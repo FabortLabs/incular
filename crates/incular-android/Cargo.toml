@@ -21,6 +21,12 @@ workspace = true
 [lib]
 path = "src/lib.rs"
 
+[features]
+# Initializes rustls-platform-verifier with the app context at startup, so
+# HTTPS clients that verify through it (reqwest's default `rustls` backend)
+# work without app code. `incular build android` adds its Kotlin component.
+platform-verifier = ["dep:jni", "dep:rustls-platform-verifier"]
+
 [dependencies]
 incular-accessibility = { workspace = true }
 incular-mobile = { workspace = true }
@@ -31,11 +37,14 @@ incular-config = { workspace = true }
 incular-core = { workspace = true }
 incular-platform = { workspace = true }
 incular-wgpu = { workspace = true }
+jni = { workspace = true, optional = true }
 jni-sys = { workspace = true }
 libc = { workspace = true }
 ndk = { workspace = true }
+ndk-context = { workspace = true }
 ndk-sys = { workspace = true }
 raw-window-handle = { workspace = true }
+rustls-platform-verifier = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true }
 
 [package.metadata.docs.rs]

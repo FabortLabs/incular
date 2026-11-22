@@ -1372,6 +1372,12 @@ impl Application {
                     let _ = record.runtime.handle_text_input_action(action);
                 });
             }
+            WindowEventKind::Platform(PlatformEvent::TextEditingState(state)) => {
+                let _ = self.with_window_mut(window_id, |record| {
+                    record.input_events = record.input_events.wrapping_add(1);
+                    record.runtime.handle_text_editing_state(state);
+                });
+            }
             WindowEventKind::Platform(PlatformEvent::Lifecycle(lifecycle)) => {
                 self.handle_application_lifecycle(lifecycle);
             }
@@ -1480,6 +1486,18 @@ impl Application {
     ) -> bool {
         self.with_window_mut(window_id, |record| {
             record.runtime.set_environment(environment)
+        })
+        .unwrap_or(false)
+    }
+
+    /// Delivers the system back button to one window; see
+    /// [`Runtime::handle_back_button`](crate::Runtime::handle_back_button).
+    /// Returns `false` when nothing used it and the host should leave the
+    /// app.
+    pub fn handle_window_back_button(&mut self, window_id: WindowId) -> bool {
+        self.with_window_mut(window_id, |record| {
+            record.input_events = record.input_events.wrapping_add(1);
+            record.runtime.handle_back_button()
         })
         .unwrap_or(false)
     }

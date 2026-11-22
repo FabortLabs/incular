@@ -1,7 +1,8 @@
-//! Material's desktop text selection toolbars: Flutter's
-//! `DesktopTextSelectionToolbar`, `DesktopTextSelectionToolbarButton`,
-//! `CupertinoDesktopTextSelectionToolbar` (which Material uses on macOS) and
-//! the `AdaptiveTextSelectionToolbar` that picks between them.
+//! Material's text selection toolbars: Flutter's touch `TextSelectionToolbar`
+//! and `TextSelectionToolbarTextButton`, `DesktopTextSelectionToolbar`,
+//! `DesktopTextSelectionToolbarButton`, `CupertinoDesktopTextSelectionToolbar`
+//! (which Material uses on macOS) and the `AdaptiveTextSelectionToolbar` that
+//! picks between them.
 
 use crate::{ButtonStyleConfig, Material, MaterialType, TextButton, Theme};
 use incular_config::EdgeInsets;
@@ -12,8 +13,8 @@ use incular_widgets::{
     Alignment, BackdropFilter, BorderRadius, BorderSide, BoxShadow, BuildContext, Builder,
     ClipRRect, Column, ContextMenuButtonItem, CustomSingleChildLayout, DecoratedShapeBox,
     DesktopTextSelectionToolbarLayoutDelegate, MainAxisSize, MouseCursor, Padding,
-    RoundedSuperellipseBorder, ShapeDecoration, SizedBox, Text, TextContextMenu,
-    TextSelectionToolbarAnchors, TextStyle, Widget,
+    RoundedSuperellipseBorder, Row, ShapeDecoration, SizedBox, Text, TextContextMenu,
+    TextSelectionToolbarAnchors, TextSelectionToolbarLayoutDelegate, TextStyle, Widget,
 };
 use std::rc::Rc;
 
@@ -317,11 +318,161 @@ impl From<CupertinoDesktopTextSelectionToolbarButton> for Widget {
     }
 }
 
+/// Flutter `_kToolbarHeight`.
+const TOUCH_TOOLBAR_HEIGHT: f32 = 44.0;
+/// Flutter `_kToolbarContentDistance`.
+const TOOLBAR_CONTENT_DISTANCE: f32 = 8.0;
+/// Flutter `_kToolbarContentDistanceBelow` (`_kHandleSize - 2`).
+const TOOLBAR_CONTENT_DISTANCE_BELOW: f32 = 20.0;
+
+/// Flutter's Material `TextSelectionToolbar`, the Android toolbar: a row of
+/// buttons on a 44-high card with 7-pixel corners and elevation 1, above
+/// `anchor_above` when it fits under the top padding, otherwise below
+/// `anchor_below`.
+///
+/// Flutter folds buttons that do not fit the width into an overflow menu;
+/// this toolbar keeps them in one row.
+#[derive(Clone)]
+pub struct TextSelectionToolbar {
+    anchor_above: Offset,
+    anchor_below: Offset,
+    children: Vec<Widget>,
+}
+
+impl TextSelectionToolbar {
+    #[must_use]
+    pub fn new(anchor_above: Offset, anchor_below: Offset, children: Vec<Widget>) -> Self {
+        debug_assert!(!children.is_empty(), "a toolbar needs at least one child");
+        Self {
+            anchor_above,
+            anchor_below,
+            children,
+        }
+    }
+}
+
+impl From<TextSelectionToolbar> for Widget {
+    fn from(value: TextSelectionToolbar) -> Self {
+        Builder::new(move |context| {
+            let padding_above = context.safe_insets().top + TOOLBAR_SCREEN_PADDING;
+            let available_height = value.anchor_above.y - TOOLBAR_CONTENT_DISTANCE - padding_above;
+            let fits_above = TOUCH_TOOLBAR_HEIGHT <= available_height;
+            let local_adjustment = Offset::new(TOOLBAR_SCREEN_PADDING, padding_above);
+            let card_color = Theme::of(context).map(|theme| theme.colors().card_color);
+            let row = Row::new(value.children.clone()).main_axis_size(MainAxisSize::Min);
+            let mut material = Material::new(SizedBox::from_dimensions(
+                None,
+                Some(TOUCH_TOOLBAR_HEIGHT),
+                Some(row),
+            ))
+            .material_type(MaterialType::Card)
+            .border_radius(BorderRadius::circular(7.0))
+            .clip_behavior(Clip::AntiAlias)
+            .elevation(1.0);
+            if let Some(color) = card_color {
+                material = material.color(color);
+            }
+            Padding::new(
+                EdgeInsets::from_ltrb(
+                    TOOLBAR_SCREEN_PADDING,
+                    padding_above,
+                    TOOLBAR_SCREEN_PADDING,
+                    TOOLBAR_SCREEN_PADDING,
+                ),
+                CustomSingleChildLayout::new(
+                    TextSelectionToolbarLayoutDelegate {
+                        anchor_above: value.anchor_above
+                            - local_adjustment
+                            - Offset::new(0.0, TOOLBAR_CONTENT_DISTANCE),
+                        anchor_below: value.anchor_below - local_adjustment
+                            + Offset::new(0.0, TOOLBAR_CONTENT_DISTANCE_BELOW),
+                        fits_above: Some(fits_above),
+                    },
+                    material,
+                ),
+            )
+            .into()
+        })
+        .into()
+    }
+}
+
+/// Flutter's `TextSelectionToolbarTextButton`: a square-cornered text
+/// button, black or white by brightness, with wider padding at the row's
+/// ends.
+#[derive(Clone)]
+pub struct TextSelectionToolbarTextButton {
+    on_pressed: Option<Rc<dyn Fn()>>,
+    text: String,
+    padding: EdgeInsets,
+}
+
+impl TextSelectionToolbarTextButton {
+    /// Flutter `_kMiddlePadding` horizontally.
+    const MIDDLE_PADDING: f32 = 9.5;
+    /// Flutter `_kEndPadding`.
+    const END_PADDING: f32 = 17.0;
+
+    /// The button at `index` of `total` in its toolbar
+    /// (`TextSelectionToolbarTextButton.getPadding`).
+    #[must_use]
+    pub fn text(
+        on_pressed: Option<Rc<dyn Fn()>>,
+        text: impl Into<String>,
+        index: usize,
+        total: usize,
+    ) -> Self {
+        let left = if index == 0 {
+            Self::END_PADDING
+        } else {
+            Self::MIDDLE_PADDING
+        };
+        let right = if index + 1 == total {
+            Self::END_PADDING
+        } else {
+            Self::MIDDLE_PADDING
+        };
+        Self {
+            on_pressed,
+            text: text.into(),
+            padding: EdgeInsets::from_ltrb(left, 8.0, right, 8.0),
+        }
+    }
+}
+
+impl From<TextSelectionToolbarTextButton> for Widget {
+    fn from(value: TextSelectionToolbarTextButton) -> Self {
+        Builder::new(move |context| {
+            let foreground = match theme_brightness(context) {
+                Brightness::Dark => Color::WHITE,
+                Brightness::Light => Color::BLACK,
+            };
+            let style = TextButton::style_from(
+                ButtonStyleConfig::builder()
+                    .foreground_color(foreground)
+                    .shape(BorderRadius::ZERO)
+                    .minimum_size(Size::new(48.0, 48.0))
+                    .padding(value.padding)
+                    .build(),
+            );
+            let mut button = TextButton::new(value.text.clone()).style(style);
+            match value.on_pressed.clone() {
+                Some(on_pressed) => button = button.on_pressed(move || on_pressed()),
+                None => button = button.enabled(false),
+            }
+            button.into()
+        })
+        .into()
+    }
+}
+
 /// Flutter's `AdaptiveTextSelectionToolbar`: the platform's toolbar for a
 /// list of [`ContextMenuButtonItem`]s.
 ///
-/// Desktop platforms get Flutter's desktop toolbars. Android and iOS get the
-/// desktop toolbar too: Incular has no touch selection toolbar yet.
+/// Android and Fuchsia get the touch [`TextSelectionToolbar`], macOS the
+/// Cupertino desktop toolbar and Linux and Windows the desktop one. iOS gets
+/// the touch Material toolbar: Incular has no `CupertinoTextSelectionToolbar`
+/// yet.
 #[derive(Clone)]
 pub struct AdaptiveTextSelectionToolbar {
     anchors: TextSelectionToolbarAnchors,
@@ -352,18 +503,23 @@ impl AdaptiveTextSelectionToolbar {
         platform: TargetPlatform,
         button_items: &[ContextMenuButtonItem],
     ) -> Vec<Widget> {
+        let total = button_items.len();
         button_items
             .iter()
-            .map(|item| {
+            .enumerate()
+            .map(|(index, item)| {
                 let label = item.resolved_label();
+                let on_pressed = item.on_pressed.clone();
                 match platform {
-                    TargetPlatform::MacOs => CupertinoDesktopTextSelectionToolbarButton::text(
-                        item.on_pressed.clone(),
-                        label,
-                    )
-                    .into(),
-                    _ => DesktopTextSelectionToolbarButton::text(item.on_pressed.clone(), label)
-                        .into(),
+                    TargetPlatform::MacOs => {
+                        CupertinoDesktopTextSelectionToolbarButton::text(on_pressed, label).into()
+                    }
+                    TargetPlatform::Linux | TargetPlatform::Windows => {
+                        DesktopTextSelectionToolbarButton::text(on_pressed, label).into()
+                    }
+                    TargetPlatform::Android | TargetPlatform::Fuchsia | TargetPlatform::Ios => {
+                        TextSelectionToolbarTextButton::text(on_pressed, label, index, total).into()
+                    }
                 }
             })
             .collect()
@@ -385,7 +541,13 @@ impl From<AdaptiveTextSelectionToolbar> for Widget {
                 TargetPlatform::MacOs => {
                     CupertinoDesktopTextSelectionToolbar::new(anchor, children).into()
                 }
-                _ => DesktopTextSelectionToolbar::new(anchor, children).into(),
+                TargetPlatform::Linux | TargetPlatform::Windows => {
+                    DesktopTextSelectionToolbar::new(anchor, children).into()
+                }
+                TargetPlatform::Android | TargetPlatform::Fuchsia | TargetPlatform::Ios => {
+                    let below = value.anchors.secondary_anchor.unwrap_or(anchor);
+                    TextSelectionToolbar::new(anchor, below, children).into()
+                }
             }
         })
         .into()

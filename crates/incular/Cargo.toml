@@ -318,6 +318,10 @@ webgl = ["web-host", "incular-wgpu/webgl"]
 # (Vulkan with a GLES fallback on Android, Metal on iOS).
 mobile = ["mobile-host", "incular-wgpu/vulkan", "incular-wgpu/gl", "incular-wgpu/metal"]
 mobile-host = ["runner", "dep:incular-platform", "dep:incular-wgpu", "dep:incular-android", "dep:incular-ios"]
+# HTTPS that verifies through rustls-platform-verifier (reqwest's default
+# `rustls` backend) works on Android: the shell initializes the verifier with
+# the app context. Other platforms need no setup.
+platform-verifier = ["incular-android?/platform-verifier"]
 controls = ["dep:incular-controls"]
 material = ["controls", "dep:incular-material"]
 
@@ -372,6 +376,11 @@ tokio = { workspace = true }
 [[example]]
 name = "performance_gallery"
 path = "../../examples/performance_gallery/main.rs"
+
+# `tokio` is used by `examples/async_runtime`, which lives outside this crate's
+# directory where cargo-machete does not look.
+[package.metadata.cargo-machete]
+ignored = ["tokio"]
 
 [package.metadata.docs.rs]
 all-features = true

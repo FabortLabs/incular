@@ -639,6 +639,14 @@ pub trait Clipboard {
     fn set_text(&mut self, text: String) {
         let _ = self.write(DataTransfer::plain_text(text));
     }
+
+    /// Whether the clipboard holds non-empty text (Flutter's
+    /// `Clipboard.hasStrings`), used to offer Paste. Platforms that report
+    /// reads to the user, such as Android 12 and later, override it to
+    /// check without reading.
+    fn has_text(&mut self) -> bool {
+        self.get_text().is_some_and(|text| !text.is_empty())
+    }
 }
 
 #[derive(Default)]

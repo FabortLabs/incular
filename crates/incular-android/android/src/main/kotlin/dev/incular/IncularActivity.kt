@@ -7,7 +7,8 @@ import android.os.Build
 import android.os.Bundle
 import android.view.MotionEvent
 import android.view.SurfaceHolder
-import android.view.SurfaceView
+import android.window.OnBackInvokedCallback
+import android.window.OnBackInvokedDispatcher
 import android.view.View
 import android.view.WindowInsets
 
@@ -20,7 +21,7 @@ import android.view.WindowInsets
  * lives in Rust; this class only translates.
  */
 open class IncularActivity : Activity(), SurfaceHolder.Callback {
-    private lateinit var surfaceView: SurfaceView
+    private lateinit var surfaceView: IncularInputView
     private var surfaceAttached = false
     private var started = false
 
@@ -28,13 +29,42 @@ open class IncularActivity : Activity(), SurfaceHolder.Callback {
         super.onCreate(savedInstanceState)
         System.loadLibrary(libraryName())
         drawEdgeToEdge()
-        surfaceView = SurfaceView(this)
+        surfaceView = IncularInputView(this)
+        IncularNative.input = surfaceView
         surfaceView.holder.addCallback(this)
         surfaceView.setOnTouchListener { _, event -> forwardTouch(event) }
         surfaceView.setOnApplyWindowInsetsListener { view, insets -> forwardInsets(insets); view.onApplyWindowInsets(insets) }
         setContentView(surfaceView)
-        started = IncularNative.nativeCreate(filesDir.absolutePath)
-        if (!started) finish()
+        started = IncularNative.create(applicationContext, filesDir.absolutePath)
+        if (!started) finish() else registerBack()
+    }
+
+    /**
+     * The back button and the back gesture go to Rust first (Flutter's `popRoute`): it closes
+     * a popup or pops a route. When nothing used them the activity finishes, as Flutter's
+     * `SystemNavigator.pop` does. Android 13+ reports them to [OnBackInvokedCallback] (the
+     * manifest opts in); older versions call [onBackPressed]. The soft keyboard takes the
+     * back press first while it is open.
+     */
+    private fun registerBack() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(
+                OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                OnBackInvokedCallback { if (!IncularNative.nativeBack()) finish() },
+            )
+        }
+    }
+
+    @Deprecated("Android 13+ uses the OnBackInvokedCallback registered in registerBack")
+    @Suppress("DEPRECATION")
+    override fun onBackPressed() {
+        if (started && IncularNative.nativeBack()) return
+        super.onBackPressed()
+    }
+
+    override fun onDestroy() {
+        if (IncularNative.input === surfaceView) IncularNative.input = null
+        super.onDestroy()
     }
 
     private fun libraryName(): String {

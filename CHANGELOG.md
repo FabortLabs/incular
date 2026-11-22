@@ -3,6 +3,107 @@
 Maintainers: record user-visible changes under `Unreleased`, then move them to
 a version and date when publishing.
 
+## Unreleased
+
+### Added
+
+- `incular-android`: the shell publishes the `JavaVM` and the application
+  context through [`ndk-context`](https://docs.rs/ndk-context) before the
+  app's `main` runs. Crates that call into Android read them from there, so
+  `webbrowser` can open links, for example.
+- `incular`/`incular-android`: a `platform-verifier` feature initializes
+  `rustls-platform-verifier` with the app context. HTTPS clients that verify
+  through it, such as reqwest's default `rustls` backend, then use Android's
+  trust store; without it they panic on the first request. Other platforms
+  need no setup.
+- `incular-cli`: when the app depends on `rustls-platform-verifier`,
+  `incular build android` adds its Kotlin component, at the version in the
+  app's lockfile, to the generated Gradle project.
+- Android text input, following Flutter's `TextInputPlugin`:
+  - `incular-android`: tapping a field opens the soft keyboard. An
+    `InputConnection` reports the input method's whole editing state
+    (composing text, autocorrect, swipe typing, backspace), and the field's
+    keyboard type and action key follow its input options.
+  - `incular-android`: hardware keys reach key handlers and text fields.
+  - `incular-android`: copy, cut and paste use the system clipboard.
+  - `incular-android`: the system back button (and the Android 13+
+    `OnBackInvokedCallback`) first reaches the focused key handlers as
+    `Code::BrowserBack`, then closes popups, then asks the pop-route
+    observers. If none of them takes it, the activity finishes, as with
+    Flutter's `SystemNavigator.pop`.
+  - `incular-runtime`: `Runtime::handle_text_editing_state` and
+    `Runtime::handle_back_button`, with matching `Application` and
+    `MobileEngine` entry points, give embedders those two paths.
+  - `incular-text`: `TextEditingDelta::between` builds the smallest edit
+    between two values, so input formatters see platform edits as user
+    edits.
+  - `incular-mobile`: `text_offsets` converts between Android's UTF-16
+    offsets and Incular's UTF-8 ones.
+- Touch text selection toolbars, as in Flutter. On Android, iOS and Fuchsia,
+  a long press shows a horizontal toolbar above the selection, or below it
+  when there is no room above:
+  - `incular-material`: `TextSelectionToolbar` and
+    `TextSelectionToolbarTextButton`.
+  - `incular-controls`: the themed panel.
+  - `incular-widgets`: `TextSelectionToolbarLayoutDelegate` places either
+    toolbar.
+
+  The Paste item appears only when the clipboard holds text
+  (`Clipboard::has_text`, Flutter's `hasStrings`).
+- `incular-widgets`: `BackGestureObserver::handle_pop_route` and
+  `dispatch_pop_route`, Flutter's `didPopRoute`. `Navigator` pops on it.
+
+### Changed
+
+- **Breaking (`incular-platform`):** `PlatformEvent` gained
+  `TextEditingState` and `TextInputCommand` gained `Show` (Flutter's
+  `TextInput.show`, sent when the focused field is tapped again). Add arms
+  for them to exhaustive matches. Hosts without a soft keyboard can treat
+  `Show` like `Update`.
+- `incular-runtime`: on Android and iOS a touch outside the focused text
+  field leaves it focused, with the keyboard up, as Flutter's
+  `EditableText` does there. Mouse and stylus presses still unfocus it.
+
+### Fixed
+
+- `incular-widgets`: touch-drag scrolling now matches Flutter's gesture arena
+  in two cases that left pages unscrollable on phones:
+  - A `GestureDetector` above a scroll view (an app-wide tap or keyboard
+    listener, say) no longer hides it. The scroll views that join a touch
+    are now found from the hit widget, not from the innermost gesture
+    detector.
+  - A drag that starts on a scroll view nested inside one on the other axis
+    (a horizontal poster row in a vertical page) scrolls whichever view
+    matches the drag's direction. Before, only the innermost view could
+    take the drag.
+- `incular-wgpu`: debug builds no longer crash at startup in the Android
+  emulator with host-GPU rendering. wgpu's debug object labels
+  (`vkSetDebugUtilsObjectNameEXT`) segfault in the emulator's gfxstream
+  Vulkan driver, so Android instances leave `InstanceFlags::DEBUG` off.
+- `incular-android`: the app owns `tracing` again. The shell installed a
+  global subscriber before the app's `main` ran, so an app's own
+  `tracing_subscriber` setup failed with "a global default trace dispatcher
+  has already been set". Like iOS, the shell now installs its logcat
+  subscriber only as a fallback, after `main` returns.
+- `incular-cli`: Android builds of apps whose dependencies compile C with
+  CMake (opus, aws-lc, …) work on Windows. The tool exports the NDK it found
+  as `ANDROID_NDK_HOME`/`ANDROID_NDK_ROOT`, sets `ANDROID_PLATFORM` to the
+  minimum API level, and uses the SDK's newest CMake package with its Ninja
+  instead of the Visual Studio generator. Variables you set still win.
+- `incular-cli`: apps that enable Incular's `mobile` feature through a
+  non-default feature of their own (`mobile = ["incular/mobile"]` beside a
+  default `desktop`) no longer fail with "incular-android is not in the
+  dependency graph".
+- `incular-widgets`: choosing an item in a text field's context menu no
+  longer unfocuses the field first. The menu counts as part of the field
+  (`TextFieldTapRegion`), so after Paste the caret and keyboard stay.
+- `incular-widgets`: a single-line field brings its caret back into view
+  when the field narrows, as Flutter's `didChangeMetrics` does when the
+  keyboard resizes the view. Before, text typed into a field that a sibling
+  then squeezed stayed scrolled to the old width, with its end hidden.
+  Scrolling also keeps the caret out of the right content padding, and the
+  glyphs are clipped to the area inside the padding.
+
 ## 0.1.5 — 2026-11-22
 
 This release adds Android and iOS app hosting, the mobile CLI, and Direct3D 11

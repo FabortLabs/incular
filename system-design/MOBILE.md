@@ -346,6 +346,18 @@ TextInputCommand (engine -> platform), additions
   RequestAutofill / FinishAutofillContext
 ```
 
+> Status (Android): the full-state path is in place. The Kotlin
+> `IncularInputView` owns a `BaseInputConnection` over a mirror `Editable`
+> and reports `PlatformEvent::TextEditingState` (UTF-16 converted to UTF-8 in
+> `incular-mobile::text_offsets`). `Runtime::handle_text_editing_state`
+> applies it as the minimal `TextEditingDelta::between` the two values, so
+> formatters run, and echoes nothing back unless a formatter changed it.
+> `TextInputCommand::{SetClient, Update, Show, Hide, Clear}`, editor actions,
+> hardware keys, the system clipboard and the back button
+> (`Runtime::handle_back_button`: key handlers, then transients, then
+> `dispatch_pop_route`) are wired. Deltas, `SetCaretRect` as
+> `CursorAnchorInfo`, autofill and the iOS input view are not yet.
+
 Rules:
 
 - The engine is the source of truth; the native side keeps a mirror

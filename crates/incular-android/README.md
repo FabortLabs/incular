@@ -18,6 +18,27 @@ Android platform integration for Incular.
   for the shell. The shell drives an `incular_mobile::MobileEngine` from a
   `SurfaceView`, `AChoreographer` frame callbacks and a looper-registered wake
   pipe, and forwards logs to logcat under the `Incular` tag.
+- Before `main` runs, the shell publishes the `JavaVM` and the application
+  context through [`ndk-context`](https://docs.rs/ndk-context). Crates that
+  call into Android read them from there, for example `webbrowser` to open a
+  link.
+- The `platform-verifier` feature (`incular/platform-verifier`) also
+  initializes [`rustls-platform-verifier`](https://docs.rs/rustls-platform-verifier).
+  HTTPS clients that verify through it, such as reqwest's default `rustls`
+  backend, then use the device's trust store with no app code. Without it
+  they panic on the first request. When the crate is in the dependency
+  graph, `incular build android` adds its Kotlin component to the generated
+  Gradle project.
+- Text input follows Flutter's `TextInputPlugin`. `IncularInputView` opens
+  the soft keyboard for the focused field and reports the input method's
+  whole editing state; hardware keys go to key handlers and fields; copy and
+  paste use the system clipboard.
+- The back button reaches the focused key handlers as `Code::BrowserBack`,
+  then closes popups, then asks the pop-route observers
+  (`BackGestureObserver::handle_pop_route`, which `Navigator` implements).
+  If nothing takes it, the activity finishes. Apps that keep their own route
+  stack should register an observer rather than rely on a key handler,
+  because a key handler hears back only while it is on the focus path.
 - The Kotlin shell lives in `android/src/main/kotlin`; the CLI generates the
   Gradle project and manifest around it.
 - `AndroidAccessibilityAdapter` exposes the incremental mobile semantics

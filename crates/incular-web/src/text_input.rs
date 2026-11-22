@@ -89,7 +89,7 @@ pub(crate) fn apply(window: &winit::window::Window, command: &TextInputCommand) 
                 focus(&element);
             }
         }
-        TextInputCommand::Update { .. } => {
+        TextInputCommand::Update { .. } | TextInputCommand::Show { .. } => {
             // A click on the canvas moves the page focus there while the
             // field stays focused in the application.
             if let Some(element) = active_element(window.id()) {

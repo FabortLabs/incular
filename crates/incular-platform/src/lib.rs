@@ -654,6 +654,12 @@ pub enum TextInputCommand {
         client: TextInputClientId,
         rect: Rect,
     },
+    /// Shows the soft keyboard again for the current client (Flutter's
+    /// `TextInput.show`), sent when the user taps the focused field after
+    /// dismissing the keyboard. [`Self::SetClient`] already implies it.
+    Show {
+        client: TextInputClientId,
+    },
     Hide {
         client: TextInputClientId,
     },
@@ -698,6 +704,13 @@ pub enum PlatformEvent {
     /// physical Enter key, while mobile hosts can forward the IME action
     /// without manufacturing a keyboard event.
     TextInputAction(TextInputAction),
+    /// The whole editing state of the focused field as the platform's input
+    /// method left it (Flutter's `TextInputClient.updateEditingValue`), sent
+    /// by hosts whose IME edits a mirror of the field, such as Android's
+    /// `InputConnection`. Offsets are UTF-8 byte offsets into `text`. The
+    /// runtime applies the difference as a user edit, so input formatters
+    /// run, and sends the field's state back only when they changed it.
+    TextEditingState(TextInputState),
     Metrics(WindowMetrics),
     /// Complete normalized environment replacement produced by the native
     /// shell. Runtime dependency tracking decides which consumers invalidate.

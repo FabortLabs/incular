@@ -226,6 +226,44 @@ impl TextEditingDelta {
         }
     }
 
+    /// The smallest delta that turns text `old` into `new`: the changed
+    /// middle of the text, plus `new`'s selection and composing range.
+    /// Platforms that report their whole editing state (Android's
+    /// `InputConnection`, Flutter's `updateEditingState`) apply it through
+    /// [`TextEditingController::apply_delta`], so input formatters see
+    /// only what changed.
+    #[must_use]
+    pub fn between(old: &str, new: &TextEditingValue) -> Self {
+        let (old_bytes, new_bytes) = (old.as_bytes(), new.text.as_bytes());
+        let mut prefix = old_bytes
+            .iter()
+            .zip(new_bytes)
+            .take_while(|(a, b)| a == b)
+            .count();
+        while !old.is_char_boundary(prefix) || !new.text.is_char_boundary(prefix) {
+            prefix -= 1;
+        }
+        let limit = old.len().min(new.text.len()) - prefix;
+        let mut suffix = old_bytes
+            .iter()
+            .rev()
+            .zip(new_bytes.iter().rev())
+            .take(limit)
+            .take_while(|(a, b)| a == b)
+            .count();
+        while !old.is_char_boundary(old.len() - suffix)
+            || !new.text.is_char_boundary(new.text.len() - suffix)
+        {
+            suffix -= 1;
+        }
+        Self {
+            range: TextRange::new(prefix, old.len() - suffix),
+            replacement: new.text[prefix..new.text.len() - suffix].to_owned(),
+            selection: Some(new.selection),
+            composing: new.composing,
+        }
+    }
+
     #[must_use]
     pub fn apply(&self, value: &TextEditingValue) -> TextEditingValue {
         let mut next = value.clone().replace(self.range, &self.replacement);

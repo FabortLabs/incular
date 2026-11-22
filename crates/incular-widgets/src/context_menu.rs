@@ -312,7 +312,11 @@ pub(crate) fn with_text_context_menu(
                         menu.anchors.primary_anchor,
                         Size::ZERO,
                     ))
-                    .overlay_child_layout_builder(move |context, _| builder(context, &menu));
+                    // Flutter `_SelectionToolbarWrapper`: a press on the menu
+                    // is not a tap outside the field, which keeps its focus.
+                    .overlay_child_layout_builder(move |context, _| {
+                        crate::TextFieldTapRegion::new(builder(context, &menu)).into()
+                    });
             }
             Stack::new([
                 child(state.clone()),
@@ -365,5 +369,64 @@ impl SingleChildLayoutDelegate for DesktopTextSelectionToolbarLayoutDelegate {
 
     fn should_relayout(&self, old: &Self) -> bool {
         self.anchor != old.anchor
+    }
+}
+
+/// Flutter's `TextSelectionToolbarLayoutDelegate`, the touch toolbars'
+/// placement: centered on `anchor_above` when the toolbar fits above it,
+/// otherwise on `anchor_below`, and moved sideways to stay inside the
+/// overlay.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TextSelectionToolbarLayoutDelegate {
+    /// Where the toolbar's bottom center goes when it fits above.
+    pub anchor_above: Offset,
+    /// Where the toolbar's top center goes otherwise.
+    pub anchor_below: Offset,
+    /// Whether the toolbar goes above; `None` decides by whether its height
+    /// fits above `anchor_above`.
+    pub fits_above: Option<bool>,
+}
+
+impl TextSelectionToolbarLayoutDelegate {
+    /// Flutter `centerOn`: `width` centered on `position`, kept in
+    /// `0..max`.
+    #[must_use]
+    pub fn center_on(position: f32, width: f32, max: f32) -> f32 {
+        if position - width / 2.0 < 0.0 {
+            0.0
+        } else if position + width / 2.0 > max {
+            max - width
+        } else {
+            position - width / 2.0
+        }
+    }
+}
+
+impl SingleChildLayoutDelegate for TextSelectionToolbarLayoutDelegate {
+    fn get_constraints_for_child(&self, constraints: Constraints) -> Constraints {
+        constraints.loosen()
+    }
+
+    fn get_position_for_child(&self, size: Size, child_size: Size) -> Offset {
+        let fits_above = self
+            .fits_above
+            .unwrap_or(self.anchor_above.y >= child_size.height);
+        let anchor = if fits_above {
+            self.anchor_above
+        } else {
+            self.anchor_below
+        };
+        Offset::new(
+            Self::center_on(anchor.x, child_size.width, size.width),
+            if fits_above {
+                (anchor.y - child_size.height).max(0.0)
+            } else {
+                anchor.y
+            },
+        )
+    }
+
+    fn should_relayout(&self, old: &Self) -> bool {
+        self != old
     }
 }

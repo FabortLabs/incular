@@ -39,7 +39,7 @@ pub fn apply_text_input_command(window: &winit::window::Window, command: &TextIn
                 ),
             );
         }
-        TextInputCommand::Update { .. } => {}
+        TextInputCommand::Update { .. } | TextInputCommand::Show { .. } => {}
         TextInputCommand::SetCaretRect { rect, .. } => {
             window.set_ime_cursor_area(
                 winit::dpi::LogicalPosition::new(

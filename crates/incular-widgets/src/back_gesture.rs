@@ -27,6 +27,13 @@ pub trait BackGestureObserver {
 
     /// Flutter `handleCancelBackGesture`: the back does not happen.
     fn handle_cancel_back_gesture(&self) {}
+
+    /// Flutter `didPopRoute`: the system asked to go back (Android's back
+    /// button, or a back gesture nobody followed). Returns whether this
+    /// observer handled it, such as a navigator popping its top route.
+    fn handle_pop_route(&self) -> bool {
+        false
+    }
 }
 
 type Observer = Rc<dyn BackGestureObserver>;
@@ -86,6 +93,17 @@ pub fn add_shared_back_gesture_observer(
         registry.observers.push((id, observer));
         BackGestureObserverRegistration { id }
     })
+}
+
+/// Flutter `WidgetsBinding.handlePopRoute`: asks the observers, newest
+/// first, to handle a system back until one does. Returns `false` when none
+/// did; the host then leaves the app, as Flutter's `SystemNavigator.pop`.
+pub fn dispatch_pop_route() -> bool {
+    let observers = REGISTRY.with(|registry| registry.borrow().observers.clone());
+    observers
+        .iter()
+        .rev()
+        .any(|(_, observer)| observer.handle_pop_route())
 }
 
 /// Delivers one stage of a back gesture to the observers, as Flutter's

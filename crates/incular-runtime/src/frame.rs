@@ -181,6 +181,9 @@ pub struct Runtime {
     pub(crate) text_input_configuration: Option<TextInputConfiguration>,
     pub(crate) text_input_state: Option<TextInputState>,
     pub(crate) text_input_caret_rect: Option<Rect>,
+    /// A tap on the focused field asked for the keyboard (Flutter's
+    /// `requestKeyboard`); the next client sync sends `Show`.
+    pub(crate) text_input_show_requested: bool,
     pub(crate) clipboard: Box<dyn Clipboard>,
     pub(crate) editing_diagnostics: EditingDiagnostics,
     /// Which platform's `DefaultTextEditingShortcuts` table applies.
@@ -340,6 +343,7 @@ impl Runtime {
             text_input_configuration: None,
             text_input_state: None,
             text_input_caret_rect: None,
+            text_input_show_requested: false,
             clipboard: Box::new(MemoryClipboard::default()),
             editing_diagnostics: EditingDiagnostics::default(),
             text_shortcut_platform: TextShortcutPlatform::current(),
@@ -1076,6 +1080,10 @@ impl Runtime {
                 self.handle_text_input_action(action);
                 None
             }
+            PlatformEvent::TextEditingState(state) => {
+                self.handle_text_editing_state(state);
+                None
+            }
             PlatformEvent::Metrics(metrics) => {
                 self.update_window_metrics(metrics);
                 None
@@ -1572,10 +1580,18 @@ impl Runtime {
                 }
                 let text_target_was_focused =
                     text_target.is_some_and(|field| self.focused == Some(field));
+                // `EditableText._defaultOnTapOutside`: on Android and iOS a
+                // finger tapping outside the field leaves it focused, with
+                // the keyboard up; a mouse or stylus unfocuses it.
+                let mobile_touch = kind == PointerDeviceKind::Touch
+                    && matches!(
+                        self.text_shortcut_platform,
+                        TextShortcutPlatform::Android | TextShortcutPlatform::Ios
+                    );
                 let keep_text_field_focus = self
                     .focused
                     .is_some_and(|focused| self.tree.is_text_field(focused))
-                    && self.tree.preserves_text_field_focus(position);
+                    && (mobile_touch || self.tree.preserves_text_field_focus(position));
                 // Flutter on desktop: a press focuses the text field it hits, a
                 // press outside a focused text field unfocuses it
                 // (`EditableText` tap-outside), and any other press leaves
@@ -1901,6 +1917,7 @@ impl Runtime {
             }
             self.text_input_configuration = None;
             self.text_input_state = None;
+            self.text_input_show_requested = false;
             self.text_input_caret_rect = None;
             return;
         };
@@ -1981,6 +1998,10 @@ impl Runtime {
                     client,
                     rect: snapshot.caret_rect,
                 });
+        }
+        if std::mem::take(&mut self.text_input_show_requested) && !client_changed {
+            self.text_input_commands
+                .push_back(TextInputCommand::Show { client });
         }
         self.text_input_client = Some(client);
         self.text_input_configuration = Some(configuration);
@@ -2183,6 +2204,37 @@ impl Runtime {
             self.frame_requested = true;
         }
         followed
+    }
+
+    /// The system back button (Android's back key or a committed back
+    /// gesture), as Flutter handles it: the key goes to the focused widgets
+    /// first (`LogicalKeyboardKey.goBack`, [`Code::BrowserBack`] here);
+    /// unhandled, it becomes `popRoute`, which closes the topmost popup
+    /// (Flutter's popup routes) and otherwise asks the back observers, such
+    /// as navigators, to pop ([`incular_widgets::dispatch_pop_route`]).
+    /// Returns `false` when nothing used it; the host then leaves the app,
+    /// as Flutter's `SystemNavigator.pop` does.
+    pub fn handle_back_button(&mut self) -> bool {
+        let key = |state| KeyboardEvent {
+            state,
+            key: incular_core::KeyboardKey::Named(incular_core::NamedKey::BrowserBack),
+            code: Code::BrowserBack,
+            ..KeyboardEvent::default()
+        };
+        self.adopt_external_focus_change();
+        let handled = self
+            .tree
+            .dispatch_keyboard(self.focused, key(incular_core::KeyState::Down));
+        let _ = self
+            .tree
+            .dispatch_keyboard(self.focused, key(incular_core::KeyState::Up));
+        let handled = handled
+            || self.dismiss_transients(incular_widgets::TransientDismissReason::Escape)
+            || incular_widgets::dispatch_pop_route();
+        if handled {
+            self.frame_requested = true;
+        }
+        handled
     }
 
     /// Flutter's `UndoHistoryState._updateState` for the platform: on iOS,
@@ -2417,6 +2469,43 @@ impl Runtime {
             ImeEvent::End => {
                 controller.clear_preedit();
             }
+        }
+        controller.reset_caret(self.input_now());
+        self.frame_requested = true;
+    }
+
+    /// Flutter `EditableTextState.updateEditingValue`: applies the input
+    /// method's whole editing state to the focused field as one user edit.
+    /// The state becomes the last one the platform knows, so the next
+    /// [`TextInputCommand::Update`] goes out only when an input formatter
+    /// changed it.
+    pub fn handle_text_editing_state(&mut self, state: TextInputState) {
+        self.editing_diagnostics.ime_events += 1;
+        self.cancel_ime_composition();
+        let Some(owner) = self.ime_focused_target() else {
+            return;
+        };
+        let controller = owner.controller;
+        let mut value = incular_text::TextEditingValue::new(state.text);
+        value.selection =
+            TextSelection::new(state.selection_start, state.selection_end).clamp_to(&value.text);
+        value.composing = state
+            .composing
+            .map(|(start, end)| incular_text::TextRange::new(start, end).clamp_to(&value.text));
+        let delta = controller.with_value(|current| {
+            (current != &value)
+                .then(|| incular_text::TextEditingDelta::between(&current.text, &value))
+        });
+        if let Some(delta) = delta {
+            controller.apply_delta(&delta);
+        }
+        if self.text_input_client.is_some() {
+            self.text_input_state = Some(TextInputState {
+                selection_start: value.selection.base,
+                selection_end: value.selection.extent,
+                composing: value.composing.map(|range| (range.start, range.end)),
+                text: value.text,
+            });
         }
         controller.reset_caret(self.input_now());
         self.frame_requested = true;

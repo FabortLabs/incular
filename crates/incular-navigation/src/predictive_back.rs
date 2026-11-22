@@ -157,4 +157,16 @@ impl BackGestureObserver for NavigatorBackGestureObserver {
             navigator.handle_cancel_back_gesture();
         }
     }
+
+    /// `WidgetsApp.didPopRoute`: `navigator.maybePop()`, which leaves the
+    /// first route in place so the system back can leave the app.
+    fn handle_pop_route(&self) -> bool {
+        self.navigator.upgrade().is_some_and(|navigator| {
+            navigator.can_pop()
+                && matches!(
+                    navigator.maybe_pop(),
+                    crate::navigator::PopResult::Popped(_) | crate::navigator::PopResult::Blocked
+                )
+        })
+    }
 }

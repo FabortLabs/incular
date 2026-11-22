@@ -16,6 +16,7 @@
 
 mod entry;
 mod environment;
+pub mod text_offsets;
 
 pub use entry::{install_application, take_application};
 pub use environment::MobileEnvironment;
@@ -27,9 +28,9 @@ use incular_core::{
 };
 use incular_host::HostSurface;
 use incular_platform::{
-    CapabilitySupport, NativeOperationCompletion, PhysicalSize, PlatformCapabilities,
-    PlatformEvent, PlatformLifecycle, PlatformOperationError, WindowCommand, WindowEvent, WindowId,
-    WindowLifecycle, WindowMetrics, WindowOptions,
+    CapabilitySupport, Clipboard, NativeOperationCompletion, PhysicalSize, PlatformCapabilities,
+    PlatformEvent, PlatformLifecycle, PlatformOperationError, TextInputCommand, WindowCommand,
+    WindowEvent, WindowId, WindowLifecycle, WindowMetrics, WindowOptions,
 };
 use incular_runtime::{Application, NativeWindowCommand, RuntimeWake};
 use incular_wgpu::{SharedGpuContext, WindowSurfaceTarget};
@@ -83,6 +84,8 @@ pub struct MobileEngine {
     /// A new or resized surface must be painted even when no retained
     /// state changed.
     force_frame: bool,
+    /// The platform clipboard, installed on the window when it arrives.
+    clipboard: Option<Box<dyn Clipboard>>,
 }
 
 impl MobileEngine {
@@ -103,6 +106,7 @@ impl MobileEngine {
             environment: MobileEnvironment::default(),
             metrics: WindowMetrics::new(PhysicalSize::new(0, 0), 1.0),
             force_frame: false,
+            clipboard: None,
         };
         engine.apply_window_commands();
         engine
@@ -195,6 +199,40 @@ impl MobileEngine {
         ));
     }
 
+    /// Forwards a platform event, such as a key, a text input action or the
+    /// input method's editing state, to the bound window.
+    pub fn platform_event(&mut self, event: PlatformEvent) {
+        if let Some(window) = self.window.as_ref() {
+            self.application
+                .handle_window_event(WindowEvent::platform(window.id, event));
+        }
+    }
+
+    /// The system back button. Returns `false` when nothing in the app used
+    /// it; the shell then leaves the app, as Flutter's `SystemNavigator.pop`.
+    pub fn back_button(&mut self) -> bool {
+        self.window
+            .as_ref()
+            .is_some_and(|window| self.application.handle_window_back_button(window.id))
+    }
+
+    /// Takes the text input commands (show the keyboard for a field, its new
+    /// state, hide it) the runtime queued since the last call.
+    pub fn take_text_input_commands(&mut self) -> Vec<TextInputCommand> {
+        self.window.as_ref().map_or_else(Vec::new, |window| {
+            self.application.take_window_text_input_commands(window.id)
+        })
+    }
+
+    /// Installs the system clipboard, replacing the runtime's in-memory one,
+    /// so copy, cut and paste reach other apps.
+    pub fn set_clipboard(&mut self, clipboard: Box<dyn Clipboard>) {
+        match self.window.as_ref() {
+            Some(window) => self.application.set_window_clipboard(window.id, clipboard),
+            None => self.clipboard = Some(clipboard),
+        }
+    }
+
     /// Runs one frame if the runtime asked for one. Returns whether the shell
     /// should schedule another frame callback.
     pub fn frame(&mut self, now: Instant) -> bool {
@@ -284,6 +322,9 @@ impl MobileEngine {
             options,
             surface: None,
         });
+        if let Some(clipboard) = self.clipboard.take() {
+            self.application.set_window_clipboard(id, clipboard);
+        }
         self.publish_metrics();
         self.publish_environment();
         self.bind_pending_surface();

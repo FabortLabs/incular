@@ -168,7 +168,7 @@ pub use async_builders::{
 };
 pub use back_gesture::{
     BackGestureObserver, BackGestureObserverRegistration, add_back_gesture_observer,
-    add_shared_back_gesture_observer, dispatch_back_gesture,
+    add_shared_back_gesture_observer, dispatch_back_gesture, dispatch_pop_route,
 };
 pub use compositing::{
     AnnotatedRegion, BackdropFilter, BackdropGroup, CompositedTransformFollower,
@@ -179,6 +179,7 @@ pub use context_menu::TextContextMenuState;
 pub use context_menu::{
     ContextMenuButtonItem, ContextMenuButtonType, DesktopTextSelectionToolbarLayoutDelegate,
     EditableTextContextMenuBuilder, TextContextMenu, TextSelectionToolbarAnchors,
+    TextSelectionToolbarLayoutDelegate,
 };
 pub use custom_layout::{
     CustomMultiChildLayout, CustomSingleChildLayout, Flow, FlowDelegate, FlowPaintError,

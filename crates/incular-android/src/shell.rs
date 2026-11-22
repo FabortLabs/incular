@@ -25,6 +25,9 @@ use std::{
     sync::Arc,
 };
 
+mod java;
+mod text_input;
+
 unsafe extern "C" {
     /// The C entry point rustc generates for the app's binary. The app is
     /// linked as a shared object (`-shared`), so its ordinary `main` runs
@@ -45,12 +48,16 @@ thread_local! {
     static FRAME_POSTED: Cell<bool> = const { Cell::new(false) };
 }
 
+/// Runs `f` on the engine, then applies the text input commands it queued
+/// (outside the borrow: Kotlin may call back in) and schedules a frame.
 fn with_shell(f: impl FnOnce(&mut AndroidShell)) {
-    SHELL.with(|shell| {
-        if let Some(shell) = shell.borrow_mut().as_mut() {
+    let commands = SHELL.with(|shell| {
+        shell.borrow_mut().as_mut().map_or_else(Vec::new, |shell| {
             f(shell);
-        }
+            shell.engine.take_text_input_commands()
+        })
     });
+    text_input::apply(commands);
     schedule_frame_if_needed();
 }
 
@@ -114,12 +121,16 @@ fn post_frame() {
 
 unsafe extern "C" fn on_frame(_frame_time_nanos: c_long, _data: *mut c_void) {
     FRAME_POSTED.set(false);
-    let again = SHELL.with(|shell| {
+    let (again, commands) = SHELL.with(|shell| {
         shell
             .borrow_mut()
             .as_mut()
-            .is_some_and(|shell| shell.engine.frame(Instant::now()))
+            .map_or((false, Vec::new()), |shell| {
+                let again = shell.engine.frame(Instant::now());
+                (again, shell.engine.take_text_input_commands())
+            })
     });
+    text_input::apply(commands);
     if again {
         post_frame();
     }
@@ -134,16 +145,14 @@ unsafe extern "C" fn on_wake(_fd: c_int, _events: c_int, _data: *mut c_void) -> 
     1
 }
 
-fn install_logging() {
-    static ONCE: std::sync::Once = std::sync::Once::new();
-    ONCE.call_once(|| {
-        redirect_stdio_to_logcat();
-        let _ = tracing_subscriber::fmt()
-            .with_writer(std::io::stderr)
-            .with_ansi(false)
-            .without_time()
-            .try_init();
-    });
+/// Logs `tracing` events to logcat unless the app's `main` installed its own
+/// subscriber, as on iOS and desktop where the app owns logging.
+fn install_fallback_subscriber() {
+    let _ = tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_ansi(false)
+        .without_time()
+        .try_init();
 }
 
 /// Android discards stdout and stderr. Pipe both into logcat so `println!`,
@@ -194,42 +203,70 @@ fn device_kind(tool_type: jint) -> PointerDeviceKind {
     }
 }
 
-/// Copies a Java string, or returns `None` for null or on a JNI failure.
+/// Publishes the JVM and the application context through `ndk-context`, where
+/// Rust crates that call into Android (opening URLs, audio, certificate
+/// verification) look for them, and initializes rustls-platform-verifier when
+/// the `platform-verifier` feature is on.
 ///
 /// # Safety
 ///
-/// `env` must be the calling thread's JNI environment and `string` null or a
-/// valid `java.lang.String` reference.
-unsafe fn java_string(env: *mut JNIEnv, string: jstring) -> Option<String> {
-    if string.is_null() {
-        return None;
-    }
-    // SAFETY: the caller guarantees `env` and `string`; the UTF chars are
-    // released before returning and copied out first.
-    unsafe {
-        let (Some(get), Some(release)) = ((**env).GetStringUTFChars, (**env).ReleaseStringUTFChars)
+/// `env` is the calling thread's valid JNI env and `context` a live local
+/// reference to an `android.content.Context`.
+unsafe fn publish_android_context(env: *mut JNIEnv, context: jobject) {
+    // SAFETY: the caller's `env` is valid; both functions come from its table.
+    let (vm, global) = unsafe {
+        let mut vm: *mut JavaVM = std::ptr::null_mut();
+        let (Some(get_java_vm), Some(new_global_ref)) = ((**env).GetJavaVM, (**env).NewGlobalRef)
         else {
-            return None;
+            return;
         };
-        let chars = get(env, string, std::ptr::null_mut());
-        if chars.is_null() {
-            return None;
+        if get_java_vm(env, &raw mut vm) != JNI_OK || context.is_null() {
+            eprintln!("Incular: cannot reach the JavaVM or the application context");
+            return;
         }
-        let value = CStr::from_ptr(chars).to_string_lossy().into_owned();
-        release(env, string, chars);
-        Some(value)
+        // A process-lifetime global reference: the application context
+        // outlives every activity, and ndk-context hands it out forever.
+        (vm, new_global_ref(env, context))
+    };
+    // SAFETY: `vm` and `global` are valid for the life of the process, and
+    // this runs once (see `native_create`).
+    unsafe { ndk_context::initialize_android_context(vm.cast(), global.cast()) };
+    #[cfg(feature = "platform-verifier")]
+    {
+        use jni::errors::LogErrorAndDefault;
+        use jni::objects::JObject;
+        // SAFETY: as above; the env belongs to this thread for the call.
+        let mut unowned = unsafe { jni::EnvUnowned::from_raw(env.cast()) };
+        unowned
+            .with_env(|env| {
+                // SAFETY: `global` is a live global reference to a Context.
+                let context = unsafe { JObject::from_raw(env, global.cast()) };
+                rustls_platform_verifier::android::init_with_env(env, context)
+            })
+            .resolve::<LogErrorAndDefault>();
     }
 }
 
 /// Starts the app. Returns false when the library exported no application.
-extern "system" fn native_create(env: *mut JNIEnv, _class: jclass, files_dir: jstring) -> jboolean {
-    install_logging();
+extern "system" fn native_create(
+    env: *mut JNIEnv,
+    _class: jclass,
+    context: jobject,
+    files_dir: jstring,
+) -> jboolean {
+    static STDIO: std::sync::Once = std::sync::Once::new();
+    STDIO.call_once(|| {
+        redirect_stdio_to_logcat();
+        // SAFETY: JNI passes a valid env and a local `Context` reference;
+        // `Once` keeps the process-wide registration to one call.
+        unsafe { publish_android_context(env, context) };
+    });
     if SHELL.with(|shell| shell.borrow().is_some()) {
         // The activity was recreated; keep the running engine.
         return 1;
     }
     // SAFETY: JNI passes a valid env and a local `String` reference.
-    match unsafe { java_string(env, files_dir) } {
+    match unsafe { java::string_from_java(env, files_dir) } {
         // Android has no `$HOME` project directories; restoration and other
         // application data live under the app's private files directory.
         Some(files_dir) => _ = incular_platform::set_application_data_root(files_dir.into()),
@@ -238,6 +275,7 @@ extern "system" fn native_create(env: *mut JNIEnv, _class: jclass, files_dir: js
     // SAFETY: the app binary's C `main` runs its Rust `main` on this (main)
     // thread; std accepts an empty argument vector.
     unsafe { main(0, std::ptr::null()) };
+    install_fallback_subscriber();
     let Some(application) = incular_mobile::take_application() else {
         eprintln!("Incular: the app's main returned without calling incular::run");
         return 0;
@@ -261,7 +299,8 @@ extern "system" fn native_create(env: *mut JNIEnv, _class: jclass, files_dir: js
             std::ptr::null_mut(),
         );
     }
-    let engine = MobileEngine::new(application, Arc::new(LooperWake(wake_writer)));
+    let mut engine = MobileEngine::new(application, Arc::new(LooperWake(wake_writer)));
+    engine.set_clipboard(Box::new(text_input::AndroidClipboard));
     SHELL.with(|shell| {
         *shell.borrow_mut() = Some(AndroidShell {
             engine,
@@ -410,7 +449,7 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut JavaVM, _reserved: *mut c_void
     let methods = [
         method(
             c"nativeCreate",
-            c"(Ljava/lang/String;)Z",
+            c"(Landroid/content/Context;Ljava/lang/String;)Z",
             native_create as *mut c_void,
         ),
         method(
@@ -431,6 +470,26 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut JavaVM, _reserved: *mut c_void
         method(c"nativeTouch", c"(IIFFFI)V", native_touch as *mut c_void),
         method(c"nativeInsets", c"(IIIII)V", native_insets as *mut c_void),
         method(c"nativeLifecycle", c"(I)V", native_lifecycle as *mut c_void),
+        method(
+            c"nativeEditingState",
+            c"(Ljava/lang/String;IIII)V",
+            text_input::native_editing_state as *mut c_void,
+        ),
+        method(
+            c"nativeEditorAction",
+            c"(I)V",
+            text_input::native_editor_action as *mut c_void,
+        ),
+        method(
+            c"nativeKey",
+            c"(ZIIIZ)Z",
+            text_input::native_key as *mut c_void,
+        ),
+        method(
+            c"nativeBack",
+            c"()Z",
+            text_input::native_back as *mut c_void,
+        ),
     ];
     // SAFETY: `vm` is valid for the duration of the call; every pointer
     // below comes from the JNI function tables it hands out, and the method
@@ -454,6 +513,7 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut JavaVM, _reserved: *mut c_void
         {
             return JNI_ERR;
         }
+        java::remember(vm, env, class);
     }
     JNI_VERSION_1_6
 }

@@ -214,3 +214,36 @@ fn initial_text_leaves_the_selection_unset_until_one_is_applied() {
         Some(TextSelection::collapsed(1))
     );
 }
+
+#[test]
+fn a_delta_between_two_values_replaces_only_the_changed_middle() {
+    let new =
+        TextEditingValue::new("hello brave world").with_selection(TextSelection::collapsed(11));
+    let delta = TextEditingDelta::between("hello world", &new);
+    assert_eq!(delta.range, TextRange::new(6, 6));
+    assert_eq!(delta.replacement, "brave ");
+    assert_eq!(delta.selection, Some(TextSelection::collapsed(11)));
+    assert_eq!(
+        delta.apply(&TextEditingValue::new("hello world")).text,
+        new.text
+    );
+
+    // Deleting one of two equal characters still yields a valid range.
+    let delta = TextEditingDelta::between("aa", &TextEditingValue::new("a"));
+    assert_eq!(
+        (delta.range, delta.replacement.as_str()),
+        (TextRange::new(1, 2), "")
+    );
+
+    // Multi-byte characters that share a leading byte split on boundaries.
+    let delta = TextEditingDelta::between("é", &TextEditingValue::new("è"));
+    assert_eq!(
+        (delta.range, delta.replacement.as_str()),
+        (TextRange::new(0, 2), "è")
+    );
+    let delta = TextEditingDelta::between("a🙂", &TextEditingValue::new("a🙃"));
+    assert_eq!(
+        (delta.range, delta.replacement.as_str()),
+        (TextRange::new(1, 5), "🙃")
+    );
+}

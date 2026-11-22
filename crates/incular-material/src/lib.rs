@@ -198,7 +198,7 @@ pub mod prelude {
         WidgetStates, WidgetStatesController, show_dialog, show_dialog_result,
     };
     pub use super::{PageTransitionBuilders, PageTransitionsBuilder};
-    // The component catalog, menu accelerators and desktop text toolbars.
+    // The component catalog, menu accelerators and text selection toolbars.
     pub use super::{
         AboutDialog, AboutListTile, AdaptiveTextSelectionToolbar, AnimatedIcon, AnimatedIconData,
         AnimatedIcons, ButtonSegment, CalendarDatePicker, CarouselController, CarouselView,
@@ -211,9 +211,10 @@ pub mod prelude {
         MaterialBanner, MenuAcceleratorCallbackBinding, MenuAcceleratorLabel, ModalBottomSheet,
         NoSplash, PaginatedDataTable, RadioMenuButton, RefreshCompleter, RefreshIndicator,
         ReorderableListView, SearchAnchor, SearchBar, SearchController, SegmentedButton, Step,
-        Stepper, TabPageSelector, TabPageSelectorIndicator, TimeOfDay, TimePickerDialog,
-        ToggleButtons, character_shortcut_label, search_suggestion, shortcut_label,
-        show_date_picker, show_date_range_picker, show_modal_bottom_sheet, show_time_picker,
+        Stepper, TabPageSelector, TabPageSelectorIndicator, TextSelectionToolbar,
+        TextSelectionToolbarTextButton, TimeOfDay, TimePickerDialog, ToggleButtons,
+        character_shortcut_label, search_suggestion, shortcut_label, show_date_picker,
+        show_date_range_picker, show_modal_bottom_sheet, show_time_picker,
     };
     // Compatibility aliases retained for Incular applications; Flutter's
     // canonical button entry points are the four concrete variants above.

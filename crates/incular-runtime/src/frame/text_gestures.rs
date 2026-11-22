@@ -325,11 +325,7 @@ impl Runtime {
         let cut = !read_only && !obscured && !collapsed;
         let copy = !obscured && !collapsed;
         // `ClipboardStatus.pasteable`: the clipboard holds text.
-        let paste = !read_only
-            && self
-                .clipboard
-                .get_text()
-                .is_some_and(|text| !text.is_empty());
+        let paste = !read_only && self.clipboard.has_text();
         let select_all = snapshot.traits.enable_interactive_selection
             && !(read_only && obscured)
             && match self.text_shortcut_platform {
@@ -505,6 +501,9 @@ pub(crate) struct TextTapRun {
     raw_count: u32,
     effective_count: u32,
     shift: bool,
+    /// Whether the field had focus before this press, so its tap asks for
+    /// the keyboard again rather than attaching it.
+    was_focused: bool,
 }
 
 impl Runtime {
@@ -582,6 +581,7 @@ impl Runtime {
             raw_count,
             effective_count,
             shift,
+            was_focused,
         });
         self.hide_text_field_menu(field);
         match effective_count {
@@ -664,6 +664,11 @@ impl Runtime {
         let now = self.input_now();
         if let Some(run) = &mut self.text_taps {
             run.last_up = Some(now);
+            // `TextSelectionGestureDetectorBuilder.onSingleTapUp`:
+            // `editableText.requestKeyboard()`.
+            if run.was_focused && self.focused == Some(run.field) {
+                self.text_input_show_requested = true;
+            }
         }
     }
 
@@ -962,7 +967,22 @@ impl Runtime {
                 }
                 if let Some(menu) = self.tree.text_field_context_menu(field) {
                     let items = self.text_field_context_menu_items(field);
-                    menu.show(TextSelectionToolbarAnchors::at(position), items);
+                    // `EditableText.contextMenuAnchors`: above the top of the
+                    // selection's line, or below its bottom.
+                    let anchors = self.tree.text_field_input_geometry(field).map_or(
+                        TextSelectionToolbarAnchors::at(position),
+                        |snapshot| {
+                            let caret = snapshot.caret_rect;
+                            TextSelectionToolbarAnchors {
+                                primary_anchor: Offset::new(position.x, caret.origin.y),
+                                secondary_anchor: Some(Offset::new(
+                                    position.x,
+                                    caret.origin.y + caret.size.height,
+                                )),
+                            }
+                        },
+                    );
+                    menu.show(anchors, items);
                 }
             }
             LongPressTarget::Label(label) => {
