@@ -1072,6 +1072,12 @@ impl SharedGpuContext {
         backends: Option<wgpu::Backends>,
     ) -> Result<Self, RendererError> {
         let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle_from_env();
+        // The Android emulator's host-GPU Vulkan driver (gfxstream,
+        // `vulkan.ranchu.so`) segfaults in `vkSetDebugUtilsObjectNameEXT`,
+        // which wgpu calls for every labelled object in debug builds. Labels
+        // only help native GPU debuggers, which Android rarely attaches.
+        #[cfg(target_os = "android")]
+        descriptor.flags.remove(wgpu::InstanceFlags::DEBUG);
         if let Some(backends) = backends {
             descriptor.backends = backends;
         }
