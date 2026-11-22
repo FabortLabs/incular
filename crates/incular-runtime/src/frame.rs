@@ -164,6 +164,8 @@ pub struct Runtime {
     pub(crate) text_taps: Option<text_gestures::TextTapRun>,
     /// A held text press that may become a long press (`kLongPressTimeout`).
     pub(crate) text_long_press: Option<text_gestures::TextLongPress>,
+    /// A press on the focused field's selection handles, until it lifts.
+    pub(crate) text_handle_drag: Option<text_gestures::TextHandleDrag>,
     /// Modifier keys held, from the latest key event (`HardwareKeyboard`).
     pub(crate) keyboard_modifiers: incular_core::Modifiers,
     /// The focused field, content revision and selection whose caret was
@@ -336,6 +338,7 @@ impl Runtime {
             last_selectable_secondary: None,
             text_taps: None,
             text_long_press: None,
+            text_handle_drag: None,
             keyboard_modifiers: incular_core::Modifiers::empty(),
             caret_reveal_key: None,
             ime_composition: None,
@@ -1369,7 +1372,14 @@ impl Runtime {
         let text_menu_was_showing = phase == PointerPhase::Down
             && button == Some(incular_core::SECONDARY_POINTER_BUTTON)
             && self.text_menu_open_at(position);
-        if phase == PointerPhase::Down && self.tree.dismiss_transients_for_pointer(position) > 0 {
+        // A press on the focused field's handle is part of that field, so it
+        // does not dismiss the field's toolbar.
+        let on_text_handle =
+            phase == PointerPhase::Down && self.text_handle_under(position, kind).is_some();
+        if phase == PointerPhase::Down
+            && !on_text_handle
+            && self.tree.dismiss_transients_for_pointer(position) > 0
+        {
             self.frame_requested = true;
         }
         let raw_event = RawPointerEvent::new(
@@ -1506,6 +1516,7 @@ impl Runtime {
                 unreachable!("pointer boundary handled above")
             }
             PointerPhase::Move => {
+                self.text_handle_drag_move(position);
                 self.text_long_press_moved(position);
                 // A started long press extends by word and owns the move.
                 let long_press_owns_move = self.text_long_press_move(position, selectable_target);
@@ -1543,6 +1554,15 @@ impl Runtime {
                         | PointerDeviceKind::Stylus
                         | PointerDeviceKind::InvertedStylus
                 );
+                // A touch on a visible selection handle drags it instead of
+                // pressing the field: no focus change, no long press.
+                if let Some(field) = self.text_handle_press(position, kind) {
+                    self.frame_requested = true;
+                    return Some(EventTarget {
+                        element: field,
+                        action: None,
+                    });
+                }
                 if let Some(label) = selectable_target {
                     self.set_focus(Some(label));
                     self.captured_selectable_text = Some(label);
@@ -1657,6 +1677,7 @@ impl Runtime {
                 target.map(|(element, action)| EventTarget { element, action })
             }
             PointerPhase::Up => {
+                self.text_handle_drag_end(position);
                 self.text_long_press_end(position);
                 if self.captured_text_field.take().is_some() {
                     self.text_field_primary_up();
@@ -1690,6 +1711,7 @@ impl Runtime {
             PointerPhase::Cancel => {
                 self.captured_text_field = None;
                 self.text_long_press = None;
+                self.text_handle_drag = None;
                 self.captured_selectable_text = None;
                 if let Some(element) = self.pressed_button.take() {
                     let _ = self

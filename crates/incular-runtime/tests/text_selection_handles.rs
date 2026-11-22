@@ -15,7 +15,8 @@ use incular_core::{
 };
 use incular_runtime::{Runtime, TextShortcutPlatform};
 use incular_widgets::{
-    EditableText, SizedBox, TextDirection, TextSelectionHandles, Widget,
+    EditableText, IgnorePointer, SizedBox, TextDirection, TextSelectionHandle,
+    TextSelectionHandles, Widget,
     internal::{TextEditingController, TextSelection},
 };
 use std::time::{Duration, Instant};
@@ -238,4 +239,204 @@ fn android_touch_drag_selects_only_from_a_focused_field() {
         selection.base, selection.extent,
         "a focused field drag-selects"
     );
+}
+
+/// Like [`mount`], with a touch toolbar installed so a handle tap can open it.
+fn mount_with_toolbar(
+    text: &str,
+    platform: TextShortcutPlatform,
+) -> (Runtime, TextEditingController) {
+    let controller = TextEditingController::with_text(text);
+    let field = EditableText::new(controller.clone())
+        .text_direction(TextDirection::Ltr)
+        .size(Size::new(400., 32.))
+        .selection_handles_builder(|_, _| SizedBox::shrink().into())
+        .context_menu_builder(|_, _| IgnorePointer::new(SizedBox::shrink()).into());
+    let mut runtime = Runtime::new(Widget::from(field)).unwrap();
+    runtime.set_text_shortcut_platform(platform);
+    runtime.run_frame(bounds()).unwrap();
+    (runtime, controller)
+}
+
+/// Whether the focused field's toolbar is open.
+fn toolbar_open(runtime: &Runtime) -> bool {
+    let field = runtime.focused_element().expect("focused field");
+    runtime
+        .tree()
+        .text_field_context_menu(field)
+        .is_some_and(|menu| menu.is_showing())
+}
+
+/// The centre of a handle's knob, where a finger grabs it.
+fn knob_centre(handle: TextSelectionHandle) -> Offset {
+    let rect = handle.rect();
+    Offset::new(
+        rect.origin.x + rect.size.width / 2.0,
+        rect.origin.y + rect.size.height / 2.0,
+    )
+}
+
+/// Focuses an Android field and places its caret with a second, later tap.
+fn place_caret(runtime: &mut Runtime, at: Offset) {
+    let start = Instant::now();
+    let first = tap(runtime, at, PointerDeviceKind::Touch, start);
+    tap(
+        runtime,
+        at,
+        PointerDeviceKind::Touch,
+        first + Duration::from_secs(1),
+    );
+}
+
+#[test]
+fn dragging_the_end_handle_right_extends_the_selection() {
+    let (mut runtime, controller) =
+        mount_with_toolbar("hello world", TextShortcutPlatform::Windows);
+    long_press(
+        &mut runtime,
+        Offset::new(12., 10.),
+        PointerDeviceKind::Touch,
+    );
+    assert_eq!(controller.selection(), TextSelection::new(0, 5));
+    assert!(toolbar_open(&runtime), "the long press shows the toolbar");
+    let end = shown_handles(&runtime)
+        .and_then(|h| h.end)
+        .expect("end handle");
+    let from = knob_centre(end);
+    drag(
+        &mut runtime,
+        from,
+        Offset::new(from.x + 60., from.y),
+        PointerDeviceKind::Touch,
+        Instant::now(),
+    );
+    let selection = controller.selection();
+    assert_eq!(selection.base, 0, "the start stays put");
+    assert!(selection.extent > 5, "the end handle moved right");
+    assert!(
+        toolbar_open(&runtime),
+        "the toolbar shows again after the drag"
+    );
+}
+
+#[test]
+fn dragging_the_start_handle_left_extends_the_selection() {
+    let (mut runtime, controller) = mount("hello world", TextShortcutPlatform::Windows);
+    long_press(
+        &mut runtime,
+        Offset::new(50., 10.),
+        PointerDeviceKind::Touch,
+    );
+    let before = controller.selection();
+    assert!(before.base > 0, "a word past the first is selected");
+    let start = shown_handles(&runtime).expect("range handles").start;
+    let from = knob_centre(start);
+    drag(
+        &mut runtime,
+        from,
+        Offset::new(from.x - 40., from.y),
+        PointerDeviceKind::Touch,
+        Instant::now(),
+    );
+    let selection = controller.selection();
+    assert!(selection.base < before.base, "the start handle moved left");
+    assert_eq!(selection.extent, before.extent, "the end stays put");
+}
+
+#[test]
+fn dragging_the_end_handle_before_the_start_does_not_invert_the_selection() {
+    let (mut runtime, controller) = mount("hello world", TextShortcutPlatform::Windows);
+    long_press(
+        &mut runtime,
+        Offset::new(12., 10.),
+        PointerDeviceKind::Touch,
+    );
+    let end = shown_handles(&runtime)
+        .and_then(|h| h.end)
+        .expect("end handle");
+    let from = knob_centre(end);
+    drag(
+        &mut runtime,
+        from,
+        Offset::new(0., from.y),
+        PointerDeviceKind::Touch,
+        Instant::now(),
+    );
+    assert_eq!(controller.selection(), TextSelection::new(0, 5));
+}
+
+#[test]
+fn dragging_the_collapsed_handle_moves_the_caret() {
+    let (mut runtime, controller) = mount("hello", TextShortcutPlatform::Android);
+    place_caret(&mut runtime, Offset::new(10., 10.));
+    let before = controller.selection();
+    assert_eq!(before.base, before.extent, "the caret is collapsed");
+    let caret = shown_handles(&runtime).expect("collapsed handle").start;
+    let from = knob_centre(caret);
+    drag(
+        &mut runtime,
+        from,
+        Offset::new(from.x + 40., from.y),
+        PointerDeviceKind::Touch,
+        Instant::now(),
+    );
+    let after = controller.selection();
+    assert_eq!(after.base, after.extent, "the caret stays collapsed");
+    assert!(after.extent > before.extent, "the caret moved right");
+}
+
+#[test]
+fn tapping_the_collapsed_handle_toggles_the_toolbar() {
+    let (mut runtime, _controller) = mount_with_toolbar("hello", TextShortcutPlatform::Android);
+    place_caret(&mut runtime, Offset::new(10., 10.));
+    let knob = knob_centre(shown_handles(&runtime).expect("collapsed handle").start);
+    assert!(!toolbar_open(&runtime));
+    let first = tap(&mut runtime, knob, PointerDeviceKind::Touch, Instant::now());
+    assert!(toolbar_open(&runtime), "a handle tap shows the toolbar");
+    assert!(shown_handles(&runtime).is_some(), "the handle stays");
+    tap(
+        &mut runtime,
+        knob,
+        PointerDeviceKind::Touch,
+        first + Duration::from_secs(1),
+    );
+    assert!(!toolbar_open(&runtime), "a second handle tap hides it");
+    assert!(shown_handles(&runtime).is_none(), "and the handles");
+}
+
+#[test]
+fn pressing_a_handle_neither_refocuses_nor_starts_a_long_press() {
+    let (mut runtime, controller) = mount("hello world", TextShortcutPlatform::Windows);
+    long_press(
+        &mut runtime,
+        Offset::new(50., 10.),
+        PointerDeviceKind::Touch,
+    );
+    let before = controller.selection();
+    let focused = runtime.focused_element();
+    let knob = knob_centre(shown_handles(&runtime).expect("range handles").start);
+    let at = Instant::now();
+    pointer(
+        &mut runtime,
+        PointerPhase::Down,
+        knob,
+        PointerDeviceKind::Touch,
+        at,
+    );
+    let held = at + Duration::from_millis(600);
+    runtime.run_frame_at(bounds(), held).unwrap();
+    pointer(
+        &mut runtime,
+        PointerPhase::Up,
+        knob,
+        PointerDeviceKind::Touch,
+        held,
+    );
+    runtime.run_frame_at(bounds(), held).unwrap();
+    assert_eq!(
+        controller.selection(),
+        before,
+        "no long press word selection"
+    );
+    assert_eq!(runtime.focused_element(), focused, "focus does not move");
 }

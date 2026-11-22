@@ -8,7 +8,9 @@ use crate::text_shortcuts::{TextIntent, TextShortcutPlatform};
 use incular_core::SECONDARY_POINTER_BUTTON;
 use incular_text::{TextAffinity, is_layout_whitespace, word_boundary_at};
 use incular_widgets::internal::gesture_constants::{LONG_PRESS_TIMEOUT, TOUCH_SLOP};
-use incular_widgets::{ContextMenuButtonItem, ContextMenuButtonType, TextSelectionToolbarAnchors};
+use incular_widgets::{
+    ContextMenuButtonItem, ContextMenuButtonType, SelectionHandleType, TextSelectionToolbarAnchors,
+};
 
 /// A secondary press that went down on a text field
 /// (`onSecondaryTapDown`), waiting for its release.
@@ -1101,5 +1103,220 @@ impl Runtime {
             }
         }
         self.frame_requested = true;
+    }
+}
+
+/// A press on one of the focused field's visible selection handles, from
+/// touch down to lift. Flutter `_SelectionHandleOverlay`'s pan gesture feeds
+/// the `TextSelectionOverlay` drag handlers, and the knob's tap is
+/// `TextSelectionHandleControls` calling `onSelectionHandleTapped`.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct TextHandleDrag {
+    field: ElementId,
+    /// The pressed handle. `Collapsed` and `Left` are the start handle, and
+    /// `Right` is the end handle.
+    handle: SelectionHandleType,
+    down_position: Offset,
+    /// The press landed on the handle's drawn knob, where its tap lives.
+    on_knob: bool,
+    line_height: f32,
+    /// The contact's global y, snapped to whole lines
+    /// (`_startHandleDragPosition` / `_endHandleDragPosition`).
+    drag_y: f32,
+    /// Distance from `drag_y` to the centre of the handle's line
+    /// (`_startHandleDragTarget` / `_endHandleDragTarget`).
+    target: f32,
+    /// The selection when the press began (`_dragStartSelection`, used on
+    /// Apple platforms).
+    start_selection: TextSelection,
+    /// Whether the press moved past touch slop, so it is a drag and not a tap.
+    started: bool,
+}
+
+/// `_getHandleDy`: the handle's y after a drag from `handle_dy` to `drag_dy`.
+/// The handle jumps whole lines, once the contact has moved a full line.
+fn handle_dy(drag_dy: f32, handle_dy: f32, line_height: f32) -> f32 {
+    if line_height <= 0.0 {
+        return handle_dy;
+    }
+    let distance = drag_dy - handle_dy;
+    let direction = if distance < 0.0 { -1.0 } else { 1.0 };
+    let lines = direction * (distance.abs() / line_height).floor();
+    handle_dy + lines * line_height
+}
+
+impl Runtime {
+    /// The focused field and the handle a touch or stylus press at `position`
+    /// lands on, if any. Pointer routing asks this before dismissing
+    /// transients: a handle belongs to its field, as Flutter's tap region
+    /// groups a text field with its handles and toolbar.
+    pub(super) fn text_handle_under(
+        &self,
+        position: Offset,
+        kind: PointerDeviceKind,
+    ) -> Option<(ElementId, SelectionHandleType)> {
+        let touch = matches!(
+            kind,
+            PointerDeviceKind::Touch
+                | PointerDeviceKind::Stylus
+                | PointerDeviceKind::InvertedStylus
+        );
+        if !touch {
+            return None;
+        }
+        let field = self
+            .focused
+            .filter(|field| self.tree.is_text_field(*field))?;
+        let handles = self.tree.text_field_selection_handles(field)?.handles()?;
+        Some((field, handles.hit_test(position)?))
+    }
+
+    /// Starts a handle drag when a touch or stylus press lands on a visible
+    /// handle of the focused field. Flutter's handle hit area wins over the
+    /// field, so the press neither moves focus nor starts a long press.
+    pub(super) fn text_handle_press(
+        &mut self,
+        position: Offset,
+        kind: PointerDeviceKind,
+    ) -> Option<ElementId> {
+        let (field, handle) = self.text_handle_under(position, kind)?;
+        let handles = self.tree.text_field_selection_handles(field)?.handles()?;
+        let geometry = match handle {
+            SelectionHandleType::Right => handles.end?,
+            _ => handles.start,
+        };
+        // `_handleSelectionEndHandleDragStart`: aim at the centre of the line
+        // the handle points to, not at the handle itself.
+        let centre = geometry.anchor.y - geometry.line_height / 2.0;
+        let start_selection = self
+            .tree
+            .text_controller(field)
+            .map_or(TextSelection::collapsed(0), |controller| {
+                controller.selection()
+            });
+        self.text_handle_drag = Some(TextHandleDrag {
+            field,
+            handle,
+            down_position: position,
+            on_knob: geometry.rect().contains(position),
+            line_height: geometry.line_height,
+            drag_y: position.y,
+            target: centre - position.y,
+            start_selection,
+            started: false,
+        });
+        Some(field)
+    }
+
+    /// Advances a handle drag on pointer move. Movement inside touch slop is
+    /// not yet a drag, so a tap on the handle can still be recognised.
+    pub(super) fn text_handle_drag_move(&mut self, position: Offset) {
+        let Some(mut drag) = self.text_handle_drag.take() else {
+            return;
+        };
+        if !drag.started {
+            let delta = position - drag.down_position;
+            if delta.x.hypot(delta.y) <= TOUCH_SLOP {
+                self.text_handle_drag = Some(drag);
+                return;
+            }
+            drag.started = true;
+            // `_handleSelectionStartHandleDragStart` hides the toolbar while
+            // the handle moves; `_handleAnyDragEnd` shows it again.
+            if let Some(menu) = self.tree.text_field_context_menu(drag.field) {
+                menu.hide();
+            }
+        }
+        let now = self.input_now();
+        drag.drag_y = handle_dy(position.y, drag.drag_y, drag.line_height);
+        let target = Offset::new(position.x, drag.drag_y + drag.target);
+        self.text_handle_select(&drag, target, now);
+        self.text_handle_drag = Some(drag);
+        self.frame_requested = true;
+    }
+
+    /// The selection update of `_handleSelectionEndHandleDragUpdate` and
+    /// `_handleSelectionStartHandleDragUpdate`. Apple platforms anchor on
+    /// the drag-start selection and never invert it; the others keep the
+    /// handles from crossing or collapsing.
+    fn text_handle_select(&mut self, drag: &TextHandleDrag, target: Offset, now: Instant) {
+        let Some((offset, affinity)) = self.tree.text_field_position_at(drag.field, target) else {
+            return;
+        };
+        let Some(controller) = self.tree.text_controller(drag.field) else {
+            return;
+        };
+        let current = controller.selection();
+        let next = if matches!(
+            self.text_shortcut_platform,
+            TextShortcutPlatform::Ios | TextShortcutPlatform::MacOs
+        ) {
+            let start = drag.start_selection;
+            if start.is_collapsed() {
+                TextSelection::collapsed(offset)
+            } else {
+                let normalized = start.extent >= start.base;
+                match (drag.handle, normalized) {
+                    (SelectionHandleType::Right, true) => TextSelection::new(start.base, offset),
+                    (SelectionHandleType::Right, false) => TextSelection::new(start.extent, offset),
+                    (_, true) => TextSelection::new(start.extent, offset),
+                    (_, false) => TextSelection::new(start.base, offset),
+                }
+            }
+        } else if current.is_collapsed() {
+            TextSelection::collapsed(offset)
+        } else {
+            let next = match drag.handle {
+                SelectionHandleType::Right => TextSelection::new(current.base, offset),
+                _ => TextSelection::new(offset, current.extent),
+            };
+            // Flutter: do not allow order swapping.
+            if next.base >= next.extent {
+                return;
+            }
+            next
+        };
+        self.tree.text_field_select(drag.field, next, affinity, now);
+    }
+
+    /// Ends a handle press. A tap on a collapsed handle toggles the touch
+    /// toolbar (`toggleToolbar`); a drag shows it again when the selection is
+    /// not collapsed (`_handleAnyDragEnd`).
+    pub(super) fn text_handle_drag_end(&mut self, position: Offset) {
+        let Some(drag) = self.text_handle_drag.take() else {
+            return;
+        };
+        self.frame_requested = true;
+        if !drag.started {
+            let delta = position - drag.down_position;
+            if drag.handle == SelectionHandleType::Collapsed
+                && drag.on_knob
+                && delta.x.hypot(delta.y) <= TOUCH_SLOP
+            {
+                self.text_field_toggle_toolbar(drag.field, drag.down_position);
+            }
+            return;
+        }
+        let collapsed = self
+            .tree
+            .text_controller(drag.field)
+            .is_none_or(|controller| controller.selection().is_collapsed());
+        if !collapsed {
+            self.show_text_field_touch_menu(drag.field, position);
+        }
+    }
+
+    /// `EditableTextState.toggleToolbar` with the default `hideHandles`:
+    /// closes the toolbar and handles when the toolbar shows, else shows it.
+    fn text_field_toggle_toolbar(&mut self, field: ElementId, position: Offset) {
+        let showing = self
+            .tree
+            .text_field_context_menu(field)
+            .is_some_and(|menu| menu.is_showing());
+        if showing {
+            self.hide_text_field_overlays(field);
+        } else {
+            self.show_text_field_touch_menu(field, position);
+        }
     }
 }

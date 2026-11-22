@@ -54,7 +54,29 @@ impl TextSelectionHandle {
             Size::new(SELECTION_HANDLE_SIZE, SELECTION_HANDLE_SIZE),
         )
     }
+
+    /// The area a touch on the handle is recognised in: Flutter
+    /// `_SelectionHandleOverlay.build`, which expands the handle's rect to
+    /// include a circle of `kMinInteractiveDimension` diameter around its
+    /// centre. The result is a square of that side, centred on the handle.
+    #[must_use]
+    pub fn interactive_rect(&self) -> Rect {
+        let handle = self.rect();
+        let center = Offset::new(
+            handle.origin.x + handle.size.width / 2.0,
+            handle.origin.y + handle.size.height / 2.0,
+        );
+        let half = MIN_INTERACTIVE_DIMENSION / 2.0;
+        Rect::from_origin_size(
+            center - Offset::new(half, half),
+            Size::new(MIN_INTERACTIVE_DIMENSION, MIN_INTERACTIVE_DIMENSION),
+        )
+    }
 }
+
+/// Flutter `kMinInteractiveDimension`: the smallest touch target a handle
+/// gets, in logical pixels.
+pub const MIN_INTERACTIVE_DIMENSION: f32 = 48.0;
 
 /// The handles of a text field's selection: a collapsed caret handle, or a
 /// start and an end handle for a range.
@@ -67,16 +89,36 @@ pub struct TextSelectionHandles {
 }
 
 impl TextSelectionHandles {
-    /// The handle under `point` in global coordinates, or `None`. This is the
-    /// seam a drag of a visible handle hit-tests through.
+    /// The handle under `point` in global coordinates, or `None`. A point
+    /// counts when it lies in the handle's [`interactive_rect`]; when both
+    /// handles' areas cover it, the handle whose tip is nearer wins.
+    ///
+    /// [`interactive_rect`]: TextSelectionHandle::interactive_rect
     #[must_use]
     pub fn hit_test(&self, point: Offset) -> Option<SelectionHandleType> {
-        if self.start.rect().contains(point) {
-            return Some(self.start.handle_type);
+        let start = self
+            .start
+            .interactive_rect()
+            .contains(point)
+            .then_some(self.start);
+        let end = self
+            .end
+            .filter(|end| end.interactive_rect().contains(point));
+        match (start, end) {
+            (Some(start), Some(end)) => {
+                let distance = |handle: &TextSelectionHandle| {
+                    let delta = point - handle.anchor;
+                    delta.x * delta.x + delta.y * delta.y
+                };
+                if distance(&end) < distance(&start) {
+                    Some(end.handle_type)
+                } else {
+                    Some(start.handle_type)
+                }
+            }
+            (Some(start), None) => Some(start.handle_type),
+            (None, end) => end.map(|end| end.handle_type),
         }
-        self.end
-            .filter(|end| end.rect().contains(point))
-            .map(|end| end.handle_type)
     }
 }
 
