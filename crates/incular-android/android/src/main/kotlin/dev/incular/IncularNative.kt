@@ -44,6 +44,12 @@ internal object IncularNative {
     /** Physical-pixel system bar/cutout insets, then the soft keyboard's bottom inset. */
     @JvmStatic external fun nativeInsets(left: Int, top: Int, right: Int, bottom: Int, imeBottom: Int)
 
+    /**
+     * The system settings Flutter reports: dark mode, font scale, bold text, reduced motion (animator
+     * transition scale 0) and the locale tags in preference order, joined with commas.
+     */
+    @JvmStatic external fun nativeSettings(dark: Boolean, textScale: Float, boldText: Boolean, reducedMotion: Boolean, locales: String)
+
     /** 0 resumed, 1 paused, 2 stopped. */
     @JvmStatic external fun nativeLifecycle(state: Int)
 

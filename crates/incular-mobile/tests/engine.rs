@@ -101,7 +101,8 @@ fn environment_snapshot_merges_insets_and_defaults() {
     assert_eq!(snapshot.physical_width, 1080);
     assert_eq!(snapshot.scale_factor, 2.5);
     assert_eq!(snapshot.safe_insets.top, 24.);
-    assert_eq!(snapshot.safe_insets.bottom, 300.);
+    // The keyboard covers the 16 px bottom padding, so no safe bottom is left.
+    assert_eq!(snapshot.safe_insets.bottom, 0.);
     assert_eq!(snapshot.view_padding.bottom, 16.);
     assert!((snapshot.text_scale - 1.3).abs() < 1e-6);
     assert_eq!(snapshot.locales.first(), Some(&french));

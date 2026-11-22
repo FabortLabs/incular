@@ -5,9 +5,10 @@
 //! Choreographer callback and the looper wake callback run on that thread,
 //! and none of them re-enters another while it holds the engine.
 
+use incular_config::Brightness;
 use incular_core::{NormalizedPressure, PointerDeviceKind, PointerPhase, time::Instant};
 use incular_mobile::{MobileEngine, MobileEnvironment, TouchSample};
-use incular_platform::{PhysicalSize, PlatformLifecycle};
+use incular_platform::{PhysicalSize, PlatformLifecycle, canonicalize_system_locales};
 use incular_runtime::RuntimeWake;
 use jni_sys::{
     JNI_ERR, JNI_OK, JNI_VERSION_1_6, JNIEnv, JNINativeMethod, JavaVM, jboolean, jclass, jfloat,
@@ -414,6 +415,37 @@ extern "system" fn native_insets(
     });
 }
 
+/// The system settings `IncularActivity` reports: dark mode, font scale, bold
+/// text, reduced motion, and comma-separated BCP-47 locale tags in preference
+/// order. Tags that do not parse are skipped; no usable tag keeps the default.
+extern "system" fn native_settings(
+    env: *mut JNIEnv,
+    _class: jclass,
+    dark: jboolean,
+    text_scale: jfloat,
+    bold_text: jboolean,
+    reduced_motion: jboolean,
+    locales: jstring,
+) {
+    // SAFETY: JNI passes this thread's environment and a valid String reference.
+    let tags = unsafe { java::string_from_java(env, locales) }.unwrap_or_default();
+    let locales = canonicalize_system_locales(tags.split(','));
+    with_shell(|shell| {
+        let mut environment = shell.environment.clone();
+        environment.brightness = Some(if dark != 0 {
+            Brightness::Dark
+        } else {
+            Brightness::Light
+        });
+        environment.text_scale = Some(text_scale);
+        environment.bold_text = Some(bold_text != 0);
+        environment.reduced_motion = Some(reduced_motion != 0);
+        environment.locales = (!locales.is_empty()).then_some(locales);
+        shell.environment.clone_from(&environment);
+        shell.engine.set_environment(environment);
+    });
+}
+
 /// `state`: 0 resumed, 1 paused, 2 stopped. Like Flutter, the app is active
 /// from `onResume` only; `onStart` sends nothing. Unknown values are ignored.
 extern "system" fn native_lifecycle(_env: *mut JNIEnv, _class: jclass, state: jint) {
@@ -470,6 +502,11 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut JavaVM, _reserved: *mut c_void
         ),
         method(c"nativeTouch", c"(IIFFFI)V", native_touch as *mut c_void),
         method(c"nativeInsets", c"(IIIII)V", native_insets as *mut c_void),
+        method(
+            c"nativeSettings",
+            c"(ZFZZLjava/lang/String;)V",
+            native_settings as *mut c_void,
+        ),
         method(c"nativeLifecycle", c"(I)V", native_lifecycle as *mut c_void),
         method(
             c"nativeEditingState",

@@ -72,12 +72,20 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-widgets`: `Text` and editable text follow the system text scale by
+  default (Flutter's `MediaQuery.textScalerOf`); pass `text_scaler` to opt out.
 - `incular-android`: the back button pops `Navigator` routes and `WidgetsApp`
   and `Router` stacks instead of closing the app, and the predictive back
   gesture follows the top route. `incular-widgets`: `RootBackButtonDispatcher`
   registers with the back gesture observers when its first callback is added.
 - `incular-android`: the app is no longer active from `onStart`, before the
   activity resumes. It becomes active in `onResume` only, as in Flutter.
+- `incular-android`: the app reports dark mode, font scale, bold text,
+  reduced motion and locales, as Flutter does, and updates them when the
+  configuration changes (`onConfigurationChanged`) or the activity resumes.
+  `incular-mobile`: `MediaQuery`-style `safe_insets` now subtract the soft
+  keyboard from the persistent padding (`max(0, view_padding - view_insets)`)
+  instead of adding it, so a shown keyboard reduces the safe bottom edge.
 - `incular-widgets`: touch-drag scrolling now matches Flutter's gesture arena
   in two cases that left pages unscrollable on phones:
   - A `GestureDetector` above a scroll view (an app-wide tap or keyboard

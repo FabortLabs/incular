@@ -8,7 +8,9 @@ use incular_platform::WindowMetrics;
 /// Inset ownership follows `SystemEnvironmentPreferences`: `view_padding` is
 /// the persistent obstruction (system bars, cutouts, home indicator),
 /// `view_insets` the transient one (the soft keyboard), and `safe_insets` what
-/// is usable right now.
+/// is usable right now: per edge `max(0, view_padding - view_insets)`, as
+/// Flutter's `MediaQuery.padding`. A shown keyboard covers the padding it
+/// overlaps, so it reduces the safe edge rather than adding to it.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct MobileEnvironment {
     pub view_padding: EdgeInsets,
@@ -26,11 +28,13 @@ impl MobileEnvironment {
     #[must_use]
     pub fn snapshot(&self, metrics: WindowMetrics) -> RuntimeEnvironment {
         let defaults = RuntimeEnvironment::default();
+        let padding = self.view_padding;
+        let insets = self.view_insets;
         let safe_insets = EdgeInsets {
-            left: self.view_padding.left.max(self.view_insets.left),
-            top: self.view_padding.top.max(self.view_insets.top),
-            right: self.view_padding.right.max(self.view_insets.right),
-            bottom: self.view_padding.bottom.max(self.view_insets.bottom),
+            left: (padding.left - insets.left).max(0.0),
+            top: (padding.top - insets.top).max(0.0),
+            right: (padding.right - insets.right).max(0.0),
+            bottom: (padding.bottom - insets.bottom).max(0.0),
         };
         let mut environment = RuntimeEnvironment {
             viewport: metrics.logical_size(),

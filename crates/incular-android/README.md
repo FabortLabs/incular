@@ -29,6 +29,11 @@ Android platform integration for Incular.
   they panic on the first request. When the crate is in the dependency
   graph, `incular build android` adds its Kotlin component to the generated
   Gradle project.
+- System settings follow Flutter's Android embedder: `nativeSettings` reports
+  the night-mode flag as brightness, `fontScale` as text scale, bold text from
+  the font weight adjustment (API 31+), reduced motion from
+  `TRANSITION_ANIMATION_SCALE` of 0, and the `LocaleList` as BCP-47 tags. The
+  values are sent at start, on resume and on `onConfigurationChanged`.
 - Text input follows Flutter's `TextInputPlugin`. `IncularInputView` opens
   the soft keyboard for the focused field and reports the input method's
   whole editing state; hardware keys go to key handlers and fields; copy and

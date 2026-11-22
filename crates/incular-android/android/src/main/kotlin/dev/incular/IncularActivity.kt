@@ -5,6 +5,8 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.content.res.Configuration
+import android.provider.Settings
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.window.OnBackInvokedCallback
@@ -25,6 +27,11 @@ open class IncularActivity : Activity(), SurfaceHolder.Callback {
     private var surfaceAttached = false
     private var started = false
 
+    private companion object {
+        /** FontWeight.Bold - FontWeight.Normal, as Flutter's AccessibilityBridge defines it. */
+        const val BOLD_TEXT_WEIGHT_ADJUSTMENT = 300
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         System.loadLibrary(libraryName())
@@ -36,7 +43,10 @@ open class IncularActivity : Activity(), SurfaceHolder.Callback {
         surfaceView.setOnApplyWindowInsetsListener { view, insets -> forwardInsets(insets); view.onApplyWindowInsets(insets) }
         setContentView(surfaceView)
         started = IncularNative.create(applicationContext, filesDir.absolutePath)
-        if (!started) finish() else registerBack()
+        if (!started) finish() else {
+            registerBack()
+            sendSettings(resources.configuration)
+        }
     }
 
     /**
@@ -154,7 +164,33 @@ open class IncularActivity : Activity(), SurfaceHolder.Callback {
 
     override fun onResume() {
         super.onResume()
-        if (started) IncularNative.nativeLifecycle(0)
+        if (started) {
+            // Settings.Global animation scale changes do not recreate the activity, so re-read on resume.
+            sendSettings(resources.configuration)
+            IncularNative.nativeLifecycle(0)
+        }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (started) sendSettings(newConfig)
+    }
+
+    /**
+     * Reports what Flutter reads in `FlutterView.sendUserSettingsToFlutter`, `AccessibilityBridge`
+     * and `LocalizationPlugin.sendLocalesToFlutter`: dark mode from the night flag, the font scale,
+     * bold text (font weight adjustment of at least 300, API 31+), reduced motion (transition
+     * animation scale 0) and the locale tags in order.
+     */
+    private fun sendSettings(config: Configuration) {
+        val dark = (config.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        val boldText = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            config.fontWeightAdjustment != Configuration.FONT_WEIGHT_ADJUSTMENT_UNDEFINED &&
+            config.fontWeightAdjustment >= BOLD_TEXT_WEIGHT_ADJUSTMENT
+        val transitionScale = Settings.Global.getFloat(contentResolver, Settings.Global.TRANSITION_ANIMATION_SCALE, 1f)
+        IncularNative.nativeSettings(
+            dark, config.fontScale, boldText, transitionScale == 0f, config.locales.toLanguageTags(),
+        )
     }
 
     override fun onPause() {
