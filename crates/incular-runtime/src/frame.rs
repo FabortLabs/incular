@@ -1935,7 +1935,9 @@ impl Runtime {
             TextInputTypeHint::Text if snapshot.multiline => TextInputType::Multiline,
             TextInputTypeHint::Text => TextInputType::Text,
             TextInputTypeHint::Multiline => TextInputType::Multiline,
-            TextInputTypeHint::Number => TextInputType::Number,
+            TextInputTypeHint::Number { signed, decimal } => {
+                TextInputType::Number { signed, decimal }
+            }
             TextInputTypeHint::Phone => TextInputType::Phone,
             TextInputTypeHint::Email => TextInputType::Email,
             TextInputTypeHint::Url => TextInputType::Url,
@@ -2007,7 +2009,11 @@ impl Runtime {
                     rect: snapshot.caret_rect,
                 });
         }
-        if std::mem::take(&mut self.text_input_show_requested) && !client_changed {
+        // `SetClient` only attaches the field. A new client is shown because
+        // focusing a field opens the keyboard; a configuration change on the
+        // same client does not reopen a keyboard the user dismissed.
+        let show_requested = std::mem::take(&mut self.text_input_show_requested);
+        if show_requested || client_changed {
             self.text_input_commands
                 .push_back(TextInputCommand::Show { client });
         }

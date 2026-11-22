@@ -71,6 +71,14 @@ a version and date when publishing.
 
 ### Changed
 
+- **Breaking (`incular-platform`, `incular-widgets`, `incular-material`):** `TextInputType::Number` and
+  `TextInputTypeHint::Number` carry `{ signed, decimal }` so a numeric keyboard can offer a decimal
+  point or a minus sign, as Flutter does. Migrate `TextInputType::Number` to
+  `TextInputType::NUMBER` (integers only, as before) or `TextInputType::number_with_options(signed,
+  decimal)`; the same for `TextInputTypeHint` (`NUMBER` / `number_with_options`).
+- `incular-platform`, `incular-runtime`: `TextInputCommand::SetClient` attaches and reconfigures the field without
+  showing the keyboard; `TextInputCommand::Show` shows it. Adapters that showed the keyboard on
+  `SetClient` must handle `Show`.
 - **Breaking (`incular-navigation`):** `Navigator::observe_back_gestures` is
   removed because a navigator now registers itself when it is created, so the
   system back pops its routes and predictive back follows the top route. Migration:
@@ -88,6 +96,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-android`: changing a focused field's configuration, such as a password field's visibility toggle, no longer reopens a keyboard the user dismissed. Focusing a field still shows it.
+- `incular-android`: after Rust pushes a selection or text change, the next input method edit that lands on the same state is reported again instead of being dropped as a duplicate.
+- `incular-android`: hardware keys without a physical-key mapping, and numpad digits and operators, type their characters as Flutter does.
 - `incular-material`: `Scaffold` and `AppBar` apply the safe insets like Flutter. The app bar
   pads its toolbar by the status-bar inset and its background covers it; the body drops the
   top inset under an app bar and the bottom inset when a navigation bar is present; the FAB

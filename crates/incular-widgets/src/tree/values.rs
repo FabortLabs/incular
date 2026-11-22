@@ -21,11 +21,29 @@ pub enum TextInputTypeHint {
     #[default]
     Text,
     Multiline,
-    Number,
+    /// A numeric keyboard; `signed` allows a minus sign and `decimal` a decimal point.
+    Number {
+        signed: bool,
+        decimal: bool,
+    },
     Phone,
     Email,
     Url,
     Password,
+}
+
+impl TextInputTypeHint {
+    /// An integer keyboard without a sign.
+    pub const NUMBER: Self = Self::Number {
+        signed: false,
+        decimal: false,
+    };
+
+    /// A numeric keyboard with optional sign and decimal point.
+    #[must_use]
+    pub const fn number_with_options(signed: bool, decimal: bool) -> Self {
+        Self::Number { signed, decimal }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]

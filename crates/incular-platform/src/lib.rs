@@ -546,11 +546,30 @@ pub enum TextInputType {
     #[default]
     Text,
     Multiline,
-    Number,
+    /// A numeric keyboard. `signed` allows a leading minus sign and `decimal`
+    /// allows a decimal point (Flutter's `TextInputType.numberWithOptions`).
+    Number {
+        signed: bool,
+        decimal: bool,
+    },
     Phone,
     Email,
     Url,
     Password,
+}
+
+impl TextInputType {
+    /// Flutter's `TextInputType.number`: integers only, no sign.
+    pub const NUMBER: Self = Self::Number {
+        signed: false,
+        decimal: false,
+    };
+
+    /// Flutter's `TextInputType.numberWithOptions`.
+    #[must_use]
+    pub const fn number_with_options(signed: bool, decimal: bool) -> Self {
+        Self::Number { signed, decimal }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -643,6 +662,9 @@ pub struct TextInputState {
 /// runtime boundary.
 #[derive(Clone, Debug, PartialEq)]
 pub enum TextInputCommand {
+    /// Attaches the client, or reconfigures it, without showing the keyboard
+    /// (Flutter's `TextInput.setClient`). A keyboard is shown only by a
+    /// following [`Self::Show`].
     SetClient {
         configuration: TextInputConfiguration,
         state: TextInputState,
@@ -656,9 +678,10 @@ pub enum TextInputCommand {
         client: TextInputClientId,
         rect: Rect,
     },
-    /// Shows the soft keyboard again for the current client (Flutter's
-    /// `TextInput.show`), sent when the user taps the focused field after
-    /// dismissing the keyboard. [`Self::SetClient`] already implies it.
+    /// Shows the soft keyboard for the current client (Flutter's
+    /// `TextInput.show`). Sent when a client gains focus, and when the user
+    /// taps the focused field after dismissing the keyboard. [`Self::SetClient`]
+    /// alone never shows the keyboard.
     Show {
         client: TextInputClientId,
     },

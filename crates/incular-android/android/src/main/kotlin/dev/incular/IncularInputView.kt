@@ -32,6 +32,9 @@ internal class IncularInputView(context: Context) : SurfaceView(context) {
     private var attached = false
     private val editable: Editable = Editable.Factory.getInstance().newEditable("")
 
+    /** The last mirror state Rust knows: pushed from Rust, or reported by the input connection. */
+    internal var reported: MirrorState? = null
+
     init {
         isFocusable = true
         isFocusableInTouchMode = true
@@ -52,7 +55,11 @@ internal class IncularInputView(context: Context) : SurfaceView(context) {
         return IncularInputConnection(this, editable, inputType, imeOptions)
     }
 
-    /** Attaches the keyboard to a newly focused field and shows it (`TextInput.setClient`, `show`). */
+    /**
+     * Attaches the input method to a field (`TextInput.setClient`). It does not show the
+     * keyboard: a following [showKeyboard] does (`TextInput.show`), so a configuration change
+     * the user did not ask for never reopens a keyboard they dismissed.
+     */
     fun attach(inputType: Int, imeOptions: Int, text: String, selStart: Int, selEnd: Int, compStart: Int, compEnd: Int) {
         this.inputType = inputType
         this.imeOptions = imeOptions
@@ -60,7 +67,6 @@ internal class IncularInputView(context: Context) : SurfaceView(context) {
         setMirror(text, selStart, selEnd, compStart, compEnd)
         requestFocus()
         imm.restartInput(this)
-        imm.showSoftInput(this, 0)
     }
 
     /** The app changed the field (`TextInput.setEditingState`). */
@@ -103,6 +109,10 @@ internal class IncularInputView(context: Context) : SurfaceView(context) {
         )
     }
 
+    /**
+     * Replaces the mirror with the state Rust pushed. That state is what Rust already has, so
+     * it becomes the dedupe baseline: an input method edit that lands on it is not echoed back.
+     */
     private fun setMirror(text: String, selStart: Int, selEnd: Int, compStart: Int, compEnd: Int) {
         editable.replace(0, editable.length, text)
         val length = editable.length
@@ -111,6 +121,13 @@ internal class IncularInputView(context: Context) : SurfaceView(context) {
         if (compStart in 0..<compEnd && compEnd <= length) {
             editable.setSpan(ComposingSpan(), compStart, compEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE or Spanned.SPAN_COMPOSING)
         }
+        reported = MirrorState(
+            editable.toString(),
+            Selection.getSelectionStart(editable),
+            Selection.getSelectionEnd(editable),
+            BaseInputConnection.getComposingSpanStart(editable),
+            BaseInputConnection.getComposingSpanEnd(editable),
+        )
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean =
@@ -139,7 +156,6 @@ internal class IncularInputConnection(
     private val imeOptions: Int,
 ) : BaseInputConnection(view, true) {
     private var batchDepth = 0
-    private var reported: MirrorState? = null
 
     override fun getEditable(): Editable = mirror
 
@@ -261,11 +277,12 @@ internal class IncularInputConnection(
             getComposingSpanStart(mirror),
             getComposingSpanEnd(mirror),
         )
-        if (state == reported) return
-        reported = state
+        if (state == view.reported) return
+        view.reported = state
         view.reportSelection()
         IncularNative.nativeEditingState(state.text, state.selStart, state.selEnd, state.compStart, state.compEnd)
     }
-
-    private data class MirrorState(val text: String, val selStart: Int, val selEnd: Int, val compStart: Int, val compEnd: Int)
 }
+
+/** A snapshot of the mirror, compared to suppress duplicate reports. */
+internal data class MirrorState(val text: String, val selStart: Int, val selEnd: Int, val compStart: Int, val compEnd: Int)

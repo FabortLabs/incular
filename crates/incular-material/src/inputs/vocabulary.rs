@@ -4,7 +4,11 @@ pub enum TextInputType {
     #[default]
     Text,
     Multiline,
-    Number,
+    /// A numeric keyboard; see [`TextInputType::number_with_options`].
+    Number {
+        signed: bool,
+        decimal: bool,
+    },
     Phone,
     Datetime,
     EmailAddress,
@@ -13,6 +17,20 @@ pub enum TextInputType {
     Name,
     StreetAddress,
     None,
+}
+
+impl TextInputType {
+    /// Flutter's `TextInputType.number`: integers only, no sign.
+    pub const NUMBER: Self = Self::Number {
+        signed: false,
+        decimal: false,
+    };
+
+    /// Flutter's `TextInputType.numberWithOptions`.
+    #[must_use]
+    pub const fn number_with_options(signed: bool, decimal: bool) -> Self {
+        Self::Number { signed, decimal }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]

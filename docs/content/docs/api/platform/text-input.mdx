@@ -5,9 +5,9 @@ icon: Keyboard
 ---
 
 [`TextInputCommand`](/docs/api/platform/text-input) values queue without native handles:
-`SetClient { configuration, state, caret_rect }` / `Update` / `SetCaretRect` /
-`Hide` / `Clear`. `TextInputClientId(u64)` identifies retained-tree clients.
-[`TextInputType`](/docs/api/platform/text-input): [`Text`](/docs/api/content/text) / `Multiline` / `Number` / `Phone` / `Email` / `Url` /
+`SetClient { configuration, state, caret_rect }` (attaches without showing the keyboard) /
+`Show` / `Update` / `SetCaretRect` / `Hide` / `Clear`. `TextInputClientId(u64)` identifies retained-tree clients.
+[`TextInputType`](/docs/api/platform/text-input): [`Text`](/docs/api/content/text) / `Multiline` / `Number { signed, decimal }` (`TextInputType::NUMBER`) / `Phone` / `Email` / `Url` /
 `Password` (soft-keyboard hints).
 
 ```rust

@@ -170,11 +170,14 @@ fn focused_editors_publish_native_text_input_state_and_actions() {
     let commands = runtime.take_text_input_commands();
     assert!(matches!(
         commands.as_slice(),
-        [incular_platform::TextInputCommand::SetClient {
-            configuration,
-            state,
-            ..
-        }] if configuration.input_type == incular_platform::TextInputType::Text
+        [
+            incular_platform::TextInputCommand::SetClient {
+                configuration,
+                state,
+                ..
+            },
+            incular_platform::TextInputCommand::Show { .. },
+        ] if configuration.input_type == incular_platform::TextInputType::Text
             && state.text.is_empty()
     ));
 
@@ -216,8 +219,10 @@ fn native_text_input_hints_survive_editor_conversion() {
     let commands = runtime.take_text_input_commands();
     assert!(matches!(
         commands.as_slice(),
-        [incular_platform::TextInputCommand::SetClient { configuration, .. }]
-            if configuration.input_type == incular_platform::TextInputType::Email
+        [
+            incular_platform::TextInputCommand::SetClient { configuration, .. },
+            incular_platform::TextInputCommand::Show { .. },
+        ] if configuration.input_type == incular_platform::TextInputType::Email
                 && configuration.action == incular_platform::TextInputAction::Search
     ));
 }

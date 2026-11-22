@@ -76,10 +76,14 @@ fn tapping_the_focused_field_asks_for_the_keyboard_again() {
     runtime.run_frame(constraints()).unwrap();
     let first = runtime.take_text_input_commands();
     assert!(
-        !first
-            .iter()
-            .any(|command| matches!(command, TextInputCommand::Show { .. })),
-        "attaching the client already shows the keyboard: {first:?}"
+        matches!(
+            first.as_slice(),
+            [
+                TextInputCommand::SetClient { .. },
+                TextInputCommand::Show { .. },
+            ]
+        ),
+        "focusing a field attaches it and then shows the keyboard: {first:?}"
     );
 
     tap(&mut runtime);
@@ -89,6 +93,37 @@ fn tapping_the_focused_field_asks_for_the_keyboard_again() {
             .take_text_input_commands()
             .iter()
             .any(|command| matches!(command, TextInputCommand::Show { .. }))
+    );
+}
+
+#[test]
+fn a_configuration_change_on_the_focused_field_does_not_show_the_keyboard() {
+    let controller = TextEditingController::new();
+    let mut runtime = editor(&controller);
+    tap(&mut runtime);
+    runtime.run_frame(constraints()).unwrap();
+    let _ = runtime.take_text_input_commands();
+
+    // A password field's "show password" toggle changes only `obscure_text`.
+    let root = runtime.tree().root().expect("the editor is the root");
+    runtime
+        .tree_mut()
+        .update(
+            root,
+            EditableText::new(controller.clone())
+                .text_direction(TextDirection::Ltr)
+                .obscure_text(true)
+                .into(),
+        )
+        .unwrap();
+    runtime.run_frame(constraints()).unwrap();
+    let commands = runtime.take_text_input_commands();
+    assert!(
+        matches!(
+            commands.as_slice(),
+            [TextInputCommand::SetClient { configuration, .. }] if configuration.obscure_text
+        ),
+        "reconfiguring keeps the keyboard as the user left it: {commands:?}"
     );
 }
 

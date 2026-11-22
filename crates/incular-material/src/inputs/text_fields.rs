@@ -28,7 +28,7 @@ fn text_input_type_hint(input_type: TextInputType) -> TextInputTypeHint {
         | TextInputType::StreetAddress
         | TextInputType::None => TextInputTypeHint::Text,
         TextInputType::Multiline => TextInputTypeHint::Multiline,
-        TextInputType::Number => TextInputTypeHint::Number,
+        TextInputType::Number { signed, decimal } => TextInputTypeHint::Number { signed, decimal },
         TextInputType::Phone => TextInputTypeHint::Phone,
         TextInputType::EmailAddress => TextInputTypeHint::Email,
         TextInputType::Url => TextInputTypeHint::Url,

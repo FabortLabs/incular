@@ -165,7 +165,9 @@ fn configure(
     configuration: &incular_platform::TextInputConfiguration,
 ) {
     let mode = match configuration.input_type {
-        TextInputType::Number => "decimal",
+        // Flutter web: a decimal keypad only when the field takes a decimal point.
+        TextInputType::Number { decimal: true, .. } => "decimal",
+        TextInputType::Number { decimal: false, .. } => "numeric",
         TextInputType::Phone => "tel",
         TextInputType::Email => "email",
         TextInputType::Url => "url",

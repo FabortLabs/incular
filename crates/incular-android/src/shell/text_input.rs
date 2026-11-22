@@ -117,6 +117,8 @@ fn input_type(configuration: &TextInputConfiguration) -> jint {
     const CLASS_TEXT: jint = 0x1;
     const CLASS_NUMBER: jint = 0x2;
     const CLASS_PHONE: jint = 0x3;
+    const FLAG_NUMBER_SIGNED: jint = 0x1000;
+    const FLAG_NUMBER_DECIMAL: jint = 0x2000;
     const VARIATION_URI: jint = 0x10;
     const VARIATION_EMAIL_ADDRESS: jint = 0x20;
     const VARIATION_PASSWORD: jint = 0x80;
@@ -128,7 +130,16 @@ fn input_type(configuration: &TextInputConfiguration) -> jint {
     const FLAG_MULTI_LINE: jint = 0x2_0000;
     const FLAG_NO_SUGGESTIONS: jint = 0x8_0000;
     let mut bits = match configuration.input_type {
-        TextInputType::Number => return CLASS_NUMBER,
+        TextInputType::Number { signed, decimal } => {
+            let mut bits = CLASS_NUMBER;
+            if signed {
+                bits |= FLAG_NUMBER_SIGNED;
+            }
+            if decimal {
+                bits |= FLAG_NUMBER_DECIMAL;
+            }
+            return bits;
+        }
         TextInputType::Phone => return CLASS_PHONE,
         TextInputType::Email => CLASS_TEXT | VARIATION_EMAIL_ADDRESS,
         TextInputType::Url => CLASS_TEXT | VARIATION_URI,
@@ -250,8 +261,12 @@ pub(super) extern "system" fn native_key(
         .ok()
         .and_then(char::from_u32)
         .filter(|character| !character.is_control());
-    let Some((code, named)) = key_code_to_code(key_code) else {
-        return 0;
+    // A key without a physical mapping still types its character, as Flutter's
+    // `InputConnectionAdaptor` does; a key with neither stays with the system.
+    let (code, named) = match key_code_to_code(key_code) {
+        Some(mapped) => mapped,
+        None if character.is_some() => (Code::Unidentified, None),
+        None => return 0,
     };
     let modifiers = modifiers(meta_state);
     let key = match (named, character) {
@@ -360,6 +375,18 @@ fn key_code_to_code(key_code: jint) -> Option<(Code, Option<NamedKey>)> {
         Code::Digit8,
         Code::Digit9,
     ];
+    const NUMPAD_DIGITS: [Code; 10] = [
+        Code::Numpad0,
+        Code::Numpad1,
+        Code::Numpad2,
+        Code::Numpad3,
+        Code::Numpad4,
+        Code::Numpad5,
+        Code::Numpad6,
+        Code::Numpad7,
+        Code::Numpad8,
+        Code::Numpad9,
+    ];
     const FUNCTION: [(Code, NamedKey); 12] = [
         (Code::F1, NamedKey::F1),
         (Code::F2, NamedKey::F2),
@@ -386,6 +413,16 @@ fn key_code_to_code(key_code: jint) -> Option<(Code, Option<NamedKey>)> {
         20 => named(Code::ArrowDown, NamedKey::ArrowDown),
         21 => named(Code::ArrowLeft, NamedKey::ArrowLeft),
         22 => named(Code::ArrowRight, NamedKey::ArrowRight),
+        144..=153 => Some((NUMPAD_DIGITS[index(144)?], None)),
+        154 => Some((Code::NumpadDivide, None)),
+        155 => Some((Code::NumpadMultiply, None)),
+        156 => Some((Code::NumpadSubtract, None)),
+        157 => Some((Code::NumpadAdd, None)),
+        158 => Some((Code::NumpadDecimal, None)),
+        159 => Some((Code::NumpadComma, None)),
+        161 => Some((Code::NumpadEqual, None)),
+        162 => Some((Code::NumpadParenLeft, None)),
+        163 => Some((Code::NumpadParenRight, None)),
         55 => Some((Code::Comma, None)),
         56 => Some((Code::Period, None)),
         57 => named(Code::AltLeft, NamedKey::Alt),

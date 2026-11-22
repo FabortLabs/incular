@@ -226,7 +226,7 @@ fn input_hints_update_while_focused() {
         Widget::from(
             EditableText::new(controller)
                 .text_direction(incular_widgets::TextDirection::Ltr)
-                .input_type(TextInputTypeHint::Number)
+                .input_type(TextInputTypeHint::NUMBER)
                 .input_action(TextInputActionHint::Done)
                 .size(Size::new(180., 32.)),
         ),
@@ -236,7 +236,7 @@ fn input_hints_update_while_focused() {
     let snapshot = tree
         .text_field_input_snapshot(root)
         .expect("input snapshot");
-    assert_eq!(snapshot.input_type, TextInputTypeHint::Number);
+    assert_eq!(snapshot.input_type, TextInputTypeHint::NUMBER);
     assert_eq!(snapshot.input_action, TextInputActionHint::Done);
 
     // Focus survives the hint update: focus state lives in the render
