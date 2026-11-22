@@ -55,6 +55,12 @@ a version and date when publishing.
 
 ### Changed
 
+- **Breaking (`incular-navigation`):** `Navigator::observe_back_gestures` is
+  removed because a navigator now registers itself when it is created, so the
+  system back pops its routes and predictive back follows the top route. Migration:
+  delete the call. A navigator that is dropped stops following back. Nested
+  navigators: back goes to the newest one first and falls through to the
+  outer ones when it cannot pop.
 - **Breaking (`incular-platform`):** `PlatformEvent` gained
   `TextEditingState` and `TextInputCommand` gained `Show` (Flutter's
   `TextInput.show`, sent when the focused field is tapped again). Add arms
@@ -66,6 +72,12 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-android`: the back button pops `Navigator` routes and `WidgetsApp`
+  and `Router` stacks instead of closing the app, and the predictive back
+  gesture follows the top route. `incular-widgets`: `RootBackButtonDispatcher`
+  registers with the back gesture observers when its first callback is added.
+- `incular-android`: the app is no longer active from `onStart`, before the
+  activity resumes. It becomes active in `onResume` only, as in Flutter.
 - `incular-widgets`: touch-drag scrolling now matches Flutter's gesture arena
   in two cases that left pages unscrollable on phones:
   - A `GestureDetector` above a scroll view (an app-wide tap or keyboard

@@ -8,6 +8,9 @@
 //! snapshot, reporting policy, and back transaction are still owned here.
 
 use super::Widget;
+use crate::back_gesture::{
+    BackGestureObserver, BackGestureObserverRegistration, add_shared_back_gesture_observer,
+};
 use incular_core::{RestorationKey, RestorationScope};
 use serde_json::{Value, json};
 use std::{
@@ -635,6 +638,10 @@ struct BackDispatcherState {
     children: Vec<Weak<DispatcherCell>>,
     /// Flutter `ChildBackButtonDispatcher.parent`; `None` for a root.
     parent: Option<Weak<DispatcherCell>>,
+    /// Set by a [`RootBackButtonDispatcher`] when its first callback is
+    /// added: the platform back reaches this dispatcher's callbacks while it
+    /// lives. Released with the dispatcher state.
+    platform_observer: Option<BackGestureObserverRegistration>,
 }
 
 /// Flutter's `BackButtonDispatcher` (`widgets/router.dart`): routes a back
@@ -884,9 +891,27 @@ impl Drop for BackCallbackSubscription {
 }
 
 /// The root back dispatcher used by an application bootstrap.
+///
+/// Like Flutter's `RootBackButtonDispatcher`, it listens to the platform
+/// back: its first callback registers it as a back gesture observer, so a
+/// system back that nothing else handled reaches its callbacks, newest first.
 #[derive(Clone, Default)]
 pub struct RootBackButtonDispatcher {
     dispatcher: BackButtonDispatcher,
+}
+
+/// Forwards a system back to a root dispatcher's callbacks. Holds the
+/// dispatcher state weakly, so the registration never keeps it alive.
+struct RootBackObserver {
+    dispatcher: Weak<DispatcherCell>,
+}
+
+impl BackGestureObserver for RootBackObserver {
+    fn handle_pop_route(&self) -> bool {
+        self.dispatcher
+            .upgrade()
+            .is_some_and(|state| BackButtonDispatcher { state }.dispatch_back())
+    }
 }
 
 impl fmt::Debug for RootBackButtonDispatcher {
@@ -905,8 +930,19 @@ impl RootBackButtonDispatcher {
         Self::default()
     }
 
-    /// Registers a root-level callback.
+    /// Registers a root-level callback. The first one also registers the
+    /// dispatcher with the platform back observers.
     pub fn add_callback(&self, callback: impl Fn() -> bool + 'static) -> BackCallbackSubscription {
+        {
+            let mut state = self.dispatcher.state.borrow_mut();
+            if state.platform_observer.is_none() {
+                state.platform_observer = Some(add_shared_back_gesture_observer(Rc::new(
+                    RootBackObserver {
+                        dispatcher: Rc::downgrade(&self.dispatcher.state),
+                    },
+                )));
+            }
+        }
         self.dispatcher.add_callback(callback)
     }
 

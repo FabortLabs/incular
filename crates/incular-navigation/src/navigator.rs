@@ -299,6 +299,9 @@ struct NavigatorState {
     records_page_transitions: bool,
     /// The predictive back gesture the current route follows.
     back_gesture: crate::predictive_back::BackGestureState,
+    /// Keeps this navigator registered as a back gesture observer; dropped
+    /// with the last clone, which unregisters it.
+    back_gesture_registration: Option<incular_widgets::BackGestureObserverRegistration>,
 }
 
 /// A navigator held without keeping it alive.
@@ -352,10 +355,30 @@ fn scope_cleanup(
 
 /// Cloneable stack navigator. Applications may drive it imperatively or
 /// reconcile it from declarative page state.
-#[derive(Clone, Default)]
+///
+/// A navigator registers itself as a back gesture observer when it is
+/// created (Flutter's `WidgetsApp.didPopRoute` for a navigator), so the
+/// system back button and predictive back gestures pop its routes without
+/// further wiring. Back goes to the most recently created navigator first;
+/// one that cannot pop (`can_pop` is `false`) lets back fall through to the
+/// navigators created before it, so an inner navigator's routes pop before
+/// the outer ones. Dropping the last clone unregisters it.
+#[derive(Clone)]
 pub struct Navigator {
     state: Rc<RefCell<NavigatorState>>,
 }
+
+impl Default for Navigator {
+    fn default() -> Self {
+        let navigator = Self {
+            state: Rc::default(),
+        };
+        let registration = crate::predictive_back::register_back_gesture_observer(&navigator);
+        navigator.state.borrow_mut().back_gesture_registration = Some(registration);
+        navigator
+    }
+}
+
 impl Navigator {
     #[must_use]
     pub fn new() -> Self {

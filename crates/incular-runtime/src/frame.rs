@@ -2192,8 +2192,8 @@ impl Runtime {
 
     /// Flutter's `WidgetsBinding` back gesture handlers: delivers one stage
     /// of a system predictive back gesture to the back gesture observers,
-    /// such as navigators following it with
-    /// `Navigator::observe_back_gestures`, and requests a frame so a route
+    /// such as navigators (which register themselves when created), and
+    /// requests a frame so a route
     /// following the gesture repaints. Returns whether an observer follows
     /// the gesture. Incular has no system pop-route channel, so a commit
     /// nobody followed (`false`) is left to the host, which reports it as

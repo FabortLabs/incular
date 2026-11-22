@@ -34,11 +34,16 @@ Android platform integration for Incular.
   whole editing state; hardware keys go to key handlers and fields; copy and
   paste use the system clipboard.
 - The back button reaches the focused key handlers as `Code::BrowserBack`,
-  then closes popups, then asks the pop-route observers
-  (`BackGestureObserver::handle_pop_route`, which `Navigator` implements).
+  then closes popups, then asks the pop-route observers, newest first.
+  `Navigator` and `WidgetsApp` register themselves, so their routes pop
+  without app code, and the predictive back gesture follows the top route.
   If nothing takes it, the activity finishes. Apps that keep their own route
-  stack should register an observer rather than rely on a key handler,
-  because a key handler hears back only while it is on the focus path.
+  stack should register a `BackGestureObserver` rather than rely on a key
+  handler, because a key handler hears back only while it is on the focus
+  path.
+- A finished activity keeps the Rust application alive in the process, so
+  relaunching from the launcher resumes the same state, as Flutter does with
+  a cached engine. There is no detached state to restore.
 - The Kotlin shell lives in `android/src/main/kotlin`; the CLI generates the
   Gradle project and manifest around it.
 - `AndroidAccessibilityAdapter` exposes the incremental mobile semantics

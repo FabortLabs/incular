@@ -98,17 +98,6 @@ impl Navigator {
         self.end_back_gesture();
     }
 
-    /// Follows predictive back gestures from the platform (Flutter's
-    /// `PredictiveBackPageTransitionsBuilder` observer): a swipe, not a
-    /// button, on a route whose pop gesture is enabled starts with the
-    /// route at `1 - progress`. The navigator is held weakly; dropping the
-    /// registration stops observing.
-    pub fn observe_back_gestures(&self) -> BackGestureObserverRegistration {
-        add_shared_back_gesture_observer(Rc::new(NavigatorBackGestureObserver {
-            navigator: self.downgrade(),
-        }))
-    }
-
     /// The current route's animation while it is the route that started
     /// the gesture (Flutter's `isCurrent` checks).
     fn back_gesture_controller(&self) -> Option<incular_widgets::AnimationController> {
@@ -124,6 +113,21 @@ impl Navigator {
     }
 }
 
+/// Registers `navigator` as a back gesture observer (Flutter's
+/// `WidgetsBinding.addObserver` for a navigator). The observer holds the
+/// navigator weakly, so the registration never keeps it alive.
+pub(crate) fn register_back_gesture_observer(
+    navigator: &Navigator,
+) -> BackGestureObserverRegistration {
+    add_shared_back_gesture_observer(Rc::new(NavigatorBackGestureObserver {
+        navigator: navigator.downgrade(),
+    }))
+}
+
+/// Follows predictive back gestures from the platform (Flutter's
+/// `PredictiveBackPageTransitionsBuilder` observer): a swipe, not a button,
+/// on a route whose pop gesture is enabled starts with the route at
+/// `1 - progress`, and a system back pops the top route.
 struct NavigatorBackGestureObserver {
     navigator: crate::navigator::WeakNavigator,
 }

@@ -39,10 +39,15 @@ fn main() {
         page("Home", Color::rgba(45, 92, 170, 255)),
     ));
 
+    // Redraw on every stack change, including pops from the system back.
+    let observed = revision.clone();
+    let redraw = navigator.observe(move |_| observed.update(|value| *value += 1));
+
     let app_navigator = navigator.clone();
     let app_overlay = overlay.clone();
     let app_revision = revision.clone();
     let app = Application::new(move |_| -> Widget {
+        let _ = &redraw;
         let root: Widget = {
             let content: Widget = {
                 let _ = app_revision.get();

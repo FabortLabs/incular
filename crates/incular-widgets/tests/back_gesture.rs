@@ -84,3 +84,22 @@ fn removing_a_following_observer_cancels_its_gesture() {
         0.3
     ))));
 }
+
+#[test]
+fn a_root_back_button_dispatcher_answers_system_back_while_it_has_callbacks() {
+    use incular_widgets::{RootBackButtonDispatcher, dispatch_pop_route};
+
+    let root = RootBackButtonDispatcher::new();
+    let hits = Rc::new(std::cell::Cell::new(0));
+    let counter = hits.clone();
+    let subscription = root.add_callback(move || {
+        counter.set(counter.get() + 1);
+        true
+    });
+    assert!(dispatch_pop_route());
+    assert_eq!(hits.get(), 1);
+
+    drop(subscription);
+    assert!(!dispatch_pop_route());
+    assert_eq!(hits.get(), 1);
+}

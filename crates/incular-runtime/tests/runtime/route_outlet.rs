@@ -5481,7 +5481,6 @@ fn back_gesture(harness: &mut OutletHarness, event: incular_widgets::BackGesture
 fn a_predictive_back_swipe_drives_the_top_route_and_pops_on_commit() {
     use incular_widgets::BackGestureEvent;
     let (navigator, mut harness, top_animation, start) = predictive_back_stack();
-    let _observing = navigator.observe_back_gestures();
     assert!(navigator.pop_gesture_enabled());
 
     back_gesture(&mut harness, BackGestureEvent::Start(swipe(0.)));
@@ -5512,7 +5511,6 @@ fn a_predictive_back_swipe_drives_the_top_route_and_pops_on_commit() {
 fn a_cancelled_predictive_back_swipe_animates_the_route_back_in() {
     use incular_widgets::BackGestureEvent;
     let (navigator, mut harness, top_animation, start) = predictive_back_stack();
-    let _observing = navigator.observe_back_gestures();
     back_gesture(&mut harness, BackGestureEvent::Start(swipe(0.1)));
     back_gesture(&mut harness, BackGestureEvent::Update(swipe(0.5)));
     present_at(&mut harness, start + Duration::from_millis(200));
@@ -5531,16 +5529,9 @@ fn a_cancelled_predictive_back_swipe_animates_the_route_back_in() {
 }
 
 #[test]
-fn back_buttons_and_unobserved_navigators_do_not_follow_back_gestures() {
+fn back_buttons_do_not_follow_back_gestures() {
     use incular_widgets::{BackGestureEvent, PredictiveBackEvent, SwipeEdge};
     let (navigator, mut harness, top_animation, _) = predictive_back_stack();
-    // Without `observe_back_gestures`, nobody follows the gesture.
-    assert!(
-        !harness
-            .runtime
-            .handle_back_gesture(BackGestureEvent::Start(swipe(0.)))
-    );
-    let _observing = navigator.observe_back_gestures();
     // A back button reported as a gesture has no touch position.
     let button = PredictiveBackEvent::new(None, 0., SwipeEdge::Left);
     assert!(button.is_button_event());
