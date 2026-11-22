@@ -7,7 +7,7 @@ use crate::{
     BottomNavigationBarType, K_BOTTOM_NAVIGATION_BAR_HEIGHT, NavigationDestinationLabelBehavior,
     TextButton,
 };
-use incular_config::{CrossAxisAlignment, MainAxisAlignment};
+use incular_config::{CrossAxisAlignment, EdgeInsets, MainAxisAlignment};
 use incular_controls::{ControlTheme, current_control_theme};
 use incular_core::Color;
 use incular_widgets::{Column, Container, Row, Text, Widget};
@@ -127,13 +127,14 @@ impl BottomNavigationBar {
 
     #[must_use]
     pub fn build(&self, theme: &ControlTheme) -> Widget {
-        self.build_with_theme(theme, None)
+        self.build_with_theme(theme, None, 0.0)
     }
 
     fn build_with_theme(
         &self,
         theme: &ControlTheme,
         inherited: Option<&ComponentThemeData>,
+        bottom_inset: f32,
     ) -> Widget {
         let default = ComponentThemeData::default();
         let inherited = inherited.unwrap_or(&default);
@@ -186,7 +187,8 @@ impl BottomNavigationBar {
                     .minimum_size
                     .map(|size| size.height)
                     .or_else(|| inherited.min_size.map(|size| size.height))
-                    .unwrap_or(K_BOTTOM_NAVIGATION_BAR_HEIGHT),
+                    .unwrap_or(K_BOTTOM_NAVIGATION_BAR_HEIGHT)
+                    + bottom_inset,
             )
             .color(
                 self.background
@@ -195,6 +197,7 @@ impl BottomNavigationBar {
                     .or(inherited.surface_color)
                     .unwrap_or(theme.colors.surface),
             )
+            .padding(EdgeInsets::only(0.0, 0.0, 0.0, bottom_inset))
             .child(row)
             .into()
     }
@@ -210,6 +213,7 @@ impl From<BottomNavigationBar> for Widget {
                 navigation
                     .as_ref()
                     .map(|themes| &themes.bottom_navigation_bar_theme),
+                context.safe_insets().bottom,
             )
         }))
     }
@@ -329,6 +333,9 @@ impl NavigationBar {
     fn build(&self, context: &incular_widgets::BuildContext<'_>) -> Widget {
         let navigation = context.depend_on_shared::<NavigationComponentThemes>();
         let default = NavigationBarThemeData::default();
+        // Flutter adds the bottom safe area to the bar height and keeps its content
+        // above it.
+        let bottom_inset = context.safe_insets().bottom;
         let inherited = navigation
             .as_ref()
             .map_or(&default, |themes| &themes.navigation_bar_theme);
@@ -386,7 +393,8 @@ impl NavigationBar {
                     .minimum_size
                     .map(|size| size.height)
                     .or_else(|| inherited.min_size.map(|size| size.height))
-                    .unwrap_or(80.0),
+                    .unwrap_or(80.0)
+                    + bottom_inset,
             )
             .color(
                 inherited
@@ -395,6 +403,7 @@ impl NavigationBar {
                     .or(inherited.surface_color)
                     .unwrap_or(controls.colors.surface),
             )
+            .padding(EdgeInsets::only(0.0, 0.0, 0.0, bottom_inset))
             .child(Row::new(children).main_axis_alignment(MainAxisAlignment::SpaceEvenly))
             .into()
     }

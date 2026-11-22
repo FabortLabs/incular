@@ -254,3 +254,80 @@ impl From<SafeArea> for Widget {
         .into()
     }
 }
+
+/// Flutter's `MediaQuery.removePadding`: hides the chosen safe-area sides from
+/// `child`'s subtree, so a nested [`SafeArea`] or bar does not pad them again.
+/// Sides that are not chosen keep the ambient safe insets.
+#[derive(Clone)]
+pub struct RemovePadding {
+    child: Widget,
+    left: bool,
+    top: bool,
+    right: bool,
+    bottom: bool,
+}
+
+impl RemovePadding {
+    /// Creates a scope that removes no padding until sides are chosen.
+    #[must_use]
+    pub fn new(child: impl Into<Widget>) -> Self {
+        Self {
+            child: child.into(),
+            left: false,
+            top: false,
+            right: false,
+            bottom: false,
+        }
+    }
+
+    /// Removes the left safe inset from `child`'s subtree.
+    #[must_use]
+    pub fn left(mut self, value: bool) -> Self {
+        self.left = value;
+        self
+    }
+
+    /// Removes the top safe inset from `child`'s subtree.
+    #[must_use]
+    pub fn top(mut self, value: bool) -> Self {
+        self.top = value;
+        self
+    }
+
+    /// Removes the right safe inset from `child`'s subtree.
+    #[must_use]
+    pub fn right(mut self, value: bool) -> Self {
+        self.right = value;
+        self
+    }
+
+    /// Removes the bottom safe inset from `child`'s subtree.
+    #[must_use]
+    pub fn bottom(mut self, value: bool) -> Self {
+        self.bottom = value;
+        self
+    }
+}
+
+impl From<RemovePadding> for Widget {
+    fn from(value: RemovePadding) -> Self {
+        let RemovePadding {
+            child,
+            left,
+            top,
+            right,
+            bottom,
+        } = value;
+        crate::Builder::new(move |context| {
+            let ambient = context.safe_insets().normalized();
+            let reduced = EdgeInsets {
+                left: if left { 0.0 } else { ambient.left },
+                top: if top { 0.0 } else { ambient.top },
+                right: if right { 0.0 } else { ambient.right },
+                bottom: if bottom { 0.0 } else { ambient.bottom },
+            };
+            crate::tree::safe_insets_scope(reduced, child.clone())
+        })
+        .into()
+    }
+}

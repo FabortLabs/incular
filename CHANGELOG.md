@@ -7,6 +7,10 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-widgets`: `RemovePadding` hides chosen safe-area sides from a subtree, as Flutter's
+  `MediaQuery.removePadding`. Use it to stop a nested `SafeArea` or bar from padding a
+  side that an outer widget already handles.
+- `incular-material`: `AppBar::primary` and `Scaffold::primary` (default `true`), as Flutter.
 - `incular-material`: `AppBar` annotates the system bars from its background, as Flutter's
   `systemOverlayStyle` does. The status-bar icons are dark on light backgrounds and light on
   dark ones, and Material 3 leaves the status bar transparent. `AppBar::system_overlay_style`
@@ -84,6 +88,12 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-material`: `Scaffold` and `AppBar` apply the safe insets like Flutter. The app bar
+  pads its toolbar by the status-bar inset and its background covers it; the body drops the
+  top inset under an app bar and the bottom inset when a navigation bar is present; the FAB
+  sits 16 pixels above the bottom region and the bottom inset. `NavigationBar`,
+  `BottomNavigationBar` and `BottomAppBar` add the bottom inset to their height. Slivers
+  do not change yet: their extents need a `BuildContext` that `Sliver::build` lacks.
 - `incular-material`: `Material` tints its surface with Flutter's Material 3 elevation opacity table
   (none at elevation 0, 5 % at 1 up to 14 % at 12). A transparent `surface_tint_color` no
   longer greys the surface, so the app bar matches the status bar behind it.

@@ -5,14 +5,17 @@ use crate::material_theme::{
     ComponentThemeData, NavigationComponentThemes, Theme, ThemeData, helpers::finite_non_negative,
 };
 use crate::surfaces::Material;
-use incular_config::{Alignment, Brightness, CrossAxisAlignment, EdgeInsets, MainAxisSize};
+use incular_config::{
+    Alignment, Brightness, Constraints, CrossAxisAlignment, EdgeInsets, MainAxisSize,
+};
 use incular_controls::{ControlTheme, current_control_theme};
-use incular_core::Color;
+use incular_core::{Color, Offset, Size};
 use incular_text::TextStyle;
 use incular_widgets::internal::Expanded;
 use incular_widgets::{
-    Align, AnnotatedRegion, BorderRadius, Column, Container, DefaultTextStyle, IconTheme, Padding,
-    Positioned, Row, SizedBox, Stack, SystemUiOverlayStyle, Text, Widget,
+    Align, AnnotatedRegion, BorderRadius, Column, Container, CustomMultiChildLayout,
+    DefaultTextStyle, IconTheme, LayoutId, MultiChildLayoutContext, MultiChildLayoutDelegate,
+    Padding, Positioned, Row, SizedBox, Stack, SystemUiOverlayStyle, Text, Widget,
 };
 use typed_builder::TypedBuilder;
 
@@ -57,6 +60,10 @@ pub struct AppBar {
     surface_tint_color: Option<Color>,
     #[builder(default, setter(strip_option))]
     shape: Option<BorderRadius>,
+    /// Whether the bar pads its toolbar by the top safe inset (Flutter's
+    /// `AppBar.primary`); the background still covers the status bar.
+    #[builder(default = true)]
+    primary: bool,
     #[builder(default, setter(strip_option))]
     system_overlay_style: Option<SystemUiOverlayStyle>,
 }
@@ -82,6 +89,7 @@ impl AppBar {
             surface_tint_color: None,
             shape: None,
             system_overlay_style: None,
+            primary: true,
         }
     }
 
@@ -132,6 +140,14 @@ impl AppBar {
     #[must_use]
     pub fn elevation(mut self, elevation: f32) -> Self {
         self.elevation = Some(finite_non_negative(elevation));
+        self
+    }
+
+    /// Whether the toolbar is padded by the top safe inset (Flutter's
+    /// `AppBar.primary`, default `true`).
+    #[must_use]
+    pub fn primary(mut self, value: bool) -> Self {
+        self.primary = value;
         self
     }
 
@@ -211,6 +227,7 @@ impl AppBar {
             incular_config::TargetPlatform::default(),
             true,
             None,
+            0.0,
         )
     }
 
@@ -233,6 +250,7 @@ impl AppBar {
         platform: incular_config::TargetPlatform,
         use_material3: bool,
         toolbar_height_override: Option<f32>,
+        top_inset: f32,
     ) -> Widget {
         let background = self.resolved_background(theme, inherited);
         let inherited = inherited.cloned().unwrap_or_default();
@@ -345,6 +363,14 @@ impl AppBar {
         } else {
             toolbar
         };
+        // Flutter's `AppBar` wraps the toolbar and its `bottom` in
+        // `SafeArea(bottom: false)`; the Material below still paints the
+        // inset, so the status bar shows the bar's own colour.
+        let content: Widget = if top_inset > 0.0 {
+            Padding::new(EdgeInsets::only(0.0, top_inset, 0.0, 0.0), content).into()
+        } else {
+            content
+        };
         let material: Widget = Material::new(content)
             .color(background)
             .shadow_color(
@@ -383,6 +409,11 @@ impl From<AppBar> for Widget {
                 platform,
                 use_material3,
                 None,
+                if value.primary {
+                    context.safe_insets().top
+                } else {
+                    0.0
+                },
             )
         }))
     }
@@ -670,6 +701,7 @@ impl SliverAppBar {
                     use_material3,
                     // What the `toolbar_height` setter would store.
                     Some(finite_non_negative(height).max(1.0)),
+                    0.0,
                 )
             },
         ));
@@ -738,6 +770,8 @@ pub struct Scaffold {
     resize_to_avoid_bottom_inset: bool,
     #[builder(default)]
     extend_body: bool,
+    #[builder(default = true)]
+    primary: bool,
     #[builder(default)]
     extend_body_behind_app_bar: bool,
 }
@@ -758,6 +792,7 @@ impl Scaffold {
             resize_to_avoid_bottom_inset: true,
             extend_body: false,
             extend_body_behind_app_bar: false,
+            primary: true,
         }
     }
 
@@ -824,6 +859,14 @@ impl Scaffold {
     }
 
     /// Extends the body beneath the app bar, including its bottom content.
+    /// Whether the app bar is the primary content at the top of the screen, so it
+    /// takes the top safe inset (Flutter's `Scaffold.primary`, default `true`).
+    #[must_use]
+    pub fn primary(mut self, value: bool) -> Self {
+        self.primary = value;
+        self
+    }
+
     #[must_use]
     pub fn extend_body_behind_app_bar(mut self, value: bool) -> Self {
         self.extend_body_behind_app_bar = value;
@@ -842,23 +885,31 @@ impl Scaffold {
         context: &incular_widgets::BuildContext<'_>,
         theme: &ControlTheme,
     ) -> Widget {
-        let mut children = Vec::new();
-        if let Some(app_bar) = &self.app_bar
-            && !self.extend_body_behind_app_bar
-        {
-            children.push(app_bar.build(theme).with_key("scaffold-app-bar"));
-        }
         let scaffold_background = context
             .depend_on_shared::<crate::material_theme::LegacyThemeColors>()
             .map_or(theme.colors.background, |colors| {
                 colors.scaffold_background_color
             });
-        let body = Expanded::new(
+        let has_bottom_bar = self.bottom_navigation_bar.is_some() || self.bottom_app_bar.is_some();
+        // Flutter's `_addIfNonNull` flags: the body drops the inset that the
+        // app bar or bottom bar pads itself, and keeps the rest.
+        let body = incular_widgets::RemovePadding::new(
             Material::new(self.body.clone()).color(self.background.unwrap_or(scaffold_background)),
-        );
-        // A private slot key keeps the body mounted when reserved regions move
-        // into the overlay layer. Application keys remain on the child itself.
-        children.push(Widget::from(body).with_key("scaffold-body"));
+        )
+        .top(self.app_bar.is_some())
+        .bottom(has_bottom_bar);
+        let mut children: Vec<Widget> = vec![LayoutId::new("body", Widget::from(body)).into()];
+
+        if let Some(app_bar) = &self.app_bar {
+            // `ScaffoldState`: the app bar takes the top inset only when it is
+            // `primary`; otherwise its own padding is removed.
+            let bar = incular_widgets::RemovePadding::new(
+                Widget::from(app_bar.clone()).with_key("scaffold-app-bar"),
+            )
+            .top(!self.primary);
+            children.push(LayoutId::new("app-bar", bar).into());
+        }
+
         let mut bottom_children = Vec::new();
         if let Some(sheet) = self.bottom_sheet.clone() {
             bottom_children.push(sheet);
@@ -870,56 +921,37 @@ impl Scaffold {
         {
             bottom_children.push(bottom);
         }
-        let bottom_region: Widget = Column::new(bottom_children)
-            .main_axis_size(MainAxisSize::Min)
-            .cross_axis_alignment(CrossAxisAlignment::Stretch)
-            .into();
-        let extended_bottom_region = if self.extend_body {
-            Some(bottom_region)
-        } else {
-            children.push(bottom_region.with_key("scaffold-bottom-region"));
-            None
-        };
-        let content: Widget = Column::new(children)
-            .cross_axis_alignment(CrossAxisAlignment::Stretch)
-            .into();
-        let mut stack_children = vec![content];
-        if self.extend_body_behind_app_bar
-            && let Some(app_bar) = &self.app_bar
-        {
-            stack_children.push(
-                Widget::from(
-                    Positioned::new(app_bar.build(theme))
-                        .left(0.0)
-                        .right(0.0)
-                        .top(0.0),
-                )
-                .with_key("scaffold-app-bar"),
-            );
+        if !bottom_children.is_empty() {
+            let region: Widget = Column::new(bottom_children)
+                .main_axis_size(MainAxisSize::Min)
+                .cross_axis_alignment(CrossAxisAlignment::Stretch)
+                .into();
+            // Bars pad their own bottom inset, so only the top is removed.
+            let region =
+                incular_widgets::RemovePadding::new(region.with_key("scaffold-bottom-region"))
+                    .top(true);
+            children.push(LayoutId::new("bottom-region", region).into());
         }
-        if let Some(bottom_region) = extended_bottom_region {
-            stack_children.push(
-                Widget::from(
-                    Positioned::new(bottom_region)
-                        .left(0.0)
-                        .right(0.0)
-                        .bottom(0.0),
-                )
-                .with_key("scaffold-bottom-region"),
-            );
-        }
+
+        let view_insets = context.view_insets().bottom;
+        let safe = context.safe_insets();
         if let Some(fab) = self.floating_action_button.clone() {
-            stack_children.push(
-                Widget::from(Positioned::new(fab).right(16.0).bottom(
-                    if self.bottom_navigation_bar.is_some() || self.bottom_app_bar.is_some() {
-                        96.0
-                    } else {
-                        16.0
-                    },
-                ))
-                .with_key("scaffold-fab"),
-            );
+            children.push(LayoutId::new("fab", fab.with_key("scaffold-fab")).into());
         }
+
+        let delegate = ScaffoldLayoutDelegate {
+            extend_body: self.extend_body,
+            extend_body_behind_app_bar: self.extend_body_behind_app_bar,
+            fab_bottom_inset: if self.resize_to_avoid_bottom_inset && view_insets != 0.0 {
+                0.0
+            } else {
+                safe.bottom
+            },
+            fab_right_inset: safe.right,
+        };
+        let layout = CustomMultiChildLayout::new(delegate, children);
+
+        let mut stack_children = vec![Widget::from(layout)];
         if let Some(drawer) = self.drawer.clone() {
             stack_children.push(
                 Widget::from(Positioned::new(drawer).left(0.0).top(0.0).bottom(0.0))
@@ -933,7 +965,7 @@ impl Scaffold {
             );
         }
         let bottom_inset = if self.resize_to_avoid_bottom_inset {
-            context.view_insets().bottom
+            view_insets
         } else {
             0.0
         };
@@ -942,6 +974,75 @@ impl Scaffold {
             Stack::aligned(Alignment::TOP_LEFT, stack_children),
         )
         .into()
+    }
+}
+
+/// Places the scaffold slots like Flutter's `_ScaffoldLayout`: the app bar at
+/// the top, the bottom region at the bottom, the body between them (under the
+/// bottom region when `extend_body`), and the end-float FAB above the bottom
+/// region with Flutter's 16 pixel margin and safe insets.
+#[derive(Clone, Copy, PartialEq)]
+struct ScaffoldLayoutDelegate {
+    extend_body: bool,
+    extend_body_behind_app_bar: bool,
+    fab_bottom_inset: f32,
+    fab_right_inset: f32,
+}
+
+/// Flutter's `kFloatingActionButtonMargin`.
+const FAB_MARGIN: f32 = 16.0;
+
+impl MultiChildLayoutDelegate for ScaffoldLayoutDelegate {
+    fn perform_layout(&self, size: Size, children: &mut MultiChildLayoutContext<'_>) {
+        let width = size.width;
+        let height = size.height;
+        let app_bar_height = if children.has_child("app-bar") {
+            children
+                .layout_child("app-bar", Constraints::new(width, width, 0.0, height))
+                .height
+        } else {
+            0.0
+        };
+        let bottom_height = if children.has_child("bottom-region") {
+            children
+                .layout_child("bottom-region", Constraints::new(width, width, 0.0, height))
+                .height
+        } else {
+            0.0
+        };
+        // The body starts under the app bar unless it extends behind it, and
+        // ends above the bottom region unless it extends under it.
+        let body_top = if self.extend_body_behind_app_bar {
+            0.0
+        } else {
+            app_bar_height
+        };
+        let body_bottom = if self.extend_body { 0.0 } else { bottom_height };
+        let body_height = (height - body_top - body_bottom).max(0.0);
+        children.layout_child(
+            "body",
+            Constraints::new(width, width, body_height, body_height),
+        );
+        children.position_child("body", Offset::new(0.0, body_top));
+        if children.has_child("app-bar") {
+            children.position_child("app-bar", Offset::new(0.0, 0.0));
+        }
+        if children.has_child("bottom-region") {
+            children.position_child("bottom-region", Offset::new(0.0, height - bottom_height));
+        }
+        if children.has_child("fab") {
+            let fab = children.layout_child("fab", Constraints::loose(size));
+            // `FabEndOffsetX` and `FabFloatOffsetY` of `endFloat`.
+            let x = width - fab.width - FAB_MARGIN - self.fab_right_inset;
+            let content_bottom = (height - bottom_height).max(0.0);
+            let safe_margin = FAB_MARGIN.max(self.fab_bottom_inset - bottom_height + FAB_MARGIN);
+            let y = content_bottom - fab.height - safe_margin;
+            children.position_child("fab", Offset::new(x.max(0.0), y.max(0.0)));
+        }
+    }
+
+    fn should_relayout(&self, old: &Self) -> bool {
+        self != old
     }
 }
 

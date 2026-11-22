@@ -273,13 +273,14 @@ impl BottomAppBar {
 
     #[must_use]
     pub fn build(&self, theme: &ControlTheme) -> Widget {
-        self.build_with_theme(theme, None)
+        self.build_with_theme(theme, None, 0.0)
     }
 
     fn build_with_theme(
         &self,
         theme: &ControlTheme,
         inherited: Option<&ComponentThemeData>,
+        bottom_inset: f32,
     ) -> Widget {
         let default = ComponentThemeData::default();
         let inherited = inherited.unwrap_or(&default);
@@ -287,11 +288,18 @@ impl BottomAppBar {
             .height
             .or_else(|| inherited.minimum_size.map(|size| size.height))
             .or_else(|| inherited.min_size.map(|size| size.height))
-            .unwrap_or(80.0);
+            .unwrap_or(80.0)
+            + bottom_inset;
         let padding = self
             .padding
             .or(inherited.padding)
             .unwrap_or_else(|| EdgeInsets::symmetric(16.0, 8.0));
+        // Flutter adds the bottom safe area to the bar's height and keeps the
+        // content above it.
+        let padding = EdgeInsets {
+            bottom: padding.bottom + bottom_inset,
+            ..padding
+        };
         let mut row_children = self.actions.clone();
         if let Some(child) = self.child.clone() {
             row_children.push(child);
@@ -345,6 +353,7 @@ impl From<BottomAppBar> for Widget {
                 navigation
                     .as_ref()
                     .map(|themes| &themes.bottom_app_bar_theme),
+                context.safe_insets().bottom,
             )
         }))
     }
