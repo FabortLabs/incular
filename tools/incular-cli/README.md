@@ -22,6 +22,16 @@ cargo run -p incular-cli -- run   ios     --example counter --screenshot shots/c
 - Needs `ANDROID_HOME` (or `%LOCALAPPDATA%/Android/Sdk`), an NDK under it or
   in `ANDROID_NDK_HOME`, the Rust target for the ABI, JDK 17 and `gradle` on
   `PATH` (or `INCULAR_GRADLE`).
+- Dependencies that build C code with CMake (opus, aws-lc, …) use the SDK's
+  newest `cmake` package and its Ninja; install one with `sdkmanager`
+  (`cmake;4.1.2`, say). The tool exports the NDK as `ANDROID_NDK_HOME` and
+  the minimum API level as `ANDROID_PLATFORM`; variables you set win.
+- Apps usually keep desktop as the default and add a feature for mobile
+  (`mobile = ["incular/mobile"]`), then pass `--features mobile`.
+- When the app depends on `rustls-platform-verifier` (reqwest's default TLS
+  does), the generated Gradle project fetches its Kotlin component from the
+  crate's Maven repository, pinned to the lockfile version. Enable
+  `incular/platform-verifier` so the shell initializes it.
 - The app's binary is linked as a shared object. `incular-android`'s
   `JNI_OnLoad` registers the shell's native methods, and the activity calls
   the binary's C `main` once it starts, so apps keep an ordinary `fn main`.

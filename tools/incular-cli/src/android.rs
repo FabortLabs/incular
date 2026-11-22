@@ -13,6 +13,9 @@ const TARGET_SDK: u32 = 35;
 const MIN_SDK: u32 = 26;
 const AGP_VERSION: &str = "8.7.3";
 const KOTLIN_VERSION: &str = "2.1.0";
+/// rustls-platform-verifier's Maven repository, served from its GitHub
+/// archive branch (see that crate's README, "Android").
+const RUSTLS_VERIFIER_MAVEN: &str = "https://github.com/rustls/rustls-platform-verifier/raw/maven-archive/android-release-support/maven/";
 
 struct Abi {
     triple: &'static str,
@@ -84,9 +87,54 @@ fn host_tag() -> &'static str {
     }
 }
 
+/// Points `cmake`-crate build scripts (opus, aws-lc, …) at the SDK's newest
+/// CMake package and its bundled Ninja. Without this, CMake on Windows picks
+/// the Visual Studio generator, which cannot target Android. The NDK's
+/// `android.toolchain.cmake` reads `ANDROID_PLATFORM` for the API level.
+/// Variables the caller already set win.
+fn cmake_env(command: &mut Command, sdk: &Path) {
+    let set = |name: &str| std::env::var_os(name).is_some();
+    if !set("ANDROID_PLATFORM") {
+        command.env("ANDROID_PLATFORM", format!("android-{MIN_SDK}"));
+    }
+    if set("CMAKE") || set("CMAKE_GENERATOR") {
+        return;
+    }
+    let exe = std::env::consts::EXE_SUFFIX;
+    let Some(bin) = std::fs::read_dir(sdk.join("cmake"))
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .map(|entry| entry.path().join("bin"))
+        .filter(|bin| bin.join(format!("ninja{exe}")).is_file())
+        // Version directories sort numerically only segment by segment.
+        .max_by_key(|bin| {
+            bin.parent()
+                .and_then(Path::file_name)
+                .and_then(|name| name.to_str())
+                .map(|name| {
+                    name.split('.')
+                        .map(|part| part.parse::<u32>().unwrap_or(0))
+                        .collect::<Vec<_>>()
+                })
+        })
+    else {
+        return;
+    };
+    // CMake finds the Ninja generator's program on `PATH`.
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    let path =
+        std::env::join_paths(std::iter::once(bin.clone()).chain(std::env::split_paths(&path)))
+            .unwrap_or(path);
+    command
+        .env("CMAKE", bin.join(format!("cmake{exe}")))
+        .env("CMAKE_GENERATOR", "Ninja")
+        .env("PATH", path);
+}
+
 /// Cross-compiles the app's binary into a shared object. Its C `main` runs
 /// the app's `main` when the activity starts (see `incular-android`).
-fn build_library(options: &Options, abi: &Abi, ndk: &Path) -> Result<PathBuf, String> {
+fn build_library(options: &Options, abi: &Abi, sdk: &Path, ndk: &Path) -> Result<PathBuf, String> {
     let bin = ndk
         .join("toolchains")
         .join("llvm")
@@ -120,6 +168,12 @@ fn build_library(options: &Options, abi: &Abi, ndk: &Path) -> Result<PathBuf, St
             format!("CARGO_TARGET_{}_LINKER", env_triple.to_uppercase()),
             &clang,
         );
+    // Build scripts that drive the NDK themselves (CMake toolchain files,
+    // `ndk-build`) look for it here.
+    command
+        .env("ANDROID_NDK_HOME", ndk)
+        .env("ANDROID_NDK_ROOT", ndk);
+    cmake_env(&mut command, sdk);
     if options.release {
         command.arg("--release");
     }
@@ -149,7 +203,7 @@ pub(crate) fn build(options: &Options) -> Result<PathBuf, String> {
     let abi = abi(&options.abi)?;
     let sdk = sdk_dir()?;
     let ndk = ndk_dir(&sdk)?;
-    let library = build_library(options, &abi, &ndk)?;
+    let library = build_library(options, &abi, &sdk, &ndk)?;
     let metadata = process::cargo_metadata()?;
     let shell = process::package_dir(&metadata, "incular-android")?
         .join("android")
@@ -163,7 +217,10 @@ pub(crate) fn build(options: &Options) -> Result<PathBuf, String> {
     std::fs::create_dir_all(&jni_libs).map_err(|error| error.to_string())?;
     std::fs::copy(&library, jni_libs.join("libincular_app.so"))
         .map_err(|error| format!("cannot copy {}: {error}", library.display()))?;
-    write_project(&project, name, &shell, &sdk)?;
+    // rustls-platform-verifier calls a small Kotlin component that ships as
+    // a Maven artifact versioned with its `-android` shim crate.
+    let verifier = process::package_version(&metadata, "rustls-platform-verifier-android");
+    write_project(&project, name, &shell, &sdk, verifier.as_deref())?;
     let gradle = std::env::var("INCULAR_GRADLE").unwrap_or_else(|_| {
         if cfg!(windows) {
             "gradle.bat"
@@ -191,8 +248,23 @@ fn application_id(name: &str) -> String {
     format!("dev.incular.apps.{}", process::identifier(name))
 }
 
-fn write_project(project: &Path, name: &str, shell: &Path, sdk: &Path) -> Result<(), String> {
+fn write_project(
+    project: &Path,
+    name: &str,
+    shell: &Path,
+    sdk: &Path,
+    verifier: Option<&str>,
+) -> Result<(), String> {
     let id = application_id(name);
+    let (verifier_repository, verifier_dependency) = match verifier {
+        Some(version) => (
+            format!("; maven {{ url = uri(\"{RUSTLS_VERIFIER_MAVEN}\") }}"),
+            format!(
+                "\ndependencies {{ implementation(\"org.rustls:rustls-platform-verifier:{version}\") }}\n"
+            ),
+        ),
+        None => (String::new(), String::new()),
+    };
     process::write(
         &project.join("local.properties"),
         format!("sdk.dir={}\n", process::portable(sdk)),
@@ -208,7 +280,7 @@ fn write_project(project: &Path, name: &str, shell: &Path, sdk: &Path) -> Result
     repositories {{ google(); mavenCentral(); gradlePluginPortal() }}
 }}
 dependencyResolutionManagement {{
-    repositories {{ google(); mavenCentral() }}
+    repositories {{ google(); mavenCentral(){verifier_repository} }}
 }}
 rootProject.name = "{name}"
 include(":app")
@@ -255,7 +327,7 @@ android {{
     kotlinOptions {{ jvmTarget = "17" }}
     packaging {{ jniLibs {{ useLegacyPackaging = false }} }}
 }}
-"#,
+{verifier_dependency}"#,
             shell = process::portable(shell),
         ),
     )?;

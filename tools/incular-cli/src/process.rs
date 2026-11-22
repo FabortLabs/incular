@@ -44,8 +44,17 @@ fn describe(command: &Command) -> String {
 }
 
 /// The Cargo workspace or package metadata, including dependencies.
+///
+/// Resolves with every feature enabled: apps usually make the mobile shell
+/// a non-default feature (`mobile = ["incular/mobile"]` beside a default
+/// `desktop`), and the shell's package must still be found.
 pub(crate) fn cargo_metadata() -> Result<serde_json::Value, String> {
-    let output = output(Command::new("cargo").args(["metadata", "--format-version", "1"]))?;
+    let output = output(Command::new("cargo").args([
+        "metadata",
+        "--format-version",
+        "1",
+        "--all-features",
+    ]))?;
     serde_json::from_slice(&output.stdout).map_err(|error| format!("bad cargo metadata: {error}"))
 }
 
@@ -62,6 +71,16 @@ pub(crate) fn package_dir(metadata: &serde_json::Value, package: &str) -> Result
         .ok_or_else(|| {
             format!("{package} is not in the dependency graph; enable incular's `mobile` feature")
         })
+}
+
+/// The resolved version of `package`, when it is in the dependency graph.
+pub(crate) fn package_version(metadata: &serde_json::Value, package: &str) -> Option<String> {
+    metadata["packages"]
+        .as_array()?
+        .iter()
+        .find(|candidate| candidate["name"] == package)?["version"]
+        .as_str()
+        .map(str::to_owned)
 }
 
 /// The Cargo target directory.
