@@ -15,7 +15,7 @@ struct RuntimeScaleFactor(f64);
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct RuntimeBrightness(Brightness);
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct RuntimeTextScale(f32);
+pub(super) struct RuntimeTextScale(pub(super) f32);
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct RuntimeSafeInsets(EdgeInsets);
 #[derive(Clone, Copy, Debug, PartialEq)]

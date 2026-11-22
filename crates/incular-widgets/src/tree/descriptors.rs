@@ -689,7 +689,7 @@ pub struct Text {
     overflow: Option<TextOverflow>,
     text_direction: Option<incular_config::TextDirection>,
     text_height_behavior: Option<TextHeightBehavior>,
-    text_scaler: TextScaler,
+    text_scaler: Option<TextScaler>,
     strut: Option<StrutStyle>,
 }
 impl Text {
@@ -706,7 +706,7 @@ impl Text {
             overflow: None,
             text_direction: None,
             text_height_behavior: None,
-            text_scaler: TextScaler::default(),
+            text_scaler: None,
             strut: None,
         }
     }
@@ -738,11 +738,13 @@ impl Text {
         self.strut = Some(strut);
         self
     }
-    /// Flutter's `Text.textScaler`: scales the resolved font size. The default
-    /// is the identity scaler, so the system text scale is not applied here.
+    /// Flutter's `Text.textScaler`: scales the resolved font size. Without it
+    /// the text follows the system text scale, as Flutter's
+    /// `MediaQuery.textScalerOf(context)` does; pass [`TextScaler::no_scaling`]
+    /// to opt out.
     #[must_use]
     pub fn text_scaler(mut self, text_scaler: TextScaler) -> Self {
-        self.text_scaler = text_scaler;
+        self.text_scaler = Some(text_scaler);
         self
     }
     #[must_use]
@@ -917,7 +919,7 @@ fn rich_text_widget(
         },
         None,
         None,
-        value.text_scaler,
+        Some(TextScaler::no_scaling()),
         spans,
         inline,
         strut.map(Box::new),

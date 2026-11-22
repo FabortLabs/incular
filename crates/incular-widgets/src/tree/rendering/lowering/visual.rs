@@ -1,5 +1,8 @@
 use super::super::super::*;
-use super::super::{physical_text_align, resolve_text_style, shared_text_style};
+use super::super::{
+    environment_text_scaler, physical_text_align, resolve_text_style, shared_text_style,
+    text_field_style,
+};
 use crate::environment::DefaultTextParagraph;
 pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> RenderKind {
     match widget.kind() {
@@ -87,13 +90,15 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             strut,
         } => {
             // Unstated paragraph options inherit the nearest DefaultTextStyle.
+            // Flutter: `textScaler ?? MediaQuery.textScalerOf(context)`.
+            let scaler = text_scaler.unwrap_or_else(|| environment_text_scaler(context));
             let defaults = context.depend::<DefaultTextParagraph>().unwrap_or_default();
             let direction = text_direction
                 .or_else(|| context.depend::<TextDirection>())
                 .unwrap_or(TextDirection::Ltr);
             RenderKind::Text {
                 text: text.clone(),
-                style: shared_text_style(style, context, Some(*text_scaler)),
+                style: shared_text_style(style, context, Some(scaler)),
                 // Start/End are direction-relative; the paragraph's resolved
                 // text direction (explicit, else the ambient `Directionality`,
                 // which build validation requires) makes them physical.
@@ -111,7 +116,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                     runs.iter()
                         .map(|run| StyledTextRun {
                             text: run.text.clone(),
-                            style: resolve_text_style(&run.style, context).scaled(*text_scaler),
+                            style: resolve_text_style(&run.style, context).scaled(scaler),
                             range: run.range.clone(),
                         })
                         .collect::<Arc<[_]>>()
@@ -121,14 +126,14 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                 // an unset size is SkParagraph's 14.
                 strut: strut.as_ref().map(|strut| {
                     let mut strut = (**strut).clone();
-                    strut.font_size = Some(text_scaler.scale(strut.font_size.unwrap_or(14.)));
+                    strut.font_size = Some(scaler.scale(strut.font_size.unwrap_or(14.)));
                     Box::new(strut)
                 }),
             }
         }
         WidgetKind::SelectableText { text, style, align } => RenderKind::SelectableText {
             text: text.clone(),
-            style: shared_text_style(style, context, None),
+            style: shared_text_style(style, context, Some(environment_text_scaler(context))),
             align: *align,
         },
         WidgetKind::SelectionArea { .. } => RenderKind::SelectionArea,
@@ -174,7 +179,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             RenderKind::TextField(Box::new(TextFieldRender {
                 controller: spec.controller.clone(),
                 desired: spec.size,
-                style: resolve_text_style(&spec.style, context).into_owned(),
+                style: text_field_style(&spec.style, context),
                 placeholder: spec.placeholder.clone(),
                 placeholder_color: spec.placeholder_color,
                 focused_border: spec.focused_border,
@@ -200,7 +205,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                     .spell_check
                     .as_ref()
                     .and_then(crate::SpellCheckConfiguration::resolve)
-                    .map(|(_, style)| resolve_text_style(&style, context).into_owned()),
+                    .map(|(_, style)| text_field_style(&style, context)),
                 paragraph_layout: spec.paragraph_layout,
             }))
         }

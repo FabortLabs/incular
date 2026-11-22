@@ -54,7 +54,8 @@ fn main() {
     let choice = Signal::new(false);
     let filter = Signal::new(true);
     let progress = Signal::new(0.62_f32);
-    let dark_mode = Signal::new(false);
+    // `None` follows the system brightness; `Some` forces the mode.
+    let dark_mode = Signal::new(None::<bool>);
     let slider_value = Signal::new(0.45_f32);
     let range_values = Signal::new(RangeValues::new(0.2, 0.8));
     let field = TextEditingController::with_text("Material defaults");
@@ -81,8 +82,10 @@ fn main() {
         ),
     );
 
-    let app = Application::new_with_options(options, move |_cx| {
-        let is_dark = dark_mode.get();
+    let app = Application::new_with_options(options, move |cx| {
+        let explicit_dark = dark_mode.get();
+        let is_dark =
+            explicit_dark.unwrap_or(cx.brightness() == incular::prelude::Brightness::Dark);
         let theme = if is_dark {
             dark_theme.clone()
         } else {
@@ -113,7 +116,9 @@ fn main() {
                         Widget::from(
                             FilledButton::tonal(if is_dark { "Light" } else { "Dark" }).on_click({
                                 let dark_mode = dark_mode.clone();
-                                move || dark_mode.update(|value| *value = !*value)
+                                move || {
+                                    dark_mode.set(Some(!is_dark));
+                                }
                             }),
                         ),
                     ])
@@ -431,10 +436,10 @@ fn main() {
         MaterialApp::new(app_content)
             .theme_shared(theme)
             .dark_theme_shared(dark_theme.clone())
-            .theme_mode(if is_dark {
-                ThemeMode::Dark
-            } else {
-                ThemeMode::Light
+            .theme_mode(match explicit_dark {
+                None => ThemeMode::System,
+                Some(true) => ThemeMode::Dark,
+                Some(false) => ThemeMode::Light,
             })
             .title("Incular Material gallery")
             .into()

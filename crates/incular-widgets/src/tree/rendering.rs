@@ -69,6 +69,24 @@ pub(super) fn resolve_text_style<'a>(
     resolved
 }
 
+/// Flutter's `MediaQuery.textScalerOf(context)`: the system text scale as a
+/// linear scaler. Reading it records the environment dependency, so a change to
+/// the text scale relayouts the text that resolved it.
+pub(super) fn environment_text_scaler(context: &DependencyContext) -> TextScaler {
+    let factor = context
+        .depend::<super::context::RuntimeTextScale>()
+        .map_or(1.0, |scale| scale.0);
+    TextScaler::linear(factor)
+}
+
+/// The resolved style of an editable text. `EditableText` has no scaler of its
+/// own, so the environment text scale is applied to its font size.
+pub(super) fn text_field_style(style: &TextStyle, context: &DependencyContext) -> TextStyle {
+    let mut resolved = resolve_text_style(style, context).into_owned();
+    resolved.size = environment_text_scaler(context).scale(resolved.size);
+    resolved
+}
+
 fn shared_text_style(
     style: &Arc<TextStyle>,
     context: &DependencyContext,

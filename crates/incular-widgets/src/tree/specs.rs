@@ -431,8 +431,9 @@ pub(crate) enum WidgetKind {
         /// `None` inherits; `Some(None)` is an explicit unlimited paragraph.
         max_lines: Option<Option<usize>>,
         overflow: Option<TextOverflow>,
-        /// Scales the font size, Flutter `Text.textScaler`.
-        text_scaler: TextScaler,
+        /// Scales the font size, Flutter `Text.textScaler`; `None` follows the
+        /// environment text scale (`MediaQuery.textScalerOf`).
+        text_scaler: Option<TextScaler>,
         /// Per-span styles of a rich paragraph; `text` is their flattened text.
         spans: Option<Arc<[StyledTextRun]>>,
         /// Explicit paragraph direction; `None` resolves against the ambient
