@@ -84,6 +84,8 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-android`: safe insets that arrive before the surface reports its density are
+  rescaled when the density arrives, instead of staying in physical pixels.
 - `incular-widgets`: `Text` and editable text follow the system text scale by
   default (Flutter's `MediaQuery.textScalerOf`); pass `text_scaler` to opt out.
 - `incular-android`: the back button pops `Navigator` routes and `WidgetsApp`

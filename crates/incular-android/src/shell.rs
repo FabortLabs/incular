@@ -45,7 +45,32 @@ struct AndroidShell {
     /// Read end of the wake socket, polled by the main looper.
     wake_reader: UnixStream,
     density: f32,
+    /// The last system bar, cutout and keyboard insets in physical pixels
+    /// (`left, top, right, bottom, ime_bottom`). They are kept unscaled because
+    /// the activity reports them before the surface reports the density.
+    physical_insets: [jint; 5],
     environment: MobileEnvironment,
+}
+
+impl AndroidShell {
+    /// Converts the physical insets with the current density and republishes
+    /// the environment.
+    fn publish_insets(&mut self) {
+        let scale = self.density.max(f32::EPSILON);
+        let logical = |value: jint| value.max(0) as f32 / scale;
+        let [left, top, right, bottom, ime_bottom] = self.physical_insets;
+        self.environment.view_padding = incular_config::EdgeInsets {
+            left: logical(left),
+            top: logical(top),
+            right: logical(right),
+            bottom: logical(bottom),
+        };
+        self.environment.view_insets = incular_config::EdgeInsets {
+            bottom: logical(ime_bottom),
+            ..incular_config::EdgeInsets::default()
+        };
+        self.engine.set_environment(self.environment.clone());
+    }
 }
 
 thread_local! {
@@ -339,6 +364,7 @@ extern "system" fn native_create(
             engine,
             wake_reader,
             density: 1.0,
+            physical_insets: [0; 5],
             environment: MobileEnvironment::default(),
         });
     });
@@ -366,6 +392,7 @@ extern "system" fn native_surface_created(
             PhysicalSize::new(width.max(0) as u32, height.max(0) as u32),
             f64::from(density),
         );
+        shell.publish_insets();
     });
 }
 
@@ -382,6 +409,7 @@ extern "system" fn native_surface_changed(
             PhysicalSize::new(width.max(0) as u32, height.max(0) as u32),
             f64::from(density),
         );
+        shell.publish_insets();
     });
 }
 
@@ -429,21 +457,8 @@ extern "system" fn native_insets(
     ime_bottom: jint,
 ) {
     with_shell(|shell| {
-        let scale = shell.density.max(f32::EPSILON);
-        let logical = |value: jint| value.max(0) as f32 / scale;
-        let mut environment = shell.environment.clone();
-        environment.view_padding = incular_config::EdgeInsets {
-            left: logical(left),
-            top: logical(top),
-            right: logical(right),
-            bottom: logical(bottom),
-        };
-        environment.view_insets = incular_config::EdgeInsets {
-            bottom: logical(ime_bottom),
-            ..incular_config::EdgeInsets::default()
-        };
-        shell.environment.clone_from(&environment);
-        shell.engine.set_environment(environment);
+        shell.physical_insets = [left, top, right, bottom, ime_bottom];
+        shell.publish_insets();
     });
 }
 
