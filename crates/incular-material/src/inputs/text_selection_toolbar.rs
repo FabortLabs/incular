@@ -4,7 +4,7 @@
 //! (which Material uses on macOS) and the `AdaptiveTextSelectionToolbar` that
 //! picks between them.
 
-use crate::{ButtonStyleConfig, Material, MaterialType, TextButton, Theme};
+use crate::{ButtonStyleConfig, Material, MaterialType, TextButton, Theme, ThemeData};
 use incular_config::EdgeInsets;
 use incular_config::{Brightness, Clip, TargetPlatform};
 use incular_controls::{ControlState, StateValue};
@@ -52,10 +52,14 @@ fn toolbar_column(children: Vec<Widget>) -> Widget {
         .into()
 }
 
+/// Flutter's `Theme.of`: without an ambient [`Theme`] the toolbars use the
+/// light default, as `ThemeData.fallback()` does.
+fn toolbar_theme(context: &BuildContext<'_>) -> ThemeData {
+    Theme::of(context).unwrap_or_else(ThemeData::light)
+}
+
 fn theme_brightness(context: &BuildContext<'_>) -> Brightness {
-    Theme::of(context).map_or(Brightness::Light, |theme| {
-        theme.core().color_scheme.brightness
-    })
+    toolbar_theme(context).core().color_scheme.brightness
 }
 
 /// Flutter's Material `DesktopTextSelectionToolbar`: a 222-wide card with
@@ -77,15 +81,13 @@ impl DesktopTextSelectionToolbar {
 impl From<DesktopTextSelectionToolbar> for Widget {
     fn from(value: DesktopTextSelectionToolbar) -> Self {
         Builder::new(move |context| {
-            let card_color = Theme::of(context).map(|theme| theme.colors().card_color);
-            let mut material = Material::new(toolbar_column(value.children.clone()))
+            let card_color = toolbar_theme(context).colors().card_color;
+            let material = Material::new(toolbar_column(value.children.clone()))
                 .material_type(MaterialType::Card)
                 .border_radius(BorderRadius::circular(7.0))
                 .clip_behavior(Clip::AntiAlias)
-                .elevation(1.0);
-            if let Some(color) = card_color {
-                material = material.color(color);
-            }
+                .elevation(1.0)
+                .color(card_color);
             let toolbar = SizedBox::from_dimensions(Some(TOOLBAR_WIDTH), None, Some(material));
             desktop_toolbar_layout(context, value.anchor, toolbar)
         })
@@ -322,11 +324,27 @@ impl From<CupertinoDesktopTextSelectionToolbarButton> for Widget {
 const TOUCH_TOOLBAR_HEIGHT: f32 = 44.0;
 /// Flutter `_kToolbarContentDistance`.
 const TOOLBAR_CONTENT_DISTANCE: f32 = 8.0;
-/// Flutter `_kToolbarContentDistanceBelow` (`_kHandleSize - 2`).
+/// Flutter `kToolbarContentDistanceBelow` (`_kHandleSize - 2`).
 const TOOLBAR_CONTENT_DISTANCE_BELOW: f32 = 20.0;
 
+/// Flutter `TextSelectionToolbar._getColor` for the default surface: white
+/// on light, `Color(0xff424242)` on dark. A scheme with its own surface
+/// uses that instead.
+fn touch_toolbar_color(theme: &ThemeData) -> Color {
+    let scheme = &theme.core().color_scheme;
+    let (default_theme, default_color) = match scheme.brightness {
+        Brightness::Light => (ThemeData::light(), Color::WHITE),
+        Brightness::Dark => (ThemeData::dark(), Color::rgba(0x42, 0x42, 0x42, 0xFF)),
+    };
+    if scheme.surface == default_theme.core().color_scheme.surface {
+        default_color
+    } else {
+        scheme.surface
+    }
+}
+
 /// Flutter's Material `TextSelectionToolbar`, the Android toolbar: a row of
-/// buttons on a 44-high card with 7-pixel corners and elevation 1, above
+/// buttons on a 44-high pill (corner radius 22) with elevation 1, above
 /// `anchor_above` when it fits under the top padding, otherwise below
 /// `anchor_below`.
 ///
@@ -355,23 +373,25 @@ impl From<TextSelectionToolbar> for Widget {
     fn from(value: TextSelectionToolbar) -> Self {
         Builder::new(move |context| {
             let padding_above = context.safe_insets().top + TOOLBAR_SCREEN_PADDING;
-            let available_height = value.anchor_above.y - TOOLBAR_CONTENT_DISTANCE - padding_above;
+            // Flutter `TextSelectionToolbar.build`: the content-distance gap
+            // is taken from the anchor twice, once for the anchor itself and
+            // once for the room the toolbar needs.
+            let available_height =
+                value.anchor_above.y - 2.0 * TOOLBAR_CONTENT_DISTANCE - padding_above;
             let fits_above = TOUCH_TOOLBAR_HEIGHT <= available_height;
             let local_adjustment = Offset::new(TOOLBAR_SCREEN_PADDING, padding_above);
-            let card_color = Theme::of(context).map(|theme| theme.colors().card_color);
+            let theme = toolbar_theme(context);
             let row = Row::new(value.children.clone()).main_axis_size(MainAxisSize::Min);
-            let mut material = Material::new(SizedBox::from_dimensions(
+            let material = Material::new(SizedBox::from_dimensions(
                 None,
                 Some(TOUCH_TOOLBAR_HEIGHT),
                 Some(row),
             ))
             .material_type(MaterialType::Card)
-            .border_radius(BorderRadius::circular(7.0))
+            .border_radius(BorderRadius::circular(TOUCH_TOOLBAR_HEIGHT / 2.0))
             .clip_behavior(Clip::AntiAlias)
-            .elevation(1.0);
-            if let Some(color) = card_color {
-                material = material.color(color);
-            }
+            .elevation(1.0)
+            .color(touch_toolbar_color(&theme));
             Padding::new(
                 EdgeInsets::from_ltrb(
                     TOOLBAR_SCREEN_PADDING,
@@ -411,7 +431,7 @@ impl TextSelectionToolbarTextButton {
     /// Flutter `_kMiddlePadding` horizontally.
     const MIDDLE_PADDING: f32 = 9.5;
     /// Flutter `_kEndPadding`.
-    const END_PADDING: f32 = 17.0;
+    const END_PADDING: f32 = 14.5;
 
     /// The button at `index` of `total` in its toolbar
     /// (`TextSelectionToolbarTextButton.getPadding`).

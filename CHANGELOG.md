@@ -96,6 +96,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-material`: the touch text selection toolbar has its Flutter surface again. Without an ambient `Theme` it fell back to a transparent card with black labels; it now uses the light default (white, or `#424242` on dark, as Flutter). The corner radius is the 22-pixel pill of Flutter, the content padding above the anchor matches `TextSelectionToolbar.build`, and the end button padding is 14.5 as in Flutter.
+- `incular-runtime`: a touch or stylus double tap on a text field shows the selection toolbar for the selected word. A mouse double click still does not show it, as Flutter `shouldShowSelectionToolbar`.
+- `incular-runtime`: changing a text field's text, by typed text or by an IME edit, hides its open selection toolbar. A selection-only change keeps it open, as Flutter `updateEditingValue`.
 - `incular-runtime`: on Android and iOS a finger tap on another text field moves focus to it. Only a
   tap outside every text field keeps the focused field focused, as Flutter's `onTapOutside` does.
 - `incular-android`: changing a focused field's configuration, such as a password field's visibility toggle, no longer reopens a keyboard the user dismissed. Focusing a field still shows it.

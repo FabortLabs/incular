@@ -1626,7 +1626,12 @@ impl Runtime {
                     text_target.filter(|field| self.text_field_pointer_selection_enabled(*field));
                 if let Some(field) = text_target {
                     if self.captured_text_field.is_some() {
-                        self.text_field_primary_down(field, position, text_target_was_focused);
+                        self.text_field_primary_down(
+                            field,
+                            position,
+                            text_target_was_focused,
+                            touch,
+                        );
                         self.text_long_press_begin(
                             text_gestures::LongPressTarget::Field(field),
                             position,
@@ -2340,6 +2345,9 @@ impl Runtime {
             self.editing_diagnostics.text_commits += 1;
             controller.reset_caret(self.input_now());
             self.frame_requested = true;
+            // Flutter `updateEditingValue`: a text change, unlike a selection-only
+            // update, closes the toolbar.
+            self.hide_text_field_menu(field);
         }
     }
 
@@ -2509,12 +2517,20 @@ impl Runtime {
         value.composing = state
             .composing
             .map(|(start, end)| incular_text::TextRange::new(start, end).clamp_to(&value.text));
+        // Flutter `updateEditingValue`: a change of text or composing range hides
+        // the toolbar; a selection-only change does not.
+        let text_changed = controller.with_value(|current| {
+            current.text != value.text || current.composing != value.composing
+        });
         let delta = controller.with_value(|current| {
             (current != &value)
                 .then(|| incular_text::TextEditingDelta::between(&current.text, &value))
         });
         if let Some(delta) = delta {
             controller.apply_delta(&delta);
+        }
+        if text_changed {
+            self.hide_text_field_menu(owner.field);
         }
         if self.text_input_client.is_some() {
             self.text_input_state = Some(TextInputState {

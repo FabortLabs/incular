@@ -554,6 +554,7 @@ impl Runtime {
         field: ElementId,
         position: Offset,
         was_focused: bool,
+        touch: bool,
     ) {
         use incular_widgets::internal::gesture_constants::{DOUBLE_TAP_SLOP, DOUBLE_TAP_TIMEOUT};
         let now = self.input_now();
@@ -587,6 +588,12 @@ impl Runtime {
         match effective_count {
             2 => {
                 self.text_field_select_word_at(field, position, now);
+                // `onDoubleTapDown`: a touch or stylus double tap shows the
+                // toolbar for the new word; a mouse double click does not
+                // (`shouldShowSelectionToolbar`).
+                if touch {
+                    self.show_text_field_touch_menu(field, position);
+                }
             }
             3 => self.text_field_select_boundaries_in_range(field, position, position, now),
             _ => {
@@ -951,6 +958,38 @@ impl Runtime {
         true
     }
 
+    /// Shows the touch toolbar of `field` for the press at `position`, if the
+    /// field has a context menu builder.
+    fn show_text_field_touch_menu(&mut self, field: ElementId, position: Offset) {
+        if let Some(menu) = self.tree.text_field_context_menu(field) {
+            let items = self.text_field_context_menu_items(field);
+            let anchors = self.text_field_menu_anchors(field, position);
+            menu.show(anchors, items);
+        }
+    }
+
+    /// `EditableText.contextMenuAnchors`: at the press's x, above the top of
+    /// the selection's line, or below its bottom.
+    fn text_field_menu_anchors(
+        &self,
+        field: ElementId,
+        position: Offset,
+    ) -> TextSelectionToolbarAnchors {
+        self.tree.text_field_input_geometry(field).map_or(
+            TextSelectionToolbarAnchors::at(position),
+            |snapshot| {
+                let caret = snapshot.caret_rect;
+                TextSelectionToolbarAnchors {
+                    primary_anchor: Offset::new(position.x, caret.origin.y),
+                    secondary_anchor: Some(Offset::new(
+                        position.x,
+                        caret.origin.y + caret.size.height,
+                    )),
+                }
+            },
+        )
+    }
+
     /// `onSingleLongTapEnd` and `_handleTouchLongPressEnd`: a started long
     /// press shows the context menu, for touch and stylus on text fields.
     pub(super) fn text_long_press_end(&mut self, position: Offset) {
@@ -965,25 +1004,7 @@ impl Runtime {
                 if !press.touch {
                     return;
                 }
-                if let Some(menu) = self.tree.text_field_context_menu(field) {
-                    let items = self.text_field_context_menu_items(field);
-                    // `EditableText.contextMenuAnchors`: above the top of the
-                    // selection's line, or below its bottom.
-                    let anchors = self.tree.text_field_input_geometry(field).map_or(
-                        TextSelectionToolbarAnchors::at(position),
-                        |snapshot| {
-                            let caret = snapshot.caret_rect;
-                            TextSelectionToolbarAnchors {
-                                primary_anchor: Offset::new(position.x, caret.origin.y),
-                                secondary_anchor: Some(Offset::new(
-                                    position.x,
-                                    caret.origin.y + caret.size.height,
-                                )),
-                            }
-                        },
-                    );
-                    menu.show(anchors, items);
-                }
+                self.show_text_field_touch_menu(field, position);
             }
             LongPressTarget::Label(label) => {
                 if let Some(menu) = self.tree.selectable_text_context_menu(label) {

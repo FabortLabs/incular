@@ -1,0 +1,121 @@
+//! Flutter's selection toolbar triggers on text fields: a touch double tap
+//! selects a word and shows the toolbar (`onDoubleTapDown` with
+//! `shouldShowSelectionToolbar`), while a mouse double click does not; typed
+//! text hides an open toolbar (`updateEditingValue`).
+
+use incular_config::Constraints;
+use incular_core::{
+    InputEvent, Offset, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase,
+    PointerSampleMetadata, Size,
+};
+use incular_runtime::{Runtime, TextShortcutPlatform};
+use incular_widgets::{
+    ContextMenuButtonType, EditableText, IgnorePointer, SizedBox, TextContextMenu, TextDirection,
+    Widget, internal::TextEditingController,
+};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    time::{Duration, Instant},
+};
+
+type Shown = Rc<RefCell<Vec<TextContextMenu>>>;
+
+fn bounds() -> Constraints {
+    Constraints::tight(Size::new(300., 40.))
+}
+
+fn mount(text: &str) -> (Runtime, TextEditingController, Shown) {
+    let controller = TextEditingController::with_text(text);
+    let shown: Shown = Rc::default();
+    let field = EditableText::new(controller.clone())
+        .text_direction(TextDirection::Ltr)
+        .size(Size::new(300., 32.))
+        .context_menu_builder({
+            let shown = shown.clone();
+            move |_, menu| {
+                shown.borrow_mut().push(menu.clone());
+                IgnorePointer::new(SizedBox::shrink()).into()
+            }
+        });
+    let mut runtime = Runtime::new(Widget::from(field)).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
+    runtime.run_frame(bounds()).unwrap();
+    (runtime, controller, shown)
+}
+
+fn tap(runtime: &mut Runtime, position: Offset, kind: PointerDeviceKind, at: Instant) {
+    for (phase, buttons) in [
+        (PointerPhase::Down, PRIMARY_POINTER_BUTTON),
+        (PointerPhase::Up, 0),
+    ] {
+        let _ = runtime.handle_input_at(
+            InputEvent::PointerWithMetadata {
+                pointer: 1,
+                device: 3,
+                kind,
+                buttons,
+                button: Some(PRIMARY_POINTER_BUTTON),
+                sample: PointerSampleMetadata::default(),
+                phase,
+                position,
+            },
+            at,
+        );
+    }
+}
+
+/// Two quick taps on the same spot: a double tap.
+fn double_tap(runtime: &mut Runtime, kind: PointerDeviceKind) -> Instant {
+    let position = Offset::new(12., 10.);
+    let start = Instant::now();
+    tap(runtime, position, kind, start);
+    let second = start + Duration::from_millis(120);
+    tap(runtime, position, kind, second);
+    second + Duration::from_millis(10)
+}
+
+#[test]
+fn touch_double_tap_selects_the_word_and_shows_the_toolbar() {
+    let (mut runtime, controller, shown) = mount("hello world");
+    let at = double_tap(&mut runtime, PointerDeviceKind::Touch);
+    runtime.run_frame_at(bounds(), at).unwrap();
+    assert_eq!(controller.selection().base, 0);
+    assert_eq!(controller.selection().extent, 5);
+    let menu = shown.borrow().last().cloned().expect("toolbar shown");
+    assert!(
+        menu.button_items
+            .iter()
+            .any(|item| item.button_type == ContextMenuButtonType::Copy),
+        "{menu:?}"
+    );
+}
+
+#[test]
+fn mouse_double_click_selects_the_word_without_the_toolbar() {
+    let (mut runtime, controller, shown) = mount("hello world");
+    let at = double_tap(&mut runtime, PointerDeviceKind::Mouse);
+    runtime.run_frame_at(bounds(), at).unwrap();
+    assert_eq!(controller.selection().extent, 5);
+    assert!(shown.borrow().is_empty());
+}
+
+/// Whether the focused field's toolbar is open.
+fn toolbar_open(runtime: &Runtime) -> bool {
+    let field = runtime.focused_element().expect("focused field");
+    runtime
+        .tree()
+        .text_field_context_menu(field)
+        .is_some_and(|menu| menu.is_showing())
+}
+
+#[test]
+fn typing_text_hides_the_open_toolbar() {
+    let (mut runtime, _controller, _shown) = mount("hello world");
+    let at = double_tap(&mut runtime, PointerDeviceKind::Touch);
+    runtime.run_frame_at(bounds(), at).unwrap();
+    assert!(toolbar_open(&runtime));
+    let _ = runtime.handle_input(InputEvent::Text("x".into()));
+    runtime.run_frame_at(bounds(), at).unwrap();
+    assert!(!toolbar_open(&runtime));
+}
