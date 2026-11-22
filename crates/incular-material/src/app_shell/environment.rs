@@ -1,3 +1,4 @@
+use crate::ThemeData;
 use incular_config::TargetPlatform;
 use incular_core::PointerDeviceKind;
 use incular_widgets::{
@@ -160,11 +161,30 @@ impl MaterialScrollBehavior {
         behavior
     }
 
-    /// Wraps a subtree in a [`ScrollConfiguration`] with this behavior.
+    /// The widgets-layer behavior for `theme`: the Material 3 stretch or the
+    /// Material 2 glow in the colour scheme's secondary colour on Android,
+    /// and the glow in that colour on Fuchsia.
     #[must_use]
-    pub fn wrap(&self, child: impl Into<Widget>) -> Widget {
+    pub fn scroll_behavior_for(&self, theme: &ThemeData) -> ScrollBehavior {
+        let core = theme.core();
+        let behavior = self.scroll_behavior();
+        match self.overscroll_indicator(core.use_material3) {
+            Some(AndroidOverscrollIndicator::Stretch) => {
+                behavior.overscroll_indicator_style(AndroidOverscrollIndicator::Stretch)
+            }
+            Some(AndroidOverscrollIndicator::Glow) => behavior
+                .overscroll_indicator_style(AndroidOverscrollIndicator::Glow)
+                .glow_color(core.color_scheme.secondary),
+            None => behavior,
+        }
+    }
+
+    /// Wraps a subtree in a [`ScrollConfiguration`] with the behavior
+    /// [`Self::scroll_behavior_for`] picks for `theme`.
+    #[must_use]
+    pub fn wrap(&self, theme: &ThemeData, child: impl Into<Widget>) -> Widget {
         ScrollConfiguration::new(child)
-            .behavior(self.scroll_behavior())
+            .behavior(self.scroll_behavior_for(theme))
             .into()
     }
 }

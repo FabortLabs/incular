@@ -4,6 +4,9 @@ use super::*;
 
 use super::rendering::{carry_replaced_transition, render_kind};
 use super::widget::WidgetChildren;
+use crate::overscroll_indicator::ScrollOverscrollIndicator;
+use crate::scroll_behavior::OverscrollStyle;
+use incular_config::AxisDirection;
 
 /// The inherited scope an element of `widget` provides and whether it is a
 /// lookup boundary: a layout builder's environment, or the
@@ -1679,7 +1682,89 @@ impl WidgetTree {
                 self.tracked.notification_subscribers.insert(listener);
             }
         }
+        self.refresh_overscroll_indicators();
         self.tracked.notification_subscriptions_dirty = false;
+    }
+
+    /// Keeps each scroll view's overscroll indicator in step with its
+    /// behavior. An indicator listens to its own controller only (Flutter's
+    /// `defaultScrollNotificationPredicate`: depth zero), and is a separate
+    /// registration from the notification listeners rebuilt above.
+    fn refresh_overscroll_indicators(&mut self) {
+        let scroll_views = self
+            .tracked
+            .scroll_views
+            .iter()
+            .copied()
+            .collect::<Vec<_>>();
+        for id in scroll_views {
+            let Some(element) = self.elements.get(id.0) else {
+                continue;
+            };
+            let Some(render) = self.renders.get(element.render.0) else {
+                continue;
+            };
+            // A list is a sliver viewport, a single child view a `Scroll`.
+            let viewport = render.size;
+            let (controller, style, axis, reverse) = match render.object.kind() {
+                RenderKind::Scroll {
+                    controller,
+                    behavior,
+                    axis,
+                    reverse,
+                    ..
+                } => (controller.clone(), behavior.overscroll, *axis, *reverse),
+                RenderKind::SliverViewport { config } => (
+                    config.controller.clone(),
+                    config.behavior.overscroll,
+                    config.axis,
+                    config.reverse,
+                ),
+                _ => continue,
+            };
+            let direction = match (axis, reverse) {
+                (Axis::Vertical, false) => AxisDirection::Down,
+                (Axis::Vertical, true) => AxisDirection::Up,
+                (Axis::Horizontal, false) => AxisDirection::Right,
+                (Axis::Horizontal, true) => AxisDirection::Left,
+            };
+            let Some(element) = self.elements.get_mut(id.0) else {
+                continue;
+            };
+            if style == OverscrollStyle::None {
+                if let Some(auxiliary) = element.auxiliary_state.as_mut() {
+                    auxiliary.overscroll_indicator = None;
+                }
+                continue;
+            }
+            let auxiliary = element.auxiliary_state_mut();
+            if let Some(registration) = auxiliary.overscroll_indicator.as_ref()
+                && registration.controller == controller
+            {
+                registration.indicator.set_style(style);
+                registration.indicator.set_axis_direction(direction);
+                registration.indicator.set_viewport(viewport);
+                continue;
+            }
+            // New, or the view swapped controllers: (re)subscribe to the
+            // current one; replacing the registration drops the old listener.
+            let indicator = Rc::new(ScrollOverscrollIndicator::new(direction, style));
+            indicator.set_viewport(viewport);
+            let weak = Rc::downgrade(&indicator);
+            let subscription = controller.add_listener(move |notification| {
+                if notification.depth == 0
+                    && let Some(indicator) = weak.upgrade()
+                {
+                    indicator.handle(&notification);
+                }
+                false
+            });
+            auxiliary.overscroll_indicator = Some(OverscrollIndicatorRegistration {
+                indicator,
+                controller,
+                _subscription: subscription,
+            });
+        }
     }
 
     pub(super) fn element_depth(&self, mut id: ElementId) -> usize {

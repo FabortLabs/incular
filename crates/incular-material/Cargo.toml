@@ -35,6 +35,7 @@ incular-text = { workspace = true }
 incular-widgets = { workspace = true }
 
 [dev-dependencies]
+incular-gestures = { workspace = true }
 incular-runtime = { workspace = true }
 
 [package.metadata.docs.rs]

@@ -14,9 +14,11 @@ use incular_animation::{
     physics::{SpringDescription, SpringSimulation, Tolerance},
 };
 use incular_config::{Axis, AxisDirection, Clip, TextDirection};
+use incular_core::time::Instant;
 use incular_core::{Color, Offset, Rect, Size, Transform as CoreTransform};
 use incular_scroll::{ScrollNotification, ScrollNotificationType};
 
+use crate::scroll_behavior::OverscrollStyle;
 use crate::tree::RetainedState;
 use crate::{Builder, ClipRect, NotificationListener, Stack, Transform, Widget};
 
@@ -167,6 +169,19 @@ impl RetainedState for StretchState {
 }
 
 impl StretchState {
+    fn new(revision: Rc<Cell<u64>>) -> Self {
+        Self {
+            controller: AnimationController::unbounded(),
+            animating: Cell::new(false),
+            overscroll: Cell::new(0.),
+            interrupted_overscroll: Cell::new(0.),
+            total_overscroll: Cell::new(0.),
+            viewport_dimension: Cell::new(None),
+            listening: Cell::new(false),
+            revision: RefCell::new(revision),
+        }
+    }
+
     fn set_overscroll(&self, value: f32) {
         let value = value.clamp(-1., 1.);
         if value != self.overscroll.replace(value) {
@@ -227,13 +242,23 @@ impl StretchState {
         );
     }
 
-    /// `_handleScrollNotification`.
-    fn handle(&self, config: &StretchingOverscrollIndicator, notification: &ScrollNotification) {
-        if !(config.notification_predicate)(notification)
-            || notification.metrics.axis != config.axis()
-        {
+    /// The spring's value while it runs (`_StretchController` listener).
+    fn on_animation_value(&self, value: f32) {
+        if !self.animating.get() {
             return;
         }
+        if self.controller.status() == AnimationStatus::Completed {
+            self.animating.set(false);
+            self.interrupted_overscroll.set(0.);
+            self.set_overscroll(0.);
+        } else {
+            self.set_overscroll(value);
+        }
+    }
+
+    /// `_handleScrollNotification` for a notification already filtered to
+    /// this indicator's axis and predicate.
+    fn handle(&self, notification: &ScrollNotification) {
         match notification.kind {
             ScrollNotificationType::Overscroll => {
                 self.viewport_dimension
@@ -268,16 +293,7 @@ impl From<StretchingOverscrollIndicator> for Widget {
     fn from(value: StretchingOverscrollIndicator) -> Self {
         let config = Rc::new(value);
         Widget::retained_builder(
-            |revision| StretchState {
-                controller: AnimationController::unbounded(),
-                animating: Cell::new(false),
-                overscroll: Cell::new(0.),
-                interrupted_overscroll: Cell::new(0.),
-                total_overscroll: Cell::new(0.),
-                viewport_dimension: Cell::new(None),
-                listening: Cell::new(false),
-                revision: RefCell::new(revision),
-            },
+            StretchState::new,
             move |state, context, _| {
                 if !state.listening.replace(true) {
                     let weak = Rc::downgrade(state);
@@ -285,16 +301,7 @@ impl From<StretchingOverscrollIndicator> for Widget {
                         let Some(state) = weak.upgrade() else {
                             return;
                         };
-                        if !state.animating.get() {
-                            return;
-                        }
-                        if state.controller.status() == AnimationStatus::Completed {
-                            state.animating.set(false);
-                            state.interrupted_overscroll.set(0.);
-                            state.set_overscroll(0.);
-                        } else {
-                            state.set_overscroll(value);
-                        }
+                        state.on_animation_value(value);
                     });
                 }
                 let stretch = state.overscroll.get();
@@ -332,8 +339,11 @@ impl From<StretchingOverscrollIndicator> for Widget {
                 let handler_config = config.clone();
                 NotificationListener::new(ticked)
                     .on_notification(move |notification| {
-                        if let Some(state) = handler.upgrade() {
-                            state.handle(&handler_config, &notification);
+                        if let Some(state) = handler.upgrade()
+                            && (handler_config.notification_predicate)(&notification)
+                            && notification.metrics.axis == handler_config.axis()
+                        {
+                            state.handle(&notification);
                         }
                         false
                     })
@@ -521,6 +531,26 @@ impl GlowController {
         }
     }
 
+    /// The glow's animation completed (`_glowController` status listener):
+    /// moves on to the next phase once.
+    fn settle_glow(&self) {
+        if self.glow.status() == AnimationStatus::Completed && !self.glow_settled.replace(true) {
+            self.change_phase();
+        }
+    }
+
+    /// Whether the pull's hold timer completed and armed the decay: the
+    /// glow then recedes slowly (`_pullRecedeTimer`).
+    fn pull_timer_fired(&self) -> bool {
+        if self.pull_timer.status() == AnimationStatus::Completed
+            && self.pull_timer_armed.replace(false)
+        {
+            self.recede(PULL_DECAY_TIME);
+            return true;
+        }
+        false
+    }
+
     fn recede(&self, duration: Duration) {
         if matches!(self.state.get(), GlowState::Recede | GlowState::Idle) {
             return;
@@ -700,6 +730,16 @@ impl RetainedState for GlowIndicatorState {
 }
 
 impl GlowIndicatorState {
+    fn new(revision: Rc<Cell<u64>>) -> Self {
+        Self {
+            leading: GlowController::new(),
+            trailing: GlowController::new(),
+            size: Cell::new(Size::ZERO),
+            listening: Cell::new(false),
+            revision: RefCell::new(revision),
+        }
+    }
+
     fn bump(&self) {
         let revision = self.revision.borrow().clone();
         revision.set(revision.get().wrapping_add(1));
@@ -710,12 +750,7 @@ impl GlowIndicatorState {
     }
 
     /// `_handleScrollNotification`.
-    fn handle(&self, config: &GlowingOverscrollIndicator, notification: &ScrollNotification) {
-        if !(config.notification_predicate)(notification)
-            || notification.metrics.axis != config.axis()
-        {
-            return;
-        }
+    fn handle(&self, notification: &ScrollNotification) {
         let metrics = notification.metrics;
         // With no `OverscrollIndicatorNotification` listener the paint
         // offset stays zero.
@@ -772,7 +807,9 @@ impl GlowIndicatorState {
     /// `_GlowingOverscrollIndicatorPainter.paint`.
     fn paint(
         &self,
-        config: &GlowingOverscrollIndicator,
+        show: (bool, bool),
+        axis_direction: AxisDirection,
+        color: Color,
         size: Size,
     ) -> incular_rendering::DisplayList {
         // Idle glows paint nothing, so skip the canvas allocation.
@@ -781,12 +818,8 @@ impl GlowIndicatorState {
         }
         let mut canvas = incular_rendering::Canvas::default();
         let sides = [
-            (
-                config.show_leading,
-                &self.leading,
-                flipped(config.axis_direction),
-            ),
-            (config.show_trailing, &self.trailing, config.axis_direction),
+            (show.0, &self.leading, flipped(axis_direction)),
+            (show.1, &self.trailing, axis_direction),
         ];
         for (show, controller, direction) in sides {
             if !show {
@@ -811,7 +844,7 @@ impl GlowIndicatorState {
                     Size::new(size.height, size.width),
                 ),
             };
-            controller.paint(&mut canvas, transform, edge, config.color);
+            controller.paint(&mut canvas, transform, edge, color);
         }
         canvas.finish()
     }
@@ -821,13 +854,7 @@ impl From<GlowingOverscrollIndicator> for Widget {
     fn from(value: GlowingOverscrollIndicator) -> Self {
         let config = Rc::new(value);
         Widget::retained_builder(
-            |revision| GlowIndicatorState {
-                leading: GlowController::new(),
-                trailing: GlowController::new(),
-                size: Cell::new(Size::ZERO),
-                listening: Cell::new(false),
-                revision: RefCell::new(revision),
-            },
+            GlowIndicatorState::new,
             move |state, _, constraints| {
                 if !state.listening.replace(true) {
                     for (index, controller) in state.controllers().into_iter().enumerate() {
@@ -837,11 +864,7 @@ impl From<GlowingOverscrollIndicator> for Widget {
                             move |_| {
                                 let Some(state) = weak.upgrade() else { return };
                                 let controller = glow_side(&state, index);
-                                if controller.glow.status() == AnimationStatus::Completed
-                                    && !controller.glow_settled.replace(true)
-                                {
-                                    controller.change_phase();
-                                }
+                                controller.settle_glow();
                                 state.bump();
                             }
                         });
@@ -850,10 +873,7 @@ impl From<GlowingOverscrollIndicator> for Widget {
                             move |_| {
                                 let Some(state) = weak.upgrade() else { return };
                                 let controller = glow_side(&state, index);
-                                if controller.pull_timer.status() == AnimationStatus::Completed
-                                    && controller.pull_timer_armed.replace(false)
-                                {
-                                    controller.recede(PULL_DECAY_TIME);
+                                if controller.pull_timer_fired() {
                                     state.bump();
                                 }
                             }
@@ -881,7 +901,12 @@ impl From<GlowingOverscrollIndicator> for Widget {
                 state.size.set(size);
                 let glow = crate::IgnorePointer::new(crate::CustomPaint::new(
                     size,
-                    state.paint(&config, size),
+                    state.paint(
+                        (config.show_leading, config.show_trailing),
+                        config.axis_direction,
+                        config.color,
+                        size,
+                    ),
                 ));
                 let mut content: Widget = Stack::new([config.child.clone(), glow.into()])
                     .fit(crate::StackFit::Passthrough)
@@ -905,8 +930,11 @@ impl From<GlowingOverscrollIndicator> for Widget {
                 let handler_config = config.clone();
                 NotificationListener::new(content)
                     .on_notification(move |notification| {
-                        if let Some(state) = handler.upgrade() {
-                            state.handle(&handler_config, &notification);
+                        if let Some(state) = handler.upgrade()
+                            && (handler_config.notification_predicate)(&notification)
+                            && notification.metrics.axis == handler_config.axis()
+                        {
+                            state.handle(&notification);
                         }
                         false
                     })
@@ -922,5 +950,149 @@ fn glow_side(state: &GlowIndicatorState, index: usize) -> &GlowController {
         &state.leading
     } else {
         &state.trailing
+    }
+}
+
+impl GlowController {
+    /// Advances this edge's animations to `now`, handling their completions
+    /// as the widget's listeners do. Returns whether any is still running.
+    fn tick(&self, now: Instant) -> bool {
+        self.glow.tick(now);
+        self.settle_glow();
+        self.pull_timer.tick(now);
+        self.pull_timer_fired();
+        if self.displacement_ticker.tick(now) {
+            self.tick_displacement(
+                self.displacement_ticker.value() * DISPLACEMENT_CLOCK.as_secs_f32(),
+            );
+        }
+        self.is_active()
+    }
+
+    fn is_active(&self) -> bool {
+        self.glow.is_active() || self.pull_timer.is_active() || self.displacement_ticker.is_active()
+    }
+}
+
+/// A scroll view's overscroll indicator, painted by its render object instead
+/// of a wrapping widget. It holds the same stretch and glow state as the
+/// [`StretchingOverscrollIndicator`] and [`GlowingOverscrollIndicator`]
+/// widgets, fed by the view's own notifications.
+pub(crate) struct ScrollOverscrollIndicator {
+    style: Cell<OverscrollStyle>,
+    axis_direction: Cell<AxisDirection>,
+    stretch: StretchState,
+    glow: GlowIndicatorState,
+}
+
+impl ScrollOverscrollIndicator {
+    pub(crate) fn new(axis_direction: AxisDirection, style: OverscrollStyle) -> Self {
+        // No widget repaints from this state: the render object does.
+        let revision = Rc::new(Cell::new(0));
+        Self {
+            style: Cell::new(style),
+            axis_direction: Cell::new(axis_direction),
+            stretch: StretchState::new(revision.clone()),
+            glow: GlowIndicatorState::new(revision),
+        }
+    }
+
+    pub(crate) fn set_style(&self, style: OverscrollStyle) {
+        self.style.set(style);
+    }
+
+    pub(crate) fn set_axis_direction(&self, axis_direction: AxisDirection) {
+        self.axis_direction.set(axis_direction);
+    }
+
+    /// Records the viewport size. A drag's pull is measured against it, so
+    /// it must be current before the first overscroll arrives, not only
+    /// after a paint.
+    pub(crate) fn set_viewport(&self, viewport: Size) {
+        self.glow.size.set(viewport);
+    }
+
+    /// Flutter's `_handleScrollNotification`, for a notification from the
+    /// view's own controller.
+    pub(crate) fn handle(&self, notification: &ScrollNotification) {
+        if notification.metrics.axis != axis_of(self.axis_direction.get()) {
+            return;
+        }
+        match self.style.get() {
+            OverscrollStyle::None => {}
+            OverscrollStyle::Stretch => self.stretch.handle(notification),
+            OverscrollStyle::Glow { .. } => self.glow.handle(notification),
+        }
+    }
+
+    /// Advances the animations to `now`. Returns whether any is still running.
+    pub(crate) fn tick(&self, now: Instant) -> bool {
+        if self.stretch.animating.get() {
+            self.stretch.controller.tick(now);
+            self.stretch
+                .on_animation_value(self.stretch.controller.value());
+        }
+        self.glow.leading.tick(now);
+        self.glow.trailing.tick(now);
+        self.is_animating()
+    }
+
+    /// Whether an animation is running, so frames must continue.
+    pub(crate) fn is_animating(&self) -> bool {
+        self.stretch.animating.get()
+            || self.glow.leading.is_active()
+            || self.glow.trailing.is_active()
+    }
+
+    /// The scale about the pulled edge that stretches the viewport's content
+    /// (Flutter's `StretchEffect`), or `None` when it is not stretching.
+    /// Paint-only: layout and hit testing keep the plain scroll translation.
+    pub(crate) fn stretch_transform(&self, viewport: Size) -> Option<CoreTransform> {
+        if self.style.get() != OverscrollStyle::Stretch {
+            return None;
+        }
+        let stretch = self.stretch.overscroll.get();
+        if stretch == 0. {
+            return None;
+        }
+        let direction = self.axis_direction.get();
+        let mut strength = -stretch;
+        if matches!(direction, AxisDirection::Up | AxisDirection::Left) {
+            strength = -strength;
+        }
+        let scale = 1. + strength.abs();
+        // The pulled edge stays put: the far edge for a backward stretch.
+        let far_edge = strength <= 0.;
+        let (scale, anchor) = match axis_of(direction) {
+            Axis::Vertical => (
+                CoreTransform::scale_non_uniform(1., scale),
+                Offset::new(0., if far_edge { viewport.height } else { 0. }),
+            ),
+            Axis::Horizontal => (
+                CoreTransform::scale_non_uniform(scale, 1.),
+                Offset::new(if far_edge { viewport.width } else { 0. }, 0.),
+            ),
+        };
+        Some(
+            CoreTransform::translation(anchor)
+                .then(scale)
+                .then(CoreTransform::translation(Offset::new(
+                    -anchor.x, -anchor.y,
+                ))),
+        )
+    }
+
+    /// Paints the glow of a viewport of `viewport` size into `output`, above
+    /// the content. Nothing paints for a stretch or an idle glow.
+    pub(crate) fn paint_glow(&self, output: &mut incular_rendering::DisplayList, viewport: Size) {
+        let OverscrollStyle::Glow { color } = self.style.get() else {
+            return;
+        };
+        output.extend_from(&self.glow.paint(
+            (true, true),
+            self.axis_direction.get(),
+            color,
+            viewport,
+        ));
     }
 }

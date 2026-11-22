@@ -72,6 +72,7 @@ a version and date when publishing.
 
 ### Changed
 
+- **Breaking (`incular-material`):** `MaterialScrollBehavior::wrap` takes the theme, so the overscroll indicator can follow the Material version and colour scheme. Migrate by passing `&theme` as the first argument. Added `MaterialScrollBehavior::scroll_behavior_for(&ThemeData)`, which picks the Material 3 Android stretch or the Material 2 glow in the secondary colour, as Flutter's `MaterialScrollBehavior` does. `incular-widgets` `ScrollBehavior` gains `overscroll_indicator_style` and `glow_color`.
 - **Breaking (`incular-platform`, `incular-widgets`, `incular-material`):** `TextInputType::Number` and
   `TextInputTypeHint::Number` carry `{ signed, decimal }` so a numeric keyboard can offer a decimal
   point or a minus sign, as Flutter does. Migrate `TextInputType::Number` to
@@ -97,6 +98,7 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-widgets`: the Android overscroll indicator is now selected from the ambient `ScrollBehavior` and the Material theme (the stretch under Material 3, the glow otherwise) as Flutter does, and scroll views (`ListView`, `SingleChildScrollView` and other viewports) now paint it: dragging past an edge on Android stretches the content under Material 3 or draws the glow, which recedes on release.
 - `incular-runtime`: a touch or stylus drag on a text field follows Flutter's gesture rules. iOS never extends the selection with a touch drag, and Android extends it only from a field that already had focus when the press went down. Mouse drags are unchanged.
 - `incular-material`: the touch text selection toolbar has its Flutter surface again. Without an ambient `Theme` it fell back to a transparent card with black labels; it now uses the light default (white, or `#424242` on dark, as Flutter). The corner radius is the 22-pixel pill of Flutter, the content padding above the anchor matches `TextSelectionToolbar.build`, and the end button padding is 14.5 as in Flutter.
 - `incular-runtime`: a touch or stylus double tap on a text field shows the selection toolbar for the selected word. A mouse double click still does not show it, as Flutter `shouldShowSelectionToolbar`.

@@ -5,7 +5,7 @@
 //! [`ScrollConfiguration`]: crate::ScrollConfiguration
 
 use incular_config::TargetPlatform;
-use incular_core::PointerDeviceKind;
+use incular_core::{Color, PointerDeviceKind};
 use incular_gestures::VelocityTrackerKind;
 use incular_scroll::{ScrollDecelerationRate, ScrollPhysics, ScrollViewKeyboardDismissBehavior};
 
@@ -52,6 +52,8 @@ pub struct ScrollBehavior {
     physics: Option<ScrollPhysics>,
     platform: Option<TargetPlatform>,
     keyboard_dismiss_behavior: Option<ScrollViewKeyboardDismissBehavior>,
+    overscroll_style: Option<AndroidOverscrollIndicator>,
+    glow_color: Color,
 }
 
 impl Default for ScrollBehavior {
@@ -72,7 +74,31 @@ impl ScrollBehavior {
             physics: None,
             platform: None,
             keyboard_dismiss_behavior: None,
+            overscroll_style: None,
+            glow_color: DEFAULT_GLOW_COLOR,
         }
+    }
+
+    /// Overrides the overscroll indicator the platform would pick, Flutter's
+    /// `MaterialScrollBehavior` choosing the stretch or the glow.
+    #[must_use]
+    pub const fn overscroll_indicator_style(mut self, style: AndroidOverscrollIndicator) -> Self {
+        self.overscroll_style = Some(style);
+        self
+    }
+
+    /// The colour of the glow overscroll indicator. Defaults to white, as
+    /// Flutter's `_kDefaultGlowColor`.
+    #[must_use]
+    pub const fn glow_color(mut self, color: Color) -> Self {
+        self.glow_color = color;
+        self
+    }
+
+    /// The glow colour set by [`ScrollBehavior::glow_color`].
+    #[must_use]
+    pub const fn get_glow_color(&self) -> Color {
+        self.glow_color
     }
 
     /// Whether scroll views get the platform's scrollbar. Defaults to true.
@@ -194,12 +220,16 @@ impl ScrollBehavior {
     /// Flutter's `buildOverscrollIndicator`: a glow on Android and Fuchsia.
     #[must_use]
     pub fn overscroll_indicator(&self) -> Option<AndroidOverscrollIndicator> {
-        (self.overscroll
-            && matches!(
+        if !self.overscroll {
+            return None;
+        }
+        self.overscroll_style.or_else(|| {
+            matches!(
                 self.get_platform(),
                 TargetPlatform::Android | TargetPlatform::Fuchsia
-            ))
-        .then_some(AndroidOverscrollIndicator::Glow)
+            )
+            .then_some(AndroidOverscrollIndicator::Glow)
+        })
     }
 
     /// Flutter's `velocityTrackerBuilder`.
@@ -231,9 +261,19 @@ impl ScrollBehavior {
             scrollbar: self.shows_scrollbar(),
             horizontal_scrollbar: self.horizontal_scrollbars,
             velocity_tracker: self.velocity_tracker(),
+            overscroll: match self.overscroll_indicator() {
+                None => OverscrollStyle::None,
+                Some(AndroidOverscrollIndicator::Stretch) => OverscrollStyle::Stretch,
+                Some(AndroidOverscrollIndicator::Glow) => OverscrollStyle::Glow {
+                    color: self.glow_color,
+                },
+            },
         }
     }
 }
+
+/// Flutter's `_kDefaultGlowColor`.
+const DEFAULT_GLOW_COLOR: Color = Color::rgba(255, 255, 255, 255);
 
 const fn device_bit(kind: PointerDeviceKind) -> u8 {
     1 << match kind {
@@ -254,6 +294,19 @@ pub struct ResolvedScrollBehavior {
     pub(crate) scrollbar: bool,
     pub(crate) horizontal_scrollbar: bool,
     pub(crate) velocity_tracker: VelocityTrackerKind,
+    /// The overscroll indicator painted by the view, if any.
+    pub(crate) overscroll: OverscrollStyle,
+}
+
+/// The overscroll indicator a scroll view paints, resolved from its behavior.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum OverscrollStyle {
+    /// No indicator.
+    None,
+    /// Flutter's glow in `color`.
+    Glow { color: Color },
+    /// Flutter's stretch.
+    Stretch,
 }
 
 impl ResolvedScrollBehavior {

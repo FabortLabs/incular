@@ -76,6 +76,7 @@ use crate::gestures::{
     GestureArenaEntry, GestureArenaKey, GestureArenaMember, GestureCallbacks, GestureDecision,
     GestureDisposition, PointerEvent, PointerGestureRecognizer, ScaleGestureDetector,
 };
+use crate::overscroll_indicator::ScrollOverscrollIndicator;
 use crate::painting_effects::BoxShadow;
 use crate::raw_input::{GestureRecognizer, RawInputKind};
 use crate::recursion::{DiagnosticNode, DiagnosticNodeId, RecursionDiagnostics};
@@ -352,12 +353,24 @@ struct ElementScrollingState {
     wheel_scroll_revision: u64,
 }
 
+/// A scroll view's overscroll indicator with the subscription that feeds it.
+/// Dropping the registration unsubscribes from the controller.
+struct OverscrollIndicatorRegistration {
+    indicator: Rc<ScrollOverscrollIndicator>,
+    /// The controller subscribed to; a swapped controller resubscribes.
+    controller: incular_scroll::ScrollController,
+    _subscription: ScrollNotificationSubscription,
+}
+
 /// Independent, uncommon element state. A notification listener, text field or
 /// layout builder can coexist with scrolling state without enlarging every node.
 #[derive(Default)]
 struct ElementAuxiliaryState {
     /// RAII registrations are rebuilt after layout so lazy children are included.
     notification_subscriptions: Vec<ScrollNotificationSubscription>,
+    /// The overscroll indicator of a scroll view that paints one, fed by its own
+    /// notifications and kept apart from the notification listeners above.
+    overscroll_indicator: Option<OverscrollIndicatorRegistration>,
     edit_transform_subscription: Option<incular_core::reactivity::Subscription>,
     edit_changed_subscription: Option<incular_text::TextEditingSubscription>,
     /// Spell checks of user edits (Flutter `_performSpellCheck`).

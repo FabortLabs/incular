@@ -2691,30 +2691,32 @@ impl WidgetTree {
     fn tick_controllers(&mut self, now: Instant) -> bool {
         // Idle frames allocate nothing: look for a controller with work first.
         let busy = self.tracked.compositor_nodes.iter().any(|&element| {
-            self.elements
-                .get(element.0)
-                .and_then(|element| self.renders.get(element.render.0))
-                .is_some_and(|node| match node.object.kind() {
-                    RenderKind::AnimationTicker {
-                        controller,
-                        auto_start,
-                        repeat,
-                        frame,
-                        ..
-                    } => {
-                        frame.as_ref().is_some_and(FrameDelegate::is_active)
-                            || controller.is_active()
-                            || (repeat.is_some())
-                            || (*auto_start
-                                && controller.status()
-                                    == incular_animation::AnimationStatus::Dismissed)
-                    }
-                    // Sliver animations (header snaps, animated slivers)
-                    // tick before layout too, as Flutter's tickers do, so
-                    // the value they produce is laid out in this frame.
-                    RenderKind::SliverViewport { config } => config.delegate.is_animating(),
-                    _ => false,
-                })
+            self.scroll_overscroll_animating(element)
+                || self
+                    .elements
+                    .get(element.0)
+                    .and_then(|element| self.renders.get(element.render.0))
+                    .is_some_and(|node| match node.object.kind() {
+                        RenderKind::AnimationTicker {
+                            controller,
+                            auto_start,
+                            repeat,
+                            frame,
+                            ..
+                        } => {
+                            frame.as_ref().is_some_and(FrameDelegate::is_active)
+                                || controller.is_active()
+                                || (repeat.is_some())
+                                || (*auto_start
+                                    && controller.status()
+                                        == incular_animation::AnimationStatus::Dismissed)
+                        }
+                        // Sliver animations (header snaps, animated slivers)
+                        // tick before layout too, as Flutter's tickers do, so
+                        // the value they produce is laid out in this frame.
+                        RenderKind::SliverViewport { config } => config.delegate.is_animating(),
+                        _ => false,
+                    })
         });
         if !busy {
             return false;
@@ -2828,6 +2830,29 @@ impl WidgetTree {
     /// immediate retained relayout so standalone `WidgetTree` users observe
     /// controller changes in the same update; any builder error is propagated.
     /// Whether `id` or an ancestor is hidden with animations paused.
+    /// The overscroll indicator a scroll element paints, if it has one.
+    pub(super) fn scroll_overscroll_indicator(
+        &self,
+        element: ElementId,
+    ) -> Option<Rc<ScrollOverscrollIndicator>> {
+        self.elements
+            .get(element.0)?
+            .auxiliary_state
+            .as_ref()?
+            .overscroll_indicator
+            .as_ref()
+            .map(|registration| registration.indicator.clone())
+    }
+
+    /// Whether a scroll element's overscroll indicator is animating.
+    fn scroll_overscroll_animating(&self, element: ElementId) -> bool {
+        self.elements
+            .get(element.0)
+            .and_then(|element| element.auxiliary_state.as_ref())
+            .and_then(|auxiliary| auxiliary.overscroll_indicator.as_ref())
+            .is_some_and(|registration| registration.indicator.is_animating())
+    }
+
     fn animation_muted(&self, mut id: ElementId) -> bool {
         while let Some(element) = self.elements.get(id.0) {
             if matches!(element.widget.kind(),
@@ -2908,6 +2933,37 @@ impl WidgetTree {
                 .and_then(|render| render.constraints);
             let _node_guard = self.guard_render(FramePhase::Compositor, _render, constraints);
             let changed_before_node = std::mem::replace(&mut changed, false);
+            // Flutter's Android overscroll indicator, owned by the scroll view
+            // itself: advance it, keep its viewport current, and take the
+            // paint-only stretch about the pulled edge. Views without one
+            // (every non-Android view) skip this with one lookup.
+            let mut stretch = None;
+            if matches!(
+                *kind,
+                RenderKind::Scroll { .. } | RenderKind::SliverViewport { .. }
+            ) && let Some(indicator) = self
+                .scroll_overscroll_indicator(element)
+                .filter(|_| ticking!())
+            {
+                let viewport = self
+                    .renders
+                    .get(_render.0)
+                    .map_or(Size::ZERO, |node| node.size);
+                indicator.set_viewport(viewport);
+                let was_animating = indicator.is_animating();
+                let animating = indicator.tick(now);
+                stretch = indicator.stretch_transform(viewport);
+                active |= animating;
+                if animating || was_animating {
+                    // The glow lives in the overlay picture.
+                    changed = true;
+                    self.mark_render_paint(_render);
+                }
+            }
+            let scroll_transform = |offset: Offset| {
+                let translation = CoreTransform::translation(offset);
+                stretch.map_or(translation, |stretch| stretch.then(translation))
+            };
             match *kind {
                 RenderKind::Scroll {
                     ref controller,
@@ -2918,9 +2974,7 @@ impl WidgetTree {
                     if let Some(content) = layers.content()
                         && self.compositor.update_transform(
                             content,
-                            CoreTransform::translation(scroll_translation(
-                                controller, axis, reverse,
-                            )),
+                            scroll_transform(scroll_translation(controller, axis, reverse)),
                         )
                     {
                         changed = true;
@@ -2954,7 +3008,7 @@ impl WidgetTree {
                     if let Some(content) = layers.content()
                         && self.compositor.update_transform(
                             content,
-                            CoreTransform::translation(scroll_translation(
+                            scroll_transform(scroll_translation(
                                 &config.controller,
                                 config.axis,
                                 config.reverse,

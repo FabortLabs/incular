@@ -2352,6 +2352,7 @@ dependencies = [
  "incular-config",
  "incular-controls",
  "incular-core",
+ "incular-gestures",
  "incular-navigation",
  "incular-rendering",
  "incular-runtime",

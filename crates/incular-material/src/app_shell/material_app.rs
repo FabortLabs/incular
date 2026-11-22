@@ -278,7 +278,7 @@ impl MaterialApp {
             theme
         };
         let text_style = theme.core().text_theme.body_medium.clone();
-        let themed: Widget = Theme::scope_shared(theme, child);
+        let themed: Widget = Theme::scope_shared(Rc::clone(&theme), child);
         // MaterialApp supplies the ambient body style just like Flutter's
         // WidgetsApp/MaterialApp. Plain `Text::new` remains intentionally
         // lightweight outside an application root, while descendants of a
@@ -306,7 +306,7 @@ impl MaterialApp {
         };
         let configured = self
             .scroll_behavior
-            .wrap(Directionality::new(direction, localized));
+            .wrap(&theme, Directionality::new(direction, localized));
         let configured = if let Some(builder) = self.builder.as_ref() {
             builder(configured)
         } else {

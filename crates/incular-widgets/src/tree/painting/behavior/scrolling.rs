@@ -10,6 +10,7 @@ impl WidgetTree {
     ) {
         match *kind {
             RenderKind::Scroll { .. } | RenderKind::SliverViewport { .. } => {
+                self.paint_overscroll_glow(id, cache);
                 self.paint_scrollbar(id, cache);
             }
             _ => unreachable!("scroll paint received a non-scrolling render kind"),

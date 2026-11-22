@@ -797,6 +797,19 @@ impl WidgetTree {
         }
         output.push(PaintCommand::PopTransform);
     }
+    /// Paints a scroll view's overscroll glow over its content. Only a
+    /// scroll view with a glow indicator has one, so no other view pays for it.
+    pub(super) fn paint_overscroll_glow(&self, id: RenderObjectId, cache: &mut DisplayList) {
+        let Some(indicator) = self
+            .element_for_render(id)
+            .and_then(|element| self.scroll_overscroll_indicator(element))
+        else {
+            return;
+        };
+        let size = self.renders.get(id.0).map_or(Size::ZERO, |node| node.size);
+        indicator.paint_glow(cache, size);
+    }
+
     pub(super) fn paint_scrollbar(&self, id: RenderObjectId, cache: &mut DisplayList) {
         // The same geometry pointer handling uses: along the scroll axis, and
         // absent where the scroll behavior gives the view no scrollbar.
