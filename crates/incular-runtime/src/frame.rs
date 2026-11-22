@@ -1590,15 +1590,18 @@ impl Runtime {
                     text_target.is_some_and(|field| self.focused == Some(field));
                 // `EditableText._defaultOnTapOutside`: on Android and iOS a
                 // finger tapping outside the field leaves it focused, with
-                // the keyboard up; a mouse or stylus unfocuses it.
+                // the keyboard up; a mouse or stylus unfocuses it. A tap on
+                // another text field is not "outside": that field requests
+                // focus itself.
                 let mobile_touch = kind == PointerDeviceKind::Touch
                     && matches!(
                         self.text_shortcut_platform,
                         TextShortcutPlatform::Android | TextShortcutPlatform::Ios
                     );
-                let keep_text_field_focus = self
-                    .focused
-                    .is_some_and(|focused| self.tree.is_text_field(focused))
+                let keep_text_field_focus = text_target.is_none()
+                    && self
+                        .focused
+                        .is_some_and(|focused| self.tree.is_text_field(focused))
                     && (mobile_touch || self.tree.preserves_text_field_focus(position));
                 // Flutter on desktop: a press focuses the text field it hits, a
                 // press outside a focused text field unfocuses it

@@ -96,6 +96,8 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-runtime`: on Android and iOS a finger tap on another text field moves focus to it. Only a
+  tap outside every text field keeps the focused field focused, as Flutter's `onTapOutside` does.
 - `incular-android`: changing a focused field's configuration, such as a password field's visibility toggle, no longer reopens a keyboard the user dismissed. Focusing a field still shows it.
 - `incular-android`: after Rust pushes a selection or text change, the next input method edit that lands on the same state is reported again instead of being dropped as a duplicate.
 - `incular-android`: hardware keys without a physical-key mapping, and numpad digits and operators, type their characters as Flutter does.
