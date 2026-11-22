@@ -12,11 +12,18 @@ allow = [
     "Apache-2.0 WITH LLVM-exception",
     "BSD-2-Clause",
     "BSD-3-Clause",
+    # Boost: clipboard-win and error-code (Windows clipboard).
+    "BSL-1.0",
     "CC0-1.0",
+    # Mozilla's root certificates as data: webpki-root-certs, through the
+    # optional rustls-platform-verifier.
+    "CDLA-Permissive-2.0",
     "ISC",
     "MIT",
     "MPL-2.0",
     "Unicode-3.0",
+    # Public domain: ksni (Linux tray).
+    "Unlicense",
     "Zlib",
 ]
 

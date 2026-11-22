@@ -31,7 +31,6 @@ targets = []
 incular-config = { workspace = true }
 incular-core = { workspace = true }
 incular-platform = { workspace = true }
-incular-rendering = { workspace = true }
 incular-runtime = { workspace = true }
 incular-wgpu = { workspace = true }
 incular-host = { workspace = true }
