@@ -810,3 +810,47 @@ fn changing_the_ambient_direction_relayouts_the_field() {
         "Directionality.updateShouldNotify must re-lay-out the editor",
     );
 }
+
+#[test]
+fn a_field_that_narrows_brings_its_caret_back_into_view() {
+    // Flutter's `EditableText.didChangeMetrics` shows the caret again when
+    // the view resizes (the keyboard opens). A field squeezed by a sibling
+    // that appears after the edit must not leave the caret hidden.
+    let cursor = incular_core::Color::rgba(255, 0, 0, 255);
+    let text = "abcdefghijklmnop";
+    let controller = TextEditingController::with_text(text);
+    controller.set_selection(TextSelection::collapsed(text.len()));
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(
+            EditableText::new(controller.clone())
+                .content_padding(INSET)
+                .cursor_color(cursor)
+                .size(Size::new(WIDTH, HEIGHT))
+                .text_direction(TextDirection::Ltr)
+                .into(),
+        )
+        .expect("mount");
+    tree.layout(Constraints::tight(Size::new(WIDTH, HEIGHT)))
+        .expect("wide layout");
+    tree.set_focused(root, true, Instant::now()).expect("focus");
+    controller.reset_caret(Instant::now());
+    let wide = tree.paint();
+    assert!(caret_edges(&wide, cursor).1 <= RIGHT_EDGE + 2.5);
+    assert_left(glyph_bounds(&wide), "the text fits, so it does not scroll");
+
+    let narrow = 60.;
+    tree.layout(Constraints::tight(Size::new(narrow, HEIGHT)))
+        .expect("narrow layout");
+    let painted = tree.paint();
+    let caret = caret_edges(&painted, cursor);
+    assert!(
+        caret.0 >= LEFT_EDGE && caret.0 <= narrow - INSET.right,
+        "the caret stays inside the text viewport: {caret:?}"
+    );
+    let glyphs = glyph_bounds(&painted);
+    assert!(
+        (glyphs.1 - caret.0).abs() < TOLERANCE,
+        "the text scrolled so its end meets the caret: {glyphs:?} {caret:?}"
+    );
+}

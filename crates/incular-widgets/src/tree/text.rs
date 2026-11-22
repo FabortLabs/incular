@@ -345,8 +345,7 @@ impl WidgetTree {
         );
         let size = node.size;
         let multiline = field.multiline;
-        let available =
-            (size.width - field.content_padding.left - (field.cursor_width.max(0.) + 1.)).max(0.);
+        let available = (size.width - field.content_padding.horizontal()).max(0.);
         let viewport = (size.height - field.content_padding.vertical()).max(0.);
         let state = self.text_field_state_live_mut(render);
         let (before_x, before_y) = (state.scroll_x, state.scroll_y);
@@ -400,9 +399,7 @@ impl WidgetTree {
             };
             (None, Some(target.clamp(0., max)))
         } else {
-            let available =
-                (size.width - field.content_padding.left - (field.cursor_width.max(0.) + 1.))
-                    .max(0.);
+            let available = (size.width - field.content_padding.horizontal()).max(0.);
             let (left, right) =
                 layout
                     .lines()

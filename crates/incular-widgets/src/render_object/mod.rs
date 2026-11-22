@@ -133,11 +133,14 @@ pub(crate) struct RenderTextFieldState {
     pub(crate) scroll_x: f32,
     pub(crate) scroll_y: f32,
     pub(crate) focused: bool,
-    /// The editing value (content revision and selection) and focus whose
-    /// caret the scroll offsets last revealed. Like Flutter's
+    /// The editing value (content revision and selection), focus and size
+    /// whose caret the scroll offsets last revealed. Like Flutter's
     /// `_scheduleShowCaretOnScreen`, the caret is brought into view only
     /// when these change, so an explicit scroll is not undone on repaint.
-    pub(crate) revealed: Option<(u64, incular_text::TextSelection, bool)>,
+    /// A new size stands in for `didChangeMetrics`: when the field narrows
+    /// (the keyboard resizes the view, or a sibling appears beside it) the
+    /// caret is brought back into view.
+    pub(crate) revealed: Option<(u64, incular_text::TextSelection, bool, incular_core::Size)>,
     /// The spell check answer the layout was built from.
     pub(crate) spell_revision: u64,
     /// Styled runs of the laid-out text that carry a decoration, painted

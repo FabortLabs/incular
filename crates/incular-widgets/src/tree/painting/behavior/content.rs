@@ -159,7 +159,7 @@ impl WidgetTree {
                 };
                 let (value_selection, value_empty) =
                     controller.with_value(|value| (value.selection, value.text.is_empty()));
-                let reveal_key = (controller.revisions().0, value_selection, focused);
+                let reveal_key = (controller.revisions().0, value_selection, focused, size);
                 let reveal = revealed != Some(reveal_key);
                 let has_layout = layout.is_some();
                 let shows_placeholder = value_empty
@@ -176,12 +176,12 @@ impl WidgetTree {
                         value_empty,
                         field,
                     );
-                    // Flutter RenderEditable._caretMargin (_kCaretGap + cursorWidth):
-                    // scrolling keeps the caret that far inside the field's right
-                    // edge. The caret is drawn past the left content padding, so
-                    // the content-space limit is width - left padding - caret margin.
-                    let caret_margin = cursor_width.max(0.) + 1.;
-                    let available = (size.width - content_padding.left - caret_margin).max(0.);
+                    // The text viewport is the box inside the content padding,
+                    // which stands in for the decoration Flutter lays out around
+                    // the editable. Text is laid out that wide (Flutter narrows it
+                    // by `_caretMargin` instead), so scrolling keeps the caret's
+                    // leading edge inside it and fitting text never scrolls.
+                    let available = (size.width - content_padding.horizontal()).max(0.);
                     if reveal && !multiline && caret - active_scroll_x > available {
                         active_scroll_x = caret - available;
                     } else if reveal && !multiline && caret < active_scroll_x {
@@ -272,9 +272,18 @@ impl WidgetTree {
                             });
                         }
                     }
-                    // editable.dart clips to Offset.zero & size (clipBehavior).
+                    // editable.dart clips to Offset.zero & size (clipBehavior), the
+                    // editable alone: text scrolled sideways never shows in the
+                    // decoration's horizontal padding. Full height keeps
+                    // ascenders and descenders that overhang the line.
                     cache.push(PaintCommand::PushClip {
-                        rect: Rect::from_origin_size(Offset::ZERO, size),
+                        rect: Rect::from_origin_size(
+                            Offset::new(content_padding.left, 0.),
+                            Size::new(
+                                (size.width - content_padding.horizontal()).max(0.),
+                                size.height,
+                            ),
+                        ),
                     });
                     cache.push(PaintCommand::PushTransform {
                         transform: CoreTransform::translation(Offset::new(
