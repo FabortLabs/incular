@@ -205,3 +205,10 @@ cases; the early frame mismatch is not counted again in this total.
 [Five frame rechecks](frame-rechecks-batch11.md) bring the total to
 60/253 (23.72%), 54 match and six differ. The additional difference is
 unset versus true semantics enabled state; the tap action still matches.
+
+### Existing frame harness: batch twelve
+
+[Navigation and semantics rechecks](frame-rechecks-batch12.md) bring the
+total to 64/253 (25.30%), 55 match and nine differ. The new mismatches are
+the fade-push timeline, Hero probe traces (actual flight not established)
+and opacity in the PopScope fixture (back-block values matched). The repeated overlay match is not counted again.

@@ -59,3 +59,7 @@ layout__table__rows_and_columns	harness/flutter/test/frames/layout_test.dart	295
 paint__data__edge_insets_lerp_extrapolated	harness/flutter/test/frames/paint_test.dart	80	match	3	frame-rechecks-batch11.md
 semantics__enabled_default	harness/flutter/test/frames/semantics_test.dart	71	mismatch	2	frame-rechecks-batch11.md
 text__editable_initial_selection_focus	harness/flutter/test/frames/text_test.dart	140	match	3	frame-rechecks-batch11.md
+navigation__navigator__fade_push_timeline	harness/flutter/test/frames/navigation_test.dart	221	mismatch	25	frame-rechecks-batch12.md
+navigation__hero__push_flight_navigator	harness/flutter/test/frames/navigation_test.dart	229	mismatch	25	frame-rechecks-batch12.md
+navigation__pop_scope__route_back_blocked	harness/flutter/test/frames/navigation_test.dart	259	mismatch	7	frame-rechecks-batch12.md
+semantics__properties_state	harness/flutter/test/frames/semantics_test.dart	23	match	2	frame-rechecks-batch12.md
