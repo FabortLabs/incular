@@ -37,3 +37,14 @@ with IndexedStack's explicit (10,20,30,40) geometry control. The focused
 layout and existing widget stack suites passed 3 and 23 tests. The
 directional default and missing-Directionality tests are still open;
 this fix does not introduce directional positioning APIs.
+
+## Layout-dependent clipping repair
+
+Stack and IndexedStack now attach the clip stage only when a positioned
+child's layout crosses an edge and clipping is enabled. Paint-only
+transforms do not turn it on. The overflow decision is retained when
+changing the clip option without remeasurement. The pinned Flutter probe
+and native Windows wgpu test agree on all four pixels across six retained
+frames, including re-enabling HardEdge on unchanged overflowing geometry.
+The separate IndexedStack wgpu selection test and the focused stack/clip
+widget suites pass.

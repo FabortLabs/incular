@@ -17,8 +17,10 @@ void main() {
     for (final (positioned, clip) in [
       (false, Clip.hardEdge),
       (true, Clip.hardEdge),
-      (false, Clip.none),
+      (false, Clip.hardEdge),
       (true, Clip.none),
+      (true, Clip.hardEdge),
+      (false, Clip.none),
     ]) {
       await tester.pumpWidget(
         Directionality(

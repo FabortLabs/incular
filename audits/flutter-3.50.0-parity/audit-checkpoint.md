@@ -733,3 +733,21 @@ or child and scaling inherited text behave as expected.
 bring complete pairs to 271/8,965 (213 match, 58 differ), with
 137 partial and 40 reference-only. Actual transforms and
 input routing match the checked original samples.
+
+### Remediation checkpoint: 400 fully paired registrations
+
+At the committed audit baseline (`e57497ce`), 400/8,965 original
+Flutter test registrations (4.46%) are fully paired: 305 matched and
+95 differed. There are also 202 partial and 80 reference-only
+dispositions. The frozen frame series and authored probes are reported
+separately. This is evidence coverage, not an estimate of fixes remaining.
+
+Per the November 24 direction, implementation began at that threshold.
+Committed fixes before this clipping patch: filtering byte offsets
+(`51fbd720`), grapheme-limit rejection (`44adc2c9`), retained
+IndexedStack painting (`7a1c5010`), and Positioned Stack geometry
+(`6aaf14fd`). The [Stack evidence](upstream-stack.md) includes the
+layout-only clipping repair and retained wgpu recheck. Remaining work
+includes focus state for hidden, detached, and ancestor-blocked nodes,
+directional defaults, other known mismatches, and the unaudited corpus.
+Use a single focused build or test at a time and reuse the laptop cache.

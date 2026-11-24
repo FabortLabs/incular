@@ -4,7 +4,7 @@ use incular_rendering::{
     Brush, CornerRadii, DisplayList, DropShadowEffect, FillRule, FollowerLayer, GaussianBlur,
     LayerId, LayerTree, Path, RRect,
 };
-use std::sync::Arc;
+use std::{cell::Cell, sync::Arc};
 
 use crate::layout::ClipDelegate;
 
@@ -179,6 +179,9 @@ pub(crate) struct RenderLayers {
     pub(crate) picture: Option<LayerId>,
     pub(crate) focus_picture: Option<LayerId>,
     pub(crate) attachment: LayerAttachment,
+    /// Retained even through Clip::None so clipping-only updates do not
+    /// need to remeasure the positioned children.
+    stack_layout_overflow: Cell<bool>,
 }
 
 impl RenderLayers {
@@ -393,6 +396,7 @@ impl RenderLayers {
             picture,
             focus_picture,
             attachment,
+            stack_layout_overflow: Cell::new(false),
         }
     }
 
@@ -852,7 +856,6 @@ fn clip_geometry(kind: &RenderKind, size: Size) -> Option<ClipGeometry> {
                 .as_ref()
                 .map_or(bounds, |clipper| clipper.clip(size).bounds()),
         ),
-        RenderKind::Stack { .. } | RenderKind::IndexedStack { .. } => ClipGeometry::Rect(bounds),
         RenderKind::ClipRRect {
             radius, clipper, ..
         } => ClipGeometry::RRect(match clipper.as_ref().map(|clipper| clipper.clip(size)) {
@@ -901,6 +904,7 @@ pub(crate) struct ClipApplied {
     size: Option<Size>,
     delegate: Option<ClipDelegate>,
     kind: Option<RenderKind>,
+    stack_enabled: Option<bool>,
 }
 
 /// Whether two clip kinds share the non-delegate inputs (corner radii, path)
@@ -928,11 +932,55 @@ fn clip_delegate(kind: &RenderKind) -> Option<&ClipDelegate> {
 }
 
 impl RenderLayers {
+    pub(crate) fn set_stack_layout_overflow(&self, overflow: bool) {
+        self.stack_layout_overflow.set(overflow);
+    }
+
+    /// A stack clips only layout overflow. Keep its child layers and its
+    /// clip stage available, but bypass the stage when nothing in the
+    /// positioned layout crosses an edge.
+    fn apply_stack_clip(&self, compositor: &mut LayerTree, size: Size) {
+        let LayerAttachment::Clip {
+            clip,
+            content,
+            applied,
+            ..
+        } = &self.attachment
+        else {
+            return;
+        };
+        let mut applied = applied.borrow_mut();
+        let enabled = self.stack_layout_overflow.get();
+        if applied.stack_enabled != Some(enabled) {
+            if enabled {
+                compositor.set_children(*clip, vec![*content]);
+            } else {
+                compositor.set_children(*clip, Vec::new());
+            }
+            let stage = if enabled { *clip } else { *content };
+            compositor.set_children(
+                self.root,
+                std::iter::once(stage).chain(self.picture).collect(),
+            );
+            applied.stack_enabled = Some(enabled);
+        }
+        if enabled {
+            compositor.update_clip(*clip, Rect::from_origin_size(Offset::ZERO, size));
+        }
+    }
+
     /// Rebuilds the clip geometry from the kind and size. The compositor keeps
     /// its geometry when the size and clip inputs (radius, path) are unchanged
     /// and the current delegate does not reclip against the one that produced it
     /// (`CustomClipper::should_reclip`), as Flutter's `_RenderCustomClip` does.
     fn apply_clip(&self, compositor: &mut LayerTree, kind: &RenderKind, size: Size) {
+        if matches!(
+            kind,
+            RenderKind::Stack { .. } | RenderKind::IndexedStack { .. }
+        ) {
+            self.apply_stack_clip(compositor, size);
+            return;
+        }
         let LayerAttachment::Clip { clip, applied, .. } = &self.attachment else {
             return;
         };

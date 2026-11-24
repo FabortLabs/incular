@@ -433,7 +433,13 @@ fn indexed_stack_clip_layers_follow_clip_behavior() {
     };
 
     let build = |clip| {
-        IndexedStack::new([white_box(40., 40.), white_box(80., 80.)])
+        let overflow: Widget = Positioned::new(white_box(80., 80.))
+            .left(50.)
+            .top(0.)
+            .width(80.)
+            .height(80.)
+            .into();
+        IndexedStack::new([white_box(40., 40.), overflow])
             .index(1)
             .clip_behavior(clip)
     };
@@ -456,6 +462,18 @@ fn indexed_stack_clip_layers_follow_clip_behavior() {
     );
     assert_eq!(tree.diagnostics().layouts, layouts + 1);
     assert_eq!(bounds_of(&tree, stack_kids(&tree, root)[1]).2, 80.);
+
+    tree.update(root, build(Clip::HardEdge).into())
+        .expect("reattach the clip stage");
+    layout_tight(&mut tree, 100., 100.);
+    assert_eq!(clip_rects(&tree.paint()), clipped);
+
+    let fitting = IndexedStack::new([white_box(40., 40.), white_box(80., 80.)])
+        .index(1)
+        .clip_behavior(Clip::HardEdge);
+    tree.update(root, fitting.into()).expect("all children fit");
+    layout_tight(&mut tree, 100., 100.);
+    assert!(clip_rects(&tree.paint()).is_empty());
 }
 
 #[test]

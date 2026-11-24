@@ -58,13 +58,24 @@ fn stack_hard_edge_clips_direct_layout_overflow_only() {
     .unwrap();
 
     let mut mismatches = Vec::new();
-    for (positioned, clip) in [
+    let mut runtime = Runtime::new(scene(false, Clip::HardEdge)).unwrap();
+    for (frame, (positioned, clip)) in [
         (false, Clip::HardEdge),
         (true, Clip::HardEdge),
-        (false, Clip::None),
+        (false, Clip::HardEdge),
         (true, Clip::None),
-    ] {
-        let mut runtime = Runtime::new(scene(positioned, clip)).unwrap();
+        (true, Clip::HardEdge),
+        (false, Clip::None),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        if frame != 0 {
+            let root = runtime.tree().root().unwrap();
+            runtime
+                .schedule_update(root, scene(positioned, clip))
+                .unwrap();
+        }
         let (list, _) = runtime
             .run_frame(Constraints::tight(Size::new(100., 100.)))
             .unwrap();
@@ -85,12 +96,20 @@ fn stack_hard_edge_clips_direct_layout_overflow_only() {
             let actual = <[u8; 4]>::try_from(&pixels.rgba8[i..i + 4]).unwrap();
             let expected = [r, 0, 0, 255];
             if actual != expected {
-                mismatches.push((positioned, clip, x, actual, expected));
+                mismatches.push((
+                    frame,
+                    positioned,
+                    clip,
+                    x,
+                    actual,
+                    expected,
+                    format!("{:?}", list.commands()),
+                ));
             }
         }
     }
     assert!(
         mismatches.is_empty(),
-        "positioned, clip, x, actual, expected: {mismatches:?}"
+        "frame, positioned, clip, x, actual, expected: {mismatches:?}"
     );
 }

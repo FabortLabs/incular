@@ -5,7 +5,7 @@ use std::collections::HashMap;
 impl WidgetTree {
     pub(super) fn layout_container_kind(
         &mut self,
-        _id: RenderObjectId,
+        id: RenderObjectId,
         kind: &RenderKind,
         children: &[RenderObjectId],
         constraints: Constraints,
@@ -260,6 +260,7 @@ impl WidgetTree {
                 } else {
                     constraints.smallest()
                 };
+                self.set_stack_layout_overflow(id, false);
                 (size, ChildOffsets::default())
             }
             RenderKind::Stack { .. } | RenderKind::IndexedStack { .. } => {
@@ -318,6 +319,7 @@ impl WidgetTree {
                 );
 
                 let mut offsets = ChildOffsets::default();
+                let mut has_visual_overflow = false;
                 for child in children {
                     let position = self.stack_positioned(*child, constraints)?;
                     if let Some(pos) = position {
@@ -367,10 +369,17 @@ impl WidgetTree {
                         incular_layout::StackPosition::NonPositioned,
                         incular_layout::StackPosition::Positioned,
                     );
-                    offsets.push(
-                        incular_layout::stack_child_geometry(final_size, &stack, size, position).1,
-                    );
+                    let (_, offset) =
+                        incular_layout::stack_child_geometry(final_size, &stack, size, position);
+                    if matches!(position, incular_layout::StackPosition::Positioned(_)) {
+                        has_visual_overflow |= offset.x < 0.0
+                            || offset.y < 0.0
+                            || offset.x + size.width > final_size.width
+                            || offset.y + size.height > final_size.height;
+                    }
+                    offsets.push(offset);
                 }
+                self.set_stack_layout_overflow(id, has_visual_overflow);
                 (final_size, offsets)
             }
             RenderKind::SafeArea {
@@ -545,6 +554,13 @@ impl WidgetTree {
             };
             current = next;
         }
+    }
+
+    fn set_stack_layout_overflow(&self, id: RenderObjectId, enabled: bool) {
+        self.render_live(id, "stack render must remain live")
+            .object
+            .layers
+            .set_stack_layout_overflow(enabled);
     }
 
     /// The [`Positioned`](crate::Positioned) data a stack child carries.
