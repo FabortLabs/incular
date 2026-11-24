@@ -257,3 +257,10 @@ The centered SliverList extent estimate and stale external FocusNode
 after PageDown now have dedicated, runnable Rust regressions:
 `flutter_sliver_anchor_parity` and `flutter_scroll_focus_parity`
 in incular-runtime. They fail at the confirmed estimate and focus checks.
+
+### Exact harness selection
+
+[Two overlapping gesture names](frame-exact-selection.md) now run
+independently and both match. Current valid frame coverage is 76/253
+(30.04%), 71 match and five differ, plus five non-equivalent fixtures.
+Use the exact runner for subsequent small frame checks.

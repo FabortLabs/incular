@@ -78,3 +78,5 @@ anim_core__controller_listener_notifications	harness/flutter/test/frames/anim_co
 anim_curves__curve2d__spline	harness/flutter/test/frames/anim_curves_test.dart	131	match	1	frame-rechecks-batch15.md
 misc__future_builder_keyed_reorder	harness/flutter/test/frames/misc_test.dart	270	match	4	frame-rechecks-batch15.md
 misc__media_query_size_aspect	harness/flutter/test/frames/misc_test.dart	166	match	3	frame-rechecks-batch15.md
+gestures__long_press	harness/flutter/test/frames/gestures_test.dart	67	match	35	frame-exact-selection.md
+gestures__long_press_draggable_quick_move	harness/flutter/test/frames/gestures_test.dart	275	match	5	frame-exact-selection.md

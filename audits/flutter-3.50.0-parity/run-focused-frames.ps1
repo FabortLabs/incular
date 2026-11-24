@@ -12,7 +12,7 @@ $catalog = Get-Content (Join-Path $PSScriptRoot 'existing-harness-scenarios.json
     ForEach-Object { $_ | ConvertFrom-Json }
 $tests = foreach ($case in $Scenario) {
     if ($case -cnotmatch '^[a-z0-9_]+$') { throw "Invalid scenario: $case" }
-    $match = @($catalog | Where-Object { $_.registration -eq 'frameScenario' -and $_.description.Contains($case) })
+    $match = @($catalog | Where-Object { $_.registration -eq 'frameScenario' -and $_.description -ceq $case })
     if ($match.Count -ne 1 -or $match[0].description -cne $case -or $match[0].file -cnotmatch '^harness/flutter/test/frames/[a-z0-9_]+_test\.dart$') {
         throw "No unique tracked Flutter frame fixture for $case"
     }
@@ -38,6 +38,7 @@ $env:PARITY_FRAMES_OUT = Join-Path $out 'frames/flutter'
 $env:INCULAR_PARITY = '1'
 $env:INCULAR_PARITY_DIR = $out
 $env:PARITY_STRICT = '1'
+$env:PARITY_SCENARIO_EXACT = '1'
 
 Push-Location $package
 try {
@@ -49,7 +50,7 @@ $results = foreach ($test in $tests) {
     $case = $test.Name
     Push-Location $package
     try {
-        & $flutter test --no-pub $test.File --plain-name $case --reporter expanded *> "$out/$case-flutter.log"
+        & $flutter test --no-pub $test.File --name ('^' + [regex]::Escape($case) + '$') --reporter expanded *> "$out/$case-flutter.log"
         $flutterCode = $LASTEXITCODE
     } finally { Pop-Location }
     if ($flutterCode -ne 0 -or -not (Test-Path "$out/frames/flutter/$case.json")) {

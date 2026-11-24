@@ -63,6 +63,7 @@ fn main() {
         return;
     }
     let filter = std::env::var("PARITY_SCENARIO").unwrap_or_default();
+    let exact = std::env::var("PARITY_SCENARIO_EXACT").as_deref() == Ok("1");
     let strict = std::env::var("PARITY_STRICT").as_deref() == Ok("1");
     let tolerances = Tolerances::from_env();
     let flutter_dir = output_dir().join("frames").join("flutter");
@@ -77,7 +78,19 @@ fn main() {
             scenario.0
         );
     }
-    for scenario in all.iter().filter(|s| s.0.contains(&filter)) {
+    if exact {
+        assert!(
+            !filter.is_empty() && names.contains(filter.as_str()),
+            "unknown exact frame scenario: {filter:?}"
+        );
+    }
+    for scenario in all.iter().filter(|s| {
+        if exact {
+            s.0 == filter
+        } else {
+            s.0.contains(&filter)
+        }
+    }) {
         let ours = run(scenario);
         let theirs = flutter_dir.join(format!("{}.json", scenario.0));
         if !theirs.exists() {
