@@ -176,3 +176,10 @@ grouping mismatch, and continue upstream scenario dispositions.
 [Strict frame rechecks](frame-rechecks-batch9.md) add five paired fixtures
 (4 match, 1 mismatch). Total 50/253 (19.76%), 45 match and five differ.
 Viewport center/anchor differs on the minimum reported scroll extent.
+
+### C36–C39: hue seams and simulation clamp edges
+
+[Color and clamp probes](color-clamp-comparisons.md) confirmed two hue
+interpolation differences, NaN clamp policy, and missing debug-only
+bounds validation. Total 39 custom paired mismatch cases. Finite clamp
+and wrapped completion provide controls.
