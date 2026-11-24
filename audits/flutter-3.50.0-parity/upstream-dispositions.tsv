@@ -128,3 +128,17 @@ packages/flutter/test/painting/text_style_test.dart	480	TextStyle shadows	paired
 packages/flutter_tools/test/commands.shard/hermetic/widget_preview/preview_manifest/preview_manifest_test.dart	48	generates a valid manifest	reference-ran-incular-open	upstream-focus-corners-curves-previews.md
 packages/flutter_tools/test/commands.shard/hermetic/widget_preview/preview_manifest/preview_manifest_test.dart	61	identifies widget preview scaffold project needs to be generated	reference-ran-incular-open	upstream-focus-corners-curves-previews.md
 packages/flutter_tools/test/commands.shard/hermetic/widget_preview/preview_manifest/preview_manifest_test.dart	91	identifies root project pubspec has changed	reference-ran-incular-open	upstream-focus-corners-curves-previews.md
+packages/flutter/test/widgets/focus_scope_test.dart	1254	Focus is lost when set to not focusable.	partial-match	upstream-focus-policy-tween-dtd.md
+packages/flutter/test/widgets/focus_scope_test.dart	1947	ExcludeFocus doesn't transfer focus to another descendant.	partial-match	upstream-focus-policy-tween-dtd.md
+packages/flutter/test/widgets/focus_scope_test.dart	1294	Child of unfocusable Focus can get focus.	partial-mismatch	upstream-focus-policy-tween-dtd.md
+packages/flutter/test/widgets/focus_scope_test.dart	1562	descendantsAreFocusable works as expected.	partial-mismatch	upstream-focus-policy-tween-dtd.md
+packages/flutter/test/animation/animations_test.dart	414	TweenSequence	paired-match	upstream-focus-policy-tween-dtd.md
+packages/flutter/test/animation/animations_test.dart	441	TweenSequence with curves	paired-match	upstream-focus-policy-tween-dtd.md
+packages/flutter/test/animation/animations_test.dart	484	TweenSequence, one tween	paired-match	upstream-focus-policy-tween-dtd.md
+packages/flutter/test/rendering/box_constraints_test.dart	95	BoxConstraints lerp with unbounded width	reference-ran-incular-open	upstream-focus-policy-tween-dtd.md
+packages/flutter/test/rendering/box_constraints_test.dart	114	BoxConstraints lerp with unbounded height	reference-ran-incular-open	upstream-focus-policy-tween-dtd.md
+packages/flutter/test/rendering/box_constraints_test.dart	121	BoxConstraints lerp from bounded to unbounded	reference-ran-incular-open	upstream-focus-policy-tween-dtd.md
+packages/flutter_tools/test/commands.shard/hermetic/widget_preview/dtd_services_test.dart	147	concurrent calls to getFlutterWidgetPreviews do not throw stream already subscribed	reference-ran-incular-open	upstream-focus-policy-tween-dtd.md
+packages/flutter_tools/test/commands.shard/hermetic/widget_preview/dtd_services_test.dart	230	waits for Lsp initialized event when only a subset of required Lsp methods are registered	reference-ran-incular-open	upstream-focus-policy-tween-dtd.md
+packages/flutter_tools/test/commands.shard/hermetic/widget_preview/dtd_services_test.dart	271	proceeds without waiting for event when all required Lsp methods are already registered	reference-ran-incular-open	upstream-focus-policy-tween-dtd.md
+packages/flutter_tools/test/commands.shard/hermetic/widget_preview/dtd_services_test.dart	296	cancels the Lsp event subscription when streamListen fails	reference-ran-incular-open	upstream-focus-policy-tween-dtd.md

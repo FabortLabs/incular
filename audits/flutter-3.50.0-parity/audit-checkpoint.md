@@ -462,3 +462,11 @@ elliptical raster shape, image cropping, unsupported spline inputs,
 and inherited text style resets. Preview manifest behavior is
 reference-only because Incular lacks the matching tool surface.
 Audit only; implementation and full workspace runs remain untouched.
+
+### Weighted sequence, focus policy and preview boundary
+
+[Three original TweenSequence pairs](upstream-focus-policy-tween-dtd.md) match. Upstream:
+95/8,965 complete pairs (67 match, 28 differ), 26 partial and 22
+reference-only. New tests expose inaccurate ancestor/blocked-node focus
+flags and a finite/infinite constraint interpolation difference.
+Four hermetic preview DTD results are reference-only, not Rust pairs.
