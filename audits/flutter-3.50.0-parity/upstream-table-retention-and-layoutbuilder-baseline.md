@@ -29,3 +29,15 @@ correctly use 80. The original custom RenderBox's reading is
 not directly representable in this Rust test, so the
 original is partial. See `flutter350_layoutbuilder_baseline_parity`
 and `layoutbuilder_child_baseline_reference_test.dart`.
+
+## LayoutBuilder baseline repair
+
+LayoutBuilder now forwards the generated child's actual baseline and
+clears the value when the child has none. Flutter's original at line 97
+was rerun; the focused Incular port uses a real Baseline widget to report
+the same 20 px metric in place of Flutter's test-only render detector.
+Both place the generated child at 160 px relative to the surrounding
+baseline's origin. Additional tests verify text metrics, the bottom-edge
+fallback, and replacement of the retained generated child across
+20 px → absent → 30 px. All four LayoutBuilder and both Stack baseline
+checks pass.

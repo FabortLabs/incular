@@ -429,7 +429,7 @@ packages/flutter/test/widgets/table_test.dart	274	Table widget - changing table 
 packages/flutter/test/widgets/table_test.dart	357	Table widget - repump test	paired-match	upstream-table-retention-and-layoutbuilder-baseline.md
 packages/flutter/test/widgets/table_test.dart	882	TableRow with no children throws an error message	reference-ran-incular-open	upstream-table-retention-and-layoutbuilder-baseline.md
 packages/flutter/test/widgets/table_test.dart	967	Table has correct roles in semantics	partial-mismatch	upstream-table-retention-and-layoutbuilder-baseline.md
-packages/flutter/test/widgets/baseline_test.dart	97	LayoutBuilder returns child's baseline	partial-mismatch	upstream-table-retention-and-layoutbuilder-baseline.md
+packages/flutter/test/widgets/baseline_test.dart	97	LayoutBuilder returns child's baseline	paired-match	upstream-table-retention-and-layoutbuilder-baseline.md#layoutbuilder-baseline-repair
 packages/flutter/test/widgets/layout_builder_test.dart	10	LayoutBuilder parent size	paired-match	upstream-layoutbuilder-dependencies-and-hidden-boundary.md
 packages/flutter/test/widgets/layout_builder_test.dart	41	LayoutBuilder does not crash at zero area	paired-match	upstream-layoutbuilder-dependencies-and-hidden-boundary.md
 packages/flutter/test/widgets/layout_builder_test.dart	260	LayoutBuilder and Inherited -- do not rebuild when not using inherited	paired-match	upstream-layoutbuilder-dependencies-and-hidden-boundary.md

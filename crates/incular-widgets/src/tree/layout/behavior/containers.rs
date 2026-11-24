@@ -462,12 +462,17 @@ impl WidgetTree {
             RenderKind::LayoutBuilder => {
                 if let Some(&child) = children.first() {
                     self.layout_render(child, constraints)?;
-                    let size = self
-                        .render_live(child, "retained render must remain live")
-                        .size;
+                    let child = self.render_live(child, "retained render must remain live");
+                    let (size, baseline) = (child.size, child.baseline);
+                    // LayoutBuilder is transparent to the child's actual
+                    // baseline; without one its parent decides the fallback.
+                    self.render_live_mut(id, "retained render must remain live")
+                        .baseline = baseline;
                     (constraints.constrain(size), ChildOffsets::One(Offset::ZERO))
                 } else {
                     // layout_builder.dart performLayout: no child sizes to biggest.
+                    self.render_live_mut(id, "retained render must remain live")
+                        .baseline = None;
                     (constraints.biggest(), ChildOffsets::default())
                 }
             }
