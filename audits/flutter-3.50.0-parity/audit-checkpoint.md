@@ -655,3 +655,11 @@ match. Complete pairs reach 227/8,965 (176 match, 51 differ).
 
 [All 14 focused implicit callback sequences](upstream-implicit-effects-and-fractional-completion.md)
 now match. Complete pairs reach 231/8,965 (180 match, 51 differ).
+
+### Flow delegate repaint, opacity and input order
+
+[Six upstream dispositions](upstream-flow-paint-and-routing.md)
+bring complete pairs to 232/8,965 (181 match, 51 differ), with
+123 partial and 30 reference-only. Flow ignores a retained
+delegate's external repaint change and ignores requested
+ordering when choosing a hit in overlapped children.
