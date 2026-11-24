@@ -663,3 +663,10 @@ bring complete pairs to 232/8,965 (181 match, 51 differ), with
 123 partial and 30 reference-only. Flow ignores a retained
 delegate's external repaint change and ignores requested
 ordering when choosing a hit in overlapped children.
+
+### Multi-child relayout and child-count validation
+
+[Nine upstream dispositions](upstream-multi-child-layout-contract.md)
+bring complete pairs to 239/8,965 (184 match, 55 differ), with
+125 partial and 30 reference-only. Duplicate and omitted child
+layouts are silently accepted instead of rejected.
