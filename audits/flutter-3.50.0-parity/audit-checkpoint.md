@@ -88,3 +88,13 @@ passed, and two reference preview cases passed with no matching Incular
 preview API. Do not count reference-only cases as paired failures.
 Next: semantics blocker traversal, then refine the upstream ledger to
 account for registrations through verified helper wrappers.
+
+### C23 and upstream BlockSemantics dispositions
+
+[Semantics blockers](block-semantics-comparisons.md): Padding exposes the
+earlier sibling in Incular. Running custom paired mismatches: 23.
+The first two exact upstream cases have dispositions (match, mismatch);
+a third ran on Flutter only. See [upstream dispositions](upstream-dispositions.tsv),
+which overlays the generated registration catalog without mutating it.
+Coverage denominator expanded to 8,965 with 216 verified testGesture
+wrapper call sites. Continue with navigation reconciliation.

@@ -1,0 +1,4 @@
+file	line	scenario	disposition	evidence
+packages/flutter/test/widgets/semantics_9_test.dart	13	hides semantic nodes of siblings	paired-match	block-semantics-comparisons.md#exact-upstream-registrations
+packages/flutter/test/widgets/semantics_9_test.dart	43	does not hides semantic nodes of siblings outside the current semantic boundary	paired-mismatch	block-semantics-comparisons.md#exact-upstream-registrations
+packages/flutter/test/widgets/semantics_9_test.dart	88	node is semantic boundary and blocking previously painted nodes	reference-ran-incular-open	block-semantics-comparisons.md#exact-upstream-registrations
