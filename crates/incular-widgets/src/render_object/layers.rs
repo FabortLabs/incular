@@ -120,7 +120,7 @@ pub(crate) enum LayerAttachment {
     Clip {
         clip: LayerId,
         content: LayerId,
-        stack_active: Cell<Option<bool>>,
+        overflow_active: Cell<Option<bool>>,
     },
     Opacity {
         layer: LayerId,
@@ -197,7 +197,6 @@ impl RenderLayers {
                 | WidgetKind::ClipRRect { .. }
                 | WidgetKind::ClipOval { .. }
                 | WidgetKind::ClipPath { .. }
-                | WidgetKind::Scroll { .. }
                 | WidgetKind::SliverViewport { .. }
         );
         let root = compositor.create_transform(CoreTransform::translation(Offset::ZERO));
@@ -226,7 +225,7 @@ impl RenderLayers {
                 LayerAttachment::Clip {
                     clip,
                     content,
-                    stack_active: Cell::new(None),
+                    overflow_active: Cell::new(None),
                 }
             }
             // `Clip.none`: the scrolled content keeps its offset transform
@@ -428,7 +427,7 @@ impl RenderLayers {
         LayerAttachment::Clip {
             clip,
             content,
-            stack_active: Cell::new(None),
+            overflow_active: Cell::new(None),
         }
     }
 
@@ -488,9 +487,12 @@ impl RenderLayers {
         self.picture = fresh.picture;
         self.focus_picture = fresh.focus_picture;
         self.attachment = fresh.attachment;
-        if let LayerAttachment::Clip { clip, .. } = self.attachment {
-            // The temporary root is gone; bind the fresh clip to the
-            // retained root instead of leaving the old child route intact.
+        if let LayerAttachment::Clip { clip, .. } | LayerAttachment::Transform { layer: clip } =
+            self.attachment
+        {
+            // The temporary root is gone. A clip or transform stage gets
+            // its children on the content layer, so bind the fresh stage
+            // to the retained root here as well.
             compositor.set_children(
                 self.root,
                 std::iter::once(clip).chain(self.picture).collect(),
@@ -1031,21 +1033,24 @@ impl RenderLayers {
         self.stack_layout_overflow.set(overflow);
     }
 
-    /// A stack clips only layout overflow. Keep its child layers and its
-    /// clip stage available, but bypass the stage when nothing in the
-    /// positioned layout crosses an edge.
-    fn apply_stack_clip(&self, compositor: &mut LayerTree, size: Size) {
+    /// Keep the child's content and clip stage available, but bypass the
+    /// stage when a stack or single-child viewport has no layout overflow.
+    pub(crate) fn apply_overflow_rect_clip(
+        &self,
+        compositor: &mut LayerTree,
+        size: Size,
+        enabled: bool,
+    ) {
         let LayerAttachment::Clip {
             clip,
             content,
-            stack_active,
+            overflow_active,
             ..
         } = &self.attachment
         else {
             return;
         };
-        let enabled = self.stack_layout_overflow.get();
-        if stack_active.get() != Some(enabled) {
+        if overflow_active.get() != Some(enabled) {
             if enabled {
                 compositor.set_children(*clip, vec![*content]);
             } else {
@@ -1056,7 +1061,7 @@ impl RenderLayers {
                 self.root,
                 std::iter::once(stage).chain(self.picture).collect(),
             );
-            stack_active.set(Some(enabled));
+            overflow_active.set(Some(enabled));
         }
         if enabled {
             compositor.update_clip(*clip, Rect::from_origin_size(Offset::ZERO, size));
@@ -1072,7 +1077,11 @@ impl RenderLayers {
             kind,
             RenderKind::Stack { .. } | RenderKind::IndexedStack { .. }
         ) {
-            self.apply_stack_clip(compositor, size);
+            self.apply_overflow_rect_clip(compositor, size, self.stack_layout_overflow.get());
+            return;
+        }
+        if matches!(kind, RenderKind::Scroll { .. }) {
+            // The viewport supplies its laid-out child's translated bounds.
             return;
         }
         let LayerAttachment::Clip { clip, .. } = &self.attachment else {

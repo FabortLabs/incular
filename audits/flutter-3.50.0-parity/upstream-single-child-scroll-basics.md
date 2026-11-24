@@ -24,3 +24,16 @@ runtime target passes four, with one paint-clip assertion red:
 
 Reference: five exact names in `widgets/single_child_scroll_view_test.dart`.
 Rust: `cargo test --locked -j 2 -p incular-runtime --test flutter350_single_child_scroll_basics -- --test-threads=1`.
+
+Remediation: the single-child viewport now attaches its rect clip only
+when the translated layout bounds of that child exceed the viewport.
+The exact-fit and 0.1 px overflow cases now agree in both dimensions;
+all five focused runtime tests pass. This does not claim Flutter's
+private paint-context or antialias inspection.
+
+The pinned Flutter and Windows wgpu pixel probes agree over six retained
+frames. An in-bounds child's paint-only shift stays visible past the
+viewport; identical pixels produced by an overflowing layout child
+are clipped. Clip.none keeps the same content visible and re-enabling
+HardEdge clips again. The four named Windows wgpu targets also cover
+existing Stack, IndexedStack and invisible-border controls.

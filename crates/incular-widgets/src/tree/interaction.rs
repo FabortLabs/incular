@@ -2971,12 +2971,13 @@ impl WidgetTree {
                     reverse,
                     ..
                 } => {
+                    let offset = scroll_translation(controller, axis, reverse);
                     if let Some(content) = layers.content()
-                        && self.compositor.update_transform(
-                            content,
-                            scroll_transform(scroll_translation(controller, axis, reverse)),
-                        )
+                        && self
+                            .compositor
+                            .update_transform(content, scroll_transform(offset))
                     {
+                        self.sync_single_child_scroll_clip(_render, offset);
                         changed = true;
                         self.diagnostics.compositor_only_updates += 1;
                         self.diagnostics.scroll_offset_updates += 1;

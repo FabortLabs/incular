@@ -494,6 +494,26 @@ impl WidgetTree {
             .map_or(node.size, |child| child.size)
     }
 
+    pub(super) fn sync_single_child_scroll_clip(&mut self, id: RenderObjectId, offset: Offset) {
+        let Some(node) = self.renders.get(id.0) else {
+            return;
+        };
+        let overflow = node
+            .children
+            .first()
+            .and_then(|child| self.renders.get(child.0))
+            .is_some_and(|child| {
+                let placement = offset + child.offset;
+                placement.x < 0.
+                    || placement.y < 0.
+                    || placement.x + child.size.width > node.size.width
+                    || placement.y + child.size.height > node.size.height
+            });
+        node.object
+            .layers
+            .apply_overflow_rect_clip(&mut self.compositor, node.size, overflow);
+    }
+
     pub(super) fn child_content_transform(&self, id: RenderObjectId) -> CoreTransform {
         let node = self.render_live(id, "child transform render must remain live");
         match node.object.kind() {
@@ -1098,6 +1118,16 @@ impl WidgetTree {
         object
             .layers
             .update_layout_geometry(&mut self.compositor, object.kind(), size, transform);
+        if let RenderKind::Scroll {
+            controller,
+            axis,
+            reverse,
+            ..
+        } = object.kind()
+        {
+            let translation = scroll_translation(controller, *axis, *reverse);
+            self.sync_single_child_scroll_clip(id, translation);
+        }
         self.diagnostics.layouts += 1;
         #[cfg(feature = "devtools")]
         if let Some(element) = self.element_for_render(id)
