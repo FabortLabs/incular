@@ -49,3 +49,4 @@ packages/flutter/test/widgets/shortcuts_test.dart	485	isActivatedBy works as exp
 packages/flutter/test/widgets/shortcuts_test.dart	614	numLock works as expected when set to LockState.ignored	reference-ran-incular-open	upstream-shortcut-comparisons.md
 packages/flutter/test/widgets/shortcuts_test.dart	1425	handles repeated events	paired-match	upstream-shortcut-comparisons.md
 packages/flutter/test/widgets/shortcuts_test.dart	1446	rejects repeated events if requested	paired-match	upstream-shortcut-comparisons.md
+packages/flutter/test/scheduler/binding_test.dart	44	Adding a persistent frame callback during a persistent frame callback	paired-match	scheduler-callback-phases-comparisons.md

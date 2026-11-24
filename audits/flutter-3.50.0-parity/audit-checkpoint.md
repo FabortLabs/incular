@@ -355,3 +355,12 @@ bring valid frame coverage to 171/253 (67.59%), 161 match and ten differ.
 Dedicated paired tests now verify real parked KeepAlive paint and
 PageView boundary teardown differences. Retained row identity on the
 ordinary clipped KeepAlive path matches after fixture repair.
+
+### Physics/layout fixtures and editor/scheduler event order
+
+[More frame rechecks](frame-physics-layout-editing.md) bring valid frames to 183/253 (72.33%):
+171 match and 12 differ. The original raw Enter difference now has
+pinned direct tests; an explicit IME Done matches. The alternate undo
+fixture repeats the known grouping problem. [Scheduler phases](scheduler-callback-phases-comparisons.md)
+produce two dedicated red tests and one upstream positive pairing:
+45/8,965 upstream pairs. No implementation fixes were made.
