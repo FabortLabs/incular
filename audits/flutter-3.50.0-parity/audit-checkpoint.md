@@ -199,3 +199,9 @@ deletion divergence, show that both sides match after seeding and making
 one edit, and separately demonstrate that two rapid edits undo as a group
 on Flutter but individually on Incular. Total 40 custom paired mismatch
 cases; the early frame mismatch is not counted again in this total.
+
+### Existing frame harness: batch eleven
+
+[Five frame rechecks](frame-rechecks-batch11.md) bring the total to
+60/253 (23.72%), 54 match and six differ. The additional difference is
+unset versus true semantics enabled state; the tap action still matches.
