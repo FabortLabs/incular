@@ -170,3 +170,9 @@ batches and the next unresolved upstream file; do not count unrun cases.
 fixtures (7 match, 3 differ). Total 45/253 (17.79%), 41 match and four
 differ. Next: nested scrolling, viewports/overlays, follow up the undo
 grouping mismatch, and continue upstream scenario dispositions.
+
+### Existing frame harness: batch nine
+
+[Strict frame rechecks](frame-rechecks-batch9.md) add five paired fixtures
+(4 match, 1 mismatch). Total 50/253 (19.76%), 45 match and five differ.
+Viewport center/anchor differs on the minimum reported scroll extent.
