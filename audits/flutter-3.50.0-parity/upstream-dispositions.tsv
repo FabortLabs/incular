@@ -547,3 +547,7 @@ packages/flutter/test/widgets/sliver_fill_remaining_test.dart	349	extent is over
 packages/flutter/test/widgets/sliver_fill_remaining_test.dart	444	within viewport	paired-match	upstream-sliver-fill-remaining.md
 packages/flutter/test/widgets/sliver_fill_remaining_test.dart	479	outside of viewport but within cache extent	paired-mismatch	upstream-sliver-fill-remaining.md
 packages/flutter/test/widgets/sliver_fill_remaining_test.dart	515	outside of viewport and not within cache extent	paired-mismatch	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	600	child stretches into overscroll that exceeds precedingScrollExtent	paired-mismatch	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	644	lone child stretches to cover the whole overscroll	paired-mismatch	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	685	child in a reversed scroll view stretches towards the leading edge	paired-mismatch	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	744	child in a reversed horizontal scroll view stretches towards the leading edge	paired-mismatch	upstream-sliver-fill-remaining.md

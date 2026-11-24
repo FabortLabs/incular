@@ -14,3 +14,16 @@ Pinned Flutter 3.50.0 passed the fourteen selected originals for default fill, n
 | :221, :515 | At y=850 (exact far cache boundary) Flutter removes the label. Incular still reports it as visible in both scroll-body modes. |
 
 The node checks use real per-frame framework semantics, not native screen-reader output. Run cargo test --locked -p incular-runtime --test flutter350_sliver_fill_remaining_parity -- --nocapture.
+
+## Four programmatic overscroll regressions (both axes and reverse)
+
+All eight original Flutter iOS/macOS variant expansions for :600, :644, :685 and :744 passed. Rust selected Bouncing physics directly in the framework harness rather than presenting on either OS. The focused Rust binary has four intentional failures. Each case passed the exact initial box and returned to that same box on jump-to-zero.
+
+| Registration | Flutter while overscrolled | Incular |
+| --- | --- | --- |
+| :600 150px preceding sibling, jump 200 | y=-50, height=650, bottom=600 | y=-50, height=450, bottom=400 |
+| :644 lone child, jump 50 | y=-50, height=650, bottom=600 | y=-50, height=600, bottom=550 |
+| :685 reversed vertical, jump 50 | y=0, height=650; (400,25) reaches fill child | y=50, height=600; point does not reach child |
+| :744 reversed horizontal, jump 50 | x=0, width=850 | x=50, width=800 |
+
+Run with cargo test --locked -p incular-runtime --test flutter350_sliver_fill_overscroll_parity -- --nocapture.
