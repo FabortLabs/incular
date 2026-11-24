@@ -149,3 +149,8 @@ into animation, scheduler, physics and additional small frame batches.
 mismatches. Ordinary repeat after a per-run curve override matched, and
 is distinct from Incular's persistent curve extension. Total 35 custom
 paired mismatch cases.
+
+### Existing frame harness: batches four through six
+
+[Strict frame rechecks](frame-rechecks-batches4-6.md) add 15 matched
+fixtures. Current verified count 35/253 (13.83%), 34 match, one mismatch.
