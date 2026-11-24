@@ -273,3 +273,12 @@ differ. Five further registrations have non-equivalent probes. Actual
 Hero push shuttles matched; pop had no Incular return shuttle. Added
 focused executable regressions for unset enabled semantics and restoration
 ownership handoff, with matching explicit removal and lease controls.
+
+### Paint, transitions, navigation event controls, and overscroll
+
+[New strict comparisons](frame-paint-scroll-rechecks.md) reach 100/253
+valid paired frame registrations (39.53%): 93 match and seven differ.
+Three other registrations remain non-equivalent. The two loop-expanded
+overscroll fixtures together count once; missing UserScroll events occur
+in both. Repaired observer order and blocked-back fixtures match without
+relying on a covered-route opacity probe.

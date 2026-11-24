@@ -12,8 +12,14 @@ $catalog = Get-Content (Join-Path $PSScriptRoot 'existing-harness-scenarios.json
     ForEach-Object { $_ | ConvertFrom-Json }
 $tests = foreach ($case in $Scenario) {
     if ($case -cnotmatch '^[a-z0-9_]+$') { throw "Invalid scenario: $case" }
-    $match = @($catalog | Where-Object { $_.registration -eq 'frameScenario' -and $_.description -ceq $case })
-    if ($match.Count -ne 1 -or $match[0].description -cne $case -or $match[0].file -cnotmatch '^harness/flutter/test/frames/[a-z0-9_]+_test\.dart$') {
+    $description = $case
+    if ($case -cin @('scroll__drag_overscroll__clamping','scroll__drag_overscroll__bouncing')) {
+        # The pinned Dart source registers these two names in a single loop.
+        # Their distinct traces share one static coverage-ledger registration.
+        $description = "'scroll__drag_overscroll__`$physics'"
+    }
+    $match = @($catalog | Where-Object { $_.registration -eq 'frameScenario' -and $_.description -ceq $description })
+    if ($match.Count -ne 1 -or $match[0].file -cnotmatch '^harness/flutter/test/frames/[a-z0-9_]+_test\.dart$') {
         throw "No unique tracked Flutter frame fixture for $case"
     }
     [pscustomobject]@{Name=$case; File=$match[0].file.Substring('harness/flutter/'.Length)}
