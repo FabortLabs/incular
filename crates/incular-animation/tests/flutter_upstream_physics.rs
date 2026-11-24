@@ -1,0 +1,217 @@
+//! Observable checks from Flutter 3.50.0's newton, clamped simulation,
+//! near-equal, and tolerance tests. Keep Flutter's numeric bounds; the first
+//! two friction cases distinguish strict reference precision from f32 behavior.
+//! The closest positive Rust sampling step after 1 second is 1 nanosecond.
+
+use incular_animation::{
+    BoundedFrictionSimulation, ClampedSimulation, FrictionSimulation, GravitySimulation,
+    Simulation, SpringDescription, SpringSimulation, SpringType as K, Tolerance,
+};
+use std::time::Duration;
+fn ds(t: f64) -> Duration {
+    Duration::from_secs_f64(t)
+}
+fn tol(d: f32, v: f32) -> Tolerance {
+    Tolerance {
+        distance: d,
+        velocity: v,
+        ..Tolerance::DEFAULT
+    }
+}
+fn near(a: f32, b: f32) -> bool {
+    (f64::from(a) - f64::from(b)).abs() <= 1e-10
+}
+#[test]
+fn flutter_friction_velocity_preserves_reference_precision() {
+    let f = FrictionSimulation::new(0.3, 100., 400., tol(0.001, 1.));
+    assert!(!f.is_done(ds(0.)));
+    assert_eq!(f.position(ds(0.)), 100.);
+    assert_eq!(f.velocity(ds(0.)), 400.);
+    let x1 = f.position(ds(1.));
+    assert!(x1 > 330. && x1 < 335.);
+    let v = [1., 2., 3., 4.].map(|t| f.velocity(ds(t)));
+    let x5 = f.position(ds(5.));
+    assert!(
+        v[0] == 120.
+            && v[1] == 36.
+            && (f64::from(v[2]) - 10.8).abs() <= 1e-10
+            && v[3] < 3.5
+            && f.is_done(ds(5.))
+            && x5 > 431.
+            && x5 < 432.,
+        "v={v:?} x5={x5} done5={}",
+        f.is_done(ds(5.))
+    );
+}
+#[test]
+fn flutter_friction_through_matches_endpoint_and_completion() {
+    let mut results = Vec::new();
+    for (start, velocity) in [(10., 600.), (1000., -500.)] {
+        let f = FrictionSimulation::new(0.025, start, velocity, Tolerance::DEFAULT);
+        let (end, vend) = (f.position(ds(1.)), f.velocity(ds(1.)));
+        if velocity > 0. {
+            assert!(end > start && vend < velocity);
+        } else {
+            assert!(end < start && vend > velocity);
+        }
+        let f = FrictionSimulation::through(start, end, velocity, vend);
+        if velocity > 0. {
+            assert!(!f.is_done(ds(0.)));
+            assert_eq!(f.position(ds(0.)), 10.);
+            assert_eq!(f.velocity(ds(0.)), 600.);
+        }
+        // Flutter checks 1.0 + 1e-10 s, below Rust Duration resolution.
+        let done = f.is_done(Duration::new(1, 1));
+        let x = f.position(ds(1.));
+        let v = f.velocity(ds(1.));
+        results.push((start, done, x, end, v, vend));
+    }
+    assert!(
+        results
+            .iter()
+            .all(|&(_, done, x, end, v, vend)| done && near(x, end) && near(v, vend)),
+        "{results:?}"
+    );
+}
+#[test]
+fn flutter_bounded_friction_stops_at_the_upper_bound() {
+    let mut f = BoundedFrictionSimulation::new(0.3, 100., 400., 50., 150.);
+    f.set_tolerance(tol(0.001, 1.));
+    assert!(!f.is_done(ds(0.)));
+    assert_eq!(f.position(ds(0.)), 100.);
+    assert_eq!(f.velocity(ds(0.)), 400.);
+    assert_eq!(f.position(ds(1.)), 150.);
+    assert!(f.is_done(ds(1.)));
+}
+#[test]
+fn flutter_gravity_reports_position_velocity_and_completion() {
+    let f = GravitySimulation::new(200., 100., 600., 0.);
+    assert!(!f.is_done(ds(0.)));
+    assert_eq!(f.position(ds(0.)), 100.);
+    assert_eq!(f.velocity(ds(0.)), 0.);
+    let times = [0.25, 0.50, 0.75, 1.00, 1.25, 1.50, 1.75];
+    assert_eq!(
+        times.map(|t| f.position(ds(t))),
+        [106.25, 125., 156.25, 200., 256.25, 325., 406.25]
+    );
+    assert_eq!(
+        times.map(|t| f.velocity(ds(t))),
+        [50., 100., 150., 200., 250., 300., 350.]
+    );
+    assert!(f.is_done(ds(2.5)));
+    assert_eq!(f.position(ds(2.5)), 725.);
+    assert_eq!(f.velocity(ds(2.5)), 500.);
+}
+#[test]
+fn flutter_spring_description_classifies_damping() {
+    for (ratio, kind) in [
+        (1., K::CriticallyDamped),
+        (1., K::CriticallyDamped),
+        (0.75, K::UnderDamped),
+        (1.25, K::OverDamped),
+    ] {
+        assert_eq!(
+            SpringDescription::with_damping_ratio(1., 100., ratio).spring_type(),
+            kind
+        );
+    }
+    assert_eq!(
+        SpringDescription::new(1., 100., 20.).spring_type(),
+        K::CriticallyDamped
+    );
+}
+#[test]
+fn flutter_critical_spring_matches_reference_samples() {
+    let d = SpringDescription::with_damping_ratio(1., 100., 1.);
+    let f = SpringSimulation::new(d, 0., 500., 0., tol(0.01, 0.01));
+    assert_eq!(d.spring_type(), K::CriticallyDamped);
+    assert!(!f.is_done(ds(0.)));
+    assert_eq!(f.position(ds(0.)), 0.);
+    assert_eq!(f.velocity(ds(0.)), 0.);
+    let times = [0.25, 0.50, 0.75];
+    assert_eq!(times.map(|t| f.position(ds(t)).floor()), [356., 479., 497.]);
+    assert_eq!(times.map(|t| f.velocity(ds(t)).floor()), [1026., 168., 20.]);
+    assert!(f.position(ds(1.5)) > 499. && f.position(ds(1.5)) < 501.);
+    assert!(f.velocity(ds(1.5)) < 0.1);
+    assert!(f.is_done(ds(1.6)));
+}
+#[test]
+fn flutter_overdamped_spring_matches_reference_samples() {
+    let d = SpringDescription::with_damping_ratio(1., 100., 1.25);
+    let f = SpringSimulation::new(d, 0., 500., 0., tol(0.01, 0.01));
+    assert_eq!(d.spring_type(), K::OverDamped);
+    assert!(!f.is_done(ds(0.)));
+    assert_eq!(f.position(ds(0.)), 0.);
+    assert!(near(f.velocity(ds(0.)), 0.));
+    let times = [0.5, 1.0, 1.5];
+    assert_eq!(times.map(|t| f.position(ds(t)).floor()), [445., 495., 499.]);
+    assert_eq!(times.map(|t| f.velocity(ds(t)).floor()), [273., 22., 1.]);
+    assert!(f.is_done(ds(3.)));
+}
+#[test]
+fn flutter_underdamped_spring_matches_reference_samples() {
+    let d = SpringDescription::with_damping_ratio(1., 100., 0.25);
+    let f = SpringSimulation::new(d, 0., 300., 0., Tolerance::DEFAULT);
+    assert_eq!(d.spring_type(), K::UnderDamped);
+    assert!(!f.is_done(ds(0.)));
+    assert!(near(f.position(ds(0.)), 0.));
+    assert!(near(f.velocity(ds(0.)), 0.));
+    assert_eq!(f.position(ds(1.)).floor(), 325.);
+    assert_eq!(f.velocity(ds(1.)).floor(), -65.);
+    assert_eq!(f.velocity(ds(6.)).floor(), 0.);
+    assert_eq!(f.position(ds(6.)).floor(), 299.);
+    assert!(f.is_done(ds(6.)));
+}
+
+fn at(ms: u64) -> Duration {
+    Duration::from_millis(ms)
+}
+#[test]
+fn flutter_clamped_gravity_respects_position_and_velocity_bounds() {
+    let s = ClampedSimulation::new(GravitySimulation::new(9.81, 10., 0., 0.), 20., 100.)
+        .with_velocity_bounds(7., 11.);
+    assert_eq!([s.position(at(0)), s.velocity(at(0))], [20., 7.]);
+    assert_eq!(
+        [s.position(at(100_000)), s.velocity(at(100_000))],
+        [100., 11.]
+    );
+}
+#[test]
+fn flutter_clamped_gravity_delegates_completion() {
+    let s = ClampedSimulation::new(GravitySimulation::new(-10., 0., 6., 10.), 0., 2.5)
+        .with_velocity_bounds(-1., 1.);
+    assert_eq!([s.position(at(0)), s.velocity(at(0))], [0., 1.]);
+    assert!(!s.is_done(at(0)));
+    assert_eq!([s.position(at(1000)), s.velocity(at(1000))], [2.5, 0.]);
+    assert!(!s.is_done(at(200)));
+    assert_eq!([s.position(at(2000)), s.velocity(at(2000))], [0., -1.]);
+    assert!(!s.is_done(at(2000)));
+    assert_eq!([s.position(at(3000)), s.velocity(at(3000))], [0., -1.]);
+    assert!(s.is_done(at(3000)));
+}
+
+use incular_animation::physics::near_equal;
+#[test]
+fn flutter_near_equal_is_symmetric_at_finite_distances() {
+    assert!(near_equal(5., 6., 2.));
+    assert!(near_equal(6., 5., 2.));
+    assert!(!near_equal(5., 6., 0.5));
+    assert!(!near_equal(6., 5., 0.5));
+}
+#[test]
+fn flutter_near_equal_handles_infinities_and_finite_equality() {
+    assert!(near_equal(f32::INFINITY, f32::INFINITY, 0.1));
+    assert!(near_equal(f32::NEG_INFINITY, f32::NEG_INFINITY, 0.1));
+    assert!(!near_equal(f32::INFINITY, f32::NEG_INFINITY, 0.1));
+    assert!(!near_equal(0.1, 0.11, 0.001));
+    assert!(near_equal(0.1, 0.11, 0.1));
+    assert!(near_equal(0.1, 0.1, 0.0000001));
+}
+#[test]
+fn flutter_tolerance_has_a_compact_diagnostic() {
+    let s = format!("{:?}", Tolerance::default());
+    assert!(!s.contains(['\r', '\n']));
+    assert!(!s.is_empty());
+    assert!(!s.contains("Instance of "));
+    assert_eq!(s.trim(), s);
+}
