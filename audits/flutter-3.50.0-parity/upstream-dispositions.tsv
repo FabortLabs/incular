@@ -237,3 +237,15 @@ packages/flutter/test/widgets/dismissible_test.dart	781	Pending confirmDismiss d
 packages/flutter/test/widgets/dismissible_test.dart	843	Dismissible cannot be dragged with pending confirmDismiss	reference-ran-incular-open	upstream-dismissible-direction-and-confirmation.md
 packages/flutter/test/widgets/dismissible_test.dart	869	Drag to end and release - items does not get stuck if confirmDismiss returns false	reference-ran-incular-open	upstream-dismissible-direction-and-confirmation.md
 packages/flutter/test/widgets/dismissible_test.dart	891	Dismissible with null resizeDuration calls onDismissed immediately	paired-match	upstream-dismissible-direction-and-confirmation.md
+packages/flutter/test/animation/curves_test.dart	45	Curve is continuous	paired-match	upstream-curves-intrinsic-layout-and-system-overlay.md
+packages/flutter/test/animation/curves_test.dart	102	Bounce stays in bounds	paired-match	upstream-curves-intrinsic-layout-and-system-overlay.md
+packages/flutter/test/animation/curves_test.dart	172	ThreePointCubic interpolates midpoint	paired-match	upstream-curves-intrinsic-layout-and-system-overlay.md
+packages/flutter/test/animation/curves_test.dart	231	Curve transform method should return 0.0 for t=0.0 and 1.0 for t=1.0	paired-match	upstream-curves-intrinsic-layout-and-system-overlay.md
+packages/flutter/test/animation/curves_test.dart	471	CatmullRomCurve interpolates given points correctly	paired-match	upstream-curves-intrinsic-layout-and-system-overlay.md
+packages/flutter/test/widgets/intrinsic_width_test.dart	9	Intrinsic stepWidth, stepHeight	partial-mismatch	upstream-curves-intrinsic-layout-and-system-overlay.md
+packages/flutter/test/widgets/intrinsic_width_test.dart	35	IntrinsicWidth does not crash at zero area	partial-match	upstream-curves-intrinsic-layout-and-system-overlay.md
+packages/flutter/test/rendering/positioned_box_test.dart	13	RenderPositionedBox expands	partial-match	upstream-curves-intrinsic-layout-and-system-overlay.md
+packages/flutter/test/rendering/positioned_box_test.dart	25	RenderPositionedBox shrink wraps	partial-match	upstream-curves-intrinsic-layout-and-system-overlay.md
+packages/flutter/test/rendering/view_chrome_style_test.dart	68	statusBarColor isn't set when view covers less than half of the system status bar	partial-match	upstream-curves-intrinsic-layout-and-system-overlay.md
+packages/flutter/test/rendering/view_chrome_style_test.dart	89	statusBarColor is set when view covers more than half of tye system status bar	partial-match	upstream-curves-intrinsic-layout-and-system-overlay.md
+packages/flutter/test/rendering/view_chrome_style_test.dart	194	Top AnnotatedRegion provides status bar overlay style and bottom AnnotatedRegion provides navigation bar overlay style	partial-match	upstream-curves-intrinsic-layout-and-system-overlay.md

@@ -530,3 +530,11 @@ bring complete pairs to 148/8,965 (107 match, 41 differ), with 65
 partial and 25 reference-only. Pointer direction, thresholds, and
 no-resize callbacks are tested. Awaiting a confirmation decision
 has no equivalent public Incular hook.
+
+### Curves, intrinsic layout and overlay-style sampling
+
+[Twelve upstream dispositions](upstream-curves-intrinsic-layout-and-system-overlay.md)
+bring complete pairs to 153/8,965 (112 match, 41 differ), with
+72 partial and 25 reference-only. Five complete curve tests match,
+and negative intrinsic step inputs still differ. Status/navigation
+annotation sampling matches at the host payload layer.
