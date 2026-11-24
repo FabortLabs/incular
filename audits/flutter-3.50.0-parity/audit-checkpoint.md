@@ -105,3 +105,9 @@ wrapper call sites. Continue with navigation reconciliation.
 remount/focus loss and a dropped pageless entry over a retained keyed page.
 Running total 25 custom paired mismatches. The keyed route control passed.
 Next: custom clip hit testing and existing focused frame harness cases.
+
+### C26–C27: path hit tests and horizontal direction
+
+[Clip and scroll comparisons](clip-scroll-comparisons.md) paired two more
+mismatches; total 27 custom paired mismatch cases. Interior clip and LTR
+controls passed. Existing harness rechecks are a separate denominator.
