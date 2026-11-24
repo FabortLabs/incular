@@ -691,3 +691,10 @@ and one-pixel overflow match; configurable Wrap clipping is unpaired.
 bring complete pairs to 248/8,965 (192 match, 56 differ), with
 130 partial and 30 reference-only. A standalone geometry probe
 isolates vertical intrinsic width at 80 instead of 188.
+
+### Basic Wrap matrices, baseline and remaining references
+
+[Seven upstream dispositions](upstream-wrap-baseline-and-final-references.md)
+bring complete pairs to 251/8,965 (195 match, 56 differ), with
+131 partial and 33 reference-only. Wrap loses the child's
+alphabetic baseline even when direct Baseline layout works.

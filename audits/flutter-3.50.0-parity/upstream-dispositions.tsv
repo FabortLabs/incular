@@ -407,3 +407,10 @@ packages/flutter/test/widgets/wrap_test.dart	342	Wrap alignment (RTL)	paired-mat
 packages/flutter/test/widgets/wrap_test.dart	428	Wrap runAlignment (DOWN)	paired-match	upstream-wrap-run-axes-and-vertical-intrinsics.md
 packages/flutter/test/widgets/wrap_test.dart	534	Wrap runAlignment (UP)	paired-match	upstream-wrap-run-axes-and-vertical-intrinsics.md
 packages/flutter/test/widgets/wrap_test.dart	1001	Vertical wrap - IntrinsicsWidth	partial-mismatch	upstream-wrap-run-axes-and-vertical-intrinsics.md
+packages/flutter/test/widgets/wrap_test.dart	20	Basic Wrap test (LTR)	paired-match	upstream-wrap-baseline-and-final-references.md
+packages/flutter/test/widgets/wrap_test.dart	134	Basic Wrap test (RTL)	paired-match	upstream-wrap-baseline-and-final-references.md
+packages/flutter/test/widgets/wrap_test.dart	251	Empty wrap	paired-match	upstream-wrap-baseline-and-final-references.md
+packages/flutter/test/widgets/wrap_test.dart	851	RenderWrap toStringShallow control test	reference-ran-incular-open	upstream-wrap-baseline-and-final-references.md
+packages/flutter/test/widgets/wrap_test.dart	858	RenderWrap toString control test	reference-ran-incular-open	upstream-wrap-baseline-and-final-references.md
+packages/flutter/test/widgets/wrap_test.dart	878	Wrap baseline control test	partial-mismatch	upstream-wrap-baseline-and-final-references.md
+packages/flutter/test/widgets/wrap_test.dart	962	Wrap can set and update clipBehavior	reference-ran-incular-open	upstream-wrap-baseline-and-final-references.md
