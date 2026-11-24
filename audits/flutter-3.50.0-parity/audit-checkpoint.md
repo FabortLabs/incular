@@ -98,3 +98,10 @@ a third ran on Flutter only. See [upstream dispositions](upstream-dispositions.t
 which overlays the generated registration catalog without mutating it.
 Coverage denominator expanded to 8,965 with 216 verified testGesture
 wrapper call sites. Continue with navigation reconciliation.
+
+### C24–C25: declarative route reconciliation
+
+[Navigation comparisons](navigation-comparisons.md) confirmed unkeyed route
+remount/focus loss and a dropped pageless entry over a retained keyed page.
+Running total 25 custom paired mismatches. The keyed route control passed.
+Next: custom clip hit testing and existing focused frame harness cases.
