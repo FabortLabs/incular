@@ -649,3 +649,35 @@ packages/flutter/test/services/text_formatter_test.dart	642	FilteringTextInputFo
 packages/flutter/test/services/text_formatter_test.dart	661	FilteringTextInputFormatter basic filtering test	paired-match	upstream-text-formatters.md
 packages/flutter/test/services/text_formatter_test.dart	674	Preserves selection region	partial-mismatch	upstream-text-formatters.md
 packages/flutter/test/services/text_formatter_test.dart	757	Preserves selection region, allow	reference-ran-incular-open	upstream-text-formatters.md
+packages/flutter/test/gestures/serial_tap_test.dart	73	Recognizes serial taps	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/serial_tap_test.dart	274	Fires cancel and resets for PointerCancelEvent	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/serial_tap_test.dart	292	Fires cancel and resets when pointer dragged past slop tolerance	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/serial_tap_test.dart	313	Resets if times out in between taps	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/serial_tap_test.dart	331	Resets if taps are far apart	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/serial_tap_test.dart	349	Serial taps with different buttons will start a new tap sequence	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/serial_tap_test.dart	369	Interleaving taps cancel first sequence and start second sequence	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/serial_tap_test.dart	387	Is no-op if no callbacks are specified	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/serial_tap_test.dart	400	Works for non-primary button	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/tap_test.dart	64	Should recognize tap	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/tap_test.dart	186	No duplicate tap events	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/tap_test.dart	219	Should not recognize two overlapping taps (FIFO)	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/tap_test.dart	252	Should not recognize two overlapping taps (FILO)	paired-mismatch	upstream-tap-recognizers.md
+packages/flutter/test/gestures/tap_test.dart	285	Distance cancels tap	partial-mismatch	upstream-tap-recognizers.md
+packages/flutter/test/gestures/tap_test.dart	318	Short distance does not cancel tap	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/tap_test.dart	351	Timeout does not cancel tap	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/tap_test.dart	988	A primary tap should trigger primary callbacks	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/tap_test.dart	1001	A primary tap cancel trigger primary callbacks	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/tap_test.dart	1014	A secondary tap should trigger secondary callbacks	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/tap_test.dart	1027	A tertiary tap should trigger tertiary callbacks	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/tap_test.dart	1040	A secondary tap cancel should trigger secondary callbacks	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/tap_test.dart	1055	A tertiary tap cancel should trigger tertiary callbacks	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/double_tap_test.dart	97	Should recognize double tap	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/double_tap_test.dart	166	Inter-tap distance cancels double tap	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/double_tap_test.dart	184	Intra-tap distance cancels double tap	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/double_tap_test.dart	204	Inter-tap delay cancels double tap	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/double_tap_test.dart	223	Inter-tap delay resets double tap, allowing third tap to be a double-tap	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/double_tap_test.dart	255	Intra-tap delay does not cancel double tap	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/double_tap_test.dart	278	Should not recognize two overlapping taps	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/double_tap_test.dart	298	Should recognize one tap of group followed by second tap	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/double_tap_test.dart	423	Should not recognize two over-rapid taps	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/double_tap_test.dart	442	Over-rapid taps resets double tap, allowing third tap to be a double-tap	paired-match	upstream-tap-recognizers.md
