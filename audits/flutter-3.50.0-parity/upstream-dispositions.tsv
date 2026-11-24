@@ -359,3 +359,8 @@ packages/flutter/test/widgets/animated_cross_fade_test.dart	518	AnimatedCrossFad
 packages/flutter/test/widgets/animated_switcher_test.dart	319	AnimatedSwitcher updates previous child transitions if the transitionBuilder changes.	partial-match	upstream-animated-switcher-builder-and-key-reentry.md
 packages/flutter/test/widgets/animated_switcher_test.dart	400	AnimatedSwitcher does not duplicate animations if the same child is entered twice.	paired-mismatch	upstream-animated-switcher-builder-and-key-reentry.md
 packages/flutter/test/widgets/animated_switcher_test.dart	420	AnimatedSwitcher does not crash at zero area	paired-match	upstream-animated-switcher-builder-and-key-reentry.md
+packages/flutter/test/widgets/implicit_animations_test.dart	69	AnimatedContainer onEnd callback test	paired-match	upstream-implicit-animation-completion.md
+packages/flutter/test/widgets/implicit_animations_test.dart	94	AnimatedPadding onEnd callback test	paired-match	upstream-implicit-animation-completion.md
+packages/flutter/test/widgets/implicit_animations_test.dart	119	AnimatedAlign onEnd callback test	paired-match	upstream-implicit-animation-completion.md
+packages/flutter/test/widgets/implicit_animations_test.dart	368	AnimatedOpacity onEnd callback test	paired-match	upstream-implicit-animation-completion.md
+packages/flutter/test/widgets/implicit_animations_test.dart	512	AnimatedDefaultTextStyle onEnd callback test	paired-match	upstream-implicit-animation-completion.md

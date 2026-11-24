@@ -633,3 +633,9 @@ the host correctly, but the inactive node incorrectly claims focus.
 bring complete pairs to 212/8,965 (161 match, 51 differ), with
 120 partial and 28 reference-only. A reentered key can leave
 two mounted children after the original animation window.
+
+### Implicit animation completion timings
+
+[Five exact callback sequences](upstream-implicit-animation-completion.md)
+match, including the 1 ms boundary. Complete pairs reach
+217/8,965 (166 match, 51 differ).
