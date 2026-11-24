@@ -154,3 +154,12 @@ paired mismatch cases.
 
 [Strict frame rechecks](frame-rechecks-batches4-6.md) add 15 matched
 fixtures. Current verified count 35/253 (13.83%), 34 match, one mismatch.
+
+### Exact upstream physics dispositions
+
+[Physics translations](upstream-physics-comparisons.md) add 12 paired
+upstream registrations: seven match, five differ (mostly strict numeric
+precision plus zero-duration policy). Overall 14/8,965 upstream paired,
+one additional reference-only; 35/253 existing harness and 35 original
+custom mismatches are separate counts. Continue small scroll/sliver frame
+batches and the next unresolved upstream file; do not count unrun cases.

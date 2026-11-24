@@ -2,3 +2,15 @@ file	line	scenario	disposition	evidence
 packages/flutter/test/widgets/semantics_9_test.dart	13	hides semantic nodes of siblings	paired-match	block-semantics-comparisons.md#exact-upstream-registrations
 packages/flutter/test/widgets/semantics_9_test.dart	43	does not hides semantic nodes of siblings outside the current semantic boundary	paired-mismatch	block-semantics-comparisons.md#exact-upstream-registrations
 packages/flutter/test/widgets/semantics_9_test.dart	88	node is semantic boundary and blocking previously painted nodes	reference-ran-incular-open	block-semantics-comparisons.md#exact-upstream-registrations
+packages/flutter/test/physics/spring_simulation_test.dart	9	When snapToEnd is set, value is exactly `end` after completion	paired-match	upstream-physics-comparisons.md
+packages/flutter/test/physics/spring_simulation_test.dart	36	SpringSimulation results are continuous near critical damping	paired-match	upstream-physics-comparisons.md
+packages/flutter/test/physics/spring_simulation_test.dart	70	creates spring with expected results	paired-match	upstream-physics-comparisons.md
+packages/flutter/test/physics/spring_simulation_test.dart	82	creates spring with negative bounce	paired-match	upstream-physics-comparisons.md
+packages/flutter/test/physics/spring_simulation_test.dart	94	get duration and bounce based on mass and stiffness	paired-match	upstream-physics-comparisons.md
+packages/flutter/test/physics/spring_simulation_test.dart	101	custom duration	paired-match	upstream-physics-comparisons.md
+packages/flutter/test/physics/spring_simulation_test.dart	114	duration <= 0 should fail	paired-mismatch	upstream-physics-comparisons.md
+packages/flutter/test/physics/friction_simulation_test.dart	9	Friction simulation positive velocity	paired-mismatch	upstream-physics-comparisons.md
+packages/flutter/test/physics/friction_simulation_test.dart	30	Friction simulation negative velocity	paired-mismatch	upstream-physics-comparisons.md
+packages/flutter/test/physics/friction_simulation_test.dart	51	Friction simulation constant deceleration	paired-mismatch	upstream-physics-comparisons.md
+packages/flutter/test/physics/gravity_simulation_test.dart	9	Gravity simulation 1	paired-mismatch	upstream-physics-comparisons.md
+packages/flutter/test/physics/gravity_simulation_test.dart	14	Gravity simulation 2	paired-match	upstream-physics-comparisons.md
