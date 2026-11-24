@@ -27,3 +27,9 @@ All thirteen selected originals passed on the pinned reference. The extended con
 - :1701 and :1763 partial match: the cold default PageView mounts only page 0 and exposes only its label, where Flutter's default false setting does the same. The true branch, where a full adjacent page is mounted and exposed semantically, is not configurable on the Rust PageView.
 - :1678, :1730 and :1794 are reference-only. Explicit, changing, and inconsistent ScrollCacheExtent/allowImplicitScrolling combinations are not exposed in the Rust descriptor.
 - :1818, :1847, :1884 and :1914 are reference-only. The Flutter cases check reveal from a mounted implicit-cache neighbor or physics-wrapper updates. Incular's ordinary Scrollable ensureVisible path and default zero-cache PageView do not exercise these contracts.
+
+## Precision-width raster control (separate from the Flutter text golden)
+
+The pinned Flutter source test at :1253 uses a pre-recorded text golden that is not present in the local SDK checkout. The original remains open. An independently authored Flutter probe uses the original logical viewport width of 411.42857142857144 and same 300ms ease animation to page 2, replacing the font-dependent text with a 60×22 solid marker on a black 512×192 frame. Its native Windows wgpu counterpart uses the nearest representable f32 width. Both pass; interior, inclusive near-inside edge, and immediately outside samples match at device ratio 1. This confirms representative geometry/paint at that width, not text or golden equivalence.
+
+Run Flutter with run-reference-probe.ps1 -Test page_view_fractional_width_raster_test.dart. Set INCULAR_DESKTOP_LIVE_TESTS=1 and run cargo test --locked -p incular-desktop --test flutter350_page_fractional_width_raster -- --nocapture.
