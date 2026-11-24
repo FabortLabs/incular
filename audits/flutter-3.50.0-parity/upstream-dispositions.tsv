@@ -288,3 +288,13 @@ packages/flutter/test/widgets/stateful_components_test.dart	47	resync stateful w
 packages/flutter/test/widgets/framework_test.dart	1776	Widget and State properties are nulled out when unmounted	partial-match	upstream-tween-transform-and-lifecycle.md
 packages/flutter/test/widgets/app_lifecycle_listener_test.dart	91	listens to AppLifecycleState	partial-mismatch	upstream-tween-transform-and-lifecycle.md
 packages/flutter/test/widgets/app_lifecycle_listener_test.dart	124	Triggers correct state transition callbacks	partial-mismatch	upstream-tween-transform-and-lifecycle.md
+packages/flutter/test/widgets/raw_tooltip_test.dart	1186	Tooltip can be dismissed by escape key	paired-mismatch	upstream-tooltip-escape-modal-keys-and-path-bounds.md
+packages/flutter/test/widgets/raw_tooltip_test.dart	1241	Multiple Tooltips are dismissed by escape key	paired-mismatch	upstream-tooltip-escape-modal-keys-and-path-bounds.md
+packages/flutter/test/widgets/raw_tooltip_test.dart	3290	Escape key dismisses open RawTooltip inside WidgetsApp without invoking ancestor DismissIntent	partial-mismatch	upstream-tooltip-escape-modal-keys-and-path-bounds.md
+packages/flutter/test/widgets/modal_barrier_test.dart	510	prevents interactions with widgets behind it	paired-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md
+packages/flutter/test/widgets/modal_barrier_test.dart	556	does not prevent interactions with widgets in front of it	paired-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md
+packages/flutter/test/widgets/modal_barrier_test.dart	665	pops the Navigator when dismissed by primary tap	partial-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md
+packages/flutter/test/widgets/modal_barrier_test.dart	696	pops the Navigator when dismissed by non-primary tap	partial-mismatch	upstream-tooltip-escape-modal-keys-and-path-bounds.md
+packages/flutter/test/widgets/keyboard_listener_test.dart	10	Can dispose without keyboard	paired-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md
+packages/flutter/test/widgets/keyboard_listener_test.dart	42	Web key event	partial-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md
+packages/flutter/test/widgets/keyboard_listener_test.dart	66	Defunct listeners do not receive events	partial-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md

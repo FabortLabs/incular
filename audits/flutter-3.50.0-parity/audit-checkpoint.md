@@ -561,3 +561,11 @@ bring complete pairs to 174/8,965 (131 match, 43 differ), with 88
 partial and 27 reference-only. A separate pinned native probe
 finds that ClipRRect antialiased modes produce binary coverage on
 Windows wgpu.
+
+### Escape, modal input, key listeners and Bézier bounds
+
+[Ten upstream dispositions](upstream-tooltip-escape-modal-keys-and-path-bounds.md)
+bring complete pairs to 179/8,965 (134 match, 45 differ), with 93
+partial and 27 reference-only. New tests expose Escape leaving
+tooltips open, secondary release not dismissing the modal, and
+tight rather than control-point Bézier bounds on the public API.
