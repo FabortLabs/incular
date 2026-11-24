@@ -168,3 +168,55 @@ fn a_custom_layout_builder_mounts_its_returned_subtree() {
     assert!(seen.borrow().iter().all(|&call| call == (true, 0)));
     assert_eq!(s.alphas(), [1.]);
 }
+
+fn configured(key: u64, reverse_ms: u64, curve: incular_animation::Curve) -> Widget {
+    AnimatedSwitcher::new(
+        Duration::from_millis(200),
+        Some(card(Some(key), Color::WHITE)),
+    )
+    .reverse_duration(Duration::from_millis(reverse_ms))
+    .switch_in_curve(curve)
+    .into()
+}
+
+fn replace_configured(scene: &mut Scene, widget: Widget, ms: u64) {
+    scene.tree.update(scene.root, widget).unwrap();
+    scene.frame(ms);
+    scene.frame(ms);
+}
+
+#[test]
+fn outgoing_entry_keeps_its_reverse_duration_when_next_entry_changes_it() {
+    use incular_animation::Curve;
+    let mut snapshots = Vec::new();
+    for incoming_ms in [200, 800] {
+        let mut s = Scene::new(configured(1, 200, Curve::Linear));
+        replace_configured(&mut s, configured(2, incoming_ms, Curve::Linear), 1000);
+        s.frame(1100);
+        assert_eq!(s.mounted(), [true, true, false]);
+        snapshots.push(s.alphas()[0]);
+    }
+    assert_eq!(
+        snapshots,
+        [0.5, 0.5],
+        "old alpha at 100ms for incoming reverse 200ms and 800ms"
+    );
+}
+
+#[test]
+fn currently_mounted_entry_keeps_its_curve_after_same_key_rebuild() {
+    use incular_animation::Curve;
+    let mut s = Scene::new(configured(1, 200, Curve::Linear));
+    replace_configured(&mut s, configured(2, 200, Curve::Linear), 1000);
+    s.frame(1100);
+    assert_eq!(s.alphas().last(), Some(&0.5));
+    let current = s
+        .tree
+        .element_with_key(&Key::Value(2))
+        .expect("visible child identity");
+    replace_configured(&mut s, configured(2, 200, Curve::Linear), 1100);
+    assert_eq!(s.alphas().last(), Some(&0.5));
+    replace_configured(&mut s, configured(2, 200, Curve::EaseIn), 1100);
+    assert_eq!(s.tree.element_with_key(&Key::Value(2)), Some(current));
+    assert_eq!(s.alphas().last(), Some(&0.5), "no elapsed time");
+}
