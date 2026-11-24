@@ -8,9 +8,11 @@ The old 3.41.7 audit, fixture names, and lexical matches cannot close a row.
 | --- | --- | --- |
 | Flutter framework API | [flutter-public-api.jsonl](flutter-public-api.jsonl) | 15,791 declarations/members from the 11 public entrypoints; explicit members only, with owner, line and signature. |
 | Flutter source and test files | [coverage-queue.tsv](coverage-queue.tsv) | 441 in-scope framework source files, 776 Flutter test/helper files, 47 existing harness source files. Includes files without parsed declarations or test registrations. |
-| Flutter upstream scenario registrations | [upstream-scenarios.jsonl](upstream-scenarios.jsonl) | 8,749 registration sites, not assertions reviewed or total dynamic cases. A row records the upstream file/line, scenario description, group and options. |
+| Flutter upstream scenario registrations | [upstream-scenarios.jsonl](upstream-scenarios.jsonl) | 8,965 registration sites, not assertions reviewed or total dynamic cases. A row records the upstream file/line, scenario description, group and options. |
 | Existing harness | [existing-harness-scenarios.jsonl](existing-harness-scenarios.jsonl) | 261 Dart registration sites (frame and scalar tests); Rust harness sources accounted for separately. Not assumed to use the current baseline. |
 | Exceptions and counts | [scenario notes](scenario-notes.json), [summary](coverage-queue-summary.json), [external re-exports](external-reexports.md) | Explicit scan boundaries and external contracts; no row passes automatically. |
+
+The catalog includes 216 direct calls to the verified testGesture wrapper (Flutter packages/flutter/test/gestures/gesture_tester.dart:28-35). Helpers nested in an already registered test are not additional registrations.
 
 The upstream catalog uses animation, foundation, gestures, painting, physics,
 rendering, scheduler, semantics, services and widgets tests, plus preview

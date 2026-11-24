@@ -2,7 +2,7 @@
   "source_files": 441,
   "public_api_rows": 15791,
   "upstream_test_files_in_scope": 776,
-  "upstream_registration_sites": 8749,
+  "upstream_registration_sites": 8965,
   "harness_source_files": 47,
   "existing_harness_registration_sites": 261,
   "runnable_parity_verified_by_catalog": 0

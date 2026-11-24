@@ -20,7 +20,7 @@ const otherPreviewDirs = [
 const registrations = {
   'test', 'testWidgets', 'testGoldens', 'testGolden', 'testWithoutContext',
   'testWithContext', 'testUsingContext', 'testWidgetsWithLeakTracking',
-  'testExecutable', 'frameScenario',
+  'testExecutable', 'testGesture', 'frameScenario',
 };
 const groups = {'group', 'groupWithContext', 'groupWithoutContext'};
 typedef Row = Map<String,Object?>;

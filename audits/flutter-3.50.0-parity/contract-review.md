@@ -608,6 +608,6 @@ upstream queue is not exhausted. API properties and defaults, callback or
 geometry differences, platform integration and performance remain separate
 dimensions. Use dependency/source files, official tests, maintained harness
 twins, and original cases for app behavior not covered by upstream tests.
-Do not reinterpret the 8,749 registrations as 8,749 passed tests or the Rust
+Do not reinterpret the catalogued registrations as 8,749 passed tests or the Rust
 controls as a complete certification. No production implementation changes
 or full-workspace test runs were made.

@@ -16,7 +16,7 @@
   "rowsByLibrary": {
     "animation": 135,
     "foundation": 227,
-    "gestures": 133,
+    "gestures": 349,
     "painting": 655,
     "physics": 30,
     "rendering": 846,
@@ -33,6 +33,7 @@
     "frameScenario",
     "test",
     "testExecutable",
+    "testGesture",
     "testGolden",
     "testGoldens",
     "testUsingContext",
