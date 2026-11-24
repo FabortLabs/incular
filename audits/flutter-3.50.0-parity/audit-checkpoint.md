@@ -364,3 +364,11 @@ pinned direct tests; an explicit IME Done matches. The alternate undo
 fixture repeats the known grouping problem. [Scheduler phases](scheduler-callback-phases-comparisons.md)
 produce two dedicated red tests and one upstream positive pairing:
 45/8,965 upstream pairs. No implementation fixes were made.
+
+### More text controls and verified offscreen accessibility regression
+
+[Nine text frame controls](frame-editable-sizing-and-input.md) match. Current coverage:
+192/253 valid frame registrations (75.89%), 180 match and 12 differ.
+The upstream [sliver semantics test](offscreen-sliver-semantics-comparisons.md) exposes two separately
+reproduced differences, at first layout and at normalized offset.
+Upstream paired registrations: 46/8,965 (35 match, 11 differ).
