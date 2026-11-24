@@ -39,7 +39,11 @@ Unreviewed individual contracts remain open. This is not a parity certification.
 Use the [backfill ledger](test-backfill.tsv) to find permanent test targets
 for the previously reproduced cases. A focused test may intentionally fail
 at its reference assertion until the implementation is fixed. Run only the
-named targets; do not run the entire workspace for this audit.
+named targets; do not run the entire workspace for this audit. The
+[Flutter reference probes](reference-probes/test/) pin the expected side
+of selected regressions in code. Run one from the repository root, e.g.
+`./audits/flutter-3.50.0-parity/run-reference-probe.ps1 -Test raster_slice_test.dart`.
+The runner verifies the pinned checkout and uses an offline scratch package.
 
 ## Inventory by public entrypoint
 
