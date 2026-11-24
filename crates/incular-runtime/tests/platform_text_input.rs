@@ -5,8 +5,9 @@ use incular_config::Constraints;
 use incular_core::{Code, InputEvent, KeyState, Offset, PointerPhase, Size};
 use incular_platform::{PlatformEvent, TextInputCommand, TextInputState};
 use incular_runtime::Runtime;
+use incular_text::{TextEditingValue, TextSelection};
 use incular_widgets::internal::{TextEditingController, TextRange};
-use incular_widgets::{EditableText, KeyboardListener, TextDirection, Widget};
+use incular_widgets::{EditableText, KeyboardListener, TextDirection, TextInputFormatter, Widget};
 use std::{cell::Cell, rc::Rc};
 
 fn constraints() -> Constraints {
@@ -173,4 +174,82 @@ fn an_unhandled_back_asks_the_pop_route_observers() {
     assert_eq!(pops.get(), 1);
     drop(registration);
     assert!(!runtime.handle_back_button());
+}
+
+#[test]
+fn single_line_native_edit_removes_newlines_and_adjusts_selection() {
+    let controller = TextEditingController::new();
+    let mut runtime = editor(&controller);
+    tap(&mut runtime);
+    runtime.run_frame(constraints()).expect("focus text field");
+    assert!(runtime.focused_element().is_some());
+
+    // Flutter prepends FilteringTextInputFormatter.singleLineFormatter.
+    let _ = runtime.handle_platform_event(PlatformEvent::TextEditingState(TextInputState {
+        text: "a\nb".into(),
+        selection_start: 3,
+        selection_end: 3,
+        composing: None,
+    }));
+    assert_eq!(
+        (controller.text().as_str(), controller.selection()),
+        ("ab", TextSelection::collapsed(2))
+    );
+}
+
+#[test]
+fn native_selection_only_update_does_not_run_text_formatters() {
+    struct CountFormatter(Rc<Cell<u32>>);
+
+    impl TextInputFormatter for CountFormatter {
+        fn format_edit_update(
+            &self,
+            _old: &TextEditingValue,
+            new: &TextEditingValue,
+        ) -> TextEditingValue {
+            self.0.set(self.0.get() + 1);
+            new.clone()
+        }
+    }
+
+    let controller = TextEditingController::with_text("abc");
+    let calls = Rc::new(Cell::new(0));
+    let mut runtime = Runtime::new(
+        EditableText::new(controller.clone())
+            .text_direction(TextDirection::Ltr)
+            .input_formatter(CountFormatter(calls.clone()))
+            .into(),
+    )
+    .expect("mount formatted editable text");
+    runtime.run_frame(constraints()).expect("initial layout");
+    tap(&mut runtime);
+    controller.set_selection(TextSelection::collapsed(0));
+    runtime.run_frame(constraints()).expect("focus text field");
+    calls.set(0);
+
+    let _ = runtime.handle_platform_event(PlatformEvent::TextEditingState(TextInputState {
+        text: "abc".into(),
+        selection_start: 1,
+        selection_end: 1,
+        composing: None,
+    }));
+    assert_eq!(controller.selection(), TextSelection::collapsed(1));
+    let selection_only_calls = calls.get();
+
+    let _ = runtime.handle_platform_event(PlatformEvent::TextEditingState(TextInputState {
+        text: "axbc".into(),
+        selection_start: 2,
+        selection_end: 2,
+        composing: None,
+    }));
+    assert_eq!(controller.text(), "axbc");
+    assert_eq!(
+        calls.get() - selection_only_calls,
+        1,
+        "control: text changed"
+    );
+    assert_eq!(
+        selection_only_calls, 0,
+        "changing only selection must not invoke text formatters"
+    );
 }
