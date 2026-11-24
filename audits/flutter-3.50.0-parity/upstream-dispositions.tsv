@@ -708,3 +708,9 @@ packages/flutter/test/painting/fractional_offset_test.dart	26	FractionalOffset.l
 packages/flutter/test/painting/fractional_offset_test.dart	36	FractionalOffset.lerp identical a,b	partial-match	upstream-fractional-offset.md
 packages/flutter/test/painting/fractional_offset_test.dart	42	FractionalOffset.fromOffsetAndSize()	paired-match	upstream-fractional-offset.md
 packages/flutter/test/painting/fractional_offset_test.dart	50	FractionalOffset.fromOffsetAndRect()	paired-match	upstream-fractional-offset.md
+packages/flutter/test/widgets/composited_transform_test.dart	123	topLeft	paired-match	upstream-geometry-input-gestures.md#linked-affine-repair
+packages/flutter/test/widgets/composited_transform_test.dart	131	center	paired-match	upstream-geometry-input-gestures.md#linked-affine-repair
+packages/flutter/test/widgets/composited_transform_test.dart	139	bottomRight - topRight	paired-match	upstream-geometry-input-gestures.md#linked-affine-repair
+packages/flutter/test/widgets/composited_transform_test.dart	186	topLeft	paired-match	upstream-geometry-input-gestures.md#linked-affine-repair
+packages/flutter/test/widgets/composited_transform_test.dart	197	center	paired-match	upstream-geometry-input-gestures.md#linked-affine-repair
+packages/flutter/test/widgets/composited_transform_test.dart	208	bottomRight - topRight	paired-match	upstream-geometry-input-gestures.md#linked-affine-repair

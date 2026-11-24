@@ -35,7 +35,7 @@ use incular_rendering as incular_painting;
 use incular_rendering::{
     Annotation, BlendMode, Border, Brush, ColorFilter, CornerRadii, DisplayList, DropShadowEffect,
     FillRule, GaussianBlur, ImageSampling, LayerAnchor, LayerLink, LayerTree, PaintCommand, Path,
-    RRect, Stroke, normalize_opacity, normalize_sigma, resolve_follower_target,
+    RRect, Stroke, normalize_opacity, normalize_sigma, resolve_linked_follower_world_transform,
 };
 use incular_scroll::{
     ActivityOrigin, AttachmentConflict, FlingSimulation, MetricAttachment, MetricOwner,

@@ -18,7 +18,7 @@ fn rect(x: f32, y: f32, width: f32, height: f32) -> Rect {
     Rect::from_origin_size(Offset::new(x, y), Size::new(width, height))
 }
 
-fn painted_marker(list: &DisplayList) -> Rect {
+fn painted_geometry(list: &DisplayList, marker_color: Color) -> (Rect, CoreTransform) {
     let mut transforms = vec![CoreTransform::IDENTITY];
     let mut marker = None;
     for command in list.commands() {
@@ -32,18 +32,23 @@ fn painted_marker(list: &DisplayList) -> Rect {
                 transforms.pop();
                 None
             }
-            PaintCommand::Rect { rect, color } if *color == MARKER => Some(*rect),
+            PaintCommand::Rect { rect, color } if *color == marker_color => Some(*rect),
             PaintCommand::RRect {
                 rrect,
                 brush: Brush::Solid(color),
-            } if *color == MARKER => Some(rrect.rect),
+            } if *color == marker_color => Some(rrect.rect),
             _ => None,
         };
         if let Some(local) = local {
-            assert!(marker.replace(current.transform_rect_bbox(local)).is_none());
+            assert!(marker.replace((local, current)).is_none());
         }
     }
     marker.expect("flattened paint must emit the follower marker")
+}
+
+fn painted_marker(list: &DisplayList) -> Rect {
+    let (local, transform) = painted_geometry(list, MARKER);
+    transform.transform_rect_bbox(local)
 }
 
 fn measure(scale: f32) -> (Rect, Rect) {
@@ -88,4 +93,83 @@ fn unscaled_follower_aligns_distinct_anchors_with_nonzero_offset() {
 fn scaled_leader_transforms_follower_geometry_and_paint() {
     let expected = rect(284., 232., 60., 40.);
     assert_eq!(measure(2.), (expected, expected), "(paint, bounds)");
+}
+
+const ANCHORS: [(Alignment, Alignment); 3] = [
+    (Alignment::TOP_LEFT, Alignment::TOP_LEFT),
+    (Alignment::CENTER, Alignment::CENTER),
+    (Alignment::BOTTOM_RIGHT, Alignment::TOP_RIGHT),
+];
+
+#[test]
+fn original_offset_only_anchors_are_exact() {
+    for ((target, follower), wanted) in
+        ANCHORS
+            .into_iter()
+            .zip([(123., 456.), (118., 451.), (113., 466.)])
+    {
+        let link = LayerLink::new();
+        let leader =
+            CompositedTransformTarget::new(link.clone(), SizedBox::new().width(10.).height(10.));
+        let follower =
+            CompositedTransformFollower::new(link, Widget::box_(Size::new(20., 20.), MARKER))
+                .target_anchor(target)
+                .follower_anchor(follower);
+        let mut r = Runtime::new(
+            Stack::new([
+                Positioned::new(leader).left(123.).top(456.),
+                Positioned::new(follower).left(787.).top(343.),
+            ])
+            .into(),
+        )
+        .unwrap();
+        let (list, _) = r
+            .run_frame(Constraints::tight(Size::new(800., 600.)))
+            .unwrap();
+        assert_eq!(painted_marker(&list), rect(wanted.0, wanted.1, 20., 20.));
+    }
+}
+
+#[test]
+fn original_rotated_anchors_agree_and_the_axes_follow_the_leader() {
+    let leader_color = Color::rgba(3, 5, 211, 255);
+    for (target_anchor, follower_anchor) in ANCHORS {
+        let link = LayerLink::new();
+        let leader = Transform::rotation(
+            1.,
+            CompositedTransformTarget::new(
+                link.clone(),
+                Widget::box_(Size::new(80., 10.), leader_color),
+            ),
+        );
+        let follower = Transform::rotation(
+            -0.3,
+            CompositedTransformFollower::new(link, Widget::box_(Size::new(40., 20.), MARKER))
+                .target_anchor(target_anchor)
+                .follower_anchor(follower_anchor),
+        );
+        let mut r = Runtime::new(
+            Stack::new([
+                Positioned::new(leader).left(456.).top(123.),
+                Positioned::new(follower).left(343.).top(787.),
+            ])
+            .into(),
+        )
+        .unwrap();
+        let (list, _) = r
+            .run_frame(Constraints::tight(Size::new(800., 600.)))
+            .unwrap();
+        let (leader_rect, leader_transform) = painted_geometry(&list, leader_color);
+        let (follower_rect, follower_transform) = painted_geometry(&list, MARKER);
+        let target = leader_rect.origin + target_anchor.along_size(leader_rect.size);
+        let follower = follower_rect.origin + follower_anchor.along_size(follower_rect.size);
+        for axis in [Offset::ZERO, Offset::new(10., 0.), Offset::new(0., 10.)] {
+            let a = leader_transform.transform_point(target + axis);
+            let b = follower_transform.transform_point(follower + axis);
+            assert!(
+                (a.x - b.x).abs() < 0.001 && (a.y - b.y).abs() < 0.001,
+                "{target_anchor:?}, {follower_anchor:?}, {axis:?}: {a:?} != {b:?}"
+            );
+        }
+    }
 }

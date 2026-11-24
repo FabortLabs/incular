@@ -202,14 +202,14 @@ fn leader_scale_resolves_anchors_in_leader_space() {
     // (100,15) paints it at (40,-15) size 120x60. Anchor and offset live
     // in leader space: target (40,-15) + ((100,15)+2*((5,7)-(100,15)) -
     // ((100,15)+2*((0,0)-(100,15)))) = (40,-15)+(10,14) = (50,-1).
-    let expected = Rect::from_origin_size(Offset::new(50., -1.), Size::new(20., 10.));
+    let expected = Rect::from_origin_size(Offset::new(50., -1.), Size::new(40., 20.));
     assert_rect_eq(
         *painted_rects(&tree.paint()).last().expect("follower rect"),
         expected,
         "scaled follower paint",
     );
     let hit = tree
-        .hit_test(Offset::new(55., 2.))
+        .hit_test(Offset::new(82., 14.))
         .and_then(|render| tree.element_for_render(render));
     assert_eq!(hit, Some(moved));
     tree.update_semantics();
@@ -357,19 +357,18 @@ fn follower_beneath_transformed_ancestor_follows_paint() {
     let moved = tree.children(follower).unwrap()[0];
     tree.layout(Constraints::tight(Size::new(200., 200.)))
         .expect("layout");
-    // Leader lays out at (70,0); follower resolves (70,0)+(5,7) in its
-    // own space, then its scale-2 ancestor paints the 20x10 box doubled.
-    // Wrapper layout (90,10,20,10) overlaps the painted content, so the
-    // button stays hittable through both transforms.
+    // Leader lays out at (70,0). The linked follower uses the leader's
+    // unscaled axes, cancelling its own scale-2 ancestor. Wrapper layout
+    // still overlaps the painted content, so the button remains hittable.
     let painted = painted_rects(&tree.paint());
-    let expected = Rect::from_origin_size(Offset::new(75., 7.), Size::new(40., 20.));
+    let expected = Rect::from_origin_size(Offset::new(75., 7.), Size::new(20., 10.));
     assert_rect_eq(
         *painted.last().expect("follower rect"),
         expected,
         "ancestor-scaled follower paint",
     );
     let hit = tree
-        .hit_test(Offset::new(100., 20.))
+        .hit_test(Offset::new(92., 14.))
         .and_then(|render| tree.element_for_render(render));
     assert_eq!(hit, Some(moved));
     assert!(

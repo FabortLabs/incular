@@ -187,10 +187,7 @@ fn clip_space(world: Transform) -> ClipSpace {
     }
 }
 
-/// World-space point where a follower's anchor must land, resolved entirely
-/// in leader space. The compositor and the widget tree share this half of
-/// the projection; each side then inverts it into its own retained frame
-/// (layer world vs. render parent), which is why the callers still differ.
+/// World-space point where a follower's anchor must land.
 #[must_use]
 pub fn resolve_follower_target(
     leader_transform: Transform,
@@ -201,6 +198,23 @@ pub fn resolve_follower_target(
     let target_point = leader_transform.transform_point(target_anchor.along_size(leader_size));
     let leader_origin = leader_transform.transform_point(Offset::ZERO);
     target_point + (leader_transform.transform_point(offset) - leader_origin)
+}
+
+/// The follower uses the leader's complete affine basis, not only the
+/// world-space anchor point. Its own parent is only the reference frame
+/// from which a widget-side caller derives the relative transform.
+#[must_use]
+pub fn resolve_linked_follower_world_transform(
+    leader_transform: Transform,
+    leader_size: Size,
+    target_anchor: LayerAnchor,
+    follower_size: Size,
+    follower_anchor: LayerAnchor,
+    offset: Offset,
+) -> Transform {
+    let linked_offset =
+        target_anchor.along_size(leader_size) - follower_anchor.along_size(follower_size) + offset;
+    leader_transform.then(Transform::translation(linked_offset))
 }
 
 /// World-resolved fallback path retained per clip layer. At most one
@@ -2198,11 +2212,17 @@ impl LayerTree {
             return show_when_unlinked.then_some(world_transform);
         };
         let leader_size = link.leader_size().unwrap_or(Size::ZERO);
-        let desired_anchor =
-            resolve_follower_target(leader_transform, leader_size, *target_anchor, *offset);
-        let desired_local = world_transform.inverse_transform_point(desired_anchor)?;
-        let local_delta = desired_local - follower_anchor.along_size(*size);
-        Some(world_transform.then(Transform::translation(local_delta)))
+        // Flutter cannot resolve the link through a degenerate follower
+        // path. Once that path is invertible it cancels out in world space.
+        world_transform.inverse()?;
+        Some(resolve_linked_follower_world_transform(
+            leader_transform,
+            leader_size,
+            *target_anchor,
+            *size,
+            *follower_anchor,
+            *offset,
+        ))
     }
     fn collect_annotations(&mut self, id: LayerId, world_transform: Transform, clip: Option<Rect>) {
         let Some(kind) = self.layers.get(id.0).map(|layer| layer.kind.clone()) else {

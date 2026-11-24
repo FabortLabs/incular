@@ -33,6 +33,26 @@ Incular checks its flattened paint and bounds, not GPU readback
 for this new fixture. See `flutter_follower_transform_parity` and
 `follower_transform_reference_test.dart`.
 
+### Linked affine repair
+
+Flutter's FollowerLayer multiplies the complete leader transform by the
+leader-space anchor delta, then expresses that result relative to the
+follower's parent. Matching only the world anchor left the follower with
+the wrong size and angle. Incular now shares the same world transform
+between compositing and widget geometry, input and semantics. The focused
+runtime fixture measures the corrected (284,232,60,40) scaled rectangle;
+both follower scale directions are also covered by the widget tests.
+
+The six original widget registrations at lines 123, 131, 139, 186, 197
+and 208 of `composited_transform_test.dart` pass in both implementations.
+Incular checks the actual composited point, not an independently rebuilt
+transform. The three offset-only coordinates are exact; the rotation
+pairs agree within 0.001 px in Rust's single-precision coordinates.
+An additional test assertion checks both axes follow the leader when
+the unlinked follower parent is itself rotated by a different angle.
+The authored scaled Flutter fixture checks raster pixels; the Rust
+follower regression checks the flattened display list, not native pixels.
+
 ## Text state
 
 `services/text_input_test.dart:55` matches reversed-selection deletion.

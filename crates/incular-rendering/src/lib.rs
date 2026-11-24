@@ -20,7 +20,7 @@ pub use color_space::{premultiplied_working_rgba, working_rgba};
 pub use compositor::{
     Annotation, CompositorDiagnostics, FlattenedAnnotation, FlattenedPicture, FollowerLayer,
     LayerAnchor, LayerId, LayerKind, LayerLink, LayerTree, PublisherIdentity, normalize_opacity,
-    resolve_follower_target,
+    resolve_follower_target, resolve_linked_follower_world_transform,
 };
 pub use display_list::{
     BackdropKey, Canvas, DisplayList, ImageSampling, PaintCommand, SurfacePartitionId,
