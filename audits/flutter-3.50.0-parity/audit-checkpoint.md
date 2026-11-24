@@ -328,3 +328,14 @@ original focus/input frame file is fully dispositioned (17 of 18 match).
 All previously reproduced custom Flutter expectations with existing
 standalone comparison files now have runnable named reference probes
 in the audit package; shipping implementation remains untouched.
+
+### Sliver and scroll frame rechecks, shortcut dispatch
+
+[New frame groups](frame-sliver-scroll-rechecks.md) add eight comparable
+registrations (six match, two differ): 151/253 (59.68%), 142 match and
+nine differ. KeepAlive and PageView's separate raw geometry/retention
+differences remain under fixture review and are not counted.
+[Shortcut results](upstream-shortcut-comparisons.md) bring upstream
+pairs to 44/8,965 (34 match, ten differ), with six reference-only.
+Committed standalone Flutter fixtures now preserve expected behavior
+in source tests as well as the existing harness; no runtime fixes.
