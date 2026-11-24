@@ -369,3 +369,8 @@ packages/flutter/test/widgets/implicit_animations_test.dart	276	AnimatedScale tr
 packages/flutter/test/widgets/implicit_animations_test.dart	334	AnimatedRotation transition test	paired-match	upstream-implicit-transition-samples.md
 packages/flutter/test/widgets/implicit_animations_test.dart	392	AnimatedOpacity transition test	paired-match	upstream-implicit-transition-samples.md
 packages/flutter/test/widgets/implicit_animations_test.dart	473	SliverAnimatedOpacity transition test	paired-match	upstream-implicit-transition-samples.md
+packages/flutter/test/widgets/implicit_animations_test.dart	194	AnimatedSlide onEnd callback test	paired-match	upstream-implicit-effects-and-fractional-completion.md
+packages/flutter/test/widgets/implicit_animations_test.dart	252	AnimatedScale onEnd callback test	paired-match	upstream-implicit-effects-and-fractional-completion.md
+packages/flutter/test/widgets/implicit_animations_test.dart	310	AnimatedRotation onEnd callback test	paired-match	upstream-implicit-effects-and-fractional-completion.md
+packages/flutter/test/widgets/implicit_animations_test.dart	426	AnimatedFractionallySizedBox onEnd callback test	paired-match	upstream-implicit-effects-and-fractional-completion.md
+packages/flutter/test/widgets/implicit_animations_test.dart	450	SliverAnimatedOpacity onEnd callback test	paired-match	upstream-implicit-effects-and-fractional-completion.md

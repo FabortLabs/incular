@@ -645,3 +645,8 @@ match, including the 1 ms boundary. Complete pairs reach
 [Five exact effect comparisons](upstream-implicit-transition-samples.md)
 match, including caller build counts. Complete pairs reach 222/8,965
 (171 match, 51 differ); 120 partial and 28 reference-only remain.
+
+### Additional implicit effect completion checks
+
+[Five more callback sequences](upstream-implicit-effects-and-fractional-completion.md)
+match. Complete pairs reach 227/8,965 (176 match, 51 differ).
