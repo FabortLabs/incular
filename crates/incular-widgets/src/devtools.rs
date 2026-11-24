@@ -3,9 +3,9 @@
 //! Enabled only by the `devtools` feature. Everything here is read-only:
 //! requesting data never marks anything dirty and never triggers rebuilds.
 
-use crate::tree::{ElementId, InvalidationCause, Key, WidgetKind, WidgetTree};
+use crate::tree::{ElementId, InvalidationCause, Key, RenderKind, WidgetKind, WidgetTree};
 use crate::util::truncate;
-use incular_config::Axis;
+use incular_config::{Alignment, Axis};
 use incular_core::{Rect, Size};
 use incular_devtools_protocol::{
     DebugValue, DevSemanticsId, DevWidgetId, DevWindowId, ElementState, FlexChildInspection,
@@ -475,12 +475,20 @@ impl WidgetTree {
             WidgetKind::Flex { axis, .. } => {
                 self.devtools_flex_details(element, *axis, constraints, size)
             }
-            WidgetKind::Stack { alignment, .. } => {
-                self.devtools_stack_details(element, *alignment, None)
+            WidgetKind::Stack { .. } | WidgetKind::IndexedStack { .. } => {
+                let (alignment, index) = self
+                    .dev_renders()
+                    .get(element.render.0)
+                    .and_then(|render| match render.object.kind() {
+                        RenderKind::Stack { stack } => Some((stack.alignment, None)),
+                        RenderKind::IndexedStack {
+                            alignment, index, ..
+                        } => Some((*alignment, Some(*index))),
+                        _ => None,
+                    })
+                    .unwrap_or((Alignment::TOP_LEFT, None));
+                self.devtools_stack_details(element, alignment, index)
             }
-            WidgetKind::IndexedStack {
-                alignment, index, ..
-            } => self.devtools_stack_details(element, *alignment, Some(*index)),
             WidgetKind::Positioned {
                 left,
                 right,

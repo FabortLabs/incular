@@ -24,4 +24,34 @@ void main() {
         direction == TextDirection.ltr ? Offset.zero : const Offset(10, 0));
     }
   });
+
+  testWidgets('only the default stack alignment mirrors in RTL', (tester) async {
+    const stackKey = ValueKey('stackPx');
+    const smallKey = ValueKey('smallPx');
+    const children = [
+      SizedBox(width: 20, height: 20),
+      SizedBox(key: smallKey, width: 10, height: 10),
+    ];
+    for (final indexed in [false, true]) {
+      for (final explicit in [false, true]) {
+        final Widget content;
+        if (indexed) {
+          content = explicit
+              ? const IndexedStack(key: stackKey, index: 1, alignment: Alignment.topLeft, children: children)
+              : const IndexedStack(key: stackKey, index: 1, children: children);
+        } else {
+          content = explicit
+              ? const Stack(key: stackKey, alignment: Alignment.topLeft, children: children)
+              : const Stack(key: stackKey, children: children);
+        }
+        await tester.pumpWidget(Directionality(
+          textDirection: TextDirection.rtl,
+          child: Center(child: content),
+        ));
+        final origin = tester.getTopLeft(find.byKey(stackKey));
+        expect(tester.getTopLeft(find.byKey(smallKey)) - origin,
+          explicit ? Offset.zero : const Offset(10, 0));
+      }
+    }
+  });
 }

@@ -8,16 +8,15 @@ use crate::{Widget, WidgetKind, macros::widget_from_kind};
 
 /// Overlays children in paint order with alignment, sizing fit, and clipping.
 ///
-/// Alignment factors are absolute (left/right, not start/end), so the
-/// stack needs no text direction. Use absolute alignment or resolve a
-/// directional alignment before constructing the stack.
+/// The default places children at the top and ambient start edge, falling
+/// back to left when no direction is provided. Explicit alignment uses
+/// physical left/right and is not mirrored.
 #[derive(Clone, Debug, PartialEq, TypedBuilder, SmartDefault)]
 pub struct Stack {
     #[builder(default, setter(into))]
     children: Vec<Widget>,
-    #[builder(default = Alignment::TOP_LEFT)]
-    #[default(Alignment::TOP_LEFT)]
-    alignment: Alignment,
+    #[builder(default, setter(strip_option))]
+    alignment: Option<Alignment>,
     #[builder(default = StackFit::Loose)]
     fit: StackFit,
     #[builder(default = Clip::HardEdge)]
@@ -46,7 +45,7 @@ impl Stack {
     /// Sets the alignment for non-positioned children.
     #[must_use]
     pub fn alignment(mut self, alignment: Alignment) -> Self {
-        self.alignment = alignment;
+        self.alignment = Some(alignment);
         self
     }
 
@@ -69,7 +68,7 @@ impl Stack {
 
     #[must_use]
     pub fn get_alignment(&self) -> Alignment {
-        self.alignment
+        self.alignment.unwrap_or(Alignment::TOP_LEFT)
     }
 
     #[must_use]
@@ -173,9 +172,8 @@ widget_from_kind!(Positioned => Positioned { left, top, right, bottom, width, he
 pub struct IndexedStack {
     #[builder(default)]
     index: usize,
-    #[builder(default = Alignment::TOP_LEFT)]
-    #[default(Alignment::TOP_LEFT)]
-    alignment: Alignment,
+    #[builder(default, setter(strip_option))]
+    alignment: Option<Alignment>,
     #[builder(default = StackFit::Loose)]
     fit: StackFit,
     #[builder(default = Clip::HardEdge)]
@@ -204,7 +202,7 @@ impl IndexedStack {
     /// Sets alignment for children.
     #[must_use]
     pub fn alignment(mut self, alignment: Alignment) -> Self {
-        self.alignment = alignment;
+        self.alignment = Some(alignment);
         self
     }
 

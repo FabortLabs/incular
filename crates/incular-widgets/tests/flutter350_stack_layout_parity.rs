@@ -159,6 +159,19 @@ fn default_alignment_uses_directional_start_not_a_physical_left() {
     }
     assert_eq!(actual, [Offset::ZERO, Offset::new(10., 0.), Offset::ZERO]);
 }
+
+#[test]
+fn explicit_physical_left_alignment_is_not_mirrored_in_rtl() {
+    let w = Stack::aligned(
+        Alignment::TOP_LEFT,
+        [fixed(0, 20., 20.), fixed(1, 10., 10.)],
+    );
+    let t = mount(direction(TextDirection::Rtl, Center::new(key(w, STACK))));
+    assert_eq!(
+        bounds(&t, 1).origin - bounds(&t, STACK).origin,
+        Offset::ZERO
+    );
+}
 #[test]
 fn clip_setting_changes_that_for_overflowing_positioned_child() {
     let build = |clip| {

@@ -215,7 +215,10 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
         } => {
             out.push(prop(
                 "alignment",
-                DebugValue::Enum(format!("{alignment:?}")),
+                DebugValue::Enum(alignment.map_or_else(
+                    || "AlignmentDirectional::TOP_START".into(),
+                    |value| format!("{value:?}"),
+                )),
             ));
             out.push(prop("childCount", DebugValue::Uint(children.len() as u64)));
         }

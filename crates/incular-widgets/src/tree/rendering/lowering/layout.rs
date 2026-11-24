@@ -17,6 +17,13 @@ fn resolve_layout_direction(
         .unwrap_or(TextDirection::Ltr)
 }
 
+fn resolve_stack_alignment(explicit: Option<Alignment>, context: &DependencyContext) -> Alignment {
+    explicit.unwrap_or_else(|| {
+        incular_config::AlignmentDirectional::TOP_START
+            .resolve(resolve_layout_direction(None, context))
+    })
+}
+
 pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> RenderKind {
     match widget.kind() {
         WidgetKind::Padding { padding, .. } => RenderKind::Padding { padding: *padding },
@@ -171,7 +178,7 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
             ..
         } => RenderKind::Stack {
             stack: incular_layout::Stack {
-                alignment: *alignment,
+                alignment: resolve_stack_alignment(*alignment, context),
                 fit: *fit,
                 clip_behavior: *clip_behavior,
             },
@@ -255,7 +262,7 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
             clip_behavior,
             ..
         } => RenderKind::IndexedStack {
-            alignment: *alignment,
+            alignment: resolve_stack_alignment(*alignment, context),
             index: *index,
             fit: *fit,
             clip_behavior: *clip_behavior,

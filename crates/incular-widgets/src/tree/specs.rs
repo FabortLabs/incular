@@ -615,7 +615,7 @@ pub(crate) enum WidgetKind {
         children: Vec<Widget>,
     },
     Stack {
-        alignment: Alignment,
+        alignment: Option<Alignment>,
         fit: StackFit,
         clip_behavior: Clip,
         children: Vec<Widget>,
@@ -639,7 +639,7 @@ pub(crate) enum WidgetKind {
         child: Widget,
     },
     IndexedStack {
-        alignment: Alignment,
+        alignment: Option<Alignment>,
         index: usize,
         fit: StackFit,
         clip_behavior: Clip,

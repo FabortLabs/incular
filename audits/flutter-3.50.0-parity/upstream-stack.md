@@ -48,3 +48,13 @@ and native Windows wgpu test agree on all four pixels across six retained
 frames, including re-enabling HardEdge on unchanged overflowing geometry.
 The separate IndexedStack wgpu selection test and the focused stack/clip
 widget suites pass.
+
+## Ambient start alignment
+
+Stack and IndexedStack now resolve the default top-start alignment
+using the nearest Directionality. An explicit physical top-left
+does not mirror. The pinned probe verifies retained LTR/RTL/LTR and
+explicit vs default alignment on both widgets. The default alignment
+and 34 other named widget checks pass; DevTools also compiles with
+the actual resolved values. An absent Directionality still falls back
+to LTR in Incular, so the existing Flutter assertion probe stays open.
