@@ -191,3 +191,12 @@ text__rich_span_style_metrics	harness/flutter/test/frames/text_test.dart	9	match
 text__editable_word_arrow_selection	harness/flutter/test/frames/text_test.dart	326	match	7	frame-editable-sizing-and-input.md
 text__editable_backspace_delete	harness/flutter/test/frames/text_test.dart	386	match	6	frame-editable-sizing-and-input.md
 text__editable_formatter_digits_then_length	harness/flutter/test/frames/text_test.dart	533	match	4	frame-editable-sizing-and-input.md
+physics__spring_description__damping_regimes	harness/flutter/test/frames/physics_test.dart	16	match	3	frame-constraint-and-fling-rechecks.md
+physics__spring_description__duration_bounce	harness/flutter/test/frames/physics_test.dart	59	match	3	frame-constraint-and-fling-rechecks.md
+physics__spring__tolerance_boundary	harness/flutter/test/frames/physics_test.dart	109	match	3	frame-constraint-and-fling-rechecks.md
+physics__friction__tolerance_boundary	harness/flutter/test/frames/physics_test.dart	138	match	3	frame-constraint-and-fling-rechecks.md
+physics__clamped_simulation__position_and_velocity	harness/flutter/test/frames/physics_test.dart	191	match	31	frame-constraint-and-fling-rechecks.md
+physics__clamping_scroll__spline	harness/flutter/test/frames/physics_test.dart	258	match	21	frame-constraint-and-fling-rechecks.md
+physics__ballistic_dispatch__clamping_overscroll	harness/flutter/test/frames/physics_test.dart	270	match	91	frame-constraint-and-fling-rechecks.md
+physics__ballistic_dispatch__clamping_negative_velocity	harness/flutter/test/frames/physics_test.dart	304	match	21	frame-constraint-and-fling-rechecks.md
+anim_core__animate_with_fling	harness/flutter/test/frames/anim_core_test.dart	113	match	106	frame-constraint-and-fling-rechecks.md

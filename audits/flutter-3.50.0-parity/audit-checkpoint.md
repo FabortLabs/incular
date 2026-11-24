@@ -372,3 +372,11 @@ produce two dedicated red tests and one upstream positive pairing:
 The upstream [sliver semantics test](offscreen-sliver-semantics-comparisons.md) exposes two separately
 reproduced differences, at first layout and at normalized offset.
 Upstream paired registrations: 46/8,965 (35 match, 11 differ).
+
+### Spring, bounded physics, and fling frame controls
+
+[Nine more strict comparisons](frame-constraint-and-fling-rechecks.md) matched.
+Valid frame registrations: 201/253 (79.45%), 189 match and 12 differ.
+Upstream paired registrations: 46/8,965. Two raw captures currently
+under equivalence review are Unicode selection units and zero-speed
+bouncing spring return.
