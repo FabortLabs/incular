@@ -54,3 +54,11 @@ Dart sources in the pinned SDK lib/async: stream.dart:107–113,
 stream_controller.dart:123–166, broadcast_stream_controller.dart:266–275,306–342.
 These source leads are not runtime results. Keep the next gestures slice
 as planned, and include these in the later async rotation.
+
+### C09–C10: gesture arbitration and synthesized scale velocity
+
+[Paired gesture tests](gesture-comparisons.md) reproduced two more mismatches,
+bringing the custom paired mismatch count to ten. Both had matching ordinary
+or below-threshold controls. Upstream formal verification denominator remains
+separate. Next slice: painting/rendering, zero-width hairline in pixels and
+drawPath Paint attributes; async lifecycle remains queued.
