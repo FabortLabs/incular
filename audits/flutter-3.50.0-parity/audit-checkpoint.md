@@ -427,3 +427,12 @@ positive pairs. Upstream: 63/8,965 fully paired, 48 match and 15 differ,
 plus eight partial and six reference-only. Continue the upstream audit
 in bounded behavior families; do not treat 100% fixture coverage as a
 complete equivalence verdict or start implementation fixes.
+
+### Upstream pools: geometry, text state and gestures
+
+[Six more full behavioral pairs](upstream-geometry-input-gestures.md) bring the upstream ledger
+to 69/8,965 (52 match, 17 differ); the partial (15) and reference-only
+(9) groups are separate. Committed paired regressions cover relative
+alignment origins, follower scale inheritance, selection preservation,
+and direct arena winner finality. Continue original test families from
+the upstream ledger; the 253 existing frame registrations are complete.

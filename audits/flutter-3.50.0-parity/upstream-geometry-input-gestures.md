@@ -1,0 +1,63 @@
+# Alignment, insets, text state, and gesture ports
+
+Pinned Flutter 3.50.0 `ab2912035e`; Incular production remains
+`c647cb85`. The exact upstream runner selects named originals
+in the pinned checkout and uses only an offline scratch package.
+
+## Geometry and composited followers
+
+`painting/alignment_test.dart:117` matches all directional resolution
+and value equality expectations. Factories/static members at 338/343
+match the resulting values, but Rust exposes two separate types instead
+of Flutter's shared public constructor/constant namespace. Both are
+partial matches. `painting/edge_insets_test.dart:41,134` match all
+directional constructor and resolve cases, including asymmetric
+individual edges. At line 12 the physical constructor values match;
+Rust has no separate absolute-insets resolve call, recorded as partial.
+
+Independent paired regression: `Alignment::along_size(100×60)`
+should place top-left at (0,0), center at (50,30), bottom-right at
+(100,60). Incular instead returns center-relative offsets; the
+off-range alignment (1.5,-2) also differs by exactly (50,30).
+See `flutter350_alignment_contracts` and
+`alignment_along_size_reference_test.dart`.
+
+This helper is **not** the cause of a linked follower's scale gap:
+linked widgets use a different `LayerAnchor` with correct top-left
+math. With a 100×60 leader at (100,90), 30×20 follower, bottom-right
+target anchor, top-center follower anchor and offset (7,11), both
+paint (192,161,30,20) at scale 1. At leader scale 2, Flutter paints
+(284,232,60,40), while Incular's composited stream has
+(299,232,30,20). Flutter's pinned reference verifies actual pixels;
+Incular checks its flattened paint and bounds, not GPU readback
+for this new fixture. See `flutter_follower_transform_parity` and
+`follower_transform_reference_test.dart`.
+
+## Text state
+
+`services/text_input_test.dart:55` matches reversed-selection deletion.
+At :78 and :94 replacing ASCII before or after the reversed selection
+produces the right text but collapses the selection in Incular.
+Flutter preserves (14,6) or (13,5), Incular reports (6,6) or (15,15).
+The `text_editing_delta_test.dart:40` composing insertion payload
+and apply round trip match, but no Flutter JSON/subclass/oldText
+decoding counterpart was asserted. See
+`flutter350_services_text_state_parity`.
+
+## Gestures
+
+Three original standalone velocity-tracker checks passed on Flutter.
+Incular's raw tracker and estimate are private, so those remain open
+rather than paired. Authored public touch-pan probes match at both
+40 ms and 41 ms sample/idle boundaries with aligned receipt/event
+clocks, checking velocity vectors (not counting the originals).
+See `flutter350_pan_velocity_sample_windows`.
+
+Three original arena cases match Rust terminal winner/loser selection
+after both members register; Flutter's explicit close/callback lifecycle
+has no direct Rust counterpart, so count partial matches only.
+A separate direct public API probe reproduces late rejection rewriting
+the winning Rust entry to rejected. Flutter emits the original
+terminal callbacks and ignores later resolutions. This was not
+reproduced through routed widget input. See
+`flutter350_arena_winner_decisions` and its pinned reference.

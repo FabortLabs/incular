@@ -45,6 +45,12 @@ of selected regressions in code. Run one from the repository root, e.g.
 `./audits/flutter-3.50.0-parity/run-reference-probe.ps1 -Test raster_slice_test.dart`.
 The runner verifies the pinned checkout and uses an offline scratch package.
 
+The [frame fixture milestone](frame-list-wheel-and-coverage-milestone.md)
+records 253/253 comparable harness registrations, not full upstream or
+device coverage. Run a named original with the [pinned upstream
+runner](run-upstream-reference.ps1), for example:
+`./audits/flutter-3.50.0-parity/run-upstream-reference.ps1 -Test painting/alignment_test.dart -FullName 'AlignmentGeometry.resolve()'`.
+
 ## Inventory by public entrypoint
 
 Counts include cross-library re-exports. Do not add the rows to get unique
