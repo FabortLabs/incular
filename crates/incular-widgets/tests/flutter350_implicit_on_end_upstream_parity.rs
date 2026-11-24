@@ -17,6 +17,12 @@ use incular_widgets::{
     Sliver, SliverAnimatedOpacity, SliverToBoxAdapter,
 };
 
+use incular_core::Color;
+use incular_widgets::{
+    AnimatedPhysicalModel, AnimatedPositioned, AnimatedPositionedDirectional, Stack,
+    TweenAnimationBuilder,
+};
+
 const RUN: Duration = Duration::from_secs(1);
 enum Property {
     Width,
@@ -29,6 +35,10 @@ enum Property {
     Rotation,
     Fraction,
     SliverOpacity,
+    Positioned,
+    Directional,
+    Physical,
+    Tween,
 }
 fn target(property: &Property, next: bool, count: &Rc<Cell<u32>>) -> Widget {
     let calls = count.clone();
@@ -101,6 +111,46 @@ fn target(property: &Property, next: bool, count: &Rc<Cell<u32>>) -> Widget {
             );
             CustomScrollView::new([sliver]).into()
         }
+        Property::Positioned => {
+            let positioned: Widget = AnimatedPositioned::new(RUN, box_())
+                .left(if next { 10. } else { 20. })
+                .on_end(end)
+                .into();
+            Stack::new([Widget::from(box_()), positioned]).into()
+        }
+        Property::Directional => {
+            let positioned: Widget = AnimatedPositionedDirectional::new(RUN, box_())
+                .start(if next { 10. } else { 20. })
+                .on_end(end)
+                .into();
+            Stack::new([Widget::from(box_()), positioned]).into()
+        }
+        Property::Physical => AnimatedPhysicalModel::new(
+            if next {
+                Color::rgba(255, 0, 0, 255)
+            } else {
+                Color::rgba(0, 255, 0, 255)
+            },
+            Color::rgba(0, 0, 255, 255),
+            0.,
+            RUN,
+            box_(),
+        )
+        .on_end(end)
+        .into(),
+        Property::Tween => {
+            TweenAnimationBuilder::new(if next { 2. } else { 1. }, RUN, |_, value: f32, child| {
+                let frame = SizedBox::new().width(value).height(value);
+                match child {
+                    Some(child) => frame.child(child),
+                    None => frame,
+                }
+            })
+            .begin(if next { 1. } else { 2. })
+            .child(box_())
+            .on_end(end)
+            .into()
+        }
         Property::TextStyle => {
             let mut style = TextStyle::default();
             if next {
@@ -128,12 +178,17 @@ fn check(property: Property) {
     };
     frame(&mut tree, 0);
     let mut snapshots = vec![calls.get()];
-    for (toggle, ms) in [(true, 10), (false, 1020), (true, 2030)] {
+    let start = if matches!(property, Property::Tween) {
+        0
+    } else {
+        10
+    };
+    for (toggle, ms) in [(true, start), (false, start + 1010), (true, start + 2020)] {
         tree.update(root, target(&property, toggle, &calls))
             .unwrap();
         frame(&mut tree, ms);
         frame(&mut tree, ms);
-        if ms == 10 {
+        if ms == start {
             snapshots.push(calls.get());
             frame(&mut tree, ms + 1000);
             snapshots.push(calls.get());
@@ -184,4 +239,21 @@ fn fractional_box_completion_timing() {
 #[test]
 fn sliver_opacity_completion_timing() {
     check(Property::SliverOpacity);
+}
+
+#[test]
+fn positioned_completion_timing() {
+    check(Property::Positioned);
+}
+#[test]
+fn directional_completion_timing() {
+    check(Property::Directional);
+}
+#[test]
+fn physical_model_completion_timing() {
+    check(Property::Physical);
+}
+#[test]
+fn tween_builder_completion_timing() {
+    check(Property::Tween);
 }
