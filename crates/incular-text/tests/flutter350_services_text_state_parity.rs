@@ -40,6 +40,39 @@ fn replacing_after_selection_keeps_both_offsets_and_direction() {
     assert_eq!(result.composing, None);
 }
 
+#[test]
+fn composing_and_reversed_selection_keep_the_same_utf16_offsets_in_utf8() {
+    let value = TextEditingValue::new("éaq")
+        .with_selection(TextSelection::new(3, 2))
+        .with_composing(Some(TextRange::new(2, 3)));
+    let edited = value.replace(TextRange::new(0, 3), "b中");
+    assert_eq!(edited.text, "b中q");
+    assert_eq!(edited.selection, TextSelection::new(4, 1));
+    assert_eq!(edited.composing, Some(TextRange::new(1, 4)));
+}
+
+#[test]
+fn insertion_before_a_composing_range_shifts_both_of_its_ends() {
+    let value = TextEditingValue::new("éa🙂")
+        .with_selection(TextSelection::collapsed(3))
+        .with_composing(Some(TextRange::new(2, 7)));
+    let edited = value.replace(TextRange::collapsed(2), "中");
+    assert_eq!(edited.text, "é中a🙂");
+    assert_eq!(edited.selection, TextSelection::collapsed(6));
+    assert_eq!(edited.composing, Some(TextRange::new(5, 10)));
+}
+
+#[test]
+fn equal_bytes_can_change_utf16_length_and_replace_an_interior_caret() {
+    let value = TextEditingValue::new("abcd!")
+        .with_selection(TextSelection::collapsed(2))
+        .with_composing(Some(TextRange::new(1, 3)));
+    let edited = value.replace(TextRange::new(0, 4), "🙂");
+    assert_eq!(edited.text, "🙂!");
+    assert_eq!(edited.selection, TextSelection::collapsed(4));
+    assert_eq!(edited.composing, Some(TextRange::collapsed(4)));
+}
+
 // Payload behavior from services/text_editing_delta_test.dart:40. Rust
 // computes the smallest delta from whole values rather than decoding JSON.
 // The old text is an argument, not a field stored on the resulting delta.

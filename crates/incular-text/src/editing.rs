@@ -188,15 +188,54 @@ impl TextEditingValue {
         self
     }
 
+    /// Replaces a byte range, shifting selection and composing endpoints
+    /// without changing their direction. Use the controller's editing
+    /// operations when the intention is to collapse the active selection.
     #[must_use]
     pub fn replace(mut self, range: TextRange, replacement: &str) -> Self {
         let range = range.normalized().clamp_to(&self.text);
+        let removed = &self.text[range.as_range()];
+        let end = range.start + replacement.len();
+        let mut same_utf16_length = None;
+        let mut adjust = |offset: usize| {
+            let offset = nearest_char_boundary(&self.text, offset.min(self.text.len()));
+            if offset < range.start || (offset == range.start && !range.is_collapsed()) {
+                return offset;
+            }
+            if offset >= range.end {
+                return end + (offset - range.end);
+            }
+            // Flutter preserves interior UTF-16 offsets for an equal-length
+            // replacement. Keep the corresponding Rust byte offset when it
+            // is representable; snap down if a new scalar straddles it.
+            if *same_utf16_length.get_or_insert_with(|| {
+                removed.encode_utf16().count() == replacement.encode_utf16().count()
+            }) {
+                let units = removed[..offset - range.start].encode_utf16().count();
+                range.start + byte_offset_at_utf16_boundary(replacement, units)
+            } else {
+                end
+            }
+        };
+        self.selection =
+            TextSelection::new(adjust(self.selection.base), adjust(self.selection.extent));
+        self.composing = self
+            .composing
+            .map(|composing| TextRange::new(adjust(composing.start), adjust(composing.end)));
         self.text.replace_range(range.as_range(), replacement);
-        let caret = range.start + replacement.len();
-        self.selection = TextSelection::collapsed(caret);
-        self.composing = None;
         self
     }
+}
+
+fn byte_offset_at_utf16_boundary(text: &str, units: usize) -> usize {
+    let mut consumed = 0;
+    for (byte, scalar) in text.char_indices() {
+        consumed += scalar.len_utf16();
+        if consumed > units {
+            return byte;
+        }
+    }
+    text.len()
 }
 
 impl Default for TextEditingValue {

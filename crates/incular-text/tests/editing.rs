@@ -12,7 +12,12 @@ fn selection_and_replacement_preserve_utf8_boundaries() {
     let range = value.selection.range();
     let replaced = value.replace(range, "x");
     assert_eq!(replaced.text, "axb");
-    assert_eq!(replaced.selection, TextSelection::collapsed(2));
+    assert_eq!(replaced.selection, TextSelection::new(1, 2));
+    let controller = TextEditingController::with_text("a🙂b");
+    controller.set_selection(TextSelection::new(1, 5));
+    controller.replace_selection("x");
+    assert_eq!(controller.text(), "axb");
+    assert_eq!(controller.selection(), TextSelection::collapsed(2));
 }
 
 #[test]
