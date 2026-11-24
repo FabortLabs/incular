@@ -779,6 +779,11 @@ impl WidgetTree {
             (RenderKind::Visibility { visible: before, .. },
              RenderKind::Visibility { visible: after, .. }) if before != after
         );
+        let indexed_selection_changed = matches!(
+            (&*old_kind, &new_kind),
+            (RenderKind::IndexedStack { index: before, .. },
+             RenderKind::IndexedStack { index: after, .. }) if before != after
+        );
         if layer_structure_changed || visibility_changed {
             self.sync_render_children(id);
         }
@@ -849,6 +854,10 @@ impl WidgetTree {
         if reconciled != previous {
             self.element_live_mut(id, "retained element must remain live")
                 .children = reconciled;
+            self.sync_render_children(id);
+        } else if indexed_selection_changed && !layer_structure_changed {
+            // Selection changes which retained layer is attached even
+            // when every child keeps its identity and position.
             self.sync_render_children(id);
         }
         self.sync_raw_input_state(id);

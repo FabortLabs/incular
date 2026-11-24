@@ -10,6 +10,19 @@ use super::text::{
     selection_rects, text_field_caret_geometry, text_field_content_top, with_text_field_display,
 };
 
+/// The paintable subset; unselected IndexedStack children remain laid out
+/// and retain any pending paint until their layer is attached again.
+fn visible_paint_children(node: &RenderNode) -> &[RenderObjectId] {
+    if let RenderKind::IndexedStack { index, .. } = node.object.kind() {
+        node.children
+            .get(*index)
+            .map(std::slice::from_ref)
+            .unwrap_or_default()
+    } else {
+        &node.children
+    }
+}
+
 /// Both hit-test results for one pointer position, from one walk of the
 /// retained tree: see [`WidgetTree::pointer_hit_test`].
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -598,10 +611,9 @@ impl WidgetTree {
             self.diagnostics.display_lists_reused += 1;
         }
         for index in 0.. {
-            let Some(&child) = self
-                .render_live(id, "retained render must remain live")
-                .children
-                .get(index)
+            let Some(&child) =
+                visible_paint_children(self.render_live(id, "retained render must remain live"))
+                    .get(index)
             else {
                 break;
             };
@@ -611,7 +623,7 @@ impl WidgetTree {
         // callbacks may request paint on a sibling that was already visited.
         let node = self.render_live(id, "retained render must remain live");
         let pending = node.dirty.contains(DirtyFlags::PAINT)
-            || node.children.iter().any(|child| {
+            || visible_paint_children(node).iter().any(|child| {
                 self.renders
                     .get(child.0)
                     .is_some_and(|child| child.subtree_needs_paint)
@@ -1026,12 +1038,7 @@ impl WidgetTree {
                     .collect::<Vec<_>>()
                     .into()
             }
-            RenderKind::IndexedStack { index, .. } => node
-                .children
-                .get(*index)
-                .map(std::slice::from_ref)
-                .unwrap_or_default()
-                .into(),
+            RenderKind::IndexedStack { .. } => visible_paint_children(node).into(),
             _ => node.children.as_slice().into(),
         }
     }

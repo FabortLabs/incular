@@ -28,3 +28,18 @@ Run: cargo test --locked -p incular-runtime --test flutter350_indexed_stack_pari
 The separate Flutter 3.50.0 raster fixture repumps the same IndexedStack with selections 0, 1, 2, 0 and passes. The focused Windows target uses WgpuRenderer to present to a hidden native window and captures RGBA at device ratio 1. The expected green/blue interior still reads red after changing to index 1/2. Three interior samples differ on each of those frames; all four immediately adjacent outside samples stay black. Each fresh Rust mount correctly presents its requested color. This confirms the display-list failure reaches raster output in the tested runtime-to-wgpu path.
 
 References: run-reference-probe.ps1 -Test indexed_stack_raster_test.dart. Set INCULAR_DESKTOP_LIVE_TESTS=1 and run cargo test --locked -p incular-desktop --test flutter350_indexed_stack_raster -- --nocapture.
+
+## Retained selection and painting repair
+
+On a selection-only update the retained compositor swaps the attached child
+layer, even when the element order is unchanged. Only the current selection
+records pictures; a hidden painter keeps its pending work and records the
+latest descriptor only when selected. An unchanged selected picture can
+be reused after hiding and showing it again. The runtime regression cases
+for retained color and selected-only paint now pass, as does the additional
+hidden-update control. The Windows wgpu test passes all seven pixel samples
+on each retained selection (0, 1, 2, 0) and the three cold mounts.
+
+The focused runtime suite at this point passes nine tests; four separate
+checks for focus state, Positioned geometry, and positive invalid index
+still fail. The repair does not change those behaviors.

@@ -113,6 +113,38 @@ fn active_only_paints_and_other_children_remain_mounted() {
     }
     assert_eq!(actual, [vec![0], vec![1], vec![2]]);
 }
+
+#[test]
+fn dirty_hidden_painter_runs_only_when_selected_and_then_reuses_picture() {
+    let trace = Rc::new(RefCell::new(Vec::new()));
+    let painter = |slot, label| {
+        Widget::from(
+            CustomPaint::new(Size::new(20., 20.), DisplayList::default())
+                .painter(Trace(label, trace.clone())),
+        )
+        .with_key(Key::Value(slot))
+    };
+    let first = painter(0, 0);
+    let old_hidden = painter(1, 1);
+    let latest_hidden = painter(1, 11);
+    let make = |index, second: &Widget| Center::new(stack([first.clone(), second.clone()], index));
+    let mut r = host(make(0, &old_hidden));
+    assert_eq!(trace.take(), [0]);
+    let hidden_element = r.tree().element_with_key(&Key::Value(1)).unwrap();
+
+    change(&mut r, make(0, &latest_hidden));
+    assert!(trace.take().is_empty());
+    assert_eq!(
+        r.tree().element_with_key(&Key::Value(1)),
+        Some(hidden_element)
+    );
+
+    change(&mut r, make(1, &latest_hidden));
+    assert_eq!(trace.take(), [11]);
+    change(&mut r, make(0, &latest_hidden));
+    change(&mut r, make(1, &latest_hidden));
+    assert!(trace.take().is_empty(), "unchanged pictures are reused");
+}
 #[test]
 fn an_overlapping_tap_reaches_only_the_selected_index() {
     let log = Rc::new(RefCell::new(Vec::new()));
