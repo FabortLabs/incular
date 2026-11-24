@@ -296,3 +296,9 @@ touch UserScroll events have separate committed Rust regressions.
 [Foundation and unbounded-scroll translations](upstream-foundation-scroll-comparisons.md)
 bring the upstream ledger to 37/8,965 paired (29 match, eight differ),
 with three additional reference-only outcomes.
+
+### Curves and tweens
+
+[Five pinned strict samples](frame-curves-and-tweens.md) all match.
+Current checkpoint: 113/253 valid paired frame registrations (44.66%),
+106 match and seven differ.

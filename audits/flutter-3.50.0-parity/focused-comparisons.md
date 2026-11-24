@@ -37,8 +37,10 @@ The four Rust files below were copied to temporary paths in the named crate's
 `tests/` directory for only the corresponding command. Check that a path
 does not exist before copying and remove only the temporary copy afterwards.
 Keep the asserts (they are intentionally red on the audited Incular source).
-Do not put these known-failing probes into a normal CI suite before fixing
-their underlying contracts.
+For subsequent runs, prefer the permanent targets in the
+[backfill ledger](test-backfill.tsv). These assertions are intentionally
+red until their underlying contracts are fixed. No workspace-wide or CI
+run is part of this audit.
 
 | Scratch source | Temporary target and crate |
 | --- | --- |

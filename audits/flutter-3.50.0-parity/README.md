@@ -34,6 +34,13 @@ Unreviewed individual contracts remain open. This is not a parity certification.
 | [Live checkpoint](audit-checkpoint.md), [coverage validator](coverage-progress.py) | Verified progress, work still open, and distinct frame/upstream denominators. |
 | [Frame ledger](harness-dispositions.tsv), [upstream ledger](upstream-dispositions.tsv) | Per-scenario outcomes with exact registration sites and linked evidence. |
 
+## Regression tests
+
+Use the [backfill ledger](test-backfill.tsv) to find permanent test targets
+for the previously reproduced cases. A focused test may intentionally fail
+at its reference assertion until the implementation is fixed. Run only the
+named targets; do not run the entire workspace for this audit.
+
 ## Inventory by public entrypoint
 
 Counts include cross-library re-exports. Do not add the rows to get unique

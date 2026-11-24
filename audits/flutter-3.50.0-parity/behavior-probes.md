@@ -8,7 +8,9 @@ source; these are not cross-executable tests or a reason to run the full suite.
 Use temporary files with the exact names below, only if the paths do not
 already exist. For snippets based on an existing test, start with a **copy**
 of that test and append the snippet. Remove only the temporary files when done.
-This keeps known-failing probes out of the standard workspace suite.
+These historical scratch recipes recorded the original evidence. The
+[backfill ledger](test-backfill.tsv) now points to permanent, deliberately
+red regression targets.
 
 ## B02 and B03: border command and cache range
 
