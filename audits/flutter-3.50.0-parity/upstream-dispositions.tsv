@@ -510,3 +510,6 @@ packages/flutter/test/animation/animation_style_test.dart	57	AnimationStyle.lerp
 packages/flutter/test/animation/animation_style_test.dart	104	AnimationStyle.lerp with null property	paired-mismatch	upstream-animation-style.md
 packages/flutter/test/animation/animation_style_test.dart	113	default AnimationStyle debugFillProperties	reference-ran-incular-open	upstream-animation-style.md
 packages/flutter/test/animation/animation_style_test.dart	126	AnimationStyle implements debugFillProperties	reference-ran-incular-open	upstream-animation-style.md
+packages/flutter/test/widgets/tap_region_test.dart	1262	TapRegionSurface calls onTapOutside for semantics tap outside region	paired-mismatch	upstream-tap-region-semantic-actions.md
+packages/flutter/test/widgets/tap_region_test.dart	1313	TapRegionSurface does not call onTapOutside for semantics tap inside region	paired-match	upstream-tap-region-semantic-actions.md
+packages/flutter/test/widgets/tap_region_test.dart	1358	TapRegionSurface calls onTapOutside for semantics longPress outside region	paired-mismatch	upstream-tap-region-semantic-actions.md
