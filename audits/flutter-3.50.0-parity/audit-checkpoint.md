@@ -677,3 +677,10 @@ layouts are silently accepted instead of rejected.
 bring complete pairs to 240/8,965 (184 match, 56 differ), with
 128 partial and 30 reference-only. All 13 registrations in this
 original file have dispositions.
+
+### Wrap constraints, overflow boundary and intrinsic height
+
+[Five upstream dispositions](upstream-wrap-constraints-and-intrinsic-height.md)
+bring complete pairs to 244/8,965 (188 match, 56 differ), with
+129 partial and 30 reference-only. Intrinsic height, exact-width
+and one-pixel overflow match; configurable Wrap clipping is unpaired.

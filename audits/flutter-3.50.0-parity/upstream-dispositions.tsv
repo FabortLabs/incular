@@ -397,3 +397,8 @@ packages/flutter/test/widgets/custom_multi_child_layout_test.dart	308	layoutChil
 packages/flutter/test/widgets/custom_multi_child_layout_test.dart	332	layoutChild on invalid size constraint	partial-match	upstream-multi-child-layout-contract.md
 packages/flutter/test/widgets/custom_multi_child_layout_test.dart	351	positionChild on non existent child	partial-match	upstream-multi-child-layout-contract.md
 packages/flutter/test/widgets/custom_multi_child_layout_test.dart	363	_callPerformLayout on child that doesn't have id	paired-mismatch	upstream-multi-child-layout-contract.md
+packages/flutter/test/widgets/wrap_test.dart	644	Shrink-wrapping Wrap test	paired-match	upstream-wrap-constraints-and-intrinsic-height.md
+packages/flutter/test/widgets/wrap_test.dart	787	Visual overflow generates a clip	partial-match	upstream-wrap-constraints-and-intrinsic-height.md
+packages/flutter/test/widgets/wrap_test.dart	898	Spacing with slight overflow	paired-match	upstream-wrap-constraints-and-intrinsic-height.md
+packages/flutter/test/widgets/wrap_test.dart	925	Object exactly matches container width	paired-match	upstream-wrap-constraints-and-intrinsic-height.md
+packages/flutter/test/widgets/wrap_test.dart	973	Horizontal wrap - IntrinsicsHeight	paired-match	upstream-wrap-constraints-and-intrinsic-height.md
