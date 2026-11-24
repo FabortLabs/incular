@@ -67,3 +67,7 @@ packages/flutter/test/services/text_formatter_test.dart	210	test filtering forma
 packages/flutter/test/services/text_formatter_test.dart	304	test length limiting formatter with non-BMP Unicode scalar values	paired-match	upstream-border-constraints-formatters.md
 packages/flutter/test/services/text_formatter_test.dart	418	Counts grapheme clusters as single characters	partial-match	upstream-border-constraints-formatters.md
 packages/flutter/test/services/text_formatter_test.dart	808	Preserves composing region	partial-mismatch	upstream-border-constraints-formatters.md
+packages/flutter/test/animation/animation_controller_test.dart	59	Can set value during status callback	paired-match	upstream-animation-controller-comparisons.md
+packages/flutter/test/animation/animation_controller_test.dart	92	Receives status callbacks for forward and reverse	paired-mismatch	upstream-animation-controller-comparisons.md
+packages/flutter/test/animation/animation_controller_test.dart	415	lastElapsedDuration control test	paired-match	upstream-animation-controller-comparisons.md
+packages/flutter/test/animation/animation_controller_test.dart	726	setting value directly sets correct status	paired-match	upstream-animation-controller-comparisons.md

@@ -406,3 +406,13 @@ review. [Eight upstream pairs](upstream-border-constraints-formatters.md) plus
 six partial ports have committed Rust test targets. Full upstream
 pair count is 54/8,965 (40 match, 14 differ), separately from
 partials or reference-only results. Production code is unchanged.
+
+### Animation controller upstream ports and ListWheel proof
+
+[Four original controller checks](upstream-animation-controller-comparisons.md) bring the
+fully paired upstream ledger to 58/8,965 (43 match, 15 differ).
+A dedicated controlled ListWheel Rust regression confirms a real
+touch routing gap with both sides explicitly clamping. Programmatic
+jump works on both. The standalone and full frame fixtures are being
+paired with the same inputs; the frozen frame ledger remains 252/253
+valid until the controlled gesture trace is verified.
