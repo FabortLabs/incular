@@ -1,6 +1,6 @@
 //! Callback checkpoints from Flutter 3.50.0 implicit_animations_test.dart.
 use incular_config::{Alignment, Constraints, EdgeInsets};
-use incular_core::Size;
+use incular_core::{Offset, Size};
 use incular_widgets::{
     AnimatedAlign, AnimatedContainer, AnimatedDefaultTextStyle, AnimatedOpacity, AnimatedPadding,
     BoxDecoration, Center, Directionality, SizedBox, Text, TextDirection, TextStyle, Widget,
@@ -12,6 +12,11 @@ use std::{
     time::{Duration, Instant},
 };
 
+use incular_widgets::{
+    AnimatedFractionallySizedBox, AnimatedRotation, AnimatedScale, AnimatedSlide, CustomScrollView,
+    Sliver, SliverAnimatedOpacity, SliverToBoxAdapter,
+};
+
 const RUN: Duration = Duration::from_secs(1);
 enum Property {
     Width,
@@ -19,6 +24,11 @@ enum Property {
     Align,
     Opacity,
     TextStyle,
+    Slide,
+    Scale,
+    Rotation,
+    Fraction,
+    SliverOpacity,
 }
 fn target(property: &Property, next: bool, count: &Rc<Cell<u32>>) -> Widget {
     let calls = count.clone();
@@ -55,6 +65,42 @@ fn target(property: &Property, next: bool, count: &Rc<Cell<u32>>) -> Widget {
         Property::Opacity => AnimatedOpacity::new(if next { 1. } else { 0. }, RUN, box_())
             .on_end(end)
             .into(),
+        Property::Slide => AnimatedSlide::new(
+            if next {
+                Offset::new(1., 1.)
+            } else {
+                Offset::ZERO
+            },
+            RUN,
+            box_(),
+        )
+        .on_end(end)
+        .into(),
+        Property::Scale => AnimatedScale::new(if next { 2. } else { 1. }, RUN, box_())
+            .on_end(end)
+            .into(),
+        Property::Rotation => AnimatedRotation::new(if next { 1.5 } else { 0. }, RUN, box_())
+            .on_end(end)
+            .into(),
+        Property::Fraction => {
+            let fraction = if next { 0.25 } else { 0.75 };
+            AnimatedFractionallySizedBox::new(RUN, box_())
+                .width_factor(fraction)
+                .height_factor(fraction)
+                .on_end(end)
+                .into()
+        }
+        Property::SliverOpacity => {
+            let sliver: Box<dyn Sliver> = Box::new(
+                SliverAnimatedOpacity::new(
+                    if next { 1. } else { 0. },
+                    RUN,
+                    SliverToBoxAdapter::new(box_()),
+                )
+                .on_end(end),
+            );
+            CustomScrollView::new([sliver]).into()
+        }
         Property::TextStyle => {
             let mut style = TextStyle::default();
             if next {
@@ -117,4 +163,25 @@ fn opacity_completion_timing() {
 #[test]
 fn default_text_style_completion_timing() {
     check(Property::TextStyle);
+}
+
+#[test]
+fn slide_completion_timing() {
+    check(Property::Slide);
+}
+#[test]
+fn scale_completion_timing() {
+    check(Property::Scale);
+}
+#[test]
+fn rotation_completion_timing() {
+    check(Property::Rotation);
+}
+#[test]
+fn fractional_box_completion_timing() {
+    check(Property::Fraction);
+}
+#[test]
+fn sliver_opacity_completion_timing() {
+    check(Property::SliverOpacity);
 }
