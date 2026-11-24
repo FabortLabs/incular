@@ -243,7 +243,8 @@ void main() {
           key: key,
           observers: <NavigatorObserver>[_OrderObserver(record)],
           pages: <Page<void>>[
-            _TestPage(key: const ValueKey<String>('root'), child: _probeBox(h, 'root', blue)),
+            // Observer order is independent of how each framework retains a covered route.
+            _TestPage(key: const ValueKey<String>('root'), child: _routeBox(blue)),
           ],
           onDidRemovePage: (_) {},
         ));
@@ -254,6 +255,7 @@ void main() {
     await h.frames(2);
     key.currentState!.pop<void>();
     await h.frames(2);
+    expect(log, 1123.0);
   });
 
   frameScenario('navigation__pop_scope__route_back_blocked', (h) async {
@@ -265,7 +267,8 @@ void main() {
     await h.mount((_) => Navigator(
           key: key,
           pages: <Page<void>>[
-            _TestPage(key: const ValueKey<String>('root'), child: _probeBox(h, 'root', blue)),
+            // Keep the original scene, but sample only the route blocking back.
+            _TestPage(key: const ValueKey<String>('root'), child: _routeBox(blue)),
           ],
           onDidRemovePage: (_) {},
         ));
@@ -286,8 +289,12 @@ void main() {
     // handlePopRoute does not reach a bare Navigator (no Router or WidgetsApp
     // registers it as the root back handler), so the Navigator back action is
     // maybePop; the Incular twin dispatches back through its own dispatcher.
-    await key.currentState!.maybePop<void>();
+    final handled = await key.currentState!.maybePop<void>();
     await h.frames(2);
+    expect(handled, isTrue);
+    expect(callbacks, 1);
+    expect(didPop, 0.0);
+    h.center('top'); // The back attempt left the top route in place.
   });
 
 }
@@ -360,12 +367,17 @@ class _TestRouterDelegate extends RouterDelegate<String> with ChangeNotifier {
   Future<bool> popRoute() async => false;
 }
 
+Widget _routeBoxContents(Color color) =>
+    SizedBox(width: 120, height: 80, child: ColoredBox(color: color));
+
+Widget _routeBox(Color color) => Align(
+      alignment: Alignment.topLeft,
+      child: _routeBoxContents(color),
+    );
+
 Widget _probeBox(FrameHarness h, String name, Color color) => Align(
       alignment: Alignment.topLeft,
-      child: h.probe(
-        name,
-        SizedBox(width: 120, height: 80, child: ColoredBox(color: color)),
-      ),
+      child: h.probe(name, _routeBoxContents(color)),
     );
 
 PageRouteBuilder<void> _fadeRoute(Widget page, int ms, int reverseMs) => PageRouteBuilder<void>(

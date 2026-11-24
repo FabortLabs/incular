@@ -272,15 +272,20 @@ fn overlay_portal_direct_anchor(h: &mut FrameHarness) {
 
 const FADE: Duration = Duration::from_millis(300);
 
+fn route_box_contents(color: Color) -> Widget {
+    SizedBox::new()
+        .width(120.)
+        .height(80.)
+        .child(solid(color))
+        .into()
+}
+
+fn route_box(color: Color) -> Widget {
+    Align::new(Alignment::TOP_LEFT, route_box_contents(color)).into()
+}
+
 fn probe_box(name: &str, color: Color) -> Widget {
-    Align::new(
-        Alignment::TOP_LEFT,
-        probe(
-            name,
-            SizedBox::new().width(120.).height(80.).child(solid(color)),
-        ),
-    )
-    .into()
+    Align::new(Alignment::TOP_LEFT, probe(name, route_box_contents(color))).into()
 }
 
 fn fade_timeline(h: &mut FrameHarness, pop: bool) {
@@ -362,7 +367,8 @@ fn navigator_observer_order(h: &mut FrameHarness) {
         };
         observer_log.set(observer_log.get() * 10. + code);
     });
-    navigator.push(Route::new("/home", probe_box("root", BLUE)));
+    // Observer order is independent of how each framework retains a covered route.
+    navigator.push(Route::new("/home", route_box(BLUE)));
     h.value("log", {
         let log = Rc::clone(&log);
         move || log.get()
@@ -375,11 +381,13 @@ fn navigator_observer_order(h: &mut FrameHarness) {
     h.frames(2);
     let _ = navigator.pop();
     h.frames(2);
+    assert_eq!(log.get(), 1123.0);
 }
 
 fn pop_scope_route_back_blocked(h: &mut FrameHarness) {
     let navigator = Navigator::new();
-    navigator.push(Route::new("/home", probe_box("root", BLUE)));
+    // Keep the original scene, but sample only the route blocking back.
+    navigator.push(Route::new("/home", route_box(BLUE)));
     let dispatcher = NavigationBackButtonDispatcher::new();
     let callbacks = Rc::new(Cell::new(0.0));
     let did_pop = Rc::new(Cell::new(-1.0));
@@ -406,6 +414,10 @@ fn pop_scope_route_back_blocked(h: &mut FrameHarness) {
     h.frames(2);
     navigator.push(Route::new("/details", Widget::from(pop_scope)));
     h.frames(2);
-    let _ = dispatcher.dispatch_back();
+    let report = dispatcher.dispatch_back();
     h.frames(2);
+    assert!(report.handled && report.blocked);
+    assert_eq!(callbacks.get(), 1.0);
+    assert_eq!(did_pop.get(), 0.0);
+    let _ = h.center("top"); // The back attempt left the top route in place.
 }
