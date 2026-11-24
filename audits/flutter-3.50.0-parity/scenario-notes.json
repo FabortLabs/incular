@@ -1,0 +1,50 @@
+{
+  "filesByLibrary": {
+    "animation": 12,
+    "foundation": 32,
+    "gestures": 32,
+    "painting": 52,
+    "physics": 9,
+    "rendering": 81,
+    "scheduler": 9,
+    "semantics": 10,
+    "services": 43,
+    "widgets": 391,
+    "widget_previews": 40,
+    "incular_harness": 22
+  },
+  "rowsByLibrary": {
+    "animation": 135,
+    "foundation": 227,
+    "gestures": 133,
+    "painting": 655,
+    "physics": 30,
+    "rendering": 846,
+    "scheduler": 31,
+    "semantics": 70,
+    "services": 485,
+    "widgets": 5974,
+    "widget_previews": 163,
+    "incular_harness": 261
+  },
+  "dynamicDescriptions": 179,
+  "diagnostics": [],
+  "registrations": [
+    "frameScenario",
+    "test",
+    "testExecutable",
+    "testGolden",
+    "testGoldens",
+    "testUsingContext",
+    "testWidgets",
+    "testWidgetsWithLeakTracking",
+    "testWithContext",
+    "testWithoutContext"
+  ],
+  "notes": [
+    "Rows represent captured registration sites; loops/variants can generate more run-time cases.",
+    "Custom helpers, skipped cases, static conditional branches and engine or package-level tests need separate review.",
+    "Material/Cupertino test directories excluded; a neutral scenario may use a design-system fixture.",
+    "Incular harness scenarios were inventoried, not re-run against this Flutter snapshot."
+  ]
+}
