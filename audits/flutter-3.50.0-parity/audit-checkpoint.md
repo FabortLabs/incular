@@ -726,3 +726,10 @@ are paired; Flutter's skipped-overlay cases remain reference-only.
 bring complete pairs to 268/8,965 (210 match, 58 differ), with
 135 partial and 40 reference-only. Resizing from either parent
 or child and scaling inherited text behave as expected.
+
+### SliverLayoutBuilder measured geometry and hit routing
+
+[Five upstream dispositions](upstream-sliver-layoutbuilder-box-adapter.md)
+bring complete pairs to 271/8,965 (213 match, 58 differ), with
+137 partial and 40 reference-only. Actual transforms and
+input routing match the checked original samples.
