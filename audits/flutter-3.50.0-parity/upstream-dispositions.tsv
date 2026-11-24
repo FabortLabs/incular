@@ -109,3 +109,22 @@ packages/flutter/test/widgets/list_wheel_scroll_view_test.dart	1540	controller c
 packages/flutter/test/painting/gradient_test.dart	229	LinearGradient lerp test with stops and unequal number of colors	reference-ran-incular-open	upstream-pointer-wheel-gradients.md
 packages/flutter/test/painting/gradient_test.dart	736	RadialGradient.scale preserves transform	reference-ran-incular-open	upstream-pointer-wheel-gradients.md
 packages/flutter/test/painting/gradient_test.dart	800	SweepGradient lerp test with stops	reference-ran-incular-open	upstream-pointer-wheel-gradients.md
+packages/flutter/test/widgets/focus_manager_test.dart	633	Requesting focus before adding to tree results in a request after adding	partial-mismatch	upstream-focus-corners-curves-previews.md
+packages/flutter/test/widgets/focus_manager_test.dart	1752	works when the previous focused node is detached	paired-mismatch	upstream-focus-corners-curves-previews.md
+packages/flutter/test/widgets/focus_manager_test.dart	1801	autofocus the first candidate	paired-match	upstream-focus-corners-curves-previews.md
+packages/flutter/test/widgets/focus_scope_test.dart	1233	Focus is ignored when set to not focusable.	partial-match	upstream-focus-corners-curves-previews.md
+packages/flutter/test/painting/border_radius_test.dart	146	BorderRadius.lerp() invariants	partial-match	upstream-focus-corners-curves-previews.md
+packages/flutter/test/painting/border_radius_test.dart	165	BorderRadius.lerp() crazy	paired-match	upstream-focus-corners-curves-previews.md
+packages/flutter/test/painting/border_radius_test.dart	398	BorderRadiusDirectional.lerp() invariants	partial-match	upstream-focus-corners-curves-previews.md
+packages/flutter/test/painting/border_radius_test.dart	423	BorderRadiusDirectional.lerp() crazy	paired-match	upstream-focus-corners-curves-previews.md
+packages/flutter/test/painting/box_fit_test.dart	9	applyBoxFit	partial-mismatch	upstream-focus-corners-curves-previews.md
+packages/flutter/test/animation/curves_test.dart	28	Threshold has a threshold	paired-match	upstream-focus-corners-curves-previews.md
+packages/flutter/test/animation/curves_test.dart	278	Split interpolates values properly	paired-match	upstream-focus-corners-curves-previews.md
+packages/flutter/test/animation/curves_test.dart	291	CatmullRomSpline interpolates values properly	paired-match	upstream-focus-corners-curves-previews.md
+packages/flutter/test/animation/curves_test.dart	511	CatmullRomCurve enforces contract	paired-match	upstream-focus-corners-curves-previews.md
+packages/flutter/test/animation/curves_test.dart	318	CatmullRomSpline enforces contract	partial-mismatch	upstream-focus-corners-curves-previews.md
+packages/flutter/test/painting/text_style_test.dart	317	TextStyle rejects NaN height	partial-mismatch	upstream-focus-corners-curves-previews.md
+packages/flutter/test/painting/text_style_test.dart	480	TextStyle shadows	paired-mismatch	upstream-focus-corners-curves-previews.md
+packages/flutter_tools/test/commands.shard/hermetic/widget_preview/preview_manifest/preview_manifest_test.dart	48	generates a valid manifest	reference-ran-incular-open	upstream-focus-corners-curves-previews.md
+packages/flutter_tools/test/commands.shard/hermetic/widget_preview/preview_manifest/preview_manifest_test.dart	61	identifies widget preview scaffold project needs to be generated	reference-ran-incular-open	upstream-focus-corners-curves-previews.md
+packages/flutter_tools/test/commands.shard/hermetic/widget_preview/preview_manifest/preview_manifest_test.dart	91	identifies root project pubspec has changed	reference-ran-incular-open	upstream-focus-corners-curves-previews.md

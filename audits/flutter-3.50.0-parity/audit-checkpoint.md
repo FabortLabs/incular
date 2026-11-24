@@ -452,3 +452,13 @@ matches and four differences (two are paint lifecycle only). Upstream:
 reference-only. The committed real Windows wgpu gradient probe
 reproduces a transparent-stop color loss across three geometries;
 opaque controls match. No production changes.
+
+### Focus, radius, curve and preview checks
+
+[Recent upstream groups](upstream-focus-corners-curves-previews.md) bring complete
+pairs to 92/8,965 (64 match and 28 differ), with 22 partial and 15
+reference-only. New tests cover replacement autofocus, actual
+elliptical raster shape, image cropping, unsupported spline inputs,
+and inherited text style resets. Preview manifest behavior is
+reference-only because Incular lacks the matching tool surface.
+Audit only; implementation and full workspace runs remain untouched.
