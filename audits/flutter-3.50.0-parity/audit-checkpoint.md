@@ -62,3 +62,13 @@ bringing the custom paired mismatch count to ten. Both had matching ordinary
 or below-threshold controls. Upstream formal verification denominator remains
 separate. Next slice: painting/rendering, zero-width hairline in pixels and
 drawPath Paint attributes; async lifecycle remains queued.
+
+### C11–C17: raster and synchronous broadcast
+
+[Windows raster readback](raster-comparisons.md) paired four mismatches at
+DPR 1 and 2, plus an ordinary path positive control.
+[Synchronous broadcast](stream-comparisons.md) paired three mismatches
+with a positive ordinary delivery/close control. Running total: 17 custom
+paired mismatch cases, not upstream registration sign-off.
+Next rotate into services (restoration removal and retained writers);
+continue physics, foundation and widget-preview below that in the queue.
