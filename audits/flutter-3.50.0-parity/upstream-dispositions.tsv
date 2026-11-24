@@ -92,3 +92,10 @@ packages/flutter/test/gestures/velocity_tracker_test.dart	158	Assume zero veloci
 packages/flutter/test/gestures/arena_test.dart	66	Should win by accepting	partial-match	upstream-geometry-input-gestures.md
 packages/flutter/test/gestures/arena_test.dart	114	Only first winner should win	partial-match	upstream-geometry-input-gestures.md
 packages/flutter/test/gestures/arena_test.dart	125	Only first winner should win, regardless of order	partial-match	upstream-geometry-input-gestures.md
+packages/flutter/test/services/text_input_test.dart	44	selection deletion	paired-match	upstream-text-replacement-boundaries.md
+packages/flutter/test/services/text_input_test.dart	66	insert	paired-match	upstream-text-replacement-boundaries.md
+packages/flutter/test/services/text_input_test.dart	110	replace inside selection - start boundary	paired-mismatch	upstream-text-replacement-boundaries.md
+packages/flutter/test/services/text_input_test.dart	126	replace inside selection - end boundary	paired-mismatch	upstream-text-replacement-boundaries.md
+packages/flutter/test/services/text_input_test.dart	142	delete after selection	paired-mismatch	upstream-text-replacement-boundaries.md
+packages/flutter/test/services/text_input_test.dart	158	delete inside selection - start boundary	paired-mismatch	upstream-text-replacement-boundaries.md
+packages/flutter/test/services/text_input_test.dart	174	delete inside selection - end boundary	paired-mismatch	upstream-text-replacement-boundaries.md

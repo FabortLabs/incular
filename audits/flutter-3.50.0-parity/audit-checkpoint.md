@@ -436,3 +436,10 @@ to 69/8,965 (52 match, 17 differ); the partial (15) and reference-only
 alignment origins, follower scale inheritance, selection preservation,
 and direct arena winner finality. Continue original test families from
 the upstream ledger; the 253 existing frame registrations are complete.
+
+### Completed upstream text replacement group
+
+[Seven additional exact behavior pairs](upstream-text-replacement-boundaries.md) cover the remaining
+original replacement group. Two match, five reproduce the same
+selection-collapse bug under distinct range boundaries. Upstream now
+76/8,965 fully paired, 54 match and 22 differ; frame milestone unchanged.
