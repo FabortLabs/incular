@@ -478,3 +478,11 @@ complete pairs to 99/8,965 (67 match, 32 differ), with 30 partial and
 22 reference-only. Clipped-away taps get through four neutral clip
 variants. Hidden focus tests distinguish stale detached-node state
 from actual hidden keyboard delivery.
+
+### Mouse buttons, absorber semantics, edit deltas and RawImage
+
+[Fifteen upstream dispositions](upstream-tap-absorber-delta-and-raw-image.md)
+bring complete pairs to 108/8,965 (72 match, 36 differ), with 36 partial
+and 22 reference-only. Actual Windows wgpu pixels confirm a separate
+nine-slice RawImage default difference, with all explicit-fit controls
+matching. No production code changed.

@@ -150,3 +150,18 @@ packages/flutter/test/widgets/visibility_test.dart	406	Visibility with maintain*
 packages/flutter/test/widgets/visibility_test.dart	434	Visibility with maintain* true does not exclude focus of child when not visible	partial-match	upstream-clip-visibility-focus.md
 packages/flutter/test/widgets/visibility_test.dart	461	Visibility with maintain* true except maintainFocusability which is false excludes focus of child when not visible	partial-mismatch	upstream-clip-visibility-focus.md
 packages/flutter/test/widgets/visibility_test.dart	625	Visibility does not crash at zero area	partial-match	upstream-clip-visibility-focus.md
+packages/flutter/test/widgets/tap_region_test.dart	113	TapRegionSurface detects outside tap up events	paired-match	upstream-tap-absorber-delta-and-raw-image.md
+packages/flutter/test/widgets/tap_region_test.dart	179	TapRegionSurface consumes outside taps when asked	paired-match	upstream-tap-absorber-delta-and-raw-image.md
+packages/flutter/test/widgets/tap_region_test.dart	339	TapRegionSurface detects inside tap up events	paired-match	upstream-tap-absorber-delta-and-raw-image.md
+packages/flutter/test/widgets/tap_region_test.dart	487	Setting the group updates the registration	paired-match	upstream-tap-absorber-delta-and-raw-image.md
+packages/flutter/test/widgets/tap_region_test.dart	578	TapRegionSurface detects outside right click	paired-mismatch	upstream-tap-absorber-delta-and-raw-image.md
+packages/flutter/test/widgets/tap_region_test.dart	652	TapRegionSurface detects outside middle click	paired-mismatch	upstream-tap-absorber-delta-and-raw-image.md
+packages/flutter/test/widgets/tap_region_test.dart	904	TapRegionSurface detects inside right click	paired-mismatch	upstream-tap-absorber-delta-and-raw-image.md
+packages/flutter/test/widgets/tap_region_test.dart	978	TapRegionSurface detects inside middle click	paired-mismatch	upstream-tap-absorber-delta-and-raw-image.md
+packages/flutter/test/widgets/absorb_pointer_test.dart	11	AbsorbPointers do not block siblings	paired-match	upstream-tap-absorber-delta-and-raw-image.md
+packages/flutter/test/widgets/absorb_pointer_test.dart	26	does not change semantics when not absorbing	partial-match	upstream-tap-absorber-delta-and-raw-image.md
+packages/flutter/test/widgets/absorb_pointer_test.dart	50	ignores user interactions	partial-mismatch	upstream-tap-absorber-delta-and-raw-image.md
+packages/flutter/test/services/text_editing_delta_test.dart	68	Verify invalid TextEditingDeltaInsertion fails to apply	partial-mismatch	upstream-tap-absorber-delta-and-raw-image.md
+packages/flutter/test/services/text_editing_delta_test.dart	138	Verify creation of deletion delta when deleting at end of composing region.	partial-match	upstream-tap-absorber-delta-and-raw-image.md
+packages/flutter/test/services/text_editing_delta_test.dart	235	Verify creation of replacement delta when replacing with shorter.	partial-match	upstream-tap-absorber-delta-and-raw-image.md
+packages/flutter/test/services/text_editing_delta_test.dart	336	Verify non text update delta created.	partial-match	upstream-tap-absorber-delta-and-raw-image.md
