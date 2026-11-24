@@ -135,3 +135,10 @@ separate.
 fixtures. Total 20/253 existing frame fixtures (7.91%): 19 match, one
 mismatch. A repeat of fade-pop reproduced the existing divergence and
 does not count twice. Use the runner only for small reviewed batches.
+
+### C31–C33: loose layout and baseline
+
+[Loose layout probes](loose-layout-comparisons.md) confirmed OverflowBox,
+FittedBox and Baseline divergences under looser inputs than the matched
+existing harness controls. Total 33 custom paired mismatches. Next rotate
+into animation, scheduler, physics and additional small frame batches.
