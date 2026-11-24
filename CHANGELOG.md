@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-android`: mouse and stylus hover reach widgets, and mouse wheels and
+  trackpads scroll the viewport under the pointer. Mouse buttons and stylus
+  orientation and barrel buttons reach raw pointer listeners.
 - `incular-widgets`, `incular-material`: touch text selection handles on text fields, as Flutter's `MaterialTextSelectionHandleControls`. `TextSelectionHandlesState` presents the start and end (or collapsed) handles through an overlay portal; `TextSelectionHandles::hit_test` returns the handle under a point. The Material `TextField` paints 22 px teardrops in the primary colour. A touch long press or double tap shows the range handles, and an Android touch tap in a focused field shows the caret handle. Typing, a mouse press, losing focus and a read-only field close them. A touch or stylus press on a visible handle drags it, with the Android and Apple rules of Flutter's `TextSelectionOverlay`: the handles never cross or collapse on Android, and the drag snaps to whole lines. The handle hit area is 48 px. Tapping the collapsed handle without moving past touch slop toggles the touch toolbar, and the toolbar hides while a handle moves and shows again after a range drag.
 - `incular-widgets`: `RemovePadding` hides chosen safe-area sides from a subtree, as Flutter's
   `MediaQuery.removePadding`. Use it to stop a nested `SafeArea` or bar from padding a
@@ -72,6 +75,14 @@ a version and date when publishing.
 
 ### Changed
 
+- **Breaking (`incular-mobile`):** `TouchSample` now requires `device`, `buttons`,
+  `button`, `stylus`, and `age`. Custom embedders should pass the native device
+  ID (or `0`), pressed-button mask, changed button and stylus metadata when
+  available, and elapsed time since the sample was recorded (`Duration::ZERO`
+  for delivery time).
+- **Breaking (`incular-core`, `incular-platform`):** exhaustive matches on
+  `InputEvent` and `PlatformEvent` should handle `ScrollAt` and `InputAt`,
+  respectively.
 - **Breaking (`incular-material`):** `MaterialScrollBehavior::wrap` takes the theme, so the overscroll indicator can follow the Material version and colour scheme. Migrate by passing `&theme` as the first argument. Added `MaterialScrollBehavior::scroll_behavior_for(&ThemeData)`, which picks the Material 3 Android stretch or the Material 2 glow in the secondary colour, as Flutter's `MaterialScrollBehavior` does. `incular-widgets` `ScrollBehavior` gains `overscroll_indicator_style` and `glow_color`.
 - **Breaking (`incular-platform`, `incular-widgets`, `incular-material`):** `TextInputType::Number` and
   `TextInputTypeHint::Number` carry `{ signed, decimal }` so a numeric keyboard can offer a decimal
@@ -98,6 +109,8 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-mobile`: Android and iOS gesture timing uses native touch timestamps.
+  Batched Android samples keep their original spacing for fling velocity.
 - `incular-widgets`: the Android overscroll indicator is now selected from the ambient `ScrollBehavior` and the Material theme (the stretch under Material 3, the glow otherwise) as Flutter does, and scroll views (`ListView`, `SingleChildScrollView` and other viewports) now paint it: dragging past an edge on Android stretches the content under Material 3 or draws the glow, which recedes on release.
 - `incular-runtime`: a touch or stylus drag on a text field follows Flutter's gesture rules. iOS never extends the selection with a touch drag, and Android extends it only from a field that already had focus when the press went down. Mouse drags are unchanged.
 - `incular-material`: the touch text selection toolbar has its Flutter surface again. Without an ambient `Theme` it fell back to a transparent card with black labels; it now uses the light default (white, or `#424242` on dark, as Flutter). The corner radius is the 22-pixel pill of Flutter, the content padding above the anchor matches `TextSelectionToolbar.build`, and the end button padding is 14.5 as in Flutter.

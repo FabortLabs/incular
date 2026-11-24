@@ -1360,10 +1360,12 @@ impl Application {
                     record.runtime.set_environment(environment);
                 });
             }
-            WindowEventKind::Platform(PlatformEvent::Input(input)) => {
+            WindowEventKind::Platform(
+                event @ (PlatformEvent::Input(_) | PlatformEvent::InputAt { .. }),
+            ) => {
                 let _ = self.with_window_mut(window_id, |record| {
                     record.input_events = record.input_events.wrapping_add(1);
-                    let _ = record.runtime.handle_input(input);
+                    let _ = record.runtime.handle_platform_event(event);
                 });
             }
             WindowEventKind::Platform(PlatformEvent::TextInputAction(action)) => {

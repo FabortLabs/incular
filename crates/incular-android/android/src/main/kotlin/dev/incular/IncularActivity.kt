@@ -7,8 +7,11 @@ import android.os.Build
 import android.os.Bundle
 import android.content.res.Configuration
 import android.provider.Settings
+import android.util.SparseIntArray
+import android.view.InputDevice
 import android.view.MotionEvent
 import android.view.SurfaceHolder
+import android.view.ViewConfiguration
 import android.window.OnBackInvokedCallback
 import android.window.OnBackInvokedDispatcher
 import android.view.View
@@ -27,10 +30,29 @@ open class IncularActivity : Activity(), SurfaceHolder.Callback {
     private lateinit var surfaceView: IncularInputView
     private var surfaceAttached = false
     private var started = false
+    private val mouseButtons = SparseIntArray()
 
     private companion object {
         /** FontWeight.Bold - FontWeight.Normal, as Flutter's AccessibilityBridge defines it. */
         const val BOLD_TEXT_WEIGHT_ADJUSTMENT = 300
+
+        /** Incular's pointer-button bits, the same values as incular-core's `*_POINTER_BUTTON` constants. */
+        const val BUTTON_PRIMARY = 1
+        const val BUTTON_SECONDARY = 2
+        const val BUTTON_TERTIARY = 4
+        const val BUTTON_BACK = 8
+        const val BUTTON_FORWARD = 16
+
+        /** Sample actions, the codes `IncularNative.nativeTouch` documents. */
+        const val PHASE_DOWN = 0
+        const val PHASE_MOVE = 1
+        const val PHASE_UP = 2
+        const val PHASE_CANCEL = 3
+        const val PHASE_HOVER_ENTER = 4
+        const val PHASE_HOVER_EXIT = 5
+
+        /** Passed as a history index to mean the event's current sample rather than a historical one. */
+        const val CURRENT_SAMPLE = -1
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,6 +64,8 @@ open class IncularActivity : Activity(), SurfaceHolder.Callback {
         IncularNative.activity = this
         surfaceView.holder.addCallback(this)
         surfaceView.setOnTouchListener { _, event -> forwardTouch(event) }
+        surfaceView.setOnHoverListener { _, event -> forwardHover(event) }
+        surfaceView.setOnGenericMotionListener { _, event -> forwardGenericMotion(event) }
         surfaceView.setOnApplyWindowInsetsListener { view, insets -> forwardInsets(insets); view.onApplyWindowInsets(insets) }
         setContentView(surfaceView)
         started = IncularNative.create(applicationContext, filesDir.absolutePath)
@@ -157,35 +181,152 @@ open class IncularActivity : Activity(), SurfaceHolder.Callback {
         IncularNative.nativeSurfaceDestroyed()
     }
 
+    /** Touch contacts, stylus contacts and mouse drags. */
     private fun forwardTouch(event: MotionEvent): Boolean {
         if (!started) return false
+        val index = event.actionIndex
         when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> send(event, event.actionIndex, 0)
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> send(event, event.actionIndex, 2)
-            MotionEvent.ACTION_MOVE -> {
-                for (h in 0 until event.historySize) {
-                    for (i in 0 until event.pointerCount) {
-                        IncularNative.nativeTouch(
-                            event.getPointerId(i), 1,
-                            event.getHistoricalX(i, h), event.getHistoricalY(i, h),
-                            event.getHistoricalPressure(i, h), event.getToolType(i),
-                        )
-                    }
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN,
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
+                if (event.getToolType(index) == MotionEvent.TOOL_TYPE_MOUSE) {
+                    forwardMouseButtons(event, index)
+                } else {
+                    val down = event.actionMasked == MotionEvent.ACTION_DOWN ||
+                        event.actionMasked == MotionEvent.ACTION_POINTER_DOWN
+                    send(event, index, if (down) PHASE_DOWN else PHASE_UP, changed = BUTTON_PRIMARY)
                 }
-                for (i in 0 until event.pointerCount) send(event, i, 1)
             }
-            MotionEvent.ACTION_CANCEL -> for (i in 0 until event.pointerCount) send(event, i, 3)
+            MotionEvent.ACTION_MOVE -> {
+                // Historical samples come first, each stamped with the time it was recorded.
+                for (h in 0 until event.historySize) {
+                    for (i in 0 until event.pointerCount) send(event, i, PHASE_MOVE, h)
+                }
+                for (i in 0 until event.pointerCount) send(event, i, PHASE_MOVE)
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                mouseButtons.delete(event.deviceId)
+                for (i in 0 until event.pointerCount) send(event, i, PHASE_CANCEL)
+            }
             else -> return false
         }
         return true
     }
 
-    private fun send(event: MotionEvent, index: Int, action: Int) {
+    /** Hover follows Android's separate hover dispatch path. */
+    private fun forwardHover(event: MotionEvent): Boolean {
+        if (!started) return false
+        when (event.actionMasked) {
+            MotionEvent.ACTION_HOVER_ENTER -> send(event, 0, PHASE_HOVER_ENTER)
+            MotionEvent.ACTION_HOVER_MOVE -> {
+                for (h in 0 until event.historySize) send(event, 0, PHASE_MOVE, h)
+                send(event, 0, PHASE_MOVE)
+            }
+            MotionEvent.ACTION_HOVER_EXIT -> send(event, 0, PHASE_HOVER_EXIT)
+            else -> return false
+        }
+        return true
+    }
+
+    private fun forwardGenericMotion(event: MotionEvent): Boolean {
+        if (!started || !event.isFromSource(InputDevice.SOURCE_CLASS_POINTER)) return false
+        when (event.actionMasked) {
+            MotionEvent.ACTION_BUTTON_PRESS, MotionEvent.ACTION_BUTTON_RELEASE -> {
+                val index = event.actionIndex
+                if (event.getToolType(index) != MotionEvent.TOOL_TYPE_MOUSE) return false
+                forwardMouseButtons(event, index)
+            }
+            MotionEvent.ACTION_SCROLL -> {
+                // Positive axis values scroll up and left; Incular's scroll deltas point down and right.
+                val config = ViewConfiguration.get(this)
+                IncularNative.nativeScroll(
+                    event.x, event.y,
+                    -event.getAxisValue(MotionEvent.AXIS_HSCROLL) * config.scaledHorizontalScrollFactor,
+                    -event.getAxisValue(MotionEvent.AXIS_VSCROLL) * config.scaledVerticalScrollFactor,
+                    ageNanos(eventTimeNanos(event, CURRENT_SAMPLE)),
+                )
+            }
+            else -> return false
+        }
+        return true
+    }
+
+    /** Android sends both touch and generic events for the first press and last release. */
+    private fun forwardMouseButtons(event: MotionEvent, index: Int) {
+        val device = event.deviceId
+        val previous = mouseButtons.get(device)
+        val buttons = buttonMask(event.buttonState)
+        if (buttons == 0) mouseButtons.delete(device) else mouseButtons.put(device, buttons)
+        var changed = previous xor buttons
+        while (changed != 0) {
+            val button = Integer.lowestOneBit(changed)
+            val phase = if (buttons and button != 0) PHASE_DOWN else PHASE_UP
+            send(event, index, phase, changed = button)
+            changed = changed xor button
+        }
+    }
+
+    /**
+     * Sends pointer [index] of [event] as sample [history] (or the current sample for
+     * [CURRENT_SAMPLE]) with a `PHASE_*` action.
+     */
+    private fun send(event: MotionEvent, index: Int, action: Int, history: Int = CURRENT_SAMPLE, changed: Int = 0) {
+        val current = history == CURRENT_SAMPLE
+        val tool = event.getToolType(index)
+        val stylus = tool == MotionEvent.TOOL_TYPE_STYLUS || tool == MotionEvent.TOOL_TYPE_ERASER
+        val hovering = event.actionMasked == MotionEvent.ACTION_HOVER_ENTER ||
+            event.actionMasked == MotionEvent.ACTION_HOVER_MOVE ||
+            event.actionMasked == MotionEvent.ACTION_HOVER_EXIT
+        val buttons = when {
+            action == PHASE_CANCEL || action == PHASE_HOVER_EXIT -> 0
+            tool == MotionEvent.TOOL_TYPE_MOUSE -> buttonMask(event.buttonState)
+            // Only the tip presses primary; a stylus can report its barrel button in hover as well.
+            else -> (if (!hovering && (action == PHASE_DOWN || action == PHASE_MOVE)) BUTTON_PRIMARY else 0) or
+                (if (stylus) buttonMask(event.buttonState) else 0)
+        }
         IncularNative.nativeTouch(
-            event.getPointerId(index), action,
-            event.getX(index), event.getY(index),
-            event.getPressure(index), event.getToolType(index),
+            event.getPointerId(index), event.deviceId, action,
+            if (current) event.getX(index) else event.getHistoricalX(index, history),
+            if (current) event.getY(index) else event.getHistoricalY(index, history),
+            if (current) event.getPressure(index) else event.getHistoricalPressure(index, history),
+            tool, buttons, changed,
+            ageNanos(eventTimeNanos(event, history)),
+            if (stylus) axis(event, MotionEvent.AXIS_TILT, index, history) else Float.NaN,
+            if (stylus) axis(event, MotionEvent.AXIS_ORIENTATION, index, history) else Float.NaN,
         )
+    }
+
+    private fun axis(event: MotionEvent, axis: Int, index: Int, history: Int): Float =
+        if (history == CURRENT_SAMPLE) event.getAxisValue(axis, index)
+        else event.getHistoricalAxisValue(axis, index, history)
+
+    /**
+     * When a sample was recorded, on the `System.nanoTime` clock: both are CLOCK_MONOTONIC.
+     * Before API 34 the event times are milliseconds.
+     */
+    private fun eventTimeNanos(event: MotionEvent, history: Int): Long {
+        if (Build.VERSION.SDK_INT >= 34) {
+            return if (history == CURRENT_SAMPLE) event.eventTimeNanos else event.getHistoricalEventTimeNanos(history)
+        }
+        val millis = if (history == CURRENT_SAMPLE) event.eventTime else event.getHistoricalEventTime(history)
+        return millis * 1_000_000L
+    }
+
+    /** How long ago a sample recorded at [eventNanos] was taken, never negative. */
+    private fun ageNanos(eventNanos: Long): Long = (System.nanoTime() - eventNanos).coerceAtLeast(0L)
+
+    /** Incular's pointer-button mask for Android's `MotionEvent.BUTTON_*` bits, as Flutter maps them. */
+    private fun buttonMask(androidButtons: Int): Int {
+        var mask = 0
+        if (androidButtons and MotionEvent.BUTTON_PRIMARY != 0) mask = mask or BUTTON_PRIMARY
+        if (androidButtons and (MotionEvent.BUTTON_SECONDARY or MotionEvent.BUTTON_STYLUS_PRIMARY) != 0) {
+            mask = mask or BUTTON_SECONDARY
+        }
+        if (androidButtons and (MotionEvent.BUTTON_TERTIARY or MotionEvent.BUTTON_STYLUS_SECONDARY) != 0) {
+            mask = mask or BUTTON_TERTIARY
+        }
+        if (androidButtons and MotionEvent.BUTTON_BACK != 0) mask = mask or BUTTON_BACK
+        if (androidButtons and MotionEvent.BUTTON_FORWARD != 0) mask = mask or BUTTON_FORWARD
+        return mask
     }
 
     @Suppress("DEPRECATION")

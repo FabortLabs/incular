@@ -724,6 +724,13 @@ impl TextInputAdapter for MemoryTextInputAdapter {
 #[derive(Clone, Debug, PartialEq)]
 pub enum PlatformEvent {
     Input(InputEvent),
+    /// Input with the time the platform recorded it. Velocity tracking and
+    /// gesture timing use `time` instead of the delivery time, so a batch of
+    /// historical samples delivered together keeps its real spacing.
+    InputAt {
+        input: InputEvent,
+        time: incular_core::time::Instant,
+    },
     /// Action chosen by a native software keyboard (for example Done, Next,
     /// or Search). Desktop backends normally express the same behavior as a
     /// physical Enter key, while mobile hosts can forward the IME action

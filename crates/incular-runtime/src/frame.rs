@@ -248,7 +248,9 @@ pub(crate) fn diagnostic_input_trigger(event: &InputEvent) -> String {
             event.kind(),
             event.phase()
         ),
-        InputEvent::Scroll { delta } => format!("scroll({:.1}, {:.1})", delta.x, delta.y),
+        InputEvent::Scroll { delta } | InputEvent::ScrollAt { delta, .. } => {
+            format!("scroll({:.1}, {:.1})", delta.x, delta.y)
+        }
         InputEvent::Key(event) => format!("key({:?}, {:?})", event.state, event.code),
         InputEvent::Text(text) => format!("text_input(chars={})", text.chars().count()),
         InputEvent::Ime(ImeEvent::Preedit { text, .. }) => {
@@ -1087,6 +1089,7 @@ impl Runtime {
     pub fn handle_platform_event(&mut self, event: PlatformEvent) -> Option<EventTarget> {
         match event {
             PlatformEvent::Input(input) => self.handle_input(input),
+            PlatformEvent::InputAt { input, time } => self.handle_input_at(input, time),
             PlatformEvent::TextInputAction(action) => {
                 self.handle_text_input_action(action);
                 None
@@ -1212,8 +1215,8 @@ impl Runtime {
 
     /// Handles `event` as if it arrived at `at`: velocity tracking and
     /// gesture timing see `at` instead of the wall clock. Frame-by-frame
-    /// parity tests use it to stamp input with the frame clock.
-    #[doc(hidden)]
+    /// parity tests stamp input with the frame clock, and mobile hosts stamp
+    /// touch samples with the time the platform recorded them.
     pub fn handle_input_at(&mut self, event: InputEvent, at: Instant) -> Option<EventTarget> {
         self.input_clock = Some(at);
         let target = self.handle_input(event);
@@ -1258,19 +1261,8 @@ impl Runtime {
     /// Handles the events that carry no pointer sample.
     fn handle_non_pointer_input(&mut self, event: InputEvent) -> Option<EventTarget> {
         match event {
-            InputEvent::Scroll { delta } => {
-                // The platform normalizes wheel values to logical pixels. The
-                // latest pointer position selects the nearest viewport.
-                // Shift turns a wheel into a horizontal scroll (Flutter's
-                // `_kScrollAxisModifierKeys`).
-                if self.tree.scroll_at_with_axis_flip(
-                    self.last_pointer,
-                    delta,
-                    self.keyboard_modifiers.shift(),
-                ) {
-                    self.frame_requested = true;
-                }
-            }
+            InputEvent::Scroll { delta } => self.handle_wheel(self.last_pointer, delta),
+            InputEvent::ScrollAt { position, delta } => self.handle_wheel(position, delta),
             InputEvent::Key(key) => self.handle_key(key),
             InputEvent::Text(text) => self.insert_text(&text),
             InputEvent::Ime(ime) => self.handle_ime(ime),
@@ -1301,6 +1293,17 @@ impl Runtime {
             }
         }
         None
+    }
+
+    fn handle_wheel(&mut self, position: Offset, delta: Offset) {
+        // Shift turns a wheel into a horizontal scroll (Flutter's
+        // `_kScrollAxisModifierKeys`).
+        if self
+            .tree
+            .scroll_at_with_axis_flip(position, delta, self.keyboard_modifiers.shift())
+        {
+            self.frame_requested = true;
+        }
     }
 
     fn handle_input_inner(&mut self, event: InputEvent) -> Option<EventTarget> {

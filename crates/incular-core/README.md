@@ -15,6 +15,9 @@ Owns dependency-free geometry, colors, normalized input events, phase dirty
 flags, and the generational `Arena`. It does not own tree semantics or layout
 policy. Arena IDs are stale after removal, even if the slot is reused.
 
+Wheel input uses `InputEvent::ScrollAt` when the platform reports a position
+with the delta. Both values are in logical pixels.
+
 ## Opt-in restoration boundary
 
 `RestorationKey`, `RestorationScope`, and `RestorationBackend` form the small

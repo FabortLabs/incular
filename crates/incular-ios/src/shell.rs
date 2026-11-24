@@ -6,7 +6,10 @@
 //! the view controller and the Metal-backed `IncularView` for each scene.
 //! Phase 1 binds the application's first window to the first scene's view.
 
-use incular_core::{NormalizedPressure, PointerDeviceKind, PointerPhase, time::Instant};
+use incular_core::{
+    NormalizedPressure, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase,
+    time::{Duration, Instant},
+};
 use incular_mobile::{MobileEngine, MobileEnvironment, TouchSample};
 use incular_platform::{PhysicalSize, PlatformLifecycle};
 use incular_runtime::{Application, RuntimeWake};
@@ -14,7 +17,8 @@ use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, NSObject, NSObjectProtocol};
 use objc2::{ClassType, DeclaredClass, declare_class, msg_send, msg_send_id, mutability, sel};
 use objc2_foundation::{
-    CGRect, MainThreadMarker, NSDictionary, NSRunLoop, NSRunLoopCommonModes, NSSet, NSString,
+    CGRect, MainThreadMarker, NSDictionary, NSProcessInfo, NSRunLoop, NSRunLoopCommonModes, NSSet,
+    NSString,
 };
 use objc2_quartz_core::{CADisplayLink, CAMetalLayer};
 use objc2_ui_kit::{
@@ -246,6 +250,8 @@ impl IncularView {
 
     fn forward_touches(&self, touches: &NSSet<UITouch>) {
         let scale = self.contentScaleFactor();
+        // SAFETY: systemUptime reads the system clock without thread or lifetime restrictions.
+        let uptime = unsafe { NSProcessInfo::processInfo().systemUptime() };
         let samples: Vec<TouchSample> = touches
             .iter()
             .map(|touch| {
@@ -261,9 +267,17 @@ impl IncularView {
                 } else {
                     PointerDeviceKind::Touch
                 };
+                // Touches have no mouse buttons: a contact presses the primary one.
+                let (buttons, button) = match phase {
+                    PointerPhase::Down => (PRIMARY_POINTER_BUTTON, Some(PRIMARY_POINTER_BUTTON)),
+                    PointerPhase::Up => (0, Some(PRIMARY_POINTER_BUTTON)),
+                    PointerPhase::Move => (PRIMARY_POINTER_BUTTON, None),
+                    _ => (0, None),
+                };
                 TouchSample {
                     // A touch object keeps its identity for the whole contact.
                     pointer: std::ptr::from_ref::<UITouch>(touch) as usize as u64,
+                    device: 0,
                     phase,
                     kind,
                     x: location.x * scale,
@@ -272,6 +286,11 @@ impl IncularView {
                         touch.force(),
                         touch.maximumPossibleForce(),
                     ),
+                    buttons,
+                    button,
+                    stylus: None,
+                    age: Duration::try_from_secs_f64(uptime - touch.timestamp())
+                        .unwrap_or_default(),
                 }
             })
             .collect();

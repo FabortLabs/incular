@@ -9,6 +9,11 @@ icon: AppWindow
 lifecycle. [`WindowEventKind`](/docs/api/platform/window-events): `Platform` / `Lifecycle` / `RedrawRequested` /
 `StateChanged`.
 
+Native hosts can use `PlatformEvent::InputAt` to supply the recorded time
+for gesture timing and velocity tracking. When a wheel event includes its
+own location, `InputEvent::ScrollAt` routes it to the viewport at that
+location. Both its position and delta use logical pixels.
+
 [`WindowOperation`](/docs/api/platform/window-events) enumerates every data-only UI-thread op (set title,
 visibility, size, drag/resize, minimize/maximize/fullscreen, decorations,
 cursor, focus, close). [`WindowRequestedState`](/docs/api/platform/window-events) tracks app-requested

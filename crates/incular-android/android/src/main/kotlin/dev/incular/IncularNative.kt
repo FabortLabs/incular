@@ -36,15 +36,30 @@ internal object IncularNative {
 
     @JvmStatic external fun nativeSurfaceDestroyed()
 
-    /** `action`: 0 down, 1 move, 2 up, 3 cancel. Physical pixels. */
+    /**
+     * `action`: 0 down, 1 move, 2 up, 3 cancel, 4 hover enter, 5 hover exit. Physical pixels.
+     * [buttons] is the pressed-button mask and [changedButton] the button that went down or up
+     * (0 when none), both in Incular's pointer-button bits. [ageNanos] is how long ago the
+     * platform recorded the sample. [tilt] and [orientation] are stylus axes in radians, NaN
+     * when the tool is not a stylus.
+     */
     @JvmStatic external fun nativeTouch(
         pointer: Int,
+        device: Int,
         action: Int,
         x: Float,
         y: Float,
         pressure: Float,
         toolType: Int,
+        buttons: Int,
+        changedButton: Int,
+        ageNanos: Long,
+        tilt: Float,
+        orientation: Float,
     )
+
+    /** A wheel or trackpad scroll at ([x], [y]); [dx] and [dy] are physical pixels, positive down and right. */
+    @JvmStatic external fun nativeScroll(x: Float, y: Float, dx: Float, dy: Float, ageNanos: Long)
 
     /** Physical-pixel system bar/cutout insets, then the soft keyboard's bottom inset. */
     @JvmStatic external fun nativeInsets(left: Int, top: Int, right: Int, bottom: Int, imeBottom: Int)

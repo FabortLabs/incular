@@ -1075,8 +1075,13 @@ impl Application {
         {
             valid_offset(*position)?;
         }
-        if let InputEvent::Scroll { delta } = &event {
-            valid_offset(*delta)?;
+        match &event {
+            InputEvent::Scroll { delta } => valid_offset(*delta)?,
+            InputEvent::ScrollAt { position, delta } => {
+                valid_offset(*position)?;
+                valid_offset(*delta)?;
+            }
+            _ => {}
         }
         if !self.contains_window(window_id) {
             return Err(SimulationError::WindowNotFound(window_id));

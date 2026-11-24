@@ -353,7 +353,13 @@ pub enum InputEvent {
     /// Native aggregate trackpad gesture. No fake pointer contacts are created
     /// from this event.
     TrackpadGesture(TrackpadGesture),
+    /// Wheel input whose location comes from the latest pointer sample.
     Scroll {
+        delta: Offset,
+    },
+    /// Wheel input with a location reported by the platform, in logical pixels.
+    ScrollAt {
+        position: Offset,
         delta: Offset,
     },
     Key(KeyboardEvent),

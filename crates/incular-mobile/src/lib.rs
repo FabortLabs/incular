@@ -23,8 +23,8 @@ pub use environment::MobileEnvironment;
 
 use incular_config::Constraints;
 use incular_core::{
-    InputEvent, Offset, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase,
-    PointerSampleMetadata, time::Instant,
+    InputEvent, Offset, PointerDeviceKind, PointerPhase, PointerSampleMetadata, StylusMetadata,
+    time::{Duration, Instant},
 };
 use incular_host::HostSurface;
 use incular_platform::{
@@ -46,12 +46,14 @@ pub fn mobile_platform_capabilities() -> PlatformCapabilities {
     capabilities
 }
 
-/// One touch contact as the native shell reports it, in physical pixels of
-/// the view.
+/// One touch, mouse or stylus sample as the native shell reports it, in
+/// physical pixels of the view.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TouchSample {
     /// Stable for the duration of one contact.
     pub pointer: u64,
+    /// Identifies the source device, or zero when the shell has no device ID.
+    pub device: u64,
     pub phase: PointerPhase,
     pub kind: PointerDeviceKind,
     /// Physical pixels from the view's top-left corner.
@@ -59,6 +61,40 @@ pub struct TouchSample {
     pub y: f64,
     /// Normalized pressure, when the device reports one.
     pub pressure: Option<incular_core::NormalizedPressure>,
+    /// Pressed-button mask after this sample, in Incular's pointer-button
+    /// bits. Finger and stylus tips report the primary bit while they touch;
+    /// mice report their real buttons.
+    pub buttons: u32,
+    /// The button that went down or up on a Down or Up sample. `None` for
+    /// movement and for platforms that do not expose the changed button.
+    pub button: Option<u32>,
+    /// Stylus tilt and orientation, when the device reports them.
+    pub stylus: Option<StylusMetadata>,
+    /// How long ago the platform recorded the sample. Historical samples
+    /// batched into one delivery keep their own age, so velocity tracking
+    /// sees their real spacing. Zero means "now".
+    pub age: Duration,
+}
+
+/// A pointer-wheel or trackpad scroll as the native shell reports it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ScrollSample {
+    /// Physical pixels from the view's top-left corner, where the pointer was.
+    pub x: f64,
+    pub y: f64,
+    /// Scroll delta in physical pixels, positive toward the bottom and right
+    /// (the sign Incular's `InputEvent::ScrollAt` uses).
+    pub delta_x: f64,
+    pub delta_y: f64,
+    /// How long ago the platform recorded the scroll.
+    pub age: Duration,
+}
+
+/// The instant a sample recorded `age` ago. A sample older than the clock's
+/// origin falls back to now.
+fn sample_time(age: Duration) -> Instant {
+    let now = Instant::now();
+    now.checked_sub(age).unwrap_or(now)
 }
 
 /// The native view the application's first window is presented in.
@@ -172,31 +208,48 @@ impl MobileEngine {
         }
     }
 
-    /// Forwards one touch contact.
+    /// Forwards one touch contact, or a mouse or stylus hover sample.
     pub fn touch(&mut self, sample: TouchSample) {
         let Some(window) = self.window.as_ref() else {
             return;
         };
         let scale = self.metrics.scale_factor as f32;
-        let held = matches!(sample.phase, PointerPhase::Down | PointerPhase::Move);
-        let button = matches!(sample.phase, PointerPhase::Down | PointerPhase::Up)
-            .then_some(PRIMARY_POINTER_BUTTON);
         let event = InputEvent::PointerWithMetadata {
             pointer: sample.pointer,
-            device: 0,
+            device: sample.device,
             kind: sample.kind,
-            buttons: if held { PRIMARY_POINTER_BUTTON } else { 0 },
-            button,
+            buttons: sample.buttons,
+            button: sample.button,
             sample: PointerSampleMetadata {
                 pressure: sample.pressure,
-                stylus: None,
+                stylus: sample.stylus,
             },
             phase: sample.phase,
             position: Offset::new(sample.x as f32 / scale, sample.y as f32 / scale),
         };
+        let time = sample_time(sample.age);
         self.application.handle_window_event(WindowEvent::platform(
             window.id,
-            PlatformEvent::Input(event),
+            PlatformEvent::InputAt { input: event, time },
+        ));
+    }
+
+    /// Forwards one scroll at the location reported by the shell.
+    pub fn scroll(&mut self, sample: ScrollSample) {
+        let Some(window) = self.window.as_ref() else {
+            return;
+        };
+        let scale = self.metrics.scale_factor as f32;
+        let input = InputEvent::ScrollAt {
+            position: Offset::new(sample.x as f32 / scale, sample.y as f32 / scale),
+            delta: Offset::new(sample.delta_x as f32 / scale, sample.delta_y as f32 / scale),
+        };
+        self.application.handle_window_event(WindowEvent::platform(
+            window.id,
+            PlatformEvent::InputAt {
+                input,
+                time: sample_time(sample.age),
+            },
         ));
     }
 

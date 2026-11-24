@@ -13,6 +13,10 @@ translation and raw-handle extraction live in `incular_desktop::winit_adapter`.
 Desktop adapters convert physical pointers through
 `WindowMetrics` before hit testing.
 
+`PlatformEvent::InputAt` carries an input event and its original time on the
+framework's monotonic clock. Hosts can use it to preserve gesture timing
+when delivering buffered native samples.
+
 ## Window contract
 
 `WindowId` is an Incular-owned `(slot, generation)` identity, never a Winit

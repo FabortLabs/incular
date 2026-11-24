@@ -6,8 +6,12 @@
 //! and none of them re-enters another while it holds the engine.
 
 use incular_config::Brightness;
-use incular_core::{NormalizedPressure, PointerDeviceKind, PointerPhase, time::Instant};
-use incular_mobile::{MobileEngine, MobileEnvironment, TouchSample};
+use incular_core::{
+    NormalizedPressure, PointerDeviceKind, PointerPhase, SECONDARY_POINTER_BUTTON, StylusMetadata,
+    StylusOrientation, TERTIARY_POINTER_BUTTON,
+    time::{Duration, Instant},
+};
+use incular_mobile::{MobileEngine, MobileEnvironment, ScrollSample, TouchSample};
 use incular_platform::{
     PhysicalSize, PlatformLifecycle, SystemUiOverlayStyle, TextInputCommand,
     canonicalize_system_locales,
@@ -15,7 +19,7 @@ use incular_platform::{
 use incular_runtime::RuntimeWake;
 use jni_sys::{
     JNI_ERR, JNI_OK, JNI_VERSION_1_6, JNIEnv, JNINativeMethod, JavaVM, jboolean, jclass, jfloat,
-    jint, jobject, jstring,
+    jint, jlong, jobject, jstring,
 };
 use ndk::native_window::NativeWindow;
 use raw_window_handle::{
@@ -23,6 +27,7 @@ use raw_window_handle::{
 };
 use std::{
     cell::{Cell, RefCell},
+    f32::consts::{FRAC_PI_2, TAU},
     ffi::{CStr, CString, c_char, c_int, c_long, c_void},
     io::{Read, Write},
     os::{fd::AsRawFd, unix::net::UnixStream},
@@ -417,33 +422,101 @@ extern "system" fn native_surface_destroyed(_env: *mut JNIEnv, _class: jclass) {
     with_shell(|shell| shell.engine.surface_destroyed());
 }
 
-/// `action`: 0 down, 1 move, 2 up, 3 cancel. Coordinates are physical pixels.
+/// `action`: 0 down, 1 move, 2 up, 3 cancel, 4 hover enter, 5 hover exit.
+/// Coordinates are physical pixels. `buttons` is the pressed-button mask and
+/// `changed_button` the button that went down or up (0 when none).
+/// `age_nanos` is how long ago the platform recorded the sample. `tilt` and
+/// `orientation` are stylus axes in radians, NaN when the tool is not a stylus.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "mirrors the JNI signature of IncularNative.nativeTouch"
+)]
 extern "system" fn native_touch(
     _env: *mut JNIEnv,
     _class: jclass,
     pointer: jint,
+    device: jint,
     action: jint,
     x: jfloat,
     y: jfloat,
     pressure: jfloat,
     tool_type: jint,
+    buttons: jint,
+    changed_button: jint,
+    age_nanos: jlong,
+    tilt: jfloat,
+    orientation: jfloat,
 ) {
     let phase = match action {
         0 => PointerPhase::Down,
         1 => PointerPhase::Move,
         2 => PointerPhase::Up,
+        4 => PointerPhase::Enter,
+        5 => PointerPhase::Exit,
         _ => PointerPhase::Cancel,
     };
+    let buttons = u32::try_from(buttons).unwrap_or(0);
+    let kind = device_kind(tool_type);
+    let stylus = matches!(
+        kind,
+        PointerDeviceKind::Stylus | PointerDeviceKind::InvertedStylus
+    )
+    .then(|| stylus_metadata(tilt, orientation, buttons));
+    let sample = TouchSample {
+        pointer: u64::from(pointer.unsigned_abs()),
+        device: u64::from(device as u32),
+        phase,
+        kind,
+        x: f64::from(x),
+        y: f64::from(y),
+        pressure: NormalizedPressure::new(f64::from(pressure)),
+        buttons,
+        button: u32::try_from(changed_button)
+            .ok()
+            .filter(|button| *button != 0),
+        stylus,
+        age: duration_from_nanos(age_nanos),
+    };
+    with_shell(|shell| shell.engine.touch(sample));
+}
+
+/// `x`, `y` is the pointer position; `dx`, `dy` the scroll in physical pixels
+/// (positive toward the bottom and right).
+extern "system" fn native_scroll(
+    _env: *mut JNIEnv,
+    _class: jclass,
+    x: jfloat,
+    y: jfloat,
+    dx: jfloat,
+    dy: jfloat,
+    age_nanos: jlong,
+) {
     with_shell(|shell| {
-        shell.engine.touch(TouchSample {
-            pointer: u64::from(pointer.unsigned_abs()),
-            phase,
-            kind: device_kind(tool_type),
+        shell.engine.scroll(ScrollSample {
             x: f64::from(x),
             y: f64::from(y),
-            pressure: NormalizedPressure::new(f64::from(pressure)),
+            delta_x: f64::from(dx),
+            delta_y: f64::from(dy),
+            age: duration_from_nanos(age_nanos),
         });
     });
+}
+
+fn duration_from_nanos(nanos: jlong) -> Duration {
+    Duration::from_nanos(u64::try_from(nanos).unwrap_or(0))
+}
+
+/// Stylus tilt (zero perpendicular to the screen) and orientation (zero
+/// pointing up the screen) as Incular's altitude and azimuth. The barrel
+/// buttons arrive as the secondary and tertiary bits.
+fn stylus_metadata(tilt: f32, orientation: f32, buttons: u32) -> StylusMetadata {
+    StylusMetadata {
+        orientation: (tilt.is_finite() && orientation.is_finite()).then(|| StylusOrientation {
+            altitude: (FRAC_PI_2 - tilt).clamp(0.0, FRAC_PI_2),
+            azimuth: (orientation - FRAC_PI_2).rem_euclid(TAU),
+        }),
+        barrel_button: buttons & (SECONDARY_POINTER_BUTTON | TERTIARY_POINTER_BUTTON) != 0,
+    }
 }
 
 /// Physical-pixel insets: system bars plus cutout, then the soft keyboard.
@@ -547,7 +620,12 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut JavaVM, _reserved: *mut c_void
             c"()V",
             native_surface_destroyed as *mut c_void,
         ),
-        method(c"nativeTouch", c"(IIFFFI)V", native_touch as *mut c_void),
+        method(
+            c"nativeTouch",
+            c"(IIIFFFIIIJFF)V",
+            native_touch as *mut c_void,
+        ),
+        method(c"nativeScroll", c"(FFFFJ)V", native_scroll as *mut c_void),
         method(c"nativeInsets", c"(IIIII)V", native_insets as *mut c_void),
         method(
             c"nativeSettings",

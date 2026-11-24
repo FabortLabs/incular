@@ -12,6 +12,11 @@
 FFI: `incular-android` and `incular-ios` translate native callbacks into calls
 on it, and it presents through `incular-host`, like the Winit shell.
 
+`MobileEngine::touch` accepts native touch, mouse and stylus samples with
+their device ID, button state, metadata and age. Report the age of each
+historical sample so a batch preserves its spacing for gesture velocity.
+`MobileEngine::scroll` takes the wheel position and delta in physical pixels.
+
 The engine binds the application's first window to the native view and
 refuses further windows with a typed `unsupported` error. All methods run on
 the platform main thread; `MobileEngine::frame` is called from the platform's
