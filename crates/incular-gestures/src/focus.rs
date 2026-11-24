@@ -45,7 +45,9 @@ impl std::fmt::Debug for FocusNode {
 }
 struct FocusState {
     focused: Cell<bool>,
-    requested: Cell<bool>,
+    requested: Cell<Option<u64>>,
+    managed_by_host: Cell<bool>,
+    host_attachment_count: Cell<usize>,
     enabled: Cell<bool>,
     can_request_focus: Cell<bool>,
     skip_traversal: Cell<bool>,
@@ -64,6 +66,30 @@ struct FocusState {
 /// an application-owned node.
 pub struct FocusNodeSubscription {
     _subscription: incular_core::reactivity::Subscription,
+}
+
+/// Owns a mounted runtime's connection to an external focus node.
+#[doc(hidden)]
+pub struct FocusNodeAttachment {
+    node: FocusNode,
+}
+
+impl FocusNodeAttachment {
+    #[must_use]
+    pub const fn node(&self) -> &FocusNode {
+        &self.node
+    }
+}
+
+impl Drop for FocusNodeAttachment {
+    fn drop(&mut self) {
+        let state = &self.node.state;
+        let remaining = state.host_attachment_count.get() - 1;
+        state.host_attachment_count.set(remaining);
+        if remaining == 0 {
+            self.node.apply_host_focus(false);
+        }
+    }
 }
 
 impl FocusState {
@@ -97,7 +123,9 @@ impl Default for FocusNode {
         Self {
             state: Rc::new(FocusState {
                 focused: Cell::new(false),
-                requested: Cell::new(false),
+                requested: Cell::new(None),
+                managed_by_host: Cell::new(false),
+                host_attachment_count: Cell::new(0),
                 enabled: Cell::new(true),
                 can_request_focus: Cell::new(true),
                 skip_traversal: Cell::new(false),
@@ -133,13 +161,16 @@ impl FocusNode {
 
     pub fn request_focus(&self) {
         if self.can_request_focus() {
-            self.state.requested.set(true);
-            FOCUS_EPOCH.set(FOCUS_EPOCH.get().wrapping_add(1));
-            self.state.set_focused(true);
+            let request = FOCUS_EPOCH.get().wrapping_add(1);
+            self.state.requested.set(Some(request));
+            FOCUS_EPOCH.set(request);
+            if !self.state.managed_by_host.get() {
+                self.state.set_focused(true);
+            }
         }
     }
     pub fn unfocus(&self) {
-        self.state.requested.set(false);
+        self.state.requested.set(None);
         self.state.set_focused(false);
     }
 
@@ -148,14 +179,42 @@ impl FocusNode {
     /// [`Self::apply_host_focus`].
     #[must_use]
     pub fn has_pending_focus_request(&self) -> bool {
+        self.state.requested.get().is_some()
+    }
+
+    /// Registers this node with a runtime that settles requests at its next
+    /// input or frame boundary. A detached node cannot grant itself focus.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn attach_to_focus_host(&self) -> FocusNodeAttachment {
+        let count = self.state.host_attachment_count.get();
+        self.state.host_attachment_count.set(count + 1);
+        if count == 0 {
+            self.state.managed_by_host.set(true);
+            self.state.set_focused(false);
+            if self.has_pending_focus_request() {
+                FOCUS_EPOCH.set(FOCUS_EPOCH.get().wrapping_add(1));
+            }
+        }
+        FocusNodeAttachment { node: self.clone() }
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn focus_request_order(&self) -> Option<u64> {
         self.state.requested.get()
+    }
+
+    #[doc(hidden)]
+    pub fn clear_pending_focus_request(&self) {
+        self.state.requested.set(None);
     }
 
     /// Records the focus a host (the runtime) granted or removed. Unlike
     /// [`Self::request_focus`] it settles any pending request instead of
     /// creating one, so another host sharing the node does not adopt it.
     pub fn apply_host_focus(&self, focused: bool) {
-        self.state.requested.set(false);
+        self.clear_pending_focus_request();
         self.state.set_focused(focused);
     }
     #[must_use]

@@ -38,7 +38,7 @@ pub use details::{
 pub use focus::{
     DirectionalFocusCandidate, FocusBehavior, FocusHighlightManager, FocusHighlightMode,
     FocusHighlightStrategy, FocusHighlightSubscription, FocusManager, FocusNode,
-    FocusNodeSubscription, FocusOrder, FocusScopeNode, FocusScopeSubscription,
+    FocusNodeAttachment, FocusNodeSubscription, FocusOrder, FocusScopeNode, FocusScopeSubscription,
     FocusTraversalPolicy, FocusTraversalPolicyKind, OrderedTraversalPolicy,
     ReadingOrderTraversalPolicy, TraversalDirection, WidgetOrderTraversalPolicy,
     directional_focus_index, focus_epoch, reading_order_by,

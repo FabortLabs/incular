@@ -3,6 +3,36 @@
 use super::*;
 
 impl WidgetTree {
+    /// Enables deferred FocusNode requests for a runtime-owned tree.
+    #[doc(hidden)]
+    pub fn enable_hosted_focus(&mut self) {
+        debug_assert!(self.root.is_none(), "enable hosted focus before mounting");
+        self.hosted_focus_nodes.get_or_insert_with(BTreeMap::new);
+    }
+
+    pub(super) fn sync_hosted_focus_node(&mut self, id: ElementId) {
+        let Some(hosted) = self.hosted_focus_nodes.as_mut() else {
+            return;
+        };
+        let node = self
+            .elements
+            .get(id.0)
+            .and_then(|element| match element.widget.kind() {
+                WidgetKind::Gesture { callbacks, .. } => callbacks.focus_node.as_ref(),
+                _ => None,
+            });
+        if let Some(node) = node {
+            if !hosted
+                .get(&id)
+                .is_some_and(|binding| binding.node() == node)
+            {
+                hosted.insert(id, node.attach_to_focus_host());
+            }
+        } else if !hosted.is_empty() {
+            hosted.remove(&id);
+        }
+    }
+
     #[must_use]
     pub fn can_request_focus(&self, id: ElementId) -> bool {
         let Some(element) = self.elements.get(id.0) else {
@@ -425,13 +455,40 @@ impl WidgetTree {
 
     /// A focus change application code made through a [`FocusNode`] since the
     /// runtime last focused `current`: `Some(Some(element))` when another
-    /// focusable node now reports focus (its `request_focus` ran), `Some(None)`
+    /// focusable node has an eligible pending request, `Some(None)`
     /// when `current`'s own node was unfocused, `None` when nothing changed.
-    /// The runtime adopts the result so a requested node takes keyboard focus
-    /// on the next frame and the previously focused node is released, as
-    /// Flutter's `FocusManager` applies `requestFocus` in its microtask.
+    /// The runtime settles requests at its next input or frame boundary.
+    /// A standalone tree retains direct focus behavior for existing users.
     #[must_use]
     pub fn external_focus_change(&self, current: Option<ElementId>) -> Option<Option<ElementId>> {
+        if let Some(hosted) = &self.hosted_focus_nodes {
+            let epoch = self.focus_epoch();
+            let requested = hosted
+                .iter()
+                .filter_map(|(&id, binding)| {
+                    let order = binding.node().focus_request_order()?;
+                    self.can_request_focus(id)
+                        .then_some((epoch.wrapping_sub(order), id))
+                })
+                .min()
+                .map(|(_, id)| id);
+            // Consume rejected requests as well. A branch that was hidden
+            // at this boundary must not steal focus when it becomes visible.
+            for binding in hosted.values() {
+                binding.node().clear_pending_focus_request();
+            }
+            if let Some(requested) = requested {
+                if Some(requested) != current {
+                    return Some(Some(requested));
+                }
+                hosted[&requested].node().apply_host_focus(true);
+                return None;
+            }
+            return current
+                .and_then(|id| hosted.get(&id))
+                .is_some_and(|binding| !binding.node().has_primary_focus())
+                .then_some(None);
+        }
         let node_of = |id: ElementId| {
             self.elements
                 .get(id.0)

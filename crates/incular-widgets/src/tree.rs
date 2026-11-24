@@ -8,7 +8,7 @@ use incular_core::time::Instant;
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     rc::Rc,
     time::Duration,
 };
@@ -1398,6 +1398,9 @@ pub struct WidgetTree {
     layout_overlay_popups: FastHashSet<RenderObjectId>,
     recursion_diagnostics: RecursionDiagnostics,
     tracked: TrackedElements,
+    /// Runtime-only focus attachments; a standalone WidgetTree keeps its
+    /// direct FocusNode behavior.
+    hosted_focus_nodes: Option<BTreeMap<ElementId, incular_gestures::FocusNodeAttachment>>,
     #[cfg(feature = "devtools")]
     deep_trace: Option<DeepTraceCapture>,
     /// Temporary DevTools property overrides, re-applied when the
@@ -1420,6 +1423,7 @@ impl WidgetTree {
                 element.tracked = tracked;
             }
         }
+        self.sync_hosted_focus_node(id);
     }
 
     /// Stable identity of this tree for scroll-attachment ownership:

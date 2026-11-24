@@ -304,6 +304,7 @@ impl Runtime {
         reactive: Rc<RefCell<ReactiveQueue>>,
     ) -> Result<Self, TreeError> {
         let mut tree = WidgetTree::new();
+        tree.enable_hosted_focus();
         let mut handlers = HashMap::new();
         root.bind_callbacks(&mut |callback| {
             let action = tree.allocate_action();
@@ -1835,7 +1836,9 @@ impl Runtime {
         if let Some(next) = self.tree.external_focus_change(self.focused) {
             self.set_focus(next);
         }
-        self.adopted_focus_epoch = Some(self.tree.focus_epoch());
+        // Focus observers can queue another request while a transition is
+        // being delivered. Do not acknowledge that newer request here.
+        self.adopted_focus_epoch = Some(epoch);
     }
 
     fn reconcile_focus_and_selection_captures(&mut self) {

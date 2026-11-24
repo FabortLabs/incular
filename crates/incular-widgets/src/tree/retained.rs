@@ -60,6 +60,7 @@ impl WidgetTree {
             layout_overlay_popups: FastHashSet::default(),
             recursion_diagnostics: RecursionDiagnostics::new(),
             tracked: TrackedElements::default(),
+            hosted_focus_nodes: None,
             #[cfg(feature = "devtools")]
             deep_trace: None,
             #[cfg(feature = "devtools")]

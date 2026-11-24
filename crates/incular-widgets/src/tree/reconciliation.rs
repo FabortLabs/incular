@@ -2113,6 +2113,9 @@ impl WidgetTree {
                         continue;
                     };
                     self.tracked.untrack(id, element.tracked);
+                    if let Some(hosted) = self.hosted_focus_nodes.as_mut() {
+                        hosted.remove(&id);
+                    }
                     self.unregister_global_key(id, &element.widget);
                     let render = element.render;
                     let indexed_element = self.render_elements.remove(&render);
