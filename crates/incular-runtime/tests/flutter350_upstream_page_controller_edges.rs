@@ -137,3 +137,101 @@ fn jump_and_animate_calls_before_the_first_layout_are_safe_and_apply_page() {
         [(true, vec![1], Some(1.)), (true, vec![1], Some(1.))]
     );
 }
+
+fn issue(c: &PageController, animated: bool) -> bool {
+    if animated {
+        c.animate_to_page(2, Duration::from_millis(300), Curve::Ease)
+    } else {
+        c.jump_to_page(2)
+    }
+}
+
+#[test]
+fn reject_page_commands_when_two_live_views_share_a_controller() {
+    use incular_widgets::{Column, Expanded};
+    let observations = [false, true].map(|animated| {
+        let c = PageController::new();
+        let branches = [10, 20].map(|base| {
+            Expanded::new(
+                PageView::new((0..3).map(|i| {
+                    Widget::from(Text::new(format!("page {base}/{i}")))
+                        .with_key(Key::Value(base + i))
+                }))
+                .controller(c.clone()),
+            )
+        });
+        let mut r =
+            Runtime::new(Directionality::new(TextDirection::Ltr, Column::new(branches)).into())
+                .unwrap();
+        let initial = r.run_frame(Constraints::tight(Size::new(800., 600.)));
+        if matches!(
+            &initial,
+            Err(incular_widgets::internal::TreeError::DuplicateScrollAttachment { .. })
+        ) {
+            // Incular rejects a duplicate owner at attachment; Flutter
+            // accepts both attachments and rejects the later command.
+            return false;
+        }
+        initial.unwrap();
+        assert_eq!(bounds(&r, 10).unwrap().size, Size::new(800., 300.));
+        assert_eq!(bounds(&r, 20).unwrap().size, Size::new(800., 300.));
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| issue(&c, animated)))
+            .unwrap_or(false)
+    });
+    assert_eq!(observations, [false, false], "jump, animate accepted");
+}
+#[test]
+fn reject_commands_while_unattached_and_allow_the_same_actions_when_attached() {
+    use incular_core::time::Instant;
+    let observations = [false, true].map(|animated| {
+        let c = PageController::new();
+        let mut r = mounted(None);
+        let accepted =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| issue(&c, animated)))
+                .unwrap_or(false);
+        assert_eq!(
+            visible(&r),
+            [0],
+            "unattached controller must not move another viewport"
+        );
+        replace(&mut r, show(Some(&c)));
+        let before = c.page();
+        let _ = issue(&c, animated);
+        let now = Instant::now();
+        for i in 0..40 {
+            r.run_frame_at(
+                Constraints::tight(Size::new(800., 600.)),
+                now + Duration::from_millis(i * 16),
+            )
+            .unwrap();
+        }
+        (accepted, before, c.page(), visible(&r))
+    });
+    assert_eq!(
+        observations,
+        [
+            (false, Some(0.), Some(2.), vec![2]),
+            (false, Some(0.), Some(2.), vec![2])
+        ]
+    );
+}
+
+#[test]
+fn cold_default_page_view_does_not_materialize_or_report_full_offscreen_pages() {
+    let pages =
+        (0..3).map(|i| Widget::from(Text::new(format!("Page {i}"))).with_key(Key::Value(i)));
+    let mut r =
+        Runtime::new(Directionality::new(TextDirection::Ltr, PageView::new(pages)).into()).unwrap();
+    frame(&mut r);
+    let tree = r.tree();
+    let actual = [0, 1, 2].map(|i| {
+        let label = format!("Page {i}");
+        (
+            tree.element_with_key(&Key::Value(i)).is_some(),
+            tree.semantics()
+                .iter()
+                .any(|(_, node)| node.label.as_deref() == Some(label.as_str())),
+        )
+    });
+    assert_eq!(actual, [(true, true), (false, false), (false, false)]);
+}

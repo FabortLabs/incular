@@ -17,3 +17,13 @@ All eleven pinned originals selected here pass. Rust boundary target passes 3/3;
 - :1624 and :1650 partial match. A request issued after constructing the view but before its first runtime frame completes without throwing, then displays page 1, for both animate/jump. Flutter tests a covered Navigator page; the Rust fixtures test the command timing directly and do not claim equivalent Navigator layout suppression.
 
 Run cargo test --locked -p incular-runtime --test flutter350_upstream_page_boundary_layout and cargo test --locked -p incular-runtime --test flutter350_upstream_page_controller_edges.
+
+## Attachment validation and PageView cache options
+
+All thirteen selected originals passed on the pinned reference. The extended controller-edge binary has seven passes and two intentional failures.
+
+- :1463 and :1490 partially match the safety boundary: both frameworks prevent the command from ambiguously driving two live views. Flutter allows both attachments but asserts when animate/jump is invoked. Incular rejects the second live attachment earlier with DuplicateScrollAttachment at layout. No matching assertion-message contract is claimed.
+- :1515 and :1548 partially mismatch: Flutter rejects a request on a controller never attached to any PageView. Incular deliberately queues it; a subsequently attached view is already on page 2 before the next explicit command. The unrelated view stays on page 0. Once attached both support commands normally. These rows flag the deferred behavior for a compatibility decision rather than requiring the Dart exception type.
+- :1701 and :1763 partial match: the cold default PageView mounts only page 0 and exposes only its label, where Flutter's default false setting does the same. The true branch, where a full adjacent page is mounted and exposed semantically, is not configurable on the Rust PageView.
+- :1678, :1730 and :1794 are reference-only. Explicit, changing, and inconsistent ScrollCacheExtent/allowImplicitScrolling combinations are not exposed in the Rust descriptor.
+- :1818, :1847, :1884 and :1914 are reference-only. The Flutter cases check reveal from a mounted implicit-cache neighbor or physics-wrapper updates. Incular's ordinary Scrollable ensureVisible path and default zero-cache PageView do not exercise these contracts.
