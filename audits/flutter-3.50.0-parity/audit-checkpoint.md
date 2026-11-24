@@ -237,3 +237,13 @@ measured independently. Keep adding durable tests for reproducible cases,
 verify fixture inputs before treating strict frame differences as product
 bugs, and leave implementation for later. No full workspace tests or
 runtime/wgpu implementation changes were made.
+
+### More upstream test targets and frame comparability checks
+
+[Asset and Newton pairs](upstream-assets-newton-comparisons.md) are now
+committed test targets. They add 12 upstream pairs, 10 match and two
+differ; current upstream coverage 31/8,965. [Focus/input batch
+fourteen](frame-rechecks-batch14.md) finds one stale external focus node
+after keyboard scrolling, and four matches. [Navigation re-review](navigation-fixture-comparability.md) excludes five non-equivalent
+fixtures from valid pairs. Results to this point: 74 raw frame runs,
+69 valid paired (64 matched, five differed); five need fixture repair.

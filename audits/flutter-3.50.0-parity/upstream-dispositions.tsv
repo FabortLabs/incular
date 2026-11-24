@@ -20,3 +20,15 @@ packages/flutter/test/physics/near_equal_test.dart	9	test_friction	paired-match	
 packages/flutter/test/physics/near_equal_test.dart	16	test_null	reference-ran-incular-open	upstream-physics-helper-comparisons.md
 packages/flutter/test/physics/utils_test.dart	9	nearEquals	paired-match	upstream-physics-helper-comparisons.md
 packages/flutter/test/physics/tolerance_test.dart	9	Tolerance control test	paired-match	upstream-physics-helper-comparisons.md
+packages/flutter/test/services/asset_bundle_test.dart	59	Caching asset bundle test	paired-match	upstream-assets-newton-comparisons.md
+packages/flutter/test/services/asset_bundle_test.dart	178	for a given key, subsequent loadStructuredData calls are synchronous after the first call resolves	paired-match	upstream-assets-newton-comparisons.md
+packages/flutter/test/services/asset_bundle_test.dart	197	loadStructuredData handles exceptions correctly	paired-match	upstream-assets-newton-comparisons.md
+packages/flutter/test/services/asset_bundle_test.dart	234	NetworkAssetBundle control test	paired-match	upstream-assets-newton-comparisons.md
+packages/flutter/test/physics/newton_test.dart	12	test_friction	paired-mismatch	upstream-assets-newton-comparisons.md
+packages/flutter/test/physics/newton_test.dart	32	test_friction_through	paired-mismatch	upstream-assets-newton-comparisons.md
+packages/flutter/test/physics/newton_test.dart	76	BoundedFrictionSimulation control test	paired-match	upstream-assets-newton-comparisons.md
+packages/flutter/test/physics/newton_test.dart	90	test_gravity	paired-match	upstream-assets-newton-comparisons.md
+packages/flutter/test/physics/newton_test.dart	120	spring_types	paired-match	upstream-assets-newton-comparisons.md
+packages/flutter/test/physics/newton_test.dart	163	crit_spring	paired-match	upstream-assets-newton-comparisons.md
+packages/flutter/test/physics/newton_test.dart	192	overdamped_spring	paired-match	upstream-assets-newton-comparisons.md
+packages/flutter/test/physics/newton_test.dart	219	underdamped_spring	paired-match	upstream-assets-newton-comparisons.md
