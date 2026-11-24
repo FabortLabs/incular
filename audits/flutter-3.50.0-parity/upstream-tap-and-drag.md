@@ -23,3 +23,9 @@ between two different gesture recognizers.
 Reference: `run-upstream-reference.ps1 -Test gestures/tap_and_drag_test.dart`
 with the named cases in three batches. Incular:
 `cargo test --locked -j 2 -p incular-gestures --test flutter350_upstream_tap_and_drag -- --test-threads=1`.
+
+Three follow-ups (:292/:313/:326) also match. Both pointers can register
+before the first is accepted without interfering in either release order.
+An acceptance delivered before the down event is routed still emits
+both expected tap callbacks. This uses the public external-arena hooks
+to deliver the same acceptance order, not an inferred callback.

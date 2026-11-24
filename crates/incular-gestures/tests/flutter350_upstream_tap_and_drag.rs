@@ -183,6 +183,47 @@ fn accepted_primary_persists_when_it_lifts_last() {
     overlapping_after_acceptance(2);
 }
 
+fn overlapping_registered_before_acceptance(first_lift: u64) {
+    let mut g = Drag::pan();
+    // The externally driven arena delivers acceptance for pointer 1 only
+    // after both registrations. The pointer events are routed separately.
+    g.recognizer = g.recognizer.with_external_arena(|_, _| None);
+    let a = event(g.base, 0, 1, Down, A);
+    let b = event(g.base, 0, 2, Down, B);
+    g.recognizer.add_pointer(a);
+    g.recognizer.add_pointer(b);
+    g.recognizer.accept_gesture(1);
+    g.recognizer.handle_event(a);
+    g.recognizer.handle_event(b);
+    for id in [first_lift, 3 - first_lift] {
+        let up = if id == 1 { A_UP } else { B_UP };
+        g.recognizer.handle_event(event(g.base, 0, id, Up, up));
+    }
+    g.expect(&[Press(1), Lift(1)]);
+}
+
+#[test]
+fn primary_can_lift_first_when_both_registered_before_acceptance() {
+    overlapping_registered_before_acceptance(1);
+}
+
+#[test]
+fn primary_can_lift_last_when_both_registered_before_acceptance() {
+    overlapping_registered_before_acceptance(2);
+}
+
+#[test]
+fn acceptance_before_routing_the_down_event_still_delivers_tap_up() {
+    let mut g = Drag::pan();
+    g.recognizer = g.recognizer.with_external_arena(|_, _| None);
+    let down = event(g.base, 0, 1, Down, A);
+    g.recognizer.add_pointer(down);
+    g.recognizer.accept_gesture(1);
+    g.recognizer.handle_event(down);
+    g.recognizer.handle_event(event(g.base, 0, 1, Up, A_UP));
+    g.expect(&[Press(1), Lift(1)]);
+}
+
 #[test]
 fn a_release_inside_tap_slop_is_not_a_drag() {
     let mut g = Drag::pan();
