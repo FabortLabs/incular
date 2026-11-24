@@ -64,3 +64,18 @@ Across the focused IndexedStack runtime and Stack widget targets, 39 Rust
 checks passed. The sole red check is still the deliberate divergence for a
 positive out-of-range index. No-selection is explicit and does not depend
 on the out-of-range behavior.
+
+## Actual baselines
+
+Two authored, pinned Flutter controls pass. A retained IndexedStack passes
+its selected text baseline (including center alignment's vertical offset)
+to an outer Baseline widget. Selecting no child or a baseline-free child
+returns no actual baseline without changing the stack's 200 px height.
+A plain Stack instead takes the highest actual baseline among all children,
+including Positioned children whose offsets and relative order disagree.
+
+Both new Incular runtime controls failed before the fix (both reported no
+baseline), then passed after the fix, along with all 23 existing stack layout
+checks. The independent LayoutBuilder forwarding test is still red and is
+tracked in the [LayoutBuilder audit](upstream-table-retention-and-layoutbuilder-baseline.md).
+These authored controls do not add original registrations to the coverage count.

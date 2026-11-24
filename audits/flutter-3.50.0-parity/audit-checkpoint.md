@@ -763,3 +763,14 @@ notification. The [single-tap overlap repair](upstream-tap-recognizers.md)
 keeps the first contact through either release order. The next
 [TapAndDrag comparison](upstream-tap-and-drag.md) adds 13 full matches
 and one partial match: 413/8,965 originals fully compared (4.61%).
+
+### Retained geometry and no-selection remediation
+
+Fully paired coverage is 423/8,965 (4.72%) at `4d73ed14`:
+328 matches and 95 historical comparison mismatches; 208 partial and
+78 reference-only. The [FractionalOffset checks](upstream-fractional-offset.md)
+added exact conversions and corrected Alignment's arithmetic origin.
+[IndexedStack](upstream-indexed-stack.md) now handles explicit no-selection
+without removing its children; six retained Flutter and Windows wgpu
+frames agree across inside and edge probes. The separate authored layout
+tests also verify selected and highest-child baseline forwarding.

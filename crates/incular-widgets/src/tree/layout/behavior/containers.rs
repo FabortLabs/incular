@@ -154,13 +154,23 @@ impl WidgetTree {
             RenderKind::Flexible { .. }
             | RenderKind::Positioned { .. }
             | RenderKind::LayoutId { .. } => {
+                // Flutter's Positioned configures its parent's child data and
+                // adds no intermediary box to obscure the child's baseline.
                 if let Some(&child) = children.first() {
                     self.layout_render(child, constraints)?;
-                    let size = self
-                        .render_live(child, "retained render must remain live")
-                        .size;
+                    let child = self.render_live(child, "retained render must remain live");
+                    let size = child.size;
+                    if matches!(kind, RenderKind::Positioned { .. }) {
+                        let baseline = child.baseline;
+                        self.render_live_mut(id, "retained render must remain live")
+                            .baseline = baseline;
+                    }
                     (constraints.constrain(size), ChildOffsets::One(Offset::ZERO))
                 } else {
+                    if matches!(kind, RenderKind::Positioned { .. }) {
+                        self.render_live_mut(id, "retained render must remain live")
+                            .baseline = None;
+                    }
                     (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }
@@ -261,23 +271,29 @@ impl WidgetTree {
                     constraints.smallest()
                 };
                 self.set_stack_layout_overflow(id, false);
+                self.render_live_mut(id, "retained render must remain live")
+                    .baseline = None;
                 (size, ChildOffsets::default())
             }
             RenderKind::Stack { .. } | RenderKind::IndexedStack { .. } => {
-                // IndexedStack differs in painting and hit testing, not in
-                // how it measures and positions its retained children.
-                let stack = match *kind {
-                    RenderKind::Stack { stack } => stack,
+                // Both stacks lay out every child. Plain Stack reports the
+                // highest actual baseline; IndexedStack reads only its selection.
+                let (stack, indexed, active_child) = match *kind {
+                    RenderKind::Stack { stack } => (stack, false, None),
                     RenderKind::IndexedStack {
                         alignment,
                         fit,
                         clip_behavior,
-                        ..
-                    } => incular_layout::Stack {
-                        alignment,
-                        fit,
-                        clip_behavior,
-                    },
+                        index,
+                    } => (
+                        incular_layout::Stack {
+                            alignment,
+                            fit,
+                            clip_behavior,
+                        },
+                        true,
+                        index.and_then(|slot| children.get(slot)).copied(),
+                    ),
                     _ => unreachable!("handled only stack kinds"),
                 };
                 let non_positioned_constraints = match stack.fit {
@@ -320,6 +336,7 @@ impl WidgetTree {
 
                 let mut offsets = ChildOffsets::default();
                 let mut has_visual_overflow = false;
+                let mut baseline: Option<f32> = None;
                 for child in children {
                     let position = self.stack_positioned(*child, constraints)?;
                     if let Some(pos) = position {
@@ -362,15 +379,20 @@ impl WidgetTree {
                         let (min_h, max_h) = child_h.map_or((0.0, free_h), |h| (h, h));
                         self.layout_render(*child, Constraints::new(min_w, max_w, min_h, max_h))?;
                     }
-                    let size = self
-                        .render_live(child, "retained render must remain live")
-                        .size;
+                    let child_node = self.render_live(child, "retained render must remain live");
+                    let size = child_node.size;
                     let position = position.map_or(
                         incular_layout::StackPosition::NonPositioned,
                         incular_layout::StackPosition::Positioned,
                     );
                     let (_, offset) =
                         incular_layout::stack_child_geometry(final_size, &stack, size, position);
+                    if (!indexed || active_child == Some(*child))
+                        && let Some(local) = child_node.baseline
+                    {
+                        let candidate = local + offset.y;
+                        baseline = Some(baseline.map_or(candidate, |old| old.min(candidate)));
+                    }
                     if matches!(position, incular_layout::StackPosition::Positioned(_)) {
                         has_visual_overflow |= offset.x < 0.0
                             || offset.y < 0.0
@@ -379,6 +401,8 @@ impl WidgetTree {
                     }
                     offsets.push(offset);
                 }
+                self.render_live_mut(id, "retained render must remain live")
+                    .baseline = baseline;
                 self.set_stack_layout_overflow(id, has_visual_overflow);
                 (final_size, offsets)
             }
