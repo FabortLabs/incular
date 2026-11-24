@@ -1,0 +1,172 @@
+//! Public tree observations from Flutter 3.50.0 widgets/semantics_test.dart.
+
+use incular_config::Constraints;
+use incular_core::Size;
+use incular_semantics::{SemanticNode, SemanticRole};
+use incular_widgets::{
+    Column, ExcludeSemantics, FittedBox, MergeSemantics, Padding, Semantics, SingleChildScrollView,
+    SizedBox, Widget, internal::WidgetTree,
+};
+
+fn mounted(widget: impl Into<Widget>) -> WidgetTree {
+    let mut tree = WidgetTree::new();
+    tree.mount(widget.into()).unwrap();
+    tree.layout(Constraints::tight(Size::new(800., 600.)))
+        .unwrap();
+    let _ = tree.paint();
+    tree.update_semantics();
+    tree
+}
+
+fn nodes(tree: &WidgetTree) -> Vec<&SemanticNode> {
+    tree.semantics().iter().map(|(_, node)| node).collect()
+}
+
+#[test]
+fn tooltip_only_annotation_is_exposed_without_a_label() {
+    let tree = mounted(Semantics::new(SizedBox::shrink()).tooltip("test1"));
+    let matching: Vec<_> = nodes(&tree)
+        .into_iter()
+        .filter(|node| node.state.tooltip.as_deref() == Some("test1"))
+        .collect();
+    assert_eq!(matching.len(), 1);
+    assert!(matching[0].label.as_deref().is_none_or(str::is_empty));
+}
+
+#[test]
+fn replacing_child_semantics_exposes_the_new_label_only() {
+    let inner = Semantics::new(SizedBox::new().width(40.).height(20.)).label("other label");
+    let outer = |child: Widget| Semantics::new(Padding::all(1., child)).label("label");
+    let active = mounted(outer(ExcludeSemantics::new(inner.clone()).into()));
+    let control = mounted(outer(ExcludeSemantics::new(inner).excluding(false).into()));
+    let labels = |tree: &WidgetTree| {
+        let mut result: Vec<_> = nodes(tree)
+            .into_iter()
+            .filter_map(|node| node.label.clone())
+            .filter(|s| !s.is_empty())
+            .collect();
+        result.sort();
+        result
+    };
+    assert_eq!(labels(&control), ["label", "other label"]);
+    assert_eq!(labels(&active), ["label"]);
+}
+
+#[test]
+fn singular_fitted_box_pose_removes_scroll_subtree_from_semantics() {
+    let fit = |height, mark| {
+        let column = Column::new(Vec::<Widget>::new());
+        let scroll = SingleChildScrollView::new(column);
+        let child = match mark {
+            true => Widget::from(Semantics::new(scroll).label("inside")),
+            false => Widget::from(scroll),
+        };
+        Column::new([Widget::from(
+            SizedBox::new()
+                .width(500.)
+                .height(height)
+                .child(FittedBox::new(
+                    SizedBox::new().width(266.).height(55.).child(child),
+                )),
+        )])
+    };
+    assert!(
+        nodes(&mounted(fit(55., true)))
+            .iter()
+            .any(|node| node.label.as_deref() == Some("inside"))
+    );
+    let original = mounted(fit(0., false));
+    let labeled = mounted(fit(0., true));
+    let retained = |tree: &WidgetTree| {
+        nodes(tree)
+            .iter()
+            .map(|node| (node.role, node.label.clone(), node.bounds))
+            .collect::<Vec<_>>()
+    };
+    let original_nodes = retained(&original);
+    let labeled_nodes = retained(&labeled);
+    assert!(
+        original_nodes.is_empty()
+            && !labeled_nodes
+                .iter()
+                .any(|(_, label, _)| label.as_deref() == Some("inside")),
+        "original empty scroll subtree: {original_nodes:?}; labeled scroll: {labeled_nodes:?}"
+    );
+}
+
+fn annotation(level: Option<u8>, label: &str, child: impl Into<Widget>) -> Widget {
+    let annotation = Semantics::new(child).label(label);
+    if let Some(level) = level {
+        annotation.heading_level(level).into()
+    } else {
+        annotation.into()
+    }
+}
+
+#[test]
+fn default_and_valid_heading_levels_appear_in_the_public_tree() {
+    for level in [None, Some(1), Some(2), Some(3), Some(4), Some(5), Some(6)] {
+        let tree = mounted(annotation(level, "heading", SizedBox::shrink()));
+        let node = nodes(&tree)
+            .into_iter()
+            .find(|node| node.label.as_deref() == Some("heading"))
+            .unwrap();
+        assert_eq!(node.state.heading_level, level);
+        assert_eq!(node.role == SemanticRole::Heading, level.is_some());
+    }
+}
+
+#[test]
+fn out_of_range_heading_cannot_claim_heading_role() {
+    // Flutter's original debug assertion rejects even constructing these
+    // values. Rust uses u8, so compare representable bad values and check
+    // that accepting one does not produce a spurious heading.
+    let advertised: Vec<_> = [0, 7, 8, 9]
+        .into_iter()
+        .filter(|&level| {
+            std::panic::catch_unwind(|| {
+                let tree = mounted(annotation(Some(level), "heading", SizedBox::shrink()));
+                nodes(&tree)
+                    .into_iter()
+                    .any(|node| node.role == SemanticRole::Heading)
+            })
+            .unwrap_or(false)
+        })
+        .collect();
+    assert!(
+        advertised.is_empty(),
+        "invalid heading roles advertised for {advertised:?}"
+    );
+}
+
+#[test]
+fn merged_heading_uses_parent_then_first_non_null_descendant() {
+    let cases = [
+        (None, None, None),
+        (None, Some(1), Some(1)),
+        (None, Some(2), Some(2)),
+        (Some(1), None, Some(1)),
+        (Some(2), None, Some(2)),
+        (Some(3), Some(2), Some(3)),
+        (Some(4), Some(1), Some(4)),
+        (Some(2), Some(3), Some(2)),
+        (Some(1), Some(5), Some(1)),
+    ];
+    let actual: Vec<_> = cases
+        .iter()
+        .map(|&(parent, child, _)| {
+            let child = annotation(child, "child", SizedBox::new().width(40.).height(20.));
+            let tree = mounted(MergeSemantics::new(annotation(
+                parent,
+                "parent",
+                Padding::all(1., child),
+            )));
+            let node = nodes(&tree)
+                .into_iter()
+                .find(|node| node.label.as_deref() == Some("parent\nchild"))
+                .expect("combined label");
+            node.state.heading_level
+        })
+        .collect();
+    assert_eq!(actual, cases.map(|(_, _, expected)| expected));
+}
