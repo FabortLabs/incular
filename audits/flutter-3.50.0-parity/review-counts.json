@@ -1,0 +1,74 @@
+{
+  "animation": {
+    "top_level": 59,
+    "members": 332,
+    "lexical-candidate": 38,
+    "no-lexical-lead": 3,
+    "historical-lead-only": 18
+  },
+  "foundation": {
+    "top_level": 143,
+    "members": 457,
+    "no-lexical-lead": 136,
+    "lexical-candidate": 7
+  },
+  "gestures": {
+    "top_level": 196,
+    "members": 660,
+    "no-lexical-lead": 51,
+    "lexical-candidate": 44,
+    "historical-lead-only": 101
+  },
+  "painting": {
+    "top_level": 138,
+    "members": 1178,
+    "lexical-candidate": 59,
+    "historical-lead-only": 69,
+    "no-lexical-lead": 10
+  },
+  "physics": {
+    "top_level": 12,
+    "members": 59,
+    "lexical-candidate": 12
+  },
+  "rendering": {
+    "top_level": 535,
+    "members": 4530,
+    "no-lexical-lead": 90,
+    "lexical-candidate": 103,
+    "historical-lead-only": 342
+  },
+  "scheduler": {
+    "top_level": 22,
+    "members": 106,
+    "no-lexical-lead": 5,
+    "lexical-candidate": 5,
+    "historical-lead-only": 12
+  },
+  "semantics": {
+    "top_level": 44,
+    "members": 612,
+    "no-lexical-lead": 37,
+    "lexical-candidate": 3,
+    "historical-lead-only": 4
+  },
+  "services": {
+    "top_level": 224,
+    "members": 2062,
+    "no-lexical-lead": 21,
+    "lexical-candidate": 33,
+    "historical-lead-only": 170
+  },
+  "widget_previews": {
+    "top_level": 9,
+    "members": 36,
+    "no-lexical-lead": 9
+  },
+  "widgets": {
+    "top_level": 1286,
+    "members": 8255,
+    "lexical-candidate": 594,
+    "no-lexical-lead": 177,
+    "historical-lead-only": 515
+  }
+}
