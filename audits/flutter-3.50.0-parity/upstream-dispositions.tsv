@@ -567,3 +567,10 @@ packages/flutter/test/widgets/sliver_fill_remaining_test.dart	1283	child has no 
 packages/flutter/test/widgets/sliver_fill_viewport_test.dart	12	SliverFillViewport control test	partial-match	upstream-sliver-fill-viewport.md
 packages/flutter/test/widgets/sliver_fill_viewport_test.dart	174	SliverFillViewport padding test	paired-match	upstream-sliver-fill-viewport.md
 packages/flutter/test/widgets/sliver_fill_viewport_test.dart	212	SliverFillViewport semantics respects allowImplicitScrolling	partial-match	upstream-sliver-fill-viewport.md
+packages/flutter/test/widgets/page_view_test.dart	32	PageView.builder respects findChildIndexCallback	reference-ran-incular-open	upstream-page-view-resize.md
+packages/flutter/test/widgets/page_view_test.dart	65	PageView resize from zero-size viewport should not lose state	paired-mismatch	upstream-page-view-resize.md
+packages/flutter/test/widgets/page_view_test.dart	111	Change the page through the controller when zero-size viewport	paired-mismatch	upstream-page-view-resize.md
+packages/flutter/test/widgets/page_view_test.dart	158	_PagePosition.applyViewportDimension should not throw	partial-match	upstream-page-view-resize.md
+packages/flutter/test/widgets/page_view_test.dart	196	PageController cannot return page while unattached	partial-match	upstream-page-view-resize.md
+packages/flutter/test/widgets/page_view_test.dart	310	PageController control test	paired-match	upstream-page-view-resize.md
+packages/flutter/test/widgets/page_view_test.dart	456	PageView in zero-size container	paired-mismatch	upstream-page-view-resize.md
