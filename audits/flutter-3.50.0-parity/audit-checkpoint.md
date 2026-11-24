@@ -41,3 +41,16 @@ two new paired mismatches, one paired positive control. Combined with
 C01–C06, eight custom paired mismatches are documented. This is not upstream
 case closure. Next: rotate to gestures (rotated axis arbitration and
 synthesized velocity), then painting or another under-reviewed track.
+
+### Async stream delivery edge cases (open)
+
+Compare pinned Dart synchronous broadcast and Incular UiStreamController:
+listener A drops B during event 1 (B should not receive it); A tries a
+reentrant add(2) during event 1 (check rejection or preserved subscriber
+order); A tries add after Done is delivered (no post-terminal data).
+Include ordinary multi-listener delivery and close controls. Rust source:
+crates/incular-widgets/src/async_builders.rs:350–351,379–404,458–469.
+Dart sources in the pinned SDK lib/async: stream.dart:107–113,
+stream_controller.dart:123–166, broadcast_stream_controller.dart:266–275,306–342.
+These source leads are not runtime results. Keep the next gestures slice
+as planned, and include these in the later async rotation.
