@@ -191,3 +191,11 @@ and wrapped completion provide controls.
 [upstream physics pairs](upstream-physics-comparisons.md#upstream-clamped-simulation-controls)
 passed on both implementations: now 16/8,965 paired (10 match, six differ),
 plus one reference-only.
+
+### C40: undo history grouping, plus a control for the frame mismatch
+
+[Timing controls](undo-history-comparisons.md) reproduce the early
+deletion divergence, show that both sides match after seeding and making
+one edit, and separately demonstrate that two rapid edits undo as a group
+on Flutter but individually on Incular. Total 40 custom paired mismatch
+cases; the early frame mismatch is not counted again in this total.

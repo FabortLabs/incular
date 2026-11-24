@@ -33,3 +33,6 @@ First observed differences:
 See the [runner](frame-rechecks-batch2.md#runner). Exact IDs and outcomes
 are in [harness dispositions](harness-dispositions.tsv). Traces and reports
 remain in audit scratch batches at UTC 15:20:07 and 15:20:59.
+
+[Timing follow-up](undo-history-comparisons.md) isolates baseline seeding
+and rapid edit coalescing from shortcut handling.
