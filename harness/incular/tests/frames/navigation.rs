@@ -2,13 +2,16 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::host;
-use incular_core::{Color, Offset, time::Instant};
-use incular_navigation::{HeroController, NavigationEvent, Navigator, Route, RouteTransition};
+use incular_animation::{AnimationController, AnimationSource, AnimationStatus, DoubleAnimation};
+use incular_core::{Color, Offset, reactivity::DependencySource};
+use incular_navigation::{
+    HeroController, NavigationEvent, Navigator, PageRouteBuilder, Route, RouteTransition,
+};
 use incular_parity_harness::{FrameHarness, INTERVAL, Scenario, probe};
 use incular_widgets::{
-    Align, Alignment, BasicRouterDelegate, ClipRect, ColoredBox, GestureDetector, Hero,
-    HeroRectTween, MemoryRouteInformationProvider, NavigationBackButtonDispatcher, OverlayPortal,
-    PopScope, Positioned, RouteInformationProvider, Router, SizedBox, Stack,
+    Align, Alignment, BasicRouterDelegate, ClipRect, ColoredBox, FadeTransition, GestureDetector,
+    Hero, HeroRectTween, MemoryRouteInformationProvider, NavigationBackButtonDispatcher,
+    OverlayPortal, PopScope, Positioned, RouteInformationProvider, Router, SizedBox, Stack,
     StringRouteInformationParser, Widget,
 };
 use std::time::Duration;
@@ -288,16 +291,54 @@ fn probe_box(name: &str, color: Color) -> Widget {
     Align::new(Alignment::TOP_LEFT, probe(name, route_box_contents(color))).into()
 }
 
+// The outgoing route's linear 1.0-to-0.5 tween of the incoming route's
+// secondary animation. Forward the route animation's own clock and updates.
+struct SecondaryFade(DoubleAnimation);
+
+impl AnimationSource for SecondaryFade {
+    fn value(&self) -> f32 {
+        1.0 - 0.5 * self.0.value()
+    }
+
+    fn status(&self) -> AnimationStatus {
+        self.0.status()
+    }
+
+    fn controllers(&self) -> Vec<AnimationController> {
+        self.0.controllers()
+    }
+
+    fn changes(&self) -> DependencySource {
+        self.0.changes()
+    }
+}
+
 fn fade_timeline(h: &mut FrameHarness, pop: bool) {
     let navigator = Navigator::new();
-    navigator.push(Route::new("/home", probe_box("below", BLUE)));
-    incular_parity_harness::load_fonts();
-    let base = Instant::now();
+    navigator.push(
+        PageRouteBuilder::new("/home", probe_box("below", BLUE))
+            .transition_duration(Duration::ZERO)
+            .reverse_transition_duration(Duration::ZERO)
+            .transitions_builder(|_, secondary, child| {
+                let opacity = DoubleAnimation::new(SecondaryFade(secondary.clone()));
+                FadeTransition::from_animation(opacity, child).into()
+            })
+            .build(),
+    );
+    // Present both routes with the fake frame clock. A non-opaque top route
+    // keeps the lower route painting even after the push has settled.
     host::mount_navigator(h, &navigator, |_, outlet| outlet);
     h.frames(2);
-    navigator.push(Route::new("/details", probe_box("top", ORANGE)).transition(
-        RouteTransition::fade_in(FADE, base + h.elapsed() + Duration::from_millis(16)),
-    ));
+    navigator.push(
+        PageRouteBuilder::new("/details", probe_box("top", ORANGE))
+            .opaque(false)
+            .transition_duration(FADE)
+            .reverse_transition_duration(FADE)
+            .transitions_builder(|primary, _, child| {
+                FadeTransition::from_animation(primary.clone(), child).into()
+            })
+            .build(),
+    );
     h.frames(22);
     if pop {
         navigator.pop();

@@ -380,7 +380,13 @@ Widget _probeBox(FrameHarness h, String name, Color color) => Align(
       child: h.probe(name, _routeBoxContents(color)),
     );
 
-PageRouteBuilder<void> _fadeRoute(Widget page, int ms, int reverseMs) => PageRouteBuilder<void>(
+PageRouteBuilder<void> _fadeRoute(
+  Widget page,
+  int ms,
+  int reverseMs, {
+  bool opaque = true,
+}) => PageRouteBuilder<void>(
+      opaque: opaque,
       transitionDuration: Duration(milliseconds: ms),
       reverseTransitionDuration: Duration(milliseconds: reverseMs),
       pageBuilder: (context, animation, secondaryAnimation) => page,
@@ -415,7 +421,11 @@ Future<void> _fadeTimeline(FrameHarness h, {required bool pop}) async {
         onDidRemovePage: (_) {},
       ));
   await h.frames(2);
-  key.currentState!.push<void>(_fadeRoute(_probeBox(h, 'top', orange), 300, 300));
+  // Keep the lower route painting even after the push settles, so the
+  // recorder samples both authored opacities rather than offstage geometry.
+  key.currentState!.push<void>(
+    _fadeRoute(_probeBox(h, 'top', orange), 300, 300, opaque: false),
+  );
   await h.frames(22);
   if (pop) {
     key.currentState!.pop<void>();
