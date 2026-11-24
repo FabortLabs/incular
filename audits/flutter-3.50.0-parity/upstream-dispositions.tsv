@@ -191,3 +191,17 @@ packages/flutter/test/foundation/change_notifier_test.dart	457	hasListeners	pair
 packages/flutter/test/animation/futures_test.dart	122	awaiting animation controllers and failing	partial-mismatch	upstream-opacity-hover-flex-notifier-futures.md
 packages/flutter/test/animation/futures_test.dart	153	creating orCancel future later	paired-match	upstream-opacity-hover-flex-notifier-futures.md
 packages/flutter/test/animation/futures_test.dart	167	creating orCancel future later	paired-match	upstream-opacity-hover-flex-notifier-futures.md
+packages/flutter/test/widgets/semantics_test.dart	100	Semantics tooltip	partial-match	upstream-semantic-headings-clamping-and-dilation.md
+packages/flutter/test/widgets/semantics_test.dart	1525	Semantics excludeSemantics ignores children	partial-match	upstream-semantic-headings-clamping-and-dilation.md
+packages/flutter/test/widgets/semantics_test.dart	1876	Semantics with zero transform gets dropped	partial-mismatch	upstream-semantic-headings-clamping-and-dilation.md
+packages/flutter/test/widgets/semantics_test.dart	2020	supports heading levels	partial-mismatch	upstream-semantic-headings-clamping-and-dilation.md
+packages/flutter/test/widgets/semantics_test.dart	2039	parent heading level takes precedence when it absorbs a child	partial-mismatch	upstream-semantic-headings-clamping-and-dilation.md
+packages/flutter/test/widgets/scroll_simulation_test.dart	11	ClampingScrollSimulation has a stable initial conditions	partial-mismatch	upstream-semantic-headings-clamping-and-dilation.md
+packages/flutter/test/widgets/scroll_simulation_test.dart	29	ClampingScrollSimulation only decelerates, never speeds up	paired-match	upstream-semantic-headings-clamping-and-dilation.md
+packages/flutter/test/widgets/scroll_simulation_test.dart	43	ClampingScrollSimulation reaches a smooth stop: velocity is continuous and goes to zero	paired-match	upstream-semantic-headings-clamping-and-dilation.md
+packages/flutter/test/widgets/scroll_simulation_test.dart	65	ClampingScrollSimulation is ballistic	partial-mismatch	upstream-semantic-headings-clamping-and-dilation.md
+packages/flutter/test/widgets/scroll_simulation_test.dart	101	ClampingScrollSimulation satisfies a physical acceleration formula	paired-match	upstream-semantic-headings-clamping-and-dilation.md
+packages/flutter/test/scheduler/animation_test.dart	17	Check for a time dilation being in effect	paired-match	upstream-semantic-headings-clamping-and-dilation.md
+packages/flutter/test/scheduler/animation_test.dart	21	Can cancel queued callback	partial-mismatch	upstream-semantic-headings-clamping-and-dilation.md
+packages/flutter/test/scheduler/ticker_test.dart	118	Ticker can be sped up with time dilation	paired-match	upstream-semantic-headings-clamping-and-dilation.md
+packages/flutter/test/scheduler/ticker_test.dart	136	Ticker can be slowed down with time dilation	paired-match	upstream-semantic-headings-clamping-and-dilation.md

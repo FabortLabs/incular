@@ -504,3 +504,12 @@ but Incular invokes the custom painter at effectively zero alpha.
 New lifecycle regressions distinguish incorrect local mouse
 coordinates, interrupted callback dispatch, and an uncancelled
 controller future.
+
+### Semantic headings, singular fitted pose, clamping and time dilation
+
+[Fourteen upstream dispositions](upstream-semantic-headings-clamping-and-dilation.md)
+bring complete pairs to 131/8,965 (91 match, 40 differ), with 53
+partial and 22 reference-only. New tests expose lost merged heading
+levels and semantics from a singular fit; clamping differences are
+isolated to public precision at strict tolerances. The scheduler
+tests match both original fast and slow time-dilation cases.
