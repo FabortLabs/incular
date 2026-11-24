@@ -703,3 +703,8 @@ packages/flutter/test/widgets/single_child_scroll_view_test.dart	1087	SingleChil
 packages/flutter/test/gestures/tap_and_drag_test.dart	292	Recognizer rejects pointer that is not the primary one (FIFO) - before acceptance	paired-match	upstream-tap-and-drag.md
 packages/flutter/test/gestures/tap_and_drag_test.dart	313	Calls tap up when the recognizer accepts before handleEvent is called	paired-match	upstream-tap-and-drag.md
 packages/flutter/test/gestures/tap_and_drag_test.dart	326	Recognizer rejects pointer that is not the primary one (FILO) - before acceptance	paired-match	upstream-tap-and-drag.md
+packages/flutter/test/painting/fractional_offset_test.dart	9	FractionalOffset control test	reference-ran-incular-open	upstream-fractional-offset.md
+packages/flutter/test/painting/fractional_offset_test.dart	26	FractionalOffset.lerp()	paired-match	upstream-fractional-offset.md
+packages/flutter/test/painting/fractional_offset_test.dart	36	FractionalOffset.lerp identical a,b	partial-match	upstream-fractional-offset.md
+packages/flutter/test/painting/fractional_offset_test.dart	42	FractionalOffset.fromOffsetAndSize()	paired-match	upstream-fractional-offset.md
+packages/flutter/test/painting/fractional_offset_test.dart	50	FractionalOffset.fromOffsetAndRect()	paired-match	upstream-fractional-offset.md

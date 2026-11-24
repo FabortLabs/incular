@@ -1,4 +1,4 @@
-use incular_core::{Offset, Size};
+use incular_core::{Offset, Rect, Size};
 
 /// Direction in which a linear layout consumes its main axis.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -115,9 +115,12 @@ impl Alignment {
         Self { x, y }
     }
 
+    /// Resolves this point relative to the size's top-left origin.
     #[must_use]
     pub const fn along_size(self, size: Size) -> Offset {
-        Offset::new(size.width * self.x * 0.5, size.height * self.y * 0.5)
+        let center_x = size.width * 0.5;
+        let center_y = size.height * 0.5;
+        Offset::new(center_x + self.x * center_x, center_y + self.y * center_y)
     }
 
     /// Computes the child origin inside a parent. Values outside `[-1, 1]`
@@ -211,6 +214,36 @@ impl FractionalOffset {
     #[must_use]
     pub const fn new(dx: f32, dy: f32) -> Self {
         Self { dx, dy }
+    }
+
+    /// Expresses a top-left-relative point as fractions of the given size.
+    /// Fractions outside the box remain outside the [0, 1] range.
+    #[must_use]
+    pub fn from_offset_and_size(offset: Offset, size: Size) -> Self {
+        Self::new(offset.x / size.width, offset.y / size.height)
+    }
+
+    /// The point and rectangle share an origin; the rectangle's own
+    /// top-left is subtracted before measuring the fractions.
+    #[must_use]
+    pub fn from_offset_and_rect(offset: Offset, rect: Rect) -> Self {
+        Self::from_offset_and_size(offset - rect.origin, rect.size)
+    }
+
+    /// Interpolates optional offsets. A missing endpoint is the center;
+    /// two missing endpoints return no offset.
+    #[must_use]
+    pub fn lerp_optional(a: Option<Self>, b: Option<Self>, t: f32) -> Option<Self> {
+        if a.is_none() && b.is_none() {
+            return None;
+        }
+        let a = a.unwrap_or(Self::CENTER);
+        let b = b.unwrap_or(Self::CENTER);
+        Some(if a == b {
+            a
+        } else {
+            incular_core::Lerp::lerp(&a, &b, t)
+        })
     }
 
     #[must_use]
