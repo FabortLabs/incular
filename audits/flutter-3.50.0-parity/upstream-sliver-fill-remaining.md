@@ -27,3 +27,17 @@ All eight original Flutter iOS/macOS variant expansions for :600, :644, :685 and
 | :744 reversed horizontal, jump 50 | x=0, width=850 | x=50, width=800 |
 
 Run with cargo test --locked -p incular-runtime --test flutter350_sliver_fill_overscroll_parity -- --nocapture.
+
+## Touch drag, flexible child, and clamping follow-up
+
+All remaining thirteen original registrations and their named iOS/macOS variants passed on the pinned reference. Flutter's exact test names are in the ledger. Incular explicitly selects the corresponding physics and delivers a 50px synthetic touch swipe through Runtime's actual input path, then pumps monotonic frames. The focused Rust binary has three matches and six intentional failures. Its 116px-wide neutral button analogue and 100px logo analogue compare geometry, not the helper widgets or OS integrations.
+
+- :385: flexible logo and bottom button geometry matches at rest; the 48px/40px button heights cover both reference density dimensions. The hardware platform theme is not involved.
+- :555: a real bouncing drag reaches about +22.49px outside the range, but the expanding child remains 450px tall. Flutter stretches beyond 450px. Initial and settled height match.
+- :793 and :958: the smaller bottom-aligned box and the flexible-column case fail to stretch. The bottom follows the offset to ~577.51 instead of staying at y=600. The logo and button keep their intended dimensions, and rest positions match after settling.
+- :838: beyond five 150px rows, the padded child attains the same resting 148px/140px natural heights. During the drag it stays at that same height despite +22.49px overscroll; Flutter grows beyond 148px in both variants.
+- :902 and :1283: partial mismatch for accessibility of the final list row alongside a zero-natural-size fill. Before scrolling, Flutter's finder does not expose label 4; Rust reports a visible node. Once the end is reached the label is visible on both. The zero-height paint-geometry observation is not equivalent to the Flutter element finder during overscroll; no exact presence claim is made there.
+- :1034, :1081, :1125: with fillOverscroll enabled, inside / within-cache / outside-cache states should be visible / hidden / absent. Incular gives visible / visible / visible despite the exact physical y coordinates.
+- :1175, :1198 and :1233: with clamping physics, the attempted swipe does not stretch the 450px fill or move its bottom-aligned small child; the padded 148px natural extent at the end of the long list also remains unchanged. These pass. The small button and padded center cases use neutral box analogues.
+
+Run cargo test --locked -p incular-runtime --test flutter350_sliver_fill_drag_semantics -- --nocapture. All 31 original registrations in this file now have an explicit disposition, including partials. See earlier sections for programmatic/reverse overscroll and no-swipe visibility.

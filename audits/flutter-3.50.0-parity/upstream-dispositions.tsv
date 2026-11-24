@@ -551,3 +551,16 @@ packages/flutter/test/widgets/sliver_fill_remaining_test.dart	600	child stretche
 packages/flutter/test/widgets/sliver_fill_remaining_test.dart	644	lone child stretches to cover the whole overscroll	paired-mismatch	upstream-sliver-fill-remaining.md
 packages/flutter/test/widgets/sliver_fill_remaining_test.dart	685	child in a reversed scroll view stretches towards the leading edge	paired-mismatch	upstream-sliver-fill-remaining.md
 packages/flutter/test/widgets/sliver_fill_remaining_test.dart	744	child in a reversed horizontal scroll view stretches towards the leading edge	paired-mismatch	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	385	alignment with a flexible works	partial-match	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	555	child without size is sized by extent and overscroll	paired-mismatch	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	793	child with smaller size is overridden and sized by extent and overscroll	partial-mismatch	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	838	extent is overridden by child size and overscroll if precedingScrollExtent > viewportMainAxisExtent	partial-mismatch	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	902	fillOverscroll works when child has no size and precedingScrollExtent > viewportMainAxisExtent	partial-mismatch	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	958	alignment with a flexible works with fillOverscroll	partial-mismatch	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	1034	within viewport	paired-match	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	1081	outside of viewport but within cache extent	paired-mismatch	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	1125	outside of viewport and not within cache extent	paired-mismatch	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	1175	child without size is sized by extent	paired-match	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	1198	child with size is overridden and sized by extent	partial-match	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	1233	extent is overridden by child size if precedingScrollExtent > viewportMainAxisExtent	partial-match	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	1283	child has no size and precedingScrollExtent > viewportMainAxisExtent	partial-mismatch	upstream-sliver-fill-remaining.md
