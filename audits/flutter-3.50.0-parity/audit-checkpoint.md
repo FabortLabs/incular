@@ -538,3 +538,11 @@ bring complete pairs to 153/8,965 (112 match, 41 differ), with
 72 partial and 25 reference-only. Five complete curve tests match,
 and negative intrinsic step inputs still differ. Status/navigation
 annotation sampling matches at the host payload layer.
+
+### Repeat validation, explicit focus, restoration, flex and matrix sampling
+
+[Twenty upstream dispositions](upstream-repeat-focus-restoration-flex-and-image-filter.md)
+bring complete pairs to 160/8,965 (118 match, 42 differ), with 83
+partial and 27 reference-only. New independent probes reproduce
+zero-count infinite repeat, direct focus lost after traversal exclusion,
+different restoration write timing, and default matrix sampling.
