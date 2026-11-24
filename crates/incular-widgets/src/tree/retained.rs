@@ -61,6 +61,7 @@ impl WidgetTree {
             recursion_diagnostics: RecursionDiagnostics::new(),
             tracked: TrackedElements::default(),
             hosted_focus_nodes: None,
+            hosted_focus_chain: HostedFocusChain::default(),
             #[cfg(feature = "devtools")]
             deep_trace: None,
             #[cfg(feature = "devtools")]

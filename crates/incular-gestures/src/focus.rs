@@ -45,6 +45,7 @@ impl std::fmt::Debug for FocusNode {
 }
 struct FocusState {
     focused: Cell<bool>,
+    descendant_focused: Cell<bool>,
     requested: Cell<Option<u64>>,
     managed_by_host: Cell<bool>,
     host_attachment_count: Cell<usize>,
@@ -123,6 +124,7 @@ impl Default for FocusNode {
         Self {
             state: Rc::new(FocusState {
                 focused: Cell::new(false),
+                descendant_focused: Cell::new(false),
                 requested: Cell::new(None),
                 managed_by_host: Cell::new(false),
                 host_attachment_count: Cell::new(0),
@@ -215,12 +217,31 @@ impl FocusNode {
     /// creating one, so another host sharing the node does not adopt it.
     pub fn apply_host_focus(&self, focused: bool) {
         self.clear_pending_focus_request();
-        self.state.set_focused(focused);
+        if self.set_host_focus_state_silent(focused, false) {
+            self.notify_host_focus_state();
+        }
+    }
+
+    /// Updates both focus roles without notifying while the host updates
+    /// the other nodes on the path to primary focus.
+    #[doc(hidden)]
+    pub fn set_host_focus_state_silent(&self, primary: bool, descendant: bool) -> bool {
+        if primary {
+            self.clear_pending_focus_request();
+        }
+        let primary_changed = self.state.set_focused_silent(primary);
+        let descendant_changed = self.state.descendant_focused.replace(descendant) != descendant;
+        primary_changed || descendant_changed
+    }
+
+    #[doc(hidden)]
+    pub fn notify_host_focus_state(&self) {
+        self.state.notify();
     }
     #[must_use]
     pub fn has_focus(&self) -> bool {
         self.state.changes.track();
-        self.state.focused.get()
+        self.state.focused.get() || self.state.descendant_focused.get()
     }
     #[must_use]
     pub fn has_primary_focus(&self) -> bool {

@@ -111,3 +111,51 @@ fn last_eligible_request_wins_even_when_skipped_by_traversal() {
     assert!(!a.has_primary_focus(), "an older request must not replay");
     assert!(b.has_primary_focus());
 }
+
+#[test]
+fn parent_focus_within_survives_child_switches_without_a_false_transition() {
+    let parent = FocusNode::new();
+    let first = FocusNode::new();
+    let second = FocusNode::new();
+    let outside = FocusNode::new();
+    let trace = Rc::new(RefCell::new(Vec::new()));
+    let _sub = parent.observe({
+        let parent = parent.clone();
+        let trace = trace.clone();
+        let prior = Cell::new(false);
+        move || {
+            let current = parent.has_focus();
+            if prior.replace(current) != current {
+                trace.borrow_mut().push(current);
+            }
+        }
+    });
+    let mut runtime = Runtime::new(
+        Column::new([
+            Focus::new(Column::new([focus(&first), focus(&second)])).node(parent.clone()),
+            focus(&outside),
+        ])
+        .into(),
+    )
+    .unwrap();
+    parent.request_focus();
+    frame(&mut runtime);
+    assert!(parent.has_primary_focus());
+    for child in [&first, &second] {
+        child.request_focus();
+        frame(&mut runtime);
+        assert!(child.has_primary_focus());
+        assert!(parent.has_focus());
+        assert!(!parent.has_primary_focus());
+        assert_eq!(
+            runtime.tree().focused_keyboard_element(),
+            runtime.focused_element()
+        );
+        assert_eq!(trace.borrow().as_slice(), [true]);
+    }
+    outside.request_focus();
+    frame(&mut runtime);
+    assert!(outside.has_primary_focus());
+    assert!(!parent.has_focus());
+    assert_eq!(trace.borrow().as_slice(), [true, false]);
+}

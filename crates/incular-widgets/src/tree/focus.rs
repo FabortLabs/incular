@@ -27,9 +27,53 @@ impl WidgetTree {
                 .is_some_and(|binding| binding.node() == node)
             {
                 hosted.insert(id, node.attach_to_focus_host());
+                self.hosted_focus_chain.dirty = true;
             }
-        } else if !hosted.is_empty() {
-            hosted.remove(&id);
+        } else if hosted.remove(&id).is_some() {
+            self.hosted_focus_chain.dirty = true;
+        }
+    }
+
+    /// Applies all hosted focus roles before any node observer is notified.
+    /// Rebuilds the chain only for a different target or retained ancestry.
+    #[doc(hidden)]
+    pub fn sync_hosted_focus_chain(&mut self, target: Option<ElementId>) {
+        let Some(hosted) = &self.hosted_focus_nodes else {
+            return;
+        };
+        if self.hosted_focus_chain.target == target && !self.hosted_focus_chain.dirty {
+            return;
+        }
+        let mut next = Vec::new();
+        let mut current = target;
+        while let Some(id) = current {
+            if let Some(binding) = hosted.get(&id)
+                && !next.iter().any(|(node, _)| node == binding.node())
+            {
+                next.push((binding.node().clone(), Some(id) == target));
+            }
+            current = self.parent(id);
+        }
+        let mut changed = Vec::new();
+        for (node, _) in &self.hosted_focus_chain.entries {
+            if !next.iter().any(|(retained, _)| retained == node)
+                && node.set_host_focus_state_silent(false, false)
+            {
+                changed.push(node.clone());
+            }
+        }
+        for (node, primary) in &next {
+            if node.set_host_focus_state_silent(*primary, !*primary) {
+                changed.push(node.clone());
+            }
+        }
+        self.hosted_focus_chain = HostedFocusChain {
+            target,
+            entries: next,
+            dirty: false,
+        };
+        for node in changed {
+            node.notify_host_focus_state();
         }
     }
 
@@ -441,7 +485,7 @@ impl WidgetTree {
                     WidgetKind::Gesture { callbacks, .. } => callbacks.focus_node.as_ref(),
                     _ => None,
                 })
-                .is_some_and(|node| node.has_focus())
+                .is_some_and(|node| node.has_primary_focus())
         })
     }
 
@@ -545,9 +589,13 @@ impl WidgetTree {
             })
     }
 
-    /// Mirrors runtime focus changes onto a listener's external focus node.
+    /// Notifies focus-within callbacks and mirrors standalone tree focus
+    /// onto the listener's node. Runtime trees synchronize their full path.
     pub fn set_keyboard_focus(&self, id: ElementId, focused: bool) {
         self.notify_focus_within(id, focused);
+        if self.hosted_focus_nodes.is_some() {
+            return;
+        }
         let Some(element) = self.elements.get(id.0) else {
             return;
         };

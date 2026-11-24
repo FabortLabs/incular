@@ -2113,8 +2113,10 @@ impl WidgetTree {
                         continue;
                     };
                     self.tracked.untrack(id, element.tracked);
-                    if let Some(hosted) = self.hosted_focus_nodes.as_mut() {
-                        hosted.remove(&id);
+                    if let Some(hosted) = self.hosted_focus_nodes.as_mut()
+                        && hosted.remove(&id).is_some()
+                    {
+                        self.hosted_focus_chain.dirty = true;
                     }
                     self.unregister_global_key(id, &element.widget);
                     let render = element.render;
@@ -2428,6 +2430,13 @@ impl WidgetTree {
             changed
         };
         if children_changed {
+            if self
+                .hosted_focus_nodes
+                .as_ref()
+                .is_some_and(|nodes| !nodes.is_empty())
+            {
+                self.hosted_focus_chain.dirty = true;
+            }
             // Every retained topology change passes through here, including
             // lazy materialization, global-key moves and finished exits.
             // A departing child kept in the list retains its subscriptions.

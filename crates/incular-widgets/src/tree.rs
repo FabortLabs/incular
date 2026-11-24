@@ -1401,6 +1401,7 @@ pub struct WidgetTree {
     /// Runtime-only focus attachments; a standalone WidgetTree keeps its
     /// direct FocusNode behavior.
     hosted_focus_nodes: Option<BTreeMap<ElementId, incular_gestures::FocusNodeAttachment>>,
+    hosted_focus_chain: HostedFocusChain,
     #[cfg(feature = "devtools")]
     deep_trace: Option<DeepTraceCapture>,
     /// Temporary DevTools property overrides, re-applied when the
@@ -1432,6 +1433,13 @@ impl WidgetTree {
     pub fn tree_id(&self) -> u64 {
         self.tree_id
     }
+}
+
+#[derive(Default)]
+struct HostedFocusChain {
+    target: Option<ElementId>,
+    entries: Vec<(incular_gestures::FocusNode, bool)>,
+    dirty: bool,
 }
 
 struct FocusCandidate {

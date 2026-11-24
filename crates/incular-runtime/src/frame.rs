@@ -1869,6 +1869,7 @@ impl Runtime {
             self.hide_text_field_handles(previous);
         }
         self.focused = next;
+        self.tree.sync_hosted_focus_chain(next);
         if let Some(current) = next {
             let _ = self.tree.set_focused(current, true, self.input_now());
             self.tree.set_keyboard_focus(current, true);
@@ -1920,6 +1921,7 @@ impl Runtime {
         {
             self.set_focus(None);
         }
+        self.tree.sync_hosted_focus_chain(self.focused);
         self.reconcile_button_tenure();
     }
 

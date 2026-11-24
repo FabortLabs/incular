@@ -19,3 +19,14 @@ independent maintain-focusability option, the deliberate invalid-index
 handling, and the earlier canceled-touch/editable focus regression (B01).
 The named audit targets still report those known reds rather than
 suppressing them.
+
+## Ancestor focus membership
+
+The runtime now records the retained path to primary focus. Parent
+nodes expose has_focus while a descendant is primary, even if a parent
+cannot take primary focus itself. Changes to the path are applied before
+node observers run. Moving from parent to child or between siblings
+no longer publishes a false end to the parent's focus membership.
+The pinned authored switch test and the original partial ancestor
+regression now pass, along with the hosted, keyboard, Visibility and
+standalone controls.

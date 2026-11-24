@@ -81,4 +81,42 @@ void main() {
     await tester.pump();
     expect((a.hasPrimaryFocus, b.hasPrimaryFocus), (false, true));
   });
+
+  testWidgets('parent focus membership survives child switches', (tester) async {
+    final parent = FocusNode();
+    final first = FocusNode();
+    final second = FocusNode();
+    final other = FocusNode();
+    for (final node in [parent, first, second, other]) {
+      addTearDown(node.dispose);
+    }
+    final trace = <bool>[];
+    var previous = false;
+    parent.addListener(() {
+      final focused = parent.hasFocus;
+      if (focused != previous) {
+        trace.add(focused);
+        previous = focused;
+      }
+    });
+    await tester.pumpWidget(scope(Column(children: [
+      Focus(focusNode: parent, child: Column(children: [bound(first), bound(second)])),
+      bound(other),
+    ])));
+    parent.requestFocus();
+    await tester.pump();
+    expect(parent.hasPrimaryFocus, true);
+    for (final child in [first, second]) {
+      child.requestFocus();
+      await tester.pump();
+      expect(child.hasPrimaryFocus, true);
+      expect((parent.hasFocus, parent.hasPrimaryFocus), (true, false));
+      expect(trace, [true]);
+    }
+    other.requestFocus();
+    await tester.pump();
+    expect(other.hasPrimaryFocus, true);
+    expect(parent.hasFocus, false);
+    expect(trace, [true, false]);
+  });
 }
