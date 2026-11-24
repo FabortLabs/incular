@@ -115,3 +115,124 @@ fn intrinsic_height_counts_two_text_runs_and_the_full_width_row() {
     ));
     assert_eq!(bounds(&tree, WRAP).size.height, 72.);
 }
+
+const DISTRIBUTION: [WrapAlignment; 4] = [
+    WrapAlignment::Center,
+    WrapAlignment::SpaceBetween,
+    WrapAlignment::SpaceAround,
+    WrapAlignment::SpaceEvenly,
+];
+
+fn main_axis(direction: TextDirection, expected: [[f32; 3]; 4]) {
+    let build = |step: usize| {
+        key(wrap(&[
+            (100., 10.),
+            (200., 20.),
+            (if step < 2 { 300. } else { 310. }, 30.),
+        ])
+        .text_direction(direction)
+        .spacing(5.)
+        .alignment(DISTRIBUTION[step]))
+    };
+    let mut tree = mount(build(0));
+    for (step, xs) in expected.into_iter().enumerate() {
+        let root = tree.root().unwrap();
+        if step > 0 {
+            tree.update(root, build(step)).unwrap();
+            tree.layout(Constraints::tight(HOST)).unwrap();
+        }
+        check(&tree, HOST, &xs.map(|x| (x, 0.)));
+    }
+}
+#[test]
+fn main_alignment_geometry_left_to_right() {
+    main_axis(
+        TextDirection::Ltr,
+        [
+            [95., 200., 405.],
+            [0., 200., 500.],
+            [30., 195., 460.],
+            [45., 195., 445.],
+        ],
+    );
+}
+#[test]
+fn main_alignment_geometry_right_to_left() {
+    main_axis(
+        TextDirection::Rtl,
+        [
+            [605., 400., 95.],
+            [700., 400., 0.],
+            [670., 405., 30.],
+            [655., 405., 45.],
+        ],
+    );
+}
+
+fn run_axis(direction: incular_config::VerticalDirection, expected: [[f32; 5]; 4]) {
+    let build = |step: usize| {
+        key(wrap(&[
+            (100., 10.),
+            (200., 20.),
+            (300., 30.),
+            (400., 40.),
+            (500., if step == 2 { 70. } else { 60. }),
+        ])
+        .vertical_direction(direction)
+        .run_spacing(5.)
+        .run_alignment(DISTRIBUTION[step]))
+    };
+    let mut tree = mount(build(0));
+    let x = [0., 100., 300., 0., 0.];
+    for (step, ys) in expected.into_iter().enumerate() {
+        let root = tree.root().unwrap();
+        if step > 0 {
+            tree.update(root, build(step)).unwrap();
+            tree.layout(Constraints::tight(HOST)).unwrap();
+        }
+        let offsets = (0..5).map(|i| (x[i], ys[i])).collect::<Vec<_>>();
+        check(&tree, HOST, &offsets);
+    }
+}
+#[test]
+fn run_distribution_down_aligns_the_rows() {
+    run_axis(
+        incular_config::VerticalDirection::Down,
+        [
+            [230., 230., 230., 265., 310.],
+            [0., 0., 0., 265., 540.],
+            [75., 75., 75., 260., 455.],
+            [115., 115., 115., 265., 425.],
+        ],
+    );
+}
+#[test]
+fn run_distribution_up_mirrors_runs_and_start_edges_inside_each_run() {
+    run_axis(
+        incular_config::VerticalDirection::Up,
+        [
+            [360., 350., 340., 295., 230.],
+            [590., 580., 570., 295., 0.],
+            [515., 505., 495., 300., 75.],
+            [475., 465., 455., 295., 115.],
+        ],
+    );
+}
+#[test]
+fn vertical_intrinsic_width_sums_three_columns() {
+    use incular_widgets::IntrinsicWidth;
+    // The Flutter fixture's Ahem text is 80 and 48 wide. Use the same
+    // measured width as fixed box inputs without changing the font stack.
+    let ahem_box = |width| SizedBox::new().width(width).height(16.);
+    let w = Wrap::new([
+        Widget::from(ahem_box(80.)),
+        Widget::from(Column::new([SizedBox::new().width(60.).height(40.)])),
+        Widget::from(ahem_box(48.)),
+    ])
+    .direction(incular_config::Axis::Vertical);
+    let tree = mount(Directionality::new(
+        TextDirection::Ltr,
+        Center::new(Widget::from(IntrinsicWidth::new(w)).with_key(Key::Value(WRAP))),
+    ));
+    assert_eq!(bounds(&tree, WRAP).size.width, 188.);
+}
