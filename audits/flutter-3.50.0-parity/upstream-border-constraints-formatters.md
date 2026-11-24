@@ -31,3 +31,24 @@ Flutter (64/128/191 at .25/.5/.75), but stays 255 in Incular.
 See `flutter350_border_side_edges` and `border_side_edges_test.dart`.
 These are paint-data results, not an assertion of affected pixels.
 The separate WGPU hairline fixture still covers actual raster output.
+
+## Border-side repair and merge
+
+`BorderSide.scale` resets stroke alignment to inside. Every intermediate
+None/Solid interpolation uses a solid stroke with interpolated alpha;
+the exact endpoints still return the original styles. Same-alignment
+None/None interpolation retains the correct layout inset without painting.
+Negative extrapolation returns an absent side; exact zero remains a
+solid hairline. The `Border.symmetric` value mapping now puts vertical
+edges on left and right. The upstream identity check remains Rust-inapplicable.
+
+The original merge registration at line 14 of `border_side_test.dart`
+now pairs across all 18 combinations, including each rejected color/style
+mismatch and neutral zero-width absent sides. An extra Rust control checks
+that a successful merge keeps the farther outside alignment.
+
+All 14 focused Rust border/decoration checks and three authored Flutter
+value checks pass. Five retained Flutter and Windows wgpu frames match
+at all seven horizontal samples, including an extrapolated negative-width
+side with neither a reserved inset nor an unwanted hairline. Translucent
+interpolation is checked as paint data here, not as a raster color comparison.

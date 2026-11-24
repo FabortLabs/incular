@@ -61,4 +61,17 @@ fn flutter_350_border_side_lerp_fades_none_endpoint_color_both_ways() {
         [increasing, decreasing],
         "None to Solid and Solid to None at t=0.25, 0.50, 0.75"
     );
+    for t in [0.25, 0.5, 0.75] {
+        assert_eq!(none.lerp(&solid, t).style, BorderStyle::Solid);
+        assert_eq!(solid.lerp(&none, t).style, BorderStyle::Solid);
+    }
+}
+
+#[test]
+fn equally_aligned_no_stroke_sides_keep_the_interpolated_layout_insets() {
+    let first = BorderSide::new(OPAQUE, 2., BorderStyle::None);
+    let second = BorderSide::new(OPAQUE, 6., BorderStyle::None);
+    let middle = first.lerp(&second, 0.5);
+    assert_eq!(middle, BorderSide::new(OPAQUE, 4., BorderStyle::None));
+    assert_eq!(middle.stroke_inset(), 4.);
 }

@@ -51,5 +51,20 @@ void main() {
     expect(colors(solid, transparentSolid), decreasing);
     expect(colors(none, solid), increasing);
     expect(colors(solid, none), decreasing);
+    for (final t in _progress) {
+      expect(BorderSide.lerp(none, solid, t).style, BorderStyle.solid);
+      expect(BorderSide.lerp(solid, none, t).style, BorderStyle.solid);
+    }
+  });
+
+  test('two none styles interpolate width without creating a stroke', () {
+    const a = BorderSide(color: _opaque, width: 2, style: BorderStyle.none);
+    const b = BorderSide(color: _opaque, width: 6, style: BorderStyle.none);
+    final mid = BorderSide.lerp(a, b, 0.5);
+    expect(
+      mid,
+      const BorderSide(color: _opaque, width: 4, style: BorderStyle.none),
+    );
+    expect(mid.strokeInset, 4.0);
   });
 }

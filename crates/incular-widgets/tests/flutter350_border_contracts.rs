@@ -4,6 +4,63 @@ use incular_core::{Color, Lerp};
 use incular_widgets::{Border, BorderSide, BorderStyle};
 
 #[test]
+fn flutter_350_border_side_merge_only_combines_compatible_sides() {
+    // packages/flutter/test/painting/border_side_test.dart:14.
+    let blue = Color::rgba(0, 0, 255, 255);
+    let green = Color::rgba(0, 255, 0, 255);
+    let solid = BorderSide::default();
+    let none = BorderSide::new(Color::BLACK, 1., BorderStyle::None);
+    let empty = BorderSide::NONE;
+    let yellow_empty = BorderSide::new(Color::rgba(255, 255, 0, 255), 0., BorderStyle::None);
+    let blue2 = BorderSide::solid(blue, 2.);
+    let green2 = BorderSide::solid(green, 2.);
+    let green3 = BorderSide::solid(green, 3.);
+    let none2 = BorderSide::new(blue, 2., BorderStyle::None);
+    let none3 = BorderSide::new(Color::BLACK, 3., BorderStyle::None);
+    let side2 = BorderSide::solid(Color::BLACK, 2.);
+    let side3 = BorderSide::solid(Color::BLACK, 3.);
+    let side5 = BorderSide::solid(Color::BLACK, 5.);
+    for (a, b, expected) in [
+        (empty, empty, Some(empty)),
+        (empty, side2, Some(side2)),
+        (empty, yellow_empty, Some(empty)),
+        (
+            BorderSide::solid(green, 1.),
+            BorderSide::solid(blue, 1.),
+            None,
+        ),
+        (green2, blue2, None),
+        (green2, green3, Some(BorderSide::solid(green, 5.))),
+        (green2, none2, None),
+        (none3, empty, Some(none3)),
+        (none3, side2, None),
+        (none3, yellow_empty, Some(none3)),
+        (side2, empty, Some(side2)),
+        (side2, none3, None),
+        (side2, side3, Some(side5)),
+        (side2, yellow_empty, Some(side2)),
+        (side3, side2, Some(side5)),
+        (solid, none, None),
+        (yellow_empty, side2, Some(side2)),
+        (yellow_empty, yellow_empty, Some(empty)),
+    ] {
+        assert_eq!(a.can_merge(&b), expected.is_some(), "{a:?} and {b:?}");
+        assert_eq!(std::panic::catch_unwind(|| a.merge(&b)).ok(), expected);
+    }
+    let outside = BorderSide {
+        stroke_align: 1.,
+        ..side3
+    };
+    assert_eq!(
+        side2.merge(&outside),
+        BorderSide {
+            stroke_align: 1.,
+            ..side5
+        }
+    );
+}
+
+#[test]
 fn flutter_350_border_side_scale() {
     // packages/flutter/test/painting/border_side_test.dart:79.
     let blue = Color::rgba(0, 0, 255, 255);

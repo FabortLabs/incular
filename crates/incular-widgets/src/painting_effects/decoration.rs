@@ -64,6 +64,39 @@ impl BorderSide {
         Self::NONE
     }
 
+    /// Zero-width absent sides merge with anything. Other sides must agree
+    /// in style and color; their widths and alignments may differ.
+    #[must_use]
+    pub fn can_merge(&self, other: &Self) -> bool {
+        self.is_absent()
+            || other.is_absent()
+            || (self.style == other.style && self.color == other.color)
+    }
+
+    /// Adds two compatible sides, preserving the farthest outside alignment.
+    ///
+    /// # Panics
+    ///
+    /// Panics when [`Self::can_merge`] returns false.
+    #[must_use]
+    pub fn merge(&self, other: &Self) -> Self {
+        assert!(self.can_merge(other), "incompatible border sides");
+        match (self.is_absent(), other.is_absent()) {
+            (true, true) => Self::NONE,
+            (true, false) => *other,
+            (false, true) => *self,
+            (false, false) => Self {
+                width: self.width + other.width,
+                stroke_align: self.stroke_align.max(other.stroke_align),
+                ..*self
+            },
+        }
+    }
+
+    fn is_absent(&self) -> bool {
+        self.style == BorderStyle::None && self.width == 0.0
+    }
+
     /// Flutter `strokeInset`: how far the stroke reaches inside the shape.
     #[must_use]
     pub fn stroke_inset(&self) -> f32 {
@@ -83,8 +116,8 @@ impl BorderSide {
         self.width * self.stroke_align
     }
 
-    /// Flutter `BorderSide.scale`: the width scales and a non-positive
-    /// factor removes the side.
+    /// Scales the width, resets alignment to inside, and removes the stroke
+    /// for non-positive factors instead of producing a solid hairline.
     #[must_use]
     pub fn scale(&self, t: f32) -> Self {
         Self {
@@ -94,24 +127,54 @@ impl BorderSide {
             } else {
                 self.style
             },
-            ..*self
+            stroke_align: Self::NONE.stroke_align,
+            color: self.color,
         }
     }
 }
 
-/// Flutter `BorderSide.lerp`: `t` is not clamped. The width stays
-/// non-negative, since Flutter's `BorderSide` asserts that, and the style
-/// switches at the halfway point as Flutter's does.
+/// Flutter `BorderSide.lerp`: negative extrapolation removes the side,
+/// and transitions involving different styles fade through transparent
+/// strokes without abruptly swapping the style at the midpoint.
 impl incular_core::Lerp for BorderSide {
     fn lerp(&self, other: &Self, t: f32) -> Self {
-        if self.style == BorderStyle::None && other.style == BorderStyle::None {
+        if t == 0.0 || self == other {
+            return *self;
+        }
+        if t == 1.0 {
+            return *other;
+        }
+        let width = if self.width == other.width {
+            self.width
+        } else {
+            self.width.lerp(&other.width, t)
+        };
+        if width < 0.0 {
             return Self::NONE;
         }
+        if self.style == other.style && self.stroke_align == other.stroke_align {
+            return Self {
+                color: self.color.lerp(&other.color, t),
+                width,
+                ..*self
+            };
+        }
+        let visible_color = |side: &Self| match side.style {
+            BorderStyle::None => Color {
+                alpha: 0,
+                ..side.color
+            },
+            BorderStyle::Solid => side.color,
+        };
         Self {
-            color: self.color.lerp(&other.color, t),
-            width: self.width.lerp(&other.width, t).max(0.0),
-            style: if t < 0.5 { self.style } else { other.style },
-            stroke_align: self.stroke_align.lerp(&other.stroke_align, t),
+            color: visible_color(self).lerp(&visible_color(other), t),
+            width,
+            style: BorderStyle::Solid,
+            stroke_align: if self.stroke_align == other.stroke_align {
+                self.stroke_align
+            } else {
+                self.stroke_align.lerp(&other.stroke_align, t)
+            },
         }
     }
 }
@@ -150,13 +213,14 @@ impl Border {
         }
     }
 
+    /// Sets the left/right (vertical) sides and top/bottom (horizontal) sides.
     #[must_use]
     pub const fn symmetric(vertical: BorderSide, horizontal: BorderSide) -> Self {
         Self {
-            top: vertical,
-            right: horizontal,
-            bottom: vertical,
-            left: horizontal,
+            top: horizontal,
+            right: vertical,
+            bottom: horizontal,
+            left: vertical,
         }
     }
 

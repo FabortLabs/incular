@@ -2,7 +2,7 @@
 #![cfg(target_os = "windows")]
 
 use incular_config::{Constraints, TransparencyMode};
-use incular_core::{Color, Size};
+use incular_core::{Color, Lerp, Size};
 use incular_platform::PhysicalSize;
 use incular_runtime::Runtime;
 use incular_wgpu::{FrameOutcome, WgpuRenderer, WindowSurfaceTarget};
@@ -14,14 +14,9 @@ const N: u32 = 60;
 const TINT: [u8; 4] = [217, 11, 79, 255];
 const WHITE: [u8; 4] = [255, 255, 255, 255];
 const BLACK: [u8; 4] = [0, 0, 0, 255];
-fn scene(style: Option<BorderStyle>) -> Widget {
-    let decoration = if let Some(style) = style {
-        let [r, g, b, a] = TINT;
-        BoxDecoration::new().border(Border::all(BorderSide::new(
-            Color::rgba(r, g, b, a),
-            2.,
-            style,
-        )))
+fn scene(side: Option<BorderSide>) -> Widget {
+    let decoration = if let Some(side) = side {
+        BoxDecoration::new().border(Border::all(side))
     } else {
         BoxDecoration::new()
     };
@@ -61,10 +56,15 @@ fn invisible_border_reserves_two_pixels_without_drawing_a_line() {
     ))
     .unwrap();
     let mut runtime = Runtime::new(scene(None)).unwrap();
-    for (frame, (style, edge)) in [
+    let [r, g, b, a] = TINT;
+    let tint = Color::rgba(r, g, b, a);
+    let solid = BorderSide::solid(tint, 2.);
+    let extrapolated = solid.lerp(&BorderSide::solid(tint, 1.), 10.);
+    for (frame, (side, edge)) in [
         (None, WHITE),
-        (Some(BorderStyle::Solid), TINT),
-        (Some(BorderStyle::None), BLACK),
+        (Some(solid), TINT),
+        (Some(BorderSide::new(tint, 2., BorderStyle::None)), BLACK),
+        (Some(extrapolated), WHITE),
         (None, WHITE),
     ]
     .into_iter()
@@ -72,7 +72,7 @@ fn invisible_border_reserves_two_pixels_without_drawing_a_line() {
     {
         if frame != 0 {
             let root = runtime.tree().root().unwrap();
-            runtime.schedule_update(root, scene(style)).unwrap();
+            runtime.schedule_update(root, scene(side)).unwrap();
         }
         let (list, _) = runtime
             .run_frame(Constraints::tight(Size::new(N as f32, N as f32)))
@@ -98,7 +98,7 @@ fn invisible_border_reserves_two_pixels_without_drawing_a_line() {
             assert_eq!(
                 pixels.rgba8[offset..offset + 4],
                 expected,
-                "style={style:?}, x={x}"
+                "side={side:?}, x={x}"
             );
         }
     }
