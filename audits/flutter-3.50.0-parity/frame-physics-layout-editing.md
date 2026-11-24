@@ -15,6 +15,12 @@ Pinned Flutter 3.50.0 `ab2912035e`; Incular production `c647cb85`.
 | `20261124-162901-737` | `layout__stack__empty_and_positioned_only` | match | 2 |
 | `20261124-162901-737` | `layout__aspect_ratio__constraint_cases` | match | 2 |
 | `20261124-162504-359` | `text__editable_enter_callback_order` | mismatch | 5 |
+
+Remediation: the raw Enter path on Android and iOS now leaves the editing
+value and active composition alone. The native Done action still completes
+before submitting. Both pinned mobile variants passed, as did 28 focused
+platform-text, shortcut and Enter tests. The Windows keyboard fallback remains
+an explicit desktop behavior and is not claimed as a paired Flutter result.
 | `20261124-162504-359` | `text__editable_undo_no_programmatic_selection` | mismatch | 9 |
 
 Raw Enter on a neutral Android-profile EditableText did not call

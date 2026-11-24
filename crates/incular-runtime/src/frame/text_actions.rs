@@ -74,6 +74,12 @@ impl Runtime {
             if !editable {
                 return false;
             }
+            if matches!(
+                self.text_shortcut_platform,
+                TextShortcutPlatform::Android | TextShortcutPlatform::Ios
+            ) {
+                return true;
+            }
             // The Newline action: a newline in a multiline field, otherwise
             // the field's completion action (same path as the IME action).
             self.handle_text_input_action(TextInputAction::Newline);

@@ -7,8 +7,6 @@ void main() {
   testWidgets('raw Enter does not submit but IME Done completes then submits', (
     tester,
   ) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    addTearDown(() => debugDefaultTargetPlatformOverride = null);
     final controller = TextEditingController();
     final focus = FocusNode();
     addTearDown(controller.dispose);
@@ -50,5 +48,5 @@ void main() {
     expect(controller.text, 'ab');
     expect(focus.hasFocus, isTrue);
     await tester.pumpWidget(const SizedBox.shrink());
-  });
+  }, variant: const TargetPlatformVariant({TargetPlatform.android, TargetPlatform.iOS}));
 }
