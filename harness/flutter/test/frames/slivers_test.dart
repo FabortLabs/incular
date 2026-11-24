@@ -320,6 +320,14 @@ void main() {
   frameScenario('slivers__keep_alive__retains_scrolled_child', (h) async {
     final controller = ScrollController();
     addTearDown(controller.dispose);
+    final retained = GlobalKey();
+    void checkOnstageBounds() {
+      expect(
+        h.tester.getRect(find.byKey(retained)),
+        const Rect.fromLTWH(0, 100, 800, 50),
+      );
+    }
+
     h.value('offset', () => controller.hasClients ? controller.offset : 0.0);
     await h.mount((_) => CustomScrollView(
           controller: controller,
@@ -328,7 +336,13 @@ void main() {
               delegate: SliverChildBuilderDelegate(
                 (context, index) => KeepAlive(
                   keepAlive: index == 2,
-                  child: rowBox(h, 'keep$index', 50, index.isEven ? blue : orange),
+                  child: index == 2
+                      ? SizedBox(
+                          key: retained,
+                          height: 50,
+                          child: const ColoredBox(color: blue),
+                        )
+                      : rowBox(h, 'keep$index', 50, index.isEven ? blue : orange),
                 ),
                 childCount: 40,
                 addAutomaticKeepAlives: false,
@@ -338,9 +352,19 @@ void main() {
             ),
           ],
         ));
+    final original = retained.currentContext;
+    expect(original, isNotNull);
+    checkOnstageBounds();
     await h.frames(1);
     controller.jumpTo(1000);
     await h.frames(2);
+    // The parked element remains mounted; its paint transform is undefined
+    // as observable geometry. Check its identity rather than that transform.
+    expect(retained.currentContext, same(original));
+    controller.jumpTo(0);
+    await h.frames(2);
+    expect(retained.currentContext, same(original));
+    checkOnstageBounds();
   });
 
   frameScenario('slivers__viewport_center__anchor', (h) async {

@@ -1,5 +1,5 @@
 use incular_config::EdgeInsets;
-use incular_core::{Color, Offset};
+use incular_core::{Color, Offset, Rect, Size};
 use incular_parity_harness::{FrameHarness, Scenario, probe};
 use incular_widgets::{
     ColoredBox, CustomScrollView, KeepAlive, PinnedHeaderSliver, ScrollController, SizedBox,
@@ -8,6 +8,7 @@ use incular_widgets::{
     SliverOffstage, SliverOpacity, SliverPadding, SliverPersistentHeader,
     SliverPrototypeExtentList, SliverResizingHeader, SliverToBoxAdapter, SliverVariedExtentList,
     Widget,
+    internal::{ElementId, Key},
 };
 
 const BLUE: Color = Color::rgba(0x21, 0x96, 0xF3, 0xFF);
@@ -442,6 +443,24 @@ fn fill_remaining_shrink_after_growth(h: &mut FrameHarness) {
 }
 
 fn keep_alive_retains_scrolled_child(h: &mut FrameHarness) {
+    const RETAINED_ROW: u64 = 2;
+    fn retained_row(h: &mut FrameHarness, onstage: bool) -> ElementId {
+        let tree = h.runtime().tree();
+        let row = tree
+            .element_with_key(&Key::from(RETAINED_ROW))
+            .expect("kept-alive row remains mounted");
+        if onstage {
+            assert_eq!(
+                tree.element_bounds(row),
+                Some(Rect::from_origin_size(
+                    Offset::new(0., 100.),
+                    Size::new(800., 50.),
+                )),
+            );
+        }
+        row
+    }
+
     let controller = ScrollController::new();
     h.value("offset", {
         let controller = controller.clone();
@@ -451,23 +470,33 @@ fn keep_alive_retains_scrolled_child(h: &mut FrameHarness) {
         let controller = controller.clone();
         move |_| {
             let list = SliverList::builder(40, |index| {
-                KeepAlive::new(
-                    index == 2,
+                let child = if index == 2 {
+                    Widget::from(SizedBox::new().height(50.).child(solid(BLUE)))
+                        .with_key(RETAINED_ROW)
+                } else {
                     row_box(
                         &format!("keep{index}"),
                         50.,
                         if index % 2 == 0 { BLUE } else { ORANGE },
-                    ),
-                )
+                    )
+                };
+                KeepAlive::new(index == 2, child)
             });
             CustomScrollView::new([Box::new(list) as Box<dyn Sliver>])
                 .controller(controller.clone())
                 .into()
         }
     });
+    let original = retained_row(h, true);
     h.frames(1);
     controller.jump_to(1000.);
     h.frames(2);
+    // The parked element remains mounted; compare identity, not the retained
+    // layout transform that does not describe an onstage painting child.
+    assert_eq!(retained_row(h, false), original);
+    controller.jump_to(0.);
+    h.frames(2);
+    assert_eq!(retained_row(h, true), original);
 }
 
 fn viewport_center_anchor(h: &mut FrameHarness) {
