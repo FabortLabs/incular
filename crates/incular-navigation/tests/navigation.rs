@@ -481,6 +481,27 @@ fn declarative_pages_preserve_keyed_route_identity() {
 }
 
 #[test]
+fn flutter_350_pageless_route_stays_current_above_an_equivalent_keyed_page() {
+    // C25: Flutter 3.50.0 updates the retained Page in place without
+    // dismissing the imperatively pushed route attached to it.
+    let navigator = Navigator::new();
+    let editor_key = PageKey::new("editor").unwrap();
+    let editor_page = || Page::new("editor", page()).key(editor_key.clone());
+    navigator.set_pages([editor_page()]).unwrap();
+    let editor = navigator.current().unwrap().id;
+    let pushed = navigator.push(Route::new("imperative", page()));
+    assert_eq!(navigator.current().unwrap().id, pushed);
+
+    navigator.set_pages([editor_page()]).unwrap();
+    let stack: Vec<RouteId> = navigator.routes().iter().map(|route| route.id).collect();
+    assert_eq!(
+        (stack.as_slice(), navigator.current().map(|route| route.id)),
+        (&[editor, pushed][..], Some(pushed)),
+        "reconciling the same page must preserve (active stack, current route)"
+    );
+}
+
+#[test]
 fn unkeyed_pages_mount_anew_on_every_reconciliation() {
     let navigator = Navigator::new();
     navigator

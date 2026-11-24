@@ -199,6 +199,73 @@ fn outlet_push_pop_restores_focus_without_manual_drive() {
 }
 
 #[test]
+fn flutter_350_compatible_unkeyed_page_retains_route_editor_and_focus() {
+    use incular_widgets::EditableText;
+
+    // C24: Flutter 3.50.0 keeps the route for a new compatible Page of
+    // the same type even when both page keys are absent. Run a stable
+    // page key first to control for the editor and focus fixture.
+    for keyed in [true, false] {
+        let navigator = Navigator::new();
+        let controller = TextEditingController::with_text("draft");
+        let editor_key = Key::from(7301_u64);
+        let editor_page = || {
+            let editor = EditableText::new(controller.clone())
+                .text_direction(TextDirection::Ltr)
+                .size(Size::new(120., 32.));
+            let page = Page::new("editor", Widget::from(editor).with_key(editor_key.clone()));
+            if keyed {
+                page.key(PageKey::new("editor").unwrap())
+            } else {
+                page
+            }
+        };
+        navigator.set_pages([editor_page()]).unwrap();
+        let mut harness = harness(&navigator);
+        let before_route = navigator.current().unwrap().id;
+        let before_editor = harness
+            .runtime
+            .tree()
+            .element_with_key(&editor_key)
+            .unwrap();
+        let editor_bounds = harness
+            .runtime
+            .tree()
+            .element_bounds(before_editor)
+            .unwrap();
+        tap(
+            &mut harness,
+            editor_bounds.origin.x + 3.,
+            editor_bounds.origin.y + 3.,
+        );
+        assert_eq!(
+            harness.runtime.focused_element(),
+            Some(before_editor),
+            "editor must own focus before reconciliation (keyed={keyed})"
+        );
+
+        navigator.set_pages([editor_page()]).unwrap();
+        present(&mut harness);
+        let after_editor = harness
+            .runtime
+            .tree()
+            .element_with_key(&editor_key)
+            .unwrap();
+        // The external controller does not establish retained widget state;
+        // check the mounted element identity and its active focus instead.
+        assert_eq!(
+            (
+                navigator.current().unwrap().id,
+                after_editor,
+                harness.runtime.focused_element()
+            ),
+            (before_route, before_editor, Some(before_editor)),
+            "compatible page should retain (route ID, editor element, focused element), keyed={keyed}"
+        );
+    }
+}
+
+#[test]
 fn outlet_reorder_preserves_and_repush_forgets() {
     let navigator = Navigator::new();
     let mut harness = harness(&navigator);
