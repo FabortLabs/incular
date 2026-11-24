@@ -356,3 +356,6 @@ packages/flutter/test/widgets/animated_cross_fade_test.dart	304	AnimatedCrossFad
 packages/flutter/test/widgets/animated_cross_fade_test.dart	328	AnimatedCrossFade bottom child can have focus	paired-match	upstream-cross-fade-focus-and-input.md
 packages/flutter/test/widgets/animated_cross_fade_test.dart	353	AnimatedCrossFade second child do not receive touch events	paired-match	upstream-cross-fade-focus-and-input.md
 packages/flutter/test/widgets/animated_cross_fade_test.dart	518	AnimatedCrossFade onEnd callback is called for each animation cycle	reference-ran-incular-open	upstream-cross-fade-focus-and-input.md
+packages/flutter/test/widgets/animated_switcher_test.dart	319	AnimatedSwitcher updates previous child transitions if the transitionBuilder changes.	partial-match	upstream-animated-switcher-builder-and-key-reentry.md
+packages/flutter/test/widgets/animated_switcher_test.dart	400	AnimatedSwitcher does not duplicate animations if the same child is entered twice.	paired-mismatch	upstream-animated-switcher-builder-and-key-reentry.md
+packages/flutter/test/widgets/animated_switcher_test.dart	420	AnimatedSwitcher does not crash at zero area	paired-match	upstream-animated-switcher-builder-and-key-reentry.md

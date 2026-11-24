@@ -626,3 +626,10 @@ the replaced intermediate child can remain mounted too long.
 bring complete pairs to 210/8,965 (160 match, 50 differ), with 119
 partial and 28 reference-only. Default bottom focus is blocked by
 the host correctly, but the inactive node incorrectly claims focus.
+
+### Switcher builder and same-key reentry
+
+[Three upstream dispositions](upstream-animated-switcher-builder-and-key-reentry.md)
+bring complete pairs to 212/8,965 (161 match, 51 differ), with
+120 partial and 28 reference-only. A reentered key can leave
+two mounted children after the original animation window.
