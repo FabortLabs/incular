@@ -49,4 +49,37 @@ void main() {
     expect(focus.hasFocus, isTrue);
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: const TargetPlatformVariant({TargetPlatform.android, TargetPlatform.iOS}));
+
+  testWidgets('multiline native newline notification does not duplicate the edit', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    final focus = FocusNode();
+    addTearDown(controller.dispose);
+    addTearDown(focus.dispose);
+    final calls = <String>[];
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: EditableText(
+          controller: controller,
+          focusNode: focus,
+          maxLines: null,
+          style: const TextStyle(color: Color(0xff000000)),
+          cursorColor: const Color(0xff000000),
+          backgroundCursorColor: const Color(0xff000000),
+          onChanged: calls.add,
+        ),
+      ),
+    );
+    await tester.showKeyboard(find.byType(EditableText));
+    tester.testTextInput.enterText('a\nb');
+    await tester.pump();
+    final before = controller.value;
+    await tester.testTextInput.receiveAction(TextInputAction.newline);
+    await tester.pump();
+    expect(controller.value, before);
+    expect(calls, ['a\nb']);
+    expect(focus.hasPrimaryFocus, true);
+  });
 }

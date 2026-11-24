@@ -21,6 +21,14 @@ value and active composition alone. The native Done action still completes
 before submitting. Both pinned mobile variants passed, as did 28 focused
 platform-text, shortcut and Enter tests. The Windows keyboard fallback remains
 an explicit desktop behavior and is not claimed as a paired Flutter result.
+
+Native completion actions also distinguish notification from editing. The
+pinned traversal probe covers Next and Previous with and without a custom
+completion callback. Default completion clears the composing range and
+moves focus; a custom callback runs before submission and does neither
+automatically. A multiline Newline notification leaves the editing value
+already supplied by the IME alone, while Windows raw Enter still inserts a
+newline. All 28 focused Rust tests across the four action/input targets pass.
 | `20261124-162504-359` | `text__editable_undo_no_programmatic_selection` | mismatch | 9 |
 
 Raw Enter on a neutral Android-profile EditableText did not call

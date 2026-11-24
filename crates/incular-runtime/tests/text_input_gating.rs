@@ -8,7 +8,7 @@ use incular_config::Constraints;
 use incular_core::{
     Code, ImeEvent, InputEvent, KeyboardEvent, KeyboardKey, Modifiers, NamedKey, Offset, Size,
 };
-use incular_platform::TextInputAction;
+use incular_platform::{PlatformEvent, TextInputAction, TextInputState};
 use incular_runtime::Runtime;
 use incular_widgets::{EditableText, Widget, internal::TextEditingController};
 
@@ -20,8 +20,18 @@ fn mount_focused(
     controller: TextEditingController,
     build: impl FnOnce(EditableText) -> EditableText,
 ) -> Runtime {
+    mount_and_press(controller, true, build)
+}
+
+fn mount_and_press(
+    controller: TextEditingController,
+    enabled: bool,
+    build: impl FnOnce(EditableText) -> EditableText,
+) -> Runtime {
     let mut runtime = Runtime::new(Widget::from(build(
-        EditableText::new(controller).text_direction(incular_widgets::TextDirection::Ltr),
+        EditableText::new(controller)
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .enabled(enabled),
     )))
     .unwrap();
     let constraints = Constraints::tight(Size::new(180., 100.));
@@ -30,9 +40,10 @@ fn mount_focused(
         phase: incular_core::PointerPhase::Down,
         position: Offset::new(5., 5.),
     });
-    assert!(
+    assert_eq!(
         runtime.focused_element().is_some(),
-        "pointer down must focus the field"
+        enabled,
+        "only an enabled field can take focus"
     );
     runtime
 }
@@ -43,9 +54,8 @@ fn disabled_field_rejects_edits_and_submit() {
     let controller = TextEditingController::with_text("abc");
     let submitted = Rc::new(Cell::new(0));
     let observed = submitted.clone();
-    let mut runtime = mount_focused(controller.clone(), |field| {
+    let mut runtime = mount_and_press(controller.clone(), false, |field| {
         field
-            .enabled(false)
             .on_submit(move |_| observed.set(observed.get() + 1))
             .size(Size::new(180., 32.))
     });
@@ -109,7 +119,7 @@ fn single_line_enter_submits_while_multiline_inserts_newline() {
 }
 
 #[test]
-fn input_action_done_submits_and_newline_inserts() {
+fn input_action_done_submits_and_multiline_newline_does_not_reinsert() {
     use std::{cell::Cell, rc::Rc};
     let submitted = Rc::new(Cell::new(0));
     let observed = submitted.clone();
@@ -127,7 +137,12 @@ fn input_action_done_submits_and_newline_inserts() {
     let mut runtime = mount_focused(multi.clone(), |field| {
         field.multiline(true).size(Size::new(180., 64.))
     });
-    multi.set_selection(incular_widgets::internal::TextSelection::collapsed(2));
+    let _ = runtime.handle_platform_event(PlatformEvent::TextEditingState(TextInputState {
+        text: "hi\n".into(),
+        selection_start: 3,
+        selection_end: 3,
+        composing: None,
+    }));
     assert!(runtime.handle_text_input_action(TextInputAction::Newline));
     assert_eq!(multi.text(), "hi\n");
 }
@@ -146,8 +161,8 @@ fn ime_preedit_and_commit_follow_editability() {
     assert_eq!(controller.preedit(), None);
 
     let frozen = TextEditingController::with_text("ab");
-    let mut runtime = mount_focused(frozen.clone(), |field| {
-        field.enabled(false).size(Size::new(180., 32.))
+    let mut runtime = mount_and_press(frozen.clone(), false, |field| {
+        field.size(Size::new(180., 32.))
     });
     let _ = runtime.handle_input(InputEvent::Ime(ImeEvent::Preedit {
         text: "xy".into(),
@@ -323,8 +338,8 @@ fn shutdown_during_composition_cancels_and_clears_focus() {
 #[test]
 fn cut_and_paste_follow_editability() {
     let controller = TextEditingController::with_text("hello");
-    let mut runtime = mount_focused(controller.clone(), |field| {
-        field.enabled(false).size(Size::new(180., 32.))
+    let mut runtime = mount_and_press(controller.clone(), false, |field| {
+        field.size(Size::new(180., 32.))
     });
     controller.set_selection(incular_widgets::internal::TextSelection { base: 0, extent: 5 });
     let mut cut = key_down(Code::KeyX);

@@ -80,9 +80,13 @@ impl Runtime {
             ) {
                 return true;
             }
-            // The Newline action: a newline in a multiline field, otherwise
-            // the field's completion action (same path as the IME action).
-            self.handle_text_input_action(TextInputAction::Newline);
+            // Desktop raw keys have no second text-input action. Insert
+            // here, not in the native multiline newline notification.
+            if self.tree.is_multiline_text_field(field) {
+                controller.insert("\n");
+            } else {
+                self.handle_text_input_action(TextInputAction::Newline);
+            }
             return true;
         }
         let Some(intent) = resolve(self.text_shortcut_platform, event.code, event.modifiers) else {

@@ -24,7 +24,7 @@ struct Editor {
     calls: Rc<RefCell<Vec<Call>>>,
 }
 
-fn editor_with_native_text(platform: TextShortcutPlatform) -> Editor {
+fn editor_with_native_text(platform: TextShortcutPlatform, multiline: bool) -> Editor {
     let controller = TextEditingController::new();
     let calls = Rc::new(RefCell::new(Vec::new()));
     let changed = Rc::clone(&calls);
@@ -33,6 +33,7 @@ fn editor_with_native_text(platform: TextShortcutPlatform) -> Editor {
     let field = EditableText::new(controller.clone())
         .text_direction(TextDirection::Ltr)
         .size(Size::new(200., 48.))
+        .multiline(multiline)
         .on_changed(move |text| changed.borrow_mut().push(Call::Changed(text.to_owned())))
         .on_editing_complete(move || completed.borrow_mut().push(Call::Complete))
         .on_submit(move |text| submitted.borrow_mut().push(Call::Submitted(text)));
@@ -76,7 +77,7 @@ fn raw_enter(editor: &mut Editor) {
 #[test]
 fn raw_enter_without_ime_action_does_not_complete_or_submit_mobile_editable() {
     for platform in [TextShortcutPlatform::Android, TextShortcutPlatform::Ios] {
-        let mut editor = editor_with_native_text(platform);
+        let mut editor = editor_with_native_text(platform, false);
         raw_enter(&mut editor);
         assert_eq!(editor.controller.text(), "ab");
         assert!(editor.runtime.focused_element().is_some());
@@ -90,7 +91,7 @@ fn raw_enter_without_ime_action_does_not_complete_or_submit_mobile_editable() {
 
 #[test]
 fn native_ime_done_completes_before_submitting_android_editable() {
-    let mut editor = editor_with_native_text(TextShortcutPlatform::Android);
+    let mut editor = editor_with_native_text(TextShortcutPlatform::Android, false);
     let _ = editor
         .runtime
         .handle_platform_event(PlatformEvent::TextInputAction(TextInputAction::Done));
@@ -109,7 +110,7 @@ fn native_ime_done_completes_before_submitting_android_editable() {
 
 #[test]
 fn raw_enter_does_not_change_active_mobile_composition() {
-    let mut editor = editor_with_native_text(TextShortcutPlatform::Android);
+    let mut editor = editor_with_native_text(TextShortcutPlatform::Android, false);
     let _ = editor
         .runtime
         .handle_platform_event(PlatformEvent::TextEditingState(TextInputState {
@@ -127,7 +128,7 @@ fn raw_enter_does_not_change_active_mobile_composition() {
 
 #[test]
 fn desktop_keyboard_keeps_the_existing_submit_fallback() {
-    let mut editor = editor_with_native_text(TextShortcutPlatform::Windows);
+    let mut editor = editor_with_native_text(TextShortcutPlatform::Windows, false);
     raw_enter(&mut editor);
     assert_eq!(
         *editor.calls.borrow(),
@@ -137,4 +138,30 @@ fn desktop_keyboard_keeps_the_existing_submit_fallback() {
             Call::Submitted("ab".into())
         ]
     );
+}
+
+#[test]
+fn native_multiline_newline_is_not_inserted_twice_but_desktop_enter_still_inserts() {
+    let mut editor = editor_with_native_text(TextShortcutPlatform::Android, true);
+    let _ = editor
+        .runtime
+        .handle_platform_event(PlatformEvent::TextEditingState(TextInputState {
+            text: "a\nb".into(),
+            selection_start: 3,
+            selection_end: 3,
+            composing: None,
+        }));
+    let before = editor.controller.value();
+    let called = editor.calls.borrow().len();
+    let _ = editor
+        .runtime
+        .handle_platform_event(PlatformEvent::TextInputAction(TextInputAction::Newline));
+    assert_eq!(editor.controller.value(), before);
+    assert_eq!(editor.calls.borrow().len(), called);
+
+    editor
+        .runtime
+        .set_text_shortcut_platform(TextShortcutPlatform::Windows);
+    raw_enter(&mut editor);
+    assert_eq!(editor.controller.text(), "a\nb\n");
 }

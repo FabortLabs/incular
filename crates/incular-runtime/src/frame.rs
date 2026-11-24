@@ -2442,9 +2442,9 @@ impl Runtime {
         }
     }
 
-    /// Handles the action chosen by a native software keyboard. Desktop
-    /// Winit backends reach the same code path through Enter, while mobile
-    /// hosts can preserve the IME's explicit Done/Next/Search intent.
+    /// Handles the action chosen by a native keyboard. Multiline input
+    /// arrives separately as editing state; a newline action is only its
+    /// notification, not another edit.
     pub fn handle_text_input_action(&mut self, action: TextInputAction) -> bool {
         let Some(field) = self.focused.filter(|id| self.tree.is_text_field(*id)) else {
             return false;
@@ -2456,24 +2456,19 @@ impl Runtime {
         let handled = match action {
             TextInputAction::Newline => {
                 if self.tree.is_multiline_text_field(field) {
-                    self.tree.text_controller(field).is_some_and(|controller| {
-                        controller.insert("\n");
-                        controller.reset_caret(self.input_now());
-                        true
-                    })
+                    return true;
                 } else {
                     self.finish_text_editing(field)
                 }
             }
-            TextInputAction::Next => {
-                let submitted = self.tree.submit_text_field(field);
-                self.focus_next(false);
-                submitted
-            }
-            TextInputAction::Previous => {
-                let submitted = self.tree.submit_text_field(field);
-                self.focus_next(true);
-                submitted
+            TextInputAction::Next | TextInputAction::Previous => {
+                if !self.tree.text_field_has_editing_complete(field) {
+                    if let Some(controller) = self.tree.text_controller(field) {
+                        controller.set_composing(None);
+                    }
+                    self.focus_next(action == TextInputAction::Previous);
+                }
+                self.tree.submit_text_field(field)
             }
             TextInputAction::Done
             | TextInputAction::Go
