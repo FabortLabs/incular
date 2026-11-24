@@ -351,3 +351,8 @@ packages/flutter/test/widgets/animated_switcher_test.dart	53	AnimatedSwitcher ca
 packages/flutter/test/widgets/animated_switcher_test.dart	88	AnimatedSwitcher doesn't transition in a new child of the same type.	paired-match	upstream-animated-switcher-retained-lifetime.md
 packages/flutter/test/widgets/animated_switcher_test.dart	116	AnimatedSwitcher handles null children.	paired-match	upstream-animated-switcher-retained-lifetime.md
 packages/flutter/test/widgets/animated_switcher_test.dart	175	AnimatedSwitcher uses custom layout.	partial-match	upstream-animated-switcher-retained-lifetime.md
+packages/flutter/test/widgets/animated_cross_fade_test.dart	226	AnimatedCrossFade switches off TickerMode and semantics on faded out widget	partial-match	upstream-cross-fade-focus-and-input.md
+packages/flutter/test/widgets/animated_cross_fade_test.dart	304	AnimatedCrossFade test focus	paired-mismatch	upstream-cross-fade-focus-and-input.md
+packages/flutter/test/widgets/animated_cross_fade_test.dart	328	AnimatedCrossFade bottom child can have focus	paired-match	upstream-cross-fade-focus-and-input.md
+packages/flutter/test/widgets/animated_cross_fade_test.dart	353	AnimatedCrossFade second child do not receive touch events	paired-match	upstream-cross-fade-focus-and-input.md
+packages/flutter/test/widgets/animated_cross_fade_test.dart	518	AnimatedCrossFade onEnd callback is called for each animation cycle	reference-ran-incular-open	upstream-cross-fade-focus-and-input.md

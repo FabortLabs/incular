@@ -619,3 +619,10 @@ ordinary ListView alignment/animation samples agree.
 bring complete pairs to 207/8,965 (158 match, 49 differ), with
 118 partial and 27 reference-only. Opacity samples match but
 the replaced intermediate child can remain mounted too long.
+
+### AnimatedCrossFade focus and interaction
+
+[Five upstream dispositions](upstream-cross-fade-focus-and-input.md)
+bring complete pairs to 210/8,965 (160 match, 50 differ), with 119
+partial and 28 reference-only. Default bottom focus is blocked by
+the host correctly, but the inactive node incorrectly claims focus.
