@@ -591,3 +591,10 @@ effects, and the color clamp at extrapolation.
 bring complete pairs to 188/8,965 (141 match, 47 differ), with 108
 partial and 27 reference-only. Two separately verified decoration
 regressions concern self-interpolation and image-only validation.
+
+### AnimatedSize, overflow constraints, controller runs and navigation events
+
+[Sixteen upstream dispositions](upstream-animated-size-overflow-controller-and-navigation.md)
+bring complete pairs to 196/8,965 (148 match, 48 differ), with
+116 partial and 27 reference-only. New regressions pin unwanted
+shrink clipping, child constraints, and removal notifications.
