@@ -120,3 +120,11 @@ fixtures (4.35%): ten match, and the fade-pop timeline diverges.
 This denominator is independent of the 8,965 upstream registration sites.
 Next: continue narrowly grouped frame comparisons and word-spacing/formatter
 probes; preserve verification details for divergences.
+
+### C28–C30: text shaping and formatter behavior
+
+[Text comparisons](text-format-comparisons.md) reproduced three additional
+mismatches: word spacing in warm/cold text layout, digit filtering caret
+remap, and length enforcement dropping an old suffix. Total: 30 original
+custom paired mismatches. Exact established fixture dispositions remain
+separate.
