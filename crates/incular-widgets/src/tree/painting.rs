@@ -973,6 +973,10 @@ impl WidgetTree {
         }
         let current = self.hit_origin(id, node, origin);
         !Rect::from_origin_size(current, node.size).contains(point)
+            || !node
+                .object
+                .layers
+                .accepts_clip_hit(node.object.kind(), node.size, point - current)
     }
 
     /// Position of `node` in its parent's hit-test space, including the

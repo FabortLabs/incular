@@ -4,7 +4,11 @@ use incular_rendering::{
     Brush, CornerRadii, DisplayList, DropShadowEffect, FillRule, FollowerLayer, GaussianBlur,
     LayerId, LayerTree, Path, RRect,
 };
-use std::{cell::Cell, sync::Arc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+    sync::Arc,
+};
 
 use crate::layout::ClipDelegate;
 
@@ -116,10 +120,7 @@ pub(crate) enum LayerAttachment {
     Clip {
         clip: LayerId,
         content: LayerId,
-        /// The size and delegate that produced the clip geometry now held by the
-        /// compositor. A same-size relayout with a delegate that does not reclip
-        /// keeps it, as Flutter's `_RenderCustomClip` does.
-        applied: Box<std::cell::RefCell<ClipApplied>>,
+        stack_active: Cell<Option<bool>>,
     },
     Opacity {
         layer: LayerId,
@@ -182,11 +183,23 @@ pub(crate) struct RenderLayers {
     /// Retained even through Clip::None so clipping-only updates do not
     /// need to remeasure the positioned children.
     stack_layout_overflow: Cell<bool>,
+    /// Shared by painted clipping and hit testing even if the paint stage
+    /// is disabled. Only clip objects with resolved geometry allocate it.
+    clip_geometry: Option<Rc<RefCell<Option<CachedClip>>>>,
 }
 
 impl RenderLayers {
     pub(crate) fn create(compositor: &mut LayerTree, widget: &WidgetKind) -> Self {
         let spec = LayerSpec::for_widget(widget);
+        let caches_clip_geometry = matches!(
+            widget,
+            WidgetKind::ClipRect { .. }
+                | WidgetKind::ClipRRect { .. }
+                | WidgetKind::ClipOval { .. }
+                | WidgetKind::ClipPath { .. }
+                | WidgetKind::Scroll { .. }
+                | WidgetKind::SliverViewport { .. }
+        );
         let root = compositor.create_transform(CoreTransform::translation(Offset::ZERO));
         let picture = spec.picture.then(|| {
             compositor.create_picture(
@@ -213,7 +226,7 @@ impl RenderLayers {
                 LayerAttachment::Clip {
                     clip,
                     content,
-                    applied: Default::default(),
+                    stack_active: Cell::new(None),
                 }
             }
             // `Clip.none`: the scrolled content keeps its offset transform
@@ -397,6 +410,7 @@ impl RenderLayers {
             focus_picture,
             attachment,
             stack_layout_overflow: Cell::new(false),
+            clip_geometry: caches_clip_geometry.then(|| Rc::new(RefCell::new(None))),
         }
     }
 
@@ -414,7 +428,7 @@ impl RenderLayers {
         LayerAttachment::Clip {
             clip,
             content,
-            applied: Default::default(),
+            stack_active: Cell::new(None),
         }
     }
 
@@ -474,6 +488,14 @@ impl RenderLayers {
         self.picture = fresh.picture;
         self.focus_picture = fresh.focus_picture;
         self.attachment = fresh.attachment;
+        if let LayerAttachment::Clip { clip, .. } = self.attachment {
+            // The temporary root is gone; bind the fresh clip to the
+            // retained root instead of leaving the old child route intact.
+            compositor.set_children(
+                self.root,
+                std::iter::once(clip).chain(self.picture).collect(),
+            );
+        }
         true
     }
 
@@ -824,11 +846,33 @@ fn text_shadow_effect(shadow: incular_text::TextShadow) -> DropShadowEffect {
 }
 
 /// Clip geometry a clip render object resolves for its laid-out size.
+#[derive(Clone, Debug)]
 enum ClipGeometry {
     Rect(Rect),
     RRect(RRect),
     Oval(Rect),
     Path(Arc<Path>),
+}
+
+impl ClipGeometry {
+    fn accepts_hit(&self, point: Offset) -> bool {
+        let contains_rect = |rect: Rect| {
+            point.x >= rect.origin.x
+                && point.y >= rect.origin.y
+                && point.x < rect.origin.x + rect.size.width
+                && point.y < rect.origin.y + rect.size.height
+        };
+        match self {
+            Self::Rect(rect) => contains_rect(*rect),
+            Self::RRect(rrect) => contains_rect(rrect.rect) && rrect.contains(point),
+            Self::Oval(rect) => {
+                let x = (point.x - rect.origin.x - rect.size.width * 0.5) / rect.size.width;
+                let y = (point.y - rect.origin.y - rect.size.height * 0.5) / rect.size.height;
+                (x * x + y * y).partial_cmp(&0.25) != Some(std::cmp::Ordering::Greater)
+            }
+            Self::Path(path) => path.contains(point, FillRule::NonZero),
+        }
+    }
 }
 
 fn rect_path(rect: Rect) -> Arc<Path> {
@@ -880,31 +924,29 @@ fn clip_geometry(kind: &RenderKind, size: Size) -> Option<ClipGeometry> {
     })
 }
 
-fn apply_clip_geometry(compositor: &mut LayerTree, clip: LayerId, geometry: ClipGeometry) {
+fn apply_clip_geometry(compositor: &mut LayerTree, clip: LayerId, geometry: &ClipGeometry) {
     match geometry {
         ClipGeometry::Rect(rect) => {
-            compositor.update_clip(clip, rect);
+            compositor.update_clip(clip, *rect);
         }
         ClipGeometry::RRect(rrect) => {
-            compositor.update_clip_rrect(clip, rrect);
+            compositor.update_clip_rrect(clip, *rrect);
         }
         ClipGeometry::Oval(rect) => {
-            compositor.update_clip_oval(clip, rect);
+            compositor.update_clip_oval(clip, *rect);
         }
         ClipGeometry::Path(path) => {
-            compositor.update_clip_path(clip, path, FillRule::NonZero);
+            compositor.update_clip_path(clip, path.clone(), FillRule::NonZero);
         }
     }
 }
 
-/// The clip geometry the compositor currently holds, with the delegate and
-/// size that produced it.
-#[derive(Clone, Debug, Default)]
-pub(crate) struct ClipApplied {
-    size: Option<Size>,
-    delegate: Option<ClipDelegate>,
-    kind: Option<RenderKind>,
-    stack_enabled: Option<bool>,
+/// One resolved shape, used by raster and hit testing.
+#[derive(Clone, Debug)]
+struct CachedClip {
+    size: Size,
+    kind: RenderKind,
+    geometry: ClipGeometry,
 }
 
 /// Whether two clip kinds share the non-delegate inputs (corner radii, path)
@@ -931,7 +973,60 @@ fn clip_delegate(kind: &RenderKind) -> Option<&ClipDelegate> {
     }
 }
 
+fn cached_clip<'a>(
+    cache: &'a mut Option<CachedClip>,
+    kind: &RenderKind,
+    size: Size,
+) -> Option<&'a ClipGeometry> {
+    let reuse = cache.as_ref().is_some_and(|cached| {
+        cached.size == size
+            && (cached.kind == *kind
+                || (same_clip_inputs(&cached.kind, kind)
+                    && match (clip_delegate(&cached.kind), clip_delegate(kind)) {
+                        (Some(old), Some(new)) => old == new || !new.reclips_from(old),
+                        (None, None) => true,
+                        _ => false,
+                    }))
+    });
+    if reuse {
+        let cached = cache.as_mut().expect("existing clip cache");
+        if cached.kind != *kind {
+            cached.kind = kind.clone();
+        }
+    } else {
+        *cache = Some(CachedClip {
+            size,
+            kind: kind.clone(),
+            geometry: clip_geometry(kind, size)?,
+        });
+    }
+    cache.as_ref().map(|cached| &cached.geometry)
+}
+
 impl RenderLayers {
+    pub(crate) fn accepts_clip_hit(&self, kind: &RenderKind, size: Size, local: Offset) -> bool {
+        // RenderClipRect and RenderClipRRect only narrow their normal box
+        // with an explicit clipper. Oval always tests its ellipse; Incular's
+        // explicit ClipPath shape corresponds to Flutter's path clipper.
+        if !matches!(
+            kind,
+            RenderKind::ClipRect {
+                clipper: Some(_),
+                ..
+            } | RenderKind::ClipRRect {
+                clipper: Some(_),
+                ..
+            } | RenderKind::ClipOval { .. }
+                | RenderKind::ClipPath { .. }
+        ) {
+            return true;
+        }
+        self.clip_geometry.as_ref().is_none_or(|cache| {
+            cached_clip(&mut cache.borrow_mut(), kind, size)
+                .is_none_or(|geometry| geometry.accepts_hit(local))
+        })
+    }
+
     pub(crate) fn set_stack_layout_overflow(&self, overflow: bool) {
         self.stack_layout_overflow.set(overflow);
     }
@@ -943,15 +1038,14 @@ impl RenderLayers {
         let LayerAttachment::Clip {
             clip,
             content,
-            applied,
+            stack_active,
             ..
         } = &self.attachment
         else {
             return;
         };
-        let mut applied = applied.borrow_mut();
         let enabled = self.stack_layout_overflow.get();
-        if applied.stack_enabled != Some(enabled) {
+        if stack_active.get() != Some(enabled) {
             if enabled {
                 compositor.set_children(*clip, vec![*content]);
             } else {
@@ -962,7 +1056,7 @@ impl RenderLayers {
                 self.root,
                 std::iter::once(stage).chain(self.picture).collect(),
             );
-            applied.stack_enabled = Some(enabled);
+            stack_active.set(Some(enabled));
         }
         if enabled {
             compositor.update_clip(*clip, Rect::from_origin_size(Offset::ZERO, size));
@@ -981,29 +1075,13 @@ impl RenderLayers {
             self.apply_stack_clip(compositor, size);
             return;
         }
-        let LayerAttachment::Clip { clip, applied, .. } = &self.attachment else {
+        let LayerAttachment::Clip { clip, .. } = &self.attachment else {
             return;
         };
-        let mut applied = applied.borrow_mut();
-        let size_changed = applied.size != Some(size);
-        let delegate_kept = match (applied.delegate.as_ref(), clip_delegate(kind)) {
-            (Some(old), Some(new)) => !new.reclips_from(old),
-            (None, None) => true,
-            _ => false,
-        };
-        let inputs_kept = applied
-            .kind
-            .as_ref()
-            .is_some_and(|old| same_clip_inputs(old, kind));
-        if !size_changed && delegate_kept && inputs_kept {
-            return;
+        if let Some(cache) = &self.clip_geometry
+            && let Some(geometry) = cached_clip(&mut cache.borrow_mut(), kind, size)
+        {
+            apply_clip_geometry(compositor, *clip, geometry);
         }
-        let Some(geometry) = clip_geometry(kind, size) else {
-            return;
-        };
-        apply_clip_geometry(compositor, *clip, geometry);
-        applied.size = Some(size);
-        applied.delegate = clip_delegate(kind).cloned();
-        applied.kind = Some(kind.clone());
     }
 }

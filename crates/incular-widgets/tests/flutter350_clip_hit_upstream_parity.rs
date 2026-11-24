@@ -1,9 +1,9 @@
 //! Public hit tests adapted from Flutter 3.50.0 widgets/clip_test.dart.
 
-use incular_config::Constraints;
+use incular_config::{Clip, Constraints};
 use incular_core::{Color, Offset, PointerPhase, Rect, Size};
 use incular_gestures::PointerEvent;
-use incular_rendering::Path;
+use incular_rendering::{PaintCommand, Path};
 use incular_widgets::{
     Align, Alignment, ClipOval, ClipPath, ClipRect, ClipShape, CustomClipper, GestureDetector,
     Opacity, SizedBox, Widget, internal::WidgetTree,
@@ -41,9 +41,10 @@ fn tap(tree: &mut WidgetTree, position: Offset, start: Instant, index: u64) {
     }
 }
 
-fn check_oval(transparent: bool) {
+fn check_oval(transparent: bool, clip: Clip) {
     let log = Log::default();
-    let oval = Widget::from(ClipOval::new(tapping(Size::new(800., 600.), &log)));
+    let oval =
+        Widget::from(ClipOval::new(tapping(Size::new(800., 600.), &log)).clip_behavior(clip));
     let scene = if transparent {
         Opacity::new(0., oval).into()
     } else {
@@ -67,12 +68,17 @@ fn check_oval(transparent: bool) {
 
 #[test]
 fn oval_hit_test_excludes_fully_clipped_corners() {
-    check_oval(false);
+    check_oval(false, Clip::HardEdge);
 }
 
 #[test]
 fn transparent_oval_still_limits_hit_testing_to_its_shape() {
-    check_oval(true);
+    check_oval(true, Clip::HardEdge);
+}
+
+#[test]
+fn oval_paint_clip_none_still_uses_elliptical_hit_shape() {
+    check_oval(false, Clip::None);
 }
 
 struct PathClipper(Log);
@@ -194,4 +200,49 @@ fn custom_rect_clip_recomputes_only_on_size_and_delegate_changes_and_limits_hit_
             vec!["a", "tap", "a", "b", "c", "tap"],
         ]
     );
+}
+
+#[test]
+fn custom_rect_hit_clip_persists_across_paint_policy_changes_and_excludes_trailing_edges() {
+    let log = Log::default();
+    let area = Rect::from_origin_size(Offset::new(10., 10.), Size::new(30., 30.));
+    let scene = |clip| -> Widget {
+        ClipRect::new(tapping(Size::new(800., 600.), &log))
+            .clip_behavior(clip)
+            .custom_clipper(RectClipper {
+                name: "clip",
+                rect: area,
+                log: log.clone(),
+            })
+            .into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scene(Clip::None)).unwrap();
+    layout(&mut tree);
+    assert!(log.borrow().is_empty(), "no paint clip is resolved yet");
+    let start = Instant::now();
+    for (i, point) in [(9., 20.), (10., 10.), (39., 39.), (40., 39.), (39., 40.)]
+        .into_iter()
+        .enumerate()
+    {
+        tap(&mut tree, Offset::new(point.0, point.1), start, i as u64);
+    }
+    assert_eq!(log.borrow().as_slice(), ["clip", "tap", "tap"]);
+
+    tree.update(root, scene(Clip::HardEdge)).unwrap();
+    layout(&mut tree);
+    assert!(tree.paint().commands().iter().any(|command| matches!(
+        command, PaintCommand::PushClip { rect } if *rect == area
+    )));
+    tree.update(root, scene(Clip::None)).unwrap();
+    layout(&mut tree);
+    assert!(
+        !tree
+            .paint()
+            .commands()
+            .iter()
+            .any(|command| matches!(command, PaintCommand::PushClip { .. }))
+    );
+    tap(&mut tree, Offset::new(20., 20.), start, 5);
+    assert_eq!(log.borrow().as_slice(), ["clip", "tap", "tap", "tap"]);
 }

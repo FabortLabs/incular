@@ -46,3 +46,14 @@ separate preserve-focus behavior. The original six-case runtime target
 now covers the earlier reference pair and independent explicit opt-in
 and Offstage controls. The pinned authored visibility_focusability probe
 checks real keyboard delivery in all three configurations.
+
+## Clip hit-testing repair
+
+Hit testing now reuses the cached raster geometry. Custom rect, rounded
+rect and path shapes constrain pointer routing; ovals use their ellipse
+under zero opacity and even when paint clipping is off. A custom rect
+preserves its shape when toggling Clip.none, resolves it once, and
+excludes the right and bottom edges. Both pinned authored policy controls
+and all six targeted Rust clip-hit tests passed, including the delegate
+call counts. The clip/stack suites and both native Windows wgpu Stack
+controls also passed.
