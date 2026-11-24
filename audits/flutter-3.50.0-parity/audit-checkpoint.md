@@ -698,3 +698,10 @@ isolates vertical intrinsic width at 80 instead of 188.
 bring complete pairs to 251/8,965 (195 match, 56 differ), with
 131 partial and 33 reference-only. Wrap loses the child's
 alphabetic baseline even when direct Baseline layout works.
+
+### Table direction, row shape and intrinsic width
+
+[Ten upstream dispositions](upstream-table-direction-rows-and-intrinsics.md)
+bring complete pairs to 258/8,965 (201 match, 57 differ), with
+132 partial and 35 reference-only. Table ignores ambient
+RTL column ordering and accepts uneven rows.
