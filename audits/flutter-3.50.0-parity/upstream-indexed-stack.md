@@ -17,6 +17,14 @@ All 16 originals in widgets/indexed_stack_test.dart passed on the pinned Flutter
 | :389 | Reference only. Negative selection has no representation in the Rust usize API. |
 | :400 | Rust completes layout with index 2 and two children, where Flutter asserts. |
 
+The existing Incular `stack_layout.rs` tests explicitly expect an out-of-range index to hide all children and to allow a later valid selection. Treat the stricter Flutter assertion as a contract decision, not a tested break in an existing Incular caller. That earlier suite also proves index changes update the hit target, but does not compare outgoing pixels. The independent `flutter_indexed_stack_parity.rs` test already covers W04's default ambient-RTL geometry.
+
 Additional observable check: fresh Rust mounts for indices 0, 1 and 2 each return the correct selected-color rectangle. In a retained 0 → 1 → 2 transition with the same children, Runtime::run_frame returns the rectangle for index 0 on all three frames, even though input tests show hit testing follows the selection. This assertion observes the runtime display list, not a native GPU pixel readback.
 
 Run: cargo test --locked -p incular-runtime --test flutter350_indexed_stack_parity -- --nocapture.
+
+## Windows wgpu readback
+
+The separate Flutter 3.50.0 raster fixture repumps the same IndexedStack with selections 0, 1, 2, 0 and passes. The focused Windows target uses WgpuRenderer to present to a hidden native window and captures RGBA at device ratio 1. The expected green/blue interior still reads red after changing to index 1/2. Three interior samples differ on each of those frames; all four immediately adjacent outside samples stay black. Each fresh Rust mount correctly presents its requested color. This confirms the display-list failure reaches raster output in the tested runtime-to-wgpu path.
+
+References: run-reference-probe.ps1 -Test indexed_stack_raster_test.dart. Set INCULAR_DESKTOP_LIVE_TESTS=1 and run cargo test --locked -p incular-desktop --test flutter350_indexed_stack_raster -- --nocapture.
