@@ -347,3 +347,11 @@ match. Valid paired frames: 156/253 (61.66%), 147 match and nine differ.
 Upstream: 44/8,965. Now 23 standalone Flutter reference fixture files
 are committed; continue keep-alive paint, PageView retention, and the
 remaining retained layout/text/physics fixture groups.
+
+### Retained scrolling, text, and implicit rechecks
+
+[New strict comparisons](frame-retained-text-implicit-rechecks.md)
+bring valid frame coverage to 171/253 (67.59%), 161 match and ten differ.
+Dedicated paired tests now verify real parked KeepAlive paint and
+PageView boundary teardown differences. Retained row identity on the
+ordinary clipped KeepAlive path matches after fixture repair.
