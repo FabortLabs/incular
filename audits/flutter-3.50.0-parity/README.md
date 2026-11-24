@@ -22,6 +22,8 @@ Unreviewed individual contracts remain open. This is not a parity certification.
 | Artifact | Read it as |
 | --- | --- |
 | [Behavior audit](behavior-audit.md) and [focused probes](behavior-probes.md) | Neutral focus, paint, editing and boundary cases; six wrong results reproduced on Incular. |
+| [Full-audit ledger](coverage-ledger.md) | Source and test queue, open scenarios, and evidence rules. |
+| [Manual contract review](contract-review.md), [paired evidence](focused-comparisons.md) and [checkpoint](audit-checkpoint.md) | Broader source review, six pinned comparisons, and explicitly open tracks. |
 | [Findings](findings.md) | Current source evidence and behavior/API differences. |
 | [Flutter public API](flutter-public-api.jsonl) | Framework-owned, locally exported declarations and explicitly declared public members with line, signature, owner and export entrypoints. One row per source symbol. |
 | [Top-level review](top-level-review.tsv) and [counts](review-counts.json) | Rust lexical leads and historical evidence to review, not parity verdicts. |
