@@ -282,3 +282,17 @@ Three other registrations remain non-equivalent. The two loop-expanded
 overscroll fixtures together count once; missing UserScroll events occur
 in both. Repaired observer order and blocked-back fixtures match without
 relying on a covered-route opacity probe.
+
+### Repaired fixtures, text checks, and additional upstream test targets
+
+[New frame results](frame-repaired-and-text.md) and the repaired IndexedStack
+and fade tests bring the frozen harness registration ledger to 108/253
+valid pairs (42.69%): 101 match, seven differ. Fresh repair comparisons
+use actual paint assertions or equally authored transitions. Historical
+catalog line numbers identify the original registration sites; newer
+fixture edits preserve their IDs. The real RTL IndexedStack and missing
+touch UserScroll events have separate committed Rust regressions.
+
+[Foundation and unbounded-scroll translations](upstream-foundation-scroll-comparisons.md)
+bring the upstream ledger to 37/8,965 paired (29 match, eight differ),
+with three additional reference-only outcomes.
