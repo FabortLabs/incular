@@ -18,3 +18,11 @@ Pinned Flutter 3.50.0 passed all 18 original registrations in widgets/stack_test
 Separate authored LTR → RTL → LTR reference: the 10px child in a 20px Stack should have relative x = [0,10,0], but Incular produces [0,0,0]. The larger sibling and stack size match. This verifies the default resolves to a physical left rather than ambient start; it is not an exact pairing for the directional bottomEnd original.
 
 Run the named Flutter originals with run-upstream-reference.ps1 (groups of five maximum), the authored sample with run-reference-probe.ps1 -Test stack_default_direction_test.dart, and cargo test --locked -p incular-widgets --test flutter350_stack_layout_parity -- --nocapture.
+
+## Windows wgpu: default clipping distinguishes geometry from paint
+
+An authored pinned Flutter test and an actual hidden-window wgpu readback compare the same opaque 100×100 scene at 1×. A centered 40×40 Stack paints a 20×20 red child after a 30px right shift. One case puts the shift in the child's layout with Positioned, the other uses only a paint transform.
+
+At (75,40), outside the Stack's right edge but inside the red child, HardEdge with a paint-only shift is red in Flutter, black in Incular. The (65,40) interior red control and the adjacent black samples match. The directly Positioned overflowing child clips in both, and Clip.none exposes both samples for both variants. This distinguishes an unnecessary clip from a wrong child transform or wrong surface size. Flutter guards with a layout-overflow flag before stacking a clip; Incular has a clip layer for any non-None Stack.
+
+Reference: run-reference-probe.ps1 -Test stack_overflow_raster_test.dart. Incular: set INCULAR_DESKTOP_LIVE_TESTS=1 and run cargo test --locked -p incular-desktop --test flutter350_stack_overflow_raster -- --nocapture.
