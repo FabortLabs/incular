@@ -14,3 +14,5 @@ packages/flutter/test/physics/friction_simulation_test.dart	30	Friction simulati
 packages/flutter/test/physics/friction_simulation_test.dart	51	Friction simulation constant deceleration	paired-mismatch	upstream-physics-comparisons.md
 packages/flutter/test/physics/gravity_simulation_test.dart	9	Gravity simulation 1	paired-mismatch	upstream-physics-comparisons.md
 packages/flutter/test/physics/gravity_simulation_test.dart	14	Gravity simulation 2	paired-match	upstream-physics-comparisons.md
+packages/flutter/test/physics/clamped_simulation_test.dart	9	Clamped simulation 1	paired-match	upstream-physics-comparisons.md
+packages/flutter/test/physics/clamped_simulation_test.dart	20	Clamped simulation 2	paired-match	upstream-physics-comparisons.md

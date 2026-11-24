@@ -49,3 +49,8 @@ slivers__viewport_center__anchor	harness/flutter/test/frames/slivers_test.dart	3
 navigation__overlay_portal__direct_anchor	harness/flutter/test/frames/navigation_test.dart	196	match	3	frame-rechecks-batch9.md
 text__editable_programmatic_controller_update	harness/flutter/test/frames/text_test.dart	183	match	3	frame-rechecks-batch9.md
 paint__raw_image__intrinsic_scale	harness/flutter/test/frames/paint_test.dart	60	match	3	frame-rechecks-batch9.md
+slivers__custom_scroll_view__cache_extent	harness/flutter/test/frames/slivers_test.dart	187	match	3	frame-rechecks-batch10.md
+slivers__grid_and_fill_viewport__geometry	harness/flutter/test/frames/slivers_test.dart	99	match	4	frame-rechecks-batch10.md
+scroll__single_child__keep_offset_page_storage	harness/flutter/test/frames/scroll_test.dart	291	match	9	frame-rechecks-batch10.md
+scroll__page_view__fraction_initial_page	harness/flutter/test/frames/scroll_test.dart	80	match	4	frame-rechecks-batch10.md
+semantics__live_region	harness/flutter/test/frames/semantics_test.dart	840	match	2	frame-rechecks-batch10.md

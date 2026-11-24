@@ -126,3 +126,39 @@ fn friction(v:f32,deceleration:f32,wants:[f32;3],final_x:f32,reverse_times:[u64;
     assert_eq!([0,200,2000,3000].map(|t|g.is_done(ms(t))),[false,false,false,true]);
 }
 ```
+
+## Upstream clamped simulation controls
+
+Copied the unmodified `clamped_simulation_test.dart` from the pinned
+reference, and ran it alone. Both Flutter registrations passed. Both Rust
+counterparts passed the same assertions for finite position/velocity bounds
+and delegated completion on the gravity baseline. These controls do not
+resolve C38–C39 (NaN and inverted bounds).
+
+```rust
+use incular_animation::{ClampedSimulation,GravitySimulation,Simulation};
+use std::time::Duration;
+fn at(ms:u64)->Duration { Duration::from_millis(ms) }
+#[test]
+fn upstream_clamp_one(){
+    let s=ClampedSimulation::new(GravitySimulation::new(9.81,10.,0.,0.),20.,100.)
+        .with_velocity_bounds(7.,11.);
+    assert_eq!([s.position(at(0)),s.velocity(at(0))],[20.,7.]);
+    assert_eq!([s.position(at(100_000)),s.velocity(at(100_000))],[100.,11.]);
+}
+#[test]
+fn upstream_clamp_two(){
+    let s=ClampedSimulation::new(GravitySimulation::new(-10.,0.,6.,10.),0.,2.5)
+        .with_velocity_bounds(-1.,1.);
+    assert_eq!([s.position(at(0)),s.velocity(at(0))],[0.,1.]);
+    assert!(!s.is_done(at(0)));
+    assert_eq!([s.position(at(1000)),s.velocity(at(1000))],[2.5,0.]);
+    assert!(!s.is_done(at(200)));
+    assert_eq!([s.position(at(2000)),s.velocity(at(2000))],[0.,-1.]);
+    assert!(!s.is_done(at(2000)));
+    assert_eq!([s.position(at(3000)),s.velocity(at(3000))],[0.,-1.]);
+    assert!(s.is_done(at(3000)));
+}
+```
+
+Rust used `cargo test --locked -p incular-animation --test audit_upstream_clamped_tmp upstream_clamp -- --nocapture`; temporary target removed.

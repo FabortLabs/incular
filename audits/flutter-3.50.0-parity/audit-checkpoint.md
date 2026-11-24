@@ -183,3 +183,11 @@ Viewport center/anchor differs on the minimum reported scroll extent.
 interpolation differences, NaN clamp policy, and missing debug-only
 bounds validation. Total 39 custom paired mismatch cases. Finite clamp
 and wrapped completion provide controls.
+
+### Existing frame harness: batch ten and upstream finite clamp controls
+
+[Five frame rechecks](frame-rechecks-batch10.md) all match. Total 55/253
+(21.74%), 50 match and five differ. Two more
+[upstream physics pairs](upstream-physics-comparisons.md#upstream-clamped-simulation-controls)
+passed on both implementations: now 16/8,965 paired (10 match, six differ),
+plus one reference-only.
