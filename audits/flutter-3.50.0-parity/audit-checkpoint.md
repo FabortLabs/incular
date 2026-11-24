@@ -612,3 +612,10 @@ and a rotated child. Complete pairs reach 201/8,965 (153 match,
 match. Complete pairs reach 204/8,965 (156 match, 48 differ), with
 116 partial and 27 reference-only. The nested 7×7 grid and all
 ordinary ListView alignment/animation samples agree.
+
+### AnimatedSwitcher rapid replacement and eviction
+
+[Five upstream dispositions](upstream-animated-switcher-retained-lifetime.md)
+bring complete pairs to 207/8,965 (158 match, 49 differ), with
+118 partial and 27 reference-only. Opacity samples match but
+the replaced intermediate child can remain mounted too long.
