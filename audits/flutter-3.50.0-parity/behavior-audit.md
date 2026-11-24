@@ -47,6 +47,16 @@ The pinned authored Android test and the Rust B01 test both keep
 typing in the first editor after cancellation. Rust checks the second
 editor's selection and the native command queue as well.
 
+## B04 and B05 remediation
+
+The editable now runs input formatters on text changes and composition
+commit, not on selection-only or active marked-range-only updates. A
+single-line editor runs the default newline filter first, so custom
+formatters see the corrected text and caret; multiline leaves the line
+break intact. The pinned native formatter policy probe passed both
+cases. The platform text input, mobile touch, and editable widget
+interaction targets passed their focused checks.
+
 ## Focus and native editing lifecycle
 
 Flutter references in this report are relative to

@@ -1545,20 +1545,57 @@ fn infer_autocorrect(autofill_hints: Option<&[String]>) -> bool {
             .iter()
             .any(|hint| matches!(hint.as_str(), "username" | "password" | "newPassword")))
 }
-/// Folds the input formatters into one user-edit transform: each formatter
-/// sees the old value and the output of the one before it, then the raw
-/// `edit_transform` (if any) runs last.
+fn input_formatters_should_run(
+    old: &incular_text::TextEditingValue,
+    next: &incular_text::TextEditingValue,
+) -> bool {
+    old.text != next.text
+        || (old.composing.is_some_and(|range| !range.is_empty())
+            && next.composing.is_none_or(|range| range.is_empty()))
+}
+
+thread_local! {
+    // Keep the default transform's identity across equivalent EditableText
+    // descriptors. It is stateless and the predicate is allocated once.
+    static SINGLE_LINE_EDIT_TRANSFORM: super::specs::EditTransform = {
+        let formatter = crate::FilteringTextInputFormatter::single_line_formatter();
+        Rc::new(move |old, next| {
+            if input_formatters_should_run(old, next) && next.text.contains('\n') {
+                crate::TextInputFormatter::format_edit_update(&formatter, old, next)
+            } else {
+                next.clone()
+            }
+        })
+    };
+}
+
+/// Folds the default single-line filter and caller formatters in order, but
+/// ignores selection-only and active-composition-range-only updates. The raw
+/// `edit_transform` (if any) retains its separate semantics and runs last.
 fn compose_edit_transform(
+    single_line: bool,
     formatters: Vec<Rc<dyn crate::TextInputFormatter>>,
     transform: Option<super::specs::EditTransform>,
 ) -> Option<super::specs::EditTransform> {
+    let default_filter = single_line.then(|| SINGLE_LINE_EDIT_TRANSFORM.with(Rc::clone));
     if formatters.is_empty() {
-        return transform;
+        match (&default_filter, &transform) {
+            (None, _) => return transform,
+            (_, None) => return default_filter,
+            _ => {}
+        }
     }
     Some(Rc::new(move |old, next| {
-        let mut value = formatters.iter().fold(next.clone(), |value, formatter| {
-            formatter.format_edit_update(old, &value)
-        });
+        let mut value = if input_formatters_should_run(old, next) {
+            let initial = default_filter
+                .as_ref()
+                .map_or_else(|| next.clone(), |filter| filter(old, next));
+            formatters.iter().fold(initial, |value, formatter| {
+                formatter.format_edit_update(old, &value)
+            })
+        } else {
+            next.clone()
+        };
         if let Some(transform) = &transform {
             value = transform(old, &value);
         }
@@ -1572,7 +1609,11 @@ impl From<EditableText> for Widget {
         let (input_type, input_action) = (value.input_type, value.input_action);
         let context_menu_builder = value.context_menu_builder.clone();
         let selection_handles_builder = value.selection_handles_builder.clone();
-        let edit_transform = compose_edit_transform(value.input_formatters, value.edit_transform);
+        let edit_transform = compose_edit_transform(
+            value.max_lines == Some(1),
+            value.input_formatters,
+            value.edit_transform,
+        );
         let spec = TextFieldSpec {
             context_menu: None,
             selection_handles: None,

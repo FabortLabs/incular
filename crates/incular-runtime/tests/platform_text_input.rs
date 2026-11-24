@@ -8,7 +8,10 @@ use incular_runtime::Runtime;
 use incular_text::{TextEditingValue, TextSelection};
 use incular_widgets::internal::{TextEditingController, TextRange};
 use incular_widgets::{EditableText, KeyboardListener, TextDirection, TextInputFormatter, Widget};
-use std::{cell::Cell, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
 
 fn constraints() -> Constraints {
     Constraints::tight(Size::new(220., 50.))
@@ -198,6 +201,43 @@ fn single_line_native_edit_removes_newlines_and_adjusts_selection() {
 }
 
 #[test]
+fn default_line_filter_runs_before_custom_formatters_and_not_on_multiline() {
+    struct Record(Rc<RefCell<Vec<String>>>);
+    impl TextInputFormatter for Record {
+        fn format_edit_update(
+            &self,
+            _: &TextEditingValue,
+            new: &TextEditingValue,
+        ) -> TextEditingValue {
+            self.0.borrow_mut().push(new.text.clone());
+            new.clone()
+        }
+    }
+    for (multiline, expected, caret) in [(false, "a😀b", 5), (true, "a😀\nb", 6)] {
+        let controller = TextEditingController::new();
+        let visits = Rc::new(RefCell::new(Vec::new()));
+        let widget = EditableText::new(controller.clone())
+            .text_direction(TextDirection::Ltr)
+            .multiline(multiline)
+            .input_formatter(Record(visits.clone()));
+        let mut runtime = Runtime::new(widget.into()).unwrap();
+        runtime.run_frame(constraints()).unwrap();
+        tap(&mut runtime);
+        let _ = runtime.handle_platform_event(PlatformEvent::TextEditingState(TextInputState {
+            text: "a😀\nb".into(),
+            selection_start: 6,
+            selection_end: 6,
+            composing: None,
+        }));
+        assert_eq!(visits.borrow().as_slice(), [expected]);
+        assert_eq!(
+            (controller.text(), controller.selection()),
+            (expected.into(), TextSelection::collapsed(caret))
+        );
+    }
+}
+
+#[test]
 fn native_selection_only_update_does_not_run_text_formatters() {
     struct CountFormatter(Rc<Cell<u32>>);
 
@@ -252,4 +292,19 @@ fn native_selection_only_update_does_not_run_text_formatters() {
         selection_only_calls, 0,
         "changing only selection must not invoke text formatters"
     );
+
+    calls.set(0);
+    for (composing, expected_calls) in [(Some((0, 2)), 0), (Some((1, 2)), 0), (None, 1)] {
+        let _ = runtime.handle_platform_event(PlatformEvent::TextEditingState(TextInputState {
+            text: "axbc".into(),
+            selection_start: 2,
+            selection_end: 2,
+            composing,
+        }));
+        assert_eq!(
+            controller.composing(),
+            composing.map(|(start, end)| TextRange::new(start, end))
+        );
+        assert_eq!(calls.get(), expected_calls, "composing={composing:?}");
+    }
 }
