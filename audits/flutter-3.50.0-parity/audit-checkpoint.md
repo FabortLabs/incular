@@ -339,3 +339,11 @@ differences remain under fixture review and are not counted.
 pairs to 44/8,965 (34 match, ten differ), with six reference-only.
 Committed standalone Flutter fixtures now preserve expected behavior
 in source tests as well as the existing harness; no runtime fixes.
+
+### Sliver viewport and header fixtures
+
+[Five more strict sliver comparisons](frame-sliver-viewport-rechecks.md)
+match. Valid paired frames: 156/253 (61.66%), 147 match and nine differ.
+Upstream: 44/8,965. Now 23 standalone Flutter reference fixture files
+are committed; continue keep-alive paint, PageView retention, and the
+remaining retained layout/text/physics fixture groups.
