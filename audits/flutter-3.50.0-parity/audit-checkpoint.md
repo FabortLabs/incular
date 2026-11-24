@@ -319,3 +319,12 @@ and start-before-resume fail at the intended assertions. Upstream count
 42/8,965, 32 match and ten differ (plus three reference-only).
 Earlier Flutter reference expectations are now being preserved as real
 named test files under `reference-probes/test`, with a pinned runner.
+
+### Layout, focus/input, and semantics controls
+
+[Ten more frame pairs](frame-layout-focus-semantics.md) match. Valid frame
+registrations now 143/253 (56.52%), 136 match and seven differ. The
+original focus/input frame file is fully dispositioned (17 of 18 match).
+All previously reproduced custom Flutter expectations with existing
+standalone comparison files now have runnable named reference probes
+in the audit package; shipping implementation remains untouched.
