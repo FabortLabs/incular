@@ -31,6 +31,8 @@ Unreviewed individual contracts remain open. This is not a parity certification.
 | [Flutter source delta](flutter-source-delta.tsv) | Changed files in the 11 library trees, including behavior-only changes. |
 | [Inventory notes](inventory-notes.json) | Exports traversed outside the local framework, parse diagnostics, and conditional export/extension caveats. |
 | [External exports](external-reexports.md) | Grouped dependency and engine boundary dispositions. |
+| [Live checkpoint](audit-checkpoint.md), [coverage validator](coverage-progress.py) | Verified progress, work still open, and distinct frame/upstream denominators. |
+| [Frame ledger](harness-dispositions.tsv), [upstream ledger](upstream-dispositions.tsv) | Per-scenario outcomes with exact registration sites and linked evidence. |
 
 ## Inventory by public entrypoint
 
@@ -79,11 +81,13 @@ are logged rather than listed; external dependency/engine edges are listed but
 not expanded; and annotations such as `@internal` or `@protected` are not a
 promise of app-level support. The pinned analyzer recovers from new doc syntax
 warnings and a trailing comma on `OverlayChildLayoutInfo`; the latter's three
-getters were checked manually (see W11). No frame, pixel, native assistive
-technology, or performance tests were run. No Rust build or workspace suite
-was run. The prior harness describes 3.41.7; for a focused 3.50 scenario,
-explicitly verify the reference Flutter executable, use fresh output, and
-compare strictly rather than reusing old captures.
+getters were checked manually (see W11). Counting declarations or registration
+sites is discovery, not verification. Since the initial inventory, focused
+Flutter/Rust behavioral checks, strict frame comparisons, and selected wgpu
+pixel readbacks have run. No Incular full workspace suite was run. Native
+assistive technology, platform-wide pixel results, and performance are not
+certified. The old harness baseline was 3.41.7; use the focused runner to
+verify the pinned SDK and generate fresh 3.50 results.
 
 ## Highest-impact next checks
 
