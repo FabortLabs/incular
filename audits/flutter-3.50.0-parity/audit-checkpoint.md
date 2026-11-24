@@ -128,3 +128,10 @@ mismatches: word spacing in warm/cold text layout, digit filtering caret
 remap, and length enforcement dropping an old suffix. Total: 30 original
 custom paired mismatches. Exact established fixture dispositions remain
 separate.
+
+### Existing frame harness: second and third strict batches
+
+[Batch results and runner](frame-rechecks-batch2.md) add nine matching
+fixtures. Total 20/253 existing frame fixtures (7.91%): 19 match, one
+mismatch. A repeat of fade-pop reproduced the existing divergence and
+does not count twice. Use the runner only for small reviewed batches.
