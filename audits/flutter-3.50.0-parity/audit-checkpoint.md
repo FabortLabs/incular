@@ -486,3 +486,11 @@ bring complete pairs to 108/8,965 (72 match, 36 differ), with 36 partial
 and 22 reference-only. Actual Windows wgpu pixels confirm a separate
 nine-slice RawImage default difference, with all explicit-fit controls
 matching. No production code changed.
+
+### Route-current input, aspect ratio, and long-press button mask
+
+[Nine upstream dispositions](upstream-current-route-aspect-and-long-press.md)
+bring complete pairs to 113/8,965 (75 match, 38 differ), with 40 partial
+and 22 reference-only. The new tests distinguish callbacks on a covered
+route, aspect ratio under infinite width, and button changes on either
+side of long-press acceptance.
