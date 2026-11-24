@@ -308,3 +308,14 @@ Current checkpoint: 113/253 valid paired frame registrations (44.66%),
 [Five strict switcher checks](frame-switchers-recheck.md) match. Valid
 paired frame registrations: 118/253 (46.64%), 111 match and seven differ.
 Upstream paired registrations: 37/8,965.
+
+### Input, retained layout, and platform lifecycle
+
+[Three strict groups](frame-input-layout-rechecks.md) add 15 matches:
+133/253 comparable frame registrations (52.57%), 126 match and seven differ.
+[Five official checks](upstream-lifecycle-clipboard-comparisons.md) have
+committed Rust targets; typed clipboard controls match, ticker suspension
+and start-before-resume fail at the intended assertions. Upstream count
+42/8,965, 32 match and ten differ (plus three reference-only).
+Earlier Flutter reference expectations are now being preserved as real
+named test files under `reference-probes/test`, with a pinned runner.

@@ -39,3 +39,8 @@ packages/flutter/test/foundation/change_notifier_test.dart	397	Value notifier	re
 packages/flutter/test/foundation/change_notifier_test.dart	539	notifyListener can be called recursively	paired-match	upstream-foundation-scroll-comparisons.md
 packages/flutter/test/foundation/change_notifier_test.dart	564	Remove Listeners while notifying on a list which will not resize	paired-match	upstream-foundation-scroll-comparisons.md
 packages/flutter/test/physics/newton_test.dart	270	scroll_with_inf_edge_ends	paired-match	upstream-foundation-scroll-comparisons.md
+packages/flutter/test/scheduler/ticker_test.dart	154	Ticker stops ticking when application is paused	paired-mismatch	upstream-lifecycle-clipboard-comparisons.md
+packages/flutter/test/scheduler/ticker_test.dart	178	Ticker can be created before application unpauses	paired-mismatch	upstream-lifecycle-clipboard-comparisons.md
+packages/flutter/test/services/clipboard_test.dart	17	Clipboard.getData returns text	paired-match	upstream-lifecycle-clipboard-comparisons.md
+packages/flutter/test/services/clipboard_test.dart	26	Clipboard.getData returns null	paired-match	upstream-lifecycle-clipboard-comparisons.md
+packages/flutter/test/services/clipboard_test.dart	46	Clipboard.setData sets text	paired-match	upstream-lifecycle-clipboard-comparisons.md
