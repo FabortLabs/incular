@@ -289,6 +289,18 @@ fn overlapping_single_taps_filo_keeps_first_press() {
 }
 
 #[test]
+fn unrelated_move_and_cancel_do_not_clear_the_primary_tap() {
+    let mut t = Tap::primary();
+    t.event(0, 1, Down, A);
+    t.event(20, 2, Down, (50., 50.));
+    t.event(40, 2, Move, (90., 90.));
+    t.event(60, 2, Cancel, (90., 90.));
+    t.expect(&[]);
+    t.event(80, 1, Up, A_UP);
+    t.expect(&["tap"]);
+}
+
+#[test]
 fn tap_diagonal_motion_outside_slop_cancels_once() {
     let mut t = Tap::primary();
     t.event(0, 3, Down, A);

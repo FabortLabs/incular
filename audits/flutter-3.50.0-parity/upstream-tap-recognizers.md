@@ -42,3 +42,9 @@ At the audited baseline: 30 of 32 targeted Rust tests passed; FIFO/FILO
 order and slop cancellation are independently observable in the test output
 (the two failures are FILO and outside-slop cancellation). The ledger records
 31 fully paired original registrations and one partial comparison.
+
+Remediation: unrelated contacts no longer replace, finish or cancel the
+single active contact. Both overlapping release orders now pass, together
+with an additional wrong-pointer move/cancel control. The focused gesture
+targets pass 84 tests total. The separate partial outside-slop comparison
+still fails in the direct handler without Flutter's arena-close step.

@@ -700,6 +700,11 @@ impl PointerGestureRecognizer {
         decision
     }
     fn observe_phase(&mut self, event: PointerEvent) -> GestureDecision {
+        // This recognizer has a single contact. A second pointer must not
+        // replace that contact or complete/cancel its gesture on release.
+        if self.down.is_some_and(|down| down.pointer != event.pointer) {
+            return GestureDecision::Reject;
+        }
         match event.phase {
             PointerPhase::Enter | PointerPhase::Exit => GestureDecision::Reject,
             PointerPhase::Down => {
