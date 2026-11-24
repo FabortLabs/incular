@@ -220,3 +220,93 @@ fn currently_mounted_entry_keeps_its_curve_after_same_key_rebuild() {
     assert_eq!(s.tree.element_with_key(&Key::Value(2)), Some(current));
     assert_eq!(s.alphas().last(), Some(&0.5), "no elapsed time");
 }
+
+fn render_kinds(scene: &Scene, predicate: impl Fn(&RenderKind) -> bool) -> usize {
+    let mut pending = vec![scene.root];
+    let mut found = 0;
+    while let Some(element) = pending.pop() {
+        found += usize::from(
+            scene
+                .tree
+                .render_id(element)
+                .and_then(|render| scene.tree.render_object_kind(render))
+                .is_some_and(&predicate),
+        );
+        if let Some(children) = scene.tree.children(element) {
+            pending.extend(children);
+        }
+    }
+    found
+}
+
+#[test]
+fn replacing_the_builder_changes_all_mounted_transitions() {
+    let scene = |id: Option<u64>, scaled| {
+        let mut switcher = AnimatedSwitcher::new(DURATION, Some(card(id, Color::WHITE)))
+            .layout_builder(|child, previous| {
+                Widget::from(Column::new(child.into_iter().chain(previous)))
+            });
+        if scaled {
+            switcher = switcher.transition_builder(|child, alpha| {
+                Widget::from(incular_widgets::Transform::scale(alpha, child))
+            });
+        }
+        Widget::from(switcher)
+    };
+    let mut s = Scene::new(scene(Some(1), false));
+    s.frame(10);
+    replace_configured(&mut s, scene(Some(2), false), 10);
+    s.frame(20);
+    replace_configured(&mut s, scene(Some(3), false), 20);
+    s.frame(30);
+    let before = s.alphas().len();
+    replace_configured(&mut s, scene(None, true), 30);
+    s.frame(40);
+    let scales = render_kinds(&s, |kind| matches!(kind, RenderKind::Transform { .. }));
+    assert_eq!((before, s.alphas().len(), scales), (3, 0, 3));
+}
+
+#[test]
+fn reentering_the_same_key_does_not_leave_a_second_copy() {
+    let duration = Duration::from_secs(1);
+    let branch = |id| {
+        let color = if id == 1 { Color::WHITE } else { Color::BLACK };
+        Widget::from(AnimatedSwitcher::new(duration, Some(card(Some(id), color))))
+    };
+    let mut s = Scene::new(branch(1));
+    replace_configured(&mut s, branch(2), 10);
+    replace_configured(&mut s, branch(1), 10);
+    s.frame(1010);
+    let copies = render_kinds(
+        &s,
+        |kind| matches!(kind,RenderKind::Box {color,..} if *color == Color::WHITE),
+    );
+    assert_eq!(copies, 1, "mounted same-key visual children");
+}
+
+#[test]
+fn zero_area_stays_zero_while_adding_and_replacing_text() {
+    use incular_widgets::{Center, Directionality, SizedBox, Text, TextDirection};
+    let build = |child: Option<(&str, u64)>| {
+        Widget::from(Directionality::new(
+            TextDirection::Ltr,
+            Center::new(
+                SizedBox::shrink().child(
+                    Widget::from(AnimatedSwitcher::new(
+                        Duration::from_micros(500),
+                        child.map(|(label, key)| {
+                            Widget::from(Text::new(label)).with_key(Key::Value(key))
+                        }),
+                    ))
+                    .with_key(Key::Value(40)),
+                ),
+            ),
+        ))
+    };
+    let mut s = Scene::new(build(None));
+    for (child, ms) in [(None, 0), (Some(("X", 1)), 10), (Some(("Y", 2)), 20)] {
+        replace_configured(&mut s, build(child), ms);
+        let target = s.tree.element_with_key(&Key::Value(40)).unwrap();
+        assert_eq!(s.tree.element_bounds(target).unwrap().size, Size::ZERO);
+    }
+}
