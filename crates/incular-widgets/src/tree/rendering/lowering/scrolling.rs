@@ -13,10 +13,14 @@ pub(super) fn lower_scrolling(widget: &Widget, context: &DependencyContext) -> R
             ..
         } => {
             let behavior = ambient_scroll_behavior(context);
+            // Flutter resolves the ambient horizontal direction first,
+            // then applies the caller's reverse flag.
+            let rtl = *axis == Axis::Horizontal
+                && context.depend::<TextDirection>() == Some(TextDirection::Rtl);
             RenderKind::Scroll {
                 controller: controller.clone(),
                 axis: *axis,
-                reverse: *reverse,
+                reverse: *reverse ^ rtl,
                 physics: inherit_physics
                     .map_or(*physics, |page| inherited_physics(&behavior, page)),
                 clip_behavior: *clip_behavior,

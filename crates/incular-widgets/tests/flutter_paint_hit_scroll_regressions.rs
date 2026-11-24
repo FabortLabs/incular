@@ -57,7 +57,7 @@ fn none_style_container_border_does_not_paint() {
     );
 }
 
-fn built_indices(extent: f32, cache_end: f32) -> Vec<usize> {
+fn built_indices(extent: f32, cache_start: f32, cache_end: f32) -> Vec<usize> {
     let built = Rc::new(RefCell::new(Vec::new()));
     let observed = built.clone();
     let sliver = SliverFixedExtentList::new(10, extent, move |index| {
@@ -65,16 +65,17 @@ fn built_indices(extent: f32, cache_end: f32) -> Vec<usize> {
         Widget::box_(Size::new(40.0, extent), Color::WHITE)
     });
     let mut render = sliver.create_render_sliver(&ScrollController::new(), Axis::Vertical, false);
+    let cache_extent = cache_end - cache_start;
     let _ = render.perform_layout(SliverConstraints::new(
         Axis::Vertical,
         false,
+        cache_start,
         0.0,
         0.0,
-        0.0,
-        cache_end,
+        cache_extent,
         40.0,
-        cache_end,
-        cache_end,
+        cache_extent,
+        cache_extent,
         0.0,
     ));
     let indices = built.borrow().clone();
@@ -83,10 +84,42 @@ fn built_indices(extent: f32, cache_end: f32) -> Vec<usize> {
 
 #[test]
 fn fixed_extent_cache_excludes_row_at_fractional_end() {
-    assert_eq!(built_indices(20.0, 60.0), [0, 1, 2], "integer edge control");
-    assert_eq!(built_indices(20.3, 60.9), [0, 1, 2], "row at cache end");
+    assert_eq!(
+        built_indices(20.0, 0.0, 60.0),
+        [0, 1, 2],
+        "integer edge control"
+    );
+    assert_eq!(
+        built_indices(20.3, 0.0, 60.9),
+        [0, 1, 2],
+        "row at cache end"
+    );
+    assert_eq!(
+        built_indices(20.3, 0.0, 60.899),
+        [0, 1, 2],
+        "just before the end"
+    );
+    assert_eq!(
+        built_indices(20.3, 0.0, 60.901),
+        [0, 1, 2, 3],
+        "actual overlap still builds a row"
+    );
 }
 
+#[test]
+fn fixed_extent_cache_excludes_preceding_row_at_fractional_start() {
+    assert_eq!(
+        built_indices(1.1, 7.7, 8.05),
+        [7],
+        "preceding row touches but does not overlap"
+    );
+    assert_eq!(
+        built_indices(1.1, 7.699, 8.05),
+        [6, 7],
+        "genuine overlap still builds preceding row"
+    );
+    assert_eq!(built_indices(1.1, 7.701, 8.05), [7]);
+}
 fn triangle(size: Size) -> Arc<Path> {
     let mut path = Path::builder();
     path.move_to(Offset::ZERO)
@@ -167,4 +200,37 @@ fn horizontal_scroll_offset_zero_respects_rtl_and_reverse() {
         [-100.0, 0.0],
         "RTL changes the horizontal axis before applying reverse",
     );
+}
+
+#[test]
+fn horizontal_scroll_reuses_its_offset_when_directionality_changes() {
+    let key = Key::from(36052_u64);
+    let controller = ScrollController::new();
+    let scene = |direction| -> Widget {
+        let child = Widget::from(SizedBox::new().width(200.).height(60.)).with_key(key.clone());
+        Directionality::new(
+            direction,
+            SingleChildScrollView::new(child)
+                .controller(controller.clone())
+                .scroll_direction(Axis::Horizontal),
+        )
+        .into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scene(TextDirection::Ltr)).unwrap();
+    let constraints = Constraints::tight(Size::new(100., 60.));
+    tree.layout(constraints).unwrap();
+    let child = tree.element_with_key(&key).unwrap();
+    controller.jump_to(25.);
+    tree.layout(constraints).unwrap();
+    let _ = tree.paint();
+    assert_eq!(tree.element_bounds(child).unwrap().origin.x, -25.);
+    for (direction, x) in [(TextDirection::Rtl, -75.), (TextDirection::Ltr, -25.)] {
+        tree.update(root, scene(direction)).unwrap();
+        tree.layout(constraints).unwrap();
+        let _ = tree.paint();
+        assert_eq!(controller.offset(), 25.);
+        assert_eq!(tree.element_with_key(&key), Some(child));
+        assert_eq!(tree.element_bounds(child).unwrap().origin.x, x);
+    }
 }

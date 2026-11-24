@@ -128,6 +128,22 @@ impl RenderSliver for BoxRenderSliver {
     }
 }
 
+/// Flutter snaps boundary indices when the reconstructed coordinate only
+/// differs by float rounding. Layout coordinates here are f32, so use
+/// one representable coordinate step rather than Dart's double epsilon.
+fn fixed_extent_boundary(offset: f32, item_extent: f32) -> f64 {
+    let extent = f64::from(item_extent);
+    let coordinate = f64::from(offset);
+    let ratio = coordinate / extent;
+    let nearest = ratio.round();
+    let tolerance = f64::from(offset.next_up()) - coordinate;
+    if (coordinate - nearest * extent).abs() <= tolerance {
+        nearest
+    } else {
+        ratio
+    }
+}
+
 pub(super) struct FixedExtentRenderSliver {
     pub(super) item_count: usize,
     pub(super) item_extent: f32,
@@ -170,8 +186,8 @@ impl RenderSliver for FixedExtentRenderSliver {
         // item extent instead of dividing by it.
         let (start, end) = if self.item_extent > 0. {
             (
-                (cache_start / self.item_extent).floor() as usize,
-                (cache_end / self.item_extent).ceil() as usize,
+                fixed_extent_boundary(cache_start, self.item_extent).floor() as usize,
+                fixed_extent_boundary(cache_end, self.item_extent).ceil() as usize,
             )
         } else {
             (0, 1)

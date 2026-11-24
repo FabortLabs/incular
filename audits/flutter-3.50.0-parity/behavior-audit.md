@@ -76,6 +76,24 @@ disabled-editor variant. The native client does not see a replacement,
 hide or clear command. The seven focused Rust targets passed 18 tests,
 including initial focus, hosted requests, and ordinary mobile taps.
 
+## C26 remediation
+
+The fixed-extent sliver now snaps cache coordinates at a row boundary
+before applying its half-open range. Incular uses one f32 coordinate
+step for rounding noise. The pinned Flutter viewport and Incular
+realize the same row sets in seven cases: integer extent, fractional
+start/end and samples just to either side. Actual overlap still builds
+the adjacent row.
+
+## C27 remediation
+
+The single-child horizontal viewport first resolves ambient text
+direction, then applies reverse. The pinned and Incular tests agree
+on all four zero-offset placements. Changing LTR to RTL and back
+retains the same child and offset of 25; its origin moves from -25
+to -75 and back. Missing ambient direction still uses Incular's
+existing LTR fallback and is not claimed as a Flutter assertion match.
+
 ## Focus and native editing lifecycle
 
 Flutter references in this report are relative to
