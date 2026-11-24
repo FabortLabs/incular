@@ -264,3 +264,12 @@ in incular-runtime. They fail at the confirmed estimate and focus checks.
 independently and both match. Current valid frame coverage is 76/253
 (30.04%), 71 match and five differ, plus five non-equivalent fixtures.
 Use the exact runner for subsequent small frame checks.
+
+### Further executable frame and runtime checks
+
+[Batches sixteen through eighteen and repaired Hero](frame-rechecks-batches16-18.md)
+reach 92/253 valid paired frame registrations (36.36%): 86 match and six
+differ. Five further registrations have non-equivalent probes. Actual
+Hero push shuttles matched; pop had no Incular return shuttle. Added
+focused executable regressions for unset enabled semantics and restoration
+ownership handoff, with matching explicit removal and lease controls.

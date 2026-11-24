@@ -27,3 +27,7 @@ public controls in Incular's hardwired trajectory
 (`crates/incular-navigation/src/hero.rs:159–178,502–506`).
 Likewise compare equivalent custom transition pairs before evaluating a
 separate secondary-animation pairing gap.
+
+The Hero push fixture was subsequently repaired and now matches; the
+repaired pop fixture demonstrates a missing return shuttle. See
+[the new paired traces](frame-rechecks-batches16-18.md).
