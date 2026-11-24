@@ -58,8 +58,8 @@ packages/flutter/test/painting/border_side_test.dart	109	BorderSide - won't lerp
 packages/flutter/test/painting/border_side_test.dart	126	BorderSide - lerp with strokeAlign	paired-match	upstream-border-constraints-formatters.md
 packages/flutter/test/painting/border_test.dart	27	Border.symmetric constructor	partial-mismatch	upstream-border-constraints-formatters.md
 packages/flutter/test/rendering/box_constraints_test.dart	17	BoxConstraints copyWith	partial-match	upstream-border-constraints-formatters.md
-packages/flutter/test/rendering/box_constraints_test.dart	60	BoxConstraints lerp	partial-match	upstream-border-constraints-formatters.md
-packages/flutter/test/rendering/box_constraints_test.dart	134	BoxConstraints lerp with overshooting t is normalized	partial-mismatch	upstream-border-constraints-formatters.md
+packages/flutter/test/rendering/box_constraints_test.dart	60	BoxConstraints lerp	paired-match	upstream-border-constraints-formatters.md#constraint-interpolation-repair
+packages/flutter/test/rendering/box_constraints_test.dart	134	BoxConstraints lerp with overshooting t is normalized	paired-match	upstream-border-constraints-formatters.md#constraint-interpolation-repair
 packages/flutter/test/rendering/box_test.dart	755	UnconstrainedBox honors constrainedAxis=Axis.horizontal	paired-match	upstream-border-constraints-formatters.md
 packages/flutter/test/rendering/box_test.dart	776	UnconstrainedBox honors constrainedAxis=Axis.vertical	paired-match	upstream-border-constraints-formatters.md
 packages/flutter/test/services/text_formatter_test.dart	148	test filtering formatter, deny mode	paired-mismatch	upstream-border-constraints-formatters.md

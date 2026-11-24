@@ -21,17 +21,20 @@ fn replacing_all_finite_bounds_leaves_original_constraints_unchanged() {
     assert_ne!(copied, original);
 }
 
-// rendering/box_constraints_test.dart:60. The Rust Lerp trait has two
-// non-null endpoints; this covers the upstream finite-to-finite subcase.
+// rendering/box_constraints_test.dart:60.
 #[test]
 fn lerp_interpolates_all_four_finite_bounds() {
     let start = Constraints::new(13., 17., 111., 117.);
     let end = Constraints::new(3., 7., 11., 17.);
     assert_eq!(start.lerp(&end, 0.2), Constraints::new(11., 15., 91., 97.));
+    let half = Some(Constraints::new(1.5, 3.5, 5.5, 8.5));
+    assert_eq!(Constraints::lerp_optional(None, Some(end), 0.5), half);
+    assert_eq!(Constraints::lerp_optional(Some(end), None, 0.5), half);
+    assert_eq!(Constraints::lerp_optional(None, None, 0.5), None);
 }
 
-// rendering/box_constraints_test.dart:134. These are the two non-null
-// cases in the upstream registration.
+// rendering/box_constraints_test.dart:134. Equalities also guarantee
+// normalized bounds because the Rust type cannot hold a contradictory box.
 #[test]
 fn lerp_overshoot_normalizes_interpolated_bounds_instead_of_using_an_endpoint() {
     let start = Constraints::tight_for(None, Some(25.));
@@ -44,6 +47,22 @@ fn lerp_overshoot_normalizes_interpolated_bounds_instead_of_using_an_endpoint() 
         start.lerp(&end, -0.1),
         Constraints::tight(Size::new(11., 11.)),
     );
+    let empty = Some(Constraints::tight(Size::ZERO));
+    assert_eq!(Constraints::lerp_optional(None, Some(start), -0.5), empty);
+    assert_eq!(Constraints::lerp_optional(Some(start), None, 1.5), empty);
+}
+
+#[test]
+fn matched_unbounded_maxima_survive_normalization() {
+    let a = Constraints::tight_for(Some(10.), None);
+    let b = Constraints::tight_for(Some(20.), None);
+    assert_eq!(a.lerp(&b, 0.5), Constraints::tight_for(Some(15.), None));
+    assert_eq!(a.lerp(&b, -2.), Constraints::tight_for(Some(0.), None));
+    let bounded = Constraints::tight(Size::new(10., 10.));
+    assert_eq!(a.lerp(&bounded, 0.25), a);
+    assert_eq!(a.lerp(&bounded, 0.75), bounded);
+    assert_eq!(bounded.lerp(&a, 0.25), bounded);
+    assert_eq!(bounded.lerp(&a, 0.75), a);
 }
 
 fn laid_out_root_size(widget: impl Into<Widget>, constraints: Constraints) -> Size {

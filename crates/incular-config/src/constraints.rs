@@ -1,6 +1,6 @@
 //! Box constraints shared by all pure layout algorithms.
 
-use incular_core::Size;
+use incular_core::{Lerp, Size};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ConstraintError {
@@ -223,27 +223,84 @@ impl Constraints {
             max_height: height.unwrap_or(self.max_height),
         }
     }
+
+    /// An absent endpoint starts or ends at zero bounds. If both are absent,
+    /// the result is absent. Overshoot still produces a normalized box.
+    #[must_use]
+    pub fn lerp_optional(begin: Option<Self>, end: Option<Self>, t: f32) -> Option<Self> {
+        match (begin, end) {
+            (None, None) => None,
+            (None, Some(end)) => Some(end.scale_for_lerp(t)),
+            (Some(begin), None) => Some(begin.scale_for_lerp(1. - t)),
+            (Some(begin), Some(end)) => Some(begin.lerp(&end, t)),
+        }
+    }
+
+    fn scale_for_lerp(self, factor: f32) -> Self {
+        if !factor.is_finite() {
+            return self;
+        }
+        if factor <= 0. {
+            return Self::tight(Size::ZERO);
+        }
+        Self::normalize_interpolation(
+            self.min_width * factor,
+            self.max_width * factor,
+            self.min_height * factor,
+            self.max_height * factor,
+        )
+        .unwrap_or(self)
+    }
+
+    fn normalize_interpolation(
+        min_width: f32,
+        max_width: f32,
+        min_height: f32,
+        max_height: f32,
+    ) -> Result<Self, ConstraintError> {
+        let min_width = min_width.max(0.);
+        let min_height = min_height.max(0.);
+        Self::try_new(
+            min_width,
+            max_width.max(min_width),
+            min_height,
+            max_height.max(min_height),
+        )
+    }
 }
 
-/// Flutter's `BoxConstraints.lerp`: finite bounds interpolate and infinite
-/// maximums stay infinite. Flutter rejects interpolating a finite bound
-/// towards an infinite one; here the result is the nearer end whenever the
-/// interpolated bounds are invalid.
-impl incular_core::Lerp for Constraints {
+/// Interpolates and normalizes bounds like Flutter's `BoxConstraints.lerp`.
+/// Mixing bounded and unbounded maxima uses the nearer endpoint instead of
+/// asserting, so an inconsistent animation cannot feed invalid bounds to layout.
+impl Lerp for Constraints {
     fn lerp(&self, other: &Self, t: f32) -> Self {
+        if self == other || t == 0. {
+            return *self;
+        }
+        if t == 1. {
+            return *other;
+        }
+        let fallback = if t < 0.5 { *self } else { *other };
+        if !t.is_finite()
+            || self.max_width.is_finite() != other.max_width.is_finite()
+            || self.max_height.is_finite() != other.max_height.is_finite()
+        {
+            return fallback;
+        }
+        let t = f64::from(t);
         let mix = |a: f32, b: f32| {
-            if a.is_finite() {
-                a + (b - a) * t
+            if a == b {
+                a
             } else {
-                f32::INFINITY
+                (f64::from(a) * (1. - t) + f64::from(b) * t) as f32
             }
         };
-        Self::try_new(
+        Self::normalize_interpolation(
             mix(self.min_width, other.min_width),
             mix(self.max_width, other.max_width),
             mix(self.min_height, other.min_height),
             mix(self.max_height, other.max_height),
         )
-        .unwrap_or(if t < 0.5 { *self } else { *other })
+        .unwrap_or(fallback)
     }
 }

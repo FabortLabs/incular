@@ -52,3 +52,16 @@ value checks pass. Five retained Flutter and Windows wgpu frames match
 at all seven horizontal samples, including an extrapolated negative-width
 side with neither a reserved inset nor an unwanted hairline. Translucent
 interpolation is checked as paint data here, not as a raster color comparison.
+
+## Constraint interpolation repair
+
+Finite pairs now normalize their interpolated bounds instead of snapping
+to an endpoint when the animation overshoots. For the tight 10 to loose
+100 case at t = −0.1, both engines return tight 11. The nullable API
+interpolates from or to zero and returns absent for two absent inputs.
+All original assertions at `box_constraints_test.dart` lines 60 and 134
+now pair, and the six focused Rust tests pass.
+
+Rust still limits minimums to finite values and uses a safe nearer
+endpoint for incompatible bounded/unbounded maxima rather than asserting.
+The separate Flutter cases using infinite minimums stay open.
