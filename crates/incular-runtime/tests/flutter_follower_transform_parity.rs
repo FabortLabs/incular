@@ -6,8 +6,8 @@ use incular_core::{Color, Offset, Rect, Size, Transform as CoreTransform};
 use incular_rendering::{Brush, DisplayList, LayerLink, PaintCommand};
 use incular_runtime::Runtime;
 use incular_widgets::{
-    CompositedTransformFollower, CompositedTransformTarget, Positioned, SizedBox, Stack, Transform,
-    Widget, internal::Key,
+    Center, CompositedTransformFollower, CompositedTransformTarget, Padding, Positioned, SizedBox,
+    Stack, Transform, Widget, internal::Key,
 };
 
 const MARKER: Color = Color::rgba(0xFF, 0x57, 0x22, 0xFF);
@@ -132,6 +132,44 @@ fn original_offset_only_anchors_are_exact() {
 
 #[test]
 fn original_rotated_anchors_agree_and_the_axes_follow_the_leader() {
+    rotated_anchors(false);
+}
+
+#[test]
+fn original_nested_anchors_cancel_the_unlinked_parent_rotation_and_skew() {
+    rotated_anchors(true);
+}
+
+#[test]
+fn original_nested_target_and_follower_lay_out_at_zero_area() {
+    let link = LayerLink::new();
+    let follower = Widget::from(CompositedTransformFollower::new(
+        link.clone(),
+        SizedBox::new(),
+    ))
+    .with_key(FOLLOWER);
+    let leader = Widget::from(CompositedTransformTarget::new(link, follower)).with_key(LEADER);
+    let mut r = Runtime::new(Center::new(leader).into()).unwrap();
+    r.run_frame(Constraints::tight(Size::ZERO)).unwrap();
+    let tree = r.tree();
+    for key in [LEADER, FOLLOWER] {
+        let element = tree.element_with_key(&Key::from(key)).unwrap();
+        assert_eq!(tree.element_bounds(element).unwrap().size, Size::ZERO);
+    }
+}
+
+#[test]
+fn original_leader_inside_follower_is_nonfatal_in_incular() {
+    let link = LayerLink::new();
+    let leader =
+        CompositedTransformTarget::new(link.clone(), Widget::box_(Size::new(20., 20.), MARKER));
+    let follower = CompositedTransformFollower::new(link, leader);
+    let mut r = Runtime::new(follower.into()).unwrap();
+    r.run_frame(Constraints::tight(Size::new(800., 600.)))
+        .unwrap();
+}
+
+fn rotated_anchors(nested: bool) {
     let leader_color = Color::rgba(3, 5, 211, 255);
     for (target_anchor, follower_anchor) in ANCHORS {
         let link = LayerLink::new();
@@ -142,12 +180,21 @@ fn original_rotated_anchors_agree_and_the_axes_follow_the_leader() {
                 Widget::box_(Size::new(80., 10.), leader_color),
             ),
         );
-        let follower = Transform::rotation(
-            -0.3,
+        let follower =
             CompositedTransformFollower::new(link, Widget::box_(Size::new(40., 20.), MARKER))
                 .target_anchor(target_anchor)
-                .follower_anchor(follower_anchor),
-        );
+                .follower_anchor(follower_anchor);
+        let child = if nested {
+            let skew = Transform::skew(0.9, 1.1, Padding::all(20., follower))
+                .alignment(Alignment::TOP_LEFT);
+            Widget::from(Padding::all(
+                20.,
+                CompositedTransformFollower::new(LayerLink::new(), skew),
+            ))
+        } else {
+            Widget::from(follower)
+        };
+        let follower = Transform::rotation(-0.3, child);
         let mut r = Runtime::new(
             Stack::new([
                 Positioned::new(leader).left(456.).top(123.),

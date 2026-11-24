@@ -53,6 +53,14 @@ the unlinked follower parent is itself rotated by a different angle.
 The authored scaled Flutter fixture checks raster pixels; the Rust
 follower regression checks the flattened display list, not native pixels.
 
+The three nested layouts at lines 270, 281 and 292 also pass. These add
+padding, an unlinked outer follower and skew before the linked inner
+follower. Both sides also lay out a linked target and follower at zero
+area without an exception (line 401). Line 373 is a mismatch: Flutter
+asserts when a follower encloses its own target in paint order; Incular
+handles that link cycle without an exception. This does not imply the
+cycle produces a valid linked transform.
+
 ## Text state
 
 `services/text_input_test.dart:55` matches reversed-selection deletion.
