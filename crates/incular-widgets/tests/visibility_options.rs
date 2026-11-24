@@ -79,6 +79,7 @@ fn maintain_constructor_keeps_everything() {
             .maintain_size(true)
             .maintain_semantics(true)
             .maintain_interactivity(true)
+            .maintain_focusability(true)
             .build()
     );
 }

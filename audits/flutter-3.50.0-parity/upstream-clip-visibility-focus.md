@@ -36,3 +36,13 @@ counted as partial. A separate Flutter extension checked key routing.
   focus and delivers another key to the hidden child. Flutter does not.
 - Visibility.maintain retains focus and delivery in both. A neutral
   zero-area placeholder completes both frames.
+
+## Visibility focusability repair
+
+Hidden Visibility content now loses focus and cannot receive keys unless
+maintain_focusability is set. That option is independent of pointer
+interactivity. Visibility.maintain enables it and Offstage keeps its
+separate preserve-focus behavior. The original six-case runtime target
+now covers the earlier reference pair and independent explicit opt-in
+and Offstage controls. The pinned authored visibility_focusability probe
+checks real keyboard delivery in all three configurations.

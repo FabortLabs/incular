@@ -14,11 +14,12 @@ fn child() -> Widget {
 
 #[test]
 fn every_preservation_combination_has_the_same_builder_and_fluent_behavior() {
-    for flags in 0..16 {
+    for flags in 0..32 {
         let state = flags & 1 != 0;
         let size = flags & 2 != 0;
         let animation = flags & 4 != 0;
         let semantics = flags & 8 != 0;
+        let focusability = flags & 16 != 0;
         for generated in [false, true] {
             let make = |visible| -> Widget {
                 let visibility: Widget = if generated {
@@ -29,6 +30,7 @@ fn every_preservation_combination_has_the_same_builder_and_fluent_behavior() {
                         .maintain_size(size)
                         .maintain_animation(animation)
                         .maintain_semantics(semantics)
+                        .maintain_focusability(focusability)
                         .replacement(Widget::box_(Size::new(7., 9.), Color::BLACK))
                         .build()
                         .into()
@@ -39,6 +41,7 @@ fn every_preservation_combination_has_the_same_builder_and_fluent_behavior() {
                         .maintain_size(size)
                         .maintain_animation(animation)
                         .maintain_semantics(semantics)
+                        .maintain_focusability(focusability)
                         .replacement(Widget::box_(Size::new(7., 9.), Color::BLACK))
                         .into()
                 };
@@ -81,7 +84,11 @@ fn every_preservation_combination_has_the_same_builder_and_fluent_behavior() {
                     .and_then(|render| tree.element_for_render(render));
                 assert_ne!(hit, Some(retained));
                 assert_ne!(hit, Some(wrapper));
-                assert_eq!(tree.focusable_elements(), vec![retained]);
+                assert_eq!(
+                    tree.focusable_elements(),
+                    if focusability { vec![retained] } else { vec![] },
+                    "focus policy for flags={flags}, generated={generated}"
+                );
                 let hidden_paint = tree.paint();
                 assert!(
                     hidden_paint.is_empty(),
@@ -90,6 +97,7 @@ fn every_preservation_combination_has_the_same_builder_and_fluent_behavior() {
                 tree.update(root, make(true)).unwrap();
                 tree.layout(constraints).unwrap();
                 assert_eq!(tree.children(wrapper).unwrap()[0], retained);
+                assert_eq!(tree.focusable_elements(), [retained]);
                 assert_eq!(tree.paint(), visible_paint);
                 assert!(tree.hit_test(Offset::new(5., 5.)).is_some());
             } else {

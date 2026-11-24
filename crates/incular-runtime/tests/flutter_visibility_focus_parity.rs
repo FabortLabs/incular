@@ -7,8 +7,8 @@ use incular_config::Constraints;
 use incular_core::{Code, InputEvent, KeyboardEvent, KeyboardKey, Size};
 use incular_runtime::Runtime;
 use incular_widgets::{
-    Center, FocusNode, KeyboardListener, Placeholder, Text, TextDirection, Visibility, Widget,
-    internal::Key,
+    Center, FocusNode, KeyboardListener, Offstage, Placeholder, Text, TextDirection, Visibility,
+    Widget, internal::Key,
 };
 
 #[derive(Clone, Copy)]
@@ -16,6 +16,8 @@ enum Policy {
     Replace,
     Maintain,
     PreserveEverythingExceptFocus,
+    PreserveFocus,
+    Offstage,
 }
 
 // (same element, node focus after hiding, node focus after request,
@@ -24,7 +26,7 @@ fn after_hiding(policy: Policy) -> (bool, bool, bool, bool, u32) {
     let focus = FocusNode::new();
     let presses = Rc::new(Cell::new(0));
     let key = Key::from(1_u64);
-    let build = |visible| {
+    let build = |visible: bool| {
         let child = Widget::from(
             KeyboardListener::new(Text::new("child").text_direction(TextDirection::Ltr))
                 .focus_node(focus.clone())
@@ -34,6 +36,9 @@ fn after_hiding(policy: Policy) -> (bool, bool, bool, bool, u32) {
                 }),
         )
         .with_key(key.clone());
+        if matches!(policy, Policy::Offstage) {
+            return Widget::from(Center::new(Offstage::new(child).offstage(!visible)));
+        }
         let visibility = match policy {
             Policy::Replace => Visibility::new(child),
             Policy::Maintain => Visibility::maintain(child),
@@ -43,6 +48,10 @@ fn after_hiding(policy: Policy) -> (bool, bool, bool, bool, u32) {
                 .maintain_interactivity(true)
                 .maintain_semantics(true)
                 .maintain_size(true),
+            Policy::PreserveFocus => Visibility::new(child)
+                .maintain_state(true)
+                .maintain_focusability(true),
+            Policy::Offstage => unreachable!(),
         };
         // Update the stable parent so Visibility may replace its child
         // subtree without replacing the mounted Rust root's widget type.
@@ -71,7 +80,10 @@ fn after_hiding(policy: Policy) -> (bool, bool, bool, bool, u32) {
     runtime.tree_mut().update(root, build(false)).expect("hide");
     runtime.run_frame(frame).expect("hidden layout");
     let focus_after_hiding = focus.has_focus();
-    if !matches!(policy, Policy::Maintain) {
+    if !matches!(
+        policy,
+        Policy::Maintain | Policy::PreserveFocus | Policy::Offstage
+    ) {
         focus.request_focus();
         runtime
             .run_frame(frame)
@@ -110,6 +122,19 @@ fn preserving_all_non_focus_options_does_not_keep_key_delivery() {
         after_hiding(Policy::PreserveEverythingExceptFocus),
         (true, false, false, false, 1),
     );
+}
+
+#[test]
+fn hidden_focusability_is_independent_of_preserved_pointer_interactivity() {
+    assert_eq!(
+        after_hiding(Policy::PreserveFocus),
+        (true, true, true, true, 2)
+    );
+}
+
+#[test]
+fn offstage_preserves_focus_and_keyboard_delivery() {
+    assert_eq!(after_hiding(Policy::Offstage), (true, true, true, true, 2));
 }
 
 // visibility_test.dart:625 -- neutral zero-constraint runtime, not platform

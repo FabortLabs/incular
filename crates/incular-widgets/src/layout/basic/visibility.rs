@@ -13,8 +13,8 @@ use crate::{Widget, WidgetKind};
 /// `maintain_size` (or `maintain_interactivity`, which Flutter only allows
 /// with it) is enabled (parent minimum constraints still apply). Hidden
 /// children never paint, and receive pointer hits only with
-/// `maintain_interactivity`. Retained focus and keyboard participation are
-/// unchanged; use `ExcludeFocus` to suppress them.
+/// `maintain_interactivity`. Hidden children are excluded from focus and
+/// keyboard delivery unless `maintain_focusability` is set.
 ///
 /// `maintain_animation` keeps tree-driven ticks running while hidden. Otherwise
 /// ticks are muted, not paused: elapsed time catches up when shown again. A
@@ -34,6 +34,8 @@ pub struct Visibility {
     maintain_semantics: bool,
     #[builder(default)]
     maintain_interactivity: bool,
+    #[builder(default)]
+    maintain_focusability: bool,
     #[builder(default, setter(strip_option, into))]
     replacement: Option<Widget>,
     #[builder(setter(into))]
@@ -51,13 +53,14 @@ impl Visibility {
             maintain_animation: false,
             maintain_semantics: false,
             maintain_interactivity: false,
+            maintain_focusability: false,
             replacement: None,
             child: child.into(),
         }
     }
 
     /// Flutter `Visibility.maintain`: keeps the hidden child's state,
-    /// animations, size, semantics and interactivity.
+    /// animations, size, semantics, interactivity and focusability.
     #[must_use]
     pub fn maintain(child: impl Into<Widget>) -> Self {
         Self {
@@ -66,6 +69,7 @@ impl Visibility {
             maintain_animation: true,
             maintain_semantics: true,
             maintain_interactivity: true,
+            maintain_focusability: true,
             ..Self::new(child)
         }
     }
@@ -108,6 +112,14 @@ impl Visibility {
         self
     }
 
+    /// Allows a retained hidden subtree to keep and request keyboard focus.
+    /// This is independent of pointer hit testing.
+    #[must_use]
+    pub fn maintain_focusability(mut self, maintain: bool) -> Self {
+        self.maintain_focusability = maintain;
+        self
+    }
+
     #[must_use]
     pub fn replacement(mut self, replacement: impl Into<Widget>) -> Self {
         self.replacement = Some(replacement.into());
@@ -122,7 +134,8 @@ impl From<Visibility> for Widget {
                 || value.maintain_size
                 || value.maintain_animation
                 || value.maintain_semantics
-                || value.maintain_interactivity)
+                || value.maintain_interactivity
+                || value.maintain_focusability)
         {
             value
                 .replacement
@@ -142,6 +155,7 @@ impl From<Visibility> for Widget {
                 },
                 child: value.child,
             })
+            .with_excluded_focus(!value.visible && !value.maintain_focusability)
         }
     }
 }
@@ -181,6 +195,7 @@ impl From<Offstage> for Widget {
             .visible(!value.offstage)
             .maintain_state(true)
             .maintain_animation(true)
+            .maintain_focusability(true)
             .into()
     }
 }
