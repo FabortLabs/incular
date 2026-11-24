@@ -65,3 +65,10 @@ dart --disable-dart-dev --packages=.dart_tool/package_config.json ../../audits/f
 Pop-Location
 python audits/flutter-3.50.0-parity/coverage-queue.py audits/flutter-3.50.0-parity .tmp/flutter
 ```
+
+## Verified progress counters
+
+Run `python audits/flutter-3.50.0-parity/coverage-progress.py` to validate
+that all upstream and harness dispositions reference exact catalog rows and
+existing evidence files. Its percentages refer to registration sites, not
+the total dynamically generated cases or all application behaviors.

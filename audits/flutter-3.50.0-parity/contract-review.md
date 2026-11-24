@@ -16,8 +16,9 @@ platform. IDs are local to this document.
 ## Animation
 
 - **A-01 Repeat sampling/notification (source):** Flutter's repeat simulation
-  is linear even if the controller used a previous curve. For a 1 s repeat
-  from 0 to 1 with retained Decelerate, at 250 ms Flutter=0.25,
+  is linear after a previous per-run curve override, as is Incular's.
+  With Incular's persistent set_curve(Decelerate) extension, for a 1 s repeat
+  from 0 to 1, at 250 ms Flutter=0.25,
   Incular=0.4375. For one reverse-enabled counted cycle, Flutter reports
   Forward→Reverse→Dismissed at the boundary; Incular's atomic terminal
   update omits Reverse. Flutter `animation/animation_controller.dart:744–749,934–947,998–1053`;
