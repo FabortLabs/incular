@@ -396,3 +396,13 @@ bouncing beyond a bound shows a real position, velocity and completion gap.
 cases](upstream-rubber-band-comparisons.md) have numeric mismatches but no
 equivalent public concrete simulation query in Rust; they are partial
 and excluded from the 46 fully paired upstream registrations.
+
+### Transition and widget samples; border, constraint and input tests
+
+[Twenty-four more frame checks](frame-switchers-transitions-samples.md) matched.
+Frame coverage is 252/253 valid pairs (99.60%), 239 match and 13 differ.
+Only the ListWheel gesture/default-physics fixture remains under
+review. [Eight upstream pairs](upstream-border-constraints-formatters.md) plus
+six partial ports have committed Rust test targets. Full upstream
+pair count is 54/8,965 (40 match, 14 differ), separately from
+partials or reference-only results. Production code is unchanged.

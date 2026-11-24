@@ -53,3 +53,17 @@ packages/flutter/test/scheduler/binding_test.dart	44	Adding a persistent frame c
 packages/flutter/test/widgets/sliver_semantics_test.dart	246	Offscreen sliver are hidden in semantics tree	paired-mismatch	offscreen-sliver-semantics-comparisons.md
 packages/flutter/test/widgets/scroll_physics_test.dart	376	on leading edge overscroll	partial-mismatch	upstream-rubber-band-comparisons.md
 packages/flutter/test/widgets/scroll_physics_test.dart	407	on trailing edge overscroll	partial-mismatch	upstream-rubber-band-comparisons.md
+packages/flutter/test/painting/border_side_test.dart	79	BorderSide - scale	paired-match	upstream-border-constraints-formatters.md
+packages/flutter/test/painting/border_side_test.dart	109	BorderSide - won't lerp into negative widths	paired-mismatch	upstream-border-constraints-formatters.md
+packages/flutter/test/painting/border_side_test.dart	126	BorderSide - lerp with strokeAlign	paired-match	upstream-border-constraints-formatters.md
+packages/flutter/test/painting/border_test.dart	27	Border.symmetric constructor	partial-mismatch	upstream-border-constraints-formatters.md
+packages/flutter/test/rendering/box_constraints_test.dart	17	BoxConstraints copyWith	partial-match	upstream-border-constraints-formatters.md
+packages/flutter/test/rendering/box_constraints_test.dart	60	BoxConstraints lerp	partial-match	upstream-border-constraints-formatters.md
+packages/flutter/test/rendering/box_constraints_test.dart	134	BoxConstraints lerp with overshooting t is normalized	partial-mismatch	upstream-border-constraints-formatters.md
+packages/flutter/test/rendering/box_test.dart	755	UnconstrainedBox honors constrainedAxis=Axis.horizontal	paired-match	upstream-border-constraints-formatters.md
+packages/flutter/test/rendering/box_test.dart	776	UnconstrainedBox honors constrainedAxis=Axis.vertical	paired-match	upstream-border-constraints-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	148	test filtering formatter, deny mode	paired-mismatch	upstream-border-constraints-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	210	test filtering formatter, allow mode	paired-mismatch	upstream-border-constraints-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	304	test length limiting formatter with non-BMP Unicode scalar values	paired-match	upstream-border-constraints-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	418	Counts grapheme clusters as single characters	partial-match	upstream-border-constraints-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	808	Preserves composing region	partial-mismatch	upstream-border-constraints-formatters.md
