@@ -142,3 +142,10 @@ does not count twice. Use the runner only for small reviewed batches.
 FittedBox and Baseline divergences under looser inputs than the matched
 existing harness controls. Total 33 custom paired mismatches. Next rotate
 into animation, scheduler, physics and additional small frame batches.
+
+### C34–C35: animation controller notification lifecycle
+
+[Controller lifecycle](controller-lifecycle-comparisons.md) paired two
+mismatches. Ordinary repeat after a per-run curve override matched, and
+is distinct from Incular's persistent curve extension. Total 35 custom
+paired mismatch cases.
