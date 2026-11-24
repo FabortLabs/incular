@@ -123,11 +123,36 @@ fn widget_span_layout(h: &mut FrameHarness) {
 
 fn editing_selection_offsets(h: &mut FrameHarness) {
     let controller = TextEditingController::from_value(TextEditingValue::new("😀x"));
-    let text_read = controller.clone();
-    let selection_read = controller.clone();
-    h.value("text_length", move || text_read.text().len() as f64);
-    h.value("selection_extent", move || {
-        read_selection_extent(&selection_read)
+    // Rust offsets are UTF-8 bytes; Dart offsets are UTF-16 code units.
+    let text_utf8 = controller.clone();
+    h.value("text_length_utf8", move || {
+        text_utf8.with_value(|value| value.text.len() as f64)
+    });
+    let text_utf16 = controller.clone();
+    h.value("text_length_utf16", move || {
+        text_utf16.with_value(|value| value.text.encode_utf16().count() as f64)
+    });
+    let selection_utf8 = controller.clone();
+    h.value("selection_extent_utf8", move || {
+        selection_utf8
+            .selection_if_set()
+            .expect("fixture has an explicit selection")
+            .extent as f64
+    });
+    let selection_utf16 = controller.clone();
+    h.value("selection_extent_utf16", move || {
+        let extent = selection_utf16
+            .selection_if_set()
+            .expect("fixture has an explicit selection")
+            .extent;
+        selection_utf16.with_value(|value| {
+            value
+                .text
+                .get(..extent)
+                .expect("selection extent is on a UTF-8 character boundary")
+                .encode_utf16()
+                .count() as f64
+        })
     });
 
     h.mount(move |_| {

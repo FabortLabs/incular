@@ -200,3 +200,10 @@ physics__clamping_scroll__spline	harness/flutter/test/frames/physics_test.dart	2
 physics__ballistic_dispatch__clamping_overscroll	harness/flutter/test/frames/physics_test.dart	270	match	91	frame-constraint-and-fling-rechecks.md
 physics__ballistic_dispatch__clamping_negative_velocity	harness/flutter/test/frames/physics_test.dart	304	match	21	frame-constraint-and-fling-rechecks.md
 anim_core__animate_with_fling	harness/flutter/test/frames/anim_core_test.dart	113	match	106	frame-constraint-and-fling-rechecks.md
+text__text_scaler_linear	harness/flutter/test/frames/text_test.dart	706	match	2	frame-text-units-and-bounce.md
+text__strut_style_min_height	harness/flutter/test/frames/text_test.dart	723	match	2	frame-text-units-and-bounce.md
+text__text_height_behavior_first_ascent	harness/flutter/test/frames/text_test.dart	740	match	2	frame-text-units-and-bounce.md
+anim_compose__train_hopping__unobserved_crossing	harness/flutter/test/frames/anim_compose_test.dart	30	match	3	frame-text-units-and-bounce.md
+anim_core__fling_negative_and_animate_back	harness/flutter/test/frames/anim_core_test.dart	215	match	77	frame-text-units-and-bounce.md
+text__editing_selection_offsets	harness/flutter/test/frames/text_test.dart	75	match	2	frame-text-units-and-bounce.md
+physics__ballistic_dispatch__bouncing_overscroll_at_rest	harness/flutter/test/frames/physics_test.dart	287	mismatch	91	frame-text-units-and-bounce.md

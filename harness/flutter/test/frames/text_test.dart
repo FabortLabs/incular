@@ -1,3 +1,5 @@
+import 'dart:convert' show utf8;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -81,11 +83,36 @@ void main() {
       ),
     );
     final focusNode = FocusNode();
-    h.value('text_length', () => controller.text.length.toDouble());
+    // Dart offsets are UTF-16 code units; Rust offsets are UTF-8 bytes.
+    h.value('text_length_utf16', () => controller.text.length.toDouble());
     h.value(
-      'selection_extent',
+      'text_length_utf8',
+      () => utf8.encode(controller.text).length.toDouble(),
+    );
+    h.value(
+      'selection_extent_utf16',
       () => controller.selection.extentOffset.toDouble(),
     );
+    h.value('selection_extent_utf8', () {
+      final current = controller.text;
+      final offset = controller.selection.extentOffset;
+      if (offset < 0 || offset > current.length) {
+        throw StateError(
+          'Selection extent is outside the UTF-16 text: $offset',
+        );
+      }
+      if (offset > 0 && offset < current.length) {
+        final before = current.codeUnitAt(offset - 1);
+        final after = current.codeUnitAt(offset);
+        if (before >= 0xD800 &&
+            before <= 0xDBFF &&
+            after >= 0xDC00 &&
+            after <= 0xDFFF) {
+          throw StateError('Selection extent splits a surrogate pair: $offset');
+        }
+      }
+      return utf8.encode(current.substring(0, offset)).length.toDouble();
+    });
     await h.mount(
       (_) => Align(
         alignment: Alignment.topLeft,

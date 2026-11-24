@@ -380,3 +380,11 @@ Valid frame registrations: 201/253 (79.45%), 189 match and 12 differ.
 Upstream paired registrations: 46/8,965. Two raw captures currently
 under equivalence review are Unicode selection units and zero-speed
 bouncing spring return.
+
+### Comparable text units and remaining spring dispatch
+
+[Seven more frame dispositions](frame-text-units-and-bounce.md) bring valid frame coverage to
+208/253 (82.21%), 195 match and 13 differ. Core animation, composition,
+text and physics frame registration files are fully dispositioned.
+Unicode caret units were normalized in the fixtures only; zero-speed
+bouncing beyond a bound shows a real position, velocity and completion gap.
