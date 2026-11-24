@@ -163,3 +163,10 @@ precision plus zero-duration policy). Overall 14/8,965 upstream paired,
 one additional reference-only; 35/253 existing harness and 35 original
 custom mismatches are separate counts. Continue small scroll/sliver frame
 batches and the next unresolved upstream file; do not count unrun cases.
+
+### Existing frame harness: batches seven and eight
+
+[Strict frame rechecks](frame-rechecks-batches7-8.md) add 10 paired frames
+fixtures (7 match, 3 differ). Total 45/253 (17.79%), 41 match and four
+differ. Next: nested scrolling, viewports/overlays, follow up the undo
+grouping mismatch, and continue upstream scenario dispositions.
