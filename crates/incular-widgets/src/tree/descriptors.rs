@@ -990,6 +990,8 @@ impl ToolbarOptions {
 /// re-clamping.
 pub struct EditableText {
     controller: TextEditingController,
+    focus_node: Option<crate::FocusNode>,
+    autofocus: bool,
     size: Size,
     style: TextStyle,
     placeholder: String,
@@ -1047,6 +1049,8 @@ impl EditableText {
     pub fn new(controller: TextEditingController) -> Self {
         Self {
             controller,
+            focus_node: None,
+            autofocus: false,
             size: Size::ZERO,
             style: TextStyle::default(),
             placeholder: String::new(),
@@ -1092,6 +1096,21 @@ impl EditableText {
             input_formatters: Vec::new(),
             spell_check: None,
         }
+    }
+
+    /// Binds the editor directly to an application-owned keyboard focus node.
+    /// The node survives rebuilds when the application reuses the handle.
+    #[must_use]
+    pub fn focus_node(mut self, node: crate::FocusNode) -> Self {
+        self.focus_node = Some(node);
+        self
+    }
+
+    /// Requests initial focus if the editor is eligible. Defaults to false.
+    #[must_use]
+    pub fn autofocus(mut self, autofocus: bool) -> Self {
+        self.autofocus = autofocus;
+        self
     }
 
     /// Flutter `spellCheckConfiguration`: checks the spelling of user
@@ -1619,6 +1638,8 @@ impl From<EditableText> for Widget {
             selection_handles: None,
             spell_check: value.spell_check,
             controller: value.controller,
+            focus_node: value.focus_node,
+            autofocus: value.autofocus,
             edit_transform,
             edit_changed: value.edit_changed,
             size: value.size,

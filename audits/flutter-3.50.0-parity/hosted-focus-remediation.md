@@ -30,3 +30,14 @@ no longer publishes a false end to the parent's focus membership.
 The pinned authored switch test and the original partial ancestor
 regression now pass, along with the hosted, keyboard, Visibility and
 standalone controls.
+
+## EditableText-owned focus node
+
+The neutral EditableText can now attach an application focus node directly
+and request initial autofocus. It shares the hosted eligibility and
+attachment lifecycle instead of requiring an outer keyed event target.
+The pinned and Incular probes verify programmatic focus, node replacement,
+rejection of a later detached-node request, uninterrupted editing with the
+same controller, and eligible/ineligible initial autofocus. The six focused
+Rust targets pass 23 tests. This does not claim dynamic autofocus changes
+or every platform's soft-keyboard connection behavior.

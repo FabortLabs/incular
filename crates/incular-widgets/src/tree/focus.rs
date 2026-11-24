@@ -2,6 +2,14 @@
 
 use super::*;
 
+fn external_node(kind: &WidgetKind) -> Option<&incular_gestures::FocusNode> {
+    match kind {
+        WidgetKind::Gesture { callbacks, .. } => callbacks.focus_node.as_ref(),
+        WidgetKind::TextField(spec) => spec.focus_node.as_ref(),
+        _ => None,
+    }
+}
+
 impl WidgetTree {
     /// Enables deferred FocusNode requests for a runtime-owned tree.
     #[doc(hidden)]
@@ -17,10 +25,7 @@ impl WidgetTree {
         let node = self
             .elements
             .get(id.0)
-            .and_then(|element| match element.widget.kind() {
-                WidgetKind::Gesture { callbacks, .. } => callbacks.focus_node.as_ref(),
-                _ => None,
-            });
+            .and_then(|element| external_node(element.widget.kind()));
         if let Some(node) = node {
             if !hosted
                 .get(&id)
@@ -84,7 +89,13 @@ impl WidgetTree {
         };
         let eligible = match element.widget.kind() {
             WidgetKind::Button(spec) => spec.enabled || spec.focusable_when_disabled,
-            WidgetKind::TextField(spec) => spec.enabled,
+            WidgetKind::TextField(spec) => {
+                spec.enabled
+                    && spec
+                        .focus_node
+                        .as_ref()
+                        .is_none_or(|node| node.can_request_focus())
+            }
             WidgetKind::SelectableText { .. } => true,
             // A `Text` registered with a selection area takes focus like a
             // `SelectableText` label so its selection keeps keyboard input.
@@ -481,10 +492,7 @@ impl WidgetTree {
         self.focusable_elements().into_iter().find(|id| {
             self.elements
                 .get(id.0)
-                .and_then(|element| match element.widget.kind() {
-                    WidgetKind::Gesture { callbacks, .. } => callbacks.focus_node.as_ref(),
-                    _ => None,
-                })
+                .and_then(|element| external_node(element.widget.kind()))
                 .is_some_and(|node| node.has_primary_focus())
         })
     }
@@ -536,10 +544,7 @@ impl WidgetTree {
         let node_of = |id: ElementId| {
             self.elements
                 .get(id.0)
-                .and_then(|element| match element.widget.kind() {
-                    WidgetKind::Gesture { callbacks, .. } => callbacks.focus_node.clone(),
-                    _ => None,
-                })
+                .and_then(|element| external_node(element.widget.kind()))
         };
         if let Some(requested) = self
             .focusable_elements()
@@ -566,14 +571,11 @@ impl WidgetTree {
         if let Some(listener) = focusable.iter().find(|id| {
             self.elements
                 .get(id.0)
-                .and_then(|element| match element.widget.kind() {
-                    WidgetKind::Gesture { callbacks, .. } => callbacks
-                        .focus_node
-                        .as_ref()
-                        .filter(|node| callbacks.autofocus && node.can_request_focus()),
-                    _ => None,
+                .is_some_and(|element| match element.widget.kind() {
+                    WidgetKind::Gesture { callbacks, .. } => callbacks.autofocus,
+                    WidgetKind::TextField(spec) => spec.autofocus,
+                    _ => false,
                 })
-                .is_some()
         }) {
             return Some(*listener);
         }
@@ -599,10 +601,7 @@ impl WidgetTree {
         let Some(element) = self.elements.get(id.0) else {
             return;
         };
-        let WidgetKind::Gesture { callbacks, .. } = element.widget.kind() else {
-            return;
-        };
-        let Some(node) = callbacks.focus_node.as_ref() else {
+        let Some(node) = external_node(element.widget.kind()) else {
             return;
         };
         if focused && !node.can_request_focus() {
@@ -680,9 +679,7 @@ impl WidgetTree {
                     .semantic_properties()
                     .focus_traversal_order
                     .clone();
-                if let WidgetKind::Gesture { callbacks, .. } = element.widget.kind()
-                    && let Some(node) = callbacks.focus_node.as_ref()
-                {
+                if let Some(node) = external_node(element.widget.kind()) {
                     node.set_rect(bounds);
                     node.set_focus_order(order.clone());
                 }

@@ -330,6 +330,8 @@ pub(crate) type EditChanged = Rc<dyn Fn(&str)>;
 #[derive(Clone)]
 pub struct TextFieldSpec {
     pub(crate) controller: TextEditingController,
+    pub(crate) focus_node: Option<crate::FocusNode>,
+    pub(crate) autofocus: bool,
     pub(crate) edit_transform: Option<EditTransform>,
     pub(crate) edit_changed: Option<EditChanged>,
     pub(crate) size: Size,
