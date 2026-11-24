@@ -533,3 +533,17 @@ packages/flutter/test/widgets/sized_box_test.dart	40	SizedBox - no child	paired-
 packages/flutter/test/widgets/sized_box_test.dart	65	SizedBox - container child	paired-match	upstream-align-sized-box.md
 packages/flutter/test/widgets/sized_box_test.dart	118	SizedBox.square tests	paired-match	upstream-align-sized-box.md
 packages/flutter/test/widgets/sized_box_test.dart	127	SizedBox does not crash at zero area	partial-match	upstream-align-sized-box.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	73	no siblings	paired-match	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	100	one sibling	paired-match	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	130	scrolls beyond viewportMainAxisExtent	partial-match	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	152	within viewport	paired-match	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	186	outside of viewport but within cache extent	paired-mismatch	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	221	outside of viewport and not within cache extent	paired-mismatch	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	261	does not extend past viewportMainAxisExtent	partial-match	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	284	child without size is sized by extent	paired-match	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	303	child with smaller size is sized by extent	partial-match	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	332	extent is overridden by child with larger size	paired-match	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	349	extent is overridden by child size if precedingScrollExtent > viewportMainAxisExtent	partial-match	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	444	within viewport	paired-match	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	479	outside of viewport but within cache extent	paired-mismatch	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_remaining_test.dart	515	outside of viewport and not within cache extent	paired-mismatch	upstream-sliver-fill-remaining.md
