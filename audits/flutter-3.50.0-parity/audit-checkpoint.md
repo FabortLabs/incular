@@ -684,3 +684,10 @@ original file have dispositions.
 bring complete pairs to 244/8,965 (188 match, 56 differ), with
 129 partial and 30 reference-only. Intrinsic height, exact-width
 and one-pixel overflow match; configurable Wrap clipping is unpaired.
+
+### Wrap run alignment and vertical intrinsic sizing
+
+[Five upstream dispositions](upstream-wrap-run-axes-and-vertical-intrinsics.md)
+bring complete pairs to 248/8,965 (192 match, 56 differ), with
+130 partial and 30 reference-only. A standalone geometry probe
+isolates vertical intrinsic width at 80 instead of 188.

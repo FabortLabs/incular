@@ -402,3 +402,8 @@ packages/flutter/test/widgets/wrap_test.dart	787	Visual overflow generates a cli
 packages/flutter/test/widgets/wrap_test.dart	898	Spacing with slight overflow	paired-match	upstream-wrap-constraints-and-intrinsic-height.md
 packages/flutter/test/widgets/wrap_test.dart	925	Object exactly matches container width	paired-match	upstream-wrap-constraints-and-intrinsic-height.md
 packages/flutter/test/widgets/wrap_test.dart	973	Horizontal wrap - IntrinsicsHeight	paired-match	upstream-wrap-constraints-and-intrinsic-height.md
+packages/flutter/test/widgets/wrap_test.dart	256	Wrap alignment (LTR)	paired-match	upstream-wrap-run-axes-and-vertical-intrinsics.md
+packages/flutter/test/widgets/wrap_test.dart	342	Wrap alignment (RTL)	paired-match	upstream-wrap-run-axes-and-vertical-intrinsics.md
+packages/flutter/test/widgets/wrap_test.dart	428	Wrap runAlignment (DOWN)	paired-match	upstream-wrap-run-axes-and-vertical-intrinsics.md
+packages/flutter/test/widgets/wrap_test.dart	534	Wrap runAlignment (UP)	paired-match	upstream-wrap-run-axes-and-vertical-intrinsics.md
+packages/flutter/test/widgets/wrap_test.dart	1001	Vertical wrap - IntrinsicsWidth	partial-mismatch	upstream-wrap-run-axes-and-vertical-intrinsics.md
