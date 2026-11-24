@@ -670,3 +670,10 @@ ordering when choosing a hit in overlapped children.
 bring complete pairs to 239/8,965 (184 match, 55 differ), with
 125 partial and 30 reference-only. Duplicate and omitted child
 layouts are silently accepted instead of rejected.
+
+### Multi-child invalid identity and constraint diagnostics
+
+[Four upstream dispositions](upstream-multi-child-layout-contract.md)
+bring complete pairs to 240/8,965 (184 match, 56 differ), with
+128 partial and 30 reference-only. All 13 registrations in this
+original file have dispositions.

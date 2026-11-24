@@ -27,3 +27,14 @@ size changes from 100×200 to 150×240, but without replacing
 the descriptor Rust keeps the stale size. A replacement with
 new state works. Rust has no equivalent public relayout Listenable.
 See `flutter350_multi_child_layout_parity`.
+
+All four remaining original invalid-input registrations also pass
+on pinned Flutter. Trying to lay out or position nonexistent ID 1
+(:308, :351) raises the typed Rust missing-ID diagnostic. Negative
+maximum constraints (:332) are rejected at Rust construction even
+before layoutChild; Flutter reports them at the layout call. These
+three are partial matches, not exact Dart diagnostic or timing
+equivalence. An unlabelled child (:363) is instead accepted and
+silently laid out as 0×0, unlike Flutter's rejection. This reaches
+a related zero-size fallback but begins with missing identity,
+not a valid identified child omitted by the delegate.
