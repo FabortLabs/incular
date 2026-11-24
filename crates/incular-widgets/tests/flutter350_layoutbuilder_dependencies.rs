@@ -150,3 +150,105 @@ fn changing_constraints_and_inherited_scope_rebuilds_descendant_once() {
         )
     );
 }
+
+fn fixed(size: Size) -> Widget {
+    Widget::from(SizedBox::new().width(size.width).height(size.height)).with_key(Key::Value(2))
+}
+
+#[test]
+fn stateful_child_resizes_the_retained_layout_builder() {
+    let child_size = Rc::new(Cell::new(Size::new(10., 20.)));
+    let rev = Rc::new(Cell::new(0u64));
+    let measured = Rc::new(Cell::new(Size::ZERO));
+    let desc = LayoutBuilder::new({
+        let child_size = child_size.clone();
+        let rev = rev.clone();
+        let measured = measured.clone();
+        move |_, constraints| {
+            measured.set(constraints.biggest());
+            let child_size = child_size.clone();
+            Widget::stateful_builder(rev.clone(), move |_| fixed(child_size.get()))
+        }
+    });
+    let mut tree = mount(Center::new(Widget::from(desc).with_key(Key::Value(1))));
+    assert_eq!(measured.get(), SURFACE);
+    assert_eq!([size(&tree, 1), size(&tree, 2)], [Size::new(10., 20.); 2]);
+    child_size.set(Size::new(100., 200.));
+    rev.set(1);
+    frame(&mut tree);
+    assert_eq!([size(&tree, 1), size(&tree, 2)], [Size::new(100., 200.); 2]);
+}
+
+#[test]
+fn stateful_parent_changes_constraints_seen_by_layout_builder() {
+    let state = Rc::new(Cell::new(Size::new(10., 20.)));
+    let rev = Rc::new(Cell::new(0u64));
+    let measured = Rc::new(Cell::new(Size::ZERO));
+    let parent = Widget::stateful_builder(rev.clone(), {
+        let state = state.clone();
+        let measured = measured.clone();
+        move |_| {
+            let observed = measured.clone();
+            let physical = state.get();
+            SizedBox::new()
+                .width(physical.width)
+                .height(physical.height)
+                .child(LayoutBuilder::new(move |_, constraints| {
+                    let limits = constraints.biggest();
+                    observed.set(limits);
+                    fixed(limits)
+                }))
+                .into()
+        }
+    });
+    let mut tree = mount(Center::new(parent));
+    assert_eq!([size(&tree, 2), measured.get()], [Size::new(10., 20.); 2]);
+    state.set(Size::new(100., 200.));
+    rev.set(1);
+    frame(&mut tree);
+    assert_eq!([size(&tree, 2), measured.get()], [Size::new(100., 200.); 2]);
+}
+
+#[test]
+fn a_text_style_change_resizes_the_leaf_without_rebuilding_its_builder() {
+    use incular_widgets::{DefaultTextStyle, TextStyle};
+    let builds = Rc::new(Cell::new(0));
+    let target: Widget = Widget::from(LayoutBuilder::new({
+        let builds = builds.clone();
+        move |_, _| {
+            let builds = builds.clone();
+            Builder::new(move |_| {
+                builds.set(builds.get() + 1);
+                Widget::from(Text::new("A")).with_key(Key::Value(2))
+            })
+            .into()
+        }
+    }))
+    .with_key(Key::Value(1));
+    let scene = |font_size| {
+        Widget::from(Center::new(Directionality::new(
+            TextDirection::Ltr,
+            DefaultTextStyle::new(
+                TextStyle::default().font_size(font_size).height(Some(1.)),
+                target.clone(),
+            ),
+        )))
+    };
+    let mut tree = mount(scene(10.));
+    let root = tree.root().unwrap();
+    let first = (builds.get(), size(&tree, 1), size(&tree, 2));
+    tree.update(root, scene(100.)).unwrap();
+    frame(&mut tree);
+    let second = (builds.get(), size(&tree, 1), size(&tree, 2));
+    assert_eq!(
+        (first.0, second.0),
+        (1, 1),
+        "original descendant builder count; {first:?} {second:?}"
+    );
+    assert_eq!((first.1, second.1), (first.2, second.2));
+    assert_eq!((first.2.height, second.2.height), (10., 100.));
+    assert!(
+        second.2.width > first.2.width * 8.,
+        "same glyph scales with new inherited style"
+    );
+}
