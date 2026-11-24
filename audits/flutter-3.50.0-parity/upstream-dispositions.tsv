@@ -304,3 +304,15 @@ packages/flutter/test/widgets/custom_single_child_layout_test.dart	144	Delegate 
 packages/flutter/test/widgets/custom_single_child_layout_test.dart	172	CustomSingleChildLayout does not crash at zero area	partial-match	upstream-custom-layout-and-asset-invalidation.md
 packages/flutter/test/services/asset_bundle_test.dart	116	clear clears all cached values'	partial-match	upstream-custom-layout-and-asset-invalidation.md
 packages/flutter/test/services/asset_bundle_test.dart	147	evict evicts a particular key from the cache	partial-match	upstream-custom-layout-and-asset-invalidation.md
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	474	Submenus call onClose before their parents	partial-mismatch	upstream-raw-menu-animation-observer-and-shadow.md
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	513	[Group] Submenus call onClose before their parents	partial-match	upstream-raw-menu-animation-observer-and-shadow.md
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	953	Detached MenuController does not throw when calling close	paired-match	upstream-raw-menu-animation-observer-and-shadow.md
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	962	Detached MenuController returns false when calling isOpen	paired-match	upstream-raw-menu-animation-observer-and-shadow.md
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	969	[Default] MenuController is detached on update	partial-mismatch	upstream-raw-menu-animation-observer-and-shadow.md
+packages/flutter/test/animation/animations_test.dart	51	ProxyAnimation.toString control test	partial-match	upstream-raw-menu-animation-observer-and-shadow.md
+packages/flutter/test/animation/animations_test.dart	60	ProxyAnimation set parent generates value changed	paired-match	upstream-raw-menu-animation-observer-and-shadow.md
+packages/flutter/test/animation/animations_test.dart	77	ReverseAnimation calls listeners	partial-match	upstream-raw-menu-animation-observer-and-shadow.md
+packages/flutter/test/animation/animations_test.dart	97	TrainHoppingAnimation	partial-match	upstream-raw-menu-animation-observer-and-shadow.md
+packages/flutter/test/animation/animations_test.dart	136	TrainHoppingAnimation notifies status listeners	paired-mismatch	upstream-raw-menu-animation-observer-and-shadow.md
+packages/flutter/test/painting/box_painter_test.dart	101	BoxShadow control test	partial-match	upstream-raw-menu-animation-observer-and-shadow.md
+packages/flutter/test/painting/box_painter_test.dart	138	BoxShadow BlurStyle test	partial-match	upstream-raw-menu-animation-observer-and-shadow.md

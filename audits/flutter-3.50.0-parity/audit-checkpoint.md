@@ -576,3 +576,11 @@ tight rather than control-point Bézier bounds on the public API.
 bring complete pairs to 182/8,965 (136 match, 46 differ), with 96
 partial and 27 reference-only. Custom layout calls the wrong
 delegate to decide whether a retained replacement relayouts.
+
+### Raw menu closure, animation notification channels and shadow colors
+
+[Twelve upstream dispositions](upstream-raw-menu-animation-observer-and-shadow.md)
+bring complete pairs to 186/8,965 (139 match, 47 differ), with 104
+partial and 27 reference-only. Committed tests pin old menu control
+ownership, child-before-parent closure, train/proxy listener
+effects, and the color clamp at extrapolation.
