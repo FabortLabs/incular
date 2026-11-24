@@ -298,3 +298,9 @@ packages/flutter/test/widgets/modal_barrier_test.dart	696	pops the Navigator whe
 packages/flutter/test/widgets/keyboard_listener_test.dart	10	Can dispose without keyboard	paired-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md
 packages/flutter/test/widgets/keyboard_listener_test.dart	42	Web key event	partial-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md
 packages/flutter/test/widgets/keyboard_listener_test.dart	66	Defunct listeners do not receive events	partial-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md
+packages/flutter/test/widgets/custom_single_child_layout_test.dart	100	Control test for CustomSingleChildLayout	paired-match	upstream-custom-layout-and-asset-invalidation.md
+packages/flutter/test/widgets/custom_single_child_layout_test.dart	121	Test SingleChildDelegate shouldRelayout method	paired-mismatch	upstream-custom-layout-and-asset-invalidation.md
+packages/flutter/test/widgets/custom_single_child_layout_test.dart	144	Delegate can change size	paired-match	upstream-custom-layout-and-asset-invalidation.md
+packages/flutter/test/widgets/custom_single_child_layout_test.dart	172	CustomSingleChildLayout does not crash at zero area	partial-match	upstream-custom-layout-and-asset-invalidation.md
+packages/flutter/test/services/asset_bundle_test.dart	116	clear clears all cached values'	partial-match	upstream-custom-layout-and-asset-invalidation.md
+packages/flutter/test/services/asset_bundle_test.dart	147	evict evicts a particular key from the cache	partial-match	upstream-custom-layout-and-asset-invalidation.md

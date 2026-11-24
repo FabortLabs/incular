@@ -569,3 +569,10 @@ bring complete pairs to 179/8,965 (134 match, 45 differ), with 93
 partial and 27 reference-only. New tests expose Escape leaving
 tooltips open, secondary release not dismissing the modal, and
 tight rather than control-point Bézier bounds on the public API.
+
+### Custom layout and asset cache invalidation
+
+[Six upstream dispositions](upstream-custom-layout-and-asset-invalidation.md)
+bring complete pairs to 182/8,965 (136 match, 46 differ), with 96
+partial and 27 reference-only. Custom layout calls the wrong
+delegate to decide whether a retained replacement relayouts.
