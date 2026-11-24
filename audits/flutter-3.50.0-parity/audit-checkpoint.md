@@ -79,3 +79,12 @@ continue physics, foundation and widget-preview below that in the queue.
 confirmed three mismatches; running total 20 custom paired mismatches.
 Next: foundation listener lifecycle as a positive control and animation
 tween endpoints/precision. Keep the preview toolchain track open.
+
+### C21–C22: tween endpoints, listener control, preview reference
+
+[Listener, tween and preview evidence](listener-tween-preview-comparisons.md):
+two more paired mismatches (running total 22), one paired listener control
+passed, and two reference preview cases passed with no matching Incular
+preview API. Do not count reference-only cases as paired failures.
+Next: semantics blocker traversal, then refine the upstream ledger to
+account for registrations through verified helper wrappers.
