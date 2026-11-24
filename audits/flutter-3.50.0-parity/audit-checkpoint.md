@@ -712,3 +712,10 @@ RTL column ordering and accepts uneven rows.
 bring complete pairs to 261/8,965 (203 match, 58 differ), with
 134 partial and 36 reference-only. Row changes reuse an unrelated
 render slot, table roles are absent, and LayoutBuilder drops baseline.
+
+### LayoutBuilder constraints, inherited updates and skipped-layout scope
+
+[Seven upstream dispositions](upstream-layoutbuilder-dependencies-and-hidden-boundary.md)
+bring complete pairs to 266/8,965 (208 match, 58 differ), with
+134 partial and 38 reference-only. Normal inherited changes
+are paired; Flutter's skipped-overlay cases remain reference-only.
