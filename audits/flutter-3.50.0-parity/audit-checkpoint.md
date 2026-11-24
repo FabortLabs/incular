@@ -494,3 +494,13 @@ bring complete pairs to 113/8,965 (75 match, 38 differ), with 40 partial
 and 22 reference-only. The new tests distinguish callbacks on a covered
 route, aspect ratio under infinite width, and button changes on either
 side of long-press acceptance.
+
+### Opacity, hover, flex, notifier and ticker futures
+
+[Seventeen upstream dispositions](upstream-opacity-hover-flex-notifier-futures.md)
+bring complete pairs to 125/8,965 (85 match, 40 differ), with 45
+partial and 22 reference-only. Actual opacity raster masks match,
+but Incular invokes the custom painter at effectively zero alpha.
+New lifecycle regressions distinguish incorrect local mouse
+coordinates, interrupted callback dispatch, and an uncancelled
+controller future.
