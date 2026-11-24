@@ -220,3 +220,20 @@ Only Incular configured a Hero flight controller in the original push
 fixture; the initial raw divergence is retained as non-equivalent, not
 counted as product behavior. The coverage script excludes such fixtures
 from valid paired outcomes.
+
+### Executable regression backfill
+
+The [test backfill ledger](test-backfill.tsv) maps C01–C40 and B01–B06 to
+committed Rust regression tests. All 40 prior custom paired mismatches
+and all six prior Incular source-backed behavior probes are backfilled.
+Each new test target was compiled and run narrowly; the regression
+assertions intentionally fail on the audited implementation. Positive
+controls remain in the corresponding targets. For C11–C14, the existing
+Windows live-test gate is required for genuine wgpu readback at DPR 1/2.
+
+This is 46/46 of the already confirmed backfill inventory, not 100% of the
+parity audit. Existing frame registrations and upstream dispositions are
+measured independently. Keep adding durable tests for reproducible cases,
+verify fixture inputs before treating strict frame differences as product
+bugs, and leave implementation for later. No full workspace tests or
+runtime/wgpu implementation changes were made.
