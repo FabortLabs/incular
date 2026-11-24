@@ -681,3 +681,17 @@ packages/flutter/test/gestures/double_tap_test.dart	278	Should not recognize two
 packages/flutter/test/gestures/double_tap_test.dart	298	Should recognize one tap of group followed by second tap	paired-match	upstream-tap-recognizers.md
 packages/flutter/test/gestures/double_tap_test.dart	423	Should not recognize two over-rapid taps	paired-match	upstream-tap-recognizers.md
 packages/flutter/test/gestures/double_tap_test.dart	442	Over-rapid taps resets double tap, allowing third tap to be a double-tap	paired-match	upstream-tap-recognizers.md
+packages/flutter/test/gestures/tap_and_drag_test.dart	129	Recognizes consecutive taps	paired-match	upstream-tap-and-drag.md
+packages/flutter/test/gestures/tap_and_drag_test.dart	158	Resets if times out in between taps	paired-match	upstream-tap-and-drag.md
+packages/flutter/test/gestures/tap_and_drag_test.dart	178	Resets if taps are far apart	paired-match	upstream-tap-and-drag.md
+packages/flutter/test/gestures/tap_and_drag_test.dart	198	Resets if consecutiveTapCount reaches maxConsecutiveTap	paired-match	upstream-tap-and-drag.md
+packages/flutter/test/gestures/tap_and_drag_test.dart	238	Should recognize drag	paired-match	upstream-tap-and-drag.md
+packages/flutter/test/gestures/tap_and_drag_test.dart	252	Recognizes consecutive taps + drag	paired-match	upstream-tap-and-drag.md
+packages/flutter/test/gestures/tap_and_drag_test.dart	347	Recognizer rejects pointer that is not the primary one (FIFO) - after acceptance	paired-match	upstream-tap-and-drag.md
+packages/flutter/test/gestures/tap_and_drag_test.dart	369	Recognizer rejects pointer that is not the primary one (FILO) - after acceptance	paired-match	upstream-tap-and-drag.md
+packages/flutter/test/gestures/tap_and_drag_test.dart	390	Recognizer detects tap gesture when pointer does not move past tap tolerance	paired-match	upstream-tap-and-drag.md
+packages/flutter/test/gestures/tap_and_drag_test.dart	406	Recognizer detects drag gesture when pointer moves past tap tolerance but not the drag minimum	paired-match	upstream-tap-and-drag.md
+packages/flutter/test/gestures/tap_and_drag_test.dart	933	Defaults to drag when pointer dragged past slop tolerance	paired-match	upstream-tap-and-drag.md
+packages/flutter/test/gestures/tap_and_drag_test.dart	954	Fires cancel and resets for PointerCancelEvent	paired-match	upstream-tap-and-drag.md
+packages/flutter/test/gestures/tap_and_drag_test.dart	975	Does not call onDragEnd if not provided	partial-match	upstream-tap-and-drag.md
+packages/flutter/test/gestures/tap_and_drag_test.dart	1013	Contains correct positions in the drag end details	paired-match	upstream-tap-and-drag.md

@@ -751,3 +751,15 @@ layout-only clipping repair and retained wgpu recheck. Remaining work
 includes focus state for hidden, detached, and ancestor-blocked nodes,
 directional defaults, other known mismatches, and the unaudited corpus.
 Use a single focused build or test at a time and reuse the laptop cache.
+
+### Continued input remediation and TapAndDrag coverage
+
+The [behavior remediation](behavior-audit.md) verifies canceled mobile
+touches, native formatter selection/composition policy, and rejection
+of ineligible editors before switching the active IME client.
+[Native IME actions](frame-physics-layout-editing.md) now distinguish
+raw mobile Enter, explicit completion/traversal, and multiline newline
+notification. The [single-tap overlap repair](upstream-tap-recognizers.md)
+keeps the first contact through either release order. The next
+[TapAndDrag comparison](upstream-tap-and-drag.md) adds 13 full matches
+and one partial match: 413/8,965 originals fully compared (4.61%).
