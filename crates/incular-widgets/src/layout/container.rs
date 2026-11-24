@@ -144,7 +144,10 @@ impl Container {
             self.background = Some(gradient);
         }
         if let Some(b) = decoration.border {
-            self.border = Some(b.into());
+            // The fast render border carries color and width, not style.
+            // A uniform invisible border still contributes to padding.
+            self.border =
+                (!b.is_uniform() || b.top.style != crate::BorderStyle::None).then(|| b.into());
         }
         if let Some(r) = decoration.border_radius {
             self.radius = r.into();
@@ -226,6 +229,10 @@ impl From<Container> for Widget {
 
         // The decoration's parts the plain decorated box cannot paint go
         // through the full box painter.
+        let decoration_padding = value
+            .decoration
+            .as_ref()
+            .map_or(EdgeInsets::ZERO, crate::BoxDecoration::padding);
         let full_decoration = value
             .decoration
             .filter(crate::BoxDecoration::needs_full_painter);
@@ -236,7 +243,7 @@ impl From<Container> for Widget {
             Some(decoration) => decoration.padding(),
             None => value
                 .border
-                .map_or(EdgeInsets::ZERO, |border| EdgeInsets::all(border.width)),
+                .map_or(decoration_padding, |border| EdgeInsets::all(border.width)),
         };
         let effective_padding = value.padding.unwrap_or(EdgeInsets::ZERO) + border_padding;
         if !effective_padding.is_zero() {

@@ -47,6 +47,15 @@ The pinned authored Android test and the Rust B01 test both keep
 typing in the first editor after cancellation. Rust checks the second
 editor's selection and the native command queue as well.
 
+## B02 remediation
+
+The B02 border fix is also verified: Container no longer turns a
+uniform BorderStyle.none into a visible fast-path stroke. Layout keeps
+the declared inset. Pinned Flutter and native Windows wgpu matched
+eight edge and interior pixels across four retained frames (no border,
+solid border, invisible border, no border). The display-list regression
+also passed.
+
 ## B04 and B05 remediation
 
 The editable now runs input formatters on text changes and composition
