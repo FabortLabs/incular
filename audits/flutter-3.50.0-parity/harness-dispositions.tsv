@@ -1,0 +1,12 @@
+scenario	file	line	status	frames	evidence
+layout__flex__expanded_and_spacing	harness/flutter/test/frames/layout_test.dart	100	match	2	frame-rechecks.md
+layout__baseline__cross_axis	harness/flutter/test/frames/layout_test.dart	448	match	2	frame-rechecks.md
+layout__fitted_box__contain_alignment	harness/flutter/test/frames/layout_test.dart	248	match	2	frame-rechecks.md
+layout__box_constraints__limited_overflow_intrinsic	harness/flutter/test/frames/layout_test.dart	504	match	2	frame-rechecks.md
+layout__flex__fit_loose_and_tight	harness/flutter/test/frames/layout_test.dart	694	match	2	frame-rechecks.md
+layout__fitted_box__all_fits	harness/flutter/test/frames/layout_test.dart	1067	match	2	frame-rechecks.md
+navigation__navigator__push_pop_can_pop	harness/flutter/test/frames/navigation_test.dart	24	match	6	frame-rechecks.md
+navigation__navigator__fade_pop_timeline	harness/flutter/test/frames/navigation_test.dart	225	mismatch	47	frame-rechecks.md
+semantics__block_previous	harness/flutter/test/frames/semantics_test.dart	240	match	2	frame-rechecks.md
+semantics__merge	harness/flutter/test/frames/semantics_test.dart	169	match	2	frame-rechecks.md
+gestures__scale__two_pointer_pinch	harness/flutter/test/frames/gestures_test.dart	173	match	7	frame-rechecks.md

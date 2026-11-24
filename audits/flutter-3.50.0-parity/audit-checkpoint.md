@@ -111,3 +111,12 @@ Next: custom clip hit testing and existing focused frame harness cases.
 [Clip and scroll comparisons](clip-scroll-comparisons.md) paired two more
 mismatches; total 27 custom paired mismatch cases. Interior clip and LTR
 controls passed. Existing harness rechecks are a separate denominator.
+
+### Existing frame harness: first strict 3.50 rechecks
+
+[Strict rechecks](frame-rechecks.md) dispositioned 11/253 existing frame
+fixtures (4.35%): ten match, and the fade-pop timeline diverges.
+[Harness dispositions](harness-dispositions.tsv) holds exact fixture keys.
+This denominator is independent of the 8,965 upstream registration sites.
+Next: continue narrowly grouped frame comparisons and word-spacing/formatter
+probes; preserve verification details for divergences.
