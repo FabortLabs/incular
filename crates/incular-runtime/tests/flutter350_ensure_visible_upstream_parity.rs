@@ -193,3 +193,136 @@ fn rotated_child_reveals_transformed_bounds_at_both_edges() {
         (start, end)
     );
 }
+
+fn scroll_window(scroll: impl Into<Widget>) -> Widget {
+    Directionality::new(
+        TextDirection::Ltr,
+        Center::new(SizedBox::new().width(600.).height(400.).child(scroll)),
+    )
+    .into()
+}
+
+#[test]
+fn nested_different_axis_scrollables_reveal_the_same_target_in_both() {
+    use incular_core::Offset;
+    use incular_widgets::{Column, Row};
+
+    let inner = ScrollController::new();
+    let outer = ScrollController::new();
+    let rows = (0u64..7).map(|y| {
+        Widget::from(Row::new((0u64..7).map(|x| {
+            Widget::from(SizedBox::new().width(200.).height(200.)).with_key(Key::Value(y * 7 + x))
+        })))
+    });
+    let inner_view = SingleChildScrollView::new(Column::new(rows)).controller(inner);
+    let outer_view = SingleChildScrollView::new(inner_view)
+        .scroll_direction(Axis::Horizontal)
+        .controller(outer.clone());
+    let mut probe = Fixture {
+        runtime: Runtime::new(scroll_window(outer_view)).unwrap(),
+        now: Instant::now(),
+        controller: outer,
+        axis: Axis::Horizontal,
+    };
+    probe.frame(0);
+    let mut observed = Vec::new();
+    for (x, y, alignment) in [
+        (0, 0, 0.),
+        (3, 0, 0.),
+        (3, 0, 0.5),
+        (6, 0, 0.),
+        (0, 2, 0.),
+        (3, 2, 0.),
+        (3, 2, 0.5),
+    ] {
+        let key = y * 7 + x;
+        probe.reveal(key, EnsureVisible::new().alignment(alignment));
+        observed.push(probe.rect(key).origin);
+    }
+    assert_eq!(
+        observed,
+        [
+            Offset::new(100., 100.),
+            Offset::new(100., 100.),
+            Offset::new(300., 100.),
+            Offset::new(500., 100.),
+            Offset::new(100., 100.),
+            Offset::new(100., 100.),
+            Offset::new(300., 200.),
+        ]
+    );
+}
+
+fn list_forward(axis: Axis, initial_offsets: [f32; 5], expected: [f32; 5]) {
+    use incular_widgets::ListView;
+    let controller = ScrollController::new();
+    let rows = (0..7)
+        .map(|i| Widget::from(SizedBox::new().width(200.).height(200.)).with_key(Key::Value(i)));
+    let list = ListView::new(rows)
+        .scroll_direction(axis)
+        .controller(controller.clone());
+    let mut probe = Fixture {
+        runtime: Runtime::new(scroll_window(list)).unwrap(),
+        now: Instant::now(),
+        controller,
+        axis,
+    };
+    probe.frame(0);
+    let mut out = Vec::new();
+    for (step, (id, align, trailing)) in [
+        (3, 0., false),
+        (6, 0., false),
+        (4, 1., true),
+        (0, 1., false),
+        (3, 0., false),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        probe.controller.jump_to(initial_offsets[step]);
+        probe.frame(0);
+        if probe
+            .runtime
+            .tree()
+            .element_with_key(&Key::Value(id))
+            .is_none()
+        {
+            out.push(None);
+            continue;
+        }
+        if step == 4 {
+            probe.animated_reveal(id);
+        } else {
+            probe.reveal(id, EnsureVisible::new().alignment(align));
+        }
+        out.push(
+            probe
+                .runtime
+                .tree()
+                .element_with_key(&Key::Value(id))
+                .map(|_| probe.edge(id, trailing)),
+        );
+    }
+    assert_eq!(
+        out,
+        expected.map(Some),
+        "None represents an unmounted original target"
+    );
+}
+
+#[test]
+fn list_view_vertical_reveals_cached_targets_at_the_original_offsets() {
+    list_forward(
+        Axis::Vertical,
+        [480., 1083., 735., 123., 523.],
+        [100., 300., 500., 100., 100.],
+    );
+}
+#[test]
+fn list_view_horizontal_reveals_cached_targets_at_the_original_offsets() {
+    list_forward(
+        Axis::Horizontal,
+        [23., 843., 415., 46., 211.],
+        [100., 500., 700., 100., 100.],
+    );
+}
