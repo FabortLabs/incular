@@ -634,3 +634,18 @@ packages/flutter/test/services/text_formatter_test.dart	445	Uses old value when 
 packages/flutter/test/services/text_formatter_test.dart	453	Truncates newValue when oldValue already over limit	paired-match	upstream-text-formatters.md
 packages/flutter/test/services/text_formatter_test.dart	465	with TargetPlatform.windows	partial-match	upstream-text-formatters.md
 packages/flutter/test/services/text_formatter_test.dart	475	with TargetPlatform.macOS	reference-ran-incular-open	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	164	test filtering formatter, deny mode (deprecated names)	paired-mismatch	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	225	test filtering formatter, allow mode (deprecated names)	paired-mismatch	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	397	Removes characters from the end	partial-match	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	403	Counts surrogate pairs as single characters	partial-match	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	483	FilteringTextInputFormatter should return the old value if new value contains non-white-listed character	paired-match	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	499	FilteringTextInputFormatter should move the cursor to the right position	paired-match	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	528	FilteringTextInputFormatter should remove non-allowed characters	paired-match	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	544	WhitelistingTextInputFormatter should return the old value if new value contains non-allowed character	paired-match	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	560	FilteringTextInputFormatter should move the cursor to the right position	paired-match	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	589	WhitelistingTextInputFormatter should move the cursor to the right position	paired-match	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	618	FilteringTextInputFormatter should filter independent of selection	reference-ran-incular-open	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	642	FilteringTextInputFormatter should filter independent of composingRegion	reference-ran-incular-open	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	661	FilteringTextInputFormatter basic filtering test	paired-match	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	674	Preserves selection region	partial-mismatch	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	757	Preserves selection region, allow	reference-ran-incular-open	upstream-text-formatters.md
