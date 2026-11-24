@@ -236,3 +236,124 @@ fn vertical_intrinsic_width_sums_three_columns() {
     ));
     assert_eq!(bounds(&tree, WRAP).size.width, 188.);
 }
+
+fn basic(reversed: bool) {
+    use incular_config::VerticalDirection;
+    let uniform = [(300., 100.); 4];
+    let uneven = [(300., 50.), (300., 100.), (300., 100.), (300., 50.)];
+    let dir = if reversed {
+        TextDirection::Rtl
+    } else {
+        TextDirection::Ltr
+    };
+    let build = |step: usize| {
+        if step < 3 {
+            key(wrap(&uniform).text_direction(dir).alignment(
+                [
+                    WrapAlignment::Start,
+                    WrapAlignment::Center,
+                    WrapAlignment::End,
+                ][step],
+            ))
+        } else {
+            key(wrap(&uneven)
+                .cross_axis_alignment(
+                    [
+                        WrapCrossAlignment::Start,
+                        WrapCrossAlignment::Center,
+                        WrapCrossAlignment::End,
+                    ][step - 3],
+                )
+                .vertical_direction(if reversed {
+                    VerticalDirection::Up
+                } else {
+                    VerticalDirection::Down
+                }))
+        }
+    };
+    let expected = if reversed {
+        [
+            [(500., 0.), (200., 0.), (500., 100.), (200., 100.)],
+            [(400., 0.), (100., 0.), (400., 100.), (100., 100.)],
+            [(300., 0.), (0., 0.), (300., 100.), (0., 100.)],
+            [(0., 550.), (300., 500.), (0., 400.), (300., 450.)],
+            [(0., 525.), (300., 500.), (0., 400.), (300., 425.)],
+            [(0., 500.), (300., 500.), (0., 400.), (300., 400.)],
+        ]
+    } else {
+        [
+            [(0., 0.), (300., 0.), (0., 100.), (300., 100.)],
+            [(100., 0.), (400., 0.), (100., 100.), (400., 100.)],
+            [(200., 0.), (500., 0.), (200., 100.), (500., 100.)],
+            [(0., 0.), (300., 0.), (0., 100.), (300., 100.)],
+            [(0., 25.), (300., 0.), (0., 100.), (300., 125.)],
+            [(0., 50.), (300., 0.), (0., 100.), (300., 150.)],
+        ]
+    };
+    let mut tree = mount(build(0));
+    let root = tree.root().unwrap();
+    for (i, point) in expected.iter().enumerate() {
+        if i > 0 {
+            tree.update(root, build(i)).unwrap();
+            tree.layout(Constraints::tight(HOST)).unwrap();
+        }
+        check(&tree, HOST, point);
+    }
+}
+#[test]
+fn basic_wrap_offsets_ltr_and_cross_axis_down() {
+    basic(false);
+}
+#[test]
+fn basic_wrap_offsets_rtl_and_cross_axis_up() {
+    basic(true);
+}
+
+#[test]
+fn empty_centered_wrap_has_zero_size() {
+    let tree = mount(Center::new(key(
+        Wrap::new(Vec::<Widget>::new()).alignment(WrapAlignment::Center)
+    )));
+    assert_eq!(bounds(&tree, WRAP).size, Size::ZERO);
+}
+
+#[test]
+fn wrap_propagates_its_child_text_baseline() {
+    use incular_widgets::Baseline;
+    let text = Widget::from(
+        Text::new("X")
+            .text_direction(TextDirection::Ltr)
+            .style(TextStyle::default().font_size(100.).height(Some(1.))),
+    )
+    .with_key(Key::Value(0));
+    let direct = mount(Center::new(
+        Widget::from(Baseline::new(175., text.clone())).with_key(Key::Value(WRAP)),
+    ));
+    let tree = mount(Center::new(
+        Widget::from(Baseline::new(
+            175.,
+            Wrap::new([text]).text_direction(TextDirection::Ltr),
+        ))
+        .with_key(Key::Value(WRAP)),
+    ));
+    let glyph = bounds(&tree, 0).size;
+    let text_id = tree.element_with_key(&Key::Value(0)).unwrap();
+    let text_baseline = tree
+        .baseline(tree.render_id(text_id).unwrap())
+        .expect("actual text baseline control");
+    let outer = bounds(&tree, WRAP).size;
+    assert_eq!(outer.width, glyph.width);
+    let expected = 175. + glyph.height - text_baseline;
+    assert!(
+        (bounds(&direct, WRAP).size.height - expected).abs() < 0.01,
+        "direct text positive control"
+    );
+    assert!(
+        (outer.height - expected).abs() < 0.01,
+        "outer height {} expected {} using text height {} and baseline {}",
+        outer.height,
+        expected,
+        glyph.height,
+        text_baseline
+    );
+}
