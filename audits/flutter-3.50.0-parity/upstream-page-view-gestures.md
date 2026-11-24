@@ -10,3 +10,10 @@ All four corresponding pinned Flutter originals passed, including both expanded 
 | :485 | During a live drag, crossing the 400px midpoint dispatches page 1 immediately, without waiting for a frame. Later moves and settling do not emit it redundantly; page 1 stays visible. This matches Flutter. |
 
 The tests use synthetic normalized touch samples through the real Runtime dispatcher and monotonic frames. Run cargo test --locked -p incular-runtime --test flutter350_upstream_page_gestures -- --nocapture.
+
+## Snapping switches and outward flings
+
+Two more pinned originals passed. The expanded Rust target has four matches and two expected failures overall.
+
+- :536: a rightward 100px/800px-per-second fling from the first 0.9-fraction page settles back to page 0, emits no callback, and keeps pages 0 and 1 visible at both 800×600 and a 414×736 OverflowBox viewport. This matches.
+- :634: the first -420px swipe selects page 1 correctly. Turning snapping off then swiping reports page 1 again and exposes pages [0,1], instead of reporting 2 and exposing [1,2]. Reenabling snapping settles on 0 instead of 2, without an extra notification. The controllerless rebuild lost the active position.

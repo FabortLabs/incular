@@ -239,3 +239,104 @@ fn on_page_changed_fires_once_at_halfway_during_a_live_drag() {
         (vec![], vec![1], vec![1], vec![1], vec![1])
     );
 }
+
+#[test]
+fn toggling_snapping_does_not_reset_active_page_or_duplicate_callbacks() {
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let build = |snapping| {
+        let log = log.clone();
+        Directionality::new(
+            TextDirection::Ltr,
+            PageView::new(
+                (0..15).map(|i| Widget::from(Text::new(i.to_string())).with_key(Key::Value(i))),
+            )
+            .page_snapping(snapping)
+            .on_page_changed(move |i| log.borrow_mut().push(i)),
+        )
+        .into()
+    };
+    // Keep the same root fixture key that the hit/viewport helpers query.
+    let build = |snapping| {
+        let w: Widget = build(snapping);
+        w.with_key(Key::Value(VIEW))
+    };
+    let mut h = Host::new(build(true));
+    assert!(log.borrow().is_empty());
+    let swipe = |h: &mut Host| {
+        h.send(PointerPhase::Down, 100., 100., 16);
+        h.send(PointerPhase::Move, -320., 100., 16);
+        let now = std::mem::take(&mut *log.borrow_mut());
+        h.now += Duration::from_millis(180);
+        h.send(PointerPhase::Up, -320., 100., 0);
+        h.settle();
+        (now, h.visible(), std::mem::take(&mut *log.borrow_mut()))
+    };
+    let snapped = swipe(&mut h);
+    h.update(build(false));
+    let without_snap = swipe(&mut h);
+    h.update(build(true));
+    h.settle();
+    assert_eq!(
+        (snapped, without_snap, h.visible(), log.borrow().clone()),
+        (
+            (vec![1], vec![1], vec![]),
+            (vec![2], vec![1, 2], vec![]),
+            vec![2],
+            vec![]
+        )
+    );
+}
+
+#[test]
+fn bouncing_fling_past_first_page_settles_without_an_extra_callback_at_both_sizes() {
+    use incular_widgets::{OverflowBox, PageController};
+    let c = PageController::new().with_viewport_fraction(0.9);
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let view = |overflow: bool| {
+        let l = log.clone();
+        let v = PageView::new(
+            (0..15).map(|i| Widget::from(Text::new(i.to_string())).with_key(Key::Value(i))),
+        )
+        .controller(c.clone())
+        .on_page_changed(move |page| l.borrow_mut().push(page))
+        .physics(ScrollPhysics::BOUNCING);
+        let v = Widget::from(v).with_key(Key::Value(VIEW));
+        let body = if overflow {
+            Widget::from(
+                OverflowBox::new(v)
+                    .min_width(414.)
+                    .max_width(414.)
+                    .min_height(736.)
+                    .max_height(736.),
+            )
+        } else {
+            v
+        };
+        Directionality::new(TextDirection::Ltr, body).into()
+    };
+    let mut h = Host::new(view(false));
+    let fling = |h: &mut Host| {
+        h.send(PointerPhase::Down, 400., 300., 25);
+        for x in [420., 440., 460., 480., 500.] {
+            h.send(PointerPhase::Move, x, 300., 25);
+        }
+        h.send(PointerPhase::Up, 500., 300., 0);
+        h.settle();
+        (
+            h.bounds(VIEW).expect("viewport").size,
+            h.visible(),
+            c.page(),
+            log.borrow().clone(),
+        )
+    };
+    let a = fling(&mut h);
+    h.update(view(true));
+    let b = fling(&mut h);
+    assert_eq!(
+        [a, b],
+        [
+            (SURFACE, vec![0, 1], Some(0.), vec![]),
+            (Size::new(414., 736.), vec![0, 1], Some(0.), vec![])
+        ]
+    );
+}

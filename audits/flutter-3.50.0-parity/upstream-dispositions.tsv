@@ -586,3 +586,5 @@ packages/flutter/test/widgets/page_view_test.dart	805	PageView large viewportFra
 packages/flutter/test/widgets/page_view_test.dart	840	All visible pages are able to receive touch events	paired-match	upstream-page-view-fractions.md
 packages/flutter/test/widgets/page_view_test.dart	886	the current item remains centered on constraint change	paired-match	upstream-page-view-fractions.md
 packages/flutter/test/widgets/page_view_test.dart	928	PageView does not report page changed on overscroll	paired-match	upstream-page-view-fractions.md
+packages/flutter/test/widgets/page_view_test.dart	536	Bouncing scroll physics ballistics does not overshoot	paired-match	upstream-page-view-gestures.md
+packages/flutter/test/widgets/page_view_test.dart	634	Page snapping disable and reenable	paired-mismatch	upstream-page-view-gestures.md
