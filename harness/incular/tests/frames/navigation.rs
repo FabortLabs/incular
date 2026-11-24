@@ -4,13 +4,12 @@ use std::rc::Rc;
 use crate::host;
 use incular_core::{Color, Offset, time::Instant};
 use incular_navigation::{HeroController, NavigationEvent, Navigator, Route, RouteTransition};
-use incular_parity_harness::{FrameHarness, Scenario, probe};
-use incular_widgets::Hero;
+use incular_parity_harness::{FrameHarness, INTERVAL, Scenario, probe};
 use incular_widgets::{
-    Align, Alignment, BasicRouterDelegate, ClipRect, ColoredBox, GestureDetector,
-    MemoryRouteInformationProvider, NavigationBackButtonDispatcher, OverlayPortal, PopScope,
-    Positioned, RouteInformationProvider, Router, SizedBox, Stack, StringRouteInformationParser,
-    Widget,
+    Align, Alignment, BasicRouterDelegate, ClipRect, ColoredBox, GestureDetector, Hero,
+    HeroRectTween, MemoryRouteInformationProvider, NavigationBackButtonDispatcher, OverlayPortal,
+    PopScope, Positioned, RouteInformationProvider, Router, SizedBox, Stack,
+    StringRouteInformationParser, Widget,
 };
 use std::time::Duration;
 
@@ -301,18 +300,22 @@ fn fade_timeline(h: &mut FrameHarness, pop: bool) {
     }
 }
 
-fn hero_stack(name: &str, x: f32, y: f32, width: f32, height: f32, color: Color) -> Widget {
+const HERO_SHUTTLE_PROBE: &str = "hero_shuttle";
+const HERO_SHUTTLE_COLOR: Color = Color::rgba(0, 0x80, 0, 0xFF);
+
+fn hero_stack(x: f32, y: f32, width: f32, height: f32, color: Color) -> Widget {
     Stack::new([Widget::from(
-        Positioned::new(Widget::from(Hero::new(
-            "photo",
-            probe(
-                name,
+        Positioned::new(Widget::from(
+            Hero::new(
+                "photo",
                 SizedBox::new()
                     .width(width)
                     .height(height)
                     .child(solid(color)),
-            ),
-        )))
+            )
+            // Probe a shuttle that cannot be mistaken for either endpoint.
+            .flight_shuttle_builder(|_, _| probe(HERO_SHUTTLE_PROBE, solid(HERO_SHUTTLE_COLOR))),
+        ))
         .left(x)
         .top(y),
     )])
@@ -321,32 +324,27 @@ fn hero_stack(name: &str, x: f32, y: f32, width: f32, height: f32, color: Color)
 
 fn hero_flight(h: &mut FrameHarness, pop: bool) {
     let navigator = Navigator::new();
-    let controller = HeroController::new();
+    let controller = HeroController::with_create_rect_tween(HeroRectTween::linear);
     controller.attach(&navigator);
-    navigator.push(Route::new(
-        "/home",
-        hero_stack("hero_from", 10., 20., 40., 40., BLUE),
-    ));
-    incular_parity_harness::load_fonts();
-    let base = Instant::now();
+    navigator.push(Route::new("/home", hero_stack(10., 20., 40., 40., BLUE)));
     let overlay = controller.clone();
     host::mount_navigator(h, &navigator, move |_, outlet| {
         Stack::new([outlet, overlay.overlay()]).into()
     });
     h.frames(2);
+    // Flutter's push ticker starts at zero on the next pumped frame.
+    let push_start = h.clock().get() + INTERVAL;
     navigator.push(
-        Route::new(
-            "/details",
-            hero_stack("hero_to", 100., 150., 80., 60., ORANGE),
-        )
-        .transition(RouteTransition::fade_in(
-            FADE,
-            base + h.elapsed() + Duration::from_millis(16),
-        )),
+        Route::new("/details", hero_stack(100., 150., 80., 60., ORANGE))
+            .transition(RouteTransition::fade_in(FADE, push_start)),
     );
-    h.frames(22);
+    h.frames(8);
+    let _ = h.center(HERO_SHUTTLE_PROBE); // An absent shuttle is not a parity match.
+    h.frames(14);
     if pop {
         navigator.pop();
+        // Let the comparator report a missing return shuttle against the
+        // reference trace instead of panicking before either can be compared.
         h.frames(22);
     }
 }

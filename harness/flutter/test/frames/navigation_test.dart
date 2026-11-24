@@ -376,14 +376,21 @@ PageRouteBuilder<void> _fadeRoute(Widget page, int ms, int reverseMs) => PageRou
           FadeTransition(opacity: animation, child: child),
     );
 
-Widget _heroStack(FrameHarness h, String name, double x, double y, double w, double hgt, Color color) =>
+const _heroShuttleProbe = 'hero_shuttle';
+const _heroShuttleColor = Color(0xFF008000);
+
+Widget _heroStack(FrameHarness h, double x, double y, double w, double hgt, Color color) =>
     Stack(children: <Widget>[
       Positioned(
         left: x,
         top: y,
         child: Hero(
           tag: 'photo',
-          child: h.probe(name, SizedBox(width: w, height: hgt, child: ColoredBox(color: color))),
+          // The same distinct widget is built only in the flying overlay,
+          // never at a route endpoint or in its placeholder.
+          flightShuttleBuilder: (_, __, ___, ____, _____) =>
+              h.probe(_heroShuttleProbe, const ColoredBox(color: _heroShuttleColor)),
+          child: SizedBox(width: w, height: hgt, child: ColoredBox(color: color)),
         ),
       ),
     ]);
@@ -406,22 +413,30 @@ Future<void> _fadeTimeline(FrameHarness h, {required bool pop}) async {
 
 Future<void> _heroFlight(FrameHarness h, {required bool pop}) async {
   final key = GlobalKey<NavigatorState>();
+  final controller = HeroController(
+    createRectTween: (begin, end) => RectTween(begin: begin, end: end),
+  );
   await h.mount((_) => Navigator(
         key: key,
         pages: <Page<void>>[
           _TestPage(
             key: const ValueKey<String>('home'),
-            child: _heroStack(h, 'hero_from', 10, 20, 40, 40, blue),
+            child: _heroStack(h, 10, 20, 40, 40, blue),
           ),
         ],
+        observers: <NavigatorObserver>[controller],
         onDidRemovePage: (_) {},
       ));
   await h.frames(2);
-  key.currentState!.push<void>(_fadeRoute(_heroStack(h, 'hero_to', 100, 150, 80, 60, orange), 300, 300));
-  await h.frames(22);
+  key.currentState!.push<void>(_fadeRoute(_heroStack(h, 100, 150, 80, 60, orange), 300, 300));
+  await h.frames(8);
+  h.center(_heroShuttleProbe); // A trace with no actual flight is invalid.
+  await h.frames(14);
   if (pop) {
     key.currentState!.pop<void>();
-    await h.frames(22);
+    await h.frames(8);
+    h.center(_heroShuttleProbe);
+    await h.frames(14);
   }
 }
 
