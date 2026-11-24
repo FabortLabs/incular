@@ -416,3 +416,14 @@ touch routing gap with both sides explicitly clamping. Programmatic
 jump works on both. The standalone and full frame fixtures are being
 paired with the same inputs; the frozen frame ledger remains 252/253
 valid until the controlled gesture trace is verified.
+
+### Frame fixture milestone; upstream audit continues
+
+[Final controlled ListWheel fixture](frame-list-wheel-and-coverage-milestone.md) reproduces missing
+touch scrolling after matching physics and attachment. All 253 static
+frame registrations now have valid outcomes: 239 match, 14 differ.
+[Five original Wrap cases](upstream-wrap-geometry-comparisons.md) add five
+positive pairs. Upstream: 63/8,965 fully paired, 48 match and 15 differ,
+plus eight partial and six reference-only. Continue the upstream audit
+in bounded behavior families; do not treat 100% fixture coverage as a
+complete equivalence verdict or start implementation fixes.

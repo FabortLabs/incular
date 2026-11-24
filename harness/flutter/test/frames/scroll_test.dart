@@ -201,33 +201,55 @@ void main() {
   });
 
   frameScenario('scroll__list_wheel__selected_fling', (h) async {
+    const itemExtent = 50.0;
     final controller = FixedExtentScrollController();
     addTearDown(controller.dispose);
     var changes = 0;
-    var selected = 0;
+    var lastReported = 0;
+    // Compare the scroll state, not the projected child geometry: the
+    // Flutter recorder uses Matrix4 while the Incular recorder uses affine.
+    h.value('attached', () => controller.hasClients ? 1 : 0);
+    h.value(
+      'viewport_extent',
+      () => controller.hasClients ? controller.position.viewportDimension : 0,
+    );
+    h.value(
+      'max_offset',
+      () => controller.hasClients ? controller.position.maxScrollExtent : 0,
+    );
     h.value('offset', () => controller.hasClients ? controller.offset : 0);
     h.value('selected_changes', () => changes.toDouble());
-    h.value('selected_index', () => selected.toDouble());
-    await h.mount((_) => ListWheelScrollView(
-          controller: controller,
-          itemExtent: 50,
-          onSelectedItemChanged: (index) {
-            changes++;
-            selected = index;
-          },
-          children: List<Widget>.generate(
-            40,
-            (index) {
-              final row = SizedBox(
-                width: 300,
-                child: ColoredBox(color: index.isEven ? blue : green),
-              );
-              return index == 0 ? h.probe('item0', row) : row;
-            },
+    h.value('last_reported_index', () => lastReported.toDouble());
+    h.value(
+      'selected_index',
+      () => controller.hasClients ? controller.selectedItem.toDouble() : 0,
+    );
+    await h.mount(
+      (_) => ListWheelScrollView(
+        controller: controller,
+        physics: const ClampingScrollPhysics(),
+        itemExtent: itemExtent,
+        onSelectedItemChanged: (index) {
+          changes++;
+          lastReported = index;
+        },
+        children: List<Widget>.generate(
+          40,
+          (index) => SizedBox(
+            width: 300,
+            child: ColoredBox(color: index.isEven ? blue : green),
           ),
-        ));
+        ),
+      ),
+    );
     await h.frames(1);
-    await _drag(h, const Offset(400, 450), const Offset(400, 250), 3, framesPerStep: 1);
+    await _drag(
+      h,
+      const Offset(400, 450),
+      const Offset(400, 250),
+      3,
+      framesPerStep: 1,
+    );
     await h.frames(60);
   });
 

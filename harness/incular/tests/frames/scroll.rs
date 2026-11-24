@@ -10,10 +10,10 @@ use incular_parity_harness::{FrameHarness, Scenario, probe};
 use incular_scroll::ScrollPhysics;
 use incular_widgets::{
     ChangeReportingBehavior, ColoredBox, Column, DraggableScrollableController,
-    DraggableScrollableSheet, ListView, ListWheelScrollView, NestedScrollView, PageController,
-    PageStorage, PageStorageBucket, PageStorageKey, PageView, ScrollController,
-    ScrollNotificationType, SingleChildScrollView, SizedBox, Sliver, SliverToBoxAdapter,
-    WheelChildDelegate, Widget,
+    DraggableScrollableSheet, FixedExtentScrollController, ListView, ListWheelScrollView,
+    NestedScrollView, PageController, PageStorage, PageStorageBucket, PageStorageKey, PageView,
+    ScrollController, ScrollNotificationType, SingleChildScrollView, SizedBox, Sliver,
+    SliverToBoxAdapter, WheelChildDelegate, Widget,
 };
 
 const BLUE: Color = Color::rgba(0x21, 0x96, 0xF3, 0xFF);
@@ -393,38 +393,57 @@ fn page_view_fling_page_changed(h: &mut FrameHarness) {
 }
 
 fn list_wheel_selected_fling(h: &mut FrameHarness) {
-    let controller = ScrollController::new();
+    const ITEM_EXTENT: f32 = 50.;
+    let fixed = FixedExtentScrollController::default();
+    let controller = fixed.controller();
+    // Sample scroll state, without comparing affine probe geometry to
+    // Flutter's projective wheel geometry.
+    let attached = controller.clone();
+    h.value("attached", move || {
+        f64::from(attached.attachment_id().is_some())
+    });
+    let viewport = controller.clone();
+    h.value("viewport_extent", move || {
+        f64::from(viewport.viewport_extent())
+    });
+    let max_offset = controller.clone();
+    h.value("max_offset", move || f64::from(max_offset.max_offset()));
     let read = controller.clone();
     h.value("offset", move || f64::from(read.offset()));
     let changes = Rc::new(Cell::new(0_u32));
-    let selected = Rc::new(Cell::new(0_usize));
+    let last_reported = Rc::new(Cell::new(0_usize));
     let read_changes = changes.clone();
     h.value("selected_changes", move || f64::from(read_changes.get()));
-    let read_selected = selected.clone();
-    h.value("selected_index", move || read_selected.get() as f64);
+    let read_last_reported = last_reported.clone();
+    h.value("last_reported_index", move || {
+        read_last_reported.get() as f64
+    });
+    h.value("selected_index", move || {
+        fixed.selected_item(ITEM_EXTENT) as f64
+    });
     let view_controller = controller.clone();
     h.mount(move |_| {
         let children: Vec<Widget> = (0..40)
             .map(|index| {
-                let row: Widget = SizedBox::new()
+                SizedBox::new()
                     .width(300.)
                     .child(colored(if index % 2 == 0 { BLUE } else { GREEN }))
-                    .into();
-                if index == 0 { probe("item0", row) } else { row }
+                    .into()
             })
             .collect();
         let mut view = ListWheelScrollView::new(
             view_controller.clone(),
-            50.,
+            ITEM_EXTENT,
             WheelChildDelegate::children(children),
         );
+        view.viewport_mut().set_physics(ScrollPhysics::clamping());
         let changes = changes.clone();
-        let selected = selected.clone();
+        let last_reported = last_reported.clone();
         view.viewport_mut().set_selection_callback(
             ChangeReportingBehavior::OnScrollUpdate,
             Some(move |index: usize| {
                 changes.set(changes.get() + 1);
-                selected.set(index);
+                last_reported.set(index);
             }),
         );
         view.into()

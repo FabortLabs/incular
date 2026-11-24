@@ -71,3 +71,8 @@ packages/flutter/test/animation/animation_controller_test.dart	59	Can set value 
 packages/flutter/test/animation/animation_controller_test.dart	92	Receives status callbacks for forward and reverse	paired-mismatch	upstream-animation-controller-comparisons.md
 packages/flutter/test/animation/animation_controller_test.dart	415	lastElapsedDuration control test	paired-match	upstream-animation-controller-comparisons.md
 packages/flutter/test/animation/animation_controller_test.dart	726	setting value directly sets correct status	paired-match	upstream-animation-controller-comparisons.md
+packages/flutter/test/widgets/wrap_test.dart	694	Wrap spacing test	paired-match	upstream-wrap-geometry-comparisons.md
+packages/flutter/test/widgets/wrap_test.dart	722	Vertical Wrap test with spacing	paired-match	upstream-wrap-geometry-comparisons.md
+packages/flutter/test/widgets/wrap_test.dart	811	Hit test children in wrap	paired-match	upstream-wrap-geometry-comparisons.md
+packages/flutter/test/widgets/wrap_test.dart	1030	Wrap alignment flipped spaceInBetween	paired-match	upstream-wrap-geometry-comparisons.md
+packages/flutter/test/widgets/wrap_test.dart	1045	Wrap does not crash at zero area	paired-match	upstream-wrap-geometry-comparisons.md
