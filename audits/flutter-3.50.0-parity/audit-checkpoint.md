@@ -443,3 +443,12 @@ the upstream ledger; the 253 existing frame registrations are complete.
 original replacement group. Two match, five reproduce the same
 selection-collapse bug under distinct range boundaries. Upstream now
 76/8,965 fully paired, 54 match and 22 differ; frame milestone unchanged.
+
+### Upstream pointer/wheel and measured gradient sampling
+
+[Seven complete upstream pairs](upstream-pointer-wheel-gradients.md) add three
+matches and four differences (two are paint lifecycle only). Upstream:
+83/8,965 paired (57 match, 26 differ), plus 15 partial and 12
+reference-only. The committed real Windows wgpu gradient probe
+reproduces a transparent-stop color loss across three geometries;
+opaque controls match. No production changes.
