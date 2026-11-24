@@ -278,3 +278,103 @@ fn zero_size_parent_clamps_even_nonzero_preferred_geometry() {
     let _ = tree.paint();
     assert_eq!(preferred_size(&tree), Size::ZERO);
 }
+
+#[derive(Clone, Copy)]
+enum IdCheck {
+    Layout,
+    Position,
+    BadConstraints,
+}
+struct IdProbe(IdCheck);
+impl MultiChildLayoutDelegate for IdProbe {
+    fn get_size(&self, _: Constraints) -> Size {
+        PARENT
+    }
+    fn should_relayout(&self, _: &Self) -> bool {
+        true
+    }
+    fn perform_layout(&self, size: Size, ctx: &mut MultiChildLayoutContext<'_>) {
+        match self.0 {
+            IdCheck::Layout => {
+                ctx.layout_child(0usize, Constraints::loose(size));
+                ctx.layout_child(1usize, Constraints::loose(size));
+            }
+            IdCheck::Position => {
+                ctx.position_child(0usize, incular_core::Offset::ZERO);
+                ctx.position_child(1usize, incular_core::Offset::ZERO);
+            }
+            IdCheck::BadConstraints => {
+                ctx.layout_child(0usize, Constraints::new(0., -1., 0., -1.));
+            }
+        }
+    }
+}
+
+fn id_scene(tree: &mut WidgetTree, case: IdCheck) {
+    let child = Widget::from(LayoutId::new(
+        0usize,
+        SizedBox::new().width(100.).height(100.),
+    ))
+    .with_key(Key::Value(77));
+    tree.mount(Center::new(CustomMultiChildLayout::new(IdProbe(case), [child])).into())
+        .unwrap();
+}
+
+fn missing_id(case: IdCheck) {
+    let mut tree = WidgetTree::new();
+    id_scene(&mut tree, case);
+    let panic =
+        std::panic::catch_unwind(AssertUnwindSafe(|| tree.layout(Constraints::tight(VIEW))))
+            .expect_err("nonexistent id must be rejected");
+    let error = panic
+        .downcast_ref::<String>()
+        .map(String::as_str)
+        .or_else(|| panic.downcast_ref::<&str>().copied())
+        .unwrap();
+    assert!(
+        error.contains("MissingLayoutChild") && error.contains("1"),
+        "{error}"
+    );
+}
+
+#[test]
+fn cannot_layout_a_missing_id() {
+    missing_id(IdCheck::Layout);
+}
+#[test]
+fn cannot_position_a_missing_id() {
+    missing_id(IdCheck::Position);
+}
+
+#[test]
+fn negative_child_maximum_is_not_silently_accepted() {
+    let mut tree = WidgetTree::new();
+    id_scene(&mut tree, IdCheck::BadConstraints);
+    let result =
+        std::panic::catch_unwind(AssertUnwindSafe(|| tree.layout(Constraints::tight(VIEW))));
+    if matches!(result, Ok(Ok(_))) {
+        let id = tree.element_with_key(&Key::Value(77)).unwrap();
+        panic!(
+            "negative maxima were accepted and laid out as {:?}",
+            tree.element_bounds(id).unwrap().size
+        );
+    }
+}
+
+#[test]
+fn a_child_without_any_layout_id_is_rejected() {
+    let mut tree = WidgetTree::new();
+    let child = Widget::from(SizedBox::new().width(100.)).with_key(Key::Value(90));
+    let pref = Pref(Rc::new(std::cell::Cell::new(Size::new(10., 10.))));
+    tree.mount(Center::new(CustomMultiChildLayout::new(pref, [child])).into())
+        .unwrap();
+    let result =
+        std::panic::catch_unwind(AssertUnwindSafe(|| tree.layout(Constraints::tight(VIEW))));
+    if matches!(result, Ok(Ok(_))) {
+        let id = tree.element_with_key(&Key::Value(90)).unwrap();
+        panic!(
+            "missing LayoutId was accepted with {:?}",
+            tree.element_bounds(id).unwrap().size
+        );
+    }
+}
