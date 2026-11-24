@@ -156,6 +156,9 @@ pub struct Runtime {
     adopted_focus_epoch: Option<u64>,
     initial_focus: InitialFocus,
     pub(crate) captured_text_field: Option<ElementId>,
+    /// An Android/iOS finger that may tap a different editable. Until a
+    /// recognizer accepts it, it cannot move the active text input client.
+    pending_mobile_text_touch: Option<text_gestures::PendingMobileTextTouch>,
     pub(crate) captured_selectable_text: Option<ElementId>,
     pub(crate) secondary_text_press: Option<text_gestures::SecondaryTextPress>,
     /// `SelectableRegionState._lastSecondaryTapDownPosition`.
@@ -336,6 +339,7 @@ impl Runtime {
             adopted_focus_epoch: None,
             initial_focus: InitialFocus::AwaitingLayout,
             captured_text_field: None,
+            pending_mobile_text_touch: None,
             captured_selectable_text: None,
             secondary_text_press: None,
             last_selectable_secondary: None,
@@ -1452,6 +1456,9 @@ impl Runtime {
         };
 
         if let Some(element) = raw_target {
+            if active_primary && phase != PointerPhase::Down {
+                self.cancel_pending_mobile_text_touch();
+            }
             self.frame_requested = true;
             self.release_legacy_pointer(device, pointer, phase, primary_changed);
             return Some(EventTarget {
@@ -1484,6 +1491,9 @@ impl Runtime {
             )
         {
             self.frame_requested = true;
+            if active_primary && phase != PointerPhase::Down {
+                self.cancel_pending_mobile_text_touch();
+            }
             // A drag, long press or scroll that wins the arena after the
             // press reached a button cancels the button (Flutter's
             // `InkWell` loses the arena and gets `onTapCancel`).
@@ -1508,6 +1518,7 @@ impl Runtime {
             return None;
         }
         if self.tree.scrollbar_pointer_with_kind(phase, position, kind) {
+            self.cancel_pending_mobile_text_touch();
             self.frame_requested = true;
             self.release_legacy_pointer(device, pointer, phase, primary_changed);
             return None;
@@ -1521,10 +1532,19 @@ impl Runtime {
             }
             PointerPhase::Move => {
                 self.text_handle_drag_move(position);
+                if self
+                    .pending_mobile_text_touch
+                    .is_some_and(|press| !press.within_slop(position))
+                {
+                    self.cancel_pending_mobile_text_touch();
+                }
                 self.text_long_press_moved(position);
                 // A started long press extends by word and owns the move.
                 let long_press_owns_move = self.text_long_press_move(position, selectable_target);
-                if let Some(field) = self.captured_text_field.filter(|_| !long_press_owns_move) {
+                if let Some(field) = self
+                    .captured_text_field
+                    .filter(|_| !long_press_owns_move && self.pending_mobile_text_touch.is_none())
+                {
                     self.text_field_primary_drag(field, position, kind);
                     self.frame_requested = true;
                 }
@@ -1622,6 +1642,8 @@ impl Runtime {
                         self.text_shortcut_platform,
                         TextShortcutPlatform::Android | TextShortcutPlatform::Ios
                     );
+                let deferred_text_touch =
+                    mobile_touch && !text_target_was_focused && text_target.is_some();
                 let keep_text_field_focus = text_target.is_none()
                     && self
                         .focused
@@ -1636,26 +1658,34 @@ impl Runtime {
                 let focused_text_field = self
                     .focused
                     .is_some_and(|focused| self.tree.is_text_field(focused));
-                self.set_focus(if keep_text_field_focus {
-                    self.focused
-                } else if text_target.is_some() || focused_text_field {
-                    text_target
-                } else {
-                    self.focused
-                });
+                if !deferred_text_touch {
+                    self.set_focus(if keep_text_field_focus {
+                        self.focused
+                    } else if text_target.is_some() || focused_text_field {
+                        text_target
+                    } else {
+                        self.focused
+                    });
+                }
                 // Flutter's EditableText only installs its selection gestures
                 // while `_userSelectionEnabled` (`!readOnly || !obscureText`)
                 // holds; a read-only obscured field keeps focus but no caret.
                 self.captured_text_field =
                     text_target.filter(|field| self.text_field_pointer_selection_enabled(*field));
                 if let Some(field) = text_target {
+                    if deferred_text_touch {
+                        self.pending_mobile_text_touch =
+                            Some(text_gestures::PendingMobileTextTouch { field, position });
+                    }
                     if self.captured_text_field.is_some() {
-                        self.text_field_primary_down(
-                            field,
-                            position,
-                            text_target_was_focused,
-                            touch,
-                        );
+                        if !deferred_text_touch {
+                            self.text_field_primary_down(
+                                field,
+                                position,
+                                text_target_was_focused,
+                                touch,
+                            );
+                        }
                         self.text_long_press_begin(
                             text_gestures::LongPressTarget::Field(field),
                             position,
@@ -1681,6 +1711,26 @@ impl Runtime {
                 target.map(|(element, action)| EventTarget { element, action })
             }
             PointerPhase::Up => {
+                if let Some(press) = self.pending_mobile_text_touch {
+                    if press.within_slop(position)
+                        && text_target == Some(press.field)
+                        && self.tree.can_request_focus(press.field)
+                    {
+                        self.pending_mobile_text_touch = None;
+                        let was_focused = self.focused == Some(press.field);
+                        self.set_focus(Some(press.field));
+                        if self.captured_text_field == Some(press.field) {
+                            self.text_field_primary_down(
+                                press.field,
+                                press.position,
+                                was_focused,
+                                true,
+                            );
+                        }
+                    } else {
+                        self.cancel_pending_mobile_text_touch();
+                    }
+                }
                 self.text_handle_drag_end(position);
                 self.text_long_press_end(position);
                 if self.captured_text_field.take().is_some() {
@@ -1773,6 +1823,7 @@ impl Runtime {
         if (phase == PointerPhase::Cancel || (phase == PointerPhase::Up && primary_changed))
             && self.legacy_pointer == Some((device, pointer))
         {
+            self.cancel_pending_mobile_text_touch();
             self.legacy_pointer = None;
         }
     }
@@ -1842,6 +1893,11 @@ impl Runtime {
     }
 
     fn reconcile_focus_and_selection_captures(&mut self) {
+        if self.pending_mobile_text_touch.is_some_and(|press| {
+            !self.tree.is_text_field(press.field) || !self.tree.can_request_focus(press.field)
+        }) {
+            self.cancel_pending_mobile_text_touch();
+        }
         if self.captured_text_field.is_some_and(|field| {
             !self.tree.is_text_field(field) || !self.tree.can_request_focus(field)
         }) {

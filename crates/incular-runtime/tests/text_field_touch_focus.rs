@@ -17,6 +17,24 @@ fn bounds() -> Constraints {
     Constraints::tight(Size::new(400., 300.))
 }
 
+fn touch_sample(runtime: &mut Runtime, position: Offset, phase: PointerPhase, now: Instant) {
+    let pressed = matches!(phase, PointerPhase::Down | PointerPhase::Move);
+    let _ = runtime.handle_input_at(
+        InputEvent::PointerWithMetadata {
+            pointer: 0,
+            device: 0,
+            kind: PointerDeviceKind::Touch,
+            buttons: if pressed { PRIMARY_POINTER_BUTTON } else { 0 },
+            button: matches!(phase, PointerPhase::Down | PointerPhase::Up)
+                .then_some(PRIMARY_POINTER_BUTTON),
+            sample: PointerSampleMetadata::default(),
+            phase,
+            position,
+        },
+        now,
+    );
+}
+
 /// A touch tap, reusing pointer 0 as Android does for every gesture.
 fn tap(runtime: &mut Runtime, position: Offset, now: &mut Instant) {
     for (phase, buttons) in [
@@ -100,4 +118,31 @@ fn a_touch_tap_outside_any_field_keeps_focus_on_mobile() {
     tap(&mut runtime, Offset::new(100., 150.), &mut now);
     type_text(&mut runtime, now);
     assert_eq!(a.text(), "ax");
+}
+
+#[test]
+fn mobile_touch_pan_cannot_change_the_editor_even_after_returning_to_the_down_point() {
+    for platform in [TextShortcutPlatform::Android, TextShortcutPlatform::Ios] {
+        let (mut runtime, a, b, mut now) = fields(platform);
+        tap(&mut runtime, Offset::new(100., 20.), &mut now);
+        let first = runtime.focused_element();
+        let second = Offset::new(100., 60.);
+        for (ms, at, phase) in [
+            (0, second, PointerPhase::Down),
+            (20, Offset::new(145., 60.), PointerPhase::Move),
+            (40, second, PointerPhase::Move),
+            (60, second, PointerPhase::Up),
+        ] {
+            let t = now + Duration::from_millis(ms);
+            touch_sample(&mut runtime, at, phase, t);
+            runtime.run_frame_at(bounds(), t).unwrap();
+            assert_eq!(runtime.focused_element(), first, "{platform:?}: {phase:?}");
+        }
+        type_text(&mut runtime, now + Duration::from_millis(80));
+        assert_eq!(
+            (a.text(), b.text()),
+            ("ax".into(), "b".into()),
+            "{platform:?}"
+        );
+    }
 }

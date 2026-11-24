@@ -850,7 +850,27 @@ pub(crate) struct TextLongPress {
     pub(crate) anchor_word: Option<TextSelection>,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(super) struct PendingMobileTextTouch {
+    pub(super) field: ElementId,
+    pub(super) position: Offset,
+}
+
+impl PendingMobileTextTouch {
+    pub(super) fn within_slop(self, position: Offset) -> bool {
+        let delta = position - self.position;
+        delta.x.hypot(delta.y) <= TOUCH_SLOP
+    }
+}
+
 impl Runtime {
+    pub(super) fn cancel_pending_mobile_text_touch(&mut self) {
+        if self.pending_mobile_text_touch.take().is_some() {
+            self.captured_text_field = None;
+            self.text_long_press = None;
+        }
+    }
+
     /// Records a primary press on a text target as a possible long press.
     pub(super) fn text_long_press_begin(
         &mut self,
@@ -890,6 +910,18 @@ impl Runtime {
                 if self.captured_text_field != Some(field) {
                     self.text_long_press = None;
                     return false;
+                }
+                if self
+                    .pending_mobile_text_touch
+                    .is_some_and(|pending| pending.field == field)
+                {
+                    if !self.tree.can_request_focus(field) {
+                        self.cancel_pending_mobile_text_touch();
+                        return false;
+                    }
+                    self.pending_mobile_text_touch = None;
+                    self.text_taps = None;
+                    self.set_focus(Some(field));
                 }
                 let ios_like = matches!(
                     self.text_shortcut_platform,

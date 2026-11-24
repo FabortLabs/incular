@@ -36,6 +36,17 @@ suite. Scratch fixtures and logs are in `.tmp/flutter350-behavior/` on the
 audit laptop; temporary targets were removed. No Flutter 3.50 runner was
 started: the reference is a source clone without its cached Dart SDK.
 
+## B01 remediation
+
+Touching another editable on Android or iOS no longer moves focus or
+publishes a new native text-input client before the tap is recognized.
+Cancel, movement past slop, or loss to another gesture leaves the
+current editor in place. Accepted taps still focus the second editor;
+the existing long-press and desktop-click suites also pass.
+The pinned authored Android test and the Rust B01 test both keep
+typing in the first editor after cancellation. Rust checks the second
+editor's selection and the native command queue as well.
+
 ## Focus and native editing lifecycle
 
 Flutter references in this report are relative to

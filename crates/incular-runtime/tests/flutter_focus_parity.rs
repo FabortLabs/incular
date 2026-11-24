@@ -13,14 +13,15 @@ use std::time::{Duration, Instant};
 
 #[test]
 fn canceled_touch_on_another_editable_keeps_current_focus() {
-    let field = |text| {
+    let [a, b] = ["a", "b"].map(TextEditingController::with_text);
+    let field = |controller: &TextEditingController| {
         Widget::from(
-            EditableText::new(TextEditingController::with_text(text))
+            EditableText::new(controller.clone())
                 .text_direction(TextDirection::Ltr)
                 .size(Size::new(180., 40.)),
         )
     };
-    let mut runtime = Runtime::new(Column::new([field("a"), field("b")]).into())
+    let mut runtime = Runtime::new(Column::new([field(&a), field(&b)]).into())
         .expect("mount two editable fields");
     runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
     let bounds = Constraints::tight(Size::new(180., 80.));
@@ -54,10 +55,21 @@ fn canceled_touch_on_another_editable_keeps_current_focus() {
     let original = runtime
         .focused_element()
         .expect("completed first tap focuses the first editable");
+    let _ = runtime.take_text_input_commands();
+    let b_selection = b.selection();
 
     touch(&mut runtime, &mut now, 60., PointerPhase::Down);
+    assert_eq!(runtime.focused_element(), Some(original));
+    assert_eq!(b.selection(), b_selection);
+    assert!(
+        runtime.take_text_input_commands().is_empty(),
+        "unrecognized touch cannot change the native text client"
+    );
     touch(&mut runtime, &mut now, 60., PointerPhase::Cancel);
     let after_cancel = runtime.focused_element();
+    assert_eq!(b.selection(), b_selection);
+    let _ = runtime.handle_input_at(InputEvent::Text("x".into()), now);
+    assert_eq!((a.text(), b.text()), ("ax".into(), "b".into()));
 
     now += Duration::from_millis(500);
     touch(&mut runtime, &mut now, 60., PointerPhase::Down);
