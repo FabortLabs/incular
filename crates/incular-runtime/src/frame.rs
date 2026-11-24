@@ -1841,6 +1841,12 @@ impl Runtime {
         }
     }
     pub(crate) fn set_focus(&mut self, next: Option<ElementId>) {
+        // Admit the new target before touching the old one. A hit on a
+        // disabled or excluded editor is not permission to retire the
+        // current native client or cancel its composing text.
+        if next.is_some_and(|target| !self.tree.can_request_focus(target)) {
+            return;
+        }
         // Explicit input (including clearing focus) wins over a pending initial
         // autofocus request, even when it leaves the focused element unchanged.
         self.initial_focus = InitialFocus::Settled;

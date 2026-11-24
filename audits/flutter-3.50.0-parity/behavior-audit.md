@@ -57,6 +57,16 @@ break intact. The pinned native formatter policy probe passed both
 cases. The platform text input, mobile touch, and editable widget
 interaction targets passed their focused checks.
 
+## F01 remediation
+
+Runtime checks eligibility before retiring the incumbent editor or its
+native client. A mouse press on a focus-excluded Flutter EditableText
+keeps the first editor and marked text through the click and subsequent
+commit. Incular now passes the same sequence, plus its explicit
+disabled-editor variant. The native client does not see a replacement,
+hide or clear command. The seven focused Rust targets passed 18 tests,
+including initial focus, hosted requests, and ordinary mobile taps.
+
 ## Focus and native editing lifecycle
 
 Flutter references in this report are relative to
