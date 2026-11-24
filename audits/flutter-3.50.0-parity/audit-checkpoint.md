@@ -598,3 +598,10 @@ regressions concern self-interpolation and image-only validation.
 bring complete pairs to 196/8,965 (148 match, 48 differ), with
 116 partial and 27 reference-only. New regressions pin unwanted
 shrink clipping, child constraints, and removal notifications.
+
+### Scrollable single-child reveal on both axes
+
+[Five exact upstream pairs](upstream-ensure-visible-single-child.md)
+all match, including reverse visibility policies, an animated reveal
+and a rotated child. Complete pairs reach 201/8,965 (153 match,
+48 differ); partial and reference-only counts are unchanged.
