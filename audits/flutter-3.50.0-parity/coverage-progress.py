@@ -41,7 +41,7 @@ f = Counter()
 for r in tsv("harness-dispositions.tsv"):
     key = r["file"], int(r["line"]), r["scenario"]
     assert key in fkeys and key not in known, key
-    assert r["status"] in {"match", "mismatch"}, r
+    assert r["status"] in {"match", "mismatch", "fixture-not-equivalent"}, r
     assert int(r["frames"]) > 0, r
     evidence_exists(r)
     known.add(key)

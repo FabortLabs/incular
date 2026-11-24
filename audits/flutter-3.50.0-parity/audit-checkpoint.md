@@ -209,6 +209,14 @@ unset versus true semantics enabled state; the tap action still matches.
 ### Existing frame harness: batch twelve
 
 [Navigation and semantics rechecks](frame-rechecks-batch12.md) bring the
-total to 64/253 (25.30%), 55 match and nine differ. The new mismatches are
-the fade-push timeline, Hero probe traces (actual flight not established)
+total to 63/253 valid paired outcomes (24.90%), 55 match and eight differ at that point. Notable results:
+the fade-push timeline, the non-equivalent Hero fixture
 and opacity in the PopScope fixture (back-block values matched). The repeated overlay match is not counted again.
+
+### Existing frame harness: batch thirteen and Hero fixture correction
+
+[Focus and input rechecks](frame-rechecks-batch13.md) add five matches.
+Only Incular configured a Hero flight controller in the original push
+fixture; the initial raw divergence is retained as non-equivalent, not
+counted as product behavior. The coverage script excludes such fixtures
+from valid paired outcomes.
