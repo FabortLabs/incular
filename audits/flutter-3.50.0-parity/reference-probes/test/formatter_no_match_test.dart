@@ -25,4 +25,24 @@ void main() {
       );
     },
   );
+
+  test('digitsOnly remaps reverse selection and active composition', () {
+    const proposal = TextEditingValue(
+      text: '1😀2β3',
+      selection: TextSelection(baseOffset: 5, extentOffset: 1),
+      composing: TextRange(start: 3, end: 5),
+    );
+    const expected = TextEditingValue(
+      text: '123',
+      selection: TextSelection(baseOffset: 2, extentOffset: 1),
+      composing: TextRange(start: 1, end: 2),
+    );
+    expect(
+      FilteringTextInputFormatter.digitsOnly.formatEditUpdate(
+        TextEditingValue.empty,
+        proposal,
+      ),
+      expected,
+    );
+  });
 }

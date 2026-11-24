@@ -1,5 +1,5 @@
 //! Retained Flutter text formatting compatibility examples omitted from the first slice.
-use incular_text::{TextEditingValue, TextSelection};
+use incular_text::{TextEditingValue, TextRange, TextSelection};
 use incular_widgets::{
     FilteringTextInputFormatter, LengthLimitingTextInputFormatter, TextInputFormatter,
 };
@@ -74,4 +74,28 @@ fn digits_only_erases_nonmatching_text_and_clamps_stranded_caret() {
     let f = FilteringTextInputFormatter::digits_only();
     let old = caret("42", 2);
     assert_eq!(f.format_edit_update(&old, &caret("X", 1)), caret("", 0));
+}
+
+#[test]
+fn digits_only_remaps_reverse_selection_and_partially_filtered_composition() {
+    let f = FilteringTextInputFormatter::digits_only();
+    let mut new = edit("1😀2β3", "1😀2β".len(), 1);
+    new.composing = Some(TextRange::new("1😀".len(), "1😀2β".len()));
+    let mut expected = edit("123", 2, 1);
+    expected.composing = Some(TextRange::new(1, 2));
+    assert_eq!(
+        f.format_edit_update(&TextEditingValue::empty(), &new),
+        expected
+    );
+}
+
+#[test]
+fn filtering_snaps_malformed_byte_offsets_before_remapping() {
+    let f = FilteringTextInputFormatter::digits_only();
+    let mut new = edit("1😀2", usize::MAX, 2); // Offset 2 splits the emoji.
+    new.composing = Some(TextRange::new(2, 5)); // The entire marked scalar is removed.
+    assert_eq!(
+        f.format_edit_update(&TextEditingValue::empty(), &new),
+        edit("12", 2, 1)
+    );
 }

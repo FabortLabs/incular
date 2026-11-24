@@ -14,7 +14,7 @@ use std::{
 use incular_core::{RestorationKey, RestorationScope};
 
 use crate::Widget;
-use incular_text::{TextEditingController, TextEditingValue};
+use incular_text::{TextEditingController, TextEditingValue, TextSelection};
 
 /// Stable identity for a field registered with a [`Form`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -1404,22 +1404,47 @@ impl TextInputFormatter for FilteringTextInputFormatter {
         _old_value: &TextEditingValue,
         new_value: &TextEditingValue,
     ) -> TextEditingValue {
-        let filtered: String = new_value
-            .text
-            .chars()
-            .filter(|&c| {
-                if self.allow {
-                    (self.filter)(c)
-                } else {
-                    !(self.filter)(c)
+        let source = &new_value.text;
+        let selection = new_value.selection.clamp_to(source);
+        let composing = new_value
+            .composing
+            .filter(|range| range.is_valid())
+            .map(|range| range.clamp_to(source));
+        let mut filtered = String::new();
+        let mut base = selection.base;
+        let mut extent = selection.extent;
+        let mut mapped_composing = composing;
+
+        // Compare with the original endpoints, not the already-shifted ones.
+        // After clamping, an endpoint either precedes a removed scalar or
+        // follows it; it cannot land inside that scalar's UTF-8 bytes.
+        for (offset, c) in source.char_indices() {
+            if (self.filter)(c) == self.allow {
+                filtered.push(c);
+                continue;
+            }
+            let width = c.len_utf8();
+            if offset < selection.base {
+                base -= width;
+            }
+            if offset < selection.extent {
+                extent -= width;
+            }
+            if let Some((original, mapped)) = composing.zip(mapped_composing.as_mut()) {
+                if offset < original.start {
+                    mapped.start -= width;
                 }
-            })
-            .collect();
+                if offset < original.end {
+                    mapped.end -= width;
+                }
+            }
+        }
+
         TextEditingValue {
             text: filtered,
-            selection: new_value.selection,
+            selection: TextSelection::new(base, extent),
             // Flutter reports a collapsed composing region as TextRange.empty.
-            composing: new_value.composing.filter(|range| !range.is_empty()),
+            composing: mapped_composing.filter(|range| !range.is_empty()),
         }
     }
 }
