@@ -719,3 +719,10 @@ render slot, table roles are absent, and LayoutBuilder drops baseline.
 bring complete pairs to 266/8,965 (208 match, 58 differ), with
 134 partial and 38 reference-only. Normal inherited changes
 are paired; Flutter's skipped-overlay cases remain reference-only.
+
+### LayoutBuilder stateful resizing
+
+[Five upstream dispositions](upstream-layoutbuilder-stateful-sizing.md)
+bring complete pairs to 268/8,965 (210 match, 58 differ), with
+135 partial and 40 reference-only. Resizing from either parent
+or child and scaling inherited text behave as expected.

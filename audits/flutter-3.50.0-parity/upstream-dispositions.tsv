@@ -437,3 +437,8 @@ packages/flutter/test/widgets/layout_builder_test.dart	289	LayoutBuilder and Inh
 packages/flutter/test/widgets/layout_builder_test.dart	319	LayoutBuilder rebuilds once in the same frame	paired-match	upstream-layoutbuilder-dependencies-and-hidden-boundary.md
 packages/flutter/test/widgets/layout_builder_test.dart	906	LayoutBuilder in a subtree that skips layout does not rebuild during the initial treewalk	reference-ran-incular-open	upstream-layoutbuilder-dependencies-and-hidden-boundary.md
 packages/flutter/test/widgets/layout_builder_test.dart	956	LayoutBuilder in a subtree that skips layout still rebuilds	reference-ran-incular-open	upstream-layoutbuilder-dependencies-and-hidden-boundary.md
+packages/flutter/test/widgets/layout_builder_test.dart	109	LayoutBuilder stateful child	paired-match	upstream-layoutbuilder-stateful-sizing.md
+packages/flutter/test/widgets/layout_builder_test.dart	216	LayoutBuilder stateful parent	paired-match	upstream-layoutbuilder-stateful-sizing.md
+packages/flutter/test/widgets/layout_builder_test.dart	352	LayoutBuilder does not dirty the render tree during the idle phase	reference-ran-incular-open	upstream-layoutbuilder-stateful-sizing.md
+packages/flutter/test/widgets/layout_builder_test.dart	378	LayoutBuilder can change size without rebuild	partial-match	upstream-layoutbuilder-stateful-sizing.md
+packages/flutter/test/widgets/layout_builder_test.dart	813	LayoutBuilder will only invoke builder if updateShouldRebuild returns true	reference-ran-incular-open	upstream-layoutbuilder-stateful-sizing.md
