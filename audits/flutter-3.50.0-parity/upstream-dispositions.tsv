@@ -578,3 +578,11 @@ packages/flutter/test/widgets/page_view_test.dart	202	PageView control test	pair
 packages/flutter/test/widgets/page_view_test.dart	267	PageView does not squish when overscrolled	paired-match	upstream-page-view-gestures.md
 packages/flutter/test/widgets/page_view_test.dart	361	PageController page stability	paired-mismatch	upstream-page-view-gestures.md
 packages/flutter/test/widgets/page_view_test.dart	485	Page changes at halfway point	paired-match	upstream-page-view-gestures.md
+packages/flutter/test/widgets/page_view_test.dart	591	PageView viewportFraction	paired-mismatch	upstream-page-view-fractions.md
+packages/flutter/test/widgets/page_view_test.dart	696	PageView small viewportFraction	paired-match	upstream-page-view-fractions.md
+packages/flutter/test/widgets/page_view_test.dart	739	PageView large viewportFraction	paired-match	upstream-page-view-fractions.md
+packages/flutter/test/widgets/page_view_test.dart	771	Updating PageView large viewportFraction	paired-match	upstream-page-view-fractions.md
+packages/flutter/test/widgets/page_view_test.dart	805	PageView large viewportFraction can scroll to the last page and snap	paired-match	upstream-page-view-fractions.md
+packages/flutter/test/widgets/page_view_test.dart	840	All visible pages are able to receive touch events	paired-match	upstream-page-view-fractions.md
+packages/flutter/test/widgets/page_view_test.dart	886	the current item remains centered on constraint change	paired-match	upstream-page-view-fractions.md
+packages/flutter/test/widgets/page_view_test.dart	928	PageView does not report page changed on overscroll	paired-match	upstream-page-view-fractions.md
