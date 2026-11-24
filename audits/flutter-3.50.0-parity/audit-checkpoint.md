@@ -513,3 +513,12 @@ partial and 22 reference-only. New tests expose lost merged heading
 levels and semantics from a singular fit; clamping differences are
 isolated to public precision at strict tolerances. The scheduler
 tests match both original fast and slow time-dilation cases.
+
+### Fit updates, overlays, scrolling, notifications and clipboard
+
+[Twenty-five upstream dispositions](upstream-fit-overlays-scroll-notifications-clipboard.md)
+bring complete pairs to 147/8,965 (106 match, 41 differ), with 62
+partial and 22 reference-only. New differences include retained
+FittedBox size on a fit change and Ctrl+A on obscured read-only
+text. Actual Windows wgpu readback finds a separate ColorFiltered
+bounds defect with a nonzero alpha translation.

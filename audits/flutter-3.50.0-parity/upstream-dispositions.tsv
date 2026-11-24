@@ -205,3 +205,28 @@ packages/flutter/test/scheduler/animation_test.dart	17	Check for a time dilation
 packages/flutter/test/scheduler/animation_test.dart	21	Can cancel queued callback	partial-mismatch	upstream-semantic-headings-clamping-and-dilation.md
 packages/flutter/test/scheduler/ticker_test.dart	118	Ticker can be sped up with time dilation	paired-match	upstream-semantic-headings-clamping-and-dilation.md
 packages/flutter/test/scheduler/ticker_test.dart	136	Ticker can be slowed down with time dilation	paired-match	upstream-semantic-headings-clamping-and-dilation.md
+packages/flutter/test/widgets/fitted_box_test.dart	41	Can contain child	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/fitted_box_test.dart	71	Child can cover	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/fitted_box_test.dart	396	Big child into small fitted box - hit testing	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/fitted_box_test.dart	487	Switching to and from BoxFit.scaleDown causes relayout	paired-mismatch	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/fractionally_sized_box_test.dart	9	FractionallySizedBox	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/fractionally_sized_box_test.dart	32	FractionallySizedBox alignment	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/fractionally_sized_box_test.dart	100	FractionallySizedBox does not crash at zero area	partial-match	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/overflow_box_test.dart	10	OverflowBox control test	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/overlay_portal_test.dart	104	The overlay child sees the right inherited widgets	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/overlay_portal_test.dart	765	show/hide works	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/overlay_portal_test.dart	810	overlayChildBuilder is not evaluated until show is called	partial-match	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/overlay_portal_test.dart	893	overlay child can be hit tested	partial-match	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/scroll_physics_test.dart	112	ScrollPhysics scrolling subclasses - Creating the simulation doesn't alter the velocity for time 0	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/scroll_physics_test.dart	140	overscroll is progressively harder	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/scroll_physics_test.dart	212	easing an overscroll meets less resistance than tensioning	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/scroll_physics_test.dart	234	no easing resistance for ScrollDecelerationRate.fast	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/scroll_physics_test.dart	252	overscroll a small list and a big list works the same way	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/notification_test.dart	15	Notification basics - dispatch	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/notification_test.dart	43	Notification basics - cancel	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/editable_text_test.dart	2788	Paste is shown only when there is something to paste	partial-match	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/editable_text_test.dart	3118	cut and paste are disabled in read only mode even if explicitly set	partial-match	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/editable_text_test.dart	3152	cut and copy are disabled in obscured mode even if explicitly set	partial-match	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/editable_text_test.dart	3235	select all does nothing if obscured and read-only, even if explicitly called	partial-mismatch	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/color_filter_test.dart	33	Color filter - sepia	partial-match	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/color_filter_test.dart	119	ColorFiltered does not crash at zero area	partial-match	upstream-fit-overlays-scroll-notifications-clipboard.md
