@@ -682,7 +682,7 @@ pub fn stack_child_geometry(
             (child_size, config.alignment.within(stack_size, child_size))
         }
         StackPosition::Positioned(position) => {
-            positioned_geometry(stack_size, child_size, position)
+            positioned_geometry(stack_size, child_size, position, config.alignment)
         }
     }
 }
@@ -949,13 +949,24 @@ pub fn positioned_axis_size(
 ///
 /// Offsets are kept verbatim, including negative values. When only an end
 /// offset applies, the measured size is subtracted from the end edge.
-fn positioned_axis_offset(parent: f32, child: f32, start: Option<f32>, end: Option<f32>) -> f32 {
+fn positioned_axis_offset(
+    parent: f32,
+    child: f32,
+    start: Option<f32>,
+    end: Option<f32>,
+    aligned: f32,
+) -> f32 {
     finite_offset(start)
         .or_else(|| finite_offset(end).map(|end| parent - end - child))
-        .unwrap_or(0.0)
+        .unwrap_or(aligned)
 }
 
-fn positioned_geometry(parent: Size, child: Size, position: Positioned) -> (Size, Offset) {
+fn positioned_geometry(
+    parent: Size,
+    child: Size,
+    position: Positioned,
+    alignment: Alignment,
+) -> (Size, Offset) {
     let width = positioned_axis_size(parent.width, position.left, position.right, position.width)
         .unwrap_or(child.width);
     let height = positioned_axis_size(
@@ -965,9 +976,23 @@ fn positioned_geometry(parent: Size, child: Size, position: Positioned) -> (Size
         position.height,
     )
     .unwrap_or(child.height);
-    let x = positioned_axis_offset(parent.width, width, position.left, position.right);
-    let y = positioned_axis_offset(parent.height, height, position.top, position.bottom);
-    (Size::new(width, height), Offset::new(x, y))
+    let size = Size::new(width, height);
+    let aligned = alignment.within(parent, size);
+    let x = positioned_axis_offset(
+        parent.width,
+        width,
+        position.left,
+        position.right,
+        aligned.x,
+    );
+    let y = positioned_axis_offset(
+        parent.height,
+        height,
+        position.top,
+        position.bottom,
+        aligned.y,
+    );
+    (size, Offset::new(x, y))
 }
 
 /// Returns `(leading, between)` main-axis space for a flex line. `flipped` is

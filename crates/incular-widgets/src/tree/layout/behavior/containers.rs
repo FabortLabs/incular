@@ -252,7 +252,7 @@ impl WidgetTree {
                         .collect(),
                 )
             }
-            RenderKind::Stack { .. } if children.is_empty() => {
+            RenderKind::Stack { .. } | RenderKind::IndexedStack { .. } if children.is_empty() => {
                 // Flutter stack.dart: a childless stack takes the biggest size
                 // its constraints allow, or the smallest when unbounded.
                 let size = if constraints.is_width_bounded() && constraints.is_height_bounded() {
@@ -262,7 +262,23 @@ impl WidgetTree {
                 };
                 (size, ChildOffsets::default())
             }
-            RenderKind::Stack { stack } => {
+            RenderKind::Stack { .. } | RenderKind::IndexedStack { .. } => {
+                // IndexedStack differs in painting and hit testing, not in
+                // how it measures and positions its retained children.
+                let stack = match *kind {
+                    RenderKind::Stack { stack } => stack,
+                    RenderKind::IndexedStack {
+                        alignment,
+                        fit,
+                        clip_behavior,
+                        ..
+                    } => incular_layout::Stack {
+                        alignment,
+                        fit,
+                        clip_behavior,
+                    },
+                    _ => unreachable!("handled only stack kinds"),
+                };
                 let non_positioned_constraints = match stack.fit {
                     StackFit::Loose => constraints.loosen(),
                     StackFit::Expand => Constraints::tight(constraints.biggest()),
@@ -356,43 +372,6 @@ impl WidgetTree {
                     );
                 }
                 (final_size, offsets)
-            }
-            RenderKind::IndexedStack { alignment, fit, .. } => {
-                // Fit applies the established Stack policy to every child
-                // (all children are measured so inactive ones keep state
-                // and identity), then the widest/tallest drives the box.
-                let child_constraints = match fit {
-                    StackFit::Loose => constraints.loosen(),
-                    StackFit::Expand => Constraints::tight(constraints.biggest()),
-                    StackFit::Passthrough => constraints,
-                };
-                let mut natural = Size::ZERO;
-                for child in children {
-                    self.layout_render(*child, child_constraints)?;
-                    let child_size = self
-                        .render_live(child, "retained render must remain live")
-                        .size;
-                    natural = Size::new(
-                        natural.width.max(child_size.width),
-                        natural.height.max(child_size.height),
-                    );
-                }
-                let size = constraints.constrain(if matches!(fit, StackFit::Expand) {
-                    constraints.biggest()
-                } else {
-                    natural
-                });
-                let offsets = children
-                    .iter()
-                    .map(|child| {
-                        alignment.within(
-                            size,
-                            self.render_live(child, "retained render must remain live")
-                                .size,
-                        )
-                    })
-                    .collect();
-                (size, offsets)
             }
             RenderKind::SafeArea {
                 minimum,

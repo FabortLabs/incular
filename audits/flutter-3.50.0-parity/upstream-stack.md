@@ -26,3 +26,14 @@ An authored pinned Flutter test and an actual hidden-window wgpu readback compar
 At (75,40), outside the Stack's right edge but inside the red child, HardEdge with a paint-only shift is red in Flutter, black in Incular. The (65,40) interior red control and the adjacent black samples match. The directly Positioned overflowing child clips in both, and Clip.none exposes both samples for both variants. This distinguishes an unnecessary clip from a wrong child transform or wrong surface size. Flutter guards with a layout-overflow flag before stacking a clip; Incular has a clip layer for any non-None Stack.
 
 Reference: run-reference-probe.ps1 -Test stack_overflow_raster_test.dart. Incular: set INCULAR_DESKTOP_LIVE_TESTS=1 and run cargo test --locked -p incular-desktop --test flutter350_stack_overflow_raster -- --nocapture.
+
+## Positioned geometry repair
+
+Both retained stacks now measure and place Positioned children with the
+same layout path. An axis with no leading or trailing inset uses the
+configured alignment and the child's final measured size, even when
+that size was explicit. The absolute subset at :500 now passes, along
+with IndexedStack's explicit (10,20,30,40) geometry control. The focused
+layout and existing widget stack suites passed 3 and 23 tests. The
+directional default and missing-Directionality tests are still open;
+this fix does not introduce directional positioning APIs.
