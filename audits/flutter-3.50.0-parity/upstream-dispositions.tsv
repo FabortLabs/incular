@@ -513,3 +513,11 @@ packages/flutter/test/animation/animation_style_test.dart	126	AnimationStyle imp
 packages/flutter/test/widgets/tap_region_test.dart	1262	TapRegionSurface calls onTapOutside for semantics tap outside region	paired-mismatch	upstream-tap-region-semantic-actions.md
 packages/flutter/test/widgets/tap_region_test.dart	1313	TapRegionSurface does not call onTapOutside for semantics tap inside region	paired-match	upstream-tap-region-semantic-actions.md
 packages/flutter/test/widgets/tap_region_test.dart	1358	TapRegionSurface calls onTapOutside for semantics longPress outside region	paired-mismatch	upstream-tap-region-semantic-actions.md
+packages/flutter/test/widgets/custom_paint_test.dart	43	Control test for custom painting	paired-match	upstream-custom-paint.md
+packages/flutter/test/widgets/custom_paint_test.dart	58	Throws FlutterError on custom painter incorrect restore/save calls	reference-ran-incular-open	upstream-custom-paint.md
+packages/flutter/test/widgets/custom_paint_test.dart	124	CustomPaint sizing	paired-match	upstream-custom-paint.md
+packages/flutter/test/widgets/custom_paint_test.dart	166	Raster cache hints	reference-ran-incular-open	upstream-custom-paint.md
+packages/flutter/test/widgets/custom_paint_test.dart	193	Raster cache hints cannot be set with null painters	reference-ran-incular-open	upstream-custom-paint.md
+packages/flutter/test/widgets/custom_paint_test.dart	198	RenderCustomPaint consults preferred size for intrinsics when it has no child	partial-match	upstream-custom-paint.md
+packages/flutter/test/widgets/custom_paint_test.dart	206	RenderCustomPaint does not return infinity for its intrinsics	partial-match	upstream-custom-paint.md
+packages/flutter/test/widgets/custom_paint_test.dart	214	CustomPaint does not crash at zero area	partial-match	upstream-custom-paint.md
