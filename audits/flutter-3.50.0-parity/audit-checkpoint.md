@@ -546,3 +546,10 @@ bring complete pairs to 160/8,965 (118 match, 42 differ), with 83
 partial and 27 reference-only. New independent probes reproduce
 zero-count infinite repeat, direct focus lost after traversal exclusion,
 different restoration write timing, and default matrix sampling.
+
+### RawTooltip input modes and held-press timing
+
+[Five upstream pairs](upstream-raw-tooltip-trigger-and-hold.md) bring
+complete pairs to 165/8,965 (122 match, 43 differ). RawTooltip tap,
+manual, and release controls match; the held long press mounts the
+bubble too late and misses the compared dismissal deadline.

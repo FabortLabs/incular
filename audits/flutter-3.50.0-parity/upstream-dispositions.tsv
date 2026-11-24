@@ -269,3 +269,8 @@ packages/flutter/test/rendering/flex_test.dart	1256	Negative RenderFlex.spacing 
 packages/flutter/test/widgets/baseline_test.dart	115	Baseline does not crash at zero area	partial-match	upstream-repeat-focus-restoration-flex-and-image-filter.md
 packages/flutter/test/widgets/image_filter_test.dart	104	Image filter - matrix	partial-mismatch	upstream-repeat-focus-restoration-flex-and-image-filter.md
 packages/flutter/test/widgets/image_filter_test.dart	158	Image filter - enabled and disabled	partial-match	upstream-repeat-focus-restoration-flex-and-image-filter.md
+packages/flutter/test/widgets/raw_tooltip_test.dart	573	RawTooltip dismiss countdown begins on long press release	paired-mismatch	upstream-raw-tooltip-trigger-and-hold.md
+packages/flutter/test/widgets/raw_tooltip_test.dart	1757	Tooltip triggers on tap when trigger mode is tap	paired-match	upstream-raw-tooltip-trigger-and-hold.md
+packages/flutter/test/widgets/raw_tooltip_test.dart	1767	Tooltip triggers on long press when mode is long press	paired-match	upstream-raw-tooltip-trigger-and-hold.md
+packages/flutter/test/widgets/raw_tooltip_test.dart	1794	Tooltip does not trigger when trigger mode is manual	paired-match	upstream-raw-tooltip-trigger-and-hold.md
+packages/flutter/test/widgets/raw_tooltip_test.dart	2184	Tooltip trigger mode ignores mouse events	paired-match	upstream-raw-tooltip-trigger-and-hold.md
