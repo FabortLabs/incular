@@ -302,3 +302,9 @@ with three additional reference-only outcomes.
 [Five pinned strict samples](frame-curves-and-tweens.md) all match.
 Current checkpoint: 113/253 valid paired frame registrations (44.66%),
 106 match and seven differ.
+
+### Focused switcher and animated-child fixtures
+
+[Five strict switcher checks](frame-switchers-recheck.md) match. Valid
+paired frame registrations: 118/253 (46.64%), 111 match and seven differ.
+Upstream paired registrations: 37/8,965.
