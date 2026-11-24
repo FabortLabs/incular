@@ -22,7 +22,7 @@ void main() {
               SizedBox(width: 28, height: 20, child: ColoredBox(color: color)),
         )
         .toList();
-    for (final i in [0, 1, 2, 0]) {
+    for (final i in <int?>[0, null, 1, 2, null, 0]) {
       await tester.pumpWidget(
         Directionality(
           textDirection: TextDirection.ltr,
@@ -67,7 +67,7 @@ void main() {
         final offset = (y * 64 + x) * 4;
         expect(
           List.generate(4, (k) => bytes.getUint8(offset + k)),
-          inside ? _rgba[i] : const [0, 0, 0, 255],
+          inside && i != null ? _rgba[i] : const [0, 0, 0, 255],
           reason: 'selected index $i, pixel ($x,$y)',
         );
       }

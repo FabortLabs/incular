@@ -475,7 +475,8 @@ impl WidgetTree {
             WidgetKind::Flex { axis, .. } => {
                 self.devtools_flex_details(element, *axis, constraints, size)
             }
-            WidgetKind::Stack { .. } | WidgetKind::IndexedStack { .. } => {
+            kind @ (WidgetKind::Stack { .. } | WidgetKind::IndexedStack { .. }) => {
+                let indexed = matches!(kind, WidgetKind::IndexedStack { .. });
                 let (alignment, index) = self
                     .dev_renders()
                     .get(element.render.0)
@@ -483,11 +484,11 @@ impl WidgetTree {
                         RenderKind::Stack { stack } => Some((stack.alignment, None)),
                         RenderKind::IndexedStack {
                             alignment, index, ..
-                        } => Some((*alignment, Some(*index))),
+                        } => Some((*alignment, *index)),
                         _ => None,
                     })
                     .unwrap_or((Alignment::TOP_LEFT, None));
-                self.devtools_stack_details(element, alignment, index)
+                self.devtools_stack_details(element, alignment, indexed, index)
             }
             WidgetKind::Positioned {
                 left,
@@ -659,6 +660,7 @@ impl WidgetTree {
         &self,
         element: &crate::tree::Element,
         alignment: incular_config::Alignment,
+        indexed: bool,
         indexed_active: Option<usize>,
     ) -> LayoutDetails {
         let children = element
@@ -690,7 +692,7 @@ impl WidgetTree {
                         render.size.width,
                         render.size.height,
                     ],
-                    painted: indexed_active.is_none_or(|active| active == index),
+                    painted: !indexed || indexed_active == Some(index),
                     left,
                     right,
                     top,

@@ -167,11 +167,12 @@ impl Positioned {
 
 widget_from_kind!(Positioned => Positioned { left, top, right, bottom, width, height, child });
 
-/// A Stack that shows only one child at a time while keeping all children laid out.
+/// A Stack that shows at most one child while keeping all children laid out.
 #[derive(Clone, Debug, PartialEq, TypedBuilder, SmartDefault)]
 pub struct IndexedStack {
-    #[builder(default)]
-    index: usize,
+    #[builder(default = Some(0), setter(into))]
+    #[default(Some(0))]
+    index: Option<usize>,
     #[builder(default, setter(strip_option))]
     alignment: Option<Alignment>,
     #[builder(default = StackFit::Loose)]
@@ -192,10 +193,10 @@ impl IndexedStack {
         }
     }
 
-    /// Sets the active index.
+    /// Sets the active index. Pass `None` to hide every child without unmounting them.
     #[must_use]
-    pub fn index(mut self, index: usize) -> Self {
-        self.index = index;
+    pub fn index(mut self, index: impl Into<Option<usize>>) -> Self {
+        self.index = index.into();
         self
     }
 
@@ -220,8 +221,16 @@ impl IndexedStack {
         self
     }
 
+    /// Returns the configured index, or zero if no index is selected.
+    /// Use `get_selected_index` to distinguish an absent selection from index zero.
     #[must_use]
     pub fn get_index(&self) -> usize {
+        self.index.unwrap_or(0)
+    }
+
+    /// Returns the configured selection. `None` hides all children.
+    #[must_use]
+    pub fn get_selected_index(&self) -> Option<usize> {
         self.index
     }
 }

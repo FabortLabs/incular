@@ -21,7 +21,10 @@ const VIEW: Size = Size {
     height: 600.,
 };
 const STACK: u64 = 99;
-fn stack(children: impl IntoIterator<Item = impl Into<Widget>>, index: usize) -> Widget {
+fn stack(
+    children: impl IntoIterator<Item = impl Into<Widget>>,
+    index: impl Into<Option<usize>>,
+) -> Widget {
     Widget::from(IndexedStack::new(children).index(index)).with_key(Key::Value(STACK))
 }
 fn scene(w: impl Into<Widget>) -> Widget {
@@ -74,6 +77,56 @@ fn empty_root_mounts_without_exception() {
 #[test]
 fn empty_centered_stack_mounts_without_exception() {
     host(Center::new(stack(Vec::<Widget>::new(), 0)));
+}
+
+#[test]
+fn null_index_keeps_two_shrink_children_without_an_error() {
+    let r = host(stack([SizedBox::new(), SizedBox::new()], None));
+    assert_eq!(bounds(&r, STACK).size, VIEW);
+    assert_eq!(
+        IndexedStack::new(Vec::<Widget>::new()).get_selected_index(),
+        Some(0)
+    );
+    assert_eq!(
+        IndexedStack::builder()
+            .index(None)
+            .build()
+            .get_selected_index(),
+        None
+    );
+    assert_eq!(
+        IndexedStack::builder()
+            .index(1)
+            .build()
+            .get_selected_index(),
+        Some(1)
+    );
+}
+
+#[test]
+fn null_index_still_sizes_to_child_but_cannot_receive_a_tap() {
+    let taps = Rc::new(Cell::new(0));
+    let child = GestureDetector::new(Widget::box_(Size::new(200., 200.), Color::WHITE)).on_tap({
+        let taps = taps.clone();
+        move || taps.set(taps.get() + 1)
+    });
+    let make = |index| Center::new(stack([child.clone()], index));
+    let mut r = host(make(None));
+    let visible_bounds = bounds(&r, STACK);
+    assert_eq!(visible_bounds.size, Size::new(200., 200.));
+    let center = visible_bounds.origin + Offset::new(100., 100.);
+    tap(&mut r, 1, center);
+    assert_eq!(taps.get(), 0);
+    change(&mut r, make(Some(0)));
+    tap(&mut r, 2, center);
+    assert_eq!(taps.get(), 1, "selected branch is an active control");
+    change(&mut r, make(None));
+    tap(&mut r, 3, center);
+    assert_eq!(
+        taps.get(),
+        1,
+        "hiding again removes the retained hit target"
+    );
 }
 
 struct Trace(usize, Rc<RefCell<Vec<usize>>>);
@@ -394,4 +447,43 @@ fn hidden_focus_widget_cannot_claim_focus_via_external_node() {
         actual,
         [[true, false], [true, false], [false, true], [false, true]]
     );
+}
+
+#[test]
+fn deselecting_detaches_retained_paint_and_focus_but_preserves_the_child() {
+    use incular_rendering::PaintCommand;
+    let marker = Color::rgba(23, 49, 219, 255);
+    let node = FocusNode::new();
+    let child = Widget::from(
+        incular_widgets::Focus::new(Widget::box_(Size::new(30., 20.), marker)).node(node.clone()),
+    )
+    .with_key(Key::Value(1));
+    let make = |index| Center::new(stack([child.clone()], index));
+    let mut r = Runtime::new(scene(make(Some(0)))).unwrap();
+    let contains_marker = |list: &DisplayList| {
+        list.commands()
+            .iter()
+            .any(|command| matches!(command, PaintCommand::Rect { color, .. } if *color == marker))
+    };
+    let (first, _) = r.run_frame(Constraints::tight(VIEW)).unwrap();
+    assert!(contains_marker(&first));
+    let child_id = r.tree().element_with_key(&Key::Value(1)).unwrap();
+    node.request_focus();
+    frame(&mut r);
+    assert!(node.has_focus());
+
+    let root = r.tree().root().unwrap();
+    r.schedule_update(root, scene(make(None))).unwrap();
+    let (hidden, _) = r.run_frame(Constraints::tight(VIEW)).unwrap();
+    assert!(!contains_marker(&hidden));
+    assert!(!node.has_focus());
+    node.request_focus();
+    frame(&mut r);
+    assert!(!node.has_focus());
+    assert_eq!(r.tree().element_with_key(&Key::Value(1)), Some(child_id));
+
+    r.schedule_update(root, scene(make(Some(0)))).unwrap();
+    let (restored, _) = r.run_frame(Constraints::tight(VIEW)).unwrap();
+    assert!(contains_marker(&restored));
+    assert_eq!(r.tree().element_with_key(&Key::Value(1)), Some(child_id));
 }

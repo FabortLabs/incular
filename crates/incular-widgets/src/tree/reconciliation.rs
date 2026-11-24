@@ -2459,7 +2459,7 @@ impl WidgetTree {
             .object;
         match *object.kind() {
             RenderKind::IndexedStack { index, .. } => {
-                let selected = child_layers.get(index).copied();
+                let selected = index.and_then(|slot| child_layers.get(slot)).copied();
                 child_layers.clear();
                 child_layers.extend(selected);
             }

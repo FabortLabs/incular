@@ -291,9 +291,8 @@ impl WidgetTree {
         }
         if let WidgetKind::IndexedStack { index, .. } = entry.widget.kind() {
             return Cow::Borrowed(
-                entry
-                    .children
-                    .get(*index)
+                index
+                    .and_then(|slot| entry.children.get(slot))
                     .map(std::slice::from_ref)
                     .unwrap_or_default(),
             );

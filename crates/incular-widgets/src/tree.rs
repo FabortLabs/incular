@@ -732,7 +732,7 @@ pub enum RenderKind {
     },
     IndexedStack {
         alignment: Alignment,
-        index: usize,
+        index: Option<usize>,
         fit: StackFit,
         clip_behavior: Clip,
     },

@@ -43,3 +43,24 @@ on each retained selection (0, 1, 2, 0) and the three cold mounts.
 The focused runtime suite at this point passes nine tests; four separate
 checks for focus state, Positioned geometry, and positive invalid index
 still fail. The repair does not change those behaviors.
+
+## Explicit no selection
+
+The pinned originals at lines 138, 167 and 378 were rerun successfully.
+Lines 138 and 378 now pair: a stack with no selection keeps the 200×200 child
+layout without accepting its tap, and two shrink children mount without an
+error. A separate retained check proves the selected child's element stays
+mounted while its paint, focus and hit target are excluded. The line 167
+Flutter finder itself has no Rust equivalent; the retained check only
+partially covers that registration.
+
+The pinned Flutter raster fixture and the native Windows wgpu target now
+agree at all seven sampled pixels over six retained frames: 0 → none → 1 →
+2 → none → 0. They check inside, adjacent outside and edge pixels; both
+unselected frames are entirely background at the sampled positions. The
+three original cold-mount color controls still pass.
+
+Across the focused IndexedStack runtime and Stack widget targets, 39 Rust
+checks passed. The sole red check is still the deliberate divergence for a
+positive out-of-range index. No-selection is explicit and does not depend
+on the out-of-range behavior.

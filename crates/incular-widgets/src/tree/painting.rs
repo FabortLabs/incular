@@ -14,8 +14,8 @@ use super::text::{
 /// and retain any pending paint until their layer is attached again.
 fn visible_paint_children(node: &RenderNode) -> &[RenderObjectId] {
     if let RenderKind::IndexedStack { index, .. } = node.object.kind() {
-        node.children
-            .get(*index)
+        index
+            .and_then(|slot| node.children.get(slot))
             .map(std::slice::from_ref)
             .unwrap_or_default()
     } else {

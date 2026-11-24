@@ -125,7 +125,7 @@ impl WidgetTree {
             };
             match ancestor.widget.kind() {
                 WidgetKind::IndexedStack { index, .. }
-                    if ancestor.children.get(*index) != Some(&current) =>
+                    if index.and_then(|slot| ancestor.children.get(slot)) != Some(&current) =>
                 {
                     return false;
                 }
@@ -708,9 +708,8 @@ impl WidgetTree {
             }
             let excluded_focus = excluded_focus || !descendants_are_focusable;
             let focus_children: &[ElementId] = match element.widget.kind() {
-                WidgetKind::IndexedStack { index, .. } => element
-                    .children
-                    .get(*index)
+                WidgetKind::IndexedStack { index, .. } => index
+                    .and_then(|slot| element.children.get(slot))
                     .map_or(&[], std::slice::from_ref),
                 _ => &element.children,
             };

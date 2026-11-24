@@ -26,7 +26,7 @@ fn capture(renderer: &mut WgpuRenderer, runtime: &mut Runtime) -> Vec<u8> {
     assert_eq!((pixels.width, pixels.height), (WIDTH, HEIGHT));
     pixels.rgba8
 }
-fn scene(children: &[Widget], index: usize) -> Widget {
+fn scene(children: &[Widget], index: impl Into<Option<usize>>) -> Widget {
     Center::new(IndexedStack::new(children.iter().cloned()).index(index)).into()
 }
 
@@ -71,7 +71,10 @@ fn selected_color_replaces_previous_raster_without_affecting_edges() {
     }
     let mut live = Runtime::new(scene(&children, 0)).unwrap();
     let mut mismatches = Vec::new();
-    for (frame, i) in [0, 1, 2, 0].into_iter().enumerate() {
+    for (frame, i) in [Some(0), None, Some(1), Some(2), None, Some(0)]
+        .into_iter()
+        .enumerate()
+    {
         if frame != 0 {
             let root = live.tree().root().unwrap();
             live.schedule_update(root, scene(&children, i)).unwrap();
@@ -86,7 +89,7 @@ fn selected_color_replaces_previous_raster_without_affecting_edges() {
             (18, 13, false),
             (45, 34, false),
         ] {
-            let expected = if inside { RGBA[i] } else { [0, 0, 0, 255] };
+            let expected = i.filter(|_| inside).map_or([0, 0, 0, 255], |i| RGBA[i]);
             let actual = sample(&pixels, x, y);
             if actual != expected {
                 mismatches.push((frame, i, x, y, actual, expected));
