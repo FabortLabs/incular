@@ -51,3 +51,5 @@ packages/flutter/test/widgets/shortcuts_test.dart	1425	handles repeated events	p
 packages/flutter/test/widgets/shortcuts_test.dart	1446	rejects repeated events if requested	paired-match	upstream-shortcut-comparisons.md
 packages/flutter/test/scheduler/binding_test.dart	44	Adding a persistent frame callback during a persistent frame callback	paired-match	scheduler-callback-phases-comparisons.md
 packages/flutter/test/widgets/sliver_semantics_test.dart	246	Offscreen sliver are hidden in semantics tree	paired-mismatch	offscreen-sliver-semantics-comparisons.md
+packages/flutter/test/widgets/scroll_physics_test.dart	376	on leading edge overscroll	partial-mismatch	upstream-rubber-band-comparisons.md
+packages/flutter/test/widgets/scroll_physics_test.dart	407	on trailing edge overscroll	partial-mismatch	upstream-rubber-band-comparisons.md

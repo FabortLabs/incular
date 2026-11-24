@@ -388,3 +388,11 @@ bouncing spring return.
 text and physics frame registration files are fully dispositioned.
 Unicode caret units were normalized in the fixtures only; zero-speed
 bouncing beyond a bound shows a real position, velocity and completion gap.
+
+### Implicit, layout, semantics, and upstream rubber band controls
+
+[Twenty more frame pairs](frame-implicit-layout-semantics.md) match. Frame coverage:
+228/253 (90.12%), 215 match and 13 differ. Two [upstream rubber-band
+cases](upstream-rubber-band-comparisons.md) have numeric mismatches but no
+equivalent public concrete simulation query in Rust; they are partial
+and excluded from the 46 fully paired upstream registrations.
