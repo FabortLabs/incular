@@ -41,4 +41,27 @@ void main() {
     expect(deferred.formatEditUpdate(atLimit, insert), atLimit);
     expect(unlimited.formatEditUpdate(atLimit, insert), insert);
   });
+
+  test('oversize replacement uses different enforced and deferred guards', () {
+    final enforced = LengthLimitingTextInputFormatter(
+      2,
+      maxLengthEnforcement: MaxLengthEnforcement.enforced,
+    );
+    final deferred = LengthLimitingTextInputFormatter(
+      2,
+      maxLengthEnforcement: MaxLengthEnforcement.truncateAfterCompositionEnds,
+    );
+    const selected = TextEditingValue(
+      text: 'ab',
+      selection: TextSelection(baseOffset: 0, extentOffset: 1),
+    );
+    expect(enforced.formatEditUpdate(selected, edit('aXYZ', 4)), edit('aX', 2));
+    expect(deferred.formatEditUpdate(selected, edit('aXYZ', 4)), selected);
+
+    final atLimit = edit('🦄b', 2);
+    expect(enforced.formatEditUpdate(atLimit, edit('🦄Xb', 3)), atLimit);
+    expect(deferred.formatEditUpdate(atLimit, edit('🦄Xb', 3)), atLimit);
+    expect(enforced.formatEditUpdate(atLimit, edit('🦄X', 3)), edit('🦄X', 3));
+    expect(deferred.formatEditUpdate(atLimit, edit('🦄X', 3)), edit('🦄X', 3));
+  });
 }

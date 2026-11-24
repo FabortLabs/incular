@@ -127,3 +127,34 @@ fn enforced_deferred_and_unlimited_policies_distinguish_active_and_committed_com
         [full.clone(), full]
     );
 }
+
+#[test]
+fn oversize_replacement_of_selected_text_uses_policy_specific_guard() {
+    let enforced = LengthLimitingTextInputFormatter::new(2);
+    let deferred = LengthLimitingTextInputFormatter::with_enforcement(
+        2,
+        MaxLengthEnforcement::TruncateAfterCompositionEnds,
+    );
+    let selected = editing("ab", 0, 1);
+    let oversize = editing("aXYZ", 4, 4);
+    assert_eq!(
+        enforced.format_edit_update(&selected, &oversize),
+        editing("aX", 2, 2)
+    );
+    assert_eq!(deferred.format_edit_update(&selected, &oversize), selected);
+
+    let exact = editing("🦄b", "🦄".len(), "🦄".len());
+    let insert = editing("🦄Xb", "🦄X".len(), "🦄X".len());
+    assert_eq!(enforced.format_edit_update(&exact, &insert), exact);
+    assert_eq!(deferred.format_edit_update(&exact, &insert), exact);
+
+    let exactly_two = editing("🦄X", "🦄X".len(), "🦄X".len());
+    assert_eq!(
+        enforced.format_edit_update(&exact, &exactly_two),
+        exactly_two
+    );
+    assert_eq!(
+        deferred.format_edit_update(&exact, &exactly_two),
+        exactly_two
+    );
+}

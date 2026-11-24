@@ -30,3 +30,26 @@ All fifteen remaining original formatter registrations passed, with the duplicat
 Additional paired control (not an original test registration): when digitsOnly sees a proposal 'X' with no matches, both frameworks produce empty text, not the old '42'. Flutter clamps the caret to 0; Rust leaves it at 1 in the empty value. The authored test verifies this independently of a downstream text widget.
 
 Run Flutter with run-reference-probe.ps1 -Test formatter_no_match_test.dart and Rust with cargo test --locked -p incular-widgets --test flutter350_upstream_formatter_filter_edges -- --nocapture.
+
+## Remediation after the audit checkpoint
+
+The observations above preserve the original baseline. The filtering fix
+(`51fbd720`) maps the two selection endpoints and the two composing
+endpoints in one UTF-8 traversal. The pinned authored probe and Rust agree
+when filtering a supplementary scalar and a BMP scalar out of a mixed
+reverse selection with active composition. Rust additionally checks snapping
+malformed byte offsets and dropping a composing range that becomes empty.
+This does not implement Dart regex/replacement-string APIs.
+
+The length-limiter fix preserves the previous value for an overflowing edit
+when already at the grapheme limit and the policy's guard applies. The
+enforced policy uses a collapsed old selection; deferred uses absence of
+old active composition. Both pinned authored cases passed, including
+multibyte input at exactly the grapheme limit and the oversized replacement
+of a noncollapsed old selection. The five named formatter targets pass 31
+tests, and the retained editable widget's formatter-pipeline test passes.
+
+Focused Rust targets: `flutter350_services_text_formatter_parity`,
+`flutter350_upstream_formatter_filter_edges`, `flutter350_upstream_text_formatters`,
+`flutter_text_formatters`, `length_formatter`, and
+`editable_text_interaction::input_formatters_apply_in_order_to_user_edits_only`.

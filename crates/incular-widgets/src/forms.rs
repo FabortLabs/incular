@@ -1463,8 +1463,8 @@ pub enum MaxLengthEnforcement {
 
 /// Limits text to extended grapheme clusters (user-perceived characters).
 /// Offsets remain UTF-8 byte offsets. The incoming selection is clamped to the
-/// output; invalid or empty composition ranges are removed. Deferred enforcement
-/// preserves active composition and truncates on its first non-composing update.
+/// output; invalid or empty composition ranges are removed. When an over-limit
+/// edit is rejected, the previous value is returned unchanged.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LengthLimitingTextInputFormatter {
     pub max_length: usize,
@@ -1492,7 +1492,7 @@ impl LengthLimitingTextInputFormatter {
 impl TextInputFormatter for LengthLimitingTextInputFormatter {
     fn format_edit_update(
         &self,
-        _old_value: &TextEditingValue,
+        old_value: &TextEditingValue,
         new_value: &TextEditingValue,
     ) -> TextEditingValue {
         let mut value = new_value.clone();
@@ -1501,19 +1501,39 @@ impl TextInputFormatter for LengthLimitingTextInputFormatter {
             .filter(|range| range.is_valid())
             .map(|range| range.clamp_to(&value.text))
             .filter(|range| !range.is_empty());
-        let enforce = match self.max_length_enforcement {
-            MaxLengthEnforcement::None => false,
-            MaxLengthEnforcement::Enforced => true,
-            MaxLengthEnforcement::TruncateAfterCompositionEnds => value.composing.is_none(),
-        };
         // Each grapheme cluster is at least one byte, so text no longer than
         // `max_length` bytes never needs segmenting.
-        if enforce && value.text.len() > self.max_length {
-            let end = icu_segmenter::GraphemeClusterSegmenter::new()
+        if self.max_length_enforcement != MaxLengthEnforcement::None
+            && value.text.len() > self.max_length
+        {
+            let segmenter = icu_segmenter::GraphemeClusterSegmenter::new();
+            let end = segmenter
                 .segment_str(&value.text)
                 .nth(self.max_length)
                 .unwrap_or(value.text.len());
-            value.text.truncate(end);
+            if end < value.text.len() {
+                let (reject_at_limit, truncate) = match self.max_length_enforcement {
+                    MaxLengthEnforcement::None => (false, false),
+                    MaxLengthEnforcement::Enforced => (old_value.selection.is_collapsed(), true),
+                    MaxLengthEnforcement::TruncateAfterCompositionEnds => {
+                        let was_composing = old_value.composing.is_some_and(|range| {
+                            range.is_valid() && !range.clamp_to(&old_value.text).is_empty()
+                        });
+                        (!was_composing, value.composing.is_none())
+                    }
+                };
+                if reject_at_limit
+                    && self.max_length != 0
+                    && old_value.text.len() >= self.max_length
+                    && segmenter.segment_str(&old_value.text).nth(self.max_length)
+                        == Some(old_value.text.len())
+                {
+                    return old_value.clone();
+                }
+                if truncate {
+                    value.text.truncate(end);
+                }
+            }
         }
         value.selection = value.selection.clamp_to(&value.text);
         value.composing = value
