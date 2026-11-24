@@ -44,6 +44,7 @@ dev_dependencies:
     path: '$flutterGoldens'
 "@ | Set-Content "$scratch/pubspec.yaml" -Encoding utf8
 
+$previousFlutterRoot = $env:FLUTTER_ROOT
 $env:CI = 'true'
 $env:FLUTTER_SUPPRESS_ANALYTICS = 'true'
 Push-Location $scratch
@@ -51,7 +52,26 @@ try {
     & $flutter pub get --offline *> pub.log
     if ($LASTEXITCODE -ne 0) { throw "Offline Flutter dependencies failed; see $scratch/pub.log" }
     Write-Output "Upstream run: $scratch"
-    & $flutter test --no-pub $original --name $pattern --reporter expanded 2>&1 |
+    # Invoke the pinned tool directly so cmd.exe cannot strip the ^ anchor
+    # from a single short name or interpret regex characters as shell syntax.
+    $env:FLUTTER_ROOT = $reference
+    $dart = Join-Path $reference 'bin/cache/dart-sdk/bin/dart.exe'
+    $tool = Join-Path $reference 'bin/cache/flutter_tools.snapshot'
+    $toolPackages = Join-Path $reference 'packages/flutter_tools/.dart_tool/package_config.json'
+    & $dart "--packages=$toolPackages" $tool test --no-pub $original --name $pattern --reporter expanded 2>&1 |
         Tee-Object -FilePath 'result.log'
-    exit $LASTEXITCODE
-} finally { Pop-Location }
+    $testExitCode = $LASTEXITCODE
+    if ($testExitCode -ne 0) { exit $testExitCode }
+    $reported = @(Get-Content 'result.log' | ForEach-Object {
+        if ($_ -match '^\d+:\d+ \+\d+: (?<testName>.+)$') {
+            $name = $Matches.testName
+            if (-not $name.StartsWith('loading ') -and $name -ne 'All tests passed!') { $name }
+        }
+    })
+    if ($reported.Count -ne $FullName.Count -or @($FullName | Where-Object { $_ -cnotin $reported }).Count) {
+        throw "Selected test names do not match the expanded reporter: $($reported -join '; ')"
+    }
+} finally {
+    $env:FLUTTER_ROOT = $previousFlutterRoot
+    Pop-Location
+}
