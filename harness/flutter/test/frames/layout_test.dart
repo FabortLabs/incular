@@ -1,3 +1,6 @@
+import 'dart:ui' as ui;
+
+import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter/widgets.dart';
 
 import 'recorder.dart';
@@ -139,30 +142,67 @@ void main() {
   });
 
   frameScenario('layout__indexed_stack__active_child', (h) async {
+    const boundaryKey = ValueKey<String>('indexed-stack-paint');
+    const inactiveKey = ValueKey<String>('indexed-stack-inactive');
+    Rect inactiveBounds() =>
+        h.tester.getRect(find.byKey(inactiveKey, skipOffstage: false));
+    h.value('inactive_x', () => inactiveBounds().left);
+    h.value('inactive_y', () => inactiveBounds().top);
+    h.value('inactive_width', () => inactiveBounds().width);
+    h.value('inactive_height', () => inactiveBounds().height);
+
+    Future<void> checkPaint() async {
+      final boundary = h.tester.renderObject<RenderRepaintBoundary>(
+        find.byKey(boundaryKey),
+      );
+      await h.tester.runAsync(() async {
+        final image = await boundary.toImage();
+        try {
+          final bytes = (await image.toByteData(
+            format: ui.ImageByteFormat.rawRgba,
+          ))!;
+          List<int> rgba(int x, int y) {
+            final offset = 4 * (y * image.width + x);
+            return List<int>.generate(4, (channel) => bytes.getUint8(offset + channel));
+          }
+
+          expect(rgba(10, 10), <int>[255, 87, 34, 255]);
+          // The inactive child would cover this pixel, but the active child
+          // does not. Its mounted bounds alone cannot tell whether it painted.
+          expect(rgba(160, 20)[3], 0);
+        } finally {
+          image.dispose();
+        }
+      });
+    }
+
     await h.mount(
-      (_) => IndexedStack(
-        index: 1,
-        children: <Widget>[
-          h.probe(
-            'indexed0',
+      (_) => RepaintBoundary(
+        key: boundaryKey,
+        child: IndexedStack(
+          index: 1,
+          children: <Widget>[
             const SizedBox(
-              width: 100,
+              key: inactiveKey,
+              width: 180,
               height: 40,
               child: ColoredBox(color: blue),
             ),
-          ),
-          h.probe(
-            'indexed1',
-            const SizedBox(
-              width: 140,
-              height: 60,
-              child: ColoredBox(color: orange),
+            h.probe(
+              'indexed1',
+              const SizedBox(
+                width: 140,
+                height: 60,
+                child: ColoredBox(color: orange),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
+    await checkPaint();
     await h.frames(1);
+    await checkPaint();
   });
 
   frameScenario('layout__wrap__multiple_runs', (h) async {

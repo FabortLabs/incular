@@ -5,8 +5,9 @@ use incular_config::{
     Alignment, Axis, Constraints, CrossAxisAlignment, EdgeInsets, MainAxisAlignment, MainAxisSize,
     StackFit, TextDirection, VerticalDirection, WrapAlignment, WrapCrossAlignment,
 };
-use incular_core::{Color, Offset, Size, Transform as CoreTransform};
+use incular_core::{Color, Offset, Rect, Size, Transform as CoreTransform};
 use incular_parity_harness::{FrameHarness, Scenario, probe};
+use incular_rendering::{Brush, PaintCommand};
 use incular_widgets::{
     AspectRatio, BoxFit, Center, ColoredBox, Column, ConstrainedBox, Container,
     CustomMultiChildLayout, CustomSingleChildLayout, Expanded, FittedBox, Flexible, Flow,
@@ -14,7 +15,7 @@ use incular_widgets::{
     IntrinsicWidth, LayoutBuilder, LayoutId, LimitedBox, MultiChildLayoutContext,
     MultiChildLayoutDelegate, Offstage, OverflowBox, Padding, Positioned, Row,
     SingleChildLayoutDelegate, SizedBox, SizedOverflowBox, Spacer, Stack, Table, Text, Transform,
-    UnconstrainedBox, Visibility, Widget, Wrap,
+    UnconstrainedBox, Visibility, Widget, Wrap, internal::Key,
 };
 
 const BLUE: Color = Color::rgba(0x21, 0x96, 0xF3, 0xFF);
@@ -178,12 +179,56 @@ fn stack_positioned(h: &mut FrameHarness) {
 }
 
 fn indexed_stack_active(h: &mut FrameHarness) {
+    const INACTIVE: u64 = 1;
+    let inactive_bounds = Rc::new(Cell::new([0.; 4]));
+    for (field, name) in [
+        "inactive_x",
+        "inactive_y",
+        "inactive_width",
+        "inactive_height",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let inactive_bounds = Rc::clone(&inactive_bounds);
+        h.value(name, move || inactive_bounds.get()[field]);
+    }
+    h.set_frame_driver(move |runtime, constraints, now| {
+        let (list, _) = runtime.run_frame_at(constraints, now).expect("frame");
+        let tree = runtime.tree();
+        let inactive = tree
+            .element_with_key(&Key::from(INACTIVE))
+            .and_then(|element| tree.element_bounds(element))
+            .expect("inactive child is still laid out");
+        inactive_bounds.set([
+            f64::from(inactive.origin.x),
+            f64::from(inactive.origin.y),
+            f64::from(inactive.size.width),
+            f64::from(inactive.size.height),
+        ]);
+
+        // Inspect the actual composited display list, not recorder opacity.
+        let rects = list.commands().iter().filter_map(|command| match command {
+            PaintCommand::Rect { rect, color } => Some((*rect, *color)),
+            PaintCommand::RRect {
+                rrect,
+                brush: Brush::Solid(color),
+            } => Some((rrect.rect, *color)),
+            _ => None,
+        });
+        assert_eq!(
+            rects.collect::<Vec<_>>(),
+            [(
+                Rect::from_origin_size(Offset::ZERO, Size::new(140., 60.)),
+                ORANGE
+            )],
+            "the selected orange child must paint, with no blue contribution",
+        );
+    });
     h.mount(|_| {
         IndexedStack::new([
-            probe(
-                "indexed0",
-                SizedBox::new().width(100.).height(40.).child(colored(BLUE)),
-            ),
+            Widget::from(SizedBox::new().width(180.).height(40.).child(colored(BLUE)))
+                .with_key(INACTIVE),
             probe(
                 "indexed1",
                 SizedBox::new()
