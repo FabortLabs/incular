@@ -33,3 +33,11 @@ disposition and exact app-facing consequence. Record whether each device or GPU
 path ran. Set estimates against a named denominator; report registration coverage
 separately from paired comparisons. If local access is down, record the last
 verified state without counting the missing run as passing.
+
+## Latest paired slice
+
+[C07–C08: retained Visibility and nested SafeArea](visibility-safe-area.md):
+two new paired mismatches, one paired positive control. Combined with
+C01–C06, eight custom paired mismatches are documented. This is not upstream
+case closure. Next: rotate to gestures (rotated axis arbitration and
+synthesized velocity), then painting or another under-reviewed track.
