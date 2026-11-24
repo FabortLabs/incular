@@ -650,3 +650,8 @@ match, including caller build counts. Complete pairs reach 222/8,965
 
 [Five more callback sequences](upstream-implicit-effects-and-fractional-completion.md)
 match. Complete pairs reach 227/8,965 (176 match, 51 differ).
+
+### Positioned, physical model and tween completion
+
+[All 14 focused implicit callback sequences](upstream-implicit-effects-and-fractional-completion.md)
+now match. Complete pairs reach 231/8,965 (180 match, 51 differ).
