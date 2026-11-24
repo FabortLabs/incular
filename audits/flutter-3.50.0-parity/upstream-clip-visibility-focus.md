@@ -1,0 +1,38 @@
+# Upstream clip hit testing and hidden focus
+
+Pinned Flutter 3.50.0 `ab2912035e`; Incular production `c647cb85`.
+
+Four exact registrations in `widgets/clip_test.dart` passed on the
+original Flutter file. The paired `flutter350_clip_hit_upstream_parity`
+target reproduces four differences using runtime pointer down/up,
+with a full-area tap child that gives the same hit extent:
+
+- :155 Custom ClipPath: Flutter and Incular get the geometry once,
+  and both deliver the center tap. Only Incular delivers the tap
+  outside the clipping path.
+- :178 and :200 ClipOval: center contact reaches both. A clipped
+  corner reaches Incular with and without zero downstream opacity;
+  it reaches neither Flutter variant.
+- :225 ClipRect: exact callback checkpoints agree on when the
+  clipper is consulted (initial, size change, delegate type change,
+  ShouldReclip change). Only Incular delivers both outside taps,
+  including the tap outside the updated custom rectangle.
+
+These four failures are related manifestations of the raster-only
+clip policy in Incular's neutral clips, not four independent renderer
+bugs. This batch exercises routing rather than real GPU pixels.
+
+Four original Visibility registrations passed (:406, :434, :461, :625).
+The Rust `flutter_visibility_focus_parity` target adapts them using
+normalized runtime key delivery and an external focus node rather
+than the original Focus/Text adapter and native zero-size test view;
+counted as partial. A separate Flutter extension checked key routing.
+
+- Default replace unregisters the focus target and blocks hidden key
+  delivery, but the detached Incular node reports focused both before
+  and after a fresh request. Flutter reports false in both phases.
+- With all five non-focus preservation flags enabled, Incular retains
+  component identity as Flutter does, but Incular also retains host
+  focus and delivers another key to the hidden child. Flutter does not.
+- Visibility.maintain retains focus and delivery in both. A neutral
+  zero-area placeholder completes both frames.

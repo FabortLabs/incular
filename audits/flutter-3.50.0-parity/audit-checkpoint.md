@@ -470,3 +470,11 @@ Audit only; implementation and full workspace runs remain untouched.
 reference-only. New tests expose inaccurate ancestor/blocked-node focus
 flags and a finite/infinite constraint interpolation difference.
 Four hermetic preview DTD results are reference-only, not Rust pairs.
+
+### Clip hit testing and hidden widget focus
+
+[Eight upstream dispositions](upstream-clip-visibility-focus.md) bring
+complete pairs to 99/8,965 (67 match, 32 differ), with 30 partial and
+22 reference-only. Clipped-away taps get through four neutral clip
+variants. Hidden focus tests distinguish stale detached-node state
+from actual hidden keyboard delivery.

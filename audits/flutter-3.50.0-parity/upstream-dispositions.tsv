@@ -142,3 +142,11 @@ packages/flutter_tools/test/commands.shard/hermetic/widget_preview/dtd_services_
 packages/flutter_tools/test/commands.shard/hermetic/widget_preview/dtd_services_test.dart	230	waits for Lsp initialized event when only a subset of required Lsp methods are registered	reference-ran-incular-open	upstream-focus-policy-tween-dtd.md
 packages/flutter_tools/test/commands.shard/hermetic/widget_preview/dtd_services_test.dart	271	proceeds without waiting for event when all required Lsp methods are already registered	reference-ran-incular-open	upstream-focus-policy-tween-dtd.md
 packages/flutter_tools/test/commands.shard/hermetic/widget_preview/dtd_services_test.dart	296	cancels the Lsp event subscription when streamListen fails	reference-ran-incular-open	upstream-focus-policy-tween-dtd.md
+packages/flutter/test/widgets/clip_test.dart	155	ClipPath	paired-mismatch	upstream-clip-visibility-focus.md
+packages/flutter/test/widgets/clip_test.dart	178	ClipOval	paired-mismatch	upstream-clip-visibility-focus.md
+packages/flutter/test/widgets/clip_test.dart	200	Transparent ClipOval hit test	paired-mismatch	upstream-clip-visibility-focus.md
+packages/flutter/test/widgets/clip_test.dart	225	ClipRect	paired-mismatch	upstream-clip-visibility-focus.md
+packages/flutter/test/widgets/visibility_test.dart	406	Visibility with maintain* false excludes focus of child when not visible	partial-mismatch	upstream-clip-visibility-focus.md
+packages/flutter/test/widgets/visibility_test.dart	434	Visibility with maintain* true does not exclude focus of child when not visible	partial-match	upstream-clip-visibility-focus.md
+packages/flutter/test/widgets/visibility_test.dart	461	Visibility with maintain* true except maintainFocusability which is false excludes focus of child when not visible	partial-mismatch	upstream-clip-visibility-focus.md
+packages/flutter/test/widgets/visibility_test.dart	625	Visibility does not crash at zero area	partial-match	upstream-clip-visibility-focus.md
