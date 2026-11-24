@@ -618,3 +618,19 @@ packages/flutter/test/widgets/page_view_test.dart	1818	PageView showOnScreen scr
 packages/flutter/test/widgets/page_view_test.dart	1847	PageView showOnScreen scrolling behavior is consistent with default scrollCacheExtent	reference-ran-incular-open	upstream-page-view-boundaries.md
 packages/flutter/test/widgets/page_view_test.dart	1884	PageView updates _ForceImplicitScrollPhysics when allowImplicitScrolling changes	reference-ran-incular-open	upstream-page-view-boundaries.md
 packages/flutter/test/widgets/page_view_test.dart	1914	PageView skips updating _ForceImplicitScrollPhysics when allowImplicitScrolling is unchanged	reference-ran-incular-open	upstream-page-view-boundaries.md
+packages/flutter/test/services/text_formatter_test.dart	22	test const constructor	reference-ran-incular-open	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	29	withFunction wraps formatting function	reference-ran-incular-open	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	62	test filtering formatter example	reference-ran-incular-open	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	180	test single line formatter	paired-mismatch	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	195	test single line formatter (deprecated names)	paired-mismatch	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	240	test digits only formatter	paired-mismatch	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	257	test digits only formatter (deprecated names)	paired-mismatch	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	274	test length limiting formatter	paired-match	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	289	test length limiting formatter with zero-length string	paired-match	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	328	test length limiting formatter with complex Unicode characters	partial-match	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	379	test length limiting formatter when selection is off the end	paired-match	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	437	Passes through when under limit	paired-match	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	445	Uses old value when at the limit	paired-mismatch	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	453	Truncates newValue when oldValue already over limit	paired-match	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	465	with TargetPlatform.windows	partial-match	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	475	with TargetPlatform.macOS	reference-ran-incular-open	upstream-text-formatters.md
