@@ -594,3 +594,14 @@ packages/flutter/test/widgets/page_view_test.dart	1030	PageView exposes semantic
 packages/flutter/test/widgets/page_view_test.dart	1069	PageMetrics	partial-match	upstream-page-view-storage.md
 packages/flutter/test/widgets/page_view_test.dart	1084	Page controller can handle rounding issue	partial-match	upstream-page-view-storage.md
 packages/flutter/test/widgets/page_view_test.dart	1104	PageView can participate in a11y scrolling	reference-ran-incular-open	upstream-page-view-storage.md
+packages/flutter/test/widgets/page_view_test.dart	1173	PageView respects clipBehavior	partial-match	upstream-page-view-boundaries.md
+packages/flutter/test/widgets/page_view_test.dart	1207	PageView.padEnds tests	partial-match	upstream-page-view-boundaries.md
+packages/flutter/test/widgets/page_view_test.dart	1223	PageView - precision error inside RenderSliverFixedExtentBoxAdaptor	partial-match	upstream-page-view-boundaries.md
+packages/flutter/test/widgets/page_view_test.dart	1304	PageController onAttach, onDetach	reference-ran-incular-open	upstream-page-view-boundaries.md
+packages/flutter/test/widgets/page_view_test.dart	1384	null to value	paired-match	upstream-page-view-boundaries.md
+packages/flutter/test/widgets/page_view_test.dart	1392	value to value	partial-match	upstream-page-view-boundaries.md
+packages/flutter/test/widgets/page_view_test.dart	1404	value to null	partial-match	upstream-page-view-boundaries.md
+packages/flutter/test/widgets/page_view_test.dart	1413	null to null	paired-match	upstream-page-view-boundaries.md
+packages/flutter/test/widgets/page_view_test.dart	1572	Get the page value before the content dimension is determined,do not throw an assertion and return null	partial-mismatch	upstream-page-view-boundaries.md
+packages/flutter/test/widgets/page_view_test.dart	1624	Does not crash when calling jumpToPage before layout	partial-match	upstream-page-view-boundaries.md
+packages/flutter/test/widgets/page_view_test.dart	1650	Does not crash when calling animateToPage before layout	partial-match	upstream-page-view-boundaries.md
