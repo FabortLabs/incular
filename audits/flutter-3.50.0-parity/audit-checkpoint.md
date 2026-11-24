@@ -553,3 +553,11 @@ different restoration write timing, and default matrix sampling.
 complete pairs to 165/8,965 (122 match, 43 differ). RawTooltip tap,
 manual, and release controls match; the held long press mounts the
 bubble too late and misses the compared dismissal deadline.
+
+### Tweens, transform hits, ownership and lifecycle events
+
+[Fourteen upstream dispositions](upstream-tween-transform-and-lifecycle.md)
+bring complete pairs to 174/8,965 (131 match, 43 differ), with 88
+partial and 27 reference-only. A separate pinned native probe
+finds that ClipRRect antialiased modes produce binary coverage on
+Windows wgpu.

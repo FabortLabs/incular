@@ -274,3 +274,17 @@ packages/flutter/test/widgets/raw_tooltip_test.dart	1757	Tooltip triggers on tap
 packages/flutter/test/widgets/raw_tooltip_test.dart	1767	Tooltip triggers on long press when mode is long press	paired-match	upstream-raw-tooltip-trigger-and-hold.md
 packages/flutter/test/widgets/raw_tooltip_test.dart	1794	Tooltip does not trigger when trigger mode is manual	paired-match	upstream-raw-tooltip-trigger-and-hold.md
 packages/flutter/test/widgets/raw_tooltip_test.dart	2184	Tooltip trigger mode ignores mouse events	paired-match	upstream-raw-tooltip-trigger-and-hold.md
+packages/flutter/test/animation/tween_test.dart	145	IntTween	paired-match	upstream-tween-transform-and-lifecycle.md
+packages/flutter/test/animation/tween_test.dart	191	ReverseTween	paired-match	upstream-tween-transform-and-lifecycle.md
+packages/flutter/test/animation/tween_test.dart	197	ColorTween	paired-match	upstream-tween-transform-and-lifecycle.md
+packages/flutter/test/animation/tween_test.dart	205	StepTween	paired-match	upstream-tween-transform-and-lifecycle.md
+packages/flutter/test/animation/tween_test.dart	211	CurveTween	paired-match	upstream-tween-transform-and-lifecycle.md
+packages/flutter/test/widgets/transform_test.dart	19	Transform origin	paired-match	upstream-tween-transform-and-lifecycle.md
+packages/flutter/test/widgets/transform_test.dart	165	Transform offset + alignment	paired-match	upstream-tween-transform-and-lifecycle.md
+packages/flutter/test/widgets/rotated_box_test.dart	9	Rotated box control test	paired-match	upstream-tween-transform-and-lifecycle.md
+packages/flutter/test/widgets/rotated_box_test.dart	53	RotatedBox does not crash at zero area	partial-match	upstream-tween-transform-and-lifecycle.md
+packages/flutter/test/widgets/stateful_component_test.dart	60	Don't rebuild subwidgets	paired-match	upstream-tween-transform-and-lifecycle.md
+packages/flutter/test/widgets/stateful_components_test.dart	47	resync stateful widget	partial-match	upstream-tween-transform-and-lifecycle.md
+packages/flutter/test/widgets/framework_test.dart	1776	Widget and State properties are nulled out when unmounted	partial-match	upstream-tween-transform-and-lifecycle.md
+packages/flutter/test/widgets/app_lifecycle_listener_test.dart	91	listens to AppLifecycleState	partial-mismatch	upstream-tween-transform-and-lifecycle.md
+packages/flutter/test/widgets/app_lifecycle_listener_test.dart	124	Triggers correct state transition callbacks	partial-mismatch	upstream-tween-transform-and-lifecycle.md
