@@ -343,3 +343,6 @@ packages/flutter/test/widgets/ensure_visible_test.dart	99	SingleChildScrollView 
 packages/flutter/test/widgets/ensure_visible_test.dart	126	SingleChildScrollView ensureVisible Axis.vertical reverse	paired-match	upstream-ensure-visible-single-child.md
 packages/flutter/test/widgets/ensure_visible_test.dart	196	SingleChildScrollView ensureVisible Axis.horizontal reverse	paired-match	upstream-ensure-visible-single-child.md
 packages/flutter/test/widgets/ensure_visible_test.dart	271	SingleChildScrollView ensureVisible rotated child	paired-match	upstream-ensure-visible-single-child.md
+packages/flutter/test/widgets/ensure_visible_test.dart	318	Nested SingleChildScrollView ensureVisible behavior test	paired-match	upstream-ensure-visible-nested-and-lazy.md
+packages/flutter/test/widgets/ensure_visible_test.dart	394	ListView ensureVisible Axis.vertical	paired-match	upstream-ensure-visible-nested-and-lazy.md
+packages/flutter/test/widgets/ensure_visible_test.dart	430	ListView ensureVisible Axis.horizontal	paired-match	upstream-ensure-visible-nested-and-lazy.md

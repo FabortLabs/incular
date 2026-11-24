@@ -605,3 +605,10 @@ shrink clipping, child constraints, and removal notifications.
 all match, including reverse visibility policies, an animated reveal
 and a rotated child. Complete pairs reach 201/8,965 (153 match,
 48 differ); partial and reference-only counts are unchanged.
+
+### Nested and lazy-list scrollable reveal
+
+[Three more exact pairs](upstream-ensure-visible-nested-and-lazy.md)
+match. Complete pairs reach 204/8,965 (156 match, 48 differ), with
+116 partial and 27 reference-only. The nested 7×7 grid and all
+ordinary ListView alignment/animation samples agree.
