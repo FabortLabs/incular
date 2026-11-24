@@ -364,3 +364,8 @@ packages/flutter/test/widgets/implicit_animations_test.dart	94	AnimatedPadding o
 packages/flutter/test/widgets/implicit_animations_test.dart	119	AnimatedAlign onEnd callback test	paired-match	upstream-implicit-animation-completion.md
 packages/flutter/test/widgets/implicit_animations_test.dart	368	AnimatedOpacity onEnd callback test	paired-match	upstream-implicit-animation-completion.md
 packages/flutter/test/widgets/implicit_animations_test.dart	512	AnimatedDefaultTextStyle onEnd callback test	paired-match	upstream-implicit-animation-completion.md
+packages/flutter/test/widgets/implicit_animations_test.dart	218	AnimatedSlide transition test	paired-match	upstream-implicit-transition-samples.md
+packages/flutter/test/widgets/implicit_animations_test.dart	276	AnimatedScale transition test	paired-match	upstream-implicit-transition-samples.md
+packages/flutter/test/widgets/implicit_animations_test.dart	334	AnimatedRotation transition test	paired-match	upstream-implicit-transition-samples.md
+packages/flutter/test/widgets/implicit_animations_test.dart	392	AnimatedOpacity transition test	paired-match	upstream-implicit-transition-samples.md
+packages/flutter/test/widgets/implicit_animations_test.dart	473	SliverAnimatedOpacity transition test	paired-match	upstream-implicit-transition-samples.md

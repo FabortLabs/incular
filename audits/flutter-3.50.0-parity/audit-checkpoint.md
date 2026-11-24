@@ -639,3 +639,9 @@ two mounted children after the original animation window.
 [Five exact callback sequences](upstream-implicit-animation-completion.md)
 match, including the 1 ms boundary. Complete pairs reach
 217/8,965 (166 match, 51 differ).
+
+### Implicit transition samples and rebuild boundary
+
+[Five exact effect comparisons](upstream-implicit-transition-samples.md)
+match, including caller build counts. Complete pairs reach 222/8,965
+(171 match, 51 differ); 120 partial and 28 reference-only remain.
