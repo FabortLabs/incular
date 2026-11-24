@@ -522,3 +522,11 @@ partial and 22 reference-only. New differences include retained
 FittedBox size on a fit change and Ctrl+A on obscured read-only
 text. Actual Windows wgpu readback finds a separate ColorFiltered
 bounds defect with a nonzero alpha translation.
+
+### Dismissible timing, direction and pending confirmation
+
+[Seven upstream dispositions](upstream-dismissible-direction-and-confirmation.md)
+bring complete pairs to 148/8,965 (107 match, 41 differ), with 65
+partial and 25 reference-only. Pointer direction, thresholds, and
+no-resize callbacks are tested. Awaiting a confirmation decision
+has no equivalent public Incular hook.
