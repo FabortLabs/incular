@@ -564,3 +564,6 @@ packages/flutter/test/widgets/sliver_fill_remaining_test.dart	1175	child without
 packages/flutter/test/widgets/sliver_fill_remaining_test.dart	1198	child with size is overridden and sized by extent	partial-match	upstream-sliver-fill-remaining.md
 packages/flutter/test/widgets/sliver_fill_remaining_test.dart	1233	extent is overridden by child size if precedingScrollExtent > viewportMainAxisExtent	partial-match	upstream-sliver-fill-remaining.md
 packages/flutter/test/widgets/sliver_fill_remaining_test.dart	1283	child has no size and precedingScrollExtent > viewportMainAxisExtent	partial-mismatch	upstream-sliver-fill-remaining.md
+packages/flutter/test/widgets/sliver_fill_viewport_test.dart	12	SliverFillViewport control test	partial-match	upstream-sliver-fill-viewport.md
+packages/flutter/test/widgets/sliver_fill_viewport_test.dart	174	SliverFillViewport padding test	paired-match	upstream-sliver-fill-viewport.md
+packages/flutter/test/widgets/sliver_fill_viewport_test.dart	212	SliverFillViewport semantics respects allowImplicitScrolling	partial-match	upstream-sliver-fill-viewport.md
