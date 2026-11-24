@@ -274,3 +274,48 @@ fn hits_reach_box_adapter_before_after_scroll_and_not_outside_viewport() {
         (vec![0, 1, 2], vec![0, 1, 2], vec![], vec![])
     );
 }
+
+#[test]
+fn moving_a_focused_layoutbuilder_offscreen_does_not_crash() {
+    use incular_text::TextEditingController;
+    use incular_widgets::{EditableText, LayoutBuilder, SliverChildListDelegate, SliverList};
+
+    let ctl = TextEditingController::with_text("X");
+    let target = Widget::from(LayoutBuilder::new({
+        let ctl = ctl.clone();
+        move |_, _| {
+            Widget::from(
+                EditableText::new(ctl.clone())
+                    .text_direction(TextDirection::Ltr)
+                    .size(Size::new(200., 40.)),
+            )
+            .with_key(Key::Value(72))
+        }
+    }))
+    .with_key(Key::Value(73));
+    let scroll = ScrollController::new();
+    let scene = |lead| {
+        let children = SliverChildListDelegate::new([fixed(70, lead), target.clone()])
+            .add_repaint_boundaries(false)
+            .add_semantic_indexes(false);
+        let items: Box<dyn Sliver> = Box::new(SliverList::delegate(children));
+        viewport(&scroll, [items], false)
+    };
+    let mut host = Host::new(scene(60.));
+    let before = host.bounds(72);
+    assert!(before.origin.y < VIEW.height);
+    let editor = host
+        .runtime
+        .tree()
+        .element_with_key(&Key::Value(72))
+        .unwrap();
+    host.tap(1, before.origin + Offset::new(10., 10.));
+    assert_eq!(
+        host.runtime.focused_element(),
+        Some(editor),
+        "actual focused visible editor control"
+    );
+    host.change(scene(6000.));
+    host.frame();
+    assert_eq!(ctl.text(), "X");
+}

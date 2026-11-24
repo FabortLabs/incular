@@ -252,3 +252,36 @@ fn a_text_style_change_resizes_the_leaf_without_rebuilding_its_builder() {
         "same glyph scales with new inherited style"
     );
 }
+
+#[test]
+fn stable_constraints_do_not_reinvoke_builder_on_ancestor_layout() {
+    let count = Rc::new(Cell::new(0usize));
+    let build = |side| {
+        let count = count.clone();
+        Widget::from(Center::new(SizedBox::square(side).child(
+            LayoutBuilder::new(move |_, limits| {
+                count.set(count.get() + 1);
+                fixed(limits.biggest())
+            }),
+        )))
+    };
+    let mut tree = mount(build(10.));
+    assert_eq!(count.get(), 1);
+    assert_eq!(size(&tree, 2), Size::new(10., 10.));
+    // Drive real ancestor layout by changing its available surface. The
+    // inner wrapper still supplies exactly 10x10 to the same builder.
+    tree.layout(Constraints::tight(Size::new(700., 500.)))
+        .unwrap();
+    assert_eq!(count.get(), 1);
+    assert_eq!(size(&tree, 2), Size::new(10., 10.));
+    let root = tree.root().unwrap();
+    tree.update(root, build(10.)).unwrap();
+    tree.layout(Constraints::tight(Size::new(700., 500.)))
+        .unwrap();
+    assert_eq!(count.get(), 2);
+    tree.update(root, build(20.)).unwrap();
+    tree.layout(Constraints::tight(Size::new(700., 500.)))
+        .unwrap();
+    assert_eq!(count.get(), 3);
+    assert_eq!(size(&tree, 2), Size::new(20., 20.));
+}
