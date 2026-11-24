@@ -316,3 +316,9 @@ packages/flutter/test/animation/animations_test.dart	97	TrainHoppingAnimation	pa
 packages/flutter/test/animation/animations_test.dart	136	TrainHoppingAnimation notifies status listeners	paired-mismatch	upstream-raw-menu-animation-observer-and-shadow.md
 packages/flutter/test/painting/box_painter_test.dart	101	BoxShadow control test	partial-match	upstream-raw-menu-animation-observer-and-shadow.md
 packages/flutter/test/painting/box_painter_test.dart	138	BoxShadow BlurStyle test	partial-match	upstream-raw-menu-animation-observer-and-shadow.md
+packages/flutter/test/rendering/limited_box_test.dart	13	LimitedBox: parent max size is unconstrained	partial-match	upstream-limited-box-and-decoration-contracts.md
+packages/flutter/test/rendering/limited_box_test.dart	59	LimitedBox: parent maxWidth is unconstrained	paired-match	upstream-limited-box-and-decoration-contracts.md
+packages/flutter/test/rendering/limited_box_test.dart	75	LimitedBox: parent maxHeight is unconstrained	paired-match	upstream-limited-box-and-decoration-contracts.md
+packages/flutter/test/rendering/limited_box_test.dart	92	LimitedBox: no child	partial-match	upstream-limited-box-and-decoration-contracts.md
+packages/flutter/test/painting/box_decoration_test.dart	63	BoxDecoration.lerp identical a,b	partial-mismatch	upstream-limited-box-and-decoration-contracts.md
+packages/flutter/test/painting/box_decoration_test.dart	187	BoxDecorations with different blendModes are not equal	partial-match	upstream-limited-box-and-decoration-contracts.md

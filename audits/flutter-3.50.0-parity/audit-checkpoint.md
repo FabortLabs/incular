@@ -584,3 +584,10 @@ bring complete pairs to 186/8,965 (139 match, 47 differ), with 104
 partial and 27 reference-only. Committed tests pin old menu control
 ownership, child-before-parent closure, train/proxy listener
 effects, and the color clamp at extrapolation.
+
+### LimitedBox geometry and BoxDecoration blend metadata
+
+[Six upstream dispositions](upstream-limited-box-and-decoration-contracts.md)
+bring complete pairs to 188/8,965 (141 match, 47 differ), with 108
+partial and 27 reference-only. Two separately verified decoration
+regressions concern self-interpolation and image-only validation.
