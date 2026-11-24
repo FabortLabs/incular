@@ -705,3 +705,10 @@ alphabetic baseline even when direct Baseline layout works.
 bring complete pairs to 258/8,965 (201 match, 57 differ), with
 132 partial and 35 reference-only. Table ignores ambient
 RTL column ordering and accepts uneven rows.
+
+### Table state and semantics; LayoutBuilder baseline
+
+[Six upstream dispositions](upstream-table-retention-and-layoutbuilder-baseline.md)
+bring complete pairs to 261/8,965 (203 match, 58 differ), with
+134 partial and 36 reference-only. Row changes reuse an unrelated
+render slot, table roles are absent, and LayoutBuilder drops baseline.
