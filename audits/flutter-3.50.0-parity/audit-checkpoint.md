@@ -247,3 +247,13 @@ fourteen](frame-rechecks-batch14.md) finds one stale external focus node
 after keyboard scrolling, and four matches. [Navigation re-review](navigation-fixture-comparability.md) excludes five non-equivalent
 fixtures from valid pairs. Results to this point: 74 raw frame runs,
 69 valid paired (64 matched, five differed); five need fixture repair.
+
+### Batch fifteen and retained scroll regression targets
+
+[Five animation and widgets frame checks](frame-rechecks-batch15.md)
+matched. Valid paired frame coverage is now 74/253 (29.25%), 69 match
+and five differ. Five additional runs need navigation fixture repair.
+The centered SliverList extent estimate and stale external FocusNode
+after PageDown now have dedicated, runnable Rust regressions:
+`flutter_sliver_anchor_parity` and `flutter_scroll_focus_parity`
+in incular-runtime. They fail at the confirmed estimate and focus checks.
