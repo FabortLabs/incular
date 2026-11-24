@@ -72,3 +72,10 @@ with a positive ordinary delivery/close control. Running total: 17 custom
 paired mismatch cases, not upstream registration sign-off.
 Next rotate into services (restoration removal and retained writers);
 continue physics, foundation and widget-preview below that in the queue.
+
+### C18–C20: persistence removal and simulation precision
+
+[Paired persistence and physics tests](restoration-physics-comparisons.md)
+confirmed three mismatches; running total 20 custom paired mismatches.
+Next: foundation listener lifecycle as a positive control and animation
+tween endpoints/precision. Keep the preview toolchain track open.
