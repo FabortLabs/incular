@@ -23,6 +23,8 @@ type BuilderFactory = dyn Fn(Rc<RetainedSlot>) -> Rc<super::context::LayoutBuild
 pub(crate) struct RetainedSlot {
     type_id: TypeId,
     value: RefCell<Option<Rc<dyn Any>>>,
+    #[cfg(debug_assertions)]
+    allocation: RefCell<Option<Rc<incular_core::memory::allocations::ObjectLifetime>>>,
     revision: Rc<Cell<u64>>,
     rebind: fn(&Rc<dyn Any>, Rc<Cell<u64>>),
     factory: Option<Rc<BuilderFactory>>,
@@ -33,6 +35,8 @@ impl RetainedSlot {
         Self {
             type_id: TypeId::of::<S>(),
             value: RefCell::new(None),
+            #[cfg(debug_assertions)]
+            allocation: RefCell::new(None),
             revision,
             factory: None,
             rebind: |value, revision| {
@@ -57,6 +61,8 @@ impl RetainedSlot {
         let slot = Rc::new(Self {
             type_id: self.type_id,
             value: RefCell::new(None),
+            #[cfg(debug_assertions)]
+            allocation: RefCell::new(None),
             revision: Rc::new(Cell::new(0)),
             rebind: self.rebind,
             factory: Some(factory.clone()),
@@ -88,6 +94,12 @@ impl RetainedSlot {
         }
         let state = Rc::new(init(self.revision.clone()));
         *self.value.borrow_mut() = Some(state.clone());
+        #[cfg(debug_assertions)]
+        {
+            let allocation =
+                incular_core::memory::allocations::ObjectLifetime::new("widgets", "State");
+            *self.allocation.borrow_mut() = Some(Rc::new(allocation));
+        }
         state
     }
 
@@ -102,5 +114,63 @@ impl RetainedSlot {
         };
         (self.rebind)(&state, self.revision.clone());
         *self.value.borrow_mut() = Some(state);
+        #[cfg(debug_assertions)]
+        self.allocation
+            .borrow_mut()
+            .clone_from(&previous.allocation.borrow());
+    }
+}
+
+#[cfg(all(test, debug_assertions))]
+mod allocation_tests {
+    use super::*;
+    use crate::{Padding, SizedBox, Widget, internal::WidgetTree};
+    use incular_config::{Constraints, EdgeInsets};
+    use incular_core::{
+        Size,
+        memory::allocations::{MemoryAllocations, ObjectEventKind},
+    };
+
+    struct Fixture;
+    impl RetainedState for Fixture {
+        fn rebind_revision(&self, _: Rc<Cell<u64>>) {}
+    }
+
+    #[test]
+    fn state_allocation_survives_update_and_disposes_when_replaced() {
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let _listener = MemoryAllocations::current().add_listener({
+            let events = events.clone();
+            move |event| {
+                if event.library == "widgets" && event.class_name == "State" {
+                    events.borrow_mut().push(event);
+                }
+            }
+        });
+        let pane = || Widget::mount_scoped_builder(|_| Fixture, |_, _| SizedBox::shrink().into());
+        let descriptor = pane();
+        assert!(events.borrow().is_empty());
+        let scoped = |child: Widget| Padding::new(EdgeInsets::ZERO, child).into();
+        let mut tree = WidgetTree::new();
+        let root = tree.mount(scoped(descriptor.clone())).unwrap();
+        let bounds = Constraints::tight(Size::new(100., 100.));
+        tree.layout(bounds).unwrap();
+        assert_eq!(events.borrow().len(), 1);
+        let created = events.borrow()[0];
+        assert_eq!(created.kind, ObjectEventKind::Created);
+
+        tree.update(root, scoped(pane())).unwrap();
+        tree.layout(bounds).unwrap();
+        assert_eq!(*events.borrow(), [created]);
+
+        tree.update(root, scoped(SizedBox::shrink().into()))
+            .unwrap();
+        tree.layout(bounds).unwrap();
+        assert_eq!(events.borrow().len(), 2);
+        let disposed = events.borrow()[1];
+        assert_eq!(disposed.kind, ObjectEventKind::Disposed);
+        assert_eq!(disposed.id, created.id);
+        drop(descriptor);
+        assert_eq!(events.borrow().len(), 2);
     }
 }

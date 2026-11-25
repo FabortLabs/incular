@@ -35,3 +35,13 @@ object and a compositor layer, each with one creation and one disposal
 for its own stable identity. The Rust fixture further verifies that a
 retained render object recolored during an update produces neither an
 extra creation nor a disposal. The instrumentation is debug-only.
+
+## Mounted State lifetime
+
+Pinned `widgets/memory_allocations_test.dart:40` matches a managed
+stateful widget: mounting creates a State event, updating its compatible
+descriptor keeps that identity, and replacing the widget disposes it.
+An immutable unmounted descriptor does not publish an event or retain
+a mounted state's instrumentation. The broader :20 BuildOwner,
+FocusManager, highlight manager, and Element publisher test ran only
+on Flutter; the standalone render-object event comparison is separate.
