@@ -311,6 +311,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- MouseRegion cursor and hit-policy updates replay paint in their shared
+  region while preserving independent repaint boundaries and hover state.
+
 - MergeSemantics advertises and dispatches activation through its first
   eligible descendant instead of dropping the action.
 

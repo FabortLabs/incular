@@ -50,6 +50,7 @@ impl WidgetTree {
             semantics_scratch: Default::default(),
             semantics_enabled: true,
             paint_scratch: DisplayList::new(),
+            proxy_repaint_regions: FastHashSet::default(),
             compositor_scratch: Vec::new(),
             lifted_scene: None,
             static_selections: FastHashMap::default(),

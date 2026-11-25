@@ -182,3 +182,29 @@ fn mouse_move_with_no_callback_side_effects_does_not_request_another_frame() {
     move_mouse(&mut runtime, 410., 310.);
     assert!(!runtime.frame_requested(), "pointer move is visually inert");
 }
+
+#[test]
+fn cursor_changes_repaint_the_shared_layer_but_not_its_nested_boundary() {
+    use incular_widgets::{Column, RepaintBoundary};
+
+    let logs: [Rc<Logs>; 3] = std::array::from_fn(|_| Rc::new(Logs::default()));
+    let scene = |cursor| {
+        let painter = |i: usize| {
+            CustomPaint::from_painter(Size::new(10., 10.), CountingPainter(logs[i].clone()))
+        };
+        top_left(RepaintBoundary::new(Column::new([
+            Widget::from(MouseRegion::new(painter(0)).cursor(cursor)),
+            Widget::from(painter(1)),
+            RepaintBoundary::new(painter(2)).into(),
+        ])))
+    };
+    let counts = || std::array::from_fn::<_, 3, _>(|i| logs[i].paints.replace(0));
+    let mut runtime = Runtime::new(scene(MouseCursor::NotAllowed)).unwrap();
+    frame(&mut runtime);
+    assert_eq!(counts(), [1, 1, 1]);
+
+    update(&mut runtime, scene(MouseCursor::Text));
+    assert_eq!(counts(), [1, 1, 0]);
+    update(&mut runtime, scene(MouseCursor::Text));
+    assert_eq!(counts(), [0, 0, 0]);
+}

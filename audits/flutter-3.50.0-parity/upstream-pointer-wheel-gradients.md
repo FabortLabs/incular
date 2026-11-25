@@ -3,8 +3,8 @@
 Pinned Flutter 3.50.0 `ab2912035e`; Incular production `c647cb85`.
 
 - Four named `widgets/mouse_region_test.dart` originals passed.
-  Cursor routing and no extra frame on inert move match. Two cursor-only
-  changes also match effective cursor, fallback and enter counts, but
+  Cursor routing and no extra frame on inert move match. The initial cursor-only
+  comparisons matched effective cursor, fallback and enter counts, while
   Flutter invokes the paint delegate once, and Incular reuses existing
   paint (zero invocations). These are observable paint-lifecycle
   differences, not a broken OS cursor, native pixel mismatch, or a
@@ -38,3 +38,13 @@ before interpolation, used for wgpu LUT generation. The pinned
 `gradient_stop_sampling_test.dart` passes and the Windows live-test
 `flutter350_gradient_stop_sampling` fails at the expected pixels.
 No claim about descriptor interpolation or every GPU/platform.
+
+## Retained cursor-only paint
+
+Pinned `:1665` and `:1726` now match: the cursor updates or defers to its
+parent under a stationary mouse, with one paint and no extra enter.
+The previously cached CustomPainter had skipped that observable paint
+even though the cursor was correct. An authored paired control confirms
+that a changed region and its same-layer sibling both repaint once,
+that an explicit nested RepaintBoundary stays cached, and that setting
+the same cursor produces no replay. The tests are headless.

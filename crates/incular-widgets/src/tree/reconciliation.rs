@@ -730,19 +730,30 @@ impl WidgetTree {
             widget.type_(),
             "only compatible elements may update"
         );
-        let mouse_hit_policy = |kind: &WidgetKind| match kind {
-            WidgetKind::RawInput { kind, .. } => kind
-                .mouse_region_opaque()
-                .map(|opaque| (opaque, kind.hit_test_behavior())),
-            _ => None,
+        let mouse_policy = |widget: &WidgetKind| {
+            if let WidgetKind::RawInput { kind, .. } = widget
+                && let RawInputKind::MouseRegion { cursor, opaque, .. } = **kind
+            {
+                Some((cursor, opaque, kind.hit_test_behavior()))
+            } else {
+                None
+            }
         };
-        if mouse_hit_policy(old.kind()) != mouse_hit_policy(widget.kind()) {
+        let before_mouse = mouse_policy(old.kind());
+        let after_mouse = mouse_policy(widget.kind());
+        let hit_policy = |(_, opaque, behavior)| (opaque, behavior);
+        if before_mouse.map(hit_policy) != after_mouse.map(hit_policy) {
             self.input.hover_hit_revision = self.input.hover_hit_revision.wrapping_add(1);
         }
         self.check_keys_borrowed(Some(id), widget.children_refs())?;
         let render = self
             .element_live(id, "retained element must remain live")
             .render;
+        if before_mouse != after_mouse {
+            // RenderMouseRegion requests a repaint for cursor and hit-policy
+            // changes, even if layout and painter descriptors are unchanged.
+            self.queue_proxy_repaint(render);
+        }
         let old_kind = self
             .render_live(render, "updated render must remain live")
             .object

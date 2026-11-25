@@ -1416,6 +1416,7 @@ pub struct WidgetTree {
     /// Recording buffer reused by every picture repaint. A layer copies it
     /// only when the recorded picture differs from the one it retains.
     paint_scratch: DisplayList,
+    proxy_repaint_regions: FastHashSet<RenderObjectId>,
     /// Visit list of `update_compositor`, kept so a frame does not allocate
     /// one entry per compositor-driven node.
     compositor_scratch: Vec<(

@@ -175,6 +175,7 @@ impl WidgetTree {
     #[must_use]
     pub fn paint(&mut self) -> DisplayList {
         let _phase_guard = self.guard_phase_root(FramePhase::Paint);
+        self.flush_proxy_repaints();
         if let Some(root) = self.root.and_then(|id| self.render_id(id)) {
             self.paint_render(root);
         }
@@ -210,6 +211,53 @@ impl WidgetTree {
         }
         output
     }
+    /// Repaints the shared paint region containing a non-painting proxy.
+    /// Deduplicated at the boundary so two updates in one frame replay it
+    /// only once; deeper explicit RepaintBoundaries keep their own pictures.
+    pub(super) fn queue_proxy_repaint(&mut self, mut id: RenderObjectId) {
+        while let Some(node) = self.renders.get(id.0) {
+            if matches!(node.object.kind(), RenderKind::RepaintBoundary) {
+                break;
+            }
+            let Some(parent) = node.parent else {
+                break;
+            };
+            id = parent;
+        }
+        if self.proxy_repaint_regions.insert(id) {
+            self.propagate_subtree_paint(id);
+        }
+    }
+
+    fn flush_proxy_repaints(&mut self) {
+        if self.proxy_repaint_regions.is_empty() {
+            return;
+        }
+        let mut regions = std::mem::take(&mut self.proxy_repaint_regions);
+        let mut work = Vec::new();
+        for region in regions.drain() {
+            work.push(region);
+            while let Some(id) = work.pop() {
+                let Some(node) = self.renders.get_mut(id.0) else {
+                    continue;
+                };
+                if node.parked
+                    || (id != region && matches!(node.object.kind(), RenderKind::RepaintBoundary))
+                {
+                    continue;
+                }
+                node.subtree_needs_paint = true;
+                if node.object.layers.picture.is_some()
+                    || node.object.layers.foreground_picture.is_some()
+                {
+                    node.dirty.insert(DirtyFlags::PAINT);
+                }
+                work.extend(visible_paint_children(node));
+            }
+        }
+        self.proxy_repaint_regions = regions;
+    }
+
     #[must_use]
     pub fn hit_test(&self, point: Offset) -> Option<RenderObjectId> {
         // Native transient input arrives in the owning view's logical
