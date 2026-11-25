@@ -2695,6 +2695,13 @@ fn direction_need(kind: &WidgetKind) -> Option<DirectionNeed> {
             reason: requirement.reason,
             always: true,
         }),
+        WidgetKind::Unconstrained {
+            alignment, text_direction: None, transform, child: Some(_), ..
+        } if !matches!(alignment, crate::AlignmentGeometry::Physical(_)) => Some(DirectionNeed {
+            widget: if transform.is_some() { "ConstraintsTransformBox" } else { "UnconstrainedBox" },
+            reason: "a logical alignment requires an explicit or inherited text direction",
+            always: true,
+        }),
         WidgetKind::Text {
             text_direction: None,
             ..

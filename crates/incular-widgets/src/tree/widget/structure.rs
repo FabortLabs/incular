@@ -176,6 +176,7 @@ impl std::fmt::Debug for WidgetKind {
             Self::Unconstrained {
                 constrained_axis,
                 alignment,
+                text_direction,
                 transform,
                 clip_behavior,
                 child,
@@ -184,6 +185,7 @@ impl std::fmt::Debug for WidgetKind {
                 .field("clip_behavior", clip_behavior)
                 .field("constrained_axis", constrained_axis)
                 .field("alignment", alignment)
+                .field("text_direction", text_direction)
                 .field("child", child)
                 .finish(),
             Self::Fractional {
@@ -1175,6 +1177,7 @@ impl PartialEq for WidgetKind {
                 Self::Unconstrained {
                     constrained_axis: a,
                     alignment: ka,
+                    text_direction: da,
                     transform: ta,
                     clip_behavior: ca,
                     child: b,
@@ -1182,11 +1185,12 @@ impl PartialEq for WidgetKind {
                 Self::Unconstrained {
                     constrained_axis: c,
                     alignment: kb,
+                    text_direction: db,
                     transform: tb,
                     clip_behavior: cb,
                     child: d,
                 },
-            ) => a == c && ka == kb && ta == tb && ca == cb && b == d,
+            ) => a == c && ka == kb && da == db && ta == tb && ca == cb && b == d,
             (
                 Self::Scroll {
                     controller: a,

@@ -222,3 +222,50 @@ fn unconstrained_box_contains_the_placeholder_on_a_zero_area_view() {
     assert_eq!(tree.children(proxy).unwrap().len(), 1);
     let _ = tree.paint();
 }
+
+#[test]
+fn logical_constraint_alignment_tracks_ambient_direction_and_explicit_override() {
+    use incular_config::AlignmentDirectional;
+    use incular_widgets::{Directionality, internal::Key};
+    const CHILD: Key = Key::Value(812);
+    const PROXY: Key = Key::Value(813);
+    let proxy = |explicit: Option<TextDirection>| {
+        let child = Widget::from(SizedBox::new().width(200.).height(50.)).with_key(CHILD);
+        let widget = TransformBox::new(TransformBox::max_width_unconstrained, child)
+            .alignment(AlignmentDirectional::TOP_START)
+            .clip_behavior(Clip::HardEdge);
+        Widget::from(explicit.map_or_else(
+            || widget.clone(),
+            |direction| widget.clone().text_direction(direction),
+        ))
+        .with_key(PROXY)
+    };
+    let scene = |direction, explicit| Directionality::new(direction, proxy(explicit)).into();
+    let mut tree = WidgetTree::new();
+    assert!(matches!(
+        tree.mount(proxy(None)),
+        Err(TreeError::MissingDirectionality {
+            widget: "ConstraintsTransformBox",
+            ..
+        })
+    ));
+    let root = tree.mount(scene(TextDirection::Ltr, None)).unwrap();
+    let viewport = Constraints::tight(Size::new(100., 100.));
+    tree.layout(viewport).unwrap();
+    let id = tree.element_with_key(&PROXY).unwrap();
+    let render = tree.render_id(id);
+    for (inherited, explicit, expected_x) in [
+        (TextDirection::Ltr, None, 0.),
+        (TextDirection::Rtl, None, -100.),
+        (TextDirection::Rtl, Some(TextDirection::Ltr), 0.),
+    ] {
+        tree.update(root, scene(inherited, explicit)).unwrap();
+        tree.layout(viewport).unwrap();
+        assert_eq!(tree.render_id(id), render);
+        let child = tree.element_with_key(&CHILD).unwrap();
+        assert_eq!(
+            tree.element_bounds(child).unwrap().origin,
+            Offset::new(expected_x, 0.)
+        );
+    }
+}

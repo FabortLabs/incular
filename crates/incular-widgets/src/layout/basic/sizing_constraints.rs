@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use incular_config::{Alignment, Axis, Clip, ConstraintError, Constraints};
+use incular_config::{Alignment, Axis, Clip, ConstraintError, Constraints, TextDirection};
 use incular_core::{Color, Size};
 use typed_builder::TypedBuilder;
 
@@ -365,8 +365,10 @@ widget_from_kind!(OverflowBox => Overflow { min_width, max_width, min_height, ma
 pub struct UnconstrainedBox {
     #[builder(default, setter(strip_option))]
     constrained_axis: Option<Axis>,
-    #[builder(default = Alignment::CENTER)]
-    alignment: Alignment,
+    #[builder(default = crate::AlignmentGeometry::Physical(Alignment::CENTER), setter(into))]
+    alignment: crate::AlignmentGeometry,
+    #[builder(default, setter(strip_option))]
+    text_direction: Option<TextDirection>,
     #[builder(default = Clip::None)]
     clip_behavior: Clip,
     #[builder(default, setter(strip_option, into))]
@@ -390,7 +392,8 @@ impl UnconstrainedBox {
     pub const fn empty() -> Self {
         Self {
             constrained_axis: None,
-            alignment: Alignment::CENTER,
+            alignment: crate::AlignmentGeometry::Physical(Alignment::CENTER),
+            text_direction: None,
             clip_behavior: Clip::None,
             child: None,
         }
@@ -405,8 +408,8 @@ impl UnconstrainedBox {
     /// Aligns the child within the box. Defaults to centered, as in Flutter's
     /// `UnconstrainedBox`; an overflowing child is shifted by half of its excess.
     #[must_use]
-    pub fn alignment(mut self, alignment: Alignment) -> Self {
-        self.alignment = alignment;
+    pub fn alignment(mut self, alignment: impl Into<crate::AlignmentGeometry>) -> Self {
+        self.alignment = alignment.into();
         self
     }
 
@@ -417,6 +420,13 @@ impl UnconstrainedBox {
         self
     }
     /// Clips only when the unconstrained child overflows this box.
+    /// Overrides the direction used to resolve logical alignment.
+    #[must_use]
+    pub fn text_direction(mut self, direction: TextDirection) -> Self {
+        self.text_direction = Some(direction);
+        self
+    }
+
     #[must_use]
     pub fn clip_behavior(mut self, behavior: Clip) -> Self {
         self.clip_behavior = behavior;
@@ -429,6 +439,7 @@ impl From<UnconstrainedBox> for Widget {
         Widget::from_kind(WidgetKind::Unconstrained {
             constrained_axis: value.constrained_axis,
             alignment: value.alignment,
+            text_direction: value.text_direction,
             transform: None,
             clip_behavior: value.clip_behavior,
             child: value.child,
@@ -638,7 +649,8 @@ widget_from_kind!(SizedOverflowBox => SizedOverflow { size, alignment, child });
 #[derive(Clone)]
 pub struct ConstraintsTransformBox {
     transform: ConstraintMapper,
-    alignment: Alignment,
+    alignment: crate::AlignmentGeometry,
+    text_direction: Option<TextDirection>,
     clip_behavior: Clip,
     child: Option<Widget>,
 }
@@ -680,7 +692,8 @@ impl ConstraintsTransformBox {
     ) -> Self {
         Self {
             transform: ConstraintMapper(Rc::new(transform)),
-            alignment: Alignment::CENTER,
+            alignment: crate::AlignmentGeometry::Physical(Alignment::CENTER),
+            text_direction: None,
             clip_behavior: Clip::None,
             child: None,
         }
@@ -747,8 +760,15 @@ impl ConstraintsTransformBox {
     }
 
     #[must_use]
-    pub fn alignment(mut self, alignment: Alignment) -> Self {
-        self.alignment = alignment;
+    pub fn alignment(mut self, alignment: impl Into<crate::AlignmentGeometry>) -> Self {
+        self.alignment = alignment.into();
+        self
+    }
+
+    /// Overrides the direction used to resolve logical alignment.
+    #[must_use]
+    pub fn text_direction(mut self, direction: TextDirection) -> Self {
+        self.text_direction = Some(direction);
         self
     }
 
@@ -764,6 +784,7 @@ impl From<ConstraintsTransformBox> for Widget {
         Widget::from_kind(WidgetKind::Unconstrained {
             constrained_axis: None,
             alignment: value.alignment,
+            text_direction: value.text_direction,
             transform: Some(value.transform),
             clip_behavior: value.clip_behavior,
             child: value.child,

@@ -645,7 +645,8 @@ pub(crate) enum WidgetKind {
     },
     Unconstrained {
         constrained_axis: Option<Axis>,
-        alignment: Alignment,
+        alignment: crate::AlignmentGeometry,
+        text_direction: Option<TextDirection>,
         transform: Option<ConstraintMapper>,
         clip_behavior: Clip,
         child: Option<Widget>,

@@ -74,12 +74,16 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
         WidgetKind::Unconstrained {
             constrained_axis,
             alignment,
+            text_direction,
             transform,
             clip_behavior,
             ..
         } => RenderKind::Unconstrained {
             constrained_axis: *constrained_axis,
-            alignment: *alignment,
+            alignment: match alignment {
+                crate::AlignmentGeometry::Physical(value) => *value,
+                value => value.resolve(resolve_layout_direction(*text_direction, context)),
+            },
             transform: transform.clone(),
             clip_behavior: *clip_behavior,
         },

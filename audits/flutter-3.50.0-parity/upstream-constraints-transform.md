@@ -32,3 +32,13 @@ and paint at zero size. In the native retained check the childless
 proxy does not allocate a fake child or invoke its constraint callback;
 mounting and removing a real child keeps the original proxy renderer
 and invokes the callback only while the child is present.
+
+## Directional overflow placement
+
+The pinned authored `constraints_direction_test.dart` and the retained
+Rust fixture place a 200px child in a 100px clipped viewport: logical
+top-start results in x=0 in LTR, x=-100 in RTL, and x=0 again when an
+explicit LTR override is applied in an RTL subtree. The Rust node
+retains its identity across direction changes. A logical alignment
+with a mounted child requires a direction; the default physical center
+does not. The authored check adds no upstream registration credit.
