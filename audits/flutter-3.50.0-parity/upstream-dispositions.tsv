@@ -1130,3 +1130,9 @@ packages/flutter/test/painting/paint_image_test.dart	312	Reports Image painting 
 packages/flutter/test/widgets/focus_scope_test.dart	1643	Focus updates the onKey handler when the widget updates	reference-ran-incular-open	upstream-focus-widget-semantics.md#focus-key-routing-and-handler-replacement
 packages/flutter/test/widgets/focus_scope_test.dart	1696	Focus updates the onKeyEvent handler when the widget updates	partial-match	upstream-focus-widget-semantics.md#focus-key-routing-and-handler-replacement
 packages/flutter/test/widgets/focus_manager_test.dart	1825	Autofocus works with global key reparenting	partial-match	upstream-focus-widget-semantics.md#retained-identity-across-focus-reparenting
+packages/flutter/test/widgets/focus_manager_test.dart	1480	Initial highlight mode guesses correctly.	paired-match	upstream-focus-widget-semantics.md#initial-and-input-driven-focus-highlights
+packages/flutter/test/widgets/focus_manager_test.dart	1494	Mouse events change initial focus highlight mode on mobile.	paired-match	upstream-focus-widget-semantics.md#initial-and-input-driven-focus-highlights
+packages/flutter/test/widgets/focus_manager_test.dart	1507	Mouse events change initial focus highlight mode on desktop.	paired-match	upstream-focus-widget-semantics.md#initial-and-input-driven-focus-highlights
+packages/flutter/test/widgets/focus_manager_test.dart	1520	Keyboard events change initial focus highlight mode.	paired-match	upstream-focus-widget-semantics.md#initial-and-input-driven-focus-highlights
+packages/flutter/test/widgets/focus_manager_test.dart	1528	Soft keyboard key events do not change focus highlight mode on Android.	reference-ran-incular-open	upstream-focus-widget-semantics.md#initial-and-input-driven-focus-highlights
+packages/flutter/test/widgets/focus_manager_test.dart	1562	Events change focus highlight mode.	paired-match	upstream-focus-widget-semantics.md#initial-and-input-driven-focus-highlights

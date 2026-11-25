@@ -249,6 +249,7 @@ pub use incular_config::{
     TransientPresentation, TransientRole, VerticalDirection, WrapAlignment, WrapCrossAlignment,
 };
 pub use incular_core::{Color, Key, LocalKey, Offset, Rect, Size, UniqueKey, ValueKey};
+pub use incular_gestures::{FocusHighlightManager, FocusHighlightMode, FocusHighlightStrategy};
 pub use incular_image::{
     AnyImageProvider, AssetImage, FileImage, ImageChunkEvent, ImageConfiguration, ImageLoadState,
     ImageProvider, ImageStream, ImageStreamCompleter, MemoryImage,

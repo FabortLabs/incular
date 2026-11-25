@@ -391,7 +391,9 @@ pub enum FocusHighlightStrategy {
 struct HighlightModeState {
     strategy: FocusHighlightStrategy,
     last_input_mode: Option<FocusHighlightMode>,
-    mode: FocusHighlightMode,
+    platform_default: FocusHighlightMode,
+    initial_mouse_connected: bool,
+    mode: Option<FocusHighlightMode>,
     observers: Vec<Weak<HighlightModeObserverEntry>>,
     pending: VecDeque<HighlightNotification>,
     dispatching: bool,
@@ -403,11 +405,20 @@ struct HighlightNotification {
 }
 
 impl HighlightModeState {
+    fn mode(&self) -> FocusHighlightMode {
+        self.mode.unwrap_or(if self.initial_mouse_connected {
+            FocusHighlightMode::Traditional
+        } else {
+            self.platform_default
+        })
+    }
+
     fn commit_mode(&mut self, mode: FocusHighlightMode) {
-        if self.mode == mode {
+        let previous = self.mode();
+        self.mode = Some(mode);
+        if previous == mode {
             return;
         }
-        self.mode = mode;
         self.observers
             .retain(|observer| observer.strong_count() != 0);
         self.pending.push_back(HighlightNotification {
@@ -454,7 +465,13 @@ thread_local! {
     static HIGHLIGHT_MODE: RefCell<HighlightModeState> = const { RefCell::new(HighlightModeState {
             strategy: FocusHighlightStrategy::Automatic,
             last_input_mode: None,
-            mode: FocusHighlightMode::Traditional,
+            platform_default: if cfg!(any(target_os = "android", target_os = "ios", target_os = "fuchsia")) {
+                FocusHighlightMode::Touch
+            } else {
+                FocusHighlightMode::Traditional
+            },
+            initial_mouse_connected: false,
+            mode: None,
             observers: Vec::new(),
             pending: VecDeque::new(),
             dispatching: false,
@@ -484,7 +501,7 @@ impl FocusHighlightManager {
 
     #[must_use]
     pub fn mode(self) -> FocusHighlightMode {
-        HIGHLIGHT_MODE.with(|state| state.borrow().mode)
+        HIGHLIGHT_MODE.with(|state| state.borrow().mode())
     }
 
     #[must_use]
@@ -499,7 +516,12 @@ impl FocusHighlightManager {
             }
             state.strategy = strategy;
             let mode = match strategy {
-                FocusHighlightStrategy::Automatic => state.last_input_mode.unwrap_or(state.mode),
+                FocusHighlightStrategy::Automatic => {
+                    let Some(mode) = state.last_input_mode else {
+                        return;
+                    };
+                    mode
+                }
                 FocusHighlightStrategy::AlwaysTouch => FocusHighlightMode::Touch,
                 FocusHighlightStrategy::AlwaysTraditional => FocusHighlightMode::Traditional,
             };
@@ -511,6 +533,23 @@ impl FocusHighlightManager {
     /// automatic input updates may change it again.
     pub fn set_mode(self, mode: FocusHighlightMode) {
         Self::update(|state| state.commit_mode(mode));
+    }
+
+    /// Sets the guess used before a concrete interaction on the UI thread.
+    /// The fallback is queried, not emitted as an input transition.
+    pub fn set_platform_default_mode(self, mode: FocusHighlightMode) {
+        HIGHLIGHT_MODE.with(|state| state.borrow_mut().platform_default = mode);
+    }
+
+    /// Records whether an external mouse was detected before the first
+    /// interaction. Mouse presence affects only the platform's initial guess.
+    pub fn set_initial_mouse_connected(self, connected: bool) {
+        HIGHLIGHT_MODE.with(|state| {
+            let mut state = state.borrow_mut();
+            if state.mode.is_none() {
+                state.initial_mouse_connected = connected;
+            }
+        });
     }
 
     /// Records keyboard input, which selects traditional highlights in

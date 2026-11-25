@@ -60,6 +60,12 @@ ancestors. Return `KeyEventResult::Ignored` to continue bubbling,
 `Handled` to consume the key, or `SkipRemainingHandlers` to stop
 framework handling without consuming the native event.
 
+Focus highlights follow the last keyboard or touch interaction by default.
+Desktop targets start with traditional focus rings. Mobile targets start
+with touch highlights unless a mouse is detected before the first input.
+A physical key selects traditional highlights; touch or stylus selects
+touch highlights. `FocusHighlightManager` can force either mode.
+
 ## FocusScope
 
 `autofocus`, `policy(FocusTraversalPolicyKind::WidgetOrder)`,

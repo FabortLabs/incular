@@ -85,3 +85,23 @@ uses a queued child request and mounted Focus nodes inside the two policy
 scopes. The pinned :1752 and the focused Rust replacement case were also
 rerun; detached autofocus replacement is now a match in the ledger.
 Six focused Rust tests passed.
+
+## Initial and input-driven focus highlights
+
+All 20 focused expansions of the six pinned highlight registrations in
+`focus_manager_test.dart` passed. Incular now compares :1480, :1494,
+:1507, :1520 and :1562 at the runtime input boundary: all six initial
+target platform policies, first mouse movement on each, keyboard
+down/up changing to traditional mode, and the ordered notifications
+for key, touch, mouse, and forced strategy changes. Mouse movement
+alters the initial guess on a mobile target but does not undo a real
+touch interaction later. Previously the first Rust comparison observed
+only the two forced strategy notifications because key and pointer
+events did not reach the highlight manager.
+
+:1528 remains reference-only. Its Android OS event includes a raw
+virtual keyboard ID and flags that the normalized keyboard boundary
+does not expose. Native Android IME behavior is not inferred from the
+normalized hardware key test. Four focused Rust targets passed (24
+tests), followed by a rerun with both key phases and real platform
+startup policy in the new focus highlight target.

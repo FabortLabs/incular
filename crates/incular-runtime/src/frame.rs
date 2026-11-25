@@ -21,7 +21,7 @@ use crate::text_shortcuts::{TextIntent, TextShortcutPlatform};
 use crate::undo::{UndoHistoryController, UndoHistoryState};
 use crate::window_commands::{WindowHandle, WindowOpener};
 use crate::window_state::WindowManager;
-use incular_config::{Constraints, RuntimeEnvironment};
+use incular_config::{Constraints, RuntimeEnvironment, TargetPlatform};
 use incular_core::IdGenerator;
 use incular_core::time::Instant;
 use incular_core::{
@@ -45,7 +45,10 @@ use incular_widgets::internal::{
     PointerDeviceKind, PointerHitTest, RawPointerEvent, TextEditingController, TextRange,
     TextSelection, TreeError, WidgetTree, WindowInteraction,
 };
-use incular_widgets::{FocusNode, KeyEventResult, TextInputActionHint, TextInputTypeHint, Widget};
+use incular_widgets::{
+    FocusHighlightManager, FocusHighlightMode, FocusNode, KeyEventResult, TextInputActionHint,
+    TextInputTypeHint, Widget,
+};
 use std::{
     cell::{Cell, RefCell},
     collections::{HashMap, VecDeque},
@@ -326,6 +329,17 @@ impl Runtime {
         let mut frame_availability = incular_animation::scheduler::FrameAvailability::default();
         frame_availability.set_enabled(lifecycle.allows_frames());
 
+        #[cfg(not(target_arch = "wasm32"))]
+        let highlight_platform = TargetPlatform::host();
+        #[cfg(target_arch = "wasm32")]
+        let highlight_platform = match TextShortcutPlatform::current() {
+            TextShortcutPlatform::Android => TargetPlatform::Android,
+            TextShortcutPlatform::Ios => TargetPlatform::Ios,
+            TextShortcutPlatform::Linux => TargetPlatform::Linux,
+            TextShortcutPlatform::MacOs => TargetPlatform::MacOs,
+            TextShortcutPlatform::Windows => TargetPlatform::Windows,
+        };
+        Self::set_focus_highlight_platform_default(highlight_platform);
         let mut tree = WidgetTree::new();
         tree.enable_hosted_focus();
         let mut handlers = HashMap::new();
@@ -1186,6 +1200,18 @@ impl Runtime {
         self.sync_focused_selection_lease();
     }
 
+    /// Overrides the initial focus-ring guess for this UI thread before
+    /// real input. Desktop targets start traditional; mobile starts touch
+    /// unless a mouse is present.
+    pub fn set_focus_highlight_platform_default(platform: TargetPlatform) {
+        let mode = if platform.is_desktop() {
+            FocusHighlightMode::Traditional
+        } else {
+            FocusHighlightMode::Touch
+        };
+        FocusHighlightManager::new().set_platform_default_mode(mode);
+    }
+
     /// The platform whose text-editing shortcuts are active.
     #[must_use]
     pub fn text_shortcut_platform(&self) -> TextShortcutPlatform {
@@ -1613,6 +1639,17 @@ impl Runtime {
                 }
             }
         }
+        if event.kind == PointerDeviceKind::Mouse {
+            self.sync_initial_focus_highlight_mouse();
+        }
+    }
+
+    fn sync_initial_focus_highlight_mouse(&self) {
+        FocusHighlightManager::new().set_initial_mouse_connected(
+            self.hover_devices
+                .iter()
+                .any(|event| event.kind == PointerDeviceKind::Mouse),
+        );
     }
 
     fn handle_pointer_input(
@@ -1639,6 +1676,11 @@ impl Runtime {
             } else {
                 self.hover_devices.record(raw_event);
             }
+        }
+        if kind == PointerDeviceKind::Mouse {
+            self.sync_initial_focus_highlight_mouse();
+        } else {
+            FocusHighlightManager::new().note_pointer_input(kind);
         }
         if phase != PointerPhase::Enter {
             self.last_pointer = position;
@@ -2511,6 +2553,7 @@ impl Runtime {
 
     /// Dispatches a portable key event and returns whether it was handled.
     pub fn dispatch_keyboard_event(&mut self, event: KeyboardEvent) -> bool {
+        FocusHighlightManager::new().note_keyboard_input();
         if let Some(debug) = &self.keyboard_event_debug_listener {
             debug(&format!("KEYBOARD: Key event received: {event:?}"));
             debug(&format!(
