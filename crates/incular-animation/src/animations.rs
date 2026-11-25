@@ -833,9 +833,28 @@ impl Animatable<f32> for CurveTween {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ConstantTween<T>(pub T);
 
-impl<T: Clone> Animatable<T> for ConstantTween<T> {
-    fn value_at(&self, _progress: f32) -> T {
+impl<T> ConstantTween<T> {
+    #[must_use]
+    pub const fn begin(&self) -> &T {
+        &self.0
+    }
+
+    #[must_use]
+    pub const fn end(&self) -> &T {
+        &self.0
+    }
+}
+
+impl<T: Clone> ConstantTween<T> {
+    #[must_use]
+    pub fn lerp(&self, _progress: f32) -> T {
         self.0.clone()
+    }
+}
+
+impl<T: Clone> Animatable<T> for ConstantTween<T> {
+    fn value_at(&self, progress: f32) -> T {
+        self.lerp(progress)
     }
 }
 

@@ -104,6 +104,18 @@ pub trait NullableTween: Tween {
     /// Flutter's `Color.lerp`, `Size.lerp` and `Rect.lerp` do with a null end.
     #[must_use]
     fn absent_like(present: Self) -> Self;
+
+    /// Some values define absent-end interpolation as a distinct operation
+    /// (for example, scaling each side of a border without blending it).
+    #[must_use]
+    fn interpolate_optional(begin: Option<Self>, end: Option<Self>, t: f32) -> Option<Self> {
+        match (begin, end) {
+            (None, None) => None,
+            (Some(begin), Some(end)) => Some(Self::lerp(begin, end, t)),
+            (Some(begin), None) => Some(Self::lerp(begin, Self::absent_like(begin), t)),
+            (None, Some(end)) => Some(Self::lerp(Self::absent_like(end), end, t)),
+        }
+    }
 }
 
 impl NullableTween for Color {
@@ -135,6 +147,12 @@ pub struct OptionalTween<T: NullableTween> {
     pub curve: Curve,
 }
 
+impl<T: NullableTween> Default for OptionalTween<T> {
+    fn default() -> Self {
+        Self::new(None, None)
+    }
+}
+
 impl<T: NullableTween> OptionalTween<T> {
     #[must_use]
     pub const fn new(begin: Option<T>, end: Option<T>) -> Self {
@@ -155,19 +173,13 @@ impl<T: NullableTween> OptionalTween<T> {
     /// absent. Exactly `begin` at 0 and `end` at 1 for present ends.
     #[must_use]
     pub fn lerp(&self, t: f32) -> Option<T> {
-        match (self.begin, self.end) {
-            (None, None) => None,
-            (Some(begin), Some(end)) => Some(T::lerp(begin, end, t)),
-            (Some(begin), None) => Some(T::lerp(begin, T::absent_like(begin), t)),
-            (None, Some(end)) => Some(T::lerp(T::absent_like(end), end, t)),
-        }
+        T::interpolate_optional(self.begin, self.end, t)
     }
 
-    /// The value at `progress` through the tween's curve. Like Flutter's
-    /// `Tween.transform`, exact endpoints retain their original absence.
+    /// Flutter's `Tween.transform` without applying the curve. Exact
+    /// endpoints retain their original absence.
     #[must_use]
-    pub fn evaluate(&self, progress: f32) -> Option<T> {
-        let t = self.curve.apply(progress);
+    pub fn transform(&self, t: f32) -> Option<T> {
         if t == 0. {
             self.begin
         } else if t == 1. {
@@ -175,6 +187,18 @@ impl<T: NullableTween> OptionalTween<T> {
         } else {
             self.lerp(t)
         }
+    }
+
+    /// The value at `progress` through the tween's curve.
+    #[must_use]
+    pub fn evaluate(&self, progress: f32) -> Option<T> {
+        self.transform(self.curve.apply(progress))
+    }
+}
+
+impl<T: NullableTween> crate::Animatable<Option<T>> for OptionalTween<T> {
+    fn value_at(&self, progress: f32) -> Option<T> {
+        self.evaluate(progress)
     }
 }
 

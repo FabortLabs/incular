@@ -180,3 +180,22 @@ The four gap assertions failed before the change. These cases remain
 partial matches: Flutter's Hidden/show/restart and reversible Detached
 are not part of the Incular lifecycle projection. Stopping and
 Terminated keep their own shutdown meaning.
+
+## Nullable borders and typed tween values
+
+All nine selected pinned `animation/tween_test.dart` originals passed.
+Six are fully paired: chaining (:99), nullable BorderTween (:128),
+SizeTween (:139), RectTween (:151), ConstantTween (:182), and nullable
+BorderRadiusTween (:218). Tests check numeric values, retained absence,
+and one-line diagnostics where those originals require them.
+A missing border endpoint scales its present sides instead of blending
+their color with a default border. Raw interpolation can yield a zero
+border or radius; transform preserves a genuinely absent endpoint.
+The optional types don't replace existing nonnullable Rust aliases.
+
+Animate and drive (:108 and :118) both update the driven value when
+the controller changes, but are partial because the original separately
+asserts Dart's animation details string. Matrix4Tween (:159) is partial:
+the XY translation and scale projection and the rotation around Z match,
+but Incular's affine transform does not represent the Z scale of 5 or
+its interpolated value of 3. Six focused Rust targets passed.

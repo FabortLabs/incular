@@ -412,7 +412,8 @@ pub use tree::{
 };
 pub use tweens::{
     AlignmentDirectionalTween, AlignmentTween, BorderRadiusTween, BorderTween, BoxConstraintsTween,
-    DecorationTween, EdgeInsetsDirectionalTween, EdgeInsetsTween, LerpTween, TextStyleTween,
+    DecorationTween, EdgeInsetsDirectionalTween, EdgeInsetsTween, LerpTween,
+    OptionalBorderRadiusTween, OptionalBorderTween, TextStyleTween,
 };
 pub use utilities::{
     Banner, BannerLocation, CheckedModeBanner, ErrorWidget, Expansible, PerformanceOverlay,

@@ -39,4 +39,11 @@ values to controllers (`value()`, `value_at(t)`, `forward`, `tick`, `map`);
 `ImplicitAnimation::new(controller, begin, end)` retargets from the current
 value (`set_target`, `set_curve`).
 
+`OptionalBorderTween` and `OptionalBorderRadiusTween` accept an absent
+endpoint. `lerp(t)` scales the present value toward a zero-width border
+or square corners; it returns no value when both endpoints are absent.
+`transform(0.0)` and `transform(1.0)` keep the original endpoint exactly,
+including absence. `ConstantTween` returns its single value at both
+ends and at every point between them.
+
 Related: [`Curves`](/docs/api/painting/curves).

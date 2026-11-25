@@ -1152,3 +1152,12 @@ packages/flutter/test/services/system_chrome_test.dart	215	setSystemUIChangeCall
 packages/flutter/test/services/system_chrome_test.dart	393	SystemChrome reports error when setSystemUIOverlayStyle fails	reference-ran-incular-open	upstream-system-chrome-comparisons.md#imperative-delivery-and-remaining-platform-commands
 packages/flutter/test/painting/box_decoration_test.dart	69	BoxDecoration.lerp supports custom BoxBorder subclasses	reference-ran-incular-open	upstream-limited-box-and-decoration-contracts.md#application-defined-box-borders
 packages/flutter/test/painting/box_decoration_test.dart	79	BoxDecoration.scale supports custom BoxBorder subclasses	reference-ran-incular-open	upstream-limited-box-and-decoration-contracts.md#application-defined-box-borders
+packages/flutter/test/animation/tween_test.dart	99	Can chain tweens	paired-match	upstream-tween-transform-and-lifecycle.md#nullable-borders-and-typed-tween-values
+packages/flutter/test/animation/tween_test.dart	108	Can animate tweens	partial-match	upstream-tween-transform-and-lifecycle.md#nullable-borders-and-typed-tween-values
+packages/flutter/test/animation/tween_test.dart	118	Can drive tweens	partial-match	upstream-tween-transform-and-lifecycle.md#nullable-borders-and-typed-tween-values
+packages/flutter/test/animation/tween_test.dart	128	BorderTween nullable test	paired-match	upstream-tween-transform-and-lifecycle.md#nullable-borders-and-typed-tween-values
+packages/flutter/test/animation/tween_test.dart	139	SizeTween	paired-match	upstream-tween-transform-and-lifecycle.md#nullable-borders-and-typed-tween-values
+packages/flutter/test/animation/tween_test.dart	151	RectTween	paired-match	upstream-tween-transform-and-lifecycle.md#nullable-borders-and-typed-tween-values
+packages/flutter/test/animation/tween_test.dart	159	Matrix4Tween	partial-match	upstream-tween-transform-and-lifecycle.md#nullable-borders-and-typed-tween-values
+packages/flutter/test/animation/tween_test.dart	182	ConstantTween	paired-match	upstream-tween-transform-and-lifecycle.md#nullable-borders-and-typed-tween-values
+packages/flutter/test/animation/tween_test.dart	218	BorderRadiusTween nullable test	paired-match	upstream-tween-transform-and-lifecycle.md#nullable-borders-and-typed-tween-values
