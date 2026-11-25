@@ -996,6 +996,23 @@ impl ScrollController {
         }
         let viewport = state.viewport_extent;
         let attachment = state.metric_attachment.map(|owner| owner.id);
+        let cached_page = state.cached_zero_page.take();
+        let page_fraction = update.physics.page_geometry_fraction();
+        if viewport == 0. && attachment.is_some() && page_fraction.is_some() {
+            let startup_page = match state.pending_initial_offset {
+                Some(crate::controller::InitialOffset::Page { page, .. }) => Some(page),
+                _ => None,
+            };
+            let old_page = previous_physics
+                .and_then(ScrollPhysics::page_geometry_fraction)
+                .filter(|_| old_viewport > 0.)
+                // Flutter installs the new viewport dimension before it
+                // decodes the old pixels. The centering origin for fractions
+                // greater than one is therefore zero on collapse, even though
+                // the divisor still uses the old width.
+                .map(|fraction| old_offset.max(0.) / (old_viewport * fraction));
+            state.cached_zero_page = Some(startup_page.or(old_page).or(cached_page).unwrap_or(0.));
+        }
         let fixed_start = if viewport > 0. || update.position_handoff.is_some() {
             state
                 .fixed_extent_start
@@ -1046,6 +1063,14 @@ impl ScrollController {
             .pending_initial_offset
             .take_if(|_| viewport > 0.)
             .map(|initial| initial.resolve(viewport))
+            .or_else(|| {
+                (viewport > 0.).then_some(())?;
+                Some(crate::pixels_for_page(
+                    cached_page?,
+                    viewport,
+                    page_fraction?,
+                ))
+            })
             .or(fixed_start)
         {
             // Flutter's first `applyContentDimensions` clamps the initial

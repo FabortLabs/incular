@@ -13,3 +13,20 @@ The first five exact originals from widgets/page_view_test.dart passed on the pi
 | :456 | Incular mounts no page 0 child at zero size, where Flutter has it mounted offstage. After expanding to 200×200 both show page 0. |
 
 Run cargo test --locked -p incular-runtime --test flutter350_upstream_page_resize -- --nocapture. This verifies framework geometry and attachment, not an OS surface bridge.
+
+## Cache the logical page at zero extent
+
+The repaired Rust target now passes the original `:65`, `:111`, and
+`:456` behaviors. A finite zero extent keeps one zero-sized, offstage
+child; it is not the unbounded-viewport fallback. A mounted controller
+caches the logical page when collapsing, exposes updates from zero-width
+jump/animate calls immediately, and converts the last page back to
+pixels on expansion. An unattached controller still does not invent a
+page through the zero-extent getter.
+
+An authored paired control uses snapping off and fraction 1.25. The
+pinned Flutter behavior is subtle: 425px is page 1.6 in a 200px viewport,
+but on collapse the centering origin becomes zero before Flutter
+decodes the old pixels, so it caches page 1.7. Expanding to 300px
+restores that cached page at 675px. The renderer and controller agree,
+and no extra page-changed notification fires in this sequence.

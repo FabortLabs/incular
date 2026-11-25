@@ -1177,7 +1177,7 @@ impl PageController {
     pub fn page(&self) -> Option<f32> {
         let viewport = self.scroll.viewport_extent();
         if viewport.partial_cmp(&0.) != Some(std::cmp::Ordering::Greater) {
-            return None;
+            return self.scroll.cached_zero_page();
         }
         let pixels = self.scroll.offset().clamp(0., self.scroll.max_offset());
         Some(incular_scroll::page_for_pixels(
@@ -1552,6 +1552,7 @@ fn build_mounted_page_view(mut value: PageView, state: &Rc<MountedPageView>) -> 
         Rc::new(move |notification: ScrollNotification| {
             if notification.depth == 0
                 && notification.kind == incular_scroll::ScrollNotificationType::Update
+                && notification.metrics.viewport_dimension > 0.
             {
                 let metrics = notification.metrics;
                 let page = incular_scroll::page_for_pixels(

@@ -158,6 +158,9 @@ pub(crate) struct ScrollState {
     pub(crate) pending_jump_offset: Option<f32>,
     /// Starting position applied on the first viewport publication.
     pub(crate) pending_initial_offset: Option<InitialOffset>,
+    /// A mounted PageView preserves its logical page when no pixel mapping
+    /// exists because the viewport extent is zero.
+    pub(crate) cached_zero_page: Option<f32>,
     /// A fixed-item controller's default applies to each new position.
     pub(crate) fixed_extent_start: Option<Box<FixedExtentStart>>,
 
@@ -283,10 +286,16 @@ impl ScrollController {
         if !(page.is_finite() && viewport_fraction.is_finite() && viewport_fraction > 0.) {
             return false;
         }
-        self.state.borrow_mut().pending_initial_offset = Some(InitialOffset::Page {
-            page,
-            viewport_fraction,
-        });
+        {
+            let mut state = self.state.borrow_mut();
+            if state.cached_zero_page.is_some() {
+                state.cached_zero_page = Some(page);
+            }
+            state.pending_initial_offset = Some(InitialOffset::Page {
+                page,
+                viewport_fraction,
+            });
+        }
         self.changes.notify();
         true
     }
@@ -347,6 +356,15 @@ impl ScrollController {
         self.state.borrow().viewport_extent
     }
 
+    /// The logical page of an attached zero-extent viewport. A controller
+    /// that has not established a viewport does not report a cached page.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn cached_zero_page(&self) -> Option<f32> {
+        self.changes.track();
+        self.state.borrow().cached_zero_page
+    }
+
     /// The current logical page of a mounted PageView position, even if its
     /// snapping physics are disabled. Used only for transferring live
     /// positions and not as a public page-controller query.
@@ -355,6 +373,9 @@ impl ScrollController {
     pub fn page_for_handoff(&self) -> Option<f32> {
         let state = self.state.borrow();
         let fraction = state.last_physics?.page_geometry_fraction()?;
+        if state.viewport_extent == 0. {
+            return state.cached_zero_page;
+        }
         (state.viewport_extent > 0.).then(|| {
             page_for_pixels(
                 state.offset.clamp(state.min_offset, state.max_offset),

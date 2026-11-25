@@ -1540,10 +1540,8 @@ impl RenderSliver for ViewportExtentRenderSliver {
     }
 
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout {
-        let viewport_extent = if constraints.viewport_main_axis_extent.is_finite()
-            && constraints.viewport_main_axis_extent > 0.
-        {
-            constraints.viewport_main_axis_extent
+        let viewport_extent = if constraints.viewport_main_axis_extent.is_finite() {
+            constraints.viewport_main_axis_extent.max(0.)
         } else {
             self.fallback_extent
         };
@@ -1571,7 +1569,9 @@ impl RenderSliver for ViewportExtentRenderSliver {
         let end = if extent > 0. {
             (cache_end / extent).ceil() as usize
         } else {
-            0
+            // Flutter still builds the first zero-sized child, but must
+            // not traverse the unbounded set of equal-offset children.
+            1
         };
         let range =
             start.min(self.item_count)..end.min(self.item_count).max(start.min(self.item_count));

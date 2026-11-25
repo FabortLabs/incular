@@ -189,3 +189,42 @@ fn controllerless_page_view_keeps_first_page_offstage_and_restores_visibility() 
         (true, vec![], vec![0])
     );
 }
+
+#[test]
+fn collapsing_a_wide_fraction_uses_the_zero_extent_centering_origin() {
+    use std::{cell::RefCell, rc::Rc};
+
+    let controller = PageController::new().with_viewport_fraction(1.25);
+    let notifications = Rc::new(RefCell::new(Vec::new()));
+    let build = |width| {
+        let notifications = notifications.clone();
+        let page_view = PageView::new(STATES.map(Text::new))
+            .controller(controller.clone())
+            .page_snapping(false)
+            .on_page_changed(move |page| notifications.borrow_mut().push(page));
+        Directionality::new(
+            TextDirection::Ltr,
+            Center::new(SizedBox::from_size(Size::new(width, 200.)).child(page_view)),
+        )
+        .into()
+    };
+    let close = |observed: Option<f32>, expected: f32| {
+        assert!(
+            (observed.unwrap() - expected).abs() < 0.000_01,
+            "{observed:?}"
+        );
+    };
+
+    let mut host = Host::new(build(200.), SURFACE);
+    assert!(controller.jump_to(425.));
+    host.pump();
+    close(controller.page(), 1.6);
+    assert_eq!(&*notifications.borrow(), &[2]);
+
+    host.update(build(0.));
+    close(controller.page(), 1.7);
+    host.update(build(300.));
+    close(controller.page(), 1.7);
+    assert_eq!(controller.offset(), 675.);
+    assert_eq!(&*notifications.borrow(), &[2]);
+}
