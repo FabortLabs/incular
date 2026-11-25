@@ -6,6 +6,8 @@
 - :555 and :600–:744 now match. A touch swipe grows the 450px expandable fill and it returns to 450px when the spring settles. The four jump regressions check exact boxes, return to rest, and include the reversed vertical hit at (400,25). The fix adds the part clipped by the sliver-local scroll offset to the child's layout budget, without adding it to the scroll range.
 - The three native targets now pass all 23 tests. :838 relayouts the padded intrinsic child during a drag even when all necessary list rows are already cached; it stretches without growing the scroll range. :793 and :958 now match the geometry exercised by the neutral button/logo analogues. :902 and :1283 agree on final-row semantics but do not equate a Flutter finder with a native paint intersection.
 
+A separate pinned fixture follows the same scroll-body render child across the trailing cache boundary in both axes. At the exact boundary it measures zero and has no semantic node; 50px into the cache it measures 50px and is hidden; at the viewport edge it measures its 100px natural size and remains hidden; on screen it measures the current 25px/50px paint budget and is visible. Incular had preserved the semantics label but collapsed both hidden boxes to zero. It now matches all checkpoints, retains child identity, and keeps the 1,200px controller maximum unchanged. The two authored Flutter tests and all 28 focused native fill/viewport tests pass.
+
 The rest of this file records the original pre-fix baseline.
 
 Pinned Flutter 3.50.0 passed the fourteen selected originals for default fill, non-scrolling fill, and the two non-overscroll accessibility groups. The Rust target has eight passes and two intentional failures.

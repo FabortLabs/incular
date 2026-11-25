@@ -1690,13 +1690,46 @@ impl RenderSliver for FillRemainingRenderSliver {
             // extent forward would keep a stale maximum after content above shrinks.
             remaining_extent.max(child_hint)
         };
-        let scroll_extent = if self.has_scroll_body {
-            constraints.viewport_main_axis_extent.max(0.)
+        let (geometry, child_constraints) = if self.has_scroll_body {
+            // A scroll body claims one viewport of scroll range, independently
+            // of the part that can paint in this frame. At the trailing cache
+            // boundary, lay out the hidden child loosely in the cache budget
+            // rather than collapsing it until it is on screen.
+            let scroll_extent = constraints.viewport_main_axis_extent;
+            let cache_extent = calculate_cache_offset(constraints, 0., scroll_extent);
+            let (start, end) = constraints.visible_interval(extent);
+            let paint_extent = end - start;
+            let max_extent = if extent == 0. { cache_extent } else { extent };
+            let cross = constraints.cross_axis_extent;
+            let child_constraints = match constraints.axis {
+                Axis::Vertical => Constraints::new(cross, cross, extent, max_extent),
+                Axis::Horizontal => Constraints::new(extent, max_extent, cross, cross),
+            };
+            let geometry = SliverGeometry {
+                scroll_extent,
+                paint_extent,
+                layout_extent: paint_extent,
+                max_paint_extent: paint_extent,
+                hit_test_extent: paint_extent,
+                cache_extent,
+                visible: paint_extent > 0.,
+                has_visual_overflow: extent > constraints.remaining_paint_extent
+                    || constraints.scroll_offset > 0.,
+                ..SliverGeometry::ZERO
+            };
+            (geometry, child_constraints)
         } else {
-            extent
+            (
+                SliverGeometry::from_scroll_extent(constraints, extent),
+                sliver_child_constraints(
+                    constraints.axis,
+                    constraints.cross_axis_extent,
+                    Some(extent),
+                ),
+            )
         };
         SliverLayout {
-            geometry: SliverGeometry::from_scroll_extent(constraints, scroll_extent),
+            geometry,
             children: vec![SliverChildLayout {
                 id: SliverChildId(0),
                 widget: self.child.clone(),
@@ -1706,11 +1739,7 @@ impl RenderSliver for FillRemainingRenderSliver {
                 // sliver's local coordinate space.
                 offset: 0.,
                 cross_offset: 0.,
-                constraints: sliver_child_constraints(
-                    constraints.axis,
-                    constraints.cross_axis_extent,
-                    Some(extent),
-                ),
+                constraints: child_constraints,
                 extent,
                 placement: SliverChildPlacement::Flow,
             }],
