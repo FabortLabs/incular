@@ -1106,3 +1106,7 @@ packages/flutter/test/widgets/spell_check_test.dart	361	buildTextSpanWithSpellCh
 packages/flutter/test/widgets/spell_check_test.dart	389	buildTextSpanWithSpellCheckSuggestions does not throw when text contains regex reserved characters	paired-match	upstream-spell-check.md#retained-widget-span-comparisons
 packages/flutter/test/widgets/spell_check_test.dart	419	buildTextSpanWithSpellCheckSuggestions does not throw when text is being deleted	paired-match	upstream-spell-check.md#retained-widget-span-comparisons
 packages/flutter/test/painting/border_radius_test.dart	669	BorderRadius copyWith parameters	paired-match	upstream-focus-corners-curves-previews.md#rounded-corner-value-parity-follow-up
+packages/flutter/test/painting/paint_image_test.dart	35	Cover and align	paired-match	upstream-decoration-image-paint.md#original-drawing-and-nine-slice-comparisons
+packages/flutter/test/painting/paint_image_test.dart	165	centerSlice with scale ≠ 1	reference-ran-incular-open	upstream-decoration-image-paint.md#original-drawing-and-nine-slice-comparisons
+packages/flutter/test/painting/paint_image_test.dart	185	centerSlice tolerates floating-point rounding when scale divides unevenly	paired-match	upstream-decoration-image-paint.md#original-drawing-and-nine-slice-comparisons
+packages/flutter/test/painting/paint_image_test.dart	206	centerSlice does not throw when the destination rect is smaller than the slice borders	paired-match	upstream-decoration-image-paint.md#original-drawing-and-nine-slice-comparisons

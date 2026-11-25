@@ -1028,21 +1028,18 @@ fn paint_nine(
 ) {
     let scale = paint.scale.max(0.001);
     let split = |start: f32, end: f32, total: f32, origin: f32, extent: f32| {
-        let (mut low, mut high) = (start / scale, (total - end) / scale);
-        if low + high > extent && low + high > 0.0 {
-            let k = extent / (low + high);
-            low *= k;
-            high *= k;
-        }
-        (
-            [0.0, start, end, total],
-            [
-                origin,
-                origin + low,
-                origin + extent - high,
-                origin + extent,
-            ],
-        )
+        let (low, high) = (start / scale, (total - end) / scale);
+        let edge = origin + extent;
+        let (first, second) = if low + high >= extent && low + high > 0.0 {
+            // The borders meet at one shared edge. Computing each side
+            // separately can put them out of order by a rounding unit.
+            let split = origin + extent * (low / (low + high));
+            (split, split)
+        } else {
+            let first = origin + low;
+            (first, (edge - high).max(first))
+        };
+        ([0.0, start, end, total], [origin, first, second, edge])
     };
     let (sx, dx) = split(
         center.origin.x,
@@ -1089,21 +1086,29 @@ pub(crate) fn paint_image(paint: &ImagePaint, rect: Rect) -> DisplayList {
     let decoded = paint.image.decoded();
     let pixels = Size::new(decoded.width() as f32, decoded.height() as f32);
     let scale = paint.scale.max(0.001);
-    let mut output = rect.size;
-    let mut input = pixels;
     let border = paint.center_slice.map(|slice| {
         Size::new(
             pixels.width / scale - slice.size.width,
             pixels.height / scale - slice.size.height,
         )
     });
-    if let Some(border) = border {
-        output = Size::new(output.width - border.width, output.height - border.height);
-        input = Size::new(
-            input.width - border.width * scale,
-            input.height - border.height * scale,
-        );
-    }
+    let output = rect.size;
+    let (input, fit_output) = match border {
+        Some(border) => (
+            Size::new(
+                (pixels.width - border.width * scale).max(0.0),
+                (pixels.height - border.height * scale).max(0.0),
+            ),
+            // A destination smaller than a slice border has no stretchable
+            // center on that axis. Flutter fits that empty center, then adds
+            // the fixed borders back. Do not construct a negative Size.
+            Size::new(
+                (output.width - border.width).max(0.0),
+                (output.height - border.height).max(0.0),
+            ),
+        ),
+        None => (pixels, output),
+    };
     let fit = paint.fit.unwrap_or(if paint.center_slice.is_none() {
         crate::tree::ImageFit::ScaleDown
     } else {
@@ -1115,12 +1120,11 @@ pub(crate) fn paint_image(paint: &ImagePaint, rect: Rect) -> DisplayList {
     } = crate::apply_box_fit(
         fit,
         Size::new(input.width / scale, input.height / scale),
-        output,
+        fit_output,
     );
     let source = Size::new(source.width * scale, source.height * scale);
     let mut destination = destination;
     if let Some(border) = border {
-        output = Size::new(output.width + border.width, output.height + border.height);
         destination = Size::new(
             destination.width + border.width,
             destination.height + border.height,
