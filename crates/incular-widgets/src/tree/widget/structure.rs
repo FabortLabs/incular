@@ -2241,8 +2241,8 @@ impl WidgetKind {
             WidgetKind::Unconstrained { child, .. } => (
                 WidgetType::Unconstrained,
                 Layout,
-                Single,
-                WidgetChildren::Single(child),
+                Optional,
+                WidgetChildren::Optional(child.as_ref()),
             ),
             WidgetKind::ProxyLayout { mode, child } => (
                 match mode {

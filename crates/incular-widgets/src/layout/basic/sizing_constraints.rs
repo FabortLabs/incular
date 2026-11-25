@@ -369,20 +369,37 @@ pub struct UnconstrainedBox {
     alignment: Alignment,
     #[builder(default = Clip::None)]
     clip_behavior: Clip,
-    #[builder(setter(into))]
-    child: Widget,
+    #[builder(default, setter(strip_option, into))]
+    child: Option<Widget>,
+}
+
+impl Default for UnconstrainedBox {
+    fn default() -> Self {
+        Self::empty()
+    }
 }
 
 impl UnconstrainedBox {
     /// Creates an UnconstrainedBox.
     #[must_use]
     pub fn new(child: impl Into<Widget>) -> Self {
+        Self::empty().child(child)
+    }
+
+    #[must_use]
+    pub const fn empty() -> Self {
         Self {
             constrained_axis: None,
             alignment: Alignment::CENTER,
             clip_behavior: Clip::None,
-            child: child.into(),
+            child: None,
         }
+    }
+
+    #[must_use]
+    pub fn child(mut self, child: impl Into<Widget>) -> Self {
+        self.child = Some(child.into());
+        self
     }
 
     /// Aligns the child within the box. Defaults to centered, as in Flutter's
@@ -623,7 +640,7 @@ pub struct ConstraintsTransformBox {
     transform: ConstraintMapper,
     alignment: Alignment,
     clip_behavior: Clip,
-    child: Widget,
+    child: Option<Widget>,
 }
 
 impl ConstraintsTransformBox {
@@ -632,7 +649,20 @@ impl ConstraintsTransformBox {
         transform: impl Fn(Constraints) -> Constraints + 'static,
         child: impl Into<Widget>,
     ) -> Self {
-        Self::try_new(move |constraints| Ok(transform(constraints)), child)
+        Self::empty(transform).child(child)
+    }
+
+    /// Creates a proxy without a child. It takes the incoming smallest
+    /// size and does not invoke the constraint transform until a child mounts.
+    #[must_use]
+    pub fn empty(transform: impl Fn(Constraints) -> Constraints + 'static) -> Self {
+        Self::from_mapper(move |constraints| Ok(transform(constraints)))
+    }
+
+    #[must_use]
+    pub fn child(mut self, child: impl Into<Widget>) -> Self {
+        self.child = Some(child.into());
+        self
     }
 
     /// Transforms constraints through a fallible callback. Invalid output
@@ -642,11 +672,17 @@ impl ConstraintsTransformBox {
         transform: impl Fn(Constraints) -> Result<Constraints, ConstraintError> + 'static,
         child: impl Into<Widget>,
     ) -> Self {
+        Self::from_mapper(transform).child(child)
+    }
+
+    fn from_mapper(
+        transform: impl Fn(Constraints) -> Result<Constraints, ConstraintError> + 'static,
+    ) -> Self {
         Self {
             transform: ConstraintMapper(Rc::new(transform)),
             alignment: Alignment::CENTER,
             clip_behavior: Clip::None,
-            child: child.into(),
+            child: None,
         }
     }
 

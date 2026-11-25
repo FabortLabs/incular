@@ -39,9 +39,13 @@ fn widget_clips(widget: &WidgetKind) -> bool {
             clip_behavior,
             child,
             ..
+        }
+        | WidgetKind::Unconstrained {
+            clip_behavior,
+            child,
+            ..
         } => child.is_some() && *clip_behavior != Clip::None,
         WidgetKind::Flex { clip_behavior, .. }
-        | WidgetKind::Unconstrained { clip_behavior, .. }
         | WidgetKind::Stack { clip_behavior, .. }
         | WidgetKind::IndexedStack { clip_behavior, .. }
         | WidgetKind::Scroll { clip_behavior, .. } => *clip_behavior != Clip::None,

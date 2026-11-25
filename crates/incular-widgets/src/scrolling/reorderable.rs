@@ -121,6 +121,7 @@ pub(crate) fn install_listener(
         | WidgetKind::FittedBox { child, .. }
         | WidgetKind::Overflow { child, .. }
         | WidgetKind::SizedOverflow { child, .. }
+        | WidgetKind::Unconstrained { child, .. }
         | WidgetKind::ClipPath { child, .. } => child
             .as_mut()
             .and_then(|child| install_listener(child, wrap)),
@@ -133,7 +134,6 @@ pub(crate) fn install_listener(
         | WidgetKind::Padding { child, .. }
         | WidgetKind::Constrained { child, .. }
         | WidgetKind::Limited { child, .. }
-        | WidgetKind::Unconstrained { child, .. }
         | WidgetKind::ProxyLayout { child, .. }
         | WidgetKind::Fractional { child, .. }
         | WidgetKind::Baseline { child, .. }

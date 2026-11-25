@@ -155,3 +155,70 @@ fn a_zero_size_constraints_transform_still_calls_its_painter() {
     let _ = tree.paint();
     assert_eq!(calls.get(), 1);
 }
+
+#[test]
+fn an_empty_constraints_transform_has_no_child_or_layout_callback_on_a_zero_area_view() {
+    use incular_widgets::{Center, Directionality, internal::Key};
+    const TOKEN: Key = Key::Value(810);
+    let calls = Rc::new(Cell::new(0));
+    let base = TransformBox::empty({
+        let calls = calls.clone();
+        move |incoming| {
+            calls.set(calls.get() + 1);
+            TransformBox::width_unconstrained(incoming)
+        }
+    });
+    let scene = |child: bool| {
+        let probe = if child {
+            base.clone().child(SizedBox::square(25.))
+        } else {
+            base.clone()
+        };
+        Directionality::new(
+            TextDirection::Ltr,
+            Center::new(Widget::from(probe).with_key(TOKEN)),
+        )
+        .into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scene(false)).unwrap();
+    tree.layout(Constraints::tight(Size::ZERO)).unwrap();
+    let box_id = tree.element_with_key(&TOKEN).unwrap();
+    let render = tree.render_id(box_id).unwrap();
+    assert_eq!(size(&tree, box_id), Size::ZERO);
+    assert!(tree.children(box_id).unwrap().is_empty());
+    assert_eq!(calls.get(), 0);
+    let _ = tree.paint();
+
+    for child in [true, false] {
+        tree.update(root, scene(child)).unwrap();
+        tree.layout(Constraints::tight(Size::new(100., 100.)))
+            .unwrap();
+        assert_eq!(tree.render_id(box_id), Some(render));
+        assert_eq!(tree.children(box_id).unwrap().len(), usize::from(child));
+        assert_eq!(
+            size(&tree, box_id),
+            if child {
+                Size::new(25., 25.)
+            } else {
+                Size::ZERO
+            }
+        );
+        assert_eq!(calls.get(), 1);
+    }
+}
+
+#[test]
+fn unconstrained_box_contains_the_placeholder_on_a_zero_area_view() {
+    use incular_widgets::{Center, Directionality, Placeholder, UnconstrainedBox, internal::Key};
+    const TOKEN: Key = Key::Value(811);
+    let proxy = Widget::from(UnconstrainedBox::new(Placeholder::new())).with_key(TOKEN);
+    let mut tree = WidgetTree::new();
+    tree.mount(Directionality::new(TextDirection::Ltr, Center::new(proxy)).into())
+        .unwrap();
+    tree.layout(Constraints::tight(Size::ZERO)).unwrap();
+    let proxy = tree.element_with_key(&TOKEN).unwrap();
+    assert_eq!(size(&tree, proxy), Size::ZERO);
+    assert_eq!(tree.children(proxy).unwrap().len(), 1);
+    let _ = tree.paint();
+}

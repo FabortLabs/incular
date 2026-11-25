@@ -1352,3 +1352,5 @@ packages/flutter/test/rendering/box_test.dart	482	throws if the resulting constr
 packages/flutter/test/rendering/box_test.dart	499	overflow is reported when insufficient size is given and clipBehavior is Clip.none	partial-match	upstream-constraints-transform.md
 packages/flutter/test/rendering/box_test.dart	563	handles flow layout	partial-match	upstream-constraints-transform.md
 packages/flutter/test/rendering/box_test.dart	584	paints even when its size is empty	partial-match	upstream-constraints-transform.md
+packages/flutter/test/widgets/basic_test.dart	1044	does not crash at zero area	paired-match	upstream-constraints-transform.md#childless-and-zero-area-constraints-proxies
+packages/flutter/test/widgets/basic_test.dart	1078	ConstraintsTransformBox does not crash at zero area	paired-match	upstream-constraints-transform.md#childless-and-zero-area-constraints-proxies

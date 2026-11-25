@@ -3789,6 +3789,11 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
                 Some(0.)
             }
         }
+        WidgetKind::Unconstrained { child, transform, .. } => child
+            .as_ref()
+            .map_or(Some(0.0), |child| {
+                if transform.is_some() { None } else { widget_main_extent_hint(child, axis) }
+            }),
         WidgetKind::Align { child, .. }
         | WidgetKind::ClipOval { child, .. }
         | WidgetKind::Gesture { child, .. }
@@ -3796,7 +3801,6 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
         | WidgetKind::DragTarget { child, .. }
         | WidgetKind::IgnorePointer { child, .. }
         | WidgetKind::AbsorbPointer { child, .. }
-        | WidgetKind::Unconstrained { child, .. }
         | WidgetKind::ProxyLayout { child, .. }
         | WidgetKind::RepaintBoundary { child }
         | WidgetKind::AnimationTicker { child, .. }

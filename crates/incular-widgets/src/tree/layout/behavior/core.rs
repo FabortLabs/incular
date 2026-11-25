@@ -243,19 +243,19 @@ impl WidgetTree {
                 ref transform,
                 clip_behavior,
             } => {
-                let child_constraints = if let Some(transform) = transform {
-                    (transform.0)(constraints).map_err(|error| {
-                        TreeError::InvalidWidgetConfiguration {
-                            widget: "ConstraintsTransformBox",
-                            reason: format!(
-                                "transformed constraints are not normalized: {error:?}"
-                            ),
-                        }
-                    })?
-                } else {
-                    unconstrained_constraints(constraints, constrained_axis)
-                };
                 let measured = if let Some(&child) = children.first() {
+                    let child_constraints = if let Some(transform) = transform {
+                        (transform.0)(constraints).map_err(|error| {
+                            TreeError::InvalidWidgetConfiguration {
+                                widget: "ConstraintsTransformBox",
+                                reason: format!(
+                                    "transformed constraints are not normalized: {error:?}"
+                                ),
+                            }
+                        })?
+                    } else {
+                        unconstrained_constraints(constraints, constrained_axis)
+                    };
                     self.layout_render(child, child_constraints)?;
                     let child = self.render_live(child, "retained render must remain live");
                     Some((child.size, child.baseline))

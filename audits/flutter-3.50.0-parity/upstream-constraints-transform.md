@@ -22,3 +22,13 @@ unbreakable-word fallback. :563 remains partial because the Flutter
 original also calls the native intrinsic-measurement API. A direct
 painter still runs at zero area; :584 is partial because the original
 uses an empty paragraph's draw call, not a custom painter.
+
+## Childless and zero-area constraints proxies
+
+The pinned `widgets/basic_test.dart:1044` and :1078 originals
+passed. A zero-area UnconstrainedBox with a direction-aware placeholder
+and a genuinely childless ConstraintsTransformBox both finish layout
+and paint at zero size. In the native retained check the childless
+proxy does not allocate a fake child or invoke its constraint callback;
+mounting and removing a real child keeps the original proxy renderer
+and invokes the callback only while the child is present.
