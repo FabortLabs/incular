@@ -871,3 +871,5 @@ packages/flutter/test/painting/border_rtl_test.dart	618	BorderDirectional.isUnif
 packages/flutter/test/painting/border_rtl_test.dart	852	BorderDirectional.scale	paired-match	upstream-border-constraints-formatters.md#physical-and-directional-border-values
 packages/flutter/test/painting/border_test.dart	195	Border.lerp	paired-match	upstream-border-constraints-formatters.md#nullable-border-interpolation
 packages/flutter/test/painting/border_rtl_test.dart	866	BorderDirectional.lerp	paired-match	upstream-border-constraints-formatters.md#nullable-border-interpolation
+packages/flutter/test/painting/border_side_test.dart	68	BorderSide - asserts when copied incorrectly	paired-match	upstream-border-constraints-formatters.md#side-copy-and-stroke-paint
+packages/flutter/test/painting/border_side_test.dart	89	BorderSide - toPaint	paired-match	upstream-border-constraints-formatters.md#side-copy-and-stroke-paint

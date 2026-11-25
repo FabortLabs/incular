@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-widgets`: `BorderSide` can copy selected fields and convert to
+  renderer-neutral stroke paint.
+
 - `incular-widgets`: physical and directional borders support optional
   interpolation endpoints, including extrapolation.
 

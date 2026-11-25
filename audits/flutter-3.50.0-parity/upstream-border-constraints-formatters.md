@@ -133,3 +133,15 @@ Scaling to zero produces an absent stroke, while a solid pair that
 extrapolates to exactly zero still yields a hairline. Logical sides
 remain independent of direction. Fifteen focused Rust tests passed.
 This does not cover transitions between physical and directional types.
+
+## Side copy and stroke paint
+
+The pinned `border_side_test.dart:68,89` originals passed, and Rust covers
+every asserted replacement and paint property. A solid side produces a
+stroke with the configured color and width; an absent style produces a
+transparent zero-width stroke description even with a configured width.
+Both use source-over. Stroke alignment is applied to path geometry, not
+encoded in either paint description. Border stroke paths use the same
+conversion. Twelve focused Rust tests passed, including leading hairline
+geometry and paint validation. Constructor validation remains a separate
+contract from copying.

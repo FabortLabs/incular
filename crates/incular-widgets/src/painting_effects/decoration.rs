@@ -2,7 +2,7 @@
 
 use incular_core::{Color, Lerp, Offset};
 use incular_image::ImageHandle;
-use incular_rendering::{BlendMode, Brush, FilterQuality};
+use incular_rendering::{BlendMode, Brush, FilterQuality, Paint};
 use smart_default::SmartDefault;
 use typed_builder::TypedBuilder;
 
@@ -62,6 +62,42 @@ impl BorderSide {
     #[must_use]
     pub const fn none() -> Self {
         Self::NONE
+    }
+
+    /// Copies this side, replacing only the supplied properties.
+    ///
+    /// # Panics
+    ///
+    /// In debug builds, panics if the resulting width is negative or NaN.
+    #[must_use]
+    pub fn copy_with(
+        self,
+        color: Option<Color>,
+        width: Option<f32>,
+        style: Option<BorderStyle>,
+        stroke_align: Option<f32>,
+    ) -> Self {
+        let width = width.unwrap_or(self.width);
+        debug_assert!(
+            width >= 0.0,
+            "border side width must not be negative or NaN"
+        );
+        Self {
+            color: color.unwrap_or(self.color),
+            width,
+            style: style.unwrap_or(self.style),
+            stroke_align: stroke_align.unwrap_or(self.stroke_align),
+        }
+    }
+
+    /// The stroke paint for this side. Alignment affects the path, not paint.
+    #[must_use]
+    pub fn to_paint(self) -> Paint {
+        let (color, width) = match self.style {
+            BorderStyle::Solid => (self.color, self.width),
+            BorderStyle::None => (Color::TRANSPARENT, 0.0),
+        };
+        Paint::new().color(color).stroke_width(width).stroke()
     }
 
     /// Zero-width absent sides merge with anything. Other sides must agree

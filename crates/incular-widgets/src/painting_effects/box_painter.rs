@@ -7,7 +7,7 @@ use std::{rc::Rc, sync::Arc};
 
 use incular_config::{Clip, EdgeInsets};
 use incular_core::{Color, Offset, Rect, Size};
-use incular_rendering::{Brush, Canvas, CornerRadii, DisplayList, FillRule, Path, RRect, Stroke};
+use incular_rendering::{Brush, Canvas, CornerRadii, DisplayList, FillRule, Path, RRect};
 
 use super::decoration::{
     Border, BorderSide, BorderStyle, BoxDecoration, BoxShadow, BoxShape, DecorationImage,
@@ -562,14 +562,7 @@ fn paint_border_sides(canvas: &mut Canvas, rect: Rect, border: Border) {
 
 /// `BorderSide.toPaint` applied to a path.
 fn stroke(canvas: &mut Canvas, side: &BorderSide, path: Path) {
-    canvas.stroke_path(
-        Arc::new(path),
-        side.color,
-        Stroke {
-            width: side.width,
-            ..Stroke::default()
-        },
-    );
+    canvas.draw_path(Arc::new(path), &side.to_paint(), FillRule::NonZero);
 }
 
 /// `Canvas.drawDRRect`: the area inside `outer` and outside `inner`.
