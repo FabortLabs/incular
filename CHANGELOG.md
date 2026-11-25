@@ -127,6 +127,10 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-widgets`: a childless Container with only one fixed dimension
+  fills the other bounded axis. Alignment is ignored for childless
+  Containers unless their explicit constraints are tight.
+
 - `incular-widgets`: containers accept taps on background or foreground
   decoration geometry without implicitly clipping the child. Layout-only
   containers remain non-interactive.

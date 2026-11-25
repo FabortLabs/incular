@@ -796,3 +796,7 @@ packages/flutter/test/widgets/container_test.dart	608	giving clipBehaviour Clip.
 packages/flutter/test/widgets/container_test.dart	621	giving clipBehaviour not a Clip.None, will add a ClipPath to the tree	partial-match	upstream-limited-box-and-decoration-contracts.md#container-decoration-and-child-clips
 packages/flutter/test/widgets/container_test.dart	767	using clipBehaviour and shadow, should not clip the shadow	partial-match	upstream-limited-box-and-decoration-contracts.md#container-decoration-and-child-clips
 packages/flutter/test/widgets/container_test.dart	666	Container is hittable only when having decorations	paired-match	upstream-limited-box-and-decoration-contracts.md#container-decoration-hit-testing
+packages/flutter/test/widgets/container_test.dart	558	Can be placed in an infinite box	paired-match	upstream-limited-box-and-decoration-contracts.md#childless-and-zero-area-container-layout
+packages/flutter/test/widgets/container_test.dart	730	Container discards alignment when the child parameter is null and constraints is not Tight	paired-match	upstream-limited-box-and-decoration-contracts.md#childless-and-zero-area-container-layout
+packages/flutter/test/widgets/container_test.dart	792	Container does not crash at zero area	paired-match	upstream-limited-box-and-decoration-contracts.md#childless-and-zero-area-container-layout
+packages/flutter/test/widgets/container_test.dart	806	DecoratedBox does not crash at zero area	paired-match	upstream-limited-box-and-decoration-contracts.md#childless-and-zero-area-container-layout

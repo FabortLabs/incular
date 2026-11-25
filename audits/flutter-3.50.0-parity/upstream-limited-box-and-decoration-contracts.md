@@ -89,3 +89,19 @@ still take a side tap unless child clipping is explicitly enabled. The
 rounded corner control rejects the top-left point. The exact Flutter
 registration, three authored Flutter probes, and 33 focused Rust tests
 passed. The new behavior is not a raster comparison.
+
+## Childless and zero-area Container layout
+
+Flutter drops the Align when a childless Container has no tight explicit
+constraint. This was verified structurally against the mounted Incular tree;
+an extra control verifies that tight explicit sizing still keeps the Align.
+The childless width-only probe now reports 40×60 in loose 100×60 bounds,
+where Incular previously reported 40×0. Bounded axes fill available space;
+an unbounded axis keeps its parent's finite minimum. The exact vertical
+ListView case completes successfully with a 100×0 child, and the two
+zero-area decoration cases also complete at 0×0.
+
+All four exact original Flutter cases at `widgets/container_test.dart:558,
+730,792,806`, all four authored Flutter samples, and 24 focused Rust tests
+passed. The original zero-area assertions only check size and successful
+layout, not rendered text in an empty area.

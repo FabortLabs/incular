@@ -8,12 +8,14 @@
 use std::rc::Rc;
 
 use incular_config::{Alignment, Clip, Constraints, EdgeInsets};
-use incular_core::{Color, Transform as CoreTransform};
+use incular_core::{Color, Size, Transform as CoreTransform};
 use incular_rendering::{Border, Brush, CornerRadii};
 use smart_default::SmartDefault;
 use typed_builder::TypedBuilder;
 
-use crate::layout::basic::{Align, ClipRRect, ClipRect, ConstrainedBox, Padding, SizedBox};
+use crate::layout::basic::{
+    Align, ClipRRect, ClipRect, ConstrainedBox, FractionallySizedBox, Padding, SizedBox,
+};
 use crate::{Transform, Widget};
 
 /// A convenience composition widget combining sizing, constraints, margin,
@@ -193,23 +195,36 @@ impl Container {
 
 impl From<Container> for Widget {
     fn from(value: Container) -> Self {
-        let has_explicit_dimensions =
-            value.width.is_some() || value.height.is_some() || value.constraints.is_some();
-
-        let mut current = if let Some(child) = value.child {
-            child
-        } else if value.alignment.is_some() || has_explicit_dimensions {
-            SizedBox::shrink().into()
-        } else {
-            // Flutter Container semantics: when no child and no alignment/explicit constraints,
-            // expand to fill bounded constraints, and shrink to zero in unbounded constraints.
-            Align::new(Alignment::CENTER, SizedBox::shrink()).into()
+        let non_negative = |value: Option<f32>| value.map(|value| value.max(0.0));
+        let constraints = value.constraints.map(|constraints| {
+            constraints.tighten(non_negative(value.width), non_negative(value.height))
+        });
+        let tightly_sized = constraints.map_or_else(
+            || value.width.is_some() && value.height.is_some(),
+            |bounds| {
+                bounds.min_width() == bounds.max_width()
+                    && bounds.min_height() == bounds.max_height()
+            },
+        );
+        let mut current = match value.child {
+            None if !tightly_sized => {
+                // Flutter uses LimitedBox(0, 0) around an expanding child.
+                // A one-to-one fill over a zero-size leaf has the same
+                // constraints: finite maxima, or the existing minima on
+                // unbounded axes. No Align is inserted for an absent child.
+                FractionallySizedBox::new(Widget::box_(Size::ZERO, Color::TRANSPARENT))
+                    .width_factor(1.0)
+                    .height_factor(1.0)
+                    .into()
+            }
+            child => {
+                let child = child.unwrap_or_else(|| SizedBox::shrink().into());
+                match value.alignment {
+                    Some(alignment) => Align::new(alignment, child).into(),
+                    None => child,
+                }
+            }
         };
-
-        // 1. Inner Alignment
-        if let Some(alignment) = value.alignment {
-            current = Align::new(alignment, current).into();
-        }
 
         let decoration = value.decoration.as_ref();
         let border = value.border.or_else(|| {
@@ -302,10 +317,8 @@ impl From<Container> for Widget {
         // `BoxConstraints.tightFor(width, height)`. An infinite dimension
         // (`width: double.infinity`) fills the parent's maximum, which is
         // what `SizedBox` does with it.
-        let non_negative = |value: Option<f32>| value.map(|value| value.max(0.0));
-        match (value.constraints, value.width, value.height) {
-            (Some(constraints), width, height) => {
-                let constraints = constraints.tighten(non_negative(width), non_negative(height));
+        match (constraints, value.width, value.height) {
+            (Some(constraints), _, _) => {
                 if constraints != Constraints::unbounded() {
                     current = ConstrainedBox::new(constraints, current).into();
                 }

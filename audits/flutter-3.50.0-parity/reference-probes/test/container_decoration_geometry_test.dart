@@ -115,4 +115,23 @@ void main() {
       }
     }
   });
+  testWidgets('a childless Container fills the other bounded axis', (
+    tester,
+  ) async {
+    const key = ValueKey('childless');
+    await tester.pumpWidget(
+      Align(
+        alignment: Alignment.topLeft,
+        child: SizedBox(
+          width: 100,
+          height: 60,
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: Container(key: key, width: 40),
+          ),
+        ),
+      ),
+    );
+    expect(tester.getSize(find.byKey(key)), const Size(40, 60));
+  });
 }

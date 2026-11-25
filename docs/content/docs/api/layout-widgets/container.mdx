@@ -116,6 +116,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 Set or replace the child — any widget converts via `Into<Widget>`.
 
+With no child and no tight explicit constraints, Container fills bounded
+axes and uses the parent minimum on unbounded axes. A fixed width alone
+does not prevent it from filling a bounded height.
+
 ### `alignment(alignment: Alignment)`
 
 Positions the child when the Container is larger than it. No visible effect

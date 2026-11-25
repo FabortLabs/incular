@@ -1,8 +1,8 @@
 //! Container descriptor behavior tests.
 
-use incular_config::{Clip, EdgeInsets};
+use incular_config::{Clip, Constraints, EdgeInsets};
 use incular_core::{Color, Size, Transform};
-use incular_widgets::{Container, DecoratedBox, Text, Widget};
+use incular_widgets::{Container, DecoratedBox, Text, Widget, internal::WidgetTree};
 
 #[test]
 fn constructors_and_empty_builder_share_the_same_defaults() {
@@ -142,11 +142,26 @@ fn lowering_without_clipping_keeps_content_sized_child_path() {
 }
 
 #[test]
-fn empty_container_lowering_keeps_fallback_alignment_behavior() {
+fn empty_container_fills_only_bounded_axes() {
     let widget: Widget = Container::builder()
         .clip_behavior(Clip::None)
         .build()
         .into();
 
-    assert_eq!(widget.debug_type_name(), "Align");
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(widget).expect("mount");
+    for (constraints, expected) in [
+        (
+            Constraints::loose(Size::new(120.0, 90.0)),
+            Size::new(120.0, 90.0),
+        ),
+        (
+            Constraints::new(0.0, 120.0, 8.0, f32::INFINITY),
+            Size::new(120.0, 8.0),
+        ),
+        (Constraints::unbounded(), Size::ZERO),
+    ] {
+        tree.layout(constraints).expect("layout");
+        assert_eq!(tree.element_geometry(root).unwrap().1, expected);
+    }
 }
