@@ -11,9 +11,7 @@ use std::{
 
 use incular_config::{Clip, EdgeInsets, TextDirection};
 use incular_core::{Color, Offset, Rect, Size};
-use incular_rendering::{
-    Brush, Canvas, CornerRadii, DisplayList, FillRule, LinearGradient, Path, RRect,
-};
+use incular_rendering::{Brush, Canvas, CornerRadii, DisplayList, FillRule, Path, RRect};
 
 use super::decoration::{
     Border, BorderDirectional, BorderSide, BorderStyle, BoxDecoration, BoxShadow, BoxShape,
@@ -42,7 +40,7 @@ impl BoxDecoration {
     pub(crate) fn needs_full_painter(&self) -> bool {
         !self.box_shadow.is_empty()
             || self.background_blend_mode.is_some()
-            || self.aligned_gradient.is_some()
+            || self.has_aligned_gradient()
             || self.shape == BoxShape::Circle
             || self.image.is_some()
             || self.has_elliptical_corners()
@@ -88,10 +86,7 @@ impl BoxDecoration {
         direction: TextDirection,
     ) -> Option<DisplayList> {
         let rect = Rect::from_origin_size(Offset::ZERO, size);
-        let aligned = self
-            .aligned_gradient
-            .as_ref()
-            .map(|g| g.resolve(rect, direction));
+        let aligned = self.resolve_aligned_gradient(rect, direction);
         if self.directional_border_radius.is_some() {
             return self
                 .clone()
@@ -104,10 +99,9 @@ impl BoxDecoration {
     fn paint_background_with_gradient(
         &self,
         rect: Rect,
-        aligned: Option<LinearGradient>,
+        aligned: Option<Brush>,
     ) -> Option<DisplayList> {
         let brush = aligned
-            .map(Brush::LinearGradient)
             .or_else(|| self.gradient.clone())
             .or_else(|| self.color.map(Brush::Solid))?;
         let adjusted = match self.border {
@@ -367,7 +361,7 @@ struct DecorationGradientCache(RefCell<Option<CachedGradient>>);
 struct CachedGradient {
     source: Rc<BoxDecoration>,
     rect: Rect,
-    gradient: LinearGradient,
+    gradient: Brush,
 }
 
 impl crate::tree::RetainedState for DecorationGradientCache {
@@ -380,8 +374,7 @@ impl DecorationGradientCache {
         decoration: &Rc<BoxDecoration>,
         rect: Rect,
         direction: TextDirection,
-    ) -> Option<LinearGradient> {
-        let aligned = decoration.aligned_gradient.as_ref()?;
+    ) -> Option<Brush> {
         let mut cached = self.0.borrow_mut();
         // Flutter's retained box painter reuses a shader at the same rect
         // even if only the ambient direction changed. Direction resolves
@@ -392,7 +385,7 @@ impl DecorationGradientCache {
         {
             return Some(cached.gradient.clone());
         }
-        let gradient = aligned.resolve(rect, direction);
+        let gradient = decoration.resolve_aligned_gradient(rect, direction)?;
         *cached = Some(CachedGradient {
             source: decoration.clone(),
             rect,
@@ -451,7 +444,7 @@ fn decorated_with_source(
     let hit_decoration = decoration.clone();
     // Filling the stack, which takes the child's size, the builder sees
     // tight constraints of exactly that size.
-    let has_aligned_gradient = decoration.aligned_gradient.is_some();
+    let has_aligned_gradient = decoration.has_aligned_gradient();
     let build_paint = move |cache: Option<&DecorationGradientCache>,
                             context: &crate::BuildContext<'_>,
                             constraints: incular_config::Constraints| {

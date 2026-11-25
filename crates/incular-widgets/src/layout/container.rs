@@ -234,7 +234,7 @@ impl Container {
         let logical_paint = if let Some(direction) = direction {
             let source = value.decoration.take().expect("directional decoration");
             value.decoration = Some(source.clone().resolved_for_direction(direction));
-            source.aligned_gradient.is_some().then_some(source)
+            source.has_aligned_gradient().then_some(source)
         } else {
             None
         };

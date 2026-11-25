@@ -116,7 +116,6 @@ packages/flutter/test/widgets/mouse_region_test.dart	1971	No new frames are sche
 packages/flutter/test/widgets/list_wheel_scroll_view_test.dart	1170	no onSelectedItemChanged callback on first build	paired-match	upstream-pointer-wheel-gradients.md
 packages/flutter/test/widgets/list_wheel_scroll_view_test.dart	1415	onSelectedItemChanged and controller are in sync	paired-match	upstream-wheel-drag-and-position.md
 packages/flutter/test/widgets/list_wheel_scroll_view_test.dart	1540	controller can be reused	paired-match	upstream-wheel-drag-and-position.md#fixed-initial-position-after-detachment
-packages/flutter/test/painting/gradient_test.dart	736	RadialGradient.scale preserves transform	reference-ran-incular-open	upstream-pointer-wheel-gradients.md
 packages/flutter/test/painting/gradient_test.dart	800	SweepGradient lerp test with stops	reference-ran-incular-open	upstream-pointer-wheel-gradients.md
 packages/flutter/test/widgets/focus_manager_test.dart	633	Requesting focus before adding to tree results in a request after adding	partial-match	upstream-focus-corners-curves-previews.md
 packages/flutter/test/widgets/focus_manager_test.dart	1752	works when the previous focused node is detached	paired-match	upstream-focus-widget-semantics.md#retained-identity-across-focus-reparenting
@@ -1282,3 +1281,17 @@ packages/flutter/test/painting/gradient_test.dart	335	LinearGradient withOpacity
 packages/flutter/test/painting/gradient_test.dart	358	LinearGradient withOpacity() preserves transform	paired-match	upstream-linear-gradients.md#shader-rotation-opacity-and-recoloring
 packages/flutter/test/painting/gradient_test.dart	382	LinearGradient.fromColor replaces all colors and preserves geometry	paired-match	upstream-linear-gradients.md#shader-rotation-opacity-and-recoloring
 packages/flutter/test/painting/gradient_test.dart	456	LinearGradient.scale preserves transform	paired-match	upstream-linear-gradients.md#shader-rotation-opacity-and-recoloring
+packages/flutter/test/painting/gradient_test.dart	308	LinearGradient with AlignmentDirectional	paired-match	upstream-radial-gradients.md
+packages/flutter/test/painting/gradient_test.dart	406	RadialGradient.fromColor replaces all colors and preserves geometry	paired-match	upstream-radial-gradients.md
+packages/flutter/test/painting/gradient_test.dart	482	RadialGradient with AlignmentDirectional	paired-match	upstream-radial-gradients.md
+packages/flutter/test/painting/gradient_test.dart	510	RadialGradient lerp test	paired-match	upstream-radial-gradients.md
+packages/flutter/test/painting/gradient_test.dart	536	RadialGradient.lerp identical a,b	partial-match	upstream-radial-gradients.md
+packages/flutter/test/painting/gradient_test.dart	542	RadialGradient lerp test with stops	paired-match	upstream-radial-gradients.md
+packages/flutter/test/painting/gradient_test.dart	573	RadialGradient lerp test with unequal number of colors	paired-match	upstream-radial-gradients.md
+packages/flutter/test/painting/gradient_test.dart	591	RadialGradient lerp test with stops and unequal number of colors	paired-match	upstream-radial-gradients.md
+packages/flutter/test/painting/gradient_test.dart	618	RadialGradient lerp test with transforms	paired-match	upstream-radial-gradients.md
+packages/flutter/test/painting/gradient_test.dart	638	RadialGradient lerp test with focal	paired-match	upstream-radial-gradients.md
+packages/flutter/test/painting/gradient_test.dart	690	RadialGradient withOpacity test	paired-match	upstream-radial-gradients.md
+packages/flutter/test/painting/gradient_test.dart	712	RadialGradient withOpacity() preserves transform	paired-match	upstream-radial-gradients.md
+packages/flutter/test/painting/gradient_test.dart	736	RadialGradient.scale preserves transform	paired-match	upstream-radial-gradients.md
+packages/flutter/test/painting/gradient_test.dart	1010	Gradient lerp test (LinearGradient to RadialGradient)	paired-match	upstream-radial-gradients.md

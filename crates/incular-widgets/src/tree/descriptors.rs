@@ -650,7 +650,7 @@ impl DecoratedBox {
 impl From<DecoratedBox> for Widget {
     fn from(value: DecoratedBox) -> Self {
         if value.decoration.as_ref().is_some_and(|decoration| {
-            decoration.directional_border_radius.is_some() && decoration.aligned_gradient.is_none()
+            decoration.directional_border_radius.is_some() && !decoration.has_aligned_gradient()
         }) {
             return crate::Builder::new(move |context| {
                 let direction = context

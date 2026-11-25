@@ -294,3 +294,41 @@ fn opacity_scale_keeps_rotation_and_decal_spread() {
         );
     }
 }
+
+#[test]
+fn linear_shader_requires_direction_only_for_logical_alignment() {
+    use incular_widgets::internal::TreeError;
+
+    let rect = Rect::from_origin_size(Offset::ZERO, Size::new(100., 100.));
+    let logical = BoxLinearGradient::new(
+        AlignmentDirectional::TOP_START,
+        Alignment::CENTER_RIGHT,
+        GradientStops::even(&[Color::WHITE; 2]),
+    );
+    assert!(matches!(
+        logical.create_shader(rect, None),
+        Err(TreeError::MissingDirectionality { .. })
+    ));
+    assert_eq!(
+        logical
+            .create_shader(rect, Some(TextDirection::Ltr))
+            .unwrap()
+            .start,
+        Offset::ZERO
+    );
+    assert_eq!(
+        logical
+            .create_shader(rect, Some(TextDirection::Rtl))
+            .unwrap()
+            .start,
+        Offset::new(100., 0.)
+    );
+    let physical = BoxLinearGradient {
+        begin: Alignment::TOP_LEFT.into(),
+        ..logical
+    };
+    assert_eq!(
+        physical.create_shader(rect, None).unwrap().start,
+        Offset::ZERO
+    );
+}
