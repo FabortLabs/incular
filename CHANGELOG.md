@@ -235,6 +235,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-widgets`: ListWheelScrollView participates in the retained
+  drag arena and uses its configured wheel physics on release.
+
 - `incular-widgets`: MouseRegion opacity defaults and stationary hit-test
   changes now match Flutter; synthetic touch hover stays separate from
   contact movement.

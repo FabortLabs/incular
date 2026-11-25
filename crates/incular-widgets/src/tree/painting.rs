@@ -103,6 +103,7 @@ fn claims_own_bounds(kind: Option<&WidgetKind>) -> bool {
                 | WidgetKind::RawInput { .. }
                 | WidgetKind::Scroll { .. }
                 | WidgetKind::SliverViewport { .. }
+                | WidgetKind::ListWheelScrollView { .. }
         )
     )
 }

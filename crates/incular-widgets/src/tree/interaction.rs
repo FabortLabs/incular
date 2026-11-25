@@ -417,16 +417,19 @@ impl WidgetTree {
         &self,
         viewport: ElementId,
     ) -> crate::scroll_behavior::ResolvedScrollBehavior {
-        let Some(render) = self
-            .elements
-            .get(viewport.0)
-            .and_then(|element| self.renders.get(element.render.0))
-        else {
+        let Some(element) = self.elements.get(viewport.0) else {
+            return Default::default();
+        };
+        let Some(render) = self.renders.get(element.render.0) else {
             return Default::default();
         };
         match render.object.kind() {
             RenderKind::Scroll { behavior, .. } => *behavior,
             RenderKind::SliverViewport { config } => config.behavior,
+            RenderKind::ListWheelScrollView { .. } => element
+                .render_context
+                .read_shared::<crate::ScrollBehavior>()
+                .map_or_else(Default::default, |behavior| behavior.resolve()),
             _ => Default::default(),
         }
     }
@@ -469,6 +472,18 @@ impl WidgetTree {
                         config.reverse,
                         config.physics.with_device_pixel_ratio(device_pixel_ratio),
                     ));
+                }
+                RenderKind::ListWheelScrollView { config } => {
+                    let (controller, physics) = config.scroll_interaction();
+                    if self.viewport_lease_live(element, controller) {
+                        chain.push((
+                            element,
+                            controller.clone(),
+                            Axis::Vertical,
+                            false,
+                            physics.with_device_pixel_ratio(device_pixel_ratio),
+                        ));
+                    }
                 }
                 _ => {}
             }
@@ -522,6 +537,9 @@ impl WidgetTree {
         let controller = match &self.renders.get(render.0)?.object.kind() {
             RenderKind::Scroll { controller, .. } => Some(controller.clone()),
             RenderKind::SliverViewport { config } => Some(config.controller.clone()),
+            RenderKind::ListWheelScrollView { config } => {
+                Some(config.scroll_interaction().0.clone())
+            }
             _ => None,
         }?;
         self.viewport_lease_live(element, &controller)

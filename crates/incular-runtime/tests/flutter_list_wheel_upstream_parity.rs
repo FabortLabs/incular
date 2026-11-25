@@ -154,3 +154,55 @@ fn reused_wheel_controller_restarts_from_initial_item_after_detach() {
         "a new wheel position starts at the controller's configured initial item"
     );
 }
+
+#[test]
+fn a_wheel_drag_releases_to_the_nearest_item_with_fixed_extent_physics() {
+    let fixed = FixedExtentScrollController::default();
+    let viewport = ListWheelScrollView::new(
+        fixed.controller(),
+        ITEM_EXTENT,
+        WheelChildDelegate::children(rows(30).collect()),
+    );
+    let mut runtime = Runtime::new(viewport.into()).unwrap();
+    let start = Instant::now();
+    frame(&mut runtime, start);
+    let event = |phase, y, ms| {
+        let up = phase == PointerPhase::Up;
+        (
+            InputEvent::PointerWithMetadata {
+                pointer: 1,
+                device: 1,
+                kind: PointerDeviceKind::Touch,
+                buttons: if up { 0 } else { PRIMARY_POINTER_BUTTON },
+                button: matches!(phase, PointerPhase::Down | PointerPhase::Up)
+                    .then_some(PRIMARY_POINTER_BUTTON),
+                sample: PointerSampleMetadata::default(),
+                phase,
+                position: Offset::new(10., y),
+            },
+            start + Duration::from_millis(ms),
+        )
+    };
+    for (phase, y, ms) in [
+        (PointerPhase::Down, 150., 16),
+        (PointerPhase::Move, 90., 32),
+        (PointerPhase::Up, 90., 250),
+    ] {
+        let (event, time) = event(phase, y, ms);
+        let _ = runtime.handle_input_at(event, time);
+        frame(&mut runtime, time);
+        if phase == PointerPhase::Move {
+            assert_eq!(fixed.controller().offset(), 60.);
+            assert_eq!(fixed.selected_item(ITEM_EXTENT), 1);
+        }
+    }
+    for i in 1..=180 {
+        if !runtime.frame_requested() {
+            break;
+        }
+        frame(&mut runtime, start + Duration::from_millis(250 + i * 16));
+    }
+    assert!((fixed.controller().offset() - 100.).abs() <= 1.);
+    assert_eq!(fixed.selected_item(ITEM_EXTENT), 1);
+    assert!(!runtime.frame_requested());
+}
