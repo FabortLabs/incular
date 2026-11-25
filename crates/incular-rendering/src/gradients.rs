@@ -337,6 +337,11 @@ pub struct RadialGradient {
 pub struct SweepGradient {
     pub center: Offset,
     pub start_angle: f32,
+    /// Explicit end of the angular sector. None retains the existing
+    /// full-turn brush parameter wrapped relative to start_angle.
+    pub end_angle: Option<f32>,
+    /// Physical rotation of an explicit sector's branch cut.
+    pub rotation: f32,
     pub stops: GradientStops,
     /// Flutter `tileMode`, default [`TileMode::Clamp`].
     pub tile_mode: TileMode,
@@ -384,8 +389,36 @@ impl SweepGradient {
         Self {
             center,
             start_angle,
+            end_angle: None,
+            rotation: 0.,
             stops,
             tile_mode: TileMode::Clamp,
+        }
+    }
+    /// Selects an explicit clockwise sector instead of a full turn.
+    #[must_use]
+    pub fn with_end_angle(mut self, end: f32) -> Self {
+        self.end_angle = Some(end.max(self.start_angle));
+        self
+    }
+
+    /// Untiled parameter for renderer-neutral inspection or sampling.
+    #[must_use]
+    pub fn parameter(&self, point: Offset) -> f32 {
+        use std::f32::consts::TAU;
+
+        let Some(end) = self.end_angle else {
+            return sweep_gradient_t(self.center, self.start_angle, point);
+        };
+        let angle = ((point.y - self.center.y).atan2(point.x - self.center.x) - self.rotation)
+            .rem_euclid(TAU);
+        let span = end - self.start_angle;
+        if span > 0. {
+            (angle - self.start_angle) / span
+        } else if angle < self.start_angle {
+            -1.
+        } else {
+            2.
         }
     }
 }
@@ -489,7 +522,7 @@ impl Brush {
     ///
     /// Rotation is exact for every brush: linear endpoints, the radial
     /// centre and focal point, and the sweep centre rotate, and a sweep's
-    /// start angle advances by `radians`. Solid brushes are unchanged.
+    /// branch cut rotates by `radians`. Solid brushes are unchanged.
     /// General `GradientTransform` matrices (scale, skew) are not
     /// representable by the brush value.
     #[must_use]
@@ -518,11 +551,16 @@ impl Brush {
                 focal: gradient.focal.map(rotate),
                 ..gradient.clone()
             }),
-            Self::SweepGradient(gradient) => Self::SweepGradient(SweepGradient {
-                center: rotate(gradient.center),
-                start_angle: gradient.start_angle + radians,
-                ..gradient.clone()
-            }),
+            Self::SweepGradient(gradient) => {
+                let mut rotated = gradient.clone();
+                rotated.center = rotate(gradient.center);
+                if gradient.end_angle.is_some() {
+                    rotated.rotation += radians;
+                } else {
+                    rotated.start_angle += radians;
+                }
+                Self::SweepGradient(rotated)
+            }
         }
     }
 }

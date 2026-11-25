@@ -46,10 +46,10 @@ pub(crate) struct GpuRRectInstance {
     pub(crate) color_b: [f32; 4],
     /// Gradient start/end in physical pixels, or radial center/radius.
     pub(crate) gradient: [f32; 4],
-    /// x=kind (0 solid, 1 linear, 2 radial, 3 sweep, 4 focal radial),
+    /// x=kind (0 solid, 1 linear, 2 radial, 3 full sweep, 4 focal radial, 5 sweep sector),
     /// y=inside border width.
     pub(crate) options: [f32; 4],
-    /// x=tile mode, yzw=focal center and radius in physical pixels.
+    /// x=tile mode; yzw=focal center/radius or y=sweep sector rotation.
     pub(crate) gradient_ext: [f32; 4],
 }
 #[repr(C)]

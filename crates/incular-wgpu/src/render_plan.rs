@@ -778,6 +778,9 @@ fn gradient_kind_and_ext(brush: &Brush, scale: f32) -> (f32, [f32; 4]) {
             )
         }
         Brush::RadialGradient(g) => (2., [g.tile_mode.shader_code(), 0., 0., 0.]),
+        Brush::SweepGradient(g) if g.end_angle.is_some() => {
+            (5., [g.tile_mode.shader_code(), g.rotation, 0., 0.])
+        }
         Brush::SweepGradient(g) => (3., [g.tile_mode.shader_code(), 0., 0., 0.]),
     }
 }
@@ -792,7 +795,12 @@ pub(crate) fn path_paint(brush: &Brush) -> (Color, [f32; 4], [f32; 4], [f32; 4])
         ),
         Brush::SweepGradient(g) => (
             Color::TRANSPARENT,
-            [g.center.x, g.center.y, g.start_angle, 0.],
+            [
+                g.center.x,
+                g.center.y,
+                g.start_angle,
+                g.end_angle.unwrap_or(0.),
+            ],
         ),
     };
     (color, gradient, [kind, 0., 0., 0.], ext)
@@ -870,7 +878,12 @@ pub(crate) fn rrect_instance(
             (
                 stops[0].color,
                 stops.last().expect("normalized stops").color,
-                [g.center.x * scale, g.center.y * scale, g.start_angle, 0.],
+                [
+                    g.center.x * scale,
+                    g.center.y * scale,
+                    g.start_angle,
+                    g.end_angle.unwrap_or(0.),
+                ],
             )
         }
     };
@@ -1198,3 +1211,7 @@ pub(crate) fn blend_instance(
         clip_radii: [0.; 4],
     }
 }
+
+#[cfg(test)]
+#[path = "sweep_sector_test.rs"]
+mod sweep_sector_test;

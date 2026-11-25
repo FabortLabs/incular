@@ -113,3 +113,25 @@ fn points_outside_every_circle_paint_nothing() {
         None
     );
 }
+
+#[test]
+fn explicit_sweep_sector_keeps_before_and_after_distinct_under_rotation() {
+    use incular_core::{Rect, Size};
+    use incular_rendering::Brush;
+    use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
+    let span = SweepGradient::new(Offset::new(32., 32.), FRAC_PI_4, stops())
+        .with_end_angle(3. * FRAC_PI_4);
+    assert!(span.parameter(Offset::new(52., 32.)) < 0.);
+    assert!((span.parameter(Offset::new(32., 52.)) - 0.5).abs() < 1e-5);
+    assert!(span.parameter(Offset::new(12., 32.)) > 1.);
+    assert!(span.parameter(Offset::new(32., 12.)) > 1.);
+    let bounds = Rect::from_origin_size(Offset::ZERO, Size::new(64., 64.));
+    let Brush::SweepGradient(rotated) =
+        Brush::SweepGradient(span.clone()).rotated(FRAC_PI_2, bounds)
+    else {
+        panic!("same brush kind")
+    };
+    assert_eq!(rotated.end_angle, span.end_angle);
+    assert!((rotated.parameter(Offset::new(12., 32.)) - 0.5).abs() < 1e-5);
+    assert!(rotated.parameter(Offset::new(32., 52.)) < 0.);
+}
