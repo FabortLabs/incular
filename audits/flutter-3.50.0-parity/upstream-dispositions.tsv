@@ -852,3 +852,6 @@ packages/flutter/test/widgets/shortcuts_test.dart	1516	isActivatedBy works as ex
 packages/flutter/test/widgets/shortcuts_test.dart	382	handles repeated events	paired-match	upstream-shortcut-comparisons.md#logical-ctrl-c-chords
 packages/flutter/test/widgets/shortcuts_test.dart	408	rejects repeated events if requested	paired-match	upstream-shortcut-comparisons.md#logical-ctrl-c-chords
 packages/flutter/test/widgets/shortcuts_test.dart	435	handles Shift-Ctrl-C	paired-match	upstream-shortcut-comparisons.md#logical-ctrl-c-chords
+packages/flutter/test/widgets/shortcuts_test.dart	1774	trigger ShortcutRegistrar on key events	paired-match	upstream-shortcut-comparisons.md#registered-shortcut-routing-and-num-lock
+packages/flutter/test/widgets/shortcuts_test.dart	1884	nested ShortcutRegistrars stop propagation	paired-match	upstream-shortcut-comparisons.md#registered-shortcut-routing-and-num-lock
+packages/flutter/test/widgets/shortcuts_test.dart	1921	non-overlapping nested ShortcutRegistrars fire appropriately	paired-match	upstream-shortcut-comparisons.md#registered-shortcut-routing-and-num-lock

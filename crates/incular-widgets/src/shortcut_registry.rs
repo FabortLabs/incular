@@ -84,8 +84,12 @@ pub enum RegistryActivator {
 impl RegistryActivator {
     #[must_use]
     pub fn accepts(&self, event: &KeyboardEvent) -> bool {
+        self.accepts_with_lock_modes(event, event.modifiers)
+    }
+
+    fn accepts_with_lock_modes(&self, event: &KeyboardEvent, lock_modes: Modifiers) -> bool {
         match self {
-            Self::Single(activator) => activator.accepts(event),
+            Self::Single(activator) => activator.accepts_with_lock_modes(event, lock_modes),
             Self::Character(activator) => activator.accepts(event),
         }
     }
@@ -213,6 +217,10 @@ impl ShortcutRegistry {
     /// Records the event's modifiers, then runs the most recently added
     /// shortcut that accepts it. Returns whether one ran.
     pub fn handle_key(&self, event: &KeyboardEvent) -> bool {
+        self.handle_key_with_lock_modes(event, event.modifiers)
+    }
+
+    fn handle_key_with_lock_modes(&self, event: &KeyboardEvent, lock_modes: Modifiers) -> bool {
         let mut modifiers = event.modifiers;
         let alt_key = matches!(event.key, KeyboardKey::Named(incular_core::NamedKey::Alt));
         if alt_key {
@@ -237,7 +245,7 @@ impl ShortcutRegistry {
             .borrow()
             .iter()
             .rev()
-            .find(|(_, activator, _)| activator.accepts(event))
+            .find(|(_, activator, _)| activator.accepts_with_lock_modes(event, lock_modes))
             .map(|(_, _, callback)| callback.clone());
         callback.is_some_and(|callback| {
             callback();
@@ -314,7 +322,9 @@ impl crate::tree::RetainedState for RegistrarState {
 fn registrar(registry: ShortcutRegistry, child: Widget) -> Widget {
     let handler = registry.clone();
     let callbacks = incular_gestures::GestureCallbacks {
-        on_key: Some(Rc::new(move |event| handler.handle_key(&event))),
+        on_shortcut_with_lock_modes: Some(Rc::new(move |event, lock_modes| {
+            handler.handle_key_with_lock_modes(&event, lock_modes)
+        })),
         include_semantics: false,
         ..incular_gestures::GestureCallbacks::default()
     };

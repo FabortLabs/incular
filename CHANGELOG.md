@@ -174,6 +174,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-widgets`: mounted shortcut registrars apply Num Lock policies
+  using the runtime hardware keyboard state.
+
 - `incular-widgets`: character shortcuts now distinguish the case of
   the produced character, as Flutter does.
 

@@ -58,3 +58,20 @@ Shift/Ctrl order, repeat defaults and opt-out, and the final empty
 pressed-key state. These are normalized logical-key tests. They do not
 assert that a native adapter separates a layout's logical key from the
 character actually produced by typing it.
+
+## Registered shortcut routing and Num Lock
+
+Three exact originals at :1774, :1884 and :1921 passed with mounted
+registrars. Each binding fires on its own key-down, a matching inner
+registrar prevents a matching outer registrar from running, and an
+unmatched key can reach the outer registrar while the inner key is held.
+Neither scope invokes callbacks on key-up. Rust uses owned callback
+registrations instead of Flutter's VoidCallbackIntent dispatch.
+
+A separate authored Flutter probe, `shortcut_registrar_num_lock_test.dart`,
+and a focused Rust regression exercise Num Lock off/on/off without
+putting the tracked mode into the event modifiers. This originally
+failed in the Rust registrar because it ignored the hardware snapshot.
+The registrar now takes the same snapshot as CallbackShortcuts while
+leaving the registry's reported native modifiers unchanged. Fourteen
+focused Rust tests passed after the fix.
