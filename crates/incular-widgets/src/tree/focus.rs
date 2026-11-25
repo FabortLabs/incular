@@ -9,6 +9,33 @@ struct TraversalScan {
     excluded_traversal: bool,
 }
 
+pub(super) struct FocusChangeBinding {
+    node: incular_gestures::FocusNode,
+    callback: Rc<dyn Fn(bool)>,
+    _subscription: incular_gestures::FocusNodeSubscription,
+}
+
+impl FocusChangeBinding {
+    fn new(node: &incular_gestures::FocusNode, callback: &Rc<dyn Fn(bool)>) -> Self {
+        let subscription = node.observe({
+            let observed = node.clone();
+            let callback = callback.clone();
+            let previous = std::cell::Cell::new(node.has_focus());
+            move || {
+                let next = observed.has_focus();
+                if previous.replace(next) != next {
+                    callback(next);
+                }
+            }
+        });
+        Self {
+            node: node.clone(),
+            callback: callback.clone(),
+            _subscription: subscription,
+        }
+    }
+}
+
 fn external_node(kind: &WidgetKind) -> Option<&incular_gestures::FocusNode> {
     match kind {
         WidgetKind::Gesture { callbacks, .. } => callbacks.focus_node.as_ref(),
@@ -42,6 +69,15 @@ pub(super) fn instantiate_owned_focus_node(widget: &mut Widget, previous: Option
 }
 
 impl WidgetTree {
+    /// Returns the node installed by a mounted focus or editing widget.
+    #[must_use]
+    pub fn focus_node_at(&self, id: ElementId) -> Option<incular_gestures::FocusNode> {
+        self.elements
+            .get(id.0)
+            .and_then(|element| external_node(element.widget.kind()))
+            .cloned()
+    }
+
     /// Enables deferred FocusNode requests for a runtime-owned tree.
     #[doc(hidden)]
     pub fn enable_hosted_focus(&mut self) {
@@ -50,26 +86,44 @@ impl WidgetTree {
     }
 
     pub(super) fn sync_focus_node_binding(&mut self, id: ElementId) {
-        let node = self
-            .elements
-            .get(id.0)
-            .and_then(|element| external_node(element.widget.kind()));
-        let Some(hosted) = self.hosted_focus_nodes.as_mut() else {
-            if let Some(node) = node {
-                node.bind_standalone_tree();
-            }
-            return;
+        let kind = self.elements.get(id.0).map(|element| element.widget.kind());
+        let node = kind.and_then(external_node);
+        let callback = match kind {
+            Some(WidgetKind::Gesture { callbacks, .. }) => callbacks.on_focus_change.as_ref(),
+            _ => None,
         };
-        if let Some(node) = node {
-            if !hosted
-                .get(&id)
-                .is_some_and(|binding| binding.node() == node)
-            {
-                hosted.insert(id, node.attach_to_focus_host());
+        let binding = node.zip(callback);
+        let binding_changed = match (binding, self.focus_change_bindings.get(&id)) {
+            (Some((node, callback)), Some(existing)) => {
+                &existing.node != node || !Rc::ptr_eq(&existing.callback, callback)
+            }
+            (None, None) => false,
+            _ => true,
+        };
+        if binding_changed {
+            self.focus_change_bindings.remove(&id);
+        }
+        if let Some(hosted) = self.hosted_focus_nodes.as_mut() {
+            if let Some(node) = node {
+                if !hosted
+                    .get(&id)
+                    .is_some_and(|binding| binding.node() == node)
+                {
+                    hosted.insert(id, node.attach_to_focus_host());
+                    self.hosted_focus_chain.dirty = true;
+                }
+            } else if hosted.remove(&id).is_some() {
                 self.hosted_focus_chain.dirty = true;
             }
-        } else if hosted.remove(&id).is_some() {
-            self.hosted_focus_chain.dirty = true;
+        }
+        if binding_changed && let Some((node, callback)) = binding {
+            self.focus_change_bindings
+                .insert(id, FocusChangeBinding::new(node, callback));
+        }
+        if self.hosted_focus_nodes.is_none()
+            && let Some(node) = node
+        {
+            node.bind_standalone_tree();
         }
     }
 

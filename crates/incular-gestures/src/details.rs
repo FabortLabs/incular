@@ -477,6 +477,8 @@ pub struct GestureCallbacks {
     /// (itself or a descendant) and `false` when it leaves. Purely
     /// observational: it never makes the region focusable.
     pub on_focus_within: Option<Rc<dyn Fn(bool)>>,
+    /// Focus widget observer, notified only after the node's focus changes.
+    pub on_focus_change: Option<Rc<dyn Fn(bool)>>,
     /// Observes every key event dispatched to a focused descendant, before
     /// any listener handles it and whether or not one consumes it. Never
     /// consumes. Not delivered while a text field has focus.

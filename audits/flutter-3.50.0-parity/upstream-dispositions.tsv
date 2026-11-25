@@ -122,7 +122,7 @@ packages/flutter/test/painting/gradient_test.dart	800	SweepGradient lerp test wi
 packages/flutter/test/widgets/focus_manager_test.dart	633	Requesting focus before adding to tree results in a request after adding	partial-mismatch	upstream-focus-corners-curves-previews.md
 packages/flutter/test/widgets/focus_manager_test.dart	1752	works when the previous focused node is detached	paired-mismatch	upstream-focus-corners-curves-previews.md
 packages/flutter/test/widgets/focus_manager_test.dart	1801	autofocus the first candidate	paired-match	upstream-focus-corners-curves-previews.md
-packages/flutter/test/widgets/focus_scope_test.dart	1233	Focus is ignored when set to not focusable.	partial-match	upstream-focus-corners-curves-previews.md
+packages/flutter/test/widgets/focus_scope_test.dart	1233	Focus is ignored when set to not focusable.	paired-match	upstream-focus-policy-tween-dtd.md#mounted-focus-callbacks-and-permissions
 packages/flutter/test/painting/border_radius_test.dart	146	BorderRadius.lerp() invariants	partial-match	upstream-focus-corners-curves-previews.md
 packages/flutter/test/painting/border_radius_test.dart	165	BorderRadius.lerp() crazy	paired-match	upstream-focus-corners-curves-previews.md
 packages/flutter/test/painting/border_radius_test.dart	398	BorderRadiusDirectional.lerp() invariants	partial-match	upstream-focus-corners-curves-previews.md
@@ -138,10 +138,10 @@ packages/flutter/test/painting/text_style_test.dart	480	TextStyle shadows	paired
 packages/flutter_tools/test/commands.shard/hermetic/widget_preview/preview_manifest/preview_manifest_test.dart	48	generates a valid manifest	reference-ran-incular-open	upstream-focus-corners-curves-previews.md
 packages/flutter_tools/test/commands.shard/hermetic/widget_preview/preview_manifest/preview_manifest_test.dart	61	identifies widget preview scaffold project needs to be generated	reference-ran-incular-open	upstream-focus-corners-curves-previews.md
 packages/flutter_tools/test/commands.shard/hermetic/widget_preview/preview_manifest/preview_manifest_test.dart	91	identifies root project pubspec has changed	reference-ran-incular-open	upstream-focus-corners-curves-previews.md
-packages/flutter/test/widgets/focus_scope_test.dart	1254	Focus is lost when set to not focusable.	partial-match	upstream-focus-policy-tween-dtd.md
+packages/flutter/test/widgets/focus_scope_test.dart	1254	Focus is lost when set to not focusable.	paired-match	upstream-focus-policy-tween-dtd.md#mounted-focus-callbacks-and-permissions
 packages/flutter/test/widgets/focus_scope_test.dart	1947	ExcludeFocus doesn't transfer focus to another descendant.	partial-match	upstream-focus-policy-tween-dtd.md
-packages/flutter/test/widgets/focus_scope_test.dart	1294	Child of unfocusable Focus can get focus.	partial-mismatch	upstream-focus-policy-tween-dtd.md
-packages/flutter/test/widgets/focus_scope_test.dart	1562	descendantsAreFocusable works as expected.	partial-mismatch	upstream-focus-policy-tween-dtd.md
+packages/flutter/test/widgets/focus_scope_test.dart	1294	Child of unfocusable Focus can get focus.	paired-match	upstream-focus-policy-tween-dtd.md#mounted-focus-callbacks-and-permissions
+packages/flutter/test/widgets/focus_scope_test.dart	1562	descendantsAreFocusable works as expected.	paired-match	upstream-focus-policy-tween-dtd.md#mounted-focus-callbacks-and-permissions
 packages/flutter/test/animation/animations_test.dart	414	TweenSequence	paired-match	upstream-focus-policy-tween-dtd.md
 packages/flutter/test/animation/animations_test.dart	441	TweenSequence with curves	paired-match	upstream-focus-policy-tween-dtd.md
 packages/flutter/test/animation/animations_test.dart	484	TweenSequence, one tween	paired-match	upstream-focus-policy-tween-dtd.md

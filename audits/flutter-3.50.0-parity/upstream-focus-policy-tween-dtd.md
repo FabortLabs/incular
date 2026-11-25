@@ -33,3 +33,19 @@ Pinned Flutter 3.50.0 `ab2912035e`; unchanged Incular `c647cb85`.
   Incular has no analogous public tool service. This exercised
   hermetic fake DTD and memory files only, not an actual daemon or
   network; four reference-only results.
+
+## Mounted Focus callbacks and permissions
+
+Four exact Flutter originals at `focus_scope_test.dart:1233,1254,1294,1562`
+now pair with mounted Incular Focus widgets. An owned but disabled
+node rejects requests without notifying; disabling an already focused
+node reports one loss. A non-focusable parent reports membership when
+its child takes focus, and excluding descendants denies both child
+requests without reporting a grant. Unlike the earlier partial ports,
+these assert the widget callback and the actual owned focus nodes.
+
+Three authored controls pair as well: switching between children does
+not cause a false/true notification on the common parent, an explicit
+permission can reenable an external node without autofocusing, and
+removing a widget detaches its callback before that node is reused.
+Sixteen focused Rust tests and all seven pinned Flutter cases passed.

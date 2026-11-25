@@ -2165,6 +2165,7 @@ impl WidgetTree {
                         continue;
                     };
                     self.tracked.untrack(id, element.tracked);
+                    self.focus_change_bindings.remove(&id);
                     if let Some(hosted) = self.hosted_focus_nodes.as_mut()
                         && hosted.remove(&id).is_some()
                     {

@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-widgets`: Focus exposes focus-change callbacks and independent
+  descendant focus and traversal permissions.
+
 - `incular-runtime`: wheel hosts can be notified when no retained
   listener or viewport claims a pointer signal.
 

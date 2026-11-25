@@ -18,7 +18,10 @@ use crate::{Widget, WidgetKind};
 pub struct Focus {
     node: Option<FocusNode>,
     autofocus: bool,
-    can_request_focus: bool,
+    can_request_focus: Option<bool>,
+    descendants_are_focusable: bool,
+    descendants_are_traversable: bool,
+    on_focus_change: Option<Rc<dyn Fn(bool)>>,
     child: Option<Widget>,
 }
 
@@ -27,7 +30,10 @@ impl Default for Focus {
         Self {
             node: None,
             autofocus: false,
-            can_request_focus: true,
+            can_request_focus: None,
+            descendants_are_focusable: true,
+            descendants_are_traversable: true,
+            on_focus_change: None,
             child: None,
         }
     }
@@ -60,26 +66,57 @@ impl Focus {
     /// Controls whether focus can be requested by user interaction or programmatic focus.
     #[must_use]
     pub fn can_request_focus(mut self, can_request: bool) -> Self {
-        self.can_request_focus = can_request;
+        self.can_request_focus = Some(can_request);
+        self
+    }
+
+    /// Controls explicit or implicit focus requests by descendants.
+    #[must_use]
+    pub fn descendants_are_focusable(mut self, focusable: bool) -> Self {
+        self.descendants_are_focusable = focusable;
+        self
+    }
+
+    /// Controls traversal to descendants without denying explicit requests.
+    #[must_use]
+    pub fn descendants_are_traversable(mut self, traversable: bool) -> Self {
+        self.descendants_are_traversable = traversable;
+        self
+    }
+
+    /// Reports a change in whether the node or one of its descendants has focus.
+    #[must_use]
+    pub fn on_focus_change(mut self, callback: impl Fn(bool) + 'static) -> Self {
+        self.on_focus_change = Some(Rc::new(callback));
         self
     }
 }
 
 impl From<Focus> for Widget {
     fn from(value: Focus) -> Self {
-        let child = value
+        let mut child = value
             .child
             .unwrap_or_else(|| crate::SizedBox::shrink().into());
-        if let Some(node) = &value.node
-            && !value.can_request_focus
-        {
-            node.set_can_request_focus(false);
+        if !value.descendants_are_focusable {
+            child = child.with_excluded_focus(true);
         }
-        let owned_focus_permission = value.node.is_none().then_some(value.can_request_focus);
+        if !value.descendants_are_traversable {
+            child = child.with_excluded_focus_traversal(true);
+        }
+        if let Some(node) = &value.node
+            && let Some(can_request_focus) = value.can_request_focus
+        {
+            node.set_can_request_focus(can_request_focus);
+        }
+        let owned_focus_permission = value
+            .node
+            .is_none()
+            .then_some(value.can_request_focus.unwrap_or(true));
         let callbacks = incular_gestures::GestureCallbacks {
             focus_node: value.node,
             owned_focus_permission,
             autofocus: value.autofocus,
+            on_focus_change: value.on_focus_change,
             // Flutter's `Focus.includeSemantics` defaults to true.
             include_semantics: true,
             ..incular_gestures::GestureCallbacks::default()
