@@ -117,3 +117,83 @@ fn middle_vertical_alignment_centers_short_cells_in_their_row() {
     .expect("layout");
     assert_eq!(cell_bounds(&tree, root, 0).1, 10.);
 }
+
+#[test]
+fn table_column_policies_follow_the_width_budget() {
+    use incular_config::Constraints;
+    use incular_core::Size;
+    use incular_widgets::{TableColumnWidth, internal::WidgetTree};
+
+    let measure = |constraints, natural: &[f32], overrides: &[(usize, TableColumnWidth)]| {
+        let mut table = Table::new(natural.len(), natural.iter().map(|&w| cell(w, 10.)));
+        for &(column, width) in overrides {
+            table = table.column_width(column, width);
+        }
+        let mut tree = WidgetTree::new();
+        let root = tree.mount(table.into()).unwrap();
+        tree.layout(constraints).unwrap();
+        let widths: Vec<_> = (0..natural.len())
+            .map(|index| cell_bounds(&tree, root, index).2)
+            .collect();
+        widths
+    };
+
+    assert_eq!(
+        measure(Constraints::loose(Size::new(100., 60.)), &[80., 80.], &[]),
+        [50., 50.]
+    );
+    assert_eq!(
+        measure(
+            Constraints::loose(Size::new(160., 60.)),
+            &[5., 125., 10.],
+            &[
+                (0, TableColumnWidth::Fixed(40.)),
+                (2, TableColumnWidth::Flex(2.))
+            ]
+        ),
+        [40., 40., 80.]
+    );
+    assert_eq!(
+        measure(
+            Constraints::new(100., 100., 0., 60.),
+            &[80., 80.],
+            &[
+                (0, TableColumnWidth::Fixed(10.)),
+                (1, TableColumnWidth::Fixed(20.))
+            ]
+        ),
+        [45., 55.]
+    );
+    assert_eq!(
+        measure(
+            Constraints::new(0., f32::INFINITY, 0., 60.),
+            &[80., 80.],
+            &[(1, TableColumnWidth::Fraction(0.5))]
+        ),
+        [0., 0.]
+    );
+}
+
+#[test]
+fn flex_cells_do_not_build_for_a_discarded_loose_measurement() {
+    use incular_config::Constraints;
+    use incular_core::Size;
+    use incular_widgets::{LayoutBuilder, internal::WidgetTree};
+    use std::{cell::RefCell, rc::Rc};
+
+    let constraints_seen = Rc::new(RefCell::new(Vec::new()));
+    let logged = constraints_seen.clone();
+    let child = LayoutBuilder::new(move |_, constraints| {
+        logged.borrow_mut().push(constraints);
+        cell(125., 10.)
+    });
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(Table::new(2, [Widget::from(child), cell(80., 10.)]).into())
+        .unwrap();
+    tree.layout(Constraints::loose(Size::new(100., 60.)))
+        .unwrap();
+    assert_eq!(cell_bounds(&tree, root, 0).2, 50.);
+    let observed = constraints_seen.borrow();
+    assert_eq!(&*observed, &[Constraints::new(50., 50., 0., f32::INFINITY)]);
+}

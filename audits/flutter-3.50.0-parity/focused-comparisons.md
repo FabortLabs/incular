@@ -263,3 +263,17 @@ snapshots use explicit DPR 2 and do not test live host DPR propagation.
 
 Run the Dart `scroll_metrics_geometry_test.dart` reference probe and
 `cargo test --locked -p incular-scroll --test flutter_scroll_metrics`.
+
+### C02 current recheck
+
+Default table columns now divide a loose 100-pixel budget into two
+50-pixel slots when both cells prefer 80. The Flutter and Incular
+control also covers mixed fixed/weighted flex widths [40, 40, 80],
+nonflex growth to a tight 100-pixel minimum [45, 55], and the zero
+widths of a flex and fraction column with no horizontal bound. Native
+`LayoutBuilder` records one tight measurement for a flex cell, with
+no separate preliminary loose build. Text intrinsic minimum-width
+measurement is still a separate gap.
+
+Run the Dart `table_column_budget_test.dart` reference probe and
+`cargo test --locked -p incular-widgets --test layout_table`.

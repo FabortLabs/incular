@@ -824,12 +824,28 @@ where
     T: Borrow<Table>,
 {
     let config = config.borrow();
-    let columns = config.columns.max(1);
-    let row_count = children.len().div_ceil(columns);
     if children.is_empty() {
         return LayoutResult::empty(constraints.constrain(Size::ZERO));
     }
     let widths = table_column_widths(constraints, children, config);
+    place_table_columns(constraints, children, config, &widths)
+}
+
+/// Places cells already measured at their resolved column widths.
+#[doc(hidden)]
+#[must_use]
+pub fn place_table_columns(
+    constraints: Constraints,
+    children: &[TableChild],
+    config: &Table,
+    widths: &[f32],
+) -> LayoutResult {
+    if children.is_empty() {
+        return LayoutResult::empty(constraints.constrain(Size::ZERO));
+    }
+    let columns = config.columns.max(1);
+    debug_assert_eq!(widths.len(), columns);
+    let row_count = children.len().div_ceil(columns);
     let mut heights: Vec<f32> = vec![0.0; row_count];
     for (index, child) in children.iter().enumerate() {
         heights[index / columns] = heights[index / columns].max(child.size.height);
@@ -876,15 +892,9 @@ where
     LayoutResult::new(size, output)
 }
 
-/// Resolves the width of every table column, as Flutter's
-/// `Table._computeColumnWidths` does for the cases it covers.
-///
-/// Fixed and fraction columns take their specified width, intrinsic and
-/// unflexed columns take their widest cell, and flex columns start at their
-/// widest cell. When the table width is bounded, flex columns then grow to
-/// share the space left after the other columns, after the column spacing.
-/// Column deficits (content wider than the maximum width) are not shrunk here;
-/// the table size is clamped to the constraints instead.
+/// Resolves the width of every table column from its intrinsic policy and
+/// the available width. Flex columns start at zero: the natural sizes of
+/// their cell contents never take precedence over the available budget.
 #[must_use]
 pub fn table_column_widths(
     constraints: Constraints,
@@ -892,51 +902,62 @@ pub fn table_column_widths(
     config: &Table,
 ) -> Vec<f32> {
     let columns = config.columns.max(1);
-    let mut intrinsic = vec![0.0_f32; columns];
+    let mut intrinsic = if children.is_empty() {
+        Vec::new()
+    } else {
+        vec![0.0_f32; columns]
+    };
     for (index, child) in children.iter().enumerate() {
-        intrinsic[index % columns] = intrinsic[index % columns].max(child.size.width);
+        let column = index % columns;
+        intrinsic[column] = intrinsic[column].max(child.size.width);
     }
+
     let max_width = constraints.max_width();
-    let mut widths = vec![0.0_f32; columns];
-    let mut flexes: Vec<Option<f32>> = vec![None; columns];
-    let mut total_flex = 0.0_f32;
-    let mut unflexed = 0.0_f32;
+    let spacing = finite_non_negative(config.column_spacing) * (columns - 1) as f32;
+    let min_content_width = (constraints.min_width() - spacing).max(0.);
+    let target = if max_width.is_finite() {
+        (max_width - spacing).max(0.)
+    } else {
+        min_content_width
+    };
+    let mut widths = Vec::with_capacity(columns);
+    let mut total_flex = 0.;
+    let mut ideal_width = 0.;
     for column in 0..columns {
-        let width = match config.column_width(column) {
+        let kind = config.column_width(column);
+        let intrinsic_width = || intrinsic.get(column).copied().unwrap_or_default();
+        let width = match kind {
             TableColumnWidth::Fixed(value) => finite_non_negative(value),
             TableColumnWidth::Fraction(fraction) if max_width.is_finite() => {
                 finite_non_negative(fraction * max_width)
             }
-            TableColumnWidth::Fraction(_) | TableColumnWidth::Intrinsic => intrinsic[column],
-            TableColumnWidth::Flex(flex) => {
-                if flex.is_finite() && flex > 0.0 {
-                    flexes[column] = Some(flex);
-                    total_flex += flex;
-                }
-                intrinsic[column]
+            TableColumnWidth::Fraction(_) => 0.,
+            TableColumnWidth::Flex(weight) if !kind.requires_intrinsic_measurement() => {
+                total_flex += weight;
+                0.
             }
+            TableColumnWidth::Flex(_) | TableColumnWidth::Intrinsic => intrinsic_width(),
         };
-        widths[column] = width;
-        if flexes[column].is_none() {
-            unflexed += width;
-        }
+        ideal_width += width;
+        widths.push(width);
     }
-    if total_flex > 0.0 {
-        let spacing = finite_non_negative(config.column_spacing) * (columns - 1) as f32;
-        let target = if max_width.is_finite() {
-            max_width
-        } else {
-            constraints.min_width()
-        };
-        let available = (target - spacing).max(0.0);
-        let table_width: f32 = widths.iter().sum();
-        if table_width < available {
-            let remaining = (available - unflexed).max(0.0);
-            for (column, flex) in flexes.iter().enumerate() {
-                if let Some(flex) = flex {
-                    widths[column] = widths[column].max(remaining * flex / total_flex);
+
+    if total_flex > 0. {
+        let remaining = (target - ideal_width).max(0.);
+        if remaining > 0. {
+            for (column, width) in widths.iter_mut().enumerate() {
+                let kind = config.column_width(column);
+                if let TableColumnWidth::Flex(weight) = kind
+                    && !kind.requires_intrinsic_measurement()
+                {
+                    *width = remaining * (weight / total_flex);
                 }
             }
+        }
+    } else if ideal_width < min_content_width {
+        let added = (min_content_width - ideal_width) / columns as f32;
+        for width in &mut widths {
+            *width += added;
         }
     }
     widths

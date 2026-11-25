@@ -77,7 +77,10 @@ fn table_uses_max_content_columns() {
             TableChild::new(Size::new(10.0, 5.0)),
             TableChild::new(Size::new(5.0, 3.0)),
         ],
-        Table::new(2),
+        Table {
+            default_column_width: incular_layout::TableColumnWidth::Intrinsic,
+            ..Table::new(2)
+        },
     );
     assert_eq!(result.size, Size::new(30.0, 8.0));
     assert_eq!(result.children[2].offset, Offset::new(0.0, 5.0));
@@ -133,7 +136,7 @@ fn wrap_ranges_match_explicit_index_runs_in_both_reading_directions() {
 }
 
 #[test]
-fn rtl_table_offsets_are_relative_to_the_natural_grid_in_a_wider_box() {
+fn rtl_table_offsets_include_spacing_and_minimum_width_growth() {
     use incular_layout::TableColumnWidth;
     let cells = [
         TableChild::new(Size::new(100., 10.)),
@@ -157,7 +160,7 @@ fn rtl_table_offsets_are_relative_to_the_natural_grid_in_a_wider_box() {
             .map(|child| child.offset.x)
             .collect::<Vec<_>>()
     };
-    assert_eq!(offsets(&config), [0., 107., 224.]);
+    assert_eq!(offsets(&config), [0., 124., 258.]);
     config.text_direction = TextDirection::Rtl;
-    assert_eq!(offsets(&config), [249., 132., 0.]);
+    assert_eq!(offsets(&config), [283., 149., 0.]);
 }

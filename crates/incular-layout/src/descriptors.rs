@@ -250,6 +250,20 @@ pub enum TableColumnWidth {
     Flex(f32),
 }
 
+impl TableColumnWidth {
+    /// Whether the layout owner has to measure cell content before solving
+    /// the column widths.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn requires_intrinsic_measurement(self) -> bool {
+        match self {
+            Self::Intrinsic => true,
+            Self::Flex(weight) => !weight.is_finite() || weight <= 0.,
+            Self::Fixed(_) | Self::Fraction(_) => false,
+        }
+    }
+}
+
 impl Default for TableColumnWidth {
     /// Flutter's default table column width: `FlexColumnWidth()`.
     fn default() -> Self {

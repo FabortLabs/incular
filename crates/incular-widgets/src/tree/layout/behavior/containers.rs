@@ -456,9 +456,6 @@ impl WidgetTree {
                 default_vertical_alignment,
                 text_direction,
             } => {
-                for child in children {
-                    self.layout_render(*child, constraints.loosen())?;
-                }
                 let config = incular_layout::Table {
                     columns,
                     column_spacing,
@@ -468,21 +465,25 @@ impl WidgetTree {
                     default_vertical_alignment,
                     text_direction,
                 };
-                let measured = children
-                    .iter()
-                    .map(|child| {
-                        incular_layout::TableChild::new(
-                            self.render_live(child, "retained render must remain live")
-                                .size,
-                        )
-                    })
-                    .collect::<Vec<_>>();
-                // Flutter lays every cell out at its column's tight width, so
-                // flex and fraction columns stretch the cell content. Column
-                // widths come from the loose measurement, then each cell is
-                // re-measured at its width.
-                let widths = incular_layout::table_column_widths(constraints, &measured, &config);
                 let columns_count = config.columns.max(1);
+                let column_needs_content =
+                    |column| config.column_width(column).requires_intrinsic_measurement();
+                let measured = if (0..columns_count).any(column_needs_content) {
+                    let mut measured = Vec::with_capacity(children.len());
+                    for (index, child) in children.iter().enumerate() {
+                        let size = if column_needs_content(index % columns_count) {
+                            self.layout_render(*child, constraints.loosen())?;
+                            self.render_live(child, "table child must remain live").size
+                        } else {
+                            Size::ZERO
+                        };
+                        measured.push(incular_layout::TableChild::new(size));
+                    }
+                    measured
+                } else {
+                    Vec::new()
+                };
+                let widths = incular_layout::table_column_widths(constraints, &measured, &config);
                 for (index, child) in children.iter().enumerate() {
                     let width = widths[index % columns_count];
                     self.layout_render(*child, Constraints::new(width, width, 0., f32::INFINITY))?;
@@ -496,7 +497,8 @@ impl WidgetTree {
                         )
                     })
                     .collect::<Vec<_>>();
-                let result = incular_layout::layout_table(constraints, &cells, &config);
+                let result =
+                    incular_layout::place_table_columns(constraints, &cells, &config, &widths);
                 (
                     result.size,
                     result

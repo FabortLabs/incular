@@ -15,8 +15,8 @@ pub use algorithms::{
     align_child, layout_align, layout_aspect_ratio, layout_baseline, layout_center,
     layout_constrained_box, layout_flex, layout_fractionally_sized, layout_padding,
     layout_sized_box, layout_stack, layout_table, layout_unconstrained_box, layout_wrap,
-    positioned_axis_size, round_intrinsic_step, stack_child_geometry, stack_size,
-    table_column_widths,
+    place_table_columns, positioned_axis_size, round_intrinsic_step, stack_child_geometry,
+    stack_size, table_column_widths,
 };
 pub use descriptors::{
     Align, AspectRatio, Baseline, BaselineType, Center, Clip, Column, ConstrainedBox, Flex,

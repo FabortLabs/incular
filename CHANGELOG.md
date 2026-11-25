@@ -279,6 +279,11 @@ a version and date when publishing.
 
 ### Fixed
 
+- Table flex columns use their share of the width budget even when cells
+  prefer more space. Tables without flex columns grow to a tight minimum
+  width. Layout skips the preliminary cell measurement when width does
+  not depend on the contents.
+
 - A Table column-count change preserves cells within surviving rows
   instead of reusing state from a different or removed row.
 
