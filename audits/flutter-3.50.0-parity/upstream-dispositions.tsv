@@ -720,3 +720,11 @@ packages/flutter/test/widgets/composited_transform_test.dart	292	bottomRight - t
 packages/flutter/test/widgets/composited_transform_test.dart	373	Leader after Follower asserts	paired-mismatch	upstream-geometry-input-gestures.md#linked-affine-repair
 packages/flutter/test/widgets/composited_transform_test.dart	401	CompositedTransformTarget & CompositedTransformFollower do not crash at zero area	paired-match	upstream-geometry-input-gestures.md#linked-affine-repair
 packages/flutter/test/painting/border_side_test.dart	14	BorderSide - merging	paired-match	upstream-border-constraints-formatters.md#border-side-repair-and-merge
+packages/flutter/test/widgets/listener_test.dart	15	Events bubble up the tree	paired-match	upstream-listener.md
+packages/flutter/test/widgets/listener_test.dart	45	Detects hover events from touch devices	paired-match	upstream-listener.md
+packages/flutter/test/widgets/listener_test.dart	70	simple offset for touch/signal	partial-match	upstream-listener.md
+packages/flutter/test/widgets/listener_test.dart	136	scaled for touch/signal	partial-match	upstream-listener.md
+packages/flutter/test/widgets/listener_test.dart	207	scaled and offset for touch/signal	partial-match	upstream-listener.md
+packages/flutter/test/widgets/listener_test.dart	280	rotated for touch/signal	partial-match	upstream-listener.md
+packages/flutter/test/widgets/listener_test.dart	353	RenderPointerListener's debugFillProperties when default	reference-ran-incular-open	upstream-listener.md
+packages/flutter/test/widgets/listener_test.dart	376	RenderPointerListener's debugFillProperties when full	reference-ran-incular-open	upstream-listener.md
