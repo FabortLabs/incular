@@ -106,3 +106,26 @@ still does. Thirty focused Rust tests passed across editing, delta/state,
 and the runtime platform text-input bridge. This stays partial because
 Rust does not store Flutter's separate oldText payload or use its debug
 assertion.
+
+## Blocking user actions without removing focus
+
+Pinned AbsorbPointer originals :26 and :50 and the native retained
+syntax now match the observable label, button role, enabled and
+focusable flags, and Tap/Focus action mask. The comparison also uses
+an explicit Focus node and Semantics annotation so the result is not
+specific to Incular's neutral button surface.
+
+Four authored checks extend the same three-frame transition to
+AbsorbPointer, IgnorePointer, and Visibility retaining semantics
+but not interactivity, plus a mixed merged node. The label, role,
+semantics ID, and actual keyboard focus remain. The blocked state
+omits focus, tap, long press, increment, decrement, directional scroll,
+and custom actions, then restores them when unblocked. The mixed merge
+keeps both labels without taking the blocked descendant's custom callback.
+Flutter's accessibility focus lifecycle callbacks remain published;
+Incular's portable action enum does not model those callbacks.
+
+The native dispatcher also rejects a stale platform user-action request
+before notifying TapRegion or invoking its callback. This is independent
+of invoking Flutter's underlying callback directly. All 31 focused
+runtime tests and 47 focused widget tests passed.

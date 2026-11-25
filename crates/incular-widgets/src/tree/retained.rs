@@ -1327,7 +1327,11 @@ impl WidgetTree {
             _ => None,
         }
     }
-    pub(super) fn pointer_actions_blocked(&self, mut id: ElementId) -> bool {
+    /// Whether the current retained pointer policy blocks user actions in
+    /// the exposed semantics tree. This does not change keyboard focus.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn pointer_actions_blocked(&self, mut id: ElementId) -> bool {
         loop {
             let Some(element) = self.elements.get(id.0) else {
                 return true;
@@ -1337,6 +1341,11 @@ impl WidgetTree {
                 | WidgetKind::AbsorbPointer {
                     absorbing: true, ..
                 } => return true,
+                WidgetKind::Visibility {
+                    visible: false,
+                    hidden,
+                    ..
+                } if !hidden.interactivity => return true,
                 _ => {}
             }
             let Some(parent) = element.parent else {
@@ -1355,7 +1364,7 @@ impl WidgetTree {
         id: ElementId,
         action: SemanticActionKind,
     ) -> Option<Rc<dyn Fn() + 'static>> {
-        if action.is_directional_scroll() && self.pointer_actions_blocked(id) {
+        if self.pointer_actions_blocked(id) {
             return None;
         }
         self.elements.get(id.0).and_then(|element| {

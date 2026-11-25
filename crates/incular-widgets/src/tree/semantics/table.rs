@@ -67,10 +67,11 @@ impl WidgetTree {
         let columns = columns.max(1);
         let table_width = render.size.width;
         let world = self.render_world_transform(entry.render);
-        let reveal_rows = self
-            .scrollable_viewport_chain(table)
-            .into_iter()
-            .any(|(_, _, _, _, physics)| physics.allows_implicit_scrolling());
+        let reveal_rows = !self.pointer_actions_blocked(table)
+            && self
+                .scrollable_viewport_chain(table)
+                .into_iter()
+                .any(|(_, _, _, _, physics)| physics.allows_implicit_scrolling());
         let mut slots = FastHashMap::default();
         let mut cells = Vec::with_capacity(entry.children.len());
         for &id in &entry.children {
@@ -209,7 +210,10 @@ impl WidgetTree {
             .find_map(|(&table, wrappers)| {
                 wrappers.rows.values().any(|id| *id == row).then_some(table)
             })
-            .is_some_and(|table| self.reveal_semantic_bounds(table, node.bounds))
+            .is_some_and(|table| {
+                !self.pointer_actions_blocked(table)
+                    && self.reveal_semantic_bounds(table, node.bounds)
+            })
     }
 }
 

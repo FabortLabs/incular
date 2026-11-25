@@ -1040,14 +1040,6 @@ impl Runtime {
         node: SemanticNodeId,
         action: SemanticAction,
     ) -> bool {
-        if matches!(action, SemanticAction::Activate | SemanticAction::LongPress)
-            && let Some(bounds) = self.tree.semantics().node(node).map(|node| node.bounds)
-        {
-            let notified = self
-                .tree
-                .notify_tap_regions_of_semantic_action(bounds, self.input_now());
-            self.frame_requested |= notified;
-        }
         let Some(element) = self.tree.element_for_semantic_node(node) else {
             let handled = action == SemanticAction::ShowOnScreen
                 && self.tree.semantic_show_table_row_on_screen(node);
@@ -1057,6 +1049,20 @@ impl Runtime {
             }
             return handled;
         };
+        // A native adapter may still hold a node ID announced before the
+        // mask changed. Reject that request without invoking callbacks or
+        // synthesizing a TapRegion event.
+        if self.tree.pointer_actions_blocked(element) {
+            return false;
+        }
+        if matches!(action, SemanticAction::Activate | SemanticAction::LongPress)
+            && let Some(bounds) = self.tree.semantics().node(node).map(|node| node.bounds)
+        {
+            let notified = self
+                .tree
+                .notify_tap_regions_of_semantic_action(bounds, self.input_now());
+            self.frame_requested |= notified;
+        }
         self.tree.note_semantic_action();
         let handled = match action {
             SemanticAction::Focus => {

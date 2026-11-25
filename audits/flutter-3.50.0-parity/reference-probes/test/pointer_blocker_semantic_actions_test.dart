@@ -95,4 +95,41 @@ void main() {
       }
     });
   }
+  testWidgets('a merged node cannot borrow a blocked custom action', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    try {
+      const merge = ValueKey('merge');
+      final target = Semantics(
+        label: 'Blocked target',
+        customSemanticsActions: {
+          const CustomSemanticsAction(label: 'conditional'): () {},
+        },
+        child: const SizedBox(width: 60, height: 40),
+      );
+      for (final blocked in [false, true, false]) {
+        await tester.pumpWidget(
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: MergeSemantics(
+              key: merge,
+              child: Column(
+                children: [
+                  IgnorePointer(ignoring: blocked, child: target),
+                  const Text('Plain sibling'),
+                ],
+              ),
+            ),
+          ),
+        );
+        final data = tester.getSemantics(find.byKey(merge)).getSemanticsData();
+        expect(data.label, contains('Blocked target'));
+        expect(data.label, contains('Plain sibling'));
+        expect(data.hasAction(SemanticsAction.customAction), !blocked);
+      }
+    } finally {
+      semantics.dispose();
+    }
+  });
 }

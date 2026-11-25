@@ -1239,35 +1239,42 @@ impl WidgetTree {
         state.focusable = focusable;
         let focus_action =
             focusable && (focus_annotation.is_none() || self.focus_semantic_actions_enabled);
-        if focus_action && !actions.contains(&SemanticActionKind::Focus) {
-            actions.push(SemanticActionKind::Focus);
-        }
-        actions.retain(|action| {
-            if *action == SemanticActionKind::Focus {
-                return focus_action;
+        let has_user_actions = focus_action
+            || !actions.is_empty()
+            || !merged.custom_actions.is_empty()
+            || absorbs_descendant_semantics(entry);
+        if has_user_actions && self.pointer_actions_blocked(element) {
+            // Flutter's blocking configuration masks user actions, not the
+            // node or its focusable/focused flags. Accessibility focus
+            // lifecycle notifications are separate from our user actions.
+            actions.clear();
+            state.custom_actions = Box::default();
+        } else {
+            if focus_action && !actions.contains(&SemanticActionKind::Focus) {
+                actions.push(SemanticActionKind::Focus);
             }
-            if (*action == SemanticActionKind::Activate || action.is_directional_scroll())
-                && self.pointer_actions_blocked(element)
+            actions.retain(|action| {
+                if *action == SemanticActionKind::Focus {
+                    return focus_action;
+                }
+                semantic_action_is_executable(
+                    entry.widget.kind(),
+                    *action,
+                    &entry.widget.semantic_properties().callbacks,
+                )
+            });
+            if absorbs_descendant_semantics(entry)
+                && !actions.contains(&SemanticActionKind::Activate)
+                && self.semantic_activation_target(element).is_some()
             {
-                return false;
+                actions.push(SemanticActionKind::Activate);
             }
-            semantic_action_is_executable(
-                entry.widget.kind(),
-                *action,
-                &entry.widget.semantic_properties().callbacks,
-            )
-        });
-        if absorbs_descendant_semantics(entry)
-            && !actions.contains(&SemanticActionKind::Activate)
-            && self.semantic_activation_target(element).is_some()
-        {
-            actions.push(SemanticActionKind::Activate);
-        }
-        merged.custom_actions.sort_unstable_by_key(|id| id.0);
-        merged.custom_actions.dedup();
-        state.custom_actions = merged.custom_actions.into_boxed_slice();
-        if merged.has_custom_callback {
-            actions.push(SemanticActionKind::Custom);
+            merged.custom_actions.sort_unstable_by_key(|id| id.0);
+            merged.custom_actions.dedup();
+            state.custom_actions = merged.custom_actions.into_boxed_slice();
+            if merged.has_custom_callback {
+                actions.push(SemanticActionKind::Custom);
+            }
         }
         if semantic_parent == RETAINED_LIST && role.is_some() != retained {
             // The parent's retained child list no longer describes this
@@ -1704,7 +1711,10 @@ impl WidgetTree {
                 .as_ref()
                 .and_then(|node| node.state.text_direction);
         }
-        merged.add_custom_actions(&entry.widget.semantic_properties().callbacks);
+        let callbacks = &entry.widget.semantic_properties().callbacks;
+        if !callbacks.custom.is_empty() && !self.pointer_actions_blocked(element) {
+            merged.add_custom_actions(callbacks);
+        }
         merged.focus_block = merged.focus_block.merge(explicit_focus_block(entry));
         if merged.heading.is_none() {
             merged.heading = entry
@@ -1803,7 +1813,7 @@ impl WidgetTree {
         search_descendants: bool,
     ) -> Option<Rc<dyn Fn() + 'static>> {
         let entry = self.elements.get(element.0)?;
-        if !self.can_contribute_merged_semantics(entry) {
+        if !self.can_contribute_merged_semantics(entry) || self.pointer_actions_blocked(element) {
             return None;
         }
         if let Some(callback) = entry

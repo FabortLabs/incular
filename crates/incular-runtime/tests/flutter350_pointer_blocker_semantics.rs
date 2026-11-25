@@ -118,3 +118,54 @@ fn ignoring_blocks_all_published_user_actions() {
 fn maintaining_semantics_but_not_interactivity_blocks_user_actions() {
     check_blocker(Wrapper::Visibility);
 }
+
+#[test]
+fn merged_node_keeps_labels_but_cannot_borrow_a_blocked_custom_action() {
+    use incular_widgets::{Column, MergeSemantics};
+    let action = CustomSemanticsAction::new("conditional");
+    let id = action.get_identifier();
+    let hits = Rc::new(Cell::new(0));
+    let target = Widget::from(
+        Semantics::new(SizedBox::new().width(60.).height(40.))
+            .label("Blocked target")
+            .custom_action(action, {
+                let hits = Rc::clone(&hits);
+                move || hits.set(hits.get() + 1)
+            }),
+    );
+    let build = |blocked: bool| {
+        Widget::from(Center::new(MergeSemantics::new(Column::new([
+            Widget::from(IgnorePointer::new(target.clone()).ignoring(blocked)),
+            Semantics::new(SizedBox::new().height(10.))
+                .label("Plain sibling")
+                .into(),
+        ]))))
+    };
+    let constraints = Constraints::tight(Size::new(800., 600.));
+    let mut runtime = Runtime::new(build(false)).unwrap();
+    runtime.run_frame(constraints).unwrap();
+    let root = runtime.tree().root().unwrap();
+    let mut retained = None;
+    for blocked in [false, true, false] {
+        runtime.schedule_update(root, build(blocked)).unwrap();
+        runtime.run_frame(constraints).unwrap();
+        let (node_id, node) = runtime
+            .tree()
+            .semantics()
+            .iter()
+            .find(|(_, node)| {
+                node.label.as_deref().is_some_and(|label| {
+                    label.contains("Blocked target") && label.contains("Plain sibling")
+                })
+            })
+            .expect("retained merged node");
+        assert_eq!(node_id, *retained.get_or_insert(node_id));
+        assert_eq!(node.actions.contains(&SemanticActionKind::Custom), !blocked);
+        assert_eq!(node.state.custom_actions.contains(&id), !blocked);
+        assert_eq!(
+            runtime.dispatch_semantic_action(node_id, SemanticAction::Custom(id)),
+            !blocked
+        );
+    }
+    assert_eq!(hits.get(), 2);
+}
