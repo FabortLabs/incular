@@ -42,15 +42,10 @@ pub type RouteFocusOwner = Rc<dyn Fn(&WidgetTree, ElementId) -> Option<RouteId>>
 ///   focus) takes the route's own autofocus target when it names one;
 ///   valid focus is never displaced for a missing record.
 ///
-/// Eligibility reuses the tree's authoritative focus rule instead of a
-/// parallel predicate: the target must be live in the arena (detached
-/// elements fail here, including reused slots whose generation changed)
-/// and a member of [`WidgetTree::focusable_elements`], which already
-/// encodes enabled state, `ExcludeFocus`, and inactive subtrees
-/// (`IndexedStack` non-indexed children, `descendants_are_focusable`).
-/// Hidden-but-mounted subtrees (`Visibility`, `Offstage`) stay eligible by
-/// framework design — they retain focus — while ownership comes from the
-/// [`RouteFocusOwner`] oracle.
+/// Restoration uses the same eligibility as a direct request, through
+/// [`WidgetTree::can_request_focus`]. Detached, disabled or excluded
+/// targets cannot receive focus, but a node omitted from Tab traversal
+/// can still receive it. Ownership comes from the [`RouteFocusOwner`].
 ///
 /// Route identity and element identity stay separate throughout: records
 /// are keyed by [`RouteId`], targets are [`ElementId`] values validated
@@ -142,9 +137,7 @@ impl RouteFocusState {
         route: RouteId,
         id: ElementId,
     ) -> bool {
-        runtime.tree().element_exists(id)
-            && runtime.tree().focusable_elements().contains(&id)
-            && owner_of(runtime.tree(), id) == Some(route)
+        runtime.tree().can_request_focus(id) && owner_of(runtime.tree(), id) == Some(route)
     }
 
     /// Orphaned focus has no live owner to keep it: a dead or unfocusable
@@ -157,8 +150,7 @@ impl RouteFocusState {
         owner_of: &RouteFocusOwner,
         id: ElementId,
     ) -> bool {
-        !runtime.tree().element_exists(id)
-            || !runtime.tree().focusable_elements().contains(&id)
+        !runtime.tree().can_request_focus(id)
             || owner_of(runtime.tree(), id)
                 .is_some_and(|owner| navigator.lifetime_of(owner).is_none())
     }

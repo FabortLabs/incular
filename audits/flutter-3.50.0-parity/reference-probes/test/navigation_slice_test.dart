@@ -19,12 +19,13 @@ class TrackedPage extends Page<void> {
   Route<void>? created;
 
   @override
-  Route<void> createRoute(BuildContext context) => created = PageRouteBuilder<void>(
-    settings: this,
-    transitionDuration: Duration.zero,
-    reverseTransitionDuration: Duration.zero,
-    pageBuilder: (_, __, ___) => Text(name!),
-  );
+  Route<void> createRoute(BuildContext context) =>
+      created = PageRouteBuilder<void>(
+        settings: this,
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+        pageBuilder: (_, __, ___) => Text(name!),
+      );
 }
 
 class Counter extends StatefulWidget {
@@ -69,6 +70,58 @@ void main() {
         expect(afterRoute.settings, same(second));
         expect(t.state<CounterState>(child), same(beforeState));
         expect(find.text('count 1'), findsOneWidget);
+      },
+    );
+  }
+  for (final disableWhileCovered in [true, false]) {
+    testWidgets(
+      'route restores direct focus skipped by Tab, disabled=$disableWhileCovered',
+      (t) async {
+        final nav = GlobalKey<NavigatorState>();
+        final node = FocusNode(skipTraversal: true);
+        addTearDown(node.dispose);
+        await t.pumpWidget(
+          MediaQuery(
+            data: MediaQueryData.fromView(t.view),
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: Navigator(
+                key: nav,
+                pages: [
+                  ProbePage(
+                    Focus.withExternalFocusNode(
+                      focusNode: node,
+                      child: const Text('original'),
+                    ),
+                  ),
+                ],
+                onDidRemovePage: (_) {},
+              ),
+            ),
+          ),
+        );
+        expect(node.hasFocus, isFalse);
+        node.requestFocus();
+        await t.pumpAndSettle();
+        expect(node.hasPrimaryFocus, isTrue);
+
+        for (final name in ['second', 'third']) {
+          nav.currentState!.push<void>(
+            PageRouteBuilder<void>(
+              pageBuilder: (_, __, ___) => Text(name),
+              transitionDuration: Duration.zero,
+              reverseTransitionDuration: Duration.zero,
+            ),
+          );
+          await t.pumpAndSettle();
+          expect(node.hasFocus, isFalse);
+        }
+        if (disableWhileCovered) {
+          node.canRequestFocus = false;
+        }
+        nav.currentState!.popUntil((route) => route.isFirst);
+        await t.pumpAndSettle();
+        expect(node.hasPrimaryFocus, !disableWhileCovered);
       },
     );
   }
@@ -142,7 +195,9 @@ void main() {
     expect(pushed.isCurrent, isTrue);
     expect(focus.hasPrimaryFocus, isTrue);
   });
-  testWidgets('pageless routes follow a reordered page and leave with it', (t) async {
+  testWidgets('pageless routes follow a reordered page and leave with it', (
+    t,
+  ) async {
     final nav = GlobalKey<NavigatorState>();
     TrackedPage keyed(String name) => TrackedPage(name, key: ValueKey(name));
     Widget shell(List<TrackedPage> pages) => MediaQuery(

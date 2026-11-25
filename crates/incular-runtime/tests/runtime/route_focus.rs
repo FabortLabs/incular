@@ -496,10 +496,14 @@ fn save_rejects_foreign_focus_and_restore_preserves_unrelated() {
 }
 
 #[test]
-fn hidden_but_mounted_target_restores() {
-    // Visibility with state retention keeps its subtree mounted and focus
-    // eligible by framework design: hiding is not detachment, so a saved
-    // hidden target restores rather than falling back.
+fn hidden_mounted_route_target_restores_only_when_focusability_is_maintained() {
+    assert_hidden_route_focus_restore(false);
+    assert_hidden_route_focus_restore(true);
+}
+
+fn assert_hidden_route_focus_restore(maintain_focusability: bool) {
+    // Retaining state keeps the element mounted, but does not keep it
+    // focusable unless the corresponding option is also enabled.
     let node_a = FocusNode::new();
     let node_b = FocusNode::new();
     let visible = Signal::new(true);
@@ -519,6 +523,7 @@ fn hidden_but_mounted_target_restores() {
                 incular_widgets::Visibility::new(focus_box(node_a_for_builder.clone()))
                     .visible(visible_for_builder.get())
                     .maintain_state(true)
+                    .maintain_focusability(maintain_focusability)
                     .into(),
                 focus_box(node_b_for_builder.clone()),
             ])
@@ -556,8 +561,11 @@ fn hidden_but_mounted_target_restores() {
     navigator.pop();
     focus.forget(rb);
     focus.restore_saved(&mut runtime, &navigator, ra);
-    assert_eq!(runtime.focused_element(), Some(ea));
-    assert!(node_a.has_focus());
+    assert_eq!(
+        runtime.focused_element(),
+        maintain_focusability.then_some(ea)
+    );
+    assert_eq!(node_a.has_focus(), maintain_focusability);
 }
 
 #[test]

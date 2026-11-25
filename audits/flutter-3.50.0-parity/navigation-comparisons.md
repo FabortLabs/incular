@@ -76,6 +76,24 @@ and never saves a history record for the uncommitted deactivation.
 Both variants pass; the broad RouteOutlet filter has 87 passing and the
 same 12 unrelated preexisting assertions.
 
+## Direct focus versus Tab traversal on route return
+
+Pinned Flutter returns focus to an explicitly focused node that Tab
+skips, even when two routes are popped in one action. It does not return
+focus if the node became ineligible while covered. The Rust fixture
+reproduced the positive case failing but the negative control passing.
+Route focus now validates saved targets and current tenures via direct
+focus eligibility rather than allocating and consulting the Tab order.
+The route-focus control also distinguishes a hidden retained child with
+`maintain_focusability(true)` from one that merely retains state.
+Both controls pass, as do all nine focused traversal tests.
+
+Flutter's original route-scope traversal cases (:1921 and :1964 in
+`widgets/routes_test.dart`) also passed against the pin. They are recorded
+as reference-only here because the authored direct-focus pair does not
+implement those cases' automatic focus-scope and descendant traversal
+assertions.
+
 ## Reproduction
 
 Use the pinned Flutter scratch package from [paired comparisons](focused-comparisons.md)

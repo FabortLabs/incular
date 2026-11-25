@@ -332,6 +332,40 @@ fn outlet_restores_focus_after_superseded_navigation_unwinds_before_commit() {
 }
 
 #[test]
+fn outlet_restores_directly_focused_nodes_even_if_tab_traversal_skips_them() {
+    for disable_while_covered in [true, false] {
+        let navigator = Navigator::new();
+        let mut harness = harness(&navigator);
+        let node = FocusNode::new();
+        node.set_skip_traversal(true);
+        let original = navigator.push_page(focus_page("original", &node));
+        present(&mut harness);
+        let _ = harness
+            .runtime
+            .handle_input(InputEvent::Key(key_down(Code::Tab)));
+        assert!(!node.has_focus(), "Tab must not choose the node");
+        node.request_focus();
+        present(&mut harness);
+        let original_focus = harness.runtime.focused_element().expect("direct focus");
+        assert!(node.has_focus());
+
+        navigator.push_page(plain_page("second"));
+        present(&mut harness);
+        assert!(!node.has_focus());
+        navigator.push_page(plain_page("third"));
+        present(&mut harness);
+        if disable_while_covered {
+            node.set_can_request_focus(false);
+        }
+        assert!(navigator.pop_until(|route| route.id == original));
+        present(&mut harness);
+        let expected = (!disable_while_covered).then_some(original_focus);
+        assert_eq!(harness.runtime.focused_element(), expected);
+        assert_eq!(node.has_focus(), !disable_while_covered);
+    }
+}
+
+#[test]
 fn outlet_reorder_preserves_and_repush_forgets() {
     let navigator = Navigator::new();
     let mut harness = harness(&navigator);
