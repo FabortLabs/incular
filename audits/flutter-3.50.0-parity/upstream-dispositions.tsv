@@ -115,7 +115,7 @@ packages/flutter/test/widgets/mouse_region_test.dart	1726	Changing whether Mouse
 packages/flutter/test/widgets/mouse_region_test.dart	1971	No new frames are scheduled when mouse moves without triggering callbacks	paired-match	upstream-pointer-wheel-gradients.md
 packages/flutter/test/widgets/list_wheel_scroll_view_test.dart	1170	no onSelectedItemChanged callback on first build	paired-match	upstream-pointer-wheel-gradients.md
 packages/flutter/test/widgets/list_wheel_scroll_view_test.dart	1415	onSelectedItemChanged and controller are in sync	paired-match	upstream-wheel-drag-and-position.md
-packages/flutter/test/widgets/list_wheel_scroll_view_test.dart	1540	controller can be reused	paired-mismatch	upstream-pointer-wheel-gradients.md
+packages/flutter/test/widgets/list_wheel_scroll_view_test.dart	1540	controller can be reused	paired-match	upstream-wheel-drag-and-position.md#fixed-initial-position-after-detachment
 packages/flutter/test/painting/gradient_test.dart	229	LinearGradient lerp test with stops and unequal number of colors	reference-ran-incular-open	upstream-pointer-wheel-gradients.md
 packages/flutter/test/painting/gradient_test.dart	736	RadialGradient.scale preserves transform	reference-ran-incular-open	upstream-pointer-wheel-gradients.md
 packages/flutter/test/painting/gradient_test.dart	800	SweepGradient lerp test with stops	reference-ran-incular-open	upstream-pointer-wheel-gradients.md

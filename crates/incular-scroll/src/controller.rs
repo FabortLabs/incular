@@ -107,6 +107,30 @@ impl Default for ScrollController {
     }
 }
 
+#[derive(Clone)]
+pub(crate) struct FixedExtentStart {
+    item: usize,
+    fallback_extent: Option<f32>,
+    /// The outer option is unset until the first publication. The inner
+    /// optional ID distinguishes a headless position from a mounted one.
+    applied_to: Option<Option<u64>>,
+}
+
+impl FixedExtentStart {
+    pub(crate) fn take_position(
+        &mut self,
+        attachment: Option<u64>,
+        extent: Option<f32>,
+    ) -> Option<f32> {
+        let extent = extent.or(self.fallback_extent)?;
+        if self.applied_to == Some(attachment) {
+            return None;
+        }
+        self.applied_to = Some(attachment);
+        Some(self.item as f32 * extent)
+    }
+}
+
 #[derive(Clone, Default)]
 pub(crate) struct ScrollState {
     pub(crate) offset: f32,
@@ -134,6 +158,9 @@ pub(crate) struct ScrollState {
     pub(crate) pending_jump_offset: Option<f32>,
     /// Starting position applied on the first viewport publication.
     pub(crate) pending_initial_offset: Option<InitialOffset>,
+    /// A fixed-item controller's default applies to each new position.
+    pub(crate) fixed_extent_start: Option<Box<FixedExtentStart>>,
+
     /// Set when a jump left the position beyond an extent of an attached
     /// viewport: the viewport springs it back on its next frame (Flutter's
     /// `goBallistic(0)` after `jumpTo`).
@@ -218,6 +245,19 @@ impl ScrollController {
         if offset.is_finite() {
             self.state.borrow_mut().pending_initial_offset = Some(InitialOffset::Pixels(offset));
         }
+        self
+    }
+
+    /// Configures a starting item for each newly attached fixed-extent view.
+    /// The actual viewport extent per item takes precedence over a fallback.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn with_fixed_initial_item(self, item: usize, fallback_extent: Option<f32>) -> Self {
+        self.state.borrow_mut().fixed_extent_start = Some(Box::new(FixedExtentStart {
+            item,
+            fallback_extent: fallback_extent.filter(|extent| extent.is_finite() && *extent > 0.),
+            applied_to: None,
+        }));
         self
     }
 

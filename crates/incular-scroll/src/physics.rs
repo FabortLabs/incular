@@ -909,15 +909,21 @@ impl ScrollController {
         viewport: f32,
         physics: ScrollPhysics,
     ) -> Result<(), MetricWriteError> {
+        self.try_publish_viewport_metrics(ViewportMetricsUpdate::new(content, viewport, physics))
+    }
+
+    /// Publishes a complete metrics update from an unattached viewport.
+    #[doc(hidden)]
+    pub fn try_publish_viewport_metrics(
+        &self,
+        update: ViewportMetricsUpdate,
+    ) -> Result<(), MetricWriteError> {
         let publication = {
             let mut state = self.state.borrow_mut();
             if let Some(live) = state.metric_attachment {
                 return Err(MetricWriteError::attached(live.tree));
             }
-            Self::commit_extent_state(
-                &mut state,
-                ViewportMetricsUpdate::new(content, viewport, physics),
-            )
+            Self::commit_extent_state(&mut state, update)
         };
         self.finish_extent_publication(publication);
         Ok(())
@@ -952,6 +958,15 @@ impl ScrollController {
             state.notification_context = Some((axis, reverse));
         }
         let viewport = state.viewport_extent;
+        let attachment = state.metric_attachment.map(|owner| owner.id);
+        let fixed_start = if viewport > 0. {
+            state
+                .fixed_extent_start
+                .as_mut()
+                .and_then(|start| start.take_position(attachment, update.fixed_item_extent))
+        } else {
+            None
+        };
         let persistence = if let Some(requested) = state.pending_jump_offset {
             let next = requested.clamp(min, max);
             if next != state.offset {
@@ -978,11 +993,15 @@ impl ScrollController {
                 }
             }
             None
-        } else if let Some(initial) = state.pending_initial_offset.filter(|_| viewport > 0.) {
+        } else if let Some(initial) = state
+            .pending_initial_offset
+            .take_if(|_| viewport > 0.)
+            .map(|initial| initial.resolve(viewport))
+            .or(fixed_start)
+        {
             // Flutter's first `applyContentDimensions` clamps the initial
             // position to the new extents; it is not persisted.
-            state.pending_initial_offset = None;
-            let next = initial.resolve(viewport).clamp(min, max);
+            let next = initial.clamp(min, max);
             if next != state.offset {
                 state.offset = next;
                 state.revision += 1;

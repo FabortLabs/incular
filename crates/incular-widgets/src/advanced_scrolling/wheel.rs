@@ -11,7 +11,9 @@ use std::{f32::consts::FRAC_PI_2, ops::Range, rc::Rc};
 
 use incular_config::{Axis, Clip, Constraints};
 use incular_core::{Offset, Rect, Size};
-use incular_scroll::{MetricWriteError, ScrollController, ScrollPhysics, SliverConstraints};
+use incular_scroll::{
+    MetricWriteError, ScrollController, ScrollPhysics, SliverConstraints, ViewportMetricsUpdate,
+};
 
 /// Why a wheel configuration value was rejected.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -691,6 +693,10 @@ impl<T> ListWheelViewport<T> {
         self.physics
     }
 
+    pub(crate) fn item_extent(&self) -> f32 {
+        self.item_extent
+    }
+
     pub(crate) fn into_retained_config(self) -> WheelViewportConfig<T> {
         WheelViewportConfig {
             controller: self.controller,
@@ -878,20 +884,18 @@ impl<T> ListWheelViewport<T> {
         T: Clone,
     {
         let max_scroll_extent = self.max_scroll_extent();
-        // The wheel's centered first/last item makes its controller range equal
-        // to `(count - 1) * itemExtent`, so add the viewport extent back when
-        // feeding the ordinary content-minus-viewport controller. Headless
-        // vertical publication declares its axis through the checked
-        // context entry first — adjacent authorized mutations with no
-        // callbacks between, so the Metrics notification carries matching
-        // context and geometry. Owned controllers refuse at the first
-        // step with nothing changed.
-        self.controller
-            .try_set_metrics_context(Axis::Vertical, false)?;
-        self.controller.update_extents_with_physics(
-            max_scroll_extent + size.height,
-            size.height,
-            self.physics,
+        // Wheel extents count spans between item centers. Publish the
+        // axis, geometry and fixed item extent together after checking
+        // that no retained viewport owns this controller.
+        self.controller.try_publish_viewport_metrics(
+            ViewportMetricsUpdate::with_axis(
+                max_scroll_extent + size.height,
+                size.height,
+                Axis::Vertical,
+                false,
+                self.physics,
+            )
+            .with_fixed_item_extent(self.item_extent),
         )?;
         Ok(self.layout_with_offset(
             size,
@@ -1171,7 +1175,7 @@ impl FixedExtentScrollController {
     /// is established.
     #[must_use]
     pub fn new(initial_item: usize) -> Self {
-        let controller = ScrollController::new();
+        let controller = ScrollController::new().with_fixed_initial_item(initial_item, None);
         Self {
             controller,
             initial_item,
@@ -1204,8 +1208,8 @@ impl FixedExtentScrollController {
         if !(item_extent.is_finite() && item_extent > 0.0) {
             return Err(WheelConfigError::InvalidItemExtent);
         }
-        let controller = ScrollController::new();
-        let _ = controller.deferred_jump_to(initial_item as f32 * item_extent);
+        let controller =
+            ScrollController::new().with_fixed_initial_item(initial_item, Some(item_extent));
         Ok(Self {
             controller,
             initial_item,

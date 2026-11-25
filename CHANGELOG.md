@@ -235,6 +235,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-widgets`: a reused fixed-extent wheel controller starts a new
+  position at its initial item using the new viewport’s actual item size.
+
 - `incular-widgets`: ListWheelScrollView participates in the retained
   drag arena and uses its configured wheel physics on release.
 

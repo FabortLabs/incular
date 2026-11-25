@@ -301,6 +301,7 @@ impl WidgetTree {
         let controller = viewport.controller();
         let max_scroll_extent = viewport.max_scroll_extent();
         let physics = viewport.physics();
+        let item_extent = viewport.item_extent();
         self.claim_scroll_viewport(element_id, &controller)?;
         self.publish_scroll_extents(
             Some(element_id),
@@ -311,7 +312,8 @@ impl WidgetTree {
                 incular_config::Axis::Vertical,
                 false,
                 physics,
-            ),
+            )
+            .with_fixed_item_extent(item_extent),
         );
         let layout = self
             .wheel_state_live_mut(id)

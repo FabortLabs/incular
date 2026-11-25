@@ -277,6 +277,8 @@ pub struct ViewportMetricsUpdate {
     /// Axis context to commit with the geometry, if the publisher names
     /// one. `None` preserves whatever context is stored.
     pub context: Option<(Axis, bool)>,
+    /// The fixed size of one item, for a fixed-extent position.
+    pub fixed_item_extent: Option<f32>,
 }
 
 impl ViewportMetricsUpdate {
@@ -291,6 +293,7 @@ impl ViewportMetricsUpdate {
             viewport,
             physics,
             context: None,
+            fixed_item_extent: None,
         }
     }
 
@@ -311,7 +314,17 @@ impl ViewportMetricsUpdate {
             viewport,
             physics,
             context: Some((axis, reverse)),
+            fixed_item_extent: None,
         }
+    }
+
+    /// Supplies the attached wheel's actual item extent.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn with_fixed_item_extent(mut self, item_extent: f32) -> Self {
+        self.fixed_item_extent =
+            (item_extent.is_finite() && item_extent > 0.).then_some(item_extent);
+        self
     }
 
     /// The same publication with `leading` scroll extent before offset zero.

@@ -206,3 +206,62 @@ fn a_wheel_drag_releases_to_the_nearest_item_with_fixed_extent_physics() {
     assert_eq!(fixed.selected_item(ITEM_EXTENT), 1);
     assert!(!runtime.frame_requested());
 }
+
+#[test]
+fn a_fixed_extent_position_learns_its_item_size_fresh_on_each_attachment() {
+    for fixed in [
+        FixedExtentScrollController::new(3),
+        FixedExtentScrollController::with_item_extent(3, 100.),
+    ] {
+        let controller = fixed.controller();
+        let root = |item_extent: Option<f32>| {
+            let mut content = SizedBox::expand();
+            if let Some(item_extent) = item_extent {
+                content = content.child(ListWheelScrollView::new(
+                    fixed.controller(),
+                    item_extent,
+                    WheelChildDelegate::children(rows(100).collect()),
+                ));
+            }
+            Widget::from(Align::new(Alignment::CENTER, content))
+        };
+        let mut runtime = Runtime::new(root(Some(80.))).unwrap();
+        let now = Instant::now();
+        frame(&mut runtime, now);
+        assert_eq!((fixed.selected_item(80.), controller.offset()), (3, 240.));
+        let first = controller.attachment_id();
+        assert!(fixed.jump_to_item(10, 80.));
+        frame(&mut runtime, now + Duration::from_millis(16));
+        assert_eq!((fixed.selected_item(80.), controller.offset()), (10, 800.));
+        assert_eq!(controller.attachment_id(), first);
+
+        let id = runtime.tree().root().unwrap();
+        runtime.schedule_update(id, root(None)).unwrap();
+        frame(&mut runtime, now + Duration::from_millis(32));
+        assert!(controller.attachment_id().is_none());
+        runtime.schedule_update(id, root(Some(120.))).unwrap();
+        frame(&mut runtime, now + Duration::from_millis(48));
+        assert_eq!((fixed.selected_item(120.), controller.offset()), (3, 360.));
+        assert!(controller.attachment_id().is_some());
+        assert_ne!(controller.attachment_id(), first);
+    }
+}
+
+#[test]
+fn an_explicit_deferred_jump_wins_over_the_fixed_extent_initial_item_once() {
+    let fixed = FixedExtentScrollController::new(3);
+    let controller = fixed.controller();
+    assert!(controller.deferred_jump_to(700.));
+    let mut runtime = Runtime::new(wheel(&fixed, rows(100), None)).unwrap();
+    let now = Instant::now();
+    frame(&mut runtime, now);
+    assert_eq!(
+        (fixed.selected_item(ITEM_EXTENT), controller.offset()),
+        (7, 700.)
+    );
+    frame(&mut runtime, now + Duration::from_millis(16));
+    assert_eq!(
+        (fixed.selected_item(ITEM_EXTENT), controller.offset()),
+        (7, 700.)
+    );
+}
