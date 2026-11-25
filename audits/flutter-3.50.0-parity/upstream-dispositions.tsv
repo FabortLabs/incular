@@ -792,3 +792,6 @@ packages/flutter/test/rendering/box_constraints_test.dart	210	BoxConstraints.con
 packages/flutter/test/painting/box_decoration_test.dart	154	BoxDecoration.getClipPath with borderRadius	paired-match	upstream-limited-box-and-decoration-contracts.md#boxdecoration-clip-and-hit-geometry
 packages/flutter/test/painting/box_decoration_test.dart	166	BoxDecoration.getClipPath with shape BoxShape.circle	paired-match	upstream-limited-box-and-decoration-contracts.md#boxdecoration-clip-and-hit-geometry
 packages/flutter/test/painting/box_decoration_test.dart	177	BoxDecoration.hitTest with shape BoxShape.circle	paired-match	upstream-limited-box-and-decoration-contracts.md#boxdecoration-clip-and-hit-geometry
+packages/flutter/test/widgets/container_test.dart	608	giving clipBehaviour Clip.None, will not add a ClipPath to the tree	partial-match	upstream-limited-box-and-decoration-contracts.md#container-decoration-and-child-clips
+packages/flutter/test/widgets/container_test.dart	621	giving clipBehaviour not a Clip.None, will add a ClipPath to the tree	partial-match	upstream-limited-box-and-decoration-contracts.md#container-decoration-and-child-clips
+packages/flutter/test/widgets/container_test.dart	767	using clipBehaviour and shadow, should not clip the shadow	partial-match	upstream-limited-box-and-decoration-contracts.md#container-decoration-and-child-clips

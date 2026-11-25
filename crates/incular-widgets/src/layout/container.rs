@@ -47,10 +47,8 @@ pub struct Container {
     pub height: Option<f32>,
     #[builder(default, setter(strip_option))]
     pub transform: Option<CoreTransform>,
-    /// The decoration set with [`Container::decoration`]. Its color,
-    /// gradient, border and radius are also copied into the fields above;
-    /// the rest (shadows, a circle, an image, a non-uniform border) paint
-    /// from here.
+    /// Background decoration, resolved identically for the builder, fluent
+    /// API, and struct literals.
     #[builder(default, setter(strip_option))]
     pub decoration: Option<crate::BoxDecoration>,
     /// Flutter `Container.foregroundDecoration`: painted in front of the
@@ -136,22 +134,6 @@ impl Container {
     /// Sets container visual decoration (color, border, radius).
     #[must_use]
     pub fn decoration(mut self, decoration: crate::BoxDecoration) -> Self {
-        // Flutter's `BoxDecoration` paints `color` or, without one, its
-        // `gradient`.
-        if let Some(c) = decoration.color {
-            self.color = Some(c);
-        } else if let Some(gradient) = decoration.gradient.clone() {
-            self.background = Some(gradient);
-        }
-        if let Some(b) = decoration.border {
-            // The fast render border carries color and width, not style.
-            // A uniform invisible border still contributes to padding.
-            self.border =
-                (!b.is_uniform() || b.top.style != crate::BorderStyle::None).then(|| b.into());
-        }
-        if let Some(r) = decoration.border_radius {
-            self.radius = r.into();
-        }
         self.decoration = Some(decoration);
         self
     }
@@ -227,49 +209,73 @@ impl From<Container> for Widget {
             current = Align::new(alignment, current).into();
         }
 
-        // The decoration's parts the plain decorated box cannot paint go
-        // through the full box painter.
-        let decoration_padding = value
-            .decoration
-            .as_ref()
-            .map_or(EdgeInsets::ZERO, crate::BoxDecoration::padding);
-        let full_decoration = value
-            .decoration
-            .filter(crate::BoxDecoration::needs_full_painter);
+        let decoration = value.decoration.as_ref();
+        let border = value.border.or_else(|| {
+            decoration
+                .and_then(|decoration| decoration.border)
+                .filter(|border| border.top.style != crate::BorderStyle::None)
+                .map(Into::into)
+        });
+        let radius = if value.radius.is_zero() {
+            decoration
+                .and_then(|decoration| decoration.border_radius)
+                .map_or(value.radius, Into::into)
+        } else {
+            value.radius
+        };
 
-        // 2. Padding, plus the border widths of the decoration: Flutter's
-        // Container pads its child by `padding.add(decoration.padding)`.
-        let border_padding = match &full_decoration {
-            Some(decoration) => decoration.padding(),
-            None => value
+        // Padding is independent of painting. A decoration border can have
+        // an inset even when its style is invisible.
+        let border_padding = if let Some(decoration) = decoration {
+            decoration.padding()
+        } else {
+            value
                 .border
-                .map_or(decoration_padding, |border| EdgeInsets::all(border.width)),
+                .map_or(EdgeInsets::ZERO, |border| EdgeInsets::all(border.width))
         };
         let effective_padding = value.padding.unwrap_or(EdgeInsets::ZERO) + border_padding;
         if !effective_padding.is_zero() {
             current = Padding::new(effective_padding, current).into();
         }
 
-        // 3. Decoration (Color, Brush, Border, Radius), then the foreground
-        // decoration over it.
-        if let Some(decoration) = full_decoration {
+        // Clip inside the decoration and outside the inner padding. A
+        // shadow or outside stroke must not be cropped by a child clip.
+        if value.clip_behavior != Clip::None
+            && let Some(decoration) = decoration
+        {
+            current = decoration.clip_child(value.clip_behavior, current);
+        }
+        let standalone_clip = value.clip_behavior != Clip::None && decoration.is_none();
+
+        // 3. Decoration, then the optional foreground over it. Stay on the
+        // single render-object fast path for simple rounded rectangles.
+        let background = value
+            .color
+            .map(Brush::Solid)
+            .or(value.background)
+            .or_else(|| {
+                decoration.and_then(|decoration| {
+                    decoration
+                        .gradient
+                        .clone()
+                        .or_else(|| decoration.color.map(Brush::Solid))
+                })
+            });
+        if let Some(decoration) = value
+            .decoration
+            .filter(crate::BoxDecoration::needs_full_painter)
+        {
             current = crate::painting_effects::decorated(
                 decoration,
                 crate::DecorationPosition::Background,
                 current,
             );
-        } else if value.color.is_some()
-            || value.background.is_some()
-            || value.border.is_some()
-            || !value.radius.is_zero()
-        {
-            let mut decorated = DecoratedBox::new(current).corner_radii(value.radius);
-            if let Some(color) = value.color {
-                decorated = decorated.background(color);
-            } else if let Some(bg) = value.background {
-                decorated = decorated.background(bg);
+        } else if background.is_some() || border.is_some() || !radius.is_zero() {
+            let mut decorated = DecoratedBox::new(current).corner_radii(radius);
+            if let Some(background) = background {
+                decorated = decorated.background(background);
             }
-            if let Some(border) = value.border {
+            if let Some(border) = border {
                 decorated = decorated.border(border);
             }
             current = decorated.into();
@@ -314,17 +320,18 @@ impl From<Container> for Widget {
             current = Transform::new(transform, current).into();
         }
 
-        // 7. Clipping
-        if value.clip_behavior != Clip::None {
-            if !value.radius.is_zero() {
-                current = ClipRRect::new(value.radius, current)
+        // The Incular-only shorthand without a BoxDecoration remains an
+        // outer rectangle/rounded-rectangle clip.
+        if standalone_clip {
+            current = if radius.is_zero() {
+                ClipRect::new(current)
                     .clip_behavior(value.clip_behavior)
-                    .into();
+                    .into()
             } else {
-                current = ClipRect::new(current)
+                ClipRRect::new(radius, current)
                     .clip_behavior(value.clip_behavior)
-                    .into();
-            }
+                    .into()
+            };
         }
 
         current

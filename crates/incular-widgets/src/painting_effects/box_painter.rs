@@ -14,8 +14,8 @@ use super::decoration::{
 };
 use super::geometry::{BorderRadius, Radius};
 use crate::{
-    ClipPath, CustomPaint, IgnorePointer, Image, LayoutBuilder, Opacity, Positioned, Stack,
-    StackFit, Widget,
+    ClipPath, ClipRRect, ClipRect, ClipShape, CustomClipper, CustomPaint, IgnorePointer, Image,
+    LayoutBuilder, Opacity, Positioned, Stack, StackFit, Widget,
 };
 
 /// Flutter `DecorationPosition`: whether a decoration paints behind or in
@@ -37,6 +37,7 @@ impl BoxDecoration {
             || self.background_blend_mode.is_some()
             || self.shape == BoxShape::Circle
             || self.image.is_some()
+            || self.has_elliptical_corners()
             || self
                 .border
                 .is_some_and(|border| !border.is_uniform() || border.top.stroke_align != -1.0)
@@ -210,6 +211,42 @@ impl BoxDecoration {
         }
     }
 
+    fn has_elliptical_corners(&self) -> bool {
+        self.shape == BoxShape::Rectangle
+            && self.border_radius.is_some_and(|radius| {
+                clockwise_radii(radius)
+                    .iter()
+                    .any(|radius| radius.x != radius.y)
+            })
+    }
+
+    /// Clip the child, not the container's foreground, background, or shadow.
+    pub(crate) fn clip_child(&self, mode: Clip, child: Widget) -> Widget {
+        if self.shape == BoxShape::Rectangle
+            && self.border_radius.unwrap_or_default() == BorderRadius::default()
+        {
+            return ClipRect::new(child).clip_behavior(mode).into();
+        }
+        let clipper = BoxDecorationClipper(BoxDecoration {
+            shape: self.shape,
+            border_radius: self.border_radius,
+            ..BoxDecoration::default()
+        });
+        if self.has_elliptical_corners() {
+            ClipPath::builder()
+                .clip_behavior(mode)
+                .child(child)
+                .build()
+                .custom_clipper(clipper)
+                .into()
+        } else {
+            ClipRRect::new(CornerRadii::ZERO, child)
+                .clip_behavior(mode)
+                .custom_clipper(clipper)
+                .into()
+        }
+    }
+
     fn rounded_box(&self, rect: Rect) -> Option<RRect> {
         match self.shape {
             BoxShape::Circle => {
@@ -310,6 +347,22 @@ impl BoxDecoration {
             BoxShape::Circle => Some(self.clip_path(rect)),
             BoxShape::Rectangle => self.border_radius.map(|_| self.clip_path(rect)),
         }
+    }
+}
+
+struct BoxDecorationClipper(BoxDecoration);
+
+impl CustomClipper for BoxDecorationClipper {
+    fn get_clip(&self, size: Size) -> ClipShape {
+        let rect = Rect::from_origin_size(Offset::ZERO, size);
+        self.0.rounded_box(rect).map_or_else(
+            || ClipShape::Path(Arc::new(self.0.clip_path(rect))),
+            ClipShape::RRect,
+        )
+    }
+
+    fn should_reclip(&self, old: &Self) -> bool {
+        self.0.shape != old.0.shape || self.0.border_radius != old.0.border_radius
     }
 }
 

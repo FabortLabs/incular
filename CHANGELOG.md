@@ -127,6 +127,14 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-widgets`: `Container` paints ordinary decorations supplied by
+  its typed builder. With an explicit `BoxDecoration`, an opt-in clip
+  follows the decoration's shape and leaves shadows and outside strokes
+  unclipped.
+- **Breaking (`widgets`):** `Container::decoration` no longer copies
+  decoration properties into `color`, `background`, `border`, or
+  `radius`. Inspect the `decoration` field for those properties instead.
+
 - `incular-gestures`: long-press callbacks run in Flutter order: start,
   long press, end, then up.
 - `incular-mobile`: Android and iOS gesture timing uses native touch timestamps.

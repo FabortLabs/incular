@@ -159,8 +159,11 @@ Affine after layout; size unchanged, only painting/hit-test/semantics observe.
 
 ### `clip_behavior(clip: Clip)`
 
-`None` (overflow paints) / `HardEdge` (default, fast) / `AntiAlias` /
-`AntiAliasWithSaveLayer` (smooth + isolated, costly).
+`None` is the default and allows overflow. Choose `HardEdge` for a fast
+clip, `AntiAlias` for smoother edges, or `AntiAliasWithSaveLayer` for
+smoother edges with an isolated layer. With an explicit `BoxDecoration`,
+only the padded child is clipped to the decoration's outline. Shadows and
+outside strokes are not clipped.
 
 ## Complete example
 
