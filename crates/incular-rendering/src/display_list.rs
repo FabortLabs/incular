@@ -687,8 +687,9 @@ impl Canvas {
         self.saves.push(SaveKind::Clip);
         self.list.push(PaintCommand::PushClip { rect });
     }
+    /// Saves an antialiased rounded clip, the default of Flutter's Canvas.
     pub fn save_clip_rrect(&mut self, rrect: RRect) {
-        self.save_clip_rrect_with_coverage(rrect, ClipCoverage::HardEdge);
+        self.save_clip_rrect_with_coverage(rrect, ClipCoverage::AntiAlias);
     }
     pub fn save_clip_rrect_with_coverage(&mut self, rrect: RRect, coverage: ClipCoverage) {
         self.saves.push(SaveKind::Clip);

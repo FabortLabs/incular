@@ -117,6 +117,52 @@ fn triangle_path() -> Arc<Path> {
     Arc::new(builder.build())
 }
 
+/// clip_test.dart:101. The public builder defaults are read from their
+/// actual emitted rounded clip, not from a redundant fixture setting.
+#[test]
+fn rounded_clip_defaults_to_antialiasing_and_zero_radii() {
+    let clip = ClipRRect::builder()
+        .child(Widget::box_(Size::new(30., 20.), Color::WHITE))
+        .build();
+    let mut tree = WidgetTree::new();
+    tree.mount(clip.into()).unwrap();
+    tree.layout(Constraints::tight(Size::new(30., 20.)))
+        .unwrap();
+    let list = tree.paint();
+    let values = list.commands().iter().find_map(|command| match command {
+        PaintCommand::PushClipRRect {
+            coverage, rrect, ..
+        } => Some((*coverage, rrect.radii)),
+        _ => None,
+    });
+    assert_eq!(
+        values,
+        Some((ClipCoverage::AntiAlias, CornerRadii::uniform(0.)))
+    );
+}
+
+/// clip_test.dart:933, :964. Layout the same centered Placeholder scene at
+/// a zero viewport size, assert each render size, then run the paint phase.
+#[test]
+fn rounded_and_oval_clips_complete_a_zero_area_frame() {
+    let cases = [
+        Widget::from(ClipRRect::new(8., Placeholder::new())),
+        Widget::from(ClipOval::new(Placeholder::new())),
+    ];
+    for clip in cases {
+        let key = incular_widgets::internal::Key::from("zero-area clip");
+        let mut tree = WidgetTree::new();
+        let viewport =
+            Directionality::new(TextDirection::Ltr, Center::new(clip.with_key(key.clone())));
+        tree.mount(viewport.into()).unwrap();
+        tree.layout(Constraints::tight(Size::ZERO)).unwrap();
+        let element = tree.element_with_key(&key).unwrap();
+        let render = tree.render_id(element).unwrap();
+        assert_eq!(tree.render_size(render), Some(Size::ZERO));
+        let _ = tree.paint();
+    }
+}
+
 #[test]
 fn rounded_clip_coverage_survives_retained_mode_changes_and_world_path_fallback() {
     let key = incular_widgets::internal::Key::Value(4242);

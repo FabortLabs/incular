@@ -801,3 +801,8 @@ The original childless ColorFiltered case raises full coverage to
 444 / 8,965 (4.95%) at `b364dd8d`. Tab traversal from a directly
 focused but traversal-excluded node is verified separately in the
 [focus recheck](upstream-repeat-focus-restoration-flex-and-image-filter.md#focus-traversal-from-a-directly-focused-skipped-node).
+
+The [clip default and zero-area recheck](upstream-tween-transform-and-lifecycle.md#default-canvas-rounded-coverage-and-widget-clip-originals)
+adds three fully paired originals: 447 / 8,965 (4.99%),
+351 matches and 96 historical mismatches. The separate Windows
+wgpu readback verifies default rounded Canvas antialiasing under scale.

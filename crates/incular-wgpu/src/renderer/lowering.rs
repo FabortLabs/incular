@@ -640,8 +640,11 @@ impl WgpuRenderer {
                 } => {
                     let [a, b, c, d, _, _] = transform.to_kurbo().as_coeffs();
                     #[cfg(not(incular_d3d11))]
+                    let uniform_scale = a as f32;
+                    #[cfg(not(incular_d3d11))]
                     if *coverage == incular_painting::ClipCoverage::AntiAlias
-                        && (a, b, c, d) == (1., 0., 0., 1.)
+                        && b == 0. && c == 0. && a == d
+                        && uniform_scale.is_finite() && uniform_scale > 0.
                         // Destination-reading effects use a replacement
                         // pass rather than a source color/alpha blend.
                         // Keep hard containment until they can mix their
@@ -651,37 +654,37 @@ impl WgpuRenderer {
                         ))
                     {
                         let parent = *clips.last().expect("clip stack");
-                        let local = transform.transform_point(rrect.rect.origin);
+                        let local = transform.transform_rect_bbox(rrect.rect);
                         let guard = 1. / scale;
                         let bounds = Rect::from_origin_size(
-                            local - Offset::new(guard, guard),
+                            local.origin - Offset::new(guard, guard),
                             Size::new(
-                                rrect.rect.size.width + 2. * guard,
-                                rrect.rect.size.height + 2. * guard,
+                                local.size.width + 2. * guard,
+                                local.size.height + 2. * guard,
                             ),
                         );
-                        let state = if rrect.rect.size.width <= 0.
-                            || rrect.rect.size.height <= 0.
+                        let state = if local.size.width <= 0.
+                            || local.size.height <= 0.
                             || intersect_clip_with_rect(parent, ClipRect::hard(bounds))
                                 == ClipState::Empty
                         {
                             ClipState::Empty
                         } else {
-                            let radii = rrect_instance(
-                                *rrect,
-                                &Brush::Solid(Color::TRANSPARENT),
-                                transform,
-                                scale,
-                                self.target_width as f32,
-                                self.target_height as f32,
-                            )
-                            .radii;
+                            let radii = rrect.radii.normalized(rrect.rect.size);
+                            let physical_scale = uniform_scale * scale;
+                            let radii = [
+                                radii.top_left,
+                                radii.top_right,
+                                radii.bottom_right,
+                                radii.bottom_left,
+                            ]
+                            .map(|radius| radius * physical_scale);
                             self.soft_clips.push(GpuSoftClip {
                                 rect: [
-                                    local.x * scale,
-                                    local.y * scale,
-                                    rrect.rect.size.width * scale,
-                                    rrect.rect.size.height * scale,
+                                    local.origin.x * scale,
+                                    local.origin.y * scale,
+                                    local.size.width * scale,
+                                    local.size.height * scale,
                                 ],
                                 radii,
                                 link: [parent.soft_index(), 0, 0, 0],

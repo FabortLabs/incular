@@ -7,18 +7,30 @@ use std::sync::Arc;
 use fixture::{BLACK, WHITE, capture, with_renderer};
 use incular_config::Clip;
 use incular_core::{Color, Offset, Rect, Size, Transform};
-use incular_rendering::{Canvas, FillRule, PathBuilder, RRect};
+use incular_rendering::{Canvas, ClipCoverage, FillRule, PathBuilder, RRect};
 use incular_wgpu::{FrameOutcome, WgpuRenderer};
 
-fn raw_clip(renderer: &mut WgpuRenderer, factor: f32, path_clip: Option<bool>) -> [[u8; 4]; 4] {
+#[derive(Clone, Copy)]
+enum RawClip {
+    None,
+    HardRounded,
+    Rounded,
+    HardPath,
+}
+
+fn raw_clip(renderer: &mut WgpuRenderer, factor: f32, clip: RawClip) -> ([[u8; 4]; 4], usize) {
     let mut canvas = Canvas::default();
     canvas.save_transform(Transform::translation(Offset::new(4., 4.)));
     canvas.save_transform(Transform::scale(factor));
     let size = 40. / factor;
     let rect = Rect::from_origin_size(Offset::ZERO, Size::new(size, size));
-    match path_clip {
-        Some(false) => canvas.save_clip_rrect(RRect::uniform(rect, 12. / factor)),
-        Some(true) => {
+    match clip {
+        RawClip::Rounded => canvas.save_clip_rrect(RRect::uniform(rect, 12. / factor)),
+        RawClip::HardRounded => canvas.save_clip_rrect_with_coverage(
+            RRect::uniform(rect, 12. / factor),
+            ClipCoverage::HardEdge,
+        ),
+        RawClip::HardPath => {
             let edge = 12. / factor;
             let mut path = PathBuilder::default();
             path.move_to(Offset::new(edge, 0.))
@@ -29,10 +41,10 @@ fn raw_clip(renderer: &mut WgpuRenderer, factor: f32, path_clip: Option<bool>) -
                 .close();
             canvas.save_clip_path(Arc::new(path.build()), FillRule::NonZero);
         }
-        None => {}
+        RawClip::None => {}
     }
     canvas.rect(rect, Color::WHITE);
-    if path_clip.is_some() {
+    if !matches!(clip, RawClip::None) {
         canvas.restore();
     }
     canvas.restore();
@@ -43,10 +55,16 @@ fn raw_clip(renderer: &mut WgpuRenderer, factor: f32, path_clip: Option<bool>) -
         FrameOutcome::Presented(_)
     ));
     let frame = renderer.take_capture().unwrap().unwrap();
-    [(4, 4), (16, 16), (34, 16), (45, 16)].map(|(x, y)| {
+    let pixel = |(x, y)| -> [u8; 4] {
         let index = ((y * frame.width + x) * 4) as usize;
         frame.rgba8[index..index + 4].try_into().unwrap()
-    })
+    };
+    let controls = [(4, 4), (16, 16), (34, 16), (45, 16)].map(pixel);
+    let partial = (4..16)
+        .flat_map(|y| (4..16).map(move |x| pixel((x, y))))
+        .filter(|pixel| pixel[1] > 0 && pixel[1] < 255)
+        .count();
+    (controls, partial)
 }
 #[test]
 fn flutter_350_clip_rrect_modes_distinguish_aa_and_saved_compositing() {
@@ -73,15 +91,25 @@ fn flutter_350_clip_rrect_modes_distinguish_aa_and_saved_compositing() {
         );
 
         let expected = [BLACK, WHITE, WHITE, BLACK];
-        let unscaled_rrect = raw_clip(renderer, 1., Some(false));
-        let scaled_rrect = raw_clip(renderer, 2., Some(false));
-        let unscaled_path = raw_clip(renderer, 1., Some(true));
-        let scaled_path = raw_clip(renderer, 2., Some(true));
-        assert_eq!(raw_clip(renderer, 2., None), [WHITE, WHITE, WHITE, BLACK]);
+        let unscaled_rrect = raw_clip(renderer, 1., RawClip::HardRounded);
+        let scaled_rrect = raw_clip(renderer, 2., RawClip::HardRounded);
+        let unscaled_path = raw_clip(renderer, 1., RawClip::HardPath);
+        let scaled_path = raw_clip(renderer, 2., RawClip::HardPath);
+        assert_eq!(
+            raw_clip(renderer, 2., RawClip::None).0,
+            [WHITE, WHITE, WHITE, BLACK]
+        );
         assert_eq!(
             [unscaled_rrect, scaled_rrect, unscaled_path, scaled_path],
-            [expected; 4],
+            [(expected, 0); 4],
             "the scissor follows the full transform for rounded and path clips"
+        );
+        let ordinary = raw_clip(renderer, 1., RawClip::Rounded);
+        let scaled_ordinary = raw_clip(renderer, 2., RawClip::Rounded);
+        assert_eq!((ordinary.0, scaled_ordinary.0), (expected, expected));
+        assert!(
+            ordinary.1 > 0 && scaled_ordinary.1 == ordinary.1,
+            "default rounded Canvas clips should antialias under scaling: {ordinary:?}, {scaled_ordinary:?}"
         );
     });
 }

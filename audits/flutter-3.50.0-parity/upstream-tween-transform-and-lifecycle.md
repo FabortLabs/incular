@@ -120,3 +120,20 @@ match the pinned Flutter result with and without scaling, including
 the cut corner, the exterior, and the no-clip control. The rounded
 save-layer and native path-fidelity checks also pass. Transformed
 antialiased path coverage is a separate limitation.
+
+### Default Canvas rounded coverage and widget clip originals
+
+The raw Canvas rounded clip now defaults to antialiasing, and
+positive uniform scaling preserves the same physical edge coverage.
+The pinned Flutter and Windows wgpu probes both have fractional
+corner pixels at 1× and 2×, matching their own scale controls;
+explicit hard clips still have none. The save-layer and native
+path-fidelity controls remain green.
+
+Three `widgets/clip_test.dart` originals were run and passed.
+For :101, the Rust builder's actual emitted rounded clip has zero
+radii and AntiAlias coverage. For :933 and :964, the equivalent
+centered Placeholder and rounded/oval clip measure zero and finish
+painting at a zero viewport size. All 21 focused retained clip
+tests pass. These original cases are separate from the authored
+Canvas readback. Rotated and general-path antialiasing remain open.

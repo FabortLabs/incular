@@ -7,7 +7,11 @@ import 'package:flutter_test/flutter_test.dart';
 const _black = [0, 0, 0, 255];
 const _white = [255, 255, 255, 255];
 
-Future<List<List<int>>> _rawClip(double factor, {bool? pathClip}) async {
+Future<({List<List<int>> controls, int partial})> _rawClip(
+  double factor, {
+  bool? pathClip,
+  bool defaultRounded = false,
+}) async {
   final recorder = ui.PictureRecorder();
   final canvas = ui.Canvas(recorder);
   canvas.drawColor(const Color(0xff000000), ui.BlendMode.src);
@@ -26,10 +30,15 @@ Future<List<List<int>>> _rawClip(double factor, {bool? pathClip}) async {
       ..close();
     canvas.clipPath(path, doAntiAlias: false);
   } else if (pathClip == false) {
-    canvas.clipRRect(
-      ui.RRect.fromRectAndRadius(rect, ui.Radius.circular(12 / factor)),
-      doAntiAlias: false,
+    final rounded = ui.RRect.fromRectAndRadius(
+      rect,
+      ui.Radius.circular(12 / factor),
     );
+    if (defaultRounded) {
+      canvas.clipRRect(rounded);
+    } else {
+      canvas.clipRRect(rounded, doAntiAlias: false);
+    }
   }
   canvas.drawRect(rect, ui.Paint()..color = const Color(0xffffffff));
   final picture = recorder.endRecording();
@@ -39,10 +48,18 @@ Future<List<List<int>>> _rawClip(double factor, {bool? pathClip}) async {
       final bytes = (await image.toByteData(
         format: ui.ImageByteFormat.rawRgba,
       ))!;
-      return [(4, 4), (16, 16), (34, 16), (45, 16)].map((point) {
+      final controls = [(4, 4), (16, 16), (34, 16), (45, 16)].map((point) {
         final index = (point.$2 * 48 + point.$1) * 4;
         return List.generate(4, (channel) => bytes.getUint8(index + channel));
       }).toList();
+      var partial = 0;
+      for (var y = 4; y < 16; y++) {
+        for (var x = 4; x < 16; x++) {
+          final g = bytes.getUint8((y * 48 + x) * 4 + 1);
+          if (g > 0 && g < 255) partial++;
+        }
+      }
+      return (controls: controls, partial: partial);
     } finally {
       image.dispose();
     }
@@ -125,15 +142,25 @@ void main() {
   test('Hard Canvas clips follow paint transforms', () async {
     for (final pathClip in [false, true]) {
       for (final factor in [1.0, 2.0]) {
-        expect(await _rawClip(factor, pathClip: pathClip), [
+        final probe = await _rawClip(factor, pathClip: pathClip);
+        expect(probe.controls, [
           _black,
           _white,
           _white,
           _black,
         ], reason: 'pathClip=$pathClip, factor=$factor');
+        expect(probe.partial, 0);
       }
     }
-    expect(await _rawClip(2), [_white, _white, _white, _black]);
+    expect((await _rawClip(2)).controls, [_white, _white, _white, _black]);
+  });
+  test('Default rounded Canvas coverage survives scaling', () async {
+    final unscaled = await _rawClip(1, pathClip: false, defaultRounded: true);
+    final scaled = await _rawClip(2, pathClip: false, defaultRounded: true);
+    expect(unscaled.controls, [_black, _white, _white, _black]);
+    expect(scaled.controls, unscaled.controls);
+    expect(unscaled.partial, greaterThan(0));
+    expect(scaled.partial, unscaled.partial);
   });
   testWidgets('ClipRRect default smooths an edge that hardEdge does not', (
     tester,
