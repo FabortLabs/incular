@@ -44,6 +44,7 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
             min_height,
             max_height,
             alignment,
+            fit,
             ..
         } => RenderKind::Overflow {
             min_width: *min_width,
@@ -51,6 +52,7 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
             min_height: *min_height,
             max_height: *max_height,
             alignment: *alignment,
+            fit: *fit,
         },
         WidgetKind::Unconstrained {
             constrained_axis,

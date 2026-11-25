@@ -38,9 +38,9 @@ pub use painting::{
 pub use sizing_constraints::{
     Builder, ConstrainedBox, ConstrainedBoxBuilder, ConstraintsTransformBox, IntrinsicHeight,
     IntrinsicHeightBuilder, IntrinsicWidth, IntrinsicWidthBuilder, LayoutBuilder, LimitedBox,
-    LimitedBoxBuilder, OverflowBox, OverflowBoxBuilder, PreferredSize, PreferredSizeBuilder,
-    SizedBox, SizedBoxBuilder, SizedOverflowBox, SizedOverflowBoxBuilder, UnconstrainedBox,
-    UnconstrainedBoxBuilder,
+    LimitedBoxBuilder, OverflowBox, OverflowBoxBuilder, OverflowBoxFit, PreferredSize,
+    PreferredSizeBuilder, SizedBox, SizedBoxBuilder, SizedOverflowBox, SizedOverflowBoxBuilder,
+    UnconstrainedBox, UnconstrainedBoxBuilder,
 };
 pub use split_view::{SplitPosition, SplitView, SplitViewBuilder};
 pub use transforms::{FractionalTranslation, FractionalTranslationBuilder, RotatedBox};

@@ -281,9 +281,9 @@ pub use layout::{
     ClipRect, ClipShape, ColoredBox, Column, ConstrainedBox, ConstraintsTransformBox, Container,
     CustomClipper, CustomPaint, Expanded, FittedBox, Flex, Flexible, FractionalTranslation,
     FractionallySizedBox, IndexedStack, IntrinsicHeight, IntrinsicWidth, KeyedSubtree,
-    LayoutBuilder, LimitedBox, NavigationToolbar, Offstage, OverflowBar, OverflowBox, Padding,
-    Placeholder, Positioned, PreferredSize, RepaintBoundary, RotatedBox, Row, SizedBox,
-    SizedOverflowBox, Spacer, Stack, Table, TableCell, TableCellVerticalAlignment,
+    LayoutBuilder, LimitedBox, NavigationToolbar, Offstage, OverflowBar, OverflowBox,
+    OverflowBoxFit, Padding, Placeholder, Positioned, PreferredSize, RepaintBoundary, RotatedBox,
+    Row, SizedBox, SizedOverflowBox, Spacer, Stack, Table, TableCell, TableCellVerticalAlignment,
     TableColumnWidth, UnconstrainedBox, Visibility, Wrap,
 };
 pub use magnifier::{

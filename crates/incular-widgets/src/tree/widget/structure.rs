@@ -151,6 +151,7 @@ impl std::fmt::Debug for WidgetKind {
                 min_height,
                 max_height,
                 alignment,
+                fit,
                 child,
             } => f
                 .debug_struct("OverflowBox")
@@ -159,6 +160,7 @@ impl std::fmt::Debug for WidgetKind {
                 .field("min_height", min_height)
                 .field("max_height", max_height)
                 .field("alignment", alignment)
+                .field("fit", fit)
                 .field("child", child)
                 .finish(),
             Self::Unconstrained {
@@ -843,6 +845,7 @@ impl PartialEq for WidgetKind {
                     min_height: c,
                     max_height: d,
                     alignment: k,
+                    fit: first_fit,
                     child: e,
                 },
                 Self::Overflow {
@@ -851,9 +854,12 @@ impl PartialEq for WidgetKind {
                     min_height: h,
                     max_height: i,
                     alignment: l,
+                    fit: second_fit,
                     child: j,
                 },
-            ) => a == f && b == g && c == h && d == i && k == l && e == j,
+            ) => {
+                a == f && b == g && c == h && d == i && k == l && first_fit == second_fit && e == j
+            }
             (Self::ProxyLayout { mode: a, child: b }, Self::ProxyLayout { mode: c, child: d }) => {
                 a == c && b == d
             }
@@ -2209,8 +2215,8 @@ impl WidgetKind {
             WidgetKind::Overflow { child, .. } => (
                 WidgetType::Overflow,
                 Layout,
-                Single,
-                WidgetChildren::Single(child),
+                Optional,
+                WidgetChildren::Optional(child.as_ref()),
             ),
             WidgetKind::Unconstrained { child, .. } => (
                 WidgetType::Unconstrained,

@@ -170,6 +170,7 @@ impl WidgetTree {
                 min_height,
                 max_height,
                 alignment,
+                fit,
             } => {
                 let child_constraints = Constraints::new(
                     min_width.unwrap_or(constraints.min_width()),
@@ -181,21 +182,38 @@ impl WidgetTree {
                         .unwrap_or(constraints.max_height())
                         .max(min_height.unwrap_or(constraints.min_height())),
                 );
+                let fit_size = |child_size| {
+                    let child_size = constraints.constrain(child_size);
+                    match fit {
+                        OverflowBoxFit::Max => Size::new(
+                            if constraints.is_width_bounded() {
+                                constraints.max_width()
+                            } else {
+                                child_size.width
+                            },
+                            if constraints.is_height_bounded() {
+                                constraints.max_height()
+                            } else {
+                                child_size.height
+                            },
+                        ),
+                        OverflowBoxFit::DeferToChild => child_size,
+                    }
+                };
                 if let Some(&child) = children.first() {
                     self.layout_render(child, child_constraints)?;
-                    let child_size = self
-                        .render_live(child, "retained render must remain live")
-                        .size;
-                    // `RenderConstrainedOverflowBox`: the box keeps its own
-                    // constrained size and `alignChild` places the child, so an
-                    // overflowing child extends past the box edges.
-                    let size = constraints.constrain(child_size);
-                    (
-                        size,
-                        ChildOffsets::One(aligned_child_offset(alignment, size, child_size)),
-                    )
+                    let child = self.render_live(child, "overflow child must remain live");
+                    let child_size = child.size;
+                    let size = fit_size(child_size);
+                    let offset = aligned_child_offset(alignment, size, child_size);
+                    let baseline = child.baseline.map(|local| offset.y + local);
+                    self.render_live_mut(id, "overflow render must remain live")
+                        .baseline = baseline;
+                    (size, ChildOffsets::One(offset))
                 } else {
-                    (constraints.constrain(Size::ZERO), ChildOffsets::default())
+                    self.render_live_mut(id, "overflow render must remain live")
+                        .baseline = None;
+                    (fit_size(Size::ZERO), ChildOffsets::default())
                 }
             }
             RenderKind::Unconstrained {

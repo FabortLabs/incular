@@ -260,7 +260,18 @@ impl LimitedBox {
 
 widget_from_kind!(LimitedBox => Limited { max_width, max_height, child });
 
-/// Allows its child to overflow parent bounds while parent reports constrained size.
+/// Determines the box size when the child does not fill its parent's bounds.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum OverflowBoxFit {
+    /// Reserves the full finite space permitted by the parent.
+    #[default]
+    Max,
+    /// Sizes to its child within the parent's bounds.
+    DeferToChild,
+}
+
+/// Allows a child to overflow its bounds. Defaults to reserving the parent's
+/// maximum size; select [OverflowBoxFit::DeferToChild] to shrink-wrap it.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct OverflowBox {
     #[builder(default, setter(strip_option))]
@@ -273,22 +284,45 @@ pub struct OverflowBox {
     max_height: Option<f32>,
     #[builder(default = Alignment::CENTER)]
     alignment: Alignment,
-    #[builder(setter(into))]
-    child: Widget,
+    #[builder(default)]
+    fit: OverflowBoxFit,
+    #[builder(default, setter(strip_option, into))]
+    child: Option<Widget>,
 }
 
 impl OverflowBox {
     /// Creates an OverflowBox.
     #[must_use]
     pub fn new(child: impl Into<Widget>) -> Self {
+        Self::empty().child(child)
+    }
+
+    /// Creates an OverflowBox without a child.
+    #[must_use]
+    pub fn empty() -> Self {
         Self {
             min_width: None,
             max_width: None,
             min_height: None,
             max_height: None,
             alignment: Alignment::CENTER,
-            child: child.into(),
+            fit: OverflowBoxFit::Max,
+            child: None,
         }
+    }
+
+    /// Sets or replaces the child.
+    #[must_use]
+    pub fn child(mut self, child: impl Into<Widget>) -> Self {
+        self.child = Some(child.into());
+        self
+    }
+
+    /// Chooses how to size this box independently of the child constraints.
+    #[must_use]
+    pub fn fit(mut self, fit: OverflowBoxFit) -> Self {
+        self.fit = fit;
+        self
     }
 
     /// Aligns the child within the box. Defaults to centered, as in Flutter's
@@ -324,7 +358,7 @@ impl OverflowBox {
     }
 }
 
-widget_from_kind!(OverflowBox => Overflow { min_width, max_width, min_height, max_height, alignment, child });
+widget_from_kind!(OverflowBox => Overflow { min_width, max_width, min_height, max_height, alignment, fit, child });
 
 /// Allows its child to size naturally without parent constraints.
 ///

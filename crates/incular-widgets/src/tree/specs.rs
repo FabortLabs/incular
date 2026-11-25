@@ -519,7 +519,8 @@ pub(crate) enum WidgetKind {
         min_height: Option<f32>,
         max_height: Option<f32>,
         alignment: Alignment,
-        child: Widget,
+        fit: OverflowBoxFit,
+        child: Option<Widget>,
     },
     Unconstrained {
         constrained_axis: Option<Axis>,

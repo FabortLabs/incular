@@ -76,6 +76,7 @@ use crate::gestures::{
     GestureArenaEntry, GestureArenaKey, GestureArenaMember, GestureCallbacks, GestureDecision,
     GestureDisposition, PointerEvent, PointerGestureRecognizer, ScaleGestureDetector,
 };
+use crate::layout::OverflowBoxFit;
 use crate::overscroll_indicator::ScrollOverscrollIndicator;
 use crate::painting_effects::BoxShadow;
 use crate::raw_input::{GestureRecognizer, RawInputKind};
@@ -662,6 +663,7 @@ pub enum RenderKind {
         min_height: Option<f32>,
         max_height: Option<f32>,
         alignment: Alignment,
+        fit: OverflowBoxFit,
     },
     Unconstrained {
         constrained_axis: Option<Axis>,

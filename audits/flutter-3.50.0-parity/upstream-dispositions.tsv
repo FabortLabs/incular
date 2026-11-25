@@ -980,3 +980,6 @@ packages/flutter/test/rendering/flex_test.dart	33	Inconsequential overflow is ig
 packages/flutter/test/rendering/flex_test.dart	937	Vertical Flex Baseline	partial-match	upstream-flex-retained-placement.md#baseline-of-a-nested-flex
 packages/flutter/test/rendering/baseline_test.dart	13	RenderBaseline	paired-match	upstream-baseline-signed-placement.md
 packages/flutter/test/rendering/baseline_test.dart	56	RenderBaseline different baseline types	partial-match	upstream-baseline-signed-placement.md
+packages/flutter/test/widgets/overflow_box_test.dart	37	'contentSuperLong=$contentSuperLong'	paired-match	upstream-overflow-box-fit.md
+packages/flutter/test/widgets/overflow_box_test.dart	68	no child	paired-match	upstream-overflow-box-fit.md
+packages/flutter/test/widgets/overflow_box_test.dart	93	OverflowBox implements debugFillProperties	partial-match	upstream-overflow-box-fit.md

@@ -3249,7 +3249,9 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
             } else {
                 max_width.unwrap_or(f32::INFINITY)
             };
-            constrained(child, axis, min, max)
+            child
+                .as_ref()
+                .and_then(|child| constrained(child, axis, min, max))
         }
         WidgetKind::Positioned {
             width,

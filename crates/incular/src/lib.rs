@@ -222,6 +222,7 @@ pub mod prelude {
         TextSpan, TextStyle, TextWidthBasis, WidgetSpan,
     };
     pub use incular_widgets::extensions::ExternalDropTarget;
+    pub use incular_widgets::OverflowBoxFit;
     pub use incular_widgets::{
         AlignmentDirectionalTween, AlignmentTween, BorderRadiusTween, BorderTween,
         BoxConstraintsTween, CapturedThemes, CharacterActivator, ContextMenuButtonItem,
