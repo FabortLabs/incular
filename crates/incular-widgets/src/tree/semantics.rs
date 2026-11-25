@@ -1690,6 +1690,13 @@ impl WidgetTree {
                 view.bounds.origin.x + view.bounds.size.width,
             ),
         };
+        let sliver = self.sliver_reveal_geometry(viewport, element);
+        let (view_start, view_end) = if reverse {
+            let (leading, trailing) = sliver.reserve(-view_end, -view_start);
+            (-trailing, -leading)
+        } else {
+            sliver.reserve(view_start, view_end)
+        };
         let delta = if start < view_start {
             start - view_start
         } else if end > view_end {

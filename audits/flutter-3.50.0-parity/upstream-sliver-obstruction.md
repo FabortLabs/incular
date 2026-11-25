@@ -33,3 +33,17 @@ existing ensure-visible tests remain executable and pass alongside
 the centered-anchor and scroll-focus neighbors. This verifies
 `Scrollable.ensure_visible` for following slivers, not automatic
 caret reveal or nested-group-specific propagation.
+
+## Implicit reveal and focused text
+
+The following target initially sits at y=25, partly underneath a
+200-pixel pinned header. Flutter's `showOnScreen` moves from offset
+475 back to 300, whereas the previous Incular semantic action did not
+move even though part of the target was covered. The semantic reveal
+and the focused editable caret now reserve the pinned strip, using
+the same layout data as explicit reveal.
+
+Both authored Flutter cases and both native regressions pass.
+After focus, the caret is at or below the visible edge of the header.
+This is a settled visibility check; it does not claim the Flutter
+caret animation timeline or exact font-dependent caret geometry.

@@ -256,6 +256,18 @@ pub(crate) struct SliverRevealGeometry {
     pub(crate) reverse_growth: bool,
 }
 
+impl SliverRevealGeometry {
+    /// Reserves the covered strip in logical scroll-direction coordinates.
+    pub(crate) fn reserve(self, leading: f32, trailing: f32) -> (f32, f32) {
+        let obstruction = self.obstruction_before.min((trailing - leading).max(0.));
+        if self.reverse_growth {
+            (leading, trailing - obstruction)
+        } else {
+            (leading + obstruction, trailing)
+        }
+    }
+}
+
 /// Private bridge for widget materialization and viewport-scoped child IDs.
 pub(crate) trait SliverViewportDelegate {
     fn scroll_layout_dependency(&self) -> SliverScrollDependency;

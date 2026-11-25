@@ -343,6 +343,9 @@ impl WidgetTree {
                     -bounds.origin.x,
                 ),
             };
+            let (view_lead, view_trail) = self
+                .sliver_reveal_geometry(viewport, id)
+                .reserve(view_lead, view_trail);
             let current = controller.offset();
             let leading = current + (rect_lead - view_lead);
             let trailing = current + (rect_trail - view_trail);
