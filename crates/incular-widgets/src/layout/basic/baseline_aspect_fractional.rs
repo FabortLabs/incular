@@ -4,7 +4,7 @@ use incular_config::{Alignment, Clip};
 use typed_builder::TypedBuilder;
 
 use crate::tree::BoxFit;
-use crate::{Widget, WidgetKind, macros::widget_from_kind};
+use crate::{AlignmentGeometry, Widget, WidgetKind, macros::widget_from_kind};
 
 /// Sizes child as a fraction of incoming parent constraints.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
@@ -116,8 +116,8 @@ impl From<AspectRatio> for Widget {
 pub struct FittedBox {
     #[builder(default = BoxFit::Contain)]
     fit: BoxFit,
-    #[builder(default = Alignment::CENTER)]
-    alignment: Alignment,
+    #[builder(default = AlignmentGeometry::Physical(Alignment::CENTER), setter(into))]
+    alignment: AlignmentGeometry,
     #[builder(default = Clip::None)]
     clip_behavior: Clip,
     #[builder(default, setter(strip_option, into))]
@@ -130,7 +130,7 @@ impl FittedBox {
     pub fn new(child: impl Into<Widget>) -> Self {
         Self {
             fit: BoxFit::Contain,
-            alignment: Alignment::CENTER,
+            alignment: Alignment::CENTER.into(),
             clip_behavior: Clip::None,
             child: Some(child.into()),
         }
@@ -143,8 +143,8 @@ impl FittedBox {
     }
 
     #[must_use]
-    pub fn alignment(mut self, alignment: Alignment) -> Self {
-        self.alignment = alignment;
+    pub fn alignment(mut self, alignment: impl Into<AlignmentGeometry>) -> Self {
+        self.alignment = alignment.into();
         self
     }
 }

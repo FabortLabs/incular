@@ -1387,7 +1387,7 @@ impl Widget {
     #[must_use]
     pub(crate) fn fitted_box(
         fit: ImageFit,
-        alignment: Alignment,
+        alignment: crate::AlignmentGeometry,
         clip_behavior: Clip,
         child: Option<Self>,
     ) -> Self {

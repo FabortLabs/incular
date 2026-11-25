@@ -811,7 +811,7 @@ pub(crate) enum WidgetKind {
     },
     FittedBox {
         fit: ImageFit,
-        alignment: Alignment,
+        alignment: crate::AlignmentGeometry,
         clip_behavior: Clip,
         child: Option<Widget>,
     },

@@ -1,6 +1,6 @@
 use super::super::super::*;
 
-pub(super) fn lower_effects(widget: &Widget) -> RenderKind {
+pub(super) fn lower_effects(widget: &Widget, context: &DependencyContext) -> RenderKind {
     match widget.kind() {
         WidgetKind::Translate { controller, .. } => RenderKind::Translate {
             controller: controller.clone(),
@@ -55,7 +55,14 @@ pub(super) fn lower_effects(widget: &Widget) -> RenderKind {
             ..
         } => RenderKind::FittedBox {
             fit: *fit,
-            alignment: *alignment,
+            alignment: match alignment {
+                crate::AlignmentGeometry::Physical(value) => *value,
+                crate::AlignmentGeometry::Directional(value) => value.resolve(
+                    context
+                        .depend::<TextDirection>()
+                        .unwrap_or(TextDirection::Ltr),
+                ),
+            },
             clip_behavior: *clip_behavior,
         },
         WidgetKind::Opacity {

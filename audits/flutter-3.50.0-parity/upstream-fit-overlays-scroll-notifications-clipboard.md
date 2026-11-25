@@ -173,3 +173,13 @@ combinations for BoxFit.none with a hard clip. Matching clip presence
 does not equate Flutter's engine layer types to Incular's retained
 commands, so those four comparisons are partial. All 19 targeted
 Rust checks pass; no native raster comparison is claimed.
+
+## FittedBox directional alignment
+
+Pinned :115 and the Rust port agree at all five checkpoints. Bottom-end
+starts on the left in RTL and moves to the right in LTR. Centering,
+replacing the child size, and changing to fill match both projected
+corners and the raw layout size. The wrapper keeps its render identity.
+All 41 focused Rust checks passed. Every registration in
+`widgets/fitted_box_test.dart` now has a disposition, including the
+four partial engine-layer comparisons above.

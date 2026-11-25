@@ -220,6 +220,7 @@ packages/flutter/test/widgets/fitted_box_test.dart	320	FittedBox layers - cover 
 packages/flutter/test/widgets/fitted_box_test.dart	341	FittedBox layers - cover - vertical	partial-match	upstream-fit-overlays-scroll-notifications-clipboard.md#fittedbox-clips-only-overflow
 packages/flutter/test/widgets/fitted_box_test.dart	362	FittedBox layers - none - clip	partial-match	upstream-fit-overlays-scroll-notifications-clipboard.md#fittedbox-clips-only-overflow
 packages/flutter/test/widgets/fitted_box_test.dart	423	Can set and update clipBehavior	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md#fittedbox-clips-only-overflow
+packages/flutter/test/widgets/fitted_box_test.dart	115	Child can be aligned multiple ways in a row	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md#fittedbox-directional-alignment
 packages/flutter/test/widgets/fractionally_sized_box_test.dart	9	FractionallySizedBox	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
 packages/flutter/test/widgets/fractionally_sized_box_test.dart	32	FractionallySizedBox alignment	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
 packages/flutter/test/widgets/fractionally_sized_box_test.dart	100	FractionallySizedBox does not crash at zero area	partial-match	upstream-fit-overlays-scroll-notifications-clipboard.md

@@ -909,3 +909,7 @@ adds four matched originals: 469 / 8,965 fully compared (5.23%),
 adds one full comparison: 470 / 8,965 (5.24%), with 374 matches
 and 96 historical mismatches. Configured coverage is applied only
 when the fit actually crops; the 81-case layer adaptation is partial.
+
+The [directional FittedBox recheck](upstream-fit-overlays-scroll-notifications-clipboard.md#fittedbox-directional-alignment)
+adds one paired original: 471 / 8,965 (5.25%), with 375 matches
+and 96 historical mismatches. All FittedBox originals are classified.
