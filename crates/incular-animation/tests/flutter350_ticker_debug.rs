@@ -72,3 +72,24 @@ fn active_ticker_rejects_duplicate_start_without_disturbing_muting_or_run() {
     frame(5);
     state(false, false, 2);
 }
+
+#[test]
+fn ticker_observers_receive_matching_create_and_dispose_id() {
+    use incular_core::memory::allocations::{MemoryAllocations, ObjectEventKind};
+    use std::cell::RefCell;
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let _subscription = MemoryAllocations::current().add_listener({
+        let seen = seen.clone();
+        move |entry| seen.borrow_mut().push(entry)
+    });
+    let ticker = Ticker::new(|_| {});
+    assert_eq!(seen.borrow().len(), 1);
+    drop(ticker);
+    let values = seen.borrow();
+    assert_eq!(values.len(), 2);
+    assert_eq!(values[0].kind, ObjectEventKind::Created);
+    assert_eq!(values[1].kind, ObjectEventKind::Disposed);
+    assert_eq!(values[0].id, values[1].id);
+    assert_eq!(values[0].library, "scheduler");
+    assert_eq!(values[0].class_name, "Ticker");
+}

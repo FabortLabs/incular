@@ -19,6 +19,8 @@
 //! # }
 //! ```
 
+pub mod allocations;
+
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 

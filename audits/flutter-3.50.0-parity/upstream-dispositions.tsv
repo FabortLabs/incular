@@ -1256,3 +1256,9 @@ packages/flutter/test/widgets/media_query_test.dart	89	MediaQuery.of finds a Med
 packages/flutter/test/widgets/media_query_test.dart	111	MediaQuery.maybeOf defaults to null	paired-match	upstream-media-query-scale.md#ancestor-lookup-and-individual-dimensions
 packages/flutter/test/widgets/media_query_test.dart	129	MediaQuery.maybeOf finds a MediaQueryData when there is one	paired-match	upstream-media-query-scale.md#ancestor-lookup-and-individual-dimensions
 packages/flutter/test/scheduler/ticker_test.dart	104	Ticker control test	paired-match	scheduler-callback-phases-comparisons.md#ticker-diagnostics-and-invalid-restart
+packages/flutter/test/scheduler/ticker_test.dart	208	Ticker dispatches memory events	paired-match	upstream-allocation-events.md
+packages/flutter/test/foundation/memory_allocations_test.dart	42	addListener and removeListener add and remove listeners.	partial-match	upstream-allocation-events.md
+packages/flutter/test/foundation/memory_allocations_test.dart	62	dispatchObjectEvent handles bad listeners	partial-match	upstream-allocation-events.md
+packages/flutter/test/foundation/memory_allocations_test.dart	101	dispatchObjectEvent does not invoke concurrently added listeners	partial-match	upstream-allocation-events.md
+packages/flutter/test/foundation/memory_allocations_test.dart	131	dispatchObjectEvent does not invoke concurrently removed listeners	partial-match	upstream-allocation-events.md
+packages/flutter/test/foundation/memory_allocations_test.dart	172	kFlutterMemoryAllocationsEnabled is true in debug mode.	paired-match	upstream-allocation-events.md

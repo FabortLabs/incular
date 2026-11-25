@@ -680,6 +680,8 @@ impl TickerState {
 pub struct Ticker {
     state: Rc<TickerState>,
     #[cfg(debug_assertions)]
+    allocation: Option<incular_core::memory::allocations::ObjectLifetime>,
+    #[cfg(debug_assertions)]
     creation_stack: std::backtrace::Backtrace,
 }
 
@@ -714,6 +716,11 @@ impl Ticker {
         });
         Self {
             state,
+            #[cfg(debug_assertions)]
+            allocation: Some(incular_core::memory::allocations::ObjectLifetime::new(
+                "scheduler",
+                "Ticker",
+            )),
             #[cfg(debug_assertions)]
             creation_stack: std::backtrace::Backtrace::force_capture(),
         }
@@ -849,6 +856,8 @@ impl Ticker {
 impl Drop for Ticker {
     /// Flutter `dispose`: a ticker dropped mid-run cancels its future.
     fn drop(&mut self) {
+        #[cfg(debug_assertions)]
+        drop(self.allocation.take());
         self.cancel();
     }
 }
