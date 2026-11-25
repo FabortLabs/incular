@@ -1,7 +1,9 @@
 use incular_config::{EdgeInsets, EdgeInsetsDirectional, TextDirection};
 use incular_core::{Color, Offset, Rect, Size};
 use incular_rendering::PaintCommand;
-use incular_widgets::{Border, BorderDirectional, BorderSide, BorderStyle, BoxDecoration};
+use incular_widgets::{
+    Border, BorderDirectional, BorderSide, BorderStyle, BoxBorder, BoxDecoration,
+};
 
 fn side(width: f32) -> BorderSide {
     BorderSide::solid(Color::BLACK, width)
@@ -251,5 +253,57 @@ fn directional_uniformity_requires_equal_values_on_every_side() {
             BorderDirectional::only(top, start, end, bottom).is_uniform(),
             expected
         );
+    }
+}
+
+#[test]
+fn a_uniform_border_copies_the_entire_side_to_each_edge() {
+    let default = BorderSide::default();
+    assert_eq!(default, BorderSide::solid(Color::BLACK, 1.0));
+    for side in [
+        default,
+        BorderSide {
+            stroke_align: 1.0,
+            ..BorderSide::solid(Color::WHITE, 3.0)
+        },
+    ] {
+        let border = Border::from_border_side(side);
+        assert_eq!(
+            [border.left, border.top, border.right, border.bottom],
+            [side; 4]
+        );
+    }
+}
+
+#[test]
+fn box_border_factories_keep_physical_and_directional_edge_order() {
+    let [a, b, c, d] = [1., 2., 3., 4.].map(side);
+    let physical = BoxBorder::from_ltrb(a, b, c, d);
+    assert_eq!(physical, Border::only(b, c, d, a));
+    assert_eq!(physical.dimensions(), EdgeInsets::only(1., 2., 3., 4.));
+    assert_eq!(BoxBorder::all(d), Border::new(4., Color::BLACK));
+    assert_eq!(BoxBorder::from_border_side(c), Border::all(c));
+    assert_eq!(BoxBorder::symmetric(c, b), Border::only(b, c, b, c));
+
+    let directional = BoxBorder::from_steb(a, b, c, d);
+    assert_eq!(directional, BorderDirectional::only(b, a, c, d));
+    assert_eq!(directional.resolve(TextDirection::Ltr), physical);
+    assert_eq!(
+        directional.resolve(TextDirection::Rtl),
+        Border::from_ltrb(c, b, a, d)
+    );
+}
+
+#[test]
+fn constructing_a_border_side_accepts_signed_zero_and_rejects_negative_width_in_debug() {
+    let black_solid = |width| BorderSide::new(Color::BLACK, width, BorderStyle::Solid);
+    assert_eq!(BorderSide::default(), black_solid(1.0));
+    assert_eq!(black_solid(-0.0), black_solid(0.0));
+    assert_eq!(BorderSide::builder().width(-0.0).build(), black_solid(0.0));
+    #[cfg(debug_assertions)]
+    {
+        assert!(std::panic::catch_unwind(|| black_solid(-1.0)).is_err());
+        assert!(std::panic::catch_unwind(|| BorderSide::builder().width(-1.0).build()).is_err());
+        assert!(std::panic::catch_unwind(|| black_solid(f32::NAN)).is_err());
     }
 }

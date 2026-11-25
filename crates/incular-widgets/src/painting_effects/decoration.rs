@@ -30,7 +30,7 @@ pub struct BorderSide {
     pub color: Color,
     #[builder(
         default = 1.0,
-        setter(transform = |width: f32| width.max(0.0))
+        setter(transform = |width: f32| checked_border_width(width))
     )]
     #[default(1.0)]
     pub width: f32,
@@ -41,6 +41,14 @@ pub struct BorderSide {
     pub stroke_align: f32,
 }
 
+const fn checked_border_width(width: f32) -> f32 {
+    debug_assert!(
+        width >= 0.0,
+        "border side width must not be negative or NaN"
+    );
+    if width >= 0.0 { width } else { 0.0 }
+}
+
 impl BorderSide {
     pub const NONE: Self = Self {
         color: Color::BLACK,
@@ -49,11 +57,13 @@ impl BorderSide {
         stroke_align: -1.0,
     };
 
+    /// # Panics
+    /// In debug builds, panics if the width is negative or NaN.
     #[must_use]
     pub const fn new(color: Color, width: f32, style: BorderStyle) -> Self {
         Self {
             color,
-            width: if width >= 0.0 { width } else { 0.0 },
+            width: checked_border_width(width),
             style,
             stroke_align: -1.0,
         }
@@ -278,6 +288,29 @@ impl Border {
             bottom,
             left,
         }
+    }
+
+    /// Flutter `BoxBorder.fromLTRB`, in physical edge order.
+    #[must_use]
+    pub const fn from_ltrb(
+        left: BorderSide,
+        top: BorderSide,
+        right: BorderSide,
+        bottom: BorderSide,
+    ) -> Self {
+        Self::only(top, right, bottom, left)
+    }
+
+    /// Flutter `BoxBorder.fromSTEB`, preserving logical start and end
+    /// until the border is resolved against a text direction.
+    #[must_use]
+    pub const fn from_steb(
+        start: BorderSide,
+        top: BorderSide,
+        end: BorderSide,
+        bottom: BorderSide,
+    ) -> BorderDirectional {
+        BorderDirectional::only(top, start, end, bottom)
     }
 
     #[must_use]

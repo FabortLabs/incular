@@ -103,7 +103,7 @@ fn painting_data_builders_match_existing_defaults_and_conversions() {
     let directional = BorderRadiusDirectional::builder().top_start(radius).build();
     assert_eq!(directional.top_end, Radius::ZERO);
 
-    let side = BorderSide::builder().width(-2.0).build();
+    let side = BorderSide::builder().width(-0.0).build();
     assert_eq!(side.width, 0.0);
     assert_eq!(side, BorderSide::new(Color::BLACK, 0.0, BorderStyle::Solid));
 

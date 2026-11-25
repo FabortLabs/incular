@@ -171,3 +171,22 @@ with holes and non-rectangular paths retain winding evaluation. Thirteen
 focused Rust tests and the two authored Flutter cases passed. The
 independent, previously recorded control-point bounds regression still
 reproduced; this change does not alter curved path bounds.
+
+## BoxBorder factories and width construction
+
+Pinned `painting/border_test.dart:474` and the Rust port agree on
+the four physical edges, uniform and symmetric construction, and
+the directional factory. The Rust controls additionally resolve the
+same start/end values in LTR and RTL. The value cases for `:18` and
+`:27` also pass, including every side in a uniform border and the
+two distinct sides in a symmetric border. Rust copies a small
+value rather than returning identical Dart objects, so these
+identity assertions are not paired.
+
+Pinned `painting/border_side_test.dart:9` matches debug construction:
+the default is a 1px solid black side, negative width is rejected,
+and negative zero equals positive zero. The Rust typed builder now
+applies the same debug validation as the direct constructor instead
+of quietly turning a negative width into a visible hairline. An
+additional Rust control rejects NaN. Release builds keep Incular's
+existing safe clamp for invalid widths.
