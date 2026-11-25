@@ -1,11 +1,33 @@
 //! Accessible semantic annotation widgets.
 
-use incular_semantics::{AccessibilityFocusBlockType, SemanticAction, SemanticRole, SemanticState};
+use incular_semantics::{
+    AccessibilityFocusBlockType, CustomSemanticsAction, SemanticAction, SemanticRole, SemanticState,
+};
 use smart_default::SmartDefault;
 use std::rc::Rc;
 use typed_builder::TypedBuilder;
 
 use crate::Widget;
+
+#[derive(Clone)]
+pub(crate) struct CustomActionBinding {
+    pub(crate) action: CustomSemanticsAction,
+    pub(crate) callback: Rc<dyn Fn() + 'static>,
+}
+
+impl std::fmt::Debug for CustomActionBinding {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("CustomActionBinding")
+            .field(&self.action)
+            .finish()
+    }
+}
+
+impl PartialEq for CustomActionBinding {
+    fn eq(&self, other: &Self) -> bool {
+        self.action == other.action && Rc::ptr_eq(&self.callback, &other.callback)
+    }
+}
 
 /// An accessible semantic annotation on a widget subtree.
 #[derive(Clone, Default, TypedBuilder)]
@@ -20,6 +42,8 @@ pub struct Semantics {
     description: Option<String>,
     #[builder(default)]
     actions: Vec<SemanticAction>,
+    #[builder(default, setter(skip))]
+    custom_actions: Vec<CustomActionBinding>,
     #[builder(default)]
     on_tap: Option<Rc<dyn Fn() + 'static>>,
     #[builder(default)]
@@ -54,6 +78,7 @@ impl Semantics {
             value: None,
             description: None,
             actions: Vec::new(),
+            custom_actions: Vec::new(),
             on_tap: None,
             on_increase: None,
             on_decrease: None,
@@ -103,6 +128,20 @@ impl Semantics {
         {
             self.actions.push(action);
         }
+        self
+    }
+
+    /// Attaches a named accessibility action and its callback.
+    #[must_use]
+    pub fn custom_action(
+        mut self,
+        action: CustomSemanticsAction,
+        callback: impl Fn() + 'static,
+    ) -> Self {
+        self.custom_actions.push(CustomActionBinding {
+            action,
+            callback: Rc::new(callback),
+        });
         self
     }
 
@@ -494,6 +533,9 @@ impl From<Semantics> for Widget {
                 incular_semantics::SemanticActionKind::ScrollBackward,
                 callback,
             );
+        }
+        if !value.custom_actions.is_empty() {
+            widget = widget.with_custom_semantic_actions(value.custom_actions);
         }
         widget
     }

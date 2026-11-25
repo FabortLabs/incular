@@ -338,7 +338,26 @@ impl Widget {
             SemanticActionKind::Focus
             | SemanticActionKind::SetText
             | SemanticActionKind::SetSelection
-            | SemanticActionKind::ShowOnScreen => {}
+            | SemanticActionKind::ShowOnScreen
+            | SemanticActionKind::Custom => {}
+        }
+        self
+    }
+
+    pub(crate) fn with_custom_semantic_actions(
+        mut self,
+        bindings: Vec<crate::semantics::CustomActionBinding>,
+    ) -> Self {
+        let custom = &mut self.semantic_properties_mut().callbacks.custom;
+        for binding in bindings {
+            if let Some(existing) = custom
+                .iter_mut()
+                .find(|existing| existing.action == binding.action)
+            {
+                *existing = binding;
+            } else {
+                custom.push(binding);
+            }
         }
         self
     }

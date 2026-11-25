@@ -1102,7 +1102,7 @@ fn map_action(action: SemanticActionKind) -> Option<Action> {
         SemanticActionKind::ShowOnScreen => Some(Action::ScrollIntoView),
         // AccessKit has no long-press action, so the desktop tree does not
         // advertise it; the mobile projection carries it.
-        SemanticActionKind::LongPress => None,
+        SemanticActionKind::LongPress | SemanticActionKind::Custom => None,
     }
 }
 

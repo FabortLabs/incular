@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-widgets`: Semantics can register named custom actions, including
+  dispatch to the correct visible child of a merged semantics node.
+
 - `incular-semantics`: named and overriding custom action descriptions
   now have canonical identifiers and reverse lookup.
 

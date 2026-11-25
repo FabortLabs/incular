@@ -1127,6 +1127,13 @@ impl Runtime {
                 })
                 .unwrap_or(false),
             SemanticAction::ShowOnScreen => self.tree.semantic_show_on_screen(element),
+            SemanticAction::Custom(id) => self
+                .tree
+                .custom_semantic_action_callback(element, id)
+                .is_some_and(|callback| {
+                    callback();
+                    true
+                }),
         };
         if handled {
             self.frame_requested = true;

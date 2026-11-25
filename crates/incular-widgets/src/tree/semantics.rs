@@ -10,7 +10,9 @@
 //! marked does no semantic work at all.
 
 use super::*;
-use incular_semantics::AccessibilityFocusBlockType;
+use incular_semantics::{
+    AccessibilityFocusBlockType, CustomSemanticsAction, CustomSemanticsActionId,
+};
 use std::borrow::Cow;
 
 mod traversal;
@@ -20,6 +22,25 @@ use traversal::TraversalItem;
 pub(super) struct SemanticCollectionContext {
     item_index: Option<usize>,
     set_size: Option<usize>,
+}
+
+#[derive(Default)]
+struct MergedSemanticSummary {
+    label: String,
+    heading: Option<u8>,
+    focus_block: AccessibilityFocusBlockType,
+    custom_actions: Vec<CustomSemanticsActionId>,
+}
+
+impl MergedSemanticSummary {
+    fn add_custom_actions(&mut self, callbacks: &SemanticCallbacks) {
+        self.custom_actions.extend(
+            callbacks
+                .custom
+                .iter()
+                .map(|binding| binding.action.get_identifier()),
+        );
+    }
 }
 
 /// One element waiting to be visited by the semantics pass.
@@ -292,10 +313,19 @@ impl WidgetTree {
         element: ElementId,
         entry: &'a Element,
     ) -> Cow<'a, [ElementId]> {
+        if absorbs_descendant_semantics(entry) {
+            return Cow::Borrowed(&[]);
+        }
+        self.visible_semantic_children(element, entry)
+    }
+
+    fn visible_semantic_children<'a>(
+        &self,
+        element: ElementId,
+        entry: &'a Element,
+    ) -> Cow<'a, [ElementId]> {
         if matches!(entry.widget.kind(), WidgetKind::Button(_))
             || self.fitted_children_have_no_semantic_geometry(entry)
-            || (entry.widget.semantic_properties().merge_descendants
-                && !keeps_explicit_child_nodes(entry))
         {
             return Cow::Borrowed(&[]);
         }
@@ -833,20 +863,24 @@ impl WidgetTree {
             }
             _ => (None, None, None, SemanticState::default(), vec![]),
         };
-        // A MergeSemantics node always exists, even without its own role
-        // (Flutter merges the configuration into one node).
-        let merging = entry.widget.semantic_properties().merge_descendants;
-        if merging && role.is_none() {
+        let properties = entry.widget.semantic_properties();
+        // An action-only annotation also creates a node.
+        if role.is_none()
+            && (properties.merge_descendants || !properties.callbacks.custom.is_empty())
+        {
             role = Some(SemanticRole::GenericContainer);
         }
-        // Explicit child nodes keep their metadata out of the merged node.
-        let (merged_label, merged_heading, merged_focus_block) = (merging
-            && !keeps_explicit_child_nodes(entry))
-        .then(|| {
-            let own = element_own_label(entry);
-            self.merged_semantic_summary(element, own)
-        })
-        .unwrap_or_default();
+        let mut merged = MergedSemanticSummary::default();
+        merged.add_custom_actions(&properties.callbacks);
+        if absorbs_descendant_semantics(entry) {
+            if let Some(own) = element_own_label(entry) {
+                push_merged_label(&mut merged.label, &own);
+            }
+            for &child in self.visible_semantic_children(element, entry).iter() {
+                self.push_merged_semantics(child, &mut merged);
+            }
+        }
+        let merged_label = (!merged.label.is_empty()).then_some(merged.label);
         if let Some(explicit) = &entry.widget.semantic_properties().explicit {
             if explicit.role == SemanticRole::GenericContainer && role.is_some() {
                 // A role-less Semantics wrapper over a widget that has its
@@ -870,8 +904,8 @@ impl WidgetTree {
         }
         // Flutter absorption preserves the parent's level if present.
         // Otherwise the first descendant with a heading supplies it.
-        state.heading_level = state.heading_level.or(merged_heading);
-        state.accessibility_focus_block_type = own_focus_block.merge(merged_focus_block);
+        state.heading_level = state.heading_level.or(merged.heading);
+        state.accessibility_focus_block_type = own_focus_block.merge(merged.focus_block);
         if state.heading_level.is_some() && role == Some(SemanticRole::GenericContainer) {
             role = Some(SemanticRole::Heading);
         }
@@ -930,6 +964,12 @@ impl WidgetTree {
                 &entry.widget.semantic_properties().callbacks,
             )
         });
+        merged.custom_actions.sort_unstable_by_key(|id| id.0);
+        merged.custom_actions.dedup();
+        state.custom_actions = merged.custom_actions.into_boxed_slice();
+        if !state.custom_actions.is_empty() {
+            actions.push(SemanticActionKind::Custom);
+        }
         if semantic_parent == RETAINED_LIST && role.is_some() != retained {
             // The parent's retained child list no longer describes this
             // node; see `collect_semantics`.
@@ -1246,60 +1286,92 @@ impl WidgetTree {
             .is_some_and(|render| render.subtree_needs_semantics)
     }
 
-    /// Merged labels, first descendant heading and strongest focus block.
-    fn merged_semantic_summary(
-        &self,
-        element: ElementId,
-        own: Option<Cow<'_, str>>,
-    ) -> (Option<String>, Option<u8>, AccessibilityFocusBlockType) {
-        let mut merged = String::new();
-        let mut heading = None;
-        let mut focus_block = AccessibilityFocusBlockType::None;
-        if let Some(own) = own {
-            push_merged_label(&mut merged, &own);
-        }
-        if let Some(entry) = self.elements.get(element.0) {
-            for &child in &entry.children {
-                self.push_merged_semantics(child, &mut merged, &mut heading, &mut focus_block);
-            }
-        }
-        ((!merged.is_empty()).then_some(merged), heading, focus_block)
-    }
-
-    fn push_merged_semantics(
-        &self,
-        element: ElementId,
-        merged: &mut String,
-        heading: &mut Option<u8>,
-        focus_block: &mut AccessibilityFocusBlockType,
-    ) {
+    fn push_merged_semantics(&self, element: ElementId, merged: &mut MergedSemanticSummary) {
         let Some(entry) = self.elements.get(element.0) else {
             return;
         };
-        if semantics_hidden(entry) {
+        if !self.can_contribute_merged_semantics(entry) {
             return;
         }
         if let Some(label) = element_own_label(entry) {
-            push_merged_label(merged, &label);
+            push_merged_label(&mut merged.label, &label);
         }
-        *focus_block = focus_block.merge(explicit_focus_block(entry));
-        if heading.is_none() {
-            *heading = entry
+        merged.add_custom_actions(&entry.widget.semantic_properties().callbacks);
+        merged.focus_block = merged.focus_block.merge(explicit_focus_block(entry));
+        if merged.heading.is_none() {
+            merged.heading = entry
                 .widget
                 .semantic_properties()
                 .explicit
                 .as_ref()
                 .and_then(|properties| properties.state.heading_level);
         }
-        // A button's label already gathers its whole subtree.
-        if matches!(entry.widget.kind(), WidgetKind::Button(_))
-            || self.fitted_children_have_no_semantic_geometry(entry)
+        for &child in self.visible_semantic_children(element, entry).iter() {
+            self.push_merged_semantics(child, merged);
+        }
+    }
+
+    fn can_contribute_merged_semantics(&self, entry: &Element) -> bool {
+        !semantics_hidden(entry)
+            && (!matches!(
+                entry.widget.kind(),
+                WidgetKind::CompositedTransformFollower { .. }
+            ) || self.follower_content_visible(entry.render))
+    }
+
+    /// Resolves an advertised custom action to the current owning widget.
+    /// Only a merged node can borrow handlers from its visible descendants.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn custom_semantic_action_callback(
+        &self,
+        element: ElementId,
+        action: CustomSemanticsActionId,
+    ) -> Option<Rc<dyn Fn() + 'static>> {
+        let node = *self.semantic_ids.get(&element)?;
+        if self
+            .semantics
+            .node(node)?
+            .state
+            .custom_actions
+            .binary_search_by_key(&action.0, |id| id.0)
+            .is_err()
         {
-            return;
+            return None;
         }
-        for &child in &entry.children {
-            self.push_merged_semantics(child, merged, heading, focus_block);
+        let entry = self.elements.get(element.0)?;
+        let action = CustomSemanticsAction::get_action(action)?;
+        self.find_custom_semantic_action(element, &action, absorbs_descendant_semantics(entry))
+    }
+
+    fn find_custom_semantic_action(
+        &self,
+        element: ElementId,
+        action: &CustomSemanticsAction,
+        search_descendants: bool,
+    ) -> Option<Rc<dyn Fn() + 'static>> {
+        let entry = self.elements.get(element.0)?;
+        if !self.can_contribute_merged_semantics(entry) {
+            return None;
         }
+        if let Some(binding) = entry
+            .widget
+            .semantic_properties()
+            .callbacks
+            .custom
+            .iter()
+            .find(|binding| &binding.action == action)
+        {
+            return Some(binding.callback.clone());
+        }
+        if search_descendants {
+            for &child in self.visible_semantic_children(element, entry).iter() {
+                if let Some(callback) = self.find_custom_semantic_action(child, action, true) {
+                    return Some(callback);
+                }
+            }
+        }
+        None
     }
 
     fn fitted_children_have_no_semantic_geometry(&self, entry: &Element) -> bool {
@@ -1519,6 +1591,10 @@ fn keeps_explicit_child_nodes(entry: &Element) -> bool {
         .is_some_and(|explicit| explicit.state.explicit_child_nodes)
 }
 
+fn absorbs_descendant_semantics(entry: &Element) -> bool {
+    entry.widget.semantic_properties().merge_descendants && !keeps_explicit_child_nodes(entry)
+}
+
 pub(super) fn semantic_action_is_executable(
     kind: &WidgetKind,
     action: SemanticActionKind,
@@ -1528,7 +1604,7 @@ pub(super) fn semantic_action_is_executable(
         return true;
     }
     match action {
-        SemanticActionKind::Focus => false,
+        SemanticActionKind::Focus | SemanticActionKind::Custom => false,
         // Advertised only inside a viewport; the dispatch reports whether a
         // viewport actually moved.
         SemanticActionKind::ShowOnScreen => true,

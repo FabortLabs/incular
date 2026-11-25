@@ -88,6 +88,8 @@ pub enum SemanticActionKind {
     /// Flutter's `SemanticsAction.showOnScreen`: reveal the node inside its
     /// nearest scroll viewport.
     ShowOnScreen,
+    /// An application-defined action with a canonical identifier.
+    Custom,
 }
 
 /// A request received from a native accessibility adapter. Text offsets use
@@ -104,6 +106,7 @@ pub enum SemanticAction {
     ScrollBackward,
     LongPress,
     ShowOnScreen,
+    Custom(CustomSemanticsActionId),
 }
 
 impl SemanticAction {
@@ -120,6 +123,7 @@ impl SemanticAction {
             Self::ScrollBackward => SemanticActionKind::ScrollBackward,
             Self::LongPress => SemanticActionKind::LongPress,
             Self::ShowOnScreen => SemanticActionKind::ShowOnScreen,
+            Self::Custom(_) => SemanticActionKind::Custom,
         }
     }
 }
@@ -280,6 +284,8 @@ pub struct SemanticState {
     /// Flutter's `explicitChildNodes`: when this node merges its descendants,
     /// its children stay separate nodes instead.
     pub explicit_child_nodes: bool,
+    /// Canonical action identifiers provided by the node or absorbed children.
+    pub custom_actions: Box<[CustomSemanticsActionId]>,
 }
 
 impl Default for SemanticState {
@@ -318,6 +324,7 @@ impl Default for SemanticState {
             sort_key: None,
             container: false,
             explicit_child_nodes: false,
+            custom_actions: Box::default(),
         }
     }
 }

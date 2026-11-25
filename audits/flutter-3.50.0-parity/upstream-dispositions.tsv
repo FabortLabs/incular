@@ -902,3 +902,8 @@ packages/flutter/test/widgets/focus_manager_test.dart	448	Suspended focus is not
 packages/flutter/test/scheduler/scheduler_test.dart	339	Can schedule a frame callback with / without scheduling a new frame	paired-match	scheduler-callback-phases-comparisons.md#transient-registration-without-a-frame-request
 packages/flutter/test/scheduler/time_dilation_test.dart	11	timeDilation can be set without a binding	paired-match	scheduler-callback-phases-comparisons.md#binding-free-time-dilation
 packages/flutter/test/semantics/custom_semantics_action_test.dart	10	is provided a canonical id based on the label	paired-match	upstream-custom-semantics-actions.md
+packages/flutter/test/widgets/semantics_test.dart	809	CustomSemanticsActions can be added to a Semantics widget	paired-match	upstream-custom-semantics-actions.md#registration-and-merged-dispatch
+packages/flutter/test/widgets/semantics_test.dart	835	MergeSemantics merges CustomSemanticsActions from its children	paired-match	upstream-custom-semantics-actions.md#registration-and-merged-dispatch
+packages/flutter/test/semantics/semantics_owner_test.dart	55	routes to inner or outer based on action id (chunhtai counter-example)	paired-match	upstream-custom-semantics-actions.md#registration-and-merged-dispatch
+packages/flutter/test/semantics/semantics_owner_test.dart	108	routes to the correct node in a three-deep merged nest	paired-match	upstream-custom-semantics-actions.md#registration-and-merged-dispatch
+packages/flutter/test/semantics/semantics_owner_test.dart	178	routes to the correct sibling descendant inside the merge group	paired-match	upstream-custom-semantics-actions.md#registration-and-merged-dispatch

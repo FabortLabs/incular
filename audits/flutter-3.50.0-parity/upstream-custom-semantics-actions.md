@@ -13,3 +13,20 @@ portable counterpart of Dart's isolate-local registry). This comparison
 covers only action descriptions and canonical identity. Installing handlers,
 merging them into retained nodes, and projecting the resulting actions onto
 each platform's assistive technology are separate behavioral contracts.
+
+## Registration and merged dispatch
+
+The five original registrations in `widgets/semantics_test.dart:809,835`
+and `semantics/semantics_owner_test.dart:55,108,178` passed. Rust now
+publishes both named actions on a plain annotation or the union on a merged
+node, and dispatches by the specific canonical ID rather than by the
+presence of any action. The ports verify two nested owners, a three-deep
+nest, and sibling owners alongside a root owner. Each call changes only
+its own callback count. An unadvertised action is not dispatched.
+
+The authored IndexedStack case passes on both sides. Switching the selected
+child keeps the merged node's identity but replaces the advertised action;
+the inactive child can neither claim it nor receive a stale request.
+Forty-four focused Rust checks pass across the runtime and widget semantics
+targets. Point-addressed dispatch, standard action hint overrides, and
+native platform presentation are not part of these five dispositions.

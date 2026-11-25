@@ -241,6 +241,7 @@ pub(crate) struct SemanticProperties {
 
 #[derive(Clone, Default)]
 pub(super) struct SemanticCallbacks {
+    pub(super) custom: Vec<crate::semantics::CustomActionBinding>,
     pub(super) activate: Option<Rc<dyn Fn() + 'static>>,
     pub(super) increment: Option<Rc<dyn Fn() + 'static>>,
     pub(super) decrement: Option<Rc<dyn Fn() + 'static>>,
@@ -253,6 +254,7 @@ impl std::fmt::Debug for SemanticCallbacks {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("SemanticCallbacks")
+            .field("custom", &self.custom)
             .field("activate", &self.activate.is_some())
             .field("increment", &self.increment.is_some())
             .field("decrement", &self.decrement.is_some())
@@ -265,7 +267,8 @@ impl std::fmt::Debug for SemanticCallbacks {
 
 impl PartialEq for SemanticCallbacks {
     fn eq(&self, other: &Self) -> bool {
-        same_rc(&self.activate, &other.activate)
+        self.custom == other.custom
+            && same_rc(&self.activate, &other.activate)
             && same_rc(&self.increment, &other.increment)
             && same_rc(&self.decrement, &other.decrement)
             && same_rc(&self.scroll_forward, &other.scroll_forward)
@@ -286,7 +289,8 @@ impl SemanticCallbacks {
             SemanticActionKind::Focus
             | SemanticActionKind::SetText
             | SemanticActionKind::SetSelection
-            | SemanticActionKind::ShowOnScreen => None,
+            | SemanticActionKind::ShowOnScreen
+            | SemanticActionKind::Custom => None,
         }
     }
 
