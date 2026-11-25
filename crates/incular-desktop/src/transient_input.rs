@@ -6,6 +6,10 @@ pub(crate) fn offset_transient_platform_event(
     offset: Offset,
 ) -> PlatformEvent {
     match event {
+        PlatformEvent::HoverDevice(mut event) => {
+            event.position = event.position + offset;
+            PlatformEvent::HoverDevice(event)
+        }
         PlatformEvent::Input(InputEvent::Pointer { phase, position }) => {
             PlatformEvent::Input(InputEvent::Pointer {
                 phase,

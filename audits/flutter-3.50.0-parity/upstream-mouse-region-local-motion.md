@@ -21,3 +21,17 @@ away uses the previous hit transform for exit. Unmount still emits no
 stale exit. The 19 focused lifecycle and pointer tests passed. The
 separate cursor-repaint assertions :1665 and :1726 remain red on the
 recorded paint count even though the effective cursor updates.
+
+## Positioned device presence
+
+Pinned :274, :299 and :336 are paired at the normalized host boundary.
+An added mouse enters the region at its known position with no ordinary
+hover. Removal emits one localized exit, without hover/re-entry on the
+next frame. A newly mounted region under a still pointer gets one enter
+and no hover. The earlier app could not represent a positioned device
+arrival independently of Winit's positionless window entry.
+
+The new portable event can be routed to a retained window or offset
+from a transient surface. Native CursorEntered/CursorLeft behavior is
+unchanged; no particular OS device plug/unplug notification is claimed.
+Twenty-two focused Rust tests and a serial desktop crate check passed.

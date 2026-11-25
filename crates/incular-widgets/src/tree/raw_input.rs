@@ -116,6 +116,20 @@ impl WidgetTree {
         self.dispatch_raw_gesture_stream(key, event, hit.raw())
     }
 
+    /// Seeds a host-positioned hover device without dispatching a mouse
+    /// move to regions, listeners, or recognizers.
+    #[doc(hidden)]
+    pub fn add_positioned_hover_device(
+        &mut self,
+        window: u64,
+        event: RawPointerEvent,
+        hit: &PointerHitTest,
+    ) {
+        let key = GestureArenaKey::pointer_device(window, event.device, event.pointer);
+        self.input.raw_pointer_positions.insert(key, event.position);
+        self.dispatch_mouse_regions(window, event, hit, false);
+    }
+
     /// Re-evaluates mouse-region and focus-behavior hover for a pointer that
     /// has not moved, after layout or scrolling moved content under it
     /// (Flutter's `MouseTracker.updateAllDevices`). Only enter and exit

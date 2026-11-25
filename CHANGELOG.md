@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-platform`: hosts can report a hover device joining or leaving
+  at a known position without manufacturing a pointer move.
+
 - `incular-widgets`: animation and listenable builders can observe
   disposable ChangeNotifier instances, and listenable builders can
   observe FocusNode.

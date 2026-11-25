@@ -73,8 +73,8 @@ pub use platform_view::{
     next_platform_view_id,
 };
 pub use pointer::{
-    CursorGrabMode, LogicalWindowPosition, LogicalWindowPositionError, NativePointerSample,
-    PointerMetadata,
+    CursorGrabMode, HoverDeviceChange, HoverDeviceEvent, LogicalWindowPosition,
+    LogicalWindowPositionError, NativePointerSample, PointerMetadata,
 };
 pub use spell_check::{
     DefaultSpellCheckService, SpellCheckCallback, SpellCheckResults, SpellCheckService,
@@ -731,6 +731,9 @@ pub enum PlatformEvent {
         input: InputEvent,
         time: incular_core::time::Instant,
     },
+    /// A hover-capable device is added or removed at a known position.
+    /// Does not synthesize an ordinary move or a pointer press.
+    HoverDevice(HoverDeviceEvent),
     /// Action chosen by a native software keyboard (for example Done, Next,
     /// or Search). Desktop backends normally express the same behavior as a
     /// physical Enter key, while mobile hosts can forward the IME action

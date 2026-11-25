@@ -365,3 +365,65 @@ fn a_scaled_mouse_region_emits_global_and_local_hover_deltas() {
     assert_eq!(moved[0].0, Kind::Exit);
     assert_eq!(moved[0].1.local_position, Offset::new(0.5, 100.5));
 }
+
+fn hover_device(host: &mut Host, change: incular_platform::HoverDeviceChange, position: Offset) {
+    use incular_platform::{HoverDeviceEvent, PlatformEvent};
+
+    let _ = host
+        .runtime
+        .handle_platform_event(PlatformEvent::HoverDevice(HoverDeviceEvent {
+            pointer: 1,
+            device: 1,
+            kind: PointerDeviceKind::Mouse,
+            position,
+            change,
+        }));
+}
+
+#[test]
+fn a_positioned_mouse_connection_enters_without_sending_hover() {
+    use incular_platform::HoverDeviceChange;
+
+    let scene = Scene::default();
+    let mut host = Host::mount(scene.widget(Alignment::CENTER, Some(1)));
+    hover_device(&mut host, HoverDeviceChange::Added, Offset::new(400., 300.));
+    assert_eq!(
+        scene.take(),
+        [sample(Kind::Enter, (400., 300.), (50., 50.))]
+    );
+    host.frame();
+    assert!(scene.take().is_empty());
+}
+
+#[test]
+fn mouse_disconnection_emits_one_exit_without_sending_hover() {
+    use incular_platform::HoverDeviceChange;
+
+    let scene = Scene::default();
+    let mut host = Host::mount(scene.widget(Alignment::CENTER, Some(1)));
+    let position = Offset::new(400., 300.);
+    hover_device(&mut host, HoverDeviceChange::Added, position);
+    host.frame();
+    scene.take();
+    hover_device(&mut host, HoverDeviceChange::Removed, position);
+    assert_eq!(scene.take(), [sample(Kind::Exit, (400., 300.), (50., 50.))]);
+    host.frame();
+    assert!(scene.take().is_empty());
+}
+
+#[test]
+fn a_new_mouse_region_enters_under_a_stationary_pointer_without_hover() {
+    let scene = Scene::default();
+    let position = Offset::new(400., 300.);
+    let mut host = Host::mount(scene.widget(Alignment::CENTER, None));
+    host.move_mouse(Offset::ZERO);
+    host.move_mouse(position);
+    assert!(scene.take().is_empty());
+    host.update(scene.widget(Alignment::CENTER, Some(1)));
+    assert_eq!(
+        scene.take(),
+        [sample(Kind::Enter, (400., 300.), (50., 50.))]
+    );
+    host.frame();
+    assert!(scene.take().is_empty());
+}

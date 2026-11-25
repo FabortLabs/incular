@@ -924,3 +924,6 @@ packages/flutter/test/widgets/mouse_region_test.dart	168	onEnter and onExit can 
 packages/flutter/test/widgets/mouse_region_test.dart	207	detects pointer enter	paired-match	upstream-mouse-region-local-motion.md
 packages/flutter/test/widgets/mouse_region_test.dart	241	detects pointer exiting	paired-match	upstream-mouse-region-local-motion.md
 packages/flutter/test/widgets/mouse_region_test.dart	788	works with transform	paired-match	upstream-mouse-region-local-motion.md
+packages/flutter/test/widgets/mouse_region_test.dart	274	triggers pointer enter when a mouse is connected	paired-match	upstream-mouse-region-local-motion.md#positioned-device-presence
+packages/flutter/test/widgets/mouse_region_test.dart	299	triggers pointer exit when a mouse is disconnected	paired-match	upstream-mouse-region-local-motion.md#positioned-device-presence
+packages/flutter/test/widgets/mouse_region_test.dart	336	triggers pointer enter when widget appears	paired-match	upstream-mouse-region-local-motion.md#positioned-device-presence

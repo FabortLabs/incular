@@ -1370,7 +1370,9 @@ impl Application {
                 });
             }
             WindowEventKind::Platform(
-                event @ (PlatformEvent::Input(_) | PlatformEvent::InputAt { .. }),
+                event @ (PlatformEvent::Input(_)
+                | PlatformEvent::InputAt { .. }
+                | PlatformEvent::HoverDevice(_)),
             ) => {
                 let _ = self.with_window_mut(window_id, |record| {
                     record.input_events = record.input_events.wrapping_add(1);

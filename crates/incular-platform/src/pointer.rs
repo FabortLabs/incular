@@ -1,4 +1,4 @@
-use incular_core::{PointerDeviceKind, PointerPhase, PointerSampleMetadata};
+use incular_core::{Offset, PointerDeviceKind, PointerPhase, PointerSampleMetadata};
 
 /// Native device details that enrich a Winit pointer sample without changing
 /// its logical contact identity or phase. This is used only when an OS adapter
@@ -31,6 +31,25 @@ pub struct PointerMetadata {
     pub button: Option<u32>,
     pub sample: PointerSampleMetadata,
     pub phase: PointerPhase,
+}
+
+/// Whether a positioned device enters or leaves hover tracking.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HoverDeviceChange {
+    Added,
+    Removed,
+}
+
+/// Flutter-style device presence with an authoritative logical position.
+/// This is not a native window enter/leave (which may have no position).
+/// Hosts cancel any active contacts before removing the device.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct HoverDeviceEvent {
+    pub pointer: u64,
+    pub device: u64,
+    pub kind: PointerDeviceKind,
+    pub position: Offset,
+    pub change: HoverDeviceChange,
 }
 
 /// Native cursor grab policy for one window.

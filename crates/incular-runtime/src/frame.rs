@@ -30,11 +30,11 @@ use incular_core::{
 };
 use incular_platform::{
     BackGestureEvent, Clipboard, ClipboardCapabilities, ClipboardError, ClipboardWriteReport,
-    DataTransfer, ExternalDragEvent, ExternalDragResponse, MemoryClipboard, PlatformEvent,
-    PlatformLifecycle, PlatformViewCommand, PlatformViewId, SystemUiOverlayStyle, TextInputAction,
-    TextInputClientId, TextInputCommand, TextInputConfiguration, TextInputState, TextInputType,
-    TransferReadRequest, UndoDirection, UndoManagerCommand, WindowId, WindowMetrics,
-    WindowOperation, WindowOptions,
+    DataTransfer, ExternalDragEvent, ExternalDragResponse, HoverDeviceChange, HoverDeviceEvent,
+    MemoryClipboard, PlatformEvent, PlatformLifecycle, PlatformViewCommand, PlatformViewId,
+    SystemUiOverlayStyle, TextInputAction, TextInputClientId, TextInputCommand,
+    TextInputConfiguration, TextInputState, TextInputType, TransferReadRequest, UndoDirection,
+    UndoManagerCommand, WindowId, WindowMetrics, WindowOperation, WindowOptions,
 };
 use incular_rendering::DisplayList;
 use incular_semantics::{SemanticAction, SemanticNodeId};
@@ -280,6 +280,16 @@ pub(crate) fn diagnostic_input_trigger(event: &InputEvent) -> String {
             size.width, size.height
         ),
     }
+}
+
+fn kind_supports_hover(kind: PointerDeviceKind) -> bool {
+    matches!(
+        kind,
+        PointerDeviceKind::Mouse
+            | PointerDeviceKind::Trackpad
+            | PointerDeviceKind::Stylus
+            | PointerDeviceKind::InvertedStylus
+    )
 }
 
 impl Runtime {
@@ -1220,6 +1230,10 @@ impl Runtime {
         match event {
             PlatformEvent::Input(input) => self.handle_input(input),
             PlatformEvent::InputAt { input, time } => self.handle_input_at(input, time),
+            PlatformEvent::HoverDevice(event) => {
+                self.handle_hover_device_event(event);
+                None
+            }
             PlatformEvent::TextInputAction(action) => {
                 self.handle_text_input_action(action);
                 None
@@ -1538,6 +1552,59 @@ impl Runtime {
         self.handle_pointer_input(raw_event, metadata_rich)
     }
 
+    fn handle_hover_device_event(&mut self, event: HoverDeviceEvent) {
+        if !kind_supports_hover(event.kind)
+            || !event.position.x.is_finite()
+            || !event.position.y.is_finite()
+        {
+            return;
+        }
+        let window = self.gesture_window();
+        let phase = match event.change {
+            HoverDeviceChange::Added => PointerPhase::Move,
+            HoverDeviceChange::Removed => PointerPhase::Exit,
+        };
+        let raw = RawPointerEvent::new(
+            event.pointer,
+            event.device,
+            event.kind,
+            0,
+            event.position,
+            phase,
+            self.input_now(),
+        );
+        match event.change {
+            HoverDeviceChange::Added => {
+                self.last_pointer = event.position;
+                self.pointer_tracking = PointerTracking::InsideAt;
+                self.last_hover_sample = Some(raw);
+                let hit = self.tree.pointer_hit_test(event.position);
+                self.tree.add_positioned_hover_device(window, raw, &hit);
+                if self.legacy_pointer.is_none() {
+                    let target = self.button_target(&hit);
+                    self.set_hover(target.map(|(element, _)| element));
+                }
+            }
+            HoverDeviceChange::Removed => {
+                let _ = self.tree.dispatch_raw_pointer_with_hit(
+                    window,
+                    raw,
+                    &PointerHitTest::default(),
+                );
+                if self.last_hover_sample.is_some_and(|previous| {
+                    (previous.device, previous.pointer) == (event.device, event.pointer)
+                }) {
+                    self.last_hover_sample = None;
+                    self.pointer_tracking = PointerTracking::Outside;
+                    self.set_hover(None);
+                    self.frame_requested |= self
+                        .tree
+                        .scrollbar_pointer(PointerPhase::Exit, event.position);
+                }
+            }
+        }
+    }
+
     fn handle_pointer_input(
         &mut self,
         raw_event: RawPointerEvent,
@@ -1553,13 +1620,7 @@ impl Runtime {
             position,
             ..
         } = raw_event;
-        let hover_capable = matches!(
-            kind,
-            PointerDeviceKind::Mouse
-                | PointerDeviceKind::Trackpad
-                | PointerDeviceKind::Stylus
-                | PointerDeviceKind::InvertedStylus
-        );
+        let hover_capable = kind_supports_hover(kind);
         if hover_capable {
             self.pointer_tracking = match phase {
                 PointerPhase::Enter => PointerTracking::InsideUnknownPosition,
