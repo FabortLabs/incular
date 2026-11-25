@@ -307,3 +307,101 @@ fn constructing_a_border_side_accepts_signed_zero_and_rejects_negative_width_in_
         assert!(std::panic::catch_unwind(|| black_solid(f32::NAN)).is_err());
     }
 }
+
+#[test]
+fn adding_physical_borders_merges_compatible_sides_and_layers_conflicts() {
+    use incular_rendering::{Brush, Canvas, FillRule};
+    use incular_widgets::{BorderComposition, ShapeBorder};
+
+    let magenta = Color::rgba(255, 0, 255, 255);
+    let yellow = Color::rgba(255, 255, 0, 255);
+    let m3 = BorderSide::solid(magenta, 3.);
+    let m6 = BorderSide::solid(magenta, 6.);
+    let y2 = BorderSide::solid(yellow, 2.);
+    let y0 = BorderSide::new(yellow, 0., BorderStyle::None);
+    let none = Border::default();
+
+    let top_y2 = Border::builder().top(y2).build();
+    let right_m3 = Border::builder().right(m3).build();
+    assert_eq!(
+        top_y2 + right_m3,
+        BorderComposition::Merged(Border::builder().top(y2).right(m3).build())
+    );
+    let bottom_m3 = Border::builder().bottom(m3).build();
+    assert_eq!(
+        bottom_m3 + bottom_m3,
+        BorderComposition::Merged(Border::builder().bottom(m6).build())
+    );
+    let left_m3 = Border::builder().left(m3).build();
+    let right_y2 = Border::builder().right(y2).build();
+    assert_eq!(
+        Border::builder().left(m3).right(y0).build() + right_y2,
+        BorderComposition::Merged(Border::builder().left(m3).right(y2).build())
+    );
+    let top_m3 = Border::builder().top(m3).build();
+    assert_eq!(
+        top_m3 + top_m3,
+        BorderComposition::Merged(Border::builder().top(m6).build())
+    );
+    let top_y0 = Border::builder().top(y0).build();
+    for (a, b) in [
+        (none, none),
+        (top_y0, top_y0),
+        (top_y0, none),
+        (none, top_y0),
+    ] {
+        assert_eq!(a + b, BorderComposition::Merged(none));
+    }
+
+    let left_y2 = Border::builder().left(y2).build();
+    let compound = left_m3 + left_y2;
+    assert_eq!(
+        compound,
+        BorderComposition::Layered {
+            outside: left_y2,
+            inside: left_m3
+        }
+    );
+    let rect = Rect::from_origin_size(Offset::ZERO, Size::new(30., 20.));
+    let inner = ShapeBorder::inner_path(&compound, rect);
+    assert_eq!(
+        inner.bounds(),
+        Some(Rect::from_origin_size(
+            Offset::new(5., 0.),
+            Size::new(25., 20.)
+        ))
+    );
+    let mut canvas = Canvas::default();
+    ShapeBorder::paint(&compound, &mut canvas, rect);
+    let display = canvas.finish();
+    let [
+        PaintCommand::FillPath {
+            path: outside,
+            brush: Brush::Solid(outer),
+            ..
+        },
+        PaintCommand::FillPath {
+            path: inside,
+            brush: Brush::Solid(inner),
+            ..
+        },
+    ] = display.commands()
+    else {
+        panic!(
+            "expected two distinct painted sides: {:?}",
+            display.commands()
+        );
+    };
+    assert_eq!((*outer, *inner), (yellow, magenta));
+    for (path, x, expected) in [
+        (outside, 1., true),
+        (outside, 3., false),
+        (inside, 1., false),
+        (inside, 3., true),
+    ] {
+        assert_eq!(
+            path.contains(Offset::new(x, 10.), FillRule::NonZero),
+            expected
+        );
+    }
+}

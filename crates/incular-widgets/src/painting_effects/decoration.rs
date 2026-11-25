@@ -248,6 +248,12 @@ pub struct Border {
 /// Alias for [`Border`], matching Flutter naming.
 pub type BoxBorder = Border;
 
+impl Default for Border {
+    fn default() -> Self {
+        Self::all(BorderSide::NONE)
+    }
+}
+
 impl Border {
     #[must_use]
     pub fn new(width: f32, color: incular_core::Color) -> Self {

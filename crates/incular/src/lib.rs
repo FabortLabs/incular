@@ -252,7 +252,7 @@ pub mod prelude {
         AutovalidateMode, AuxiliaryViewError, AuxiliaryViewHandle, AuxiliaryViewHost,
         AuxiliaryViewOutcome, AuxiliaryViewRequest, BackButtonDispatcher, BackButtonListener,
         BackCallbackSubscription, BackHandlerResult, BackRegistration, Banner, BannerLocation,
-        Baseline, BasicRouterDelegate, Border, BorderDirectional, BorderRadius,
+        Baseline, BasicRouterDelegate, Border, BorderComposition, BorderDirectional, BorderRadius,
         BorderRadiusDirectional, BorderSide, BorderStyle, BoxBorder, BoxDecoration, BoxFit,
         BoxLinearGradient, BoxShadow, BoxShape, Builder, CacheExtentStyle, CallbackShortcuts,
         Center, ChangeReportingBehavior, CheckedModeBanner, ChildBackButtonDispatcher,

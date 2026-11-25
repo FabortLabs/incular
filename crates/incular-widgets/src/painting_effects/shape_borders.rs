@@ -7,10 +7,10 @@ use std::{f64::consts::PI, rc::Rc, sync::Arc};
 
 use incular_config::{EdgeInsets, TextDirection};
 use incular_core::{Offset, Rect, Size};
-use incular_rendering::{Canvas, CornerRadii, Paint, Path, Stroke};
+use incular_rendering::{Brush, Canvas, CornerRadii, FillRule, Paint, PaintStyle, Path, Stroke};
 use smart_default::SmartDefault;
 
-use super::decoration::{BorderSide, BorderStyle};
+use super::decoration::{Border, BorderSide, BorderStyle, BoxShape};
 use super::geometry::BorderRadius;
 
 /// Flutter's `ShapeBorder` for the outlined shapes Incular paints itself:
@@ -149,6 +149,136 @@ impl ShapeBorder for CompoundBorder {
         for border in &self.borders {
             border.paint_with_direction(canvas, rect, direction);
             rect = deflate_border(rect, border.dimensions(direction));
+        }
+    }
+}
+
+/// The result of adding two physical box borders. Compatible sides merge
+/// without allocating or painting an extra stroke; incompatible sides
+/// stay as a physical pair with the right operand on the outside.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum BorderComposition {
+    Merged(Border),
+    Layered { outside: Border, inside: Border },
+}
+
+impl std::ops::Add for Border {
+    type Output = BorderComposition;
+
+    fn add(self, outside: Self) -> Self::Output {
+        if self.top.can_merge(&outside.top)
+            && self.right.can_merge(&outside.right)
+            && self.bottom.can_merge(&outside.bottom)
+            && self.left.can_merge(&outside.left)
+        {
+            BorderComposition::Merged(self.merge(outside))
+        } else {
+            BorderComposition::Layered {
+                outside,
+                inside: self,
+            }
+        }
+    }
+}
+
+impl ShapeBorder for Border {
+    fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
+        Border::dimensions(*self)
+    }
+
+    fn outer_path(&self, rect: Rect) -> Path {
+        Border::outer_path(*self, rect)
+    }
+
+    fn inner_path(&self, rect: Rect) -> Path {
+        Border::inner_path(*self, rect)
+    }
+
+    fn prefer_paint_interior(&self) -> bool {
+        true
+    }
+
+    fn paint_interior(
+        &self,
+        canvas: &mut Canvas,
+        rect: Rect,
+        paint: &Paint,
+        _: Option<TextDirection>,
+    ) {
+        if let (PaintStyle::Fill, Brush::Solid(color)) = (paint.style_value(), paint.brush_value())
+        {
+            canvas.rect(rect, *color);
+        } else {
+            canvas.draw_path(Arc::new(rect_path(rect)), paint, FillRule::NonZero);
+        }
+    }
+
+    fn paint(&self, canvas: &mut Canvas, rect: Rect) {
+        let _ = Border::paint(*self, canvas, rect, BoxShape::Rectangle, None);
+    }
+}
+
+impl ShapeBorder for BorderComposition {
+    fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
+        match self {
+            Self::Merged(border) => Border::dimensions(*border),
+            Self::Layered { outside, inside } => {
+                let a = Border::dimensions(*outside);
+                let b = Border::dimensions(*inside);
+                EdgeInsets::only(
+                    a.left + b.left,
+                    a.top + b.top,
+                    a.right + b.right,
+                    a.bottom + b.bottom,
+                )
+            }
+        }
+    }
+
+    fn outer_path(&self, rect: Rect) -> Path {
+        rect_path(rect)
+    }
+
+    fn inner_path(&self, rect: Rect) -> Path {
+        match self {
+            Self::Merged(border) => Border::inner_path(*border, rect),
+            Self::Layered { outside, inside } => {
+                Border::inner_path(*inside, deflate_border(rect, Border::dimensions(*outside)))
+            }
+        }
+    }
+
+    fn prefer_paint_interior(&self) -> bool {
+        true
+    }
+
+    fn paint_interior(
+        &self,
+        canvas: &mut Canvas,
+        rect: Rect,
+        paint: &Paint,
+        direction: Option<TextDirection>,
+    ) {
+        let outside = match self {
+            Self::Merged(border)
+            | Self::Layered {
+                outside: border, ..
+            } => border,
+        };
+        outside.paint_interior(canvas, rect, paint, direction);
+    }
+
+    fn paint(&self, canvas: &mut Canvas, rect: Rect) {
+        match self {
+            Self::Merged(border) => ShapeBorder::paint(border, canvas, rect),
+            Self::Layered { outside, inside } => {
+                ShapeBorder::paint(outside, canvas, rect);
+                ShapeBorder::paint(
+                    inside,
+                    canvas,
+                    deflate_border(rect, Border::dimensions(*outside)),
+                );
+            }
         }
     }
 }

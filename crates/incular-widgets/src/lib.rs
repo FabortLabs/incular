@@ -307,7 +307,7 @@ pub use overscroll_indicator::{
     GlowingOverscrollIndicator, StretchEffect, StretchingOverscrollIndicator,
 };
 pub use painting_effects::{
-    BeveledRectangleBorder, BlurStyle, Border, BorderDirectional, BorderRadius,
+    BeveledRectangleBorder, BlurStyle, Border, BorderComposition, BorderDirectional, BorderRadius,
     BorderRadiusDirectional, BorderSide, BorderStyle, BoxBorder, BoxDecoration, BoxLinearGradient,
     BoxShadow, BoxShape, CircleBorder, ClipRSuperellipse, CompoundBorder,
     ContinuousRectangleBorder, CustomPainter, CustomPainterSemantics, DecoratedShapeBox,

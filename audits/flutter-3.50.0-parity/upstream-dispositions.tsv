@@ -955,3 +955,4 @@ packages/flutter/test/painting/continuous_rectangle_border_test.dart	34	Continuo
 packages/flutter/test/painting/linear_border_test.dart	28	LinearBorder defaults	partial-match	upstream-border-constraints-formatters.md#outlined-shapes-default-to-no-stroke
 packages/flutter/test/painting/rounded_superellipse_border_test.dart	170	RoundedSuperellipseBorder.dimensions and CircleBorder.dimensions	paired-match	upstream-border-constraints-formatters.md#native-superellipse-edge-fitting
 packages/flutter/test/painting/rounded_superellipse_border_test.dart	198	RoundedSuperellipseBorder.lerp with different StrokeAlign	paired-match	upstream-border-constraints-formatters.md#native-superellipse-edge-fitting
+packages/flutter/test/painting/border_test.dart	61	Border.add	paired-match	upstream-border-constraints-formatters.md#physical-border-addition

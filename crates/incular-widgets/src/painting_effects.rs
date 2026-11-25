@@ -22,8 +22,8 @@ pub use geometry::{BorderRadius, BorderRadiusDirectional, Radius};
 pub use images::{ImageFiltered, ImageIcon, RawImage};
 pub use layers::{ClipRSuperellipse, GridPaper, PhysicalModel, PhysicalShape, SnapshotWidget};
 pub use shape_borders::{
-    BeveledRectangleBorder, CircleBorder, CompoundBorder, ContinuousRectangleBorder, LinearBorder,
-    LinearBorderEdge, OvalBorder, RoundedRectangleBorder, RoundedSuperellipseBorder, ShapeBorder,
-    StadiumBorder, StarBorder, StarBorderError,
+    BeveledRectangleBorder, BorderComposition, CircleBorder, CompoundBorder,
+    ContinuousRectangleBorder, LinearBorder, LinearBorderEdge, OvalBorder, RoundedRectangleBorder,
+    RoundedSuperellipseBorder, ShapeBorder, StadiumBorder, StarBorder, StarBorderError,
 };
 pub use shape_decoration::{DecoratedShapeBox, ShapeBorderClipper, ShapeDecoration};

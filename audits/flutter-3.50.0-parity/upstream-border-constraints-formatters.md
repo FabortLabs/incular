@@ -246,3 +246,18 @@ Pinned `painting/rounded_superellipse_border_test.dart:170` matches
 all six inside/center/outside inset cases for the superellipse and
 circle. `:198` matches the midpoint from a 10px inside stroke to
 a 20px outside stroke: 15px centered.
+
+## Physical border addition
+
+Pinned `painting/border_test.dart:61` matches. Disjoint sides combine
+without duplication, equal-color compatible sides add their widths,
+and zero-width absent sides are neutral. Incompatible sides keep
+distinct paint layers instead of panicking or silently replacing a
+color. Runtime geometry preserves Flutter's order: the right operand
+is outside, with the left operand inset by the outside stroke.
+
+The authored geometry and recording check uses a yellow 2px left
+side and a magenta 3px left side. Flutter and Incular both put yellow
+at x=1 and magenta at x=3 and start the inner path at x=5. The Rust
+typed result composes with ShapeDecoration. Cross-type border
+addition is not claimed by this physical Border + Border overload.
