@@ -153,3 +153,16 @@ and Windows fixtures both distinguish it from the binary hard
 control. All 28 retained clip and input checks plus the native
 shape controls pass. Saved-layer oval coverage and arbitrary-path
 antialiasing are separate from this render verification.
+
+### Elliptical save-layer compositing
+
+The pinned Flutter probe paints red and then white across the same
+40 by 28 ellipse. Ordinary AntiAlias exposes some red at the partially
+covered edge, but AntiAliasWithSaveLayer keeps fractional edge pixels
+and removes that red fringe. The Windows wgpu before run had 16 partial
+pixels (all with a red fringe) in ordinary AntiAlias and zero in saved
+mode. After the fix it passes the same smoothness and compositing
+assertions as Flutter, with unchanged interior and exterior controls.
+Rounded save-layer, color-matrix/opacity compositing, and seven native
+path/draw controls also pass. This is an authored probe, not an extra
+original registration; rotated and general paths remain open.

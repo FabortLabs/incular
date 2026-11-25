@@ -200,6 +200,29 @@ void main() {
     expect(hard.partial, 0);
     expect(smooth.partial, greaterThan(0));
   });
+  testWidgets('ClipOval saveLayer applies elliptical coverage once', (
+    tester,
+  ) async {
+    final ordinary = await _capture(
+      tester,
+      null,
+      oval: true,
+      paintRedFirst: true,
+    );
+    final isolated = await _capture(
+      tester,
+      Clip.antiAliasWithSaveLayer,
+      oval: true,
+      paintRedFirst: true,
+    );
+    for (final probe in [ordinary, isolated]) {
+      expect(probe.corner, _black);
+      expect(probe.center, _white);
+      expect(probe.partial, greaterThan(0));
+    }
+    expect(ordinary.redFringe, greaterThan(0));
+    expect(isolated.redFringe, 0);
+  });
 
   testWidgets('ClipRRect saveLayer removes earlier paint from the AA edge', (
     tester,

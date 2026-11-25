@@ -1582,7 +1582,7 @@ impl LayerTree {
                 ClipSpace::Translation => PaintCommand::PushClipRRect {
                     rrect: RRect::new(world.transform_rect_bbox(rrect.rect), rrect.radii),
                     coverage: *coverage,
-                    isolation: self.rounded_clip_isolation(id, *coverage),
+                    isolation: self.clip_isolation(id, *coverage),
                 },
                 // Positive uniform scales keep corners circular; anything
                 // else (mirrors, nonuniform scales) would move corner
@@ -1590,7 +1590,7 @@ impl LayerTree {
                 ClipSpace::Scale { x, y } if x > 0. && x == y => PaintCommand::PushClipRRect {
                     rrect: RRect::new(world.transform_rect_bbox(rrect.rect), rrect.radii.scaled(x)),
                     coverage: *coverage,
-                    isolation: self.rounded_clip_isolation(id, *coverage),
+                    isolation: self.clip_isolation(id, *coverage),
                 },
                 _ => {
                     let (rect, radii) = (rrect.rect, rrect.radii);
@@ -1610,6 +1610,7 @@ impl LayerTree {
                 ClipSpace::Translation | ClipSpace::Scale { .. } => PaintCommand::PushClipOval {
                     rect: world.transform_rect_bbox(*rect),
                     coverage: *coverage,
+                    isolation: self.clip_isolation(id, *coverage),
                 },
                 ClipSpace::General => {
                     let rect = *rect;
@@ -1634,7 +1635,7 @@ impl LayerTree {
             _ => unreachable!("clip emitter received a non-clip layer"),
         }
     }
-    fn rounded_clip_isolation(&self, id: LayerId, coverage: ClipCoverage) -> Option<ClipIsolation> {
+    fn clip_isolation(&self, id: LayerId, coverage: ClipCoverage) -> Option<ClipIsolation> {
         (coverage == ClipCoverage::AntiAliasWithSaveLayer).then(|| ClipIsolation {
             layer: id,
             generation: self.subtree_generation(id),

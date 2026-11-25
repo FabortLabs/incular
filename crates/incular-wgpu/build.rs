@@ -14,6 +14,7 @@ fn main() {
     let source_dir = PathBuf::from("src/shaders");
     println!("cargo:rerun-if-changed={}", source_dir.display());
     println!("cargo:rerun-if-changed=src/soft_clip.wgsl");
+    println!("cargo:rerun-if-changed=src/clip_math.wgsl");
     println!("cargo:rerun-if-changed=src/artistic_blend.wgsl");
     let output = PathBuf::from(env::var_os("OUT_DIR").expect("Cargo provides OUT_DIR"));
     let mut paths: Vec<_> = fs::read_dir(&source_dir)
@@ -37,6 +38,8 @@ fn main() {
             .expect("UTF-8 shader name");
         let base = if matches!(name, "blend_shader" | "color_matrix_shader") {
             format!("{base}\n{}", include_str!("src/artistic_blend.wgsl"))
+        } else if name == "composite_shader" {
+            format!("{base}\n{}", include_str!("src/clip_math.wgsl"))
         } else {
             base
         };
@@ -57,13 +60,16 @@ fn main() {
                     | "text_shader"
                     | "composite_shader"
             ) {
-            let coverage = if name == "composite_shader" {
-                "color * weight"
+            let (math, coverage) = if name == "composite_shader" {
+                ("", "color * weight")
             } else {
-                "vec4<f32>(color.rgb, color.a * weight)"
+                (
+                    include_str!("src/clip_math.wgsl"),
+                    "vec4<f32>(color.rgb, color.a * weight)",
+                )
             };
             format!(
-                "{base}\n{}\n@fragment fn fs_clipped(input: Out) -> @location(0) vec4<f32> {{ let color = draw_color(input); let weight = clip_weight(input.position.xy); return {coverage}; }}",
+                "{base}\n{math}\n{}\n@fragment fn fs_clipped(input: Out) -> @location(0) vec4<f32> {{ let color = draw_color(input); let weight = clip_weight(input.position.xy); return {coverage}; }}",
                 include_str!("src/soft_clip.wgsl")
             )
         } else {

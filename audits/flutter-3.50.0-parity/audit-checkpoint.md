@@ -811,3 +811,6 @@ Two retained clip-mode cases (:107 and :123) bring the total to
 449 / 8,965 (5.01%), with 353 matches and 96 historical mismatches.
 The separate noncircular ClipOval readback also verifies ordinary
 antialiasing without changing hard-edge or pointer routing controls.
+The [elliptical save-layer recheck](upstream-tween-transform-and-lifecycle.md#elliptical-save-layer-compositing)
+verifies that Windows wgpu now applies coverage once after the children
+compose, keeping a smooth edge without leaking earlier paint.

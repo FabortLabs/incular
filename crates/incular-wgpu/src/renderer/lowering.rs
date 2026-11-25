@@ -1,9 +1,17 @@
 use super::*;
 
-#[cfg(not(incular_d3d11))]
 enum AnalyticClip {
     Rounded([f32; 4]),
     Oval,
+}
+
+impl AnalyticClip {
+    fn shader_parts(self) -> ([f32; 4], u32) {
+        match self {
+            Self::Rounded(radii) => (radii, 0),
+            Self::Oval => ([0.; 4], 1),
+        }
+    }
 }
 
 impl WgpuRenderer {
@@ -32,10 +40,7 @@ impl WgpuRenderer {
         if intersect_clip_with_rect(parent, ClipRect::hard(bounds)) == ClipState::Empty {
             return ClipState::Empty;
         }
-        let (radii, shape) = match shape {
-            AnalyticClip::Rounded(radii) => (radii, 0),
-            AnalyticClip::Oval => ([0.; 4], 1),
-        };
+        let (radii, shape) = shape.shader_parts();
         self.soft_clips.push(GpuSoftClip {
             rect: [
                 rect.origin.x * scale,
@@ -740,58 +745,31 @@ impl WgpuRenderer {
                         let end = crate::compositor::find_clip_end(commands, command_index)?;
                         let start = command_index + 1;
                         command_index = end + 1;
-                        let local = transform.transform_point(rrect.rect.origin);
-                        let world_bounds =
-                            Rect::from_origin_size(self.target_origin + local, rrect.rect.size);
-                        let visible = Rect::from_origin_size(
-                            self.target_origin,
-                            Size::new(
-                                self.target_width as f32 / scale,
-                                self.target_height as f32 / scale,
-                            ),
+                        let bounds = Rect::from_origin_size(
+                            self.target_origin + transform.transform_point(rrect.rect.origin),
+                            rrect.rect.size,
                         );
-                        if let Some(bounds) = world_bounds.intersection(visible)
-                            && let Some(DrawBatch::Offscreen {
-                                clip,
-                                layer,
-                                mut instance,
-                            }) = self.lower_opacity_group(
-                                LayerGroup {
-                                    commands: &commands[start..end],
-                                    scale,
-                                    layer: isolation.layer,
-                                    generation: isolation.generation,
-                                    bounds,
-                                    parent_clip: clip,
-                                    translation,
-                                },
-                                1.,
-                            )?
-                        {
-                            // Clip the composed source once, in parent
-                            // framebuffer pixels, rather than clipping each
-                            // child draw against a binary stencil.
-                            instance.clip_rect = [
-                                local.x * scale,
-                                local.y * scale,
-                                rrect.rect.size.width * scale,
-                                rrect.rect.size.height * scale,
-                            ];
-                            instance.clip_radii = rrect_instance(
-                                *rrect,
-                                &Brush::Solid(Color::TRANSPARENT),
-                                transform,
+                        let radii = rrect_instance(
+                            *rrect,
+                            &Brush::Solid(Color::TRANSPARENT),
+                            transform,
+                            scale,
+                            self.target_width as f32,
+                            self.target_height as f32,
+                        )
+                        .radii;
+                        batches.extend(self.lower_isolated_clip(
+                            LayerGroup {
+                                commands: &commands[start..end],
                                 scale,
-                                self.target_width as f32,
-                                self.target_height as f32,
-                            )
-                            .radii;
-                            batches.push(DrawBatch::Offscreen {
-                                clip,
-                                layer,
-                                instance,
-                            });
-                        }
+                                layer: isolation.layer,
+                                generation: isolation.generation,
+                                bounds,
+                                parent_clip: clip,
+                                translation,
+                            },
+                            AnalyticClip::Rounded(radii),
+                        )?);
                         continue;
                     }
                     // The stencil uses the full affine, so the scissor must
@@ -829,13 +807,39 @@ impl WgpuRenderer {
                 }
                 PaintCommand::PushClipOval {
                     rect,
-                    coverage: _coverage,
+                    coverage,
+                    isolation,
                 } => {
                     let parent = *clips.last().expect("clip stack");
+                    let [a, b, c, d, _, _] = transform.to_kurbo().as_coeffs();
+                    if *coverage == incular_painting::ClipCoverage::AntiAliasWithSaveLayer
+                        && let Some(isolation) = isolation
+                        && (a, b, c, d) == (1., 0., 0., 1.)
+                    {
+                        let end = crate::compositor::find_clip_end(commands, command_index)?;
+                        let start = command_index + 1;
+                        command_index = end + 1;
+                        let bounds = Rect::from_origin_size(
+                            self.target_origin + transform.transform_point(rect.origin),
+                            rect.size,
+                        );
+                        batches.extend(self.lower_isolated_clip(
+                            LayerGroup {
+                                commands: &commands[start..end],
+                                scale,
+                                layer: isolation.layer,
+                                generation: isolation.generation,
+                                bounds,
+                                parent_clip: parent,
+                                translation,
+                            },
+                            AnalyticClip::Oval,
+                        )?);
+                        continue;
+                    }
                     #[cfg(not(incular_d3d11))]
                     {
-                        let [_, b, c, _, _, _] = transform.to_kurbo().as_coeffs();
-                        if *_coverage == incular_painting::ClipCoverage::AntiAlias
+                        if *coverage == incular_painting::ClipCoverage::AntiAlias
                             && b == 0.
                             && c == 0.
                             && !*has_destination_effect.get_or_insert_with(|| {
@@ -977,6 +981,50 @@ impl WgpuRenderer {
         }
         Ok(())
     }
+    fn lower_isolated_clip(
+        &mut self,
+        group: LayerGroup<'_>,
+        shape: AnalyticClip,
+    ) -> Result<Option<DrawBatch>, RendererError> {
+        let scale = group.scale;
+        let rect = group.bounds;
+        let visible = Rect::from_origin_size(
+            self.target_origin,
+            Size::new(
+                self.target_width as f32 / scale,
+                self.target_height as f32 / scale,
+            ),
+        );
+        let Some(bounds) = rect.intersection(visible) else {
+            return Ok(None);
+        };
+        let Some(DrawBatch::Offscreen {
+            clip,
+            layer,
+            mut instance,
+        }) = self.lower_opacity_group(LayerGroup { bounds, ..group }, 1.)?
+        else {
+            return Ok(None);
+        };
+        // Mask the composed source once in parent framebuffer pixels. Keep the
+        // shape in its original coordinates even if the target was cropped.
+        let local = rect.origin - self.target_origin;
+        let (radii, shape) = shape.shader_parts();
+        instance.clip_rect = [
+            local.x * scale,
+            local.y * scale,
+            rect.size.width * scale,
+            rect.size.height * scale,
+        ];
+        instance.clip_radii = radii;
+        instance.options[1] = shape as f32;
+        Ok(Some(DrawBatch::Offscreen {
+            clip,
+            layer,
+            instance,
+        }))
+    }
+
     pub(super) fn lower_opacity_group(
         &mut self,
         group: LayerGroup<'_>,

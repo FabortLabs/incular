@@ -1,0 +1,24 @@
+// Shapes are expressed in their containing framebuffer's physical pixels.
+// An empty rectangle in a composite instance means no additional mask.
+fn analytic_coverage(point: vec2<f32>, rect: vec4<f32>, radii: vec4<f32>, shape: u32) -> f32 {
+  if (rect.z <= 0. || rect.w <= 0.) {
+    return 1.;
+  }
+  let q = point - rect.xy - rect.zw * 0.5;
+  if (shape == 1u) {
+    let radius = rect.zw * 0.5;
+    let unit_point = q / radius;
+    let rho = length(unit_point);
+    // Normalize the ellipse's implicit gradient to measure distance in
+    // physical pixels near the boundary, regardless of aspect ratio.
+    let gradient = length(unit_point / radius) / max(rho, 1e-6);
+    let distance = (rho - 1.0) / max(gradient, 1e-6);
+    return clamp(0.5 - distance, 0.0, 1.0);
+  }
+  let top = select(radii.x, radii.y, q.x >= 0.);
+  let bottom = select(radii.w, radii.z, q.x >= 0.);
+  let radius = select(top, bottom, q.y >= 0.);
+  let d = abs(q) - (rect.zw * 0.5 - vec2(radius));
+  let distance = length(max(d, vec2(0.))) + min(max(d.x, d.y), 0.) - radius;
+  return clamp(0.5 - distance, 0., 1.);
+}
