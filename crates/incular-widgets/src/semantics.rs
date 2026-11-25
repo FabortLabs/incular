@@ -325,6 +325,14 @@ impl Semantics {
         self
     }
 
+    /// Adds framework metadata to this semantics annotation without
+    /// changing the accessibility label or sending it to the platform.
+    #[must_use]
+    pub fn tag(mut self, tag: incular_semantics::SemanticsTag) -> Self {
+        self.state.add_tag(tag);
+        self
+    }
+
     /// Flutter's `hidden`: in the tree but not currently visible.
     #[must_use]
     pub fn hidden(mut self, hidden: bool) -> Self {

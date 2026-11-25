@@ -36,6 +36,7 @@ struct MergedSemanticSummary {
     custom_actions: Vec<CustomSemanticsActionId>,
     has_custom_callback: bool,
     enabled: Option<bool>,
+    tags: Vec<incular_semantics::SemanticsTag>,
 }
 
 impl MergedSemanticSummary {
@@ -74,6 +75,14 @@ impl MergedSemanticSummary {
         self.label.push_str(label);
         if embedded.is_some() {
             self.label.push('\u{202c}');
+        }
+    }
+
+    fn add_tags(&mut self, tags: &[incular_semantics::SemanticsTag]) {
+        for tag in tags {
+            if !self.tags.contains(tag) {
+                self.tags.push(tag.clone());
+            }
         }
     }
 
@@ -1194,6 +1203,15 @@ impl WidgetTree {
         // Flutter absorption preserves the parent's level if present.
         // Otherwise the first descendant with a heading supplies it.
         state.set_enabled_state(merge_enabled_state(state.enabled_state(), merged.enabled));
+        if !merged.tags.is_empty() {
+            let mut tags = std::mem::take(&mut state.tags).into_vec();
+            for tag in merged.tags {
+                if !tags.contains(&tag) {
+                    tags.push(tag);
+                }
+            }
+            state.tags = tags.into_boxed_slice();
+        }
         state.heading_level = state.heading_level.or(merged.heading);
         state.accessibility_focus_block_type = own_focus_block.merge(merged.focus_block);
         if state.heading_level.is_some() && role == Some(SemanticRole::GenericContainer) {
@@ -1719,6 +1737,9 @@ impl WidgetTree {
         let callbacks = &entry.widget.semantic_properties().callbacks;
         if !callbacks.custom.is_empty() && !self.pointer_actions_blocked(element) {
             merged.add_custom_actions(callbacks);
+        }
+        if let Some(explicit) = &entry.widget.semantic_properties().explicit {
+            merged.add_tags(&explicit.state.tags);
         }
         let enabled = entry
             .widget
@@ -2291,6 +2312,9 @@ fn overlay_semantic_state(base: &mut SemanticState, overlay: &SemanticState) {
     let default = SemanticState::default();
     if let Some(enabled) = overlay.enabled_state() {
         base.set_enabled_state(Some(enabled));
+    }
+    if !overlay.tags.is_empty() {
+        base.tags.clone_from(&overlay.tags);
     }
     macro_rules! take {
         ($($field:ident),* $(,)?) => {

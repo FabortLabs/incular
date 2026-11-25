@@ -6,7 +6,11 @@
 //! `SemanticAction`.
 
 use incular_core::{Arena, ArenaId, Rect};
-use std::cmp::Ordering;
+use std::{
+    cmp::Ordering,
+    hash::{Hash, Hasher},
+    sync::Arc,
+};
 
 mod attributed_string;
 mod custom_action;
@@ -17,6 +21,38 @@ pub use attributed_string::{
 pub use custom_action::{CustomSemanticsAction, CustomSemanticsActionId};
 pub use incular_core::TextDirection;
 pub use label_builder::SemanticsLabelBuilder;
+
+/// Framework-only metadata used to identify a node without changing what
+/// assistive technology says. The name is diagnostic; cloning a tag
+/// preserves its identity, but two separately created tags are distinct.
+#[derive(Clone, Debug)]
+pub struct SemanticsTag(Arc<str>);
+
+impl SemanticsTag {
+    #[must_use]
+    pub fn new(name: impl AsRef<str>) -> Self {
+        Self(Arc::from(name.as_ref()))
+    }
+
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.0
+    }
+}
+
+impl PartialEq for SemanticsTag {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl Eq for SemanticsTag {}
+
+impl Hash for SemanticsTag {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        std::ptr::hash(Arc::as_ptr(&self.0), state);
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct SemanticNodeId(pub ArenaId);
@@ -363,11 +399,22 @@ pub struct SemanticState {
     /// Flutter's `explicitChildNodes`: when this node merges its descendants,
     /// its children stay separate nodes instead.
     pub explicit_child_nodes: bool,
+    /// Framework tags; host accessibility bridges do not export them.
+    pub tags: Box<[SemanticsTag]>,
     /// Canonical action identifiers provided by the node or absorbed children.
     pub custom_actions: Box<[CustomSemanticsActionId]>,
 }
 
 impl SemanticState {
+    /// Adds a tag once, preserving discovery order.
+    pub fn add_tag(&mut self, tag: SemanticsTag) {
+        if !self.tags.contains(&tag) {
+            let mut tags = std::mem::take(&mut self.tags).into_vec();
+            tags.push(tag);
+            self.tags = tags.into_boxed_slice();
+        }
+    }
+
     /// Flutter's isEnabled flag: omitted, explicitly enabled or disabled.
     #[must_use]
     pub const fn enabled_state(&self) -> Option<bool> {
@@ -432,6 +479,7 @@ impl Default for SemanticState {
             sort_key: None,
             container: false,
             explicit_child_nodes: false,
+            tags: Box::default(),
             custom_actions: Box::default(),
         }
     }
@@ -448,6 +496,19 @@ pub struct SemanticNode {
     pub state: SemanticState,
     pub actions: Vec<SemanticActionKind>,
     pub children: Vec<SemanticNodeId>,
+}
+
+impl SemanticNode {
+    /// Returns the node's framework-only tags.
+    #[must_use]
+    pub fn tags(&self) -> &[SemanticsTag] {
+        &self.state.tags
+    }
+
+    #[must_use]
+    pub fn is_tagged(&self, tag: &SemanticsTag) -> bool {
+        self.tags().contains(tag)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
