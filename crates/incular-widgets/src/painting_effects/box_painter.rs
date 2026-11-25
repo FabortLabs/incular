@@ -112,7 +112,12 @@ impl BoxDecoration {
         let rect = Rect::from_origin_size(Offset::ZERO, size);
         let mut canvas = Canvas::default();
         border
-            .paint(&mut canvas, rect, self.shape, self.border_radius)
+            .paint(
+                &mut canvas,
+                rect,
+                self.shape,
+                self.effective_radius(TextDirection::Ltr),
+            )
             .then(|| canvas.finish())
     }
 
@@ -131,11 +136,13 @@ impl BoxDecoration {
 
     fn has_elliptical_corners(&self) -> bool {
         self.shape == BoxShape::Rectangle
-            && self.border_radius.is_some_and(|radius| {
-                clockwise_radii(radius)
-                    .iter()
-                    .any(|radius| radius.x != radius.y)
-            })
+            && self
+                .effective_radius(TextDirection::Ltr)
+                .is_some_and(|radius| {
+                    clockwise_radii(radius)
+                        .iter()
+                        .any(|radius| radius.x != radius.y)
+                })
     }
 
     /// Clip the child, not the container's foreground, background, or shadow.
@@ -179,7 +186,9 @@ impl BoxDecoration {
                 })
             }
             BoxShape::Rectangle => {
-                let radius = self.border_radius.unwrap_or_default();
+                let radius = self
+                    .effective_radius(TextDirection::Ltr)
+                    .unwrap_or_default();
                 let corners = [
                     radius.top_left,
                     radius.top_right,
@@ -214,9 +223,15 @@ impl BoxDecoration {
     /// shadows do not change the clip; a circle uses the shortest side.
     #[must_use]
     pub fn clip_path(&self, rect: Rect) -> Path {
+        self.clip_path_for_direction(rect, TextDirection::Ltr)
+    }
+
+    /// Returns the outline after resolving the logical corners.
+    #[must_use]
+    pub fn clip_path_for_direction(&self, rect: Rect, direction: TextDirection) -> Path {
         match self.shape {
             BoxShape::Circle => circle_path(center(rect), shortest_side(rect) / 2.0),
-            BoxShape::Rectangle => match self.border_radius {
+            BoxShape::Rectangle => match self.effective_radius(direction) {
                 Some(radius) if radius != BorderRadius::default() => rrect_path(rect, radius),
                 _ => rect_path(rect),
             },
@@ -227,6 +242,17 @@ impl BoxDecoration {
     /// tests geometry only, regardless of color, borders, or shadows.
     #[must_use]
     pub fn hit_test(&self, size: Size, position: Offset) -> bool {
+        self.hit_test_for_direction(size, position, TextDirection::Ltr)
+    }
+
+    /// Tests the geometry after resolving the logical corners.
+    #[must_use]
+    pub fn hit_test_for_direction(
+        &self,
+        size: Size,
+        position: Offset,
+        direction: TextDirection,
+    ) -> bool {
         let bounds = Rect::from_origin_size(Offset::ZERO, size);
         let (x, y) = (position.x, position.y);
         if !((0.0..size.width).contains(&x) && (0.0..size.height).contains(&y)) {
@@ -238,7 +264,7 @@ impl BoxDecoration {
                 let radius = shortest_side(bounds) / 2.0;
                 delta.x.mul_add(delta.x, delta.y * delta.y) <= radius * radius
             }
-            BoxShape::Rectangle => self.border_radius.is_none_or(|radius| {
+            BoxShape::Rectangle => self.effective_radius(direction).is_none_or(|radius| {
                 let [tl, tr, br, bl] = normalized_radii(size, clockwise_radii(radius));
                 let (right, bottom) = (size.width - x, size.height - y);
                 [
@@ -313,6 +339,17 @@ pub(crate) fn decorated(
     position: DecorationPosition,
     child: Widget,
 ) -> Widget {
+    if decoration.directional_border_radius.is_some() {
+        return crate::Builder::new(move |context| {
+            let direction = context.text_direction().unwrap_or(TextDirection::Ltr);
+            decorated(
+                decoration.clone().resolved_for_direction(direction),
+                position,
+                child.clone(),
+            )
+        })
+        .into();
+    }
     let decoration = Rc::new(decoration);
     let hit_decoration = decoration.clone();
     // Filling the stack, which takes the child's size, the builder sees

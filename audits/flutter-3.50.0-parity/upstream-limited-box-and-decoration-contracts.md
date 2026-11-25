@@ -128,3 +128,15 @@ same 100×40 rectangle keeps those colors. A resize to 120×40 or a new
 RTL painter swaps them. This is a retained shader-cache behavior in
 Flutter 3.50.0, not a general rule for directional gradient resolution.
 No equivalent mounted Incular gradient or radius behavior is claimed yet.
+
+## Directional corner painting and hits
+
+Pinned `box_decoration_test.dart:85` now pairs. A top-start radius of
+100 maps to the left in LTR and right in RTL on the same 1000×1000
+rectangle. Both implementations exclude the sample 10 pixels from
+the rounded corner and include its square-corner counterpart. The
+retained Rust test reuses the original widget, flips direction and
+flips back, then checks paint commands and actual tap delivery through
+both DecoratedBox and Container. A separate control resolves mixed
+physical and logical radii after interpolation. Fifteen focused Rust
+checks passed. The directional gradient baseline remains separate.

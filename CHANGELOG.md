@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-widgets`: directional decoration radii follow inherited text
+  direction in both painting and hit testing.
+
 - `incular-widgets`: box borders expose inner and outer paths, with
   directional insets resolved before building the inner outline.
 

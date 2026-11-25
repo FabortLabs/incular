@@ -649,6 +649,27 @@ impl DecoratedBox {
 }
 impl From<DecoratedBox> for Widget {
     fn from(value: DecoratedBox) -> Self {
+        if value
+            .decoration
+            .as_ref()
+            .is_some_and(|decoration| decoration.directional_border_radius.is_some())
+        {
+            return crate::Builder::new(move |context| {
+                let direction = context
+                    .text_direction()
+                    .unwrap_or(incular_config::TextDirection::Ltr);
+                let mut resolved = value.clone();
+                if let Some(decoration) = resolved.decoration.take() {
+                    let decoration = decoration.resolved_for_direction(direction);
+                    if let Some(radius) = decoration.border_radius {
+                        resolved.radius = radius.to_corner_radii();
+                    }
+                    resolved.decoration = Some(decoration);
+                }
+                resolved.into()
+            })
+            .into();
+        }
         if let Some(decoration) = &value.decoration
             && (value.position == crate::DecorationPosition::Foreground
                 || decoration.needs_full_painter())

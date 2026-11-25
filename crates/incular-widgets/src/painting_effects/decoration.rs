@@ -1,13 +1,15 @@
 //! Box decoration primitives and their painting data.
 
+use incular_config::TextDirection;
 use incular_core::{Color, Lerp, Offset};
 use incular_image::ImageHandle;
 use incular_rendering::{BlendMode, Brush, FilterQuality, Paint};
 use smart_default::SmartDefault;
 use typed_builder::TypedBuilder;
 
-use super::geometry::BorderRadius;
+use super::geometry::{BorderRadius, BorderRadiusDirectional, Radius};
 use crate::tree::{ImageFit, ImageRepeat};
+use std::sync::Arc;
 
 /// The style of a border stroke.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -659,6 +661,10 @@ pub struct BoxDecoration {
     pub border: Option<Border>,
     #[builder(default, setter(strip_option))]
     pub border_radius: Option<BorderRadius>,
+    /// Logical radii are resolved at paint and hit-test time. An interpolated
+    /// decoration can carry both physical and logical components.
+    #[builder(default, setter(transform = |radius: BorderRadiusDirectional| Some(Arc::new(radius))))]
+    pub directional_border_radius: Option<Arc<BorderRadiusDirectional>>,
     #[builder(
         default = Vec::new(),
         setter(transform = |shadows: impl IntoIterator<Item = BoxShadow>| {
@@ -703,7 +709,44 @@ impl BoxDecoration {
     #[must_use]
     pub fn border_radius(mut self, radius: BorderRadius) -> Self {
         self.border_radius = Some(radius);
+        self.directional_border_radius = None;
         self
+    }
+
+    /// Sets corner radii measured from the leading and trailing edges.
+    #[must_use]
+    pub fn directional_border_radius(mut self, radius: BorderRadiusDirectional) -> Self {
+        self.border_radius = None;
+        self.directional_border_radius = Some(Arc::new(radius));
+        self
+    }
+
+    /// Resolves this decoration's logical corner radii for explicit painting
+    /// or hit testing. Widgets resolve them from their nearest Directionality.
+    #[must_use]
+    pub fn resolved_for_direction(mut self, direction: TextDirection) -> Self {
+        if self.directional_border_radius.is_some() {
+            self.border_radius = self.effective_radius(direction);
+            self.directional_border_radius = None;
+        }
+        self
+    }
+
+    pub(super) fn effective_radius(&self, direction: TextDirection) -> Option<BorderRadius> {
+        let Some(logical) = &self.directional_border_radius else {
+            return self.border_radius;
+        };
+        let logical = logical.resolve(direction);
+        let Some(physical) = self.border_radius else {
+            return Some(logical);
+        };
+        let sum = |a: Radius, b: Radius| Radius::elliptical(a.x + b.x, a.y + b.y);
+        Some(BorderRadius::only(
+            sum(physical.top_left, logical.top_left),
+            sum(physical.top_right, logical.top_right),
+            sum(physical.bottom_right, logical.bottom_right),
+            sum(physical.bottom_left, logical.bottom_left),
+        ))
     }
 
     #[must_use]
@@ -735,7 +778,9 @@ impl BoxDecoration {
 
     #[must_use]
     pub fn is_valid(&self) -> bool {
-        if self.shape == BoxShape::Circle && self.border_radius.is_some() {
+        if self.shape == BoxShape::Circle
+            && (self.border_radius.is_some() || self.directional_border_radius.is_some())
+        {
             return false;
         }
         if self.background_blend_mode.is_some() && self.color.is_none() && self.gradient.is_none() {
@@ -793,6 +838,16 @@ impl incular_core::Lerp for BoxDecoration {
             border_radius: match (self.border_radius, other.border_radius) {
                 (None, None) => None,
                 (a, b) => Some(a.unwrap_or_default().lerp(&b.unwrap_or_default(), t)),
+            },
+            directional_border_radius: match (
+                self.directional_border_radius.as_deref(),
+                other.directional_border_radius.as_deref(),
+            ) {
+                (None, None) => None,
+                (a, b) => Some(Arc::new(
+                    a.unwrap_or(&BorderRadiusDirectional::ZERO)
+                        .lerp(b.unwrap_or(&BorderRadiusDirectional::ZERO), t),
+                )),
             },
             box_shadow: BoxShadow::lerp_list(&self.box_shadow, &other.box_shadow, t),
             gradient: if t < 0.5 {

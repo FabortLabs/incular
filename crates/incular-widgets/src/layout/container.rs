@@ -206,6 +206,26 @@ impl Container {
 
 impl From<Container> for Widget {
     fn from(value: Container) -> Self {
+        if [&value.decoration, &value.foreground_decoration]
+            .into_iter()
+            .flatten()
+            .any(|decoration| decoration.directional_border_radius.is_some())
+        {
+            return crate::Builder::new(move |context| {
+                let direction = context
+                    .text_direction()
+                    .unwrap_or(incular_config::TextDirection::Ltr);
+                let mut resolved = value.clone();
+                resolved.decoration = resolved
+                    .decoration
+                    .map(|decoration| decoration.resolved_for_direction(direction));
+                resolved.foreground_decoration = resolved
+                    .foreground_decoration
+                    .map(|decoration| decoration.resolved_for_direction(direction));
+                resolved.into()
+            })
+            .into();
+        }
         let non_negative = |value: Option<f32>| value.map(|value| value.max(0.0));
         let constraints = value.constraints.map(|constraints| {
             constraints.tighten(non_negative(value.width), non_negative(value.height))
