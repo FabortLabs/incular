@@ -999,3 +999,11 @@ packages/flutter/test/widgets/gesture_detector_semantics_test.dart	13	Vertical g
 packages/flutter/test/widgets/gesture_detector_semantics_test.dart	62	Horizontal gesture detector has up/down actions	paired-match	upstream-semantic-gesture-directions.md#gesturedetector-recognizer-phases
 packages/flutter/test/widgets/gesture_detector_semantics_test.dart	111	All registered handlers for the gesture kind are called	paired-match	upstream-semantic-gesture-directions.md#gesturedetector-recognizer-phases
 packages/flutter/test/widgets/semantics_test.dart	474	Semantics widget supports all actions	partial-match	upstream-semantic-gesture-directions.md#explicit-semantics-callbacks
+packages/flutter/test/gestures/transformed_monodrag_test.dart	15	gets local coordinates	paired-match	upstream-transformed-monodrag.md
+packages/flutter/test/gestures/transformed_monodrag_test.dart	71	kTouchSlop is evaluated in the global coordinate space when scaled up	paired-match	upstream-transformed-monodrag.md
+packages/flutter/test/gestures/transformed_monodrag_test.dart	177	kTouchSlop is evaluated in the global coordinate space when scaled down	paired-match	upstream-transformed-monodrag.md
+packages/flutter/test/gestures/transformed_monodrag_test.dart	283	kTouchSlop is evaluated in the global coordinate space when rotated 45 degrees	paired-match	upstream-transformed-monodrag.md
+packages/flutter/test/gestures/transformed_monodrag_test.dart	380	gets local coordinates	paired-match	upstream-transformed-monodrag.md
+packages/flutter/test/gestures/transformed_monodrag_test.dart	436	kTouchSlop is evaluated in the global coordinate space when scaled up	paired-match	upstream-transformed-monodrag.md
+packages/flutter/test/gestures/transformed_monodrag_test.dart	542	kTouchSlop is evaluated in the global coordinate space when scaled down	paired-match	upstream-transformed-monodrag.md
+packages/flutter/test/gestures/transformed_monodrag_test.dart	648	kTouchSlop is evaluated in the global coordinate space when rotated 45 degrees	reference-ran-incular-open	upstream-transformed-monodrag.md

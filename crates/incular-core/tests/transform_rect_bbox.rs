@@ -85,3 +85,12 @@ fn rotated_and_skewed_transforms_keep_the_general_computation() {
         }
     }
 }
+
+#[test]
+fn affine_vector_projection_ignores_translation() {
+    let affine = Transform::from_coefficients([2., -3., 5., 7., 1e30, -1e30]);
+    assert_eq!(
+        affine.transform_vector(Offset::new(4., 2.)),
+        Offset::new(18., 2.)
+    );
+}

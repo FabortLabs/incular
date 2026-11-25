@@ -89,6 +89,9 @@ pub struct PointerGestureRecognizer {
     /// Global-to-local transform of the receiving widget; `None` reports
     /// local values equal to global ones.
     local_transform: Option<incular_core::Transform>,
+    /// Physical length of one unit of local x/y movement. Compute this
+    /// once at routing rather than inverting or taking norms on each move.
+    world_axis_scale: [f64; 2],
     pan_started: bool,
     pan_action: Option<PanAction>,
     long_press_started: bool,
@@ -109,6 +112,8 @@ pub struct PointerGestureRecognizer {
     delayed_drag: Option<Duration>,
     /// A delayed drag moved beyond slop before its delay and lost the arena.
     drag_rejected: bool,
+    /// The unstarted drag callbacks are owed at most one cancellation.
+    drag_cancel_pending: bool,
     /// The arena resolved this press for the recognizer before any movement
     /// (Flutter closes the arena after the hit test, and a sole member wins by
     /// default). Its drag then starts without waiting for the slop.
@@ -153,6 +158,7 @@ pub struct FlingLimits {
 struct DragProgress {
     /// `_pendingDragOffset`: movement accumulated before the drag is accepted.
     pending: Offset,
+    pending_local: Offset,
     /// `_lastPendingEventTimestamp`.
     pending_time: Option<Instant>,
     /// `_globalDistanceMoved` of the vertical drag recognizer (signed sum).
@@ -169,6 +175,7 @@ impl DragProgress {
     fn at(position: Offset) -> Self {
         Self {
             pending: Offset::ZERO,
+            pending_local: Offset::ZERO,
             pending_time: None,
             moved_vertical: 0.,
             moved_horizontal: 0.,
@@ -218,6 +225,7 @@ impl PointerGestureRecognizer {
             pending_tap_down: None,
             tap_down_sent: false,
             local_transform: None,
+            world_axis_scale: [1., 1.],
             pan_started: false,
             pan_action: None,
             long_press_started: false,
@@ -230,6 +238,7 @@ impl PointerGestureRecognizer {
             immediate_drag: false,
             delayed_drag: None,
             drag_rejected: false,
+            drag_cancel_pending: false,
             accepted_on_press: false,
             tap_memory: None,
             long_press_pending: false,
@@ -341,16 +350,35 @@ impl PointerGestureRecognizer {
     /// retained adapters pass the widget's inverse world transform.
     pub fn set_local_transform(&mut self, transform: incular_core::Transform) {
         self.local_transform = Some(transform);
+        self.world_axis_scale = if transform.is_translation() {
+            [1., 1.]
+        } else if let Some(world) = transform.inverse() {
+            let [a, b, c, d, _, _] = world.coefficients();
+            [a.hypot(b), c.hypot(d)]
+        } else {
+            [1., 1.]
+        };
     }
     fn local(&self, point: Offset) -> Offset {
         self.local_transform
             .map_or(point, |transform| transform.transform_point(point))
     }
-    /// Flutter's `PointerEvent.transformDeltaViaPositions`.
-    fn local_delta(&self, delta: Offset, end: Offset) -> Offset {
-        match self.local_transform {
-            Some(_) => self.local(end) - self.local(end - delta),
-            None => delta,
+    fn local_delta(&self, delta: Offset) -> Offset {
+        self.local_transform
+            .map_or(delta, |transform| transform.transform_vector(delta))
+    }
+    fn global_delta(&self, delta: Offset) -> Offset {
+        self.local_transform
+            .filter(|transform| !transform.is_translation())
+            .and_then(incular_core::Transform::inverse)
+            .map_or(delta, |transform| transform.transform_vector(delta))
+    }
+
+    fn project_drag_delta(&self, action: PanAction, delta: Offset) -> (Offset, Option<f32>) {
+        match action {
+            PanAction::Pan => (delta, None),
+            PanAction::Horizontal => (Offset::new(delta.x, 0.), Some(delta.x)),
+            PanAction::Vertical => (Offset::new(0., delta.y), Some(delta.y)),
         }
     }
     fn has_tap_callbacks(&self) -> bool {
@@ -365,6 +393,7 @@ impl PointerGestureRecognizer {
     pub fn reject(&mut self) {
         self.tap_cancel();
         self.long_press_cancel();
+        self.cancel_pending_drag();
     }
     /// Fires the deadline-driven callbacks of the press in progress at
     /// `now`: `onTapDown` after `kPressTimeout` and the long-press start after
@@ -594,39 +623,39 @@ impl PointerGestureRecognizer {
         event: &PointerEvent,
         behavior: DragStartBehavior,
     ) -> GestureAction {
-        let origin = match behavior {
-            DragStartBehavior::Start => down.position + self.drag.pending,
+        let local_down = self.local(down.position);
+        let (global_position, local_position) = match behavior {
+            DragStartBehavior::Start => (
+                down.position + self.drag.pending,
+                local_down + self.drag.pending_local,
+            ),
             DragStartBehavior::Down => {
-                let delta = match action {
-                    PanAction::Pan => self.drag.pending,
-                    PanAction::Horizontal => Offset::new(self.drag.pending.x, 0.),
-                    PanAction::Vertical => Offset::new(0., self.drag.pending.y),
-                };
-                self.start_update = (delta != Offset::ZERO).then(|| {
-                    self.drag_update(
+                let (local_delta, _) = self.project_drag_delta(action, self.drag.pending_local);
+                self.start_update = (local_delta != Offset::ZERO).then(|| {
+                    self.drag_update_local(
                         action,
-                        delta,
-                        &PointerEvent {
-                            position: down.position + delta,
-                            time: self.drag.pending_time.unwrap_or(event.time),
-                            ..*event
-                        },
+                        local_delta,
+                        down.position + self.global_delta(local_delta),
+                        local_down + local_delta,
+                        self.drag.pending_time.unwrap_or(event.time),
                     )
                 });
-                down.position
+                (down.position, local_down)
             }
         };
         let start = DragStartDetails {
             source_time: self.drag.pending_time,
-            global_position: origin,
-            local_position: self.local(origin),
+            global_position,
+            local_position,
             kind: self.kind,
         };
         self.pan_action = Some(action);
         self.pan_started = true;
+        self.drag_cancel_pending = false;
         // The drag wins the arena; the tap loses.
         self.tap_cancel();
         self.drag.pending = Offset::ZERO;
+        self.drag.pending_local = Offset::ZERO;
         self.drag.pending_time = None;
         match action {
             PanAction::Pan => GestureAction::PanStart(start),
@@ -645,19 +674,30 @@ impl PointerGestureRecognizer {
     /// An update for the accepted drag: the movement since the previous event,
     /// restricted to the drag axis for horizontal and vertical drags.
     fn drag_update(&self, action: PanAction, step: Offset, event: &PointerEvent) -> GestureAction {
-        // Flutter reports the delta in the receiver's coordinate space.
-        let step = self.local_delta(step, event.position);
-        let (delta, primary_delta) = match action {
-            PanAction::Pan => (step, None),
-            PanAction::Horizontal => (Offset::new(step.x, 0.), Some(step.x)),
-            PanAction::Vertical => (Offset::new(0., step.y), Some(step.y)),
-        };
+        self.drag_update_local(
+            action,
+            self.local_delta(step),
+            event.position,
+            self.local(event.position),
+            event.time,
+        )
+    }
+
+    fn drag_update_local(
+        &self,
+        action: PanAction,
+        local_step: Offset,
+        global_position: Offset,
+        local_position: Offset,
+        time: Instant,
+    ) -> GestureAction {
+        let (delta, primary_delta) = self.project_drag_delta(action, local_step);
         let details = DragUpdateDetails {
-            source_time: Some(event.time),
+            source_time: Some(time),
             delta,
             primary_delta,
-            global_position: event.position,
-            local_position: self.local(event.position),
+            global_position,
+            local_position,
             kind: self.kind,
         };
         match action {
@@ -795,6 +835,7 @@ impl PointerGestureRecognizer {
                 }
                 self.double_tap_second = is_double_tap;
                 self.down = Some(event);
+                self.drag_cancel_pending = true;
                 self.velocity.clear();
                 if !synthesized {
                     self.velocity
@@ -922,9 +963,17 @@ impl PointerGestureRecognizer {
                     return GestureDecision::Accept(self.drag_update(action, step, &event));
                 }
                 self.drag.pending = self.drag.pending + step;
+                let local_step = self.local_delta(step);
+                self.drag.pending_local = self.drag.pending_local + local_step;
                 self.drag.pending_time = Some(event.time);
-                self.drag.moved_vertical += step.y;
-                self.drag.moved_horizontal += step.x;
+                // Flutter first projects to the local drag axis, then
+                // measures signed physical length in world units.
+                self.drag.moved_vertical +=
+                    (f64::from(local_step.y) * self.world_axis_scale[1]) as f32;
+                self.drag.moved_horizontal +=
+                    (f64::from(local_step.x) * self.world_axis_scale[0]) as f32;
+                // A pan has no axis filter; projecting its full movement
+                // back to world space yields the original physical step.
                 self.drag.moved_pan += step.x.hypot(step.y);
                 // The long-press deadline passed on this movement: the press
                 // is a long press, as the deadline poll would have reported.
@@ -973,11 +1022,12 @@ impl PointerGestureRecognizer {
                         self.begin_drag(down, action, &event, behavior),
                     );
                 }
-                let axis_callbacks = if delta.x.abs() >= delta.y.abs() {
-                    self.has_horizontal_drag_callbacks()
-                } else {
-                    self.has_vertical_drag_callbacks()
-                };
+                let axis_callbacks =
+                    if self.drag.moved_horizontal.abs() >= self.drag.moved_vertical.abs() {
+                        self.has_horizontal_drag_callbacks()
+                    } else {
+                        self.has_vertical_drag_callbacks()
+                    };
                 if !axis_callbacks
                     && !self.has_pan_callbacks()
                     && delta.x.hypot(delta.y) > compute_pan_slop(self.kind, self.gesture_settings)
@@ -995,6 +1045,9 @@ impl PointerGestureRecognizer {
                         .drag_end(event.time)
                         .map_or(GestureDecision::Pending, GestureDecision::Accept);
                 }
+                // A tap can win within this same widget. Its unstarted
+                // drag recognizers still report one cancellation on release.
+                self.cancel_pending_drag();
                 let elapsed = event.time.saturating_duration_since(down.time);
                 if elapsed >= PRESS_TIMEOUT {
                     self.flush_tap_down();
@@ -1095,6 +1148,7 @@ impl PointerGestureRecognizer {
                             .drag_end(event.time)
                             .map_or(GestureDecision::Cancelled, GestureDecision::Accept);
                     }
+                    self.cancel_pending_drag();
                     self.pan_started = false;
                     self.pan_action = None;
                     self.long_press_started = false;
@@ -1193,11 +1247,9 @@ impl PointerGestureRecognizer {
             GestureAction::ArenaAccepted { .. } => None,
         };
     }
-    pub fn cancel(&mut self) {
-        self.tap_cancel();
-        self.long_press_cancel();
-        if let Some(callback) = &self.callbacks.on_double_tap_cancel {
-            callback();
+    fn cancel_pending_drag(&mut self) {
+        if !std::mem::take(&mut self.drag_cancel_pending) {
+            return;
         }
         if let Some(callback) = &self.callbacks.on_pan_cancel {
             callback();
@@ -1208,6 +1260,15 @@ impl PointerGestureRecognizer {
         if let Some(callback) = &self.callbacks.on_vertical_drag_cancel {
             callback();
         }
+    }
+
+    pub fn cancel(&mut self) {
+        self.tap_cancel();
+        self.long_press_cancel();
+        if let Some(callback) = &self.callbacks.on_double_tap_cancel {
+            callback();
+        }
+        self.cancel_pending_drag();
         if let Some(callback) = &self.callbacks.on_cancel {
             callback();
         }

@@ -478,6 +478,15 @@ impl Transform {
         Offset::new(point.x as f32, point.y as f32)
     }
 
+    /// Maps a displacement through the linear part of this affine transform.
+    /// Unlike a point, a vector does not include the translation.
+    #[must_use]
+    pub fn transform_vector(self, vector: Offset) -> Offset {
+        let [a, b, c, d, _, _] = self.0.as_coeffs();
+        let (x, y) = (f64::from(vector.x), f64::from(vector.y));
+        Offset::new((a * x + c * y) as f32, (b * x + d * y) as f32)
+    }
+
     #[must_use]
     pub fn inverse_transform_point(self, point: Offset) -> Option<Offset> {
         self.inverse().map(|inverse| inverse.transform_point(point))

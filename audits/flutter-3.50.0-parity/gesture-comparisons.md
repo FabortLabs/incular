@@ -174,3 +174,7 @@ timestamps: after a synthesized wobble the release still reports
 handling but are not fitting points. A warmed raw-input diagnostic
 regression also verifies zero allocations over 200 moves. Fifteen
 focused Rust tests passed. This does not cover native trackpad sampling.
+
+C09 was later fixed and independently rechecked alongside seven
+original transformed-monodrag cases. See
+[transformed drag thresholds](upstream-transformed-monodrag.md).
