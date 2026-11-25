@@ -37,15 +37,15 @@ impl Tween for f64 {
 
 impl Tween for i32 {
     fn interpolate(from: Self, to: Self, t: f32) -> Self {
-        (from as f32 + (to - from) as f32 * t).round() as i32
+        let from = f64::from(from);
+        (from + (f64::from(to) - from) * f64::from(t)).round() as i32
     }
 }
 
 impl Tween for u32 {
     fn interpolate(from: Self, to: Self, t: f32) -> Self {
-        (from as f32 + (to as f32 - from as f32) * t)
-            .round()
-            .max(0.0) as u32
+        let from = f64::from(from);
+        (from + (f64::from(to) - from) * f64::from(t)).round() as u32
     }
 }
 
@@ -163,10 +163,18 @@ impl<T: NullableTween> OptionalTween<T> {
         }
     }
 
-    /// The value at `progress` through the tween's curve.
+    /// The value at `progress` through the tween's curve. Like Flutter's
+    /// `Tween.transform`, exact endpoints retain their original absence.
     #[must_use]
     pub fn evaluate(&self, progress: f32) -> Option<T> {
-        self.lerp(self.curve.apply(progress))
+        let t = self.curve.apply(progress);
+        if t == 0. {
+            self.begin
+        } else if t == 1. {
+            self.end
+        } else {
+            self.lerp(t)
+        }
     }
 }
 

@@ -39,3 +39,14 @@ Pinned Flutter 3.50.0 `ab2912035e`; unchanged Incular production `c647cb85`.
   `flutter350_clip_rrect_raster_modes` and
   `clip_rrect_raster_modes_test.dart`. No static count added
   for the authored pair.
+
+## Exact nullable endpoints and integer precision
+
+The C21 and C22 authored regressions now pass. An optional tween's
+`evaluate` returns its original endpoint, including None, at exactly
+zero or one. Its direct `lerp` retains the linear interpolation contract.
+Integer tweens interpolate in double precision before rounding, so the
+midpoint from 16,777,217 to 16,777,219 is 16,777,218. Using a wide
+intermediate also avoids overflowing the difference of two signed
+32-bit endpoints. All 19 focused Rust controller, physics and tween
+regressions in the three named targets passed.
