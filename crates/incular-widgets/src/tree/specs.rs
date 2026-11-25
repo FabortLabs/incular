@@ -594,6 +594,7 @@ pub(crate) enum WidgetKind {
         text_direction: Option<TextDirection>,
         vertical_direction: VerticalDirection,
         spacing: f32,
+        clip_behavior: Clip,
         children: Vec<Widget>,
     },
     Flexible {

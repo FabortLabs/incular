@@ -969,3 +969,4 @@ packages/flutter/test/rendering/flex_test.dart	338	MainAxisAlignment.end with Re
 packages/flutter/test/rendering/flex_test.dart	377	MainAxisAlignment.center with RenderFlex.spacing	paired-match	upstream-flex-retained-placement.md
 packages/flutter/test/rendering/flex_test.dart	416	MainAxisAlignment.spaceEvenly with RenderFlex.spacing	paired-match	upstream-flex-retained-placement.md
 packages/flutter/test/rendering/flex_test.dart	455	MainAxisAlignment.spaceAround with RenderFlex.spacing	paired-match	upstream-flex-retained-placement.md
+packages/flutter/test/rendering/flex_test.dart	62	Clip behavior is respected	partial-match	upstream-flex-retained-placement.md#overflow-dependent-clipping

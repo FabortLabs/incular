@@ -35,7 +35,7 @@ impl WidgetTree {
                     (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }
-            RenderKind::Flex { flex } => {
+            RenderKind::Flex { flex, .. } => {
                 let cross_max = match flex.direction {
                     Axis::Horizontal => constraints.max_height(),
                     Axis::Vertical => constraints.max_width(),
@@ -143,10 +143,19 @@ impl WidgetTree {
                 }
 
                 let result = incular_layout::layout_flex(constraints, &flex_children, flex);
-                (
-                    result.size,
-                    result.children.into_iter().map(|c| c.offset).collect(),
-                )
+                let mut used_main = f64::from(spacing);
+                let offsets = result
+                    .children
+                    .into_iter()
+                    .map(|child| {
+                        used_main += f64::from(flex.direction.main_extent(child.size));
+                        child.offset
+                    })
+                    .collect();
+                let main = f64::from(flex.direction.main_extent(result.size));
+                // Flutter ignores overflow within precisionErrorTolerance.
+                self.set_layout_overflow(id, used_main - main > 1e-10);
+                (result.size, offsets)
             }
             RenderKind::CustomLayout { ref delegate } => {
                 self.layout_custom(delegate, children, constraints)?
@@ -270,7 +279,7 @@ impl WidgetTree {
                 } else {
                     constraints.smallest()
                 };
-                self.set_stack_layout_overflow(id, false);
+                self.set_layout_overflow(id, false);
                 self.render_live_mut(id, "retained render must remain live")
                     .baseline = None;
                 (size, ChildOffsets::default())
@@ -403,7 +412,7 @@ impl WidgetTree {
                 }
                 self.render_live_mut(id, "retained render must remain live")
                     .baseline = baseline;
-                self.set_stack_layout_overflow(id, has_visual_overflow);
+                self.set_layout_overflow(id, has_visual_overflow);
                 (final_size, offsets)
             }
             RenderKind::SafeArea {
@@ -585,11 +594,11 @@ impl WidgetTree {
         }
     }
 
-    fn set_stack_layout_overflow(&self, id: RenderObjectId, enabled: bool) {
-        self.render_live(id, "stack render must remain live")
+    fn set_layout_overflow(&self, id: RenderObjectId, enabled: bool) {
+        self.render_live(id, "overflow render must remain live")
             .object
             .layers
-            .set_stack_layout_overflow(enabled);
+            .set_layout_overflow(enabled);
     }
 
     /// The [`Positioned`](crate::Positioned) data a stack child carries.

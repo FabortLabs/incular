@@ -117,8 +117,10 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
             text_direction,
             vertical_direction,
             spacing,
+            clip_behavior,
             ..
         } => RenderKind::Flex {
+            clip_behavior: *clip_behavior,
             flex: incular_layout::Flex {
                 direction: *axis,
                 main_axis_alignment: *main_axis_alignment,

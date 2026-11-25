@@ -697,6 +697,7 @@ pub enum RenderKind {
     },
     Flex {
         flex: incular_layout::Flex,
+        clip_behavior: Clip,
     },
     Flexible {
         flex: u32,

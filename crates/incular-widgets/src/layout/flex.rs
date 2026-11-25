@@ -5,7 +5,7 @@
 //! Layout algorithms are authoritative in `incular-layout`.
 
 use incular_config::{
-    Axis, CrossAxisAlignment, FlexFit, MainAxisAlignment, MainAxisSize, TextDirection,
+    Axis, Clip, CrossAxisAlignment, FlexFit, MainAxisAlignment, MainAxisSize, TextDirection,
     VerticalDirection,
 };
 use smart_default::SmartDefault;
@@ -43,6 +43,9 @@ macro_rules! axis_flex {
                         setter(transform = |spacing: f32| spacing.max(0.0))
                     )]
             pub spacing: f32,
+            #[builder(default = Clip::None)]
+            #[default(Clip::None)]
+            pub clip_behavior: Clip,
         }
 
         impl $name {
@@ -113,6 +116,13 @@ macro_rules! axis_flex {
                 self
             }
 
+            /// Clips main-axis overflow; the default leaves overflow unclipped.
+            #[must_use]
+            pub fn clip_behavior(mut self, clip: Clip) -> Self {
+                self.clip_behavior = clip;
+                self
+            }
+
             #[must_use]
             pub fn get_main_axis_alignment(&self) -> MainAxisAlignment {
                 self.main_axis_alignment
@@ -144,6 +154,7 @@ macro_rules! axis_flex {
                     text_direction: value.text_direction,
                     vertical_direction: value.vertical_direction,
                     spacing: value.spacing.max(0.0),
+                    clip_behavior: value.clip_behavior,
                     children: value.children,
                 })
             }
@@ -182,6 +193,9 @@ pub struct Flex {
         setter(transform = |spacing: f32| spacing.max(0.0))
     )]
     pub spacing: f32,
+    #[builder(default = Clip::None)]
+    #[default(Clip::None)]
+    pub clip_behavior: Clip,
 }
 
 impl Flex {
@@ -246,6 +260,13 @@ impl Flex {
         self.spacing = spacing.max(0.0);
         self
     }
+
+    /// Clips main-axis overflow; the default leaves overflow unclipped.
+    #[must_use]
+    pub fn clip_behavior(mut self, clip: Clip) -> Self {
+        self.clip_behavior = clip;
+        self
+    }
 }
 
 impl From<Flex> for Widget {
@@ -258,6 +279,7 @@ impl From<Flex> for Widget {
             text_direction: value.text_direction,
             vertical_direction: value.vertical_direction,
             spacing: value.spacing.max(0.0),
+            clip_behavior: value.clip_behavior,
             children: value.children,
         })
     }

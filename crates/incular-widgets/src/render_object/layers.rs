@@ -40,7 +40,8 @@ fn widget_clips(widget: &WidgetKind) -> bool {
             child,
             ..
         } => child.is_some() && *clip_behavior != Clip::None,
-        WidgetKind::Stack { clip_behavior, .. }
+        WidgetKind::Flex { clip_behavior, .. }
+        | WidgetKind::Stack { clip_behavior, .. }
         | WidgetKind::IndexedStack { clip_behavior, .. }
         | WidgetKind::Scroll { clip_behavior, .. } => *clip_behavior != Clip::None,
         WidgetKind::SliverViewport { config } => config.clip_behavior != Clip::None,
@@ -91,6 +92,7 @@ impl LayerSpec {
             | WidgetKind::ClipOval { .. }
             | WidgetKind::ClipPath { .. }
             | WidgetKind::FittedBox { .. }
+            | WidgetKind::Flex { .. }
             | WidgetKind::Stack { .. }
             | WidgetKind::IndexedStack { .. }
                 if widget_clips(widget) =>
@@ -200,7 +202,7 @@ pub(crate) struct RenderLayers {
     pub(crate) attachment: LayerAttachment,
     /// Retained even through Clip::None so clipping-only updates do not
     /// need to remeasure the positioned children.
-    stack_layout_overflow: Cell<bool>,
+    layout_overflow: Cell<bool>,
     /// Shared by painted clipping and hit testing even if the paint stage
     /// is disabled. Only clip objects with resolved geometry allocate it.
     clip_geometry: Option<Rc<RefCell<Option<CachedClip>>>>,
@@ -257,6 +259,7 @@ impl RenderLayers {
             // and the update path fill the retained shape from the node
             // size before any flatten can observe it.
             WidgetKind::ClipRect { clip_behavior, .. }
+            | WidgetKind::Flex { clip_behavior, .. }
             | WidgetKind::FittedBox { clip_behavior, .. }
                 if widget_clips(widget) =>
             {
@@ -439,7 +442,7 @@ impl RenderLayers {
             picture,
             focus_picture,
             attachment,
-            stack_layout_overflow: Cell::new(false),
+            layout_overflow: Cell::new(false),
             clip_geometry: caches_clip_geometry.then(|| Rc::new(RefCell::new(None))),
         }
     }
@@ -1080,8 +1083,8 @@ impl RenderLayers {
         })
     }
 
-    pub(crate) fn set_stack_layout_overflow(&self, overflow: bool) {
-        self.stack_layout_overflow.set(overflow);
+    pub(crate) fn set_layout_overflow(&self, overflow: bool) {
+        self.layout_overflow.set(overflow);
     }
 
     /// Keep the child's content and clip stage available, but bypass the
@@ -1137,11 +1140,15 @@ impl RenderLayers {
     /// and the current delegate does not reclip against the one that produced it
     /// (`CustomClipper::should_reclip`), as Flutter's `_RenderCustomClip` does.
     fn apply_clip(&self, compositor: &mut LayerTree, kind: &RenderKind, size: Size) {
+        if let RenderKind::Flex { clip_behavior, .. } = *kind {
+            self.apply_fitted_clip(compositor, size, clip_behavior, self.layout_overflow.get());
+            return;
+        }
         if matches!(
             kind,
             RenderKind::Stack { .. } | RenderKind::IndexedStack { .. }
         ) {
-            self.apply_overflow_rect_clip(compositor, size, self.stack_layout_overflow.get());
+            self.apply_overflow_rect_clip(compositor, size, self.layout_overflow.get());
             return;
         }
         if matches!(

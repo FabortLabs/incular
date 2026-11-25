@@ -263,9 +263,11 @@ impl std::fmt::Debug for WidgetKind {
                 text_direction,
                 vertical_direction,
                 spacing,
+                clip_behavior,
                 children,
             } => f
                 .debug_struct("Flex")
+                .field("clip_behavior", clip_behavior)
                 .field("axis", axis)
                 .field("main_axis_alignment", main_axis_alignment)
                 .field("main_axis_size", main_axis_size)
@@ -1507,6 +1509,7 @@ impl PartialEq for WidgetKind {
                     text_direction: e,
                     vertical_direction: f,
                     spacing: g,
+                    clip_behavior: q,
                     children: h,
                 },
                 Self::Flex {
@@ -1517,9 +1520,20 @@ impl PartialEq for WidgetKind {
                     text_direction: m,
                     vertical_direction: n,
                     spacing: o,
+                    clip_behavior: r,
                     children: p,
                 },
-            ) => a == i && b == j && c == k && d == l && e == m && f == n && g == o && h == p,
+            ) => {
+                a == i
+                    && b == j
+                    && c == k
+                    && d == l
+                    && e == m
+                    && f == n
+                    && g == o
+                    && h == p
+                    && q == r
+            }
             (
                 Self::Flexible {
                     flex: a,
