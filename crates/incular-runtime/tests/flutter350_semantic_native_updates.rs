@@ -1,0 +1,339 @@
+//! Pinned Flutter semantic update behavior at Incular's two native seams.
+
+use accesskit::{Action, ActionData, ActionRequest, NodeId, Role as AccessKitRole, TreeId};
+use accesskit_consumer::{Node, NodeId as ConsumerId, Tree, TreeChangeHandler};
+use incular_accessibility::{
+    AccessKitProjection, AccessKitUpdateKind, MobileAccessibilityProjection,
+};
+use incular_config::{Constraints, TextDirection, TransientPresentation};
+use incular_core::Size;
+use incular_runtime::Runtime;
+use incular_semantics::{CustomSemanticsAction, Role, SemanticAction, SemanticNodeId};
+use incular_widgets::{
+    Directionality, MergeSemantics, OverlayPortal, Padding, Semantics, SizedBox, Text, Widget,
+    internal::ActionSurface,
+};
+use std::{cell::Cell, rc::Rc};
+
+const VIEW: Size = Size {
+    width: 800.,
+    height: 600.,
+};
+
+fn scene(widget: impl Into<Widget>) -> Widget {
+    Directionality::new(TextDirection::Ltr, widget).into()
+}
+
+fn frame(runtime: &mut Runtime) {
+    runtime.run_frame(Constraints::tight(VIEW)).unwrap();
+}
+
+fn semantic_id(runtime: &Runtime, label: &str) -> SemanticNodeId {
+    runtime
+        .tree()
+        .semantics()
+        .iter()
+        .find_map(|(id, node)| (node.label.as_deref() == Some(label)).then_some(id))
+        .expect("visible labelled semantic node")
+}
+
+fn patch(runtime: &mut Runtime, widget: Widget) {
+    let root = runtime.tree().root().unwrap();
+    runtime.tree_mut().update(root, widget).unwrap();
+    frame(runtime);
+}
+
+#[test]
+fn only_the_retained_merged_node_is_republished_when_an_inner_label_changes() {
+    let merged = |inner| {
+        scene(MergeSemantics::new(
+            Semantics::new(Padding::zero(
+                Semantics::new(Padding::zero(Text::new("text")))
+                    .label(inner)
+                    .container(true),
+            ))
+            .label("outer")
+            .role(Role::Group),
+        ))
+    };
+    let mut runtime = Runtime::new(merged("inner")).unwrap();
+    frame(&mut runtime);
+    let mut accesskit = AccessKitProjection::new();
+    let mut mobile = MobileAccessibilityProjection::new();
+    let merged_id = semantic_id(&runtime, "outer\ninner\ntext");
+    let semantic = runtime.tree().semantics();
+    let initial = accesskit.sync(semantic, 1.).unwrap().into_accesskit();
+    let native_id = NodeId(accesskit.native_node_id(merged_id).unwrap());
+    assert_eq!(initial.nodes.len(), 2);
+    let native_tree = Tree::new(initial, true);
+    let children = native_tree.state().root().children().collect::<Vec<_>>();
+    assert_eq!(children.len(), 1);
+    assert_eq!(
+        children[0].id(),
+        native_tree
+            .state()
+            .node_by_tree_local_id(native_id, TreeId::ROOT)
+            .unwrap()
+            .id(),
+    );
+    assert_eq!(children[0].label().as_deref(), Some("outer\ninner\ntext"));
+    assert_eq!(children[0].children().count(), 0);
+
+    let initial_mobile = mobile.sync(semantic).unwrap();
+    assert_eq!(initial_mobile.nodes.len(), 1);
+    let mobile_id = initial_mobile.nodes[0].native_id;
+    assert_eq!(initial_mobile.roots, [mobile_id]);
+    assert!(initial_mobile.nodes[0].children.is_empty());
+
+    patch(&mut runtime, merged("inner-updated"));
+    assert_eq!(
+        semantic_id(&runtime, "outer\ninner-updated\ntext"),
+        merged_id
+    );
+    let semantic = runtime.tree().semantics();
+    let desktop_patch = accesskit.sync(semantic, 1.).unwrap();
+    assert_eq!(desktop_patch.kind(), AccessKitUpdateKind::Incremental);
+    let nodes = desktop_patch.into_accesskit().nodes;
+    assert_eq!(nodes.len(), 1);
+    assert_eq!(nodes[0].0, native_id);
+    assert_eq!(nodes[0].1.label(), Some("outer\ninner-updated\ntext"));
+    assert!(nodes[0].1.children().is_empty());
+    let mobile_patch = mobile.sync(semantic).unwrap();
+    assert_eq!(mobile_patch.nodes.len(), 1);
+    assert_eq!(mobile_patch.nodes[0].native_id, mobile_id);
+    assert_eq!(
+        mobile_patch.nodes[0].semantic.label.as_deref(),
+        Some("outer\ninner-updated\ntext")
+    );
+    assert!(mobile_patch.nodes[0].children.is_empty());
+    assert!(mobile_patch.removed.is_empty());
+    assert!(accesskit.sync(semantic, 1.).is_none());
+    assert!(mobile.sync(semantic).is_none());
+}
+
+#[derive(Default)]
+struct Changes {
+    removed: Vec<ConsumerId>,
+}
+
+impl TreeChangeHandler for Changes {
+    fn node_added(&mut self, _: &Node) {}
+    fn node_updated(&mut self, _: &Node, _: &Node) {}
+    fn focus_moved(&mut self, _: Option<&Node>, _: Option<&Node>) {}
+    fn node_removed(&mut self, node: &Node) {
+        self.removed.push(node.id());
+    }
+}
+
+fn contains(node: Node<'_>, sought: ConsumerId) -> bool {
+    node.id() == sought || node.children().any(|child| contains(child, sought))
+}
+
+#[test]
+fn detached_overlay_nodes_leave_native_traversal_and_cannot_receive_stale_actions() {
+    let calls = Rc::new(Cell::new(0));
+    let portal = |show| {
+        scene(
+            OverlayPortal::new(ActionSurface::new("anchor").size(Size::new(40., 20.)))
+                .presentation(TransientPresentation::Overlay)
+                .overlay_child(
+                    ActionSurface::new("menu item")
+                        .size(Size::new(80., 40.))
+                        .on_press({
+                            let calls = calls.clone();
+                            move || calls.set(calls.get() + 1)
+                        }),
+                )
+                .show(show),
+        )
+    };
+    let mut runtime = Runtime::new(portal(true)).unwrap();
+    frame(&mut runtime);
+    let anchor = semantic_id(&runtime, "anchor");
+    let menu = semantic_id(&runtime, "menu item");
+    let mut accesskit = AccessKitProjection::new();
+    let mut mobile = MobileAccessibilityProjection::new();
+    let semantic = runtime.tree().semantics();
+    let initial = accesskit.sync(semantic, 1.).unwrap().into_accesskit();
+    let anchor_native = NodeId(accesskit.native_node_id(anchor).unwrap());
+    let menu_native = NodeId(accesskit.native_node_id(menu).unwrap());
+    let mut consumer = Tree::new(initial, true);
+    let consumer_id = |id| {
+        consumer
+            .state()
+            .node_by_tree_local_id(id, TreeId::ROOT)
+            .unwrap()
+            .id()
+    };
+    let anchor_consumer = consumer_id(anchor_native);
+    let menu_consumer = consumer_id(menu_native);
+    assert!(contains(consumer.state().root(), anchor_consumer));
+    assert!(contains(consumer.state().root(), menu_consumer));
+    mobile.sync(semantic).unwrap();
+    let menu_mobile = mobile.native_node_id(menu).unwrap();
+    assert!(mobile.native_node_id(anchor).is_some());
+    let request = ActionRequest {
+        action: Action::Click,
+        target_tree: TreeId::ROOT,
+        target_node: menu_native,
+        data: None,
+    };
+    let queued_before_detach = accesskit.translate_action(&request).unwrap();
+    assert!(runtime.dispatch_semantic_action(
+        queued_before_detach.node,
+        queued_before_detach.action.clone()
+    ));
+    assert_eq!(calls.get(), 1);
+
+    patch(&mut runtime, portal(false));
+    let semantic = runtime.tree().semantics();
+    assert!(semantic.node(menu).is_none());
+    let update = accesskit.sync(semantic, 1.).unwrap().into_accesskit();
+    assert!(
+        update
+            .nodes
+            .iter()
+            .all(|(id, node)| *id != menu_native && !node.children().contains(&menu_native))
+    );
+    assert!(
+        update
+            .nodes
+            .iter()
+            .any(|(_, node)| node.children() == [anchor_native])
+    );
+    let mut changes = Changes::default();
+    consumer.update_and_process_changes(update, &mut changes);
+    assert!(changes.removed.contains(&menu_consumer));
+    assert!(contains(consumer.state().root(), anchor_consumer));
+    assert!(!contains(consumer.state().root(), menu_consumer));
+    assert!(accesskit.translate_action(&request).is_none());
+    assert!(
+        !runtime.dispatch_semantic_action(queued_before_detach.node, queued_before_detach.action)
+    );
+    assert_eq!(calls.get(), 1);
+    let update = mobile.sync(runtime.tree().semantics()).unwrap();
+    assert!(update.removed.contains(&menu_mobile));
+    assert!(
+        update
+            .nodes
+            .iter()
+            .all(|node| !node.children.contains(&menu_mobile))
+    );
+}
+
+#[test]
+fn replacing_only_a_custom_action_republishes_the_node_and_invalidates_the_old_action() {
+    let first = CustomSemanticsAction::new("Action 1");
+    let second = CustomSemanticsAction::new("Action 2");
+    let first_id = first.get_identifier();
+    let second_id = second.get_identifier();
+    let callbacks = [Rc::new(Cell::new(0)), Rc::new(Cell::new(0))];
+    let subject = |action, slot: usize| {
+        let calls = callbacks[slot].clone();
+        scene(
+            Semantics::new(SizedBox::square(10.))
+                .container(true)
+                .label("target")
+                .custom_action(action, move || calls.set(calls.get() + 1)),
+        )
+    };
+    let mut runtime = Runtime::new(subject(first, 0)).unwrap();
+    frame(&mut runtime);
+    let node = semantic_id(&runtime, "target");
+    let mut accesskit = AccessKitProjection::new();
+    let mut mobile = MobileAccessibilityProjection::new();
+    let initial = runtime.tree().semantics();
+    let tree_update = accesskit.sync(initial, 1.).unwrap().into_accesskit();
+    let native = NodeId(accesskit.native_node_id(node).unwrap());
+    let first_patch = tree_update
+        .nodes
+        .iter()
+        .find(|(id, _)| *id == native)
+        .unwrap();
+    assert_eq!(
+        first_patch.1.custom_actions()[0].description.as_ref(),
+        "Action 1"
+    );
+    assert!(accesskit.sync(initial, 1.).is_none());
+    assert!(mobile.sync(initial).is_some());
+    assert!(mobile.sync(initial).is_none());
+    let mobile_id = mobile.native_node_id(node).unwrap();
+    let request = |raw| ActionRequest {
+        action: Action::CustomAction,
+        target_tree: TreeId::ROOT,
+        target_node: native,
+        data: Some(ActionData::CustomAction(raw)),
+    };
+    let old_request = request(i32::try_from(first_id.0).unwrap());
+    let queued = accesskit.translate_action(&old_request).unwrap();
+    assert_eq!(queued.action, SemanticAction::Custom(first_id));
+
+    patch(&mut runtime, subject(second, 1));
+    assert_eq!(semantic_id(&runtime, "target"), node);
+    let semantic = runtime.tree().semantics();
+    let changed = accesskit.sync(semantic, 1.).unwrap().into_accesskit();
+    assert_eq!(changed.nodes.len(), 1);
+    assert_eq!(changed.nodes[0].0, native);
+    assert_eq!(changed.nodes[0].1.custom_actions().len(), 1);
+    assert_eq!(
+        changed.nodes[0].1.custom_actions()[0].description.as_ref(),
+        "Action 2"
+    );
+    let changed = mobile.sync(semantic).unwrap();
+    assert_eq!(changed.nodes.len(), 1);
+    assert_eq!(changed.nodes[0].native_id, mobile_id);
+    assert_eq!(
+        changed.nodes[0].semantic.state.custom_actions.as_ref(),
+        &[second_id]
+    );
+    assert!(
+        mobile
+            .translate_action(mobile_id, SemanticAction::Custom(first_id))
+            .is_none()
+    );
+    assert!(accesskit.translate_action(&old_request).is_none());
+    assert!(!runtime.dispatch_semantic_action(queued.node, queued.action));
+
+    let new_request = request(i32::try_from(second_id.0).unwrap());
+    let mapped = accesskit.translate_action(&new_request).unwrap();
+    assert!(runtime.dispatch_semantic_action(mapped.node, mapped.action));
+    assert_eq!(callbacks.each_ref().map(|calls| calls.get()), [0, 1]);
+}
+
+#[test]
+fn changing_only_the_role_marks_a_node_changed_and_publishes_the_new_role() {
+    let subject = |role| {
+        scene(
+            Semantics::new(SizedBox::square(10.))
+                .label("target")
+                .role(role),
+        )
+    };
+    let mut runtime = Runtime::new(subject(Role::GenericContainer)).unwrap();
+    frame(&mut runtime);
+    let mut accesskit = AccessKitProjection::new();
+    let id = semantic_id(&runtime, "target");
+    let tree = runtime.tree().semantics();
+    let initial_revision = tree.revision();
+    let initial = accesskit.sync(tree, 1.).unwrap().into_accesskit();
+    let native = NodeId(accesskit.native_node_id(id).unwrap());
+    assert_eq!(tree.node(id).unwrap().role, Role::GenericContainer);
+    let original = initial.nodes.iter().find(|(id, _)| *id == native).unwrap();
+    assert_eq!(original.1.role(), AccessKitRole::GenericContainer);
+    assert!(accesskit.sync(tree, 1.).is_none());
+
+    patch(&mut runtime, subject(Role::Tab));
+    let tree = runtime.tree().semantics();
+    assert_eq!(tree.node(id).unwrap().role, Role::Tab);
+    assert_eq!(
+        tree.changed_since(initial_revision)
+            .map(|(id, _)| id)
+            .collect::<Vec<_>>(),
+        [id]
+    );
+    let update = accesskit.sync(tree, 1.).unwrap().into_accesskit();
+    assert_eq!(update.nodes.len(), 1);
+    assert_eq!(update.nodes[0].0, native);
+    assert_eq!(update.nodes[0].1.role(), AccessKitRole::Tab);
+    assert!(accesskit.sync(tree, 1.).is_none());
+}

@@ -43,7 +43,7 @@ packages/flutter/test/physics/newton_test.dart	270	scroll_with_inf_edge_ends	pai
 packages/flutter/test/physics/newton_test.dart	296	over/under scroll spring	paired-match	upstream-physics-comparisons.md#explicit-bouncing-scroll-simulations
 packages/flutter/test/semantics/semantics_binding_test.dart	135	getRectOfSemanticsNodeInViewCoordinates returns transformed logical rect	paired-match	upstream-semantics-binding.md
 packages/flutter/test/semantics/semantics_owner_test.dart	12	Performing SemanticsAction.showOnScreen does not crash if node no longer exist	paired-match	upstream-semantics-binding.md
-packages/flutter/test/semantics/semantics_test.dart	453	updateWith marks node as dirty when role changes	partial-match	upstream-semantics-binding.md#ordinal-sort-keys-and-role-updates
+packages/flutter/test/semantics/semantics_test.dart	453	updateWith marks node as dirty when role changes	paired-match	upstream-semantic-native-updates.md
 packages/flutter/test/semantics/semantics_test.dart	528	OrdinalSortKey compares correctly when names are the same	partial-match	upstream-semantics-binding.md#ordinal-sort-keys-and-role-updates
 packages/flutter/test/semantics/semantics_test.dart	553	OrdinalSortKey compares correctly when the names are different	paired-match	upstream-semantics-binding.md#ordinal-sort-keys-and-role-updates
 packages/flutter/test/semantics/traversal_order_test.dart	11	Traversal order handles touching elements	partial-match	upstream-semantics-binding.md#touching-traversal-grid
@@ -1068,3 +1068,9 @@ packages/flutter/test/semantics/semantics_test.dart	1307	very long labels	paired
 packages/flutter/test/semantics/semantics_test.dart	1321	many parts	paired-match	upstream-semantics-label-builder.md
 packages/flutter/test/semantics/semantics_test.dart	1334	special characters in separators	paired-match	upstream-semantics-label-builder.md
 packages/flutter/test/semantics/semantics_test.dart	1345	Unicode characters in content	paired-match	upstream-semantics-label-builder.md
+packages/flutter/test/semantics/semantics_test.dart	466	updateWith marks node as dirty when customSemanticsActions changes	paired-match	upstream-semantic-native-updates.md
+packages/flutter/test/semantics/semantics_update_test.dart	29	Semantics update does not send update for merged nodes.	paired-match	upstream-semantic-native-updates.md
+packages/flutter/test/semantics/semantics_update_test.dart	95	Semantics update receives attributed text	reference-ran-incular-open	upstream-semantic-native-updates.md
+packages/flutter/test/semantics/semantics_update_test.dart	194	Semantics update receives correct traversal transform with nested OverlayPortals	reference-ran-incular-open	upstream-semantic-native-updates.md
+packages/flutter/test/semantics/semantics_update_test.dart	271	Semantics update does not leak nodes to hit-test order when traversal parent is missing	reference-ran-incular-open	upstream-semantic-native-updates.md
+packages/flutter/test/semantics/semantics_update_test.dart	308	Semantics update removes detached OverlayPortal traversal child	paired-match	upstream-semantic-native-updates.md
