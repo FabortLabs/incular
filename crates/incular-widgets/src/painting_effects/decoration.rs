@@ -1,14 +1,17 @@
 //! Box decoration primitives and their painting data.
 
 use incular_config::TextDirection;
-use incular_core::{Color, Lerp, Offset};
+use incular_core::{Color, Lerp, Offset, Rect};
 use incular_image::ImageHandle;
-use incular_rendering::{BlendMode, Brush, FilterQuality, Paint};
+use incular_rendering::{BlendMode, Brush, FilterQuality, GradientStops, LinearGradient, Paint};
 use smart_default::SmartDefault;
 use typed_builder::TypedBuilder;
 
 use super::geometry::{BorderRadius, BorderRadiusDirectional, Radius};
-use crate::tree::{ImageFit, ImageRepeat};
+use crate::{
+    AlignmentGeometry,
+    tree::{ImageFit, ImageRepeat},
+};
 use std::sync::Arc;
 
 /// The style of a border stroke.
@@ -650,6 +653,50 @@ impl DecorationImage {
     }
 }
 
+/// Linear gradient with endpoints relative to the painted box. Unlike a
+/// renderer brush in logical pixels, an endpoint can follow text direction.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BoxLinearGradient {
+    pub begin: AlignmentGeometry,
+    pub end: AlignmentGeometry,
+    pub stops: GradientStops,
+    pub tile_mode: TileMode,
+}
+
+impl BoxLinearGradient {
+    #[must_use]
+    pub fn new(
+        begin: impl Into<AlignmentGeometry>,
+        end: impl Into<AlignmentGeometry>,
+        stops: GradientStops,
+    ) -> Self {
+        Self {
+            begin: begin.into(),
+            end: end.into(),
+            stops,
+            tile_mode: TileMode::Clamp,
+        }
+    }
+
+    /// Resolves the shader in the coordinate space of the supplied box.
+    #[must_use]
+    pub fn resolve(&self, rect: Rect, direction: TextDirection) -> LinearGradient {
+        let endpoint = |alignment: AlignmentGeometry| {
+            let alignment = alignment.resolve(direction);
+            Offset::new(
+                rect.origin.x + (alignment.x + 1.0) * 0.5 * rect.size.width,
+                rect.origin.y + (alignment.y + 1.0) * 0.5 * rect.size.height,
+            )
+        };
+        LinearGradient {
+            start: endpoint(self.begin),
+            end: endpoint(self.end),
+            stops: self.stops.clone(),
+            tile_mode: self.tile_mode,
+        }
+    }
+}
+
 /// An immutable description of how to paint a box.
 #[derive(Clone, Debug, Default, PartialEq, TypedBuilder)]
 pub struct BoxDecoration {
@@ -674,6 +721,9 @@ pub struct BoxDecoration {
     pub box_shadow: Vec<BoxShadow>,
     #[builder(default, setter(strip_option, into))]
     pub gradient: Option<Brush>,
+    /// An aligned shader, resolved against this decoration's rectangle.
+    #[builder(default, setter(transform = |gradient: BoxLinearGradient| Some(Arc::new(gradient))))]
+    pub aligned_gradient: Option<Arc<BoxLinearGradient>>,
     /// Flutter `backgroundBlendMode`: the background color or gradient
     /// blends with what is painted below it (it needs a fill).
     #[builder(default, setter(strip_option))]
@@ -761,6 +811,15 @@ impl BoxDecoration {
     #[must_use]
     pub fn gradient(mut self, gradient: impl Into<Brush>) -> Self {
         self.gradient = Some(gradient.into());
+        self.aligned_gradient = None;
+        self
+    }
+
+    /// Sets a gradient using box-relative or logical start/end alignments.
+    #[must_use]
+    pub fn aligned_gradient(mut self, gradient: BoxLinearGradient) -> Self {
+        self.gradient = None;
+        self.aligned_gradient = Some(Arc::new(gradient));
         self
     }
 
@@ -783,7 +842,11 @@ impl BoxDecoration {
         {
             return false;
         }
-        if self.background_blend_mode.is_some() && self.color.is_none() && self.gradient.is_none() {
+        if self.background_blend_mode.is_some()
+            && self.color.is_none()
+            && self.gradient.is_none()
+            && self.aligned_gradient.is_none()
+        {
             return false;
         }
         true
@@ -854,6 +917,11 @@ impl incular_core::Lerp for BoxDecoration {
                 self.gradient.clone()
             } else {
                 other.gradient.clone()
+            },
+            aligned_gradient: if t < 0.5 {
+                self.aligned_gradient.clone()
+            } else {
+                other.aligned_gradient.clone()
             },
             background_blend_mode: None,
             shape: if t < 0.5 { self.shape } else { other.shape },

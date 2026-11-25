@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-widgets`: box-relative linear gradients resolve logical
+  endpoints with text direction and reuse shaders across retained paints.
+
 - `incular-widgets`: directional decoration radii follow inherited text
   direction in both painting and hit testing.
 

@@ -140,3 +140,20 @@ flips back, then checks paint commands and actual tap delivery through
 both DecoratedBox and Container. A separate control resolves mixed
 physical and logical radii after interpolation. Fifteen focused Rust
 checks passed. The directional gradient baseline remains separate.
+
+## Aligned linear gradients
+
+Pinned `box_decoration_test.dart:134` now pairs. Incular renders the same
+1000×1000 square-corner fill, resolving RTL center-start to (1000,500)
+and bottom-end to (0,1000). Gradient stops keep their identity; direct
+resolution also checks a translated rectangle.
+
+Both authored Flutter raster probes passed: a direction-only change
+keeps the sampled gradient colors until resize or remount, but logical
+corner radii do update immediately. Incular verifies the same sequence
+through retained display-list geometry and CPU sampling of the emitted
+brush, including combined radii in DecoratedBox and Container. Changing
+the decoration value also resets the retained shader. Ten focused
+Rust tests and the top-level no-default-features check passed. This
+does not compare Incular raster pixels or relative gradients other
+than linear gradients.

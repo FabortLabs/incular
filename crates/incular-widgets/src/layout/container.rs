@@ -206,26 +206,34 @@ impl Container {
 
 impl From<Container> for Widget {
     fn from(value: Container) -> Self {
-        if [&value.decoration, &value.foreground_decoration]
-            .into_iter()
-            .flatten()
-            .any(|decoration| decoration.directional_border_radius.is_some())
+        if value
+            .decoration
+            .as_ref()
+            .is_some_and(|decoration| decoration.directional_border_radius.is_some())
         {
             return crate::Builder::new(move |context| {
                 let direction = context
                     .text_direction()
                     .unwrap_or(incular_config::TextDirection::Ltr);
-                let mut resolved = value.clone();
-                resolved.decoration = resolved
-                    .decoration
-                    .map(|decoration| decoration.resolved_for_direction(direction));
-                resolved.foreground_decoration = resolved
-                    .foreground_decoration
-                    .map(|decoration| decoration.resolved_for_direction(direction));
-                resolved.into()
+                Container::build_widget(value.clone(), Some(direction))
             })
             .into();
         }
+        Container::build_widget(value, None)
+    }
+}
+
+impl Container {
+    fn build_widget(mut value: Self, direction: Option<incular_config::TextDirection>) -> Widget {
+        // Layout and child clipping need physical radii, but a full painter
+        // keeps the original logical decoration as its cache identity.
+        let logical_paint = if let Some(direction) = direction {
+            let source = value.decoration.take().expect("directional decoration");
+            value.decoration = Some(source.clone().resolved_for_direction(direction));
+            source.aligned_gradient.is_some().then_some(source)
+        } else {
+            None
+        };
         let non_negative = |value: Option<f32>| value.map(|value| value.max(0.0));
         let constraints = value.constraints.map(|constraints| {
             constraints.tighten(non_negative(value.width), non_negative(value.height))
@@ -312,7 +320,7 @@ impl From<Container> for Widget {
         match value.decoration {
             Some(decoration) if decoration.needs_full_painter() => {
                 current = crate::painting_effects::decorated(
-                    decoration,
+                    logical_paint.unwrap_or(decoration),
                     crate::DecorationPosition::Background,
                     current,
                 );

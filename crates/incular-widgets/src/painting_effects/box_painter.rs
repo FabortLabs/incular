@@ -3,11 +3,17 @@
 //! every part of a [`BoxDecoration`] painted at the decorated box's size,
 //! behind or in front of the child.
 
-use std::{rc::Rc, sync::Arc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+    sync::Arc,
+};
 
 use incular_config::{Clip, EdgeInsets, TextDirection};
 use incular_core::{Color, Offset, Rect, Size};
-use incular_rendering::{Brush, Canvas, CornerRadii, DisplayList, FillRule, Path, RRect};
+use incular_rendering::{
+    Brush, Canvas, CornerRadii, DisplayList, FillRule, LinearGradient, Path, RRect,
+};
 
 use super::decoration::{
     Border, BorderDirectional, BorderSide, BorderStyle, BoxDecoration, BoxShadow, BoxShape,
@@ -36,6 +42,7 @@ impl BoxDecoration {
     pub(crate) fn needs_full_painter(&self) -> bool {
         !self.box_shadow.is_empty()
             || self.background_blend_mode.is_some()
+            || self.aligned_gradient.is_some()
             || self.shape == BoxShape::Circle
             || self.image.is_some()
             || self.has_elliptical_corners()
@@ -70,11 +77,39 @@ impl BoxDecoration {
     /// stroke inset. `None` without a color or gradient.
     #[must_use]
     pub fn paint_background(&self, size: Size) -> Option<DisplayList> {
-        let brush = self
-            .gradient
-            .clone()
-            .or_else(|| self.color.map(Brush::Solid))?;
+        self.paint_background_for_direction(size, TextDirection::Ltr)
+    }
+
+    /// Paints against the specified logical direction without a retained shader cache.
+    #[must_use]
+    pub fn paint_background_for_direction(
+        &self,
+        size: Size,
+        direction: TextDirection,
+    ) -> Option<DisplayList> {
         let rect = Rect::from_origin_size(Offset::ZERO, size);
+        let aligned = self
+            .aligned_gradient
+            .as_ref()
+            .map(|g| g.resolve(rect, direction));
+        if self.directional_border_radius.is_some() {
+            return self
+                .clone()
+                .resolved_for_direction(direction)
+                .paint_background_with_gradient(rect, aligned);
+        }
+        self.paint_background_with_gradient(rect, aligned)
+    }
+
+    fn paint_background_with_gradient(
+        &self,
+        rect: Rect,
+        aligned: Option<LinearGradient>,
+    ) -> Option<DisplayList> {
+        let brush = aligned
+            .map(Brush::LinearGradient)
+            .or_else(|| self.gradient.clone())
+            .or_else(|| self.color.map(Brush::Solid))?;
         let adjusted = match self.border {
             Some(border) => {
                 let adjusted_side = |side: BorderSide| {
@@ -326,6 +361,47 @@ pub(crate) fn decoration_image_widget(image: &DecorationImage) -> Widget {
     painted
 }
 
+#[derive(Default)]
+struct DecorationGradientCache(RefCell<Option<CachedGradient>>);
+
+struct CachedGradient {
+    source: Rc<BoxDecoration>,
+    rect: Rect,
+    gradient: LinearGradient,
+}
+
+impl crate::tree::RetainedState for DecorationGradientCache {
+    fn rebind_revision(&self, _revision: Rc<Cell<u64>>) {}
+}
+
+impl DecorationGradientCache {
+    fn resolve(
+        &self,
+        decoration: &Rc<BoxDecoration>,
+        rect: Rect,
+        direction: TextDirection,
+    ) -> Option<LinearGradient> {
+        let aligned = decoration.aligned_gradient.as_ref()?;
+        let mut cached = self.0.borrow_mut();
+        // Flutter's retained box painter reuses a shader at the same rect
+        // even if only the ambient direction changed. Direction resolves
+        // again on a new rect or after the decoration is replaced.
+        if let Some(cached) = cached.as_ref()
+            && cached.rect == rect
+            && (Rc::ptr_eq(&cached.source, decoration) || cached.source == *decoration)
+        {
+            return Some(cached.gradient.clone());
+        }
+        let gradient = aligned.resolve(rect, direction);
+        *cached = Some(CachedGradient {
+            source: decoration.clone(),
+            rect,
+            gradient: gradient.clone(),
+        });
+        Some(gradient)
+    }
+}
+
 /// Flutter `DecoratedBox` with a [`BoxDecoration`] and a
 /// [`DecorationPosition`]: the decoration paints at the child's size, its
 /// shadows blurred by `BoxShadow.blurSigma`.
@@ -339,22 +415,40 @@ pub(crate) fn decorated(
     position: DecorationPosition,
     child: Widget,
 ) -> Widget {
+    let decoration = Rc::new(decoration);
+    decorated_with_source(decoration.clone(), decoration, position, child)
+}
+
+fn decorated_with_source(
+    decoration: Rc<BoxDecoration>,
+    source: Rc<BoxDecoration>,
+    position: DecorationPosition,
+    child: Widget,
+) -> Widget {
     if decoration.directional_border_radius.is_some() {
         return crate::Builder::new(move |context| {
             let direction = context.text_direction().unwrap_or(TextDirection::Ltr);
-            decorated(
-                decoration.clone().resolved_for_direction(direction),
+            decorated_with_source(
+                Rc::new(
+                    decoration
+                        .as_ref()
+                        .clone()
+                        .resolved_for_direction(direction),
+                ),
+                source.clone(),
                 position,
                 child.clone(),
             )
         })
         .into();
     }
-    let decoration = Rc::new(decoration);
     let hit_decoration = decoration.clone();
     // Filling the stack, which takes the child's size, the builder sees
     // tight constraints of exactly that size.
-    let painted = LayoutBuilder::new(move |context, constraints| {
+    let has_aligned_gradient = decoration.aligned_gradient.is_some();
+    let build_paint = move |cache: Option<&DecorationGradientCache>,
+                            context: &crate::BuildContext<'_>,
+                            constraints: incular_config::Constraints| {
         let size = constraints.biggest();
         // Shadows plus at most three layers pushed below: background, image, border.
         let mut layers = Vec::with_capacity(decoration.box_shadow.len() + 3);
@@ -364,7 +458,12 @@ pub(crate) fn decorated(
                 .iter()
                 .map(|shadow| styled_shadow(&decoration, size, shadow)),
         );
-        if let Some(background) = decoration.paint_background(size) {
+        let rect = Rect::from_origin_size(Offset::ZERO, size);
+        let aligned = cache.and_then(|cache| {
+            let direction = context.text_direction().unwrap_or(TextDirection::Ltr);
+            cache.resolve(&source, rect, direction)
+        });
+        if let Some(background) = decoration.paint_background_with_gradient(rect, aligned) {
             let background: Widget = CustomPaint::new(size, background).into();
             // Flutter `_getBackgroundPaint`: the fill alone takes the
             // background blend mode, against what is painted below it.
@@ -408,7 +507,17 @@ pub(crate) fn decorated(
         // Shadows extend past the box, and Flutter's decoration painter
         // never clips them: no stack clip here or around the child.
         Stack::new(layers).clip_behavior(Clip::None).into()
-    });
+    };
+    let painted: Widget = if has_aligned_gradient {
+        Widget::retained_builder(
+            |_| DecorationGradientCache::default(),
+            move |cache, context, constraints| build_paint(Some(cache), context, constraints),
+            true,
+        )
+    } else {
+        LayoutBuilder::new(move |context, constraints| build_paint(None, context, constraints))
+            .into()
+    };
     // The decoration never takes a hit from the child it decorates.
     let layer: Widget = Positioned::fill(IgnorePointer::new(painted)).into();
     let children = match position {
