@@ -24,3 +24,15 @@ Incular `crates/incular-widgets/src/scrolling/layout.rs:78–97`,
 The offset difference is consistent with anchoring corrections during
 estimate refinement (48→200 on six rows; +912); this is a source
 hypothesis, not a verified fix or complete explanation.
+
+## Literal initial offset repaired
+
+The first retained layout has no previously painted row to anchor.
+It now preserves the controller's literal initial offset while
+refining estimated sizes rather than treating estimates as painted
+positions. The paired Rust setup now establishes offset 300 on its
+first 200px viewport frame, instead of drifting to 1212. Later
+retained anchor corrections are not disabled. The literal offset
+check, three sliver correction tests, 39 scrolling tests, and eight
+centered viewport tests passed. The separate accessibility-tree
+assertions remain open at this checkpoint.

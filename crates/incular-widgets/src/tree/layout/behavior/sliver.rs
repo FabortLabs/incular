@@ -169,6 +169,13 @@ impl WidgetTree {
                 // Axis context publishes with the geometry below — never
                 // ahead of the claim — so a rejected viewport leaves both
                 // untouched.
+                // First layout has no previously painted row to preserve.
+                // Changing estimated extents must not move a caller's literal
+                // initial pixel position to keep a provisional row in place.
+                let has_prior_layout = self
+                    .render_live(id, "sliver viewport render must remain live")
+                    .constraints
+                    .is_some();
                 let mut size = sliver_viewport_size(config.axis, constraints, config.shrink_wrap);
                 let mut viewport_extent = scroll_viewport_extent(config.axis, size);
                 let cross_extent = config.axis.cross_extent(size);
@@ -335,7 +342,9 @@ impl WidgetTree {
                 for _ in 0..3 {
                     let offset_before = config.controller.offset();
                     let corrections_before = explicit_corrections.get();
-                    let anchor_before = sliver_anchor(&sliver_layout, offset_before);
+                    let anchor_before = has_prior_layout
+                        .then(|| sliver_anchor(&sliver_layout, offset_before))
+                        .flatten();
                     let (pass_changed, mapping_changed) =
                         self.measure_sliver_children(id, config, &sliver_layout, true)?;
                     structural |= mapping_changed;
