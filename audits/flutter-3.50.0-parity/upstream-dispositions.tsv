@@ -208,7 +208,7 @@ packages/flutter/test/rendering/flex_test.dart	744	MainAxisSize.min inside tight
 packages/flutter/test/foundation/change_notifier_test.dart	83	ChangeNotifier	partial-match	upstream-opacity-hover-flex-notifier-futures.md#observer-failure-isolation
 packages/flutter/test/foundation/change_notifier_test.dart	168	ChangeNotifier with mutating listener	paired-match	upstream-opacity-hover-flex-notifier-futures.md
 packages/flutter/test/foundation/change_notifier_test.dart	457	hasListeners	paired-match	upstream-opacity-hover-flex-notifier-futures.md
-packages/flutter/test/animation/futures_test.dart	122	awaiting animation controllers and failing	partial-mismatch	upstream-opacity-hover-flex-notifier-futures.md
+packages/flutter/test/animation/futures_test.dart	122	awaiting animation controllers and failing	partial-match	upstream-opacity-hover-flex-notifier-futures.md#awaited-controller-chains-under-uneven-frame-times
 packages/flutter/test/animation/futures_test.dart	153	creating orCancel future later	paired-match	upstream-opacity-hover-flex-notifier-futures.md
 packages/flutter/test/animation/futures_test.dart	167	creating orCancel future later	paired-match	upstream-opacity-hover-flex-notifier-futures.md
 packages/flutter/test/widgets/semantics_test.dart	100	Semantics tooltip	partial-match	upstream-semantic-headings-clamping-and-dilation.md
@@ -1136,3 +1136,6 @@ packages/flutter/test/widgets/focus_manager_test.dart	1507	Mouse events change i
 packages/flutter/test/widgets/focus_manager_test.dart	1520	Keyboard events change initial focus highlight mode.	paired-match	upstream-focus-widget-semantics.md#initial-and-input-driven-focus-highlights
 packages/flutter/test/widgets/focus_manager_test.dart	1528	Soft keyboard key events do not change focus highlight mode on Android.	reference-ran-incular-open	upstream-focus-widget-semantics.md#initial-and-input-driven-focus-highlights
 packages/flutter/test/widgets/focus_manager_test.dart	1562	Events change focus highlight mode.	paired-match	upstream-focus-widget-semantics.md#initial-and-input-driven-focus-highlights
+packages/flutter/test/animation/futures_test.dart	12	awaiting animation controllers - using direct future	paired-match	upstream-opacity-hover-flex-notifier-futures.md#awaited-controller-chains-under-uneven-frame-times
+packages/flutter/test/animation/futures_test.dart	67	awaiting animation controllers - using orCancel	paired-match	upstream-opacity-hover-flex-notifier-futures.md#awaited-controller-chains-under-uneven-frame-times
+packages/flutter/test/animation/futures_test.dart	185	TickerFuture is a Future	partial-match	upstream-opacity-hover-flex-notifier-futures.md#awaited-controller-chains-under-uneven-frame-times

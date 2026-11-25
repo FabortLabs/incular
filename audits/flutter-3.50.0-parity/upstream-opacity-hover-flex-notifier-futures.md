@@ -72,3 +72,22 @@ reporter rather than unwinding Rust application code.
 
 The exact :83, :168, and :457 originals and 21 focused Rust checks
 passed. Panic-abort builds cannot recover from an observer panic.
+
+## Awaited controller chains under uneven frame times
+
+Pinned `animation/futures_test.dart:12` and `:67` now have full
+Runtime comparisons. Three real controllers run for 100, 600 and
+300 milliseconds. Direct awaits and cancel-aware awaits each produce
+the exact sequence at all ten original frame timestamps, including
+duplicate zero-time frames and the missed completion deadlines.
+The local continuation polls only after its ticker wakes it, still
+inside that frame's timestamp. No sleeping or time tolerance is used.
+
+:122 now records a partial match after the cancellation recheck,
+keeping the explicit disposal versus last-owner release distinction.
+:185 is partial: a completed ticker drives a normal generic Rust Future
+continuation, but the Dart-only asStream, timeout, and promise methods
+aren't reproduced. All four selected originals and the seven focused
+Rust ticker-future tests passed. The adjacent run-semantics target still
+exposes the separately documented f32 precision mismatch; it is not a
+failure of these future comparisons.

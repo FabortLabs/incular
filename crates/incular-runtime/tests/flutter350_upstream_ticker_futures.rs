@@ -110,3 +110,117 @@ fn only_the_last_handle_cancels_even_without_a_scheduler_ticker() {
     drop(other_owner);
     assert_eq!(cancel.poll(&mut context), Poll::Ready(Err(TickerCanceled)));
 }
+
+#[derive(Default)]
+struct WakeFlag(std::sync::atomic::AtomicBool);
+
+impl std::task::Wake for WakeFlag {
+    fn wake(self: std::sync::Arc<Self>) {
+        self.wake_by_ref();
+    }
+
+    fn wake_by_ref(self: &std::sync::Arc<Self>) {
+        self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+fn await_three_controllers_or_cancel(use_or_cancel: bool) {
+    use std::{
+        cell::Cell,
+        rc::Rc,
+        sync::{Arc, atomic::Ordering},
+    };
+
+    let mut frame = frame_driver();
+    let controllers = [100, 600, 300]
+        .map(|millis| AnimationController::new(Duration::from_millis(millis)).with_vsync());
+    let log = Rc::new(RefCell::new(vec!["start"]));
+    let continuation = Rc::new(RefCell::new(Box::pin({
+        let log = log.clone();
+        async move {
+            for (label, controller) in ["a", "b", "c"].into_iter().zip(controllers.iter()) {
+                log.borrow_mut().push(label);
+                let run = controller.forward_on_next_tick();
+                if use_or_cancel {
+                    run.or_cancel().await.unwrap();
+                } else {
+                    run.await;
+                }
+            }
+            log.borrow_mut().extend(["d", "end"]);
+        }
+    })));
+    let wake = Arc::new(WakeFlag::default());
+    let waker = Waker::from(wake.clone());
+    let ready = Rc::new(Cell::new(false));
+    assert_eq!(
+        continuation
+            .borrow_mut()
+            .as_mut()
+            .poll(&mut Context::from_waker(&waker)),
+        Poll::Pending,
+    );
+    assert_eq!(log.borrow().as_slice(), ["start", "a"]);
+
+    let steps: &[(u64, &[&str])] = &[
+        (0, &["start", "a"]),
+        (0, &["start", "a"]),
+        (50, &["start", "a"]),
+        (150, &["start", "a", "b"]),
+        (200, &["start", "a", "b"]),
+        (600, &["start", "a", "b"]),
+        (799, &["start", "a", "b", "c"]),
+        (850, &["start", "a", "b", "c"]),
+        (1200, &["start", "a", "b", "c", "d", "end"]),
+        (1600, &["start", "a", "b", "c", "d", "end"]),
+    ];
+    for &(millis, expected) in steps {
+        // Poll the UI-local await only when woken by a completion, in this
+        // frame while its timestamp is still active. No wall-clock sleeps.
+        incular_animation::scheduler::add_post_frame_callback({
+            let continuation = continuation.clone();
+            let wake = wake.clone();
+            let waker = waker.clone();
+            let ready = ready.clone();
+            move |_| {
+                if !ready.get() && wake.0.swap(false, Ordering::SeqCst) {
+                    let poll = continuation
+                        .borrow_mut()
+                        .as_mut()
+                        .poll(&mut Context::from_waker(&waker));
+                    ready.set(poll.is_ready());
+                }
+            }
+        });
+        frame(millis);
+        assert_eq!(log.borrow().as_slice(), expected, "after t={millis}");
+    }
+    assert!(ready.get());
+}
+
+#[test]
+fn awaiting_three_direct_futures_preserves_frame_deadlines_and_log_order() {
+    await_three_controllers_or_cancel(false);
+}
+
+#[test]
+fn awaiting_three_or_cancel_futures_preserves_frame_deadlines_and_log_order() {
+    await_three_controllers_or_cancel(true);
+}
+
+#[test]
+fn a_completed_ticker_future_can_drive_a_generic_await_continuation() {
+    async fn accepts_any_unit_future(future: impl Future<Output = ()>) -> bool {
+        future.await;
+        true
+    }
+
+    let mut frame = frame_driver();
+    let animation = controller();
+    let future = animation.forward_on_next_tick();
+    frame(0);
+    frame(200);
+    let continuation = accepts_any_unit_future(future);
+    let mut context = Context::from_waker(Waker::noop());
+    assert_eq!(pin!(continuation).poll(&mut context), Poll::Ready(true));
+}
