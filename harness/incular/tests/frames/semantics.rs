@@ -160,7 +160,11 @@ fn enabled_default(h: &mut FrameHarness) {
         .iter()
         .find(|(_, node)| node.label.as_deref() == Some("Action"))
     {
-        enabled_state.set(node.state.enabled as u8 as f64);
+        enabled_state.set(match node.state.enabled_state() {
+            Some(false) => 0.,
+            Some(true) => 1.,
+            None => 2.,
+        });
         has_tap.set(
             node.actions
                 .iter()

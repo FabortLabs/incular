@@ -309,7 +309,7 @@ impl Semantics {
 
     #[must_use]
     pub fn enabled(mut self, enabled: bool) -> Self {
-        self.state.enabled = enabled;
+        self.state.set_enabled_state(Some(enabled));
         self
     }
 

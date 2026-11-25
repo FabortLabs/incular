@@ -35,6 +35,7 @@ struct MergedSemanticSummary {
     focus_block: AccessibilityFocusBlockType,
     custom_actions: Vec<CustomSemanticsActionId>,
     has_custom_callback: bool,
+    enabled: Option<bool>,
 }
 
 impl MergedSemanticSummary {
@@ -983,6 +984,7 @@ impl WidgetTree {
                 None,
                 SemanticState {
                     enabled: spec.enabled,
+                    has_enabled_state: true,
                     focused: self.button_state_live(render_id).focused,
                     focusable: spec.enabled || spec.focusable_when_disabled,
                     ..SemanticState::default()
@@ -1169,7 +1171,9 @@ impl WidgetTree {
                 role = Some(explicit.role);
                 default_label = explicit.label.clone().or(default_label);
                 value = explicit.value.clone().or(value);
+                let enabled = explicit.state.enabled_state().or(state.enabled_state());
                 state = explicit.state.clone();
+                state.set_enabled_state(enabled);
                 actions = actions_with_room(&explicit.actions);
             }
         }
@@ -1189,6 +1193,7 @@ impl WidgetTree {
         });
         // Flutter absorption preserves the parent's level if present.
         // Otherwise the first descendant with a heading supplies it.
+        state.set_enabled_state(merge_enabled_state(state.enabled_state(), merged.enabled));
         state.heading_level = state.heading_level.or(merged.heading);
         state.accessibility_focus_block_type = own_focus_block.merge(merged.focus_block);
         if state.heading_level.is_some() && role == Some(SemanticRole::GenericContainer) {
@@ -1715,6 +1720,18 @@ impl WidgetTree {
         if !callbacks.custom.is_empty() && !self.pointer_actions_blocked(element) {
             merged.add_custom_actions(callbacks);
         }
+        let enabled = entry
+            .widget
+            .semantic_properties()
+            .explicit
+            .as_ref()
+            .and_then(|explicit| explicit.state.enabled_state())
+            .or_else(|| match entry.widget.kind() {
+                WidgetKind::Button(spec) => Some(spec.enabled),
+                WidgetKind::TextField(spec) if !spec.enabled => Some(false),
+                _ => None,
+            });
+        merged.enabled = merge_enabled_state(merged.enabled, enabled);
         merged.focus_block = merged.focus_block.merge(explicit_focus_block(entry));
         if merged.heading.is_none() {
             merged.heading = entry
@@ -2259,17 +2276,28 @@ impl WidgetTree {
     }
 }
 
+fn merge_enabled_state(first: Option<bool>, second: Option<bool>) -> Option<bool> {
+    // Flutter SemanticsFlags.merge: true > false > unspecified.
+    match (first, second) {
+        (Some(true), _) | (_, Some(true)) => Some(true),
+        (Some(false), _) | (_, Some(false)) => Some(false),
+        (None, None) => None,
+    }
+}
+
 /// Overlays the fields `overlay` sets (differs from the default) onto `base`.
 /// Used when a role-less Semantics wrapper annotates a widget with its own role.
 fn overlay_semantic_state(base: &mut SemanticState, overlay: &SemanticState) {
     let default = SemanticState::default();
+    if let Some(enabled) = overlay.enabled_state() {
+        base.set_enabled_state(Some(enabled));
+    }
     macro_rules! take {
         ($($field:ident),* $(,)?) => {
             $(if overlay.$field != default.$field { base.$field = overlay.$field.clone(); })*
         };
     }
     take!(
-        enabled,
         focused,
         focusable,
         selected,

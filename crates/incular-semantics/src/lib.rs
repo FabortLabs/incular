@@ -288,6 +288,9 @@ pub struct SemanticState {
     /// which assistive technology reads as enabled, so the default here is
     /// `true` and only an explicit `false` disables an interactive node.
     pub enabled: bool,
+    /// Whether the node explicitly reports an enabled flag. Consumers that
+    /// need the Flutter tri-state should use [Self::enabled_state].
+    pub has_enabled_state: bool,
     pub focused: bool,
     pub focusable: bool,
     /// Effective Flutter accessibility focus scope for this semantic node.
@@ -364,10 +367,34 @@ pub struct SemanticState {
     pub custom_actions: Box<[CustomSemanticsActionId]>,
 }
 
+impl SemanticState {
+    /// Flutter's isEnabled flag: omitted, explicitly enabled or disabled.
+    #[must_use]
+    pub const fn enabled_state(&self) -> Option<bool> {
+        // Writing the older public effective value to false is always
+        // an explicit disable, even without setting the presence flag.
+        if self.has_enabled_state || !self.enabled {
+            Some(self.enabled)
+        } else {
+            None
+        }
+    }
+
+    /// Updates both the declared flag and the effective input state.
+    pub const fn set_enabled_state(&mut self, value: Option<bool>) {
+        self.has_enabled_state = value.is_some();
+        self.enabled = match value {
+            Some(enabled) => enabled,
+            None => true,
+        };
+    }
+}
+
 impl Default for SemanticState {
     fn default() -> Self {
         Self {
             enabled: true,
+            has_enabled_state: false,
             focused: false,
             focusable: false,
             accessibility_focus_block_type: AccessibilityFocusBlockType::None,

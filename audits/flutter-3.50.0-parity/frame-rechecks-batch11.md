@@ -21,3 +21,13 @@ The tap action and other captured fields matched. Flutter's
 a Boolean. This is a semantics representation difference, not proof
 of an announcement or focus difference on a native screen reader.
 Scratch batch: `20261124-153110-911`; [focused runner](run-focused-frames.ps1).
+
+## Linux follow-up: enabled tri-state
+
+The Flutter pin distinguishes an omitted flag from explicit true or false
+and merges them as true > false > omitted. Incular keeps the effective default
+enabled for input and adapters while retaining the declared flag separately.
+The Flutter probe and native runtime tests cover retained flag resets,
+ordinary tap availability, and forced descendant merging. The strict
+`semantics__enabled_default` and `semantics__action_dispatch` fixtures now
+each match both frames. This verifies tree extraction, not screen-reader output.
