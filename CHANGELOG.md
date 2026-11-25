@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-core`: added Flutter-style signed duration interpolation in
+  microseconds, including negative durations and extrapolation.
+
 - `incular-core`: added `CachingIterable` for lazy, repeatable iteration over
   a single source, with separately cached derived sequences.
 

@@ -53,3 +53,13 @@ expansion and signed indexed lookups. Derived sequences share cached source
 values without rerunning their own transforms. Separate cursor controls verify
 that iterators may interleave and that an exhausted source is not polled again.
 Eleven focused Rust tests passed across the iterable and observer lists.
+
+## Signed duration interpolation
+
+The six `foundation/basic_types_test.dart` registrations pair positive
+and negative durations, zero crossing, exact ordinary endpoints, and
+extrapolation to ±6 s. Incular's separate signed-microsecond helper leaves
+existing unsigned clock durations unchanged. An authored native Flutter
+probe also matches half-microsecond ties, finite saturation, the signed
+subtraction wrap at integer limits, and rejection of non-finite results.
+Nine focused Rust tests, six exact originals and the authored probe passed.

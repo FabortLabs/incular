@@ -51,3 +51,7 @@ when the interval might have unordered or NaN bounds.
 `CachingIterable` consumes its source lazily and caches values for independent
 cursors. Mapping, filtering, expansion, take and skip return derived caches
 that share the source. Rust cursors clone values as they yield them.
+
+`time::lerp_duration_micros` interpolates signed duration values in
+microseconds and rounds the final result. It does not change the unsigned
+`Duration` type used by the runtime clocks.

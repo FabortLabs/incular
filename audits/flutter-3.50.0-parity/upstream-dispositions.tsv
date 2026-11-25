@@ -818,3 +818,9 @@ packages/flutter/test/foundation/caching_iterable_test.dart	53	The Caching Itera
 packages/flutter/test/foundation/caching_iterable_test.dart	76	The Caching Iterable: take and skip	paired-match	upstream-foundation-scroll-comparisons.md#lazy-caching-iterable
 packages/flutter/test/foundation/caching_iterable_test.dart	94	The Caching Iterable: expand	paired-match	upstream-foundation-scroll-comparisons.md#lazy-caching-iterable
 packages/flutter/test/foundation/caching_iterable_test.dart	111	The Caching Iterable: elementAt correctness	paired-match	upstream-foundation-scroll-comparisons.md#lazy-caching-iterable
+packages/flutter/test/foundation/basic_types_test.dart	10	linearly interpolates between positive Durations	paired-match	upstream-foundation-scroll-comparisons.md#signed-duration-interpolation
+packages/flutter/test/foundation/basic_types_test.dart	17	linearly interpolates between negative Durations	paired-match	upstream-foundation-scroll-comparisons.md#signed-duration-interpolation
+packages/flutter/test/foundation/basic_types_test.dart	24	linearly interpolates between positive and negative Durations	paired-match	upstream-foundation-scroll-comparisons.md#signed-duration-interpolation
+packages/flutter/test/foundation/basic_types_test.dart	31	starts at first Duration	paired-match	upstream-foundation-scroll-comparisons.md#signed-duration-interpolation
+packages/flutter/test/foundation/basic_types_test.dart	38	ends at second Duration	paired-match	upstream-foundation-scroll-comparisons.md#signed-duration-interpolation
+packages/flutter/test/foundation/basic_types_test.dart	45	time values beyond 1.0 have a multiplier effect	paired-match	upstream-foundation-scroll-comparisons.md#signed-duration-interpolation
