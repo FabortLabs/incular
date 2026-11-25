@@ -3,7 +3,8 @@ set -euo pipefail
 
 usage() {
   printf '%s\n' 'Usage: bash run-reference-linux.sh probe FILE_test.dart' \
-    '       bash run-reference-linux.sh upstream LIBRARY/FILE_test.dart "Exact full test name" [...]' >&2
+    '       bash run-reference-linux.sh upstream LIBRARY/FILE_test.dart "Exact full test name" [...]' \
+    '       bash run-reference-linux.sh tooling WIDGET_PREVIEW_FILE_test.dart "Exact full test name" [...]' >&2
   exit 2
 }
 
@@ -26,10 +27,16 @@ case "$mode" in
     [[ "$test_file" =~ ^[a-z0-9_]+_test\.dart$ ]] || usage
     fixture="$audit/reference-probes/test/$test_file"
     ;;
-  upstream)
+  upstream|tooling)
     (( $# >= 1 && $# <= 5 )) || usage
-    [[ "$test_file" =~ ^(animation|foundation|gestures|painting|physics|rendering|scheduler|semantics|services|widget_previews|widgets)/([a-z0-9_]+/)*[a-z0-9_]+_test\.dart$ ]] || usage
-    fixture="$flutter_root/packages/flutter/test/$test_file"
+    if [[ "$mode" == tooling ]]; then
+      [[ "$test_file" =~ ^([a-z0-9_]+/)*[a-z0-9_]+_test\.dart$ ]] || usage
+      tool_root="$flutter_root/packages/flutter_tools"
+      fixture="$tool_root/test/commands.shard/hermetic/widget_preview/$test_file"
+    else
+      [[ "$test_file" =~ ^(animation|foundation|gestures|painting|physics|rendering|scheduler|semantics|services|widget_previews|widgets)/([a-z0-9_]+/)*[a-z0-9_]+_test\.dart$ ]] || usage
+      fixture="$flutter_root/packages/flutter/test/$test_file"
+    fi
     pattern=$(python3 - "$@" <<'PY'
 import re
 import sys
@@ -55,7 +62,7 @@ if [[ "$mode" == probe ]]; then
   cp -- "$audit/reference-probes/pubspec.yaml" "$scratch/pubspec.yaml"
   cp -- "$fixture" "$scratch/test/$test_file"
   fixture="test/$test_file"
-else
+elif [[ "$mode" == upstream ]]; then
   python3 - "$flutter_root/packages/flutter_goldens" > "$scratch/pubspec.yaml" <<'PY'
 import json
 import sys
@@ -83,17 +90,48 @@ if [[ ${INCULAR_BOOTSTRAP_PUB:-0} == 1 ]]; then
   pub_args=()
 fi
 cd "$scratch"
-if ! "$flutter" pub get "${pub_args[@]}" > pub.log 2>&1; then
-  cat pub.log >&2
-  exit 1
-fi
+if [[ "$mode" == tooling ]]; then
+  package_config="$tool_root/.dart_tool/package_config.json"
+  if [[ ! -f "$package_config" ]]; then
+    printf '%s\n' 'Initialize the pinned flutter_tools package and its Dart test dependencies first.' >&2
+    exit 1
+  fi
+  runner=$(python3 - "$package_config" <<'CONFIG'
+import json
+from pathlib import Path
+import sys
+from urllib.parse import unquote, urlparse
 
-test_args=(--no-pub --concurrency=1 --reporter expanded)
-if [[ "$mode" == upstream ]]; then
-  test_args+=(--name "$pattern")
+config = Path(sys.argv[1])
+for package in json.loads(config.read_text(encoding="utf-8"))["packages"]:
+    if package["name"] == "test":
+        uri = urlparse(package["rootUri"])
+        path = Path(unquote(uri.path))
+        print((path if uri.scheme else config.parent / path) / "bin/test.dart")
+        break
+else:
+    raise SystemExit("Missing test package in the pinned flutter_tools package config")
+CONFIG
+  )
+  (
+    cd "$tool_root"
+    export FLUTTER_ROOT="$flutter_root"
+    "$flutter_root/bin/cache/dart-sdk/bin/dart" --packages="$package_config" "$runner" \
+      --concurrency=1 --reporter expanded --name "$pattern" "$fixture"
+  ) 2>&1 | tee result.log
+else
+  if ! "$flutter" pub get "${pub_args[@]}" > pub.log 2>&1; then
+    cat pub.log >&2
+    exit 1
+  fi
+
+  test_args=(--no-pub --concurrency=1 --reporter expanded)
+  if [[ "$mode" == upstream ]]; then
+    test_args+=(--name "$pattern")
+  fi
+  "$flutter" test "${test_args[@]}" "$fixture" 2>&1 | tee result.log
 fi
-"$flutter" test "${test_args[@]}" "$fixture" 2>&1 | tee result.log
-if [[ "$mode" == upstream ]]; then
+if [[ "$mode" != probe ]]; then
   python3 - "$@" <<'PY'
 from collections import Counter
 from pathlib import Path

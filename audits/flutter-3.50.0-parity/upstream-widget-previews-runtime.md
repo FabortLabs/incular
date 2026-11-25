@@ -14,3 +14,22 @@ This is only runtime composition. Locale/delegate integration, annotation
 discovery, generator, scaffold, host/rendering, file watching/reload,
 and DTD/IDE integration remain outside this slice. These authored cases
 do not count as any of the 163 upstream tooling registrations.
+
+## Preview scaffold manifest
+
+Three exact hermetic tool registrations passed in the pinned Flutter SDK:
+valid manifest fields, initial/stale SDK scaffold regeneration, and root
+pubspec changes. Flutter's manifest records manifest and Dart SDK versions
+and project pubspec hashes. Incular does not yet generate a preview
+scaffold or equivalent cache manifest, so the three results are reference
+only and are excluded from the paired count.
+
+To repeat against the SDK's initialized `flutter_tools` package:
+
+```bash
+bash audits/flutter-3.50.0-parity/run-reference-linux.sh \
+  tooling preview_manifest/preview_manifest_test.dart \
+  'PreviewManifest generates a valid manifest' \
+  'PreviewManifest identifies widget preview scaffold project needs to be generated' \
+  'PreviewManifest identifies root project pubspec has changed'
+```
