@@ -206,7 +206,7 @@ impl BoxDecoration {
     fn fill_box(&self, canvas: &mut Canvas, rect: Rect, brush: Brush) {
         match self.rounded_box(rect) {
             Some(rrect) => canvas.rrect(rrect, brush),
-            None => canvas.fill_path(Arc::new(self.box_path(rect)), brush, FillRule::NonZero),
+            None => canvas.fill_path(Arc::new(self.clip_path(rect)), brush, FillRule::NonZero),
         }
     }
 
@@ -255,7 +255,10 @@ impl BoxDecoration {
         }
     }
 
-    fn box_path(&self, rect: Rect) -> Path {
+    /// Returns the outline of the decoration in `rect`. The border and
+    /// shadows do not change the clip; a circle uses the shortest side.
+    #[must_use]
+    pub fn clip_path(&self, rect: Rect) -> Path {
         match self.shape {
             BoxShape::Circle => circle_path(center(rect), shortest_side(rect) / 2.0),
             BoxShape::Rectangle => match self.border_radius {
@@ -265,12 +268,47 @@ impl BoxDecoration {
         }
     }
 
+    /// Tests the decoration's shape at a position local to the box. This
+    /// tests geometry only, regardless of color, borders, or shadows.
+    #[must_use]
+    pub fn hit_test(&self, size: Size, position: Offset) -> bool {
+        let bounds = Rect::from_origin_size(Offset::ZERO, size);
+        let (x, y) = (position.x, position.y);
+        if !((0.0..size.width).contains(&x) && (0.0..size.height).contains(&y)) {
+            return false;
+        }
+        match self.shape {
+            BoxShape::Circle => {
+                let delta = position - center(bounds);
+                let radius = shortest_side(bounds) / 2.0;
+                delta.x.mul_add(delta.x, delta.y * delta.y) <= radius * radius
+            }
+            BoxShape::Rectangle => self.border_radius.is_none_or(|radius| {
+                let [tl, tr, br, bl] = normalized_radii(size, clockwise_radii(radius));
+                let (right, bottom) = (size.width - x, size.height - y);
+                [
+                    (x, y, tl),
+                    (right, y, tr),
+                    (right, bottom, br),
+                    (x, bottom, bl),
+                ]
+                .into_iter()
+                .find(|&(x, y, (rx, ry))| x < rx && y < ry)
+                .is_none_or(|(x, y, (rx, ry))| {
+                    let dx = (rx - x) / rx;
+                    let dy = (ry - y) / ry;
+                    dx.mul_add(dx, dy * dy) <= 1.0
+                })
+            }),
+        }
+    }
+
     /// `_paintBackgroundImage`'s clip: the circle, or the rounded rectangle
     /// when there is a radius.
     fn image_clip(&self, rect: Rect) -> Option<Path> {
         match self.shape {
-            BoxShape::Circle => Some(circle_path(center(rect), shortest_side(rect) / 2.0)),
-            BoxShape::Rectangle => self.border_radius.map(|radius| rrect_path(rect, radius)),
+            BoxShape::Circle => Some(self.clip_path(rect)),
+            BoxShape::Rectangle => self.border_radius.map(|_| self.clip_path(rect)),
         }
     }
 }
@@ -514,15 +552,16 @@ fn deflate_sides(rect: Rect, insets: EdgeInsets) -> Rect {
 
 /// `BorderRadius.toRRect(rect)` as a path with elliptical corners.
 fn rrect_path(rect: Rect, radius: BorderRadius) -> Path {
-    elliptical_rrect_path(
-        rect,
-        [
-            radius.top_left,
-            radius.top_right,
-            radius.bottom_right,
-            radius.bottom_left,
-        ],
-    )
+    elliptical_rrect_path(rect, clockwise_radii(radius))
+}
+
+fn clockwise_radii(radius: BorderRadius) -> [Radius; 4] {
+    [
+        radius.top_left,
+        radius.top_right,
+        radius.bottom_right,
+        radius.bottom_left,
+    ]
 }
 
 /// Flutter `EdgeInsets.inflateRRect`: the rectangle grows by `insets` and
@@ -552,13 +591,9 @@ fn deflate_rrect(rect: Rect, radius: BorderRadius, insets: EdgeInsets) -> Path {
     )
 }
 
-/// A closed rounded rectangle with elliptical corners (top-left first,
-/// clockwise), each corner a quarter conic. Radii that overflow a side are
-/// scaled down together, as Skia's `SkRRect` does.
-fn elliptical_rrect_path(rect: Rect, radii: [Radius; 4]) -> Path {
-    let (left, top) = (rect.origin.x, rect.origin.y);
-    let (width, height) = (rect.size.width.max(0.0), rect.size.height.max(0.0));
-    let (right, bottom) = (left + width, top + height);
+/// Scale all corners together until adjacent radii fit on every side.
+fn normalized_radii(size: Size, radii: [Radius; 4]) -> [(f32, f32); 4] {
+    let (width, height) = (size.width.max(0.0), size.height.max(0.0));
     let [tl, tr, br, bl] = radii.map(|r| (r.x.max(0.0), r.y.max(0.0)));
     let mut scale: f32 = 1.0;
     for (sum, limit) in [
@@ -571,7 +606,17 @@ fn elliptical_rrect_path(rect: Rect, radii: [Radius; 4]) -> Path {
             scale = scale.min(limit / sum);
         }
     }
-    let [tl, tr, br, bl] = [tl, tr, br, bl].map(|(x, y)| (x * scale, y * scale));
+    [tl, tr, br, bl].map(|(x, y)| (x * scale, y * scale))
+}
+
+/// A closed rounded rectangle with elliptical corners (top-left first,
+/// clockwise), each corner a quarter conic. Radii that overflow a side are
+/// scaled down together, as Skia's `SkRRect` does.
+fn elliptical_rrect_path(rect: Rect, radii: [Radius; 4]) -> Path {
+    let (left, top) = (rect.origin.x, rect.origin.y);
+    let (width, height) = (rect.size.width.max(0.0), rect.size.height.max(0.0));
+    let (right, bottom) = (left + width, top + height);
+    let [tl, tr, br, bl] = normalized_radii(rect.size, radii);
     let weight = std::f32::consts::FRAC_1_SQRT_2;
     let mut builder = Path::builder();
     builder.move_to(Offset::new(left + tl.0, top));

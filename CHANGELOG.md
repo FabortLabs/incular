@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-widgets`: `BoxDecoration::clip_path` and `hit_test` expose the
+  outline and local hit geometry for rectangles, rounded boxes, and circles.
+
 - `incular-config`: `Constraints::try_normalized` clamps negative bounds to
   zero and raises an inverted maximum to its minimum, while rejecting NaN
   and positive-infinite minimums.

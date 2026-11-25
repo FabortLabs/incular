@@ -789,3 +789,6 @@ packages/flutter/test/widgets/routes_test.dart	1921	focus traversal is correct w
 packages/flutter/test/widgets/routes_test.dart	1964	focus traversal is correct when popping multiple pages simultaneously - with focused children	reference-ran-incular-open	navigation-comparisons.md#direct-focus-versus-tab-traversal-on-route-return
 packages/flutter/test/rendering/box_constraints_test.dart	186	BoxConstraints normalize	paired-match	upstream-border-constraints-formatters.md#constraint-normalization-and-empty-sizes
 packages/flutter/test/rendering/box_constraints_test.dart	210	BoxConstraints.constrainSizeAndAttemptToPreserveAspectRatio can handle empty size	paired-match	upstream-border-constraints-formatters.md#constraint-normalization-and-empty-sizes
+packages/flutter/test/painting/box_decoration_test.dart	154	BoxDecoration.getClipPath with borderRadius	paired-match	upstream-limited-box-and-decoration-contracts.md#boxdecoration-clip-and-hit-geometry
+packages/flutter/test/painting/box_decoration_test.dart	166	BoxDecoration.getClipPath with shape BoxShape.circle	paired-match	upstream-limited-box-and-decoration-contracts.md#boxdecoration-clip-and-hit-geometry
+packages/flutter/test/painting/box_decoration_test.dart	177	BoxDecoration.hitTest with shape BoxShape.circle	paired-match	upstream-limited-box-and-decoration-contracts.md#boxdecoration-clip-and-hit-geometry

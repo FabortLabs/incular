@@ -144,6 +144,9 @@ controllers, action surfaces, and icon catalogs are implementation services;
 they are available only through the hidden `incular_widgets::internal` bridge
 for sibling framework crates and are not part of the application Widgets API.
 
+`BoxDecoration::clip_path` and `hit_test` expose the outline and local hit
+geometry without painting. Circles are inscribed in the shortest side.
+
 ## Focused editable text
 
 `EditableText` is the renderer-neutral Widgets primitive. Its retained editing
