@@ -263,6 +263,10 @@ a version and date when publishing.
 
 ### Fixed
 
+- incular-widgets: text length enforcement follows the target platform
+  unless explicitly overridden. Choose MaxLengthEnforcement::Enforced
+  to keep strict truncation while composing on all platforms.
+
 - incular-runtime: a surviving sibling no longer gains focus when an
   unkeyed focused child is removed. Programmatic focus wakes an idle runtime,
   and focus requests respect mounted scope permissions without changing the

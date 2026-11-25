@@ -81,3 +81,20 @@ The nine historical scalar filter and length-limiter mismatches
 against the permanent native targets and exact pinned reruns. The
 deprecated aliases exercise the same filtering behavior; no obsolete
 Rust alias was introduced.
+
+## Grapheme truncation and host enforcement
+
+The five pinned :397, :403, :418, :465, and :475 originals passed
+by exact name. The Rust public truncation helper checks the same ASCII,
+supplementary scalar, and family emoji examples with the exact corresponding
+caret positions. Default enforcement is immediate on native Windows
+and Android; composition can exceed the limit on the other native targets
+and web. Tests cover the six native defaults and the portable web-policy
+branch, not browser IME events.
+
+The authored reversed-selection and collapsed-composition probe passes
+on both sides. Truncation orders the two endpoints, clamps them and
+drops a composing span that collapses. A valid collapsed composing
+range can still defer the length limit until a committed update.
+The built-in fixed-width OTP control retains immediate enforcement
+explicitly, independent of the general host default.

@@ -84,11 +84,50 @@ fn already_over_limit_edit_is_truncated_to_max() {
     );
 }
 #[test]
-fn portable_default_enforces_the_native_windows_policy_value() {
+fn default_enforcement_depends_on_native_platform_and_web_overrides() {
+    use MaxLengthEnforcement::{Enforced, TruncateAfterCompositionEnds as Deferred};
+    use incular_config::TargetPlatform::{self, *};
+    for (platform, native) in [
+        (Android, Enforced),
+        (Windows, Enforced),
+        (MacOs, Deferred),
+        (Ios, Deferred),
+        (Linux, Deferred),
+        (Fuchsia, Deferred),
+    ] {
+        assert_eq!(
+            LengthLimitingTextInputFormatter::default_enforcement(platform, false),
+            native
+        );
+        assert_eq!(
+            LengthLimitingTextInputFormatter::default_enforcement(platform, true),
+            Deferred
+        );
+    }
     assert_eq!(
         LengthLimitingTextInputFormatter::new(5).max_length_enforcement,
-        MaxLengthEnforcement::Enforced
+        LengthLimitingTextInputFormatter::default_enforcement(
+            TargetPlatform::host(),
+            cfg!(target_arch = "wasm32")
+        )
     );
+}
+
+#[test]
+fn public_truncate_matches_the_three_upstream_ascii_and_unicode_inputs() {
+    for (input, expected) in [
+        ("01234567890", "0123456789"),
+        ("😆01234567890", "😆012345678"),
+        ("👨‍👩‍👦01234567890", "👨‍👩‍👦012345678"),
+    ] {
+        let shortened =
+            LengthLimitingTextInputFormatter::truncate(TextEditingValue::new(input), 10);
+        assert_eq!(shortened.text, expected);
+        assert_eq!(
+            shortened.selection,
+            TextSelection::collapsed(expected.len())
+        );
+    }
 }
 
 #[test]
@@ -130,7 +169,8 @@ fn enforced_deferred_and_unlimited_policies_distinguish_active_and_committed_com
 
 #[test]
 fn oversize_replacement_of_selected_text_uses_policy_specific_guard() {
-    let enforced = LengthLimitingTextInputFormatter::new(2);
+    let enforced =
+        LengthLimitingTextInputFormatter::with_enforcement(2, MaxLengthEnforcement::Enforced);
     let deferred = LengthLimitingTextInputFormatter::with_enforcement(
         2,
         MaxLengthEnforcement::TruncateAfterCompositionEnds,

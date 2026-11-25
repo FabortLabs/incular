@@ -1,5 +1,6 @@
 //! Live editing formatters and selection/composition remapping.
 
+use incular_config::TargetPlatform;
 use incular_text::{TextEditingValue, TextRange, TextSelection, byte_offset_at_utf16_boundary};
 use std::{ops::Range, rc::Rc};
 
@@ -276,13 +277,14 @@ pub enum MaxLengthEnforcement {
     /// Enforce the limit on every update, including active composition.
     #[default]
     Enforced,
-    /// Allow a nonempty composition to exceed the limit until it ends.
+    /// Allow a valid composing range to exceed the limit until it ends.
     TruncateAfterCompositionEnds,
 }
 
 /// Limits text to extended grapheme clusters (user-perceived characters).
 /// Offsets remain UTF-8 byte offsets. The incoming selection is clamped to the
-/// output; invalid or empty composition ranges are removed. When an over-limit
+/// output. Invalid composition ranges are removed; truncation also discards a
+/// composition that collapses. When an over-limit
 /// edit is rejected, the previous value is returned unchanged.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LengthLimitingTextInputFormatter {
@@ -293,10 +295,51 @@ pub struct LengthLimitingTextInputFormatter {
 impl LengthLimitingTextInputFormatter {
     #[must_use]
     pub const fn new(max_length: usize) -> Self {
-        Self {
+        Self::with_enforcement(
             max_length,
-            max_length_enforcement: MaxLengthEnforcement::Enforced,
+            Self::default_enforcement(TargetPlatform::host(), cfg!(target_arch = "wasm32")),
+        )
+    }
+
+    /// The host's default length policy. Web uses deferred enforcement
+    /// regardless of the underlying keyboard platform.
+    #[must_use]
+    pub const fn default_enforcement(
+        platform: TargetPlatform,
+        is_web: bool,
+    ) -> MaxLengthEnforcement {
+        if !is_web && matches!(platform, TargetPlatform::Android | TargetPlatform::Windows) {
+            MaxLengthEnforcement::Enforced
+        } else {
+            MaxLengthEnforcement::TruncateAfterCompositionEnds
         }
+    }
+
+    /// Truncates to the first `max_length` extended grapheme clusters.
+    /// Range endpoints are sorted and clamped to the retained text.
+    #[must_use]
+    pub fn truncate(value: TextEditingValue, max_length: usize) -> TextEditingValue {
+        let segmenter = icu_segmenter::GraphemeClusterSegmenter::new();
+        let end = segmenter
+            .segment_str(&value.text)
+            .nth(max_length)
+            .unwrap_or(value.text.len());
+        Self::truncate_at(value, end)
+    }
+
+    fn truncate_at(mut value: TextEditingValue, end: usize) -> TextEditingValue {
+        value.text.truncate(end);
+        let selection = value.selection.clamp_to(&value.text);
+        value.selection = TextSelection::new(
+            selection.base.min(selection.extent),
+            selection.base.max(selection.extent),
+        );
+        value.composing = value
+            .composing
+            .filter(|range| range.is_valid())
+            .map(|range| range.clamp_to(&value.text))
+            .filter(|range| !range.is_empty());
+        value
     }
 
     #[must_use]
@@ -318,8 +361,7 @@ impl TextInputFormatter for LengthLimitingTextInputFormatter {
         value.composing = value
             .composing
             .filter(|range| range.is_valid())
-            .map(|range| range.clamp_to(&value.text))
-            .filter(|range| !range.is_empty());
+            .map(|range| range.clamp_to(&value.text));
         // Each grapheme cluster is at least one byte, so text no longer than
         // `max_length` bytes never needs segmenting.
         if self.max_length_enforcement != MaxLengthEnforcement::None
@@ -335,9 +377,8 @@ impl TextInputFormatter for LengthLimitingTextInputFormatter {
                     MaxLengthEnforcement::None => (false, false),
                     MaxLengthEnforcement::Enforced => (old_value.selection.is_collapsed(), true),
                     MaxLengthEnforcement::TruncateAfterCompositionEnds => {
-                        let was_composing = old_value.composing.is_some_and(|range| {
-                            range.is_valid() && !range.clamp_to(&old_value.text).is_empty()
-                        });
+                        let was_composing =
+                            old_value.composing.is_some_and(|range| range.is_valid());
                         (!was_composing, value.composing.is_none())
                     }
                 };
@@ -350,15 +391,11 @@ impl TextInputFormatter for LengthLimitingTextInputFormatter {
                     return old_value.clone();
                 }
                 if truncate {
-                    value.text.truncate(end);
+                    return Self::truncate_at(value, end);
                 }
             }
         }
         value.selection = value.selection.clamp_to(&value.text);
-        value.composing = value
-            .composing
-            .map(|range| range.clamp_to(&value.text))
-            .filter(|range| !range.is_empty());
         value
     }
 }

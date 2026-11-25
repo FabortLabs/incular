@@ -75,7 +75,7 @@ packages/flutter/test/rendering/box_test.dart	776	UnconstrainedBox honors constr
 packages/flutter/test/services/text_formatter_test.dart	148	test filtering formatter, deny mode	paired-match	upstream-text-formatters.md#literal-and-regex-patterns-in-retained-edits
 packages/flutter/test/services/text_formatter_test.dart	210	test filtering formatter, allow mode	paired-match	upstream-text-formatters.md#literal-and-regex-patterns-in-retained-edits
 packages/flutter/test/services/text_formatter_test.dart	304	test length limiting formatter with non-BMP Unicode scalar values	paired-match	upstream-border-constraints-formatters.md
-packages/flutter/test/services/text_formatter_test.dart	418	Counts grapheme clusters as single characters	partial-match	upstream-border-constraints-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	418	Counts grapheme clusters as single characters	paired-match	upstream-text-formatters.md#grapheme-truncation-and-host-enforcement
 packages/flutter/test/services/text_formatter_test.dart	808	Preserves composing region	paired-match	upstream-text-formatters.md#literal-and-regex-patterns-in-retained-edits
 packages/flutter/test/animation/animation_controller_test.dart	59	Can set value during status callback	paired-match	upstream-animation-controller-comparisons.md
 packages/flutter/test/animation/animation_controller_test.dart	92	Receives status callbacks for forward and reverse	paired-mismatch	upstream-animation-controller-comparisons.md
@@ -662,12 +662,12 @@ packages/flutter/test/services/text_formatter_test.dart	379	test length limiting
 packages/flutter/test/services/text_formatter_test.dart	437	Passes through when under limit	paired-match	upstream-text-formatters.md
 packages/flutter/test/services/text_formatter_test.dart	445	Uses old value when at the limit	paired-match	upstream-text-formatters.md#literal-and-regex-patterns-in-retained-edits
 packages/flutter/test/services/text_formatter_test.dart	453	Truncates newValue when oldValue already over limit	paired-match	upstream-text-formatters.md
-packages/flutter/test/services/text_formatter_test.dart	465	with TargetPlatform.windows	partial-match	upstream-text-formatters.md
-packages/flutter/test/services/text_formatter_test.dart	475	with TargetPlatform.macOS	reference-ran-incular-open	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	465	with TargetPlatform.windows	paired-match	upstream-text-formatters.md#grapheme-truncation-and-host-enforcement
+packages/flutter/test/services/text_formatter_test.dart	475	with TargetPlatform.macOS	paired-match	upstream-text-formatters.md#grapheme-truncation-and-host-enforcement
 packages/flutter/test/services/text_formatter_test.dart	164	test filtering formatter, deny mode (deprecated names)	paired-match	upstream-text-formatters.md#literal-and-regex-patterns-in-retained-edits
 packages/flutter/test/services/text_formatter_test.dart	225	test filtering formatter, allow mode (deprecated names)	paired-match	upstream-text-formatters.md#literal-and-regex-patterns-in-retained-edits
-packages/flutter/test/services/text_formatter_test.dart	397	Removes characters from the end	partial-match	upstream-text-formatters.md
-packages/flutter/test/services/text_formatter_test.dart	403	Counts surrogate pairs as single characters	partial-match	upstream-text-formatters.md
+packages/flutter/test/services/text_formatter_test.dart	397	Removes characters from the end	paired-match	upstream-text-formatters.md#grapheme-truncation-and-host-enforcement
+packages/flutter/test/services/text_formatter_test.dart	403	Counts surrogate pairs as single characters	paired-match	upstream-text-formatters.md#grapheme-truncation-and-host-enforcement
 packages/flutter/test/services/text_formatter_test.dart	483	FilteringTextInputFormatter should return the old value if new value contains non-white-listed character	paired-match	upstream-text-formatters.md
 packages/flutter/test/services/text_formatter_test.dart	499	FilteringTextInputFormatter should move the cursor to the right position	paired-match	upstream-text-formatters.md
 packages/flutter/test/services/text_formatter_test.dart	528	FilteringTextInputFormatter should remove non-allowed characters	paired-match	upstream-text-formatters.md

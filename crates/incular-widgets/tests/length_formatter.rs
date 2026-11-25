@@ -33,13 +33,13 @@ fn enforcement_modes_preserve_or_defer_composition() {
 }
 
 #[test]
-fn truncation_preserves_new_directional_selection_and_clamps_ranges() {
+fn truncation_orders_selection_endpoints_and_clamps_ranges() {
     let input = TextEditingValue::new("éabc")
         .with_selection(TextSelection::new(5, 2))
         .with_composing(Some(TextRange::new(3, 5)));
     let result = format(Mode::Enforced, 2, &input);
     assert_eq!(result.text, "éa");
-    assert_eq!(result.selection, TextSelection::new(3, 2));
+    assert_eq!(result.selection, TextSelection::new(2, 3));
     assert_eq!(result.composing, None);
 }
 
@@ -56,4 +56,18 @@ fn zero_limit_and_invalid_ranges_are_normalized() {
     assert_eq!(none.text, input.text);
     assert_eq!(none.selection, TextSelection::new(3, 0));
     assert_eq!(none.composing, None);
+}
+
+#[test]
+fn deferred_policy_preserves_valid_collapsed_composition_until_commit() {
+    let limiter = Limit::with_enforcement(2, Mode::TruncateAfterCompositionEnds);
+    let old = TextEditingValue::new("a");
+    let composing = TextEditingValue::new("abc").with_composing(Some(TextRange::new(1, 1)));
+    assert_eq!(limiter.format_edit_update(&old, &composing), composing);
+    let at_limit = TextEditingValue::new("ab").with_composing(Some(TextRange::new(1, 1)));
+    let commit = TextEditingValue::new("aXY");
+    assert_eq!(
+        limiter.format_edit_update(&at_limit, &commit),
+        TextEditingValue::new("aX")
+    );
 }

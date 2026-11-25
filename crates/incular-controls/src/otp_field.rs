@@ -2,8 +2,8 @@
 //! digit. This keeps paste, selection, and accessibility coherent.
 use incular_widgets::internal::TextEditingController;
 use incular_widgets::{
-    EditableText, LengthLimitingTextInputFormatter, Opacity, Positioned, Stack, TextInputFormatter,
-    Widget,
+    EditableText, LengthLimitingTextInputFormatter, MaxLengthEnforcement, Opacity, Positioned,
+    Stack, TextInputFormatter, Widget,
 };
 
 use typed_builder::TypedBuilder;
@@ -49,7 +49,12 @@ impl Root {
 impl From<Root> for Widget {
     fn from(value: Root) -> Self {
         let controller = TextEditingController::new();
-        let limiter = LengthLimitingTextInputFormatter::new(value.length);
+        // Each cell represents one accepted token, including while the user
+        // composes. The general text formatter follows host IME defaults.
+        let limiter = LengthLimitingTextInputFormatter::with_enforcement(
+            value.length,
+            MaxLengthEnforcement::Enforced,
+        );
         let editor: Widget = EditableText::new(controller)
             .obscure_text(value.masked)
             .edit_transform(move |old, next| limiter.format_edit_update(old, next))
