@@ -577,6 +577,18 @@ impl Positioned {
             height: None,
         }
     }
+
+    /// An empty set of insets and extents participates in non-positioned
+    /// Stack sizing, like Flutter's `StackParentData.isPositioned`.
+    #[must_use]
+    pub const fn is_positioned(self) -> bool {
+        self.left.is_some()
+            || self.top.is_some()
+            || self.right.is_some()
+            || self.bottom.is_some()
+            || self.width.is_some()
+            || self.height.is_some()
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

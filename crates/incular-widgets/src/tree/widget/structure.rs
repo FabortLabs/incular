@@ -342,12 +342,14 @@ impl std::fmt::Debug for WidgetKind {
                 .finish(),
             Self::Stack {
                 alignment,
+                text_direction,
                 fit,
                 clip_behavior,
                 children,
             } => f
                 .debug_struct("Stack")
                 .field("alignment", alignment)
+                .field("text_direction", text_direction)
                 .field("fit", fit)
                 .field("clip_behavior", clip_behavior)
                 .field("children", children)
@@ -432,6 +434,7 @@ impl std::fmt::Debug for WidgetKind {
                 .finish(),
             Self::IndexedStack {
                 alignment,
+                text_direction,
                 index,
                 fit,
                 clip_behavior,
@@ -439,6 +442,7 @@ impl std::fmt::Debug for WidgetKind {
             } => f
                 .debug_struct("IndexedStack")
                 .field("alignment", alignment)
+                .field("text_direction", text_direction)
                 .field("index", index)
                 .field("fit", fit)
                 .field("clip_behavior", clip_behavior)
@@ -1574,17 +1578,19 @@ impl PartialEq for WidgetKind {
             (
                 Self::Stack {
                     alignment: a,
+                    text_direction: first_direction,
                     fit: b,
                     clip_behavior: c,
                     children: d,
                 },
                 Self::Stack {
                     alignment: e,
+                    text_direction: second_direction,
                     fit: f,
                     clip_behavior: g,
                     children: h,
                 },
-            ) => a == e && b == f && c == g && d == h,
+            ) => first_direction == second_direction && a == e && b == f && c == g && d == h,
             (
                 Self::Positioned {
                     left: a,
@@ -1608,6 +1614,7 @@ impl PartialEq for WidgetKind {
             (
                 Self::IndexedStack {
                     alignment: a,
+                    text_direction: first_direction,
                     index: b,
                     fit: c,
                     clip_behavior: d,
@@ -1615,12 +1622,20 @@ impl PartialEq for WidgetKind {
                 },
                 Self::IndexedStack {
                     alignment: f,
+                    text_direction: second_direction,
                     index: g,
                     fit: h,
                     clip_behavior: i,
                     children: j,
                 },
-            ) => a == f && b == g && c == h && d == i && e == j,
+            ) => {
+                first_direction == second_direction
+                    && a == f
+                    && b == g
+                    && c == h
+                    && d == i
+                    && e == j
+            }
             (
                 Self::SafeArea {
                     minimum: a,

@@ -645,14 +645,17 @@ impl WidgetTree {
                     bottom,
                     width,
                     height,
-                } => Some(incular_layout::Positioned {
-                    left,
-                    top,
-                    right,
-                    bottom,
-                    width,
-                    height,
-                }),
+                } => {
+                    let position = incular_layout::Positioned {
+                        left,
+                        top,
+                        right,
+                        bottom,
+                        width,
+                        height,
+                    };
+                    position.is_positioned().then_some(position)
+                }
                 _ => None,
             },
         )

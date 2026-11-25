@@ -6,6 +6,8 @@ icon: Move
 
 [`Positioned`](/docs/api/layout-widgets/positioned) places a child inside a [`Stack`](/docs/api/layout-widgets/stack)
 via edge offsets plus optional explicit size. All offsets default `None`.
+When all edges and extents are unspecified, the child participates in normal
+stack sizing and alignment.
 
 ## Props
 
@@ -87,12 +89,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 ```
-```
 
 ## Methods
 
 ```rust
 pub fn new(child: impl Into<Widget>) -> Self
+pub fn from_rect(rect: Rect, child: impl Into<Widget>) -> Self
+pub fn from_relative_rect(rect: RelativeRect, child: impl Into<Widget>) -> Self
+pub fn directional(direction: TextDirection, positioned: PositionedDirectional) -> Self
 pub fn fill(child: impl Into<Widget>) -> Self // left=top=right=bottom=0.0
 pub fn left(mut self, left: f32) -> Self
 pub fn top(mut self, top: f32) -> Self
@@ -104,5 +108,8 @@ pub fn height(mut self, height: f32) -> Self
 
 Combine opposite edges to stretch, or one edge plus an explicit size to pin
 (see the runnable program above for both patterns).
+
+Use `PositionedDirectional` to follow the nearest Directionality as it changes,
+or `Positioned::directional` for a fixed direction.
 
 Related: [`Stack`](/docs/api/layout-widgets/stack).

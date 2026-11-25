@@ -60,3 +60,16 @@ fn positioned_unanchored_axes_use_alignment_after_explicit_sizing() {
     assert_eq!(result.children[1].offset, Offset::new(72., 76.));
     assert_eq!(result.children[2].offset, Offset::new(72., 16.));
 }
+
+#[test]
+fn a_positioned_descriptor_with_no_configuration_still_sizes_a_loose_stack() {
+    let child = StackChild::positioned(Size::new(30., 40.), Positioned::default());
+    assert!(!child.position.is_positioned());
+    let result = layout_stack(
+        Constraints::loose(Size::new(200., 100.)),
+        &[child],
+        Stack::new(),
+    );
+    assert_eq!(result.size, Size::new(30., 40.));
+    assert_eq!(result.children[0].offset, Offset::ZERO);
+}

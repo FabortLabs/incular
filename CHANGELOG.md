@@ -7,6 +7,10 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-widgets`: Stack and IndexedStack accept directional alignment and
+  an explicit text direction. Positioned can be constructed from a physical
+  or relative rectangle or from fixed-direction insets.
+
 - `incular::widget_previews`: compose programmatic previews with ordered
   wrappers, themed scopes, and host metadata, without a design-system dependency.
 
@@ -243,6 +247,9 @@ a version and date when publishing.
   `EditableText` does there. Mouse and stylus presses still unfocus it.
 
 ### Fixed
+
+- `incular-widgets`: a Positioned child without any insets or explicit size
+  contributes to Stack sizing instead of forcing the stack to fill its parent.
 
 - `incular-widgets`: list-wheel selection callbacks follow scroll updates
   or completed activities instead of waiting for a layout pass.

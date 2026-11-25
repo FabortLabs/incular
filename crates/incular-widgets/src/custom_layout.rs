@@ -738,31 +738,32 @@ impl PositionedDirectional {
         self.height = Some(height);
         self
     }
+    /// Resolves this value to physical insets in the specified direction.
+    #[must_use]
+    pub fn resolve(self, direction: TextDirection) -> Positioned {
+        let (left, right) = match direction {
+            TextDirection::Ltr => (self.start, self.end),
+            TextDirection::Rtl => (self.end, self.start),
+        };
+        Positioned {
+            left,
+            top: self.top,
+            right,
+            bottom: self.bottom,
+            width: self.width,
+            height: self.height,
+            child: self.child,
+        }
+    }
 }
 
 impl From<PositionedDirectional> for Widget {
     fn from(value: PositionedDirectional) -> Self {
         Builder::new(move |context| {
-            // `Positioned.directional`.
-            let (left, right) = if context.text_direction() == Some(TextDirection::Rtl) {
-                (value.end, value.start)
-            } else {
-                (value.start, value.end)
-            };
-            let mut positioned = Positioned::new(value.child.clone());
-            for (edge, set) in [
-                (left, Positioned::left as fn(Positioned, f32) -> Positioned),
-                (value.top, Positioned::top),
-                (right, Positioned::right),
-                (value.bottom, Positioned::bottom),
-                (value.width, Positioned::width),
-                (value.height, Positioned::height),
-            ] {
-                if let Some(edge) = edge {
-                    positioned = set(positioned, edge);
-                }
-            }
-            positioned.into()
+            value
+                .clone()
+                .resolve(context.text_direction().unwrap_or(TextDirection::Ltr))
+                .into()
         })
         .into()
     }

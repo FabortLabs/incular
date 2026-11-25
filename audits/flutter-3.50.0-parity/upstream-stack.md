@@ -58,3 +58,26 @@ explicit vs default alignment on both widgets. The default alignment
 and 34 other named widget checks pass; DevTools also compiles with
 the actual resolved values. An absent Directionality still falls back
 to LTR in Incular, so the existing Flutter assertion probe stays open.
+
+## Directional positioning and empty parent data
+
+Pinned `widgets/stack_test.dart:111,157,422,459,494,500` and
+`widgets/positioned_test.dart:12,133` pass. The Incular ports assert preserved
+child identity with direction updates, physical center and directional
+bottom-end in LTR/RTL, and all 36 final child rectangles under four
+combinations of direction and alignment. A stack's explicit direction
+overrides its own alignment without changing inherited Directionality.
+The physical rectangle and relative-inset constructors expose all six
+expected optional fields. The zero-area Positioned placeholder mounts.
+
+The authored `stack_positioned_empty_insets_test.dart` exposed a separate
+failure: a single 40×20 child wrapped in an empty Positioned made a loose
+stack fill 800×600. Pinned Flutter reports 40×20 → 800×600 → 40×20 as
+an inset is added and cleared, preserving the child. The retained path and
+the pure layout function now classify children by actual configured
+positioning fields rather than the presence of the wrapper.
+
+Focused layout/stack controls passed with the existing
+missing-Directionality diagnostic mismatch left open. A separate
+IgnoreBaseline regression was discovered in the same regression run
+and is tracked independently.

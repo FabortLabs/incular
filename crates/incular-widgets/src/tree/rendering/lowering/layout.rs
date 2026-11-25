@@ -17,11 +17,17 @@ fn resolve_layout_direction(
         .unwrap_or(TextDirection::Ltr)
 }
 
-fn resolve_stack_alignment(explicit: Option<Alignment>, context: &DependencyContext) -> Alignment {
-    explicit.unwrap_or_else(|| {
-        incular_config::AlignmentDirectional::TOP_START
-            .resolve(resolve_layout_direction(None, context))
-    })
+fn resolve_stack_alignment(
+    alignment: Option<crate::AlignmentGeometry>,
+    direction: Option<TextDirection>,
+    context: &DependencyContext,
+) -> Alignment {
+    match alignment.unwrap_or_else(|| incular_config::AlignmentDirectional::TOP_START.into()) {
+        crate::AlignmentGeometry::Physical(alignment) => alignment,
+        crate::AlignmentGeometry::Directional(alignment) => {
+            alignment.resolve(resolve_layout_direction(direction, context))
+        }
+    }
 }
 
 pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> RenderKind {
@@ -186,12 +192,13 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
         },
         WidgetKind::Stack {
             alignment,
+            text_direction,
             fit,
             clip_behavior,
             ..
         } => RenderKind::Stack {
             stack: incular_layout::Stack {
-                alignment: resolve_stack_alignment(*alignment, context),
+                alignment: resolve_stack_alignment(*alignment, *text_direction, context),
                 fit: *fit,
                 clip_behavior: *clip_behavior,
             },
@@ -280,12 +287,13 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
         },
         WidgetKind::IndexedStack {
             alignment,
+            text_direction,
             index,
             fit,
             clip_behavior,
             ..
         } => RenderKind::IndexedStack {
-            alignment: resolve_stack_alignment(*alignment, context),
+            alignment: resolve_stack_alignment(*alignment, *text_direction, context),
             index: *index,
             fit: *fit,
             clip_behavior: *clip_behavior,

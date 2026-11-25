@@ -730,7 +730,8 @@ pub(crate) enum WidgetKind {
         children: Vec<Widget>,
     },
     Stack {
-        alignment: Option<Alignment>,
+        alignment: Option<crate::AlignmentGeometry>,
+        text_direction: Option<TextDirection>,
         fit: StackFit,
         clip_behavior: Clip,
         children: Vec<Widget>,
@@ -754,7 +755,8 @@ pub(crate) enum WidgetKind {
         child: Widget,
     },
     IndexedStack {
-        alignment: Option<Alignment>,
+        alignment: Option<crate::AlignmentGeometry>,
+        text_direction: Option<TextDirection>,
         index: Option<usize>,
         fit: StackFit,
         clip_behavior: Clip,

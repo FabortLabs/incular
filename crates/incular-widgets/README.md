@@ -75,6 +75,13 @@ This crate depends on core, layout, painting, and the platform-neutral
 nor GPU resources. `GestureDetector` is the retained-tree adapter, while pointer
 event values and recognition state are owned by `incular-gestures`.
 
+## Stack direction
+
+Stack and IndexedStack accept physical or directional alignments. The stack's
+optional text direction overrides its own alignment, not the direction used by
+descendants. Positioned with no insets or explicit size participates in normal
+Stack sizing.
+
 ## Custom desktop chrome
 
 `WindowDragRegion` and `WindowResizeRegion` are retained hit annotations for an

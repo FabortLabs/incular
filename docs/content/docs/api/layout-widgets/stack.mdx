@@ -4,8 +4,8 @@ description: Overlay layout painting children in order with alignment and clippi
 icon: Layers
 ---
 
-[`Stack`](/docs/api/layout-widgets/stack) overlays children in paint order. Alignment is absolute (left/right —
-no text direction needed). Defaults: `alignment = TOP_LEFT`,
+[`Stack`](/docs/api/layout-widgets/stack) overlays children in paint order. Physical alignment is absolute; directional alignment uses the nearest
+Directionality unless this stack sets its own direction. Defaults: `TOP_START`,
 `fit = Loose`, `clip_behavior = HardEdge`.
 
 ## Props
@@ -18,9 +18,14 @@ no text direction needed). Defaults: `alignment = TOP_LEFT`,
       default: '[]',
     },
     alignment: {
-      description: 'Absolute alignment of non-positioned children',
+      description: 'Physical or text-direction-aware alignment of non-positioned children',
       type: <a className="underline" href="/docs/api/values/alignment">Alignment</a>,
-      default: 'TOP_LEFT',
+      default: 'TOP_START',
+    },
+    text_direction: {
+      description: 'Override for this stack’s alignment, not for its descendants',
+      type: 'Option<TextDirection>',
+      default: 'Ambient',
     },
     fit: {
       description: 'How the stack sizes itself to children',
@@ -80,7 +85,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```rust
 pub fn new(children: impl IntoIterator<Item = impl Into<Widget>>) -> Self
 pub fn aligned(alignment: Alignment, children: impl IntoIterator<Item = impl Into<Widget>>) -> Self
-pub fn alignment(mut self, alignment: Alignment) -> Self
+pub fn alignment(mut self, alignment: impl Into<AlignmentGeometry>) -> Self
+pub fn text_direction(mut self, direction: TextDirection) -> Self
 pub fn fit(mut self, fit: StackFit) -> Self
 pub fn clip_behavior(mut self, clip: Clip) -> Self
 pub fn get_alignment(&self) -> Alignment

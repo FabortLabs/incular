@@ -139,6 +139,16 @@ pub enum StackPosition {
     Positioned(Positioned),
 }
 
+impl StackPosition {
+    #[must_use]
+    pub const fn is_positioned(self) -> bool {
+        match self {
+            Self::NonPositioned => false,
+            Self::Positioned(position) => position.is_positioned(),
+        }
+    }
+}
+
 /// Measured child input for [`layout_wrap`].
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WrapChild {
@@ -618,7 +628,7 @@ where
     let mut intrinsic = Size::ZERO;
     let mut has_non_positioned = false;
     for child in children {
-        if matches!(child.position, StackPosition::NonPositioned) {
+        if !child.position.is_positioned() {
             has_non_positioned = true;
             intrinsic = Size::new(
                 intrinsic.width.max(child.size.width),

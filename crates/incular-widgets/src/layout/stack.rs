@@ -1,22 +1,28 @@
 //! Flutter-style stack and positioning layout descriptors.
 
-use incular_config::{Alignment, Clip, StackFit};
+use incular_config::{Alignment, AlignmentDirectional, Clip, StackFit, TextDirection};
+use incular_core::Rect;
 use smart_default::SmartDefault;
 use typed_builder::TypedBuilder;
 
-use crate::{Widget, WidgetKind, macros::widget_from_kind};
+use crate::{
+    AlignmentGeometry, PositionedDirectional, RelativeRect, Widget, WidgetKind,
+    macros::widget_from_kind,
+};
 
 /// Overlays children in paint order with alignment, sizing fit, and clipping.
 ///
 /// The default places children at the top and ambient start edge, falling
-/// back to left when no direction is provided. Explicit alignment uses
-/// physical left/right and is not mirrored.
+/// back to left when no direction is provided. Physical alignment is not
+/// mirrored; directional alignment resolves against the stack direction.
 #[derive(Clone, Debug, PartialEq, TypedBuilder, SmartDefault)]
 pub struct Stack {
     #[builder(default, setter(into))]
     children: Vec<Widget>,
+    #[builder(default, setter(strip_option, into))]
+    alignment: Option<AlignmentGeometry>,
     #[builder(default, setter(strip_option))]
-    alignment: Option<Alignment>,
+    text_direction: Option<TextDirection>,
     #[builder(default = StackFit::Loose)]
     fit: StackFit,
     #[builder(default = Clip::HardEdge)]
@@ -44,8 +50,16 @@ impl Stack {
 
     /// Sets the alignment for non-positioned children.
     #[must_use]
-    pub fn alignment(mut self, alignment: Alignment) -> Self {
-        self.alignment = Some(alignment);
+    pub fn alignment(mut self, alignment: impl Into<AlignmentGeometry>) -> Self {
+        self.alignment = Some(alignment.into());
+        self
+    }
+
+    /// Overrides the direction used by this stack's own alignment.
+    /// Does not change the ambient direction for its descendants.
+    #[must_use]
+    pub fn text_direction(mut self, direction: TextDirection) -> Self {
+        self.text_direction = Some(direction);
         self
     }
 
@@ -68,7 +82,9 @@ impl Stack {
 
     #[must_use]
     pub fn get_alignment(&self) -> Alignment {
-        self.alignment.unwrap_or(Alignment::TOP_LEFT)
+        self.alignment
+            .unwrap_or_else(|| AlignmentDirectional::TOP_START.into())
+            .resolve(self.text_direction.unwrap_or(TextDirection::Ltr))
     }
 
     #[must_use]
@@ -82,7 +98,7 @@ impl Stack {
     }
 }
 
-widget_from_kind!(Stack => Stack { alignment, fit, clip_behavior, children });
+widget_from_kind!(Stack => Stack { alignment, text_direction, fit, clip_behavior, children });
 
 /// Positions a child inside a [`Stack`].
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
@@ -110,6 +126,33 @@ impl Positioned {
         Self::builder().child(child).build()
     }
 
+    /// Creates a positioned child with the rect's left/top and size.
+    #[must_use]
+    pub fn from_rect(rect: Rect, child: impl Into<Widget>) -> Self {
+        Self::new(child)
+            .left(rect.origin.x)
+            .top(rect.origin.y)
+            .width(rect.size.width)
+            .height(rect.size.height)
+    }
+
+    /// Creates a positioned child with all four insets from the rect.
+    #[must_use]
+    pub fn from_relative_rect(rect: RelativeRect, child: impl Into<Widget>) -> Self {
+        Self::new(child)
+            .left(rect.left)
+            .top(rect.top)
+            .right(rect.right)
+            .bottom(rect.bottom)
+    }
+
+    /// Resolves directional positioning using a fixed direction, independent
+    /// of any ambient direction where the result is mounted.
+    #[must_use]
+    pub fn directional(direction: TextDirection, positioned: PositionedDirectional) -> Self {
+        positioned.resolve(direction)
+    }
+
     /// Creates a positioned child filled to all four edges.
     #[must_use]
     pub fn fill(child: impl Into<Widget>) -> Self {
@@ -120,6 +163,42 @@ impl Positioned {
             .bottom(0.0)
             .child(child)
             .build()
+    }
+
+    /// Returns the configured left inset.
+    #[must_use]
+    pub fn get_left(&self) -> Option<f32> {
+        self.left
+    }
+
+    /// Returns the configured top inset.
+    #[must_use]
+    pub fn get_top(&self) -> Option<f32> {
+        self.top
+    }
+
+    /// Returns the configured right inset.
+    #[must_use]
+    pub fn get_right(&self) -> Option<f32> {
+        self.right
+    }
+
+    /// Returns the configured bottom inset.
+    #[must_use]
+    pub fn get_bottom(&self) -> Option<f32> {
+        self.bottom
+    }
+
+    /// Returns the configured width.
+    #[must_use]
+    pub fn get_width(&self) -> Option<f32> {
+        self.width
+    }
+
+    /// Returns the configured height.
+    #[must_use]
+    pub fn get_height(&self) -> Option<f32> {
+        self.height
     }
 
     /// Sets the left edge offset.
@@ -173,8 +252,10 @@ pub struct IndexedStack {
     #[builder(default = Some(0), setter(into))]
     #[default(Some(0))]
     index: Option<usize>,
+    #[builder(default, setter(strip_option, into))]
+    alignment: Option<AlignmentGeometry>,
     #[builder(default, setter(strip_option))]
-    alignment: Option<Alignment>,
+    text_direction: Option<TextDirection>,
     #[builder(default = StackFit::Loose)]
     fit: StackFit,
     #[builder(default = Clip::HardEdge)]
@@ -202,8 +283,16 @@ impl IndexedStack {
 
     /// Sets alignment for children.
     #[must_use]
-    pub fn alignment(mut self, alignment: Alignment) -> Self {
-        self.alignment = Some(alignment);
+    pub fn alignment(mut self, alignment: impl Into<AlignmentGeometry>) -> Self {
+        self.alignment = Some(alignment.into());
+        self
+    }
+
+    /// Overrides the direction used by this stack's own alignment.
+    /// Does not change the ambient direction for its descendants.
+    #[must_use]
+    pub fn text_direction(mut self, direction: TextDirection) -> Self {
+        self.text_direction = Some(direction);
         self
     }
 
@@ -235,4 +324,4 @@ impl IndexedStack {
     }
 }
 
-widget_from_kind!(IndexedStack => IndexedStack { alignment, index, fit, clip_behavior, children });
+widget_from_kind!(IndexedStack => IndexedStack { alignment, text_direction, index, fit, clip_behavior, children });

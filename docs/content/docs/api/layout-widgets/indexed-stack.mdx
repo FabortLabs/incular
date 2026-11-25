@@ -6,7 +6,7 @@ icon: Copy
 
 [`IndexedStack`](/docs/api/layout-widgets/indexed-stack) lays out every child but paints only the selected index —
 state-preserving tab bodies. Defaults: `index = 0`,
-`alignment = TOP_LEFT`, `fit = Loose`, `clip_behavior = HardEdge`.
+`alignment = TOP_START`, `fit = Loose`, `clip_behavior = HardEdge`.
 
 ## Props
 
@@ -23,9 +23,14 @@ state-preserving tab bodies. Defaults: `index = 0`,
       default: '[]',
     },
     alignment: {
-      description: 'Absolute alignment of children',
+      description: 'Physical or text-direction-aware alignment of children',
       type: <a className="underline" href="/docs/api/values/alignment">Alignment</a>,
-      default: 'TOP_LEFT',
+      default: 'TOP_START',
+    },
+    text_direction: {
+      description: 'Override for this stack’s alignment, not for its descendants',
+      type: 'Option<TextDirection>',
+      default: 'Ambient',
     },
     fit: {
       description: 'How the stack sizes itself',
@@ -82,7 +87,8 @@ shows the same calls without a signal.
 ```rust
 pub fn new(children: impl IntoIterator<Item = impl Into<Widget>>) -> Self
 pub fn index(mut self, index: usize) -> Self
-pub fn alignment(mut self, alignment: Alignment) -> Self
+pub fn alignment(mut self, alignment: impl Into<AlignmentGeometry>) -> Self
+pub fn text_direction(mut self, direction: TextDirection) -> Self
 pub fn fit(mut self, fit: StackFit) -> Self
 pub fn clip_behavior(mut self, clip: Clip) -> Self
 pub fn get_index(&self) -> usize

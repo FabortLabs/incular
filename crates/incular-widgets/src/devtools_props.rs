@@ -211,15 +211,27 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
         WidgetKind::Stack {
             alignment,
             children,
+            text_direction,
             ..
         } => {
             out.push(prop(
                 "alignment",
                 DebugValue::Enum(alignment.map_or_else(
                     || "AlignmentDirectional::TOP_START".into(),
-                    |value| format!("{value:?}"),
+                    |value| match value {
+                        crate::AlignmentGeometry::Physical(alignment) => format!("{alignment:?}"),
+                        crate::AlignmentGeometry::Directional(alignment) => {
+                            format!("{alignment:?}")
+                        }
+                    },
                 )),
             ));
+            if let Some(direction) = text_direction {
+                out.push(prop(
+                    "textDirection",
+                    DebugValue::Enum(format!("{direction:?}")),
+                ));
+            }
             out.push(prop("childCount", DebugValue::Uint(children.len() as u64)));
         }
         WidgetKind::Padding { padding, child } => {
