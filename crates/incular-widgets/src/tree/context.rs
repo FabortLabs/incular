@@ -71,7 +71,7 @@ struct MediaQuerySize(Size);
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct MediaQueryDevicePixelRatio(f64);
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct MediaQueryTextScale(f32);
+pub(super) struct MediaQueryTextScale(pub(super) f32);
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct MediaQueryPlatformBrightness(Brightness);
 #[derive(Clone, Copy, Debug, PartialEq)]

@@ -348,3 +348,115 @@ fn application_level_localizations_does_not_override_node_pronunciation() {
         assert_eq!(node.state.locale, None);
     }
 }
+
+#[test]
+fn media_query_scale_and_brightness_follow_the_nearest_scope() {
+    use incular_config::{Brightness, Constraints};
+    use incular_core::Size;
+    use incular_widgets::{Builder, SizedBox, internal::WidgetTree};
+    use std::{cell::RefCell, rc::Rc};
+
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let outer = Builder::new({
+        let seen = seen.clone();
+        move |context| {
+            seen.borrow_mut().push((
+                context
+                    .media_query_text_scale()
+                    .unwrap_or_else(|| context.text_scale()),
+                context
+                    .media_query_platform_brightness()
+                    .unwrap_or_else(|| context.brightness()),
+            ));
+            MediaQuery::new(
+                RuntimeEnvironment {
+                    text_scale: 4.,
+                    brightness: Brightness::Dark,
+                    ..Default::default()
+                },
+                Builder::new({
+                    let seen = seen.clone();
+                    move |context| {
+                        seen.borrow_mut().push((
+                            context.media_query_text_scale().unwrap(),
+                            context.media_query_platform_brightness().unwrap(),
+                        ));
+                        SizedBox::shrink().into()
+                    }
+                }),
+            )
+            .into()
+        }
+    });
+    let mut tree = WidgetTree::new();
+    tree.mount(outer.into()).unwrap();
+    tree.layout(Constraints::tight(Size::new(100., 100.)))
+        .unwrap();
+    assert_eq!(
+        *seen.borrow(),
+        [(1., Brightness::Light), (4., Brightness::Dark)]
+    );
+}
+
+#[test]
+fn scoped_text_scaler_updates_paragraph_geometry_without_remounting_or_touching_explicit_scale() {
+    use incular_config::Constraints;
+    use incular_core::Size;
+    use incular_text::{TextScaler, TextStyle};
+    use incular_widgets::{
+        Column, Directionality, Text,
+        internal::{Key, WidgetTree},
+    };
+
+    let inherited_key = Key::from("inherited scale");
+    let explicit_key = Key::from("explicit scale");
+    let style = TextStyle::new().size(14.);
+    let child: Widget = Column::new([
+        Widget::from(Text::new("Preview").style(style.clone())).with_key(inherited_key.clone()),
+        Widget::from(
+            Text::new("Preview")
+                .style(style)
+                .text_scaler(TextScaler::NO_SCALING),
+        )
+        .with_key(explicit_key.clone()),
+    ])
+    .into();
+    let child = Widget::from(Directionality::new(TextDirection::Ltr, child));
+    let scoped = |text_scale| {
+        MediaQuery::new(
+            RuntimeEnvironment {
+                text_scale,
+                ..Default::default()
+            },
+            child.clone(),
+        )
+        .into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scoped(1.)).unwrap();
+    let constraints = Constraints::loose(Size::new(500., 500.));
+    tree.layout(constraints).unwrap();
+    let inherited = tree.element_with_key(&inherited_key).unwrap();
+    let explicit = tree.element_with_key(&explicit_key).unwrap();
+    let before = tree.element_geometry(inherited).unwrap().1;
+    assert_eq!(tree.element_geometry(explicit).unwrap().1, before);
+
+    tree.update(root, scoped(2.)).unwrap();
+    tree.layout(constraints).unwrap();
+    let doubled = tree.element_geometry(inherited).unwrap().1;
+    assert!(
+        doubled.width > before.width * 1.9,
+        "{before:?} -> {doubled:?}"
+    );
+    assert!(
+        doubled.height > before.height * 1.9,
+        "{before:?} -> {doubled:?}"
+    );
+    assert_eq!(tree.element_geometry(explicit).unwrap().1, before);
+
+    tree.update(root, scoped(0.)).unwrap();
+    tree.layout(constraints).unwrap();
+    let zero = tree.element_geometry(inherited).unwrap().1;
+    assert_eq!(zero.width, 0.);
+    assert_eq!(tree.element_geometry(explicit).unwrap().1, before);
+}

@@ -20,7 +20,7 @@ pub use incular_config::ContentSensitivity;
 /// descriptor is useful for isolated subtrees and deterministic tests.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct MediaQuery {
-    #[builder(setter(transform = |data: RuntimeEnvironment| data.normalized()))]
+    #[builder(setter(transform = |data: RuntimeEnvironment| normalize_media_query(data)))]
     data: RuntimeEnvironment,
     #[builder(setter(into))]
     child: Widget,
@@ -36,7 +36,7 @@ impl MediaQuery {
     #[must_use]
     pub fn new(data: RuntimeEnvironment, child: impl Into<Widget>) -> Self {
         Self {
-            data: data.normalized(),
+            data: normalize_media_query(data),
             child: child.into(),
         }
     }
@@ -50,6 +50,17 @@ impl MediaQuery {
     pub fn into_data(self) -> RuntimeEnvironment {
         self.data
     }
+}
+
+fn normalize_media_query(data: RuntimeEnvironment) -> RuntimeEnvironment {
+    let explicitly_zero = data.text_scale == 0.;
+    let mut data = data.normalized();
+    if explicitly_zero {
+        // Unlike a native configuration, a scoped linear scaler may
+        // intentionally make text invisible with a factor of zero.
+        data.text_scale = 0.;
+    }
+    data
 }
 
 impl From<MediaQuery> for Widget {

@@ -74,8 +74,14 @@ pub(super) fn resolve_text_style<'a>(
 /// the text scale relayouts the text that resolved it.
 pub(super) fn environment_text_scaler(context: &DependencyContext) -> TextScaler {
     let factor = context
-        .depend::<super::context::RuntimeTextScale>()
-        .map_or(1.0, |scale| scale.0);
+        .depend::<super::context::MediaQueryTextScale>()
+        .map(|scale| scale.0)
+        .or_else(|| {
+            context
+                .depend::<super::context::RuntimeTextScale>()
+                .map(|scale| scale.0)
+        })
+        .unwrap_or(1.0);
     TextScaler::linear(factor)
 }
 
