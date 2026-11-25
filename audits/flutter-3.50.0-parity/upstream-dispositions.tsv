@@ -376,8 +376,8 @@ packages/flutter/test/widgets/ensure_visible_test.dart	271	SingleChildScrollView
 packages/flutter/test/widgets/ensure_visible_test.dart	318	Nested SingleChildScrollView ensureVisible behavior test	paired-match	upstream-ensure-visible-nested-and-lazy.md
 packages/flutter/test/widgets/ensure_visible_test.dart	394	ListView ensureVisible Axis.vertical	paired-match	upstream-ensure-visible-nested-and-lazy.md
 packages/flutter/test/widgets/ensure_visible_test.dart	430	ListView ensureVisible Axis.horizontal	paired-match	upstream-ensure-visible-nested-and-lazy.md
-packages/flutter/test/widgets/animated_switcher_test.dart	9	AnimatedSwitcher fades in a new child.	partial-match	upstream-animated-switcher-retained-lifetime.md
-packages/flutter/test/widgets/animated_switcher_test.dart	53	AnimatedSwitcher can handle back-to-back changes.	paired-mismatch	upstream-animated-switcher-retained-lifetime.md
+packages/flutter/test/widgets/animated_switcher_test.dart	9	AnimatedSwitcher fades in a new child.	paired-match	upstream-animated-switcher-retained-lifetime.md#current-retained-transitions
+packages/flutter/test/widgets/animated_switcher_test.dart	53	AnimatedSwitcher can handle back-to-back changes.	paired-match	upstream-animated-switcher-retained-lifetime.md#current-retained-transitions
 packages/flutter/test/widgets/animated_switcher_test.dart	88	AnimatedSwitcher doesn't transition in a new child of the same type.	paired-match	upstream-animated-switcher-retained-lifetime.md
 packages/flutter/test/widgets/animated_switcher_test.dart	116	AnimatedSwitcher handles null children.	paired-match	upstream-animated-switcher-retained-lifetime.md
 packages/flutter/test/widgets/animated_switcher_test.dart	175	AnimatedSwitcher uses custom layout.	partial-match	upstream-animated-switcher-retained-lifetime.md
@@ -387,7 +387,7 @@ packages/flutter/test/widgets/animated_cross_fade_test.dart	328	AnimatedCrossFad
 packages/flutter/test/widgets/animated_cross_fade_test.dart	353	AnimatedCrossFade second child do not receive touch events	paired-match	upstream-cross-fade-focus-and-input.md
 packages/flutter/test/widgets/animated_cross_fade_test.dart	518	AnimatedCrossFade onEnd callback is called for each animation cycle	paired-match	upstream-cross-fade-focus-and-input.md#current-completion-and-clipping
 packages/flutter/test/widgets/animated_switcher_test.dart	319	AnimatedSwitcher updates previous child transitions if the transitionBuilder changes.	partial-match	upstream-animated-switcher-builder-and-key-reentry.md
-packages/flutter/test/widgets/animated_switcher_test.dart	400	AnimatedSwitcher does not duplicate animations if the same child is entered twice.	paired-mismatch	upstream-animated-switcher-builder-and-key-reentry.md
+packages/flutter/test/widgets/animated_switcher_test.dart	400	AnimatedSwitcher does not duplicate animations if the same child is entered twice.	paired-match	upstream-animated-switcher-retained-lifetime.md#current-retained-transitions
 packages/flutter/test/widgets/animated_switcher_test.dart	420	AnimatedSwitcher does not crash at zero area	paired-match	upstream-animated-switcher-builder-and-key-reentry.md
 packages/flutter/test/widgets/implicit_animations_test.dart	69	AnimatedContainer onEnd callback test	paired-match	upstream-implicit-animation-completion.md
 packages/flutter/test/widgets/implicit_animations_test.dart	94	AnimatedPadding onEnd callback test	paired-match	upstream-implicit-animation-completion.md

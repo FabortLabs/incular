@@ -46,3 +46,18 @@ same focused Rust test target:
   default fade was compared, not every custom builder shape.
 
 These are authored probes; the static upstream count is unchanged.
+
+## Current retained transitions
+
+Pinned :9, :53 and :400 and all 16 focused native tests passed. The three
+interrupted fade samples are unchanged and only the current child remains
+after the authored 166ms checkpoint. A never-visible outgoing entry is
+removed even when its reverse completes without a numeric value change.
+A reentered keyed child no longer has an invisible old copy at the tested
+1000ms checkpoint, while ordinary null-child exits still expose their exact
+zero-opacity boundary. Internal transition keys cannot impersonate the
+application's numeric child keys.
+
+Each entry keeps the duration and curved animation it was created with;
+the two pinned authored controls now agree at 0.5 after changing the next
+child's reverse duration or rebuilding the same key with a different curve.

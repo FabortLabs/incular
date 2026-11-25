@@ -162,6 +162,8 @@ pub enum Key {
     Value(u64),
     #[doc(hidden)]
     GridCell(usize),
+    #[doc(hidden)]
+    SwitcherEntry(u64),
     String(String),
     PageStorage(crate::PageStorageKey),
     Global(GlobalKey),
@@ -220,6 +222,10 @@ impl std::hash::Hash for Key {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
             Key::Value(value) => state.write_u64(*value),
+            Key::SwitcherEntry(index) => {
+                state.write_u64(*index);
+                state.write_u8(0x53);
+            }
             Key::GridCell(index) => {
                 state.write_usize(*index);
                 state.write_u8(0x43);

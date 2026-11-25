@@ -956,6 +956,7 @@ fn key_display(key: &Key) -> String {
     match key {
         Key::Value(value) => format!("<{value}>"),
         Key::GridCell(index) => format!("<grid cell {index}>"),
+        Key::SwitcherEntry(index) => format!("<switcher entry {index}>"),
         Key::String(text) => text.clone(),
         Key::PageStorage(key) => format!("{key:?}"),
         Key::Global(key) => format!("[GlobalKey#{}]", key.id()),

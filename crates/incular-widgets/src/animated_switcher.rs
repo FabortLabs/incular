@@ -12,7 +12,7 @@ use incular_animation::{
 };
 use incular_config::Alignment;
 
-use crate::tree::RetainedState;
+use crate::tree::{Key, RetainedState};
 use crate::{Opacity, Stack, Widget};
 
 /// Builds a child's transition from its animation value (0 hidden, 1 shown).
@@ -128,26 +128,6 @@ struct Entry {
     animation: DoubleAnimation,
     child: RefCell<Widget>,
     key: u64,
-    /// `CurvedAnimation._curveDirection`: the direction that started the
-    /// running animation, which picks its curve until it settles.
-    curve_direction: Cell<Option<AnimationStatus>>,
-}
-
-impl Entry {
-    fn value(&self, config: &AnimatedSwitcher) -> f32 {
-        let t = self.controller.value();
-        let curve = match self.curve_direction.get() {
-            Some(AnimationStatus::Reverse) => config.switch_out_curve,
-            _ => config.switch_in_curve,
-        };
-        curve.apply(t)
-    }
-
-    fn start(&self, direction: AnimationStatus) {
-        if self.curve_direction.get().is_none() {
-            self.curve_direction.set(Some(direction));
-        }
-    }
 }
 
 struct SwitcherState {
@@ -169,6 +149,12 @@ impl SwitcherState {
     fn bump(&self) {
         let revision = self.revision.borrow().clone();
         revision.set(revision.get().wrapping_add(1));
+    }
+
+    fn remove_outgoing(&self, entry: &Rc<Entry>) {
+        self.outgoing
+            .borrow_mut()
+            .retain(|other| !Rc::ptr_eq(other, entry));
     }
 
     /// `initState` / `didUpdateWidget` for a new descriptor.
@@ -197,17 +183,16 @@ impl SwitcherState {
     /// `_addEntryForNewChild`.
     fn add_entry(self: &Rc<Self>, config: &AnimatedSwitcher, animate: bool) {
         if let Some(current) = self.current.take() {
-            current
-                .controller
-                .set_duration(config.reverse_duration.unwrap_or(config.duration));
-            current.start(AnimationStatus::Reverse);
+            // Register the outgoing entry before reversing: at value zero,
+            // reverse completes synchronously and removes that entry.
+            self.outgoing.borrow_mut().push(current.clone());
             current.controller.reverse_on_next_tick();
-            self.outgoing.borrow_mut().push(current);
         }
         let Some(child) = config.child.clone() else {
             return;
         };
         let controller = AnimationController::new(config.duration);
+        controller.set_reverse_duration(config.reverse_duration);
         let animation: DoubleAnimation =
             CurvedAnimation::new(controller.clone(), config.switch_in_curve)
                 .reverse_curve(config.switch_out_curve)
@@ -217,32 +202,44 @@ impl SwitcherState {
             animation,
             child: RefCell::new(child),
             key: self.child_number.get(),
-            curve_direction: Cell::new(None),
         });
         let weak_state = self.this.borrow().clone();
         let weak_entry = Rc::downgrade(&entry);
-        controller.add_listener(move |_| {
+        controller.add_listener(move |value| {
             let (Some(state), Some(entry)) = (weak_state.upgrade(), weak_entry.upgrade()) else {
                 return;
             };
-            let status = entry.controller.status();
-            if matches!(
-                status,
-                AnimationStatus::Completed | AnimationStatus::Dismissed
-            ) {
-                entry.curve_direction.set(None);
-            }
-            // A dismissed outgoing child leaves the switcher.
-            if status == AnimationStatus::Dismissed {
-                state
-                    .outgoing
-                    .borrow_mut()
-                    .retain(|e| !Rc::ptr_eq(e, &entry));
+            if value == 0.0 && entry.controller.status() == AnimationStatus::Reverse {
+                // The exact endpoint of an ordinary exit remains observable.
+                // If that child key has already reentered, do not retain two
+                // instances of the same keyed child once the old one is invisible.
+                let child = entry.child.borrow();
+                let is_reentry = child.key().is_some()
+                    && state
+                        .current
+                        .borrow()
+                        .as_ref()
+                        .is_some_and(|current| current.child.borrow().can_update(&child));
+                if is_reentry {
+                    state.remove_outgoing(&entry);
+                }
             }
             state.bump();
         });
+        let weak_state = self.this.borrow().clone();
+        let weak_entry = Rc::downgrade(&entry);
+        controller.add_status_listener(move |status| {
+            let (Some(state), Some(entry)) = (weak_state.upgrade(), weak_entry.upgrade()) else {
+                return;
+            };
+            // A final tick can change status without changing the numeric
+            // value. Remove on status, not on the incidental value callback.
+            if status == AnimationStatus::Dismissed {
+                state.remove_outgoing(&entry);
+                state.bump();
+            }
+        });
         if animate {
-            entry.start(AnimationStatus::Forward);
             controller.forward_on_next_tick();
         } else {
             controller.set_value(1.0);
@@ -260,7 +257,7 @@ impl SwitcherState {
         let transition = |entry: &Rc<Entry>| {
             let child = entry.child.borrow().clone();
             let child = match &config.transition_builder {
-                TransitionBuilder::Scalar(builder) => builder(child, entry.value(&config)),
+                TransitionBuilder::Scalar(builder) => builder(child, entry.animation.value()),
                 TransitionBuilder::Animated(builder) => builder(child, entry.animation.clone()),
             };
             Widget::animation_ticker_with_revision(
@@ -269,7 +266,7 @@ impl SwitcherState {
                 revision.clone(),
                 child,
             )
-            .with_key(entry.key)
+            .with_key(Key::SwitcherEntry(entry.key))
         };
         let current = self.current.borrow().clone();
         let current_key = current.as_ref().map(|entry| entry.key);
