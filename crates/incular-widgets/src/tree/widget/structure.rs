@@ -1347,13 +1347,15 @@ impl PartialEq for WidgetKind {
                     fit: a,
                     alignment: b,
                     child: c,
+                    clip_behavior: g,
                 },
                 Self::FittedBox {
                     fit: d,
                     alignment: e,
                     child: f,
+                    clip_behavior: h,
                 },
-            ) => a == d && b == e && c == f,
+            ) => a == d && b == e && c == f && g == h,
             (
                 Self::Opacity {
                     alpha: a,

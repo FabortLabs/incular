@@ -737,6 +737,9 @@ impl WidgetTree {
                 world_transform,
                 content_transform,
             );
+            if matches!(new_kind, RenderKind::FittedBox { .. }) {
+                self.sync_fitted_clip(render);
+            }
             if invalidation.contains(Invalidation::COMPOSITE) {
                 self.diagnostics.compositor_only_updates += 1;
                 #[cfg(feature = "devtools")]

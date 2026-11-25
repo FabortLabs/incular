@@ -886,6 +886,7 @@ pub enum RenderKind {
     FittedBox {
         fit: ImageFit,
         alignment: Alignment,
+        clip_behavior: Clip,
     },
     Opacity {
         alpha: f32,

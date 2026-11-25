@@ -48,9 +48,15 @@ pub(super) fn lower_effects(widget: &Widget) -> RenderKind {
             alignment: *alignment,
             filter_quality: *filter_quality,
         },
-        WidgetKind::FittedBox { fit, alignment, .. } => RenderKind::FittedBox {
+        WidgetKind::FittedBox {
+            fit,
+            alignment,
+            clip_behavior,
+            ..
+        } => RenderKind::FittedBox {
             fit: *fit,
             alignment: *alignment,
+            clip_behavior: *clip_behavior,
         },
         WidgetKind::Opacity {
             alpha, controller, ..

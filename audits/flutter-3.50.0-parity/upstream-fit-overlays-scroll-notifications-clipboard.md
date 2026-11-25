@@ -161,3 +161,15 @@ nonempty child completes a zero viewport without giving it area.
 A retained control inserts, removes, and reinserts a drawable child
 on the same wrapper and observes draw submission follow its presence.
 All 18 targeted Rust layout, baseline and semantics tests passed.
+
+## FittedBox clips only overflow
+
+Pinned :423 observes the default Clip.none and then changes the mode
+on the same render object. The Rust port also verifies emitted hard,
+antialiased and isolated coverage on actual overflowing content,
+without relayout. Four other pinned layer tests pass. The Rust
+adaptation checks contain and cover on both axes and all 81 size
+combinations for BoxFit.none with a hard clip. Matching clip presence
+does not equate Flutter's engine layer types to Incular's retained
+commands, so those four comparisons are partial. All 19 targeted
+Rust checks pass; no native raster comparison is claimed.

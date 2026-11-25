@@ -1,6 +1,6 @@
 //! Baseline, aspect-ratio, fractional-sizing, and fitted-box primitives.
 
-use incular_config::Alignment;
+use incular_config::{Alignment, Clip};
 use typed_builder::TypedBuilder;
 
 use crate::tree::BoxFit;
@@ -118,6 +118,8 @@ pub struct FittedBox {
     fit: BoxFit,
     #[builder(default = Alignment::CENTER)]
     alignment: Alignment,
+    #[builder(default = Clip::None)]
+    clip_behavior: Clip,
     #[builder(default, setter(strip_option, into))]
     child: Option<Widget>,
 }
@@ -129,6 +131,7 @@ impl FittedBox {
         Self {
             fit: BoxFit::Contain,
             alignment: Alignment::CENTER,
+            clip_behavior: Clip::None,
             child: Some(child.into()),
         }
     }
@@ -146,8 +149,17 @@ impl FittedBox {
     }
 }
 
+impl FittedBox {
+    /// Clips visual overflow using this mode. Content that fits is not clipped.
+    #[must_use]
+    pub fn clip_behavior(mut self, behavior: Clip) -> Self {
+        self.clip_behavior = behavior;
+        self
+    }
+}
+
 impl From<FittedBox> for Widget {
     fn from(value: FittedBox) -> Self {
-        Widget::fitted_box(value.fit, value.alignment, value.child)
+        Widget::fitted_box(value.fit, value.alignment, value.clip_behavior, value.child)
     }
 }

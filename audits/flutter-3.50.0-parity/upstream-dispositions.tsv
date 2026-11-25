@@ -215,6 +215,11 @@ packages/flutter/test/widgets/fitted_box_test.dart	102	FittedBox with no child	p
 packages/flutter/test/widgets/fitted_box_test.dart	524	FittedBox without child does not throw	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md#childless-fittedbox-and-zero-area
 packages/flutter/test/widgets/fitted_box_test.dart	537	FittedBox with zero size child does not throw	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md#childless-fittedbox-and-zero-area
 packages/flutter/test/widgets/fitted_box_test.dart	559	FittedBox does not crash at zero area	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md#childless-fittedbox-and-zero-area
+packages/flutter/test/widgets/fitted_box_test.dart	305	FittedBox layers - contain	partial-match	upstream-fit-overlays-scroll-notifications-clipboard.md#fittedbox-clips-only-overflow
+packages/flutter/test/widgets/fitted_box_test.dart	320	FittedBox layers - cover - horizontal	partial-match	upstream-fit-overlays-scroll-notifications-clipboard.md#fittedbox-clips-only-overflow
+packages/flutter/test/widgets/fitted_box_test.dart	341	FittedBox layers - cover - vertical	partial-match	upstream-fit-overlays-scroll-notifications-clipboard.md#fittedbox-clips-only-overflow
+packages/flutter/test/widgets/fitted_box_test.dart	362	FittedBox layers - none - clip	partial-match	upstream-fit-overlays-scroll-notifications-clipboard.md#fittedbox-clips-only-overflow
+packages/flutter/test/widgets/fitted_box_test.dart	423	Can set and update clipBehavior	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md#fittedbox-clips-only-overflow
 packages/flutter/test/widgets/fractionally_sized_box_test.dart	9	FractionallySizedBox	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
 packages/flutter/test/widgets/fractionally_sized_box_test.dart	32	FractionallySizedBox alignment	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
 packages/flutter/test/widgets/fractionally_sized_box_test.dart	100	FractionallySizedBox does not crash at zero area	partial-match	upstream-fit-overlays-scroll-notifications-clipboard.md

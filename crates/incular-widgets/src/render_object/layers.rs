@@ -34,6 +34,11 @@ fn widget_clips(widget: &WidgetKind) -> bool {
             clip_behavior,
             child,
             ..
+        }
+        | WidgetKind::FittedBox {
+            clip_behavior,
+            child,
+            ..
         } => child.is_some() && *clip_behavior != Clip::None,
         WidgetKind::Stack { clip_behavior, .. }
         | WidgetKind::IndexedStack { clip_behavior, .. }
@@ -85,6 +90,7 @@ impl LayerSpec {
             | WidgetKind::ClipRRect { .. }
             | WidgetKind::ClipOval { .. }
             | WidgetKind::ClipPath { .. }
+            | WidgetKind::FittedBox { .. }
             | WidgetKind::Stack { .. }
             | WidgetKind::IndexedStack { .. }
                 if widget_clips(widget) =>
@@ -250,7 +256,10 @@ impl RenderLayers {
             // Clip widgets start with zero geometry like scrolling; layout
             // and the update path fill the retained shape from the node
             // size before any flatten can observe it.
-            WidgetKind::ClipRect { clip_behavior, .. } if widget_clips(widget) => {
+            WidgetKind::ClipRect { clip_behavior, .. }
+            | WidgetKind::FittedBox { clip_behavior, .. }
+                if widget_clips(widget) =>
+            {
                 let clip = compositor.create_clip_rect_with_coverage(
                     Rect::from_origin_size(Offset::ZERO, Size::ZERO),
                     shape_clip_coverage(*clip_behavior),
@@ -612,6 +621,9 @@ impl RenderLayers {
     ) {
         if matches!(self.attachment, LayerAttachment::Clip { .. }) {
             self.apply_clip(compositor, kind, size);
+            if let (Some(layer), Some(transform)) = (self.content(), content_transform) {
+                compositor.update_transform(layer, transform);
+            }
             return;
         }
         match (&self.attachment, kind) {
@@ -1107,6 +1119,19 @@ impl RenderLayers {
         }
     }
 
+    pub(crate) fn apply_fitted_clip(
+        &self,
+        compositor: &mut LayerTree,
+        size: Size,
+        behavior: Clip,
+        overflows: bool,
+    ) {
+        if let LayerAttachment::Clip { clip, .. } = &self.attachment {
+            compositor.update_clip_rect_coverage(*clip, shape_clip_coverage(behavior));
+            self.apply_overflow_rect_clip(compositor, size, overflows);
+        }
+    }
+
     /// Rebuilds the clip geometry from the kind and size. The compositor keeps
     /// its geometry when the size and clip inputs (radius, path) are unchanged
     /// and the current delegate does not reclip against the one that produced it
@@ -1119,7 +1144,10 @@ impl RenderLayers {
             self.apply_overflow_rect_clip(compositor, size, self.stack_layout_overflow.get());
             return;
         }
-        if matches!(kind, RenderKind::Scroll { .. }) {
+        if matches!(
+            kind,
+            RenderKind::Scroll { .. } | RenderKind::FittedBox { .. }
+        ) {
             // The viewport supplies its laid-out child's translated bounds.
             return;
         }

@@ -3337,7 +3337,7 @@ impl WidgetTree {
                         );
                     }
                 }
-                RenderKind::FittedBox { fit, alignment } => {
+                RenderKind::FittedBox { fit, alignment, .. } => {
                     if let (Some(content), Some(&child)) = (
                         layers.content(),
                         self.render_live(_render, "retained render must remain live")

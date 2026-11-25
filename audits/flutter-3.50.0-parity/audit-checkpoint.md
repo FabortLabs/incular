@@ -904,3 +904,8 @@ back to scaleDown relayouts in place.
 [Childless FittedBox](upstream-fit-overlays-scroll-notifications-clipboard.md#childless-fittedbox-and-zero-area)
 adds four matched originals: 469 / 8,965 fully compared (5.23%),
 373 matches and 96 historical mismatches.
+
+[FittedBox clipping](upstream-fit-overlays-scroll-notifications-clipboard.md#fittedbox-clips-only-overflow)
+adds one full comparison: 470 / 8,965 (5.24%), with 374 matches
+and 96 historical mismatches. Configured coverage is applied only
+when the fit actually crops; the 81-case layer adaptation is partial.

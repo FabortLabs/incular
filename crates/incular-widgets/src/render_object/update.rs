@@ -174,6 +174,21 @@ fn custom_paint_only_change(old: &RenderKind, new: &RenderKind) -> bool {
 }
 
 fn same_compositor_family(old: &RenderKind, new: &RenderKind) -> bool {
+    if let (
+        RenderKind::FittedBox {
+            fit: old_fit,
+            alignment: old_alignment,
+            ..
+        },
+        RenderKind::FittedBox {
+            fit: new_fit,
+            alignment: new_alignment,
+            ..
+        },
+    ) = (old, new)
+    {
+        return old_fit == new_fit && old_alignment == new_alignment;
+    }
     // Stack alignment, fit, and text direction change measurement, so a
     // stack pair is compositor-only only for a pure behavior flip.
     if let (RenderKind::Stack { stack: old_stack }, RenderKind::Stack { stack: new_stack }) =

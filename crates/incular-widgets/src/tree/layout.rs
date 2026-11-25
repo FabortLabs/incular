@@ -477,7 +477,7 @@ impl WidgetTree {
                 *alignment,
                 node.size,
             )),
-            RenderKind::FittedBox { fit, alignment } => {
+            RenderKind::FittedBox { fit, alignment, .. } => {
                 let child = *node.children.first()?;
                 let child_size = self.renders.get(child.0)?.size;
                 Some(fitted_transform(child_size, node.size, *fit, *alignment))
@@ -490,6 +490,37 @@ impl WidgetTree {
         self.content_transform(id)
             .and_then(CoreTransform::inverse)
             .is_some()
+    }
+
+    pub(super) fn sync_fitted_clip(&mut self, id: RenderObjectId) {
+        let node = self.render_live(id, "fitted clip render must remain live");
+        let RenderKind::FittedBox {
+            fit, clip_behavior, ..
+        } = *node.object.kind()
+        else {
+            return;
+        };
+        if clip_behavior == Clip::None {
+            return;
+        }
+        let (bounds, source) = (node.size, self.transform_child_size(node));
+        let overflows = if self.fitted_content_is_visible(id) {
+            // Compare aspect ratios without division or rounded transformed
+            // edges: these are the axes that Flutter crops in applyBoxFit.
+            let scaled_width = f64::from(bounds.width) * f64::from(source.height);
+            let scaled_height = f64::from(bounds.height) * f64::from(source.width);
+            match fit {
+                ImageFit::Cover => scaled_width != scaled_height,
+                ImageFit::FitWidth => scaled_width > scaled_height,
+                ImageFit::FitHeight => scaled_width < scaled_height,
+                ImageFit::None => source.width > bounds.width || source.height > bounds.height,
+                _ => false,
+            }
+        } else {
+            false
+        };
+        let layers = node.object.layers.clone();
+        layers.apply_fitted_clip(&mut self.compositor, bounds, clip_behavior, overflows);
     }
     /// Measured child size for fraction resolution: the fraction is
     /// documented against the child's size, which differs from the
@@ -1146,6 +1177,9 @@ impl WidgetTree {
         {
             let translation = scroll_translation(controller, *axis, *reverse);
             self.sync_single_child_scroll_clip(id, translation);
+        }
+        if matches!(kind.as_ref(), RenderKind::FittedBox { .. }) {
+            self.sync_fitted_clip(id);
         }
         self.diagnostics.layouts += 1;
         #[cfg(feature = "devtools")]
