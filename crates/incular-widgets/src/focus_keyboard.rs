@@ -192,6 +192,23 @@ impl FocusScope {
         }
     }
 
+    /// Finds the nearest mounted scope above this retained element.
+    /// Returns none when the root has no explicit scope node.
+    #[must_use]
+    pub fn maybe_of(
+        tree: &crate::tree::WidgetTree,
+        element: crate::tree::ElementId,
+    ) -> Option<FocusScopeNode> {
+        let mut ancestor = tree.parent(element);
+        while let Some(id) = ancestor {
+            if let Some(scope) = tree.focus_node_at(id).and_then(|node| node.scope_owner()) {
+                return Some(scope);
+            }
+            ancestor = tree.parent(id);
+        }
+        None
+    }
+
     /// Binds an external scope node without changing its configuration.
     #[must_use]
     pub fn node(mut self, node: FocusScopeNode) -> Self {

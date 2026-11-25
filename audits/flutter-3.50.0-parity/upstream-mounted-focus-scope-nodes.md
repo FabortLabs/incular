@@ -10,8 +10,10 @@ an ordinary Tab stop. The Rust runtime tests use the nested focus
 fixture and also request focus on a centered scope measured at exactly
 zero width and height.
 
-This change does not infer the nearest scope from a build context or
-implement Flutter's complete per-scope focused-child history.
+The initial mount does not depend on layout. The retained-tree scope
+lookup resolves explicit ancestor scopes; the implicit Flutter root
+scope fallback, focus attachment API and complete unfocus policies are
+not covered by these tests.
 
 ## Scope request and descendant permissions
 
@@ -43,3 +45,15 @@ after moving a node within a scope. Its separate manual focus attachment
 and parent enumeration are not covered by the mounted Rust fixture, so
 it stays partial. The existing :812 widget reparent remains partial
 because its root-scope activation and label checks are distinct.
+
+## Requests through a mounted scope
+
+A mounted scope delegates focus to its eligible descendant through the
+retained runtime. Supplying a node in another scope is rejected.
+`request_focus_in_scope()` follows the last eligible child through
+nested scopes, landing on the scope itself if that scope has no eligible
+child. The pinned authored probe checks both restoration to the leaf
+and fallback to the inner scope when the leaf is disabled. The mounted
+Rust tests also verify a request before the first layout. Scoped
+requests through the nearest mounted scope complete the original
+`focus_scope_test.dart:16` and :30 reactive-label comparisons.

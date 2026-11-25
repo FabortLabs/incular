@@ -15,8 +15,11 @@ fn external_scope_can_take_primary_focus_instead_of_its_previous_child() {
     .node(outer.clone());
     let mut runtime = Runtime::new(tree.into()).unwrap();
     let bounds = Constraints::tight(Size::new(800., 600.));
-    runtime.run_frame(bounds).unwrap();
-    child.request_focus();
+    assert!(
+        outer.request_focus(&child),
+        "initial mount has already attached descendants"
+    );
+    assert!(!child.has_primary_focus());
     runtime.run_frame(bounds).unwrap();
     assert!(outer.has_focus() && !outer.has_primary_focus());
     assert!(child.has_primary_focus());
@@ -32,6 +35,9 @@ fn external_scope_can_take_primary_focus_instead_of_its_previous_child() {
     runtime.run_frame(bounds).unwrap();
     assert!(outer.has_primary_focus());
     assert!(!child.has_primary_focus());
+    assert!(outer.request_focus_in_scope());
+    runtime.run_frame(bounds).unwrap();
+    assert!(child.has_primary_focus());
 }
 
 #[test]
@@ -188,6 +194,7 @@ fn focus_history_survives_direct_scope_focus_and_clears_after_global_key_scope_m
     assert!(child.has_primary_focus());
     assert_eq!(runtime.focused_element(), Some(original));
     assert_eq!(left.focused_child(), None);
+    assert!(!left.request_focus(&child));
     assert_eq!(right.focused(), Some(child.clone()));
     assert_eq!(right.focused_child(), Some(child.clone()));
     assert!(!runtime.dispatch_keyboard_event(KeyboardEvent::key_down(
@@ -229,5 +236,14 @@ fn a_parent_scope_remembers_its_nested_scope_and_not_the_nested_leaf() {
     runtime.run_frame(bounds).unwrap();
     assert_eq!(outer.focused(), Some(nested.scope_focus_node()));
     assert_eq!(nested.focused(), None);
-    assert_eq!(nested.focused_child(), Some(leaf));
+    assert_eq!(nested.focused_child(), Some(leaf.clone()));
+
+    assert!(outer.request_focus_in_scope());
+    runtime.run_frame(bounds).unwrap();
+    assert!(leaf.has_primary_focus());
+    leaf.set_can_request_focus(false);
+    assert!(outer.request_focus_in_scope());
+    runtime.run_frame(bounds).unwrap();
+    assert!(nested.has_primary_focus());
+    assert!(!leaf.has_focus());
 }

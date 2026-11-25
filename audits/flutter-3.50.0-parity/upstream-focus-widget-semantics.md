@@ -112,9 +112,10 @@ The pinned originals :16, :30, and :65 in `focus_scope_test.dart`
 passed by exact name. The new retained application test builds its
 status text reactively from live FocusNodes. It verifies the initial
 state, each node's focus state, and the exact labels in the committed
-semantic tree after a request or autofocus. :65 is paired. :16 and :30
-are partial, since the mounted Rust fixtures request the node directly
-rather than looking up an attached scope with `FocusScope.of`.
+semantic tree after a request or autofocus. All three are paired. For :16 and :30
+the native fixture now finds the nearest mounted scope from the keyed
+control and requests focus through that scope, rather than directly
+through the node.
 
 After the primary-focus ownership fix, the pinned :812 cross-scope
 case and the :1825 manager case were rerun. The native GlobalKey test

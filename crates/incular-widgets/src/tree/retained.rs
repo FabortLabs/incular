@@ -812,6 +812,7 @@ impl WidgetTree {
         self.finalize_parked_global_elements();
         let root = self.mount_element(None, widget)?;
         self.root = Some(root);
+        self.refresh_hosted_scope_membership();
         self.refresh_notification_listeners();
         Ok(root)
     }

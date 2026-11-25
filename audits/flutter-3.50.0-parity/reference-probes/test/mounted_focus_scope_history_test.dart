@@ -107,5 +107,14 @@ void main() {
     expect(outer.focusedChild, nested);
     expect(nested.hasPrimaryFocus, isTrue);
     expect(nested.focusedChild, leaf);
+
+    outer.requestFocus();
+    await tester.pump();
+    expect(leaf.hasPrimaryFocus, isTrue);
+    leaf.canRequestFocus = false;
+    outer.requestFocus();
+    await tester.pump();
+    expect(nested.hasPrimaryFocus, isTrue);
+    expect(leaf.hasFocus, isFalse);
   });
 }

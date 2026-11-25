@@ -1694,6 +1694,30 @@ impl FocusScopeNode {
         self.scope_focus_node().request_focus();
     }
 
+    /// Requests the most recently focused eligible descendant, following
+    /// nested scopes. When none is remembered, requests the scope itself.
+    #[must_use]
+    pub fn request_focus_in_scope(&self) -> bool {
+        let mut current = self.clone();
+        let mut visited = Vec::new();
+        loop {
+            if !current.can_request_focus() || visited.contains(&current) {
+                return false;
+            }
+            let Some(child) = current.last_hosted_child(true) else {
+                current.request_scope_focus();
+                return true;
+            };
+            if let Some(child_scope) = child.scope_owner() {
+                visited.push(current);
+                current = child_scope;
+            } else {
+                child.request_focus();
+                return true;
+            }
+        }
+    }
+
     /// Whether the mounted scope or any of its descendants has focus.
     #[must_use]
     pub fn has_focus(&self) -> bool {
@@ -1779,10 +1803,30 @@ impl FocusScopeNode {
         transition.notify();
     }
 
-    /// Gives a node exclusive focus in this scope.
+    /// Gives a node exclusive focus in this scope. A mounted scope queues
+    /// the request through the host and only accepts its own descendants.
     #[must_use]
     pub fn request_focus(&self, node: &FocusNode) -> bool {
         if !node.can_request_focus() {
+            return false;
+        }
+        if self.mounted_anchor().is_some() {
+            let mut scope = node.host_enclosing_scope();
+            let mut visited = Vec::new();
+            while let Some(parent) = scope {
+                if !parent.descendants_are_focusable() || visited.contains(&parent) {
+                    return false;
+                }
+                if &parent == self {
+                    if let Some(scope) = node.scope_owner() {
+                        return scope.request_focus_in_scope();
+                    }
+                    node.request_focus();
+                    return true;
+                }
+                scope = parent.scope_focus_node().host_enclosing_scope();
+                visited.push(parent);
+            }
             return false;
         }
         let parent = self
@@ -1873,12 +1917,9 @@ impl FocusScopeNode {
         history.push(child_state);
     }
 
-    /// The most recently focused live child, even when another scope owns
-    /// primary focus. Children that move to another scope no longer count.
-    #[must_use]
-    pub fn focused_child(&self) -> Option<FocusNode> {
-        if self.mounted_anchor().is_none() {
-            return self.state.manager.borrow_mut().focused();
+    fn last_hosted_child(&self, require_focusable: bool) -> Option<FocusNode> {
+        if require_focusable && !self.descendants_are_focusable() {
+            return None;
         }
         self.state
             .hosted_history
@@ -1887,7 +1928,20 @@ impl FocusScopeNode {
             .rev()
             .filter_map(Weak::upgrade)
             .map(|state| FocusNode { state })
-            .find(|child| child.host_enclosing_scope().as_ref() == Some(self))
+            .find(|child| {
+                child.host_enclosing_scope().as_ref() == Some(self)
+                    && (!require_focusable || child.can_request_focus())
+            })
+    }
+
+    /// The most recently focused live child, even when another scope owns
+    /// primary focus. Children that move to another scope no longer count.
+    #[must_use]
+    pub fn focused_child(&self) -> Option<FocusNode> {
+        if self.mounted_anchor().is_none() {
+            return self.state.manager.borrow_mut().focused();
+        }
+        self.last_hosted_child(false)
     }
 
     /// Returns the currently active child of this scope, if any.
@@ -1922,6 +1976,11 @@ impl FocusScopeNode {
     /// requestable.
     #[must_use]
     pub fn restore_focus(&self) -> bool {
+        if self.mounted_anchor().is_some() {
+            return self
+                .last_hosted_child(true)
+                .is_some_and(|child| self.request_focus(&child));
+        }
         let Some(node) = self.state.last_focused.borrow().clone() else {
             return false;
         };
