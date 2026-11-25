@@ -1,4 +1,4 @@
-//! Two pinned Ticker time-dilation cases plus the scheduler's default.
+//! Pinned Ticker and binding-free scheduler time-dilation cases.
 use incular_animation::{Ticker, set_time_dilation, time_dilation};
 use incular_config::Constraints;
 use incular_core::{Color, Size, time::Instant};
@@ -7,8 +7,15 @@ use incular_widgets::Widget;
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
 #[test]
-fn time_dilation_defaults_to_one_without_frames() {
+fn time_dilation_can_be_set_without_a_runtime_or_frames() {
+    use incular_animation::current_system_frame_time;
+
+    assert_eq!(current_system_frame_time(), None);
     assert_eq!(time_dilation(), 1.0);
+    set_time_dilation(2.0);
+    assert_eq!(time_dilation(), 2.0);
+    assert_eq!(current_system_frame_time(), None);
+    set_time_dilation(1.0);
 }
 
 fn verify_ticker(dilation: f64, expected_elapsed_ms: u64) {

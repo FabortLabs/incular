@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-animation`: transient callbacks can wait for the next frame
+  without requesting a new one.
+
 - `incular-widgets`: Focus exposes focus-change callbacks and independent
   descendant focus and traversal permissions.
 
@@ -206,6 +209,9 @@ a version and date when publishing.
   `EditableText` does there. Mouse and stylus presses still unfocus it.
 
 ### Fixed
+
+- `incular-animation`: canceling a transient callback no longer withdraws
+  a frame that was already requested.
 
 - `incular-runtime`: windows opened while the app is suspended no longer
   reenable animation ticks before the app resumes.

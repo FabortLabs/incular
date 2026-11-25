@@ -45,7 +45,8 @@ pub use scheduler::{
     TickerFuture, TickerOrCancel, add_persistent_frame_callback, add_post_frame_callback,
     cancel_frame_callback, current_frame_time, current_system_frame_time,
     debug_assert_no_time_dilation, schedule_forced_frame, schedule_frame, schedule_frame_callback,
-    set_time_dilation, time_dilation, try_assert_no_time_dilation, try_set_time_dilation,
+    schedule_frame_callback_with_request, set_time_dilation, time_dilation,
+    try_assert_no_time_dilation, try_set_time_dilation,
 };
 pub use style::AnimationStyle;
 pub use tween::{

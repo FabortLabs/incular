@@ -89,6 +89,7 @@ pub mod prelude {
         Ticker, TrainHoppingAnimation, add_persistent_frame_callback, add_post_frame_callback,
         always_complete, always_dismissed, animation_max, animation_mean, animation_min,
         cancel_frame_callback, schedule_frame, schedule_frame_callback,
+        schedule_frame_callback_with_request,
     };
     // Flutter's named tweens.
     pub use incular_animation::{ColorTween, IntTween, Matrix4Tween, RectTween, SizeTween};

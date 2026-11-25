@@ -38,6 +38,8 @@ type TransientBatch = VecDeque<(FrameCallbackId, Transient)>;
 
 struct Scheduler {
     frame_callbacks: TransientBatch,
+    /// Ticker demand may be withdrawn, unlike an explicit frame request.
+    queued_ticker_count: usize,
     /// Reuse the previous dispatch buffer. Running tickers enqueue one
     /// lightweight weak reference each, not a heap-allocated closure.
     spare_callbacks: TransientBatch,
@@ -74,6 +76,7 @@ impl Default for Scheduler {
     fn default() -> Self {
         Self {
             frame_callbacks: VecDeque::new(),
+            queued_ticker_count: 0,
             spare_callbacks: VecDeque::new(),
             active_frame_callbacks: Vec::new(),
             post_frame_callbacks: Vec::new(),
@@ -99,9 +102,16 @@ impl Scheduler {
     }
 
     fn remove_frame_callback(&mut self, id: FrameCallbackId) -> Option<Transient> {
-        for batch in core::iter::once(&mut self.frame_callbacks)
-            .chain(self.active_frame_callbacks.iter_mut().rev())
+        if let Some(index) = self
+            .frame_callbacks
+            .iter()
+            .position(|(candidate, _)| *candidate == id)
+            && let Some((_, callback)) = self.frame_callbacks.remove(index)
         {
+            self.queued_ticker_count -= usize::from(matches!(callback, Transient::Ticker(_)));
+            return Some(callback);
+        }
+        for batch in self.active_frame_callbacks.iter_mut().rev() {
             if let Some(index) = batch.iter().position(|(candidate, _)| *candidate == id) {
                 return batch.remove(index).map(|(_, callback)| callback);
             }
@@ -366,10 +376,20 @@ pub struct FrameCallbackId(u64);
 /// frame's timestamp at the start of the next frame, before the build, and
 /// asks for that frame.
 pub fn schedule_frame_callback(callback: impl FnOnce(Instant) + 'static) -> FrameCallbackId {
+    schedule_frame_callback_with_request(callback, true)
+}
+
+/// Registers a transient callback, optionally requesting a new frame.
+/// With `schedule_new_frame` false it waits for a frame supplied for another
+/// reason. It still runs before build, unlike [`add_post_frame_callback`].
+pub fn schedule_frame_callback_with_request(
+    callback: impl FnOnce(Instant) + 'static,
+    schedule_new_frame: bool,
+) -> FrameCallbackId {
     SCHEDULER.with(|scheduler| {
-        scheduler
-            .borrow_mut()
-            .enqueue(Transient::Callback(Box::new(callback)))
+        let mut scheduler = scheduler.borrow_mut();
+        scheduler.frame_requested |= schedule_new_frame;
+        scheduler.enqueue(Transient::Callback(Box::new(callback)))
     })
 }
 
@@ -381,7 +401,7 @@ pub fn transient_callback_count() -> usize {
 }
 
 /// Flutter `SchedulerBinding.cancelFrameCallbackWithId`. Returns whether the
-/// callback was still waiting.
+/// callback was still waiting. Does not withdraw a requested frame.
 pub fn cancel_frame_callback(id: FrameCallbackId) -> bool {
     // Release the scheduler borrow before a captured value is dropped.
     let removed = SCHEDULER.with(|scheduler| scheduler.borrow_mut().remove_frame_callback(id));
@@ -439,15 +459,15 @@ pub fn current_system_frame_time() -> Option<Instant> {
     SCHEDULER.with(|scheduler| scheduler.borrow().last_raw)
 }
 
-/// Whether a frame is wanted: one was asked for, a frame callback waits, or
-/// an unmuted ticker runs. The runtime keeps producing frames while true.
+/// Whether a frame was requested or an unmuted ticker is ready. Transient
+/// callbacks registered without requesting a frame do not affect this.
 #[must_use]
 pub fn has_scheduled_frame() -> bool {
     let enabled = frames_enabled();
     SCHEDULER.with(|scheduler| {
         let scheduler = scheduler.borrow();
         scheduler.forced_frame_requested
-            || enabled && (scheduler.frame_requested || !scheduler.frame_callbacks.is_empty())
+            || enabled && (scheduler.frame_requested || scheduler.queued_ticker_count != 0)
     })
 }
 
@@ -475,6 +495,7 @@ pub fn begin_frame(raw: Instant) {
         if has_batch {
             let spare = std::mem::take(&mut scheduler.spare_callbacks);
             let pending = std::mem::replace(&mut scheduler.frame_callbacks, spare);
+            scheduler.queued_ticker_count = 0;
             scheduler.active_frame_callbacks.push(pending);
         }
         (now, has_batch)
@@ -614,6 +635,7 @@ impl TickerState {
             let id = SCHEDULER.with(|scheduler| {
                 let mut scheduler = scheduler.borrow_mut();
                 scheduler.forced_frame_requested |= self.force_frames.get();
+                scheduler.queued_ticker_count += 1;
                 scheduler.enqueue(Transient::Ticker(Rc::downgrade(self)))
             });
             self.scheduled.set(Some(id));

@@ -119,3 +119,53 @@ fn a_ticker_started_in_post_frame_has_zero_elapsed_at_its_first_tick() {
     assert_eq!(*elapsed.borrow(), [std::time::Duration::ZERO, interval]);
     ticker.stop();
 }
+
+#[test]
+fn cancelling_the_last_transient_callback_keeps_an_already_requested_frame() {
+    let size = Size::new(100., 100.);
+    let bounds = Constraints::tight(size);
+    let mut runtime = Runtime::new(Widget::box_(size, Color::WHITE)).unwrap();
+    runtime.run_frame_at(bounds, Instant::now()).unwrap();
+    assert!(!runtime.frame_requested());
+    let id = schedule_frame_callback(|_| panic!("cancelled callback ran"));
+    assert!(runtime.frame_requested());
+    assert!(cancel_frame_callback(id));
+    assert!(runtime.frame_requested());
+    runtime.run_frame_at(bounds, Instant::now()).unwrap();
+    assert!(!runtime.frame_requested());
+}
+
+/// scheduler/scheduler_test.dart:339, through both the scheduler and host
+/// demand checks. A supplied frame runs passive callbacks in transient phase.
+#[test]
+fn a_frame_callback_can_wait_without_requesting_a_frame() {
+    use incular_animation::{schedule_frame_callback_with_request, scheduler::has_scheduled_frame};
+    let size = Size::new(100., 100.);
+    let bounds = Constraints::tight(size);
+    let mut runtime = Runtime::new(Widget::box_(size, Color::WHITE)).unwrap();
+    runtime.run_frame_at(bounds, Instant::now()).unwrap();
+
+    for request in [false, true] {
+        let invoked = Rc::new(Cell::new(None));
+        let at = Instant::now();
+        schedule_frame_callback_with_request(
+            {
+                let invoked = invoked.clone();
+                move |time| invoked.set(Some(time))
+            },
+            request,
+        );
+        assert_eq!(has_scheduled_frame(), request);
+        assert_eq!(runtime.frame_requested(), request);
+        assert_eq!(invoked.get(), None);
+        runtime.run_frame_at(bounds, at).unwrap();
+        assert_eq!(invoked.get(), Some(at));
+        assert!(!has_scheduled_frame());
+        assert!(!runtime.frame_requested());
+    }
+
+    let passive = schedule_frame_callback_with_request(|_| panic!("passive callback ran"), false);
+    assert!(cancel_frame_callback(passive));
+    assert!(!has_scheduled_frame());
+    runtime.run_frame_at(bounds, Instant::now()).unwrap();
+}

@@ -899,3 +899,5 @@ packages/flutter/test/widgets/focus_manager_test.dart	358	FocusManager ignores a
 packages/flutter/test/widgets/focus_manager_test.dart	393	FocusManager responds to app lifecycle changes.	paired-match	upstream-focus-lifecycle.md
 packages/flutter/test/widgets/focus_manager_test.dart	420	Node is removed completely even if app is paused.	paired-match	upstream-focus-lifecycle.md
 packages/flutter/test/widgets/focus_manager_test.dart	448	Suspended focus is not restored on resume when another node claimed focus.	paired-match	upstream-focus-lifecycle.md
+packages/flutter/test/scheduler/scheduler_test.dart	339	Can schedule a frame callback with / without scheduling a new frame	paired-match	scheduler-callback-phases-comparisons.md#transient-registration-without-a-frame-request
+packages/flutter/test/scheduler/time_dilation_test.dart	11	timeDilation can be set without a binding	paired-match	scheduler-callback-phases-comparisons.md#binding-free-time-dilation

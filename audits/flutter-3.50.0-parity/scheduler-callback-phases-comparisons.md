@@ -115,3 +115,25 @@ bracket frame callbacks, while the default is silent. Six focused Rust
 checks and the exact Flutter original passed. Rust uses per-thread
 configuration and a replaceable diagnostic output rather than Flutter's
 global debug print function.
+
+## Transient registration without a frame request
+
+The pinned `scheduler/scheduler_test.dart:339` passed. A callback queued
+with `schedule_frame_callback_with_request(..., false)` joins the next
+transient batch without making the scheduler or runtime request a frame.
+The default still requests one. Both run at the timestamp of the supplied
+frame and clear their demand afterward.
+
+An authored Flutter control verifies that canceling the only callback
+does not retract an already requested frame. Baseline Incular incorrectly
+withdrew it. Canceling a passive callback requests nothing. Existing ticker
+demand stays independently withdrawable when the last ticker stops or
+mutes, and frame demand remains a constant-time query. Existing
+start-during-frame ordering and callback-cancellation controls pass.
+
+## Binding-free time dilation
+
+The pinned `scheduler/time_dilation_test.dart:11` and its Rust counterpart
+start at 1.0, set and read 2.0 successfully, and create no runtime or frame.
+The neighboring slow/fast ticker tests still pass. This is independent of
+the host's vsync or window state.
