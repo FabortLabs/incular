@@ -1,5 +1,9 @@
 # PageView fractions, controller replacement, and visible touch routing
 
+## Current recheck
+
+The pinned :591 original and all eight native fraction/controller checks pass. This confirms the controller handoff notes below, including the retained logical page rather than the incoming controller’s initial page.
+
 All eight associated pinned Flutter originals and seven of eight focused Rust tests pass. The intentional Rust failure is controller replacement.
 
 | Registration | Outcome |

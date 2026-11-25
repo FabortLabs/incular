@@ -1,5 +1,9 @@
 # PageView tap, drag, fling, and resize behavior
 
+## Current recheck
+
+The pinned :361 and :634 originals and all nine native touch/physics checks pass. The notes below distinguish the original failures from the verified repairs.
+
 All four corresponding pinned Flutter originals passed, including both expanded iOS/macOS variants for overscroll. The focused Rust runtime binary passes three tests and intentionally fails one.
 
 | Registration | Result |

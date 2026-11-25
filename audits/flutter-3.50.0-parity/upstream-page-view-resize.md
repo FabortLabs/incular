@@ -1,5 +1,9 @@
 # PageView and PageController: resizing and deferred state
 
+## Current recheck
+
+The pinned :65, :111 and :456 originals pass. All seven native checks pass, including the repeated collapse/expand, commands at zero extent, and offstage mounting. The table below records the original failures.
+
 The first five exact originals from widgets/page_view_test.dart passed on the pinned Flutter 3.50.0 checkout. The exact-name ordinary control also included the selected next/previous and zero-size-container originals; all four reported ordinary cases passed in its raw log, and the omitted overscroll variant names were run separately. The focused Rust resize target has three matches and three intentional failures.
 
 | Registration | Evidence |
