@@ -279,6 +279,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- A Table column-count change preserves cells within surviving rows
+  instead of reusing state from a different or removed row.
+
 - Table lays columns out right to left when requested by Directionality
   or an explicit setting, without remounting the cells.
 

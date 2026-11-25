@@ -131,3 +131,41 @@ fn table_publishes_table_row_and_labeled_cell_relationships() {
         ]
     );
 }
+
+#[test]
+fn width_changes_preserve_each_surviving_rows_cells_in_both_directions() {
+    let form = |columns, rows, generation| {
+        Widget::from(Table::new(
+            columns,
+            (0..rows).flat_map(move |row| {
+                (0..columns).map(move |column| text(&format!("{generation}.{row}.{column}")))
+            }),
+        ))
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(form(3, 3, 0)).unwrap();
+    frame(&mut tree);
+    let renders = |tree: &WidgetTree| {
+        tree.children(root)
+            .unwrap()
+            .iter()
+            .map(|&id| tree.render_id(id).unwrap())
+            .collect::<Vec<_>>()
+    };
+    let before = renders(&tree);
+    tree.update(root, form(4, 2, 1)).unwrap();
+    frame(&mut tree);
+    let widened = renders(&tree);
+    assert_eq!(&widened[0..3], &before[0..3]);
+    assert_eq!(&widened[4..7], &before[3..6]);
+    assert!(!before.contains(&widened[3]));
+    assert!(!before.contains(&widened[7]));
+
+    tree.update(root, form(2, 4, 2)).unwrap();
+    frame(&mut tree);
+    let narrowed = renders(&tree);
+    assert_eq!(&narrowed[0..2], &widened[0..2]);
+    assert_eq!(&narrowed[2..4], &widened[4..6]);
+    assert!(narrowed[4..].iter().all(|id| !widened.contains(id)));
+    assert!(narrowed[4..].iter().all(|id| !before.contains(id)));
+}

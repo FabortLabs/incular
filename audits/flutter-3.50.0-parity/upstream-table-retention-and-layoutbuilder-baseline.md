@@ -41,3 +41,13 @@ baseline's origin. Additional tests verify text metrics, the bottom-edge
 fallback, and replacement of the retained generated child across
 20 px → absent → 30 px. All four LayoutBuilder and both Stack baseline
 checks pass.
+
+## Row-aware column-count changes
+
+The pinned `:274` original and native port now agree. Reconciliation
+matches each row separately instead of letting old flat indices decide
+which cells survive. An authored comparison also checks all surviving
+cell identities in 3×3 → 4×2 → 2×4 transitions and confirms that newly
+inserted columns and rows do not inherit state from removed cells.
+The flat Table API still permits a short final row; explicit Flutter
+TableRow keys, empty rows, and table accessibility roles are separate.

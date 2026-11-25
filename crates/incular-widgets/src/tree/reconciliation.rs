@@ -975,7 +975,15 @@ impl WidgetTree {
             .children
             .clone();
         let desired = widget.children_refs().into_iter().collect::<Vec<_>>();
-        let reconciled = self.reconcile_children(id, &previous, &desired)?;
+        let reconciled = match (old.kind(), widget.kind()) {
+            (
+                WidgetKind::Table { columns: before, .. },
+                WidgetKind::Table { columns: after, .. },
+            ) if before != after => self.reconcile_resized_table_rows(
+                id, &previous, *before, &desired, *after,
+            )?,
+            _ => self.reconcile_children(id, &previous, &desired, true)?,
+        };
         if reconciled != previous {
             self.element_live_mut(id, "retained element must remain live")
                 .children = reconciled;
@@ -1002,11 +1010,40 @@ impl WidgetTree {
             None => false,
         }
     }
-    pub(super) fn reconcile_children(
+    /// A column-count change updates corresponding rows independently.
+    /// A removed row must not donate cells to a newly wider prior row.
+    fn reconcile_resized_table_rows(
+        &mut self,
+        parent: ElementId,
+        previous: &[ElementId],
+        old_columns: usize,
+        desired: &[&Widget],
+        new_columns: usize,
+    ) -> Result<Vec<ElementId>, TreeError> {
+        let mut old_rows = previous.chunks(old_columns.max(1));
+        let mut retained = Vec::with_capacity(desired.len());
+        for row in desired.chunks(new_columns.max(1)) {
+            // The new grid cannot keep an exiting child in a removed slot:
+            // that would shift all subsequent cells into the wrong columns.
+            retained.extend(self.reconcile_children(
+                parent, old_rows.next().unwrap_or_default(), row, false,
+            )?);
+        }
+        for row in old_rows {
+            for &stale in row {
+                self.retire_element(stale, parent);
+                self.diagnostics.elements_removed += 1;
+            }
+        }
+        Ok(retained)
+    }
+
+    fn reconcile_children(
         &mut self,
         parent: ElementId,
         previous: &[ElementId],
         desired: &[&Widget],
+        retain_departures: bool,
     ) -> Result<Vec<ElementId>, TreeError> {
         self.check_keys_borrowed(Some(parent), desired.iter().copied())?;
         self.diagnostics.child_list_scans += 1;
@@ -1098,7 +1135,7 @@ impl WidgetTree {
         let mut kept = std::collections::HashSet::new();
         for (position, id) in old_middle.iter().enumerate() {
             if !used[position] {
-                if self.defer_exit(*id) {
+                if retain_departures && self.defer_exit(*id) {
                     kept.insert(*id);
                 } else {
                     self.retire_element(*id, parent);
