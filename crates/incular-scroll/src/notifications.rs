@@ -72,15 +72,50 @@ impl ScrollController {
         &self,
         listener: impl Fn(ScrollNotification) -> bool + 'static,
     ) -> ScrollNotificationSubscription {
+        self.subscribe_notification(false, listener)
+    }
+
+    /// Receives the owning viewport's own notifications before ancestor
+    /// or external listeners can stop propagation.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn add_viewport_notification_listener(
+        &self,
+        listener: impl Fn(ScrollNotification) -> bool + 'static,
+    ) -> ScrollNotificationSubscription {
+        let expected = self.attachment_id();
+        let state = Rc::downgrade(&self.state);
+        self.subscribe_notification(true, move |notification| {
+            let live = expected.is_some_and(|expected| {
+                state.upgrade().is_some_and(|state| {
+                    state
+                        .borrow()
+                        .metric_attachment
+                        .is_some_and(|live| live.id == expected)
+                })
+            });
+            live && listener(notification)
+        })
+    }
+
+    fn subscribe_notification(
+        &self,
+        viewport_first: bool,
+        listener: impl Fn(ScrollNotification) -> bool + 'static,
+    ) -> ScrollNotificationSubscription {
         let mut state = self.state.borrow_mut();
         let id = state.next_notification_listener;
         state.next_notification_listener = id
             .checked_add(1)
             .expect("scroll notification listener identity space exhausted");
-        state
-            .notification_listeners
-            .borrow_mut()
-            .push((id, Rc::new(listener)));
+        let mut listeners = state.notification_listeners.borrow_mut();
+        let listener: ScrollNotificationListener = Rc::new(listener);
+        if viewport_first {
+            listeners.insert(0, (id, listener));
+        } else {
+            listeners.push((id, listener));
+        }
+        drop(listeners);
         ScrollNotificationSubscription {
             state: Rc::downgrade(&self.state),
             id,

@@ -170,6 +170,7 @@ pub(crate) struct RenderScrollState {
 pub(crate) struct RenderWheelState {
     pub(crate) viewport: Option<Box<ListWheelViewport<Widget>>>,
     pub(crate) layout: Option<WheelLayout<Widget>>,
+    pub(crate) selection: crate::advanced_scrolling::WheelSelectionReporter,
 }
 
 #[derive(Default)]
@@ -255,6 +256,7 @@ impl RenderFeatureState {
             | RenderKind::ListWheelViewport { config } => Self::Wheel(Box::new(RenderWheelState {
                 viewport: Some(Box::new(config.instantiate())),
                 layout: None,
+                selection: Default::default(),
             })),
             RenderKind::TwoDimensionalScrollView { config }
             | RenderKind::TwoDimensionalViewport { config } => {

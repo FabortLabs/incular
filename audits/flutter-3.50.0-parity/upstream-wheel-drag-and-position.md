@@ -44,3 +44,18 @@ The handoff is published after the incoming controller's lease is
 acquired. It applies only to a retained ListWheelScrollView, not a
 headless wheel or a raw renderer whose offset is replaced explicitly.
 The baseline Rust test returned item 30 at the first swap.
+
+## Selection notification timing
+
+Pinned :1190, :1231, and :1277 pass. OnScrollUpdate reports midpoint
+crossings before layout, including reversed motion, but not another
+notification in the same rounded item. OnScrollEnd reports only after
+the activity ends. No callback points outside the delegate's finite item
+range. All three Rust assertions failed on the unchanged baseline.
+
+Two authored pairs cover the callback lifetime and settle boundary:
+changing the handler retains the prior reported item, and a release
+followed by a fixed-extent spring notifies once after settling. The Rust
+control also confirms unmount removes the old binding. The reporter
+belongs to the live viewport lease and does not override a callback
+from a headless layout. Fifty-six focused Rust checks passed.

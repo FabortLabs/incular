@@ -7,12 +7,13 @@
 //! still useful to sliver and scroll notification code.
 
 use crate::util::same_rc;
-use std::{f32::consts::FRAC_PI_2, ops::Range, rc::Rc};
+use std::{cell::Cell, f32::consts::FRAC_PI_2, ops::Range, rc::Rc};
 
 use incular_config::{Axis, Clip, Constraints};
 use incular_core::{Offset, Rect, Size};
 use incular_scroll::{
-    MetricWriteError, ScrollController, ScrollPhysics, SliverConstraints, ViewportMetricsUpdate,
+    MetricWriteError, ScrollController, ScrollNotificationSubscription, ScrollNotificationType,
+    ScrollPhysics, SliverConstraints, ViewportMetricsUpdate,
 };
 
 /// Why a wheel configuration value was rejected.
@@ -62,8 +63,89 @@ pub enum ChangeReportingBehavior {
     /// Report as soon as the rounded selected index changes.
     #[default]
     OnScrollUpdate,
-    /// Report only after [`ListWheelViewport::settle`] snaps to an item.
+    /// Report only when the retained scroll activity ends, or when a
+    /// headless viewport is explicitly settled.
     OnScrollEnd,
+}
+
+/// Owned by a mounted scroll view, not by the controller. A headless or
+/// renderer-only viewport retains its existing explicit reporting path.
+#[derive(Default)]
+pub(crate) struct WheelSelectionReporter {
+    last_reported: Option<usize>,
+    binding: Option<WheelSelectionBinding>,
+}
+
+struct WheelSelectionBinding {
+    controller: ScrollController,
+    trigger: ScrollNotificationType,
+    item_extent: f32,
+    count: Option<usize>,
+    callback: Rc<dyn Fn(usize)>,
+    last_reported: Rc<Cell<Option<usize>>>,
+    _listener: ScrollNotificationSubscription,
+}
+
+impl WheelSelectionReporter {
+    pub(crate) fn sync<T>(&mut self, viewport: &ListWheelViewport<T>) {
+        let trigger = match viewport.change_reporting_behavior {
+            ChangeReportingBehavior::OnScrollUpdate => ScrollNotificationType::Update,
+            ChangeReportingBehavior::OnScrollEnd => ScrollNotificationType::End,
+        };
+        let count = viewport.delegate.child_count();
+        let item_extent = viewport.item_extent;
+        let callback = viewport.on_selected_item_changed.as_ref();
+        if self.binding.as_ref().is_some_and(|binding| {
+            binding.controller == viewport.controller
+                && binding.trigger == trigger
+                && binding.count == count
+                && binding.item_extent == item_extent
+                && callback.is_some_and(|callback| Rc::ptr_eq(&binding.callback, callback))
+        }) {
+            return;
+        }
+        if let Some(previous) = self.binding.take() {
+            self.last_reported = previous.last_reported.get();
+        }
+        if self.last_reported.is_none() {
+            self.last_reported = Some(viewport.controller.fixed_initial_item().unwrap_or(0));
+        }
+        let Some(callback) = callback.cloned() else {
+            return;
+        };
+        let last_reported = Rc::new(Cell::new(self.last_reported));
+        let subscription = viewport.controller.add_viewport_notification_listener({
+            let last_reported = last_reported.clone();
+            let callback = callback.clone();
+            move |notification| {
+                if notification.depth == 0
+                    && notification.kind == trigger
+                    && let Some(index) =
+                        wheel_selected_index(notification.metrics.pixels, item_extent, count)
+                    && last_reported.replace(Some(index)) != Some(index)
+                {
+                    callback(index);
+                }
+                false
+            }
+        });
+        self.binding = Some(WheelSelectionBinding {
+            controller: viewport.controller.clone(),
+            trigger,
+            item_extent,
+            count,
+            callback,
+            last_reported,
+            _listener: subscription,
+        });
+    }
+}
+
+fn wheel_selected_index(offset: f32, item_extent: f32, count: Option<usize>) -> Option<usize> {
+    let rounded = (offset.max(0.0) / item_extent).round() as usize;
+    count.map_or(Some(rounded), |count| {
+        (count > 0).then(|| rounded.min(count - 1))
+    })
 }
 
 /// A child source for a wheel viewport.
@@ -902,6 +984,7 @@ impl<T> ListWheelViewport<T> {
             measure,
             self.controller.offset(),
             self.controller.revision(),
+            true,
         ))
     }
 
@@ -915,6 +998,7 @@ impl<T> ListWheelViewport<T> {
         measure: impl Fn(&T, Constraints) -> Size,
         scroll_offset: f32,
         consumed_revision: u64,
+        report_selection: bool,
     ) -> WheelLayout<T>
     where
         T: Clone,
@@ -1012,10 +1096,12 @@ impl<T> ListWheelViewport<T> {
         }
         // Flutter seeds `_lastReportedItemIndex` with the initial item, so the
         // item the wheel starts on is not reported as a change at mount.
-        if self.last_selected_index.is_none() {
-            self.last_selected_index = selected_index;
+        if report_selection {
+            if self.last_selected_index.is_none() {
+                self.last_selected_index = selected_index;
+            }
+            self.report_selection_if_needed(selected_index);
         }
-        self.report_selection_if_needed(selected_index);
         WheelLayout {
             size,
             controller_revision: consumed_revision,
@@ -1047,10 +1133,7 @@ impl<T> ListWheelViewport<T> {
     }
 
     fn selected_item_for_offset(&self, offset: f32) -> Option<usize> {
-        let rounded = (offset.max(0.0) / self.item_extent).round() as usize;
-        self.delegate.child_count().map_or(Some(rounded), |count| {
-            (count > 0).then(|| rounded.min(count - 1))
-        })
+        wheel_selected_index(offset, self.item_extent, self.delegate.child_count())
     }
 
     fn report_selection_if_needed(&mut self, selected: Option<usize>) {

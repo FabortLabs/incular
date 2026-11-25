@@ -235,6 +235,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-widgets`: list-wheel selection callbacks follow scroll updates
+  or completed activities instead of waiting for a layout pass.
+
 - `incular-widgets`: replacing a controller on a mounted list wheel keeps
   its current item and offset instead of applying the new initial item.
 

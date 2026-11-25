@@ -261,6 +261,17 @@ impl ScrollController {
         self
     }
 
+    /// Initial fixed item used by a wheel's selection notification policy.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn fixed_initial_item(&self) -> Option<usize> {
+        self.state
+            .borrow()
+            .fixed_extent_start
+            .as_ref()
+            .map(|start| start.item)
+    }
+
     /// Requests the page-based starting position, Flutter
     /// `PageController.initialPage`. The pixel offset depends on the viewport
     /// extent, so it is resolved on the first publication with a non-zero

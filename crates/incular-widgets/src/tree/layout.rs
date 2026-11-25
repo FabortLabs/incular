@@ -304,18 +304,19 @@ impl WidgetTree {
         let item_extent = viewport.item_extent();
         // ListWheelScrollView owns an existing position across a change
         // of controller; ListWheelViewport is just a raw render primitive.
-        let handoff = matches!(
+        let is_scroll_view = matches!(
             self.render_live(id, "wheel must remain live").object.kind(),
             RenderKind::ListWheelScrollView { .. }
-        )
-        .then(|| {
-            self.scroll_attachments
-                .get(&element_id)?
-                .first()
-                .filter(|lease| lease.controller() != &controller)
-                .map(|lease| lease.controller().offset())
-        })
-        .flatten();
+        );
+        let handoff = is_scroll_view
+            .then(|| {
+                self.scroll_attachments
+                    .get(&element_id)?
+                    .first()
+                    .filter(|lease| lease.controller() != &controller)
+                    .map(|lease| lease.controller().offset())
+            })
+            .flatten();
         self.claim_scroll_viewport(element_id, &controller)?;
         self.publish_scroll_extents(
             Some(element_id),
@@ -330,17 +331,21 @@ impl WidgetTree {
             .with_fixed_item_extent(item_extent)
             .with_position_handoff(handoff),
         );
-        let layout = self
-            .wheel_state_live_mut(id)
+        let state = self.wheel_state_live_mut(id);
+        let viewport = state
             .viewport
             .as_mut()
-            .expect("wheel render must own retained viewport")
-            .layout_with_offset(
-                viewport_size,
-                |_, child_constraints| child_constraints.biggest(),
-                controller.offset(),
-                controller.revision(),
-            );
+            .expect("wheel render must own retained viewport");
+        if is_scroll_view {
+            state.selection.sync(viewport);
+        }
+        let layout = viewport.layout_with_offset(
+            viewport_size,
+            |_, child_constraints| child_constraints.biggest(),
+            controller.offset(),
+            controller.revision(),
+            !is_scroll_view,
+        );
         let desired = layout
             .children
             .iter()

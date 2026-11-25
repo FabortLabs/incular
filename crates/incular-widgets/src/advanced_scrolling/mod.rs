@@ -11,6 +11,7 @@ pub mod draggable;
 pub mod raw_scrollbar;
 pub mod two_dimensional;
 pub mod wheel;
+pub(crate) use wheel::WheelSelectionReporter;
 
 pub use draggable::{
     DraggableAnimationStep, DraggableExtentError, DraggableNotificationSubscription,
