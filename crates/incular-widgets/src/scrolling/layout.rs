@@ -369,6 +369,26 @@ pub(super) struct VariableExtentRenderSliver {
     pub(super) tight_main_extent: bool,
     /// Scratch list of kept-alive rows outside the window, reused per layout.
     kept: Vec<usize>,
+    /// First child from the last materialized range, not a kept-alive child
+    /// parked outside that range.
+    leading_anchor: Option<VariableLeadingAnchor>,
+    /// An overlapping range has reached the beginning again. Wait for the
+    /// newly inserted leading children to be measured before comparing
+    /// their total extent with the old anchor.
+    reentered_leading_range: Option<ReenteredLeadingRange>,
+}
+
+#[derive(Clone)]
+struct VariableLeadingAnchor {
+    index: usize,
+    offset: f32,
+    key: Option<crate::tree::Key>,
+    kind: std::mem::Discriminant<crate::tree::WidgetKind>,
+}
+
+struct ReenteredLeadingRange {
+    anchor: VariableLeadingAnchor,
+    measured: bool,
 }
 
 impl VariableExtentRenderSliver {
@@ -380,6 +400,8 @@ impl VariableExtentRenderSliver {
             transferred: Rc::new(RefCell::new(HashSet::new())),
             tight_main_extent: false,
             kept: Vec::new(),
+            leading_anchor: None,
+            reentered_leading_range: None,
         }
     }
 
@@ -416,6 +438,56 @@ impl VariableExtentRenderSliver {
             placement: SliverChildPlacement::Flow,
         }
     }
+
+    /// Flutter's RenderSliverList lays backwards from its first retained
+    /// child. If inserting leading rows would push index zero before
+    /// logical zero, it asks the viewport to correct by that distance.
+    /// The extent index gives the same distance without walking all rows.
+    fn leading_offset_correction(
+        &mut self,
+        range: &std::ops::Range<usize>,
+        scroll_offset: f32,
+    ) -> Option<f32> {
+        if self.tight_main_extent || range.start != 0 || scroll_offset > f32::EPSILON {
+            self.reentered_leading_range = None;
+            return None;
+        }
+        if self
+            .reentered_leading_range
+            .as_ref()
+            .is_some_and(|probe| probe.measured)
+        {
+            let probe = self
+                .reentered_leading_range
+                .take()
+                .expect("measured leading range");
+            if range.contains(&probe.anchor.index) {
+                let delta = self.index.offset_for_index(probe.anchor.index) - probe.anchor.offset;
+                if delta.is_finite() && delta > f32::EPSILON {
+                    return Some(delta);
+                }
+            }
+            return None;
+        }
+        if self.reentered_leading_range.is_none()
+            && let Some(anchor) = self
+                .leading_anchor
+                .as_ref()
+                .filter(|anchor| anchor.index != 0 && range.contains(&anchor.index))
+                .cloned()
+        {
+            let current = self.child_widget(anchor.index);
+            if anchor.key.as_ref() == current.key()
+                && anchor.kind == std::mem::discriminant(current.kind())
+            {
+                self.reentered_leading_range = Some(ReenteredLeadingRange {
+                    anchor,
+                    measured: false,
+                });
+            }
+        }
+        None
+    }
 }
 
 impl RenderSliver for VariableExtentRenderSliver {
@@ -429,6 +501,13 @@ impl RenderSliver for VariableExtentRenderSliver {
         let range =
             self.index
                 .flutter_child_range(cache_start, (cache_end - cache_start).max(0.), 0.);
+        if let Some(correction) = self.leading_offset_correction(&range, constraints.scroll_offset)
+        {
+            return SliverLayout::empty(SliverGeometry {
+                scroll_offset_correction: Some(correction),
+                ..SliverGeometry::ZERO
+            });
+        }
         // A row whose widget asks to be kept alive (Flutter's `KeepAlive`
         // parent data) stays materialized outside the window, so its state
         // survives scrolling away. Every other row leaves with the window.
@@ -453,6 +532,25 @@ impl RenderSliver for VariableExtentRenderSliver {
         }
         // Both edges of every materialized row, from one walk of the index.
         let offsets = self.index.offsets_for_range(range.clone());
+        let first = range.start;
+        if !range.is_empty() {
+            let offset = offsets[0];
+            if let Some(anchor) = &mut self.leading_anchor
+                && anchor.index == first
+            {
+                anchor.offset = offset;
+            } else {
+                let widget = self.child_widget(first);
+                self.leading_anchor = Some(VariableLeadingAnchor {
+                    index: first,
+                    offset,
+                    key: widget.key().cloned(),
+                    kind: std::mem::discriminant(widget.kind()),
+                });
+            }
+        } else {
+            self.leading_anchor = None;
+        }
         for (index, edges) in range.zip(offsets.windows(2)) {
             children.push(self.variable_child_layout(index, edges[0], edges[1], constraints));
         }
@@ -483,7 +581,19 @@ impl RenderSliver for VariableExtentRenderSliver {
         // its numeric value is unchanged, so later reconciliation cannot
         // overwrite established truth.
         self.transferred.borrow_mut().remove(&index);
-        self.index.set_measured_extent(index, extent)
+        let changed = self.index.set_measured_extent(index, extent);
+        // Even unchanged measurements get one retry to settle and retire
+        // an outstanding leading probe; otherwise it could survive the
+        // frame and react to an unrelated future edit of index zero.
+        let first_probe_measurement = self.reentered_leading_range.as_mut().is_some_and(|probe| {
+            if index < probe.anchor.index && !probe.measured {
+                probe.measured = true;
+                true
+            } else {
+                false
+            }
+        });
+        changed || first_probe_measurement
     }
 
     fn revision(&self) -> u64 {
@@ -2542,6 +2652,7 @@ pub(crate) fn transfer_retained_sliver_state(
     fresh: &mut dyn RenderSliver,
     retained: &mut dyn RenderSliver,
     probes: &mut u64,
+    preserve_anchor: bool,
 ) {
     if let (Some(fresh), Some(retained)) = (
         fresh
@@ -2554,13 +2665,18 @@ pub(crate) fn transfer_retained_sliver_state(
         fresh.adopt(retained);
         let mut fresh_inner = fresh.inner_cell().borrow_mut();
         let mut retained_inner = retained.inner_cell().borrow_mut();
-        transfer_retained_sliver_state(&mut **fresh_inner, &mut **retained_inner, probes);
+        transfer_retained_sliver_state(
+            &mut **fresh_inner,
+            &mut **retained_inner,
+            probes,
+            preserve_anchor,
+        );
         return;
     }
     if adopt_natural_header_state(fresh, retained)
         || adopt_box_extent(fresh, retained)
         || adopt_floating_header_state(fresh, retained)
-        || adopt_variable_extent_measurements(fresh, retained, probes)
+        || adopt_variable_extent_measurements(fresh, retained, probes, preserve_anchor)
     {
         return;
     }
@@ -2575,15 +2691,38 @@ pub(crate) fn transfer_retained_sliver_state(
         for (fresh_child, retained_child) in fresh.children.iter().zip(retained.children.iter()) {
             let mut fresh_sliver = fresh_child.borrow_mut();
             let mut retained_sliver = retained_child.borrow_mut();
-            transfer_retained_sliver_state(&mut **fresh_sliver, &mut **retained_sliver, probes);
+            transfer_retained_sliver_state(
+                &mut **fresh_sliver,
+                &mut **retained_sliver,
+                probes,
+                preserve_anchor,
+            );
         }
         return;
     }
-    transfer_single_inner_sliver_state::<PaddingRenderSliver>(fresh, retained, probes);
-    transfer_single_inner_sliver_state::<WidgetWrapRenderSliver>(fresh, retained, probes);
-    transfer_single_inner_sliver_state::<OverlapAbsorberRenderSliver>(fresh, retained, probes);
+    transfer_single_inner_sliver_state::<PaddingRenderSliver>(
+        fresh,
+        retained,
+        probes,
+        preserve_anchor,
+    );
+    transfer_single_inner_sliver_state::<WidgetWrapRenderSliver>(
+        fresh,
+        retained,
+        probes,
+        preserve_anchor,
+    );
+    transfer_single_inner_sliver_state::<OverlapAbsorberRenderSliver>(
+        fresh,
+        retained,
+        probes,
+        preserve_anchor,
+    );
     transfer_single_inner_sliver_state::<super::sliver_semantics::SemanticsRenderSliver>(
-        fresh, retained, probes,
+        fresh,
+        retained,
+        probes,
+        preserve_anchor,
     );
 }
 
@@ -2612,6 +2751,7 @@ fn adopt_variable_extent_measurements(
     fresh: &mut dyn RenderSliver,
     retained: &mut dyn RenderSliver,
     probes: &mut u64,
+    preserve_anchor: bool,
 ) -> bool {
     let (Some(fresh), Some(retained)) = (
         fresh
@@ -2630,6 +2770,13 @@ fn adopt_variable_extent_measurements(
     // transfer only shields totals and first paint; per-row truth is
     // established post-mapping below.
     let fresh_len = fresh.index.len();
+    if preserve_anchor && !fresh.tight_main_extent && !retained.tight_main_extent {
+        fresh.leading_anchor = retained
+            .leading_anchor
+            .as_ref()
+            .filter(|anchor| anchor.index < fresh_len)
+            .cloned();
+    }
     let mut adopted = false;
     let before = retained.index.metrics();
     let indices = retained.index.measured_indices();
@@ -2828,6 +2975,7 @@ fn transfer_single_inner_sliver_state<T: SingleInnerSliver + 'static>(
     fresh: &mut dyn RenderSliver,
     retained: &mut dyn RenderSliver,
     probes: &mut u64,
+    preserve_anchor: bool,
 ) {
     if let (Some(fresh), Some(retained)) = (
         fresh.as_any_mut().and_then(|any| any.downcast_mut::<T>()),
@@ -2837,7 +2985,12 @@ fn transfer_single_inner_sliver_state<T: SingleInnerSliver + 'static>(
     ) {
         let mut fresh_inner = fresh.inner_cell().borrow_mut();
         let mut retained_inner = retained.inner_cell().borrow_mut();
-        transfer_retained_sliver_state(&mut **fresh_inner, &mut **retained_inner, probes);
+        transfer_retained_sliver_state(
+            &mut **fresh_inner,
+            &mut **retained_inner,
+            probes,
+            preserve_anchor,
+        );
     }
 }
 
@@ -3056,19 +3209,30 @@ impl SliverViewportDelegate for SequenceViewportDelegate {
         true
     }
 
-    fn adopt_compatible_state(&self, previous: &dyn SliverViewportDelegate, probes: &mut u64) {
+    fn adopt_compatible_state(
+        &self,
+        previous: &dyn SliverViewportDelegate,
+        probes: &mut u64,
+        preserve_anchor: bool,
+    ) {
         let Some(previous) = previous
             .as_any()
             .and_then(|any| any.downcast_ref::<SequenceViewportDelegate>())
         else {
             return;
         };
+        let preserve_anchor = preserve_anchor && self.center == previous.center;
         let fresh = self.sequence.borrow_mut();
         let retained = previous.sequence.borrow_mut();
         for (fresh_child, retained_child) in fresh.children.iter().zip(retained.children.iter()) {
             let mut fresh_sliver = fresh_child.borrow_mut();
             let mut retained_sliver = retained_child.borrow_mut();
-            transfer_retained_sliver_state(&mut **fresh_sliver, &mut **retained_sliver, probes);
+            transfer_retained_sliver_state(
+                &mut **fresh_sliver,
+                &mut **retained_sliver,
+                probes,
+                preserve_anchor,
+            );
         }
     }
 }

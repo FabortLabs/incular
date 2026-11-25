@@ -1430,6 +1430,7 @@ impl Widget {
             kind: WidgetKind::SliverViewport {
                 config: Rc::new(SliverViewportConfig {
                     controller,
+                    preserve_implicit_scroll_position: false,
                     axis,
                     reverse,
                     physics,

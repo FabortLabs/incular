@@ -44,6 +44,10 @@ Fixed extents derive ranges by division; variable extents learn exact sizes
 from laid-out children and compensate the visible anchor when rows above
 change size.
 
+A `CustomScrollView` with no controller or PageStorage key keeps its
+scroll position when rebuilt in place. Supplying a new explicit
+`ScrollController` uses that controller's position instead.
+
 Related: [`SliverGrid`](/docs/api/navigation/sliver-grid),
 [`CustomScrollView`](/docs/api/navigation/custom-scroll-view),
 [`ListView`](/docs/api/navigation/list-view).

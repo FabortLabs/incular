@@ -2,9 +2,12 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets(
-    'padding forwards the retained correction after a leading box grows',
-    (tester) async {
+  for (final (label, newHeight, top, resizeAgain) in [
+    ('grow the earlier row', 400.0, -200.0, false),
+    ('leave the earlier row unchanged', 200.0, 0.0, true),
+    ('shrink the earlier row', 100.0, 0.0, false),
+  ]) {
+    testWidgets(label, (tester) async {
       final controller = ScrollController();
       addTearDown(controller.dispose);
 
@@ -39,13 +42,22 @@ void main() {
         const Rect.fromLTWH(0, 100, 800, 200),
       );
 
-      await tester.pumpWidget(scene(400));
+      await tester.pumpWidget(scene(newHeight));
       controller.jumpTo(0);
       await tester.pump();
       expect(
         tester.getRect(find.byKey(const ValueKey(0))),
-        const Rect.fromLTWH(0, -200, 800, 400),
+        Rect.fromLTWH(0, top, 800, newHeight),
       );
-    },
-  );
+      expect(controller.offset, -top);
+      if (resizeAgain) {
+        await tester.pumpWidget(scene(400));
+        expect(controller.offset, 0);
+        expect(
+          tester.getRect(find.byKey(const ValueKey(0))),
+          const Rect.fromLTWH(0, 0, 800, 400),
+        );
+      }
+    });
+  }
 }

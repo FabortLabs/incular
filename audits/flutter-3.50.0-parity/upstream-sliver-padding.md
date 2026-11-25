@@ -50,3 +50,25 @@ Four focused Rust targets passed (46 tests). This is authored coverage,
 not an extra original registration. The changing-leading-row regression
 above remains open: its ordinary variable-extent list has to produce the
 correction before the viewport can apply it.
+
+## Retained anchor repair and touch-input comparison
+
+Original :505 now pairs through Runtime with the same 20-pixel touch
+slop waypoint and 300-pixel drags, rebuilt list sizes, and first-frame
+rectangles. Both sides place row 2 at (0,100) with height 200, then
+place row 0 at (0,-200) with height 400 on the first frame after
+returning toward the start. Before the fix, Incular placed row 0 at y=0.
+
+Two issues were distinct. The implicit CustomScrollView lost its
+position on rebuild; it now hands the mounted viewport position to
+the replacement implicit controller. A variable list also now holds
+an identity-checked overlapping anchor while it measures re-entering
+leading rows and issues a correction if their new total would place
+the beginning before zero. This does not retain an anchor for a
+nonoverlapping jump or for a replacement explicit controller.
+
+The authored Flutter and Rust controls also cover shrinking and
+unchanged preceding sizes and a later resize after the rewind has
+settled. These never issue the growth correction. The explicit
+replacement keeps its own initial position. Eight focused Rust
+targets passed (160 tests); all three authored Flutter cases passed.

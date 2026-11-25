@@ -240,25 +240,25 @@ impl WidgetTree {
                 // and reapplies the new controller's fraction to that page.
                 // Read the old lease before claiming; a failed claim must not
                 // change the incoming or outgoing controller's position.
-                let handoff = config
-                    .physics
-                    .page_geometry_fraction()
-                    .and_then(|fraction| {
-                        if viewport_extent <= 0. {
-                            return None;
-                        }
-                        let old = self
-                            .scroll_attachments
-                            .get(&viewport_element?)?
-                            .first()?
-                            .controller();
-                        (old != &config.controller)
-                            .then(|| old.page_for_handoff())
-                            .flatten()
-                            .map(|page| {
-                                incular_scroll::pixels_for_page(page, viewport_extent, fraction)
-                            })
-                    });
+                let handoff = viewport_element.and_then(|element| {
+                    let old = self.scroll_attachments.get(&element)?.first()?.controller();
+                    if old == &config.controller {
+                        return None;
+                    }
+                    if let Some(fraction) = config.physics.page_geometry_fraction()
+                        && viewport_extent > 0.
+                    {
+                        return old.page_for_handoff().map(|page| {
+                            incular_scroll::pixels_for_page(page, viewport_extent, fraction)
+                        });
+                    }
+                    // Like Flutter's own ScrollPosition, the position of
+                    // a controller-less CustomScrollView belongs to the
+                    // mounted viewport, not the rebuilt descriptor.
+                    config
+                        .preserve_implicit_scroll_position
+                        .then(|| old.offset())
+                });
                 if let Some(viewport) = viewport_element {
                     self.claim_scroll_viewport(viewport, &config.controller)?;
                 }

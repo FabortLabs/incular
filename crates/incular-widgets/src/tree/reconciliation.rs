@@ -710,8 +710,15 @@ impl WidgetTree {
             RenderKind::SliverViewport { config: next },
         ) = (&*old_kind, &new_kind)
         {
-            next.delegate
-                .adopt_compatible_state(&*previous.delegate, &mut self.diagnostics.transfer_probes);
+            let preserve_anchor = previous.axis == next.axis
+                && previous.reverse == next.reverse
+                && (previous.controller == next.controller
+                    || next.preserve_implicit_scroll_position);
+            next.delegate.adopt_compatible_state(
+                &*previous.delegate,
+                &mut self.diagnostics.transfer_probes,
+                preserve_anchor,
+            );
         }
         #[cfg(feature = "devtools")]
         let mut work_reasons: (Option<String>, Option<String>, Option<String>) = (None, None, None);

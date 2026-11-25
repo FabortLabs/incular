@@ -254,7 +254,13 @@ pub(crate) trait SliverViewportDelegate {
     /// a no-op so custom delegates keep existing replacement semantics.
     /// `probes` counts rows examined while adopting, so callers can
     /// prove the work stays proportional to measured rows.
-    fn adopt_compatible_state(&self, _previous: &dyn SliverViewportDelegate, _probes: &mut u64) {}
+    fn adopt_compatible_state(
+        &self,
+        _previous: &dyn SliverViewportDelegate,
+        _probes: &mut u64,
+        _preserve_anchor: bool,
+    ) {
+    }
     /// Invalidates one viewport-scoped child's retained measurement after a
     /// content rebuild below it. Returns whether a sliver was found to
     /// notify; the default reports none.
@@ -270,6 +276,9 @@ pub(crate) trait SliverViewportDelegate {
 #[derive(Clone)]
 pub struct SliverViewportConfig {
     pub(crate) controller: ScrollController,
+    /// Preserve the current position when rebuilding a scroll view that
+    /// has no caller-supplied controller or PageStorage key.
+    pub(crate) preserve_implicit_scroll_position: bool,
     pub(crate) axis: Axis,
     pub(crate) reverse: bool,
     pub(crate) physics: ScrollPhysics,
@@ -308,6 +317,7 @@ impl std::fmt::Debug for SliverViewportConfig {
 impl PartialEq for SliverViewportConfig {
     fn eq(&self, other: &Self) -> bool {
         self.controller == other.controller
+            && self.preserve_implicit_scroll_position == other.preserve_implicit_scroll_position
             && self.axis == other.axis
             && self.reverse == other.reverse
             && self.physics == other.physics

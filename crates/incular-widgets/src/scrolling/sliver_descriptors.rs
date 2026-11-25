@@ -600,6 +600,7 @@ impl CustomScrollView {
 
 impl From<CustomScrollView> for Widget {
     fn from(mut value: CustomScrollView) -> Self {
+        let implicit = value.controller.is_none() && value.page_storage_key.is_none();
         let controller = value
             .controller
             .get_or_insert_with(ScrollController::default)
@@ -609,11 +610,11 @@ impl From<CustomScrollView> for Widget {
             .physics
             .is_none()
             .then_some(super::scroll_views::InheritedPhysics::Scroll);
-        keep_scroll_offset(
-            super::inherit_physics(custom_scroll_view_widget(value), inherit),
-            &controller,
-            key,
-        )
+        let mut viewport = custom_scroll_view_widget(value);
+        if implicit && let WidgetKind::SliverViewport { config } = viewport.kind_mut() {
+            Rc::make_mut(config).preserve_implicit_scroll_position = true;
+        }
+        keep_scroll_offset(super::inherit_physics(viewport, inherit), &controller, key)
     }
 }
 fn custom_scroll_view_widget(value: CustomScrollView) -> Widget {
