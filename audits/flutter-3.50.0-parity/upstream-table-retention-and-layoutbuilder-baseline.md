@@ -51,3 +51,19 @@ cell identities in 3×3 → 4×2 → 2×4 transitions and confirms that newly
 inserted columns and rows do not inherit state from removed cells.
 The flat Table API still permits a short final row; explicit Flutter
 TableRow keys, empty rows, and table accessibility roles are separate.
+
+## Retained table accessibility
+
+Three named Flutter originals pass: `:967` exposes Table → Row →
+labeled Cell; `:1026` tolerates a cell descendant painting past the
+row bottom; `:1068` keeps the same cell wrapper when the real editor
+takes focus. The native ports exercise these same assertions. The
+native graph tests also verify that zero-width cells and removed or
+disabled tables leave no unreachable semantic nodes. An authored
+Flutter comparison and native port move explicit cells from LTR to RTL
+and preserve the row and cell node IDs.
+
+The AccessKit consumer independently validates the table, row, cell,
+and column-header role mapping. This does not assert native reader
+announcements, synthetic row scroll actions, or the Flutter shell's
+generic wrapper nodes.

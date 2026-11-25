@@ -16,6 +16,7 @@ use incular_semantics::{
 };
 use std::borrow::Cow;
 
+pub(super) mod table;
 mod traversal;
 use traversal::TraversalItem;
 
@@ -170,6 +171,8 @@ pub(super) struct SemanticsScratch {
     /// Every semantic node with a parent edge (or top-level slot) this pass,
     /// sorted for lookup.
     attached: Vec<SemanticNodeId>,
+    /// Layout-only nodes created while assembling semantic table rows.
+    table_changes: table::TableSemanticChanges,
     /// Nodes dropped from a re-collected child list.
     detached: Vec<SemanticNodeId>,
     /// Scroll nodes re-collected after a scroll offset change.
@@ -189,6 +192,11 @@ impl WidgetTree {
             // unchanged one.
             for (_, node) in self.semantic_ids.drain() {
                 let _ = self.semantics.remove(node);
+            }
+            for (_, wrappers) in self.table_semantic_wrappers.drain() {
+                for id in wrappers.into_ids() {
+                    let _ = self.semantics.remove(id);
+                }
             }
             self.semantics.set_root(None);
             // Marks recorded while the graph is released are not kept up to
@@ -402,7 +410,7 @@ impl WidgetTree {
                     || absorbs_descendant_semantics(parent_entry)
                     || self.semantics_hidden(parent_entry)
                     || self.fitted_children_have_no_semantic_geometry(parent_entry)
-                    || matches!(parent_entry.widget.kind(), WidgetKind::Button(_))
+                    || matches!(parent_entry.widget.kind(), WidgetKind::Button(_) | WidgetKind::Table { .. })
                     || matches!(parent_entry.widget.kind(), WidgetKind::IndexedStack { index, .. }
                         if index.and_then(|slot| parent_entry.children.get(slot)) != Some(&current))
                 {
@@ -565,6 +573,7 @@ impl WidgetTree {
             edges,
             traversal_items,
             attached,
+            table_changes,
             detached,
             ..
         } = scratch;
@@ -611,6 +620,7 @@ impl WidgetTree {
                 .map(|(_, _, child)| semantic_id(&self.semantic_ids, child)),
         );
         attached.sort_unstable_by_key(|id| id.0);
+        table_changes.clear();
         detached.clear();
         let mut cursor = 0;
         // Collection builds fresh values each pass, so moving them into the
@@ -635,6 +645,30 @@ impl WidgetTree {
                         .filter(|child| !is_attached(attached, **child)),
                 );
             }
+            let is_table = match &build {
+                Collected::Full(build) => build.role == SemanticRole::Table,
+                Collected::Bounds { .. } => self.semantics.node(id).is_some_and(|node| node.role == SemanticRole::Table),
+            };
+            let table_widget = matches!(
+                self.element_live(element, "semantic element remains live").widget.kind(),
+                WidgetKind::Table { .. }
+            );
+            if table_widget {
+                if is_table {
+                    self.assemble_semantic_table(
+                        element,
+                        &edges[start..cursor],
+                        child_ids,
+                        table_changes,
+                    );
+                } else {
+                    // An explicit role can replace the widget's table role.
+                    // Its previous synthetic nodes leave via the same
+                    // detached child sweep as all other old nodes.
+                    self.table_semantic_wrappers.remove(&element);
+                }
+            }
+
             #[cfg(feature = "devtools")]
             let semantic_revision_before = self.semantics.revision();
             match build {
@@ -668,6 +702,18 @@ impl WidgetTree {
                 element.dev.semantic_updates = element.dev.semantic_updates.saturating_add(1);
             }
         }
+        // Synthetic rows/cells were not part of the element-edge collection.
+        // Keep the IDs they reused out of the detached-subtree sweep.
+        if !table_changes.dropped.is_empty() {
+            table_changes.dropped.sort_unstable_by_key(|id| id.0);
+            attached.retain(|id| !is_attached(&table_changes.dropped, *id));
+            detached.append(&mut table_changes.dropped);
+        }
+        if !table_changes.kept.is_empty() {
+            attached.append(&mut table_changes.kept);
+            attached.sort_unstable_by_key(|id| id.0);
+        }
+        detached.append(&mut table_changes.detached);
         let top_level = &edges[cursor..];
         // Every top-level node is a root: layout-only ancestors create no
         // semantic node, so the graph is a forest whenever one has several
@@ -708,6 +754,8 @@ impl WidgetTree {
             let semantics = &self.semantics;
             self.semantic_ids
                 .retain(|_, node| semantics.node(*node).is_some());
+            self.table_semantic_wrappers
+                .retain(|element, _| self.semantic_ids.contains_key(element));
         }
     }
 
@@ -808,6 +856,7 @@ impl WidgetTree {
                 edges.push((semantic_parent, edges.len() as u32, element));
             }
             let regroups = self.regroups_sliver_semantics(entry);
+            let table = matches!(entry.widget.kind(), WidgetKind::Table { .. });
             let reorder = scope.descendant_bounds
                 && self.semantic_reading_direction(element).is_some()
                 && self
@@ -815,7 +864,7 @@ impl WidgetTree {
                     .get(&element)
                     .and_then(|id| self.semantics.node(*id))
                     .is_some_and(|node| node.children.len() > 1);
-            if !scope.own_bounds && !regroups && !reorder {
+            if !scope.own_bounds && !regroups && !reorder && !table {
                 // The node only lies on the path to a marked one: its bounds
                 // and its child list stand, and only its marked children
                 // are entered.
@@ -943,6 +992,13 @@ impl WidgetTree {
                 } else {
                     actions_with_room(&[SemanticActionKind::Focus])
                 },
+            ),
+            WidgetKind::Table { .. } => (
+                Some(SemanticRole::Table),
+                None,
+                None,
+                SemanticState { container: true, ..SemanticState::default() },
+                Vec::new(),
             ),
             WidgetKind::Text { text, .. } => (
                 Some(SemanticRole::Text),
@@ -1573,6 +1629,7 @@ impl WidgetTree {
         match entry.widget.kind() {
             WidgetKind::Text { .. } => self.is_selection_label(element),
             WidgetKind::Button(_)
+            | WidgetKind::Table { .. }
             | WidgetKind::SelectableText { .. }
             | WidgetKind::TextField(_)
             | WidgetKind::Scroll { .. }

@@ -7,6 +7,10 @@ a version and date when publishing.
 
 ### Added
 
+- Table publishes retained accessibility rows and cells. Focus changes
+  update an editor inside its existing cell instead of recreating the
+  surrounding accessibility nodes.
+
 - Accessibility role values include Table, Row, Cell and ColumnHeader,
   with native AccessKit and web mappings.
 

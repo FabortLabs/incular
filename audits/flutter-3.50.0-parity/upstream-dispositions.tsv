@@ -458,7 +458,7 @@ packages/flutter/test/widgets/table_test.dart	47	Table widget - empty	paired-mat
 packages/flutter/test/widgets/table_test.dart	274	Table widget - changing table dimensions	paired-match	upstream-table-retention-and-layoutbuilder-baseline.md
 packages/flutter/test/widgets/table_test.dart	357	Table widget - repump test	paired-match	upstream-table-retention-and-layoutbuilder-baseline.md
 packages/flutter/test/widgets/table_test.dart	882	TableRow with no children throws an error message	reference-ran-incular-open	upstream-table-retention-and-layoutbuilder-baseline.md
-packages/flutter/test/widgets/table_test.dart	967	Table has correct roles in semantics	partial-mismatch	upstream-table-retention-and-layoutbuilder-baseline.md
+packages/flutter/test/widgets/table_test.dart	967	Table has correct roles in semantics	paired-match	upstream-table-retention-and-layoutbuilder-baseline.md#retained-table-accessibility
 packages/flutter/test/widgets/baseline_test.dart	97	LayoutBuilder returns child's baseline	paired-match	upstream-table-retention-and-layoutbuilder-baseline.md#layoutbuilder-baseline-repair
 packages/flutter/test/widgets/layout_builder_test.dart	10	LayoutBuilder parent size	paired-match	upstream-layoutbuilder-dependencies-and-hidden-boundary.md
 packages/flutter/test/widgets/layout_builder_test.dart	41	LayoutBuilder does not crash at zero area	paired-match	upstream-layoutbuilder-dependencies-and-hidden-boundary.md
@@ -1410,3 +1410,5 @@ packages/flutter/test/rendering/table_border_test.dart	33	TableBorder.all constr
 packages/flutter/test/rendering/table_border_test.dart	46	TableBorder.symmetric constructor	paired-match	upstream-table-border.md
 packages/flutter/test/rendering/table_border_test.dart	67	TableBorder.lerp	paired-match	upstream-table-border.md
 packages/flutter/test/rendering/table_border_test.dart	120	TableBorder.lerp with nulls	paired-match	upstream-table-border.md
+packages/flutter/test/widgets/table_test.dart	1026	Single-row Table does not crash when a cell child paints below the row bottom	paired-match	upstream-table-retention-and-layoutbuilder-baseline.md#retained-table-accessibility
+packages/flutter/test/widgets/table_test.dart	1068	Table reuse the semantics nodes for cell wrappers	paired-match	upstream-table-retention-and-layoutbuilder-baseline.md#retained-table-accessibility

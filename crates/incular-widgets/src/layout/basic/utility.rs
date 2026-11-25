@@ -69,7 +69,21 @@ impl TableCell {
 
 impl From<TableCell> for Widget {
     fn from(value: TableCell) -> Self {
-        value.child
+        use crate::tree::{ChildLayoutMode, WidgetKind};
+
+        let explicit = crate::ExplicitSemantics::new(incular_semantics::Role::Cell);
+        let child = value.child;
+        if matches!(child.kind(), WidgetKind::Text { .. }) && !child.has_explicit_semantics() {
+            // A plain text cell contributes its label to the cell node.
+            return child.semantics(explicit);
+        }
+        // Preserve a custom role or action underneath the cell rather than
+        // overwriting it (e.g. an editable field still needs its own node).
+        Widget::from_kind(WidgetKind::ProxyLayout {
+            mode: ChildLayoutMode::SemanticAnnotation,
+            child,
+        })
+        .semantics(explicit)
     }
 }
 

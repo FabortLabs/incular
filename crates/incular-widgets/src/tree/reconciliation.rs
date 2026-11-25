@@ -2344,6 +2344,11 @@ impl WidgetTree {
                     if let Some(semantic) = self.semantic_ids.remove(&id) {
                         let _ = self.semantics.remove(semantic);
                     }
+                    if let Some(wrappers) = self.table_semantic_wrappers.remove(&id) {
+                        for node in wrappers.into_ids() {
+                            let _ = self.semantics.remove(node);
+                        }
+                    }
                     let build_consumer = element.build_context.consumer_id();
                     let render_consumer = element.render_context.consumer_id();
                     element.build_context.clear_dependencies();
