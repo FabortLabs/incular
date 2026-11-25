@@ -109,3 +109,77 @@ fn invalidating_the_host_preserves_the_latest_pending_request() {
     assert_eq!(app.take_window_system_ui_overlay_style(id), Some(light));
     assert_eq!(app.take_window_system_ui_overlay_style(id), None);
 }
+
+#[test]
+fn imperative_overlay_style_forwards_all_fields_and_deduplicates_at_host_delivery() {
+    use incular_core::Color;
+
+    let mut runtime = runtime(SizedBox::expand().into());
+    runtime.set_system_ui_overlay_style(SystemUiOverlayStyle::DARK);
+    assert_eq!(
+        runtime.take_system_ui_overlay_style(),
+        Some(SystemUiOverlayStyle::DARK)
+    );
+
+    runtime.set_system_ui_overlay_style(SystemUiOverlayStyle::LIGHT);
+    assert_eq!(
+        runtime.take_system_ui_overlay_style(),
+        Some(SystemUiOverlayStyle {
+            system_navigation_bar_color: Some(Color::BLACK),
+            system_navigation_bar_divider_color: None,
+            system_status_bar_contrast_enforced: None,
+            status_bar_color: None,
+            status_bar_brightness: Some(Brightness::Dark),
+            status_bar_icon_brightness: Some(Brightness::Light),
+            system_navigation_bar_icon_brightness: Some(Brightness::Light),
+            system_navigation_bar_contrast_enforced: None,
+        })
+    );
+    assert_eq!(runtime.take_system_ui_overlay_style(), None);
+    runtime.set_system_ui_overlay_style(SystemUiOverlayStyle::LIGHT);
+    assert_eq!(runtime.take_system_ui_overlay_style(), None);
+
+    let style = SystemUiOverlayStyle {
+        system_status_bar_contrast_enforced: Some(false),
+        system_navigation_bar_contrast_enforced: Some(true),
+        ..Default::default()
+    };
+    runtime.set_system_ui_overlay_style(style);
+    assert_eq!(runtime.take_system_ui_overlay_style(), Some(style));
+    assert_eq!(runtime.take_system_ui_overlay_style(), None);
+}
+
+#[test]
+fn an_idle_runtime_requests_delivery_only_for_a_pending_new_style() {
+    let mut runtime = runtime(SizedBox::expand().into());
+    runtime.run_frame(constraints()).unwrap();
+    assert!(!runtime.frame_requested());
+
+    runtime.set_system_ui_overlay_style(SystemUiOverlayStyle::DARK);
+    assert!(
+        runtime.frame_requested(),
+        "the host must wake to apply an imperative request"
+    );
+    runtime.run_frame(constraints()).unwrap();
+    assert_eq!(
+        runtime.take_system_ui_overlay_style(),
+        Some(SystemUiOverlayStyle::DARK)
+    );
+    assert!(!runtime.frame_requested());
+
+    runtime.set_system_ui_overlay_style(SystemUiOverlayStyle::DARK);
+    assert!(
+        !runtime.frame_requested(),
+        "a delivered duplicate must not schedule a frame"
+    );
+    assert_eq!(runtime.take_system_ui_overlay_style(), None);
+
+    runtime.set_system_ui_overlay_style(SystemUiOverlayStyle::LIGHT);
+    runtime.set_system_ui_overlay_style(SystemUiOverlayStyle::DARK);
+    runtime.run_frame(constraints()).unwrap();
+    assert_eq!(
+        runtime.take_system_ui_overlay_style(),
+        None,
+        "latest request is already delivered"
+    );
+}

@@ -14,7 +14,15 @@ impl Runtime {
     /// the status and navigation bars in `style`. A frame whose annotations
     /// find a style replaces this request.
     pub fn set_system_ui_overlay_style(&mut self, style: SystemUiOverlayStyle) {
+        if self.system_ui_overlay_style.is_none()
+            && self.system_ui_overlay_style_applied == Some(style)
+        {
+            return;
+        }
         self.system_ui_overlay_style = Some(style);
+        // An imperative change must reach the host even when no widgets
+        // are rebuilding or animating. The frame also coalesces requests.
+        self.request_frame();
     }
 
     /// Drains the overlay style the host should apply now. Returns `None`
