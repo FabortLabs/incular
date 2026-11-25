@@ -619,11 +619,11 @@ packages/flutter/test/widgets/page_view_test.dart	928	PageView does not report p
 packages/flutter/test/widgets/page_view_test.dart	536	Bouncing scroll physics ballistics does not overshoot	paired-match	upstream-page-view-gestures.md
 packages/flutter/test/widgets/page_view_test.dart	634	Page snapping disable and reenable	paired-match	upstream-page-view-gestures.md
 packages/flutter/test/widgets/page_view_test.dart	413	PageController nextPage and previousPage return Futures that resolve	reference-ran-incular-open	upstream-page-view-storage.md
-packages/flutter/test/widgets/page_view_test.dart	953	PageView can restore page	partial-mismatch	upstream-page-view-storage.md
+packages/flutter/test/widgets/page_view_test.dart	953	PageView can restore page	partial-match	upstream-page-view-storage.md
 packages/flutter/test/widgets/page_view_test.dart	1030	PageView exposes semantics of children	paired-match	upstream-page-view-storage.md
 packages/flutter/test/widgets/page_view_test.dart	1069	PageMetrics	partial-match	upstream-page-view-storage.md
 packages/flutter/test/widgets/page_view_test.dart	1084	Page controller can handle rounding issue	partial-match	upstream-page-view-storage.md
-packages/flutter/test/widgets/page_view_test.dart	1104	PageView can participate in a11y scrolling	reference-ran-incular-open	upstream-page-view-storage.md
+packages/flutter/test/widgets/page_view_test.dart	1104	PageView can participate in a11y scrolling	paired-match	upstream-page-view-storage.md
 packages/flutter/test/widgets/page_view_test.dart	1173	PageView respects clipBehavior	partial-match	upstream-page-view-boundaries.md
 packages/flutter/test/widgets/page_view_test.dart	1207	PageView.padEnds tests	partial-match	upstream-page-view-boundaries.md
 packages/flutter/test/widgets/page_view_test.dart	1223	PageView - precision error inside RenderSliverFixedExtentBoxAdaptor	partial-match	upstream-page-view-boundaries.md

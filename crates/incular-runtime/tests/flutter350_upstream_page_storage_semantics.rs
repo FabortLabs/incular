@@ -221,3 +221,59 @@ fn storage_restores_the_logical_page_after_width_and_fraction_change() {
     replace(&mut runtime, build(Some(&queued), 500.));
     assert_eq!((queued.page(), queued.offset()), (Some(3.), 750.));
 }
+
+#[test]
+fn animated_accessibility_pages_expose_only_the_current_and_hidden_neighbors() {
+    let controller = PageController::new();
+    let pages = (0..4).map(|i| Semantics::new(Text::new(format!("Page #{i}"))).container(true));
+    let mut runtime = Runtime::new(
+        Directionality::new(
+            TextDirection::Ltr,
+            PageView::new(pages)
+                .controller(controller.clone())
+                .allow_implicit_scrolling(true),
+        )
+        .into(),
+    )
+    .unwrap();
+    let mut now = Instant::now();
+    let mut pump = |runtime: &mut Runtime| {
+        runtime.run_frame_at(constraint(), now).unwrap();
+        now += Duration::from_millis(16);
+    };
+    pump(&mut runtime);
+    assert!(
+        runtime
+            .tree()
+            .semantics()
+            .iter()
+            .any(|(_, node)| node.state.has_implicit_scrolling)
+    );
+
+    let cached_visibility = |runtime: &Runtime| {
+        ["Page #0", "Page #1", "Page #2", "Page #3"].map(|label| {
+            runtime
+                .tree()
+                .semantics()
+                .iter()
+                .find(|(_, node)| node.label.as_deref() == Some(label))
+                .map(|(_, node)| node.state.hidden)
+        })
+    };
+    assert_eq!(controller.page(), Some(0.));
+    assert_eq!(
+        cached_visibility(&runtime),
+        [Some(false), Some(true), None, None]
+    );
+    for (page, expected) in [
+        (1., [Some(true), Some(false), Some(true), None]),
+        (2., [None, Some(true), Some(false), Some(true)]),
+    ] {
+        assert!(controller.next_page(Duration::from_millis(150), incular_animation::Curve::Ease));
+        for _ in 0..32 {
+            pump(&mut runtime);
+        }
+        assert_eq!(controller.page(), Some(page));
+        assert_eq!(cached_visibility(&runtime), expected);
+    }
+}
