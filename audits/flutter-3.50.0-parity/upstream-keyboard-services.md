@@ -35,3 +35,14 @@ dispatch apply to subsequent events. A panic does not prevent later
 handlers or pressed-state updates. That case (:529) stays partial: Rust
 collects typed payloads and logs the event context rather than producing
 FlutterErrorDetails. Fourteen focused Rust checks passed.
+
+## Irregular events and keyboard diagnostics
+
+The exact pinned originals :573 and :593 passed. Rust tests confirm
+the three opt-in event/state diagnostics, then compare error markers and
+pressed sets through all seven irregular-key steps. Duplicate downs and
+repeats can update the logical key, unmatched ups clear nothing, and
+mismatched ups clear the physical position. All events still reach
+handlers. Output is per-runtime and disabled by default; the Rust debug
+representation of keys need not match Dart's string format. Sixteen
+focused Rust tests passed.

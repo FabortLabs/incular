@@ -173,6 +173,7 @@ pub struct Runtime {
     pub(crate) keyboard_modifiers: incular_core::Modifiers,
     hardware_keyboard: incular_core::HardwareKeyboardState,
     hardware_key_handlers: incular_core::HardwareKeyHandlers,
+    keyboard_event_debug_listener: Option<Box<dyn Fn(&str)>>,
     /// The focused field, content revision and selection whose caret was
     /// last shown on screen (Flutter's `_scheduleShowCaretOnScreen`).
     pub(crate) caret_reveal_key: Option<(ElementId, u64, TextSelection)>,
@@ -352,6 +353,7 @@ impl Runtime {
             keyboard_modifiers: incular_core::Modifiers::empty(),
             hardware_keyboard: incular_core::HardwareKeyboardState::default(),
             hardware_key_handlers: incular_core::HardwareKeyHandlers::default(),
+            keyboard_event_debug_listener: None,
             caret_reveal_key: None,
             ime_composition: None,
             text_histories: HashMap::new(),
@@ -2211,9 +2213,35 @@ impl Runtime {
         self.hardware_key_handlers.add(handler)
     }
 
+    /// Enables key and pressed-state diagnostics for this window. Normal
+    /// event handling produces no such messages unless a listener is set.
+    pub fn set_keyboard_event_debug_listener(&mut self, listener: impl Fn(&str) + 'static) {
+        self.keyboard_event_debug_listener = Some(Box::new(listener));
+    }
+
+    pub fn clear_keyboard_event_debug_listener(&mut self) {
+        self.keyboard_event_debug_listener = None;
+    }
+
     /// Dispatches a portable key event and returns whether it was handled.
     pub fn dispatch_keyboard_event(&mut self, event: KeyboardEvent) -> bool {
-        self.hardware_keyboard.observe(&event);
+        if let Some(debug) = &self.keyboard_event_debug_listener {
+            debug(&format!("KEYBOARD: Key event received: {event:?}"));
+            debug(&format!(
+                "KEYBOARD: Pressed state before processing the event: {:?}",
+                self.hardware_keyboard
+            ));
+            let irregularity = self.hardware_keyboard.observe_checked(&event);
+            if let Some(irregularity) = irregularity {
+                debug(&format!("KEYBOARD: ERROR: {irregularity:?}: {event:?}"));
+            }
+            debug(&format!(
+                "KEYBOARD: Pressed state after processing the event: {:?}",
+                self.hardware_keyboard
+            ));
+        } else {
+            self.hardware_keyboard.observe(&event);
+        }
         self.track_keyboard_modifiers(&event);
         // Widgets that show held modifiers (menu accelerator underlines)
         // rebuild when one is pressed or released.

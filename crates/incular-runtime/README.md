@@ -271,3 +271,6 @@ the event to the widget tree.
 Register a window-wide handler with `Runtime::add_hardware_key_handler` and
 keep its subscription alive. Every handler and the focused keyboard scope
 receive the event before unhandled events fall back to editing or traversal.
+
+`Runtime::set_keyboard_event_debug_listener` enables diagnostics for delivered
+key events, including pressed state before/after and irregular transitions.

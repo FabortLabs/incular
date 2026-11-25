@@ -33,6 +33,7 @@ pub use geometry::{
 };
 pub use hardware_keyboard::{
     HardwareKeyDispatch, HardwareKeyHandlers, HardwareKeySubscription, HardwareKeyboardState,
+    IrregularKeyEvent,
 };
 pub use id::IdGenerator;
 pub use input::{

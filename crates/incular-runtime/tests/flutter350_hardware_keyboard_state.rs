@@ -131,3 +131,84 @@ fn press_owns_its_position_and_repeats_do_not_toggle_a_lock() {
     assert!(!state.is_logical_key_pressed(&NUM));
     assert!(state.lock_modes_enabled().contains(Modifiers::NUM_LOCK));
 }
+
+fn letter(label: &str, down: bool) -> KeyboardEvent {
+    let logical = Key::Character(label.to_owned());
+    if down {
+        KeyboardEvent::key_down(logical, Code::KeyA)
+    } else {
+        KeyboardEvent::key_up(logical, Code::KeyA)
+    }
+}
+
+#[test]
+fn opt_in_keyboard_diagnostics_report_the_event_and_both_pressed_states() {
+    use std::{cell::RefCell, rc::Rc};
+    let mut runtime = runtime();
+    let logs = Rc::new(RefCell::new(Vec::new()));
+    runtime.set_keyboard_event_debug_listener({
+        let logs = logs.clone();
+        move |line| logs.borrow_mut().push(line.to_owned())
+    });
+    assert!(!runtime.dispatch_keyboard_event(letter("a", true)));
+    let captured = logs.take().join("\n");
+    assert!(captured.contains("KEYBOARD: Key event received: "));
+    assert!(captured.contains("KEYBOARD: Pressed state before processing the event:"));
+    assert!(captured.contains("KEYBOARD: Pressed state after processing the event:"));
+    runtime.clear_keyboard_event_debug_listener();
+    assert!(!runtime.dispatch_keyboard_event(letter("a", false)));
+    assert!(logs.borrow().is_empty());
+}
+
+#[test]
+fn irregular_keys_are_still_delivered_and_update_the_pressed_state() {
+    use std::{
+        cell::{Cell, RefCell},
+        rc::Rc,
+    };
+    let mut runtime = runtime();
+    let logs = Rc::new(RefCell::new(Vec::new()));
+    let delivered = Rc::new(Cell::new(0));
+    runtime.set_keyboard_event_debug_listener({
+        let logs = logs.clone();
+        move |line| logs.borrow_mut().push(line.to_owned())
+    });
+    let _handler = runtime.add_hardware_key_handler({
+        let delivered = delivered.clone();
+        move |_| {
+            delivered.set(delivered.get() + 1);
+            false
+        }
+    });
+    for (event, irregular, key) in [
+        (letter("a", true), false, Some("a")),
+        (letter("b", true), true, Some("b")),
+        (letter("b", false), false, None),
+        (letter("a", false), true, None),
+        (
+            KeyboardEvent {
+                repeat: true,
+                ..letter("a", true)
+            },
+            true,
+            Some("a"),
+        ),
+        (letter("b", true), true, Some("b")),
+        (letter("a", false), true, None),
+    ] {
+        assert!(!runtime.dispatch_keyboard_event(event));
+        assert_eq!(
+            logs.take().iter().any(|line| line.contains("ERROR")),
+            irregular
+        );
+        let expected = key.map(|value| Key::Character(value.to_owned()));
+        let keys: Vec<_> = expected.into_iter().collect();
+        let codes = if keys.is_empty() {
+            vec![]
+        } else {
+            vec![Code::KeyA]
+        };
+        assert_state(runtime.hardware_keyboard(), &codes, &keys, false);
+    }
+    assert_eq!(delivered.get(), 7);
+}

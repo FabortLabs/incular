@@ -3,7 +3,7 @@
 use std::{
     any::Any,
     cell::RefCell,
-    collections::{HashMap, HashSet, hash_map::Entry},
+    collections::{HashMap, HashSet},
     panic::{AssertUnwindSafe, catch_unwind},
     rc::{Rc, Weak},
 };
@@ -19,31 +19,61 @@ pub struct HardwareKeyboardState {
     locks: Modifiers,
 }
 
+/// An event disagreed with the previous pressed-key state. Incular still
+/// applies and routes that event rather than dropping it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IrregularKeyEvent {
+    AlreadyPressed,
+    NotPressed,
+    MismatchedLogicalKey,
+}
+
 impl HardwareKeyboardState {
     /// Updates the state before forwarding an event to application handlers.
     pub fn observe(&mut self, event: &KeyboardEvent) {
+        let _ = self.observe_checked(event);
+    }
+
+    /// Applies the event and reports any inconsistency in the prior state.
+    /// A new press or repeat establishes the latest logical key, while a
+    /// release always clears the physical position.
+    #[must_use]
+    pub fn observe_checked(&mut self, event: &KeyboardEvent) -> Option<IrregularKeyEvent> {
+        let previous = self.pressed.get(&event.code);
+        let irregularity = if event.state.is_down() && !event.repeat {
+            previous
+                .is_some()
+                .then_some(IrregularKeyEvent::AlreadyPressed)
+        } else {
+            match previous {
+                None => Some(IrregularKeyEvent::NotPressed),
+                Some(key) if key != &event.key => Some(IrregularKeyEvent::MismatchedLogicalKey),
+                Some(_) => None,
+            }
+        };
+
         match event.state {
             KeyState::Up => {
                 self.pressed.remove(&event.code);
             }
             KeyState::Down => {
-                if let Entry::Vacant(entry) = self.pressed.entry(event.code) {
-                    if !event.repeat {
-                        match &event.key {
-                            Key::Named(NamedKey::CapsLock) => {
-                                self.locks.toggle(Modifiers::CAPS_LOCK)
-                            }
-                            Key::Named(NamedKey::NumLock) => self.locks.toggle(Modifiers::NUM_LOCK),
-                            Key::Named(NamedKey::ScrollLock) => {
-                                self.locks.toggle(Modifiers::SCROLL_LOCK)
-                            }
-                            _ => {}
+                if !event.repeat {
+                    match &event.key {
+                        Key::Named(NamedKey::CapsLock) => self.locks.toggle(Modifiers::CAPS_LOCK),
+                        Key::Named(NamedKey::NumLock) => self.locks.toggle(Modifiers::NUM_LOCK),
+                        Key::Named(NamedKey::ScrollLock) => {
+                            self.locks.toggle(Modifiers::SCROLL_LOCK)
                         }
+                        _ => {}
                     }
-                    entry.insert(event.key.clone());
+                }
+                // Repeats and irregular presses can change the logical label.
+                if previous != Some(&event.key) {
+                    self.pressed.insert(event.code, event.key.clone());
                 }
             }
         }
+        irregularity
     }
 
     /// The physical positions currently pressed.

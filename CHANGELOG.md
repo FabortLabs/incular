@@ -171,6 +171,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-runtime`: irregular keyboard transitions still update and reach
+  handlers; per-window opt-in diagnostics show the event and before/after state.
+
 - `incular-text`: malformed IME replacement ranges no longer silently
   clamp into a different edit. Checked APIs expose the rejection.
 
