@@ -83,3 +83,16 @@ cancels once and does not start later. The direct Rust recognizer
 tests cover callback and timer behavior but do not claim an independent
 Flutter addPointer/closeArena lifecycle. These are two partial matches;
 all 25 targeted timing, deadline, and tap-cancel checks pass.
+
+## Cancel-only long press
+
+The authored pinned Flutter probe observed one cancellation on early
+release, slop rejection, and explicit pointer cancel with only
+`onLongPressCancel` installed. An accepted hold did not cancel when
+released. Incular's old guard required an `onLongPressDown` callback
+to have fired, suppressing the early release in the Rust baseline.
+The guard now tracks a possible long press rather than whether a
+user callback was installed; rejection consumes it once.
+
+All 26 focused deadline and cancellation tests passed after the fix.
+This is an authored case, not an additional original registration.

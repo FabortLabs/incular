@@ -113,9 +113,8 @@ pub struct PointerGestureRecognizer {
     /// The first-tap record shared by the recognizers of successive presses on
     /// one widget (Flutter keeps `_firstTap` on a recognizer for its lifetime).
     tap_memory: Option<Rc<Cell<TapMemory>>>,
-    /// `onLongPressDown` was reported for the press in progress, so a loss
-    /// before the long press starts reports `onLongPressCancel`.
-    long_press_down_sent: bool,
+    /// This contact may still deliver a single long-press cancellation.
+    long_press_pending: bool,
     /// Movement beyond slop before the long-press deadline rejected the long
     /// press (Flutter `LongPressGestureRecognizer` resolves rejected), so the
     /// deadline no longer starts it.
@@ -230,7 +229,7 @@ impl PointerGestureRecognizer {
             drag_rejected: false,
             accepted_on_press: false,
             tap_memory: None,
-            long_press_down_sent: false,
+            long_press_pending: false,
             long_press_rejected: false,
             gesture_settings: DeviceGestureSettings::default(),
         }
@@ -414,11 +413,9 @@ impl PointerGestureRecognizer {
                     && self.has_long_press_callbacks())
                 || (self.delayed_drag.is_some() && !self.drag_rejected))
     }
-    /// Flutter `_checkLongPressCancel`: a press that reported
-    /// `onLongPressDown` and lost before its long press started reports
-    /// `onLongPressCancel`.
+    /// A possible long press can be cancelled even without a down callback.
     fn long_press_cancel(&mut self) {
-        if std::mem::take(&mut self.long_press_down_sent)
+        if std::mem::take(&mut self.long_press_pending)
             && !self.long_press_started
             && let Some(callback) = &self.callbacks.on_long_press_cancel
         {
@@ -804,13 +801,12 @@ impl PointerGestureRecognizer {
                 self.long_press_started = false;
                 self.drag_rejected = false;
                 self.long_press_rejected = false;
-                self.long_press_down_sent = false;
+                self.long_press_pending = self.has_long_press_callbacks();
                 if let Some(callback) = &self.callbacks.on_long_press_down {
                     callback(LongPressDownDetails {
                         global_position: event.position,
                         local_position: self.local(event.position),
                     });
-                    self.long_press_down_sent = true;
                 }
                 // Flutter's `TapGestureRecognizer` reports `onTapDown` only
                 // after `kPressTimeout`, or when the tap is accepted first.

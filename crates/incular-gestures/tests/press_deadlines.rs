@@ -43,6 +43,52 @@ fn long_press_recorder() -> (PointerGestureRecognizer, Rc<RefCell<Vec<&'static s
     (recognizer, log)
 }
 
+#[test]
+fn cancel_only_long_press_reports_one_cancel_for_each_rejected_contact() {
+    let cancels = Rc::new(Cell::new(0));
+    let mut recognizer = PointerGestureRecognizer::new(GestureCallbacks {
+        on_long_press_cancel: Some(Rc::new({
+            let cancels = Rc::clone(&cancels);
+            move || cancels.set(cancels.get() + 1)
+        })),
+        ..GestureCallbacks::default()
+    });
+    let now = Instant::now();
+    for (index, phase) in [PointerPhase::Up, PointerPhase::Move, PointerPhase::Cancel]
+        .into_iter()
+        .enumerate()
+    {
+        let start = now + Duration::from_secs(index as u64 * 2);
+        recognizer.observe(event(Offset::ZERO, PointerPhase::Down, start, 0));
+        let position = if phase == PointerPhase::Move {
+            Offset::new(100., 100.)
+        } else {
+            Offset::ZERO
+        };
+        recognizer.observe(event(position, phase, start, 100));
+        assert_eq!(cancels.get(), index + 1, "{phase:?}");
+        recognizer.observe(event(position, PointerPhase::Up, start, 200));
+        recognizer.poll(start + Duration::from_millis(600));
+        assert_eq!(
+            cancels.get(),
+            index + 1,
+            "the same contact cannot cancel twice"
+        );
+    }
+    let accepted = now + Duration::from_secs(8);
+    recognizer.observe(event(Offset::ZERO, PointerPhase::Down, accepted, 0));
+    assert!(matches!(
+        recognizer.poll(accepted + LONG_PRESS_TIMEOUT),
+        GestureDecision::Accept(_)
+    ));
+    recognizer.observe(event(Offset::ZERO, PointerPhase::Up, accepted, 550));
+    assert_eq!(
+        cancels.get(),
+        3,
+        "an accepted press is not cancelled on release"
+    );
+}
+
 /// gestures/long_press_test.dart:75, after registration.
 #[test]
 fn long_press_uses_the_requested_short_deadline() {
