@@ -407,7 +407,10 @@ impl From<ImageFiltered> for Widget {
                             fraction: None,
                             transform_hit_tests: false,
                             slot: None,
-                            filter_quality: None,
+                            // Flutter's ImageFilter.matrix defaults to
+                            // Medium. Even affine scaling samples an
+                            // isolated child image, not transformed draws.
+                            filter_quality: Some(incular_rendering::FilterQuality::Medium),
                             child,
                         })
                     }

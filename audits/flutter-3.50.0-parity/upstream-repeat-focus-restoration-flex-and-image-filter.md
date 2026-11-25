@@ -48,3 +48,14 @@ Pinned Flutter 3.50.0 `ab2912035e`; unchanged Incular production `c647cb85`.
   intermediate raster. No original golden or native layer
   equivalence claim. See `flutter350_image_filter_matrix_sampling`
   and `image_filter_matrix_sampling_test.dart`.
+
+### Matrix image filter sampling recheck
+
+The default matrix ImageFiltered now selects the retained resampling
+path at Flutter's Medium quality, mapped to Incular's linear sampler.
+Windows wgpu now matches the two pinned 2× seam samples within one byte
+per channel. Identity, disabling and the unpainted exterior still pass.
+The retained test also checks the untransformed source, scaled output
+bounds, linear sampling, and removal of the filter when disabled. This
+does not establish mipmap behavior for minification or high-quality
+sampling, and it does not upgrade the original golden coverage.

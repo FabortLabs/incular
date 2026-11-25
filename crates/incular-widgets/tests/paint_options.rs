@@ -10,7 +10,7 @@ use incular_config::{Constraints, TextDirection};
 use incular_core::{Color, Offset, Rect, Size, Transform};
 use incular_image::ImageHandle;
 use incular_rendering::{
-    BlendMode, Canvas, ColorFilter, ImageFilter, ImageFilterTarget, PaintCommand,
+    BlendMode, Canvas, ColorFilter, ImageFilter, ImageFilterTarget, ImageSampling, PaintCommand,
 };
 use incular_widgets::internal::WidgetTree;
 use incular_widgets::{
@@ -332,19 +332,39 @@ fn image_filtered_executes_composed_filters_and_refuses_morphology() {
 
     let matrix = ImageFiltered::new(
         ImageFilter::matrix(Transform::scale(2.)),
-        SizedBox::new().width(10.).height(10.),
+        Widget::box_(Size::new(10., 10.), Color::WHITE),
     )
     .expect("matrix is supported");
+    let unfiltered = painted(
+        Stack::new([Widget::from(matrix.clone().enabled(false))]).into(),
+        Size::new(100., 100.),
+    );
+    assert!(
+        !unfiltered
+            .iter()
+            .any(|command| matches!(command, PaintCommand::PushMatrixFilter { .. }))
+    );
     let commands = painted(
         Stack::new([Widget::from(matrix)]).into(),
         Size::new(100., 100.),
     );
-    assert!(
-        commands
-            .iter()
-            .any(|command| matches!(command, PaintCommand::PushTransform { .. })),
-        "{commands:#?}"
-    );
+    let (matrix, sampling, source, output) = commands
+        .iter()
+        .find_map(|command| match command {
+            PaintCommand::PushMatrixFilter {
+                matrix,
+                sampling,
+                bounds,
+                filtered_bounds,
+                ..
+            } => Some((*matrix, *sampling, *bounds, *filtered_bounds)),
+            _ => None,
+        })
+        .expect("matrix resamples the child raster");
+    assert_eq!(matrix, Transform::scale(2.));
+    assert_eq!(sampling, ImageSampling::Linear);
+    assert_rect(source, rect(0., 0., 10., 10.));
+    assert_rect(output, rect(0., 0., 20., 20.));
 
     let refused = ImageFiltered::new(
         ImageFilter::compose(ImageFilter::blur(1., 1.), ImageFilter::dilate(2., 2.)),
