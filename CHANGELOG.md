@@ -235,6 +235,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-widgets`: replacing a controller on a mounted list wheel keeps
+  its current item and offset instead of applying the new initial item.
+
 - `incular-widgets`: a reused fixed-extent wheel controller starts a new
   position at its initial item using the new viewport’s actual item size.
 

@@ -302,6 +302,20 @@ impl WidgetTree {
         let max_scroll_extent = viewport.max_scroll_extent();
         let physics = viewport.physics();
         let item_extent = viewport.item_extent();
+        // ListWheelScrollView owns an existing position across a change
+        // of controller; ListWheelViewport is just a raw render primitive.
+        let handoff = matches!(
+            self.render_live(id, "wheel must remain live").object.kind(),
+            RenderKind::ListWheelScrollView { .. }
+        )
+        .then(|| {
+            self.scroll_attachments
+                .get(&element_id)?
+                .first()
+                .filter(|lease| lease.controller() != &controller)
+                .map(|lease| lease.controller().offset())
+        })
+        .flatten();
         self.claim_scroll_viewport(element_id, &controller)?;
         self.publish_scroll_extents(
             Some(element_id),
@@ -313,7 +327,8 @@ impl WidgetTree {
                 false,
                 physics,
             )
-            .with_fixed_item_extent(item_extent),
+            .with_fixed_item_extent(item_extent)
+            .with_position_handoff(handoff),
         );
         let layout = self
             .wheel_state_live_mut(id)

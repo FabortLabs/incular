@@ -30,3 +30,17 @@ extent, and an explicit deferred jump still takes precedence over the
 initial item. Ordinary scroll controllers keep their existing behavior.
 Fifty-five focused runtime, wheel-model, and controller tests passed.
 Replacing a controller on a still-mounted wheel is a separate case.
+
+## Controller replacement on one position
+
+Pinned :1457 passed. The mounted wheel first scrolls to item 5. A new
+controller's initial item 30 does not take effect; it observes item 5
+on the existing position. Moving to item 50 and attaching a second
+controller with initial item 33 keeps item 50. The replaced controllers
+detach. Switching to another internally owned position handle also
+keeps the wheel at item 40 in the Rust control.
+
+The handoff is published after the incoming controller's lease is
+acquired. It applies only to a retained ListWheelScrollView, not a
+headless wheel or a raw renderer whose offset is replaced explicitly.
+The baseline Rust test returned item 30 at the first swap.

@@ -959,7 +959,7 @@ impl ScrollController {
         }
         let viewport = state.viewport_extent;
         let attachment = state.metric_attachment.map(|owner| owner.id);
-        let fixed_start = if viewport > 0. {
+        let fixed_start = if viewport > 0. || update.position_handoff.is_some() {
             state
                 .fixed_extent_start
                 .as_mut()
@@ -967,7 +967,19 @@ impl ScrollController {
         } else {
             None
         };
-        let persistence = if let Some(requested) = state.pending_jump_offset {
+        let persistence = if let Some(offset) = update.position_handoff.filter(|x| x.is_finite()) {
+            // The controller changed, not the viewport position. An incoming
+            // initial item or restoration cannot replace that live position.
+            state.pending_jump_offset = None;
+            state.pending_restored_offset = None;
+            state.pending_initial_offset = None;
+            let next = offset.clamp(min, max);
+            if next != state.offset {
+                state.offset = next;
+                state.revision += 1;
+            }
+            None
+        } else if let Some(requested) = state.pending_jump_offset {
             let next = requested.clamp(min, max);
             if next != state.offset {
                 state.offset = next;

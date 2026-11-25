@@ -265,3 +265,80 @@ fn an_explicit_deferred_jump_wins_over_the_fixed_extent_initial_item_once() {
         (7, 700.)
     );
 }
+
+#[test]
+fn a_hot_swapped_controller_keeps_the_existing_wheel_position() {
+    let internal = FixedExtentScrollController::default();
+    let first = FixedExtentScrollController::new(30);
+    let second = FixedExtentScrollController::new(33);
+    let mut runtime = Runtime::new(wheel(&internal, rows(100), None)).unwrap();
+    let now = Instant::now();
+    frame(&mut runtime, now);
+    let root = runtime.tree().root().unwrap();
+    for (phase, y, ms) in [
+        (PointerPhase::Down, 300., 16),
+        (PointerPhase::Move, -200., 32),
+        (PointerPhase::Up, -200., 250),
+    ] {
+        let at = now + Duration::from_millis(ms);
+        let _ = runtime.handle_input_at(
+            InputEvent::PointerWithMetadata {
+                pointer: 1,
+                device: 1,
+                kind: PointerDeviceKind::Touch,
+                position: Offset::new(400., y),
+                phase,
+                buttons: if phase == PointerPhase::Up {
+                    0
+                } else {
+                    PRIMARY_POINTER_BUTTON
+                },
+                button: matches!(phase, PointerPhase::Down | PointerPhase::Up)
+                    .then_some(PRIMARY_POINTER_BUTTON),
+                sample: PointerSampleMetadata::default(),
+            },
+            at,
+        );
+        frame(&mut runtime, at);
+    }
+    assert_eq!(internal.selected_item(ITEM_EXTENT), 5);
+
+    runtime
+        .schedule_update(root, wheel(&first, rows(100), None))
+        .unwrap();
+    frame(&mut runtime, now + Duration::from_millis(266));
+    assert_eq!(first.selected_item(ITEM_EXTENT), 5);
+    assert!(internal.controller().attachment_id().is_none());
+    assert!(first.jump_to_item(50, ITEM_EXTENT));
+    assert_eq!(
+        (
+            first.selected_item(ITEM_EXTENT),
+            first.controller().offset()
+        ),
+        (50, 5000.)
+    );
+
+    runtime
+        .schedule_update(root, wheel(&second, rows(100), None))
+        .unwrap();
+    frame(&mut runtime, now + Duration::from_millis(282));
+    assert!(first.controller().attachment_id().is_none());
+    assert_eq!(second.selected_item(ITEM_EXTENT), 50);
+    assert!(second.jump_to_item(40, ITEM_EXTENT));
+    assert_eq!(
+        (
+            second.selected_item(ITEM_EXTENT),
+            second.controller().offset()
+        ),
+        (40, 4000.)
+    );
+
+    let returned_internal = FixedExtentScrollController::default();
+    runtime
+        .schedule_update(root, wheel(&returned_internal, rows(100), None))
+        .unwrap();
+    frame(&mut runtime, now + Duration::from_millis(298));
+    assert!(first.controller().attachment_id().is_none());
+    assert!(second.controller().attachment_id().is_none());
+    assert_eq!(returned_internal.selected_item(ITEM_EXTENT), 40);
+}

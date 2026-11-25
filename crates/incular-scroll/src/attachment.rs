@@ -279,6 +279,8 @@ pub struct ViewportMetricsUpdate {
     pub context: Option<(Axis, bool)>,
     /// The fixed size of one item, for a fixed-extent position.
     pub fixed_item_extent: Option<f32>,
+    /// Existing position of a retained viewport that is changing controller.
+    pub position_handoff: Option<f32>,
 }
 
 impl ViewportMetricsUpdate {
@@ -294,6 +296,7 @@ impl ViewportMetricsUpdate {
             physics,
             context: None,
             fixed_item_extent: None,
+            position_handoff: None,
         }
     }
 
@@ -315,6 +318,7 @@ impl ViewportMetricsUpdate {
             physics,
             context: Some((axis, reverse)),
             fixed_item_extent: None,
+            position_handoff: None,
         }
     }
 
@@ -324,6 +328,14 @@ impl ViewportMetricsUpdate {
     pub fn with_fixed_item_extent(mut self, item_extent: f32) -> Self {
         self.fixed_item_extent =
             (item_extent.is_finite() && item_extent > 0.).then_some(item_extent);
+        self
+    }
+
+    /// Continues a retained position through a controller replacement.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn with_position_handoff(mut self, offset: Option<f32>) -> Self {
+        self.position_handoff = offset.filter(|offset| offset.is_finite());
         self
     }
 
