@@ -1225,9 +1225,9 @@ impl WidgetTree {
         false
     }
 
-    /// Flutter's `showOnScreen`: scrolls the nearest viewport of `element` so
-    /// that the element's semantic bounds lie inside it. Returns whether a
-    /// viewport handled the request.
+    /// Flutter's `showOnScreen`: the nearest viewport that allows an
+    /// implicit reveal scrolls to the element's bounds. A viewport that
+    /// declines passes the request to its ancestors without moving itself.
     pub fn semantic_show_on_screen(&self, element: ElementId) -> bool {
         let Some(node) = self
             .semantic_ids
@@ -1236,8 +1236,10 @@ impl WidgetTree {
         else {
             return false;
         };
-        let Some((viewport, controller, axis, reverse, _)) =
-            self.scrollable_viewport_chain(element).into_iter().next()
+        let Some((viewport, controller, axis, reverse, _)) = self
+            .scrollable_viewport_chain(element)
+            .into_iter()
+            .find(|(_, _, _, _, physics)| physics.allows_implicit_scrolling())
         else {
             return false;
         };

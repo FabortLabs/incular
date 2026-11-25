@@ -336,6 +336,18 @@ impl ScrollPhysics {
         self.page_geometry_fraction.unwrap_or(1.)
     }
 
+    /// Whether a reveal request from a descendant may move this viewport.
+    /// It does not constrain explicit scroll commands.
+    #[must_use]
+    pub const fn allows_implicit_scrolling(self) -> bool {
+        self.page_geometry_fraction.is_none()
+            && !matches!(
+                self.snap,
+                SnapPhysics::PageViewport | SnapPhysics::Page { .. }
+            )
+            && !matches!(self.scrollability, Scrollability::Never)
+    }
+
     #[must_use]
     pub const fn fixed_extent_snapping(mut self, extent: f32) -> Self {
         self.snap = SnapPhysics::FixedExtent { extent };

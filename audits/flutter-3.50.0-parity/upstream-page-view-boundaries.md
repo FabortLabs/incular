@@ -40,3 +40,19 @@ when it takes over a retained viewport. Incular still accepts the
 unattached request rather than raising Flutter's assertion, so the
 `:1515` and `:1548` dispositions remain partial mismatches. Fresh mounts
 still support Incular's pre-layout command API.
+
+## Default implicit reveal is not an explicit scroll
+
+An authored paired probe uses a 400px viewport and fraction 0.625. The
+neighbor occupies x=250..500 and still contributes a semantic label.
+Flutter leaves the default PageView at offset 0 for show-on-screen;
+Incular previously moved to 100px. The repaired runtime leaves the
+inner page stationary while still letting an ordinary vertical ancestor
+reveal the target (100px in the paired nested fixture). The ordinary
+single-scroll reveal regression remains green.
+
+In the pinned Flutter opt-in control, the same reveal moves immediately
+to 100px and snapping then settles back to 0. That is a different
+behavior than never moving. Incular's opt-in API and cache defaults are
+not covered by this default-path repair. Authored checks add no original
+registration to the coverage ledger.
