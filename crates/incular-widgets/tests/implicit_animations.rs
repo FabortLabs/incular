@@ -10,16 +10,19 @@ use std::{
 };
 
 use incular_animation::Curve;
-use incular_config::{Alignment, Constraints, EdgeInsets};
+use incular_config::{
+    Alignment, AlignmentDirectional, Constraints, EdgeInsets, MainAxisAlignment, MainAxisSize,
+    TextDirection,
+};
 use incular_core::{Color, Offset, Rect, Size, Transform as CoreTransform};
 use incular_rendering::{DisplayList, PaintCommand};
-use incular_widgets::internal::{ElementId, RenderKind, WidgetTree};
+use incular_widgets::internal::{ElementId, Key, RenderKind, WidgetTree};
 use incular_widgets::{
-    AnimatedAlign, AnimatedContainer, AnimatedFractionallySizedBox, AnimatedOpacity,
-    AnimatedPadding, AnimatedPhysicalModel, AnimatedPositioned, AnimatedPositionedDirectional,
-    AnimatedRotation, AnimatedScale, AnimatedSlide, BoxShape, CustomScrollView, Directionality,
-    SizedBox, Sliver, SliverAnimatedOpacity, SliverToBoxAdapter, Stack, TweenAnimationBuilder,
-    Widget,
+    AlignmentGeometry, AnimatedAlign, AnimatedContainer, AnimatedFractionallySizedBox,
+    AnimatedOpacity, AnimatedPadding, AnimatedPhysicalModel, AnimatedPositioned,
+    AnimatedPositionedDirectional, AnimatedRotation, AnimatedScale, AnimatedSlide, BoxShape,
+    Column, CustomScrollView, Directionality, Row, SizedBox, Sliver, SliverAnimatedOpacity,
+    SliverToBoxAdapter, Stack, TweenAnimationBuilder, Widget,
 };
 
 const DURATION: Duration = Duration::from_millis(200);
@@ -28,16 +31,22 @@ struct Harness {
     tree: WidgetTree,
     root: ElementId,
     base: Instant,
+    constraints: Constraints,
 }
 
 impl Harness {
     fn new(widget: Widget) -> Self {
+        Self::with_constraints(widget, Constraints::loose(Size::new(200., 200.)))
+    }
+
+    fn with_constraints(widget: Widget, constraints: Constraints) -> Self {
         let mut tree = WidgetTree::new();
         let root = tree.mount(widget).expect("mount");
         let mut harness = Self {
             tree,
             root,
             base: Instant::now(),
+            constraints,
         };
         // The first frame builds; the second starts animations requested
         // by that build.
@@ -50,9 +59,7 @@ impl Harness {
         self.tree
             .update_compositor(self.base + Duration::from_millis(millis))
             .expect("frame");
-        self.tree
-            .layout(Constraints::loose(Size::new(200., 200.)))
-            .expect("layout");
+        self.tree.layout(self.constraints).expect("layout");
     }
 
     /// Rebuilds with `widget` at `millis`: the animation starts on that
@@ -230,6 +237,157 @@ fn padding_and_alignment_animate() {
     harness.frame(1_100);
     // Alignment (0, 0) in a 200 x 200 box: the square's origin is (75, 75).
     assert_eq!(harness.rects()[0].origin, Offset::new(75., 75.));
+}
+
+// widgets/animated_align_test.dart:18
+#[test]
+fn animated_align_interpolates_from_physical_right_to_rtl_start() {
+    let target = Widget::from(SizedBox::new().width(100.).height(200.)).with_key(99_u64);
+    let build = |alignment| {
+        Directionality::new(
+            TextDirection::Rtl,
+            AnimatedAlign::new(alignment, DURATION, target.clone()),
+        )
+        .into()
+    };
+    let mut harness = Harness::with_constraints(
+        build(AlignmentGeometry::Physical(Alignment::TOP_RIGHT)),
+        Constraints::tight(Size::new(800., 600.)),
+    );
+    let check = |harness: &Harness, y| {
+        let tree = &harness.tree;
+        let id = tree.element_with_key(&Key::from(99_u64)).unwrap();
+        let rect = tree.element_bounds(id).unwrap();
+        assert_eq!(rect.size, Size::new(100., 200.));
+        assert_eq!(
+            rect.origin + Offset::new(rect.size.width, 0.),
+            Offset::new(800., y)
+        );
+    };
+    check(&harness, 0.);
+    harness.update(
+        build(AlignmentGeometry::Directional(
+            AlignmentDirectional::BOTTOM_START,
+        )),
+        1_000,
+    );
+    check(&harness, 0.);
+    harness.frame(1_100);
+    check(&harness, 200.);
+    harness.frame(1_600);
+    check(&harness, 400.);
+}
+
+// widgets/animated_align_test.dart:62,84,105,126.
+#[test]
+fn animated_align_initial_factors_and_null_axes_match_the_retained_flex_fixtures() {
+    let child = || Widget::from(SizedBox::square(100.)).with_key(100_u64);
+    let build = |factor: Option<(bool, f32)>| {
+        let mut align = AnimatedAlign::new(Alignment::CENTER, DURATION, child()).curve(Curve::Ease);
+        if let Some((horizontal, factor)) = factor {
+            align = if horizontal {
+                align.width_factor(factor)
+            } else {
+                align.height_factor(factor)
+            };
+        }
+        Widget::from(align).with_key(101_u64)
+    };
+    let tree = |widget: Widget| {
+        Harness::with_constraints(
+            Directionality::new(TextDirection::Ltr, widget).into(),
+            Constraints::tight(Size::new(800., 600.)),
+        )
+    };
+    let size = |harness: &Harness, key| {
+        let tree = &harness.tree;
+        let id = tree.element_with_key(&Key::from(key)).unwrap();
+        tree.element_bounds(id).unwrap().size
+    };
+    let width = tree(
+        Row::new([build(Some((true, 0.5)))])
+            .main_axis_size(MainAxisSize::Min)
+            .into(),
+    );
+    assert_eq!(size(&width, 101_u64).width, 50.);
+    let height = tree(Column::new([build(Some((false, 0.5)))]).into());
+    assert_eq!(size(&height, 101_u64).height, 50.);
+    let natural_height = tree(
+        Column::new([build(None)])
+            .main_axis_alignment(MainAxisAlignment::Center)
+            .into(),
+    );
+    assert_eq!(size(&natural_height, 100_u64), Size::new(100., 100.));
+    let natural_width = tree(
+        SizedBox::shrink()
+            .child(
+                Row::new([build(None)])
+                    .main_axis_size(MainAxisSize::Min)
+                    .main_axis_alignment(MainAxisAlignment::Center),
+            )
+            .into(),
+    );
+    assert_eq!(size(&natural_width, 100_u64), Size::new(100., 100.));
+}
+
+#[test]
+fn direction_changes_resolve_the_running_alignment_without_restarting_its_clock() {
+    for fractional in [false, true] {
+        let ends = Rc::new(Cell::new(0));
+        let target = Widget::from(SizedBox::square(50.)).with_key(99_u64);
+        let build = |direction, target_alignment| {
+            let callback = {
+                let ends = ends.clone();
+                move || ends.set(ends.get() + 1)
+            };
+            let animated: Widget = if fractional {
+                AnimatedFractionallySizedBox::new(DURATION, target.clone())
+                    .alignment(target_alignment)
+                    .width_factor(0.25)
+                    .height_factor(0.25)
+                    .on_end(callback)
+                    .into()
+            } else {
+                AnimatedAlign::new(target_alignment, DURATION, target.clone())
+                    .on_end(callback)
+                    .into()
+            };
+            Directionality::new(direction, animated).into()
+        };
+        let start = AlignmentGeometry::Physical(Alignment::TOP_LEFT);
+        let end = AlignmentGeometry::Directional(AlignmentDirectional::BOTTOM_END);
+        let mut harness = Harness::with_constraints(
+            build(TextDirection::Ltr, start),
+            Constraints::tight(Size::new(200., 200.)),
+        );
+        let check = |harness: &Harness, x, y| {
+            let tree = &harness.tree;
+            let id = tree.element_with_key(&Key::from(99_u64)).unwrap();
+            assert_eq!(
+                tree.element_bounds(id).unwrap(),
+                Rect::from_origin_size(Offset::new(x, y), Size::new(50., 50.)),
+                "fractional={fractional}",
+            );
+        };
+        check(&harness, 0., 0.);
+        harness.update(build(TextDirection::Ltr, end), 1_000);
+        harness.frame(1_100);
+        check(&harness, 75., 75.);
+        harness.update(build(TextDirection::Rtl, end), 1_100);
+        check(&harness, 0., 75.);
+        assert_eq!(ends.get(), 0);
+        harness.frame(1_150);
+        check(&harness, 0., 112.5);
+        harness.frame(1_200);
+        check(&harness, 0., 150.);
+        assert_eq!(ends.get(), 0);
+        harness.frame(1_201);
+        assert_eq!(ends.get(), 1);
+        harness.update(build(TextDirection::Ltr, end), 1_201);
+        check(&harness, 150., 150.);
+        harness.frame(1_400);
+        assert_eq!(ends.get(), 1);
+    }
 }
 
 #[test]

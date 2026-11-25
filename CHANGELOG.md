@@ -323,6 +323,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- Changing text direction during AnimatedAlign or AnimatedFractionallySizedBox
+  repositions the child without restarting the animation.
+
 - AnimationStyle blends sampled forward and reverse curves, including
   nested blends and linear fallback for an absent interior override.
 

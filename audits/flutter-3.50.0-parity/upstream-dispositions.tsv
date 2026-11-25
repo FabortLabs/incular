@@ -1475,3 +1475,8 @@ packages/flutter/test/rendering/offstage_test.dart	13	offstage	partial-match	ups
 packages/flutter/test/rendering/relayout_boundary_test.dart	9	relayout boundary change does not trigger relayout	paired-match	upstream-render-box-edges.md
 packages/flutter/test/widgets/fractionally_sized_box_test.dart	53	FractionallySizedBox alignment (direction-sensitive)	paired-match	upstream-fractional-sizing-and-direction.md
 packages/flutter/test/widgets/fractionally_sized_box_test.dart	74	OverflowBox alignment with FractionallySizedBox	paired-match	upstream-fractional-sizing-and-direction.md
+packages/flutter/test/widgets/animated_align_test.dart	18	AnimatedAlign alignment visual-to-directional animation	paired-match	upstream-animated-alignment-direction.md
+packages/flutter/test/widgets/animated_align_test.dart	62	AnimatedAlign widthFactor	paired-match	upstream-animated-alignment-direction.md
+packages/flutter/test/widgets/animated_align_test.dart	84	AnimatedAlign heightFactor	paired-match	upstream-animated-alignment-direction.md
+packages/flutter/test/widgets/animated_align_test.dart	105	AnimatedAlign null height factor	paired-match	upstream-animated-alignment-direction.md
+packages/flutter/test/widgets/animated_align_test.dart	126	AnimatedAlign null widthFactor	paired-match	upstream-animated-alignment-direction.md

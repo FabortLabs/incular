@@ -49,8 +49,8 @@ impl<T: Lerp + Clone> PropertyTween<T> {
 }
 
 /// Flutter `AlignmentGeometry`: a physical alignment, or one whose horizontal
-/// value is relative to the text direction. An implicit widget resolves it
-/// with the ambient direction when its target is read.
+/// value is relative to the text direction. Mixed geometry keeps both
+/// components until it is resolved against the ambient direction.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum AlignmentGeometry {
     Physical(Alignment),
@@ -826,7 +826,7 @@ impl AnimatedAlign {
 
 #[derive(Default)]
 pub(crate) struct AlignTweens {
-    alignment: Option<PropertyTween<Alignment>>,
+    alignment: Option<PropertyTween<AlignmentGeometry>>,
     width_factor: Option<PropertyTween<f32>>,
     height_factor: Option<PropertyTween<f32>>,
 }
@@ -840,7 +840,8 @@ fn visit_factors(
     width_factor: Option<f32>,
     height_factor: Option<f32>,
 ) {
-    let alignment = alignment.resolve(pass.direction());
+    // Interpolate physical and logical components before applying direction.
+    // A direction-only rebuild must not change the tween target or its clock.
     visit(pass, &mut tweens.alignment, Some(&alignment));
     if let Some(height_factor) = height_factor {
         visit(pass, &mut tweens.height_factor, Some(&height_factor));
@@ -868,13 +869,12 @@ impl ImplicitlyAnimated for AnimatedAlign {
     }
 
     fn build(&self, tweens: &AlignTweens, t: f32, context: &BuildContext<'_>) -> Widget {
-        let fallback = self
-            .alignment
-            .resolve(context.text_direction().unwrap_or(TextDirection::Ltr));
-        let mut align = Align::new(
-            evaluate(&tweens.alignment, t).unwrap_or(fallback),
-            self.child.clone(),
-        );
+        let geometry = evaluate(&tweens.alignment, t).unwrap_or(self.alignment);
+        let alignment = match geometry {
+            AlignmentGeometry::Physical(alignment) => alignment,
+            logical => logical.resolve(context.text_direction().unwrap_or(TextDirection::Ltr)),
+        };
+        let mut align = Align::new(alignment, self.child.clone());
         if let Some(factor) = evaluate(&tweens.height_factor, t) {
             align = align.height_factor(factor);
         }
@@ -966,12 +966,9 @@ impl ImplicitlyAnimated for AnimatedFractionallySizedBox {
         );
     }
 
-    fn build(&self, tweens: &AlignTweens, t: f32, context: &BuildContext<'_>) -> Widget {
-        let fallback = self
-            .alignment
-            .resolve(context.text_direction().unwrap_or(TextDirection::Ltr));
+    fn build(&self, tweens: &AlignTweens, t: f32, _context: &BuildContext<'_>) -> Widget {
         let mut sized = FractionallySizedBox::empty()
-            .alignment(evaluate(&tweens.alignment, t).unwrap_or(fallback));
+            .alignment(evaluate(&tweens.alignment, t).unwrap_or(self.alignment));
         if let Some(factor) = evaluate(&tweens.height_factor, t) {
             sized = sized.height_factor(factor);
         }
