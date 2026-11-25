@@ -838,3 +838,5 @@ packages/flutter/test/services/system_chrome_test.dart	363	SystemChrome handles 
 packages/flutter/test/services/keyboard_key_test.dart	50	Control characters are recognized as such	paired-match	upstream-keyboard-services.md#control-key-label-classification
 packages/flutter/test/services/hardware_keyboard_test.dart	18	HardwareKeyboard records pressed keys and enabled locks	paired-match	upstream-keyboard-services.md#pressed-keys-and-lock-state
 packages/flutter/test/services/hardware_keyboard_test.dart	105	KeyEvent can tell which keys are pressed	paired-match	upstream-keyboard-services.md#pressed-keys-and-lock-state
+packages/flutter/test/services/hardware_keyboard_test.dart	164	Dispatch events to all handlers	paired-match	upstream-keyboard-services.md#window-wide-handler-order-and-failure-isolation
+packages/flutter/test/services/hardware_keyboard_test.dart	529	Exceptions from HardwareKeyboard handlers are caught and reported	partial-match	upstream-keyboard-services.md#window-wide-handler-order-and-failure-isolation

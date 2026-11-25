@@ -1,6 +1,12 @@
 //! Pressed key and lock state over the portable native event stream.
 
-use std::collections::{HashMap, HashSet, hash_map::Entry};
+use std::{
+    any::Any,
+    cell::RefCell,
+    collections::{HashMap, HashSet, hash_map::Entry},
+    panic::{AssertUnwindSafe, catch_unwind},
+    rc::{Rc, Weak},
+};
 
 use crate::input::{Code, Key, KeyState, KeyboardEvent, Modifiers, NamedKey};
 
@@ -67,5 +73,86 @@ impl HardwareKeyboardState {
     #[must_use]
     pub fn is_logical_key_pressed(&self, key: &Key) -> bool {
         self.pressed.values().any(|pressed| pressed == key)
+    }
+}
+
+type Handler = Rc<dyn Fn(&KeyboardEvent) -> bool>;
+
+#[derive(Default)]
+struct HandlerRegistry {
+    sequence: u64,
+    handlers: Rc<Vec<(u64, Handler)>>,
+}
+
+/// Ordered hardware key handlers. Every registration is invoked even
+/// after a handler accepts the event. Registration changes during one
+/// dispatch take effect on the next event.
+#[derive(Clone, Default)]
+pub struct HardwareKeyHandlers {
+    registry: Rc<RefCell<HandlerRegistry>>,
+}
+
+/// The combined handling result and original panic payloads. In
+/// panic-abort builds a panicking handler cannot be recovered.
+#[derive(Default)]
+pub struct HardwareKeyDispatch {
+    pub handled: bool,
+    pub failures: Vec<Box<dyn Any + Send>>,
+}
+
+impl HardwareKeyHandlers {
+    /// Adds one registration. Registering an equivalent handler twice
+    /// creates two independently owned subscriptions.
+    pub fn add(
+        &self,
+        handler: impl Fn(&KeyboardEvent) -> bool + 'static,
+    ) -> HardwareKeySubscription {
+        let mut registry = self.registry.borrow_mut();
+        let sequence = registry.sequence;
+        registry.sequence = sequence
+            .checked_add(1)
+            .expect("hardware key handler IDs exhausted");
+        Rc::make_mut(&mut registry.handlers).push((sequence, Rc::new(handler)));
+        HardwareKeySubscription {
+            sequence,
+            registry: Rc::downgrade(&self.registry),
+        }
+    }
+
+    /// Dispatches over a snapshot without holding a borrow during callbacks.
+    #[must_use]
+    pub fn dispatch(&self, event: &KeyboardEvent) -> HardwareKeyDispatch {
+        let snapshot = self.registry.borrow().handlers.clone();
+        let mut report = HardwareKeyDispatch::default();
+        for (_, handler) in snapshot.iter() {
+            match catch_unwind(AssertUnwindSafe(|| handler(event))) {
+                Ok(handled) => report.handled |= handled,
+                Err(payload) => report.failures.push(payload),
+            }
+        }
+        report
+    }
+}
+
+/// Removes one hardware-key handler registration on drop.
+#[must_use = "keep the subscription to receive hardware key events"]
+pub struct HardwareKeySubscription {
+    sequence: u64,
+    registry: Weak<RefCell<HandlerRegistry>>,
+}
+
+impl Drop for HardwareKeySubscription {
+    fn drop(&mut self) {
+        if let Some(registry) = self.registry.upgrade() {
+            let removed = {
+                let mut registry = registry.borrow_mut();
+                let handlers = Rc::make_mut(&mut registry.handlers);
+                handlers
+                    .iter()
+                    .position(|(sequence, _)| *sequence == self.sequence)
+                    .map(|index| handlers.remove(index))
+            };
+            drop(removed);
+        }
     }
 }

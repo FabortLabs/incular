@@ -23,3 +23,15 @@ physical position and that a repeated lock key does not toggle again.
 Eleven focused Rust tests passed. No native lock querying, full key-ID
 table, disconnected keyboard or synthesized lifecycle sequences were
 verified by these cases.
+
+## Window-wide handler order and failure isolation
+
+Both pinned variants of `services/hardware_keyboard_test.dart:164` and
+`:529` passed. Rust pairs the nine dispatch steps of :164, including
+duplicate registrations, removal, all-callback delivery even when one
+handler accepts, and focused notification after global handlers. A
+snapshot control verifies that edits to the registration list during
+dispatch apply to subsequent events. A panic does not prevent later
+handlers or pressed-state updates. That case (:529) stays partial: Rust
+collects typed payloads and logs the event context rather than producing
+FlutterErrorDetails. Fourteen focused Rust checks passed.

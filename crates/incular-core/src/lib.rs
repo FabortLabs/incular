@@ -31,7 +31,9 @@ pub use geometry::{
     ChangeImpact, Color, DirtyFlags, HslColor, HsvColor, Invalidation, Lerp, Offset, Rect, Size,
     Transform, finite_non_negative, finite_or_zero,
 };
-pub use hardware_keyboard::HardwareKeyboardState;
+pub use hardware_keyboard::{
+    HardwareKeyDispatch, HardwareKeyHandlers, HardwareKeySubscription, HardwareKeyboardState,
+};
 pub use id::IdGenerator;
 pub use input::{
     BACK_POINTER_BUTTON, Code, DeviceGestureSettings, DragStartBehavior, FORWARD_POINTER_BUTTON,

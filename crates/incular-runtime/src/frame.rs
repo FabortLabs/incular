@@ -172,6 +172,7 @@ pub struct Runtime {
     /// Modifier keys held, from the latest key event (`HardwareKeyboard`).
     pub(crate) keyboard_modifiers: incular_core::Modifiers,
     hardware_keyboard: incular_core::HardwareKeyboardState,
+    hardware_key_handlers: incular_core::HardwareKeyHandlers,
     /// The focused field, content revision and selection whose caret was
     /// last shown on screen (Flutter's `_scheduleShowCaretOnScreen`).
     pub(crate) caret_reveal_key: Option<(ElementId, u64, TextSelection)>,
@@ -350,6 +351,7 @@ impl Runtime {
             text_handle_drag: None,
             keyboard_modifiers: incular_core::Modifiers::empty(),
             hardware_keyboard: incular_core::HardwareKeyboardState::default(),
+            hardware_key_handlers: incular_core::HardwareKeyHandlers::default(),
             caret_reveal_key: None,
             ime_composition: None,
             text_histories: HashMap::new(),
@@ -1292,7 +1294,9 @@ impl Runtime {
         match event {
             InputEvent::Scroll { delta } => self.handle_wheel(self.last_pointer, delta),
             InputEvent::ScrollAt { position, delta } => self.handle_wheel(position, delta),
-            InputEvent::Key(key) => self.handle_key(key),
+            InputEvent::Key(key) => {
+                self.dispatch_keyboard_event(key);
+            }
             InputEvent::Text(text) => self.insert_text(&text),
             InputEvent::Ime(ime) => self.handle_ime(ime),
             InputEvent::TrackpadGesture(gesture) => {
@@ -2198,7 +2202,17 @@ impl Runtime {
         &self.hardware_keyboard
     }
 
-    fn handle_key(&mut self, event: KeyboardEvent) {
+    /// Adds a window-wide hardware key handler. Keep the subscription to
+    /// receive events before focused widgets and fallback editing actions.
+    pub fn add_hardware_key_handler(
+        &self,
+        handler: impl Fn(&KeyboardEvent) -> bool + 'static,
+    ) -> incular_core::HardwareKeySubscription {
+        self.hardware_key_handlers.add(handler)
+    }
+
+    /// Dispatches a portable key event and returns whether it was handled.
+    pub fn dispatch_keyboard_event(&mut self, event: KeyboardEvent) -> bool {
         self.hardware_keyboard.observe(&event);
         self.track_keyboard_modifiers(&event);
         // Widgets that show held modifiers (menu accelerator underlines)
@@ -2227,15 +2241,24 @@ impl Runtime {
         // external selection before routing the event through retained parents.
         self.adopt_external_focus_change();
 
-        // KeyboardListener/Shortcuts are the nearest retained command scopes.
-        // Give them first refusal for every transition, including key-up and
-        // auto-repeat; text editing and Tab traversal remain fallthrough paths.
-        if self.tree.dispatch_keyboard(self.focused, event.clone()) {
+        let hardware = self.hardware_key_handlers.dispatch(&event);
+        for failure in hardware.failures {
+            let message = failure
+                .downcast_ref::<&str>()
+                .copied()
+                .or_else(|| failure.downcast_ref::<String>().map(String::as_str))
+                .unwrap_or("non-string hardware key handler panic");
+            tracing::error!(?event, %message, "hardware key handler failed");
+        }
+        // A window-wide handler cannot suppress notification of the focused
+        // keyboard scope. Both results gate fallback editing and traversal.
+        let focused_handled = self.tree.dispatch_keyboard(self.focused, event.clone());
+        if hardware.handled || focused_handled {
             self.frame_requested = true;
-            return;
+            return true;
         }
         if !event.state.is_down() {
-            return;
+            return false;
         }
         if event.code == Code::Escape
             && self
@@ -2244,7 +2267,7 @@ impl Runtime {
                 > 0
         {
             self.frame_requested = true;
-            return;
+            return true;
         }
         if matches!(
             event.code,
@@ -2253,7 +2276,7 @@ impl Runtime {
             && let Some(next) = self.tree.menu_directional_focus_target(focused, event.code)
         {
             self.set_focus(Some(next));
-            return;
+            return true;
         }
         // Activate the focused surface itself. Only menus delegate activation
         // from a focused descendant; nested editors retain their own keys.
@@ -2269,7 +2292,7 @@ impl Runtime {
             }
             && self.activate_action(action)
         {
-            return;
+            return true;
         }
         // Flutter's NextFocusIntent/PreviousFocusIntent activators require
         // control, alt and meta to be released; Ctrl+Tab matches nothing.
@@ -2279,13 +2302,12 @@ impl Runtime {
             && !event.modifiers.meta()
         {
             self.focus_next(event.modifiers.shift());
-            return;
+            return true;
         }
         if let Some(label) = self.focused.filter(|id| self.tree.is_selectable_text(*id)) {
-            if self.run_selectable_text_key(label, &event) {
-                self.frame_requested = true;
-            }
-            return;
+            let handled = self.run_selectable_text_key(label, &event);
+            self.frame_requested |= handled;
+            return handled;
         }
         // Text fields keep arrows and paging for their own editing, so the
         // default focus and scroll shortcuts only serve other focus targets.
@@ -2293,22 +2315,23 @@ impl Runtime {
             && self.run_default_focus_key(&event)
         {
             self.frame_requested = true;
-            return;
+            return true;
         }
         let Some(field) = self.focused.filter(|id| self.tree.is_text_field(*id)) else {
-            return;
+            return false;
         };
         let Some(controller) = self.tree.text_controller(field) else {
-            return;
+            return false;
         };
         // Flutter's `DefaultTextEditingShortcuts` pick the intent for the
         // chord on the target platform and the field's actions run it.
         if !self.run_text_field_key(field, &controller, &event) {
-            return;
+            return false;
         }
         self.hide_text_field_overlays(field);
         controller.reset_caret(self.input_now());
         self.frame_requested = true;
+        true
     }
     /// Flutter's `UndoHistoryState.handlePlatformUndo`: a system undo or redo
     /// command acts on the history of the focused text field, the

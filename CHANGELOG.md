@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-runtime`: added ordered window-wide hardware key handlers.
+  Handled events still reach focused listeners and other handlers.
+
 - `incular-runtime`: exposes pressed physical positions, portable logical
   keys, and lock toggles observed from the delivered keyboard stream.
 

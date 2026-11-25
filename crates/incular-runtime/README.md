@@ -267,3 +267,7 @@ encrypted: never place passwords, tokens, or other secrets in it.
 `Runtime::hardware_keyboard()` reports physical positions, portable logical
 keys, and lock toggles observed so far. The runtime updates it before routing
 the event to the widget tree.
+
+Register a window-wide handler with `Runtime::add_hardware_key_handler` and
+keep its subscription alive. Every handler and the focused keyboard scope
+receive the event before unhandled events fall back to editing or traversal.
