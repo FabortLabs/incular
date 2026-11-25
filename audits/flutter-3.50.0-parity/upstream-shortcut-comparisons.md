@@ -46,3 +46,15 @@ for the three registrations :485, :1406 and :1516. Rust matches produced
 question mark through the actual mounted registry and verifies both
 repeat policies and ignored releases. Sixteen focused Rust tests passed.
 Native character normalization itself is unchanged.
+
+## Logical Ctrl-C chords
+
+Four exact upstream registrations at :283, :382, :408 and :435 passed
+(seven invocations including the raw-key and key-data variants). The
+four Rust counterparts mount an autofocus target and invoke the public
+CallbackShortcuts path. They check eight Ctrl-C sequences, either
+Control position or both at once, unrelated held keys, late modifiers,
+Shift/Ctrl order, repeat defaults and opt-out, and the final empty
+pressed-key state. These are normalized logical-key tests. They do not
+assert that a native adapter separates a layout's logical key from the
+character actually produced by typing it.

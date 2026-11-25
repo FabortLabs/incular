@@ -56,7 +56,7 @@ packages/flutter/test/scheduler/ticker_test.dart	178	Ticker can be created befor
 packages/flutter/test/services/clipboard_test.dart	17	Clipboard.getData returns text	paired-match	upstream-lifecycle-clipboard-comparisons.md
 packages/flutter/test/services/clipboard_test.dart	26	Clipboard.getData returns null	paired-match	upstream-lifecycle-clipboard-comparisons.md
 packages/flutter/test/services/clipboard_test.dart	46	Clipboard.setData sets text	paired-match	upstream-lifecycle-clipboard-comparisons.md
-packages/flutter/test/widgets/shortcuts_test.dart	283	handles Ctrl-C	reference-ran-incular-open	upstream-shortcut-comparisons.md
+packages/flutter/test/widgets/shortcuts_test.dart	283	handles Ctrl-C	paired-match	upstream-shortcut-comparisons.md#logical-ctrl-c-chords
 packages/flutter/test/widgets/shortcuts_test.dart	1425	handles repeated events	paired-match	upstream-shortcut-comparisons.md
 packages/flutter/test/widgets/shortcuts_test.dart	1446	rejects repeated events if requested	paired-match	upstream-shortcut-comparisons.md
 packages/flutter/test/scheduler/binding_test.dart	44	Adding a persistent frame callback during a persistent frame callback	paired-match	scheduler-callback-phases-comparisons.md
@@ -849,3 +849,6 @@ packages/flutter/test/widgets/shortcuts_test.dart	1637	nested CallbackShortcuts 
 packages/flutter/test/widgets/shortcuts_test.dart	485	isActivatedBy works as expected	paired-match	upstream-shortcut-comparisons.md#produced-character-sensitivity
 packages/flutter/test/widgets/shortcuts_test.dart	1406	is triggered on events with correct character	paired-match	upstream-shortcut-comparisons.md#produced-character-sensitivity
 packages/flutter/test/widgets/shortcuts_test.dart	1516	isActivatedBy works as expected	paired-match	upstream-shortcut-comparisons.md#produced-character-sensitivity
+packages/flutter/test/widgets/shortcuts_test.dart	382	handles repeated events	paired-match	upstream-shortcut-comparisons.md#logical-ctrl-c-chords
+packages/flutter/test/widgets/shortcuts_test.dart	408	rejects repeated events if requested	paired-match	upstream-shortcut-comparisons.md#logical-ctrl-c-chords
+packages/flutter/test/widgets/shortcuts_test.dart	435	handles Shift-Ctrl-C	paired-match	upstream-shortcut-comparisons.md#logical-ctrl-c-chords
