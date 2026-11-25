@@ -41,3 +41,7 @@ callbacks, not blocking or background work. The runtime runs one eligible
 task before each frame. By default, tasks below `Priority::ANIMATION`
 wait until there are no pending transient callbacks. You can await the
 result, or drop the future to let the callback run without observing it.
+
+In debug builds, `scheduler::set_scheduler_debug_flags` can mark the start
+and end of each frame. `try_assert_all_scheduler_vars_unset` reports whether
+either banner remains enabled.

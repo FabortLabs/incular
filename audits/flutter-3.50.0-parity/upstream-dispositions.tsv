@@ -842,3 +842,4 @@ packages/flutter/test/services/hardware_keyboard_test.dart	164	Dispatch events t
 packages/flutter/test/services/hardware_keyboard_test.dart	529	Exceptions from HardwareKeyboard handlers are caught and reported	partial-match	upstream-keyboard-services.md#window-wide-handler-order-and-failure-isolation
 packages/flutter/test/services/hardware_keyboard_test.dart	573	debugPrintKeyboardEvents causes logging of key events	paired-match	upstream-keyboard-services.md#irregular-events-and-keyboard-diagnostics
 packages/flutter/test/services/hardware_keyboard_test.dart	593	Irregular key events are processed	paired-match	upstream-keyboard-services.md#irregular-events-and-keyboard-diagnostics
+packages/flutter/test/scheduler/debug_test.dart	9	debugAssertAllSchedulerVarsUnset control test	paired-match	scheduler-callback-phases-comparisons.md#scheduler-debug-banners

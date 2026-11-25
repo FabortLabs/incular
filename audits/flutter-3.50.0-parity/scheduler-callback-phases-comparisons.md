@@ -105,3 +105,13 @@ Nineteen focused Rust checks passed. The named case exercises queue
 semantics, not Flutter's engine timer driver or asynchronous result
 flattening; the native Rust runtime services eligible work before its
 next delivered frame, one short task at a time.
+
+## Scheduler debug banners
+
+The pinned `scheduler/debug_test.dart:9` registration passed. Rust
+pairs the clean, begin-only, end-only and reset assertions and preserves
+the error reason. A focused control also verifies that enabled banners
+bracket frame callbacks, while the default is silent. Six focused Rust
+checks and the exact Flutter original passed. Rust uses per-thread
+configuration and a replaceable diagnostic output rather than Flutter's
+global debug print function.

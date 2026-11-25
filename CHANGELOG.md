@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-animation`: added opt-in debug frame banners and a check that
+  their switches were reset.
+
 - `incular-runtime`: added ordered window-wide hardware key handlers.
   Handled events still reach focused listeners and other handlers.
 

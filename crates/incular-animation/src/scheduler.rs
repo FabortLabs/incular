@@ -7,6 +7,12 @@
 //! paint. While a ticker runs or a frame callback waits,
 //! [`has_scheduled_frame`] keeps the runtime producing frames.
 
+pub use crate::scheduler_debug::{
+    SchedulerDebugFlags, SchedulerDebugFlagsEnabled, clear_scheduler_debug_output,
+    debug_assert_all_scheduler_vars_unset, scheduler_debug_flags, set_scheduler_debug_flags,
+    set_scheduler_debug_output, try_assert_all_scheduler_vars_unset,
+};
+
 use incular_core::time::Instant;
 use std::{
     cell::{Cell, RefCell},
@@ -473,6 +479,7 @@ pub fn begin_frame(raw: Instant) {
         }
         (now, has_batch)
     });
+    crate::scheduler_debug::begin_banner(now);
     if !has_batch {
         return;
     }
@@ -582,6 +589,7 @@ pub fn end_frame(raw: Instant) {
     for callback in post {
         callback(now);
     }
+    crate::scheduler_debug::end_banner();
 }
 
 struct TickerState {

@@ -11,6 +11,7 @@ mod curves;
 pub mod motion;
 pub mod physics;
 pub mod scheduler;
+mod scheduler_debug;
 mod style;
 mod tween;
 mod ui_tasks;
