@@ -317,7 +317,7 @@ impl WidgetTree {
                     .map(|lease| lease.controller().offset())
             })
             .flatten();
-        self.claim_scroll_viewport(element_id, &controller)?;
+        self.claim_scroll_viewport(element_id, &controller, false)?;
         self.publish_scroll_extents(
             Some(element_id),
             &controller,

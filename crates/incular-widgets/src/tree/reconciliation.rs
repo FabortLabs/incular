@@ -1959,6 +1959,7 @@ impl WidgetTree {
         &mut self,
         element: ElementId,
         controller: &ScrollController,
+        pending_page_dimensions: bool,
     ) -> Result<(), TreeError> {
         // Fast path: this element already drives this controller,
         // including same-controller reuse across updates. The stored
@@ -1976,7 +1977,9 @@ impl WidgetTree {
         // borrowed, and a failure leaves the existing lease, ownership,
         // activity, and metrics exactly as they were.
         if self.scroll_attachments.contains_key(&element) {
-            let replacement = match controller.try_attach(MetricOwner::of_tree(self.tree_id)) {
+            let replacement = match controller
+                .try_attach_viewport(MetricOwner::of_tree(self.tree_id), pending_page_dimensions)
+            {
                 Ok(attachment) => attachment,
                 Err(conflict) => {
                     return Err(self.attachment_conflict(conflict, element));
@@ -2002,7 +2005,9 @@ impl WidgetTree {
             return Ok(());
         }
         // Fresh attach: this element held no lease.
-        match controller.try_attach(MetricOwner::of_tree(self.tree_id)) {
+        match controller
+            .try_attach_viewport(MetricOwner::of_tree(self.tree_id), pending_page_dimensions)
+        {
             Ok(attachment) => {
                 self.scroll_attachments.insert(element, vec![attachment]);
                 Ok(())

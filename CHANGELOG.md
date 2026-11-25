@@ -263,6 +263,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- PageController reports no page inside the view's first child build, until
+  PageView has laid out its content. Later builds read the retained page.
+
 - incular-widgets: text length enforcement follows the target platform
   unless explicitly overridden. Choose MaxLengthEnforcement::Enforced
   to keep strict truncation while composing on all platforms.

@@ -90,3 +90,13 @@ page 0 hidden. Incular retains both semantic identities while modifying
 their bounds and visibility; an explicit hidden flag is not cleared
 by geometry updates. Portable and AccessKit projection fixtures pass.
 This does not reproduce a native screen reader session.
+
+## First page read before content dimensions
+
+Pinned essential assertions at `:1572` pass on both sides. The first
+mounted child builds the null branch even though internal provisional
+metrics already picked that child. Reading after layout returns page 0.
+Tapping the rendered trigger rebuilds the same view and shows the
+non-null branch. The existing zero-extent, controller-handoff, gesture,
+cache, and lifecycle fixtures still pass. A separate lease test verifies
+a stale attachment cannot expose a new viewport's provisional page.

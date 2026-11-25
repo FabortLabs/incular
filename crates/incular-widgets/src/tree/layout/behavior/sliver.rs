@@ -272,8 +272,13 @@ impl WidgetTree {
                         .preserve_implicit_scroll_position
                         .then(|| old.offset())
                 });
+                let uses_page_geometry = config.physics.page_geometry_fraction().is_some();
                 if let Some(viewport) = viewport_element {
-                    self.claim_scroll_viewport(viewport, &config.controller)?;
+                    self.claim_scroll_viewport(
+                        viewport,
+                        &config.controller,
+                        uses_page_geometry && handoff.is_none(),
+                    )?;
                 }
                 let mut last_published: Option<PublishedViewportAttempt> = None;
                 let mut sliver_layout = self.publish_sliver_attempt(
@@ -500,6 +505,13 @@ impl WidgetTree {
                     .set_layout_overflow(
                         overflow || (config.shrink_wrap && config.controller.offset() < 0.),
                     );
+                if uses_page_geometry
+                    && let Some(lease) = viewport_element
+                        .and_then(|element| self.scroll_attachments.get(&element))
+                        .and_then(|leases| leases.first())
+                {
+                    lease.finish_initial_page_layout();
+                }
                 self.diagnostics.lazy_layouts += 1;
                 (size, ChildOffsets::default())
             }

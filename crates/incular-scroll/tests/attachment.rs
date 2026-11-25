@@ -665,3 +665,28 @@ fn attachment_identities_stay_unique_across_controllers() {
     assert_ne!(first.id(), renewed.id());
     assert_ne!(renewed.id(), second.id());
 }
+
+#[test]
+fn fresh_page_geometry_is_private_until_the_live_attachment_finishes_layout() {
+    let controller = ScrollController::new();
+    let metrics =
+        ViewportMetricsUpdate::new(400., 100., ScrollPhysics::default().with_page_geometry(1.));
+
+    let first = controller.try_attach_viewport(owner(1), true).unwrap();
+    first.update_extents(metrics).unwrap();
+    assert_eq!(controller.viewport_extent(), 100.);
+    assert_eq!(controller.page_for_controller(1.), None);
+    assert_eq!(controller.page_for_handoff(), None);
+    first.finish_initial_page_layout();
+    assert_eq!(controller.page_for_controller(1.), Some(0.));
+    assert_eq!(controller.page_for_handoff(), Some(0.));
+
+    assert!(first.release());
+    let next = controller.try_attach_viewport(owner(2), true).unwrap();
+    next.update_extents(metrics).unwrap();
+    // The old lease cannot announce readiness for a different viewport.
+    first.finish_initial_page_layout();
+    assert_eq!(controller.page_for_controller(1.), None);
+    next.finish_initial_page_layout();
+    assert_eq!(controller.page_for_controller(1.), Some(0.));
+}

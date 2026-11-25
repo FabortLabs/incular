@@ -426,6 +426,12 @@ impl ScrollController {
     pub fn page_for_controller(&self, fallback_fraction: f32) -> Option<f32> {
         self.changes.track();
         let state = self.state.borrow();
+        if state
+            .metric_attachment
+            .is_some_and(|live| live.pending_page_dimensions)
+        {
+            return None;
+        }
         let fraction = match state
             .last_physics
             .and_then(ScrollPhysics::page_geometry_fraction)
@@ -445,7 +451,9 @@ impl ScrollController {
     #[must_use]
     pub fn page_for_handoff(&self) -> Option<f32> {
         let state = self.state.borrow();
-        state.metric_attachment?;
+        if state.metric_attachment?.pending_page_dimensions {
+            return None;
+        }
         let fraction = state.last_physics?.page_geometry_fraction()?;
         logical_page(&state, fraction)
     }
@@ -500,11 +508,22 @@ impl ScrollController {
     /// tree's lease map, never directly per frame.
     #[doc(hidden)]
     pub fn try_attach(&self, owner: MetricOwner) -> Result<MetricAttachment, AttachmentConflict> {
+        self.try_attach_viewport(owner, false)
+    }
+
+    /// Claims a viewport. For a fresh page position, metrics used to pick the
+    /// first children are provisional until those children have been laid out.
+    #[doc(hidden)]
+    pub fn try_attach_viewport(
+        &self,
+        owner: MetricOwner,
+        pending_page_dimensions: bool,
+    ) -> Result<MetricAttachment, AttachmentConflict> {
         let mut state = self.state.borrow_mut();
         if let Some(live) = state.metric_attachment {
             return Err(AttachmentConflict::for_owner(live));
         }
-        let stored = StoredAttachment::mint(owner.tree());
+        let stored = StoredAttachment::mint(owner.tree(), pending_page_dimensions);
         state.metric_attachment = Some(stored);
         Ok(MetricAttachment::new(self.clone(), stored.id, stored.tree))
     }

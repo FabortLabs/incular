@@ -632,7 +632,7 @@ packages/flutter/test/widgets/page_view_test.dart	1384	null to value	paired-matc
 packages/flutter/test/widgets/page_view_test.dart	1392	value to value	partial-match	upstream-page-view-boundaries.md
 packages/flutter/test/widgets/page_view_test.dart	1404	value to null	partial-match	upstream-page-view-boundaries.md
 packages/flutter/test/widgets/page_view_test.dart	1413	null to null	paired-match	upstream-page-view-boundaries.md
-packages/flutter/test/widgets/page_view_test.dart	1572	Get the page value before the content dimension is determined,do not throw an assertion and return null	partial-mismatch	upstream-page-view-boundaries.md
+packages/flutter/test/widgets/page_view_test.dart	1572	Get the page value before the content dimension is determined,do not throw an assertion and return null	paired-match	upstream-page-view-boundaries.md
 packages/flutter/test/widgets/page_view_test.dart	1624	Does not crash when calling jumpToPage before layout	partial-match	upstream-page-view-boundaries.md
 packages/flutter/test/widgets/page_view_test.dart	1650	Does not crash when calling animateToPage before layout	partial-match	upstream-page-view-boundaries.md
 packages/flutter/test/widgets/page_view_test.dart	1463	animateToPage assertion is working properly when pageController is attached to multiple PageViews	partial-match	upstream-page-view-boundaries.md

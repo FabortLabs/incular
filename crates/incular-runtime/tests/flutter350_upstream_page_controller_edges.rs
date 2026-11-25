@@ -93,32 +93,99 @@ fn controllerless_page_view_can_rebuild_with_no_external_controller_again() {
 }
 #[test]
 fn page_getter_is_readable_from_a_child_builder_before_content_metrics_exist() {
+    use incular_core::{
+        InputEvent, Offset, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase,
+        PointerSampleMetadata, time::Instant,
+    };
+    use incular_runtime::Signal;
+    use incular_widgets::{Column, Expanded, GestureDetector, SizedBox};
+
+    const PENDING: u64 = 31;
+    const READY: u64 = 32;
+    const REBUILD: u64 = 33;
     let c = PageController::new();
     let values = Rc::new(RefCell::new(Vec::new()));
-    let build = || {
-        let v = values.clone();
-        let ctrl = c.clone();
-        let child = Builder::new(move |_| {
-            let page = ctrl.page();
-            v.borrow_mut().push(page);
-            Text::new(if page.is_some() { "ready" } else { "not ready" }).into()
-        });
-        Directionality::new(
-            TextDirection::Ltr,
-            PageView::new([child]).controller(c.clone()),
-        )
-        .into()
-    };
-    let mut r = Runtime::new(build()).unwrap();
+    let revision = Signal::new(0_u32);
+    let root = Builder::new({
+        let (c, values, revision) = (c.clone(), values.clone(), revision.clone());
+        move |_| {
+            let _ = revision.get();
+            let child = Builder::new({
+                let (c, values) = (c.clone(), values.clone());
+                move |_| {
+                    let page = c.page();
+                    values.borrow_mut().push(page);
+                    if page.is_some() {
+                        Widget::from(Text::new("not empty")).with_key(Key::Value(READY))
+                    } else {
+                        Widget::from(Text::new("null")).with_key(Key::Value(PENDING))
+                    }
+                }
+            });
+            let trigger = GestureDetector::new(
+                SizedBox::from_size(Size::new(80., 40.)).child(Text::new("Tap")),
+            )
+            .on_tap({
+                let revision = revision.clone();
+                move || revision.update(|count| *count += 1)
+            });
+            Directionality::new(
+                TextDirection::Ltr,
+                Column::new([
+                    Expanded::new(PageView::new([child]).controller(c.clone())).into(),
+                    Widget::from(trigger).with_key(Key::Value(REBUILD)),
+                ]),
+            )
+            .into()
+        }
+    });
+    let mut r = Runtime::new(root.into()).unwrap();
     frame(&mut r);
-    let first = values.borrow().first().copied();
-    replace(&mut r, build());
-    let last = values.borrow().last().copied();
-    assert_eq!(
-        (first, last, c.page()),
-        (Some(None), Some(Some(0.)), Some(0.))
+    assert_eq!(&*values.borrow(), &[None]);
+    assert!(bounds(&r, PENDING).is_some());
+    assert!(bounds(&r, READY).is_none());
+    assert_eq!(c.page(), Some(0.));
+
+    let trigger = bounds(&r, REBUILD).unwrap();
+    let position = Offset::new(
+        trigger.origin.x + trigger.size.width / 2.,
+        trigger.origin.y + trigger.size.height / 2.,
     );
+    let time = Instant::now();
+    for (phase, buttons, elapsed_ms) in [
+        (PointerPhase::Down, PRIMARY_POINTER_BUTTON, 0),
+        (PointerPhase::Up, 0, 16),
+    ] {
+        r.handle_input_at(
+            InputEvent::PointerWithMetadata {
+                pointer: 1,
+                device: 0,
+                kind: PointerDeviceKind::Touch,
+                buttons,
+                button: Some(PRIMARY_POINTER_BUTTON),
+                sample: PointerSampleMetadata::EMPTY,
+                phase,
+                position,
+            },
+            time + Duration::from_millis(elapsed_ms),
+        );
+    }
+    r.run_frame_at(
+        Constraints::tight(Size::new(800., 600.)),
+        time + Duration::from_millis(32),
+    )
+    .unwrap();
+    assert_eq!(
+        revision.get(),
+        1,
+        "the rendered trigger must receive the tap"
+    );
+    assert_eq!(&*values.borrow(), &[None, Some(0.)]);
+    assert!(bounds(&r, PENDING).is_none());
+    assert!(bounds(&r, READY).is_some());
+    assert_eq!(c.page(), Some(0.));
 }
+
 #[test]
 fn jump_and_animate_calls_before_the_first_layout_are_safe_and_apply_page() {
     let actual = [false, true].map(|animated| {

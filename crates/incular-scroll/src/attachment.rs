@@ -210,6 +210,17 @@ impl MetricAttachment {
         Ok(())
     }
 
+    /// Makes page reads available after this viewport successfully laid out its content.
+    #[doc(hidden)]
+    pub fn finish_initial_page_layout(&self) {
+        let mut state = self.controller.state.borrow_mut();
+        if let Some(live) = state.metric_attachment.as_mut()
+            && live.id == self.id
+        {
+            live.pending_page_dimensions = false;
+        }
+    }
+
     /// Releases ownership when this attachment is still the live owner.
     /// Returns whether the release happened; a stale handle returns
     /// `false` without touching the current owner, its activity, or its
@@ -484,13 +495,15 @@ fn commit_extent_pair(
 pub(crate) struct StoredAttachment {
     pub(crate) id: u64,
     pub(crate) tree: u64,
+    pub(crate) pending_page_dimensions: bool,
 }
 
 impl StoredAttachment {
-    pub(crate) fn mint(tree: u64) -> Self {
+    pub(crate) fn mint(tree: u64, pending_page_dimensions: bool) -> Self {
         Self {
             id: ATTACHMENT_SEQUENCE.next(),
             tree,
+            pending_page_dimensions,
         }
     }
 }
