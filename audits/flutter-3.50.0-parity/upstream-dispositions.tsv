@@ -1025,3 +1025,8 @@ packages/flutter/test/gestures/drag_test.dart	1880	Button change after acceptanc
 packages/flutter/test/gestures/drag_test.dart	189	Should reject mouse drag when configured to ignore mouse pointers - Horizontal	paired-match	upstream-monodrag-arena-threshold.md#supported-device-filtering
 packages/flutter/test/gestures/drag_test.dart	241	Should reject mouse drag when configured to ignore mouse pointers - Vertical	paired-match	upstream-monodrag-arena-threshold.md#supported-device-filtering
 packages/flutter/test/gestures/drag_test.dart	1699	Can filter drags based on device kind	paired-match	upstream-monodrag-arena-threshold.md#supported-device-filtering
+packages/flutter/test/gestures/multidrag_test.dart	16	MultiDrag: moving before delay rejects	paired-match	upstream-multidrag.md
+packages/flutter/test/gestures/multidrag_test.dart	43	MultiDrag: delay triggers	paired-match	upstream-multidrag.md
+packages/flutter/test/gestures/multidrag_test.dart	72	MultiDrag: can filter based on device kind	paired-match	upstream-multidrag.md
+packages/flutter/test/gestures/multidrag_test.dart	105	allowedButtonsFilter should work the same when null or not specified	paired-match	upstream-multidrag.md
+packages/flutter/test/gestures/multidrag_test.dart	130	'$MultiDragPointerState dispatches memory events'	reference-ran-incular-open	upstream-multidrag.md

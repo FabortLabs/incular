@@ -36,6 +36,9 @@ enum MultiDragKind {
     Delayed(Duration),
 }
 
+/// Timer deadline, followed by creation order when deadlines tie.
+type DragTimer = (Instant, u64);
+
 /// Flutter `MultiDragPointerState`.
 struct PointerState {
     initial_position: Offset,
@@ -46,7 +49,7 @@ struct PointerState {
     last_pending_event_time: Option<Instant>,
     has_entry: bool,
     /// `_DelayedPointerState._timer`'s deadline.
-    timer: Option<Instant>,
+    timer: Option<DragTimer>,
     /// `_DelayedPointerState._starter`: accepted while the delay runs.
     starter: bool,
 }
@@ -59,9 +62,11 @@ pub struct MultiDragGestureRecognizer {
     supported_devices: Option<Vec<PointerDeviceKind>>,
     /// Flutter `GestureRecognizer.gestureSettings`: platform slop overrides.
     gesture_settings: DeviceGestureSettings,
-    allowed_buttons: Rc<dyn Fn(u32) -> bool>,
+    allowed_buttons: Option<Rc<dyn Fn(u32) -> bool>>,
     on_start: Option<MultiDragStartCallback>,
     pointers: BTreeMap<u64, PointerState>,
+    timers: BTreeMap<DragTimer, u64>,
+    timer_sequence: u64,
     link: ArenaLink,
 }
 
@@ -72,9 +77,11 @@ impl MultiDragGestureRecognizer {
             supported_devices: None,
             gesture_settings: DeviceGestureSettings::default(),
             // `_defaultButtonAcceptBehavior`: the primary button only.
-            allowed_buttons: Rc::new(|buttons| buttons == PRIMARY_POINTER_BUTTON),
+            allowed_buttons: None,
             on_start: None,
             pointers: BTreeMap::new(),
+            timers: BTreeMap::new(),
+            timer_sequence: 0,
             link: ArenaLink::default(),
         }
     }
@@ -125,8 +132,13 @@ impl MultiDragGestureRecognizer {
     /// alone by default.
     #[must_use]
     pub fn allowed_buttons_filter(mut self, filter: impl Fn(u32) -> bool + 'static) -> Self {
-        self.allowed_buttons = Rc::new(filter);
+        self.set_allowed_buttons_filter(Some(Rc::new(filter)));
         self
+    }
+
+    /// Replaces the button filter. `None` restores the primary-only default.
+    pub fn set_allowed_buttons_filter(&mut self, filter: Option<Rc<dyn Fn(u32) -> bool>>) {
+        self.allowed_buttons = filter;
     }
 
     #[must_use]
@@ -144,12 +156,22 @@ impl MultiDragGestureRecognizer {
             .supported_devices
             .as_ref()
             .is_none_or(|kinds| kinds.contains(&event.kind))
-            && (self.allowed_buttons)(event.buttons);
+            && self
+                .allowed_buttons
+                .as_ref()
+                .map_or(event.buttons == PRIMARY_POINTER_BUTTON, |filter| {
+                    filter(event.buttons)
+                });
         if !allowed || self.pointers.contains_key(&event.pointer) {
             return;
         }
         let timer = match self.kind {
-            MultiDragKind::Delayed(delay) => Some(event.time + delay),
+            MultiDragKind::Delayed(delay) => {
+                let key = (event.time + delay, self.timer_sequence);
+                self.timer_sequence += 1;
+                self.timers.insert(key, event.pointer);
+                Some(key)
+            }
             MultiDragKind::Immediate | MultiDragKind::Horizontal | MultiDragKind::Vertical => None,
         };
         self.pointers.insert(
@@ -249,14 +271,8 @@ impl MultiDragGestureRecognizer {
 
     /// Fires the delayed recognizer's timers due by `now`.
     pub fn poll(&mut self, now: Instant) {
-        // Each pass clears one due timer, so the search makes progress. The
-        // BTreeMap order is the same as the snapshot's.
-        while let Some(pointer) = self.pointers.iter().find_map(|(&pointer, state)| {
-            state
-                .timer
-                .is_some_and(|deadline| deadline <= now)
-                .then_some(pointer)
-        }) {
+        while self.next_deadline().is_some_and(|deadline| deadline <= now) {
+            let (_, pointer) = self.timers.pop_first().expect("there is a due timer");
             // `_delayPassed`.
             let state = self
                 .pointers
@@ -274,7 +290,9 @@ impl MultiDragGestureRecognizer {
 
     #[must_use]
     pub fn next_deadline(&self) -> Option<Instant> {
-        self.pointers.values().filter_map(|state| state.timer).min()
+        self.timers
+            .first_key_value()
+            .map(|(&(deadline, _), _)| deadline)
     }
 
     /// `checkForResolutionAfterMove` of each pointer state.
@@ -309,10 +327,10 @@ impl MultiDragGestureRecognizer {
                     return;
                 }
                 if distance(pending) > slop {
-                    self.settle(pointer, GestureDisposition::Rejected);
-                    if let Some(state) = self.pointers.get_mut(&pointer) {
-                        state.timer = None;
+                    if let Some(timer) = state.timer.take() {
+                        self.timers.remove(&timer);
                     }
+                    self.settle(pointer, GestureDisposition::Rejected);
                 }
             }
         }
@@ -348,9 +366,13 @@ impl MultiDragGestureRecognizer {
     /// `_removeState`: the state is disposed, rejecting its arena entry if
     /// it is still open.
     fn remove_state(&mut self, pointer: u64) {
-        if let Some(state) = self.pointers.remove(&pointer)
-            && state.has_entry
-        {
+        let Some(state) = self.pointers.remove(&pointer) else {
+            return;
+        };
+        if let Some(timer) = state.timer {
+            self.timers.remove(&timer);
+        }
+        if state.has_entry {
             self.settle(pointer, GestureDisposition::Rejected);
         }
     }
