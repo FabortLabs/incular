@@ -724,3 +724,27 @@ mod probe_entry_size {
             * 1024
     }
 }
+
+#[test]
+fn unbreakable_words_wrap_only_when_paragraph_wrapping_is_enabled() {
+    let mut engine = TextEngine::new();
+    let word = "a".repeat(100);
+    let style = TextStyle::default().font_size(14.);
+    let wrapped = engine.layout_with_options(
+        &word,
+        &style,
+        TextLayoutOptions::new(Some(30.), TextAlign::Start),
+    );
+    assert!(wrapped.lines.len() >= 2);
+    assert!(wrapped.lines.iter().all(|line| line.width <= 30.));
+    let unwrapped = engine.layout_with_options(
+        &word,
+        &style,
+        TextLayoutOptions::new(Some(30.), TextAlign::Start).soft_wrap(false),
+    );
+    assert_eq!(unwrapped.lines.len(), 1);
+    assert!(unwrapped.overflowed);
+    let natural = engine.layout(&word, &style, None, TextAlign::Start);
+    assert_eq!(natural.lines.len(), 1);
+    assert!(natural.metrics.size.width > 30.);
+}

@@ -1530,6 +1530,11 @@ impl TextEngine {
         ));
         if max_width.is_none() {
             builder.push_default(StyleProperty::TextWrapMode(parley::TextWrapMode::NoWrap));
+        } else {
+            // Flutter paragraphs fall back to a shaped-cluster break when
+            // a word is too long for an otherwise empty line. Keep the
+            // normal break opportunities and intrinsic word widths.
+            builder.push_default(StyleProperty::OverflowWrap(parley::OverflowWrap::BreakWord));
         }
         for_each_style_property(style, |property| builder.push_default(property));
         // Each styled run overrides the paragraph defaults over its own bytes,
