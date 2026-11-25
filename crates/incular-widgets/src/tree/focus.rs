@@ -121,13 +121,26 @@ pub(super) fn instantiate_owned_focus_node(widget: &mut Widget, previous: Option
     let Some(can_request) = owned_focus_permission(widget) else {
         return;
     };
-    let node = previous
-        .filter(|previous| owned_focus_permission(previous).is_some())
-        .and_then(|previous| external_node(previous.kind()))
-        .cloned()
-        .unwrap_or_default();
-    node.set_can_request_focus(can_request);
-    if let WidgetKind::Gesture { callbacks, .. } = widget.kind_mut() {
+    let WidgetKind::Gesture { callbacks, .. } = widget.kind_mut() else {
+        return;
+    };
+    let previous = previous.and_then(|previous| match previous.kind() {
+        WidgetKind::Gesture { callbacks: old, .. }
+            if old.owned_focus_permission.is_some()
+                && old.owns_focus_scope == callbacks.owns_focus_scope =>
+        {
+            Some(old)
+        }
+        _ => None,
+    });
+    if callbacks.owns_focus_scope {
+        let scope = previous.and_then(|old| old.focus_scope.clone()).unwrap_or_default();
+        scope.set_can_request_focus(can_request);
+        callbacks.focus_node = Some(scope.scope_focus_node());
+        callbacks.focus_scope = Some(scope);
+    } else {
+        let node = previous.and_then(|old| old.focus_node.clone()).unwrap_or_default();
+        node.set_can_request_focus(can_request);
         callbacks.focus_node = Some(node);
     }
 }

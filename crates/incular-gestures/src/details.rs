@@ -479,6 +479,8 @@ pub struct GestureCallbacks {
     /// one node for the mounted element and applies this focus permission.
     #[doc(hidden)]
     pub owned_focus_permission: Option<bool>,
+    #[doc(hidden)]
+    pub owns_focus_scope: bool,
     /// Combined retained focus, hover, and focus-highlight behavior.
     pub focus_behavior: Option<Rc<FocusBehavior>>,
     pub autofocus: bool,

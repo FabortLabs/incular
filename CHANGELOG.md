@@ -7,6 +7,14 @@ a version and date when publishing.
 
 ### Added
 
+- incular-widgets: external FocusScope nodes can own primary focus, remember
+  their last child, and restore it across nested scopes. Runtime exposes
+  primary focus observers and early/late focus keyboard handlers.
+
+- incular-widgets and incular-rendering: box-relative radial and sweep
+  gradients animate and paint through wgpu. Explicit gradient positions
+  can be validated with GradientStops::from_colors.
+
 - `incular-widgets`: attributed accessibility label, value, and hint setters
   preserve UTF-16 pronunciation spans in retained and mobile projection data.
 
@@ -254,6 +262,11 @@ a version and date when publishing.
   `EditableText` does there. Mouse and stylus presses still unfocus it.
 
 ### Fixed
+
+- incular-runtime: a surviving sibling no longer gains focus when an
+  unkeyed focused child is removed. Programmatic focus wakes an idle runtime,
+  and focus requests respect mounted scope permissions without changing the
+  child's own setting.
 
 - `incular-widgets`: merged accessibility labels retain the reading direction
   of individual phrases in mixed-language text.

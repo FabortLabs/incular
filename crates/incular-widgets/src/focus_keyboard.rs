@@ -268,8 +268,12 @@ impl From<FocusScope> for Widget {
                 callbacks.focus_scope = Some(node.clone());
             }
             widget
-        } else if value.can_request_focus == Some(false) {
-            child.with_excluded_focus(true)
+        } else if let Some(allowed) = value.can_request_focus {
+            let mut widget = Widget::from(Focus::new(child).can_request_focus(allowed));
+            if let WidgetKind::Gesture { callbacks, .. } = widget.kind_mut() {
+                callbacks.owns_focus_scope = true;
+            }
+            widget
         } else {
             child
         };

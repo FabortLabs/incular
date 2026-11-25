@@ -57,3 +57,16 @@ and fallback to the inner scope when the leaf is disabled. The mounted
 Rust tests also verify a request before the first layout. Scoped
 requests through the nearest mounted scope complete the original
 `focus_scope_test.dart:16` and :30 reactive-label comparisons.
+
+## Inherited eligibility without overwriting child configuration
+
+Pinned `focus_scope_test.dart:2016` disables and re-enables the same
+mounted scope and observes the same external child's public
+`canRequestFocus` value. The native result is true, false, true,
+matching the reference. A second locally-disabled child remains disabled
+through both rebuilds. The retained scope owns the permission, and
+its mounted descendants compute effective focus eligibility without
+rewriting their own flag. Requests denied during the disallowed interval
+do not reappear. This check is specific to focus scopes; the runtime
+separately enforces actual focus requests and traversal eligibility for
+ordinary non-scope Focus ancestors.

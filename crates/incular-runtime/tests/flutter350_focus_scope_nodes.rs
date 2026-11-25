@@ -247,3 +247,38 @@ fn a_parent_scope_remembers_its_nested_scope_and_not_the_nested_leaf() {
     assert!(nested.has_primary_focus());
     assert!(!leaf.has_focus());
 }
+
+#[test]
+fn descendants_inherit_scope_permission_without_losing_their_local_setting() {
+    use incular_widgets::Column;
+    let child = FocusNode::new();
+    let local_opt_out = FocusNode::new();
+    local_opt_out.set_can_request_focus(false);
+    let scene = |allowed| {
+        FocusScope::new(Column::new([
+            Focus::new(SizedBox::shrink()).node(child.clone()),
+            Focus::new(SizedBox::shrink()).node(local_opt_out.clone()),
+        ]))
+        .can_request_focus(allowed)
+        .into()
+    };
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let mut runtime = Runtime::new(scene(true)).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert!(child.can_request_focus());
+    assert!(!local_opt_out.can_request_focus());
+    let root = runtime.tree().root().unwrap();
+    runtime.schedule_update(root, scene(false)).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert!(!child.can_request_focus());
+    assert!(!local_opt_out.can_request_focus());
+    child.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    assert!(!child.has_focus());
+
+    runtime.schedule_update(root, scene(true)).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert!(child.can_request_focus());
+    assert!(!child.has_focus());
+    assert!(!local_opt_out.can_request_focus());
+}

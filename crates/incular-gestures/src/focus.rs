@@ -347,10 +347,34 @@ impl FocusNode {
             self.unfocus();
         }
     }
-    #[must_use]
-    pub fn can_request_focus(&self) -> bool {
+    fn locally_can_request_focus(&self) -> bool {
         self.state.changes.track();
         self.state.enabled.get() && self.state.can_request_focus.get()
+    }
+
+    #[must_use]
+    pub fn can_request_focus(&self) -> bool {
+        if !self.locally_can_request_focus() {
+            return false;
+        }
+        let mut scope = self.host_enclosing_scope();
+        let mut visited = Vec::new();
+        while let Some(current) = scope {
+            if visited.contains(&current) {
+                return false;
+            }
+            let Some(anchor) = current.mounted_anchor() else {
+                break;
+            };
+            if !anchor.locally_can_request_focus() || !anchor.state.descendants_are_focusable.get() {
+                return false;
+            }
+            scope = anchor.host_enclosing_scope();
+            if scope.is_some() {
+                visited.push(current);
+            }
+        }
+        true
     }
 
     /// Enables or disables this hosted focus node without overwriting its
@@ -386,7 +410,7 @@ impl FocusNode {
     #[must_use]
     pub fn descendants_are_focusable(&self) -> bool {
         self.state.descendants_are_focusable.get()
-            && (self.state.scope_owner.is_none() || self.can_request_focus())
+            && (self.state.scope_owner.is_none() || self.locally_can_request_focus())
     }
     pub fn set_descendants_are_traversable(&self, traversable: bool) {
         if self.state.descendants_are_traversable.replace(traversable) != traversable {
