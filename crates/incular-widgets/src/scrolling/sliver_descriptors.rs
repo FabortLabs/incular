@@ -1284,7 +1284,6 @@ impl Sliver for SliverFillRemaining {
             child: self.child.clone(),
             has_scroll_body: self.has_scroll_body,
             fill_overscroll: self.fill_overscroll,
-            extent: Cell::new(0.),
         })
     }
 }

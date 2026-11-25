@@ -208,6 +208,8 @@ fn bouncing_drag_keeps_bottom_aligned_child_at_viewport_bottom() {
 fn bouncing_drag_grows_intrinsic_child_past_a_long_list() {
     let actual = [48., 40.].map(|base| {
         let mut h = Host::new(list(), centered_button(base), true, true);
+        let max = h.c.max_offset();
+        assert_eq!(max, 150. + 100. + base);
         h.jump_end();
         let before = (h.height(), h.button_center_x_and_bottom());
         h.swipe();
@@ -216,7 +218,10 @@ fn bouncing_drag_grows_intrinsic_child_past_a_long_list() {
             h.height(),
             h.button_center_x_and_bottom(),
         );
+        assert_eq!(h.c.max_offset(), max, "stretch must not change scroll range");
         h.settle();
+        assert_eq!(h.c.offset(), max);
+        assert_eq!(h.c.max_offset(), max);
         (before, during, h.height())
     });
     let mut mismatches = Vec::new();

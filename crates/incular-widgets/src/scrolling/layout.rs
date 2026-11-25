@@ -1630,15 +1630,13 @@ pub(super) struct FillRemainingRenderSliver {
     pub(super) child: Widget,
     pub(super) has_scroll_body: bool,
     pub(super) fill_overscroll: bool,
-    pub(super) extent: Cell<f32>,
 }
 
 impl FillRemainingRenderSliver {
     /// Flutter's `RenderSliverFillRemainingAndOverscroll`: the child fills the
     /// remaining space plus any overscroll area, with a minimum of the
     /// remaining extent and a maximum that includes overscroll.
-    fn overscroll_layout(&mut self, constraints: SliverConstraints, extent: f32) -> SliverLayout {
-        self.extent.set(extent);
+    fn overscroll_layout(&self, constraints: SliverConstraints, extent: f32) -> SliverLayout {
         // The viewport caps the paint budget at its own extent; past this
         // sliver's leading edge, the clipped part of the child is carried in
         // scroll_offset. Keep that part in the child's layout budget so its
@@ -1692,7 +1690,6 @@ impl RenderSliver for FillRemainingRenderSliver {
             // extent forward would keep a stale maximum after content above shrinks.
             remaining_extent.max(child_hint)
         };
-        self.extent.set(extent);
         let scroll_extent = if self.has_scroll_body {
             constraints.viewport_main_axis_extent.max(0.)
         } else {
@@ -1721,13 +1718,16 @@ impl RenderSliver for FillRemainingRenderSliver {
         }
     }
 
-    fn set_child_extent(&mut self, child: SliverChildId, extent: f32) -> bool {
-        if child.0 != 0 || !extent.is_finite() || extent < 0. {
-            return false;
+    fn scroll_layout_dependency(&self) -> SliverScrollDependency {
+        // A scroll body consumes the current paint budget, and a stretching
+        // child follows that budget through overscroll. Rematerializing the
+        // cache is not required for either size to change. Ordinary static
+        // fill depends on the preceding scroll extent, not the current offset.
+        if self.has_scroll_body || self.fill_overscroll {
+            SliverScrollDependency::ScrollOffset
+        } else {
+            SliverScrollDependency::CacheWindow
         }
-        let changed = (self.extent.get() - extent).abs() > f32::EPSILON;
-        self.extent.set(extent);
-        changed
     }
 }
 
