@@ -144,6 +144,45 @@ fn fixed_extent_boundary(offset: f32, item_extent: f32) -> f64 {
     }
 }
 
+/// Separates the live cache range from explicitly retained children. The
+/// ordinary case allocates no parking buffer.
+fn retain_fixed_cache(
+    widgets: &mut HashMap<usize, Widget>,
+    range: &std::ops::Range<usize>,
+    count: usize,
+) -> Vec<usize> {
+    let mut parked = Vec::new();
+    widgets.retain(|index, widget| {
+        if range.contains(index) {
+            true
+        } else if *index < count && widget.keep_alive_request() {
+            parked.push(*index);
+            true
+        } else {
+            false
+        }
+    });
+    parked.sort_unstable();
+    parked
+}
+
+fn fixed_cache_slots(
+    range: std::ops::Range<usize>,
+    parked: &[usize],
+) -> impl Iterator<Item = (usize, SliverChildPlacement)> + '_ {
+    let split = parked.partition_point(|index| *index < range.start);
+    // Preserve logical order on both sides of the active range.
+    parked[..split]
+        .iter()
+        .map(|index| (*index, SliverChildPlacement::Parked))
+        .chain(range.map(|index| (index, SliverChildPlacement::Flow)))
+        .chain(
+            parked[split..]
+                .iter()
+                .map(|index| (*index, SliverChildPlacement::Parked)),
+        )
+}
+
 pub(super) struct FixedExtentRenderSliver {
     pub(super) item_count: usize,
     pub(super) item_extent: f32,
@@ -178,6 +217,10 @@ impl RenderSliver for FixedExtentRenderSliver {
         Some(self.item_count)
     }
 
+    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        Some(self)
+    }
+
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout {
         let total = self.item_count as f32 * self.item_extent;
         let cache_start = (constraints.scroll_offset + constraints.cache_origin).max(0.);
@@ -194,9 +237,9 @@ impl RenderSliver for FixedExtentRenderSliver {
         };
         let range =
             start.min(self.item_count)..end.min(self.item_count).max(start.min(self.item_count));
-        self.widgets.retain(|index, _| range.contains(index));
-        let children = range
-            .map(|index| {
+        let parked = retain_fixed_cache(&mut self.widgets, &range, self.item_count);
+        let children = fixed_cache_slots(range, &parked)
+            .map(|(index, placement)| {
                 let widget = self.child_widget(index);
                 SliverChildLayout {
                     id: SliverChildId::list_item(index),
@@ -210,7 +253,7 @@ impl RenderSliver for FixedExtentRenderSliver {
                         Some(self.item_extent),
                     ),
                     extent: self.item_extent,
-                    placement: SliverChildPlacement::Flow,
+                    placement,
                 }
             })
             .collect();
@@ -1655,6 +1698,10 @@ impl RenderSliver for ViewportExtentRenderSliver {
         Some(self.item_count)
     }
 
+    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        Some(self)
+    }
+
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout {
         let viewport_extent = if constraints.viewport_main_axis_extent.is_finite() {
             constraints.viewport_main_axis_extent.max(0.)
@@ -1691,9 +1738,9 @@ impl RenderSliver for ViewportExtentRenderSliver {
         };
         let range =
             start.min(self.item_count)..end.min(self.item_count).max(start.min(self.item_count));
-        self.widgets.retain(|index, _| range.contains(index));
-        let children = range
-            .map(|index| {
+        let parked = retain_fixed_cache(&mut self.widgets, &range, self.item_count);
+        let children = fixed_cache_slots(range, &parked)
+            .map(|(index, placement)| {
                 let widget = self.child_widget(index);
                 SliverChildLayout {
                     id: SliverChildId::list_item(index),
@@ -1707,7 +1754,7 @@ impl RenderSliver for ViewportExtentRenderSliver {
                         Some(extent),
                     ),
                     extent,
-                    placement: SliverChildPlacement::Flow,
+                    placement,
                 }
             })
             .collect();
@@ -2698,7 +2745,8 @@ pub(crate) fn transfer_retained_sliver_state(
         );
         return;
     }
-    if adopt_natural_header_state(fresh, retained)
+    if adopt_fixed_keep_alives(fresh, retained, probes)
+        || adopt_natural_header_state(fresh, retained)
         || adopt_box_extent(fresh, retained)
         || adopt_floating_header_state(fresh, retained)
         || adopt_variable_extent_measurements(fresh, retained, probes, preserve_anchor)
@@ -2772,6 +2820,88 @@ fn adopt_natural_header_state(
 /// the global fallback. No row correspondence is implied: explicit seeds win,
 /// reused elements establish identity, and fresh elements invalidate guesses.
 /// Offscreen totals remain estimates until those rows are materialized.
+/// Rebuild only the formerly kept entries with the new delegate. A slot
+/// can stay parked only if its new descriptor requests it and identifies
+/// the same child. Unrelated off-cache slots are never probed or built.
+fn transfer_keep_alives(
+    retained: &HashMap<usize, Widget>,
+    fresh: &mut HashMap<usize, Widget>,
+    count: usize,
+    build: impl Fn(usize) -> Widget,
+    probes: &mut u64,
+) {
+    let mut indices: Vec<_> = retained
+        .iter()
+        .filter_map(|(&index, widget)| {
+            (index < count && widget.keep_alive_request()).then_some(index)
+        })
+        .collect();
+    indices.sort_unstable();
+    for index in indices {
+        *probes += 1;
+        let old = &retained[&index];
+        if fresh.contains_key(&index) {
+            continue;
+        }
+        let new = build(index);
+        let same_child = old.key() == new.key()
+            && std::mem::discriminant(old.kind()) == std::mem::discriminant(new.kind());
+        if !new.keep_alive_request() || same_child {
+            fresh.insert(index, new);
+        }
+    }
+}
+
+fn adopt_fixed_keep_alives(
+    fresh: &mut dyn RenderSliver,
+    retained: &mut dyn RenderSliver,
+    probes: &mut u64,
+) -> bool {
+    if let (Some(fresh), Some(retained)) = (
+        fresh
+            .as_any_mut()
+            .and_then(|any| any.downcast_mut::<FixedExtentRenderSliver>()),
+        retained
+            .as_any_mut()
+            .and_then(|any| any.downcast_mut::<FixedExtentRenderSliver>()),
+    ) {
+        transfer_keep_alives(
+            &retained.widgets,
+            &mut fresh.widgets,
+            fresh.item_count,
+            |index| (fresh.builder)(index),
+            probes,
+        );
+        return true;
+    }
+    if let (Some(fresh), Some(retained)) = (
+        fresh
+            .as_any_mut()
+            .and_then(|any| any.downcast_mut::<ViewportExtentRenderSliver>()),
+        retained
+            .as_any_mut()
+            .and_then(|any| any.downcast_mut::<ViewportExtentRenderSliver>()),
+    ) {
+        let children = fresh.children.as_ref();
+        let builder = fresh.builder.as_ref();
+        transfer_keep_alives(
+            &retained.widgets,
+            &mut fresh.widgets,
+            fresh.item_count,
+            |index| {
+                children
+                    .and_then(|children| children.get(index))
+                    .cloned()
+                    .or_else(|| builder.map(|builder| builder(index)))
+                    .unwrap_or_else(|| SizedBox::shrink().into())
+            },
+            probes,
+        );
+        return true;
+    }
+    false
+}
+
 fn adopt_variable_extent_measurements(
     fresh: &mut dyn RenderSliver,
     retained: &mut dyn RenderSliver,
