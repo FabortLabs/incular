@@ -873,3 +873,4 @@ packages/flutter/test/painting/border_test.dart	195	Border.lerp	paired-match	ups
 packages/flutter/test/painting/border_rtl_test.dart	866	BorderDirectional.lerp	paired-match	upstream-border-constraints-formatters.md#nullable-border-interpolation
 packages/flutter/test/painting/border_side_test.dart	68	BorderSide - asserts when copied incorrectly	paired-match	upstream-border-constraints-formatters.md#side-copy-and-stroke-paint
 packages/flutter/test/painting/border_side_test.dart	89	BorderSide - toPaint	paired-match	upstream-border-constraints-formatters.md#side-copy-and-stroke-paint
+packages/flutter/test/painting/border_rtl_test.dart	933	BorderDirectional.paint	paired-match	upstream-border-constraints-formatters.md#directional-canvas-painting

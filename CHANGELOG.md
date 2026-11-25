@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-widgets`: physical and directional borders can paint directly
+  to a canvas at a supplied rectangle.
+
 - `incular-widgets`: `BorderSide` can copy selected fields and convert to
   renderer-neutral stroke paint.
 

@@ -145,3 +145,15 @@ encoded in either paint description. Border stroke paths use the same
 conversion. Twelve focused Rust tests passed, including leading hairline
 geometry and paint validation. Constructor validation remains a separate
 contract from copying.
+
+## Directional canvas painting
+
+The exact `border_rtl_test.dart:933` registration passed. Incular's public
+border painting API emits one green filled edge at the same nonzero
+origin, with the same included and excluded samples in LTR and RTL.
+A visible non-uniform directional border rejects a missing text
+direction; uniform and invisible controls do not require one. Physical
+borders and decorations share the same command construction, with
+no extra display list on direct canvas calls. Nineteen focused Rust
+checks passed. Inheriting a directional BoxDecoration at a widget boundary
+and cross-type interpolation are separate work.

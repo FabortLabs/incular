@@ -5,12 +5,13 @@
 
 use std::{rc::Rc, sync::Arc};
 
-use incular_config::{Clip, EdgeInsets};
+use incular_config::{Clip, EdgeInsets, TextDirection};
 use incular_core::{Color, Offset, Rect, Size};
 use incular_rendering::{Brush, Canvas, CornerRadii, DisplayList, FillRule, Path, RRect};
 
 use super::decoration::{
-    Border, BorderSide, BorderStyle, BoxDecoration, BoxShadow, BoxShape, DecorationImage,
+    Border, BorderDirectional, BorderSide, BorderStyle, BoxDecoration, BoxShadow, BoxShape,
+    DecorationImage,
 };
 use super::geometry::{BorderRadius, Radius};
 use crate::{
@@ -110,115 +111,9 @@ impl BoxDecoration {
         let border = self.border?;
         let rect = Rect::from_origin_size(Offset::ZERO, size);
         let mut canvas = Canvas::default();
-        let radius = self
-            .border_radius
-            .filter(|radius| *radius != BorderRadius::default());
-        if border.is_uniform() {
-            let side = border.top;
-            if side.style == BorderStyle::None {
-                return None;
-            }
-            match (self.shape, radius) {
-                (BoxShape::Circle, _) => {
-                    // `_paintUniformBorderWithCircle`.
-                    let radius = (shortest_side(rect) + side.stroke_offset()) / 2.0;
-                    stroke(&mut canvas, &side, circle_path(center(rect), radius));
-                }
-                (BoxShape::Rectangle, Some(radius)) => {
-                    // `_paintUniformBorderWithRadius`.
-                    if side.width == 0.0 {
-                        stroke(&mut canvas, &side, rrect_path(rect, radius));
-                    } else {
-                        let outer =
-                            inflate_rrect(rect, radius, EdgeInsets::all(side.stroke_outset()));
-                        let inner =
-                            deflate_rrect(rect, radius, EdgeInsets::all(side.stroke_inset()));
-                        fill_between(&mut canvas, outer, inner, side.color);
-                    }
-                }
-                (BoxShape::Rectangle, None) => {
-                    // `_paintUniformBorderWithRectangle`.
-                    let path = rect_path(inflate(rect, side.stroke_offset() / 2.0));
-                    stroke(&mut canvas, &side, path);
-                }
-            }
-            return Some(canvas.finish());
-        }
-        let sides = [border.top, border.right, border.bottom, border.left];
-        if sides.iter().all(|side| side.style == BorderStyle::None) {
-            return None;
-        }
-        let mut visible = sides
-            .iter()
-            .filter(|side| side.style != BorderStyle::None)
-            .map(|side| side.color);
-        let first = visible.next().expect("a side is visible");
-        let one_color = visible.all(|color| color == first);
-        let hairline = sides
-            .iter()
-            .any(|side| side.style == BorderStyle::Solid && side.width == 0.0);
-        if one_color && !hairline && (self.shape == BoxShape::Circle || radius.is_some()) {
-            // `BoxBorder.paintNonUniformBorder`.
-            let (box_rect, radius) = match self.shape {
-                BoxShape::Circle => (
-                    circle_rect(center(rect), shortest_side(rect) / 2.0),
-                    BorderRadius::all(Radius::circular(rect.size.width)),
-                ),
-                BoxShape::Rectangle => (rect, radius.unwrap_or_default()),
-            };
-            let visible_side = |side: BorderSide| {
-                if side.style == BorderStyle::None {
-                    BorderSide::NONE
-                } else {
-                    side
-                }
-            };
-            let [top, right, bottom, left] = sides.map(visible_side);
-            let inner = deflate_rrect(
-                box_rect,
-                radius,
-                EdgeInsets::only(
-                    left.stroke_inset(),
-                    top.stroke_inset(),
-                    right.stroke_inset(),
-                    bottom.stroke_inset(),
-                ),
-            );
-            let outer = inflate_rrect(
-                box_rect,
-                radius,
-                EdgeInsets::only(
-                    left.stroke_outset(),
-                    top.stroke_outset(),
-                    right.stroke_outset(),
-                    bottom.stroke_outset(),
-                ),
-            );
-            fill_between(&mut canvas, outer, inner, first);
-            return Some(canvas.finish());
-        }
-
-        // This four-path fallback describes a square, inside-aligned border
-        // only. Flutter reports unsupported combinations in debug builds
-        // rather than silently substituting different geometry.
-        debug_assert!(
-            !hairline || radius.is_none(),
-            "a non-uniform hairline border requires zero or no border radius"
-        );
-        debug_assert!(
-            radius.is_none(),
-            "a non-uniform rounded border requires uniform visible colors"
-        );
-        debug_assert!(
-            self.shape == BoxShape::Rectangle,
-            "a non-uniform circle border requires uniform visible colors and non-hairline widths"
-        );
-        debug_assert!(
-            sides.iter().all(|side| side.stroke_align == -1.0),
-            "a non-uniform rectangular border requires inside stroke alignment"
-        );
-        paint_border_sides(&mut canvas, rect, border);
-        Some(canvas.finish())
+        border
+            .paint(&mut canvas, rect, self.shape, self.border_radius)
+            .then(|| canvas.finish())
     }
 
     /// `_BoxDecorationPainter._paintBox`'s geometry: a circle inscribed in
@@ -494,6 +389,177 @@ pub(crate) fn decorated(
         stack.into(),
         Some(hit_decoration),
     )
+}
+
+impl Border {
+    /// Paints this border within `rect`, returning whether any stroke was drawn.
+    #[must_use]
+    pub fn paint(
+        self,
+        canvas: &mut Canvas,
+        rect: Rect,
+        shape: BoxShape,
+        radius: Option<BorderRadius>,
+    ) -> bool {
+        paint_box_border(canvas, rect, self, shape, radius, false)
+    }
+}
+
+impl BorderDirectional {
+    /// Paints this border using the logical leading and trailing edges.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a visible non-uniform border is painted without a direction.
+    #[must_use]
+    pub fn paint(
+        self,
+        canvas: &mut Canvas,
+        rect: Rect,
+        direction: Option<TextDirection>,
+        shape: BoxShape,
+        radius: Option<BorderRadius>,
+    ) -> bool {
+        let physical = self.resolve(direction.unwrap_or(TextDirection::Ltr));
+        if direction.is_none() && !physical.is_uniform() {
+            if [self.top, self.start, self.end, self.bottom]
+                .iter()
+                .all(|side| side.style == BorderStyle::None)
+            {
+                return false;
+            }
+            panic!("non-uniform directional borders require a text direction");
+        }
+        paint_box_border(canvas, rect, physical, shape, radius, true)
+    }
+}
+
+fn paint_box_border(
+    canvas: &mut Canvas,
+    rect: Rect,
+    border: Border,
+    shape: BoxShape,
+    configured_radius: Option<BorderRadius>,
+    directional: bool,
+) -> bool {
+    let radius = configured_radius.filter(|radius| *radius != BorderRadius::default());
+    if border.is_uniform() {
+        let side = border.top;
+        if side.style == BorderStyle::None {
+            return false;
+        }
+        match (shape, radius) {
+            (BoxShape::Circle, _) => {
+                // `_paintUniformBorderWithCircle`.
+                debug_assert!(
+                    configured_radius.is_none(),
+                    "a circle cannot have a border radius"
+                );
+                let radius = (shortest_side(rect) + side.stroke_offset()) / 2.0;
+                stroke(canvas, &side, circle_path(center(rect), radius));
+            }
+            (BoxShape::Rectangle, Some(radius)) => {
+                // `_paintUniformBorderWithRadius`.
+                if side.width == 0.0 {
+                    stroke(canvas, &side, rrect_path(rect, radius));
+                } else {
+                    let outer = inflate_rrect(rect, radius, EdgeInsets::all(side.stroke_outset()));
+                    let inner = deflate_rrect(rect, radius, EdgeInsets::all(side.stroke_inset()));
+                    fill_between(canvas, outer, inner, side.color);
+                }
+            }
+            (BoxShape::Rectangle, None) => {
+                // `_paintUniformBorderWithRectangle`.
+                let path = rect_path(inflate(rect, side.stroke_offset() / 2.0));
+                stroke(canvas, &side, path);
+            }
+        }
+        return true;
+    }
+    let sides = [border.top, border.right, border.bottom, border.left];
+    if sides.iter().all(|side| side.style == BorderStyle::None) {
+        return false;
+    }
+    let mut visible = sides
+        .iter()
+        .filter(|side| side.style != BorderStyle::None)
+        .map(|side| side.color);
+    let first = visible.next().expect("a side is visible");
+    let one_color = visible.all(|color| color == first);
+    let hairline = sides
+        .iter()
+        .any(|side| side.style == BorderStyle::Solid && side.width == 0.0);
+    if one_color && !hairline && (shape == BoxShape::Circle || radius.is_some()) {
+        // `BoxBorder.paintNonUniformBorder`.
+        debug_assert!(
+            shape != BoxShape::Circle || configured_radius.is_none(),
+            "a circle cannot have a border radius"
+        );
+        let (box_rect, radius) = match shape {
+            BoxShape::Circle => (
+                circle_rect(center(rect), shortest_side(rect) / 2.0),
+                BorderRadius::all(Radius::circular(rect.size.width)),
+            ),
+            BoxShape::Rectangle => (rect, radius.unwrap_or_default()),
+        };
+        let visible_side = |side: BorderSide| {
+            if side.style == BorderStyle::None {
+                BorderSide::NONE
+            } else {
+                side
+            }
+        };
+        let [top, right, bottom, left] = sides.map(visible_side);
+        let inner = deflate_rrect(
+            box_rect,
+            radius,
+            EdgeInsets::only(
+                left.stroke_inset(),
+                top.stroke_inset(),
+                right.stroke_inset(),
+                bottom.stroke_inset(),
+            ),
+        );
+        let outer = inflate_rrect(
+            box_rect,
+            radius,
+            EdgeInsets::only(
+                left.stroke_outset(),
+                top.stroke_outset(),
+                right.stroke_outset(),
+                bottom.stroke_outset(),
+            ),
+        );
+        fill_between(canvas, outer, inner, first);
+        return true;
+    }
+
+    // This four-path fallback describes a square, inside-aligned border
+    // only. Flutter reports unsupported combinations in debug builds
+    // rather than silently substituting different geometry.
+    debug_assert!(
+        !hairline || radius.is_none(),
+        "a non-uniform hairline border requires zero or no border radius"
+    );
+    debug_assert!(
+        (if directional {
+            configured_radius
+        } else {
+            radius
+        })
+        .is_none(),
+        "a non-uniform rounded border requires uniform visible colors"
+    );
+    debug_assert!(
+        shape == BoxShape::Rectangle,
+        "a non-uniform circle border requires uniform visible colors and non-hairline widths"
+    );
+    debug_assert!(
+        sides.iter().all(|side| side.stroke_align == -1.0),
+        "a non-uniform rectangular border requires inside stroke alignment"
+    );
+    paint_border_sides(canvas, rect, border);
+    true
 }
 
 /// Flutter `paintBorder`: each solid side as a trapezoid meeting its
