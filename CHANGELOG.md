@@ -174,6 +174,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-widgets`: character shortcuts now distinguish the case of
+  the produced character, as Flutter does.
+
 - `incular-widgets`: callback shortcuts preserve single-activator Num Lock
   policies and run every distinct binding that matches.
 

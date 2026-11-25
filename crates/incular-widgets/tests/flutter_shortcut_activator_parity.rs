@@ -99,3 +99,39 @@ fn character_activator_distinguishes_lowercase_and_uppercase_output() {
         "Shift is ignored as a modifier but its produced character is case-sensitive"
     );
 }
+
+#[test]
+fn single_activator_rejects_both_trigger_and_modifier_releases() {
+    let ctrl = Modifiers::CONTROL;
+    let down = pressed("a", Code::KeyA, ctrl);
+    let ctrl_up = KeyboardEvent::key_up(
+        KeyboardKey::Named(incular_core::NamedKey::Control),
+        Code::ControlLeft,
+    );
+    let events = [down.clone(), repeat(&down), released(&down), ctrl_up];
+    let activator = SingleActivator::new(down.key.clone(), ctrl);
+    for (repeats, expected) in [
+        (true, [true, true, false, false]),
+        (false, [true, false, false, false]),
+    ] {
+        assert_eq!(
+            events
+                .each_ref()
+                .map(|event| activator.clone().with_repeats(repeats).accepts(event)),
+            expected
+        );
+    }
+}
+
+#[test]
+fn character_activation_matches_a_down_repeat_and_release_with_both_policies() {
+    let down = pressed("a", Code::KeyA, Modifiers::empty());
+    let events = [down.clone(), repeat(&down), released(&down)];
+    for (repeats, expected) in [(true, [true, true, false]), (false, [true, false, false])] {
+        let activator = CharacterActivator::new("a").include_repeats(repeats);
+        assert_eq!(
+            events.each_ref().map(|event| activator.accepts(event)),
+            expected
+        );
+    }
+}

@@ -8,7 +8,7 @@ use incular_runtime::Runtime;
 use incular_widgets::{CharacterActivator, Focus, ShortcutRegistrar, ShortcutRegistry, SizedBox};
 use std::{cell::Cell, rc::Rc};
 
-fn shifted_question_mark_dispatch(activator: CharacterActivator) -> [u32; 3] {
+fn shifted_question_mark_dispatch(activator: CharacterActivator, send_repeat: bool) -> [u32; 3] {
     let invoked = Rc::new(Cell::new(0));
     let count = Rc::clone(&invoked);
     let registry = ShortcutRegistry::new();
@@ -35,13 +35,15 @@ fn shifted_question_mark_dispatch(activator: CharacterActivator) -> [u32; 3] {
     let down = KeyboardEvent::key_down(question_mark.clone(), Code::Slash);
     send(down.clone(), Modifiers::SHIFT);
     let after_down = invoked.get();
-    send(
-        KeyboardEvent {
-            repeat: true,
-            ..down
-        },
-        Modifiers::SHIFT,
-    );
+    if send_repeat {
+        send(
+            KeyboardEvent {
+                repeat: true,
+                ..down
+            },
+            Modifiers::SHIFT,
+        );
+    }
     let after_repeat = invoked.get();
     send(
         KeyboardEvent::key_up(question_mark, Code::Slash),
@@ -57,7 +59,7 @@ fn shifted_question_mark_dispatch(activator: CharacterActivator) -> [u32; 3] {
 #[test]
 fn registered_character_shortcut_handles_repeated_key_events_by_default() {
     assert_eq!(
-        shifted_question_mark_dispatch(CharacterActivator::new("?")),
+        shifted_question_mark_dispatch(CharacterActivator::new("?"), true),
         [1, 2, 2]
     );
 }
@@ -65,7 +67,15 @@ fn registered_character_shortcut_handles_repeated_key_events_by_default() {
 #[test]
 fn registered_character_shortcut_can_reject_repeated_key_events() {
     assert_eq!(
-        shifted_question_mark_dispatch(CharacterActivator::new("?").include_repeats(false)),
+        shifted_question_mark_dispatch(CharacterActivator::new("?").include_repeats(false), true),
+        [1, 1, 1]
+    );
+}
+
+#[test]
+fn shift_slash_matches_the_produced_question_mark_once() {
+    assert_eq!(
+        shifted_question_mark_dispatch(CharacterActivator::new("?"), false),
         [1, 1, 1]
     );
 }

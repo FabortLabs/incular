@@ -35,3 +35,14 @@ propagation. One authored reference also confirms that multiple distinct
 matches run in order and a duplicate binding replaces in place.
 Thirteen focused Rust checks, five Flutter originals and the authored
 probe passed. This does not verify all native lock key normalization.
+
+## Produced character sensitivity
+
+The previously reproduced case-folding difference is fixed:
+`CharacterActivator` compares the produced character verbatim while
+still ignoring Shift as an independent modifier. The pinned authored
+lowercase/uppercase probe and four exact Flutter test invocations passed
+for the three registrations :485, :1406 and :1516. Rust matches produced
+question mark through the actual mounted registry and verifies both
+repeat policies and ignored releases. Sixteen focused Rust tests passed.
+Native character normalization itself is unchanged.

@@ -57,7 +57,6 @@ packages/flutter/test/services/clipboard_test.dart	17	Clipboard.getData returns 
 packages/flutter/test/services/clipboard_test.dart	26	Clipboard.getData returns null	paired-match	upstream-lifecycle-clipboard-comparisons.md
 packages/flutter/test/services/clipboard_test.dart	46	Clipboard.setData sets text	paired-match	upstream-lifecycle-clipboard-comparisons.md
 packages/flutter/test/widgets/shortcuts_test.dart	283	handles Ctrl-C	reference-ran-incular-open	upstream-shortcut-comparisons.md
-packages/flutter/test/widgets/shortcuts_test.dart	485	isActivatedBy works as expected	reference-ran-incular-open	upstream-shortcut-comparisons.md
 packages/flutter/test/widgets/shortcuts_test.dart	1425	handles repeated events	paired-match	upstream-shortcut-comparisons.md
 packages/flutter/test/widgets/shortcuts_test.dart	1446	rejects repeated events if requested	paired-match	upstream-shortcut-comparisons.md
 packages/flutter/test/scheduler/binding_test.dart	44	Adding a persistent frame callback during a persistent frame callback	paired-match	scheduler-callback-phases-comparisons.md
@@ -847,3 +846,6 @@ packages/flutter/test/widgets/shortcuts_test.dart	571	numLock works as expected 
 packages/flutter/test/widgets/shortcuts_test.dart	614	numLock works as expected when set to LockState.ignored	paired-match	upstream-shortcut-comparisons.md#num-lock-and-mounted-callback-scopes
 packages/flutter/test/widgets/shortcuts_test.dart	1602	trigger on key events	paired-match	upstream-shortcut-comparisons.md#num-lock-and-mounted-callback-scopes
 packages/flutter/test/widgets/shortcuts_test.dart	1637	nested CallbackShortcuts stop propagation	paired-match	upstream-shortcut-comparisons.md#num-lock-and-mounted-callback-scopes
+packages/flutter/test/widgets/shortcuts_test.dart	485	isActivatedBy works as expected	paired-match	upstream-shortcut-comparisons.md#produced-character-sensitivity
+packages/flutter/test/widgets/shortcuts_test.dart	1406	is triggered on events with correct character	paired-match	upstream-shortcut-comparisons.md#produced-character-sensitivity
+packages/flutter/test/widgets/shortcuts_test.dart	1516	isActivatedBy works as expected	paired-match	upstream-shortcut-comparisons.md#produced-character-sensitivity

@@ -13,7 +13,7 @@ use std::{
 
 /// Flutter's `CharacterActivator`: matches the character a key press
 /// produces, whatever key produced it, with the given modifiers held.
-/// Shift is not a field: it is part of the character.
+/// Shift is not a field: it is part of the character, whose case matters.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CharacterActivator {
     pub character: String,
@@ -67,7 +67,7 @@ impl CharacterActivator {
         };
         event.state.is_down()
             && (self.include_repeats || !event.repeat)
-            && character.to_lowercase() == self.character.to_lowercase()
+            && character == &self.character
             && event.modifiers.alt() == self.alt
             && event.modifiers.ctrl() == self.control
             && event.modifiers.meta() == self.meta
