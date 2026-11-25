@@ -1,6 +1,7 @@
 //! Renderer- and platform-independent primitives shared by Incular.
 
 mod arena;
+mod caching_iterable;
 mod context;
 mod fast_hash;
 mod geometry;
@@ -22,6 +23,7 @@ mod value_notifier;
 mod widget;
 
 pub use arena::{Arena, ArenaId};
+pub use caching_iterable::{CachingCursor, CachingIndexError, CachingIterable};
 pub use context::{BuildContext, ConsumerId, ContextGuard, DependencySnapshot};
 pub use geometry::{
     ChangeImpact, Color, DirtyFlags, HslColor, HsvColor, Invalidation, Lerp, Offset, Rect, Size,

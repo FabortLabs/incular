@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-core`: added `CachingIterable` for lazy, repeatable iteration over
+  a single source, with separately cached derived sequences.
+
 - `incular-core`: added ordered observer lists with Flutter's two duplicate
   policies and a `clamp_double` helper that maps NaN to the upper bound.
 

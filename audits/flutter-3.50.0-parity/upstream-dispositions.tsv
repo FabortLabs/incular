@@ -812,3 +812,9 @@ packages/flutter/test/scheduler/scheduler_test.dart	74	Tasks are executed in the
 packages/flutter/test/foundation/observer_list_test.dart	9	ObserverList	paired-match	upstream-foundation-scroll-comparisons.md#observer-collections-and-numeric-clamp
 packages/flutter/test/foundation/observer_list_test.dart	26	HashedObserverList	paired-match	upstream-foundation-scroll-comparisons.md#observer-collections-and-numeric-clamp
 packages/flutter/test/foundation/math_test.dart	9	clampDouble	paired-match	upstream-foundation-scroll-comparisons.md#observer-collections-and-numeric-clamp
+packages/flutter/test/foundation/caching_iterable_test.dart	23	The Caching Iterable: length caches	paired-match	upstream-foundation-scroll-comparisons.md#lazy-caching-iterable
+packages/flutter/test/foundation/caching_iterable_test.dart	39	The Caching Iterable: laziness	paired-match	upstream-foundation-scroll-comparisons.md#lazy-caching-iterable
+packages/flutter/test/foundation/caching_iterable_test.dart	53	The Caching Iterable: where and map	paired-match	upstream-foundation-scroll-comparisons.md#lazy-caching-iterable
+packages/flutter/test/foundation/caching_iterable_test.dart	76	The Caching Iterable: take and skip	paired-match	upstream-foundation-scroll-comparisons.md#lazy-caching-iterable
+packages/flutter/test/foundation/caching_iterable_test.dart	94	The Caching Iterable: expand	paired-match	upstream-foundation-scroll-comparisons.md#lazy-caching-iterable
+packages/flutter/test/foundation/caching_iterable_test.dart	111	The Caching Iterable: elementAt correctness	paired-match	upstream-foundation-scroll-comparisons.md#lazy-caching-iterable

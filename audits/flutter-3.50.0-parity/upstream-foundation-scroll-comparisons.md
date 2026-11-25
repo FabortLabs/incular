@@ -43,3 +43,13 @@ all five results, including both infinities and NaN mapping to the upper
 bound. Additional checks preserve signed zero and reject unordered/NaN
 bounds with a Rust typed error. Three selected Flutter originals and
 ten focused Rust checks pass; existing physics clamping is unchanged.
+
+## Lazy caching iterable
+
+All six pinned Flutter registrations in `foundation/caching_iterable_test.dart`
+passed. The Rust counterpart checks source yields at construction, first
+access, search, length, transformed and filtered reads, take/skip boundaries,
+expansion and signed indexed lookups. Derived sequences share cached source
+values without rerunning their own transforms. Separate cursor controls verify
+that iterators may interleave and that an exhausted source is not polled again.
+Eleven focused Rust tests passed across the iterable and observer lists.

@@ -47,3 +47,7 @@ collections, separate from reactive dependency tracking.
 `clamp_double(value, lower, upper)` matches Flutter's inclusive numeric
 clamp, including mapping NaN to the upper bound. Use `try_clamp_double`
 when the interval might have unordered or NaN bounds.
+
+`CachingIterable` consumes its source lazily and caches values for independent
+cursors. Mapping, filtering, expansion, take and skip return derived caches
+that share the source. Rust cursors clone values as they yield them.
