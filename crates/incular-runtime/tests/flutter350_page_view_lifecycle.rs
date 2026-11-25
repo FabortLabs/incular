@@ -57,3 +57,58 @@ fn flutter_350_page_view_evicts_plain_page_after_partial_scroll_settles() {
         );
     }
 }
+
+#[test]
+fn page_cache_boundary_evicts_only_after_the_last_cached_pixel() {
+    use incular_widgets::ScrollCacheExtent;
+
+    let extent = Size::new(800., 600.);
+    let constraints = Constraints::tight(extent);
+    let key = Key::from("first");
+    for reverse in [false, true] {
+        let controller = PageController::new();
+        let mut runtime = Runtime::new(
+            PageView::new([
+                Widget::box_(extent, Color::WHITE).with_key(key.clone()),
+                Widget::box_(extent, Color::BLACK),
+                Widget::box_(extent, Color::WHITE),
+            ])
+            .controller(controller.clone())
+            .reverse(reverse)
+            .page_snapping(false)
+            .allow_implicit_scrolling(true)
+            .scroll_cache_extent(ScrollCacheExtent::pixels(40.))
+            .into(),
+        )
+        .unwrap();
+        let t = Instant::now();
+        runtime.run_frame_at(constraints, t).unwrap();
+        let first = runtime.tree().element_with_key(&key).unwrap();
+        assert!(controller.jump_to(800.));
+        runtime
+            .run_frame_at(constraints, t + Duration::from_millis(16))
+            .unwrap();
+        assert_eq!(runtime.tree().element_with_key(&key), Some(first));
+        assert!(controller.jump_to(839.));
+        let (_, stats) = runtime
+            .run_frame_at(constraints, t + Duration::from_millis(32))
+            .unwrap();
+        assert_eq!(runtime.tree().element_with_key(&key), Some(first));
+        assert_eq!(
+            stats.laid_out_render_objects, 0,
+            "scroll stays compositor-only before crossing"
+        );
+
+        assert!(controller.jump_to(840.));
+        runtime
+            .run_frame_at(constraints, t + Duration::from_millis(48))
+            .unwrap();
+        assert!(!runtime.tree().element_exists(first));
+        assert!(runtime.tree().element_with_key(&key).is_none());
+        assert!(controller.jump_to(839.));
+        runtime
+            .run_frame_at(constraints, t + Duration::from_millis(64))
+            .unwrap();
+        assert_ne!(runtime.tree().element_with_key(&key).unwrap(), first);
+    }
+}

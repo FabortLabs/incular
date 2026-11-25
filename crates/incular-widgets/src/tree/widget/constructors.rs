@@ -1437,6 +1437,7 @@ impl Widget {
                     axis_resolution: Default::default(),
                     physics,
                     cache_extent: crate::ScrollCacheExtent::pixels(cache_extent.max(0.)),
+                    evict_outside_cache: false,
                     shrink_wrap,
                     clip_behavior,
                     drag_start_behavior,
@@ -1450,6 +1451,13 @@ impl Widget {
             semantics: None,
         })
     }
+    pub(crate) fn with_exact_sliver_cache_window(mut self) -> Self {
+        if let WidgetKind::SliverViewport { config } = self.kind_mut() {
+            Rc::make_mut(config).evict_outside_cache = true;
+        }
+        self
+    }
+
     pub(crate) fn with_ambient_sliver_axis(mut self) -> Self {
         if let WidgetKind::SliverViewport { config } = self.kind_mut()
             && config.axis == Axis::Horizontal

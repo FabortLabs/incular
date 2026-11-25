@@ -1743,5 +1743,6 @@ fn page_view_widget(value: PageView) -> Widget {
         }
     }
     .with_sliver_cache_extent(cache_extent)
+    .with_exact_sliver_cache_window()
     .with_ambient_sliver_axis()
 }

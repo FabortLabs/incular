@@ -1609,8 +1609,18 @@ impl WidgetTree {
             if !child_start.is_finite() || !child_extent.is_finite() {
                 return false;
             }
+            let child_end = child_start + child_extent;
+            // Coverage alone overlooks a page that was mounted during a
+            // partial transition and has now moved completely out of cache.
+            // Keep the compositor-only path while every page still overlaps.
+            if config.evict_outside_cache
+                && child_extent > 0.
+                && (child_end <= wanted_start || child_start >= wanted_end)
+            {
+                return false;
+            }
             materialized_start = materialized_start.min(child_start);
-            materialized_end = materialized_end.max(child_start + child_extent);
+            materialized_end = materialized_end.max(child_end);
         }
         if !materialized_start.is_finite() || !materialized_end.is_finite() {
             return content_end == 0.;

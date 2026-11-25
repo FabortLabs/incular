@@ -44,3 +44,20 @@ source localization, not a framework fix.
 
 Raw Enter and an unseeded undo variation were also run and are
 under input-lifecycle follow-up; not included in these counts.
+
+### PageView lifecycle repair
+
+The formerly failing authored lifecycle comparison now passes from
+both a direct jump and a partial scroll. Retained viewport coverage
+used to answer only “are enough pages present?”, so a page could stay
+mounted after its last visible pixel left. PageView now also requests
+reconciliation when a materialized page falls wholly outside its
+cache. Smaller movement with the same page set remains compositor-only.
+
+The extended Flutter probe checks normal and reversed 800px pages
+with a 40px cache: the same first page survives at offsets 800 and
+839; it is disposed at 840 and a fresh page mounts on returning to
+839. Rust matches both directions and confirms that 800 → 839 does
+not lay out any render objects. All four authored Flutter cases and
+13 targeted Rust tests passed. The standalone keep-alive paint
+mismatch above remains separate.

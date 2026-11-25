@@ -328,6 +328,8 @@ pub struct SliverViewportConfig {
     pub(crate) axis_resolution: SliverAxisResolution,
     pub(crate) physics: ScrollPhysics,
     pub(crate) cache_extent: ScrollCacheExtent,
+    /// Pages leave the retained tree when their whole extent leaves the cache.
+    pub(crate) evict_outside_cache: bool,
     pub(crate) shrink_wrap: bool,
     pub(crate) clip_behavior: Clip,
     pub(crate) drag_start_behavior: DragStartBehavior,
@@ -368,6 +370,7 @@ impl PartialEq for SliverViewportConfig {
             && self.text_direction == other.text_direction
             && self.physics == other.physics
             && self.cache_extent == other.cache_extent
+            && self.evict_outside_cache == other.evict_outside_cache
             && self.shrink_wrap == other.shrink_wrap
             && self.clip_behavior == other.clip_behavior
             && self.drag_start_behavior == other.drag_start_behavior
