@@ -8,6 +8,7 @@ pub(super) fn lower_effects(widget: &Widget) -> RenderKind {
         WidgetKind::Transform {
             transform,
             origin,
+            alignment,
             fraction,
             transform_hit_tests,
             slot,
@@ -16,6 +17,7 @@ pub(super) fn lower_effects(widget: &Widget) -> RenderKind {
         } => RenderKind::Transform {
             transform: *transform,
             origin: *origin,
+            alignment: *alignment,
             fraction: *fraction,
             transform_hit_tests: *transform_hit_tests,
             slot: slot.clone(),

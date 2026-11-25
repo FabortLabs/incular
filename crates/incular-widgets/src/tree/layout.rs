@@ -445,6 +445,7 @@ impl WidgetTree {
             RenderKind::Transform {
                 transform,
                 origin,
+                alignment,
                 fraction,
                 slot,
                 ..
@@ -452,6 +453,7 @@ impl WidgetTree {
                 slot.as_ref()
                     .map_or(*transform, crate::custom_layout::FlowSlot::transform),
                 *origin,
+                *alignment,
                 *fraction,
                 node.size,
                 self.transform_child_size(node),

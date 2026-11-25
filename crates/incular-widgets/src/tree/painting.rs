@@ -439,6 +439,21 @@ impl WidgetTree {
                 want_target.then_some(id),
             );
         }
+        // Positioned is parent data in Flutter, not an intervening hit
+        // boundary. Its child may paint (and receive hits) outside the
+        // nominal position while still inside the enclosing Stack.
+        if matches!(node.object.kind(), RenderKind::Positioned { .. }) {
+            let mut result = RawHitResult::default();
+            let (_, target) = self.collect_pointer_hit_children(
+                &node.children,
+                point,
+                origin + node.offset,
+                want_target,
+                precise,
+                &mut result,
+            );
+            return (result, target);
+        }
         // A transform that opts out of hit-test conversion falls through
         // to the ordinary untransformed path below: hits land where the
         // child lays out, not where it paints. Painting and semantics
@@ -875,6 +890,13 @@ impl WidgetTree {
         if flow_child_hidden(node.object.kind()) {
             return None;
         }
+        if matches!(node.object.kind(), RenderKind::Positioned { .. }) {
+            return node
+                .children
+                .iter()
+                .rev()
+                .find_map(|child| self.hit_test_render(*child, point, origin + node.offset));
+        }
         if hit_test_transforms_children(node.object.kind()) {
             let current = origin + node.offset;
             let local = self
@@ -936,8 +958,10 @@ impl WidgetTree {
         point: Offset,
         origin: Offset,
     ) -> bool {
-        if matches!(node.object.kind(), RenderKind::Gesture)
-            || hit_test_transforms_children(node.object.kind())
+        if matches!(
+            node.object.kind(),
+            RenderKind::Gesture | RenderKind::Positioned { .. }
+        ) || hit_test_transforms_children(node.object.kind())
         {
             return false;
         }

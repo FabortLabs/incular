@@ -50,3 +50,18 @@ midpoint from 16,777,217 to 16,777,219 is 16,777,218. Using a wide
 intermediate also avoids overflowing the difference of two signed
 32-bit endpoints. All 19 focused Rust controller, physics and tween
 regressions in the three named targets passed.
+
+## Independent transform hit geometry
+
+`Transform::transform_hit_tests(false)` now leaves the hit target at
+its layout position and reports coordinates in that space. An explicit
+origin and alignment form one pivot instead of multiple nested
+translations. Positioned contributes its offset without adding a
+phantom hit boundary before its transformed child.
+
+The authored pinned Flutter and Rust retained fixtures keep the same
+child and visual box (87,51,80,60) across the flag change. With hits
+transformed, only the painted-only point arrives, locally (16.5,13.5);
+without hit transformation, only the layout-only point arrives, locally
+(5,4). The geometry check is not a GPU raster assertion. All 39 focused
+transform, follower, pointer and stack tests passed.

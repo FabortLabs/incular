@@ -403,6 +403,7 @@ impl From<ImageFiltered> for Widget {
                         Widget::from_kind(crate::tree::WidgetKind::Transform {
                             transform,
                             origin: Some(incular_core::Offset::ZERO),
+                            alignment: None,
                             fraction: None,
                             transform_hit_tests: false,
                             slot: None,

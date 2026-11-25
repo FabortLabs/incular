@@ -502,6 +502,7 @@ impl std::fmt::Debug for WidgetKind {
             Self::Transform {
                 transform,
                 origin,
+                alignment,
                 fraction,
                 transform_hit_tests,
                 slot,
@@ -510,6 +511,7 @@ impl std::fmt::Debug for WidgetKind {
                 .debug_struct("Transform")
                 .field("transform", transform)
                 .field("origin", origin)
+                .field("alignment", alignment)
                 .field("fraction", fraction)
                 .field("transform_hit_tests", transform_hit_tests)
                 .field("slot", slot)
@@ -1264,6 +1266,7 @@ impl PartialEq for WidgetKind {
                 Self::Transform {
                     transform: a,
                     origin: b,
+                    alignment: aa,
                     fraction: c,
                     transform_hit_tests: d,
                     slot: k,
@@ -1273,13 +1276,14 @@ impl PartialEq for WidgetKind {
                 Self::Transform {
                     transform: f,
                     origin: g,
+                    alignment: af,
                     fraction: h,
                     transform_hit_tests: i,
                     slot: l,
                     filter_quality: r,
                     child: j,
                 },
-            ) => a == f && b == g && c == h && d == i && k == l && q == r && e == j,
+            ) => a == f && b == g && aa == af && c == h && d == i && k == l && q == r && e == j,
             (
                 Self::CustomLayout {
                     delegate: a,

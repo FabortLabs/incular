@@ -220,6 +220,7 @@ pub(super) fn transform_around(
 pub(super) fn resolve_transform(
     transform: CoreTransform,
     origin: Option<Offset>,
+    alignment: Option<Alignment>,
     fraction: Option<Offset>,
     bounds_size: Size,
     child_size: Size,
@@ -231,6 +232,12 @@ pub(super) fn resolve_transform(
         ))),
         None => transform,
     };
+    // Flutter resolves a single pivot: the local origin plus the
+    // aligned point of this box. Separate translation proxies would
+    // incorrectly impose an extra hit boundary at each intermediate.
+    let origin = alignment
+        .map(|alignment| origin.unwrap_or(Offset::ZERO) + alignment.along_size(bounds_size))
+        .or(origin);
     transform_around(absolute, origin, bounds_size)
 }
 

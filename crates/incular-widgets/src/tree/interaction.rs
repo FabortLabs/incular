@@ -859,7 +859,7 @@ impl WidgetTree {
                     // transform of the recognizing widget.
                     if let Some(local) = self
                         .render_id(candidate)
-                        .and_then(|render| self.render_world_transform(render).inverse())
+                        .and_then(|render| self.pointer_world_to_local(render))
                     {
                         recognizer.set_local_transform(local);
                     }
@@ -3218,6 +3218,7 @@ impl WidgetTree {
                 RenderKind::Transform {
                     transform,
                     origin,
+                    alignment,
                     fraction,
                     ref slot,
                     filter_quality,
@@ -3234,7 +3235,14 @@ impl WidgetTree {
                         };
                         if self.compositor.update_transform(
                             content,
-                            resolve_transform(transform, origin, fraction, bounds_size, child_size),
+                            resolve_transform(
+                                transform,
+                                origin,
+                                alignment,
+                                fraction,
+                                bounds_size,
+                                child_size,
+                            ),
                         ) {
                             changed = true;
                             self.diagnostics.compositor_only_updates += 1;

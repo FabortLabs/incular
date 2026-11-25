@@ -862,6 +862,7 @@ pub enum RenderKind {
     Transform {
         transform: CoreTransform,
         origin: Option<Offset>,
+        alignment: Option<Alignment>,
         fraction: Option<Offset>,
         transform_hit_tests: bool,
         slot: Option<crate::custom_layout::FlowSlot>,

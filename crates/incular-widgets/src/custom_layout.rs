@@ -516,6 +516,7 @@ impl FlowSlot {
         Widget::from_kind(WidgetKind::Transform {
             transform: CoreTransform::IDENTITY,
             origin: Some(Offset::ZERO),
+            alignment: None,
             fraction: None,
             transform_hit_tests: true,
             slot: Some(self.clone()),

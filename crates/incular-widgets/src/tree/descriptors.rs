@@ -1841,6 +1841,7 @@ pub struct Transform {
     /// top-left corner.
     centered: bool,
     alignment: Option<Alignment>,
+    transform_hit_tests: bool,
     filter_quality: Option<incular_rendering::FilterQuality>,
     child: Widget,
 }
@@ -1854,6 +1855,7 @@ impl Transform {
             origin: None,
             centered: false,
             alignment: None,
+            transform_hit_tests: true,
             filter_quality: None,
             child: child.into(),
         }
@@ -1895,6 +1897,14 @@ impl Transform {
         self.alignment = Some(alignment);
         self
     }
+    /// Whether pointer hit testing follows the painted transform. Defaults
+    /// to true; false keeps the child's hit geometry at its layout position
+    /// while leaving painting and visual bounds transformed.
+    #[must_use]
+    pub fn transform_hit_tests(mut self, enabled: bool) -> Self {
+        self.transform_hit_tests = enabled;
+        self
+    }
     /// Flutter's `filterQuality`: when set, the child is
     /// rasterized and resampled through the transform with this quality
     /// (Flutter applies it as `ImageFilter.matrix`), instead of being drawn
@@ -1907,29 +1917,13 @@ impl Transform {
 }
 impl From<Transform> for Widget {
     fn from(value: Transform) -> Self {
-        if let Some(alignment) = value.alignment {
-            // `alignment.alongSize(size)` needs the child's size, so the pivot
-            // shift is two fractional translations around a transform about
-            // `origin`: T(a·size) T(origin) M T(-origin) T(-a·size).
-            let fraction = Offset::new((alignment.x + 1.) / 2., (alignment.y + 1.) / 2.);
-            let inner = crate::FractionalTranslation::new(
-                Offset::new(-fraction.x, -fraction.y),
-                value.child,
-            );
-            let transformed = Widget::transform_around(
-                value.transform,
-                value.origin.unwrap_or(Offset::ZERO),
-                inner.into(),
-            )
-            .with_transform_filter_quality(value.filter_quality);
-            return crate::FractionalTranslation::new(fraction, transformed).into();
-        }
         match value.origin {
             Some(origin) => Widget::transform_around(value.transform, origin, value.child),
             None if value.centered => Widget::transform(value.transform, value.child),
             None => Widget::transform_around(value.transform, Offset::ZERO, value.child),
         }
         .with_transform_filter_quality(value.filter_quality)
+        .with_transform_hit_geometry(value.alignment, value.transform_hit_tests)
     }
 }
 

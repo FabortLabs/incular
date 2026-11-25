@@ -768,14 +768,14 @@ pub(crate) enum WidgetKind {
     Transform {
         transform: CoreTransform,
         origin: Option<Offset>,
+        alignment: Option<Alignment>,
         /// Fractional child-size translation resolved at use time against
         /// the measured size. `None` for absolute transforms; `Some` only
         /// from `FractionalTranslation`, whose fraction cannot resolve
         /// until layout measures the child.
         fraction: Option<Offset>,
-        /// Whether pointer hits follow the transform. False only from
-        /// `FractionalTranslation::transform_hit_tests(false)`; painting
-        /// and semantics always follow the visual transform.
+        /// Whether pointer hits follow the transform. Painting and
+        /// semantics always follow the visual transform.
         transform_hit_tests: bool,
         /// A `Flow` child's slot, whose transform replaces `transform` and
         /// which hides the child when the flow does not paint it.

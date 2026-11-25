@@ -168,6 +168,26 @@ impl Widget {
     }
 
     #[must_use]
+    pub(crate) fn with_transform_hit_geometry(
+        mut self,
+        pivot: Option<Alignment>,
+        enabled: bool,
+    ) -> Self {
+        if (pivot.is_some() || !enabled)
+            && self.node.is_some()
+            && let WidgetKind::Transform {
+                alignment,
+                transform_hit_tests,
+                ..
+            } = self.kind_mut()
+        {
+            *alignment = pivot;
+            *transform_hit_tests = enabled;
+        }
+        self
+    }
+
+    #[must_use]
     pub(crate) fn semantic_properties(&self) -> &SemanticProperties {
         thread_local! {
             // One shared default for every descriptor that never set semantic
@@ -1311,6 +1331,7 @@ impl Widget {
             kind: WidgetKind::Transform {
                 transform,
                 origin: None,
+                alignment: None,
                 fraction: None,
                 transform_hit_tests: true,
                 slot: None,
@@ -1329,6 +1350,7 @@ impl Widget {
             kind: WidgetKind::Transform {
                 transform,
                 origin: Some(Offset::finite_or_zero(origin)),
+                alignment: None,
                 fraction: None,
                 transform_hit_tests: true,
                 slot: None,
@@ -1352,6 +1374,7 @@ impl Widget {
             kind: WidgetKind::Transform {
                 transform: CoreTransform::IDENTITY,
                 origin: None,
+                alignment: None,
                 fraction: Some(fraction),
                 transform_hit_tests,
                 slot: None,
