@@ -7,6 +7,11 @@ icon: List
 Everything here implements the [`Sliver`](/docs/api/navigation/sliver-list) trait (`build`, `create_render_sliver`).
 The retained viewport materializes only the visible range plus a bounded cache.
 
+`SliverPadding::new(insets, sliver)` adds physical padding on the
+sliver's edges. For example, bottom padding is the leading padding
+when a vertical sliver grows upward. Use `SliverPadding::empty(insets)`
+for a scrollable gap with no mounted child.
+
 ```rust
 use incular::prelude::*;
 

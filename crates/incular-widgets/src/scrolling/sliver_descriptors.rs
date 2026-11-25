@@ -200,10 +200,10 @@ impl Sliver for SliverGrid {
 pub struct SliverPadding {
     #[builder(setter(into))]
     padding: EdgeInsets,
-    #[builder(setter(transform = |sliver: impl Sliver + 'static| {
-        Box::new(sliver) as Box<dyn Sliver>
+    #[builder(default, setter(transform = |sliver: impl Sliver + 'static| {
+        Some(Box::new(sliver) as Box<dyn Sliver>)
     }))]
-    sliver: Box<dyn Sliver>,
+    sliver: Option<Box<dyn Sliver>>,
 }
 
 impl SliverPadding {
@@ -211,14 +211,36 @@ impl SliverPadding {
     pub fn new(padding: EdgeInsets, sliver: impl Sliver + 'static) -> Self {
         Self {
             padding,
-            sliver: Box::new(sliver),
+            sliver: Some(Box::new(sliver)),
+        }
+    }
+
+    /// A sliver with only padding and no mounted child.
+    #[must_use]
+    pub const fn empty(padding: EdgeInsets) -> Self {
+        Self {
+            padding,
+            sliver: None,
         }
     }
 }
 
 impl Sliver for SliverPadding {
     fn build(&self, controller: &ScrollController) -> Widget {
-        Padding::new(self.padding, self.sliver.build(controller)).into()
+        self.build_with_config(controller, Axis::Vertical, false)
+    }
+
+    fn build_with_config(
+        &self,
+        controller: &ScrollController,
+        axis: Axis,
+        reverse: bool,
+    ) -> Widget {
+        let child = self.sliver.as_ref().map_or_else(
+            || SizedBox::shrink().into(),
+            |sliver| sliver.build_with_config(controller, axis, reverse),
+        );
+        Padding::new(self.padding, child).into()
     }
 
     fn create_render_sliver(
@@ -228,7 +250,10 @@ impl Sliver for SliverPadding {
         reverse: bool,
     ) -> Box<dyn RenderSliver> {
         Box::new(PaddingRenderSliver {
-            inner: RefCell::new(self.sliver.create_render_sliver(controller, axis, reverse)),
+            inner: RefCell::new(self.sliver.as_ref().map_or_else(
+                || Box::new(EmptyRenderSliver) as Box<dyn RenderSliver>,
+                |sliver| sliver.create_render_sliver(controller, axis, reverse),
+            )),
             padding: self.padding,
         })
     }

@@ -1161,3 +1161,9 @@ packages/flutter/test/animation/tween_test.dart	151	RectTween	paired-match	upstr
 packages/flutter/test/animation/tween_test.dart	159	Matrix4Tween	partial-match	upstream-tween-transform-and-lifecycle.md#nullable-borders-and-typed-tween-values
 packages/flutter/test/animation/tween_test.dart	182	ConstantTween	paired-match	upstream-tween-transform-and-lifecycle.md#nullable-borders-and-typed-tween-values
 packages/flutter/test/animation/tween_test.dart	218	BorderRadiusTween nullable test	paired-match	upstream-tween-transform-and-lifecycle.md#nullable-borders-and-typed-tween-values
+packages/flutter/test/widgets/slivers_padding_test.dart	292	Viewport+SliverPadding no child	paired-match	upstream-sliver-padding.md#padding-only-signed-overlap-and-leading-edges
+packages/flutter/test/widgets/slivers_padding_test.dart	314	SliverPadding with no child reports correct geometry as scroll offset changes	paired-match	upstream-sliver-padding.md#padding-only-signed-overlap-and-leading-edges
+packages/flutter/test/widgets/slivers_padding_test.dart	557	SliverPadding includes preceding padding in the precedingScrollExtent provided to child	paired-match	upstream-sliver-padding.md#padding-only-signed-overlap-and-leading-edges
+packages/flutter/test/widgets/slivers_padding_test.dart	589	SliverPadding consumes only its padding from the overlap of its parent's constraints	paired-match	upstream-sliver-padding.md#padding-only-signed-overlap-and-leading-edges
+packages/flutter/test/widgets/slivers_padding_test.dart	618	SliverPadding passes the overlap to the child if it's negative	paired-match	upstream-sliver-padding.md#padding-only-signed-overlap-and-leading-edges
+packages/flutter/test/widgets/slivers_padding_test.dart	646	SliverPadding passes the paintOrigin of the child on	paired-match	upstream-sliver-padding.md#padding-only-signed-overlap-and-leading-edges

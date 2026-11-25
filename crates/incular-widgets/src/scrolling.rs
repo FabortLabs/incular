@@ -44,7 +44,7 @@ pub(crate) use geometry::{SliverViewportDelegate, SliverViewportLayout, sliver_p
 
 pub use layout::SliverOverlapHandle;
 use layout::{
-    BoxRenderSliver, FillRemainingRenderSliver, FixedExtentRenderSliver,
+    BoxRenderSliver, EmptyRenderSliver, FillRemainingRenderSliver, FixedExtentRenderSliver,
     FloatingHeaderRenderSliver, GridRenderSliver, HeaderPresentation, HeaderRenderSliver,
     HeaderScrollState, HeaderSnapFrame, LayoutBuilderRenderSliver, NaturalHeaderExtent,
     NaturalHeaderRenderSliver, OverlapAbsorberRenderSliver, OverlapInjectorRenderSliver,

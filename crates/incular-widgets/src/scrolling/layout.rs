@@ -2000,6 +2000,18 @@ impl RenderSliver for NaturalHeaderRenderSliver {
     }
 }
 
+pub(super) struct EmptyRenderSliver;
+
+impl RenderSliver for EmptyRenderSliver {
+    fn perform_layout(&mut self, _: SliverConstraints) -> SliverLayout {
+        SliverLayout::empty(SliverGeometry::ZERO)
+    }
+
+    fn child_count(&self) -> Option<usize> {
+        Some(0)
+    }
+}
+
 pub(super) struct PaddingRenderSliver {
     pub(super) inner: RefCell<Box<dyn RenderSliver>>,
     pub(super) padding: EdgeInsets,
@@ -2015,8 +2027,13 @@ impl RenderSliver for PaddingRenderSliver {
     }
 
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout {
-        let before = main_before(constraints.axis, self.padding);
-        let after = main_after(constraints.axis, self.padding);
+        let physical_start = main_before(constraints.axis, self.padding);
+        let physical_end = main_after(constraints.axis, self.padding);
+        let (before, after) = if constraints.reverse {
+            (physical_end, physical_start)
+        } else {
+            (physical_start, physical_end)
+        };
         let total_padding = before + after;
         let paint_offset = |from: f32, to: f32| {
             let start = from.max(constraints.scroll_offset);
