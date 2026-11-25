@@ -36,7 +36,7 @@ impl WidgetTree {
                     (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }
-            RenderKind::FittedBox { .. } => {
+            RenderKind::FittedBox { fit, .. } => {
                 if let Some(&child) = children.first() {
                     self.layout_render(
                         child,
@@ -48,10 +48,19 @@ impl WidgetTree {
                     // baseline; the paint fit does not change this metric.
                     self.render_live_mut(id, "fitted render must remain live")
                         .baseline = baseline;
-                    (
-                        constraints.constrain(child_size),
-                        ChildOffsets::One(Offset::ZERO),
-                    )
+                    // ScaleDown fits against maxima only before applying
+                    // the actual minimums, so it does not grow the child
+                    // to satisfy a minimum in the other axis.
+                    let size = if fit == ImageFit::ScaleDown {
+                        constraints.constrain(
+                            constraints
+                                .loosen()
+                                .constrain_preserving_aspect_ratio(child_size),
+                        )
+                    } else {
+                        constraints.constrain_preserving_aspect_ratio(child_size)
+                    };
+                    (size, ChildOffsets::One(Offset::ZERO))
                 } else {
                     self.render_live_mut(id, "fitted render must remain live")
                         .baseline = None;

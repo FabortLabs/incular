@@ -136,3 +136,17 @@ baseline. Both now report the actual metric, then None when replacing
 the child with a baseline-free box, then the real baseline again on the
 same FittedBox render object. This does not compare font metrics between
 renderers or claim a public dry-baseline API.
+
+## FittedBox layout aspect ratio
+
+The pinned :10, :434 and :487 originals pass. Old Incular always
+clamped width and height independently. In the original 200-wide
+case its default box stayed 50 high instead of 100. A larger
+scaleDown child kept 200 height instead of shrinking to 100.
+The corrected box adjusts the size in the same bounds order as
+Flutter, using loosened minimums for scaleDown, and only then
+applies the paint fit. In addition to the sizes, the permanent
+Rust tests check the original world-space edge and both scaleDown
+offsets, and the 50→100→50 sequence on one retained render object.
+All 43 selected layout and semantics regressions pass. :487 is
+a historical pair; this adds only the two new full comparisons.

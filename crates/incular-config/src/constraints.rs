@@ -147,6 +147,49 @@ impl Constraints {
             size.height.clamp(self.min_height, self.max_height),
         )
     }
+
+    /// Flutter's box constraint adjustment: preserve a nonempty size's
+    /// aspect ratio as far as the minimum and maximum bounds permit.
+    #[must_use]
+    pub fn constrain_preserving_aspect_ratio(self, size: Size) -> Size {
+        if self.min_width == self.max_width && self.min_height == self.max_height {
+            return self.smallest();
+        }
+        if size.width <= 0.
+            || size.height <= 0.
+            || !size.width.is_finite()
+            || !size.height.is_finite()
+        {
+            return self.constrain(size);
+        }
+        let mut width = f64::from(size.width);
+        let mut height = f64::from(size.height);
+        let aspect = width / height;
+        let [min_width, max_width, min_height, max_height] = [
+            self.min_width,
+            self.max_width,
+            self.min_height,
+            self.max_height,
+        ]
+        .map(f64::from);
+        if width > max_width {
+            width = max_width;
+            height = width / aspect;
+        }
+        if height > max_height {
+            height = max_height;
+            width = height * aspect;
+        }
+        if width < min_width {
+            width = min_width;
+            height = width / aspect;
+        }
+        if height < min_height {
+            height = min_height;
+            width = height * aspect;
+        }
+        self.constrain(Size::new(width as f32, height as f32))
+    }
     /// Flutter's `BoxConstraints.enforce`: clamps each bound of these
     /// constraints into `other`, so the result never escapes `other`.
     #[must_use]

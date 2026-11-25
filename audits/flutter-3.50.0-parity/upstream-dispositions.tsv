@@ -209,6 +209,8 @@ packages/flutter/test/widgets/fitted_box_test.dart	41	Can contain child	paired-m
 packages/flutter/test/widgets/fitted_box_test.dart	71	Child can cover	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
 packages/flutter/test/widgets/fitted_box_test.dart	396	Big child into small fitted box - hit testing	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
 packages/flutter/test/widgets/fitted_box_test.dart	487	Switching to and from BoxFit.scaleDown causes relayout	paired-mismatch	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/fitted_box_test.dart	10	Can size according to aspect ratio	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md#fittedbox-layout-aspect-ratio
+packages/flutter/test/widgets/fitted_box_test.dart	434	BoxFit.scaleDown matches size of child	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md#fittedbox-layout-aspect-ratio
 packages/flutter/test/widgets/fractionally_sized_box_test.dart	9	FractionallySizedBox	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
 packages/flutter/test/widgets/fractionally_sized_box_test.dart	32	FractionallySizedBox alignment	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
 packages/flutter/test/widgets/fractionally_sized_box_test.dart	100	FractionallySizedBox does not crash at zero area	partial-match	upstream-fit-overlays-scroll-notifications-clipboard.md

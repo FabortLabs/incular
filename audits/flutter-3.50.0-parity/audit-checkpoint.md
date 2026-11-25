@@ -894,3 +894,9 @@ level only when the parent has none.
 The [empty FittedBox recheck](upstream-semantic-headings-clamping-and-dilation.md#empty-fitted-content)
 now removes both the child draw and its accessibility subtree when
 the fitted area is empty, and restores them when area returns.
+
+[FittedBox layout](upstream-fit-overlays-scroll-notifications-clipboard.md#fittedbox-layout-aspect-ratio)
+adds two exact originals: 465 / 8,965 fully compared (5.19%),
+369 matches and 96 historical mismatches. Independent constraints no
+longer distort the fitting box's aspect ratio, and switching from and
+back to scaleDown relayouts in place.
