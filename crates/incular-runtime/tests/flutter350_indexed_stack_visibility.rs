@@ -160,3 +160,45 @@ fn visibility_remains_conjunctive_and_follows_retained_keyed_branch_reorders() {
         ],
     );
 }
+
+#[test]
+fn a_globally_keyed_reader_rebinds_when_its_indexed_ancestor_changes() {
+    use incular_widgets::{Column, GlobalKey};
+    let key = Key::Global(GlobalKey::new());
+    let seen = Rc::new(Cell::new(None));
+    let leaf = observe(
+        key.clone(),
+        Size::new(30., 25.),
+        Rc::clone(&seen),
+        Rc::new(Cell::new(0)),
+    );
+    let build = |in_stack, index| {
+        let children = if in_stack {
+            vec![leaf.clone()]
+        } else {
+            Vec::new()
+        };
+        let stack = Widget::from(IndexedStack::new(children).index(index));
+        let right = Widget::from(Center::new(if in_stack {
+            SizedBox::shrink().into()
+        } else {
+            leaf.clone()
+        }));
+        scene(Column::new([stack, right]))
+    };
+    let frame = Constraints::tight(VIEW);
+    let mut runtime = Runtime::new(build(true, None)).unwrap();
+    runtime.run_frame(frame).unwrap();
+    let root = runtime.tree().root().unwrap();
+    let retained = runtime.tree().element_with_key(&key).unwrap();
+    let mut actual = vec![seen.get()];
+    for (in_stack, index) in [(false, None), (true, Some(0)), (true, None)] {
+        runtime
+            .schedule_update(root, build(in_stack, index))
+            .unwrap();
+        runtime.run_frame(frame).unwrap();
+        assert_eq!(runtime.tree().element_with_key(&key), Some(retained));
+        actual.push(seen.get());
+    }
+    assert_eq!(actual, [Some(false), Some(true), Some(true), Some(false)]);
+}

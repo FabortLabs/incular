@@ -100,3 +100,24 @@ native controls assert paint and geometry rather than Flutter's
 `skipOffstage` query and inherited `Visibility.of` observations.
 
 Both native targets passed after validation was added (40 focused tests).
+
+## Inherited selection and reparenting
+
+Pinned originals :104 and :264 and their native ports now pass. All
+three child branches publish their selection-aligned Visibility.of
+value for none, first, middle, last and none. Changing only selection
+rebuilds only the outgoing and incoming visibility readers; identities
+stay mounted. A Positioned child is still directly attached to the
+IndexedStack, has the original 10/20/30/40 box, and its ordinary sibling
+reads false. The inherited scopes do not add render wrappers. A native
+keyed reorder also verifies the result is the conjunction of selection
+and outer box Visibility, with no branch remount.
+
+The authored global-key control exposed a pinned Flutter edge case:
+the same Builder reads false while hidden, reads true after moving
+outside the stack, moves back selected, and still displays true in
+the offstage tree when deselected. A forced rebuild on the very same
+element reads false. Incular rebinds on the move and reads false upon
+deselection without forcing a fresh descriptor. This divergence is a
+stale retained dependency in the authored reference, not a change to
+the original :104 or :264 expectations.

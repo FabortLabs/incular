@@ -369,6 +369,14 @@ struct OverscrollIndicatorRegistration {
     _subscription: ScrollNotificationSubscription,
 }
 
+/// A child's inherited IndexedStack branch, separate from its render and key.
+struct IndexedVisibilityBinding {
+    stack: ElementId,
+    build: DependencyContext,
+    render: DependencyContext,
+    visible: bool,
+}
+
 /// Independent, uncommon element state. A notification listener, text field or
 /// layout builder can coexist with scrolling state without enlarging every node.
 #[derive(Default)]
@@ -387,6 +395,7 @@ struct ElementAuxiliaryState {
     spell_check_session: Option<Rc<crate::spell_check::SpellCheckSession>>,
     layout_builder_constraints: Option<Constraints>,
     layout_builder_revision: u64,
+    indexed_visibility: Option<Box<IndexedVisibilityBinding>>,
 }
 
 impl Element {

@@ -225,7 +225,7 @@ pub(super) struct VisibilityScope {
 }
 
 #[derive(Clone, Copy)]
-struct VisibilityObservation(bool);
+pub(super) struct VisibilityObservation(pub(super) bool);
 
 /// A borrowed view of the retained inherited environment for one live build
 /// operation. The reference cannot escape the callback that receives it.

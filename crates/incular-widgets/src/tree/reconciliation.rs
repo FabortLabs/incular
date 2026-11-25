@@ -2,6 +2,7 @@
 
 use super::*;
 
+use super::context::VisibilityObservation;
 use super::focus::{instantiate_owned_focus_node, owned_focus_permission};
 use super::rendering::{carry_replaced_transition, render_kind};
 use super::widget::WidgetChildren;
@@ -192,13 +193,17 @@ impl WidgetTree {
         parent: Option<ElementId>,
         boundary: bool,
         scope: Option<&InheritedScopeValue>,
-    ) -> (DependencyContext, DependencyContext) {
+    ) -> (
+        DependencyContext,
+        DependencyContext,
+        Option<Box<IndexedVisibilityBinding>>,
+    ) {
         self.inherited_contexts_for_consumers(
             parent,
             boundary,
             scope,
-            ConsumerId::new(),
-            ConsumerId::new(),
+            (ConsumerId::new(), ConsumerId::new()),
+            false,
         )
     }
 
@@ -207,9 +212,13 @@ impl WidgetTree {
         parent: Option<ElementId>,
         boundary: bool,
         scope: Option<&InheritedScopeValue>,
-        build_consumer: ConsumerId,
-        render_consumer: ConsumerId,
-    ) -> (DependencyContext, DependencyContext) {
+        (build_consumer, render_consumer): (ConsumerId, ConsumerId),
+        stack_visible: bool,
+    ) -> (
+        DependencyContext,
+        DependencyContext,
+        Option<Box<IndexedVisibilityBinding>>,
+    ) {
         let (parent_build, parent_render) =
             parent.and_then(|id| self.elements.get(id.0)).map_or_else(
                 || (self.dependency_root.clone(), self.dependency_root.clone()),
@@ -230,13 +239,35 @@ impl WidgetTree {
         } else {
             parent_render.for_related_consumer(render_consumer)
         };
+        // Indexed selection is inherited by the direct child and its
+        // descendants. Insert only a context, not a widget or render wrapper:
+        // Positioned parent data and keyed child reconciliation stay direct.
+        let indexed_visibility = parent
+            .filter(|&id| {
+                !boundary
+                    && self.elements.get(id.0).is_some_and(|parent| {
+                        matches!(parent.widget.kind(), WidgetKind::IndexedStack { .. })
+                    })
+            })
+            .map(|stack| {
+                let value = Rc::new(VisibilityObservation(stack_visible));
+                let kind = TypeId::of::<VisibilityObservation>();
+                build = build.provide_erased(kind, value.clone());
+                render = render.provide_erased(kind, value);
+                Box::new(IndexedVisibilityBinding {
+                    stack,
+                    build: build.clone(),
+                    render: render.clone(),
+                    visible: stack_visible,
+                })
+            });
         if let Some(scope) = scope {
             build = build.provide_erased(scope.value_type(), scope.value.clone());
             render = render.provide_erased(scope.value_type(), scope.value.clone());
             super::context::install_scope_aspects(&build, scope);
             super::context::install_scope_aspects(&render, scope);
         }
-        (build, render)
+        (build, render, indexed_visibility)
     }
 
     /// Rebinds contexts only when inherited topology itself changes (a lookup
@@ -261,13 +292,19 @@ impl WidgetTree {
             let children = element.children.clone();
             old_build.clear_dependencies();
             old_render.clear_dependencies();
-            let (build_context, render_context) = self.inherited_contexts_for_consumers(
-                parent,
-                boundary,
-                scope.as_ref(),
-                build_consumer,
-                render_consumer,
-            );
+            let indexed_visible = element
+                .auxiliary_state
+                .as_ref()
+                .and_then(|aux| aux.indexed_visibility.as_ref())
+                .is_some_and(|binding| Some(binding.stack) == parent && binding.visible);
+            let (build_context, render_context, indexed_visibility) = self
+                .inherited_contexts_for_consumers(
+                    parent,
+                    boundary,
+                    scope.as_ref(),
+                    (build_consumer, render_consumer),
+                    indexed_visible,
+                );
             let new_kind = render_context.build(|context| render_kind(&widget, context));
             let invalidation = self
                 .render_live_mut(render, "rebound render must remain live")
@@ -276,6 +313,11 @@ impl WidgetTree {
             if let Some(element) = self.elements.get_mut(id.0) {
                 element.build_context = build_context;
                 element.render_context = render_context;
+                if let Some(binding) = indexed_visibility {
+                    element.auxiliary_state_mut().indexed_visibility = Some(binding);
+                } else if let Some(aux) = element.auxiliary_state.as_mut() {
+                    aux.indexed_visibility = None;
+                }
                 element.reset_layout_builder_state();
             }
             if matches!(widget.kind(), WidgetKind::LayoutBuilder { .. })
@@ -434,6 +476,7 @@ impl WidgetTree {
                     }
                 }
                 MountWork::Finish(id) => {
+                    self.refresh_indexed_visibility(id);
                     self.sync_render_children(id);
                     self.sync_raw_input_state(id);
                     if self
@@ -482,7 +525,7 @@ impl WidgetTree {
                     .downcast_ref::<crate::platform_widgets::PlatformMenuRetainedMarker>()
             })
             .map(|marker| marker.binding.clone());
-        let (build_context, render_context) = self.inherited_contexts_for(
+        let (build_context, render_context, indexed_visibility) = self.inherited_contexts_for(
             parent,
             environment_boundary,
             environment_override.as_ref(),
@@ -513,7 +556,12 @@ impl WidgetTree {
             render: RenderObjectId(render),
             dirty: DirtyFlags::NONE,
             scrolling_state: None,
-            auxiliary_state: None,
+            auxiliary_state: indexed_visibility.map(|binding| {
+                Box::new(ElementAuxiliaryState {
+                    indexed_visibility: Some(binding),
+                    ..Default::default()
+                })
+            }),
             build_context: build_context.clone(),
             render_context: render_context.clone(),
             environment_override,
@@ -961,11 +1009,13 @@ impl WidgetTree {
             (RenderKind::Visibility { visible: before, .. },
              RenderKind::Visibility { visible: after, .. }) if before != after
         );
-        let indexed_selection_changed = matches!(
-            (&*old_kind, &new_kind),
-            (RenderKind::IndexedStack { index: before, .. },
-             RenderKind::IndexedStack { index: after, .. }) if before != after
-        );
+        let indexed_selection_change = match (&*old_kind, &new_kind) {
+            (
+                RenderKind::IndexedStack { index: before, .. },
+                RenderKind::IndexedStack { index: after, .. },
+            ) if before != after => Some((*before, *after)),
+            _ => None,
+        };
         if layer_structure_changed || visibility_changed {
             self.sync_render_children(id);
         }
@@ -1034,27 +1084,98 @@ impl WidgetTree {
         let desired = widget.children_refs().into_iter().collect::<Vec<_>>();
         let reconciled = match (old.kind(), widget.kind()) {
             (
-                WidgetKind::Table { columns: before, .. },
+                WidgetKind::Table {
+                    columns: before, ..
+                },
                 WidgetKind::Table { columns: after, .. },
-            ) if before != after => self.reconcile_resized_table_rows(
-                id, &previous, *before, &desired, *after,
-            )?,
+            ) if before != after => {
+                self.reconcile_resized_table_rows(id, &previous, *before, &desired, *after)?
+            }
             _ => self.reconcile_children(id, &previous, &desired, true)?,
         };
         if reconciled != previous {
             self.element_live_mut(id, "retained element must remain live")
                 .children = reconciled;
+            self.refresh_indexed_visibility(id);
             self.sync_render_children(id);
-        } else if indexed_selection_changed && !layer_structure_changed {
-            // Selection changes which retained layer is attached even
-            // when every child keeps its identity and position.
-            self.sync_render_children(id);
+        } else if let Some((before, after)) = indexed_selection_change {
+            self.publish_indexed_selection(id, before, after);
+            if !layer_structure_changed {
+                // Selection changes which retained layer is attached even
+                // when every child keeps its identity and position.
+                self.sync_render_children(id);
+            }
         }
         self.sync_raw_input_state(id);
         #[cfg(feature = "devtools")]
         self.devtools_trace_end(trace);
         Ok(true)
     }
+    fn set_indexed_branch(&mut self, stack: ElementId, slot: usize, visible: bool) -> bool {
+        let Some(child) = self
+            .elements
+            .get(stack.0)
+            .and_then(|element| element.children.get(slot))
+            .copied()
+        else {
+            return false;
+        };
+        let Some(binding) = self
+            .elements
+            .get_mut(child.0)
+            .and_then(|element| element.auxiliary_state.as_mut())
+            .and_then(|aux| aux.indexed_visibility.as_mut())
+        else {
+            return false;
+        };
+        debug_assert_eq!(
+            binding.stack, stack,
+            "branch belongs to its retained parent"
+        );
+        if binding.visible == visible {
+            return false;
+        }
+        binding.visible = visible;
+        let value = Rc::new(VisibilityObservation(visible));
+        let kind = TypeId::of::<VisibilityObservation>();
+        binding.build.set_erased(kind, value.clone());
+        binding.render.set_erased(kind, value);
+        true
+    }
+
+    fn refresh_indexed_visibility(&mut self, stack: ElementId) {
+        let Some(parent) = self.elements.get(stack.0) else {
+            return;
+        };
+        let WidgetKind::IndexedStack { index, .. } = parent.widget.kind() else {
+            return;
+        };
+        let selection = *index;
+        let len = parent.children.len();
+        let mut changed = false;
+        for slot in 0..len {
+            changed |= self.set_indexed_branch(stack, slot, selection == Some(slot));
+        }
+        if changed {
+            self.apply_inherited_invalidations();
+        }
+    }
+
+    fn publish_indexed_selection(
+        &mut self,
+        stack: ElementId,
+        before: Option<usize>,
+        after: Option<usize>,
+    ) {
+        // With a stable child vector only the outgoing and incoming branch
+        // become dirty. Offstage siblings keep their inherited state and cache.
+        let removed = before.is_some_and(|slot| self.set_indexed_branch(stack, slot, false));
+        let added = after.is_some_and(|slot| self.set_indexed_branch(stack, slot, true));
+        if removed || added {
+            self.apply_inherited_invalidations();
+        }
+    }
+
     pub(super) fn compatible(&mut self, id: ElementId, widget: &Widget) -> bool {
         match self.elements.get(id.0) {
             Some(element) => {
