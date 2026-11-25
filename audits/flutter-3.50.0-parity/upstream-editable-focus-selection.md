@@ -39,3 +39,22 @@ seven value replacement-boundary checks passed. Two assertions in
 `editing_copies` still conflate caret collapse after a controller
 user edit with value-level range remapping; both failures were reproduced
 on the unchanged baseline. No browser or native host was required.
+
+## Obscured code-point movement and deletion
+
+The pinned obscured-editor registration :17767 and the retained Rust
+keyboard comparison agree on every arrow and Backspace. The family
+emoji's UTF-16 caret positions are 8→6→5→3→2→0 and back. Backspace
+then removes each code point, including each zero-width joiner,
+instead of treating the family as one grapheme. The Rust assertion
+converts actual UTF-8 caret positions to UTF-16 only for comparison.
+
+The related pinned :17872 passed on Flutter but is not paired: Dart
+can place a caret between the two UTF-16 surrogates of one scalar,
+while the portable Rust editor uses valid UTF-8 boundaries. A
+separate authored desktop probe confirmed that programmatic text
+replacement selects the entire value; Backspace there deletes all.
+With an explicitly collapsed caret, the unobscured editor instead
+removes only the emoji grapheme. The older Rust repeat test now
+sets that caret before checking its grapheme expectation.
+The two focused Rust comparisons and the corrected repeat test passed.

@@ -459,6 +459,9 @@ fn focused_native_style_backspace_repeat_and_delete_edit_the_buffer() {
         assert_eq!(controller.text(), expected);
     }
     controller.set_text("é👩‍💻");
+    // On desktop a focused text replacement selects all. Test the separate
+    // grapheme deletion behavior by explicitly placing a collapsed caret.
+    controller.set_selection(TextSelection::collapsed(controller.text().len()));
     let _ = runtime.handle_input(InputEvent::Key(key_down(Code::Backspace)));
     assert_eq!(controller.text(), "é");
     controller.set_selection(TextSelection::collapsed(0));

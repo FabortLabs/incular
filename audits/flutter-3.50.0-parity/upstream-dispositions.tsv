@@ -1203,3 +1203,5 @@ packages/flutter/test/widgets/list_view_semantics_test.dart	133	reverse horizont
 packages/flutter/test/widgets/keep_alive_test.dart	50	KeepAlive with ListView with itemExtent	paired-match	upstream-keep-alive-fixed.md#a-child-changes-its-request-without-rebuilding-its-viewport
 packages/flutter/test/widgets/keep_alive_test.dart	98	KeepAlive with ListView without itemExtent	paired-match	upstream-keep-alive-fixed.md#a-child-changes-its-request-without-rebuilding-its-viewport
 packages/flutter/test/widgets/keep_alive_test.dart	147	KeepAlive with GridView	paired-match	upstream-keep-alive-fixed.md#a-child-changes-its-request-without-rebuilding-its-viewport
+packages/flutter/test/widgets/editable_text_test.dart	17767	code points are treated as single characters in obscure mode	paired-match	upstream-editable-focus-selection.md#obscured-code-point-movement-and-deletion
+packages/flutter/test/widgets/editable_text_test.dart	17872	when manually placing the cursor in the middle of a code point	reference-ran-incular-open	upstream-editable-focus-selection.md#obscured-code-point-movement-and-deletion
