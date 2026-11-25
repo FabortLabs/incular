@@ -1261,7 +1261,21 @@ impl Runtime {
     /// and the supplied timestamp through listeners and retained gestures.
     pub fn handle_raw_pointer_event(&mut self, event: RawPointerEvent) -> Option<EventTarget> {
         let traced_at = incular_core::time::Instant::now();
-        self.tree.set_diagnostic_trigger("raw pointer event");
+        let diagnostic = InputEvent::PointerWithMetadata {
+            pointer: event.pointer,
+            device: event.device,
+            kind: event.kind,
+            buttons: event.buttons,
+            button: event.button,
+            sample: event.sample,
+            phase: event.phase,
+            position: event.position,
+        };
+        self.tree.set_diagnostic_input_trigger(
+            event.synthesized.then_some("synthesized"),
+            &diagnostic,
+            diagnostic_input_trigger,
+        );
         let previous_clock = self.input_clock.replace(event.time);
         let result = self.handle_pointer_input(event, true);
         self.input_clock = previous_clock;

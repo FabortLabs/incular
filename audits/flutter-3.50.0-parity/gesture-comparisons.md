@@ -163,3 +163,14 @@ timestamp, including the provenance bit, to retained scale. Twenty
 focused Rust tests passed, including pressure, buttons and the input
 allocation check. Native platform adapters are not assumed to
 synthesize motion. This authored case is outside the upstream count.
+
+## Synthesized horizontal drag and quick flicks
+
+The two exact Flutter cases at `drag_test.dart:1519,1567` passed. The
+mounted Incular horizontal recognizer uses the same positions and
+timestamps: after a synthesized wobble the release still reports
+(1000,0) px/s, and down plus two genuine moves still produces a
+1000 px/s quick flick. Synthesized samples continue through motion
+handling but are not fitting points. A warmed raw-input diagnostic
+regression also verifies zero allocations over 200 moves. Fifteen
+focused Rust tests passed. This does not cover native trackpad sampling.

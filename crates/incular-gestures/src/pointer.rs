@@ -701,13 +701,14 @@ impl PointerGestureRecognizer {
     /// retained arena delay observable behavior until it has accepted this
     /// recognizer. Direct users should normally keep using [`Self::handle`].
     pub fn observe(&mut self, event: PointerEvent) -> GestureDecision {
-        self.observe_with_buttons(event, None)
+        self.observe_with_buttons(event, None, false)
     }
 
     fn observe_with_buttons(
         &mut self,
         event: PointerEvent,
         buttons: Option<u32>,
+        synthesized: bool,
     ) -> GestureDecision {
         if self.down.is_none_or(|down| down.pointer == event.pointer) {
             if event.phase == PointerPhase::Down {
@@ -728,7 +729,7 @@ impl PointerGestureRecognizer {
                 self.long_press_cancel();
             }
         }
-        let decision = self.observe_phase(event);
+        let decision = self.observe_phase(event, synthesized);
         if let Some(memory) = &self.tap_memory {
             memory.set(TapMemory {
                 last_tap: self.last_tap,
@@ -754,7 +755,7 @@ impl PointerGestureRecognizer {
         }
     }
 
-    fn observe_phase(&mut self, event: PointerEvent) -> GestureDecision {
+    fn observe_phase(&mut self, event: PointerEvent, synthesized: bool) -> GestureDecision {
         // This recognizer has a single contact. A second pointer must not
         // replace that contact or complete/cancel its gesture on release.
         if self.down.is_some_and(|down| down.pointer != event.pointer) {
@@ -795,8 +796,10 @@ impl PointerGestureRecognizer {
                 self.double_tap_second = is_double_tap;
                 self.down = Some(event);
                 self.velocity.clear();
-                self.velocity
-                    .add_position(event.time, self.local(event.position));
+                if !synthesized {
+                    self.velocity
+                        .add_position(event.time, self.local(event.position));
+                }
                 self.tap_moved_beyond_slop = false;
                 self.pan_started = false;
                 self.pan_action = None;
@@ -857,8 +860,10 @@ impl PointerGestureRecognizer {
                     return GestureDecision::Reject;
                 };
                 let delta = event.position - down.position;
-                self.velocity
-                    .add_position(event.time, self.local(event.position));
+                if !synthesized {
+                    self.velocity
+                        .add_position(event.time, self.local(event.position));
+                }
                 if delta.x.hypot(delta.y) > compute_hit_slop(self.kind, self.gesture_settings)
                     && !self.tap_moved_beyond_slop
                 {
@@ -1237,7 +1242,7 @@ impl GestureRecognizer for PointerGestureRecognizer {
 
     fn observe_raw(&mut self, event: crate::details::RawPointerEvent) -> GestureDecision {
         self.kind = event.kind;
-        self.observe_with_buttons(event.legacy(), Some(event.buttons))
+        self.observe_with_buttons(event.legacy(), Some(event.buttons), event.synthesized)
     }
 
     fn cancel(&mut self) {

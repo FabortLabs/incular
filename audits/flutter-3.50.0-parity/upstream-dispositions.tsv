@@ -882,3 +882,5 @@ packages/flutter/test/gestures/velocity_tracker_test.dart	138	Makes consistent v
 packages/flutter/test/gestures/velocity_tracker_test.dart	177	Assume zero velocity when there are no recent samples - IOS	paired-match	upstream-geometry-input-gestures.md#standalone-velocity-tracker-comparisons
 packages/flutter/test/gestures/velocity_tracker_test.dart	196	Assume zero velocity when there are no recent samples - MacOS	paired-match	upstream-geometry-input-gestures.md#standalone-velocity-tracker-comparisons
 packages/flutter/test/gestures/velocity_tracker_test.dart	38	Velocity tracker gives expected results	paired-match	upstream-geometry-input-gestures.md#recorded-drag-velocity-and-scratch-allocation
+packages/flutter/test/gestures/drag_test.dart	1519	Synthesized pointer events are ignored for velocity tracking	paired-match	gesture-comparisons.md#synthesized-horizontal-drag-and-quick-flicks
+packages/flutter/test/gestures/drag_test.dart	1567	Quick flicks have velocity	paired-match	gesture-comparisons.md#synthesized-horizontal-drag-and-quick-flicks

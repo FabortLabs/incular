@@ -757,7 +757,7 @@ impl WidgetTree {
         )
     }
     /// Routes a complete pointer sample to the retained detector arena.
-    /// The sample's synthesized flag reaches scale velocity tracking.
+    /// The sample's synthesized flag reaches drag and scale velocity tracking.
     pub fn dispatch_pointer_gesture_raw_with_hit(
         &mut self,
         window: u64,
@@ -888,15 +888,18 @@ impl WidgetTree {
                     {
                         recognizer.set_local_transform(local);
                     }
-                    let _ = recognizer.observe_raw(crate::raw_input::RawPointerEvent::new(
-                        event.pointer,
-                        device,
-                        kind,
-                        buttons,
-                        event.position,
-                        event.phase,
-                        event.time,
-                    ));
+                    let _ = recognizer.observe_raw(crate::raw_input::RawPointerEvent {
+                        synthesized,
+                        ..crate::raw_input::RawPointerEvent::new(
+                            event.pointer,
+                            device,
+                            kind,
+                            buttons,
+                            event.position,
+                            event.phase,
+                            event.time,
+                        )
+                    });
                     active.members.push(ActiveGestureMember {
                         element: candidate,
                         member,
@@ -1123,15 +1126,18 @@ impl WidgetTree {
                         max_velocity: Some(physics.max_fling_velocity()),
                         min_distance: Some(physics.min_fling_distance()),
                     });
-                    let _ = recognizer.observe_raw(crate::raw_input::RawPointerEvent::new(
-                        event.pointer,
-                        device,
-                        kind,
-                        0,
-                        event.position,
-                        event.phase,
-                        event.time,
-                    ));
+                    let _ = recognizer.observe_raw(crate::raw_input::RawPointerEvent {
+                        synthesized,
+                        ..crate::raw_input::RawPointerEvent::new(
+                            event.pointer,
+                            device,
+                            kind,
+                            0,
+                            event.position,
+                            event.phase,
+                            event.time,
+                        )
+                    });
                     active.members.push(ActiveGestureMember {
                         element: viewport,
                         member,
@@ -1234,15 +1240,18 @@ impl WidgetTree {
                         let Some(recognizer) = candidate.recognizer.as_mut() else {
                             continue;
                         };
-                        let raw = crate::raw_input::RawPointerEvent::new(
-                            event.pointer,
-                            device,
-                            kind,
-                            buttons,
-                            event.position,
-                            event.phase,
-                            event.time,
-                        );
+                        let raw = crate::raw_input::RawPointerEvent {
+                            synthesized,
+                            ..crate::raw_input::RawPointerEvent::new(
+                                event.pointer,
+                                device,
+                                kind,
+                                buttons,
+                                event.position,
+                                event.phase,
+                                event.time,
+                            )
+                        };
                         match recognizer.observe_raw(raw) {
                             GestureDecision::Accept(action) => match disposition {
                                 GestureDisposition::Accepted => {

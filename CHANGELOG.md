@@ -201,6 +201,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-gestures`: synthesized pointer samples no longer distort
+  release velocity for retained drags.
+
 - `incular-gestures`: synthesized scale moves update the focal point
   without creating release velocity.
 

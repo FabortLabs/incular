@@ -8,7 +8,7 @@ use incular_core::{
     input::{InputEvent, PointerPhase},
 };
 use incular_runtime::Runtime;
-use incular_widgets::SizedBox;
+use incular_widgets::{PointerDeviceKind, RawPointerEvent, SizedBox};
 
 struct CountingAllocator;
 
@@ -86,4 +86,31 @@ fn pointer_moves_do_not_allocate_a_trigger_label() {
         "label formatting should add at least one allocation per event"
     );
     assert_eq!(after, 0, "pointer move allocated {after} times");
+}
+
+#[test]
+fn raw_moves_also_defer_diagnostic_labels() {
+    let mut runtime = Runtime::new(SizedBox::shrink().into()).expect("runtime");
+    let start = std::time::Instant::now();
+    let raw = |index| RawPointerEvent {
+        synthesized: index % 2 == 0,
+        ..RawPointerEvent::new(
+            1,
+            2,
+            PointerDeviceKind::Mouse,
+            0,
+            Offset::new(index as f32 * 0.5, 3.0),
+            PointerPhase::Move,
+            start + std::time::Duration::from_millis(index as u64),
+        )
+    };
+    for index in 0..8 {
+        let _ = runtime.handle_raw_pointer_event(raw(index));
+    }
+    let allocations = allocations_during(|| {
+        for index in 0..EVENTS {
+            let _ = runtime.handle_raw_pointer_event(raw(index));
+        }
+    });
+    assert_eq!(allocations, 0, "raw pointer move diagnostic allocated");
 }
