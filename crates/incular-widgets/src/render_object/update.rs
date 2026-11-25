@@ -12,8 +12,8 @@ impl RenderObjectPayload {
             return Invalidation::NONE;
         }
         if delegate_keeps_output(&self.kind, &kind) {
-            // Flutter keeps the current clip or picture when the new delegate
-            // reports no reclip or repaint; the new delegate is retained for later.
+            // A replacement delegate can preserve layout or paint and
+            // still receive the next update as the retained old delegate.
             self.replace_kind(kind);
             return Invalidation::NONE;
         }
@@ -238,12 +238,14 @@ fn stack_clip_only_change(old: &incular_layout::Stack, new: &incular_layout::Sta
     old.clip_behavior != new.clip_behavior && old.alignment == new.alignment && old.fit == new.fit
 }
 
-/// True when a changed clip or painter delegate would produce the output the
-/// render object already holds: same geometry inputs and a delegate that
-/// reports no reclip (`CustomClipper::should_reclip`) or repaint
-/// (`CustomPainter::should_repaint`) against the old one.
+/// True when a replacement delegate reports no relayout, reclip or
+/// repaint against the old delegate, and other phase inputs are unchanged.
 fn delegate_keeps_output(old: &RenderKind, new: &RenderKind) -> bool {
     match (old, new) {
+        (
+            RenderKind::CustomLayout { delegate: old },
+            RenderKind::CustomLayout { delegate: new },
+        ) => !new.changes_from(old),
         (
             RenderKind::CustomPaint {
                 desired: old_desired,

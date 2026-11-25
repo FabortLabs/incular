@@ -329,7 +329,7 @@ packages/flutter/test/widgets/keyboard_listener_test.dart	10	Can dispose without
 packages/flutter/test/widgets/keyboard_listener_test.dart	42	Web key event	partial-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md
 packages/flutter/test/widgets/keyboard_listener_test.dart	66	Defunct listeners do not receive events	partial-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md
 packages/flutter/test/widgets/custom_single_child_layout_test.dart	100	Control test for CustomSingleChildLayout	paired-match	upstream-custom-layout-and-asset-invalidation.md
-packages/flutter/test/widgets/custom_single_child_layout_test.dart	121	Test SingleChildDelegate shouldRelayout method	paired-mismatch	upstream-custom-layout-and-asset-invalidation.md
+packages/flutter/test/widgets/custom_single_child_layout_test.dart	121	Test SingleChildDelegate shouldRelayout method	paired-match	upstream-custom-layout-and-asset-invalidation.md#current-replacement-delegate-direction
 packages/flutter/test/widgets/custom_single_child_layout_test.dart	144	Delegate can change size	paired-match	upstream-custom-layout-and-asset-invalidation.md
 packages/flutter/test/widgets/custom_single_child_layout_test.dart	172	CustomSingleChildLayout does not crash at zero area	partial-match	upstream-custom-layout-and-asset-invalidation.md
 packages/flutter/test/services/asset_bundle_test.dart	116	clear clears all cached values'	partial-match	upstream-custom-layout-and-asset-invalidation.md
@@ -415,7 +415,7 @@ packages/flutter/test/widgets/flow_test.dart	160	Flow can set and update clipBeh
 packages/flutter/test/widgets/flow_test.dart	185	Flow.unwrapped can set and update clipBehavior	reference-ran-incular-open	upstream-flow-paint-and-routing.md
 packages/flutter/test/widgets/flow_test.dart	210	Flow does not crash at zero area	paired-match	upstream-flow-paint-and-routing.md
 packages/flutter/test/widgets/custom_multi_child_layout_test.dart	164	Control test for CustomMultiChildLayout	paired-match	upstream-multi-child-layout-contract.md
-packages/flutter/test/widgets/custom_multi_child_layout_test.dart	182	Test MultiChildDelegate shouldRelayout method	paired-mismatch	upstream-multi-child-layout-contract.md
+packages/flutter/test/widgets/custom_multi_child_layout_test.dart	182	Test MultiChildDelegate shouldRelayout method	paired-match	upstream-multi-child-layout-contract.md#current-replacement-delegate-direction
 packages/flutter/test/widgets/custom_multi_child_layout_test.dart	205	Nested CustomMultiChildLayouts	partial-match	upstream-multi-child-layout-contract.md
 packages/flutter/test/widgets/custom_multi_child_layout_test.dart	229	Loose constraints	paired-match	upstream-multi-child-layout-contract.md
 packages/flutter/test/widgets/custom_multi_child_layout_test.dart	257	Can use listener for relayout	partial-mismatch	upstream-multi-child-layout-contract.md

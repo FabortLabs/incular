@@ -19,3 +19,12 @@ key live. Both original registrations pass on Flutter and their
 Rust text subsets pass. Flutter's structured-binary branch has no
 public Rust equivalent and is excluded from these partial results.
 See `flutter350_asset_cache_invalidation_parity`.
+
+## Current replacement delegate direction
+
+The replacement instance, not the previous one, receives the relayout
+question. A no-relayout result preserves the measured geometry but still
+installs the new instance, so the next comparison sees that replacement.
+The exact single-child :121 and multi-child :182 originals both passed
+on the pinned SDK. The two focused native counterparts and eight adjacent
+custom-layout checks also passed.

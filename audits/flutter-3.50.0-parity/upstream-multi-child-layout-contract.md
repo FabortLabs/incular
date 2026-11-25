@@ -38,3 +38,12 @@ equivalence. An unlabelled child (:363) is instead accepted and
 silently laid out as 0×0, unlike Flutter's rejection. This reaches
 a related zero-size fallback but begins with missing identity,
 not a valid identified child omitted by the delegate.
+
+## Current replacement delegate direction
+
+The replacement instance, not the previous one, receives the relayout
+question. A no-relayout result preserves the measured geometry but still
+installs the new instance, so the next comparison sees that replacement.
+The exact single-child :121 and multi-child :182 originals both passed
+on the pinned SDK. The two focused native counterparts and eight adjacent
+custom-layout checks also passed.

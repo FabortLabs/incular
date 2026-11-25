@@ -98,8 +98,8 @@ pub trait FlowDelegate: 'static {
         Self: Sized;
 }
 
-/// A delegate with the type-aware comparison Flutter makes when a widget
-/// replaces it: `runtimeType` differs or `shouldRelayout` says so.
+/// A retained delegate. Identity compares without user code; the replacement
+/// makes the type-aware relayout decision at the render update boundary.
 #[doc(hidden)]
 pub struct DelegateCell<D: ?Sized> {
     delegate: Rc<D>,
@@ -121,13 +121,14 @@ impl<D: ?Sized> DelegateCell<D> {
     pub(crate) fn get(&self) -> &D {
         &self.delegate
     }
-}
 
-/// Equal when replacing one with the other needs no new layout.
+    fn changes_from(&self, old: &Self) -> bool {
+        self != old && (self.changed)(&*self.concrete, &*old.concrete)
+    }
+}
 impl<D: ?Sized> PartialEq for DelegateCell<D> {
     fn eq(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.concrete, &other.concrete)
-            || !(self.changed)(&*self.concrete, &*other.concrete)
     }
 }
 
@@ -212,6 +213,17 @@ impl fmt::Debug for CustomLayoutDelegate {
 }
 
 impl CustomLayoutDelegate {
+    /// Called on the new delegate, not as an equality side effect. A false
+    /// result keeps this layout but still installs the new delegate.
+    pub(crate) fn changes_from(&self, old: &Self) -> bool {
+        match (self, old) {
+            (Self::Single(new), Self::Single(old)) => new.changes_from(old),
+            (Self::Multi(new), Self::Multi(old)) => new.changes_from(old),
+            (Self::Flow(new), Self::Flow(old)) => new.changes_from(old),
+            _ => self != old,
+        }
+    }
+
     /// The Flutter widget this layout implements.
     pub(crate) const fn type_name(&self) -> &'static str {
         match self {
