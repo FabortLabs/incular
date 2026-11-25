@@ -4,12 +4,16 @@
 
 use std::{rc::Rc, sync::Arc};
 
+use incular_config::{Clip, TextDirection};
 use incular_core::{Color, Offset, Rect, Size};
 use incular_rendering::{Brush, Canvas, DisplayList, FillRule};
 
 use super::decoration::{BoxShadow, DecorationImage};
 use super::shape_borders::ShapeBorder;
-use crate::{ClipPath, CustomPaint, LayoutBuilder, Positioned, Stack, StackFit, Widget};
+use crate::{
+    Builder, ClipPath, ClipShape, CustomClipper, CustomPaint, LayoutBuilder, Positioned, Stack,
+    StackFit, Widget,
+};
 
 /// Flutter `ShapeDecoration`: a shape's interior filled with a color or
 /// gradient, an image clipped to the shape, its shadows, and the shape's own
@@ -191,18 +195,64 @@ impl From<DecoratedShapeBox> for Widget {
     }
 }
 
+/// A custom path clipper that asks a border for its outline at the final
+/// layout size, with the supplied text direction.
+#[derive(Clone)]
+pub struct ShapeBorderClipper {
+    pub shape: Rc<dyn ShapeBorder>,
+    pub text_direction: Option<TextDirection>,
+}
+
+impl ShapeBorderClipper {
+    #[must_use]
+    pub fn new(shape: Rc<dyn ShapeBorder>, text_direction: Option<TextDirection>) -> Self {
+        Self {
+            shape,
+            text_direction,
+        }
+    }
+}
+
+impl CustomClipper for ShapeBorderClipper {
+    fn get_clip(&self, size: Size) -> ClipShape {
+        let rect = Rect::from_origin_size(Offset::ZERO, size);
+        ClipShape::Path(Arc::new(
+            self.shape
+                .outer_path_with_direction(rect, self.text_direction),
+        ))
+    }
+
+    fn should_reclip(&self, old: &Self) -> bool {
+        !Rc::ptr_eq(&self.shape, &old.shape) || self.text_direction != old.text_direction
+    }
+}
+
 impl ClipPath {
     /// Flutter `ClipPath.shape`: clips the child to `shape`'s outer path.
-    ///
-    /// The path is built for the largest size the incoming constraints
-    /// allow, which is the child's size under tight constraints.
     #[must_use]
     pub fn shape(shape: impl ShapeBorder + 'static, child: impl Into<Widget>) -> Widget {
-        let shape: Rc<dyn ShapeBorder> = Rc::new(shape);
-        let child = child.into();
-        LayoutBuilder::new(move |_, constraints| {
-            let rect = Rect::from_origin_size(Offset::ZERO, constraints.biggest());
-            ClipPath::new(Arc::new(shape.outer_path(rect)), child.clone()).into()
+        Self::shape_with_options(Rc::new(shape), Clip::AntiAlias, Some(child.into()))
+    }
+
+    /// Builds a shape clip with an explicit mode and optional child. Keep
+    /// the shared shape across rebuilds to retain the resolved outline.
+    #[must_use]
+    pub fn shape_with_options(
+        shape: Rc<dyn ShapeBorder>,
+        clip_behavior: Clip,
+        child: Option<Widget>,
+    ) -> Widget {
+        Builder::new(move |context| {
+            let clip = Self::builder().clip_behavior(clip_behavior);
+            let clip = match &child {
+                Some(child) => clip.child(child.clone()).build(),
+                None => clip.build(),
+            };
+            clip.custom_clipper(ShapeBorderClipper::new(
+                shape.clone(),
+                context.text_direction(),
+            ))
+            .into()
         })
         .into()
     }

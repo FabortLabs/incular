@@ -76,3 +76,19 @@ recheck of the already registered mismatch, not another registration.
 All 33 focused clip and shape tests pass. Path coverage now reaches
 the display list; the general path renderer still uses a binary mask
 and needs separate coverage and save-layer verification.
+
+## Shape clip direction and actual layout size
+
+The pinned :741 original and its Rust port match all six rebuild
+checkpoints. The same shape resolves once without Directionality,
+is reused on an equivalent rebuild, receives LTR and then RTL on
+inherited updates, is reused on the identical RTL rebuild, and
+resolves again with LTR. Both resolve a rectangle of 800 by 600
+under the tight original viewport. A separate loose-constraints
+probe observed a 100 by 40 child inside maximum bounds of 300 by
+300. The old Incular outlined the entire maximum; the corrected
+implementation and pinned Flutter outline the 100 by 40 child.
+
+All 35 focused Rust tests passed. The cache recognizes a shared
+shape instance; equality of distinct border values and generalized
+path raster coverage were not covered by this recheck.

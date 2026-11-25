@@ -1,12 +1,15 @@
 //! Flutter's `ShapeDecoration` (`_ShapeDecorationPainter`) and
 //! `ClipPath.shape` (`ShapeBorderClipper`).
 
-use incular_config::Constraints;
+use std::{cell::RefCell, rc::Rc};
+
+use incular_config::{Clip, Constraints, TextDirection};
 use incular_core::{Color, Offset, Rect, Size};
-use incular_rendering::{Brush, PaintCommand};
+use incular_rendering::{Brush, Canvas, PaintCommand, Path};
 use incular_widgets::internal::WidgetTree;
 use incular_widgets::{
-    BoxShadow, ClipPath, DecoratedShapeBox, ShapeDecoration, StadiumBorder, Widget,
+    BoxShadow, ClipPath, ClipRect, DecoratedShapeBox, Directionality, ShapeBorder, ShapeDecoration,
+    StadiumBorder, Widget,
 };
 
 const RED: Color = Color::rgba(0xF4, 0x43, 0x36, 0xFF);
@@ -97,6 +100,95 @@ fn clip_path_shape_clips_to_the_outer_path() {
         clip.bounds().map(rounded),
         Some(Rect::from_origin_size(Offset::ZERO, Size::new(100., 40.)))
     );
+}
+
+#[test]
+fn clip_path_shape_under_loose_constraints_uses_the_childs_size() {
+    let mut tree = WidgetTree::new();
+    tree.mount(ClipPath::shape(
+        StadiumBorder::default(),
+        Widget::box_(Size::new(100., 40.), RED),
+    ))
+    .unwrap();
+    tree.layout(Constraints::loose(Size::new(300., 300.)))
+        .unwrap();
+    let list = tree.paint();
+    let actual = list.commands().iter().find_map(|command| match command {
+        PaintCommand::PushClipPath { path, .. } => path.bounds().map(rounded),
+        _ => None,
+    });
+    assert_eq!(
+        actual,
+        Some(Rect::from_origin_size(Offset::ZERO, Size::new(100., 40.)))
+    );
+}
+
+/// clip_test.dart:741, preserving the six original rebuild checkpoints.
+#[test]
+fn clip_path_shape_reclips_only_on_shape_or_inherited_direction_changes() {
+    type Observations = Rc<RefCell<Vec<(Rect, Option<TextDirection>)>>>;
+    struct TestBorder(Observations);
+
+    impl ShapeBorder for TestBorder {
+        fn outer_path(&self, rect: Rect) -> Path {
+            self.outer_path_with_direction(rect, None)
+        }
+        fn outer_path_with_direction(&self, rect: Rect, direction: Option<TextDirection>) -> Path {
+            self.0.borrow_mut().push((rect, direction));
+            StadiumBorder::default().outer_path(rect)
+        }
+        fn inner_path(&self, rect: Rect) -> Path {
+            StadiumBorder::default().inner_path(rect)
+        }
+        fn paint(&self, canvas: &mut Canvas, rect: Rect) {
+            StadiumBorder::default().paint(canvas, rect);
+        }
+    }
+    let observations = Observations::default();
+    let shape: Rc<dyn ShapeBorder> = Rc::new(TestBorder(observations.clone()));
+    let build = || {
+        ClipPath::shape_with_options(
+            shape.clone(),
+            Clip::AntiAlias,
+            Some(Widget::box_(Size::new(100., 100.), RED)),
+        )
+    };
+    let original = build();
+    let mut tree = WidgetTree::new();
+    let rect = Rect::from_origin_size(Offset::ZERO, Size::new(800., 600.));
+    let bounds = Constraints::tight(rect.size);
+    let mut retained_root = None;
+    for (direction, widget, reclip) in [
+        (None, original.clone(), true),
+        (None, build(), false),
+        (Some(TextDirection::Ltr), original.clone(), true),
+        (Some(TextDirection::Rtl), original.clone(), true),
+        (Some(TextDirection::Rtl), build(), false),
+        (Some(TextDirection::Ltr), original, true),
+    ] {
+        let widget = match direction {
+            Some(direction) => Directionality::new(direction, widget).into(),
+            None => widget,
+        };
+        // Keep the root render object compatible while inserting Directionality.
+        let scene = ClipRect::new(widget).into();
+        if let Some(root) = retained_root {
+            tree.update(root, scene).unwrap();
+        } else {
+            retained_root = Some(tree.mount(scene).unwrap());
+        }
+        tree.layout(bounds).unwrap();
+        let _ = tree.paint();
+        let calls = observations.take();
+        assert_eq!(
+            calls,
+            if reclip {
+                vec![(rect, direction)]
+            } else {
+                vec![]
+            }
+        );
+    }
 }
 
 #[test]

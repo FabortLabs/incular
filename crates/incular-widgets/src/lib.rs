@@ -312,8 +312,8 @@ pub use painting_effects::{
     CustomPainterSemantics, DecoratedShapeBox, DecorationImage, DecorationPosition, GridPaper,
     ImageFiltered, ImageIcon, LinearBorder, LinearBorderEdge, OvalBorder, PhysicalModel,
     PhysicalShape, Radius, RawImage, RoundedRectangleBorder, RoundedSuperellipseBorder,
-    SemanticsBuilder, ShapeBorder, ShapeDecoration, SnapshotWidget, StadiumBorder, StarBorder,
-    StarBorderError, TileMode,
+    SemanticsBuilder, ShapeBorder, ShapeBorderClipper, ShapeDecoration, SnapshotWidget,
+    StadiumBorder, StarBorder, StarBorderError, TileMode,
 };
 pub use platform_view::{
     PlatformViewController, PlatformViewHitTestBehavior, PlatformViewPlacement, PlatformViewSurface,

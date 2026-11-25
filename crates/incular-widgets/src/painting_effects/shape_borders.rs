@@ -5,6 +5,7 @@
 
 use std::{f64::consts::PI, sync::Arc};
 
+use incular_config::TextDirection;
 use incular_core::{Offset, Rect, Size};
 use incular_rendering::{Canvas, CornerRadii, Path, Stroke};
 
@@ -16,6 +17,12 @@ use super::geometry::BorderRadius;
 pub trait ShapeBorder {
     /// Flutter `getOuterPath`: the shape's outline in `rect`.
     fn outer_path(&self, rect: Rect) -> Path;
+
+    /// Resolves the outline for callers that supply an inherited direction.
+    /// Direction-independent borders can keep the default implementation.
+    fn outer_path_with_direction(&self, rect: Rect, _direction: Option<TextDirection>) -> Path {
+        self.outer_path(rect)
+    }
 
     /// Flutter `getInnerPath`: the outline inset by the stroke's inner
     /// width.

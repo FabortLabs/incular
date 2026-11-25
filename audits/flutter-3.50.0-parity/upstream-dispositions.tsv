@@ -743,3 +743,4 @@ packages/flutter/test/widgets/clip_test.dart	107	ClipRRect updates clipBehavior 
 packages/flutter/test/widgets/clip_test.dart	123	ClipOval updates clipBehavior in updateRenderObject	paired-match	upstream-tween-transform-and-lifecycle.md#oval-coverage-and-retained-clip-mode-transitions
 packages/flutter/test/widgets/clip_test.dart	139	ClipPath updates clipBehavior in updateRenderObject	paired-match	upstream-clip-visibility-focus.md#default-and-childless-clip-path
 packages/flutter/test/widgets/clip_test.dart	976	ClipPath does not crash at zero area	paired-match	upstream-clip-visibility-focus.md#default-and-childless-clip-path
+packages/flutter/test/widgets/clip_test.dart	741	ClipPath.shape	paired-match	upstream-clip-visibility-focus.md#shape-clip-direction-and-actual-layout-size

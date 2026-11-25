@@ -821,3 +821,9 @@ There are 355 matches and 96 historical mismatches. The default
 outline tracks the laid-out child; childless modes retain the same
 render object without emitting a paint clip. Native general path
 coverage remains open.
+
+[ClipPath.shape](upstream-clip-visibility-focus.md#shape-clip-direction-and-actual-layout-size)
+adds the original inherited-direction and no-reclip comparison,
+for 452 / 8,965 fully compared (5.04%), with 356 matches and 96
+historical mismatches. In a separate matched probe, the outline
+now follows the actual child rather than the maximum constraint.

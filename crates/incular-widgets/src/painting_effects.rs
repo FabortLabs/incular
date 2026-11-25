@@ -26,4 +26,4 @@ pub use shape_borders::{
     LinearBorderEdge, OvalBorder, RoundedRectangleBorder, RoundedSuperellipseBorder, ShapeBorder,
     StadiumBorder, StarBorder, StarBorderError,
 };
-pub use shape_decoration::{DecoratedShapeBox, ShapeDecoration};
+pub use shape_decoration::{DecoratedShapeBox, ShapeBorderClipper, ShapeDecoration};
