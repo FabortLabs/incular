@@ -1,11 +1,11 @@
-//! Edits build the next value directly instead of copying the current one
-//! and editing the copy, and selection changes never copy the text. Both
-//! must behave exactly as the value-level operations they replace.
+//! Edits build the next value directly, and selection changes do not copy
+//! the text. Controller replacements follow the edit's caret policy, not
+//! merely the directional remapping of a pure value replacement.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use incular_text::{TextEditingController, TextEditingValue, TextRange, TextSelection};
+use incular_text::{TextEditingController, TextRange, TextSelection};
 
 fn exactly_sized(controller: &TextEditingController) -> bool {
     controller.with_value(|value| value.text.capacity() == value.text.len())
@@ -27,7 +27,7 @@ fn an_edit_leaves_the_text_exactly_sized() {
 }
 
 #[test]
-fn edits_match_the_value_level_replace() {
+fn edits_match_value_text_and_collapse_the_user_edit_caret() {
     let text = "ab\u{e9}\u{1F600}cd\nef";
     let selections = [
         TextSelection::collapsed(0),
@@ -41,9 +41,13 @@ fn edits_match_the_value_level_replace() {
         for replacement in ["", "x", "\u{4e16}\u{754c}", "two\nlines"] {
             let controller = TextEditingController::with_text(text);
             controller.set_selection(selection);
-            let expected = controller
-                .value()
-                .replace(controller.selection().range(), replacement);
+            let old = controller.value();
+            let replaced = old.selection.range();
+            // Flutter's EditableText paste collapses to the old selection
+            // end before replacing, which places the caret after insertion.
+            let expected = old
+                .with_selection(TextSelection::collapsed(replaced.end))
+                .replace(replaced, replacement);
             controller.replace_selection(replacement);
             assert_eq!(
                 controller.value(),
@@ -55,7 +59,7 @@ fn edits_match_the_value_level_replace() {
 }
 
 #[test]
-fn deleting_matches_the_value_level_replace() {
+fn deletion_matches_value_replacement_from_the_actual_selection() {
     let text = "a\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}b";
     for caret in [0, 1, text.len() - 1, text.len()] {
         let backspaced = TextEditingController::with_text(text);
@@ -74,11 +78,11 @@ fn deleting_matches_the_value_level_replace() {
     }
     let ranged = TextEditingController::with_text("hello world");
     ranged.set_selection(TextSelection::new(2, 7));
+    let old = ranged.value();
+    let deleted = old.selection.range();
     ranged.backspace();
-    assert_eq!(
-        ranged.value(),
-        TextEditingValue::new("hello world").replace(TextRange::new(2, 7), "")
-    );
+    assert_eq!(ranged.value(), old.replace(deleted, ""));
+    assert_eq!(ranged.selection(), TextSelection::collapsed(2));
 }
 
 #[test]

@@ -53,3 +53,15 @@ covers a supplementary-plane character. Incular's native offsets are
 UTF-8 bytes and reject positions inside a UTF-8 scalar. Flutter's
 negative sentinel is represented as absent in Rust. Checked text deltas
 reuse this boundary predicate without changing their existing behavior.
+
+## Pure replacement versus user editing
+
+A pure replacement preserves the direction of a nonempty selection when
+possible. Actual keyboard paste instead collapses the caret after the
+inserted text, and Backspace collapses it at the earlier selection
+edge. Both the pinned Flutter keyboard/clipboard probe and the Rust
+runtime probe verify the distinction, including a reversed selection
+across a supplementary scalar. The controller allocation fixtures now
+use the same pre-edit selection when constructing the expected value
+instead of conflating these two operations. These authored probes add
+no original registration to the coverage ledger.
