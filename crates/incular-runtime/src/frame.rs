@@ -1095,6 +1095,9 @@ impl Runtime {
                     true
                 })
                 .unwrap_or(false),
+            SemanticAction::ScrollToOffset { x, y } => {
+                self.tree.semantic_scroll_to_offset(element, x, y)
+            }
             SemanticAction::ScrollForward => self
                 .tree
                 .semantic_action_callback(

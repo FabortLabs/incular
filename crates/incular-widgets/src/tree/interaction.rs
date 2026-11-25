@@ -3846,6 +3846,37 @@ impl WidgetTree {
         }
     }
     /// Applies a semantic page action to the controller owned by this viewport.
+    /// Flutter's absolute accessibility offset request. It targets this
+    /// viewport, not its focused descendant, and bypasses drag physics.
+    pub fn semantic_scroll_to_offset(&self, id: ElementId, x: f64, y: f64) -> bool {
+        let Some(render) = self.render_id(id).and_then(|id| self.renders.get(id.0)) else {
+            return false;
+        };
+        let (controller, axis, physics) = match render.object.kind() {
+            RenderKind::Scroll {
+                controller,
+                axis,
+                physics,
+                ..
+            } => (controller, *axis, *physics),
+            RenderKind::SliverViewport { config } => {
+                (&config.controller, config.axis, config.physics)
+            }
+            _ => return false,
+        };
+        if !self.viewport_lease_live(id, controller)
+            || !physics.allows_implicit_scrolling()
+            || controller.max_offset() <= controller.min_offset()
+        {
+            return false;
+        }
+        let offset = match axis {
+            Axis::Horizontal => x,
+            Axis::Vertical => y,
+        };
+        controller.jump_to(offset as f32)
+    }
+
     pub fn semantic_scroll(&mut self, id: ElementId, forward: bool) -> bool {
         let Some(render) = self.render_id(id) else {
             return false;

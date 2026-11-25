@@ -38,7 +38,7 @@ impl From<&SemanticsTree> for SemanticsSnapshot {
 }
 
 /// An action emitted by a native accessibility bridge for a semantic node.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SemanticActionRequest {
     pub node: SemanticNodeId,
     pub action: SemanticAction,
@@ -828,6 +828,21 @@ impl AccessKitProjection {
             Action::ScrollUp if supports(&projected.semantic, SemanticActionKind::ScrollUp) => {
                 Some(SemanticAction::ScrollUp)
             }
+            Action::SetScrollOffset
+                if supports(&projected.semantic, SemanticActionKind::ScrollToOffset) =>
+            {
+                match request.data.as_ref() {
+                    Some(ActionData::SetScrollOffset(point))
+                        if point.x.is_finite() && point.y.is_finite() =>
+                    {
+                        Some(SemanticAction::ScrollToOffset {
+                            x: point.x,
+                            y: point.y,
+                        })
+                    }
+                    _ => None,
+                }
+            }
             Action::ScrollDown if supports(&projected.semantic, SemanticActionKind::ScrollDown) => {
                 Some(SemanticAction::ScrollDown)
             }
@@ -1044,10 +1059,27 @@ impl AccessKitProjection {
             node.set_position_in_set(index.saturating_add(1));
         }
         if matches!(semantic.role, Role::ScrollView | Role::List) {
-            let (offset, maximum) = scroll_value(semantic.value.as_deref());
-            node.set_scroll_y(offset);
-            node.set_scroll_y_min(0.0);
-            node.set_scroll_y_max(maximum);
+            use incular_semantics::SemanticScrollAxis;
+            match semantic.state.scroll_metrics {
+                Some(metrics) => match metrics.axis {
+                    SemanticScrollAxis::Horizontal => {
+                        node.set_scroll_x(metrics.offset);
+                        node.set_scroll_x_min(metrics.minimum);
+                        node.set_scroll_x_max(metrics.maximum);
+                    }
+                    SemanticScrollAxis::Vertical => {
+                        node.set_scroll_y(metrics.offset);
+                        node.set_scroll_y_min(metrics.minimum);
+                        node.set_scroll_y_max(metrics.maximum);
+                    }
+                },
+                None => {
+                    let (offset, maximum) = scroll_value(semantic.value.as_deref());
+                    node.set_scroll_y(offset);
+                    node.set_scroll_y_min(0.0);
+                    node.set_scroll_y_max(maximum);
+                }
+            }
         }
         if semantic.state.editable
             && !semantic.state.obscured
@@ -1177,6 +1209,7 @@ fn map_action(action: SemanticActionKind) -> Option<Action> {
         SemanticActionKind::ScrollRight => Some(Action::ScrollRight),
         SemanticActionKind::ScrollUp => Some(Action::ScrollUp),
         SemanticActionKind::ScrollDown => Some(Action::ScrollDown),
+        SemanticActionKind::ScrollToOffset => Some(Action::SetScrollOffset),
         SemanticActionKind::ShowOnScreen => Some(Action::ScrollIntoView),
         // AccessKit has no long-press action. The parameterized custom
         // action is advertised only once its native descriptions are known.

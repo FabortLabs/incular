@@ -94,6 +94,8 @@ pub enum SemanticActionKind {
     ScrollRight,
     ScrollUp,
     ScrollDown,
+    /// Flutter `SemanticsAction.scrollToOffset`.
+    ScrollToOffset,
     /// Flutter's `SemanticsAction.longPress`: a press-and-hold activation.
     LongPress,
     /// Flutter's `SemanticsAction.showOnScreen`: reveal the node inside its
@@ -116,12 +118,15 @@ impl SemanticActionKind {
 
 /// A request received from a native accessibility adapter. Text offsets use
 /// the editing model's UTF-8 byte indexing convention.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum SemanticAction {
     Focus,
     Activate,
     SetText(String),
-    SetSelection { base: usize, extent: usize },
+    SetSelection {
+        base: usize,
+        extent: usize,
+    },
     Increment,
     Decrement,
     ScrollForward,
@@ -130,6 +135,12 @@ pub enum SemanticAction {
     ScrollRight,
     ScrollUp,
     ScrollDown,
+    /// Jump to an absolute logical offset; a one-dimensional view takes
+    /// the coordinate on its own axis.
+    ScrollToOffset {
+        x: f64,
+        y: f64,
+    },
     LongPress,
     ShowOnScreen,
     Custom(CustomSemanticsActionId),
@@ -151,6 +162,7 @@ impl SemanticAction {
             Self::ScrollRight => SemanticActionKind::ScrollRight,
             Self::ScrollUp => SemanticActionKind::ScrollUp,
             Self::ScrollDown => SemanticActionKind::ScrollDown,
+            Self::ScrollToOffset { .. } => SemanticActionKind::ScrollToOffset,
             Self::LongPress => SemanticActionKind::LongPress,
             Self::ShowOnScreen => SemanticActionKind::ShowOnScreen,
             Self::Custom(_) => SemanticActionKind::Custom,
@@ -245,6 +257,23 @@ impl std::fmt::Display for CheckedState {
     }
 }
 
+/// Main axis used by a one-dimensional semantic scroll view.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SemanticScrollAxis {
+    Horizontal,
+    Vertical,
+}
+
+/// Logical scroll values exported without rounding or string parsing.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SemanticScrollMetrics {
+    pub axis: SemanticScrollAxis,
+    pub reverse: bool,
+    pub offset: f64,
+    pub minimum: f64,
+    pub maximum: f64,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct SemanticState {
     /// Whether the node accepts input. Flutter's default is "unspecified",
@@ -289,6 +318,9 @@ pub struct SemanticState {
     /// Flutter's `isHidden`: present in the tree but not currently visible,
     /// such as an off-screen item a screen reader may scroll to.
     pub hidden: bool,
+    /// Flutter `hasImplicitScrolling`.
+    pub has_implicit_scrolling: bool,
+    pub scroll_metrics: Option<SemanticScrollMetrics>,
     /// Flutter's `isLiveRegion`: changes are announced politely.
     pub live_region: bool,
     /// Base direction of the node’s accessible label.
@@ -349,6 +381,8 @@ impl Default for SemanticState {
             heading_level: None,
             toggled: None,
             hidden: false,
+            has_implicit_scrolling: false,
+            scroll_metrics: None,
             live_region: false,
             text_direction: None,
             text_attributes: None,

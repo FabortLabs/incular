@@ -954,8 +954,8 @@ impl WidgetTree {
                     controller.offset(),
                     controller.max_offset()
                 )),
-                SemanticState::default(),
-                scroll_edge_actions(controller),
+                semantic_scroll_state(render.object.kind()),
+                scroll_edge_actions(controller, render.object.kind()),
             ),
             WidgetKind::SliverViewport { config } => (
                 Some(SemanticRole::ScrollView),
@@ -965,8 +965,8 @@ impl WidgetTree {
                     config.controller.offset(),
                     config.controller.max_offset()
                 )),
-                SemanticState::default(),
-                scroll_edge_actions(&config.controller),
+                semantic_scroll_state(render.object.kind()),
+                scroll_edge_actions(&config.controller, render.object.kind()),
             ),
             WidgetKind::Gesture { callbacks, .. } => {
                 let policy = entry.widget.semantic_properties().callbacks.gesture_policy;
@@ -1769,9 +1769,51 @@ fn actions_with_room(actions: &[SemanticActionKind]) -> Vec<SemanticActionKind> 
     list
 }
 
-fn scroll_edge_actions(controller: &ScrollController) -> Vec<SemanticActionKind> {
+fn semantic_scroll_state(kind: &RenderKind) -> SemanticState {
+    use incular_semantics::{SemanticScrollAxis, SemanticScrollMetrics};
+    let (controller, axis, reverse) = match kind {
+        RenderKind::Scroll {
+            controller,
+            axis,
+            reverse,
+            ..
+        } => (controller, *axis, *reverse),
+        RenderKind::SliverViewport { config } => (&config.controller, config.axis, config.reverse),
+        _ => return SemanticState::default(),
+    };
+    SemanticState {
+        has_implicit_scrolling: semantic_scroll_allows_implicit(kind),
+        scroll_metrics: Some(SemanticScrollMetrics {
+            axis: match axis {
+                Axis::Horizontal => SemanticScrollAxis::Horizontal,
+                Axis::Vertical => SemanticScrollAxis::Vertical,
+            },
+            reverse,
+            offset: f64::from(controller.offset()),
+            minimum: f64::from(controller.min_offset()),
+            maximum: f64::from(controller.max_offset()),
+        }),
+        ..SemanticState::default()
+    }
+}
+
+fn semantic_scroll_allows_implicit(kind: &RenderKind) -> bool {
+    match kind {
+        RenderKind::Scroll { physics, .. } => physics.allows_implicit_scrolling(),
+        RenderKind::SliverViewport { config } => config.physics.allows_implicit_scrolling(),
+        _ => false,
+    }
+}
+
+fn scroll_edge_actions(
+    controller: &ScrollController,
+    kind: &RenderKind,
+) -> Vec<SemanticActionKind> {
     let offset = controller.offset();
-    let mut actions = Vec::with_capacity(2);
+    let mut actions = Vec::with_capacity(3);
+    if semantic_scroll_allows_implicit(kind) && controller.max_offset() > controller.min_offset() {
+        actions.push(SemanticActionKind::ScrollToOffset);
+    }
     if offset < controller.max_offset() {
         actions.push(SemanticActionKind::ScrollForward);
     }
@@ -2140,7 +2182,9 @@ pub(super) fn semantic_action_is_executable(
         SemanticActionKind::SetText | SemanticActionKind::SetSelection => {
             matches!(kind, WidgetKind::TextField(_))
         }
-        SemanticActionKind::ScrollForward | SemanticActionKind::ScrollBackward => {
+        SemanticActionKind::ScrollForward
+        | SemanticActionKind::ScrollBackward
+        | SemanticActionKind::ScrollToOffset => {
             matches!(
                 kind,
                 WidgetKind::Scroll { .. } | WidgetKind::SliverViewport { .. }

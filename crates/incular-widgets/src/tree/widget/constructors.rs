@@ -364,6 +364,7 @@ impl Widget {
             SemanticActionKind::Focus
             | SemanticActionKind::SetText
             | SemanticActionKind::SetSelection
+            | SemanticActionKind::ScrollToOffset
             | SemanticActionKind::ShowOnScreen
             | SemanticActionKind::Custom => {}
             SemanticActionKind::ScrollLeft
