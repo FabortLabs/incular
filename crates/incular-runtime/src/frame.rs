@@ -204,6 +204,7 @@ pub struct Runtime {
     /// Which platform's `DefaultTextEditingShortcuts` table applies.
     pub(crate) text_shortcut_platform: TextShortcutPlatform,
     pub(crate) frame_requested: bool,
+    warm_up_frame: Option<incular_animation::scheduler::WarmUpFrame>,
     pub(crate) scheduler: Rc<RefCell<tasks::TaskScheduler>>,
     pub(crate) environment: Rc<RefCell<RuntimeEnvironment>>,
     lifecycle: ApplicationLifecycle,
@@ -405,6 +406,7 @@ impl Runtime {
             editing_diagnostics: EditingDiagnostics::default(),
             text_shortcut_platform: TextShortcutPlatform::current(),
             frame_requested: true,
+            warm_up_frame: None,
             scheduler,
             environment: Rc::new(RefCell::new(RuntimeEnvironment::default())),
             lifecycle,
@@ -1385,7 +1387,8 @@ impl Runtime {
     }
     #[must_use]
     pub fn frame_requested(&self) -> bool {
-        self.frame_requested
+        self.warm_up_frame.is_some()
+            || self.frame_requested
             || self.reactive.borrow().has_work()
             || self.tree.has_dirty_dependencies()
             || self.tree.has_pending_application_fonts()
@@ -3079,6 +3082,52 @@ impl Runtime {
     ) -> Result<(DisplayList, FrameStats), TreeError> {
         self.run_frame_at(constraints, Instant::now())
     }
+    /// Reserves one warm-up begin/draw pair on this UI thread. Duplicate
+    /// requests and requests during an active frame are ignored.
+    ///
+    /// The next ordinary runtime frame drives both phases automatically.
+    /// A host with separate turns can instead call the begin and draw
+    /// methods directly. Prioritized UI tasks wait until draw completes.
+    pub fn schedule_warm_up_frame(&mut self) -> bool {
+        if self.warm_up_frame.is_some() {
+            return false;
+        }
+        self.warm_up_frame = incular_animation::scheduler::WarmUpFrame::reserve();
+        self.warm_up_frame.is_some()
+    }
+
+    /// Starts the reserved warm-up frame's transient callbacks once.
+    pub fn begin_warm_up_frame_at(&mut self, now: Instant) -> bool {
+        self.warm_up_frame
+            .as_mut()
+            .is_some_and(|frame| frame.begin(now))
+    }
+
+    /// Drains microtasks, then builds, lays out, paints, and finishes a
+    /// warm-up frame that has begun. Returns None before its begin phase.
+    pub fn draw_warm_up_frame(
+        &mut self,
+        constraints: Constraints,
+    ) -> Result<Option<(DisplayList, FrameStats)>, TreeError> {
+        let Some(now) = self
+            .warm_up_frame
+            .as_ref()
+            .and_then(|frame| frame.began_at())
+        else {
+            return Ok(None);
+        };
+        let frame = self.warm_up_frame.take().expect("begun warm-up frame");
+        let result = self.run_frame_mode(constraints, now, true);
+        match result {
+            Ok((list, mut stats)) => {
+                frame.complete();
+                stats.requested_another_frame = self.frame_requested();
+                Ok(Some((list, stats)))
+            }
+            Err(error) => Err(error),
+        }
+    }
+
     /// Deterministic frame entry point used by animation tests and embedders
     /// with an existing monotonic clock.
     pub fn run_frame_at(
@@ -3086,20 +3135,38 @@ impl Runtime {
         constraints: Constraints,
         now: Instant,
     ) -> Result<(DisplayList, FrameStats), TreeError> {
+        if self.warm_up_frame.is_some() {
+            self.begin_warm_up_frame_at(now);
+            return self
+                .draw_warm_up_frame(constraints)
+                .map(|frame| frame.expect("warm-up frame starts before draw"));
+        }
+        if incular_animation::scheduler::warm_up_frame_pending() {
+            return Err(TreeError::WarmUpFrameInProgress);
+        }
+        self.run_frame_mode(constraints, now, false)
+    }
+
+    fn run_frame_mode(
+        &mut self,
+        constraints: Constraints,
+        now: Instant,
+        warm_up: bool,
+    ) -> Result<(DisplayList, FrameStats), TreeError> {
         let message_guard = tracing::info_span!("incular.messages").entered();
         let message_span = profiling::PhaseSpan::start();
         // Writes made during the previous build invalidate their dependents
         // now, so they rebuild in this frame.
         crate::environment::flush_deferred_invalidations();
-        self.process_runtime_work_at(now);
-        if self.lifecycle != ApplicationLifecycle::Suspended {
-            // Yield after one short UI task. Animation-priority work can
-            // run before a frame; idle work waits for its transient queue.
-            let _ = incular_animation::scheduler::run_one_scheduled_task();
+        if !warm_up {
+            self.process_runtime_work_at(now);
+            if self.lifecycle != ApplicationLifecycle::Suspended {
+                // Ordinary prioritized tasks yield between frames.
+                let _ = incular_animation::scheduler::run_one_scheduled_task();
+            }
+            incular_animation::scheduler::begin_frame(now);
         }
-        // Flutter `handleBeginFrame`: frame callbacks and tickers run with the
-        // frame timestamp before the build, so what they change builds now.
-        incular_animation::scheduler::begin_frame(now);
+        incular_animation::scheduler::flush_frame_microtasks();
         // The controllers that builds read tick here too, so their new values
         // build in this frame rather than the next.
         self.tree.tick_animations(now);

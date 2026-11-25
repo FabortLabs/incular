@@ -28,6 +28,11 @@ pub use crate::ui_tasks::{
     set_scheduling_strategy,
 };
 
+mod warm_up;
+pub use warm_up::schedule_frame_microtask;
+#[doc(hidden)]
+pub use warm_up::{WarmUpFrame, flush_frame_microtasks, warm_up_frame_pending};
+
 type FrameCallback = Box<dyn FnOnce(Instant)>;
 
 enum Transient {
@@ -55,6 +60,8 @@ struct Scheduler {
     next_callback: u64,
     frame_requested: bool,
     forced_frame_requested: bool,
+    warm_up_pending: bool,
+    microtask_checkpoint_passed: bool,
     /// Flutter `timeDilation`; 1 is real time.
     time_dilation: f64,
     /// The dilated time base since the dilation last changed. `None` until
@@ -87,6 +94,8 @@ impl Default for Scheduler {
             next_callback: 0,
             frame_requested: false,
             forced_frame_requested: false,
+            warm_up_pending: false,
+            microtask_checkpoint_passed: false,
             time_dilation: 1.0,
             epoch: None,
             last_raw: None,
@@ -477,14 +486,21 @@ pub fn has_scheduled_frame() -> bool {
 /// Runtime-internal; application code never calls it.
 #[doc(hidden)]
 pub fn begin_frame(raw: Instant) {
-    let enabled = frames_enabled();
+    begin_frame_with_mode(raw, false);
+}
+
+fn begin_frame_with_mode(raw: Instant, warm_up: bool) {
+    let enabled = warm_up || frames_enabled();
     let (now, has_batch) = SCHEDULER.with(|scheduler| {
         let mut scheduler = scheduler.borrow_mut();
         // Flutter `handleBeginFrame`: the raw timestamp, dilated.
-        scheduler.last_raw = Some(raw);
+        if !warm_up {
+            scheduler.last_raw = Some(raw);
+        }
         let now = scheduler.adjust(raw);
         scheduler.frame_time = Some(now);
         scheduler.post_frame_active = false;
+        scheduler.microtask_checkpoint_passed = false;
         let requested_forced_frame = std::mem::take(&mut scheduler.forced_frame_requested);
         if !(enabled || requested_forced_frame) {
             // A host may explicitly render for a restoration barrier

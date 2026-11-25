@@ -199,3 +199,21 @@ reason and affected ticker with its stack. It remains partial because
 Rust's error is a panic with those parts, not Flutter's three structured
 DiagnosticsNode objects. Twelve focused Rust and the original Flutter
 tests passed.
+
+## Warm-up begin and draw
+
+Pinned `scheduler/scheduler_test.dart:148` and :167 both passed.
+Runtime warm-up owns one begin/draw pair. Transient callbacks run on
+begin, their microtasks (including nested microtasks) drain before the
+actual retained build/layout/paint, and post-frame callbacks run after
+paint. :148 pairs the same checkpoint. :167 is partial: there is one
+reservation across duplicate requests and queued prioritized work stays
+locked until draw, but a Runtime driven directly by its Rust host has
+two explicit phases rather than two Dart Zone Timer registrations.
+
+The same Rust tests check the epoch does not absorb warm-up wall time,
+the last native frame timestamp is unmodified, a previous normal frame
+request survives, late microtasks request the next frame, and abandoning
+a reservation does not block another runtime. The original :281 is
+skipped in the pinned SDK and is not credited. The separate desktop
+native event lock and startup/hot-reload triggering are not claimed.

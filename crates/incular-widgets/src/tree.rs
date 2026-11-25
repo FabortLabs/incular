@@ -235,6 +235,8 @@ pub enum GeneratedChildIdentity {
 
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum TreeError {
+    #[error("a warm-up frame owns this UI thread; finish it before drawing another runtime")]
+    WarmUpFrameInProgress,
     #[error("element {0:?} is not mounted")]
     MissingElement(ElementId),
     #[error(

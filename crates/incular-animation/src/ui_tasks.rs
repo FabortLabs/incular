@@ -16,7 +16,7 @@ use std::{
     task::{Context, Poll, Wake, Waker},
 };
 
-use crate::scheduler::{Priority, transient_callback_count};
+use crate::scheduler::{Priority, transient_callback_count, warm_up_frame_pending};
 
 type Strategy = Rc<dyn Fn(Priority) -> bool>;
 type HostWake = Arc<dyn Fn() + Send + Sync>;
@@ -379,7 +379,7 @@ fn ready_head() -> Option<u64> {
 /// Whether at least one scheduled UI task may run now.
 #[must_use]
 pub fn has_ready_scheduled_task() -> bool {
-    has_ready_async() || ready_head().is_some()
+    !warm_up_frame_pending() && (has_ready_async() || ready_head().is_some())
 }
 
 /// Run at most one eligible task. Returns whether any tasks remain,
@@ -388,6 +388,9 @@ pub fn has_ready_scheduled_task() -> bool {
 /// use this to let input and rendering yield between tasks.
 #[must_use]
 pub fn run_one_scheduled_task() -> bool {
+    if warm_up_frame_pending() {
+        return false;
+    }
     if let Some(id) = take_ready_async() {
         poll_async(id);
     } else if let Some(sequence) = ready_head() {
