@@ -1074,3 +1074,6 @@ packages/flutter/test/semantics/semantics_update_test.dart	95	Semantics update r
 packages/flutter/test/semantics/semantics_update_test.dart	194	Semantics update receives correct traversal transform with nested OverlayPortals	reference-ran-incular-open	upstream-semantic-native-updates.md
 packages/flutter/test/semantics/semantics_update_test.dart	271	Semantics update does not leak nodes to hit-test order when traversal parent is missing	reference-ran-incular-open	upstream-semantic-native-updates.md
 packages/flutter/test/semantics/semantics_update_test.dart	308	Semantics update removes detached OverlayPortal traversal child	paired-match	upstream-semantic-native-updates.md
+packages/flutter/test/semantics/semantics_service_test.dart	12	Semantic announcement	reference-ran-incular-open	upstream-attributed-semantics.md
+packages/flutter/test/semantics/semantics_test.dart	70	SemanticsConfiguration can set both string label/value/hint and attributed version	reference-ran-incular-open	upstream-attributed-semantics.md
+packages/flutter/test/semantics/semantics_test.dart	901	Attributed String can concat	paired-match	upstream-attributed-semantics.md
