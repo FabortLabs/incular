@@ -8,6 +8,14 @@ use incular_core::{IdGenerator, finite_or_zero};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ElementId(pub(crate) ArenaId);
+
+/// A retained element qualified by the tree that owns its arena.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ElementAddress {
+    pub(super) tree: u64,
+    pub(super) element: ElementId,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct RenderObjectId(pub(crate) ArenaId);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

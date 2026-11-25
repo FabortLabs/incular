@@ -1343,3 +1343,7 @@ packages/flutter/test/rendering/proxy_box_test.dart	853	Offstage implements pain
 packages/flutter/test/rendering/proxy_box_test.dart	870	Opacity implements paintsChild correctly	paired-match	upstream-render-proxies.md#offstage-and-opacity-child-paint-eligibility
 packages/flutter/test/rendering/proxy_box_test.dart	883	AnimatedOpacity sets paint matrix to zero when alpha == 0	paired-match	upstream-render-proxies.md#offstage-and-opacity-child-paint-eligibility
 packages/flutter/test/rendering/proxy_box_test.dart	900	AnimatedOpacity sets paint matrix to zero when alpha == 0 (sliver)	paired-match	upstream-render-proxies.md#offstage-and-opacity-child-paint-eligibility
+packages/flutter/test/rendering/object_test.dart	188	RenderObject.getTransformTo asserts if target not in the same render tree	paired-match	upstream-render-coordinates.md
+packages/flutter/test/rendering/object_test.dart	197	RenderObject.getTransformTo works for siblings and descendants	paired-match	upstream-render-coordinates.md
+packages/flutter/test/rendering/object_test.dart	217	RenderObject.getTransformTo gets the correct paint transform	partial-match	upstream-render-coordinates.md
+packages/flutter/test/rendering/box_test.dart	1281	localToGlobal with ancestor	paired-match	upstream-render-coordinates.md

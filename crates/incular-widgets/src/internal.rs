@@ -99,7 +99,7 @@ pub use crate::tree::icons;
 pub use crate::tree::{
     ActionId, AnimationRetargetBridge, Blend, Blur, BlurController, BoxFit, BuildContext,
     ButtonInk, ButtonSpec, ButtonState, ColorFilterController, ColorFiltered, DecoratedBox,
-    Diagnostics, DropShadow, DropShadowController, EditableText, Effects, Element, ElementId,
+    Diagnostics, DropShadow, DropShadowController, EditableText, Effects, Element, ElementAddress, ElementId,
     ExplicitSemantics, FadeTransition, GeneratedChildIdentity, GlobalKey, Icon, Image, ImageFit,
     ImageRepeat, InheritedScopeValue, InvariantCategory, InvariantViolation, Key,
     MAX_ANIMATION_TIME_SCALE, OpacityController, PERFORMANCE_OVERLAY_KEY, PathView, PointerHitTest,

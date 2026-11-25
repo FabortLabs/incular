@@ -239,6 +239,8 @@ pub enum TreeError {
     WarmUpFrameInProgress,
     #[error("element {0:?} is not mounted")]
     MissingElement(ElementId),
+    #[error("the source and destination are not in the same render tree")]
+    UnrelatedRenderTrees,
     #[error(
         "duplicate sibling key {key:?}{}",
         .parent.map_or_else(String::new, |parent| format!(" under parent {parent:?}"))

@@ -681,6 +681,102 @@ impl WidgetTree {
         }
         world
     }
+    /// Qualifies a mounted element with its owning tree. The resulting
+    /// address cannot accidentally resolve to the same arena slot in a
+    /// different window.
+    #[must_use]
+    pub fn element_address(&self, element: ElementId) -> Option<ElementAddress> {
+        self.element_exists(element).then_some(ElementAddress {
+            tree: self.tree_id(),
+            element,
+        })
+    }
+
+    /// Returns the paint transform from this element to an explicit render
+    /// destination, or to the view's logical coordinates if absent.
+    /// A singular destination yields a zero affine projection.
+    pub fn element_transform_to(
+        &self,
+        source: ElementId,
+        destination: Option<ElementAddress>,
+    ) -> Result<CoreTransform, TreeError> {
+        Ok(self.resolve_element_transform(source, destination)?
+            .unwrap_or_else(|| CoreTransform::scale(0.)))
+    }
+
+    fn resolve_element_transform(
+        &self,
+        source: ElementId,
+        destination: Option<ElementAddress>,
+    ) -> Result<Option<CoreTransform>, TreeError> {
+        let mut from = self.render_id(source).ok_or(TreeError::MissingElement(source))?;
+        let Some(destination) = destination else {
+            return Ok(Some(self.render_world_transform(from)));
+        };
+        if destination.tree != self.tree_id() {
+            return Err(TreeError::UnrelatedRenderTrees);
+        }
+        let mut to = self.render_id(destination.element)
+            .ok_or(TreeError::MissingElement(destination.element))?;
+        if from == to {
+            return Ok(Some(CoreTransform::IDENTITY));
+        }
+
+        let depth = |mut render| {
+            let mut depth = 0;
+            while let Some(parent) = self.render_live(render, "live render path").parent {
+                render = parent;
+                depth += 1;
+            }
+            depth
+        };
+        let edge = |child| -> Result<_, TreeError> {
+            let node = self.render_live(child, "live render path");
+            let parent = node.parent.ok_or(TreeError::UnrelatedRenderTrees)?;
+            let transform = self.child_content_transform(parent)
+                .then(CoreTransform::translation(node.offset));
+            Ok((parent, transform))
+        };
+        let mut from_depth = depth(from);
+        let mut to_depth = depth(to);
+        let mut from_transform = CoreTransform::IDENTITY;
+        let mut to_transform = CoreTransform::IDENTITY;
+        while from != to {
+            // Process both sides at the same depth using the pre-step depths.
+            let move_from = from_depth >= to_depth;
+            let move_to = from_depth <= to_depth;
+            if move_from {
+                let (parent, hop) = edge(from)?;
+                from = parent;
+                from_depth -= 1;
+                from_transform = hop.then(from_transform);
+            }
+            if move_to {
+                let (parent, hop) = edge(to)?;
+                to = parent;
+                to_depth -= 1;
+                to_transform = hop.then(to_transform);
+            }
+        }
+        // Flutter getTransformTo composes the inverse destination path on
+        // the right, after finding the common ancestor.
+        Ok(to_transform.inverse().map(|inverse| from_transform.then(inverse)))
+    }
+
+    /// Projects a local point to the view, or to the given ancestor.
+    /// NaN coordinates indicate an unprojectable singular destination.
+    pub fn element_local_to_global(
+        &self,
+        source: ElementId,
+        point: Offset,
+        ancestor: Option<ElementAddress>,
+    ) -> Result<Offset, TreeError> {
+        Ok(self.resolve_element_transform(source, ancestor)?.map_or(
+            Offset::new(f32::NAN, f32::NAN),
+            |transform| transform.transform_point(point),
+        ))
+    }
+
     /// Laid-out geometry of a frame-ticker node, for motion that reacts to
     /// layout (in-view, layout and shared transitions, reordering).
     pub(super) fn frame_geometry(&self, id: RenderObjectId) -> FrameGeometry {
