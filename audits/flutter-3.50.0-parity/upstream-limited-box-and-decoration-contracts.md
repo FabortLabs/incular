@@ -115,3 +115,16 @@ for center-right, (100,125) for RTL center-end, and (100,100) with no pivot.
 The child stays laid out at 100×100 and paints in a 50×50 box. The retained
 Rust control changes Directionality while mounted. All 18 focused Rust
 tests, the exact Flutter original, and five authored Flutter probes passed.
+
+## Directional decoration reference baseline
+
+Both pinned originals at `box_decoration_test.dart:85,134` passed.
+The directional radius original includes both clip drawing and corner
+hit-test samples. The directional gradient original only observes the
+drawn rectangle, so a separate authored raster probe pins the actual
+color direction on a retained `DecoratedBox`. Red dominates the left
+sample and blue the right in fresh LTR. Switching only to RTL at the
+same 100×40 rectangle keeps those colors. A resize to 120×40 or a new
+RTL painter swaps them. This is a retained shader-cache behavior in
+Flutter 3.50.0, not a general rule for directional gradient resolution.
+No equivalent mounted Incular gradient or radius behavior is claimed yet.
