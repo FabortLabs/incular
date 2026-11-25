@@ -1,4 +1,4 @@
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, OnceCell, RefCell};
 use std::collections::VecDeque;
 use std::rc::{Rc, Weak};
 
@@ -1497,8 +1497,8 @@ impl FocusManager {
 /// `FocusScopeNode` is the Rust-native equivalent of a scoped focus owner. It
 /// owns a [`FocusManager`] behind interior mutability so a scope can be kept
 /// outside rebuildable widget descriptors and shared by controls that need to
-/// request focus. It intentionally does not participate in a Dart-style
-/// Element hierarchy.
+/// request focus. When mounted as a FocusScope, its shared focus node
+/// participates in the retained host's focus ancestry.
 #[derive(Clone)]
 pub struct FocusScopeNode {
     state: Rc<FocusScopeState>,
@@ -1513,7 +1513,13 @@ pub struct FocusScopeSubscription {
     _subscription: incular_core::reactivity::Subscription,
 }
 
+struct ScopeFocusAnchor {
+    node: FocusNode,
+    _subscription: FocusNodeSubscription,
+}
+
 struct FocusScopeState {
+    anchor: OnceCell<ScopeFocusAnchor>,
     manager: RefCell<FocusManager>,
     last_focused: RefCell<Option<FocusNode>>,
     parent: RefCell<Option<Weak<FocusScopeState>>>,
@@ -1556,6 +1562,7 @@ impl FocusScopeNode {
     pub fn new() -> Self {
         Self {
             state: Rc::new(FocusScopeState {
+                anchor: OnceCell::new(),
                 manager: RefCell::new(FocusManager::new()),
                 last_focused: RefCell::new(None),
                 parent: RefCell::new(None),
@@ -1563,6 +1570,55 @@ impl FocusScopeNode {
                 revision: Cell::new(0),
             }),
         }
+    }
+
+    /// The retained scope's own focus target. Unlike its descendants,
+    /// the scope is not a stop in ordinary Tab traversal.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn scope_focus_node(&self) -> FocusNode {
+        self.state
+            .anchor
+            .get_or_init(|| {
+                let node = FocusNode::new();
+                node.set_skip_traversal(true);
+                let state = Rc::downgrade(&self.state);
+                let subscription = node.observe(move || {
+                    if let Some(state) = state.upgrade() {
+                        state.bump_revision();
+                    }
+                });
+                ScopeFocusAnchor {
+                    node,
+                    _subscription: subscription,
+                }
+            })
+            .node
+            .clone()
+    }
+
+    /// Requests primary focus for the scope itself, without forwarding
+    /// the request to a previously focused descendant.
+    pub fn request_scope_focus(&self) {
+        self.scope_focus_node().request_focus();
+    }
+
+    /// Whether the mounted scope or any of its descendants has focus.
+    #[must_use]
+    pub fn has_focus(&self) -> bool {
+        self.state
+            .anchor
+            .get()
+            .map_or_else(|| self.focused().is_some(), |anchor| anchor.node.has_focus())
+    }
+
+    /// Whether this mounted scope itself owns primary focus.
+    #[must_use]
+    pub fn has_primary_focus(&self) -> bool {
+        self.state
+            .anchor
+            .get()
+            .is_some_and(|anchor| anchor.node.has_primary_focus())
     }
 
     /// Creates a scope nested below `parent`.

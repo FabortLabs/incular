@@ -160,6 +160,7 @@ impl From<Focus> for Widget {
 /// [`Self::widget_order`] for registration order.
 #[derive(Clone)]
 pub struct FocusScope {
+    node: Option<FocusScopeNode>,
     autofocus: bool,
     policy: FocusTraversalPolicyKind,
     child: Option<Widget>,
@@ -168,6 +169,7 @@ pub struct FocusScope {
 impl Default for FocusScope {
     fn default() -> Self {
         Self {
+            node: None,
             autofocus: false,
             policy: FocusTraversalPolicyKind::ReadingOrder,
             child: None,
@@ -180,10 +182,18 @@ impl FocusScope {
     #[must_use]
     pub fn new(child: impl Into<Widget>) -> Self {
         Self {
+            node: None,
             autofocus: false,
             policy: FocusTraversalPolicyKind::ReadingOrder,
             child: Some(child.into()),
         }
+    }
+
+    /// Binds an external scope node without changing its configuration.
+    #[must_use]
+    pub fn node(mut self, node: FocusScopeNode) -> Self {
+        self.node = Some(node);
+        self
     }
 
     /// Automatically requests focus for its primary descendant on mount.
@@ -218,9 +228,15 @@ impl FocusScope {
 
 impl From<FocusScope> for Widget {
     fn from(value: FocusScope) -> Self {
-        value
+        let child = value
             .child
-            .unwrap_or_else(|| crate::SizedBox::shrink().into())
+            .unwrap_or_else(|| crate::SizedBox::shrink().into());
+        let scope = if let Some(node) = &value.node {
+            Widget::from(Focus::new(child).node(node.scope_focus_node()))
+        } else {
+            child
+        };
+        scope
             .with_focus_traversal_policy(value.policy)
             .with_focus_scope_autofocus(value.autofocus)
     }
