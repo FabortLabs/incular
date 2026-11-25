@@ -124,11 +124,15 @@ impl WidgetTree {
                 let child_constraints = enforced_constraints(constraints, additional);
                 if let Some(&child) = children.first() {
                     self.layout_render(child, child_constraints)?;
-                    let size = self
-                        .render_live(child, "retained render must remain live")
-                        .size;
+                    let child = self.render_live(child, "retained render must remain live");
+                    let (size, baseline) = (child.size, child.baseline);
+                    // RenderConstrainedBox proxies its child without a placement offset.
+                    self.render_live_mut(id, "constrained render must remain live")
+                        .baseline = baseline;
                     (constraints.constrain(size), ChildOffsets::One(Offset::ZERO))
                 } else {
+                    self.render_live_mut(id, "constrained render must remain live")
+                        .baseline = None;
                     (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }

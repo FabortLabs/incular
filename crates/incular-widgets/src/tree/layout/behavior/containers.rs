@@ -142,11 +142,28 @@ impl WidgetTree {
                 }
 
                 let result = incular_layout::layout_flex(constraints, &flex_children, flex);
+                let mut baseline: Option<f32> = None;
                 let offsets = result
                     .children
                     .into_iter()
-                    .map(|child| child.offset)
+                    .map(|child| {
+                        if let Some(local) = child.baseline {
+                            let positioned = child.offset.y + local;
+                            // Flutter uses the highest real baseline in a row
+                            // and the first in logical child order in a column.
+                            baseline = Some(match baseline {
+                                None => positioned,
+                                Some(current) if flex.direction == Axis::Horizontal => {
+                                    current.min(positioned)
+                                }
+                                Some(current) => current,
+                            });
+                        }
+                        child.offset
+                    })
                     .collect();
+                self.render_live_mut(id, "flex render must remain live")
+                    .baseline = baseline;
                 // Only unbounded non-flex children and spacing can exceed the
                 // budget. Re-summing independently rounded flexible shares
                 // can otherwise report overflow for children that fit.
@@ -163,20 +180,24 @@ impl WidgetTree {
             RenderKind::Flexible { .. }
             | RenderKind::Positioned { .. }
             | RenderKind::LayoutId { .. } => {
-                // Flutter's Positioned configures its parent's child data and
-                // adds no intermediary box to obscure the child's baseline.
+                // Flutter's Flexible and Positioned are parent-data widgets;
+                // neither adds a render box that could hide a real baseline.
+                let forwards_baseline = matches!(
+                    kind,
+                    RenderKind::Flexible { .. } | RenderKind::Positioned { .. }
+                );
                 if let Some(&child) = children.first() {
                     self.layout_render(child, constraints)?;
                     let child = self.render_live(child, "retained render must remain live");
                     let size = child.size;
-                    if matches!(kind, RenderKind::Positioned { .. }) {
+                    if forwards_baseline {
                         let baseline = child.baseline;
                         self.render_live_mut(id, "retained render must remain live")
                             .baseline = baseline;
                     }
                     (constraints.constrain(size), ChildOffsets::One(Offset::ZERO))
                 } else {
-                    if matches!(kind, RenderKind::Positioned { .. }) {
+                    if forwards_baseline {
                         self.render_live_mut(id, "retained render must remain live")
                             .baseline = None;
                     }

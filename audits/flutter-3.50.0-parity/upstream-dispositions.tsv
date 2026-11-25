@@ -977,3 +977,4 @@ packages/flutter/test/rendering/flex_test.dart	689	MainAxisSize.min inside uncon
 packages/flutter/test/rendering/flex_test.dart	716	MainAxisSize.min inside unconstrained	paired-mismatch	upstream-flex-retained-placement.md#flexible-sizing-before-shrink-wrap
 packages/flutter/test/rendering/flex_test.dart	16	Overconstrained flex	paired-match	upstream-flex-retained-placement.md#constrained-overflow-and-rounding
 packages/flutter/test/rendering/flex_test.dart	33	Inconsequential overflow is ignored	partial-match	upstream-flex-retained-placement.md#constrained-overflow-and-rounding
+packages/flutter/test/rendering/flex_test.dart	937	Vertical Flex Baseline	partial-match	upstream-flex-retained-placement.md#baseline-of-a-nested-flex

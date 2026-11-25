@@ -78,3 +78,23 @@ more than 500px in f64. Placement now uses the measured
 children without repeating their allocation, while the
 overflow check compares the space that is free to exceed the
 budget (nonflex children and spacing) against the constraint.
+
+## Baseline of a nested Flex
+
+The pinned vertical baseline test (`:937`) and two authored
+actual-layout probes passed. The Rust and Flutter probes put the
+nested Flex inside a baseline-aligned horizontal parent and
+measure how far the parent moves it in real layout. A nested
+Column uses the first real child baseline in logical order,
+even when the vertical direction is reversed. The observed
+baselines are 110, 210, 310 and 410px across the pinned alignment
+sequence. The original registration remains partial because it
+also calls the Dart dry-baseline API directly.
+
+A nested Row uses the highest real baseline after child
+placement, not simply the first raw child metric. The second
+child has a 5px baseline and a 20px alignment offset, so the
+parent places the Row 55px below an 80px anchor. A retained
+update removes both real baselines and restores top alignment.
+This also exercises baseline forwarding through Flexible and
+ConstrainedBox, which had previously hidden the child baseline.
