@@ -51,6 +51,7 @@ enum FocusAuthority {
 }
 
 struct FocusState {
+    scope_anchor: bool,
     focused: Cell<bool>,
     descendant_focused: Cell<bool>,
     requested: Cell<Option<u64>>,
@@ -128,8 +129,15 @@ impl FocusState {
 
 impl Default for FocusNode {
     fn default() -> Self {
+        Self::with_scope_role(false)
+    }
+}
+
+impl FocusNode {
+    fn with_scope_role(scope_anchor: bool) -> Self {
         Self {
             state: Rc::new(FocusState {
+                scope_anchor,
                 focused: Cell::new(false),
                 descendant_focused: Cell::new(false),
                 requested: Cell::new(None),
@@ -319,6 +327,7 @@ impl FocusNode {
     #[must_use]
     pub fn descendants_are_focusable(&self) -> bool {
         self.state.descendants_are_focusable.get()
+            && (!self.state.scope_anchor || self.can_request_focus())
     }
     pub fn set_descendants_are_traversable(&self, traversable: bool) {
         if self.state.descendants_are_traversable.replace(traversable) != traversable {
@@ -1580,7 +1589,7 @@ impl FocusScopeNode {
         self.state
             .anchor
             .get_or_init(|| {
-                let node = FocusNode::new();
+                let node = FocusNode::with_scope_role(true);
                 node.set_skip_traversal(true);
                 let state = Rc::downgrade(&self.state);
                 let subscription = node.observe(move || {
@@ -1595,6 +1604,36 @@ impl FocusScopeNode {
             })
             .node
             .clone()
+    }
+
+    /// Enables requests for the scope and its hosted descendants.
+    /// Disabling the scope does not overwrite any descendant's own setting.
+    pub fn set_can_request_focus(&self, allowed: bool) {
+        self.scope_focus_node().set_can_request_focus(allowed);
+    }
+
+    #[must_use]
+    pub fn can_request_focus(&self) -> bool {
+        self.scope_focus_node().can_request_focus()
+    }
+
+    /// Independently restricts descendants without disabling the scope itself.
+    pub fn set_descendants_are_focusable(&self, allowed: bool) {
+        self.scope_focus_node().set_descendants_are_focusable(allowed);
+    }
+
+    #[must_use]
+    pub fn descendants_are_focusable(&self) -> bool {
+        self.scope_focus_node().descendants_are_focusable()
+    }
+
+    pub fn set_descendants_are_traversable(&self, allowed: bool) {
+        self.scope_focus_node().set_descendants_are_traversable(allowed);
+    }
+
+    #[must_use]
+    pub fn descendants_are_traversable(&self) -> bool {
+        self.scope_focus_node().descendants_are_traversable()
     }
 
     /// Requests primary focus for the scope itself, without forwarding

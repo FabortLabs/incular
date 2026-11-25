@@ -161,6 +161,7 @@ impl From<Focus> for Widget {
 #[derive(Clone)]
 pub struct FocusScope {
     node: Option<FocusScopeNode>,
+    can_request_focus: Option<bool>,
     autofocus: bool,
     policy: FocusTraversalPolicyKind,
     child: Option<Widget>,
@@ -170,6 +171,7 @@ impl Default for FocusScope {
     fn default() -> Self {
         Self {
             node: None,
+            can_request_focus: None,
             autofocus: false,
             policy: FocusTraversalPolicyKind::ReadingOrder,
             child: None,
@@ -183,6 +185,7 @@ impl FocusScope {
     pub fn new(child: impl Into<Widget>) -> Self {
         Self {
             node: None,
+            can_request_focus: None,
             autofocus: false,
             policy: FocusTraversalPolicyKind::ReadingOrder,
             child: Some(child.into()),
@@ -193,6 +196,14 @@ impl FocusScope {
     #[must_use]
     pub fn node(mut self, node: FocusScopeNode) -> Self {
         self.node = Some(node);
+        self
+    }
+
+    /// Controls focus eligibility inside this scope. A disabled scope blocks
+    /// descendants without changing their own focus settings.
+    #[must_use]
+    pub fn can_request_focus(mut self, allowed: bool) -> Self {
+        self.can_request_focus = Some(allowed);
         self
     }
 
@@ -232,7 +243,12 @@ impl From<FocusScope> for Widget {
             .child
             .unwrap_or_else(|| crate::SizedBox::shrink().into());
         let scope = if let Some(node) = &value.node {
+            if let Some(allowed) = value.can_request_focus {
+                node.set_can_request_focus(allowed);
+            }
             Widget::from(Focus::new(child).node(node.scope_focus_node()))
+        } else if value.can_request_focus == Some(false) {
+            child.with_excluded_focus(true)
         } else {
             child
         };

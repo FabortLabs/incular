@@ -65,9 +65,16 @@ impl FocusSemanticsBindings {
         }
         let observe = node.clone();
         let dirty = Rc::clone(&self.dirty);
-        let previous = std::cell::Cell::new((node.can_request_focus(), node.has_primary_focus()));
+        let focus_semantics = |node: &incular_gestures::FocusNode| {
+            (
+                node.can_request_focus(),
+                node.has_primary_focus(),
+                node.descendants_are_focusable(),
+            )
+        };
+        let previous = std::cell::Cell::new(focus_semantics(node));
         let subscription = node.observe(move || {
-            let next = (observe.can_request_focus(), observe.has_primary_focus());
+            let next = focus_semantics(&observe);
             if previous.replace(next) != next {
                 dirty.borrow_mut().insert(element);
                 incular_animation::scheduler::schedule_frame();

@@ -1316,3 +1316,5 @@ packages/flutter/test/widgets/focus_scope_test.dart	30	Can unfocus	partial-match
 packages/flutter/test/widgets/focus_scope_test.dart	65	Autofocus works	paired-match	upstream-focus-widget-semantics.md#focus-movement-and-reactive-labels
 packages/flutter/test/widgets/focus_scope_test.dart	812	Moving widget from one scope to another retains focus	partial-match	upstream-focus-widget-semantics.md#focus-movement-and-reactive-labels
 packages/flutter/test/widgets/focus_manager_test.dart	1607	Scopes can be focused without sending focus to descendants.	paired-match	upstream-mounted-focus-scope-nodes.md
+packages/flutter/test/widgets/focus_manager_test.dart	781	FocusScopeNode.canRequestFocus affects descendantsAreFocusable	paired-match	upstream-mounted-focus-scope-nodes.md#scope-request-and-descendant-permissions
+packages/flutter/test/widgets/focus_manager_test.dart	801	canRequestFocus affects children.	partial-match	upstream-mounted-focus-scope-nodes.md#scope-request-and-descendant-permissions

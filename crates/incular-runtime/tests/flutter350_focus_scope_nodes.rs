@@ -56,3 +56,78 @@ fn an_external_focus_scope_can_be_focused_on_a_zero_area_view() {
     runtime.run_frame(empty).unwrap();
     assert!(scope.has_primary_focus());
 }
+
+#[test]
+fn a_scopes_focus_permission_combines_with_its_independent_descendant_flag() {
+    let scope = FocusScopeNode::new();
+    scope.set_descendants_are_focusable(false);
+    assert!(!scope.descendants_are_focusable());
+    assert!(scope.can_request_focus());
+    scope.set_descendants_are_focusable(true);
+    assert!(scope.descendants_are_focusable());
+    scope.set_can_request_focus(false);
+    assert!(!scope.descendants_are_focusable());
+    assert!(!scope.can_request_focus());
+    scope.set_can_request_focus(true);
+    assert!(scope.descendants_are_focusable());
+    assert!(scope.can_request_focus());
+
+    scope.set_descendants_are_focusable(false);
+    scope.set_can_request_focus(false);
+    scope.set_can_request_focus(true);
+    assert!(
+        !scope.descendants_are_focusable(),
+        "the local opt-out is not overwritten"
+    );
+    assert!(scope.can_request_focus());
+}
+
+#[test]
+fn disabling_a_scope_revokes_current_child_focus_without_replaying_rejected_requests() {
+    let scope = FocusScopeNode::new();
+    let child = FocusNode::new();
+    let disabled_child = FocusNode::new();
+    disabled_child.set_can_request_focus(false);
+    let scene = FocusScope::new(incular_widgets::Column::new([
+        Focus::new(SizedBox::shrink()).node(child.clone()),
+        Focus::new(SizedBox::shrink()).node(disabled_child.clone()),
+    ]))
+    .node(scope.clone());
+    let mut runtime = Runtime::new(scene.into()).unwrap();
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    runtime.run_frame(bounds).unwrap();
+    child.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    assert!(child.has_primary_focus());
+
+    scope.set_can_request_focus(false);
+    assert!(
+        runtime.frame_requested(),
+        "a permission change must wake an idle scope"
+    );
+    runtime.run_frame(bounds).unwrap();
+    assert!(runtime.focused_element().is_none() && !child.has_focus());
+    assert!(runtime.tree().focusable_elements().is_empty());
+    child.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    assert!(runtime.focused_element().is_none());
+
+    scope.set_can_request_focus(true);
+    runtime.run_frame(bounds).unwrap();
+    assert!(runtime.focused_element().is_none());
+    assert_eq!(runtime.tree().focusable_elements().len(), 1);
+    disabled_child.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    assert!(runtime.focused_element().is_none());
+    child.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    assert!(child.has_primary_focus());
+    runtime.run_frame(bounds).unwrap();
+    scope.set_descendants_are_focusable(false);
+    assert!(
+        runtime.frame_requested(),
+        "a descendant permission change must request a frame"
+    );
+    runtime.run_frame(bounds).unwrap();
+    assert!(!child.has_focus());
+}
