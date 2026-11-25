@@ -10,6 +10,7 @@
 use incular_core::time::Instant;
 use std::{
     cell::{Cell, RefCell},
+    collections::VecDeque,
     rc::{Rc, Weak},
     time::Duration,
 };
@@ -21,11 +22,14 @@ struct Scheduler {
     /// Scratch buffer for [`begin_frame`], kept to reuse its allocation.
     ticking: Vec<Rc<TickerState>>,
     frame_callbacks: Vec<(u64, FrameCallback)>,
+    /// Pending callbacks in each dispatch snapshot. The UI thread drops
+    /// borrows while running callbacks, so they can cancel other members.
+    active_frame_callbacks: Vec<VecDeque<(u64, FrameCallback)>>,
     post_frame_callbacks: Vec<FrameCallback>,
     persistent_callbacks: Vec<Rc<dyn Fn(Instant)>>,
-    /// The timestamp of the frame being produced, from `begin_frame` until
-    /// the post-frame callbacks (Flutter `currentFrameTimeStamp`).
+    /// The timestamp remains valid through the last post-frame callback.
     frame_time: Option<Instant>,
+    post_frame_active: bool,
     next_callback: u64,
     frame_requested: bool,
     /// Flutter `timeDilation`; 1 is real time.
@@ -52,9 +56,11 @@ impl Default for Scheduler {
             tickers: Vec::new(),
             ticking: Vec::new(),
             frame_callbacks: Vec::new(),
+            active_frame_callbacks: Vec::new(),
             post_frame_callbacks: Vec::new(),
             persistent_callbacks: Vec::new(),
             frame_time: None,
+            post_frame_active: false,
             next_callback: 0,
             frame_requested: false,
             time_dilation: 1.0,
@@ -65,6 +71,22 @@ impl Default for Scheduler {
 }
 
 impl Scheduler {
+    fn remove_frame_callback(&mut self, id: u64) -> Option<FrameCallback> {
+        if let Some(index) = self
+            .frame_callbacks
+            .iter()
+            .position(|(candidate, _)| *candidate == id)
+        {
+            return Some(self.frame_callbacks.remove(index).1);
+        }
+        for batch in self.active_frame_callbacks.iter_mut().rev() {
+            if let Some(index) = batch.iter().position(|(candidate, _)| *candidate == id) {
+                return batch.remove(index).map(|(_, callback)| callback);
+            }
+        }
+        None
+    }
+
     /// Flutter `_adjustForEpoch`: the dilated timestamp of a raw one. The
     /// first frame of an epoch lands on the epoch start, so the interval
     /// that spans a dilation change does not advance time.
@@ -183,14 +205,9 @@ pub fn schedule_frame_callback(callback: impl FnOnce(Instant) + 'static) -> Fram
 /// Flutter `SchedulerBinding.cancelFrameCallbackWithId`. Returns whether the
 /// callback was still waiting.
 pub fn cancel_frame_callback(id: FrameCallbackId) -> bool {
-    SCHEDULER.with(|scheduler| {
-        let mut scheduler = scheduler.borrow_mut();
-        let before = scheduler.frame_callbacks.len();
-        scheduler
-            .frame_callbacks
-            .retain(|(callback, _)| *callback != id.0);
-        before != scheduler.frame_callbacks.len()
-    })
+    // Release the scheduler borrow before a captured value is dropped.
+    let removed = SCHEDULER.with(|scheduler| scheduler.borrow_mut().remove_frame_callback(id.0));
+    removed.is_some()
 }
 
 /// Flutter `SchedulerBinding.addPostFrameCallback`: runs `callback` once,
@@ -223,7 +240,7 @@ pub fn schedule_frame() {
 }
 
 /// Flutter `SchedulerBinding.currentFrameTimeStamp`: the timestamp of the
-/// frame being produced, while one is (before its post-frame callbacks).
+/// frame being produced, including its post-frame callbacks.
 #[must_use]
 pub fn current_frame_time() -> Option<Instant> {
     SCHEDULER.with(|scheduler| scheduler.borrow().frame_time)
@@ -250,18 +267,32 @@ pub fn has_scheduled_frame() -> bool {
 /// Runtime-internal; application code never calls it.
 #[doc(hidden)]
 pub fn begin_frame(raw: Instant) {
-    let mut now = raw;
-    let callbacks = SCHEDULER.with(|scheduler| {
+    let (now, has_batch) = SCHEDULER.with(|scheduler| {
         let mut scheduler = scheduler.borrow_mut();
         // Flutter `handleBeginFrame`: the raw timestamp, dilated.
         scheduler.last_raw = Some(raw);
-        now = scheduler.adjust(raw);
+        let now = scheduler.adjust(raw);
         scheduler.frame_requested = false;
         scheduler.frame_time = Some(now);
-        std::mem::take(&mut scheduler.frame_callbacks)
+        scheduler.post_frame_active = false;
+        let pending = std::mem::take(&mut scheduler.frame_callbacks);
+        let has_batch = !pending.is_empty();
+        if has_batch {
+            scheduler.active_frame_callbacks.push(pending.into());
+        }
+        (now, has_batch)
     });
-    for (_, callback) in callbacks {
-        callback(now);
+    if has_batch {
+        let _batch = ActiveFrameCallbackBatch;
+        while let Some((_, callback)) = SCHEDULER.with(|scheduler| {
+            scheduler
+                .borrow_mut()
+                .active_frame_callbacks
+                .last_mut()?
+                .pop_front()
+        }) {
+            callback(now);
+        }
     }
     let mut tickers =
         SCHEDULER.with(|scheduler| std::mem::take(&mut scheduler.borrow_mut().ticking));
@@ -282,20 +313,42 @@ pub fn begin_frame(raw: Instant) {
     SCHEDULER.with(|scheduler| scheduler.borrow_mut().ticking = tickers);
 }
 
+struct ActiveFrameCallbackBatch;
+
+impl Drop for ActiveFrameCallbackBatch {
+    fn drop(&mut self) {
+        let retired =
+            SCHEDULER.with(|scheduler| scheduler.borrow_mut().active_frame_callbacks.pop());
+        drop(retired);
+    }
+}
+
+struct EndFrameTimestamp;
+
+impl Drop for EndFrameTimestamp {
+    fn drop(&mut self) {
+        SCHEDULER.with(|scheduler| {
+            let mut scheduler = scheduler.borrow_mut();
+            scheduler.frame_time = None;
+            scheduler.post_frame_active = false;
+        });
+    }
+}
+
 /// Flutter `handleDrawFrame`'s post-frame phase: runs the persistent
 /// callbacks and then the post-frame callbacks registered before this point.
 /// Runtime-internal.
 #[doc(hidden)]
 pub fn end_frame(raw: Instant) {
-    let mut now = raw;
-    let post = SCHEDULER.with(|scheduler| {
+    let now = SCHEDULER.with(|scheduler| {
         let mut scheduler = scheduler.borrow_mut();
-        now = scheduler
+        let now = scheduler
             .frame_time
             .unwrap_or_else(|| scheduler.adjust(raw));
-        scheduler.frame_time = None;
-        std::mem::take(&mut scheduler.post_frame_callbacks)
+        scheduler.frame_time = Some(now);
+        now
     });
+    let _timestamp = EndFrameTimestamp;
     // Indexed, so no list is copied: callbacks added while this runs wait for
     // the next frame, as they would for a snapshot.
     let count = SCHEDULER.with(|scheduler| scheduler.borrow().persistent_callbacks.len());
@@ -306,6 +359,13 @@ pub fn end_frame(raw: Instant) {
             callback(now);
         }
     }
+    // Each phase snapshots its own queue at entry. A persistent callback can
+    // add post work for this frame; post callbacks only append to the next.
+    let post = SCHEDULER.with(|scheduler| {
+        let mut scheduler = scheduler.borrow_mut();
+        scheduler.post_frame_active = true;
+        std::mem::take(&mut scheduler.post_frame_callbacks)
+    });
     for callback in post {
         callback(now);
     }
@@ -390,13 +450,20 @@ impl Ticker {
     }
 
     /// Starts ticking. Like Flutter's `Ticker.start`, a ticker started while
-    /// a frame is being produced (by a frame callback, a build or layout)
+    /// a frame is being produced (before its post-frame callbacks)
     /// times itself from that frame; otherwise from the next frame. Starting a
     /// running ticker does nothing; [`stop`](Self::stop) it first to restart
     /// the clock. Returns the run's [`TickerFuture`].
     pub fn start(&self) -> TickerFuture {
         if !self.state.active.replace(true) {
-            self.state.started.set(current_frame_time());
+            self.state.started.set(SCHEDULER.with(|scheduler| {
+                let scheduler = scheduler.borrow();
+                if scheduler.post_frame_active {
+                    None
+                } else {
+                    scheduler.frame_time
+                }
+            }));
             *self.state.future.borrow_mut() = Some(TickerFuture::pending());
         }
         self.state

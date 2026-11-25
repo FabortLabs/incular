@@ -774,3 +774,12 @@ added exact conversions and corrected Alignment's arithmetic origin.
 without removing its children; six retained Flutter and Windows wgpu
 frames agree across inside and edge probes. The separate authored layout
 tests also verify selected and highest-child baseline forwarding.
+
+### Pointer and scheduler remediation
+
+Verified coverage reached 440 / 8,965 original registrations (4.91%) at
+`ef2c82c0`: 344 matches and 96 historical comparison mismatches, 209
+partial, 80 reference-only. The [Listener audit](upstream-listener.md)
+checks bubbling, touch hover and transform-dependent local event fields.
+The [behavior audit](behavior-audit.md) records the frozen pointer transform
+and the same-frame callback and scheduler timestamp repairs.

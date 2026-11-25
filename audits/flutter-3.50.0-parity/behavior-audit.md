@@ -335,6 +335,13 @@ paths or continue from the preceding crate path.
   (`scheduler/binding.dart:633–637,1259–1273`;
   `crates/incular-animation/src/scheduler.rs:185–193,252–265`,
   `crates/incular-runtime/tests/frame_scheduler.rs:71–90`).
+- **B06 and SC01 repaired.** A transient callback cancels later work in its
+  current batch without affecting callbacks newly queued for the next frame.
+  Persistent callbacks can append post-frame work to the current frame;
+  post callbacks themselves can only append to the next. The current frame
+  timestamp is visible through the last post callback while a ticker started
+  in that phase begins elapsed time at the next frame, not at the old timestamp.
+  Nine focused Rust tests and four authored pinned Flutter controls passed.
 - **A01: zero-duration/equal-target notifications** (source-traced). Starting
   at value 0.5, request animateTo(0.5). Flutter changes status to Completed
   without firing a value listener; Incular can emit an unchanged value
