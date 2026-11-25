@@ -46,6 +46,7 @@ fn widget_clips(widget: &WidgetKind) -> bool {
             ..
         } => child.is_some() && *clip_behavior != Clip::None,
         WidgetKind::Flex { clip_behavior, .. }
+        | WidgetKind::Wrap { clip_behavior, .. }
         | WidgetKind::Stack { clip_behavior, .. }
         | WidgetKind::IndexedStack { clip_behavior, .. }
         | WidgetKind::Scroll { clip_behavior, .. } => *clip_behavior != Clip::None,
@@ -102,6 +103,7 @@ impl LayerSpec {
             | WidgetKind::FittedBox { .. }
             | WidgetKind::Unconstrained { .. }
             | WidgetKind::Flex { .. }
+            | WidgetKind::Wrap { .. }
             | WidgetKind::Stack { .. }
             | WidgetKind::IndexedStack { .. }
             | WidgetKind::CustomLayout { .. }
@@ -271,6 +273,7 @@ impl RenderLayers {
             WidgetKind::ClipRect { clip_behavior, .. }
             | WidgetKind::Unconstrained { clip_behavior, .. }
             | WidgetKind::Flex { clip_behavior, .. }
+            | WidgetKind::Wrap { clip_behavior, .. }
             | WidgetKind::FittedBox { clip_behavior, .. }
                 if widget_clips(widget) =>
             {
@@ -1166,6 +1169,7 @@ impl RenderLayers {
             return;
         }
         if let RenderKind::Flex { clip_behavior, .. }
+        | RenderKind::Wrap { clip_behavior, .. }
         | RenderKind::Unconstrained { clip_behavior, .. } = *kind
         {
             self.apply_fitted_clip(compositor, size, clip_behavior, self.layout_overflow.get());

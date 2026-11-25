@@ -729,6 +729,7 @@ pub enum RenderKind {
     },
     Wrap {
         wrap: incular_layout::Wrap,
+        clip_behavior: Clip,
     },
     Table {
         columns: usize,

@@ -752,6 +752,7 @@ pub(crate) enum WidgetKind {
         cross_axis_alignment: WrapCrossAlignment,
         text_direction: Option<TextDirection>,
         vertical_direction: VerticalDirection,
+        clip_behavior: Clip,
         children: Vec<Widget>,
     },
     Table {

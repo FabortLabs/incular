@@ -711,29 +711,30 @@ pub fn layout_wrap<W>(constraints: Constraints, children: &[WrapChild], config: 
 where
     W: Borrow<Wrap>,
 {
+    layout_wrap_with_overflow(constraints, children, config).0
+}
+
+/// Resolves the wrap and whether its laid-out runs extend beyond its box.
+#[doc(hidden)]
+#[must_use]
+pub fn layout_wrap_with_overflow<W>(
+    constraints: Constraints,
+    children: &[WrapChild],
+    config: W,
+) -> (LayoutResult, bool)
+where
+    W: Borrow<Wrap>,
+{
     let config = config.borrow();
     let direction = config.direction;
     let spacing = finite_non_negative(config.spacing);
     let run_spacing = finite_non_negative(config.run_spacing);
-    let available_main = main_max(constraints, direction);
-    // RenderWrap compares double-precision extents with a small tolerance.
-    // Our input coordinates are f32, so avoid accumulating them in f32
-    // and allow half a representable step at the limit. A full step of
-    // genuine overflow must still start a new run.
-    let limit = f64::from(available_main);
-    let half_step = if available_main < f32::MAX {
-        (f64::from(available_main.next_up()) - limit) * 0.5
-    } else if available_main.is_finite() {
-        (limit - f64::from(available_main.next_down())) * 0.5
-    } else {
-        0.
-    };
-    let fit_limit = limit + half_step.max(1.0e-10);
+    let fit_limit = fractional_layout_limit(main_max(constraints, direction));
     let mut runs: Vec<WrapRun> = Vec::new();
     let mut current = WrapRun::default();
     for (index, child) in children.iter().enumerate() {
         let extent = f64::from(direction.main_extent(child.size));
-        let next_extent = current.main + f64::from(spacing) + extent;
+        let next_extent = current.main + extent + f64::from(spacing);
         if !current.children.is_empty() && next_extent > fit_limit {
             runs.push(std::mem::take(&mut current));
             current.children = index..index;
@@ -750,22 +751,23 @@ where
         runs.push(current);
     }
 
-    let natural_main = runs.iter().map(|run| run.main).fold(0.0, f64::max) as f32;
-    let natural_cross = runs.iter().map(|run| run.cross).sum::<f32>()
-        + run_spacing * runs.len().saturating_sub(1) as f32;
+    let natural_main = runs.iter().map(|run| run.main).fold(0.0, f64::max);
+    let natural_cross = runs.iter().map(|run| f64::from(run.cross)).sum::<f64>()
+        + f64::from(run_spacing) * runs.len().saturating_sub(1) as f64;
     let line_main = if main_min(constraints, direction) == main_max(constraints, direction) {
         main_max(constraints, direction)
     } else {
-        main_min(constraints, direction).max(natural_main.min(main_max(constraints, direction)))
+        main_min(constraints, direction)
+            .max((natural_main as f32).min(main_max(constraints, direction)))
     };
     let cross_maximum = cross_max(constraints, direction);
     let line_cross = if cross_min(constraints, direction) == cross_maximum {
         cross_maximum
     } else {
-        cross_min(constraints, direction).max(natural_cross.min(cross_maximum))
+        cross_min(constraints, direction).max((natural_cross as f32).min(cross_maximum))
     };
     let mut output = vec![ChildLayout::default(); children.len()];
-    let cross_remaining = (line_cross - natural_cross).max(0.0);
+    let cross_remaining = (f64::from(line_cross) - natural_cross).max(0.) as f32;
     let reverse_main = match direction {
         Axis::Horizontal => matches!(config.text_direction, TextDirection::Rtl),
         Axis::Vertical => matches!(config.vertical_direction, VerticalDirection::Up),
@@ -823,7 +825,27 @@ where
         }
         cross_cursor += run.cross + run_spacing + run_extra;
     }
-    LayoutResult::new(direction.size(line_main, line_cross), output)
+    let overflows = natural_main > fractional_layout_limit(line_main)
+        || natural_cross > fractional_layout_limit(line_cross);
+    (
+        LayoutResult::new(direction.size(line_main, line_cross), output),
+        overflows,
+    )
+}
+
+/// Account for input coordinate rounding without treating a representable
+/// step of real overflow as a fit. Flutter uses double precision plus
+/// precisionErrorTolerance; our widget sizes are f32.
+fn fractional_layout_limit(limit: f32) -> f64 {
+    let value = f64::from(limit);
+    let half_step = if limit < f32::MAX {
+        (f64::from(limit.next_up()) - value) * 0.5
+    } else if limit.is_finite() {
+        (value - f64::from(limit.next_down())) * 0.5
+    } else {
+        0.
+    };
+    value + half_step.max(1.0e-10)
 }
 
 /// Lays out row-major table cells using max-content column widths and row

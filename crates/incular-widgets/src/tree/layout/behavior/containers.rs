@@ -406,7 +406,7 @@ impl WidgetTree {
                     .baseline = baseline;
                 (size, offsets)
             }
-            RenderKind::Wrap { wrap } => {
+            RenderKind::Wrap { wrap, .. } => {
                 // Flutter wrap.dart: children get only the main-axis maximum
                 // (BoxConstraints(maxWidth:) or BoxConstraints(maxHeight:)), so
                 // the cross axis stays unbounded.
@@ -431,7 +431,9 @@ impl WidgetTree {
                     })
                     .collect::<Vec<_>>();
 
-                let result = incular_layout::layout_wrap(constraints, &wrap_children, wrap);
+                let (result, overflows) =
+                    incular_layout::layout_wrap_with_overflow(constraints, &wrap_children, wrap);
+                self.set_layout_overflow(id, overflows);
                 let baseline = children
                     .iter()
                     .zip(&result.children)

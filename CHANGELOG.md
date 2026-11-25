@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- Wrap supports painting overflow clips in the requested mode. It leaves
+  fitting children unclipped and defaults to no clip.
+
 - ScrollController and PageController expose viewport attachment and
   detachment callbacks and a live-client check.
 

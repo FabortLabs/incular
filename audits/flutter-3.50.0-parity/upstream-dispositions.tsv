@@ -428,7 +428,7 @@ packages/flutter/test/widgets/custom_multi_child_layout_test.dart	332	layoutChil
 packages/flutter/test/widgets/custom_multi_child_layout_test.dart	351	positionChild on non existent child	partial-match	upstream-multi-child-layout-contract.md
 packages/flutter/test/widgets/custom_multi_child_layout_test.dart	363	_callPerformLayout on child that doesn't have id	paired-match	upstream-multi-child-layout-contract.md#current-child-slot-validation
 packages/flutter/test/widgets/wrap_test.dart	644	Shrink-wrapping Wrap test	paired-match	upstream-wrap-constraints-and-intrinsic-height.md
-packages/flutter/test/widgets/wrap_test.dart	787	Visual overflow generates a clip	partial-match	upstream-wrap-constraints-and-intrinsic-height.md
+packages/flutter/test/widgets/wrap_test.dart	787	Visual overflow generates a clip	paired-match	upstream-wrap-constraints-and-intrinsic-height.md
 packages/flutter/test/widgets/wrap_test.dart	898	Spacing with slight overflow	paired-match	upstream-wrap-constraints-and-intrinsic-height.md
 packages/flutter/test/widgets/wrap_test.dart	925	Object exactly matches container width	paired-match	upstream-wrap-constraints-and-intrinsic-height.md
 packages/flutter/test/widgets/wrap_test.dart	973	Horizontal wrap - IntrinsicsHeight	paired-match	upstream-wrap-constraints-and-intrinsic-height.md
@@ -443,7 +443,7 @@ packages/flutter/test/widgets/wrap_test.dart	251	Empty wrap	paired-match	upstrea
 packages/flutter/test/widgets/wrap_test.dart	851	RenderWrap toStringShallow control test	reference-ran-incular-open	upstream-wrap-baseline-and-final-references.md
 packages/flutter/test/widgets/wrap_test.dart	858	RenderWrap toString control test	reference-ran-incular-open	upstream-wrap-baseline-and-final-references.md
 packages/flutter/test/widgets/wrap_test.dart	878	Wrap baseline control test	partial-match	upstream-wrap-baseline-and-final-references.md#current-baseline-behavior
-packages/flutter/test/widgets/wrap_test.dart	962	Wrap can set and update clipBehavior	reference-ran-incular-open	upstream-wrap-baseline-and-final-references.md
+packages/flutter/test/widgets/wrap_test.dart	962	Wrap can set and update clipBehavior	paired-match	upstream-wrap-baseline-and-final-references.md
 packages/flutter/test/widgets/table_test.dart	136	Table widget - column offset (LTR)	paired-match	upstream-table-direction-rows-and-intrinsics.md
 packages/flutter/test/widgets/table_test.dart	194	Table widget - column offset (RTL)	paired-match	upstream-table-direction-rows-and-intrinsics.md
 packages/flutter/test/widgets/table_test.dart	252	Table border - smoke test	reference-ran-incular-open	upstream-table-direction-rows-and-intrinsics.md

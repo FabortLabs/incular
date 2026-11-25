@@ -1,6 +1,8 @@
 //! Flutter-style multi-run Wrap layout descriptor.
 
-use incular_config::{Axis, TextDirection, VerticalDirection, WrapAlignment, WrapCrossAlignment};
+use incular_config::{
+    Axis, Clip, TextDirection, VerticalDirection, WrapAlignment, WrapCrossAlignment,
+};
 use smart_default::SmartDefault;
 use typed_builder::TypedBuilder;
 
@@ -28,6 +30,9 @@ pub struct Wrap {
     text_direction: Option<TextDirection>,
     #[builder(default = VerticalDirection::Down)]
     vertical_direction: VerticalDirection,
+    #[default(Clip::None)]
+    #[builder(default = Clip::None)]
+    clip_behavior: Clip,
 }
 
 impl Wrap {
@@ -96,6 +101,14 @@ impl Wrap {
         self
     }
 
+    /// Clips painted overflow, without clipping children that fit.
+    /// Defaults to `Clip::None`, including when the runs overflow.
+    #[must_use]
+    pub fn clip_behavior(mut self, behavior: Clip) -> Self {
+        self.clip_behavior = behavior;
+        self
+    }
+
     #[must_use]
     pub fn get_direction(&self) -> Axis {
         self.direction
@@ -123,6 +136,7 @@ impl From<Wrap> for Widget {
             cross_axis_alignment: value.cross_axis_alignment,
             text_direction: value.text_direction,
             vertical_direction: value.vertical_direction,
+            clip_behavior: value.clip_behavior,
             children: value.children,
         })
     }

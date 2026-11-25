@@ -200,6 +200,7 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
             cross_axis_alignment,
             text_direction,
             vertical_direction,
+            clip_behavior,
             ..
         } => RenderKind::Wrap {
             wrap: incular_layout::Wrap {
@@ -212,6 +213,7 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
                 text_direction: resolve_layout_direction(*text_direction, context),
                 vertical_direction: *vertical_direction,
             },
+            clip_behavior: *clip_behavior,
         },
         WidgetKind::Table {
             columns,

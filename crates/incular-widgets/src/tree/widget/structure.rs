@@ -333,6 +333,7 @@ impl std::fmt::Debug for WidgetKind {
                 cross_axis_alignment,
                 text_direction,
                 vertical_direction,
+                clip_behavior,
                 children,
             } => f
                 .debug_struct("Wrap")
@@ -344,6 +345,7 @@ impl std::fmt::Debug for WidgetKind {
                 .field("cross_axis_alignment", cross_axis_alignment)
                 .field("text_direction", text_direction)
                 .field("vertical_direction", vertical_direction)
+                .field("clip_behavior", clip_behavior)
                 .field("children", children)
                 .finish(),
             Self::Table {
@@ -1205,6 +1207,7 @@ impl PartialEq for WidgetKind {
                     cross_axis_alignment: f,
                     text_direction: g,
                     vertical_direction: h,
+                    clip_behavior: clip_a,
                     children: i,
                 },
                 Self::Wrap {
@@ -1216,6 +1219,7 @@ impl PartialEq for WidgetKind {
                     cross_axis_alignment: o,
                     text_direction: p,
                     vertical_direction: q,
+                    clip_behavior: clip_b,
                     children: r,
                 },
             ) => {
@@ -1228,6 +1232,7 @@ impl PartialEq for WidgetKind {
                     && g == p
                     && h == q
                     && i == r
+                    && clip_a == clip_b
             }
             (
                 Self::Constrained {

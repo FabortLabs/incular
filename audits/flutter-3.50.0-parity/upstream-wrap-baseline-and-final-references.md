@@ -18,8 +18,7 @@ layout propagation, not inherent font metric disagreement.
 See `flutter350_wrap_constraints_parity` and
 `wrap_child_baseline_reference_test.dart`.
 
-Dart RenderWrap formatting (:851,:858) and the clipBehavior
-setter (:962) have no equivalent and are reference-only. All
+Dart RenderWrap formatting (:851,:858) remains reference-only. The clipBehavior update at :962 is now paired. All
 22 original registrations in this file are now disposed of
 as paired, partial, or reference-only, not all matches.
 
@@ -36,3 +35,13 @@ passed across the Wrap constraints and builder targets.
 The original registration remains a partial comparison because its 100×100
 FlutterTest glyph and fixed 200px outer height are font-specific. The native
 test measures its own font and compares direct text with the wrapped result.
+
+## Overflow clip and retained mode
+
+Pinned Flutter cases `:787` and `:962` pass, as does the authored
+mode-switch probe. Native display lists have no clip by default, even
+if two 500×500 children overflow an 800×600 box. Hard-edge and both
+anti-alias modes attach their requested rectangle only while overflowing.
+Switching mode retains the same render object; replacing two children
+with one drops the stale clip. This verifies paint commands and their
+coverage modes, not a GPU anti-aliasing pixel comparison.
