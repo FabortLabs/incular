@@ -2709,6 +2709,15 @@ impl Runtime {
             self.frame_requested = true;
             return true;
         }
+        // Match RawTooltip's early Escape handler: an open tooltip takes
+        // precedence over the ancestor shortcut that would dismiss a route.
+        if event.state.is_down()
+            && event.key == incular_core::KeyboardKey::Named(incular_core::NamedKey::Escape)
+            && self.tree.dismiss_tooltips_on_escape() > 0
+        {
+            self.frame_requested = true;
+            return true;
+        }
         let lock_modes = event.modifiers | self.hardware_keyboard.lock_modes_enabled();
         let focus_result =
             self.tree

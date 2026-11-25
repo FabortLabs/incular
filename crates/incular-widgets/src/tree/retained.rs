@@ -378,14 +378,30 @@ impl WidgetTree {
     /// a controller cannot mutate retained traversal in the middle of a scan.
     #[doc(hidden)]
     pub fn dismiss_transients(&self, reason: crate::TransientDismissReason) -> usize {
+        self.dismiss_transients_matching(reason, |_| true)
+    }
+
+    /// Tooltips get the first Escape before a focused dismiss shortcut or
+    /// another transient. Return zero so ordinary routing continues when
+    /// there is no open, dismissible tooltip.
+    #[doc(hidden)]
+    pub fn dismiss_tooltips_on_escape(&self) -> usize {
+        self.dismiss_transients_matching(crate::TransientDismissReason::Escape, |role| {
+            role == crate::TransientRole::Tooltip
+        })
+    }
+
+    fn dismiss_transients_matching(
+        &self,
+        reason: crate::TransientDismissReason,
+        accepts: impl Fn(crate::TransientRole) -> bool,
+    ) -> usize {
         let callbacks = self
             .transient_portal_entries()
             .into_iter()
             .rev()
             .filter_map(|(_, marker, _, _, _, _)| {
-                marker
-                    .dismiss_policy
-                    .allows(reason)
+                (accepts(marker.role) && marker.dismiss_policy.allows(reason))
                     .then_some(marker.on_dismiss)
                     .flatten()
             })

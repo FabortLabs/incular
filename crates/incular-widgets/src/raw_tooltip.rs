@@ -1401,10 +1401,16 @@ impl RawTooltip {
             .follower_anchor(follower_anchor)
             .offset(popup_offset);
 
+        let dismiss_controller = controller.clone();
         OverlayPortal::new(anchor)
             .overlay_child(follower)
             .role(crate::TransientRole::Tooltip)
-            .show(self.controller.is_visible())
+            .dismiss_policy(crate::TransientDismissPolicy {
+                escape: true,
+                ..crate::TransientDismissPolicy::tooltip()
+            })
+            .on_dismiss(move |_| dismiss_controller.hide())
+            .show(controller.is_visible())
             .into()
     }
 }

@@ -47,3 +47,14 @@ focused rendering tests, 48 widget paint/layout tests, two wgpu
 tessellation tests (no GPU device required) and both Flutter probes
 passed. This closes an authored probe, not an additional upstream
 registration site.
+
+## Current RawTooltip Escape routing
+
+The three original Escape registrations (:1186, :1241, :3290) passed on the
+pinned Flutter checkout and all three mounted Incular tests now pass.
+One Escape closes a hovered tooltip without mouse exit or closes both
+programmatically opened tooltips. When an ancestor has an Escape dismissal
+shortcut, the first press closes the tooltip without invoking that shortcut;
+the next press invokes it. The early stage only dismisses tooltip portals;
+other transient roles keep their ordinary key routing. The shortcut case is
+still partial because Incular's named action is not Flutter's typed intent.
