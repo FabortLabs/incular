@@ -93,3 +93,16 @@ checks do not cover native context menus or arbitrary pointer chords.
   Incular hardcodes ScaleDown before the correct slice-aware
   fallback. See `flutter350_raw_image_nine_slice` and
   `raw_image_nine_slice_test.dart`.
+
+## Reject malformed replacement ranges
+
+The exact `services/text_editing_delta_test.dart:68` registration passed.
+Its Rust reproduction previously turned an insertion at byte 11 in empty
+text into an insertion at byte zero. The checked delta path now returns
+a typed range error and the convenience path leaves the original value
+unchanged. Reversed ranges, out-of-bounds offsets and offsets inside a
+UTF-8 scalar do not reach controller formatters; a valid subsequent edit
+still does. Thirty focused Rust tests passed across editing, delta/state,
+and the runtime platform text-input bridge. This stays partial because
+Rust does not store Flutter's separate oldText payload or use its debug
+assertion.

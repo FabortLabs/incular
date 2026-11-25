@@ -2,9 +2,12 @@
 //! `services/text_editing_delta_test.dart`. Rust derives the delta from whole
 //! editing values, so these are payload/application checks, not wire ports.
 
-use std::panic::catch_unwind;
+use std::{cell::Cell, rc::Rc};
 
-use incular_text::{TextEditingDelta, TextEditingValue, TextRange, TextSelection};
+use incular_text::{
+    InvalidTextDeltaRange, TextEditingController, TextEditingDelta, TextEditingValue, TextRange,
+    TextSelection,
+};
 
 // Upstream :138, deleting at the end of the composing region.
 #[test]
@@ -72,9 +75,52 @@ fn applying_an_out_of_range_insertion_does_not_perform_a_different_edit() {
         composing: None,
     };
     let old = TextEditingValue::empty();
-    // A safe no-op would also reject the malformed edit; the parity
-    // concern is changing the text, not the choice of error mechanism.
-    if let Ok(result) = catch_unwind(|| delta.apply(&old)) {
-        assert_eq!(result, old, "invalid insertion must not move to byte zero");
+    assert_eq!(
+        delta.try_apply(&old),
+        Err(InvalidTextDeltaRange {
+            range: TextRange::collapsed(11),
+            text_byte_len: 0,
+        })
+    );
+    assert_eq!(
+        delta.apply(&old),
+        old,
+        "invalid insertion must not move to byte zero"
+    );
+}
+
+#[test]
+fn malformed_delta_does_not_dispatch_to_controller_formatters() {
+    let controller = TextEditingController::with_text("é🙂");
+    let original = controller.value();
+    let calls = Rc::new(Cell::new(0));
+    let _formatter = controller.register_edit_transform({
+        let calls = calls.clone();
+        move |_, new| {
+            calls.set(calls.get() + 1);
+            new.clone()
+        }
+    });
+    for range in [
+        TextRange::collapsed(1),
+        TextRange::new(6, 2),
+        TextRange::new(0, 7),
+    ] {
+        let delta = TextEditingDelta::replace(range, "x");
+        assert_eq!(
+            controller.try_apply_delta(&delta),
+            Err(InvalidTextDeltaRange {
+                range,
+                text_byte_len: 6,
+            })
+        );
+        controller.apply_delta(&delta);
     }
+    assert_eq!(controller.value(), original);
+    assert_eq!(calls.get(), 0);
+    controller
+        .try_apply_delta(&TextEditingDelta::replace(TextRange::new(0, 2), "x"))
+        .expect("valid edit");
+    assert_eq!(controller.value().text, "x🙂");
+    assert_eq!(calls.get(), 1);
 }

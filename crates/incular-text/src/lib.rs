@@ -13,9 +13,9 @@ mod windows_segmentation;
 
 pub use boundary::{TextBoundaryKind, is_layout_whitespace, set_word_segmenter, word_boundary_at};
 pub use editing::{
-    ComposingRange, EditableText, SelectionChangedCause, TextAffinity, TextEditingController,
-    TextEditingDelta, TextEditingSubscription, TextEditingValue, TextField, TextRange,
-    TextSelection,
+    ComposingRange, EditableText, InvalidTextDeltaRange, SelectionChangedCause, TextAffinity,
+    TextEditingController, TextEditingDelta, TextEditingSubscription, TextEditingValue, TextField,
+    TextRange, TextSelection,
 };
 pub use spans::{
     InlineSpan, RichText, StyledTextRun, Text, TextSpan, TextSpanVisitor, WidgetSpan,

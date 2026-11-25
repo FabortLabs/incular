@@ -162,6 +162,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-text`: malformed IME replacement ranges no longer silently
+  clamp into a different edit. Checked APIs expose the rejection.
+
 - `incular-mobile`: invalidate the system bar style delivery cache when
   the host surface detaches or is replaced, so equal styles can be resent.
 

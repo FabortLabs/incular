@@ -254,6 +254,26 @@ pub struct TextEditingDelta {
     pub composing: Option<ComposingRange>,
 }
 
+/// A delta addressed a reversed, out-of-bounds, or non-UTF-8-boundary
+/// replacement range in the previous text.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InvalidTextDeltaRange {
+    pub range: TextRange,
+    pub text_byte_len: usize,
+}
+
+impl fmt::Display for InvalidTextDeltaRange {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "delta range {}..{} is not a valid UTF-8 range in {} bytes",
+            self.range.start, self.range.end, self.text_byte_len,
+        )
+    }
+}
+
+impl std::error::Error for InvalidTextDeltaRange {}
+
 impl TextEditingDelta {
     #[must_use]
     pub fn replace(range: TextRange, replacement: impl Into<String>) -> Self {
@@ -303,14 +323,38 @@ impl TextEditingDelta {
         }
     }
 
+    /// Applies the edit, leaving the value untouched if the replacement
+    /// range is malformed. Use [`Self::try_apply`] for the original error.
     #[must_use]
     pub fn apply(&self, value: &TextEditingValue) -> TextEditingValue {
+        self.try_apply(value).unwrap_or_else(|_| value.clone())
+    }
+
+    /// Applies a checked edit without silently clamping a malformed
+    /// replacement range into a different edit.
+    ///
+    /// # Errors
+    /// Returns [`InvalidTextDeltaRange`] unless both endpoints describe an
+    /// ordered UTF-8 byte range in the previous text.
+    pub fn try_apply(
+        &self,
+        value: &TextEditingValue,
+    ) -> Result<TextEditingValue, InvalidTextDeltaRange> {
+        if !self.range.is_valid()
+            || !value.text.is_char_boundary(self.range.start)
+            || !value.text.is_char_boundary(self.range.end)
+        {
+            return Err(InvalidTextDeltaRange {
+                range: self.range,
+                text_byte_len: value.text.len(),
+            });
+        }
         let mut next = value.clone().replace(self.range, &self.replacement);
         if let Some(selection) = self.selection {
             next.selection = selection.clamp_to(&next.text);
         }
         next.composing = self.composing.map(|range| range.clamp_to(&next.text));
-        next
+        Ok(next)
     }
 }
 
@@ -631,10 +675,18 @@ impl TextEditingController {
         before != state.listeners.len()
     }
 
-    /// Applies a user (IME or platform) delta. Input formatters run on it.
+    /// Applies a user (IME or platform) delta. Input formatters run only
+    /// on valid edits. Use [`Self::try_apply_delta`] to inspect a rejection.
     pub fn apply_delta(&self, delta: &TextEditingDelta) {
-        let next = delta.apply(&self.value());
+        let _ = self.try_apply_delta(delta);
+    }
+
+    /// Applies a user delta and returns an error for an invalid range,
+    /// without invoking formatters or notifying edit listeners.
+    pub fn try_apply_delta(&self, delta: &TextEditingDelta) -> Result<(), InvalidTextDeltaRange> {
+        let next = delta.try_apply(&self.inner.borrow().value)?;
         self.update_user(next);
+        Ok(())
     }
 
     /// Replaces the selection as a user edit: input formatters run on the
