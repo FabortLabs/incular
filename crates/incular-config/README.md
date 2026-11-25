@@ -10,6 +10,10 @@
 
 Renderer-independent configuration values shared across Incular layers.
 
+Use `Constraints::try_normalized` to normalize raw bounds before layout.
+Negative bounds become zero, an inverted maximum rises to its minimum,
+and NaN or positive-infinite minimums return an error.
+
 This crate owns box constraints, physical edge insets, axis and direction
 values, and alignment/flex/wrap policy enums. It depends only on
 `incular-core` geometry, so layout, widgets, runtime, and platform adapters can

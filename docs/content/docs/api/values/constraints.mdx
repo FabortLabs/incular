@@ -29,6 +29,7 @@ Validity: minimums finite and `>= 0`; maximums not NaN and `>=` minimums.
 | --- | --- |
 | `new(min_w, max_w, min_h, max_h)` | Exact bounds; panics if invalid |
 | `try_new(..)` | Same as `new`, returns `Result` |
+| `try_normalized(..)` | Clamp negative bounds to zero and raise inverted maxima; returns an error on NaN or positive-infinite minimums |
 | `tight(size)` | `min == max == size` |
 | `loose(size)` | `0..size` |
 | `unbounded()` | `0..∞` both axes |

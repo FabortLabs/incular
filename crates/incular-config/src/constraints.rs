@@ -286,7 +286,7 @@ impl Constraints {
         if factor <= 0. {
             return Self::tight(Size::ZERO);
         }
-        Self::normalize_interpolation(
+        Self::try_normalized(
             self.min_width * factor,
             self.max_width * factor,
             self.min_height * factor,
@@ -295,12 +295,22 @@ impl Constraints {
         .unwrap_or(self)
     }
 
-    fn normalize_interpolation(
+    /// Normalizes input bounds like Flutter's `BoxConstraints.normalize`:
+    /// each minimum is at least zero and each maximum is raised to that
+    /// minimum if necessary. As with `try_new`, NaN and positive-infinite
+    /// minimums are not layout constraints.
+    pub fn try_normalized(
         min_width: f32,
         max_width: f32,
         min_height: f32,
         max_height: f32,
     ) -> Result<Self, ConstraintError> {
+        if [min_width, max_width, min_height, max_height]
+            .into_iter()
+            .any(f32::is_nan)
+        {
+            return Err(ConstraintError::Invalid);
+        }
         let min_width = min_width.max(0.);
         let min_height = min_height.max(0.);
         Self::try_new(
@@ -338,7 +348,7 @@ impl Lerp for Constraints {
                 (f64::from(a) * (1. - t) + f64::from(b) * t) as f32
             }
         };
-        Self::normalize_interpolation(
+        Self::try_normalized(
             mix(self.min_width, other.min_width),
             mix(self.max_width, other.max_width),
             mix(self.min_height, other.min_height),

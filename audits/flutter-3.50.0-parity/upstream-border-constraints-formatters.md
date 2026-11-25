@@ -65,3 +65,14 @@ now pair, and the six focused Rust tests pass.
 Rust still limits minimums to finite values and uses a safe nearer
 endpoint for incompatible bounded/unbounded maxima rather than asserting.
 The separate Flutter cases using infinite minimums stay open.
+
+## Constraint normalization and empty sizes
+
+Pinned Flutter originals at `rendering/box_constraints_test.dart:186,210`
+and their Incular ports in `flutter350_constraints_normalization.rs` pass.
+An inverted width (3..2) normalizes to tight width 3 without changing the
+11..18 height. An empty size of 15×0 under 10..20 bounds on both axes
+becomes 15×10, without dividing by the zero axis. Rust also checks the
+transposed example and rejects NaN and positive-infinite minimums instead
+of admitting invalid layout values. All 11 focused Rust tests and both
+exact Flutter registrations passed on Linux; no raster output is involved.

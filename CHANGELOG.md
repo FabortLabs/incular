@@ -7,6 +7,10 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-config`: `Constraints::try_normalized` clamps negative bounds to
+  zero and raises an inverted maximum to its minimum, while rejecting NaN
+  and positive-infinite minimums.
+
 - `incular-widgets`: `Semantics::accessibility_focus_block_type` blocks
   accessibility focus for a node or subtree without changing keyboard
   focus or removing the node's other actions.
