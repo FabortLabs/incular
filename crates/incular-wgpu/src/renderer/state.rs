@@ -75,6 +75,12 @@ pub struct WgpuRenderer {
     /// without shared locks and flushed in one batch per frame.
     pub(super) image_cache: RendererImageCache<ImageId, GpuImage>,
     pub(super) composite_bind_group_layout: wgpu::BindGroupLayout,
+    #[cfg(not(incular_d3d11))]
+    pub(super) soft_clips: Vec<GpuSoftClip>,
+    #[cfg(not(incular_d3d11))]
+    pub(super) soft_clip_layout: wgpu::BindGroupLayout,
+    #[cfg(not(incular_d3d11))]
+    pub(super) no_soft_clip: SoftClipBindings,
     pub(super) composite_sampler: wgpu::Sampler,
     pub(super) blur_bind_group_layout: wgpu::BindGroupLayout,
     pub(super) blur_sampler: wgpu::Sampler,
@@ -352,6 +358,12 @@ impl WgpuRenderer {
             image_samplers: pipelines.image_samplers.clone(),
             image_cache: RendererImageCache::new(),
             composite_bind_group_layout: pipelines.composite_bind_group_layout.clone(),
+            #[cfg(not(incular_d3d11))]
+            soft_clips: Vec::new(),
+            #[cfg(not(incular_d3d11))]
+            soft_clip_layout: pipelines.soft_clip_layout.clone(),
+            #[cfg(not(incular_d3d11))]
+            no_soft_clip: pipelines.no_soft_clip.clone(),
             composite_sampler: pipelines.composite_sampler.clone(),
             blur_bind_group_layout: pipelines.blur_bind_group_layout.clone(),
             blur_sampler: pipelines.blur_sampler.clone(),

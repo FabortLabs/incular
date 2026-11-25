@@ -94,3 +94,17 @@ their own renderer implementation. The full three-mode target remains
 red for ordinary AntiAlias; the save-layer target checks its behavior
 separately. The comparison is against Flutter's edge/fringe assertions,
 not an exact per-pixel match of the two renderers.
+
+## Native ordinary rounded antialiasing
+
+The Windows wgpu three-mode fixture now passes. Ordinary AntiAlias
+applies fractional coverage per draw, so overlapping paint can produce
+the same earlier-color fringe as Flutter. AntiAliasWithSaveLayer still
+applies coverage once after composition and removes that fringe.
+HardEdge and Clip.none retain their independent controls. The saved-layer
+and invisible-border native regressions also pass.
+
+This is the analytic axis-aligned rounded-rectangle path. General-path
+fallbacks and passes with destination-reading effects still use binary
+containment. The fixture compares coverage and compositing behavior rather
+than requiring identical sample colors across renderers.

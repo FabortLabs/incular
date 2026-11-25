@@ -604,6 +604,8 @@ impl WgpuRenderer {
             multiview_mask: None,
         });
         pass.set_pipeline(self.composite_pipeline.get_for(false)?);
+        #[cfg(not(incular_d3d11))]
+        pass.set_bind_group(1, &self.no_soft_clip.group, &[0]);
         pass.set_bind_group(0, &bind_group, &[]);
         pass.set_vertex_buffer(0, self.mesh.slice(..));
         pass.set_vertex_buffer(
@@ -646,6 +648,8 @@ impl WgpuRenderer {
         list: &DisplayList,
         scale_factor: f64,
     ) -> Result<FrameOutcome, RendererError> {
+        #[cfg(not(incular_d3d11))]
+        self.soft_clips.clear();
         if !self.window_gpu.presentation.configured {
             // Still driven but presenting nothing (zero-size surface): no
             // frame advances, so age eviction cannot run — but stale shared

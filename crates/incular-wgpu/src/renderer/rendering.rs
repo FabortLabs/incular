@@ -269,6 +269,12 @@ impl WgpuRenderer {
         let mut bound_scissor = None;
         let mut bound_reference = None;
         let mut quad_bound = false;
+        #[cfg(not(incular_d3d11))]
+        let clip_bindings = if self.soft_clips.is_empty() {
+            self.no_soft_clip.clone()
+        } else {
+            SoftClipBindings::create(&self.device, &self.soft_clip_layout, &self.soft_clips)
+        };
         for batch in batches.iter() {
             let clip = match batch {
                 DrawBatch::Rectangles { clip, .. }
@@ -287,6 +293,24 @@ impl WgpuRenderer {
             };
             if clip == ClipState::Empty {
                 continue;
+            }
+            #[cfg(not(incular_d3d11))]
+            if matches!(
+                batch,
+                DrawBatch::Rectangles { .. }
+                    | DrawBatch::Glyphs { .. }
+                    | DrawBatch::Images { .. }
+                    | DrawBatch::RoundedRects { .. }
+                    | DrawBatch::Path { .. }
+                    | DrawBatch::Offscreen { .. }
+                    | DrawBatch::Filtered { .. }
+                    | DrawBatch::Shadow { .. }
+            ) {
+                pass.set_bind_group(
+                    1,
+                    &clip_bindings.group,
+                    &[clip.soft_index() * clip_bindings.stride],
+                );
             }
             let Some(scissor) = scissor_rect(clip, width, height, scale) else {
                 match batch {

@@ -9,4 +9,6 @@ struct Out { @builtin(position) position: vec4<f32>, @location(0) uv: vec2<f32>,
 // `surface.z` carries the fade of an opacity layer folded into this draw
 // (0 for an opaque draw): scaling straight alpha by the layer opacity gives
 // the pixels compositing the image through an isolated layer would.
-@fragment fn fs_main(input: Out) -> @location(0) vec4<f32> { let color=textureSample(image, image_sampler, input.uv); return vec4<f32>(color.rgb, color.a*input.opacity); }
+fn draw_color(input: Out) -> vec4<f32> { let color=textureSample(image, image_sampler, input.uv); return vec4<f32>(color.rgb, color.a*input.opacity); }
+
+@fragment fn fs_main(input: Out) -> @location(0) vec4<f32> { return draw_color(input); }

@@ -83,6 +83,68 @@ pub(crate) struct GpuCompositeInstance {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
+pub(crate) struct GpuSoftClip {
+    pub(crate) rect: [f32; 4],
+    pub(crate) radii: [f32; 4],
+    pub(crate) link: [u32; 4],
+}
+
+#[cfg(not(incular_d3d11))]
+#[derive(Clone)]
+pub(crate) struct SoftClipBindings {
+    pub(crate) group: wgpu::BindGroup,
+    pub(crate) stride: u32,
+}
+
+#[cfg(not(incular_d3d11))]
+impl SoftClipBindings {
+    pub(crate) fn create(
+        device: &wgpu::Device,
+        layout: &wgpu::BindGroupLayout,
+        nodes: &[GpuSoftClip],
+    ) -> Self {
+        let stride = device.limits().min_uniform_buffer_offset_alignment.max(16);
+        let mut storage = Vec::with_capacity(nodes.len() + 1);
+        storage.push(GpuSoftClip::zeroed());
+        storage.extend_from_slice(nodes);
+        let masks = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("incular rounded clip stack"),
+            contents: bytemuck::cast_slice(&storage),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+        let mut indices = vec![0; storage.len() * stride as usize];
+        for (index, block) in indices.chunks_exact_mut(stride as usize).enumerate() {
+            block[..4].copy_from_slice(&(index as u32).to_le_bytes());
+        }
+        let indices = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("incular rounded clip indices"),
+            contents: &indices,
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
+        let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("incular rounded clip state"),
+            layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: masks.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &indices,
+                        offset: 0,
+                        size: wgpu::BufferSize::new(16),
+                    }),
+                },
+            ],
+        });
+        Self { group, stride }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub(crate) struct GpuBlurParams {
     /// Source coordinate of the first output pixel, in input physical pixels.
     pub(crate) source_origin: [f32; 2],
@@ -198,6 +260,10 @@ pub(crate) struct SharedPipelineResources {
     pub(crate) image_bind_group_layout: wgpu::BindGroupLayout,
     pub(crate) image_samplers: HashMap<ImageSampling, wgpu::Sampler>,
     pub(crate) composite_bind_group_layout: wgpu::BindGroupLayout,
+    #[cfg(not(incular_d3d11))]
+    pub(crate) soft_clip_layout: wgpu::BindGroupLayout,
+    #[cfg(not(incular_d3d11))]
+    pub(crate) no_soft_clip: SoftClipBindings,
     pub(crate) composite_sampler: wgpu::Sampler,
     pub(crate) blur_bind_group_layout: wgpu::BindGroupLayout,
     pub(crate) blur_sampler: wgpu::Sampler,
@@ -562,6 +628,8 @@ pub(crate) struct SharedBindGroupLayouts<'a> {
     pub(crate) blur: &'a wgpu::BindGroupLayout,
     pub(crate) color_matrix: &'a wgpu::BindGroupLayout,
     pub(crate) destination_blend: &'a wgpu::BindGroupLayout,
+    #[cfg(not(incular_d3d11))]
+    pub(crate) soft_clip: &'a wgpu::BindGroupLayout,
 }
 
 /// Owned bind-group layouts created once per device. Extracted from renderer
@@ -576,6 +644,8 @@ pub(crate) struct SharedBindGroupLayoutsOwned {
     pub(crate) blur: wgpu::BindGroupLayout,
     pub(crate) color_matrix: wgpu::BindGroupLayout,
     pub(crate) destination_blend: wgpu::BindGroupLayout,
+    #[cfg(not(incular_d3d11))]
+    pub(crate) soft_clip: wgpu::BindGroupLayout,
 }
 impl SharedBindGroupLayoutsOwned {
     pub(crate) fn create(device: &wgpu::Device) -> Self {
@@ -660,6 +730,34 @@ impl SharedBindGroupLayoutsOwned {
                     sampler_entry(2),
                 ],
             ),
+            #[cfg(not(incular_d3d11))]
+            soft_clip: create(
+                "incular rounded clip state layout",
+                &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: wgpu::BufferSize::new(
+                                std::mem::size_of::<GpuSoftClip>() as u64,
+                            ),
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: true,
+                            min_binding_size: wgpu::BufferSize::new(16),
+                        },
+                        count: None,
+                    },
+                ],
+            ),
         }
     }
     pub(crate) fn borrowed(&self) -> SharedBindGroupLayouts<'_> {
@@ -671,6 +769,8 @@ impl SharedBindGroupLayoutsOwned {
             blur: &self.blur,
             color_matrix: &self.color_matrix,
             destination_blend: &self.destination_blend,
+            #[cfg(not(incular_d3d11))]
+            soft_clip: &self.soft_clip,
         }
     }
 }
@@ -795,9 +895,20 @@ pub(crate) fn create_contract_pipeline(
     }
     #[cfg(not(incular_d3d11))]
     {
+        let uses_coverage = matches!(
+            contract.class,
+            PipelineClass::Rectangle
+                | PipelineClass::Text
+                | PipelineClass::Image
+                | PipelineClass::RoundedRect
+                | PipelineClass::SquareRect
+                | PipelineClass::Path
+                | PipelineClass::Composite
+        );
+        let bindings = [bind_group, Some(layouts.soft_clip)];
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some(contract.label),
-            bind_group_layouts: &[bind_group],
+            bind_group_layouts: &bindings[..if uses_coverage { 2 } else { 1 }],
             immediate_size: 0,
         });
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -819,7 +930,11 @@ pub(crate) fn create_contract_pipeline(
             multisample: wgpu::MultisampleState::default(),
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: Some(PipelineContract::FRAGMENT_ENTRY),
+                entry_point: Some(if uses_coverage {
+                    "fs_clipped"
+                } else {
+                    PipelineContract::FRAGMENT_ENTRY
+                }),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 targets: &[Some(color_target_state(
                     format,
@@ -863,7 +978,11 @@ pub(crate) async fn create_shared_pipeline_resources(
         blur: blur_bind_group_layout,
         color_matrix: color_matrix_bind_group_layout,
         destination_blend: blend_bind_group_layout,
+        #[cfg(not(incular_d3d11))]
+            soft_clip: soft_clip_layout,
     } = owned_bind_group_layouts.clone();
+    #[cfg(not(incular_d3d11))]
+    let no_soft_clip = SoftClipBindings::create(device, &soft_clip_layout, &[]);
     let atlas_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         label: Some("incular glyph atlas sampler"),
         address_mode_u: wgpu::AddressMode::ClampToEdge,
@@ -1026,6 +1145,10 @@ pub(crate) async fn create_shared_pipeline_resources(
         image_bind_group_layout,
         image_samplers,
         composite_bind_group_layout,
+        #[cfg(not(incular_d3d11))]
+        soft_clip_layout,
+        #[cfg(not(incular_d3d11))]
+        no_soft_clip,
         composite_sampler,
         blur_bind_group_layout,
         blur_sampler,

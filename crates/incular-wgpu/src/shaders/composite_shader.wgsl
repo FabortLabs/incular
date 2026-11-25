@@ -27,7 +27,7 @@ fn rounded_coverage(p: vec2<f32>, rect: vec4<f32>, radii: vec4<f32>) -> f32 {
 }
 // Offscreen color is premultiplied. Multiplying both stored RGB and alpha by
 // the group alpha exactly once preserves overlap semantics at the parent.
-@fragment fn fs_main(input: Out) -> @location(0) vec4<f32> {
+fn draw_color(input: Out) -> vec4<f32> {
   let sample = textureSample(group_texture, target_sampler, input.uv);
   let alpha = input.alpha * rounded_coverage(input.position.xy, input.clip_rect, input.clip_radii);
   if (input.mode > 0.5) {
@@ -36,3 +36,5 @@ fn rounded_coverage(p: vec2<f32>, rect: vec4<f32>, radii: vec4<f32>) -> f32 {
   }
   return vec4<f32>(sample.rgb * alpha, sample.a * alpha);
 }
+
+@fragment fn fs_main(input: Out) -> @location(0) vec4<f32> { return draw_color(input); }

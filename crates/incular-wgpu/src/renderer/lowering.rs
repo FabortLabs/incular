@@ -32,6 +32,8 @@ impl WgpuRenderer {
         let mut transforms = vec![initial_transform];
         let mut clips = vec![initial_clip];
         let mut clip_masks: Vec<Option<ClipMask>> = vec![None];
+        #[cfg(not(incular_d3d11))]
+        let mut has_destination_effect = None;
         let mut command_index = 0_usize;
         while command_index < commands.len() {
             let command = &commands[command_index];
@@ -624,28 +626,9 @@ impl WgpuRenderer {
                     }
                 }
                 PaintCommand::PushClip { rect } => {
-                    let next = ClipRect {
-                        rect: transform.transform_rect_bbox(*rect),
-                    };
-                    let combined = match *clips.last().expect("clip stack") {
-                        ClipState::Unbounded => ClipState::Rect(next),
-                        ClipState::Rect(current) => intersect_rect(current.rect, next.rect)
-                            .map(|rect| ClipState::Rect(ClipRect { rect }))
-                            .unwrap_or(ClipState::Empty),
-                        ClipState::Stencil { rect, depth } => match rect {
-                            Some(current) => intersect_rect(current.rect, next.rect)
-                                .map(|rect| ClipState::Stencil {
-                                    rect: Some(ClipRect { rect }),
-                                    depth,
-                                })
-                                .unwrap_or(ClipState::Empty),
-                            None => ClipState::Stencil {
-                                rect: Some(next),
-                                depth,
-                            },
-                        },
-                        ClipState::Empty => ClipState::Empty,
-                    };
+                    let next = ClipRect::hard(transform.transform_rect_bbox(*rect));
+                    let combined =
+                        intersect_clip_with_rect(*clips.last().expect("clip stack"), next);
                     clips.push(combined);
                     clip_masks.push(None);
                     self.counters.clip_rect_pushes += 1;
@@ -656,6 +639,67 @@ impl WgpuRenderer {
                     isolation,
                 } => {
                     let [a, b, c, d, _, _] = transform.to_kurbo().as_coeffs();
+                    #[cfg(not(incular_d3d11))]
+                    if *coverage == incular_painting::ClipCoverage::AntiAlias
+                        && (a, b, c, d) == (1., 0., 0., 1.)
+                        // Destination-reading effects use a replacement
+                        // pass rather than a source color/alpha blend.
+                        // Keep hard containment until they can mix their
+                        // filtered destination with fractional coverage.
+                        && !*has_destination_effect.get_or_insert_with(|| commands.iter().any(
+                            |command| matches!(command, PaintCommand::PushBlend { .. } | PaintCommand::PushBackdropFilter { .. })
+                        ))
+                    {
+                        let parent = *clips.last().expect("clip stack");
+                        let local = transform.transform_point(rrect.rect.origin);
+                        let guard = 1. / scale;
+                        let bounds = Rect::from_origin_size(
+                            local - Offset::new(guard, guard),
+                            Size::new(
+                                rrect.rect.size.width + 2. * guard,
+                                rrect.rect.size.height + 2. * guard,
+                            ),
+                        );
+                        let state = if rrect.rect.size.width <= 0.
+                            || rrect.rect.size.height <= 0.
+                            || intersect_clip_with_rect(parent, ClipRect::hard(bounds))
+                                == ClipState::Empty
+                        {
+                            ClipState::Empty
+                        } else {
+                            let radii = rrect_instance(
+                                *rrect,
+                                &Brush::Solid(Color::TRANSPARENT),
+                                transform,
+                                scale,
+                                self.target_width as f32,
+                                self.target_height as f32,
+                            )
+                            .radii;
+                            self.soft_clips.push(GpuSoftClip {
+                                rect: [
+                                    local.x * scale,
+                                    local.y * scale,
+                                    rrect.rect.size.width * scale,
+                                    rrect.rect.size.height * scale,
+                                ],
+                                radii,
+                                link: [parent.soft_index(), 0, 0, 0],
+                            });
+                            intersect_clip_with_rect(
+                                parent,
+                                ClipRect {
+                                    rect: bounds,
+                                    soft: self.soft_clips.len() as u32,
+                                },
+                            )
+                        };
+                        clips.push(state);
+                        clip_masks.push(None);
+                        self.counters.clip_rrect_pushes += 1;
+                        command_index += 1;
+                        continue;
+                    }
                     if *coverage == incular_painting::ClipCoverage::AntiAliasWithSaveLayer
                         && let Some(isolation) = isolation
                         && (a, b, c, d) == (1., 0., 0., 1.)
@@ -717,9 +761,7 @@ impl WgpuRenderer {
                         }
                         continue;
                     }
-                    let next = ClipRect {
-                        rect: translated_rect(rrect.rect, translation),
-                    };
+                    let next = ClipRect::hard(translated_rect(rrect.rect, translation));
                     let parent = *clips.last().expect("clip stack");
                     let scissor = intersect_clip_with_rect(parent, next);
                     let depth = stencil_depth(parent);
@@ -798,9 +840,7 @@ impl WgpuRenderer {
                     };
                     let scissor = intersect_clip_with_rect(
                         parent,
-                        ClipRect {
-                            rect: translated_rect(bounds, translation),
-                        },
+                        ClipRect::hard(translated_rect(bounds, translation)),
                     );
                     let key = PathMeshKey {
                         path: path.id(),
@@ -1024,7 +1064,7 @@ impl WgpuRenderer {
         self.counters.shader_mask_passes += 1;
         let placed = Placed::new(self.target_origin, width, height);
         Ok(Some(DrawBatch::Blend {
-            clip: ClipState::Rect(ClipRect { rect: mask_rect }),
+            clip: ClipState::Rect(ClipRect::hard(mask_rect)),
             layer,
             source: BlendSource::Effect,
             mode: mask.blend_mode,

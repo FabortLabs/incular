@@ -4,6 +4,18 @@ use super::*;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct ClipRect {
     pub(crate) rect: Rect,
+    pub(crate) soft: u32,
+}
+impl ClipRect {
+    pub(crate) fn hard(rect: Rect) -> Self {
+        Self { rect, soft: 0 }
+    }
+    fn intersect(self, next: Self) -> Option<Self> {
+        intersect_rect(self.rect, next.rect).map(|rect| Self {
+            rect,
+            soft: if next.soft == 0 { self.soft } else { next.soft },
+        })
+    }
 }
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum ClipState {
@@ -16,6 +28,17 @@ pub(crate) enum ClipState {
         depth: u8,
     },
     Empty,
+}
+impl ClipState {
+    pub(crate) fn soft_index(self) -> u32 {
+        match self {
+            Self::Rect(rect)
+            | Self::Stencil {
+                rect: Some(rect), ..
+            } => rect.soft,
+            _ => 0,
+        }
+    }
 }
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum ClipMask {
@@ -322,8 +345,9 @@ pub(crate) fn with_stencil_depth(clip: ClipState, depth: u8) -> ClipState {
 pub(crate) fn intersect_clip_with_rect(clip: ClipState, next: ClipRect) -> ClipState {
     match clip {
         ClipState::Unbounded => ClipState::Rect(next),
-        ClipState::Rect(current) => intersect_rect(current.rect, next.rect)
-            .map(|rect| ClipState::Rect(ClipRect { rect }))
+        ClipState::Rect(current) => current
+            .intersect(next)
+            .map(ClipState::Rect)
             .unwrap_or(ClipState::Empty),
         ClipState::Stencil { rect: None, depth } => ClipState::Stencil {
             rect: Some(next),
@@ -332,9 +356,10 @@ pub(crate) fn intersect_clip_with_rect(clip: ClipState, next: ClipRect) -> ClipS
         ClipState::Stencil {
             rect: Some(current),
             depth,
-        } => intersect_rect(current.rect, next.rect)
+        } => current
+            .intersect(next)
             .map(|rect| ClipState::Stencil {
-                rect: Some(ClipRect { rect }),
+                rect: Some(rect),
                 depth,
             })
             .unwrap_or(ClipState::Empty),

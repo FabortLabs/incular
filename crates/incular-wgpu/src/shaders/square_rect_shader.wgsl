@@ -20,7 +20,9 @@ fn gradient_sample(p: vec2<f32>, kind: f32, g: vec4<f32>, ext: vec4<f32>) -> vec
 // edge; an extent under one pixel is drawn one pixel wide at its centre with
 // coverage scaled by the extent.
 fn axis_coverage(c: f32, extent: f32, unit: f32) -> f32 { let lo=-c/unit; let hi=(extent-c)/unit; let w=hi-lo; if (w >= 1.) { return min(clamp(.5-lo,0.,1.),clamp(hi+.5,0.,1.)); } let m=(lo+hi)*.5; return w*min(clamp(1.-m,0.,1.),clamp(m+1.,0.,1.)); }
-@fragment fn fs_main(i: Out) -> @location(0) vec4<f32> { let size=i.options.zw; let width=i.options.y; let unit=max(length(fwidth(i.local))*.70710678,1e-4); let box_cov=axis_coverage(i.local.x,size.x,unit)*axis_coverage(i.local.y,size.y,unit); var edge=box_cov; if(width>0.) { let inner_size=max(size-vec2(2.*width),vec2(0.)); let inner_box=axis_coverage(i.local.x-width,inner_size.x,unit)*axis_coverage(i.local.y-width,inner_size.y,unit); edge=max(box_cov-inner_box,0.); }
+fn draw_color(i: Out) -> vec4<f32> { let size=i.options.zw; let width=i.options.y; let unit=max(length(fwidth(i.local))*.70710678,1e-4); let box_cov=axis_coverage(i.local.x,size.x,unit)*axis_coverage(i.local.y,size.y,unit); var edge=box_cov; if(width>0.) { let inner_size=max(size-vec2(2.*width),vec2(0.)); let inner_box=axis_coverage(i.local.x-width,inner_size.x,unit)*axis_coverage(i.local.y-width,inner_size.y,unit); edge=max(box_cov-inner_box,0.); }
   // Solid fills, the common case, never touch the gradient texture.
   var color=i.a; if(i.options.x>0.) { color=gradient_sample(i.local,i.options.x,i.gradient,i.gradient_ext); }
   return vec4(color.rgb,color.a*edge); }
+
+@fragment fn fs_main(input: Out) -> @location(0) vec4<f32> { return draw_color(input); }
