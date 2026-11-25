@@ -8,11 +8,11 @@ packages/flutter/test/physics/spring_simulation_test.dart	70	creates spring with
 packages/flutter/test/physics/spring_simulation_test.dart	82	creates spring with negative bounce	paired-match	upstream-physics-comparisons.md
 packages/flutter/test/physics/spring_simulation_test.dart	94	get duration and bounce based on mass and stiffness	paired-match	upstream-physics-comparisons.md
 packages/flutter/test/physics/spring_simulation_test.dart	101	custom duration	paired-match	upstream-physics-comparisons.md
-packages/flutter/test/physics/spring_simulation_test.dart	114	duration <= 0 should fail	paired-mismatch	upstream-physics-comparisons.md
-packages/flutter/test/physics/friction_simulation_test.dart	9	Friction simulation positive velocity	paired-mismatch	upstream-physics-comparisons.md
-packages/flutter/test/physics/friction_simulation_test.dart	30	Friction simulation negative velocity	paired-mismatch	upstream-physics-comparisons.md
-packages/flutter/test/physics/friction_simulation_test.dart	51	Friction simulation constant deceleration	paired-mismatch	upstream-physics-comparisons.md
-packages/flutter/test/physics/gravity_simulation_test.dart	9	Gravity simulation 1	paired-mismatch	upstream-physics-comparisons.md
+packages/flutter/test/physics/spring_simulation_test.dart	114	duration <= 0 should fail	paired-match	upstream-physics-comparisons.md#current-physics-ledger-verification
+packages/flutter/test/physics/friction_simulation_test.dart	9	Friction simulation positive velocity	paired-match	upstream-physics-comparisons.md#current-physics-ledger-verification
+packages/flutter/test/physics/friction_simulation_test.dart	30	Friction simulation negative velocity	paired-match	upstream-physics-comparisons.md#current-physics-ledger-verification
+packages/flutter/test/physics/friction_simulation_test.dart	51	Friction simulation constant deceleration	paired-match	upstream-physics-comparisons.md#current-physics-ledger-verification
+packages/flutter/test/physics/gravity_simulation_test.dart	9	Gravity simulation 1	paired-match	upstream-physics-comparisons.md#current-physics-ledger-verification
 packages/flutter/test/physics/gravity_simulation_test.dart	14	Gravity simulation 2	paired-match	upstream-physics-comparisons.md
 packages/flutter/test/physics/clamped_simulation_test.dart	9	Clamped simulation 1	paired-match	upstream-physics-comparisons.md
 packages/flutter/test/physics/clamped_simulation_test.dart	20	Clamped simulation 2	paired-match	upstream-physics-comparisons.md
@@ -24,8 +24,8 @@ packages/flutter/test/services/asset_bundle_test.dart	59	Caching asset bundle te
 packages/flutter/test/services/asset_bundle_test.dart	178	for a given key, subsequent loadStructuredData calls are synchronous after the first call resolves	paired-match	upstream-assets-newton-comparisons.md
 packages/flutter/test/services/asset_bundle_test.dart	197	loadStructuredData handles exceptions correctly	paired-match	upstream-assets-newton-comparisons.md
 packages/flutter/test/services/asset_bundle_test.dart	234	NetworkAssetBundle control test	paired-match	upstream-assets-newton-comparisons.md
-packages/flutter/test/physics/newton_test.dart	12	test_friction	paired-mismatch	upstream-assets-newton-comparisons.md
-packages/flutter/test/physics/newton_test.dart	32	test_friction_through	paired-mismatch	upstream-assets-newton-comparisons.md
+packages/flutter/test/physics/newton_test.dart	12	test_friction	paired-match	upstream-physics-comparisons.md#current-physics-ledger-verification
+packages/flutter/test/physics/newton_test.dart	32	test_friction_through	paired-match	upstream-physics-comparisons.md#current-physics-ledger-verification
 packages/flutter/test/physics/newton_test.dart	76	BoundedFrictionSimulation control test	paired-match	upstream-assets-newton-comparisons.md
 packages/flutter/test/physics/newton_test.dart	90	test_gravity	paired-match	upstream-assets-newton-comparisons.md
 packages/flutter/test/physics/newton_test.dart	120	spring_types	paired-match	upstream-assets-newton-comparisons.md

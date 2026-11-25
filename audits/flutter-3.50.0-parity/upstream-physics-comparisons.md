@@ -222,3 +222,15 @@ done. Thirty-one focused Rust scroll tests passed.
 These pairs account for the two remaining original registrations in
 the 30-site physics catalog. This is coverage of those original cases,
 not a claim that all possible simulation inputs have parity.
+
+## Current physics ledger verification
+
+The earlier dispositions were the historical baseline. The seven
+still marked red were rerun on the pinned Flutter SDK by exact name
+and through the permanent native physics targets. All seven now match:
+debug invalid spring duration, three dedicated friction cases at
+the original inverse tolerance, the two Newton friction checks, and
+the 10-second decimal-acceleration gravity sample of exactly 500.5.
+The ledger now reflects 30 matches out of the 30 inventoried physics
+registrations. This is not a claim about all inputs, representation
+widths, or release-mode validation.
