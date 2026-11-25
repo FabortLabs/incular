@@ -16,6 +16,7 @@ mod content_sensitivity;
 mod data_transfer;
 mod display;
 mod file_dialog;
+pub mod message_codecs;
 mod operation;
 mod platform_view;
 mod pointer;

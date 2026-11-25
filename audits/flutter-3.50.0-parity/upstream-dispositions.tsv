@@ -1388,3 +1388,7 @@ packages/flutter/test/foundation/serialization_test.dart	107	of double list when
 packages/flutter/test/foundation/serialization_test.dart	120	done twice	paired-match	upstream-foundation-serialization.md
 packages/flutter/test/foundation/serialization_test.dart	125	empty WriteBuffer	paired-match	upstream-foundation-serialization.md
 packages/flutter/test/foundation/serialization_test.dart	128	size 1	paired-match	upstream-foundation-serialization.md
+packages/flutter/test/services/message_codecs_test.dart	182	should encode sizes correctly at boundary cases	paired-match	upstream-standard-message-codecs.md#standard-message-values
+packages/flutter/test/services/message_codecs_test.dart	208	should encode and decode simple messages	paired-match	upstream-standard-message-codecs.md#standard-message-values
+packages/flutter/test/services/message_codecs_test.dart	223	should encode and decode composite message	paired-match	upstream-standard-message-codecs.md#standard-message-values
+packages/flutter/test/services/message_codecs_test.dart	265	should align doubles to 8 bytes	paired-match	upstream-standard-message-codecs.md#standard-message-values

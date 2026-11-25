@@ -1,0 +1,20 @@
+# Services standard binary codecs
+
+## Standard message values
+
+The four exact `Standard message codec` registrations in
+`services/message_codecs_test.dart` passed on pinned Flutter 3.50.0 and
+the native `flutter350_standard_message_codec` target passes all six tests.
+
+The tests compare the 253/254 and 65535/65536 size-prefix boundaries,
+actual 8-byte double alignment, scalar value tags, nested lists, and
+maps with mixed key types. A separate pinned reference verifies exact
+UTF-8 and nested-null bytes and decoding a slice of a larger buffer.
+The native host byte order, the codec's null-message distinction, and
+IEEE infinity, NaN and signed-zero handling are retained.
+
+This is the standard data encoding, not a platform channel transport.
+Rust keeps ordered map entries instead of normalizing arbitrary Dart
+key equality, bounds nesting, and checks requested lengths before
+allocating. Dart subclass extension tags and web number coercions are
+not claimed.

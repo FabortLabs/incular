@@ -195,7 +195,13 @@ impl<'a> ReadBuffer<'a> {
 
     #[must_use]
     pub const fn has_remaining(&self) -> bool {
-        self.position < self.data.len()
+        self.remaining() != 0
+    }
+
+    /// Bytes available starting at the current cursor.
+    #[must_use]
+    pub const fn remaining(&self) -> usize {
+        self.data.len() - self.position
     }
 
     pub fn get_uint8(&mut self) -> Result<u8, BufferError> {
