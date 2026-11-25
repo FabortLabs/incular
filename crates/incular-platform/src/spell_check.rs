@@ -33,6 +33,18 @@ impl SuggestionSpan {
     }
 }
 
+impl fmt::Display for SuggestionSpan {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "SuggestionSpan(range: TextRange(start: {}, end: {}), suggestions: [",
+            self.range.start, self.range.end
+        )?;
+        display_list(f, &self.suggestions)?;
+        f.write_str("])")
+    }
+}
+
 /// Flutter's `SpellCheckResults`: the text that was checked and its
 /// misspelled spans, in text order.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
@@ -83,6 +95,28 @@ impl SpellCheckResults {
         }
         None
     }
+}
+
+impl fmt::Display for SpellCheckResults {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "SpellCheckResults(spellCheckText: {}, suggestionSpans: [",
+            self.spell_checked_text
+        )?;
+        display_list(f, &self.suggestion_spans)?;
+        f.write_str("])")
+    }
+}
+
+fn display_list<T: fmt::Display>(f: &mut fmt::Formatter<'_>, items: &[T]) -> fmt::Result {
+    for (index, item) in items.iter().enumerate() {
+        if index != 0 {
+            f.write_str(", ")?;
+        }
+        write!(f, "{item}")?;
+    }
+    Ok(())
 }
 
 /// Receives the outcome of one spell check: the misspelled spans, or `None`

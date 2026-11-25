@@ -1090,3 +1090,5 @@ packages/flutter/test/services/text_boundary_test.dart	231	trailing boundary wor
 packages/flutter/test/services/text_boundary_test.dart	240	works when position is between two CRLF	paired-match	upstream-text-boundary-services.md
 packages/flutter/test/services/text_boundary_test.dart	249	works for multiple consecutive line terminators	paired-match	upstream-text-boundary-services.md
 packages/flutter/test/services/text_boundary_test.dart	267	document boundary works	paired-match	upstream-text-boundary-services.md
+packages/flutter/test/services/spell_check_test.dart	9	SuggestionSpan.toString	paired-match	upstream-spell-check.md
+packages/flutter/test/services/spell_check_test.dart	18	SpellCheckResults.toString	paired-match	upstream-spell-check.md

@@ -127,3 +127,31 @@ fn the_default_service_forwards_to_the_native_checker_and_saves_results() {
         Some(SpellCheckResults::new("ok xyz", expected))
     );
 }
+
+#[test]
+fn suggestion_span_displays_unquoted_ordered_replacements() {
+    assert_eq!(
+        SuggestionSpan::new(12..17, ["weird"]).to_string(),
+        "SuggestionSpan(range: TextRange(start: 12, end: 17), suggestions: [weird])",
+    );
+    assert_eq!(
+        SuggestionSpan::new(3..7, ["one", "two"]).to_string(),
+        "SuggestionSpan(range: TextRange(start: 3, end: 7), suggestions: [one, two])",
+    );
+}
+
+#[test]
+fn spell_check_results_display_the_text_and_entire_span_list() {
+    assert_eq!(
+        SpellCheckResults::new(
+            "i before e except after c is so wierd.",
+            vec![SuggestionSpan::new(12..17, ["weird"])],
+        )
+        .to_string(),
+        "SpellCheckResults(spellCheckText: i before e except after c is so wierd., suggestionSpans: [SuggestionSpan(range: TextRange(start: 12, end: 17), suggestions: [weird])])",
+    );
+    assert_eq!(
+        SpellCheckResults::default().to_string(),
+        "SpellCheckResults(spellCheckText: , suggestionSpans: [])"
+    );
+}
