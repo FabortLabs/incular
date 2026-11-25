@@ -206,8 +206,10 @@ where
     let fixed_with_spacing = fixed_main + spacing * child_count.saturating_sub(1) as f32;
     let max_main = main_max(constraints, direction);
     let min_main = main_min(constraints, direction);
-    let target_main = if matches!(config.main_axis_size, MainAxisSize::Max) && max_main.is_finite()
-    {
+    // Flutter allocates bounded free space before it decides whether
+    // the line itself shrink-wraps. MainAxisSize::Min uses the same
+    // share ceiling as Max, then sizes to the children actually laid out.
+    let target_main = if max_main.is_finite() {
         max_main
     } else {
         fixed_with_spacing.max(min_main)

@@ -33,3 +33,27 @@ from 100px to 250px and back. The clip disappears once content fits
 and reappears when main-axis overflow returns. Rows and columns
 also expose the same option in Incular. The existing placement
 batch stays green.
+
+## Flexible sizing before shrink wrap
+
+Pinned `:533` checks loose fit before and after changing the child
+request from 100px to 1000px. The measured child stops at its 300px
+share; its siblings move from [200,400] to [300,400].
+Pinned `:589` checks a retained `MainAxisSize::Min` row with the
+first child changing from inflexible to tight and then loose.
+Before the fix, Incular laid out the tight child at 300px but
+positioned siblings as if that child had zero width. It also
+shrink-wrapped both the tight and loose states to 200px. After the
+fix the line wraps to 300, 500 and 300px across the three frames,
+with no overlap and the exact pinned child widths and offsets.
+
+The identically named pinned registrations at `:650`, `:689` and
+`:716` all executed. In the legal loose/min configuration, both
+engines keep the same layout object and report widths
+[300,300,300,500,500,505] with a constant 100px height as the
+constraints and child fit change. The other two registrations
+exercise invalid unbounded configurations: tight/min and loose/max.
+Flutter reports a debug layout exception in each; Incular returns
+an intrinsic 300×100 layout in both. That is the documented retained
+fallback, and these cases record the mismatch rather than claiming
+diagnostic parity.

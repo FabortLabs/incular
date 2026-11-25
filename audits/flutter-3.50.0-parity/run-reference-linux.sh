@@ -35,9 +35,11 @@ import re
 import sys
 
 names = sys.argv[1:]
-if any(not name.strip() for name in names) or len(set(names)) != len(names):
-    raise SystemExit("Give distinct exact test names, including group prefixes.")
-print("^(?:" + "|".join(map(re.escape, names)) + ")$")
+if any(not name.strip() for name in names):
+    raise SystemExit("Give exact test names, including group prefixes.")
+# Repeated names select distinct registrations with the same full name.
+# The result check below still requires an exact count for each name.
+print("^(?:" + "|".join(map(re.escape, dict.fromkeys(names))) + ")$")
 PY
     )
     ;;

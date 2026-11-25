@@ -970,3 +970,8 @@ packages/flutter/test/rendering/flex_test.dart	377	MainAxisAlignment.center with
 packages/flutter/test/rendering/flex_test.dart	416	MainAxisAlignment.spaceEvenly with RenderFlex.spacing	paired-match	upstream-flex-retained-placement.md
 packages/flutter/test/rendering/flex_test.dart	455	MainAxisAlignment.spaceAround with RenderFlex.spacing	paired-match	upstream-flex-retained-placement.md
 packages/flutter/test/rendering/flex_test.dart	62	Clip behavior is respected	partial-match	upstream-flex-retained-placement.md#overflow-dependent-clipping
+packages/flutter/test/rendering/flex_test.dart	533	Fit.loose	paired-match	upstream-flex-retained-placement.md#flexible-sizing-before-shrink-wrap
+packages/flutter/test/rendering/flex_test.dart	589	Flexible with MainAxisSize.min	paired-match	upstream-flex-retained-placement.md#flexible-sizing-before-shrink-wrap
+packages/flutter/test/rendering/flex_test.dart	650	MainAxisSize.min inside unconstrained	paired-match	upstream-flex-retained-placement.md#flexible-sizing-before-shrink-wrap
+packages/flutter/test/rendering/flex_test.dart	689	MainAxisSize.min inside unconstrained	paired-mismatch	upstream-flex-retained-placement.md#flexible-sizing-before-shrink-wrap
+packages/flutter/test/rendering/flex_test.dart	716	MainAxisSize.min inside unconstrained	paired-mismatch	upstream-flex-retained-placement.md#flexible-sizing-before-shrink-wrap
