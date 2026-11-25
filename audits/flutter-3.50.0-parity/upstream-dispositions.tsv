@@ -419,14 +419,14 @@ packages/flutter/test/widgets/custom_multi_child_layout_test.dart	182	Test Multi
 packages/flutter/test/widgets/custom_multi_child_layout_test.dart	205	Nested CustomMultiChildLayouts	partial-match	upstream-multi-child-layout-contract.md
 packages/flutter/test/widgets/custom_multi_child_layout_test.dart	229	Loose constraints	paired-match	upstream-multi-child-layout-contract.md
 packages/flutter/test/widgets/custom_multi_child_layout_test.dart	257	Can use listener for relayout	partial-mismatch	upstream-multi-child-layout-contract.md
-packages/flutter/test/widgets/custom_multi_child_layout_test.dart	320	layoutChild more than once	paired-mismatch	upstream-multi-child-layout-contract.md
-packages/flutter/test/widgets/custom_multi_child_layout_test.dart	388	performLayout did not layout a child	paired-mismatch	upstream-multi-child-layout-contract.md
-packages/flutter/test/widgets/custom_multi_child_layout_test.dart	410	performLayout did not layout multiple child	paired-mismatch	upstream-multi-child-layout-contract.md
+packages/flutter/test/widgets/custom_multi_child_layout_test.dart	320	layoutChild more than once	paired-match	upstream-multi-child-layout-contract.md#current-child-slot-validation
+packages/flutter/test/widgets/custom_multi_child_layout_test.dart	388	performLayout did not layout a child	paired-match	upstream-multi-child-layout-contract.md#current-child-slot-validation
+packages/flutter/test/widgets/custom_multi_child_layout_test.dart	410	performLayout did not layout multiple child	paired-match	upstream-multi-child-layout-contract.md#current-child-slot-validation
 packages/flutter/test/widgets/custom_multi_child_layout_test.dart	435	CustomMultiChildLayout does not crash at zero area	paired-match	upstream-multi-child-layout-contract.md
 packages/flutter/test/widgets/custom_multi_child_layout_test.dart	308	layoutChild on non existent child	partial-match	upstream-multi-child-layout-contract.md
 packages/flutter/test/widgets/custom_multi_child_layout_test.dart	332	layoutChild on invalid size constraint	partial-match	upstream-multi-child-layout-contract.md
 packages/flutter/test/widgets/custom_multi_child_layout_test.dart	351	positionChild on non existent child	partial-match	upstream-multi-child-layout-contract.md
-packages/flutter/test/widgets/custom_multi_child_layout_test.dart	363	_callPerformLayout on child that doesn't have id	paired-mismatch	upstream-multi-child-layout-contract.md
+packages/flutter/test/widgets/custom_multi_child_layout_test.dart	363	_callPerformLayout on child that doesn't have id	paired-match	upstream-multi-child-layout-contract.md#current-child-slot-validation
 packages/flutter/test/widgets/wrap_test.dart	644	Shrink-wrapping Wrap test	paired-match	upstream-wrap-constraints-and-intrinsic-height.md
 packages/flutter/test/widgets/wrap_test.dart	787	Visual overflow generates a clip	partial-match	upstream-wrap-constraints-and-intrinsic-height.md
 packages/flutter/test/widgets/wrap_test.dart	898	Spacing with slight overflow	paired-match	upstream-wrap-constraints-and-intrinsic-height.md

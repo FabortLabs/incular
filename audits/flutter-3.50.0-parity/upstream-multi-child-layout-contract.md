@@ -47,3 +47,15 @@ installs the new instance, so the next comparison sees that replacement.
 The exact single-child :121 and multi-child :182 originals both passed
 on the pinned SDK. The two focused native counterparts and eight adjacent
 custom-layout checks also passed.
+
+## Current child-slot validation
+
+Pinned :320, :363, :388 and :410 and the native counterparts now reject the
+same invalid layout operations. A repeated measurement returns an
+`AlreadyLaidOut` error (the infallible call rejects it); the first measured
+size is not overwritten. A child without a LayoutId is rejected before the
+delegate runs. Omitting one or several named children returns an error with
+the affected slots, in child order, rather than placing zero-sized children.
+These compare invalid-operation behavior and reason, not Dart's formatted
+diagnostic tree. Eighteen focused native tests passed; the separate live
+relayout case was not part of this batch.

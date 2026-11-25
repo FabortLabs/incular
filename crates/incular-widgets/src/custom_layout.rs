@@ -290,9 +290,14 @@ impl MultiChildLayoutContext<'_> {
         &mut self,
         id: impl Into<LayoutChildId>,
         constraints: Constraints,
-    ) -> Result<Size, MissingLayoutChild> {
-        let index = self.index(id.into())?;
-        self.laid_out[index] = true;
+    ) -> Result<Size, LayoutChildError> {
+        let id = id.into();
+        let Some(&index) = self.ids.get(&id) else {
+            return Err(LayoutChildError::Missing(MissingLayoutChild(id)));
+        };
+        if std::mem::replace(&mut self.laid_out[index], true) {
+            return Err(LayoutChildError::AlreadyLaidOut(id));
+        }
         Ok((self.layout)(index, constraints))
     }
 
@@ -341,15 +346,23 @@ impl fmt::Display for MissingLayoutChild {
 
 impl std::error::Error for MissingLayoutChild {}
 
-/// Runs a multi-child delegate over children indexed by id. Children the
-/// delegate does not lay out, which Flutter rejects, lay out at zero size.
+/// Failure to lay out a named child.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum LayoutChildError {
+    #[error(transparent)]
+    Missing(#[from] MissingLayoutChild),
+    #[error("CustomMultiChildLayout child {0:?} was laid out more than once")]
+    AlreadyLaidOut(LayoutChildId),
+}
+
+/// Runs a multi-child delegate. Every child must be laid out exactly once.
 pub(crate) fn perform_multi_child_layout(
     delegate: &dyn MultiChildLayoutDelegate,
     size: Size,
     ids: &HashMap<LayoutChildId, usize>,
     child_count: usize,
     layout: &mut dyn FnMut(usize, Constraints) -> Size,
-) -> Vec<Offset> {
+) -> Result<Vec<Offset>, Vec<LayoutChildId>> {
     let mut offsets = vec![Offset::ZERO; child_count];
     let mut laid_out = vec![false; child_count];
     delegate.perform_layout(
@@ -361,12 +374,12 @@ pub(crate) fn perform_multi_child_layout(
             laid_out: &mut laid_out,
         },
     );
-    for (index, laid_out) in laid_out.into_iter().enumerate() {
-        if !laid_out {
-            layout(index, Constraints::tight(Size::ZERO));
-        }
+    if laid_out.iter().all(|laid_out| *laid_out) {
+        return Ok(offsets);
     }
-    offsets
+    let mut missing: Vec<_> = ids.iter().filter(|(_, index)| !laid_out[**index]).collect();
+    missing.sort_unstable_by_key(|(_, index)| **index);
+    Err(missing.into_iter().map(|(id, _)| id.clone()).collect())
 }
 
 /// What [`FlowDelegate::paint_children`] paints through: Flutter's

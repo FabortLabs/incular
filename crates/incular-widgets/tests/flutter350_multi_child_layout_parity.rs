@@ -2,9 +2,9 @@
 use incular_config::Constraints;
 use incular_core::Size;
 use incular_widgets::{
-    Center, CustomMultiChildLayout, LayoutId, MultiChildLayoutContext, MultiChildLayoutDelegate,
-    SizedBox, Widget,
-    internal::{Key, WidgetTree},
+    Center, CustomMultiChildLayout, LayoutChildError, LayoutId, MultiChildLayoutContext,
+    MultiChildLayoutDelegate, SizedBox, Widget,
+    internal::{Key, TreeError, WidgetTree},
 };
 use std::{cell::RefCell, panic::AssertUnwindSafe, rc::Rc};
 
@@ -131,37 +131,72 @@ fn the_replacement_delegate_decides_if_layout_runs() {
     );
 }
 
-fn invalid_layout(count: usize, mode: Mode) {
+fn layout_with_invalid_slots(count: usize, mode: Mode) -> WidgetTree {
     let log = Rc::new(RefCell::new(Observations::default()));
     let mut tree = WidgetTree::new();
     tree.mount(scene(&log, 1, false, count, mode)).unwrap();
-    let result =
-        std::panic::catch_unwind(AssertUnwindSafe(|| tree.layout(Constraints::tight(VIEW))));
-    if matches!(result, Ok(Ok(_))) {
-        let sizes: Vec<_> = (0..count)
-            .map(|i| {
-                let element = tree.element_with_key(&Key::Value(i as u64)).unwrap();
-                tree.element_bounds(element).unwrap().size
-            })
-            .collect();
-        panic!(
-            "invalid layout must be rejected; accepted child sizes={sizes:?}, delegate observations={:?}",
-            log.borrow().laid_out
+    tree
+}
+
+#[test]
+fn child_cannot_be_laid_out_twice() {
+    let mut tree = layout_with_invalid_slots(1, Mode::Duplicate);
+    let failure =
+        std::panic::catch_unwind(AssertUnwindSafe(|| tree.layout(Constraints::tight(VIEW))))
+            .expect_err("infallible layout_child must reject a duplicate");
+    let message = failure.downcast_ref::<String>().unwrap();
+    assert!(
+        message.contains("AlreadyLaidOut") && message.contains("0"),
+        "{message}"
+    );
+}
+
+fn check_missing_layout(count: usize, expected: usize) {
+    let mut tree = layout_with_invalid_slots(count, Mode::Regular);
+    assert!(matches!(
+        tree.layout(Constraints::tight(VIEW)),
+        Err(TreeError::InvalidWidgetConfiguration { widget: "CustomMultiChildLayout", reason })
+            if reason.starts_with(&format!("delegate did not lay out {expected} child slot(s)"))
+    ));
+}
+
+#[test]
+fn forgetting_one_child_rejects_layout() {
+    check_missing_layout(3, 1);
+}
+#[test]
+fn forgetting_two_children_rejects_layout() {
+    check_missing_layout(4, 2);
+}
+
+struct FallibleDuplicate;
+impl MultiChildLayoutDelegate for FallibleDuplicate {
+    fn should_relayout(&self, _: &Self) -> bool {
+        false
+    }
+
+    fn perform_layout(&self, _: Size, ctx: &mut MultiChildLayoutContext<'_>) {
+        assert!(!ctx.has_child("unknown"));
+        let first = ctx
+            .try_layout_child("child", Constraints::tight(Size::new(70., 40.)))
+            .unwrap();
+        assert_eq!(first, Size::new(70., 40.));
+        assert_eq!(
+            ctx.try_layout_child("child", Constraints::tight(Size::new(10., 10.))),
+            Err(LayoutChildError::AlreadyLaidOut("child".into())),
         );
     }
 }
 
 #[test]
-fn child_cannot_be_laid_out_twice() {
-    invalid_layout(1, Mode::Duplicate);
-}
-#[test]
-fn forgetting_one_child_rejects_layout() {
-    invalid_layout(3, Mode::Regular);
-}
-#[test]
-fn forgetting_two_children_rejects_layout() {
-    invalid_layout(4, Mode::Regular);
+fn rejected_second_measurement_preserves_the_first_size() {
+    let child = Widget::from(LayoutId::new("child", SizedBox::new())).with_key(Key::Value(70));
+    let mut tree = WidgetTree::new();
+    tree.mount(CustomMultiChildLayout::new(FallibleDuplicate, [child]).into())
+        .unwrap();
+    tree.layout(Constraints::tight(VIEW)).unwrap();
+    let key = tree.element_with_key(&Key::Value(70)).unwrap();
+    assert_eq!(tree.element_bounds(key).unwrap().size, Size::new(70., 40.));
 }
 
 struct Pref(Rc<std::cell::Cell<Size>>);
@@ -368,13 +403,9 @@ fn a_child_without_any_layout_id_is_rejected() {
     let pref = Pref(Rc::new(std::cell::Cell::new(Size::new(10., 10.))));
     tree.mount(Center::new(CustomMultiChildLayout::new(pref, [child])).into())
         .unwrap();
-    let result =
-        std::panic::catch_unwind(AssertUnwindSafe(|| tree.layout(Constraints::tight(VIEW))));
-    if matches!(result, Ok(Ok(_))) {
-        let id = tree.element_with_key(&Key::Value(90)).unwrap();
-        panic!(
-            "missing LayoutId was accepted with {:?}",
-            tree.element_bounds(id).unwrap().size
-        );
-    }
+    assert!(matches!(
+        tree.layout(Constraints::tight(VIEW)),
+        Err(TreeError::InvalidWidgetConfiguration { widget: "CustomMultiChildLayout", reason })
+            if reason == "child at position 0 has no LayoutId"
+    ));
 }

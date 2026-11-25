@@ -876,12 +876,21 @@ impl WidgetTree {
                 let mut ids = HashMap::with_capacity(children.len());
                 for (index, &child) in children.iter().enumerate() {
                     let render = self.parent_data_render(child, constraints)?;
-                    if let RenderKind::LayoutId { id } = self
+                    let RenderKind::LayoutId { id } = self
                         .render_live(render, "retained render must remain live")
                         .object
                         .kind()
-                    {
-                        ids.insert(id.clone(), index);
+                    else {
+                        return Err(TreeError::InvalidWidgetConfiguration {
+                            widget: "CustomMultiChildLayout",
+                            reason: format!("child at position {index} has no LayoutId"),
+                        });
+                    };
+                    if ids.insert(id.clone(), index).is_some() {
+                        return Err(TreeError::InvalidWidgetConfiguration {
+                            widget: "CustomMultiChildLayout",
+                            reason: format!("LayoutId {id:?} is assigned to multiple children"),
+                        });
                     }
                 }
                 let mut error = None;
@@ -904,10 +913,17 @@ impl WidgetTree {
                         }
                     },
                 );
-                match error {
-                    Some(error) => Err(error),
-                    None => Ok((size, offsets.into_iter().collect())),
+                if let Some(error) = error {
+                    return Err(error);
                 }
+                let offsets = offsets.map_err(|missing| TreeError::InvalidWidgetConfiguration {
+                    widget: "CustomMultiChildLayout",
+                    reason: format!(
+                        "delegate did not lay out {} child slot(s): {missing:?}",
+                        missing.len()
+                    ),
+                })?;
+                Ok((size, offsets.into_iter().collect()))
             }
             CustomLayoutDelegate::Flow(delegate) => {
                 let delegate = delegate.get();
