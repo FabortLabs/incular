@@ -1,5 +1,7 @@
 //! Keyboard focus discovery and traversal.
 
+use std::{cell::RefCell, collections::BTreeSet};
+
 use super::*;
 
 #[derive(Clone, Copy, Default)]
@@ -36,6 +38,59 @@ impl FocusChangeBinding {
     }
 }
 
+/// Track only annotated Focus nodes. Unrelated frames and widgets neither
+/// scan the focus tree nor allocate a semantic observer.
+#[derive(Default)]
+pub(super) struct FocusSemanticsBindings {
+    observers: BTreeMap<
+        ElementId,
+        (
+            incular_gestures::FocusNode,
+            incular_gestures::FocusNodeSubscription,
+        ),
+    >,
+    dirty: Rc<RefCell<BTreeSet<ElementId>>>,
+}
+
+impl FocusSemanticsBindings {
+    fn bind(&mut self, element: ElementId, node: &incular_gestures::FocusNode) {
+        if self
+            .observers
+            .get(&element)
+            .is_some_and(|(previous, _)| previous == node)
+        {
+            return;
+        }
+        let observe = node.clone();
+        let dirty = Rc::clone(&self.dirty);
+        let previous = std::cell::Cell::new((node.can_request_focus(), node.has_primary_focus()));
+        let subscription = node.observe(move || {
+            let next = (observe.can_request_focus(), observe.has_primary_focus());
+            if previous.replace(next) != next {
+                dirty.borrow_mut().insert(element);
+                incular_animation::scheduler::schedule_frame();
+            }
+        });
+        self.observers.insert(element, (node.clone(), subscription));
+    }
+
+    pub(super) fn unbind(&mut self, element: ElementId) {
+        self.observers.remove(&element);
+        self.dirty.borrow_mut().remove(&element);
+    }
+}
+
+pub(super) fn annotated_focus_node(kind: &WidgetKind) -> Option<&incular_gestures::FocusNode> {
+    match kind {
+        WidgetKind::Gesture { callbacks, .. }
+            if callbacks.annotates_focus && callbacks.include_semantics =>
+        {
+            callbacks.focus_node.as_ref()
+        }
+        _ => None,
+    }
+}
+
 fn external_node(kind: &WidgetKind) -> Option<&incular_gestures::FocusNode> {
     match kind {
         WidgetKind::Gesture { callbacks, .. } => callbacks.focus_node.as_ref(),
@@ -69,6 +124,48 @@ pub(super) fn instantiate_owned_focus_node(widget: &mut Widget, previous: Option
 }
 
 impl WidgetTree {
+    pub(super) fn flush_focus_semantics_changes(&mut self) {
+        let Some(bindings) = &self.focus_semantics_bindings else {
+            return;
+        };
+        if bindings.dirty.borrow().is_empty() {
+            return;
+        }
+        let dirty = std::mem::take(&mut *bindings.dirty.borrow_mut());
+        for element in dirty {
+            if let Some(render) = self.render_id(element) {
+                self.mark_render_semantics(render, SemanticsDirty::Subtree);
+            }
+        }
+    }
+
+    /// Flutter's Focus annotation omits its focus action on iOS.
+    #[doc(hidden)]
+    pub fn set_focus_semantic_actions_enabled(&mut self, enabled: bool) {
+        if self.focus_semantic_actions_enabled == enabled {
+            return;
+        }
+        self.focus_semantic_actions_enabled = enabled;
+        if let Some(bindings) = &self.focus_semantics_bindings {
+            bindings
+                .dirty
+                .borrow_mut()
+                .extend(bindings.observers.keys().copied());
+        }
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn can_dispatch_semantic_focus(&self, element: ElementId) -> bool {
+        self.can_request_focus(element)
+            && (self.focus_semantic_actions_enabled
+                || self
+                    .elements
+                    .get(element.0)
+                    .and_then(|entry| annotated_focus_node(entry.widget.kind()))
+                    .is_none())
+    }
+
     /// Returns the node installed by a mounted focus or editing widget.
     #[must_use]
     pub fn focus_node_at(&self, id: ElementId) -> Option<incular_gestures::FocusNode> {
@@ -87,6 +184,13 @@ impl WidgetTree {
 
     pub(super) fn sync_focus_node_binding(&mut self, id: ElementId) {
         let kind = self.elements.get(id.0).map(|element| element.widget.kind());
+        if let Some(annotated) = kind.and_then(annotated_focus_node) {
+            self.focus_semantics_bindings
+                .get_or_insert_with(FocusSemanticsBindings::default)
+                .bind(id, annotated);
+        } else if let Some(bindings) = &mut self.focus_semantics_bindings {
+            bindings.unbind(id);
+        }
         let node = kind.and_then(external_node);
         let callback = match kind {
             Some(WidgetKind::Gesture { callbacks, .. }) => callbacks.on_focus_change.as_ref(),

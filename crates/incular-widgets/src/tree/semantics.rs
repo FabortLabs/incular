@@ -98,6 +98,9 @@ pub(super) struct SemanticVisit {
     force_bounds: bool,
     /// The visual ancestor set an accessibility subtree block.
     subtree_focus_blocked: bool,
+    /// Plain text belongs to an enclosing Focus annotation until a
+    /// descendant independent semantics boundary starts its own group.
+    merges_focus_labels: bool,
     /// The parent's world transform followed by its child content
     /// transform; this element's own offset is not applied yet.
     parent_world: CoreTransform,
@@ -192,6 +195,7 @@ impl WidgetTree {
         if !self.semantics_enabled && self.tracked.semantics_debuggers.is_empty() {
             return;
         }
+        self.flush_focus_semantics_changes();
         let stamp = (
             self.diagnostics.layouts,
             self.diagnostics.compositor_only_updates,
@@ -284,6 +288,7 @@ impl WidgetTree {
             force_content: full,
             force_bounds: full,
             subtree_focus_blocked: false,
+            merges_focus_labels: false,
             parent_world: CoreTransform::IDENTITY,
             page_clip: None,
         });
@@ -293,9 +298,10 @@ impl WidgetTree {
         // graph is then collected whole instead of being left inconsistent.
         let mut inconsistent = false;
         while let Some(visit) = visits.pop() {
-            let render = self
-                .element_live(visit.element, "semantic traversal element must remain live")
-                .render;
+            let entry =
+                self.element_live(visit.element, "semantic traversal element must remain live");
+            let annotation = super::focus::annotated_focus_node(entry.widget.kind()).is_some();
+            let render = entry.render;
             let node = self.render_live_mut(render, "semantic render must remain live");
             if !visit.force_content && !visit.force_bounds && !node.subtree_needs_semantics {
                 if visit.parent != RETAINED_LIST {
@@ -309,7 +315,9 @@ impl WidgetTree {
             let scope = VisitScope {
                 // A node whose own content is stale, or below which a node
                 // may have appeared or disappeared, rebuilds fully.
-                content: visit.force_content || dirty.any_content(),
+                content: visit.force_content
+                    || dirty.any_content()
+                    || annotation && dirty.has_descendant_content(),
                 subtree_content: visit.force_content || dirty.subtree_content(),
                 own_bounds: visit.force_bounds || dirty.own_bounds(),
                 bounds_below: visit.force_bounds || dirty.bounds_below(),
@@ -661,6 +669,7 @@ impl WidgetTree {
             collection,
             parent_world,
             subtree_focus_blocked,
+            merges_focus_labels,
             page_clip,
             ..
         } = visit;
@@ -675,6 +684,10 @@ impl WidgetTree {
             explicit_focus_block(entry)
         };
         let child_focus_blocked = own_focus_block == AccessibilityFocusBlockType::BlockSubtree;
+        let focus_annotation = super::focus::annotated_focus_node(entry.widget.kind());
+        let joins_focus_annotation =
+            merges_focus_labels && !self.focus_semantics_boundary(element, entry);
+        let child_merges_focus_labels = focus_annotation.is_some() || joins_focus_annotation;
         if matches!(
             entry.widget.kind(),
             WidgetKind::CompositedTransformFollower { .. }
@@ -735,6 +748,7 @@ impl WidgetTree {
                             force_content: false,
                             force_bounds: false,
                             subtree_focus_blocked: child_focus_blocked,
+                            merges_focus_labels: child_merges_focus_labels,
                             page_clip: child_page_clip,
                             parent_world: if index < entry.children.len() {
                                 child_world
@@ -773,6 +787,7 @@ impl WidgetTree {
                         force_content: regroups,
                         force_bounds: scope.bounds_below || regroups,
                         subtree_focus_blocked: child_focus_blocked,
+                        merges_focus_labels: child_merges_focus_labels,
                         page_clip: child_page_clip,
                         parent_world: if index < entry.children.len() {
                             child_world
@@ -941,7 +956,18 @@ impl WidgetTree {
         }
         let mut merged = MergedSemanticSummary::default();
         merged.add_custom_actions(&properties.callbacks);
-        if absorbs_descendant_semantics(entry) {
+        if let Some(node) = focus_annotation {
+            for &child in self.visible_semantic_children(element, entry).iter() {
+                self.push_focus_label_fragments(child, &mut merged);
+            }
+            if self.can_request_focus(element) || !merged.label.is_empty() {
+                role.get_or_insert(SemanticRole::GenericContainer);
+            }
+            state.focused = node.has_primary_focus();
+        } else if joins_focus_annotation && matches!(entry.widget.kind(), WidgetKind::Text { .. }) {
+            role = None;
+        }
+        if absorbs_descendant_semantics(entry) && focus_annotation.is_none() {
             if let Some(own) = element_own_label(entry) {
                 merged.add_label(
                     &own,
@@ -1040,18 +1066,20 @@ impl WidgetTree {
         }
         let focus_blocked = state.accessibility_focus_block_type.blocks_focus();
         let focusable = !focus_blocked && self.can_request_focus(element);
-        if focus_blocked {
+        if focus_blocked || (focus_annotation.is_some() && !focusable) {
             // The portable projection uses false for the omitted focused
             // flag. The independent retained keyboard focus is untouched.
             state.focused = false;
         }
         state.focusable = focusable;
-        if focusable && !actions.contains(&SemanticActionKind::Focus) {
+        let focus_action =
+            focusable && (focus_annotation.is_none() || self.focus_semantic_actions_enabled);
+        if focus_action && !actions.contains(&SemanticActionKind::Focus) {
             actions.push(SemanticActionKind::Focus);
         }
         actions.retain(|action| {
             if *action == SemanticActionKind::Focus {
-                return focusable;
+                return focus_action;
             }
             if (*action == SemanticActionKind::Activate || action.is_directional_scroll())
                 && self.pointer_actions_blocked(element)
@@ -1148,6 +1176,7 @@ impl WidgetTree {
                     force_content: scope.subtree_content || regroups,
                     force_bounds: scope.bounds_below || regroups,
                     subtree_focus_blocked: child_focus_blocked,
+                    merges_focus_labels: child_merges_focus_labels,
                     page_clip: child_page_clip,
                     // A sliver anchor's own children come first; the
                     // grouped ones after them sit in the viewport's space,
@@ -1407,6 +1436,60 @@ impl WidgetTree {
             .get(element.0)
             .and_then(|entry| self.renders.get(entry.render.0))
             .is_some_and(|render| render.subtree_needs_semantics)
+    }
+
+    fn focus_semantics_boundary(&self, element: ElementId, entry: &Element) -> bool {
+        let properties = entry.widget.semantic_properties();
+        if properties.explicit.is_some()
+            || properties.merge_descendants
+            || !properties.callbacks.custom.is_empty()
+        {
+            return true;
+        }
+        match entry.widget.kind() {
+            WidgetKind::Text { .. } => self.is_selection_label(element),
+            WidgetKind::Button(_)
+            | WidgetKind::SelectableText { .. }
+            | WidgetKind::TextField(_)
+            | WidgetKind::Scroll { .. }
+            | WidgetKind::SliverViewport { .. } => true,
+            WidgetKind::Image { .. } => properties.label.is_some(),
+            WidgetKind::Gesture { callbacks, .. } => {
+                super::focus::annotated_focus_node(entry.widget.kind()).is_some()
+                    || GestureSemanticPolicy::ACTIONS.into_iter().any(|action| {
+                        gesture_supports(callbacks, properties.callbacks.gesture_policy, action)
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    fn push_focus_label_fragments(&self, element: ElementId, merged: &mut MergedSemanticSummary) {
+        let Some(entry) = self.elements.get(element.0) else {
+            return;
+        };
+        if !self.can_contribute_merged_semantics(entry)
+            || self.focus_semantics_boundary(element, entry)
+        {
+            return;
+        }
+        if let WidgetKind::Text { text, .. } = entry.widget.kind() {
+            merged.add_label(
+                entry
+                    .widget
+                    .semantic_properties()
+                    .label
+                    .as_deref()
+                    .unwrap_or(text),
+                self.semantic_label_direction(element, entry),
+                element_label_attributes(entry),
+            );
+        }
+        with_recursive_tree_stack(|| {
+            for &child in self.visible_semantic_children(element, entry).iter() {
+                self.push_focus_label_fragments(child, merged);
+            }
+        });
     }
 
     fn push_merged_semantics(&self, element: ElementId, merged: &mut MergedSemanticSummary) {

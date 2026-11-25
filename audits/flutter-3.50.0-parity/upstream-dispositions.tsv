@@ -1118,9 +1118,9 @@ packages/flutter/test/painting/border_radius_test.dart	578	BorderRadiusGeometry 
 packages/flutter/test/painting/border_radius_test.dart	596	BorderRadiusGeometry add and subtract, more	paired-match	upstream-focus-corners-curves-previews.md#mixed-physical-and-directional-corner-values
 packages/flutter/test/painting/border_radius_test.dart	632	BorderRadiusGeometry operators	paired-match	upstream-focus-corners-curves-previews.md#mixed-physical-and-directional-corner-values
 packages/flutter/test/widgets/focus_scope_test.dart	1085	FocusScope does not crash at zero area	reference-ran-incular-open	upstream-focus-widget-semantics.md#pinning-the-initial-behavior
-packages/flutter/test/widgets/focus_scope_test.dart	1358	Focus widgets set Semantics information about focus	paired-mismatch	upstream-focus-widget-semantics.md#pinning-the-initial-behavior
-packages/flutter/test/widgets/focus_scope_test.dart	1633	Focus doesn't introduce a Semantics node when includeSemantics is false	reference-ran-incular-open	upstream-focus-widget-semantics.md#pinning-the-initial-behavior
-packages/flutter/test/widgets/focus_scope_test.dart	1846	Focus widget gains input focus when it gains accessibility focus	paired-mismatch	upstream-focus-widget-semantics.md#pinning-the-initial-behavior
+packages/flutter/test/widgets/focus_scope_test.dart	1358	Focus widgets set Semantics information about focus	paired-match	upstream-focus-widget-semantics.md#retained-focus-annotation-parity
+packages/flutter/test/widgets/focus_scope_test.dart	1633	Focus doesn't introduce a Semantics node when includeSemantics is false	paired-match	upstream-focus-widget-semantics.md#retained-focus-annotation-parity
+packages/flutter/test/widgets/focus_scope_test.dart	1846	Focus widget gains input focus when it gains accessibility focus	paired-match	upstream-focus-widget-semantics.md#retained-focus-annotation-parity
 packages/flutter/test/widgets/focus_scope_test.dart	1886	Focus does not crash at zero area	paired-match	upstream-focus-widget-semantics.md#pinning-the-initial-behavior
 packages/flutter/test/painting/paint_image_test.dart	55	debugInvertOversizedImages	reference-ran-incular-open	upstream-decoration-image-paint.md#flutter-specific-paint-diagnostics
 packages/flutter/test/painting/paint_image_test.dart	135	debugInvertOversizedImages smaller than overhead allowance	reference-ran-incular-open	upstream-decoration-image-paint.md#flutter-specific-paint-diagnostics

@@ -1858,6 +1858,7 @@ fn gesture_callbacks_eq(left: &GestureCallbacks, right: &GestureCallbacks) -> bo
         && same_rc(&left.focus_behavior, &right.focus_behavior)
         && left.autofocus == right.autofocus
         && left.include_semantics == right.include_semantics
+        && left.annotates_focus == right.annotates_focus
         && left.mouse_cursor == right.mouse_cursor
         && left.drag_start_behavior == right.drag_start_behavior
         && left.only_accept_drag_on_threshold == right.only_accept_drag_on_threshold

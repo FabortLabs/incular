@@ -1022,7 +1022,7 @@ impl Runtime {
                     self.tree.semantics().node(node).is_some_and(|node| {
                         node.state.accessibility_focus_block_type.blocks_focus()
                     });
-                if !blocked && self.tree.can_request_focus(element) {
+                if !blocked && self.tree.can_dispatch_semantic_focus(element) {
                     self.set_focus(Some(element));
                     true
                 } else {
@@ -1181,6 +1181,8 @@ impl Runtime {
     /// platform this build targets.
     pub fn set_text_shortcut_platform(&mut self, platform: TextShortcutPlatform) {
         self.text_shortcut_platform = platform;
+        self.tree
+            .set_focus_semantic_actions_enabled(platform != TextShortcutPlatform::Ios);
         self.sync_focused_selection_lease();
     }
 

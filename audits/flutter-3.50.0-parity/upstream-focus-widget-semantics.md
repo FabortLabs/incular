@@ -35,3 +35,22 @@ an explicitly separate semantic control also stays independent. In
 particular iOS still exposes the focusable and focused state, but its
 Focus widget omits the input-focus action that Linux exposes.
 These authored cases do not add original registration credit.
+
+## Retained focus annotation parity
+
+:1358 and :1846 now pass on the public Runtime. Focus exposes the state
+of its actual input focus node and can route the advertised action to
+that node, while preserving the semantic node's identity and direction.
+Disabling eligibility withdraws the action and state; restoring it
+without giving the node focus invalidates the retained annotation as
+well. :1633 is now fully paired: the explicit opt-out produces no
+semantic node for an empty child, and keyboard requests still work.
+
+The authored Linux/iOS controls pass in Incular too. Plain descendant
+labels merge with a newline, live label changes update the same ID,
+nested Focus nodes and independent controls keep their own actions,
+and iOS reports focus state without advertising an input-focus action.
+The focus observer only invalidates annotated subtrees when eligibility
+or primary focus changes. Nine targeted Runtime and Widgets suites passed
+(81 tests). This does not claim native screen reader integration or the
+external FocusScopeNode API (:1085).

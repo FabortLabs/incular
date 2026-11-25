@@ -478,6 +478,9 @@ pub struct GestureCallbacks {
     pub focus_behavior: Option<Rc<FocusBehavior>>,
     pub autofocus: bool,
     pub include_semantics: bool,
+    /// The retained wrapper is Flutter's explicit Focus annotation.
+    #[doc(hidden)]
+    pub annotates_focus: bool,
     /// Renderer-independent cursor preference for hover-capable widgets.
     pub mouse_cursor: MouseCursor,
     /// Flutter `GestureDetector.dragStartBehavior` for the drag and scale

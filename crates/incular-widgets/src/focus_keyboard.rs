@@ -21,6 +21,7 @@ pub struct Focus {
     can_request_focus: Option<bool>,
     descendants_are_focusable: bool,
     descendants_are_traversable: bool,
+    include_semantics: bool,
     on_focus_change: Option<Rc<dyn Fn(bool)>>,
     child: Option<Widget>,
 }
@@ -33,6 +34,7 @@ impl Default for Focus {
             can_request_focus: None,
             descendants_are_focusable: true,
             descendants_are_traversable: true,
+            include_semantics: true,
             on_focus_change: None,
             child: None,
         }
@@ -84,6 +86,14 @@ impl Focus {
         self
     }
 
+    /// Includes this widget's focus annotation in the accessibility tree.
+    /// This defaults to true and does not affect ordinary keyboard focus.
+    #[must_use]
+    pub fn include_semantics(mut self, include: bool) -> Self {
+        self.include_semantics = include;
+        self
+    }
+
     /// Reports a change in whether the node or one of its descendants has focus.
     #[must_use]
     pub fn on_focus_change(mut self, callback: impl Fn(bool) + 'static) -> Self {
@@ -117,8 +127,8 @@ impl From<Focus> for Widget {
             owned_focus_permission,
             autofocus: value.autofocus,
             on_focus_change: value.on_focus_change,
-            // Flutter's `Focus.includeSemantics` defaults to true.
-            include_semantics: true,
+            include_semantics: value.include_semantics,
+            annotates_focus: true,
             ..incular_gestures::GestureCallbacks::default()
         };
         Widget::from_kind(WidgetKind::Gesture {

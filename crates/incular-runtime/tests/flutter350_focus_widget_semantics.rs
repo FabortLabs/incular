@@ -110,3 +110,172 @@ fn requesting_focus_under_a_zero_area_view_does_not_panic() {
     focus.request_focus();
     runtime.run_frame(view).unwrap();
 }
+
+#[test]
+fn disabling_focus_semantics_does_not_create_a_node_or_remove_keyboard_focus() {
+    use incular_widgets::SizedBox;
+
+    let focus = FocusNode::new();
+    let view = Constraints::tight(Size::new(800., 600.));
+    let root: Widget = Focus::new(SizedBox::shrink())
+        .node(focus.clone())
+        .include_semantics(false)
+        .into();
+    let mut runtime = Runtime::new(root).unwrap();
+    runtime.run_frame(view).unwrap();
+    assert!(runtime.tree().semantics().is_empty());
+
+    focus.request_focus();
+    runtime.run_frame(view).unwrap();
+    assert!(focus.has_primary_focus());
+    assert!(runtime.tree().semantics().is_empty());
+}
+
+#[test]
+fn ios_exposes_focus_state_without_the_native_focus_action() {
+    let focus = FocusNode::new();
+    let view = Constraints::tight(Size::new(800., 600.));
+    let mut runtime = Runtime::new(scene(&focus, TextDirection::Rtl, Text::new("Test"))).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Ios);
+    runtime.run_frame(view).unwrap();
+    let id = semantic_text(&runtime, "Test");
+    let sem = |runtime: &Runtime| {
+        let node = runtime.tree().semantics().node(id).unwrap();
+        (
+            node.state.focusable,
+            node.state.focused,
+            node.actions.clone(),
+        )
+    };
+    assert_eq!(sem(&runtime), (true, false, vec![]));
+    assert!(!runtime.dispatch_semantic_action(id, SemanticAction::Focus));
+    assert!(!focus.has_focus());
+
+    focus.request_focus();
+    runtime.run_frame(view).unwrap();
+    assert_eq!(sem(&runtime), (true, true, vec![]));
+    focus.set_can_request_focus(false);
+    runtime.run_frame(view).unwrap();
+    assert_eq!(sem(&runtime), (false, false, vec![]));
+
+    // Permissions also invalidate the semantics while this node is unfocused.
+    focus.set_can_request_focus(true);
+    runtime.run_frame(view).unwrap();
+    assert_eq!(sem(&runtime), (true, false, vec![]));
+}
+
+#[test]
+fn focus_merges_plain_labels_but_stops_at_an_independent_focus_node() {
+    use incular_widgets::Column;
+
+    let outer = FocusNode::new();
+    let inner = FocusNode::new();
+    let view = Constraints::tight(Size::new(800., 600.));
+    let labels = |second: &str| {
+        scene(
+            &outer,
+            TextDirection::Rtl,
+            Column::new([Widget::from(Text::new("one")), Text::new(second).into()]),
+        )
+    };
+    let mut runtime = Runtime::new(labels("two")).unwrap();
+    runtime.run_frame(view).unwrap();
+    let outer_id = semantic_text(&runtime, "one\ntwo");
+    assert_eq!(runtime.tree().semantics().roots(), [outer_id]);
+    assert_eq!(runtime.tree().semantics().len(), 1);
+
+    let root = runtime.tree().root().unwrap();
+    runtime
+        .schedule_update(root, labels("replacement"))
+        .unwrap();
+    runtime.run_frame(view).unwrap();
+    assert_eq!(semantic_text(&runtime, "one\nreplacement"), outer_id);
+
+    runtime
+        .schedule_update(
+            root,
+            scene(
+                &outer,
+                TextDirection::Rtl,
+                Focus::new(Text::new("nested")).node(inner.clone()),
+            ),
+        )
+        .unwrap();
+    runtime.run_frame(view).unwrap();
+    let inner_id = semantic_text(&runtime, "nested");
+    assert_ne!(inner_id, outer_id);
+    let tree = runtime.tree().semantics();
+    assert_eq!(tree.roots(), [outer_id]);
+    let outer_semantics = tree.node(outer_id).unwrap();
+    assert_eq!(outer_semantics.children, [inner_id]);
+    assert_eq!(outer_semantics.label.as_deref().unwrap_or(""), "");
+    assert_eq!(outer_semantics.actions, [SemanticActionKind::Focus]);
+    assert_eq!(
+        tree.node(inner_id).unwrap().actions,
+        [SemanticActionKind::Focus]
+    );
+
+    assert!(runtime.dispatch_semantic_action(outer_id, SemanticAction::Focus));
+    runtime.run_frame(view).unwrap();
+    assert!(outer.has_primary_focus());
+    assert!(!inner.has_focus());
+    assert!(runtime.dispatch_semantic_action(inner_id, SemanticAction::Focus));
+    runtime.run_frame(view).unwrap();
+    assert!(inner.has_primary_focus() && outer.has_focus());
+    assert!(!outer.has_primary_focus());
+    assert!(
+        !runtime
+            .tree()
+            .semantics()
+            .node(outer_id)
+            .unwrap()
+            .state
+            .focused
+    );
+    assert!(
+        runtime
+            .tree()
+            .semantics()
+            .node(inner_id)
+            .unwrap()
+            .state
+            .focused
+    );
+}
+
+#[test]
+fn a_separate_semantic_control_keeps_its_own_label_and_activation() {
+    use incular_widgets::{Semantics, SizedBox};
+    use std::{cell::Cell, rc::Rc};
+
+    let focus = FocusNode::new();
+    let activated = Rc::new(Cell::new(false));
+    let control = Semantics::new(SizedBox::shrink())
+        .label("separate control")
+        .container(true)
+        .on_tap({
+            let activated = activated.clone();
+            move || activated.set(true)
+        });
+    let mut runtime = Runtime::new(scene(&focus, TextDirection::Rtl, control)).unwrap();
+    runtime
+        .run_frame(Constraints::tight(Size::new(800., 600.)))
+        .unwrap();
+
+    let child_id = semantic_text(&runtime, "separate control");
+    let tree = runtime.tree().semantics();
+    let [parent_id] = tree.roots() else {
+        panic!("focus root")
+    };
+    let parent = tree.node(*parent_id).unwrap();
+    assert_eq!(parent.children, [child_id]);
+    assert_eq!(parent.label, None);
+    assert_eq!(parent.actions, [SemanticActionKind::Focus]);
+    assert_eq!(
+        tree.node(child_id).unwrap().actions,
+        [SemanticActionKind::Activate]
+    );
+    assert!(runtime.dispatch_semantic_action(child_id, SemanticAction::Activate));
+    assert!(activated.get());
+    assert!(!focus.has_focus());
+}

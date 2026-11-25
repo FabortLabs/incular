@@ -47,9 +47,12 @@ fn main() {
 }
 ```
 
-Without an explicit node but with `autofocus` or `can_request_focus = false`,
-[`Focus`](/docs/api/input/focus) creates one internally. Fully default [`Focus`](/docs/api/input/focus) returns the child
-unchanged.
+Without an explicit node, [`Focus`](/docs/api/input/focus) creates one when
+mounted. It exposes focus state to accessibility by default, using the plain
+text labels in its subtree without absorbing independent controls. Set
+`.include_semantics(false)` to omit the focus annotation without changing
+keyboard focus. On iOS the annotation still reports focus state but does not
+offer the accessibility action that requests keyboard focus.
 
 ## FocusScope
 
