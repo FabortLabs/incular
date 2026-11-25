@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-platform`: added Flutter-style overlay copies, value hashing,
+  and ordered diagnostics for status and navigation bar styles.
+
 - `incular-core` and `incular-widgets`: added merged dependency listeners
   with owned detach and `ListenableBuilder` support.
 

@@ -137,7 +137,7 @@ impl Rect {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Color {
     pub red: u8,
     pub green: u8,

@@ -10,7 +10,7 @@ pub use incular_core::DeviceGestureSettings;
 use incular_core::{Rect, Size};
 
 /// The platform colour preference known to the application.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Brightness {
     #[default]
     Light,

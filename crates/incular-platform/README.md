@@ -115,3 +115,7 @@ offset (content moves upward). Winit `LineDelta` is scaled by 40 logical px;
 direction without rounding, preserving fractional trackpad movement. Key commands are delivered on pressed events
 (including native repeats); control-text payloads such as Backspace are not
 forwarded as committed text.
+
+`SystemUiOverlayStyle::copy_with` replaces only supplied fields. Its
+`Display` and `diagnostic_properties` expose Flutter's property names and
+normalized sRGB values without changing the native host policy.

@@ -829,3 +829,8 @@ packages/flutter/test/foundation/change_notifier_test.dart	315	Merging change no
 packages/flutter/test/foundation/change_notifier_test.dart	330	Merging change notifiers ignores null	paired-match	upstream-foundation-scroll-comparisons.md#merged-listener-subscriptions
 packages/flutter/test/foundation/change_notifier_test.dart	347	Can remove from merged notifier	paired-match	upstream-foundation-scroll-comparisons.md#merged-listener-subscriptions
 packages/flutter/test/foundation/change_notifier_test.dart	438	Listenable.merge does not leak	paired-match	upstream-foundation-scroll-comparisons.md#merged-listener-subscriptions
+packages/flutter/test/services/system_chrome_test.dart	235	toString default values should be null	paired-match	upstream-system-chrome-comparisons.md#system-ui-overlay-style-values
+packages/flutter/test/services/system_chrome_test.dart	250	toString works as intended with actual values	paired-match	upstream-system-chrome-comparisons.md#system-ui-overlay-style-values
+packages/flutter/test/services/system_chrome_test.dart	289	==, hashCode basics	paired-match	upstream-system-chrome-comparisons.md#system-ui-overlay-style-values
+packages/flutter/test/services/system_chrome_test.dart	312	copyWith can override properties	paired-match	upstream-system-chrome-comparisons.md#system-ui-overlay-style-values
+packages/flutter/test/services/system_chrome_test.dart	331	SystemUiOverlayStyle implements debugFillProperties	paired-match	upstream-system-chrome-comparisons.md#system-ui-overlay-style-values

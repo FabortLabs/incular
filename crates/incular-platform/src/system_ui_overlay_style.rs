@@ -3,12 +3,17 @@
 //! field is optional, so a style changes only the properties it names and
 //! leaves the rest to the platform default.
 
+use std::{
+    fmt,
+    hash::{DefaultHasher, Hash, Hasher},
+};
+
 use incular_config::Brightness;
 use incular_core::Color;
 
 /// Flutter's `SystemUiOverlayStyle`. Set it imperatively on a window, or
 /// annotate a region with it so the status bar follows the screen under it.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct SystemUiOverlayStyle {
     /// Background of the navigation bar. Android only.
     pub system_navigation_bar_color: Option<Color>,
@@ -57,6 +62,73 @@ impl SystemUiOverlayStyle {
         system_status_bar_contrast_enforced: None,
     };
 
+    /// Replaces named fields, keeping the current value for every
+    /// `None` override, as Flutter's `copyWith` does.
+    #[must_use]
+    pub fn copy_with(self, overrides: Self) -> Self {
+        Self {
+            system_navigation_bar_color: overrides
+                .system_navigation_bar_color
+                .or(self.system_navigation_bar_color),
+            system_navigation_bar_divider_color: overrides
+                .system_navigation_bar_divider_color
+                .or(self.system_navigation_bar_divider_color),
+            system_navigation_bar_icon_brightness: overrides
+                .system_navigation_bar_icon_brightness
+                .or(self.system_navigation_bar_icon_brightness),
+            system_navigation_bar_contrast_enforced: overrides
+                .system_navigation_bar_contrast_enforced
+                .or(self.system_navigation_bar_contrast_enforced),
+            status_bar_color: overrides.status_bar_color.or(self.status_bar_color),
+            status_bar_brightness: overrides
+                .status_bar_brightness
+                .or(self.status_bar_brightness),
+            status_bar_icon_brightness: overrides
+                .status_bar_icon_brightness
+                .or(self.status_bar_icon_brightness),
+            system_status_bar_contrast_enforced: overrides
+                .system_status_bar_contrast_enforced
+                .or(self.system_status_bar_contrast_enforced),
+        }
+    }
+
+    /// Reports every property in Flutter diagnostics order, including
+    /// unset fields. Colors are rendered as normalized sRGB components.
+    #[must_use]
+    pub fn diagnostic_properties(self) -> [(&'static str, String); 8] {
+        [
+            (
+                "systemNavigationBarColor",
+                diagnostic_color(self.system_navigation_bar_color),
+            ),
+            (
+                "systemNavigationBarDividerColor",
+                diagnostic_color(self.system_navigation_bar_divider_color),
+            ),
+            (
+                "systemNavigationBarIconBrightness",
+                diagnostic_brightness(self.system_navigation_bar_icon_brightness),
+            ),
+            (
+                "systemNavigationBarContrastEnforced",
+                diagnostic_bool(self.system_navigation_bar_contrast_enforced),
+            ),
+            ("statusBarColor", diagnostic_color(self.status_bar_color)),
+            (
+                "statusBarBrightness",
+                diagnostic_brightness(self.status_bar_brightness),
+            ),
+            (
+                "statusBarIconBrightness",
+                diagnostic_brightness(self.status_bar_icon_brightness),
+            ),
+            (
+                "systemStatusBarContrastEnforced",
+                diagnostic_bool(self.system_status_bar_contrast_enforced),
+            ),
+        ]
+    }
+
     /// Flutter's `RenderView._updateSystemChrome` merge: when `upper` (the
     /// annotation at the status bar) and `lower` (the one at the navigation
     /// bar) both exist, `upper` supplies the status-bar fields and `lower`
@@ -79,5 +151,50 @@ impl SystemUiOverlayStyle {
             }),
             (Some(style), None) | (None, Some(style)) => Some(style),
         }
+    }
+}
+
+fn diagnostic_color(color: Option<Color>) -> String {
+    color.map_or_else(|| String::from("null"), |color| {
+        let scale = |byte| f64::from(byte) / 255.0;
+        format!(
+            "Color(alpha: {:.4}, red: {:.4}, green: {:.4}, blue: {:.4}, colorSpace: ColorSpace.sRGB)",
+            scale(color.alpha), scale(color.red), scale(color.green), scale(color.blue)
+        )
+    })
+}
+
+fn diagnostic_brightness(value: Option<Brightness>) -> String {
+    String::from(match value {
+        Some(Brightness::Dark) => "Brightness.dark",
+        Some(Brightness::Light) => "Brightness.light",
+        None => "null",
+    })
+}
+
+fn diagnostic_bool(value: Option<bool>) -> String {
+    String::from(match value {
+        Some(true) => "true",
+        Some(false) => "false",
+        None => "null",
+    })
+}
+
+impl fmt::Display for SystemUiOverlayStyle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut hash = DefaultHasher::new();
+        self.hash(&mut hash);
+        write!(
+            f,
+            "SystemUiOverlayStyle#{:05x}(",
+            hash.finish() & 0x000f_ffff
+        )?;
+        for (index, (name, value)) in self.diagnostic_properties().into_iter().enumerate() {
+            if index != 0 {
+                f.write_str(", ")?;
+            }
+            write!(f, "{name}: {value}")?;
+        }
+        f.write_str(")")
     }
 }
