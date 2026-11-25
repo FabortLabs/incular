@@ -216,6 +216,24 @@ impl WidgetTree {
                     (fit_size(Size::ZERO), ChildOffsets::default())
                 }
             }
+            RenderKind::SizedOverflow { size, alignment } => {
+                let size = constraints.constrain(size);
+                if let Some(&child) = children.first() {
+                    // Flutter lays out the child with the unchanged incoming
+                    // bounds rather than the wrapper's requested size.
+                    self.layout_render(child, constraints)?;
+                    let child = self.render_live(child, "sized overflow child must remain live");
+                    let offset = aligned_child_offset(alignment, size, child.size);
+                    let baseline = child.baseline.map(|local| offset.y + local);
+                    self.render_live_mut(id, "sized overflow render must remain live")
+                        .baseline = baseline;
+                    (size, ChildOffsets::One(offset))
+                } else {
+                    self.render_live_mut(id, "sized overflow render must remain live")
+                        .baseline = None;
+                    (size, ChildOffsets::default())
+                }
+            }
             RenderKind::Unconstrained {
                 constrained_axis,
                 step_width,

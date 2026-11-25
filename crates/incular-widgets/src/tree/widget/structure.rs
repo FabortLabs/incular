@@ -163,6 +163,16 @@ impl std::fmt::Debug for WidgetKind {
                 .field("fit", fit)
                 .field("child", child)
                 .finish(),
+            Self::SizedOverflow {
+                size,
+                alignment,
+                child,
+            } => f
+                .debug_struct("SizedOverflowBox")
+                .field("size", size)
+                .field("alignment", alignment)
+                .field("child", child)
+                .finish(),
             Self::Unconstrained {
                 constrained_axis,
                 step_width,
@@ -859,6 +869,22 @@ impl PartialEq for WidgetKind {
                 },
             ) => {
                 a == f && b == g && c == h && d == i && k == l && first_fit == second_fit && e == j
+            }
+            (
+                Self::SizedOverflow {
+                    size: first_size,
+                    alignment: first_alignment,
+                    child: first_child,
+                },
+                Self::SizedOverflow {
+                    size: second_size,
+                    alignment: second_alignment,
+                    child: second_child,
+                },
+            ) => {
+                first_size == second_size
+                    && first_alignment == second_alignment
+                    && first_child == second_child
             }
             (Self::ProxyLayout { mode: a, child: b }, Self::ProxyLayout { mode: c, child: d }) => {
                 a == c && b == d
@@ -1854,6 +1880,7 @@ pub(crate) enum WidgetType {
     Constrained,
     Limited,
     Overflow,
+    SizedOverflow,
     Unconstrained,
     IntrinsicHeight,
     RotatedBox,
@@ -1942,6 +1969,7 @@ impl WidgetType {
             Self::Constrained => "ConstrainedBox",
             Self::Limited => "LimitedBox",
             Self::Overflow => "OverflowBox",
+            Self::SizedOverflow => "SizedOverflowBox",
             Self::Unconstrained => "UnconstrainedBox",
             Self::IntrinsicHeight => "IntrinsicHeight",
             Self::RotatedBox => "RotatedBox",
@@ -2214,6 +2242,12 @@ impl WidgetKind {
             ),
             WidgetKind::Overflow { child, .. } => (
                 WidgetType::Overflow,
+                Layout,
+                Optional,
+                WidgetChildren::Optional(child.as_ref()),
+            ),
+            WidgetKind::SizedOverflow { child, .. } => (
+                WidgetType::SizedOverflow,
                 Layout,
                 Optional,
                 WidgetChildren::Optional(child.as_ref()),

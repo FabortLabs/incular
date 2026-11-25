@@ -665,6 +665,10 @@ pub enum RenderKind {
         alignment: Alignment,
         fit: OverflowBoxFit,
     },
+    SizedOverflow {
+        size: Size,
+        alignment: Alignment,
+    },
     Unconstrained {
         constrained_axis: Option<Axis>,
         step_width: Option<f32>,

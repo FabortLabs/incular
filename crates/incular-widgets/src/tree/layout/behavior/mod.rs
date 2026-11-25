@@ -29,6 +29,7 @@ impl LayoutFamily {
             | RenderKind::Constrained { .. }
             | RenderKind::Limited { .. }
             | RenderKind::Overflow { .. }
+            | RenderKind::SizedOverflow { .. }
             | RenderKind::Unconstrained { .. }
             | RenderKind::ProxyLayout { .. }
             | RenderKind::Fractional { .. }

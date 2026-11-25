@@ -522,6 +522,11 @@ pub(crate) enum WidgetKind {
         fit: OverflowBoxFit,
         child: Option<Widget>,
     },
+    SizedOverflow {
+        size: Size,
+        alignment: crate::AlignmentGeometry,
+        child: Option<Widget>,
+    },
     Unconstrained {
         constrained_axis: Option<Axis>,
         step_width: Option<f32>,

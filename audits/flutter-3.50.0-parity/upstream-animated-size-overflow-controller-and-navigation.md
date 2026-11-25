@@ -23,6 +23,8 @@ Pinned Flutter 3.50.0 `ab2912035e`; unchanged Incular production `c647cb85`.
   tests compare both exact geometry rectangles. See
   `flutter_sized_overflow_geometry_parity` and
   `sized_overflow_child_constraints_test.dart`.
+  See [the retained repair](upstream-sized-overflow-retained.md) for
+  current results.
 - Four original controller runs pass on Flutter. Inclusive velocity
   observations (:449) and both never-done/reverse simulation status
   traces (:1087, :1102) match. Timing at both duration permutations

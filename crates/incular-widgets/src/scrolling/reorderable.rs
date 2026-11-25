@@ -120,6 +120,7 @@ pub(crate) fn install_listener(
         | WidgetKind::ClipRRect { child, .. }
         | WidgetKind::FittedBox { child, .. }
         | WidgetKind::Overflow { child, .. }
+        | WidgetKind::SizedOverflow { child, .. }
         | WidgetKind::ClipPath { child, .. } => child
             .as_mut()
             .and_then(|child| install_listener(child, wrap)),

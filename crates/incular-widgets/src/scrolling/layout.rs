@@ -3231,6 +3231,7 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
                 .map(|extent| extent.min(max))
                 .or_else(|| finite(max))
         }
+        WidgetKind::SizedOverflow { size, .. } => finite(axis.main_extent(*size)),
         WidgetKind::Overflow {
             min_width,
             max_width,

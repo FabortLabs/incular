@@ -561,36 +561,41 @@ impl From<IntrinsicHeight> for Widget {
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct SizedOverflowBox {
     size: Size,
-    #[builder(default = Alignment::CENTER)]
-    alignment: Alignment,
-    #[builder(setter(into))]
-    child: Widget,
+    #[builder(default = crate::AlignmentGeometry::Physical(Alignment::CENTER), setter(into))]
+    alignment: crate::AlignmentGeometry,
+    #[builder(default, setter(strip_option, into))]
+    child: Option<Widget>,
 }
 
 impl SizedOverflowBox {
     #[must_use]
     pub fn new(size: Size, child: impl Into<Widget>) -> Self {
+        Self::empty(size).child(child)
+    }
+
+    #[must_use]
+    pub fn empty(size: Size) -> Self {
         Self {
             size,
-            alignment: Alignment::CENTER,
-            child: child.into(),
+            alignment: crate::AlignmentGeometry::Physical(Alignment::CENTER),
+            child: None,
         }
     }
 
     #[must_use]
-    pub fn alignment(mut self, alignment: Alignment) -> Self {
-        self.alignment = alignment;
+    pub fn child(mut self, child: impl Into<Widget>) -> Self {
+        self.child = Some(child.into());
+        self
+    }
+
+    #[must_use]
+    pub fn alignment(mut self, alignment: impl Into<crate::AlignmentGeometry>) -> Self {
+        self.alignment = alignment.into();
         self
     }
 }
 
-impl From<SizedOverflowBox> for Widget {
-    fn from(value: SizedOverflowBox) -> Self {
-        SizedBox::from_size(value.size)
-            .child(Align::new(value.alignment, OverflowBox::new(value.child)))
-            .into()
-    }
-}
+widget_from_kind!(SizedOverflowBox => SizedOverflow { size, alignment, child });
 
 /// Transforms incoming layout constraints before passing them to its child.
 #[derive(Clone)]

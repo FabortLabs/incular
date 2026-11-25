@@ -359,9 +359,9 @@ packages/flutter/test/widgets/animated_size_test.dart	83	calls onEnd when animat
 packages/flutter/test/widgets/animated_size_test.dart	129	clamps animated size to constraints	paired-match	upstream-animated-size-overflow-controller-and-navigation.md
 packages/flutter/test/widgets/animated_size_test.dart	276	does not run animation unnecessarily	partial-match	upstream-animated-size-overflow-controller-and-navigation.md
 packages/flutter/test/widgets/animated_size_test.dart	491	AnimatedSize does not crash at zero size	paired-match	upstream-animated-size-overflow-controller-and-navigation.md
-packages/flutter/test/widgets/overflow_box_test.dart	115	SizedOverflowBox alignment	paired-match	upstream-animated-size-overflow-controller-and-navigation.md
-packages/flutter/test/widgets/overflow_box_test.dart	142	SizedOverflowBox alignment (direction-sensitive)	partial-match	upstream-animated-size-overflow-controller-and-navigation.md
-packages/flutter/test/widgets/overflow_box_test.dart	169	SizedOverflowBox does not crash at zero area	partial-match	upstream-animated-size-overflow-controller-and-navigation.md
+packages/flutter/test/widgets/overflow_box_test.dart	115	SizedOverflowBox alignment	paired-match	upstream-sized-overflow-retained.md
+packages/flutter/test/widgets/overflow_box_test.dart	142	SizedOverflowBox alignment (direction-sensitive)	paired-match	upstream-sized-overflow-retained.md
+packages/flutter/test/widgets/overflow_box_test.dart	169	SizedOverflowBox does not crash at zero area	paired-match	upstream-sized-overflow-retained.md
 packages/flutter/test/animation/animation_controller_test.dart	184	Forward and reverse with different durations	partial-mismatch	upstream-animated-size-overflow-controller-and-navigation.md
 packages/flutter/test/animation/animation_controller_test.dart	449	velocity test - linear	paired-match	upstream-animated-size-overflow-controller-and-navigation.md
 packages/flutter/test/animation/animation_controller_test.dart	1087	Simulations run forward	paired-match	upstream-animated-size-overflow-controller-and-navigation.md

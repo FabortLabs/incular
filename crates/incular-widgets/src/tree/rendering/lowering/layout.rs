@@ -54,6 +54,19 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
             alignment: *alignment,
             fit: *fit,
         },
+        WidgetKind::SizedOverflow {
+            size, alignment, ..
+        } => RenderKind::SizedOverflow {
+            size: *size,
+            alignment: match alignment {
+                crate::AlignmentGeometry::Physical(value) => *value,
+                crate::AlignmentGeometry::Directional(value) => value.resolve(
+                    context
+                        .depend::<TextDirection>()
+                        .unwrap_or(TextDirection::Ltr),
+                ),
+            },
+        },
         WidgetKind::Unconstrained {
             constrained_axis,
             step_width,
