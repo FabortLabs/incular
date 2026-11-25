@@ -5,6 +5,7 @@ use incular_core::{Color, Lerp, Offset, Rect};
 use incular_image::ImageHandle;
 use incular_rendering::{
     BlendMode, Brush, FilterQuality, GradientStops, LinearGradient, Paint, RadialGradient,
+    SweepGradient,
 };
 use smart_default::SmartDefault;
 use typed_builder::TypedBuilder;
@@ -1004,6 +1005,147 @@ impl Lerp for BoxRadialGradient {
     }
 }
 
+/// Angular gradient with a box-relative or directional center.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BoxSweepGradient {
+    pub center: AlignmentGeometry,
+    pub start_angle: f32,
+    pub end_angle: f32,
+    pub stops: GradientStops,
+    pub tile_mode: TileMode,
+    pub rotation: Option<f32>,
+}
+
+impl BoxSweepGradient {
+    #[must_use]
+    pub fn new(stops: GradientStops) -> Self {
+        Self {
+            center: incular_config::Alignment::CENTER.into(),
+            start_angle: 0.,
+            end_angle: std::f32::consts::TAU,
+            stops,
+            tile_mode: TileMode::Clamp,
+            rotation: None,
+        }
+    }
+
+    #[must_use]
+    pub fn center(mut self, value: impl Into<AlignmentGeometry>) -> Self {
+        self.center = value.into();
+        self
+    }
+
+    #[must_use]
+    pub fn angles(mut self, start: f32, end: f32) -> Self {
+        self.start_angle = start;
+        self.end_angle = end;
+        self
+    }
+
+    #[must_use]
+    pub fn rotated(mut self, radians: f32) -> Self {
+        self.rotation = Some(radians);
+        self
+    }
+
+    #[must_use]
+    pub fn scale(&self, factor: f32) -> Self {
+        Self {
+            stops: self.stops.scale_opacity(factor),
+            ..self.clone()
+        }
+    }
+
+    #[must_use]
+    pub fn from_color(&self, color: Color) -> Self {
+        Self {
+            stops: self.stops.with_color(color),
+            ..self.clone()
+        }
+    }
+
+    #[must_use]
+    pub fn with_opacity(&self, opacity: f32) -> Self {
+        Self {
+            stops: self.stops.with_opacity(opacity),
+            ..self.clone()
+        }
+    }
+
+    #[must_use]
+    pub fn lerp_optional(a: Option<&Self>, b: Option<&Self>, t: f32) -> Option<Self> {
+        match (a, b) {
+            (None, None) => None,
+            (Some(a), None) => Some(a.scale(1. - t)),
+            (None, Some(b)) => Some(b.scale(t)),
+            (Some(a), Some(b)) => Some(a.lerp(b, t)),
+        }
+    }
+
+    /// Creates a shader with an optional ambient direction. Logical
+    /// alignments require that direction; physical alignments do not.
+    pub fn create_shader(
+        &self,
+        rect: Rect,
+        direction: Option<TextDirection>,
+    ) -> Result<SweepGradient, crate::tree::TreeError> {
+        if !matches!(self.center, AlignmentGeometry::Physical(_)) && direction.is_none() {
+            return Err(crate::tree::TreeError::MissingDirectionality {
+                widget: "BoxSweepGradient",
+                reason: "resolving logical gradient alignment",
+            });
+        }
+        Ok(self.resolve(rect, direction.unwrap_or(TextDirection::Ltr)))
+    }
+
+    #[must_use]
+    pub fn resolve(&self, rect: Rect, direction: TextDirection) -> SweepGradient {
+        let center = self.center.resolve(direction);
+        let center = Offset::new(
+            rect.origin.x + (center.x + 1.) * 0.5 * rect.size.width,
+            rect.origin.y + (center.y + 1.) * 0.5 * rect.size.height,
+        );
+        let mut gradient = SweepGradient::new(center, self.start_angle, self.stops.clone())
+            .with_end_angle(self.end_angle);
+        gradient.tile_mode = self.tile_mode;
+        if let Some(rotation) = self.rotation {
+            let Brush::SweepGradient(rotated) =
+                Brush::SweepGradient(gradient).rotated(rotation, rect)
+            else {
+                unreachable!("rotation preserves the gradient kind");
+            };
+            rotated
+        } else {
+            gradient
+        }
+    }
+}
+
+impl Lerp for BoxSweepGradient {
+    fn lerp(&self, other: &Self, t: f32) -> Self {
+        if self == other {
+            return self.clone();
+        }
+        let mix_angle = |a, b| f32::max(a + (b - a) * t, 0.);
+        Self {
+            center: self.center.lerp(&other.center, t),
+            start_angle: mix_angle(self.start_angle, other.start_angle),
+            end_angle: mix_angle(self.end_angle, other.end_angle),
+            stops: self.stops.interpolate(&other.stops, t),
+            tile_mode: if t < 0.5 {
+                self.tile_mode
+            } else {
+                other.tile_mode
+            },
+            rotation: if t < 0.5 {
+                self.rotation
+            } else {
+                other.rotation
+            },
+        }
+    }
+}
+
 /// An immutable description of how to paint a box.
 #[derive(Clone, Debug, Default, PartialEq, TypedBuilder)]
 pub struct BoxDecoration {
@@ -1033,6 +1175,8 @@ pub struct BoxDecoration {
     pub aligned_gradient: Option<Arc<BoxLinearGradient>>,
     #[builder(default, setter(transform = |gradient: BoxRadialGradient| Some(Arc::new(gradient))))]
     pub aligned_radial_gradient: Option<Arc<BoxRadialGradient>>,
+    #[builder(default, setter(transform = |gradient: BoxSweepGradient| Some(Arc::new(gradient))))]
+    pub aligned_sweep_gradient: Option<Arc<BoxSweepGradient>>,
     /// Flutter `backgroundBlendMode`: the background color or gradient
     /// blends with what is painted below it (it needs a fill).
     #[builder(default, setter(strip_option))]
@@ -1136,6 +1280,7 @@ impl BoxDecoration {
         self.gradient = Some(gradient.into());
         self.aligned_gradient = None;
         self.aligned_radial_gradient = None;
+        self.aligned_sweep_gradient = None;
         self
     }
 
@@ -1145,6 +1290,7 @@ impl BoxDecoration {
         self.gradient = None;
         self.aligned_gradient = Some(Arc::new(gradient));
         self.aligned_radial_gradient = None;
+        self.aligned_sweep_gradient = None;
         self
     }
 
@@ -1154,11 +1300,34 @@ impl BoxDecoration {
         self.gradient = None;
         self.aligned_gradient = None;
         self.aligned_radial_gradient = Some(Arc::new(gradient));
+        self.aligned_sweep_gradient = None;
         self
     }
 
+    /// Sets a sweep shader whose center follows the decoration bounds.
+    #[must_use]
+    pub fn aligned_sweep_gradient(mut self, gradient: BoxSweepGradient) -> Self {
+        self.gradient = None;
+        self.aligned_gradient = None;
+        self.aligned_radial_gradient = None;
+        self.aligned_sweep_gradient = Some(Arc::new(gradient));
+        self
+    }
+
+    fn aligned_gradient_kind(&self) -> Option<AlignedGradientKind> {
+        if self.aligned_gradient.is_some() {
+            Some(AlignedGradientKind::Linear)
+        } else if self.aligned_radial_gradient.is_some() {
+            Some(AlignedGradientKind::Radial)
+        } else if self.aligned_sweep_gradient.is_some() {
+            Some(AlignedGradientKind::Sweep)
+        } else {
+            None
+        }
+    }
+
     pub(crate) fn has_aligned_gradient(&self) -> bool {
-        self.aligned_gradient.is_some() || self.aligned_radial_gradient.is_some()
+        self.aligned_gradient_kind().is_some()
     }
 
     pub(crate) fn resolve_aligned_gradient(
@@ -1169,9 +1338,12 @@ impl BoxDecoration {
         if let Some(gradient) = &self.aligned_gradient {
             return Some(Brush::LinearGradient(gradient.resolve(rect, direction)));
         }
-        self.aligned_radial_gradient
+        if let Some(gradient) = &self.aligned_radial_gradient {
+            return Some(Brush::RadialGradient(gradient.resolve(rect, direction)));
+        }
+        self.aligned_sweep_gradient
             .as_ref()
-            .map(|gradient| Brush::RadialGradient(gradient.resolve(rect, direction)))
+            .map(|gradient| Brush::SweepGradient(gradient.resolve(rect, direction)))
     }
 
     #[must_use]
@@ -1228,6 +1400,13 @@ impl BoxDecoration {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AlignedGradientKind {
+    Linear,
+    Radial,
+    Sweep,
+}
+
 impl incular_core::Lerp for BoxDecoration {
     /// Flutter `BoxDecoration.lerp`: a part present on one side only
     /// scales in or out (`Color.lerp(null, c, t)`, `BoxBorder.lerp`,
@@ -1241,43 +1420,46 @@ impl incular_core::Lerp for BoxDecoration {
         if t == 1.0 {
             return other.clone();
         }
-        let cross_kind = self.aligned_gradient.is_some() && other.aligned_radial_gradient.is_some()
-            || self.aligned_radial_gradient.is_some() && other.aligned_gradient.is_some();
-        let (aligned_gradient, aligned_radial_gradient) =
+        let a_kind = self.aligned_gradient_kind();
+        let b_kind = other.aligned_gradient_kind();
+        let cross_kind = a_kind.is_some() && b_kind.is_some() && a_kind != b_kind;
+        let (a, b, gradient_t) = if cross_kind {
+            // Flutter fades out the first type in the first half, then
+            // fades in the second type in the second half.
+            if t < 0.5 {
+                (Some(self), None, 2. * t)
+            } else {
+                (None, Some(other), 2. * t - 1.)
+            }
+        } else {
+            (Some(self), Some(other), t)
+        };
+        let (aligned_gradient, aligned_radial_gradient, aligned_sweep_gradient) =
             if self.gradient.is_some() || other.gradient.is_some() {
                 let endpoint = if t < 0.5 { self } else { other };
                 (
                     endpoint.aligned_gradient.clone(),
                     endpoint.aligned_radial_gradient.clone(),
-                )
-            } else if cross_kind {
-                let (endpoint, opacity) = if t < 0.5 {
-                    (self, 1. - 2. * t)
-                } else {
-                    (other, 2. * t - 1.)
-                };
-                (
-                    endpoint
-                        .aligned_gradient
-                        .as_ref()
-                        .map(|gradient| Arc::new(gradient.scale(opacity))),
-                    endpoint
-                        .aligned_radial_gradient
-                        .as_ref()
-                        .map(|gradient| Arc::new(gradient.scale(opacity))),
+                    endpoint.aligned_sweep_gradient.clone(),
                 )
             } else {
                 (
                     BoxLinearGradient::lerp_optional(
-                        self.aligned_gradient.as_deref(),
-                        other.aligned_gradient.as_deref(),
-                        t,
+                        a.and_then(|value| value.aligned_gradient.as_deref()),
+                        b.and_then(|value| value.aligned_gradient.as_deref()),
+                        gradient_t,
                     )
                     .map(Arc::new),
                     BoxRadialGradient::lerp_optional(
-                        self.aligned_radial_gradient.as_deref(),
-                        other.aligned_radial_gradient.as_deref(),
-                        t,
+                        a.and_then(|value| value.aligned_radial_gradient.as_deref()),
+                        b.and_then(|value| value.aligned_radial_gradient.as_deref()),
+                        gradient_t,
+                    )
+                    .map(Arc::new),
+                    BoxSweepGradient::lerp_optional(
+                        a.and_then(|value| value.aligned_sweep_gradient.as_deref()),
+                        b.and_then(|value| value.aligned_sweep_gradient.as_deref()),
+                        gradient_t,
                     )
                     .map(Arc::new),
                 )
@@ -1305,6 +1487,7 @@ impl incular_core::Lerp for BoxDecoration {
             },
             aligned_gradient,
             aligned_radial_gradient,
+            aligned_sweep_gradient,
             background_blend_mode: None,
             shape: if t < 0.5 { self.shape } else { other.shape },
         }
