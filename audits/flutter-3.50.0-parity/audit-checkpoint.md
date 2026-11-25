@@ -796,3 +796,8 @@ edge samples. [Color filter checks](upstream-fit-overlays-scroll-notifications-c
 cover matte bounds, nonseparable blends, saturation and the original
 retained-layer identity case without counting authored samples as
 extra original registrations.
+
+The original childless ColorFiltered case raises full coverage to
+444 / 8,965 (4.95%) at `b364dd8d`. Tab traversal from a directly
+focused but traversal-excluded node is verified separately in the
+[focus recheck](upstream-repeat-focus-restoration-flex-and-image-filter.md#focus-traversal-from-a-directly-focused-skipped-node).

@@ -59,5 +59,56 @@ void main() {
     await tester.pump();
     expect(primary(), <int>[2]);
     expect(FocusManager.instance.primaryFocus, same(nodes[2]));
+    expect(nodes[1].hasFocus, isTrue);
+    expect(nodes[1].hasPrimaryFocus, isFalse);
+
+    expect(nodes[2].nextFocus(), isTrue);
+    await tester.pump();
+    expect(primary(), <int>[3]);
+
+    nodes[2].requestFocus();
+    await tester.pump();
+    expect(nodes[2].previousFocus(), isTrue);
+    await tester.pump();
+    expect(primary(), <int>[0]);
+  });
+
+  testWidgets('skipTraversal still allows a direct node request', (
+    WidgetTester tester,
+  ) async {
+    final nodes = [FocusNode(), FocusNode(skipTraversal: true), FocusNode()];
+    addTearDown(() {
+      for (final node in nodes) {
+        node.dispose();
+      }
+    });
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: FocusTraversalGroup(
+          child: Column(
+            children: [
+              for (var i = 0; i < nodes.length; i++)
+                Focus(
+                  focusNode: nodes[i],
+                  autofocus: i == 0,
+                  child: const SizedBox.square(dimension: 10),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(FocusManager.instance.primaryFocus, same(nodes[0]));
+    nodes[0].nextFocus();
+    await tester.pump();
+    expect(FocusManager.instance.primaryFocus, same(nodes[2]));
+    nodes[1].requestFocus();
+    await tester.pump();
+    expect(FocusManager.instance.primaryFocus, same(nodes[1]));
+    nodes[1].previousFocus();
+    await tester.pump();
+    expect(FocusManager.instance.primaryFocus, same(nodes[0]));
   });
 }

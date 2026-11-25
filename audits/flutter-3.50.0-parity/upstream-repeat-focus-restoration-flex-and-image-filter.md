@@ -59,3 +59,19 @@ The retained test also checks the untransformed source, scaled output
 bounds, linear sampling, and removal of the filter when disabled. This
 does not establish mipmap behavior for minification or high-quality
 sampling, and it does not upgrade the original golden coverage.
+
+### Focus traversal from a directly focused skipped node
+
+Hosted focus now adopts the explicit focus request in the earlier
+fixture, and the excluded ancestor retains focus-within without
+becoming primary. A follow-up found that the first Tab from that
+middle node incorrectly jumped to the first candidate. A focused
+node now participates as the ordering anchor, without making any
+other excluded node a stop. Tab moves to the next sibling and
+Shift+Tab to the preceding one, matching the pinned probe. A
+node-level skipTraversal flag likewise skips normal traversal
+while allowing direct focus and preserving the reverse anchor.
+Both pinned probes and all 18 focused Incular traversal, hosted
+focus and editor checks pass. The :3691 API comparison is still
+partial: Incular drives the equivalent Tab intent, not Flutter's
+attached FocusNode.nextFocus method.

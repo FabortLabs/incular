@@ -2,6 +2,13 @@
 
 use super::*;
 
+#[derive(Clone, Copy, Default)]
+struct TraversalScan {
+    anchor: Option<ElementId>,
+    excluded_focus: bool,
+    excluded_traversal: bool,
+}
+
 fn external_node(kind: &WidgetKind) -> Option<&incular_gestures::FocusNode> {
     match kind {
         WidgetKind::Gesture { callbacks, .. } => callbacks.focus_node.as_ref(),
@@ -145,12 +152,24 @@ impl WidgetTree {
 
     #[must_use]
     pub fn focusable_elements(&self) -> Vec<ElementId> {
-        with_recursive_tree_stack(|| self.focusable_elements_recursive())
+        self.focus_traversal_elements(None)
     }
 
-    fn focusable_elements_recursive(&self) -> Vec<ElementId> {
+    /// Orders traversal candidates, keeping the explicitly focused node
+    /// as the starting position even if traversal would not land on it.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn focus_traversal_elements(&self, anchor: Option<ElementId>) -> Vec<ElementId> {
+        with_recursive_tree_stack(|| self.focusable_elements_recursive(anchor))
+    }
+
+    fn focusable_elements_recursive(&self, anchor: Option<ElementId>) -> Vec<ElementId> {
         let mut members = Vec::new();
         let mut sequence = 0;
+        let scan = TraversalScan {
+            anchor,
+            ..TraversalScan::default()
+        };
         if let Some(root) = self.root {
             if self.elements.get(root.0).is_some_and(|element| {
                 element
@@ -162,7 +181,7 @@ impl WidgetTree {
                 self.collect_focus_group(
                     root,
                     FocusTraversalPolicyKind::ReadingOrder,
-                    false,
+                    scan,
                     &mut members,
                     &mut sequence,
                 );
@@ -170,7 +189,7 @@ impl WidgetTree {
                 self.append_focus_members(
                     root,
                     FocusTraversalPolicyKind::ReadingOrder,
-                    false,
+                    scan,
                     &mut members,
                     &mut sequence,
                 );
@@ -610,76 +629,86 @@ impl WidgetTree {
         node.apply_host_focus(focused);
     }
 
-    pub(super) fn collect_focus_group(
+    fn collect_focus_group(
         &self,
         id: ElementId,
         inherited_policy: FocusTraversalPolicyKind,
-        excluded_focus: bool,
+        scan: TraversalScan,
         out: &mut Vec<FocusTraversalMember>,
         sequence: &mut usize,
     ) {
         let Some(element) = self.elements.get(id.0) else {
             return;
         };
-        if element.widget.semantic_properties().exclude_focus_traversal {
-            return;
-        }
         let policy = element
             .widget
             .semantic_properties()
             .focus_traversal_policy
             .unwrap_or(inherited_policy);
         let mut members = Vec::new();
-        self.append_focus_members(id, policy, excluded_focus, &mut members, sequence);
+        self.append_focus_members(id, policy, scan, &mut members, sequence);
+        if members.is_empty() {
+            return;
+        }
         out.push(FocusTraversalMember::Group(FocusTraversalGroupMembers {
             policy,
             members,
         }));
     }
 
-    pub(super) fn append_focus_members(
+    fn append_focus_members(
         &self,
         id: ElementId,
         policy: FocusTraversalPolicyKind,
-        excluded_focus: bool,
+        scan: TraversalScan,
         out: &mut Vec<FocusTraversalMember>,
         sequence: &mut usize,
     ) {
         enum FocusWork {
-            Node(ElementId, FocusTraversalPolicyKind, bool),
-            Group(ElementId, FocusTraversalPolicyKind, bool),
+            Node(ElementId, FocusTraversalPolicyKind, TraversalScan),
+            Group(ElementId, FocusTraversalPolicyKind, TraversalScan),
         }
 
-        let mut work = vec![FocusWork::Node(id, policy, excluded_focus)];
+        let mut work = vec![FocusWork::Node(id, policy, scan)];
         while let Some(next) = work.pop() {
-            let FocusWork::Node(id, policy, excluded_focus) = next else {
-                let FocusWork::Group(id, inherited_policy, excluded_focus) = next else {
+            let FocusWork::Node(id, policy, mut scan) = next else {
+                let FocusWork::Group(id, inherited_policy, scan) = next else {
                     unreachable!();
                 };
-                self.collect_focus_group(id, inherited_policy, excluded_focus, out, sequence);
+                self.collect_focus_group(id, inherited_policy, scan, out, sequence);
                 continue;
             };
             let Some(element) = self.elements.get(id.0) else {
                 continue;
             };
-            if element.widget.semantic_properties().exclude_focus_traversal {
+            let properties = element.widget.semantic_properties();
+            scan.excluded_traversal |= properties.exclude_focus_traversal;
+            if scan.excluded_traversal
+                && !scan
+                    .anchor
+                    .is_some_and(|anchor| self.is_descendant_or_self(anchor, id))
+            {
                 continue;
             }
-            let excluded_focus =
-                excluded_focus || element.widget.semantic_properties().exclude_focus;
+            scan.excluded_focus |= properties.exclude_focus;
             // A `Text` label takes focus from a selection gesture only; it is
             // not a traversal stop (Flutter traverses to the area, not to
             // each registered paragraph).
-            let focusable = self.can_request_focus(id)
-                && !matches!(element.widget.kind(), WidgetKind::Text { .. });
-            if focusable && !excluded_focus {
+            let node = external_node(element.widget.kind());
+            let traversal_candidate =
+                !scan.excluded_traversal && node.is_none_or(|node| !node.skip_traversal());
+            if !scan.excluded_focus
+                && (traversal_candidate || scan.anchor == Some(id))
+                && !matches!(element.widget.kind(), WidgetKind::Text { .. })
+                && self.can_request_focus(id)
+            {
                 let bounds = self.element_bounds(id).unwrap_or_default();
                 let order = element
                     .widget
                     .semantic_properties()
                     .focus_traversal_order
                     .clone();
-                if let Some(node) = external_node(element.widget.kind()) {
+                if let Some(node) = node {
                     node.set_rect(bounds);
                     node.set_focus_order(order.clone());
                 }
@@ -703,10 +732,11 @@ impl WidgetTree {
                     }
                     _ => (true, true),
                 };
-            if !descendants_are_traversable {
+            scan.excluded_traversal |= !descendants_are_traversable;
+            if scan.excluded_traversal && scan.anchor.is_none() {
                 continue;
             }
-            let excluded_focus = excluded_focus || !descendants_are_focusable;
+            scan.excluded_focus |= !descendants_are_focusable;
             let focus_children: &[ElementId] = match element.widget.kind() {
                 WidgetKind::IndexedStack { index, .. } => index
                     .and_then(|slot| element.children.get(slot))
@@ -720,9 +750,9 @@ impl WidgetTree {
                     .get(child.0)
                     .and_then(|child| child.widget.semantic_properties().focus_traversal_policy);
                 if child_policy.is_some() {
-                    work.push(FocusWork::Group(child, policy, excluded_focus));
+                    work.push(FocusWork::Group(child, policy, scan));
                 } else {
-                    work.push(FocusWork::Node(child, policy, excluded_focus));
+                    work.push(FocusWork::Node(child, policy, scan));
                 }
             }
         }

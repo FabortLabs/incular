@@ -2124,7 +2124,7 @@ impl Runtime {
         self.text_input_caret_rect = Some(snapshot.caret_rect);
     }
     fn focus_next(&mut self, reverse: bool) {
-        let fields = self.tree.focusable_elements();
+        let fields = self.tree.focus_traversal_elements(self.focused);
         if fields.is_empty() {
             return;
         }

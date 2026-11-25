@@ -174,4 +174,41 @@ fn explicit_request_focus_enters_traversal_excluded_subtree() {
         (Some(excluded), vec![2]),
         "an explicit request must bypass traversal exclusion"
     );
+    assert!(nodes[1].has_focus());
+    assert!(!nodes[1].has_primary_focus());
+
+    host.tab(false);
+    assert_eq!(
+        (host.runtime.focused_element(), primary(&nodes)),
+        (Some(end), vec![3]),
+        "forward traversal starts at the excluded node's position"
+    );
+    nodes[2].request_focus();
+    host.frame();
+    host.tab(true);
+    assert_eq!(
+        primary(&nodes),
+        [0],
+        "reverse traversal starts at the excluded node's position"
+    );
+}
+
+#[test]
+fn skip_traversal_still_allows_a_direct_node_request() {
+    let nodes: [FocusNode; 3] = std::array::from_fn(|_| FocusNode::new());
+    nodes[1].set_skip_traversal(true);
+    let column = Column::new(vec![
+        Widget::from(focus_target(&nodes[0]).autofocus(true)),
+        Widget::from(focus_target(&nodes[1])),
+        Widget::from(focus_target(&nodes[2])),
+    ]);
+    let mut host = Host::mount(FocusTraversalGroup::new(column).into());
+    assert_eq!(primary(&nodes), [0]);
+    host.tab(false);
+    assert_eq!(primary(&nodes), [2]);
+    nodes[1].request_focus();
+    host.frame();
+    assert_eq!(primary(&nodes), [1]);
+    host.tab(true);
+    assert_eq!(primary(&nodes), [0]);
 }
