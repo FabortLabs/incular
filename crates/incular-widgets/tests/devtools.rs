@@ -371,3 +371,54 @@ fn fitted_box_inspection_reports_the_rendered_directional_alignment() {
     assert_eq!(dev_id(&tree, tree.element_with_key(&key).unwrap()), id);
     assert_eq!(details(&tree), ([1., -1.], 80.));
 }
+
+#[test]
+fn page_view_inspection_keeps_the_cache_extent_value_and_unit() {
+    use incular_widgets::{PageView, ScrollCacheExtent};
+
+    let build = |extent| {
+        PageView::new([Widget::box_(Size::new(20., 20.), Color::WHITE)])
+            .allow_implicit_scrolling(true)
+            .scroll_cache_extent(extent)
+            .into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(build(ScrollCacheExtent::pixels(50.))).unwrap();
+    let mut retained = None;
+    let window = DevWindowId::new(1, 0);
+    let bounds = Constraints::tight(Size::new(200., 100.));
+    for (extent, value, unit) in [
+        (ScrollCacheExtent::pixels(50.), 50., "pixels"),
+        (ScrollCacheExtent::viewport(0.5), 0.5, "viewport"),
+    ] {
+        tree.update(root, build(extent)).unwrap();
+        tree.layout(bounds).unwrap();
+        // PageView retains its controller in a mount-scoped wrapper; the
+        // cache is an attribute of the generated sliver viewport beneath it.
+        let (nodes, _) = tree.devtools_snapshot(root, false);
+        let (id, details) = nodes
+            .iter()
+            .find_map(|node| {
+                let element = tree.devtools_resolve_id(node.id)?;
+                let details = tree.devtools_node_details(element, node.id, window)?;
+                details
+                    .properties
+                    .iter()
+                    .any(|property| property.name == "cacheExtent")
+                    .then_some((node.id, details))
+            })
+            .expect("mounted sliver viewport");
+        assert_eq!(id, *retained.get_or_insert(id));
+        assert!(
+            details
+                .properties
+                .iter()
+                .any(|p| { p.name == "cacheExtent" && p.value == DebugValue::Float(value) })
+        );
+        assert!(
+            details.properties.iter().any(|p| {
+                p.name == "cacheExtentUnit" && p.value == DebugValue::Enum(unit.into())
+            })
+        );
+    }
+}

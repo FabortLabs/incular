@@ -373,8 +373,13 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
             ));
             out.push(prop(
                 "cacheExtent",
-                DebugValue::Float(f64::from(config.cache_extent)),
+                DebugValue::Float(f64::from(config.cache_extent.value())),
             ));
+            let unit = match config.cache_extent {
+                crate::ScrollCacheExtent::Pixels(_) => "pixels",
+                crate::ScrollCacheExtent::Viewport(_) => "viewport",
+            };
+            out.push(prop("cacheExtentUnit", DebugValue::Enum(unit.into())));
         }
         WidgetKind::Visibility {
             visible,
