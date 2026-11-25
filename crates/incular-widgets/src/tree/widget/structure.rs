@@ -354,24 +354,6 @@ impl std::fmt::Debug for WidgetKind {
                 .field("clip_behavior", clip_behavior)
                 .field("children", children)
                 .finish(),
-            Self::SafeArea {
-                minimum,
-                left,
-                top,
-                right,
-                bottom,
-                maintain_bottom_view_padding,
-                child,
-            } => f
-                .debug_struct("SafeArea")
-                .field("minimum", minimum)
-                .field("left", left)
-                .field("top", top)
-                .field("right", right)
-                .field("bottom", bottom)
-                .field("maintain_bottom_view_padding", maintain_bottom_view_padding)
-                .field("child", child)
-                .finish(),
             Self::ClipRect {
                 clip_behavior,
                 child,
@@ -1638,26 +1620,6 @@ impl PartialEq for WidgetKind {
                     && e == j
             }
             (
-                Self::SafeArea {
-                    minimum: a,
-                    left: b,
-                    top: c,
-                    right: d,
-                    bottom: e,
-                    maintain_bottom_view_padding: f,
-                    child: g,
-                },
-                Self::SafeArea {
-                    minimum: h,
-                    left: i,
-                    top: j,
-                    right: k,
-                    bottom: l,
-                    maintain_bottom_view_padding: m,
-                    child: n,
-                },
-            ) => a == h && b == i && c == j && d == k && e == l && f == m && g == n,
-            (
                 Self::ClipRect {
                     clip_behavior: a,
                     clipper: x,
@@ -1927,7 +1889,6 @@ pub(crate) enum WidgetType {
     Stack,
     Positioned,
     IndexedStack,
-    SafeArea,
     ClipRect,
     ClipRRect,
     ClipOval,
@@ -2022,7 +1983,6 @@ impl WidgetType {
             Self::LayoutId => "LayoutId",
             Self::Positioned => "Positioned",
             Self::IndexedStack => "IndexedStack",
-            Self::SafeArea => "SafeArea",
             Self::ClipRect => "ClipRect",
             Self::ClipRRect => "ClipRRect",
             Self::ClipOval => "ClipOval",
@@ -2404,12 +2364,6 @@ impl WidgetKind {
                 Layout,
                 Many,
                 ManyChildren(children),
-            ),
-            WidgetKind::SafeArea { child, .. } => (
-                WidgetType::SafeArea,
-                Layout,
-                Single,
-                WidgetChildren::Single(child),
             ),
             WidgetKind::ClipRect { child, .. } => (
                 WidgetType::ClipRect,

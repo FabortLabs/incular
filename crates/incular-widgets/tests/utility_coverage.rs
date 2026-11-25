@@ -45,7 +45,7 @@ fn only_child(tree: &WidgetTree, id: ElementId) -> ElementId {
     kids[0]
 }
 
-/// The widget a SafeArea wraps. Flutter 3.41.7 `SafeArea.build`
+/// The widget a SafeArea wraps. Flutter 3.50 `SafeArea.build`
 /// (widgets/safe_area.dart:113-136) composes `Padding` over
 /// `MediaQuery.removePadding`, so the child sits below several single-child
 /// elements rather than directly under the SafeArea root.
@@ -160,7 +160,7 @@ fn safe_area_nested_consumes_padding_once() {
         .mount(SafeArea::new(SafeArea::new(box_(50., 50.))).into())
         .expect("mount");
     tight(&mut tree, root, 300., 300.);
-    // Flutter 3.41.7 `SafeArea.build` (widgets/safe_area.dart:128-135) wraps
+    // Flutter 3.50 `SafeArea.build` (widgets/safe_area.dart:128-135) wraps
     // its child in `MediaQuery.removePadding` for every enabled side, so the
     // inner SafeArea reads zero padding and adds nothing: the insets apply
     // once, 300 - (10+30) by 300 - (20+40).
@@ -298,11 +298,7 @@ fn safe_area_nested_maintained_accumulates_from_snapshot() {
         )
         .expect("mount");
     tight(&mut tree, root, 400., 400.);
-    let inner = only_child(&tree, root);
-    assert_eq!(
-        bounds(&tree, only_child(&tree, inner)).1.height,
-        400. - 2. * PERSISTENT_BOTTOM
-    );
+    assert_eq!(child_height(&tree, root), 400. - 2. * PERSISTENT_BOTTOM);
 }
 
 #[test]
@@ -340,12 +336,20 @@ fn safe_area_disabled_bottom_and_minimum_ignore_maintenance() {
 }
 
 #[test]
-fn safe_area_tracks_padding_and_safe_margin_not_occlusion() {
+fn safe_area_geometry_uses_persistent_padding_and_forwards_occlusion() {
     let mut tree = WidgetTree::new();
     tree.set_environment(keyboard_shown());
+    let seen = std::rc::Rc::new(std::cell::Cell::new(0.));
+    let child = incular_widgets::Builder::new({
+        let seen = seen.clone();
+        move |context| {
+            seen.set(context.view_insets().bottom);
+            box_(50., 50.)
+        }
+    });
     let root = tree
         .mount(
-            SafeArea::new(box_(50., 50.))
+            SafeArea::new(child)
                 .maintain_bottom_view_padding(true)
                 .into(),
         )
@@ -363,27 +367,28 @@ fn safe_area_tracks_padding_and_safe_margin_not_occlusion() {
     tight(&mut tree, root, FRAME, FRAME);
     assert_eq!(child_height(&tree, root), FRAME - 30.);
 
-    // Occlusion 180 -> 100 with padding fixed: padding is unaffected, and
-    // the transient change alone dirties nothing in this tree.
+    // Occlusion 180 -> 100 with padding fixed: geometry stays fixed, but
+    // descendants still receive the new inset through the media scope.
     let dirty = tree.set_environment(environment_with(
         EdgeInsets::ZERO,
         bottom_only(30.),
         bottom_only(100.),
     ));
-    assert!(!dirty, "occlusion alone must not dirty SafeArea");
+    assert!(dirty, "descendants must see the live keyboard inset");
     tight(&mut tree, root, FRAME, FRAME);
     assert_eq!(child_height(&tree, root), FRAME - 30.);
 
-    // Usable margin 0 -> 40 above the persistent 30: safe margin still
-    // participates in the maintained edge.
+    assert_eq!(seen.get(), 100.);
+    // Usable margin 0 -> 40 above persistent 30: maintained geometry
+    // still uses the persistent value, not the larger usable value.
     let dirty = tree.set_environment(environment_with(
         bottom_only(40.),
         bottom_only(30.),
         bottom_only(100.),
     ));
-    assert!(dirty, "safe-margin change must dirty SafeArea");
+    assert!(dirty, "inherited padding changed");
     tight(&mut tree, root, FRAME, FRAME);
-    assert_eq!(child_height(&tree, root), FRAME - 40.);
+    assert_eq!(child_height(&tree, root), FRAME - 30.);
 }
 
 #[test]

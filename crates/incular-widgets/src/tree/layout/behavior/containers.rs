@@ -439,45 +439,6 @@ impl WidgetTree {
                 self.set_layout_overflow(id, has_visual_overflow);
                 (final_size, offsets)
             }
-            RenderKind::SafeArea {
-                minimum,
-                left,
-                top,
-                right,
-                bottom,
-                maintain_bottom_view_padding,
-            } => {
-                // One shared policy feeds every construction path; the
-                // retained arm only supplies the ambient signals.
-                let insets = crate::SafeAreaPolicy {
-                    minimum,
-                    left,
-                    top,
-                    right,
-                    bottom,
-                    maintain_bottom_view_padding,
-                }
-                .padding(self.environment.safe_insets, self.environment.view_padding);
-                let child_constraints = constraints.deflate(insets.horizontal(), insets.vertical());
-                if let Some(&child) = children.first() {
-                    self.layout_render(child, child_constraints)?;
-                    let child_size = self
-                        .render_live(child, "retained render must remain live")
-                        .size;
-                    let size = constraints.constrain(Size::new(
-                        child_size.width + insets.horizontal(),
-                        child_size.height + insets.vertical(),
-                    ));
-                    (
-                        size,
-                        ChildOffsets::One(Offset::new(insets.left, insets.top)),
-                    )
-                } else {
-                    let size =
-                        constraints.constrain(Size::new(insets.horizontal(), insets.vertical()));
-                    (size, ChildOffsets::default())
-                }
-            }
             RenderKind::ClipRect { .. }
             | RenderKind::ClipRRect { .. }
             | RenderKind::ClipOval { .. }

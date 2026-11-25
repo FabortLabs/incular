@@ -147,7 +147,6 @@ pub(crate) fn install_listener(
         | WidgetKind::Align { child, .. }
         | WidgetKind::Flexible { child, .. }
         | WidgetKind::Positioned { child, .. }
-        | WidgetKind::SafeArea { child, .. }
         | WidgetKind::ClipOval { child, .. }
         | WidgetKind::Visibility { child, .. }
         | WidgetKind::AspectRatio { child, .. }

@@ -775,15 +775,6 @@ pub(crate) enum WidgetKind {
         clip_behavior: Clip,
         children: Vec<Widget>,
     },
-    SafeArea {
-        minimum: EdgeInsets,
-        left: bool,
-        top: bool,
-        right: bool,
-        bottom: bool,
-        maintain_bottom_view_padding: bool,
-        child: Widget,
-    },
     ClipRect {
         clip_behavior: Clip,
         clipper: Option<crate::layout::ClipDelegate>,

@@ -354,7 +354,6 @@ pub use raw_tooltip::{
 pub use repeating_animation_builder::{
     RepeatMode, RepeatingAnimationBuilder, RepeatingAnimationWidgetBuilder,
 };
-pub(crate) use safe_area::SafeAreaPolicy;
 pub use safe_area::{RemovePadding, SafeArea};
 pub use scroll_aware_image_provider::{ScrollAwareContext, ScrollAwareImageProvider};
 pub use scroll_behavior::{

@@ -56,7 +56,6 @@ impl LayoutFamily {
             | RenderKind::LayoutId { .. }
             | RenderKind::Positioned { .. }
             | RenderKind::IndexedStack { .. }
-            | RenderKind::SafeArea { .. }
             | RenderKind::ClipRect { .. }
             | RenderKind::ClipRRect { .. }
             | RenderKind::ClipOval { .. }

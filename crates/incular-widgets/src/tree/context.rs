@@ -22,6 +22,8 @@ pub(super) struct RuntimeTextScale(pub(super) f32);
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct RuntimeSafeInsets(EdgeInsets);
 #[derive(Clone, Copy, Debug, PartialEq)]
+struct RuntimeViewPadding(EdgeInsets);
+#[derive(Clone, Copy, Debug, PartialEq)]
 struct RuntimeViewInsets(EdgeInsets);
 #[derive(Clone, Debug, PartialEq)]
 struct RuntimeLocales(Vec<Locale>);
@@ -123,6 +125,9 @@ media_query_aspects! {
     MediaQueryPadding from safe_insets,
     MediaQueryViewPadding from view_padding,
     MediaQueryViewInsets from view_insets,
+    RuntimeSafeInsets from safe_insets,
+    RuntimeViewPadding from view_padding,
+    RuntimeViewInsets from view_insets,
     RuntimeHighContrast from high_contrast,
     RuntimeSystemGestureInsets from system_gesture_insets,
     RuntimeDisplayFeatures from display_features,
@@ -235,6 +240,13 @@ impl<'a> BuildContext<'a> {
     pub fn safe_insets(&self) -> EdgeInsets {
         self.inner
             .depend::<RuntimeSafeInsets>()
+            .map_or(EdgeInsets::ZERO, |value| value.0)
+    }
+
+    #[must_use]
+    pub fn view_padding(&self) -> EdgeInsets {
+        self.inner
+            .depend::<RuntimeViewPadding>()
             .map_or(EdgeInsets::ZERO, |value| value.0)
     }
 
@@ -505,13 +517,6 @@ pub(crate) fn sub_screen_scope(
     )
 }
 
-/// Scopes reduced safe insets for descendants: Flutter's
-/// `MediaQuery.removePadding` on the consumed sides of a `SafeArea`. View
-/// insets and display features pass through unchanged.
-pub(crate) fn safe_insets_scope(safe_insets: EdgeInsets, child: Widget) -> Widget {
-    Widget::environment_scope(RuntimeSafeInsets(safe_insets), child)
-}
-
 pub(super) fn install_runtime_environment(
     context: &DependencyContext,
     environment: &RuntimeEnvironment,
@@ -542,6 +547,10 @@ pub(super) fn install_runtime_environment(
     context.set_erased(
         TypeId::of::<RuntimeSafeInsets>(),
         Rc::new(RuntimeSafeInsets(environment.safe_insets)),
+    );
+    context.set_erased(
+        TypeId::of::<RuntimeViewPadding>(),
+        Rc::new(RuntimeViewPadding(environment.view_padding)),
     );
     context.set_erased(
         TypeId::of::<RuntimeViewInsets>(),
@@ -672,6 +681,7 @@ pub(super) fn update_runtime_environment(
     replace_if_changed!(brightness, RuntimeBrightness);
     replace_if_changed!(text_scale, RuntimeTextScale);
     replace_if_changed!(safe_insets, RuntimeSafeInsets);
+    replace_if_changed!(view_padding, RuntimeViewPadding);
     replace_if_changed!(view_insets, RuntimeViewInsets);
     replace_if_changed!(locales, RuntimeLocales);
     replace_if_changed!(reduced_motion, RuntimeReducedMotion);

@@ -1,18 +1,14 @@
-//! Declarative SafeArea widget consuming ambient runtime/window safe insets.
+//! SafeArea and the per-edge scopes it installs for descendants.
 
-use incular_config::EdgeInsets;
+use incular_config::{EdgeInsets, MediaQueryEdges};
 use typed_builder::TypedBuilder;
 
-use crate::{Widget, WidgetKind};
+use crate::{MediaQuery, Widget};
 
 /// Insets child from the display edges to avoid platform UI, notches, and status bars.
 ///
-/// Nested instances accumulate: each applies the full ambient padding, so
-/// an inner `SafeArea` pads inside the outer one's padding. This matches
-/// the platform convention the option names follow. Avoid double-padding
-/// by disabling already-handled edges on one level with [`Self::sides`]
-/// (for example an inner bar with only the bottom edge enabled inside a
-/// full outer guard), or by keeping separate subtrees on separate edges.
+/// Consumed edges are removed from the descendant MediaQuery, so ordinary
+/// nested safe areas do not apply the same inset twice.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct SafeArea {
     #[builder(setter(into))]
@@ -108,14 +104,16 @@ impl SafeArea {
     /// [`Self::resolve_with_padding`] when both signals are available.
     #[must_use]
     pub fn resolve(self, insets: EdgeInsets) -> Widget {
-        let padding = self.policy().padding(insets, EdgeInsets::ZERO);
+        let mut policy = self.policy();
+        policy.maintain_bottom_view_padding = false;
+        let padding = policy.padding(insets, EdgeInsets::ZERO);
         crate::Padding::new(padding, self.child).into()
     }
 
     /// Resolves against both environment signals for use outside the
     /// retained tree, applying the same maintained-padding policy as
-    /// retained construction: the bottom edge keeps
-    /// `max(safe, minimum, persistent)` when maintenance is enabled.
+    /// retained construction: persistent view padding replaces ordinary
+    /// padding on the bottom edge when maintenance is enabled.
     /// Transient occlusion never participates; keyboard avoidance belongs
     /// to the padded parent.
     #[must_use]
@@ -144,33 +142,27 @@ impl SafeArea {
 }
 
 /// Edge toggles and floors shared by every SafeArea construction path.
-///
-/// One policy feeds the retained render kind, the explicit-insets
-/// [`SafeArea::resolve`], and the environment-aware
-/// [`SafeArea::resolve_with_padding`], so the three paths cannot drift on
-/// the max expressions. Passing zero view padding disables maintenance,
-/// which is exactly the documented [`SafeArea::resolve`] contract.
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct SafeAreaPolicy {
-    pub(crate) minimum: EdgeInsets,
-    pub(crate) left: bool,
-    pub(crate) top: bool,
-    pub(crate) right: bool,
-    pub(crate) bottom: bool,
-    pub(crate) maintain_bottom_view_padding: bool,
+struct SafeAreaPolicy {
+    minimum: EdgeInsets,
+    left: bool,
+    top: bool,
+    right: bool,
+    bottom: bool,
+    maintain_bottom_view_padding: bool,
 }
 
 impl SafeAreaPolicy {
-    pub(crate) fn padding(self, safe_insets: EdgeInsets, view_padding: EdgeInsets) -> EdgeInsets {
+    fn padding(self, safe_insets: EdgeInsets, view_padding: EdgeInsets) -> EdgeInsets {
         let ambient = safe_insets.normalized();
         // A maintained bottom edge keeps the persistent obstruction
         // margin, which the shell reports separately from transient
         // occlusion and never reduces under it. The occlusion height is
         // not persistent padding. Disabled edges stay at their minimum.
-        let persistent_bottom = if self.maintain_bottom_view_padding {
-            view_padding.normalized().bottom.max(0.0)
+        let bottom = if self.maintain_bottom_view_padding {
+            view_padding.normalized().bottom
         } else {
-            0.0
+            ambient.bottom
         };
         EdgeInsets::only(
             if self.left {
@@ -189,10 +181,7 @@ impl SafeAreaPolicy {
                 self.minimum.right
             },
             if self.bottom {
-                ambient
-                    .bottom
-                    .max(self.minimum.bottom)
-                    .max(persistent_bottom)
+                bottom.max(self.minimum.bottom)
             } else {
                 self.minimum.bottom
             },
@@ -202,54 +191,22 @@ impl SafeAreaPolicy {
 
 impl From<SafeArea> for Widget {
     fn from(value: SafeArea) -> Self {
-        if value.maintain_bottom_view_padding {
-            // Maintained bottom padding needs the persistent view padding,
-            // which only the retained render arm reads. Descendants of that
-            // arm do not see reduced safe insets (see the layout note below).
-            return Widget::from_kind(WidgetKind::SafeArea {
-                minimum: value.minimum,
-                left: value.left,
-                top: value.top,
-                right: value.right,
-                bottom: value.bottom,
-                maintain_bottom_view_padding: true,
-                child: value.child,
-            });
-        }
-        let SafeArea {
-            child,
-            minimum,
-            left,
-            top,
-            right,
-            bottom,
-            ..
-        } = value;
-        // Flutter's `SafeArea.build`: the padding comes from the ambient
-        // safe insets, and `MediaQuery.removePadding` hides the consumed
-        // sides from descendants so a nested SafeArea does not pad twice.
+        let policy = value.policy();
+        let edges = MediaQueryEdges {
+            left: policy.left,
+            top: policy.top,
+            right: policy.right,
+            bottom: policy.bottom,
+        };
+        let child = MediaQuery::remove_padding(value.child, edges);
         crate::Builder::new(move |context| {
-            let policy = SafeAreaPolicy {
-                minimum,
-                left,
-                top,
-                right,
-                bottom,
-                maintain_bottom_view_padding: false,
+            let view_padding = if policy.maintain_bottom_view_padding && policy.bottom {
+                context.view_padding()
+            } else {
+                EdgeInsets::ZERO
             };
-            let ambient = context.safe_insets().normalized();
-            let padding = policy.padding(ambient, EdgeInsets::ZERO);
-            let reduced = EdgeInsets {
-                left: if left { 0.0 } else { ambient.left },
-                top: if top { 0.0 } else { ambient.top },
-                right: if right { 0.0 } else { ambient.right },
-                bottom: if bottom { 0.0 } else { ambient.bottom },
-            };
-            crate::Padding::new(
-                padding,
-                crate::tree::safe_insets_scope(reduced, child.clone()),
-            )
-            .into()
+            let padding = policy.padding(context.safe_insets(), view_padding);
+            crate::Padding::new(padding, child.clone()).into()
         })
         .into()
     }
@@ -311,23 +268,14 @@ impl RemovePadding {
 
 impl From<RemovePadding> for Widget {
     fn from(value: RemovePadding) -> Self {
-        let RemovePadding {
-            child,
-            left,
-            top,
-            right,
-            bottom,
-        } = value;
-        crate::Builder::new(move |context| {
-            let ambient = context.safe_insets().normalized();
-            let reduced = EdgeInsets {
-                left: if left { 0.0 } else { ambient.left },
-                top: if top { 0.0 } else { ambient.top },
-                right: if right { 0.0 } else { ambient.right },
-                bottom: if bottom { 0.0 } else { ambient.bottom },
-            };
-            crate::tree::safe_insets_scope(reduced, child.clone())
-        })
-        .into()
+        MediaQuery::remove_padding(
+            value.child,
+            MediaQueryEdges {
+                left: value.left,
+                top: value.top,
+                right: value.right,
+                bottom: value.bottom,
+            },
+        )
     }
 }

@@ -3764,7 +3764,6 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
             }
         }
         WidgetKind::Align { child, .. }
-        | WidgetKind::SafeArea { child, .. }
         | WidgetKind::ClipOval { child, .. }
         | WidgetKind::Gesture { child, .. }
         | WidgetKind::Draggable { child, .. }

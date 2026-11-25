@@ -1228,3 +1228,12 @@ packages/flutter/test/widgets/media_query_test.dart	927	MediaQuery.removeViewIns
 packages/flutter/test/widgets/media_query_test.dart	1005	MediaQuery.removeViewInsets removes only specified viewInsets	paired-match	upstream-media-query-insets.md
 packages/flutter/test/widgets/media_query_test.dart	1080	MediaQuery.removeViewPadding removes specified viewPadding	paired-match	upstream-media-query-insets.md
 packages/flutter/test/widgets/media_query_test.dart	1158	MediaQuery.removeViewPadding removes only specified viewPadding	paired-match	upstream-media-query-insets.md
+packages/flutter/test/widgets/safe_area_test.dart	11	SafeArea - basic	paired-match	upstream-safe-area.md
+packages/flutter/test/widgets/safe_area_test.dart	22	SafeArea - with minimums	paired-match	upstream-safe-area.md
+packages/flutter/test/widgets/safe_area_test.dart	37	SafeArea - nested	paired-match	upstream-safe-area.md
+packages/flutter/test/widgets/safe_area_test.dart	48	SafeArea - changing	paired-match	upstream-safe-area.md
+packages/flutter/test/widgets/safe_area_test.dart	111	SafeArea alone.	paired-match	upstream-safe-area.md
+packages/flutter/test/widgets/safe_area_test.dart	144	SafeArea alone - partial ViewInsets consume Padding	paired-match	upstream-safe-area.md
+packages/flutter/test/widgets/safe_area_test.dart	175	SafeArea with nested fixed-size container	paired-match	upstream-safe-area.md
+packages/flutter/test/widgets/safe_area_test.dart	210	SafeArea with nested fixed-size container - partial ViewInsets consume Padding	paired-match	upstream-safe-area.md
+packages/flutter/test/widgets/safe_area_test.dart	245	SafeArea does not crash at zero area	paired-match	upstream-safe-area.md

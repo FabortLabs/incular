@@ -127,7 +127,7 @@ pub(super) fn with_recursive_tree_stack<R>(f: impl FnOnce() -> R) -> R {
 }
 
 pub use context::{BuildContext, InheritedScopeValue};
-pub(crate) use context::{LayoutBuilderCallback, safe_insets_scope, sub_screen_scope};
+pub(crate) use context::{LayoutBuilderCallback, sub_screen_scope};
 pub use descriptors::*;
 pub(crate) use specs::WidgetKind;
 pub use specs::{
@@ -741,14 +741,6 @@ pub enum RenderKind {
         index: Option<usize>,
         fit: StackFit,
         clip_behavior: Clip,
-    },
-    SafeArea {
-        minimum: EdgeInsets,
-        left: bool,
-        top: bool,
-        right: bool,
-        bottom: bool,
-        maintain_bottom_view_padding: bool,
     },
     ClipRect {
         clip_behavior: Clip,

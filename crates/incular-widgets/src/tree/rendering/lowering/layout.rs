@@ -203,22 +203,6 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
                 clip_behavior: *clip_behavior,
             },
         },
-        WidgetKind::SafeArea {
-            minimum,
-            left,
-            top,
-            right,
-            bottom,
-            maintain_bottom_view_padding,
-            ..
-        } => RenderKind::SafeArea {
-            minimum: *minimum,
-            left: *left,
-            top: *top,
-            right: *right,
-            bottom: *bottom,
-            maintain_bottom_view_padding: *maintain_bottom_view_padding,
-        },
         WidgetKind::ClipRect {
             clip_behavior,
             clipper,
