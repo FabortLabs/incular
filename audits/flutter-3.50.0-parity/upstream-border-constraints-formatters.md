@@ -97,3 +97,17 @@ zero-width stroke still produces one hairline on the leading edge in
 each text direction. Both the Flutter canvas and Incular display list
 assert the zero width and edge coordinates; no new GPU raster comparison
 was run. Sixteen focused Rust checks passed.
+
+## Non-uniform border paint validation
+
+Both pinned originals at `border_test.dart:235,335` passed. The
+previously failing Rust paint tests now reject unsupported combinations
+in debug mode: non-inside alignment on the plain rectangular fallback,
+rounded multicolor borders, and rounded non-uniform hairlines. Valid
+rounded or circular, single-color borders still paint despite different
+widths or alignments; invisible edges and square hairlines remain valid.
+The Rust paint-boundary port exercises every accepted and rejected case
+at :335 and tests directional resolution on both sides. The specific
+error at :235 is partial because Flutter's diagnostic-node type and
+line wrapping are not reproduced. Thirteen focused Rust checks passed;
+release fallback and the renderer are unchanged.

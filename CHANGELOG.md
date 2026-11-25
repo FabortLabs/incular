@@ -177,6 +177,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-widgets`: debug painting rejects unsupported non-uniform
+  border geometry instead of silently drawing a square inside border.
+
 - `incular-widgets`: omitted directional border sides no longer paint
   a default line. Physical and directional border dimensions count only
   the inset portion of each stroke.

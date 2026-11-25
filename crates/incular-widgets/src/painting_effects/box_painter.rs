@@ -102,6 +102,9 @@ impl BoxDecoration {
 
     /// Flutter `Border.paint` for this decoration's shape and radius.
     /// `None` without a border.
+    ///
+    /// In debug builds, rejects border combinations that the plain
+    /// rectangular fallback cannot represent.
     #[must_use]
     pub fn paint_border(&self, size: Size) -> Option<DisplayList> {
         let border = self.border?;
@@ -194,6 +197,26 @@ impl BoxDecoration {
             fill_between(&mut canvas, outer, inner, first);
             return Some(canvas.finish());
         }
+
+        // This four-path fallback describes a square, inside-aligned border
+        // only. Flutter reports unsupported combinations in debug builds
+        // rather than silently substituting different geometry.
+        debug_assert!(
+            !hairline || radius.is_none(),
+            "a non-uniform hairline border requires zero or no border radius"
+        );
+        debug_assert!(
+            radius.is_none(),
+            "a non-uniform rounded border requires uniform visible colors"
+        );
+        debug_assert!(
+            self.shape == BoxShape::Rectangle,
+            "a non-uniform circle border requires uniform visible colors and non-hairline widths"
+        );
+        debug_assert!(
+            sides.iter().all(|side| side.stroke_align == -1.0),
+            "a non-uniform rectangular border requires inside stroke alignment"
+        );
         paint_border_sides(&mut canvas, rect, border);
         Some(canvas.finish())
     }

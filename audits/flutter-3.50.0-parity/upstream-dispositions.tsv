@@ -862,3 +862,5 @@ packages/flutter/test/painting/border_test.dart	94	Border.scale	paired-match	ups
 packages/flutter/test/painting/border_test.dart	108	Border.dimensions	paired-match	upstream-border-constraints-formatters.md#box-border-defaults-and-stroke-insets
 packages/flutter/test/painting/border_test.dart	120	Border.isUniform	paired-match	upstream-border-constraints-formatters.md#box-border-defaults-and-stroke-insets
 packages/flutter/test/painting/border_test.dart	256	Border.dimension	paired-match	upstream-border-constraints-formatters.md#box-border-defaults-and-stroke-insets
+packages/flutter/test/painting/border_test.dart	235	Border - throws correct exception with strokeAlign	partial-match	upstream-border-constraints-formatters.md#non-uniform-border-paint-validation
+packages/flutter/test/painting/border_test.dart	335	Non-Uniform Border variations	paired-match	upstream-border-constraints-formatters.md#non-uniform-border-paint-validation
