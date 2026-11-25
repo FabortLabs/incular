@@ -10,6 +10,8 @@ mod images;
 mod layers;
 mod shape_borders;
 mod shape_decoration;
+mod table_border;
+pub use table_border::TableBorder;
 
 pub use box_painter::DecorationPosition;
 pub(crate) use box_painter::{ImagePaint, decorated, painted_image};

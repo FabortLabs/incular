@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- TableBorder describes and paints physical outside edges and inside row
+  and column dividers, with no stroke unless a side is supplied.
+
 - Wrap supports painting overflow clips in the requested mode. It leaves
   fitting children unclipped and defaults to no clip.
 

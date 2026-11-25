@@ -347,7 +347,7 @@ pub mod prelude {
         SliverVariedExtentList, SliverVisibility, SnapshotWidget, Spacer, Stack, StadiumBorder,
         StarBorder, StreamBuilder, StreamBuilderBase, StreamEvent, StretchEffect,
         StretchingOverscrollIndicator, StringRouteInformationParser, Table, TableCell,
-        TableCellVerticalAlignment, TableColumnWidth, TapRegion, TapRegionCallbacks,
+        TableBorder, TableCellVerticalAlignment, TableColumnWidth, TapRegion, TapRegionCallbacks,
         TapRegionGroupId, TapRegionSurface, Text, TextFieldTapRegion, TextInputActionHint,
         TextInputTypeHint, TickerMode, TileMode, Title, TitleController, TitleData, TitleError,
         ToolbarOptions, TooltipComponentBuilder, TooltipDurations, TooltipTriggerMode,

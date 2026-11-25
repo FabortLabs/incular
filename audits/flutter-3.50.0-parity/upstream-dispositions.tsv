@@ -1405,3 +1405,8 @@ packages/flutter/test/services/message_codecs_test.dart	163	should preserve UTF-
 packages/flutter/test/services/message_codecs_test.dart	106	should decode error envelope without native stacktrace	paired-match	upstream-standard-message-codecs.md#json-method-envelopes-and-diagnostics
 packages/flutter/test/services/message_codecs_test.dart	122	should decode error envelope with native stacktrace.	paired-match	upstream-standard-message-codecs.md#json-method-envelopes-and-diagnostics
 packages/flutter/test/services/message_codecs_test.dart	287	toString works as intended	paired-match	upstream-standard-message-codecs.md#json-method-envelopes-and-diagnostics
+packages/flutter/test/rendering/table_border_test.dart	9	TableBorder constructor	paired-match	upstream-table-border.md
+packages/flutter/test/rendering/table_border_test.dart	33	TableBorder.all constructor	paired-match	upstream-table-border.md
+packages/flutter/test/rendering/table_border_test.dart	46	TableBorder.symmetric constructor	paired-match	upstream-table-border.md
+packages/flutter/test/rendering/table_border_test.dart	67	TableBorder.lerp	paired-match	upstream-table-border.md
+packages/flutter/test/rendering/table_border_test.dart	120	TableBorder.lerp with nulls	paired-match	upstream-table-border.md

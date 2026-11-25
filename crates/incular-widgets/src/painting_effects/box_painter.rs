@@ -733,7 +733,7 @@ fn paint_box_border(
 
 /// Flutter `paintBorder`: each solid side as a trapezoid meeting its
 /// neighbours on the diagonals, or a hairline for a zero width.
-fn paint_border_sides(canvas: &mut Canvas, rect: Rect, border: Border) {
+pub(super) fn paint_border_sides(canvas: &mut Canvas, rect: Rect, border: Border) {
     let (left, top) = (rect.origin.x, rect.origin.y);
     let (right, bottom) = (left + rect.size.width, top + rect.size.height);
     let Border {
@@ -801,7 +801,7 @@ fn stroke(canvas: &mut Canvas, side: &BorderSide, path: Path) {
 }
 
 /// `Canvas.drawDRRect`: the area inside `outer` and outside `inner`.
-fn fill_between(canvas: &mut Canvas, outer: Path, inner: Path, color: Color) {
+pub(super) fn fill_between(canvas: &mut Canvas, outer: Path, inner: Path, color: Color) {
     let mut builder = Path::builder();
     builder.append(&outer).append(&inner);
     canvas.fill_path(Arc::new(builder.build()), color, FillRule::EvenOdd);
@@ -878,7 +878,7 @@ fn clockwise_radii(radius: BorderRadius) -> [Radius; 4] {
 
 /// Flutter `EdgeInsets.inflateRRect`: the rectangle grows by `insets` and
 /// each corner radius by the two sides that meet there.
-fn inflate_rrect(rect: Rect, radius: BorderRadius, insets: EdgeInsets) -> Path {
+pub(super) fn inflate_rrect(rect: Rect, radius: BorderRadius, insets: EdgeInsets) -> Path {
     let grow = |corner: Radius, x: f32, y: f32| Radius {
         x: (corner.x + x).max(0.0),
         y: (corner.y + y).max(0.0),
@@ -895,7 +895,7 @@ fn inflate_rrect(rect: Rect, radius: BorderRadius, insets: EdgeInsets) -> Path {
 }
 
 /// Flutter `EdgeInsets.deflateRRect`.
-fn deflate_rrect(rect: Rect, radius: BorderRadius, insets: EdgeInsets) -> Path {
+pub(super) fn deflate_rrect(rect: Rect, radius: BorderRadius, insets: EdgeInsets) -> Path {
     inflate_rrect(
         rect,
         radius,
