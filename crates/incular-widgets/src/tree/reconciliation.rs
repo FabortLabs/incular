@@ -7,7 +7,6 @@ use super::rendering::{carry_replaced_transition, render_kind};
 use super::widget::WidgetChildren;
 use crate::overscroll_indicator::ScrollOverscrollIndicator;
 use crate::scroll_behavior::OverscrollStyle;
-use incular_config::AxisDirection;
 
 /// The inherited scope an element of `widget` provides and whether it is a
 /// lookup boundary: a layout builder's environment, or the
@@ -2758,6 +2757,14 @@ fn direction_need(kind: &WidgetKind) -> Option<DirectionNeed> {
                 always: false,
             })
         }
+        WidgetKind::ListBody {
+            axis: Axis::Horizontal,
+            ..
+        } => Some(DirectionNeed {
+            widget: "ListBody",
+            reason: "a horizontal ListBody resolves the reading direction with Directionality.of",
+            always: true,
+        }),
         WidgetKind::OverflowBar {
             text_direction: None,
             ..

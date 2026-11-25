@@ -20,9 +20,9 @@ static TREE_SEQUENCE: IdGenerator = IdGenerator::new();
 use icu_segmenter::GraphemeClusterSegmenter;
 use incular_animation::AnimationController;
 use incular_config::{
-    Alignment, Axis, Clip, Constraints, CrossAxisAlignment, EdgeInsets, FlexFit, MainAxisAlignment,
-    MainAxisSize, RuntimeEnvironment, StackFit, TextDirection, VerticalDirection, WrapAlignment,
-    WrapCrossAlignment,
+    Alignment, Axis, AxisDirection, Clip, Constraints, CrossAxisAlignment, EdgeInsets, FlexFit,
+    MainAxisAlignment, MainAxisSize, RuntimeEnvironment, StackFit, TextDirection,
+    VerticalDirection, WrapAlignment, WrapCrossAlignment,
 };
 use incular_core::DragStartBehavior;
 use incular_core::{
@@ -715,6 +715,9 @@ pub enum RenderKind {
     Flexible {
         flex: u32,
         fit: incular_config::FlexFit,
+    },
+    ListBody {
+        direction: AxisDirection,
     },
     OverflowBar {
         spacing: f32,

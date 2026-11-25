@@ -2,31 +2,43 @@ use super::super::*;
 use crate::tree::widget::aligned_child_offset;
 
 impl WidgetTree {
-    fn probe_intrinsic_width(
+    fn probe_intrinsic_extent(
         &mut self,
         child: RenderObjectId,
-        max_height: f32,
+        dimension: Axis,
+        probe: Constraints,
     ) -> Result<f32, TreeError> {
         let node = self.render_live(child, "intrinsic child remains live");
-        if let RenderKind::OverflowBar { spacing, .. } = node.object.kind() {
-            // OverflowBar's intrinsic width ignores the row alignment and
-            // sums child intrinsic widths at unbounded height. Do not lay out
-            // the bar itself at infinite width: explicit alignment expands.
-            let spacing = *spacing;
-            let children = node.children.clone();
-            let mut width = 0.0;
-            for &grandchild in &children {
-                width += with_recursive_tree_stack(|| {
-                    self.probe_intrinsic_width(grandchild, f32::INFINITY)
-                })?;
+        let (sum, gap, child_probe) = match node.object.kind() {
+            // Alignment can expand the row, but cannot expand intrinsic width.
+            RenderKind::OverflowBar { spacing, .. } if dimension == Axis::Horizontal => (
+                true,
+                *spacing,
+                Constraints::at_most(f32::INFINITY, f32::INFINITY),
+            ),
+            // Flutter sums child intrinsics in a horizontal ListBody and takes
+            // their maximum in a vertical one, for both queries. Probing the
+            // body itself would supply invalid unbounded cross-axis constraints.
+            RenderKind::ListBody { direction } => (direction.axis().is_horizontal(), 0.0, probe),
+            _ => {
+                self.layout_render(child, probe)?;
+                return Ok(dimension
+                    .main_extent(self.render_live(child, "intrinsic child remains live").size));
             }
-            return Ok(width + spacing * children.len().saturating_sub(1) as f32);
+        };
+        let children = node.children.clone();
+        let mut value: f32 = 0.0;
+        for &grandchild in &children {
+            let extent = with_recursive_tree_stack(|| {
+                self.probe_intrinsic_extent(grandchild, dimension, child_probe)
+            })?;
+            value = if sum {
+                value + extent
+            } else {
+                value.max(extent)
+            };
         }
-        self.layout_render(child, Constraints::at_most(f32::INFINITY, max_height))?;
-        Ok(self
-            .render_live(child, "intrinsic child remains live")
-            .size
-            .width)
+        Ok(value + gap * children.len().saturating_sub(1) as f32)
     }
 
     pub(super) fn layout_core_kind(
@@ -394,20 +406,21 @@ impl WidgetTree {
                         let width = if constraints.min_width() == constraints.max_width() {
                             None
                         } else {
-                            let natural =
-                                self.probe_intrinsic_width(child, constraints.max_height())?;
+                            let natural = self.probe_intrinsic_extent(
+                                child,
+                                Axis::Horizontal,
+                                Constraints::at_most(f32::INFINITY, constraints.max_height()),
+                            )?;
                             Some(incular_layout::round_intrinsic_step(natural, step_width))
                         };
                         let height = if step_height.is_some()
                             && constraints.min_height() != constraints.max_height()
                         {
-                            let probe =
-                                Constraints::at_most(constraints.max_width(), f32::INFINITY);
-                            self.layout_render(child, probe)?;
-                            let natural = self
-                                .render_live(child, "intrinsic child must remain live")
-                                .size
-                                .height;
+                            let natural = self.probe_intrinsic_extent(
+                                child,
+                                Axis::Vertical,
+                                Constraints::at_most(constraints.max_width(), f32::INFINITY),
+                            )?;
                             Some(incular_layout::round_intrinsic_step(natural, step_height))
                         } else {
                             None
@@ -427,8 +440,9 @@ impl WidgetTree {
                             if constraints.min_height() == constraints.max_height() {
                                 constraints
                             } else {
-                                self.layout_render(
+                                let natural = self.probe_intrinsic_extent(
                                     child,
+                                    Axis::Vertical,
                                     Constraints::new(
                                         constraints.min_width(),
                                         constraints.max_width(),
@@ -436,10 +450,6 @@ impl WidgetTree {
                                         f32::INFINITY,
                                     ),
                                 )?;
-                                let natural = self
-                                    .render_live(child, "retained render must remain live")
-                                    .size
-                                    .height;
                                 constraints.tighten(None, Some(natural))
                             };
                         self.layout_render(child, child_constraints)?;

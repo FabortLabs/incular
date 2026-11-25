@@ -158,6 +158,26 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
             flex: *flex,
             fit: *fit,
         },
+        WidgetKind::ListBody { axis, reverse, .. } => {
+            let direction = match axis {
+                Axis::Horizontal => {
+                    let rtl = resolve_layout_direction(None, context) == TextDirection::Rtl;
+                    if rtl ^ *reverse {
+                        AxisDirection::Left
+                    } else {
+                        AxisDirection::Right
+                    }
+                }
+                Axis::Vertical => {
+                    if *reverse {
+                        AxisDirection::Up
+                    } else {
+                        AxisDirection::Down
+                    }
+                }
+            };
+            RenderKind::ListBody { direction }
+        }
         WidgetKind::OverflowBar {
             spacing,
             overflow_spacing,

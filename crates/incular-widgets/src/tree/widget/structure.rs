@@ -296,6 +296,16 @@ impl std::fmt::Debug for WidgetKind {
                 .field("fit", fit)
                 .field("child", child)
                 .finish(),
+            Self::ListBody {
+                axis,
+                reverse,
+                children,
+            } => f
+                .debug_struct("ListBody")
+                .field("axis", axis)
+                .field("reverse", reverse)
+                .field("children", children)
+                .finish(),
             Self::OverflowBar {
                 spacing,
                 overflow_spacing,
@@ -1148,6 +1158,18 @@ impl PartialEq for WidgetKind {
                 },
             ) => a == d && b == e && g == h && c == f,
             (
+                Self::ListBody {
+                    axis: a,
+                    reverse: b,
+                    children: c,
+                },
+                Self::ListBody {
+                    axis: d,
+                    reverse: e,
+                    children: f,
+                },
+            ) => a == d && b == e && c == f,
+            (
                 Self::OverflowBar {
                     spacing: a,
                     overflow_spacing: b,
@@ -1934,6 +1956,7 @@ pub(crate) enum WidgetType {
     Flex,
     Flexible,
     Wrap,
+    ListBody,
     OverflowBar,
     Table,
     Stack,
@@ -2025,6 +2048,7 @@ impl WidgetType {
             Self::Flex => "Flex",
             Self::Flexible => "Flexible",
             Self::Wrap => "Wrap",
+            Self::ListBody => "ListBody",
             Self::OverflowBar => "OverflowBar",
             Self::Table => "Table",
             Self::Stack => "Stack",
@@ -2374,6 +2398,9 @@ impl WidgetKind {
                 Single,
                 WidgetChildren::Single(child),
             ),
+            WidgetKind::ListBody { children, .. } => {
+                (WidgetType::ListBody, Layout, Many, ManyChildren(children))
+            }
             WidgetKind::OverflowBar { children, .. } => (
                 WidgetType::OverflowBar,
                 Layout,

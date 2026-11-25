@@ -994,11 +994,14 @@ impl From<ShrinkWrappingViewport> for Widget {
     }
 }
 
-/// A simple sequential layout along the main axis.
+/// Places every child sequentially along an unbounded main axis, stretching
+/// each child to the available cross-axis extent.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct ListBody {
-    #[builder(default = WidgetDefaults::DEFAULT.scroll_direction)]
+    #[builder(default = Axis::Vertical)]
     main_axis: Axis,
+    #[builder(default)]
+    reverse: bool,
     #[builder(default, setter(transform = |children: impl IntoIterator<Item = impl Into<Widget>>| {
         children.into_iter().map(Into::into).collect::<Vec<Widget>>()
     }))]
@@ -1015,7 +1018,8 @@ impl ListBody {
     #[must_use]
     pub fn new(children: impl IntoIterator<Item = impl Into<Widget>>) -> Self {
         Self {
-            main_axis: WidgetDefaults::DEFAULT.scroll_direction,
+            main_axis: Axis::Vertical,
+            reverse: false,
             children: children.into_iter().map(Into::into).collect(),
         }
     }
@@ -1025,14 +1029,22 @@ impl ListBody {
         self.main_axis = axis;
         self
     }
+
+    /// Flips the placement direction without changing the order of the children.
+    #[must_use]
+    pub fn reverse(mut self, reverse: bool) -> Self {
+        self.reverse = reverse;
+        self
+    }
 }
 
 impl From<ListBody> for Widget {
     fn from(value: ListBody) -> Self {
-        match value.main_axis {
-            Axis::Horizontal => Row::new(value.children).into(),
-            Axis::Vertical => Column::new(value.children).into(),
-        }
+        Widget::from_kind(WidgetKind::ListBody {
+            axis: value.main_axis,
+            reverse: value.reverse,
+            children: value.children,
+        })
     }
 }
 

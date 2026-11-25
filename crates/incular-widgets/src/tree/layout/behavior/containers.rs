@@ -207,6 +207,65 @@ impl WidgetTree {
                     (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }
+            RenderKind::ListBody { direction } => {
+                let axis = direction.axis();
+                let (main_max, cross) = match axis {
+                    Axis::Horizontal => (constraints.max_width(), constraints.max_height()),
+                    Axis::Vertical => (constraints.max_height(), constraints.max_width()),
+                };
+                if main_max.is_finite() {
+                    return Err(TreeError::InvalidWidgetConfiguration {
+                        widget: "ListBody",
+                        reason: "RenderListBody must have unlimited space along its main axis. \
+                                 Place it in a viewport with the same scrolling axis."
+                            .into(),
+                    });
+                }
+                if !cross.is_finite() {
+                    return Err(TreeError::InvalidWidgetConfiguration {
+                        widget: "ListBody",
+                        reason:
+                            "RenderListBody must have a bounded constraint for its cross axis. \
+                                 Give it a finite extent perpendicular to its main axis."
+                                .into(),
+                    });
+                }
+                let child_constraints = match axis {
+                    Axis::Horizontal => Constraints::new(0., f32::INFINITY, cross, cross),
+                    Axis::Vertical => Constraints::new(cross, cross, 0., f32::INFINITY),
+                };
+                let mut extent = 0.0;
+                for &child in children {
+                    self.layout_render(child, child_constraints)?;
+                    extent += axis
+                        .main_extent(self.render_live(child, "list body child remains live").size);
+                }
+
+                let mut baseline = None;
+                let mut cursor = 0.0;
+                let offsets = children
+                    .iter()
+                    .map(|child| {
+                        let child = self.render_live(child, "list body child remains live");
+                        let child_extent = axis.main_extent(child.size);
+                        let main = if direction.is_reversed() {
+                            extent - (cursor + child_extent)
+                        } else {
+                            cursor
+                        };
+                        cursor += child_extent;
+                        let offset = axis.offset(main, 0.0);
+                        // RenderListBody uses the first real baseline in child
+                        // order even if reverse puts another child above it.
+                        if baseline.is_none() {
+                            baseline = child.baseline.map(|local| local + offset.y);
+                        }
+                        offset
+                    })
+                    .collect();
+                self.render_live_mut(id, "list body remains live").baseline = baseline;
+                (constraints.constrain(axis.size(extent, cross)), offsets)
+            }
             RenderKind::OverflowBar {
                 spacing,
                 overflow_spacing,

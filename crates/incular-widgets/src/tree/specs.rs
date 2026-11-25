@@ -725,6 +725,11 @@ pub(crate) enum WidgetKind {
         fit: incular_config::FlexFit,
         child: Widget,
     },
+    ListBody {
+        axis: Axis,
+        reverse: bool,
+        children: Vec<Widget>,
+    },
     OverflowBar {
         spacing: f32,
         overflow_spacing: f32,

@@ -3886,6 +3886,7 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
         | WidgetKind::AspectRatio { .. }
         | WidgetKind::SizeObserver { .. }
         | WidgetKind::Fractional { .. }
+        | WidgetKind::ListBody { .. }
         | WidgetKind::OverflowBar { .. }
         | WidgetKind::Wrap { .. }
         | WidgetKind::Table { .. } => None,
