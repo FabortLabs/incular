@@ -1326,25 +1326,6 @@ impl WidgetTree {
             _ => None,
         }
     }
-    /// Whether a semantic Activate may execute on this element right now.
-    /// This is the single advertisement/execution predicate shared with
-    /// semantic collection: explicit callbacks always qualify, otherwise
-    /// only an enabled button with a bound callback does. Dispatch rechecks
-    /// current eligibility; native projections may describe an earlier frame.
-    #[must_use]
-    pub fn semantic_activate_executable(&self, id: ElementId) -> bool {
-        if self.pointer_actions_blocked(id) {
-            return false;
-        }
-        self.elements.get(id.0).is_some_and(|element| {
-            super::semantics::semantic_action_is_executable(
-                element.widget.kind(),
-                SemanticActionKind::Activate,
-                &element.widget.semantic_properties().callbacks,
-            )
-        })
-    }
-
     pub(super) fn pointer_actions_blocked(&self, mut id: ElementId) -> bool {
         loop {
             let Some(element) = self.elements.get(id.0) else {

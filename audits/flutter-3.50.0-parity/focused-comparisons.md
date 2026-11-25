@@ -286,3 +286,14 @@ fractional 0.1 gap and a slightly narrower bound that really exceeds
 the available width. Incular sums f32 measurements in f64 and allows
 half a representable step at the line limit, rather than using a wide
 fixed epsilon. Both named Flutter exact/slight-overflow regressions pass.
+
+### C03 current recheck
+
+Incular now advertises activation on the merged node and dispatches to
+North only, matching Flutter for the original two actionable children.
+The native control also exercises a retained update: blocking North
+routes to South and blocking both removes activation. Flutter's explicit
+Semantics onTap inside IgnorePointer still routes to North, even after
+remounting. Incular intentionally keeps its existing rule that
+pointer-blocked subtrees cannot advertise or execute activation.
+Neither authored comparison adds an upstream registration.

@@ -1257,6 +1257,12 @@ impl WidgetTree {
                 &entry.widget.semantic_properties().callbacks,
             )
         });
+        if absorbs_descendant_semantics(entry)
+            && !actions.contains(&SemanticActionKind::Activate)
+            && self.semantic_activation_target(element).is_some()
+        {
+            actions.push(SemanticActionKind::Activate);
+        }
         merged.custom_actions.sort_unstable_by_key(|id| id.0);
         merged.custom_actions.dedup();
         state.custom_actions = merged.custom_actions.into_boxed_slice();
@@ -1727,6 +1733,42 @@ impl WidgetTree {
                 entry.widget.kind(),
                 WidgetKind::CompositedTransformFollower { .. }
             ) || self.follower_content_visible(entry.render))
+    }
+
+    /// Resolves activation to the first live handler in a merged subtree.
+    /// An ordinary node may activate only itself. Excluded or pointer-
+    /// blocked descendants cannot take the merged node's action.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn semantic_activation_target(&self, element: ElementId) -> Option<ElementId> {
+        let entry = self.elements.get(element.0)?;
+        self.find_semantic_activation_target(element, absorbs_descendant_semantics(entry))
+    }
+
+    fn find_semantic_activation_target(
+        &self,
+        element: ElementId,
+        search_descendants: bool,
+    ) -> Option<ElementId> {
+        let entry = self.elements.get(element.0)?;
+        if !self.can_contribute_merged_semantics(entry) || self.pointer_actions_blocked(element) {
+            return None;
+        }
+        if semantic_action_is_executable(
+            entry.widget.kind(),
+            SemanticActionKind::Activate,
+            &entry.widget.semantic_properties().callbacks,
+        ) {
+            return Some(element);
+        }
+        if !search_descendants {
+            return None;
+        }
+        with_recursive_tree_stack(|| {
+            self.visible_semantic_children(element, entry)
+                .iter()
+                .find_map(|&child| self.find_semantic_activation_target(child, true))
+        })
     }
 
     /// Resolves an advertised custom action to the current owning widget.

@@ -122,3 +122,46 @@ fn block_semantics_keeps_nested_explicit_child_inside_boundary() {
         BTreeSet::from(["#1", "#2", "#2.2", "#2.2.1", "#2.3", "#3"])
     );
 }
+
+#[test]
+fn a_merged_tap_retargets_when_the_first_action_becomes_blocked() {
+    let hits = Rc::new(Cell::new(""));
+    let make = |label: &'static str| -> Widget {
+        let hits = hits.clone();
+        Semantics::new(SizedBox::new().width(60.).height(40.))
+            .label(label)
+            .on_tap(move || hits.set(label))
+            .into()
+    };
+    let scene = |north_blocked, south_blocked| {
+        MergeSemantics::new(Column::new([
+            incular_widgets::IgnorePointer::new(make("North")).ignoring(north_blocked),
+            incular_widgets::IgnorePointer::new(make("South")).ignoring(south_blocked),
+        ]))
+    };
+    let mut runtime = run(scene(false, false));
+    let id = runtime.tree().semantics().root().unwrap();
+    assert!(runtime.dispatch_semantic_action(id, SemanticAction::Activate));
+    assert_eq!(hits.get(), "North");
+    let root = runtime.tree().root().unwrap();
+    for (south_blocked, expected) in [(false, "South"), (true, "")] {
+        hits.set("");
+        runtime
+            .schedule_update(root, scene(true, south_blocked).into())
+            .unwrap();
+        runtime
+            .run_frame(Constraints::tight(Size::new(240., 160.)))
+            .unwrap();
+        let node = runtime.tree().semantics().node(id).unwrap();
+        assert_eq!(node.label.as_deref(), Some("North\nSouth"));
+        assert_eq!(
+            node.actions.contains(&SemanticActionKind::Activate),
+            !south_blocked
+        );
+        assert_eq!(
+            runtime.dispatch_semantic_action(id, SemanticAction::Activate),
+            !south_blocked
+        );
+        assert_eq!(hits.get(), expected);
+    }
+}

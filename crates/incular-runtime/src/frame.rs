@@ -1072,20 +1072,19 @@ impl Runtime {
                 }
             }
             SemanticAction::Activate => {
-                if let Some(callback) = self.tree.semantic_action_callback(
-                    element,
-                    incular_semantics::SemanticActionKind::Activate,
-                ) {
-                    callback();
-                    true
-                } else if self.tree.semantic_activate_executable(element) {
-                    self.tree
-                        .action_for_element(element)
-                        .map(|action| self.activate_action(action))
-                        .unwrap_or(false)
-                } else {
-                    false
-                }
+                self.tree.semantic_activation_target(element).is_some_and(|target| {
+                    if let Some(callback) = self.tree.semantic_action_callback(
+                        target,
+                        incular_semantics::SemanticActionKind::Activate,
+                    ) {
+                        callback();
+                        true
+                    } else {
+                        self.tree
+                            .action_for_element(target)
+                            .is_some_and(|action| self.activate_action(action))
+                    }
+                })
             }
             SemanticAction::SetText(text) => {
                 if !self.tree.text_field_is_editable(element) {

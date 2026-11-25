@@ -311,6 +311,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- MergeSemantics advertises and dispatches activation through its first
+  eligible descendant instead of dropping the action.
+
 - Wrap keeps fractional children together when they fit within coordinate
   rounding, while still breaking the run at a genuine overflow.
 
