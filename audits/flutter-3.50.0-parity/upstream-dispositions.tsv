@@ -914,3 +914,9 @@ packages/flutter/test/foundation/change_notifier_test.dart	383	Can remove listen
 packages/flutter/test/foundation/change_notifier_test.dart	389	Can check hasListener on a disposed ChangeNotifier	paired-match	upstream-foundation-scroll-comparisons.md#disposable-change-notifier
 packages/flutter/test/foundation/change_notifier_test.dart	494	Throws FlutterError when disposed and called	paired-match	upstream-foundation-scroll-comparisons.md#disposable-change-notifier
 packages/flutter/test/foundation/change_notifier_test.dart	516	Calling debugAssertNotDisposed works as intended	paired-match	upstream-foundation-scroll-comparisons.md#disposable-change-notifier
+packages/flutter/test/widgets/transitions_test.dart	1102	rebuilds when changed	paired-match	upstream-disposable-listenable-builders.md
+packages/flutter/test/widgets/transitions_test.dart	1132	doesn't rebuild the child	paired-match	upstream-disposable-listenable-builders.md
+packages/flutter/test/widgets/transitions_test.dart	1168	does not crash at zero area	paired-match	upstream-disposable-listenable-builders.md
+packages/flutter/test/widgets/transitions_test.dart	1194	 rebuilds when changed	paired-match	upstream-disposable-listenable-builders.md
+packages/flutter/test/widgets/transitions_test.dart	1224	doesn't rebuild the child	paired-match	upstream-disposable-listenable-builders.md
+packages/flutter/test/widgets/transitions_test.dart	1260	does not crash at zero area	paired-match	upstream-disposable-listenable-builders.md

@@ -1326,6 +1326,7 @@ impl Runtime {
     pub fn frame_requested(&self) -> bool {
         self.frame_requested
             || self.reactive.borrow().has_work()
+            || self.tree.has_dirty_dependencies()
             || self.tree.has_pending_application_fonts()
             || self.tree.has_pending_scroll_animations()
             || incular_animation::scheduler::has_scheduled_frame()
@@ -3123,7 +3124,7 @@ impl Runtime {
                 composited: u64::from(composited),
                 active_animations: u64::from(animations_active),
                 display_list_commands: display_list.len(),
-                requested_another_frame: self.frame_requested,
+                requested_another_frame: self.frame_requested || self.tree.has_dirty_dependencies(),
                 timings,
             },
         ))

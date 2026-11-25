@@ -1,5 +1,6 @@
 //! Ordered, disposable UI-thread notifications with owned registrations.
 
+use crate::reactivity::DependencySource;
 use std::{
     cell::RefCell,
     panic::{AssertUnwindSafe, catch_unwind, resume_unwind},
@@ -16,6 +17,7 @@ struct Listener {
 #[derive(Default)]
 struct State {
     listeners: Vec<Option<Listener>>,
+    tracked: Option<DependencySource>,
     live_listeners: usize,
     depth: usize,
     next_id: u64,
@@ -82,7 +84,26 @@ impl ChangeNotifier {
     /// Whether at least one registration is active. After disposal this is false.
     #[must_use]
     pub fn has_listeners(&self) -> bool {
-        self.0.borrow().live_listeners != 0
+        let state = self.0.borrow();
+        state.live_listeners != 0
+            || state
+                .tracked
+                .as_ref()
+                .is_some_and(|source| source.subscriber_count() != 0)
+    }
+
+    /// Makes the current build depend on notifications from this notifier.
+    /// Tracking is independent of an application's listener token.
+    pub fn track(&self) {
+        let source = {
+            let mut state = self.0.borrow_mut();
+            state.assert_alive();
+            state
+                .tracked
+                .get_or_insert_with(DependencySource::default)
+                .clone()
+        };
+        source.track();
     }
 
     /// Debug check matching Flutter's `debugAssertNotDisposed`. In release
@@ -104,14 +125,19 @@ impl ChangeNotifier {
     /// # Panics
     /// Panics if the notifier is disposed, or if a listener panicked.
     pub fn notify_listeners(&self) {
-        let end = {
+        let (end, tracked) = {
             let mut state = self.0.borrow_mut();
             state.assert_alive();
-            if state.live_listeners == 0 {
+            if state.live_listeners == 0
+                && state
+                    .tracked
+                    .as_ref()
+                    .is_none_or(|source| source.subscriber_count() == 0)
+            {
                 return;
             }
             state.depth += 1;
-            state.listeners.len()
+            (state.listeners.len(), state.tracked.clone())
         };
         let guard = Notification(&self.0);
         let mut first_panic = None;
@@ -124,6 +150,12 @@ impl ChangeNotifier {
                 && first_panic.is_none()
             {
                 first_panic = Some(payload);
+            }
+        }
+        if let Some(tracked) = tracked {
+            let failures = tracked.notify_collecting_panics();
+            if first_panic.is_none() {
+                first_panic = failures.into_iter().next();
             }
         }
         drop(guard);
@@ -147,7 +179,7 @@ impl ChangeNotifier {
             );
             state.disposed = true;
             state.live_listeners = 0;
-            std::mem::take(&mut state.listeners)
+            (std::mem::take(&mut state.listeners), state.tracked.take())
         };
         // Captures can own other subscriptions on this notifier.
         drop(listeners);

@@ -7,6 +7,10 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-widgets`: animation and listenable builders can observe
+  disposable ChangeNotifier instances, and listenable builders can
+  observe FocusNode.
+
 - `incular-core`: ChangeNotifier provides ordered synchronous notifications
   and explicit disposal that releases retained callbacks.
 
@@ -227,6 +231,9 @@ a version and date when publishing.
   `EditableText` does there. Mouse and stylus presses still unfocus it.
 
 ### Fixed
+
+- `incular-runtime`: a retained build dependency now requests the next
+  frame when it changes, even when nothing else needs drawing.
 
 - `incular-animation`: canceling a transient callback no longer withdraws
   a frame that was already requested.

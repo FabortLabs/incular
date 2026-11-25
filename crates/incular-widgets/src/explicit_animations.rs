@@ -126,11 +126,7 @@ pub type TransitionBuilder = Rc<dyn for<'a> Fn(&BuildContext<'a>, Option<Widget>
 /// changes. `child` is built once and handed to every run, for the part of
 /// the subtree that does not depend on the animation.
 #[derive(Clone)]
-pub struct AnimatedBuilder {
-    animation: DoubleAnimation,
-    builder: TransitionBuilder,
-    child: Option<Widget>,
-}
+pub struct AnimatedBuilder(ListenableBuilder);
 
 impl AnimatedBuilder {
     #[must_use]
@@ -138,28 +134,27 @@ impl AnimatedBuilder {
         animation: impl Into<DoubleAnimation>,
         builder: impl for<'a> Fn(&BuildContext<'a>, Option<Widget>) -> Widget + 'static,
     ) -> Self {
-        Self {
-            animation: animation.into(),
-            builder: Rc::new(builder),
-            child: None,
-        }
+        Self::from_listenable(animation.into(), builder)
+    }
+
+    /// Follows a listenable that need not have an animation value.
+    #[must_use]
+    pub fn from_listenable(
+        listenable: impl Listenable + 'static,
+        builder: impl for<'a> Fn(&BuildContext<'a>, Option<Widget>) -> Widget + 'static,
+    ) -> Self {
+        Self(ListenableBuilder::new(listenable, builder))
     }
 
     #[must_use]
-    pub fn child(mut self, child: impl Into<Widget>) -> Self {
-        self.child = Some(child.into());
-        self
+    pub fn child(self, child: impl Into<Widget>) -> Self {
+        Self(self.0.child(child))
     }
 }
 
 impl From<AnimatedBuilder> for Widget {
     fn from(value: AnimatedBuilder) -> Self {
-        let AnimatedBuilder {
-            animation,
-            builder,
-            child,
-        } = value;
-        animated_widget_for(animation, move |context| builder(context, child.clone()))
+        value.0.into()
     }
 }
 
@@ -214,6 +209,18 @@ impl Listenable for incular_core::reactivity::DependencySource {
 impl Listenable for incular_core::MergedListenable {
     fn track(&self) {
         incular_core::MergedListenable::track(self);
+    }
+}
+
+impl Listenable for incular_core::ChangeNotifier {
+    fn track(&self) {
+        incular_core::ChangeNotifier::track(self);
+    }
+}
+
+impl Listenable for incular_gestures::FocusNode {
+    fn track(&self) {
+        let _ = self.has_focus();
     }
 }
 
