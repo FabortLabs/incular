@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- PageView scroll notifications expose immutable page metrics and
+  support copying a snapshot with changed fields.
+
 - Lazy PageView builders can resolve keyed pages after reordering so that
   a kept-alive page carries its state to the new index.
 
@@ -216,6 +219,10 @@ a version and date when publishing.
   `dispatch_pop_route`, Flutter's `didPopRoute`. `Navigator` pops on it.
 
 ### Changed
+
+- **Breaking (`incular-scroll`):** ScrollMetrics struct literals must set
+  `page_viewport_fraction` to `None` for ordinary scrolling or use
+  `..Default::default()`. PageView notifications set the fraction for you.
 
 - **Breaking (`incular-semantics`):** exhaustive `SemanticState` literals need
   `text_direction: None` and `text_attributes: None` unless explicitly supplying

@@ -25,7 +25,7 @@ pub use ballistic::{FlingSimulation, ScrollSpring, ScrollTolerance};
 pub use controller::{ScrollAnimation, ScrollController, page_for_pixels, pixels_for_page};
 pub use coordinator::{NestedScrollCoordinator, NestedScrollViewCoordinator, ScrollDriveDelegate};
 pub use extent_index::{ExtentIndexMetrics, MeasuredExtentIndex};
-pub use metrics::ScrollMetrics;
+pub use metrics::{PageMetrics, PageMetricsUpdate, ScrollMetrics};
 pub use notifications::{
     ScrollNotification, ScrollNotificationSubscription, ScrollNotificationType,
 };

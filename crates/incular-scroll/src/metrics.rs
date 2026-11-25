@@ -8,9 +8,18 @@ pub struct ScrollMetrics {
     pub axis: incular_config::Axis,
     pub axis_direction: incular_config::AxisDirection,
     pub device_pixel_ratio: f32,
+    /// The fraction used by a PageView, or `None` for ordinary scrolling.
+    pub page_viewport_fraction: Option<f32>,
 }
 
 impl ScrollMetrics {
+    /// Projects this snapshot into paged metrics if it came from a PageView.
+    #[must_use]
+    pub fn page_metrics(self) -> Option<PageMetrics> {
+        self.page_viewport_fraction?;
+        Some(PageMetrics(self))
+    }
+
     #[must_use]
     pub fn extent_before(&self) -> f32 {
         (self.pixels - self.min_scroll_extent).max(0.0)
@@ -47,6 +56,84 @@ impl ScrollMetrics {
     }
 }
 
+/// An immutable snapshot received with a PageView scroll notification.
+///
+/// Unlike a live page controller, this snapshot uses the raw clamped offset:
+/// it does not subtract the centering origin of fractions larger than one.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PageMetrics(ScrollMetrics);
+
+/// Fields to replace in an existing [`PageMetrics`] snapshot.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct PageMetricsUpdate {
+    pub pixels: Option<f32>,
+    pub min_scroll_extent: Option<f32>,
+    pub max_scroll_extent: Option<f32>,
+    pub viewport_dimension: Option<f32>,
+    pub axis_direction: Option<incular_config::AxisDirection>,
+    pub device_pixel_ratio: Option<f32>,
+    pub viewport_fraction: Option<f32>,
+}
+
+impl PageMetrics {
+    /// Creates a page snapshot with ordinary scroll metrics and the page fraction.
+    #[must_use]
+    pub fn new(mut metrics: ScrollMetrics, viewport_fraction: f32) -> Self {
+        metrics.page_viewport_fraction = Some(viewport_fraction);
+        Self(metrics)
+    }
+
+    /// Fraction of the viewport occupied by a page.
+    #[must_use]
+    pub fn viewport_fraction(&self) -> f32 {
+        self.0
+            .page_viewport_fraction
+            .expect("PageMetrics always holds page geometry")
+    }
+
+    /// Fractional page described by these snapshot values.
+    #[must_use]
+    pub fn page(&self) -> f32 {
+        let pixels = self
+            .pixels
+            .max(self.min_scroll_extent)
+            .min(self.max_scroll_extent)
+            .max(0.);
+        pixels / (self.viewport_dimension * self.viewport_fraction()).max(1.)
+    }
+
+    /// Copies this snapshot, replacing only fields supplied in `update`.
+    #[must_use]
+    pub fn copy_with(self, update: PageMetricsUpdate) -> Self {
+        let mut scroll = self.0;
+        scroll.pixels = update.pixels.unwrap_or(scroll.pixels);
+        scroll.min_scroll_extent = update.min_scroll_extent.unwrap_or(scroll.min_scroll_extent);
+        scroll.max_scroll_extent = update.max_scroll_extent.unwrap_or(scroll.max_scroll_extent);
+        scroll.viewport_dimension = update
+            .viewport_dimension
+            .unwrap_or(scroll.viewport_dimension);
+        if let Some(direction) = update.axis_direction {
+            scroll.axis_direction = direction;
+            scroll.axis = direction.axis();
+        }
+        scroll.device_pixel_ratio = update
+            .device_pixel_ratio
+            .unwrap_or(scroll.device_pixel_ratio);
+        Self::new(
+            scroll,
+            update.viewport_fraction.unwrap_or(self.viewport_fraction()),
+        )
+    }
+}
+
+impl std::ops::Deref for PageMetrics {
+    type Target = ScrollMetrics;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 use crate::controller::ScrollController;
 
 impl ScrollController {
@@ -71,6 +158,9 @@ impl ScrollController {
                 (incular_config::Axis::Vertical, true) => incular_config::AxisDirection::Up,
             },
             device_pixel_ratio: 1.,
+            page_viewport_fraction: state
+                .last_physics
+                .and_then(crate::ScrollPhysics::page_geometry_fraction),
         }
     }
 

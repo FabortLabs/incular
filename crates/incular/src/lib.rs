@@ -30,7 +30,8 @@ pub use incular_widgets::widget_previews;
 /// out of the application facade.
 pub mod scroll {
     pub use incular_scroll::{
-        BoundaryPhysics, ClampingScrollPhysics, DragStartBehavior, ScrollAnimation,
+        BoundaryPhysics, ClampingScrollPhysics, DragStartBehavior, PageMetrics, PageMetricsUpdate,
+        ScrollAnimation,
         ScrollController, ScrollMetrics, ScrollNotification, ScrollNotificationSubscription,
         ScrollNotificationType, ScrollPhysics, ScrollViewKeyboardDismissBehavior, Scrollability,
         SnapPhysics,
@@ -305,7 +306,8 @@ pub mod prelude {
         NavigatorPopHandler, NavigatorPopHandlerController, NestedScrollView,
         NoopAuxiliaryViewHost, NoopWindowChromeSink, NotificationDispatcher, NotificationListener,
         Offstage, Opacity, OrderedTraversalPolicy, Orientation, OrientationBuilder, OverflowBar,
-        OverflowBox, OverlayPortal, Padding, PageController, PageStorage, PageStorageBucket,
+        OverflowBox, OverlayPortal, Padding, PageController, PageMetrics, PageMetricsUpdate, PageStorage,
+        PageStorageBucket,
         PageStorageIdentifier, PageStorageKey, PageView, PanAxis, PathView, PerformanceOverlay,
         PhysicalModel, PhysicalShape, PinnedHeaderSliver, Placeholder, PointerSignalResolver,
         PopAttempt, PopScope, PopScopeController, Positioned, PositionedDirectional,

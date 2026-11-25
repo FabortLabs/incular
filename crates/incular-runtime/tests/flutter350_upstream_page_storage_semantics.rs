@@ -3,9 +3,9 @@ use incular_config::Constraints;
 use incular_core::{Size, time::Instant};
 use incular_runtime::Runtime;
 use incular_widgets::{
-    Container, Directionality, PageController, PageStorage, PageStorageBucket, PageStorageKey,
-    PageView, Placeholder, ScrollController, Semantics, Text, TextDirection, Widget,
-    internal::page_for_pixels,
+    Container, Directionality, PageController, PageMetrics, PageMetricsUpdate, PageStorage,
+    PageStorageBucket, PageStorageKey, PageView, Placeholder, ScrollController, ScrollMetrics,
+    Semantics, Text, TextDirection, Widget,
 };
 use std::time::Duration;
 
@@ -140,10 +140,33 @@ fn only_the_current_full_size_page_contributes_its_label_to_semantics() {
     );
 }
 #[test]
-fn page_metric_calculation_clamps_pixels_before_converting() {
-    let page = |pixels: f32| page_for_pixels(pixels.clamp(100., 200.), 25., 1.);
-    assert_eq!([page(150.), page(50.)], [6., 4.]);
+fn page_metrics_copy_clamps_pixels_before_converting_without_mutating_the_original() {
+    let initial = PageMetrics::new(
+        ScrollMetrics {
+            min_scroll_extent: 100.,
+            max_scroll_extent: 200.,
+            pixels: 150.,
+            viewport_dimension: 25.,
+            axis: incular_config::Axis::Horizontal,
+            axis_direction: incular_config::AxisDirection::Right,
+            device_pixel_ratio: 2.,
+            ..Default::default()
+        },
+        1.,
+    );
+    let updated = initial.copy_with(PageMetricsUpdate {
+        pixels: Some(initial.pixels - 100.),
+        ..Default::default()
+    });
+    assert_eq!((initial.page(), updated.page()), (6., 4.));
+    assert_eq!((initial.pixels, updated.pixels), (150., 50.));
+    assert_eq!(
+        (updated.viewport_fraction(), updated.device_pixel_ratio),
+        (1., 2.)
+    );
+    assert_eq!(updated.axis_direction, incular_config::AxisDirection::Right);
 }
+
 #[test]
 fn controller_resolves_the_reference_rounding_input_to_page_one() {
     let c = PageController::new();
@@ -276,4 +299,59 @@ fn animated_accessibility_pages_expose_only_the_current_and_hidden_neighbors() {
         assert_eq!(controller.page(), Some(page));
         assert_eq!(cached_visibility(&runtime), expected);
     }
+}
+
+#[test]
+fn scroll_updates_carry_paged_geometry_distinct_from_the_live_centered_page() {
+    use incular_widgets::{Center, ScrollNotificationType, SizedBox};
+    use std::{cell::RefCell, rc::Rc};
+
+    let controller = PageController::new().with_viewport_fraction(1.25);
+    let captured = Rc::new(RefCell::new(Vec::new()));
+    let _subscription = controller.add_listener({
+        let captured = captured.clone();
+        move |event| {
+            if event.kind == ScrollNotificationType::Update {
+                captured.borrow_mut().push(event.metrics);
+            }
+            false
+        }
+    });
+    let pages = PageView::new((0..4).map(|i| Text::new(i.to_string())))
+        .controller(controller.clone())
+        .page_snapping(false);
+    let mut runtime = Runtime::new(
+        Directionality::new(
+            TextDirection::Ltr,
+            Center::new(SizedBox::from_size(Size::new(200., 100.)).child(pages)),
+        )
+        .into(),
+    )
+    .unwrap();
+    frame(&mut runtime);
+    captured.borrow_mut().clear();
+    assert!(controller.jump_to(425.));
+    let captured = captured.borrow();
+    let [metrics] = captured.as_slice() else {
+        panic!("expected one scroll update, got {captured:?}");
+    };
+    let snapshot = metrics.page_metrics().unwrap();
+    assert_eq!(snapshot.viewport_fraction(), 1.25);
+    assert_eq!(
+        snapshot.axis_direction,
+        incular_config::AxisDirection::Right
+    );
+    assert_eq!((snapshot.pixels, snapshot.page()), (425., 1.7));
+    assert_eq!(controller.page(), Some(1.6));
+    assert_eq!(
+        snapshot
+            .copy_with(PageMetricsUpdate {
+                pixels: Some(500.),
+                ..Default::default()
+            })
+            .page(),
+        2.
+    );
+    assert_eq!(snapshot.page(), 1.7);
+    assert_eq!(ScrollController::new().metrics().page_metrics(), None);
 }
