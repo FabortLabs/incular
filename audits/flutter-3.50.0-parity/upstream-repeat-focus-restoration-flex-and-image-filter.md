@@ -133,3 +133,12 @@ in the first snapshot, and does not wait for later unrelated redraws.
 Closing, hiding, or making the awaited window zero-size releases its
 wait; idle and headless retry still pass. This is an Incular host
 check, not an extra Flutter registration.
+
+## Current repeat count validation
+
+Pinned :1267 and the native regression now reject zero in debug builds before
+changing the controller or canceling an existing ticker. The extended native
+test checks both the next-frame and timestamped entry points and shows an
+already-running controller progressing from .25 to .5 after rejection.
+`None`, not zero, is the unbounded repeat request. The five native finite
+and indefinite repeat controls also passed.

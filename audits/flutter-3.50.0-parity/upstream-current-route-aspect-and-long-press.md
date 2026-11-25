@@ -122,3 +122,10 @@ until accepted. The mounted Runtime tests pass for all three buttons
 with and without the deadline frame, and the direct recognizer proves
 the late action is silent before dispatch. All 35 focused tests passed.
 This is a custom comparison, not an original registration.
+
+## Current disposition of button-mask regression
+
+The exact :427 registration passed again on the pinned SDK. The mounted
+runtime test reruns the whole rejecting stream, then starts and ends the next
+accepted press on the same detector; it passed with the five other focused
+long-press controls. The historic failure is no longer the current ledger value.

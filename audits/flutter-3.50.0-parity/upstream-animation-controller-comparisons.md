@@ -19,3 +19,11 @@ independent new bug. Flutter gates the value callback on value change
 (`crates/incular-animation/src/controller.rs:1036–1055`).
 The zero-duration Rust fixture in :726 never performs timed animation;
 nullable getters outside the measured active sample are not certified.
+
+## Current zero-duration status/value recheck
+
+The exact :92 registration passed again. The mounted Incular runtime target
+now passes all four lifecycle cases: reversing at the lower bound no longer
+emits an unchanged value notification. This is a current disposition for the
+previously repaired zero-duration logic, not a claim about arbitrary listener
+reentry beyond the measured cases.

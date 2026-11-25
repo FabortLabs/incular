@@ -127,7 +127,7 @@ pub struct RepeatOptions {
     /// Every other cycle runs from `max` back to `min`.
     pub reverse: bool,
     pub period: Option<Duration>,
-    /// The number of cycles before the animation completes.
+    /// The positive number of cycles before completion, or `None` to loop.
     pub count: Option<u32>,
 }
 
@@ -732,6 +732,8 @@ impl AnimationController {
     }
 
     /// Flutter `repeat(min:, max:, reverse:, period:, count:)`.
+    ///
+    /// In debug builds, a count of zero panics before canceling any active run.
     pub fn repeat_with(&self, now: Instant, options: RepeatOptions) -> TickerFuture {
         self.repeat_at(Some(now), options)
     }
@@ -1127,6 +1129,10 @@ impl AnimationController {
     }
 
     fn repeat_at(&self, now: Option<Instant>, options: RepeatOptions) -> TickerFuture {
+        debug_assert!(
+            options.count != Some(0),
+            "repeat count must be greater than zero"
+        );
         let state = self.inner.borrow().state;
         let min = options.min.unwrap_or(state.lower_bound);
         let max = options.max.unwrap_or(state.upper_bound);
@@ -1151,7 +1157,7 @@ impl AnimationController {
                 reverse: options.reverse,
                 period,
                 initial_t,
-                count: options.count.filter(|count| *count > 0),
+                count: options.count,
                 curve: state.curve,
             },
             true,

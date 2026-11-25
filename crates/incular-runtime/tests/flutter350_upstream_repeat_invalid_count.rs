@@ -1,5 +1,7 @@
 //! Count validation from Flutter 3.50.0 animation/animation_controller_test.dart.
 
+#![cfg(debug_assertions)]
+
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},
     time::Duration,
@@ -43,16 +45,27 @@ fn zero_repeat_count_is_rejected_instead_of_repeating_indefinitely() {
         .with_value(0.0)
         .with_vsync();
     assert_eq!(invalid.value(), 0.0);
-    let result = catch_unwind(AssertUnwindSafe(|| {
-        invalid.repeat_on_next_tick(options.count(0))
-    }));
-    if let Ok(future) = result {
-        frame(200);
-        let samples = [25, 100, 125, 225, 325, 425].map(|elapsed| {
-            frame(200 + elapsed);
-            (elapsed, invalid.value(), future.is_pending())
-        });
-        invalid.stop();
-        panic!("count=0 was accepted; samples (elapsed ms, value, future pending): {samples:?}");
-    }
+    assert!(
+        catch_unwind(AssertUnwindSafe(|| {
+            invalid.repeat_on_next_tick(options.count(0))
+        }))
+        .is_err()
+    );
+    assert_eq!(invalid.value(), 0.0);
+    assert!(!invalid.is_animating());
+
+    let active = invalid.forward_on_next_tick();
+    frame(200);
+    frame(225);
+    assert_eq!(invalid.value(), 0.25);
+    assert!(
+        catch_unwind(AssertUnwindSafe(|| {
+            invalid.repeat_with(base + Duration::from_millis(225), options.count(0))
+        }))
+        .is_err()
+    );
+    assert_eq!(invalid.value(), 0.25);
+    assert!(active.is_pending());
+    frame(250);
+    assert_eq!(invalid.value(), 0.5);
 }

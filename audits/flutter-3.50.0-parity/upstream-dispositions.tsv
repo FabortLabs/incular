@@ -78,7 +78,7 @@ packages/flutter/test/services/text_formatter_test.dart	304	test length limiting
 packages/flutter/test/services/text_formatter_test.dart	418	Counts grapheme clusters as single characters	paired-match	upstream-text-formatters.md#grapheme-truncation-and-host-enforcement
 packages/flutter/test/services/text_formatter_test.dart	808	Preserves composing region	paired-match	upstream-text-formatters.md#literal-and-regex-patterns-in-retained-edits
 packages/flutter/test/animation/animation_controller_test.dart	59	Can set value during status callback	paired-match	upstream-animation-controller-comparisons.md
-packages/flutter/test/animation/animation_controller_test.dart	92	Receives status callbacks for forward and reverse	paired-mismatch	upstream-animation-controller-comparisons.md
+packages/flutter/test/animation/animation_controller_test.dart	92	Receives status callbacks for forward and reverse	paired-match	upstream-animation-controller-comparisons.md#current-zero-duration-statusvalue-recheck
 packages/flutter/test/animation/animation_controller_test.dart	415	lastElapsedDuration control test	paired-match	upstream-animation-controller-comparisons.md
 packages/flutter/test/animation/animation_controller_test.dart	726	setting value directly sets correct status	paired-match	upstream-animation-controller-comparisons.md
 packages/flutter/test/widgets/wrap_test.dart	694	Wrap spacing test	paired-match	upstream-wrap-geometry-comparisons.md
@@ -187,7 +187,7 @@ packages/flutter/test/widgets/aspect_ratio_test.dart	54	AspectRatio does not cra
 packages/flutter/test/gestures/long_press_test.dart	61	Should recognize long press	partial-match	upstream-current-route-aspect-and-long-press.md
 packages/flutter/test/gestures/long_press_test.dart	106	Moving before accept cancels	partial-match	upstream-current-route-aspect-and-long-press.md
 packages/flutter/test/gestures/long_press_test.dart	365	Moving after accept does not cancel	partial-match	upstream-current-route-aspect-and-long-press.md
-packages/flutter/test/gestures/long_press_test.dart	427	Buttons change before acceptance should not prevent the next long press	paired-mismatch	upstream-current-route-aspect-and-long-press.md
+packages/flutter/test/gestures/long_press_test.dart	427	Buttons change before acceptance should not prevent the next long press	paired-match	upstream-current-route-aspect-and-long-press.md#current-disposition-of-button-mask-regression
 packages/flutter/test/gestures/long_press_test.dart	75	Should recognize long press with altered duration	partial-match	upstream-current-route-aspect-and-long-press.md#custom-long-press-duration
 packages/flutter/test/gestures/long_press_test.dart	91	Up cancels long press	partial-match	upstream-current-route-aspect-and-long-press.md#custom-long-press-duration
 packages/flutter/test/gestures/long_press_test.dart	204	Should not recognize long press with more than one buttons	partial-mismatch	upstream-current-route-aspect-and-long-press.md#chord-at-contact-start
@@ -283,7 +283,7 @@ packages/flutter/test/animation/animation_controller_test.dart	541	AnimationCont
 packages/flutter/test/animation/animation_controller_test.dart	873	calling repeat with reverse set to true makes the animation alternate between lowerBound and upperBound values on each repeat	paired-match	upstream-repeat-focus-restoration-flex-and-image-filter.md
 packages/flutter/test/animation/animation_controller_test.dart	920	calling repeat with specified min and max values between 0 and 1 makes the animation alternate between min and max values on each repeat	paired-match	upstream-repeat-focus-restoration-flex-and-image-filter.md
 packages/flutter/test/animation/animation_controller_test.dart	1126	Repeating animation with reverse: true report as forward and reverse	paired-match	upstream-repeat-focus-restoration-flex-and-image-filter.md
-packages/flutter/test/animation/animation_controller_test.dart	1267	calling repeat by setting count as zero shall throw Assertion	paired-mismatch	upstream-repeat-focus-restoration-flex-and-image-filter.md
+packages/flutter/test/animation/animation_controller_test.dart	1267	calling repeat by setting count as zero shall throw Assertion	paired-match	upstream-repeat-focus-restoration-flex-and-image-filter.md#current-repeat-count-validation
 packages/flutter/test/animation/animation_controller_test.dart	1278	calling repeat by setting count as negative shall throw Assertion	reference-ran-incular-open	upstream-repeat-focus-restoration-flex-and-image-filter.md
 packages/flutter/test/animation/animation_controller_test.dart	1289	calling repeat by setting count as valid with reverse as false, shall run animation accordingly	paired-match	upstream-repeat-focus-restoration-flex-and-image-filter.md
 packages/flutter/test/animation/animation_controller_test.dart	1324	calling repeat by setting count as valid with reverse as true, shall run animation accordingly	paired-match	upstream-repeat-focus-restoration-flex-and-image-filter.md
