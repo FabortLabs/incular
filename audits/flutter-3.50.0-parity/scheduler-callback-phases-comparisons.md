@@ -164,3 +164,24 @@ host wake. The work resumes on its owning UI thread, not the
 worker, and a stale waker after completion schedules nothing.
 This is an in-process event-loop boundary check, not an OS
 presentation or Dart microtask scheduling claim.
+
+## Frame timing observers
+
+Pinned `scheduler/scheduler_test.dart:229` reports an empty
+batch to a failing callback. Incular's observer surface also
+delivers an empty report, captures the error text ("Exception:
+Test"), and continues to the next observer. An authored pinned
+test and its Rust counterpart additionally replace subscriptions
+during a report: the removed observer is skipped immediately
+and the new one starts with the next report.
+
+The Runtime application integration sends the completed
+`FrameRecord` only once renderer metrics reach its existing
+host path. The Rust fixture checks that preparation, encoding
+and submission are merged into the CPU total before the
+callback, rather than emitting the provisional UI-only record.
+This is an Incular frame record, not a claim that Flutter's
+Dart VM timeline event or engine vsync/raster timestamps
+have been reproduced. The exact timeline event at :204 and
+two warm-up scheduling cases at :148/:167 ran on the reference
+and are still open on Incular.

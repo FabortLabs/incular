@@ -26,6 +26,7 @@ mod route_tasks;
 mod simulation;
 mod tasks;
 mod text_shortcuts;
+mod timing_callbacks;
 mod transient_presentation;
 mod undo;
 mod window_commands;
@@ -99,6 +100,9 @@ pub use tasks::{
     TaskHandle, TaskScope, UiDispatcher,
 };
 pub use text_shortcuts::TextShortcutPlatform;
+pub use timing_callbacks::{
+    FrameTimingCallbackError, FrameTimingCallbacks, FrameTimingSubscription,
+};
 pub use transient_presentation::{
     ResolvedTransientPresentation, TransientFallbackReason, TransientPresentationResolution,
 };

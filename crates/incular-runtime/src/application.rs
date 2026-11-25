@@ -129,6 +129,7 @@ pub struct Application {
     pub(crate) restoration_window_factories:
         HashMap<String, (WindowOptions, RestorableWindowFactory)>,
     pub(crate) profiler: PerformanceProfiler,
+    timing_callbacks: Option<crate::FrameTimingCallbacks>,
     pub(crate) hub: PerformanceHub,
     pub(crate) scheduler_counters: ApplicationSchedulerCounters,
 }
@@ -305,6 +306,7 @@ impl Application {
             restoration_frame_barrier: None,
             restoration_window_factories: HashMap::new(),
             profiler: PerformanceProfiler::new(ProfilerMode::Normal),
+            timing_callbacks: None,
             hub: PerformanceHub::new(),
             scheduler_counters: ApplicationSchedulerCounters::default(),
         })
@@ -1844,6 +1846,14 @@ impl Application {
         self.profiler.set_refresh_rate_hz(hz);
     }
 
+    /// Observe completed frame reports from this application's renderer.
+    /// No timing observer state is allocated until first requested.
+    pub fn frame_timing_callbacks(&mut self) -> crate::FrameTimingCallbacks {
+        self.timing_callbacks
+            .get_or_insert_with(Default::default)
+            .clone()
+    }
+
     /// Merges renderer-reported metrics into one window's latest record and
     /// feeds the application profiler history with a complete frame sample.
     pub fn note_render_metrics(
@@ -1877,6 +1887,9 @@ impl Application {
         }
         if let Some(record) = completed {
             self.profiler.record(record);
+            if let Some(callbacks) = &self.timing_callbacks {
+                callbacks.report(std::slice::from_ref(&record));
+            }
         }
         // Throttled publish for observers (debug overlays). Production frames
         // with no observer and Normal mode skip the snapshot build entirely.

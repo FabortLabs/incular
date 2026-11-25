@@ -990,3 +990,7 @@ packages/flutter/test/rendering/shifted_box_test.dart	84	computeDryBaseline work
 packages/flutter/test/rendering/shifted_box_test.dart	183	RenderFractionallySizedOverflowBox computeDryBaseline	partial-match	upstream-shifted-box-baselines.md
 packages/flutter/test/rendering/shifted_box_test.dart	200	RenderPadding computeDryBaseline	partial-match	upstream-shifted-box-baselines.md
 packages/flutter/test/scheduler/scheduler_test.dart	317	Can schedule futures to completion	paired-match	scheduler-callback-phases-comparisons.md#future-returning-ui-tasks
+packages/flutter/test/scheduler/scheduler_test.dart	148	scheduleWarmUpFrame should flush microtasks between callbacks	reference-ran-incular-open	scheduler-callback-phases-comparisons.md#frame-timing-observers
+packages/flutter/test/scheduler/scheduler_test.dart	167	2 calls to scheduleWarmUpFrame just schedules it once	reference-ran-incular-open	scheduler-callback-phases-comparisons.md#frame-timing-observers
+packages/flutter/test/scheduler/scheduler_test.dart	204	Flutter.Frame event fired	reference-ran-incular-open	scheduler-callback-phases-comparisons.md#frame-timing-observers
+packages/flutter/test/scheduler/scheduler_test.dart	229	TimingsCallback exceptions are caught	paired-match	scheduler-callback-phases-comparisons.md#frame-timing-observers
