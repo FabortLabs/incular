@@ -457,7 +457,7 @@ packages/flutter/test/widgets/table_test.dart	391	Table widget - intrinsic sizin
 packages/flutter/test/widgets/table_test.dart	415	Table widget - intrinsic sizing test, resizing	paired-match	upstream-table-direction-rows-and-intrinsics.md
 packages/flutter/test/widgets/table_test.dart	452	Table widget - intrinsic sizing test, changing column widths	paired-match	upstream-table-direction-rows-and-intrinsics.md
 packages/flutter/test/widgets/table_test.dart	787	Table widget - Default textBaseline is null	reference-ran-incular-open	upstream-table-direction-rows-and-intrinsics.md
-packages/flutter/test/widgets/table_test.dart	800	Table widget requires all TableRows to have same number of children	partial-mismatch	upstream-table-direction-rows-and-intrinsics.md
+packages/flutter/test/widgets/table_test.dart	800	Table widget requires all TableRows to have same number of children	paired-match	upstream-table-direction-rows-and-intrinsics.md#explicit-rows
 packages/flutter/test/widgets/table_test.dart	47	Table widget - empty	paired-match	upstream-table-retention-and-layoutbuilder-baseline.md
 packages/flutter/test/widgets/table_test.dart	274	Table widget - changing table dimensions	paired-match	upstream-table-retention-and-layoutbuilder-baseline.md
 packages/flutter/test/widgets/table_test.dart	357	Table widget - repump test	paired-match	upstream-table-retention-and-layoutbuilder-baseline.md

@@ -292,7 +292,8 @@ pub use layout::{
     LayoutBuilder, LimitedBox, NavigationToolbar, Offstage, OverflowBar, OverflowBarAlignment,
     OverflowBox, OverflowBoxFit, Padding, Placeholder, Positioned, PreferredSize, RepaintBoundary,
     RotatedBox, Row, SizedBox, SizedOverflowBox, Spacer, Stack, Table, TableCell,
-    TableCellVerticalAlignment, TableColumnWidth, UnconstrainedBox, Visibility, Wrap,
+    TableCellVerticalAlignment, TableColumnWidth, TableRow, TableRowLengthError, UnconstrainedBox,
+    Visibility, Wrap,
 };
 pub use magnifier::{
     MagnifierBuilder, MagnifierController, MagnifierDecoration, MagnifierInfo, MagnifierScaleError,

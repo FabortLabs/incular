@@ -55,3 +55,16 @@ IntrinsicHeight its natural 100px height grows the row and moves the
 10px bottom-aligned neighbor from y=30 to y=90. An all-Fill row is zero
 height. Per-cell overrides work independently of the table default.
 Text-baseline alignment remains separate.
+
+## Explicit rows
+
+The pinned :800 test and the separate two-cell/one-cell authored
+control pass. The Rust port now supplies explicit TableRow values to
+Table::from_rows. A one-cell row followed by an explicitly empty row
+returns the matching irregular-row error, and a partly filled second
+row also fails. The error carries the first offending row and exact
+counts. Equal rows preserve the cell order and render geometry; empty
+and all-empty input make an empty table. The original flat constructor
+intentionally still supports incomplete final rows and is tested
+separately. Row metadata such as keys and decorations is not compared
+by this check.

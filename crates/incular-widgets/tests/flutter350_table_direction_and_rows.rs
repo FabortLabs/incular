@@ -2,10 +2,10 @@
 use incular_config::Constraints;
 use incular_core::Size;
 use incular_widgets::{
-    Center, Directionality, SizedBox, Table, TableColumnWidth, Text, TextDirection, Widget,
+    Center, Directionality, SizedBox, Table, TableColumnWidth, TableRow, TableRowLengthError, Text,
+    TextDirection, Widget,
     internal::{Key, WidgetTree},
 };
-use std::panic::AssertUnwindSafe;
 
 const HOST: Size = Size {
     width: 800.,
@@ -56,26 +56,81 @@ fn rtl_starts_fixed_columns_at_the_right_edge() {
 }
 
 #[test]
-fn a_partly_filled_final_row_is_not_silently_accepted() {
-    let scene = |count| {
-        Directionality::new(
-            TextDirection::Ltr,
-            Table::new(2, (0..count).map(|_| SizedBox::square(20.))),
-        )
-        .into()
-    };
-    let mut control = WidgetTree::new();
-    control.mount(scene(4)).unwrap();
-    control.layout(Constraints::tight(HOST)).unwrap();
-    let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
-        let mut tree = WidgetTree::new();
-        tree.mount(scene(3))
-            .and_then(|_| tree.layout(Constraints::tight(HOST)))
-    }));
-    assert!(
-        !matches!(result, Ok(Ok(_))),
-        "table accepted row lengths 2 and 1"
+fn explicit_table_rejects_a_partly_filled_final_row() {
+    let error = Table::from_rows([
+        TableRow::new([SizedBox::square(20.), SizedBox::square(20.)]),
+        TableRow::new([SizedBox::square(20.)]),
+    ])
+    .unwrap_err();
+    assert_eq!(
+        error,
+        TableRowLengthError {
+            row: 1,
+            expected: 2,
+            actual: 1
+        }
     );
+    assert!(
+        error
+            .to_string()
+            .contains("Table contains irregular row lengths.")
+    );
+}
+
+#[test]
+fn explicit_table_rejects_an_empty_row_after_a_nonempty_row() {
+    // The original :800 uses a cell containing text followed by an
+    // explicitly empty second TableRow, not just a missing flat cell.
+    assert_eq!(
+        Table::from_rows([TableRow::new([Text::new("Some Text")]), TableRow::default()])
+            .unwrap_err(),
+        TableRowLengthError {
+            row: 1,
+            expected: 1,
+            actual: 0
+        },
+    );
+    assert_eq!(
+        Table::from_rows([TableRow::default(), TableRow::new([Text::new("Some Text")])])
+            .unwrap_err(),
+        TableRowLengthError {
+            row: 1,
+            expected: 0,
+            actual: 1
+        },
+    );
+}
+
+#[test]
+fn explicit_rows_keep_cell_order_and_empty_tables_are_valid() {
+    let left = TableRow::new([SizedBox::square(20.), SizedBox::square(20.)]);
+    let right = TableRow::builder()
+        .children(vec![
+            SizedBox::square(30.).into(),
+            SizedBox::square(30.).into(),
+        ])
+        .build();
+    let explicit = Table::from_rows([left.clone(), right.clone()]).unwrap();
+    let flat = Table::new(2, left.children().iter().chain(right.children()).cloned());
+    assert_eq!(explicit, flat);
+    assert_eq!(Table::from_rows([]).unwrap(), Table::default());
+    assert_eq!(
+        Table::from_rows([TableRow::default(), TableRow::default()]).unwrap(),
+        Table::default()
+    );
+    let mut tree = WidgetTree::new();
+    tree.mount(Directionality::new(TextDirection::Ltr, explicit).into())
+        .unwrap();
+    tree.layout(Constraints::tight(HOST)).unwrap();
+}
+
+#[test]
+fn flat_table_keeps_its_explicit_ragged_tail_extension() {
+    let mut tree = WidgetTree::new();
+    let table = Table::new(2, (0..3).map(|_| SizedBox::square(20.)));
+    tree.mount(Directionality::new(TextDirection::Ltr, table).into())
+        .unwrap();
+    tree.layout(Constraints::tight(HOST)).unwrap();
 }
 
 #[test]

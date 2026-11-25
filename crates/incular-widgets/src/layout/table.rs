@@ -9,6 +9,53 @@ use std::rc::Rc;
 
 use crate::{TableBorder, TextDirection, Widget, WidgetKind, macros::widget_from_kind};
 
+/// Explicit cell grouping for a rectangular [Table].
+///
+/// With [Table::from_rows], every row must contain the same number of
+/// cells. The flat [Table::new] constructor also supports a ragged tail.
+#[derive(Clone, Debug, Default, PartialEq, TypedBuilder)]
+pub struct TableRow {
+    #[builder(default, setter(into))]
+    children: Vec<Widget>,
+}
+
+impl TableRow {
+    #[must_use]
+    pub fn new(children: impl IntoIterator<Item = impl Into<Widget>>) -> Self {
+        Self {
+            children: children.into_iter().map(Into::into).collect(),
+        }
+    }
+
+    #[must_use]
+    pub fn children(&self) -> &[Widget] {
+        &self.children
+    }
+}
+
+/// A row in an explicitly rectangular table had a different cell count.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TableRowLengthError {
+    /// Zero-based index of the first irregular row.
+    pub row: usize,
+    /// Number of cells in the first row.
+    pub expected: usize,
+    /// Number of cells supplied in this row.
+    pub actual: usize,
+}
+
+impl std::fmt::Display for TableRowLengthError {
+    fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            out,
+            "Table contains irregular row lengths. Row {} has {} cells; expected {}.",
+            self.row, self.actual, self.expected,
+        )
+    }
+}
+
+impl std::error::Error for TableRowLengthError {}
+
 /// A row-major table with Flutter's column-width and cell-alignment rules.
 ///
 /// Columns default to [`TableColumnWidth::Flex`] with factor 1.0, so a table
@@ -47,6 +94,38 @@ impl Table {
             children: children.into_iter().map(Into::into).collect(),
             ..Self::default()
         }
+    }
+
+    /// Creates a rectangular table from explicit rows.
+    ///
+    /// # Errors
+    ///
+    /// Returns [TableRowLengthError] for the first row that does not
+    /// have the same number of cells as the first row. An empty list or
+    /// a list containing only empty rows lays out as an empty table.
+    pub fn from_rows(
+        rows: impl IntoIterator<Item = TableRow>,
+    ) -> Result<Self, TableRowLengthError> {
+        let mut rows = rows.into_iter();
+        let Some(TableRow { mut children }) = rows.next() else {
+            return Ok(Self::default());
+        };
+        let columns = children.len();
+        for (index, TableRow { children: row }) in rows.enumerate() {
+            if row.len() != columns {
+                return Err(TableRowLengthError {
+                    row: index + 1,
+                    expected: columns,
+                    actual: row.len(),
+                });
+            }
+            children.extend(row);
+        }
+        Ok(Self {
+            columns: columns.max(1),
+            children,
+            ..Self::default()
+        })
     }
 
     /// Sets the horizontal spacing between columns.
