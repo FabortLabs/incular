@@ -130,6 +130,20 @@ impl WidgetTree {
         })
     }
 
+    /// Applies the external-focus selection policy before the field falls
+    /// back to initializing an unset caret at the end.
+    #[doc(hidden)]
+    pub fn select_all_on_editable_focus(&self, id: ElementId, platform_default: bool) {
+        if let Some(element) = self.elements.get(id.0)
+            && let WidgetKind::TextField(spec) = element.widget.kind()
+            && !spec.multiline
+            && spec.keyboard_selection_enabled
+            && spec.select_all_on_focus.unwrap_or(platform_default)
+        {
+            spec.controller.select_all();
+        }
+    }
+
     #[must_use]
     pub fn text_field_is_read_only(&self, id: ElementId) -> bool {
         self.elements.get(id.0).is_some_and(|element| {
@@ -1495,7 +1509,7 @@ impl WidgetTree {
 
     /// The caret rectangle of the byte `offset` in global coordinates, from
     /// the field's last layout (Flutter `RenderEditable.getLocalRectForCaret`).
-    pub(crate) fn text_field_offset_rect(
+    pub fn text_field_offset_rect(
         &self,
         id: ElementId,
         offset: usize,

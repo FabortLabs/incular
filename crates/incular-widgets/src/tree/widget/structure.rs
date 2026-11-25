@@ -692,6 +692,7 @@ impl PartialEq for TextFieldSpec {
         self.controller == other.controller
             && self.focus_node == other.focus_node
             && self.autofocus == other.autofocus
+            && self.select_all_on_focus == other.select_all_on_focus
             && self.size == other.size
             && self.style == other.style
             && self.placeholder == other.placeholder

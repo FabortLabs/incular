@@ -393,7 +393,7 @@ impl Runtime {
         // once the element IDs exist, then keep runtime and node focus mirrored
         // for subsequent keyboard traversal.
         if let Some(autofocus) = runtime.tree.autofocus_element() {
-            runtime.set_focus(Some(autofocus));
+            runtime.set_focus_with_external_selection(Some(autofocus), false);
         }
         Ok(runtime)
     }
@@ -1741,13 +1741,16 @@ impl Runtime {
                     .focused
                     .is_some_and(|focused| self.tree.is_text_field(focused));
                 if !deferred_text_touch {
-                    self.set_focus(if keep_text_field_focus {
-                        self.focused
-                    } else if text_target.is_some() || focused_text_field {
-                        text_target
-                    } else {
-                        self.focused
-                    });
+                    self.set_focus_with_external_selection(
+                        if keep_text_field_focus {
+                            self.focused
+                        } else if text_target.is_some() || focused_text_field {
+                            text_target
+                        } else {
+                            self.focused
+                        },
+                        false,
+                    );
                 }
                 // Flutter's EditableText only installs its selection gestures
                 // while `_userSelectionEnabled` (`!readOnly || !obscureText`)
@@ -1800,7 +1803,7 @@ impl Runtime {
                     {
                         self.pending_mobile_text_touch = None;
                         let was_focused = self.focused == Some(press.field);
-                        self.set_focus(Some(press.field));
+                        self.set_focus_with_external_selection(Some(press.field), false);
                         if self.captured_text_field == Some(press.field) {
                             self.text_field_primary_down(
                                 press.field,
@@ -1923,6 +1926,10 @@ impl Runtime {
         }
     }
     pub(crate) fn set_focus(&mut self, next: Option<ElementId>) {
+        self.set_focus_with_external_selection(next, true);
+    }
+
+    fn set_focus_with_external_selection(&mut self, next: Option<ElementId>, external: bool) {
         // Admit the new target before touching the old one. A hit on a
         // disabled or excluded editor is not permission to retire the
         // current native client or cancel its composing text.
@@ -1953,6 +1960,16 @@ impl Runtime {
         self.focused = next;
         self.tree.sync_hosted_focus_chain(next);
         if let Some(current) = next {
+            if external {
+                let select_all = cfg!(target_arch = "wasm32")
+                    || matches!(
+                        self.text_shortcut_platform,
+                        TextShortcutPlatform::Linux
+                            | TextShortcutPlatform::MacOs
+                            | TextShortcutPlatform::Windows,
+                    );
+                self.tree.select_all_on_editable_focus(current, select_all);
+            }
             let _ = self.tree.set_focused(current, true, self.input_now());
             self.tree.set_keyboard_focus(current, true);
             if self.tree.is_text_field(current) {
@@ -2895,12 +2912,12 @@ impl Runtime {
         // layout. Resolve initial autofocus once those controls exist, without
         // reclaiming focus on later frames or after an explicit input decision.
         if self.initial_focus == InitialFocus::AwaitingLayout {
-            self.set_focus(self.tree.autofocus_element());
+            self.set_focus_with_external_selection(self.tree.autofocus_element(), false);
         }
         let replaces_detached_focus = self.focused.is_none()
             && focused_at_start.is_some_and(|focused| !self.tree.element_exists(focused));
         if let Some(next) = self.tree.finish_mounted_autofocus(replaces_detached_focus) {
-            self.set_focus(Some(next));
+            self.set_focus_with_external_selection(Some(next), false);
         }
         let _composite_guard = tracing::info_span!("incular.composite").entered();
         let composite_span = profiling::PhaseSpan::start();

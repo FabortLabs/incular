@@ -1017,6 +1017,7 @@ pub struct EditableText {
     controller: TextEditingController,
     focus_node: Option<crate::FocusNode>,
     autofocus: bool,
+    select_all_on_focus: Option<bool>,
     size: Size,
     style: TextStyle,
     placeholder: String,
@@ -1076,6 +1077,7 @@ impl EditableText {
             controller,
             focus_node: None,
             autofocus: false,
+            select_all_on_focus: None,
             size: Size::ZERO,
             style: TextStyle::default(),
             placeholder: String::new(),
@@ -1135,6 +1137,13 @@ impl EditableText {
     #[must_use]
     pub fn autofocus(mut self, autofocus: bool) -> Self {
         self.autofocus = autofocus;
+        self
+    }
+
+    /// Overrides the platform's select-all behavior on external focus.
+    #[must_use]
+    pub fn select_all_on_focus(mut self, select: bool) -> Self {
+        self.select_all_on_focus = Some(select);
         self
     }
 
@@ -1671,6 +1680,7 @@ impl From<EditableText> for Widget {
             controller: value.controller,
             focus_node: value.focus_node,
             autofocus: value.autofocus,
+            select_all_on_focus: value.select_all_on_focus,
             edit_transform,
             edit_changed: value.edit_changed,
             size: value.size,

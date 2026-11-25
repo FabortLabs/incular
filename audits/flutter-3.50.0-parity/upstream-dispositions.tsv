@@ -889,3 +889,8 @@ packages/flutter/test/gestures/pointer_signal_resolver_test.dart	45	Resolving wi
 packages/flutter/test/gestures/pointer_signal_resolver_test.dart	61	First entry should always win	paired-match	upstream-pointer-signal-resolution.md
 packages/flutter/test/gestures/pointer_signal_resolver_test.dart	70	Re-use after resolve should work	paired-match	upstream-pointer-signal-resolution.md
 packages/flutter/test/gestures/pointer_signal_resolver_test.dart	86	works with transformed events	partial-match	upstream-pointer-signal-resolution.md
+packages/flutter/test/widgets/editable_text_test.dart	17330	tabbing between fields	paired-match	upstream-editable-focus-selection.md
+packages/flutter/test/widgets/editable_text_test.dart	17552	when selectAllOnFocus is turned off	paired-match	upstream-editable-focus-selection.md
+packages/flutter/test/widgets/editable_text_test.dart	17581	when selectAllOnFocus is turned on	paired-match	upstream-editable-focus-selection.md
+packages/flutter/test/widgets/editable_text_test.dart	17613	when having focus regained after the app resumed	paired-match	upstream-editable-focus-selection.md
+packages/flutter/test/widgets/editable_text_test.dart	17645	moving focus after the app resumed should select all the content on desktop	paired-match	upstream-editable-focus-selection.md

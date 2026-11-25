@@ -332,6 +332,7 @@ pub struct TextFieldSpec {
     pub(crate) controller: TextEditingController,
     pub(crate) focus_node: Option<crate::FocusNode>,
     pub(crate) autofocus: bool,
+    pub(crate) select_all_on_focus: Option<bool>,
     pub(crate) edit_transform: Option<EditTransform>,
     pub(crate) edit_changed: Option<EditChanged>,
     pub(crate) size: Size,

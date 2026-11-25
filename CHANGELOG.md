@@ -207,6 +207,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-runtime`: desktop text fields select all on external focus by
+  default without overwriting pointer, autofocus, or resume caret placement.
+
 - `incular-gestures`: a focus request made before attachment stays
   pending without publishing a primary-focus grant.
 
