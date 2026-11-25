@@ -8,7 +8,7 @@ The first five exact originals from widgets/page_view_test.dart passed on the pi
 
 | Registration | Evidence |
 | --- | --- |
-| :32 | Reference only. Flutter's builder exposes findChildIndexCallback across item-count updates; the Rust PageView builder offers item_count/builder with no corresponding callback. |
+| :32 | Matching. A keyed builder's reverse lookup is not called on mount; it is called after the item count changes from 7 to 77. |
 | :65 | Initial page 1 becomes visible and a normal jump shows page 14. Flutter restores page 14 after a second collapse/expand; Incular restores page 0. Rust also lacks the initial mounted-but-offstage page 0, and both have no visible content at zero area. |
 | :111 | While the viewport is zero the logical page getter returns 14 after animateToPage and 12 after jumpToPage in Flutter. Incular gives None twice and has no mounted initial page. Its queued last request still works when the viewport expands: page 12 becomes visible and is reported by the controller. |
 | :158 | Partial match: an expanding page viewport survives a zero to 500×400 host constraint change without throwing and is correctly sized. This does not reproduce Flutter's test-binding MediaQuery update. |
@@ -34,3 +34,13 @@ but on collapse the centering origin becomes zero before Flutter
 decodes the old pixels, so it caches page 1.7. Expanding to 300px
 restores that cached page at 675px. The renderer and controller agree,
 and no extra page-changed notification fires in this sequence.
+
+## Lazy page reordering
+
+The pinned `:32` original and both native checks pass. An authored
+comparison also moves a kept-alive page from index 0 to index 2 while
+page 1 remains selected. The reverse index receives only the previously
+materialized keys; it is not called on ordinary scrolling. The moved
+page retains its state when revisited. Removing the parked page with
+no new index releases it. Flutter requests retention through its
+automatic keep-alive client; Incular uses explicit `KeepAlive`.

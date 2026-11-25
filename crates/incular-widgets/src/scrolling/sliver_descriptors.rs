@@ -1301,6 +1301,8 @@ pub struct SliverFillViewport {
     builder: Option<Rc<dyn Fn(usize) -> Widget>>,
     #[builder(default, setter(skip))]
     item_count: Option<usize>,
+    #[builder(default, setter(skip))]
+    find_child_index: Option<FindChildIndex>,
     #[builder(default = 1.0, setter(transform = |fraction: f32| fraction.max(0.01)))]
     viewport_fraction: f32,
     #[builder(default = WidgetDefaults::DEFAULT.sliver_fill_viewport_extent, setter(transform = |extent: f32| extent.max(1.0)))]
@@ -1324,6 +1326,7 @@ impl SliverFillViewport {
             children: Rc::new(children.into_iter().map(Into::into).collect()),
             builder: None,
             item_count: None,
+            find_child_index: None,
             viewport_fraction: 1.0,
             fallback_extent: WidgetDefaults::DEFAULT.sliver_fill_viewport_extent,
             pad_ends: true,
@@ -1340,10 +1343,18 @@ impl SliverFillViewport {
             children: Rc::default(),
             builder: Some(Rc::new(move |index| builder(index).into())),
             item_count: Some(item_count),
+            find_child_index: None,
             viewport_fraction: 1.0,
             fallback_extent: WidgetDefaults::DEFAULT.sliver_fill_viewport_extent,
             pad_ends: true,
         }
+    }
+
+    pub(super) fn with_child_index_lookup(mut self, callback: Option<FindChildIndex>) -> Self {
+        if self.builder.is_some() {
+            self.find_child_index = callback;
+        }
+        self
     }
 
     #[must_use]
@@ -1399,6 +1410,7 @@ impl Sliver for SliverFillViewport {
             item_count,
             children: (!self.children.is_empty()).then(|| Rc::clone(&self.children)),
             builder: self.builder.clone(),
+            find_child_index: self.find_child_index.clone(),
             widgets: HashMap::new(),
             viewport_fraction: self.viewport_fraction,
             fallback_extent: self.fallback_extent,

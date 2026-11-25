@@ -16,8 +16,10 @@ use incular_scroll::{
 use typed_builder::TypedBuilder;
 
 use crate::drag_drop::DragDropContext;
-use crate::tree::WidgetKind;
+use crate::tree::{Key as WidgetKey, WidgetKind};
 use crate::{Column, Draggable, Padding, Row, SizedBox, Widget};
+
+type FindChildIndex = Rc<dyn Fn(&WidgetKey) -> Option<usize>>;
 
 type SliverLayoutBuilderFn = Rc<dyn Fn(SliverConstraints) -> Widget>;
 

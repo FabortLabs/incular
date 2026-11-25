@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- Lazy PageView builders can resolve keyed pages after reordering so that
+  a kept-alive page carries its state to the new index.
+
 - incular-widgets: external FocusScope nodes can own primary focus, remember
   their last child, and restore it across nested scopes. Runtime exposes
   primary focus observers and early/late focus keyboard handlers.

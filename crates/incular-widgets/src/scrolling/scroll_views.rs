@@ -1268,6 +1268,7 @@ enum PageViewStrategy {
     Builder {
         page_count: usize,
         builder: Rc<dyn Fn(usize) -> Widget>,
+        find_child_index: Option<FindChildIndex>,
     },
 }
 
@@ -1360,6 +1361,7 @@ impl PageView {
             strategy: Some(PageViewStrategy::Builder {
                 page_count,
                 builder: Rc::new(move |i| builder(i).into()),
+                find_child_index: None,
             }),
             controller: None,
             scroll_direction: WidgetDefaults::DEFAULT.page_scroll_direction,
@@ -1376,6 +1378,25 @@ impl PageView {
             page_storage_key: None,
             on_page_changed: None,
         }
+    }
+
+    /// Resolves a previously materialized [`Widget::key`] after reordering
+    /// the pages returned by [`PageView::builder`]. Return the key's new
+    /// index, or `None` if it no longer exists. This lets a kept-alive
+    /// page carry its state to its new index without rebuilding every item.
+    /// Has no effect on a PageView constructed from static children.
+    #[must_use]
+    pub fn find_child_index_callback(
+        mut self,
+        callback: impl Fn(&WidgetKey) -> Option<usize> + 'static,
+    ) -> Self {
+        if let Some(PageViewStrategy::Builder {
+            find_child_index, ..
+        }) = &mut self.strategy
+        {
+            *find_child_index = Some(Rc::new(callback));
+        }
+        self
     }
 
     /// Flutter `PageView.onPageChanged`: called with the new rounded page each
@@ -1721,8 +1742,10 @@ fn page_view_widget(value: PageView) -> Widget {
         PageViewStrategy::Builder {
             page_count,
             builder,
+            find_child_index,
         } => {
             let sliver = SliverFillViewport::builder(page_count, move |index| builder(index))
+                .with_child_index_lookup(find_child_index)
                 .viewport_fraction(fraction)
                 .pad_ends(value.pad_ends)
                 .fallback_extent(WidgetDefaults::DEFAULT.sliver_fill_viewport_extent);

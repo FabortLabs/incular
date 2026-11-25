@@ -1731,6 +1731,7 @@ pub(super) struct ViewportExtentRenderSliver {
     pub(super) item_count: usize,
     pub(super) children: Option<Rc<Vec<Widget>>>,
     pub(super) builder: Option<Rc<dyn Fn(usize) -> Widget>>,
+    pub(super) find_child_index: Option<FindChildIndex>,
     pub(super) widgets: HashMap<usize, Widget>,
     pub(super) viewport_fraction: f32,
     pub(super) fallback_extent: f32,
@@ -1739,17 +1740,49 @@ pub(super) struct ViewportExtentRenderSliver {
 }
 
 impl ViewportExtentRenderSliver {
+    fn build_child(&self, index: usize) -> Widget {
+        self.children
+            .as_ref()
+            .and_then(|children| children.get(index).cloned())
+            .or_else(|| self.builder.as_ref().map(|builder| builder(index)))
+            .unwrap_or_else(|| SizedBox::shrink().into())
+    }
+
     fn child_widget(&mut self, index: usize) -> Widget {
-        self.widgets
-            .entry(index)
-            .or_insert_with(|| {
-                self.children
-                    .as_ref()
-                    .and_then(|children| children.get(index).cloned())
-                    .or_else(|| self.builder.as_ref().map(|builder| builder(index)))
-                    .unwrap_or_else(|| Widget::from(SizedBox::shrink()))
-            })
-            .clone()
+        if let Some(widget) = self.widgets.get(&index) {
+            return widget.clone();
+        }
+        let widget = self.build_child(index);
+        self.widgets.insert(index, widget.clone());
+        widget
+    }
+
+    fn adopt_keyed_keep_alives(&mut self, previous: &Self, probes: &mut u64) {
+        let Some(find_index) = self.find_child_index.clone() else {
+            return;
+        };
+        // Only children materialized by the outgoing delegate are queried,
+        // in original index order. A scroll in the same delegate never
+        // makes the reverse lookup, even when it materializes fresh pages.
+        let mut indices: Vec<_> = previous.widgets.keys().copied().collect();
+        indices.sort_unstable();
+        for index in indices {
+            let old = &previous.widgets[&index];
+            let destination = old.key().and_then(&*find_index).unwrap_or(index);
+            if !old.keep_alive_request()
+                || destination >= self.item_count
+                || self.widgets.contains_key(&destination)
+            {
+                continue;
+            }
+            *probes += 1;
+            let widget = self.build_child(destination);
+            if widget.key() == old.key()
+                && std::mem::discriminant(widget.kind()) == std::mem::discriminant(old.kind())
+            {
+                self.widgets.insert(destination, widget);
+            }
+        }
     }
 }
 
@@ -3025,6 +3058,10 @@ fn adopt_indexed_keep_alives(
             .as_any_mut()
             .and_then(|any| any.downcast_mut::<ViewportExtentRenderSliver>()),
     ) {
+        if fresh.find_child_index.is_some() {
+            fresh.adopt_keyed_keep_alives(retained, probes);
+            return true;
+        }
         let children = fresh.children.as_ref();
         let builder = fresh.builder.as_ref();
         transfer_keep_alives(
