@@ -1396,3 +1396,9 @@ packages/flutter/test/services/message_codecs_test.dart	50	Should encode and dec
 packages/flutter/test/services/message_codecs_test.dart	56	should decode error envelope without native stacktrace	paired-match	upstream-standard-message-codecs.md#standard-method-calls-and-envelopes
 packages/flutter/test/services/message_codecs_test.dart	73	should decode error envelope with native stacktrace.	paired-match	upstream-standard-message-codecs.md#standard-method-calls-and-envelopes
 packages/flutter/test/services/message_codecs_test.dart	87	should allow null error message,	paired-match	upstream-standard-message-codecs.md#standard-method-calls-and-envelopes
+packages/flutter/test/services/message_codecs_test.dart	19	should encode and decode simple messages	paired-match	upstream-standard-message-codecs.md#binary-utf-8-and-json-messages
+packages/flutter/test/services/message_codecs_test.dart	27	should encode and decode simple messages	paired-match	upstream-standard-message-codecs.md#binary-utf-8-and-json-messages
+packages/flutter/test/services/message_codecs_test.dart	33	ByteData with offset	paired-match	upstream-standard-message-codecs.md#binary-utf-8-and-json-messages
+packages/flutter/test/services/message_codecs_test.dart	134	should encode and decode simple messages	paired-match	upstream-standard-message-codecs.md#binary-utf-8-and-json-messages
+packages/flutter/test/services/message_codecs_test.dart	147	should encode and decode composite message	paired-match	upstream-standard-message-codecs.md#binary-utf-8-and-json-messages
+packages/flutter/test/services/message_codecs_test.dart	163	should preserve UTF-8 encoding and ByteData bounds across encoder chunks	paired-match	upstream-standard-message-codecs.md#binary-utf-8-and-json-messages

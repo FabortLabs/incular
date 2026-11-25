@@ -379,3 +379,61 @@ fn read_optional_string(buffer: &mut ReadBuffer<'_>) -> Result<Option<String>, M
         _ => Err(MethodCodecError::InvalidEnvelope),
     }
 }
+
+/// Unencoded byte messages. The caller's exact borrowed view is returned.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct BinaryCodec;
+
+impl BinaryCodec {
+    #[must_use]
+    pub const fn encode_message(bytes: Option<&[u8]>) -> Option<&[u8]> {
+        bytes
+    }
+
+    #[must_use]
+    pub const fn decode_message(bytes: Option<&[u8]>) -> Option<&[u8]> {
+        bytes
+    }
+}
+
+/// UTF-8 string messages. Absence is distinct from an empty string.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct StringCodec;
+
+impl StringCodec {
+    #[must_use]
+    pub fn encode_message(text: Option<&str>) -> Option<&[u8]> {
+        text.map(str::as_bytes)
+    }
+
+    /// Decodes exactly the provided view, removing a leading UTF-8 BOM.
+    pub fn decode_message(bytes: Option<&[u8]>) -> Result<Option<&str>, std::str::Utf8Error> {
+        bytes
+            .map(|bytes| std::str::from_utf8(without_utf8_bom(bytes)))
+            .transpose()
+    }
+}
+
+/// JSON messages carried as UTF-8. A top-level null has no message bytes.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct JsonMessageCodec;
+
+impl JsonMessageCodec {
+    pub fn encode_message(message: &serde_json::Value) -> serde_json::Result<Option<Vec<u8>>> {
+        if message.is_null() {
+            Ok(None)
+        } else {
+            serde_json::to_vec(message).map(Some)
+        }
+    }
+
+    pub fn decode_message(bytes: Option<&[u8]>) -> serde_json::Result<serde_json::Value> {
+        bytes.map_or(Ok(serde_json::Value::Null), |bytes| {
+            serde_json::from_slice(without_utf8_bom(bytes))
+        })
+    }
+}
+
+fn without_utf8_bom(bytes: &[u8]) -> &[u8] {
+    bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(bytes)
+}

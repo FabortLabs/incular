@@ -28,3 +28,14 @@ no message, and an optional native stack trace read directly from bytes.
 The native target separately tests aligned arguments, a null success reply,
 and malformed call/envelope fields. This is a codec API only; it does not
 add a service transport or Dart's codec subclassing mechanism.
+
+## Binary, UTF-8 and JSON messages
+
+All six exact originals in the Binary codec, String codec and JSON
+message codec groups passed on pinned Flutter; all six native
+counterparts passed. Raw bytes use the exact borrowed view, and the
+string codec neither reads beyond a slice nor conflates empty with
+absent. JSON tests cover scalar and nested data and the exact UTF-8
+bytes when a four-byte emoji crosses the reference encoder's 256-byte
+chunk boundary. Native JSON uses serde_json; its internal chunking
+is not presented as a match.
