@@ -14,7 +14,7 @@ use incular_semantics::{
     AccessibilityFocusBlockType, CustomSemanticsAction, CustomSemanticsActionId, SemanticAction,
     StringAttribute,
 };
-use std::borrow::Cow;
+use std::{borrow::Cow, rc::Rc};
 
 pub(super) mod table;
 mod traversal;
@@ -101,8 +101,44 @@ struct SemanticSliverWindow {
     cache: Rect,
 }
 
+struct ChildTagScope {
+    tag: incular_semantics::SemanticsTag,
+    outer: Option<Rc<Self>>,
+}
+
+impl ChildTagScope {
+    fn extend(
+        outer: Option<Rc<Self>>,
+        tag: Option<&incular_semantics::SemanticsTag>,
+    ) -> Option<Rc<Self>> {
+        match tag {
+            Some(tag) => Some(Rc::new(Self {
+                tag: tag.clone(),
+                outer,
+            })),
+            None => outer,
+        }
+    }
+
+    fn apply(&self, state: &mut SemanticState) {
+        let mut stack = Vec::new();
+        let mut scope = Some(self);
+        while let Some(current) = scope {
+            stack.push(&current.tag);
+            scope = current.outer.as_deref();
+        }
+        let mut tags = std::mem::take(&mut state.tags).into_vec();
+        for tag in stack.into_iter().rev() {
+            if !tags.contains(tag) {
+                tags.push(tag.clone());
+            }
+        }
+        state.tags = tags.into_boxed_slice();
+    }
+}
+
 /// One element waiting to be visited by the semantics pass.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(super) struct SemanticVisit {
     element: ElementId,
     /// Index in `builds` of the nearest collected semantic ancestor, or
@@ -111,6 +147,7 @@ pub(super) struct SemanticVisit {
     collection: Option<SemanticCollectionContext>,
     /// Most recent locale annotation on the traversal path.
     locale_scope: Option<ElementId>,
+    inherited_tags: Option<Rc<ChildTagScope>>,
     /// Collect the full content of every element below, whatever its marks
     /// say.
     force_content: bool,
@@ -316,6 +353,7 @@ impl WidgetTree {
             parent: TOP_LEVEL,
             collection: None,
             locale_scope: None,
+            inherited_tags: None,
             force_content: full,
             force_bounds: full,
             subtree_focus_blocked: false,
@@ -785,6 +823,7 @@ impl WidgetTree {
             parent: semantic_parent,
             collection,
             locale_scope,
+            inherited_tags,
             parent_world,
             subtree_focus_blocked,
             merges_focus_labels,
@@ -856,8 +895,10 @@ impl WidgetTree {
             }
             _ => None,
         };
+        let tag_for_children = entry.widget.semantic_properties().tag_for_children.as_ref();
         let retained = self.semantic_ids.contains_key(&element);
         if !scope.content && retained {
+            let next_tag_scope = ChildTagScope::extend(None, tag_for_children);
             // Nothing but geometry changed here or below, so the retained
             // node keeps its role, text, state and actions. A node with a
             // retained id always emitted a node, so its descendants inherit
@@ -889,6 +930,7 @@ impl WidgetTree {
                             parent: RETAINED_LIST,
                             collection: None,
                             locale_scope,
+                            inherited_tags: next_tag_scope.clone(),
                             force_content: false,
                             force_bounds: false,
                             subtree_focus_blocked: child_focus_blocked,
@@ -934,6 +976,7 @@ impl WidgetTree {
                         parent: this_parent,
                         collection: None,
                         locale_scope,
+                        inherited_tags: next_tag_scope.clone(),
                         force_content: regroups,
                         force_bounds: scope.bounds_below || regroups,
                         subtree_focus_blocked: child_focus_blocked,
@@ -1307,6 +1350,9 @@ impl WidgetTree {
         }
         let this_parent = if let Some(role) = role {
             let mut state = state;
+            if let Some(tags) = inherited_tags.as_deref() {
+                tags.apply(&mut state);
+            }
             if let Some(scope) = locale_scope {
                 state.locale.clone_from(
                     &self
@@ -1367,6 +1413,10 @@ impl WidgetTree {
         // A Button deliberately merges its visual label/icon subtree into the
         // one control node. Other containers preserve logical child order.
         let child_collection = role.is_none().then_some(collection).flatten();
+        let next_tag_scope = ChildTagScope::extend(
+            if role.is_none() { inherited_tags } else { None },
+            tag_for_children,
+        );
         let regroups = self.regroups_sliver_semantics(entry);
         // Below a retained child list a clean child has nothing to lend.
         let only_marked = this_parent == RETAINED_LIST
@@ -1384,6 +1434,7 @@ impl WidgetTree {
                     parent: this_parent,
                     collection: child_collection,
                     locale_scope,
+                    inherited_tags: next_tag_scope.clone(),
                     force_content: scope.subtree_content || regroups,
                     force_bounds: scope.bounds_below || regroups,
                     subtree_focus_blocked: child_focus_blocked,

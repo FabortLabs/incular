@@ -213,6 +213,11 @@ impl Widget {
     }
 
     #[must_use]
+    pub(crate) fn with_semantic_child_tag(mut self, tag: incular_semantics::SemanticsTag) -> Self {
+        self.semantic_properties_mut().tag_for_children = Some(tag);
+        self
+    }
+
     pub(crate) fn semantic_properties_mut(&mut self) -> &mut SemanticProperties {
         Rc::make_mut(
             self.node_mut()

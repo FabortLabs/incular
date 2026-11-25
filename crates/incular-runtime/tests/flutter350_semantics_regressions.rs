@@ -165,3 +165,30 @@ fn a_merged_tap_retargets_when_the_first_action_becomes_blocked() {
         assert_eq!(hits.get(), expected);
     }
 }
+
+// Flutter semantics/semantics_test.dart:946.
+#[test]
+fn point_addressed_tap_reaches_a_merged_semantics_boundary() {
+    use incular_core::Offset;
+    let tapped = Rc::new(Cell::new(false));
+    let merged = MergeSemantics::new(
+        Semantics::new(SizedBox::square(10.))
+            .container(true)
+            .on_tap({
+                let tapped = tapped.clone();
+                move || tapped.set(true)
+            }),
+    );
+    let root = Semantics::new(merged)
+        .container(true)
+        .explicit_child_nodes(true);
+    let mut runtime = Runtime::new(root.into()).unwrap();
+    runtime
+        .run_frame(Constraints::tight(Size::new(10., 10.)))
+        .unwrap();
+    assert!(runtime.dispatch_semantic_action_at(Offset::new(5., 5.), SemanticAction::Activate));
+    assert!(tapped.get());
+    tapped.set(false);
+    assert!(!runtime.dispatch_semantic_action_at(Offset::new(11., 5.), SemanticAction::Activate));
+    assert!(!tapped.get());
+}

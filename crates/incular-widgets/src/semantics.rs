@@ -75,6 +75,10 @@ pub struct Semantics {
     on_long_press: Option<Rc<dyn Fn() + 'static>>,
     #[builder(default)]
     state: SemanticState,
+    #[builder(default, setter(skip))]
+    // The outer option keeps the explicit annotation when a caller clears
+    // its tag, so handling that update does not remount the subtree.
+    tag_for_children: Option<Option<incular_semantics::SemanticsTag>>,
     #[builder(default, setter(strip_option))]
     locale_for_subtree: Option<incular_config::Locale>,
     #[builder(default, setter(strip_option, into))]
@@ -116,6 +120,7 @@ impl Semantics {
             on_scroll_down: None,
             on_long_press: None,
             state: SemanticState::default(),
+            tag_for_children: None,
             locale_for_subtree: None,
             child: Some(child.into()),
         }
@@ -330,6 +335,17 @@ impl Semantics {
     #[must_use]
     pub fn tag(mut self, tag: incular_semantics::SemanticsTag) -> Self {
         self.state.add_tag(tag);
+        self
+    }
+
+    /// Flutter's `tagForChildren`: assigns a framework tag to nodes
+    /// passing through this annotation, stopping at a child boundary.
+    #[must_use]
+    pub fn tag_for_children(
+        mut self,
+        tag: impl Into<Option<incular_semantics::SemanticsTag>>,
+    ) -> Self {
+        self.tag_for_children = Some(tag.into());
         self
     }
 
@@ -622,16 +638,20 @@ impl From<Semantics> for Widget {
         let mut widget: Widget = value
             .child
             .unwrap_or_else(|| crate::SizedBox::shrink().into());
+        let tags_children = value.tag_for_children.is_some();
+        if tags_children || (explicit.is_some() && widget.has_explicit_semantics()) {
+            // Keep the tagging annotation outside its child, including
+            // children that contribute implicit semantics such as Text.
+            widget = Widget::from_kind(WidgetKind::ProxyLayout {
+                mode: ChildLayoutMode::SemanticAnnotation,
+                child: widget,
+            });
+        }
         if let Some(explicit) = explicit {
-            // An outer annotation must not overwrite an already configured
-            // descendant node (in particular a nested semantic container).
-            if widget.has_explicit_semantics() {
-                widget = Widget::from_kind(WidgetKind::ProxyLayout {
-                    mode: ChildLayoutMode::SemanticAnnotation,
-                    child: widget,
-                });
-            }
             widget = widget.semantics(explicit);
+        }
+        if let Some(Some(tag)) = value.tag_for_children {
+            widget = widget.with_semantic_child_tag(tag);
         }
         if let Some(locale) = value.locale_for_subtree {
             widget = widget.with_semantic_locale(Arc::from(locale.to_string()));
