@@ -39,3 +39,14 @@ absent. JSON tests cover scalar and nested data and the exact UTF-8
 bytes when a four-byte emoji crosses the reference encoder's 256-byte
 chunk boundary. Native JSON uses serde_json; its internal chunking
 is not presented as a match.
+
+## JSON method envelopes and diagnostics
+
+Both pinned JSON method envelope registrations pass, preserving an
+optional native stack trace and an absent trace. Native controls also
+verify missing arguments, ordinary success and malformed error fields.
+The pinned standalone diagnostic registration matches display output for
+a null-argument MethodCall, a PlatformException with no optional fields,
+and a MissingPluginException with no message. General debug formatting
+of compound arguments is not claimed. All 16 tests in the three
+focused JSON method, standard method, and simple-message targets passed.

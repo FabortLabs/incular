@@ -95,3 +95,30 @@ fn invalid_method_call_and_error_fields_are_rejected() {
         Err(MethodCodecError::InvalidEnvelope)
     );
 }
+
+#[test]
+fn call_and_exception_displays_keep_the_pinned_null_diagnostics() {
+    use incular_platform::message_codecs::MissingPluginException;
+    assert_eq!(
+        MethodCall {
+            method: "sample method".into(),
+            arguments: V::Null
+        }
+        .to_string(),
+        "MethodCall(sample method, null)",
+    );
+    assert_eq!(
+        PlatformException {
+            code: "100".into(),
+            message: None,
+            details: V::Null,
+            stacktrace: None,
+        }
+        .to_string(),
+        "PlatformException(100, null, null, null)",
+    );
+    assert_eq!(
+        MissingPluginException::default().to_string(),
+        "MissingPluginException(null)"
+    );
+}

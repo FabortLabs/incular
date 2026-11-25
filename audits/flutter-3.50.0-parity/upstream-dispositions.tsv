@@ -1402,3 +1402,6 @@ packages/flutter/test/services/message_codecs_test.dart	33	ByteData with offset	
 packages/flutter/test/services/message_codecs_test.dart	134	should encode and decode simple messages	paired-match	upstream-standard-message-codecs.md#binary-utf-8-and-json-messages
 packages/flutter/test/services/message_codecs_test.dart	147	should encode and decode composite message	paired-match	upstream-standard-message-codecs.md#binary-utf-8-and-json-messages
 packages/flutter/test/services/message_codecs_test.dart	163	should preserve UTF-8 encoding and ByteData bounds across encoder chunks	paired-match	upstream-standard-message-codecs.md#binary-utf-8-and-json-messages
+packages/flutter/test/services/message_codecs_test.dart	106	should decode error envelope without native stacktrace	paired-match	upstream-standard-message-codecs.md#json-method-envelopes-and-diagnostics
+packages/flutter/test/services/message_codecs_test.dart	122	should decode error envelope with native stacktrace.	paired-match	upstream-standard-message-codecs.md#json-method-envelopes-and-diagnostics
+packages/flutter/test/services/message_codecs_test.dart	287	toString works as intended	paired-match	upstream-standard-message-codecs.md#json-method-envelopes-and-diagnostics

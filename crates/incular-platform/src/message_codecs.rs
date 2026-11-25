@@ -1,6 +1,7 @@
 //! Flutter-compatible standard binary message encoding for native transports.
 
 use incular_core::serialization::{BufferError, ReadBuffer, WriteBuffer};
+use std::fmt;
 
 const NULL: u8 = 0;
 const TRUE: u8 = 1;
@@ -38,6 +39,21 @@ pub enum MessageValue {
     Float64List(Vec<f64>),
     List(Vec<MessageValue>),
     Map(Vec<(MessageValue, MessageValue)>),
+}
+
+impl fmt::Display for MessageValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Null => f.write_str("null"),
+            Self::Bool(value) => value.fmt(f),
+            Self::Int(value) => value.fmt(f),
+            Self::Float(value) if *value == f64::INFINITY => f.write_str("Infinity"),
+            Self::Float(value) if *value == f64::NEG_INFINITY => f.write_str("-Infinity"),
+            Self::Float(value) => write!(f, "{value:?}"),
+            Self::String(value) => f.write_str(value),
+            _ => write!(f, "{self:?}"),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
@@ -254,20 +270,56 @@ fn checked_slots(
 
 /// A callable platform method and its argument, which may be null.
 #[derive(Clone, Debug, PartialEq)]
-pub struct MethodCall {
+pub struct MethodCall<Value = MessageValue> {
     pub method: String,
-    pub arguments: MessageValue,
+    pub arguments: Value,
 }
 
 /// An error replied to a method call by the platform.
-#[derive(Clone, Debug, PartialEq, thiserror::Error)]
-#[error("platform method failed with code {code}: {message:?}")]
-pub struct PlatformException {
+#[derive(Clone, Debug, PartialEq)]
+pub struct PlatformException<Value = MessageValue> {
     pub code: String,
     pub message: Option<String>,
-    pub details: MessageValue,
+    pub details: Value,
     pub stacktrace: Option<String>,
 }
+
+impl<Value: fmt::Display> fmt::Display for MethodCall<Value> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "MethodCall({}, {})", self.method, self.arguments)
+    }
+}
+
+impl<Value: fmt::Display> fmt::Display for PlatformException<Value> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "PlatformException({}, {}, {}, {})",
+            self.code,
+            self.message.as_deref().unwrap_or("null"),
+            self.details,
+            self.stacktrace.as_deref().unwrap_or("null"),
+        )
+    }
+}
+impl<Value: fmt::Debug + fmt::Display> std::error::Error for PlatformException<Value> {}
+
+/// No plugin supplied an implementation for a requested method.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct MissingPluginException {
+    pub message: Option<String>,
+}
+
+impl fmt::Display for MissingPluginException {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "MissingPluginException({})",
+            self.message.as_deref().unwrap_or("null")
+        )
+    }
+}
+impl std::error::Error for MissingPluginException {}
 
 #[derive(Debug, PartialEq, thiserror::Error)]
 pub enum MethodCodecError {
@@ -436,4 +488,98 @@ impl JsonMessageCodec {
 
 fn without_utf8_bom(bytes: &[u8]) -> &[u8] {
     bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(bytes)
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum JsonMethodCodecError {
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
+    #[error("expected a JSON method call with a string method name")]
+    InvalidMethodCall,
+    #[error("invalid JSON method reply envelope")]
+    InvalidEnvelope,
+    #[error(transparent)]
+    Platform(Box<PlatformException<serde_json::Value>>),
+}
+
+/// JSON method calls and replies encoded as UTF-8.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct JsonMethodCodec;
+
+impl JsonMethodCodec {
+    pub fn encode_method_call(
+        call: &MethodCall<serde_json::Value>,
+    ) -> Result<Vec<u8>, JsonMethodCodecError> {
+        Ok(serde_json::to_vec(&serde_json::json!({
+            "method": call.method,
+            "args": call.arguments,
+        }))?)
+    }
+
+    pub fn decode_method_call(
+        data: &[u8],
+    ) -> Result<MethodCall<serde_json::Value>, JsonMethodCodecError> {
+        use serde_json::Value;
+        let Value::Object(mut fields) = JsonMessageCodec::decode_message(Some(data))? else {
+            return Err(JsonMethodCodecError::InvalidMethodCall);
+        };
+        let Some(Value::String(method)) = fields.remove("method") else {
+            return Err(JsonMethodCodecError::InvalidMethodCall);
+        };
+        Ok(MethodCall {
+            method,
+            arguments: fields.remove("args").unwrap_or(Value::Null),
+        })
+    }
+
+    pub fn encode_success_envelope(
+        result: &serde_json::Value,
+    ) -> Result<Vec<u8>, JsonMethodCodecError> {
+        Ok(serde_json::to_vec(&[result])?)
+    }
+
+    pub fn encode_error_envelope(
+        error: &PlatformException<serde_json::Value>,
+    ) -> Result<Vec<u8>, JsonMethodCodecError> {
+        let fields = (&error.code, &error.message, &error.details);
+        if let Some(trace) = &error.stacktrace {
+            Ok(serde_json::to_vec(&(fields.0, fields.1, fields.2, trace))?)
+        } else {
+            Ok(serde_json::to_vec(&fields)?)
+        }
+    }
+
+    pub fn decode_envelope(data: &[u8]) -> Result<serde_json::Value, JsonMethodCodecError> {
+        use serde_json::Value;
+        let Value::Array(mut fields) = JsonMessageCodec::decode_message(Some(data))? else {
+            return Err(JsonMethodCodecError::InvalidEnvelope);
+        };
+        let stacktrace = match fields.len() {
+            1 => return Ok(fields.pop().expect("one success value")),
+            3 => None,
+            4 => nullable_string(fields.pop().expect("trace field"))?,
+            _ => return Err(JsonMethodCodecError::InvalidEnvelope),
+        };
+        let details = fields.pop().expect("details field");
+        let message = nullable_string(fields.pop().expect("message field"))?;
+        let Some(Value::String(code)) = fields.pop() else {
+            return Err(JsonMethodCodecError::InvalidEnvelope);
+        };
+        Err(JsonMethodCodecError::Platform(Box::new(
+            PlatformException {
+                code,
+                message,
+                details,
+                stacktrace,
+            },
+        )))
+    }
+}
+
+fn nullable_string(value: serde_json::Value) -> Result<Option<String>, JsonMethodCodecError> {
+    match value {
+        serde_json::Value::Null => Ok(None),
+        serde_json::Value::String(text) => Ok(Some(text)),
+        _ => Err(JsonMethodCodecError::InvalidEnvelope),
+    }
 }
