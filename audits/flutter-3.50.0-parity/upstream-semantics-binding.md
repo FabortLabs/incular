@@ -33,3 +33,12 @@ reordered the signed-zero siblings; using the ordinal comparison now
 retains their traversal order. All 33 focused Rust semantics tests
 passed. Groups still keep their relative traversal positions; the
 public key comparison does not globally reorder named groups.
+
+## Touching traversal grid
+
+Pinned `traversal_order_test.dart:11` and the retained WidgetTree
+agree on the nine labels and their row-major traversal. The Rust
+fixture checks that each 50×50 cell really touches its neighbors
+before reading the published semantic child list. This is partial:
+the TestWidgetsApp shell's semantic grouping and raw numeric IDs
+are not ported to the generational Rust tree.

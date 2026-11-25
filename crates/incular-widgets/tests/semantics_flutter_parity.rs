@@ -6,11 +6,12 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use incular_config::Constraints;
-use incular_core::Size;
+use incular_core::{Rect, Size};
 use incular_semantics::{OrdinalSortKey, SemanticActionKind, SemanticRole, SemanticState};
 use incular_widgets::{
-    Column, GestureDetector, MergeSemantics, Opacity, Semantics, SingleChildScrollView, SizedBox,
-    Widget, internal::WidgetTree,
+    Column, Directionality, GestureDetector, MergeSemantics, Opacity, Row, Semantics,
+    SingleChildScrollView, SizedBox, Text, TextDirection, Widget,
+    internal::{Key, WidgetTree},
 };
 
 fn mounted(widget: impl Into<Widget>) -> WidgetTree {
@@ -261,6 +262,53 @@ fn ordinal_sort_keys_keep_widget_order_for_signed_zero_ties() {
         child_labels(&tree, "zero ties"),
         ["positive zero", "negative zero"]
     );
+}
+
+#[test]
+fn traversal_order_keeps_a_grid_with_touching_elements_in_reading_order() {
+    let rows = (0..3)
+        .map(|row| {
+            Widget::from(Row::new(
+                (0..3)
+                    .map(|column| {
+                        let label = format!("{row} - {column}");
+                        let box_widget = Widget::from(SizedBox::from_dimensions(
+                            Some(50.),
+                            Some(50.),
+                            Some(Text::new(label.clone())),
+                        ))
+                        .with_key(Key::from(label.as_str()));
+                        Widget::from(Semantics::new(box_widget))
+                    })
+                    .collect::<Vec<_>>(),
+            ))
+        })
+        .collect::<Vec<_>>();
+    let grid = Semantics::new(Column::new(rows))
+        .label("touching grid")
+        .container(true)
+        .explicit_child_nodes(true);
+    let tree = mounted(Directionality::new(TextDirection::Ltr, grid));
+    let expected = (0..3)
+        .flat_map(|row| (0..3).map(move |column| format!("{row} - {column}")))
+        .collect::<Vec<_>>();
+    let mut bounds: Vec<Rect> = Vec::new();
+    for label in &expected {
+        let id = tree
+            .element_with_key(&Key::from(label.as_str()))
+            .expect("mounted cell");
+        bounds.push(tree.element_bounds(id).expect("cell bounds"));
+    }
+    assert!(bounds.iter().all(|rect| rect.size == Size::new(50., 50.)));
+    for (index, rect) in bounds.iter().enumerate() {
+        if index % 3 != 0 {
+            assert_eq!(bounds[index - 1].origin.x + 50., rect.origin.x);
+        }
+        if index >= 3 {
+            assert_eq!(bounds[index - 3].origin.y + 50., rect.origin.y);
+        }
+    }
+    assert_eq!(child_labels(&tree, "touching grid"), expected);
 }
 
 /// semantics-012: `widgets/basic.dart:7942`. `container(true)` makes a bare
