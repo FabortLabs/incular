@@ -214,8 +214,12 @@ impl From<Container> for Widget {
             return crate::Builder::new(move |context| {
                 let direction = context
                     .text_direction()
-                    .unwrap_or(incular_config::TextDirection::Ltr);
+                    .expect("validated directional Container");
                 Container::build_widget(value.clone(), Some(direction))
+            })
+            .require_directionality(&crate::tree::DirectionRequirement {
+                widget: "Container",
+                reason: crate::BoxDecoration::DIRECTIONAL_RADIUS_NEEDS_DIRECTION,
             })
             .into();
         }

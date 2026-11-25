@@ -772,6 +772,8 @@ pub struct BoxDecoration {
 }
 
 impl BoxDecoration {
+    pub(crate) const DIRECTIONAL_RADIUS_NEEDS_DIRECTION: &'static str = "No TextDirection found. BorderRadiusDirectional cannot resolve without a Directionality ancestor";
+
     #[must_use]
     pub fn new() -> Self {
         Self::default()

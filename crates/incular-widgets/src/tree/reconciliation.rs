@@ -2591,6 +2591,14 @@ fn direction_need(kind: &WidgetKind) -> Option<DirectionNeed> {
         CrossAxisAlignment, MainAxisAlignment, WrapAlignment, WrapCrossAlignment,
     };
     match kind {
+        WidgetKind::LayoutBuilder {
+            direction_requirement: Some(requirement),
+            ..
+        } => Some(DirectionNeed {
+            widget: requirement.widget,
+            reason: requirement.reason,
+            always: true,
+        }),
         WidgetKind::Text {
             text_direction: None,
             ..

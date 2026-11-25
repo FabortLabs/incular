@@ -145,6 +145,10 @@ Last writer wins — prefer `color` for solids, `background` for gradients.
 
 ### `border(border: impl Into<Border>)` and `decoration(decoration: BoxDecoration)`
 
+Wrap decorations with directional corner radii in a
+[`Directionality`](/docs/api/environment/directionality) scope so leading and
+trailing corners resolve correctly. A physical radius does not require it.
+
 Use `BoxDecoration::clip_path(rect)` to get the decoration outline, or
 `BoxDecoration::hit_test(size, position)` to check a point in local coordinates.
 A circle is centered on the rectangle and takes its diameter from the shorter side.

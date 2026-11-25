@@ -503,6 +503,12 @@ pub(crate) struct TextParagraphPolicy {
     pub(crate) overflow: Option<TextOverflow>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct DirectionRequirement {
+    pub widget: &'static str,
+    pub reason: &'static str,
+}
+
 #[derive(Clone)]
 pub(crate) enum WidgetKind {
     Box {
@@ -816,6 +822,9 @@ pub(crate) enum WidgetKind {
         /// `environment_boundary`), whose builder always returns it. Lets
         /// prevalidation descend through the scope before anything mounts.
         static_child: Option<Widget>,
+        /// A composed widget that resolves ambient direction before it can
+        /// safely build its render subtree.
+        direction_requirement: Option<&'static DirectionRequirement>,
     },
     Visibility {
         visible: bool,

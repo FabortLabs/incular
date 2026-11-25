@@ -134,3 +134,132 @@ fn child_clip_does_not_clip_the_decoration_shadow() {
         .expect("child fill");
     assert!(shadow < clip && clip < child, "{commands:?}");
 }
+
+#[test]
+fn control_container_paints_background_child_and_foreground_in_reference_order() {
+    use incular_config::Alignment;
+    use incular_core::Transform;
+    use incular_rendering::CornerRadii;
+    use incular_widgets::{Align, SizedBox};
+
+    const GREEN: Color = Color::rgba(0, 255, 0, 255);
+    const YELLOW: Color = Color::rgba(255, 255, 0, 255);
+    const FOREGROUND: Color = Color::rgba(0, 0, 255, 127);
+
+    let child = SizedBox::new()
+        .width(25.)
+        .height(33.)
+        .child(Container::new().decoration(BoxDecoration::new().color(YELLOW)));
+    let container = Container::new()
+        .alignment(Alignment::BOTTOM_RIGHT)
+        .padding(EdgeInsets::all(7.))
+        .color(GREEN)
+        .foreground_decoration(BoxDecoration::new().color(FOREGROUND))
+        .width(53.)
+        .height(76.)
+        .constraints(Constraints::new(50., 55., 78., 82.))
+        .margin(EdgeInsets::all(5.))
+        .child(child);
+    let mut tree = WidgetTree::new();
+    tree.mount(Align::new(Alignment::TOP_LEFT, container).into())
+        .unwrap();
+    tree.layout(Constraints::tight(Size::new(800., 600.)))
+        .unwrap();
+    let mut transforms = vec![Transform::IDENTITY];
+    let mut fills = Vec::new();
+    for command in tree.paint().commands() {
+        let current = *transforms.last().unwrap();
+        match command {
+            PaintCommand::PushTransform { transform } => transforms.push(current.then(*transform)),
+            PaintCommand::PopTransform => {
+                transforms.pop();
+            }
+            PaintCommand::Rect { rect, color } => {
+                fills.push((current.transform_rect_bbox(*rect), *color))
+            }
+            PaintCommand::RRect {
+                rrect,
+                brush: Brush::Solid(color),
+            } => {
+                assert_eq!(rrect.radii, CornerRadii::ZERO);
+                fills.push((current.transform_rect_bbox(rrect.rect), *color));
+            }
+            _ => panic!("no border, clip, or extra paint expected: {command:?}"),
+        }
+    }
+    let rect = |x, y, w, h| Rect::from_origin_size(Offset::new(x, y), Size::new(w, h));
+    assert_eq!(
+        fills,
+        [
+            (rect(5., 5., 53., 78.), GREEN),
+            (rect(26., 43., 25., 33.), YELLOW),
+            (rect(5., 5., 53., 78.), FOREGROUND),
+        ]
+    );
+}
+
+#[test]
+fn missing_directionality_for_directional_container_radii_is_a_detailed_error() {
+    use incular_widgets::{Border, BorderRadiusDirectional, internal::TreeError};
+
+    let decoration = BoxDecoration::new()
+        .border(Border::new(1., Color::BLACK))
+        .directional_border_radius(BorderRadiusDirectional::circular(1.));
+    let mut tree = WidgetTree::new();
+    let error = tree
+        .mount(Container::new().decoration(decoration).into())
+        .and_then(|_| tree.layout(Constraints::tight(Size::new(80., 80.))))
+        .expect_err("a directional radius cannot resolve without Directionality");
+    assert!(
+        matches!(
+            error,
+            TreeError::MissingDirectionality {
+                widget: "Container",
+                ..
+            }
+        ),
+        "{error:?}"
+    );
+    let message = error.to_string();
+    assert!(message.contains("No TextDirection found."));
+    assert!(message.contains("without a Directionality ancestor"));
+}
+
+#[test]
+fn directional_decoration_reads_the_local_scope_and_cannot_cross_a_lookup_boundary() {
+    use incular_widgets::{
+        BorderRadiusDirectional, DecoratedBox, Directionality, LookupBoundary, SizedBox,
+        TextDirection, internal::TreeError,
+    };
+
+    let decorate = || {
+        DecoratedBox::new(SizedBox::shrink()).decoration(
+            BoxDecoration::new()
+                .color(Color::WHITE)
+                .directional_border_radius(BorderRadiusDirectional::circular(4.)),
+        )
+    };
+    let mut tree = WidgetTree::new();
+    let root: Widget = Directionality::new(TextDirection::Rtl, decorate()).into();
+    tree.mount(root).unwrap();
+    tree.layout(Constraints::tight(Size::new(80., 80.)))
+        .unwrap();
+    assert!(tree.paint().commands().iter().any(|command| {
+        matches!(command, PaintCommand::RRect { rrect, .. }
+            if rrect.radii.top_left == 4.)
+    }));
+
+    let mut tree = WidgetTree::new();
+    let root: Widget =
+        Directionality::new(TextDirection::Rtl, LookupBoundary::new(decorate())).into();
+    let error = tree
+        .mount(root)
+        .expect_err("the boundary hides the outer direction");
+    assert!(matches!(
+        error,
+        TreeError::MissingDirectionality {
+            widget: "DecoratedBox",
+            ..
+        }
+    ));
+}

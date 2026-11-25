@@ -134,7 +134,7 @@ pub use specs::{
     AnimationRetargetBridge, ButtonSpec, ExplicitSemantics, FrameDelegate, FrameGeometry,
     FrameTick, TextFieldSpec,
 };
-pub(crate) use specs::{ChildLayoutMode, GestureSemanticPolicy};
+pub(crate) use specs::{ChildLayoutMode, DirectionRequirement, GestureSemanticPolicy};
 use specs::{SemanticCallbacks, SemanticProperties};
 
 use semantics::widget_text;

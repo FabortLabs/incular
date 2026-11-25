@@ -428,6 +428,7 @@ impl From<LayoutBuilder> for Widget {
             constraint_dependent: true,
             retained: None,
             static_child: None,
+            direction_requirement: None,
         })
     }
 }
@@ -442,6 +443,7 @@ impl From<LayoutBuilder> for Widget {
 #[derive(Clone)]
 pub struct Builder {
     builder: Rc<crate::tree::LayoutBuilderCallback>,
+    direction_requirement: Option<&'static crate::tree::DirectionRequirement>,
 }
 
 impl Builder {
@@ -450,7 +452,17 @@ impl Builder {
     pub fn new(builder: impl for<'a> Fn(&crate::BuildContext<'a>) -> Widget + 'static) -> Self {
         Self {
             builder: Rc::new(move |context, _| builder(context)),
+            direction_requirement: None,
         }
+    }
+
+    #[must_use]
+    pub(crate) fn require_directionality(
+        mut self,
+        requirement: &'static crate::tree::DirectionRequirement,
+    ) -> Self {
+        self.direction_requirement = Some(requirement);
+        self
     }
 }
 
@@ -464,6 +476,7 @@ impl From<Builder> for Widget {
             constraint_dependent: false,
             retained: None,
             static_child: None,
+            direction_requirement: value.direction_requirement,
         })
     }
 }

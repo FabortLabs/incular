@@ -427,7 +427,9 @@ fn decorated_with_source(
 ) -> Widget {
     if decoration.directional_border_radius.is_some() {
         return crate::Builder::new(move |context| {
-            let direction = context.text_direction().unwrap_or(TextDirection::Ltr);
+            let direction = context
+                .text_direction()
+                .expect("validated directional DecoratedBox");
             decorated_with_source(
                 Rc::new(
                     decoration
@@ -439,6 +441,10 @@ fn decorated_with_source(
                 position,
                 child.clone(),
             )
+        })
+        .require_directionality(&crate::tree::DirectionRequirement {
+            widget: "DecoratedBox",
+            reason: BoxDecoration::DIRECTIONAL_RADIUS_NEEDS_DIRECTION,
         })
         .into();
     }

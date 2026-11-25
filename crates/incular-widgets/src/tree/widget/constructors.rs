@@ -978,6 +978,7 @@ impl Widget {
                 constraint_dependent: true,
                 retained: None,
                 static_child: None,
+                direction_requirement: None,
             },
             semantics: None,
         })
@@ -1001,6 +1002,7 @@ impl Widget {
                 constraint_dependent: false,
                 retained: None,
                 static_child: Some(child),
+                direction_requirement: None,
             },
             semantics: None,
         })
@@ -1020,6 +1022,7 @@ impl Widget {
                 constraint_dependent: false,
                 retained: None,
                 static_child: Some(child),
+                direction_requirement: None,
             },
             semantics: None,
         })
@@ -1042,6 +1045,7 @@ impl Widget {
                 constraint_dependent: false,
                 retained: None,
                 static_child: Some(child),
+                direction_requirement: None,
             },
             semantics: None,
         })
@@ -1067,6 +1071,7 @@ impl Widget {
                 constraint_dependent: true,
                 retained: None,
                 static_child: None,
+                direction_requirement: None,
             },
             semantics: None,
         })
@@ -1106,6 +1111,7 @@ impl Widget {
                 constraint_dependent,
                 retained: Some(slot),
                 static_child: None,
+                direction_requirement: None,
             },
             semantics: None,
         })
@@ -1142,6 +1148,7 @@ impl Widget {
                 constraint_dependent: false,
                 retained: Some(slot),
                 static_child: None,
+                direction_requirement: None,
             },
             semantics: None,
         })
@@ -1186,6 +1193,7 @@ impl Widget {
                 constraint_dependent: false,
                 retained: None,
                 static_child: None,
+                direction_requirement: None,
             },
             semantics: None,
         })

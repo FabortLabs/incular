@@ -655,7 +655,7 @@ impl From<DecoratedBox> for Widget {
             return crate::Builder::new(move |context| {
                 let direction = context
                     .text_direction()
-                    .unwrap_or(incular_config::TextDirection::Ltr);
+                    .expect("validated directional DecoratedBox");
                 let mut resolved = value.clone();
                 if let Some(decoration) = resolved.decoration.take() {
                     let decoration = decoration.resolved_for_direction(direction);
@@ -665,6 +665,10 @@ impl From<DecoratedBox> for Widget {
                     resolved.decoration = Some(decoration);
                 }
                 resolved.into()
+            })
+            .require_directionality(&crate::tree::DirectionRequirement {
+                widget: "DecoratedBox",
+                reason: crate::BoxDecoration::DIRECTIONAL_RADIUS_NEEDS_DIRECTION,
             })
             .into();
         }

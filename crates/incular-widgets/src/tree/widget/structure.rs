@@ -1719,6 +1719,7 @@ impl PartialEq for WidgetKind {
                     constraint_dependent: i,
                     retained: k,
                     static_child: _,
+                    direction_requirement: m,
                 },
                 Self::LayoutBuilder {
                     builder: b,
@@ -1728,6 +1729,7 @@ impl PartialEq for WidgetKind {
                     constraint_dependent: j,
                     retained: l,
                     static_child: _,
+                    direction_requirement: n,
                 },
             ) => {
                 Rc::ptr_eq(a, b)
@@ -1740,6 +1742,7 @@ impl PartialEq for WidgetKind {
                     && g == h
                     && i == j
                     && same_rc(k, l)
+                    && m == n
             }
             (
                 Self::Visibility {
