@@ -107,7 +107,7 @@ impl Default for Spring {
 }
 
 /// How a value travels to a new target.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TransitionKind {
     /// Jump to the target.
     Instant,
@@ -232,8 +232,8 @@ impl Transition {
     }
 
     #[must_use]
-    pub const fn kind(&self) -> TransitionKind {
-        self.kind
+    pub fn kind(&self) -> TransitionKind {
+        self.kind.clone()
     }
 
     #[must_use]
@@ -258,11 +258,11 @@ impl Transition {
         if let Some(transition) = override_ {
             return transition.clone();
         }
-        match (channel, self.kind) {
+        match (channel, &self.kind) {
             (Channel::Opacity | Channel::Color, TransitionKind::Spring(_)) => {
                 Transition::ease(FADE_UNDER_SPRING).delay(self.delay)
             }
-            _ => Transition::from_kind(self.kind).delay(self.delay),
+            _ => Transition::from_kind(self.kind.clone()).delay(self.delay),
         }
     }
 
@@ -275,12 +275,12 @@ impl Transition {
         } else {
             1.
         };
-        let kind = match self.kind {
+        let kind = match &self.kind {
             TransitionKind::Ease { duration, curve } => TransitionKind::Ease {
-                duration: scale_duration(duration, factor),
-                curve,
+                duration: scale_duration(*duration, factor),
+                curve: curve.clone(),
             },
-            kind => kind,
+            kind => kind.clone(),
         };
         Transition {
             kind,

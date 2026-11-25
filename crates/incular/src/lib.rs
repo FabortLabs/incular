@@ -74,7 +74,7 @@ pub mod prelude {
     // Motion: the extension traits and the functions every app reaches for.
     pub use incular_animation::{
         AnimationController, AnimationStatus, BoundedFrictionSimulation, ClampedSimulation, Curve,
-        CurveChain, Curves, FrictionSimulation, GravitySimulation, ScrollSpringSimulation,
+        CurveBlend, CurveChain, Curves, FrictionSimulation, GravitySimulation, ScrollSpringSimulation,
         Simulation, SpringDescription, SpringSimulation, SpringType, Tolerance, Tween,
         TweenSegment, TweenSequence, TweenValue,
     };

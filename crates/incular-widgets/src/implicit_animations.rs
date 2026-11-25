@@ -304,7 +304,7 @@ struct ImplicitState<W: ImplicitlyAnimated> {
     listening: Cell<bool>,
     /// The curve in effect since the last target change. A curve-only update
     /// keeps it until the next target change (`AnimatedWidgetBaseState`).
-    curve: Cell<Curve>,
+    curve: RefCell<Curve>,
     revision: RefCell<Rc<Cell<u64>>>,
     /// `.transition()` progress from 0 to 1 (springs may overshoot).
     progress: MotionValue,
@@ -358,7 +358,7 @@ impl<W: ImplicitlyAnimated> ImplicitState<W> {
         if config.timing().transition.is_some() {
             self.progress.get()
         } else {
-            self.curve.get().apply(self.controller.value())
+            self.curve.borrow().apply(self.controller.value())
         }
     }
 
@@ -402,8 +402,8 @@ impl<W: ImplicitlyAnimated> ImplicitState<W> {
                 return;
             }
             // The new curve takes effect with the new target.
-            self.curve.set(config.timing().curve);
-            let t = self.curve.get().apply(self.controller.value());
+            self.curve.replace(config.timing().curve.clone());
+            let t = self.curve.borrow().apply(self.controller.value());
             config.for_each_tween(&mut tweens, &mut TweenPass::Retarget { t, direction });
             // `controller.forward(from: 0.0)`.
             self.controller.set_value(0.0);
@@ -448,7 +448,7 @@ pub(crate) fn implicitly_animated<W: ImplicitlyAnimated>(widget: W) -> Widget {
                 tweens: RefCell::new(W::Tweens::default()),
                 controller: AnimationController::new(config.timing().duration),
                 listening: Cell::new(false),
-                curve: Cell::new(config.timing().curve),
+                curve: RefCell::new(config.timing().curve.clone()),
                 revision: RefCell::new(revision),
                 progress: MotionValue::new(1.),
                 delegate: RefCell::new(None),

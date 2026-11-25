@@ -1,9 +1,11 @@
 //! Timing curves used by explicit and implicit animations.
 
+use std::sync::Arc;
+
 /// A normalized timing function. Curves clamp input to `[0, 1]` and map the
 /// endpoints exactly. Overshooting curves may return values outside `[0, 1]`,
 /// as Flutter's curves do.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub enum Curve {
     #[default]
     Linear,
@@ -50,6 +52,8 @@ pub enum Curve {
     },
     StepStart,
     StepEnd,
+    /// An owned blend of two curve outputs.
+    Blend(Arc<CurveBlend>),
     /// Flutter `Curves.decelerate` (`DecelerateCurve`): `1 - (1 - t)^2`.
     Decelerate,
     /// Flutter `Curves.fastLinearToSlowEaseIn`.
@@ -105,9 +109,34 @@ pub enum Curve {
     },
 }
 
+/// The owned operands of a timing-curve blend.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CurveBlend {
+    first: Curve,
+    second: Curve,
+    weight: f32,
+}
+
 impl Curve {
+    /// Blends the evaluated outputs, retaining both curves for nested blends.
+    /// A weight of zero or one reuses that endpoint without allocating.
     #[must_use]
-    pub fn apply(self, value: f32) -> f32 {
+    pub fn blend(first: Self, second: Self, weight: f32) -> Self {
+        if first == second || weight == 0. {
+            return first;
+        }
+        if weight == 1. {
+            return second;
+        }
+        Self::Blend(Arc::new(CurveBlend {
+            first,
+            second,
+            weight,
+        }))
+    }
+
+    #[must_use]
+    pub fn apply(&self, value: f32) -> f32 {
         let t = if value.is_finite() {
             value.clamp(0.0, 1.0)
         } else if value.is_sign_negative() {
@@ -119,8 +148,11 @@ impl Curve {
             return t;
         }
         let pi = std::f32::consts::PI;
-        match self {
+        match *self {
             Self::Linear => t,
+            Self::Blend(ref pair) => {
+                pair.first.apply(t) * (1. - pair.weight) + pair.second.apply(t) * pair.weight
+            }
             Self::Ease => cubic_bezier(0.25, 0.1, 0.25, 1.0, t),
             Self::EaseIn => cubic_bezier(0.42, 0.0, 1.0, 1.0, t),
             Self::EaseOut => cubic_bezier(0.0, 0.0, 0.58, 1.0, t),
@@ -327,8 +359,8 @@ impl Curve {
 
     /// The cubic Bezier control points of the curves Flutter defines as a
     /// `Cubic`.
-    const fn cubic_points(self) -> Option<(f32, f32, f32, f32)> {
-        Some(match self {
+    const fn cubic_points(&self) -> Option<(f32, f32, f32, f32)> {
+        Some(match *self {
             Self::Ease => (0.25, 0.1, 0.25, 1.0),
             Self::EaseIn => (0.42, 0.0, 1.0, 1.0),
             Self::EaseOut => (0.0, 0.0, 0.58, 1.0),
@@ -385,13 +417,18 @@ impl Curve {
             Self::EaseInOutBounce => Self::EaseInOutBounce,
             Self::StepStart => Self::StepEnd,
             Self::StepEnd => Self::StepStart,
-            Self::Flipped(curve) => *curve,
+            Self::Flipped(curve) => curve.clone(),
+            Self::Blend(pair) => Self::blend(
+                pair.first.clone().flipped(),
+                pair.second.clone().flipped(),
+                pair.weight,
+            ),
             _ => match self.cubic_points() {
                 Some((x1, y1, x2, y2)) => {
                     let flipped = (1.0 - x2, 1.0 - y2, 1.0 - x1, 1.0 - y1);
                     NAMED_CUBICS
                         .iter()
-                        .copied()
+                        .cloned()
                         .find(|named| {
                             named.cubic_points().is_some_and(|points| {
                                 [
@@ -446,7 +483,7 @@ fn bounce_out(mut t: f32) -> f32 {
 }
 
 /// Sequential curve composition.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CurveChain {
     first: Curve,
     next: Curve,
@@ -454,7 +491,7 @@ pub struct CurveChain {
 
 impl CurveChain {
     #[must_use]
-    pub fn apply(self, value: f32) -> f32 {
+    pub fn apply(&self, value: f32) -> f32 {
         let value = if value.is_finite() {
             value.clamp(0.0, 1.0)
         } else if value.is_sign_negative() {

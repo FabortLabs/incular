@@ -99,8 +99,8 @@ impl<T: Tween> Animation<T> {
     }
 
     #[must_use]
-    pub const fn tween(&self) -> TweenValue<T> {
-        self.tween
+    pub fn tween(&self) -> TweenValue<T> {
+        self.tween.clone()
     }
 
     pub fn set_tween(&mut self, tween: TweenValue<T>) {
@@ -234,20 +234,20 @@ impl<T: Tween> ImplicitAnimation<T> {
     }
 
     #[must_use]
-    pub const fn curve(&self) -> Curve {
-        self.curve
+    pub fn curve(&self) -> Curve {
+        self.curve.clone()
     }
 
     pub fn set_target(&mut self, now: Instant, target: T) {
         self.begin = self.value();
         self.end = target;
-        self.controller.set_curve(self.curve);
+        self.controller.set_curve(self.curve.clone());
         self.controller.set_value(0.0);
         self.controller.forward(now);
     }
 
     pub fn set_curve(&mut self, curve: Curve) {
-        self.curve = curve;
+        self.curve = curve.clone();
         self.controller.set_curve(curve);
     }
 

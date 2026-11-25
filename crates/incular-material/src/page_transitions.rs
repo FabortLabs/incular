@@ -320,7 +320,7 @@ fn fade_forwards(
     primary_state: &Rc<Cell<Option<AnimationStatus>>>,
     secondary_state: &Rc<Cell<Option<AnimationStatus>>>,
 ) -> Widget {
-    let curve = Curve::EaseInOutCubicEmphasized;
+    const CURVE: Curve = Curve::EaseInOutCubicEmphasized;
     let fade_in = |t: f32| interval(0.0, 0.75, t);
     let fade_out = |t: f32| 1.0 - interval(0.0, 0.25, t);
     // `_delegatedTransition`: the page below slides a quarter out while
@@ -336,7 +336,7 @@ fn fade_forwards(
             let inner = faded(
                 fade_out(reverse_value),
                 slide(
-                    Offset::new(lerp(0.0, -0.25, curve.apply(reverse_value)), 0.0),
+                    Offset::new(lerp(0.0, -0.25, CURVE.apply(reverse_value)), 0.0),
                     child,
                 ),
             );
@@ -344,7 +344,7 @@ fn fade_forwards(
             let outer = faded(
                 fade_in(forward_value),
                 slide(
-                    Offset::new(lerp(-0.25, 0.0, curve.apply(forward_value)), 0.0),
+                    Offset::new(lerp(-0.25, 0.0, CURVE.apply(forward_value)), 0.0),
                     inner,
                 ),
             );
@@ -365,7 +365,7 @@ fn fade_forwards(
         let leaving = IgnorePointer::new(faded(
             fade_out(reverse_value),
             slide(
-                Offset::new(lerp(0.0, 0.25, curve.apply(reverse_value)), 0.0),
+                Offset::new(lerp(0.0, 0.25, CURVE.apply(reverse_value)), 0.0),
                 child,
             ),
         ))
@@ -374,7 +374,7 @@ fn fade_forwards(
         faded(
             fade_in(forward_value),
             slide(
-                Offset::new(lerp(0.25, 0.0, curve.apply(forward_value)), 0.0),
+                Offset::new(lerp(0.25, 0.0, CURVE.apply(forward_value)), 0.0),
                 leaving.into(),
             ),
         )

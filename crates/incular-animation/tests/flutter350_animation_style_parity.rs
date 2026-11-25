@@ -4,16 +4,18 @@ use std::time::Duration;
 
 const ONE: Duration = Duration::from_secs(1);
 const TWO: Duration = Duration::from_secs(2);
-const A: AnimationStyle = AnimationStyle::new()
-    .curve(Curve::Ease)
-    .duration(ONE)
-    .reverse_curve(Curve::Ease)
-    .reverse_duration(ONE);
-const B: AnimationStyle = AnimationStyle::new()
-    .curve(Curve::Linear)
-    .duration(TWO)
-    .reverse_curve(Curve::Linear)
-    .reverse_duration(TWO);
+const A: AnimationStyle = AnimationStyle {
+    curve: Some(Curve::Ease),
+    duration: Some(ONE),
+    reverse_curve: Some(Curve::Ease),
+    reverse_duration: Some(ONE),
+};
+const B: AnimationStyle = AnimationStyle {
+    curve: Some(Curve::Linear),
+    duration: Some(TWO),
+    reverse_curve: Some(Curve::Linear),
+    reverse_duration: Some(TWO),
+};
 
 #[test]
 fn empty_and_all_fields_override_controls() {
@@ -27,7 +29,7 @@ fn empty_and_all_fields_override_controls() {
 fn merge_keeps_unset_reverse_fields() {
     let patch = AnimationStyle::new().curve(Curve::Linear).duration(TWO);
     assert_eq!(
-        A.merge(patch),
+        A.merge(patch.clone()),
         patch.reverse_curve(Curve::Ease).reverse_duration(ONE)
     );
 }
@@ -64,8 +66,8 @@ fn lerp_blends_forward_and_reverse_curve_outputs() {
             let t = i as f32 / 6.;
             let expected = Curve::Ease.apply(t) * (1. - blend) + Curve::Linear.apply(t) * blend;
             let actual = [
-                style.curve.unwrap().apply(t),
-                style.reverse_curve.unwrap().apply(t),
+                style.curve.as_ref().unwrap().apply(t),
+                style.reverse_curve.as_ref().unwrap().apply(t),
             ];
             if actual
                 .into_iter()
@@ -84,8 +86,11 @@ fn lerp_blends_forward_and_reverse_curve_outputs() {
 fn null_duration_interpolates_as_zero_between_endpoints() {
     let a = AnimationStyle::new().duration(TWO);
     let b = AnimationStyle::new();
-    let actual =
-        [0., 0.25, 0.5, 1.].map(|t| AnimationStyle::lerp(Some(a), Some(b), t).unwrap().duration);
+    let actual = [0., 0.25, 0.5, 1.].map(|t| {
+        AnimationStyle::lerp(Some(a.clone()), Some(b.clone()), t)
+            .unwrap()
+            .duration
+    });
     assert_eq!(
         actual,
         [
@@ -103,19 +108,19 @@ fn durations_round_independently_and_preserve_nullable_style_endpoints() {
         .duration(Duration::from_micros(1))
         .reverse_duration(Duration::from_micros(3));
     let second = AnimationStyle::new().duration(Duration::from_micros(4));
-    let midpoint = AnimationStyle::lerp(Some(first), Some(second), 0.5).unwrap();
+    let midpoint = AnimationStyle::lerp(Some(first.clone()), Some(second.clone()), 0.5).unwrap();
     assert_eq!(midpoint.duration, Some(Duration::from_micros(3)));
     assert_eq!(midpoint.reverse_duration, Some(Duration::from_micros(2)));
     assert_eq!(
-        AnimationStyle::lerp(None, Some(second), 0.),
+        AnimationStyle::lerp(None, Some(second.clone()), 0.),
         Some(AnimationStyle::new())
     );
     assert_eq!(
-        AnimationStyle::lerp(Some(first), None, 1.),
+        AnimationStyle::lerp(Some(first.clone()), None, 1.),
         Some(AnimationStyle::new())
     );
     assert_eq!(
-        AnimationStyle::lerp(Some(first), Some(second), 1.),
+        AnimationStyle::lerp(Some(first.clone()), Some(second.clone()), 1.),
         Some(second)
     );
     assert_eq!(
@@ -124,5 +129,46 @@ fn durations_round_independently_and_preserve_nullable_style_endpoints() {
             .duration,
         Some(Duration::ZERO),
         "negative extrapolation cannot wrap through unsigned Rust Duration"
+    );
+}
+
+#[test]
+fn curve_blends_keep_nested_outputs_and_release_owned_storage() {
+    use std::sync::Arc;
+    let a = AnimationStyle::new()
+        .curve(Curve::Ease)
+        .reverse_curve(Curve::EaseIn);
+    let mid = AnimationStyle::lerp(Some(a), None, 0.25).unwrap();
+    let Curve::Blend(entry) = mid.curve.as_ref().unwrap() else {
+        panic!("an interior style owns its blended curve");
+    };
+    let allocation = Arc::downgrade(entry);
+    let nested = AnimationStyle::lerp(
+        Some(mid.clone()),
+        Some(AnimationStyle::new().curve(Curve::EaseInBounce)),
+        0.75,
+    )
+    .unwrap();
+    for t in [0., 0.2, 0.5, 0.8, 1.] {
+        let inner = Curve::Ease.apply(t) * 0.75 + Curve::Linear.apply(t) * 0.25;
+        let expected = inner * 0.25 + Curve::EaseInBounce.apply(t) * 0.75;
+        assert!((nested.curve.as_ref().unwrap().apply(t) - expected).abs() < 1e-6);
+        let reverse = Curve::EaseIn.apply(t) * 0.75 + Curve::Linear.apply(t) * 0.25;
+        let expected_reverse = reverse * 0.25 + Curve::Linear.apply(t) * 0.75;
+        assert!((nested.reverse_curve.as_ref().unwrap().apply(t) - expected_reverse).abs() < 1e-6);
+        let flipped = nested.curve.as_ref().unwrap().clone().flipped();
+        assert!(
+            (flipped.apply(t) - (1. - nested.curve.as_ref().unwrap().apply(1. - t))).abs() < 1e-5
+        );
+    }
+    drop(mid);
+    assert!(
+        allocation.upgrade().is_some(),
+        "nested curve retains its source"
+    );
+    drop(nested);
+    assert!(
+        allocation.upgrade().is_none(),
+        "no global allocation retains the blend"
     );
 }

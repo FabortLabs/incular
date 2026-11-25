@@ -140,7 +140,7 @@ impl NullableTween for Rect {
 /// subclasses are. Both ends absent yields no value; one absent end scales
 /// the present one, as Flutter's `Color.lerp`, `Size.lerp` and `Rect.lerp`
 /// do with a null argument.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct OptionalTween<T: NullableTween> {
     pub begin: Option<T>,
     pub end: Option<T>,
@@ -164,7 +164,7 @@ impl<T: NullableTween> OptionalTween<T> {
     }
 
     #[must_use]
-    pub const fn curve(mut self, curve: Curve) -> Self {
+    pub fn curve(mut self, curve: Curve) -> Self {
         self.curve = curve;
         self
     }
@@ -210,7 +210,7 @@ pub type OptionalSizeTween = OptionalTween<Size>;
 pub type OptionalRectTween = OptionalTween<Rect>;
 
 /// A typed interval with an optional timing curve.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TweenValue<T: Tween> {
     pub begin: T,
     pub end: T,
@@ -233,18 +233,18 @@ impl<T: Tween> TweenValue<T> {
     }
 
     #[must_use]
-    pub const fn curve(mut self, curve: Curve) -> Self {
+    pub fn curve(mut self, curve: Curve) -> Self {
         self.curve = curve;
         self
     }
 
     #[must_use]
-    pub fn evaluate(self, progress: f32) -> T {
+    pub fn evaluate(&self, progress: f32) -> T {
         T::lerp(self.begin, self.end, self.curve.apply(progress))
     }
 
     #[must_use]
-    pub fn lerp(self, progress: f32) -> T {
+    pub fn lerp(&self, progress: f32) -> T {
         T::lerp(self.begin, self.end, progress)
     }
 
@@ -272,7 +272,7 @@ pub struct TweenSequence<T: Tween> {
     segments: Vec<TweenSegment<T>>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TweenSegment<T: Tween> {
     pub tween: TweenValue<T>,
     pub weight: f32,

@@ -343,7 +343,7 @@ impl From<FlutterLogo> for Widget {
                 .unwrap_or(24.);
             let (style, text_color) = (value.style, value.text_color);
             AnimatedContainer::new(value.duration)
-                .curve(value.curve)
+                .curve(value.curve.clone())
                 .width(size)
                 .height(size)
                 .child(LayoutBuilder::new(move |_, constraints| {

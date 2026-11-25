@@ -178,13 +178,13 @@ fn repeat_starts_from_the_current_value() {
 #[test]
 fn animation_style_overrides_and_lerps() {
     let base = AnimationStyle::new().duration(Duration::from_millis(200));
-    let merged = base.merge(AnimationStyle::new().curve(Curve::EaseIn));
+    let merged = base.clone().merge(AnimationStyle::new().curve(Curve::EaseIn));
     assert_eq!(merged.duration, Some(Duration::from_millis(200)));
     assert_eq!(merged.curve, Some(Curve::EaseIn));
     assert_eq!(AnimationStyle::NO_ANIMATION.duration, Some(Duration::ZERO));
     assert_eq!(
         AnimationStyle::lerp(Some(base), Some(AnimationStyle::NO_ANIMATION), 0.75),
-        Some(AnimationStyle::NO_ANIMATION)
+        Some(AnimationStyle::NO_ANIMATION.duration(Duration::from_millis(50)))
     );
 }
 

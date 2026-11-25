@@ -84,7 +84,7 @@ impl InitialOffset {
 /// A request to move a scroll position along a curve, made by
 /// [`ScrollController::animate_to`] and started by the viewport that owns
 /// the controller on its next frame.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ScrollAnimation {
     /// The offset to reach, in logical pixels.
     pub target: f32,

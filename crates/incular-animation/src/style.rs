@@ -6,7 +6,7 @@ use std::time::Duration;
 /// Flutter `AnimationStyle`: overrides for the curve and duration of a
 /// widget's built-in animations, forward and in reverse. An unset field
 /// keeps the widget's default.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct AnimationStyle {
     pub curve: Option<Curve>,
     pub duration: Option<Duration>,
@@ -34,7 +34,7 @@ impl AnimationStyle {
     }
 
     #[must_use]
-    pub const fn curve(mut self, curve: Curve) -> Self {
+    pub fn curve(mut self, curve: Curve) -> Self {
         self.curve = Some(curve);
         self
     }
@@ -46,7 +46,7 @@ impl AnimationStyle {
     }
 
     #[must_use]
-    pub const fn reverse_curve(mut self, curve: Curve) -> Self {
+    pub fn reverse_curve(mut self, curve: Curve) -> Self {
         self.reverse_curve = Some(curve);
         self
     }
@@ -69,8 +69,8 @@ impl AnimationStyle {
     }
 
     /// Interpolates durations in microseconds, treating a missing duration
-    /// as zero only between the endpoints. Curve overrides currently choose
-    /// their endpoint at the midpoint; their samples do not blend yet.
+    /// as zero only between the endpoints. Blends evaluated curve outputs,
+    /// using linear timing for a missing interior curve.
     #[must_use]
     pub fn lerp(a: Option<Self>, b: Option<Self>, t: f32) -> Option<Self> {
         if a == b {
@@ -78,13 +78,27 @@ impl AnimationStyle {
         }
         let start = a.unwrap_or_default();
         let end = b.unwrap_or_default();
-        let curves = if t < 0.5 { start } else { end };
         Some(Self {
+            curve: lerp_curve(start.curve, end.curve, t),
             duration: lerp_duration(start.duration, end.duration, t),
+            reverse_curve: lerp_curve(start.reverse_curve, end.reverse_curve, t),
             reverse_duration: lerp_duration(start.reverse_duration, end.reverse_duration, t),
-            ..curves
         })
     }
+}
+
+fn lerp_curve(a: Option<Curve>, b: Option<Curve>, t: f32) -> Option<Curve> {
+    if a == b || t == 0. {
+        return a;
+    }
+    if t == 1. {
+        return b;
+    }
+    Some(Curve::blend(
+        a.unwrap_or_default(),
+        b.unwrap_or_default(),
+        t,
+    ))
 }
 
 fn lerp_duration(a: Option<Duration>, b: Option<Duration>, t: f32) -> Option<Duration> {

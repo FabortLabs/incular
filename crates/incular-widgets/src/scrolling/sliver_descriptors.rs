@@ -2509,7 +2509,7 @@ impl Sliver for SliverFloatingHeader {
             self.snap,
             self.snap_mode,
             self.snap_duration,
-            self.snap_curve,
+            self.snap_curve.clone(),
         ))
     }
 }

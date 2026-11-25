@@ -23,5 +23,16 @@ and round half-up for nonnegative values. The authored control checks
 the independent 3µs and 2µs midpoint rounding, and absent whole-style
 endpoints. With negative extrapolation, Dart preserves a negative
 duration and Rust deliberately saturates to zero. The duration
-assertions for `:57` now pass; its curve-blending assertions are still
-open and the registration remains a mismatch.
+assertions for `:57` now pass independently of the curve checks.
+
+## Evaluated curve blending
+
+The pinned `:57` case now matches. Both forward and reverse curves
+blend their evaluated outputs smoothly at each sampled time; they no
+longer step from one descriptor to the other at t=0.5. An authored
+comparison exercises nested blends and the linear default for absent
+interior curves. Exactly at the absent endpoint the override is absent.
+The Rust checks use the same endpoint curves to isolate blending from
+f32 differences in individual solvers. Cloning a blend keeps owned
+operands alive, and releasing the last curve handle releases that
+storage; runtime blends do not use the legacy intern table.

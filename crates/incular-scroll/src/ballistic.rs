@@ -457,7 +457,7 @@ impl ClampingMotion {
 /// `BouncingScrollSimulation` (friction inside the extents, a spring at the
 /// extent it crosses or starts beyond), and a clamping position that is
 /// already beyond an extent runs a `ScrollSpringSimulation` back to it.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct FlingSimulation {
     model: FlingModel,
     /// How a coordinated position reads the shared simulation (Flutter
@@ -465,7 +465,7 @@ pub struct FlingSimulation {
     map: Option<NestedMap>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 enum FlingModel {
     Clamping(ClampingMotion),
     Bouncing(BouncingMotion),
@@ -476,7 +476,7 @@ enum FlingModel {
 
 /// A position driven along a curve for a fixed duration: the motion of
 /// Flutter's `DrivenScrollActivity` (`ScrollPosition.animateTo`).
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 struct CurvedMotion {
     from: f64,
     to: f64,

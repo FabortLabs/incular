@@ -358,9 +358,9 @@ impl AnimationSource for CurvedAnimation {
         let t = self.parent.value();
         let reverse = self.direction.get().unwrap_or_else(|| self.parent.status())
             == AnimationStatus::Reverse;
-        let curve = match self.reverse_curve {
+        let curve = match self.reverse_curve.as_ref() {
             Some(reverse_curve) if reverse => reverse_curve,
-            _ => self.curve,
+            _ => &self.curve,
         };
         if t == 0.0 || t == 1.0 {
             t
@@ -905,7 +905,7 @@ impl From<TrainHoppingAnimation> for DoubleAnimation {
 }
 
 /// Flutter `CurveTween`: transforms a double through `curve`.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CurveTween(pub Curve);
 
 impl Animatable<f32> for CurveTween {

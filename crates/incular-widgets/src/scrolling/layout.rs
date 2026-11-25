@@ -808,7 +808,7 @@ impl FloatingHeaderRenderSliver {
                     signal.ended_direction,
                     self.extent.get().max(0.),
                     self.snap_duration,
-                    self.snap_curve,
+                    self.snap_curve.clone(),
                     self.reduced_motion.get(),
                 )
             }
@@ -926,7 +926,7 @@ fn floating_scroll_subscription(
 }
 
 /// Flutter `_RenderSliverFloatingHeader` presentation state.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub(super) struct FloatingHeaderState {
     last_scroll_offset: Option<f32>,
     /// Distance from the header's start to the viewport's start: zero when
@@ -935,7 +935,7 @@ pub(super) struct FloatingHeaderState {
     snap: FloatingSnap,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 enum FloatingSnap {
     #[default]
     Idle,
@@ -1067,7 +1067,7 @@ impl FloatingHeaderState {
     }
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Default)]
 pub(super) struct HeaderScrollState {
     last_scroll_offset: Option<f32>,
     effective_scroll_offset: f32,
@@ -1107,7 +1107,7 @@ impl HeaderScrollState {
     /// reduced motion is enabled mid-flight; the endpoint selection is
     /// unchanged, only the interpolation is skipped.
     fn resolve_snap_immediately(&mut self, range: f32) -> bool {
-        let HeaderSnapProgress::Running(run) = self.snap else {
+        let HeaderSnapProgress::Running(run) = &self.snap else {
             return false;
         };
         let target = run.target.clamp(0., range);
@@ -1198,7 +1198,7 @@ impl HeaderScrollState {
                 });
             }
         }
-        let HeaderSnapProgress::Running(run) = self.snap else {
+        let HeaderSnapProgress::Running(run) = &self.snap else {
             if matches!(self.snap, HeaderSnapProgress::Settling) {
                 self.snap = HeaderSnapProgress::Idle;
             }
@@ -1245,7 +1245,7 @@ pub(super) enum HeaderSnapActivity {
 /// Mutually exclusive snap presentation states. A running animation carries
 /// its start presentation, resolved target, and timing together; there are no
 /// partially valid flag combinations.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub(super) enum HeaderSnapProgress {
     /// No snap animation; presentation follows scroll deltas.
     #[default]
@@ -1264,7 +1264,7 @@ pub(super) enum HeaderSnapProgress {
 /// effective target, and when/how fast it gets there. The target is resolved
 /// against the live range every tick, so geometry changes retarget the run
 /// instead of stranding it past a new edge.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(super) struct HeaderSnapRun {
     from: f32,
     target: f32,
@@ -1274,7 +1274,7 @@ pub(super) struct HeaderSnapRun {
 }
 
 /// A header's snap configuration plus its live snap range for one tick.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub(super) struct HeaderSnapSpec {
     /// Snap animation timing for this header.
     pub(super) duration: Duration,
@@ -1614,7 +1614,7 @@ impl NaturalHeaderRenderSliver {
             adopted = true;
         }
         if self.scroll_behavior == previous.scroll_behavior {
-            self.scroll_state = previous.scroll_state;
+            self.scroll_state = previous.scroll_state.clone();
             adopted = true;
         }
         // A running snap never transfers: replacement always re-seeds the
@@ -3288,7 +3288,7 @@ fn adopt_floating_header_state(
     if (fresh.extent.get() - retained.extent.get()).abs() > f32::EPSILON {
         fresh.extent.set(retained.extent.get());
     }
-    fresh.scroll_state = retained.scroll_state;
+    fresh.scroll_state = retained.scroll_state.clone();
     // The fresh subscription has seen nothing yet: carry the observed
     // activity, direction and any unconsumed transition across.
     fresh.signal.set(retained.signal.get());

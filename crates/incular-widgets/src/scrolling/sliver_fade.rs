@@ -198,7 +198,7 @@ impl Sliver for SliverAnimatedOpacity {
         Box::new(AnimatedOpacityRenderSliver {
             inner: RefCell::new(self.sliver.create_render_sliver(controller, axis, reverse)),
             target: self.opacity,
-            curve: self.curve,
+            curve: self.curve.clone(),
             on_end: self.on_end.clone(),
             controller: AnimationController::new(self.duration),
             tween: PropertyTween {

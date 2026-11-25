@@ -211,7 +211,7 @@ impl Animate {
             kind,
             delay: start,
             duration: self.duration,
-            curve: self.curve,
+            curve: self.curve.clone(),
         });
         self
     }

@@ -272,7 +272,7 @@ impl Run {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 struct State {
     value: f32,
     status: AnimationStatus,
@@ -419,7 +419,7 @@ pub struct AnimationController {
 
 impl fmt::Debug for AnimationController {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let state = self.inner.borrow().state;
+        let state = self.inner.borrow().state.clone();
         formatter
             .debug_struct("AnimationController")
             .field("value", &state.value)
@@ -445,14 +445,14 @@ impl AnimationController {
         }
         let (next, run) = {
             let other = other.inner.borrow();
-            (other.state, other.run.clone())
+            (other.state.clone(), other.run.clone())
         };
         let changed = {
             let mut controller = self.inner.borrow_mut();
-            let previous = controller.state;
+            let changed = controller.state != next;
             controller.state = next;
             controller.run = run;
-            previous != next
+            changed
         };
         if changed {
             self.notify_value(true);
@@ -604,8 +604,8 @@ impl AnimationController {
 
     #[must_use]
     pub fn bounds(&self) -> (f32, f32) {
-        let state = self.inner.borrow().state;
-        (state.lower_bound, state.upper_bound)
+        let inner = self.inner.borrow();
+        (inner.state.lower_bound, inner.state.upper_bound)
     }
 
     pub fn set_bounds(&self, lower_bound: f32, upper_bound: f32) {
@@ -980,7 +980,7 @@ impl AnimationController {
 
     #[must_use]
     pub fn curve(&self) -> Curve {
-        self.inner.borrow().state.curve
+        self.inner.borrow().state.curve.clone()
     }
 
     /// Observes value changes until the returned token is dropped.
@@ -1061,7 +1061,7 @@ impl AnimationController {
         curve: Option<Curve>,
         forward: bool,
     ) -> TickerFuture {
-        let state = self.inner.borrow().state;
+        let state = self.inner.borrow().state.clone();
         let scale = behavior_scale(state.animation_behavior);
         let target = clamp_finite(target, &state);
         let duration = match duration {
@@ -1081,7 +1081,7 @@ impl AnimationController {
                 )))
             }
         };
-        let curve = curve.unwrap_or(state.curve);
+        let curve = curve.unwrap_or_else(|| state.curve.clone());
         if duration.is_zero() {
             // Flutter: a zero-duration run lands on the target at once.
             self.stop();
@@ -1133,7 +1133,7 @@ impl AnimationController {
             options.count != Some(0),
             "repeat count must be greater than zero"
         );
-        let state = self.inner.borrow().state;
+        let state = self.inner.borrow().state.clone();
         let min = options.min.unwrap_or(state.lower_bound);
         let max = options.max.unwrap_or(state.upper_bound);
         let period = options.period.unwrap_or(state.duration).as_secs_f64();
@@ -1158,7 +1158,7 @@ impl AnimationController {
                 period,
                 initial_t,
                 count: options.count,
-                curve: state.curve,
+                curve: state.curve.clone(),
             },
             true,
         )
@@ -1171,7 +1171,7 @@ impl AnimationController {
         spring: Option<SpringDescription>,
         behavior: Option<AnimationBehavior>,
     ) -> TickerFuture {
-        let state = self.inner.borrow().state;
+        let state = self.inner.borrow().state.clone();
         let forward = velocity >= 0.0;
         let target = if forward {
             state.upper_bound + FLING_TOLERANCE.distance

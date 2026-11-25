@@ -127,7 +127,7 @@ impl SizeState {
     }
 
     /// `_animatedSize`: the size tween at the curved animation value.
-    fn animated(&self, curve: Curve) -> Size {
+    fn animated(&self, curve: &Curve) -> Size {
         let t = curve.apply(self.controller.value());
         let (begin, end) = (self.begin.get(), self.end.get());
         // An overshooting curve can carry the tween below zero. Flutter does
@@ -214,7 +214,7 @@ impl SizeState {
             return (smallest, Offset::ZERO);
         }
         self.child_laid_out(child);
-        let size = constraints.constrain(self.animated(config.curve));
+        let size = constraints.constrain(self.animated(&config.curve));
         self.current.set(size);
         // `alignChild`: the child sits at the alignment within the box.
         let offset = Offset::new(

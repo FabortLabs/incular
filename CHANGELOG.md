@@ -245,6 +245,13 @@ a version and date when publishing.
 
 ### Changed
 
+- **Breaking (`incular-animation`, `incular-scroll`, `incular-widgets`):**
+  Curves now implement Clone instead of Copy so runtime blends can own
+  and release their operands. Clone curves when reusing owned values;
+  sampling borrows them. Curve-bearing styles, tweens, transitions,
+  scroll runs and ensure-visible options likewise use Clone. Build
+  const styles with struct literals and the named curve constants.
+
 - **Breaking (`incular-widgets`):** TableCell vertical alignment uses
   TableCellVerticalAlignment rather than CrossAxisAlignment. Use Top,
   Middle, Bottom or Fill in place of Start, Center, End or Stretch.
@@ -310,6 +317,9 @@ a version and date when publishing.
   `EditableText` does there. Mouse and stylus presses still unfocus it.
 
 ### Fixed
+
+- AnimationStyle blends sampled forward and reverse curves, including
+  nested blends and linear fallback for an absent interior override.
 
 - AnimationStyle interpolates forward and reverse durations in
   microseconds, while preserving an absent value at its endpoint.

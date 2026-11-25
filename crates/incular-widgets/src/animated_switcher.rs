@@ -194,8 +194,8 @@ impl SwitcherState {
         let controller = AnimationController::new(config.duration);
         controller.set_reverse_duration(config.reverse_duration);
         let animation: DoubleAnimation =
-            CurvedAnimation::new(controller.clone(), config.switch_in_curve)
-                .reverse_curve(config.switch_out_curve)
+            CurvedAnimation::new(controller.clone(), config.switch_in_curve.clone())
+                .reverse_curve(config.switch_out_curve.clone())
                 .into();
         let entry = Rc::new(Entry {
             controller: controller.clone(),

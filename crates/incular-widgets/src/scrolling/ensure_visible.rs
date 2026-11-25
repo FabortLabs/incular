@@ -30,7 +30,7 @@ pub enum ScrollPositionAlignmentPolicy {
 /// Options for [`Scrollable::ensure_visible`], with Flutter's defaults:
 /// alignment 0.0, a zero duration (jump), `Curves.ease` and the explicit
 /// alignment policy.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct EnsureVisible {
     alignment: f32,
     duration: Duration,
@@ -265,7 +265,7 @@ impl Scrollable {
             if options.duration.is_zero() {
                 controller.jump_to(target);
             } else {
-                controller.animate_to(target, options.duration, options.curve);
+                controller.animate_to(target, options.duration, options.curve.clone());
             }
         }
         count

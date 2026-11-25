@@ -267,7 +267,7 @@ impl CrossFadeStateData {
         let laid_out = (config.layout_builder)(top.into(), top_key, bottom.into(), bottom_key);
         let mut sized = AnimatedSize::new(config.duration, laid_out)
             .alignment(config.alignment)
-            .curve(config.size_curve)
+            .curve(config.size_curve.clone())
             .clip_behavior(config.clip_behavior);
         if let Some(reverse_duration) = config.reverse_duration {
             sized = sized.reverse_duration(reverse_duration);
