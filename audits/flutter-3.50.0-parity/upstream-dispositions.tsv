@@ -154,9 +154,13 @@ packages/flutter/test/widgets/clip_test.dart	155	ClipPath	paired-match	upstream-
 packages/flutter/test/widgets/clip_test.dart	178	ClipOval	paired-match	upstream-pointer-current-dispositions.md
 packages/flutter/test/widgets/clip_test.dart	200	Transparent ClipOval hit test	paired-match	upstream-pointer-current-dispositions.md
 packages/flutter/test/widgets/clip_test.dart	225	ClipRect	paired-match	upstream-pointer-current-dispositions.md
-packages/flutter/test/widgets/visibility_test.dart	406	Visibility with maintain* false excludes focus of child when not visible	partial-mismatch	upstream-clip-visibility-focus.md
-packages/flutter/test/widgets/visibility_test.dart	434	Visibility with maintain* true does not exclude focus of child when not visible	partial-match	upstream-clip-visibility-focus.md
-packages/flutter/test/widgets/visibility_test.dart	461	Visibility with maintain* true except maintainFocusability which is false excludes focus of child when not visible	partial-mismatch	upstream-clip-visibility-focus.md
+packages/flutter/test/widgets/visibility_test.dart	406	Visibility with maintain* false excludes focus of child when not visible	paired-match	upstream-clip-visibility-focus.md
+packages/flutter/test/widgets/visibility_test.dart	434	Visibility with maintain* true does not exclude focus of child when not visible	paired-match	upstream-clip-visibility-focus.md
+packages/flutter/test/widgets/visibility_test.dart	461	Visibility with maintain* true except maintainFocusability which is false excludes focus of child when not visible	paired-match	upstream-clip-visibility-focus.md
+packages/flutter/test/widgets/visibility_test.dart	507	Visibility does not force compositing when visible and maintain*	partial-match	upstream-clip-visibility-focus.md#visibility-ancestor-scope-and-owned-focus
+packages/flutter/test/widgets/visibility_test.dart	525	SliverVisibility does not force compositing when visible and maintain*	partial-match	upstream-clip-visibility-focus.md#visibility-ancestor-scope-and-owned-focus
+packages/flutter/test/widgets/visibility_test.dart	555	Visibility.of returns correct value	paired-match	upstream-clip-visibility-focus.md#visibility-ancestor-scope-and-owned-focus
+packages/flutter/test/widgets/visibility_test.dart	578	Visibility.of works when multiple Visibility widgets are in hierarchy	paired-match	upstream-clip-visibility-focus.md#visibility-ancestor-scope-and-owned-focus
 packages/flutter/test/widgets/visibility_test.dart	625	Visibility does not crash at zero area	partial-match	upstream-clip-visibility-focus.md
 packages/flutter/test/widgets/tap_region_test.dart	39	TapRegionSurface detects outside tap down events	paired-match	upstream-tap-absorber-delta-and-raw-image.md#primary-down-cancel-and-empty-hit-regions
 packages/flutter/test/widgets/tap_region_test.dart	113	TapRegionSurface detects outside tap up events	paired-match	upstream-tap-absorber-delta-and-raw-image.md

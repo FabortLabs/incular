@@ -25,6 +25,23 @@ fn element_environment(
             environment_boundary,
             ..
         } => return (environment.clone(), *environment_boundary),
+        WidgetKind::Visibility {
+            reported_visible: Some(visible),
+            ..
+        } => {
+            use super::context::VisibilityScope;
+            return if let Some(previous) = previous
+                && previous.value.downcast_ref::<VisibilityScope>()
+                    == Some(&VisibilityScope(*visible))
+            {
+                (Some(previous.clone()), false)
+            } else {
+                (
+                    Some(InheritedScopeValue::new(VisibilityScope(*visible))),
+                    false,
+                )
+            };
+        }
         WidgetKind::Scroll { controller, .. } => controller,
         WidgetKind::SliverViewport { config } => &config.controller,
         _ => return (None, false),

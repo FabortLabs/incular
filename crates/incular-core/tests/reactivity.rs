@@ -87,3 +87,34 @@ fn rebuilding_during_dispatch_cancels_all_previous_source_edges() {
     context.clear_dependencies();
     assert_eq!(second.subscriber_count(), 0);
 }
+
+#[test]
+fn inherited_chain_stops_at_first_rejection_but_retains_providers_already_seen() {
+    #[derive(Clone, Copy)]
+    struct Visible(bool);
+    let outer = BuildContext::new().provide(Visible(true));
+    let inner = outer.provide(Visible(false));
+    let reader = inner.for_related_consumer(incular_core::ConsumerId::new());
+    let read = || reader.build(|context| context.all_retained_inherited::<Visible>(|v| v.0));
+
+    assert!(!read());
+    assert_eq!(reader.dependency_count(), 1);
+    outer.insert(Visible(false));
+    assert!(!reader.is_dirty(), "never observed the outer provider");
+    outer.insert(Visible(true));
+    inner.insert(Visible(true));
+    assert!(reader.take_dirty());
+    assert!(read());
+    assert_eq!(reader.dependency_count(), 2);
+    inner.insert(Visible(false));
+    assert!(reader.take_dirty());
+    assert!(!read());
+    assert_eq!(reader.dependency_count(), 2);
+    outer.insert(Visible(false));
+    assert!(reader.take_dirty(), "prior ancestor dependency survives");
+    reader.clear_dependencies();
+    assert_eq!(reader.dependency_count(), 0);
+    outer.insert(Visible(true));
+    inner.insert(Visible(true));
+    assert!(!reader.is_dirty(), "rebind or detach drops all old edges");
+}

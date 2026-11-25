@@ -298,10 +298,20 @@ pub(crate) fn apply_edit(kind: &mut WidgetKind, name: &str, value: &DebugValue) 
             },
             "opacity",
         ) => set(alpha, finite(value)?.clamp(0., 1.)),
-        (WidgetKind::Visibility { visible, .. }, "visible") => {
+        (
+            WidgetKind::Visibility {
+                visible,
+                reported_visible,
+                ..
+            },
+            "visible",
+        ) => {
             let DebugValue::Bool(next) = value else {
                 return None;
             };
+            if reported_visible.is_some() {
+                *reported_visible = Some(*next);
+            }
             set(visible, *next)
         }
         _ => None,

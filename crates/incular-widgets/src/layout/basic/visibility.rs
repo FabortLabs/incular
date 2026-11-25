@@ -3,7 +3,7 @@
 use typed_builder::TypedBuilder;
 
 use super::SizedBox;
-use crate::{Widget, WidgetKind};
+use crate::{BuildContext, Widget, WidgetKind};
 
 /// Conditionally displays a child.
 ///
@@ -127,36 +127,51 @@ impl Visibility {
     }
 }
 
-impl From<Visibility> for Widget {
-    fn from(value: Visibility) -> Self {
-        if !value.visible
-            && !(value.maintain_state
-                || value.maintain_size
-                || value.maintain_animation
-                || value.maintain_semantics
-                || value.maintain_interactivity
-                || value.maintain_focusability)
-        {
-            value
-                .replacement
+impl Visibility {
+    /// Returns whether every enclosing Visibility is visible, or true if this
+    /// context has no Visibility ancestor. Observed ancestors invalidate this
+    /// build when their visibility changes.
+    #[must_use]
+    pub fn of(context: &BuildContext<'_>) -> bool {
+        context.visibility()
+    }
+
+    fn into_widget(self, report_visibility: bool) -> Widget {
+        let replaces = !self.visible
+            && !(self.maintain_state
+                || self.maintain_size
+                || self.maintain_animation
+                || self.maintain_semantics
+                || self.maintain_interactivity
+                || self.maintain_focusability);
+        let child = if replaces {
+            self.replacement
                 .unwrap_or_else(|| SizedBox::shrink().into())
         } else {
-            Widget::from_kind(WidgetKind::Visibility {
-                visible: value.visible,
-                hidden: crate::tree::HiddenVisibility {
-                    layout: if value.maintain_size || value.maintain_interactivity {
-                        crate::tree::HiddenLayout::PreserveSpace
-                    } else {
-                        crate::tree::HiddenLayout::Offstage
-                    },
-                    animation: value.maintain_animation,
-                    semantics: value.maintain_semantics,
-                    interactivity: value.maintain_interactivity,
+            self.child
+        };
+        Widget::from_kind(WidgetKind::Visibility {
+            visible: self.visible || replaces,
+            reported_visible: report_visibility.then_some(self.visible),
+            hidden: crate::tree::HiddenVisibility {
+                layout: if self.maintain_size || self.maintain_interactivity {
+                    crate::tree::HiddenLayout::PreserveSpace
+                } else {
+                    crate::tree::HiddenLayout::Offstage
                 },
-                child: value.child,
-            })
-            .with_excluded_focus(!value.visible && !value.maintain_focusability)
-        }
+                animation: self.maintain_animation,
+                semantics: self.maintain_semantics,
+                interactivity: self.maintain_interactivity,
+            },
+            child,
+        })
+        .with_excluded_focus(!replaces && !self.visible && !self.maintain_focusability)
+    }
+}
+
+impl From<Visibility> for Widget {
+    fn from(value: Visibility) -> Self {
+        value.into_widget(true)
     }
 }
 
@@ -196,6 +211,6 @@ impl From<Offstage> for Widget {
             .maintain_state(true)
             .maintain_animation(true)
             .maintain_focusability(true)
-            .into()
+            .into_widget(false)
     }
 }

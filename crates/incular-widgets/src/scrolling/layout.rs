@@ -3852,6 +3852,7 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
             visible,
             hidden,
             child,
+            ..
         } => {
             if *visible || hidden.layout == crate::tree::HiddenLayout::PreserveSpace {
                 widget_main_extent_hint(child, axis)

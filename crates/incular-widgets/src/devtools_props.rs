@@ -398,6 +398,7 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
             visible,
             hidden,
             child,
+            ..
         } => {
             out.push(editable("visible", DebugValue::Bool(*visible)));
             out.push(prop(

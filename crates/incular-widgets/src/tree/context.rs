@@ -194,6 +194,9 @@ pub(super) fn update_scope_aspects(
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct VisibilityScope(pub(super) bool);
+
 /// A borrowed view of the retained inherited environment for one live build
 /// operation. The reference cannot escape the callback that receives it.
 pub struct BuildContext<'a> {
@@ -230,6 +233,11 @@ impl<'a> BuildContext<'a> {
     #[must_use]
     pub fn find_shared<T: Any>(&self) -> Option<Rc<T>> {
         self.inner.read_shared::<T>()
+    }
+
+    pub(crate) fn visibility(&self) -> bool {
+        self.inner
+            .all_retained_inherited::<VisibilityScope>(|scope| scope.0)
     }
 
     /// Current logical viewport from the native/runtime environment. This is

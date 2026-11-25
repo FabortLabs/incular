@@ -83,6 +83,10 @@ impl ObservedSources {
 #[derive(Default)]
 struct TrackerInner {
     dependencies: RefCell<FastHashMap<ConsumerId, ConsumerSubscriptions>>,
+    // Pinned inherited subscriptions survive a rebuild of the same element,
+    // but are cleared on context rebind or unmount. Only opt-in readers pay
+    // storage for these edges.
+    retained_inherited: RefCell<FastHashMap<ConsumerId, smallvec::SmallVec<[DependencyKey; 1]>>>,
     sources: RefCell<FastHashMap<DependencyKey, DependencySource>>,
     /// Environment source keys by source id, so clearing a consumer prunes
     /// only the sources it observed instead of scanning all of them.
@@ -136,7 +140,36 @@ impl TrackerInner {
             .sources
             .record(&source, &subscriptions.observer);
     }
+    fn retain_inherited(self: &Rc<Self>, consumer: ConsumerId, dependency: DependencyKey) {
+        let mut retained = self.retained_inherited.borrow_mut();
+        let keys = retained.entry(consumer).or_default();
+        if !keys.contains(&dependency) {
+            keys.push(dependency);
+        }
+        drop(retained);
+        self.record(consumer, dependency);
+    }
+
+    fn recollect(self: &Rc<Self>, consumer: ConsumerId) {
+        self.clear_sources(consumer);
+        if !self.retained_inherited.borrow().is_empty() {
+            let retained = self.retained_inherited.borrow();
+            if let Some(keys) = retained.get(&consumer) {
+                for &key in keys {
+                    self.record(consumer, key);
+                }
+            }
+        }
+    }
+
     fn clear(&self, consumer: ConsumerId) {
+        if !self.retained_inherited.borrow().is_empty() {
+            self.retained_inherited.borrow_mut().remove(&consumer);
+        }
+        self.clear_sources(consumer);
+    }
+
+    fn clear_sources(&self, consumer: ConsumerId) {
         self.dirty.borrow_mut().remove(&consumer);
         let Some(subscriptions) = self.dependencies.borrow_mut().remove(&consumer) else {
             return;
@@ -534,6 +567,33 @@ impl BuildContext {
         self.read_shared()
     }
 
+    /// Observes inherited values from nearest to farthest until the predicate
+    /// rejects one. The rejected provider is observed too. Unlike ordinary
+    /// build dependencies, the visited providers stay observed across
+    /// rebuilds until this context is cleared or rebound.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn all_retained_inherited<T: Any>(&self, mut accept: impl FnMut(&T) -> bool) -> bool {
+        let type_id = TypeId::of::<T>();
+        let mut current = Some(self.environment.as_ref());
+        while let Some(environment) = current {
+            let value = environment.values.borrow().get(&type_id).cloned();
+            if let Some(value) = value.and_then(|value| value.downcast::<T>().ok()) {
+                let key = DependencyKey::Environment {
+                    environment: environment.id,
+                    type_id,
+                };
+                with_active_scope(|scope| scope.tracker.retain_inherited(scope.consumer, key))
+                    .unwrap_or_else(|| self.tracker.retain_inherited(self.consumer, key));
+                if !accept(&value) {
+                    return false;
+                }
+            }
+            current = environment.parent.as_deref();
+        }
+        true
+    }
+
     /// Alias for [`BuildContext::depend`], matching reactive UI terminology.
     #[must_use]
     pub fn watch<T: Any + Clone>(&self) -> Option<T> {
@@ -569,7 +629,7 @@ impl BuildContext {
     /// Clears old dependencies, enters the build scope, and invokes the
     /// callback. This is the normal runtime integration point.
     pub fn build<R>(&self, callback: impl FnOnce(&BuildContext) -> R) -> R {
-        self.clear_dependencies();
+        self.tracker.recollect(self.consumer);
         let _guard = self.enter();
         callback(self)
     }
@@ -577,7 +637,7 @@ impl BuildContext {
     /// Runs a closure in a fresh dependency collection. Use [`BuildContext::build`]
     /// when the callback needs the context as an argument.
     pub fn run<R>(&self, callback: impl FnOnce() -> R) -> R {
-        self.clear_dependencies();
+        self.tracker.recollect(self.consumer);
         let _guard = self.enter();
         callback()
     }

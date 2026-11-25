@@ -850,6 +850,9 @@ pub(crate) enum WidgetKind {
     },
     Visibility {
         visible: bool,
+        /// A replacement still lays out and paints, but reports hidden.
+        /// Offstage reuses the renderer without providing this scope.
+        reported_visible: Option<bool>,
         hidden: super::HiddenVisibility,
         child: Widget,
     },

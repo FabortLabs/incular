@@ -171,3 +171,25 @@ recording its picture again. A separate control replaces the source,
 checks that the old source no longer invalidates, and confirms hit
 testing sees the newly notified geometry after the frame.
 All 54 focused Rust cases pass.
+
+## Visibility ancestor scope and owned focus
+
+Pinned originals :406, :434 and :461 and the Rust ports now use Focus
+owning a node around Text, not just a KeyboardListener analogue.
+Replacing the hidden branch disposes its focus and refuses a fresh
+request. Retaining all flags except focus keeps render identity but
+cannot regain focus. Visibility.maintain retains focus and identity.
+
+The pinned :555 and :578 originals and the retained Builder ports
+match the default true and nested visibility results. Repeated
+identical values do not invalidate the existing reader. The authored
+Flutter control also distinguishes an ancestor that was never read
+below a hidden child from a previously observed ancestor: only the
+latter continues to invalidate this reader. Incular now tracks exactly
+those providers until rebind or detach. A replacement sees false but
+still paints normally, and Offstage does not supply a Visibility scope.
+
+:507 and :525 both retain a single text draw with no opacity group on
+the native renderer. This checks the compositing behavior but does not
+compare the total Flutter layer count with Incular's wgpu layer tree.
+The broad :33 matrix and :495 invalid-flag behavior remain separate.
