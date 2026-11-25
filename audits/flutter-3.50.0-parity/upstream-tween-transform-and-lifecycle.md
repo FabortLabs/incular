@@ -137,3 +137,19 @@ centered Placeholder and rounded/oval clip measure zero and finish
 painting at a zero viewport size. All 21 focused retained clip
 tests pass. These original cases are separate from the authored
 Canvas readback. Rotated and general-path antialiasing remain open.
+
+### Oval coverage and retained clip-mode transitions
+
+The pinned :107 and :123 originals verify default AntiAlias,
+HardEdge, and None on one retained render object. The Rust ports
+observe the same transitions on a stable render ID using a painted
+child to expose the actual output mode. They also exercise save-layer
+metadata and confirm a rotated shape keeps its cached fallback path.
+
+Before this repair Windows wgpu rendered a default noncircular
+ClipOval with no partial edge pixels. Ordinary antialiasing now
+uses the ellipse in physical pixel coordinates, and the pinned
+and Windows fixtures both distinguish it from the binary hard
+control. All 28 retained clip and input checks plus the native
+shape controls pass. Saved-layer oval coverage and arbitrary-path
+antialiasing are separate from this render verification.

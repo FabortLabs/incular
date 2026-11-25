@@ -54,7 +54,7 @@ fn world_clips(list: &DisplayList) -> Vec<WorldClip> {
                     rrect.radii,
                 )));
             }
-            PaintCommand::PushClipOval { rect } => out.push(WorldClip::Oval(
+            PaintCommand::PushClipOval { rect, .. } => out.push(WorldClip::Oval(
                 transforms.last().unwrap().transform_rect_bbox(*rect),
             )),
             PaintCommand::PushClipPath { .. } => out.push(WorldClip::Path),
@@ -165,16 +165,34 @@ fn rounded_and_oval_clips_complete_a_zero_area_frame() {
 
 #[test]
 fn rounded_clip_coverage_survives_retained_mode_changes_and_world_path_fallback() {
+    assert_curved_clip_coverage(false);
+}
+
+#[test]
+fn oval_clip_coverage_survives_retained_mode_changes_and_world_path_fallback() {
+    assert_curved_clip_coverage(true);
+}
+
+fn assert_curved_clip_coverage(oval: bool) {
     let key = incular_widgets::internal::Key::Value(4242);
     let bounds = Constraints::tight(Size::new(200., 200.));
     for rotated in [false, true] {
         let scene = |mode: Option<Clip>| {
-            let clip = ClipRRect::new(CornerRadii::uniform(12.), labeled_action("clip content"));
-            let clip = match mode {
-                Some(mode) => clip.clip_behavior(mode),
-                None => clip,
+            let clip = if oval {
+                let clip = ClipOval::new(labeled_action("clip content"));
+                match mode {
+                    Some(mode) => Widget::from(clip.clip_behavior(mode)),
+                    None => Widget::from(clip),
+                }
+            } else {
+                let clip =
+                    ClipRRect::new(CornerRadii::uniform(12.), labeled_action("clip content"));
+                match mode {
+                    Some(mode) => Widget::from(clip.clip_behavior(mode)),
+                    None => Widget::from(clip),
+                }
             };
-            let clip = Widget::from(clip).with_key(key.clone());
+            let clip = clip.with_key(key.clone());
             if rotated {
                 Center::new(incular_widgets::Transform::rotation(0.3, clip)).into()
             } else {
@@ -185,6 +203,7 @@ fn rounded_clip_coverage_survives_retained_mode_changes_and_world_path_fallback(
         let root = tree.mount(scene(None)).unwrap();
         tree.layout(bounds).unwrap();
         let clip_element = tree.element_with_key(&key).unwrap();
+        let render = tree.render_id(clip_element).unwrap();
         let mut retained_path = None;
         for (step, (mode, wanted)) in [
             (None, Some(ClipCoverage::AntiAlias)),
@@ -203,10 +222,15 @@ fn rounded_clip_coverage_survives_retained_mode_changes_and_world_path_fallback(
                 tree.layout(bounds).unwrap();
             }
             assert_eq!(tree.element_with_key(&key), Some(clip_element));
+            assert_eq!(tree.render_id(clip_element), Some(render));
             let list = tree.paint();
             let actual = list.commands().iter().find_map(|command| match command {
                 PaintCommand::PushClipRRect { coverage, .. } => {
-                    assert!(!rotated);
+                    assert!(!rotated && !oval);
+                    Some(*coverage)
+                }
+                PaintCommand::PushClipOval { coverage, .. } => {
+                    assert!(!rotated && oval);
                     Some(*coverage)
                 }
                 PaintCommand::PushClipPath { path, coverage, .. } => {

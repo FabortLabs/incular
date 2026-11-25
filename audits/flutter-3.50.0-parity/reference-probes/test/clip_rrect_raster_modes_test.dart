@@ -73,6 +73,7 @@ _capture(
   WidgetTester tester,
   Clip? behavior, {
   bool paintRedFirst = false,
+  bool oval = false,
 }) async {
   final key = GlobalKey();
   final contents = Stack(
@@ -83,7 +84,11 @@ _capture(
     ],
   );
   const radius = BorderRadius.all(Radius.circular(12));
-  final clip = behavior == null
+  final Widget clip = oval
+      ? (behavior == null
+            ? ClipOval(child: contents)
+            : ClipOval(clipBehavior: behavior, child: contents))
+      : behavior == null
       ? ClipRRect(borderRadius: radius, child: contents)
       : ClipRRect(
           borderRadius: radius,
@@ -102,7 +107,13 @@ _capture(
               fit: StackFit.expand,
               children: [
                 const ColoredBox(color: Color(0xff000000)),
-                Positioned(left: 4, top: 4, width: 40, height: 40, child: clip),
+                Positioned(
+                  left: 4,
+                  top: 4,
+                  width: 40,
+                  height: oval ? 28 : 40,
+                  child: clip,
+                ),
               ],
             ),
           ),
@@ -176,6 +187,18 @@ void main() {
     }
     expect(hard.partial, 0);
     expect(defaultClip.partial, greaterThan(0));
+  });
+  testWidgets('ClipOval default smooths a noncircular elliptical edge', (
+    tester,
+  ) async {
+    final hard = await _capture(tester, Clip.hardEdge, oval: true);
+    final smooth = await _capture(tester, null, oval: true);
+    for (final probe in [hard, smooth]) {
+      expect(probe.corner, _black);
+      expect(probe.center, _white);
+    }
+    expect(hard.partial, 0);
+    expect(smooth.partial, greaterThan(0));
   });
 
   testWidgets('ClipRRect saveLayer removes earlier paint from the AA edge', (

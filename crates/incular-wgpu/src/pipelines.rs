@@ -86,6 +86,7 @@ pub(crate) struct GpuCompositeInstance {
 pub(crate) struct GpuSoftClip {
     pub(crate) rect: [f32; 4],
     pub(crate) radii: [f32; 4],
+    /// Parent index and shape tag (0 rounded rectangle, 1 ellipse).
     pub(crate) link: [u32; 4],
 }
 

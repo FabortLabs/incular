@@ -384,6 +384,7 @@ pub enum LayerKind {
     },
     ClipOval {
         rect: Rect,
+        coverage: ClipCoverage,
     },
     ClipPath {
         path: Arc<Path>,
@@ -643,7 +644,15 @@ impl LayerTree {
     /// Creates an oval clip stage in local space; the world shape resolves
     /// at flatten time like [`Self::create_clip_rect`].
     pub fn create_clip_oval(&mut self, rect: Rect) -> LayerId {
-        self.insert(LayerKind::ClipOval { rect })
+        self.create_clip_oval_with_coverage(rect, ClipCoverage::HardEdge)
+    }
+    /// Creates an oval with explicit edge coverage.
+    pub fn create_clip_oval_with_coverage(
+        &mut self,
+        rect: Rect,
+        coverage: ClipCoverage,
+    ) -> LayerId {
+        self.insert(LayerKind::ClipOval { rect, coverage })
     }
     /// Creates a path clip stage in local space; the world shape resolves
     /// at flatten time like [`Self::create_clip_rect`].
@@ -1134,14 +1143,25 @@ impl LayerTree {
     /// Reuses the retained clip geometry (including any fallback path) when
     /// only its coverage and composition policy changes.
     pub fn update_clip_rrect_coverage(&mut self, id: LayerId, coverage: ClipCoverage) -> bool {
+        self.update_shape_clip_coverage(id, coverage, false)
+    }
+    /// Updates oval coverage without invalidating cached clip geometry.
+    pub fn update_clip_oval_coverage(&mut self, id: LayerId, coverage: ClipCoverage) -> bool {
+        self.update_shape_clip_coverage(id, coverage, true)
+    }
+    fn update_shape_clip_coverage(
+        &mut self,
+        id: LayerId,
+        coverage: ClipCoverage,
+        oval: bool,
+    ) -> bool {
         let Some(layer) = self.layers.get_mut(id.0) else {
             return false;
         };
-        let LayerKind::ClipRRect {
-            coverage: current, ..
-        } = &mut layer.kind
-        else {
-            return false;
+        let current = match (&mut layer.kind, oval) {
+            (LayerKind::ClipRRect { coverage, .. }, false)
+            | (LayerKind::ClipOval { coverage, .. }, true) => coverage,
+            _ => return false,
         };
         if *current == coverage {
             return false;
@@ -1156,7 +1176,7 @@ impl LayerTree {
         let Some(layer) = self.layers.get_mut(id.0) else {
             return false;
         };
-        let LayerKind::ClipOval { rect: current } = &mut layer.kind else {
+        let LayerKind::ClipOval { rect: current, .. } = &mut layer.kind else {
             return false;
         };
         if *current == rect {
@@ -1585,10 +1605,11 @@ impl LayerTree {
                     }
                 }
             },
-            LayerKind::ClipOval { rect, .. } => match clip_space(world) {
+            LayerKind::ClipOval { rect, coverage } => match clip_space(world) {
                 // Axis-aligned scales keep ovals exact through the box.
                 ClipSpace::Translation | ClipSpace::Scale { .. } => PaintCommand::PushClipOval {
                     rect: world.transform_rect_bbox(*rect),
+                    coverage: *coverage,
                 },
                 ClipSpace::General => {
                     let rect = *rect;
@@ -1599,7 +1620,7 @@ impl LayerTree {
                             world,
                         ),
                         fill_rule: FillRule::NonZero,
-                        coverage: ClipCoverage::HardEdge,
+                        coverage: *coverage,
                     }
                 }
             },

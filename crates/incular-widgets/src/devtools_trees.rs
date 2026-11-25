@@ -125,7 +125,7 @@ fn layer_summary(kind: &LayerKind, world: Transform) -> (&'static str, String, O
         }
         LayerKind::ClipRect { rect } => ("ClipRect", String::new(), world_rect(*rect)),
         LayerKind::ClipRRect { rrect, .. } => ("ClipRRect", String::new(), world_rect(rrect.rect)),
-        LayerKind::ClipOval { rect } => ("ClipOval", String::new(), world_rect(*rect)),
+        LayerKind::ClipOval { rect, .. } => ("ClipOval", String::new(), world_rect(*rect)),
         LayerKind::ClipPath { path, .. } => (
             "ClipPath",
             String::new(),

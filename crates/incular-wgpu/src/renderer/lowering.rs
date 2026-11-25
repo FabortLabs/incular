@@ -1,6 +1,60 @@
 use super::*;
 
+#[cfg(not(incular_d3d11))]
+enum AnalyticClip {
+    Rounded([f32; 4]),
+    Oval,
+}
+
 impl WgpuRenderer {
+    #[cfg(not(incular_d3d11))]
+    fn push_analytic_clip(
+        &mut self,
+        parent: ClipState,
+        rect: Rect,
+        scale: f32,
+        shape: AnalyticClip,
+    ) -> ClipState {
+        if !(rect.size.width > 0.
+            && rect.size.height > 0.
+            && rect.size.width.is_finite()
+            && rect.size.height.is_finite()
+            && rect.origin.x.is_finite()
+            && rect.origin.y.is_finite())
+        {
+            return ClipState::Empty;
+        }
+        let guard = 1. / scale;
+        let bounds = Rect::from_origin_size(
+            rect.origin - Offset::new(guard, guard),
+            Size::new(rect.size.width + 2. * guard, rect.size.height + 2. * guard),
+        );
+        if intersect_clip_with_rect(parent, ClipRect::hard(bounds)) == ClipState::Empty {
+            return ClipState::Empty;
+        }
+        let (radii, shape) = match shape {
+            AnalyticClip::Rounded(radii) => (radii, 0),
+            AnalyticClip::Oval => ([0.; 4], 1),
+        };
+        self.soft_clips.push(GpuSoftClip {
+            rect: [
+                rect.origin.x * scale,
+                rect.origin.y * scale,
+                rect.size.width * scale,
+                rect.size.height * scale,
+            ],
+            radii,
+            link: [parent.soft_index(), shape, 0, 0],
+        });
+        intersect_clip_with_rect(
+            parent,
+            ClipRect {
+                rect: bounds,
+                soft: self.soft_clips.len() as u32,
+            },
+        )
+    }
+
     pub(super) fn lower_commands(
         &mut self,
         commands: &[PaintCommand],
@@ -654,20 +708,7 @@ impl WgpuRenderer {
                         ))
                     {
                         let parent = *clips.last().expect("clip stack");
-                        let local = transform.transform_rect_bbox(rrect.rect);
-                        let guard = 1. / scale;
-                        let bounds = Rect::from_origin_size(
-                            local.origin - Offset::new(guard, guard),
-                            Size::new(
-                                local.size.width + 2. * guard,
-                                local.size.height + 2. * guard,
-                            ),
-                        );
-                        let state = if local.size.width <= 0.
-                            || local.size.height <= 0.
-                            || intersect_clip_with_rect(parent, ClipRect::hard(bounds))
-                                == ClipState::Empty
-                        {
+                        let state = if rrect.rect.size.width <= 0. || rrect.rect.size.height <= 0. {
                             ClipState::Empty
                         } else {
                             let radii = rrect.radii.normalized(rrect.rect.size);
@@ -679,22 +720,11 @@ impl WgpuRenderer {
                                 radii.bottom_left,
                             ]
                             .map(|radius| radius * physical_scale);
-                            self.soft_clips.push(GpuSoftClip {
-                                rect: [
-                                    local.origin.x * scale,
-                                    local.origin.y * scale,
-                                    local.size.width * scale,
-                                    local.size.height * scale,
-                                ],
-                                radii,
-                                link: [parent.soft_index(), 0, 0, 0],
-                            });
-                            intersect_clip_with_rect(
+                            self.push_analytic_clip(
                                 parent,
-                                ClipRect {
-                                    rect: bounds,
-                                    soft: self.soft_clips.len() as u32,
-                                },
+                                transform.transform_rect_bbox(rrect.rect),
+                                scale,
+                                AnalyticClip::Rounded(radii),
                             )
                         };
                         clips.push(state);
@@ -797,9 +827,47 @@ impl WgpuRenderer {
                     }
                     self.counters.clip_rrect_pushes += 1;
                 }
-                PaintCommand::PushClipOval { rect } => {
+                PaintCommand::PushClipOval {
+                    rect,
+                    coverage: _coverage,
+                } => {
                     let parent = *clips.last().expect("clip stack");
+                    #[cfg(not(incular_d3d11))]
+                    {
+                        let [_, b, c, _, _, _] = transform.to_kurbo().as_coeffs();
+                        if *_coverage == incular_painting::ClipCoverage::AntiAlias
+                            && b == 0.
+                            && c == 0.
+                            && !*has_destination_effect.get_or_insert_with(|| {
+                                commands.iter().any(|command| {
+                                    matches!(
+                                        command,
+                                        PaintCommand::PushBlend { .. }
+                                            | PaintCommand::PushBackdropFilter { .. }
+                                    )
+                                })
+                            })
+                        {
+                            let state = if rect.size.width <= 0. || rect.size.height <= 0. {
+                                ClipState::Empty
+                            } else {
+                                self.push_analytic_clip(
+                                    parent,
+                                    transform.transform_rect_bbox(*rect),
+                                    scale,
+                                    AnalyticClip::Oval,
+                                )
+                            };
+                            clips.push(state);
+                            clip_masks.push(None);
+                            command_index += 1;
+                            continue;
+                        }
+                    }
                     let depth = stencil_depth(parent);
+                    if depth == MAX_STENCIL_CLIP_DEPTH {
+                        return Err(RendererError::StencilDepthOverflow);
+                    }
                     // The oval at the origin, placed by the transform: a
                     // scrolling or repeated oval keeps one retained mesh.
                     let path = self.shape_path(true, rect.size);

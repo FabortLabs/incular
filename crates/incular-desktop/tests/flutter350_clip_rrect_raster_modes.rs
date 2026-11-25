@@ -5,10 +5,12 @@ mod fixture;
 use std::sync::Arc;
 
 use fixture::{BLACK, WHITE, capture, with_renderer};
-use incular_config::Clip;
+use incular_config::{Clip, Constraints};
 use incular_core::{Color, Offset, Rect, Size, Transform};
-use incular_rendering::{Canvas, ClipCoverage, FillRule, PathBuilder, RRect};
+use incular_rendering::{Canvas, ClipCoverage, DisplayList, FillRule, PathBuilder, RRect};
+use incular_runtime::Runtime;
 use incular_wgpu::{FrameOutcome, WgpuRenderer};
+use incular_widgets::{ClipOval, Positioned, Stack, Widget};
 
 #[derive(Clone, Copy)]
 enum RawClip {
@@ -49,9 +51,31 @@ fn raw_clip(renderer: &mut WgpuRenderer, factor: f32, clip: RawClip) -> ([[u8; 4
     }
     canvas.restore();
     canvas.restore();
+    clip_samples(renderer, &canvas.finish())
+}
+
+fn oval_clip(renderer: &mut WgpuRenderer, clip: Option<Clip>) -> ([[u8; 4]; 4], usize) {
+    let oval = ClipOval::new(Widget::box_(Size::new(40., 28.), Color::WHITE));
+    let oval = match clip {
+        Some(clip) => oval.clip_behavior(clip),
+        None => oval,
+    };
+    let positioned = Positioned::new(oval)
+        .left(4.)
+        .top(4.)
+        .width(40.)
+        .height(28.);
+    let mut runtime = Runtime::new(Stack::new([Widget::from(positioned)]).into()).unwrap();
+    let (list, _) = runtime
+        .run_frame(Constraints::tight(Size::new(48., 48.)))
+        .unwrap();
+    clip_samples(renderer, &list)
+}
+
+fn clip_samples(renderer: &mut WgpuRenderer, list: &DisplayList) -> ([[u8; 4]; 4], usize) {
     renderer.request_capture();
     assert!(matches!(
-        renderer.render(&canvas.finish(), 1.).unwrap(),
+        renderer.render(list, 1.).unwrap(),
         FrameOutcome::Presented(_)
     ));
     let frame = renderer.take_capture().unwrap().unwrap();
@@ -110,6 +134,14 @@ fn flutter_350_clip_rrect_modes_distinguish_aa_and_saved_compositing() {
         assert!(
             ordinary.1 > 0 && scaled_ordinary.1 == ordinary.1,
             "default rounded Canvas clips should antialias under scaling: {ordinary:?}, {scaled_ordinary:?}"
+        );
+        let hard_oval = oval_clip(renderer, Some(Clip::HardEdge));
+        let default_oval = oval_clip(renderer, None);
+        assert_eq!(hard_oval, (expected, 0));
+        assert_eq!(default_oval.0, expected);
+        assert!(
+            default_oval.1 > 0,
+            "the default elliptical clip should antialias: {default_oval:?}"
         );
     });
 }

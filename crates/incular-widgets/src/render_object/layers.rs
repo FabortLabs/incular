@@ -249,13 +249,15 @@ impl RenderLayers {
                         Rect::from_origin_size(Offset::ZERO, Size::ZERO),
                         CornerRadii::ZERO,
                     ),
-                    rounded_clip_coverage(*clip_behavior),
+                    shape_clip_coverage(*clip_behavior),
                 );
                 Self::create_clip_stage(compositor, root, picture, clip)
             }
-            WidgetKind::ClipOval { .. } if widget_clips(widget) => {
-                let clip =
-                    compositor.create_clip_oval(Rect::from_origin_size(Offset::ZERO, Size::ZERO));
+            WidgetKind::ClipOval { clip_behavior, .. } if widget_clips(widget) => {
+                let clip = compositor.create_clip_oval_with_coverage(
+                    Rect::from_origin_size(Offset::ZERO, Size::ZERO),
+                    shape_clip_coverage(*clip_behavior),
+                );
                 Self::create_clip_stage(compositor, root, picture, clip)
             }
             WidgetKind::ClipPath { .. } if widget_clips(widget) => {
@@ -946,7 +948,7 @@ fn apply_clip_geometry(compositor: &mut LayerTree, clip: LayerId, geometry: &Cli
     }
 }
 
-fn rounded_clip_coverage(mode: Clip) -> incular_rendering::ClipCoverage {
+fn shape_clip_coverage(mode: Clip) -> incular_rendering::ClipCoverage {
     use incular_rendering::ClipCoverage;
     match mode {
         Clip::None | Clip::HardEdge => ClipCoverage::HardEdge,
@@ -1099,10 +1101,15 @@ impl RenderLayers {
         let LayerAttachment::Clip { clip, .. } = &self.attachment else {
             return;
         };
-        if let RenderKind::ClipRRect { clip_behavior, .. } = kind {
-            // Coverage changes must be visible even when the cached custom
-            // clipper geometry does not need to be calculated again.
-            compositor.update_clip_rrect_coverage(*clip, rounded_clip_coverage(*clip_behavior));
+        // A coverage change does not recalculate cached clipper geometry.
+        match kind {
+            RenderKind::ClipRRect { clip_behavior, .. } => {
+                compositor.update_clip_rrect_coverage(*clip, shape_clip_coverage(*clip_behavior));
+            }
+            RenderKind::ClipOval { clip_behavior, .. } => {
+                compositor.update_clip_oval_coverage(*clip, shape_clip_coverage(*clip_behavior));
+            }
+            _ => {}
         }
         if let Some(cache) = &self.clip_geometry
             && let Some(geometry) = cached_clip(&mut cache.borrow_mut(), kind, size)

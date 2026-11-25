@@ -806,3 +806,8 @@ The [clip default and zero-area recheck](upstream-tween-transform-and-lifecycle.
 adds three fully paired originals: 447 / 8,965 (4.99%),
 351 matches and 96 historical mismatches. The separate Windows
 wgpu readback verifies default rounded Canvas antialiasing under scale.
+
+Two retained clip-mode cases (:107 and :123) bring the total to
+449 / 8,965 (5.01%), with 353 matches and 96 historical mismatches.
+The separate noncircular ClipOval readback also verifies ordinary
+antialiasing without changing hard-edge or pointer routing controls.

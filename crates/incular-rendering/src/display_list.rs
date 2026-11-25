@@ -131,6 +131,7 @@ pub enum PaintCommand {
     },
     PushClipOval {
         rect: Rect,
+        coverage: ClipCoverage,
     },
     PushClipPath {
         path: Arc<Path>,
@@ -700,8 +701,12 @@ impl Canvas {
         });
     }
     pub fn save_clip_oval(&mut self, rect: Rect) {
+        self.save_clip_oval_with_coverage(rect, ClipCoverage::HardEdge);
+    }
+    pub fn save_clip_oval_with_coverage(&mut self, rect: Rect, coverage: ClipCoverage) {
         self.saves.push(SaveKind::Clip);
-        self.list.push(PaintCommand::PushClipOval { rect });
+        self.list
+            .push(PaintCommand::PushClipOval { rect, coverage });
     }
     pub fn save_clip_path(&mut self, path: Arc<Path>, fill_rule: FillRule) {
         self.save_clip_path_with_coverage(path, fill_rule, ClipCoverage::HardEdge);
