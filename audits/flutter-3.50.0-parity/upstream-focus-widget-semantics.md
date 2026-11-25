@@ -54,3 +54,21 @@ The focus observer only invalidates annotated subtrees when eligibility
 or primary focus changes. Nine targeted Runtime and Widgets suites passed
 (81 tests). This does not claim native screen reader integration or the
 external FocusScopeNode API (:1085).
+
+## Focus key routing and handler replacement
+
+Pinned originals :1643 and :1696 passed. The latter is a partial
+comparison: rebuilding Incular's mounted Focus replaces the typed
+handler without losing focus, and the next Enter event reaches the
+new handler and the correct retained node. It does not reproduce
+Flutter's public callback-property getters on FocusNode or the
+deprecated RawKeyEvent handler. :1643 is therefore reference-only.
+
+The separate pinned `focus_key_routing_reference_test.dart` checks all
+three outcomes: ignored bubbles; handled stops and reports consumption;
+skip-remaining stops without reporting consumption. Both the reference
+and Incular route to the same inner/outer sequence after updates.
+Incular also verifies on actual Tab input that skip-remaining prevents
+the default framework traversal and still returns unconsumed at the
+Runtime boundary. Tests use normalized keyboard events, not native OS
+delivery or system shortcuts. Five focused Rust targets passed (20 tests).

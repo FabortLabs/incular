@@ -6,9 +6,10 @@ use incular_core::KeyboardEvent;
 pub use incular_gestures::{
     Action, ActionInvocationPhase, ActionResult, Actions, Command, CommandId, FocusBehavior,
     FocusManager, FocusNode, FocusOrder, FocusScopeNode, FocusScopeSubscription,
-    FocusTraversalPolicy, FocusTraversalPolicyKind, Intent, LockState, LogicalKeySet,
-    LogicalShortcutKey, OrderedTraversalPolicy, ReadingOrderTraversalPolicy, ShortcutActivator,
-    ShortcutKey, ShortcutTrigger, Shortcuts, SingleActivator, WidgetOrderTraversalPolicy,
+    FocusTraversalPolicy, FocusTraversalPolicyKind, Intent, KeyEventResult, LockState,
+    LogicalKeySet, LogicalShortcutKey, OrderedTraversalPolicy, ReadingOrderTraversalPolicy,
+    ShortcutActivator, ShortcutKey, ShortcutTrigger, Shortcuts, SingleActivator,
+    WidgetOrderTraversalPolicy,
 };
 
 use crate::{Widget, WidgetKind};
@@ -22,6 +23,7 @@ pub struct Focus {
     descendants_are_focusable: bool,
     descendants_are_traversable: bool,
     include_semantics: bool,
+    on_key_event: Option<incular_gestures::FocusKeyEventHandler>,
     on_focus_change: Option<Rc<dyn Fn(bool)>>,
     child: Option<Widget>,
 }
@@ -35,6 +37,7 @@ impl Default for Focus {
             descendants_are_focusable: true,
             descendants_are_traversable: true,
             include_semantics: true,
+            on_key_event: None,
             on_focus_change: None,
             child: None,
         }
@@ -94,6 +97,16 @@ impl Focus {
         self
     }
 
+    /// Handles keys delivered to this node or bubbled from a focused child.
+    #[must_use]
+    pub fn on_key_event(
+        mut self,
+        handler: impl Fn(&FocusNode, KeyboardEvent) -> KeyEventResult + 'static,
+    ) -> Self {
+        self.on_key_event = Some(Rc::new(handler));
+        self
+    }
+
     /// Reports a change in whether the node or one of its descendants has focus.
     #[must_use]
     pub fn on_focus_change(mut self, callback: impl Fn(bool) + 'static) -> Self {
@@ -127,6 +140,7 @@ impl From<Focus> for Widget {
             owned_focus_permission,
             autofocus: value.autofocus,
             on_focus_change: value.on_focus_change,
+            on_focus_key_event: value.on_key_event,
             include_semantics: value.include_semantics,
             annotates_focus: true,
             ..incular_gestures::GestureCallbacks::default()

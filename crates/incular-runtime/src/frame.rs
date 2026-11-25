@@ -45,7 +45,7 @@ use incular_widgets::internal::{
     PointerDeviceKind, PointerHitTest, RawPointerEvent, TextEditingController, TextRange,
     TextSelection, TreeError, WidgetTree, WindowInteraction,
 };
-use incular_widgets::{FocusNode, TextInputActionHint, TextInputTypeHint, Widget};
+use incular_widgets::{FocusNode, KeyEventResult, TextInputActionHint, TextInputTypeHint, Widget};
 use std::{
     cell::{Cell, RefCell},
     collections::{HashMap, VecDeque},
@@ -2567,12 +2567,16 @@ impl Runtime {
         // A window-wide handler cannot suppress notification of the focused
         // keyboard scope. Both results gate fallback editing and traversal.
         let lock_modes = event.modifiers | self.hardware_keyboard.lock_modes_enabled();
-        let focused_handled =
+        let focus_result =
             self.tree
-                .dispatch_keyboard_with_lock_modes(self.focused, event.clone(), lock_modes);
-        if hardware.handled || focused_handled {
+                .route_keyboard_with_lock_modes(self.focused, event.clone(), lock_modes);
+        if hardware.handled || focus_result == KeyEventResult::Handled {
             self.frame_requested = true;
             return true;
+        }
+        if focus_result == KeyEventResult::SkipRemainingHandlers {
+            self.frame_requested = true;
+            return false;
         }
         if !event.state.is_down() {
             return false;

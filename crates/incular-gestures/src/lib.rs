@@ -48,8 +48,9 @@ pub use incular_core::DeviceGestureSettings;
 pub use keyboard::{
     Action, ActionInvocationPhase, ActionInvocationSubscription, ActionListenerSubscription,
     ActionResult, Actions, CharacterActivator, Command, CommandId, ErasedActionScope, ErasedIntent,
-    ErasedShortcutScope, Intent, LockState, LogicalKeySet, LogicalShortcutKey, ShortcutActivator,
-    ShortcutKey, ShortcutMatch, ShortcutTrigger, Shortcuts, SingleActivator,
+    ErasedShortcutScope, FocusKeyEventHandler, Intent, KeyEventResult, LockState, LogicalKeySet,
+    LogicalShortcutKey, ShortcutActivator, ShortcutKey, ShortcutMatch, ShortcutTrigger, Shortcuts,
+    SingleActivator,
 };
 pub use mouse::MouseRegion;
 pub use multidrag::{Drag, MultiDragGestureRecognizer, MultiDragStartCallback};

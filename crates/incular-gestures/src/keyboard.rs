@@ -9,11 +9,27 @@ use incular_core::{Code, KeyboardEvent, KeyboardKey, Modifiers};
 
 use crate::details::GestureCallbacks;
 
+/// Flutter's result for routing an event through focus handlers.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum KeyEventResult {
+    /// Run the next ancestor's handlers.
+    #[default]
+    Ignored,
+    /// Stop routing and keep the platform from handling the key.
+    Handled,
+    /// Stop framework handlers but allow the platform to handle the key.
+    SkipRemainingHandlers,
+}
+
+/// Input handler for a mounted, typed focus node.
+pub type FocusKeyEventHandler = Rc<dyn Fn(&crate::FocusNode, KeyboardEvent) -> KeyEventResult>;
+
 impl GestureCallbacks {
     /// Whether this callback set carries retained keyboard/focus behavior.
     #[must_use]
     pub fn has_keyboard_listener(&self) -> bool {
         self.on_key.is_some()
+            || self.on_focus_key_event.is_some()
             || self.on_key_down.is_some()
             || self.on_key_repeat.is_some()
             || self.on_key_up.is_some()
@@ -49,26 +65,47 @@ impl GestureCallbacks {
         event: KeyboardEvent,
         lock_modes: Modifiers,
     ) -> bool {
+        self.route_keyboard_with_lock_modes(event, lock_modes) == KeyEventResult::Handled
+    }
+
+    /// Routes a key, distinguishing a consumed event from a request to
+    /// stop framework routing while leaving the key to the platform.
+    #[must_use]
+    pub fn route_keyboard_with_lock_modes(
+        &self,
+        event: KeyboardEvent,
+        lock_modes: Modifiers,
+    ) -> KeyEventResult {
         if self
             .on_shortcut_with_lock_modes
             .as_ref()
             .is_some_and(|callback| callback(event.clone(), lock_modes))
         {
-            return true;
+            return KeyEventResult::Handled;
         }
         if self
             .on_shortcut
             .as_ref()
             .is_some_and(|callback| callback(event.clone()))
         {
-            return true;
+            return KeyEventResult::Handled;
+        }
+        if let Some((handler, node)) = self
+            .on_focus_key_event
+            .as_ref()
+            .zip(self.focus_node.as_ref())
+        {
+            let result = handler(node, event.clone());
+            if result != KeyEventResult::Ignored {
+                return result;
+            }
         }
         if self
             .on_key
             .as_ref()
             .is_some_and(|callback| callback(event.clone()))
         {
-            return true;
+            return KeyEventResult::Handled;
         }
         // Phase observers never consume the event: Flutter's KeyboardListener
         // reports KeyEventResult.ignored, so outer scopes still see the key.
@@ -84,7 +121,7 @@ impl GestureCallbacks {
         } else if let Some(callback) = &self.on_key_up {
             callback(event);
         }
-        false
+        KeyEventResult::Ignored
     }
 }
 

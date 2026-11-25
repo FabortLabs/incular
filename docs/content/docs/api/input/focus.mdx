@@ -54,6 +54,12 @@ text labels in its subtree without absorbing independent controls. Set
 keyboard focus. On iOS the annotation still reports focus state but does not
 offer the accessibility action that requests keyboard focus.
 
+`.on_key_event(|node, event| ...)` receives the mounted focus node and a
+keyboard event. Events start at the focused element and bubble to its
+ancestors. Return `KeyEventResult::Ignored` to continue bubbling,
+`Handled` to consume the key, or `SkipRemainingHandlers` to stop
+framework handling without consuming the native event.
+
 ## FocusScope
 
 `autofocus`, `policy(FocusTraversalPolicyKind::WidgetOrder)`,

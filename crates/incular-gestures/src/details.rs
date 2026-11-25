@@ -10,7 +10,7 @@ use incular_core::{
 use crate::focus::{FocusBehavior, FocusNode};
 use crate::keyboard::{
     ActionInvocationSubscription, ActionListenerSubscription, ErasedActionScope,
-    ErasedShortcutScope,
+    ErasedShortcutScope, FocusKeyEventHandler,
 };
 
 use crate::scale::{ScaleEndDetails, ScaleStartDetails, ScaleUpdateDetails};
@@ -444,6 +444,8 @@ pub struct GestureCallbacks {
     /// focused element. Returning `true` consumes the event and prevents
     /// outer keyboard scopes and text editing from seeing it.
     pub on_key: Option<Rc<dyn Fn(KeyboardEvent) -> bool>>,
+    /// A mounted Focus widget's typed keyboard handler.
+    pub on_focus_key_event: Option<FocusKeyEventHandler>,
     /// Receives key-down events that were not consumed by [`Self::on_key`].
     pub on_key_down: Option<Rc<dyn Fn(KeyboardEvent)>>,
     /// Receives repeated key-down events in addition to [`Self::on_key_down`].

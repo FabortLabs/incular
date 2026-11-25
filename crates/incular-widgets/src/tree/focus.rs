@@ -2,6 +2,8 @@
 
 use std::{cell::RefCell, collections::BTreeSet};
 
+use incular_gestures::KeyEventResult;
+
 use super::*;
 
 #[derive(Clone, Copy, Default)]
@@ -420,6 +422,18 @@ impl WidgetTree {
         event: KeyboardEvent,
         lock_modes: incular_core::Modifiers,
     ) -> bool {
+        self.route_keyboard_with_lock_modes(focused, event, lock_modes) == KeyEventResult::Handled
+    }
+
+    /// Routes keyboard input while preserving a Focus handler's request
+    /// to stop framework handling without consuming the native event.
+    #[must_use]
+    pub fn route_keyboard_with_lock_modes(
+        &self,
+        focused: Option<ElementId>,
+        event: KeyboardEvent,
+        lock_modes: incular_core::Modifiers,
+    ) -> KeyEventResult {
         self.dispatch_keyboard_where(focused, event, lock_modes, |_| true)
     }
 
@@ -435,7 +449,7 @@ impl WidgetTree {
         event: KeyboardEvent,
         lock_modes: incular_core::Modifiers,
         mut serve: impl FnMut(&incular_gestures::GestureCallbacks) -> bool,
-    ) -> bool {
+    ) -> KeyEventResult {
         self.notify_key_observers(focused, &event);
         let mut current = focused;
         while let Some(id) = current {
@@ -443,13 +457,15 @@ impl WidgetTree {
                 && let WidgetKind::Gesture { callbacks, .. } = element.widget.kind()
                 && callbacks.has_keyboard_listener()
                 && serve(callbacks)
-                && callbacks.handle_keyboard_with_lock_modes(event.clone(), lock_modes)
             {
-                return true;
+                let result = callbacks.route_keyboard_with_lock_modes(event.clone(), lock_modes);
+                if result != KeyEventResult::Ignored {
+                    return result;
+                }
             }
             current = self.parent(id);
         }
-        false
+        KeyEventResult::Ignored
     }
 
     /// Routes a native accessibility increment/decrement through the same
@@ -473,7 +489,7 @@ impl WidgetTree {
             KeyboardEvent::key_down(key, code),
             incular_core::Modifiers::empty(),
             incular_gestures::GestureCallbacks::services_semantic_keys,
-        )
+        ) == KeyEventResult::Handled
     }
 
     /// Returns whether `element` participates in menu-item keyboard navigation.

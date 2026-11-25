@@ -1127,3 +1127,5 @@ packages/flutter/test/painting/paint_image_test.dart	135	debugInvertOversizedIma
 packages/flutter/test/painting/paint_image_test.dart	230	Reports Image painting	reference-ran-incular-open	upstream-decoration-image-paint.md#flutter-specific-paint-diagnostics
 packages/flutter/test/painting/paint_image_test.dart	269	Reports Image painting - change per frame	reference-ran-incular-open	upstream-decoration-image-paint.md#flutter-specific-paint-diagnostics
 packages/flutter/test/painting/paint_image_test.dart	312	Reports Image painting - no debug label	reference-ran-incular-open	upstream-decoration-image-paint.md#flutter-specific-paint-diagnostics
+packages/flutter/test/widgets/focus_scope_test.dart	1643	Focus updates the onKey handler when the widget updates	reference-ran-incular-open	upstream-focus-widget-semantics.md#focus-key-routing-and-handler-replacement
+packages/flutter/test/widgets/focus_scope_test.dart	1696	Focus updates the onKeyEvent handler when the widget updates	partial-match	upstream-focus-widget-semantics.md#focus-key-routing-and-handler-replacement
