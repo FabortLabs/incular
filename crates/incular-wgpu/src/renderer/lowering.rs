@@ -8,6 +8,7 @@ enum AnalyticClip {
 impl AnalyticClip {
     fn shader_parts(self) -> ([f32; 4], u32) {
         match self {
+            Self::Rounded(radii) if radii == [0.; 4] => (radii, 2),
             Self::Rounded(radii) => (radii, 0),
             Self::Oval => ([0.; 4], 1),
         }

@@ -5,6 +5,16 @@ fn analytic_coverage(point: vec2<f32>, rect: vec4<f32>, radii: vec4<f32>, shape:
     return 1.;
   }
   let q = point - rect.xy - rect.zw * 0.5;
+  if (shape == 2u) {
+    // Box coverage is the intersection area of the rect and the unit
+    // pixel; both fractional edges contribute at a corner.
+    let overlap = max(
+      min(point + vec2(0.5), rect.xy + rect.zw) -
+      max(point - vec2(0.5), rect.xy),
+      vec2(0.0),
+    );
+    return overlap.x * overlap.y;
+  }
   if (shape == 1u) {
     let radius = rect.zw * 0.5;
     let unit_point = q / radius;

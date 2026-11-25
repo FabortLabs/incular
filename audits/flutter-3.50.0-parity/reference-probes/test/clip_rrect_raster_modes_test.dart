@@ -7,6 +7,16 @@ import 'package:flutter_test/flutter_test.dart';
 const _black = [0, 0, 0, 255];
 const _white = [255, 255, 255, 255];
 
+class _FractionalBox extends CustomClipper<Rect> {
+  const _FractionalBox();
+
+  @override
+  Rect getClip(Size size) => const Rect.fromLTRB(4.25, 4.25, 39.75, 35.75);
+
+  @override
+  bool shouldReclip(_FractionalBox oldClipper) => false;
+}
+
 Future<({List<List<int>> controls, int partial})> _rawClip(
   double factor, {
   bool? pathClip,
@@ -74,6 +84,7 @@ _capture(
   Clip? behavior, {
   bool paintRedFirst = false,
   bool oval = false,
+  bool fractionalRect = false,
 }) async {
   final key = GlobalKey();
   final contents = Stack(
@@ -84,7 +95,13 @@ _capture(
     ],
   );
   const radius = BorderRadius.all(Radius.circular(12));
-  final Widget clip = oval
+  final Widget clip = fractionalRect
+      ? ClipRect(
+          clipper: const _FractionalBox(),
+          clipBehavior: behavior ?? Clip.hardEdge,
+          child: contents,
+        )
+      : oval
       ? (behavior == null
             ? ClipOval(child: contents)
             : ClipOval(clipBehavior: behavior, child: contents))
@@ -150,6 +167,34 @@ _capture(
 }
 
 void main() {
+  testWidgets('ClipRect defaults to hard edges but honors both AA modes', (
+    tester,
+  ) async {
+    final none = await _capture(tester, Clip.none, fractionalRect: true);
+    final hard = await _capture(tester, null, fractionalRect: true);
+    final smooth = await _capture(
+      tester,
+      Clip.antiAlias,
+      fractionalRect: true,
+      paintRedFirst: true,
+    );
+    final saved = await _capture(
+      tester,
+      Clip.antiAliasWithSaveLayer,
+      fractionalRect: true,
+      paintRedFirst: true,
+    );
+    expect(none.corner, _white);
+    for (final probe in [hard, smooth, saved]) {
+      expect(probe.corner, _black);
+      expect(probe.center, _white);
+    }
+    expect(hard.partial, 0);
+    expect(smooth.partial, greaterThan(0));
+    expect(smooth.redFringe, greaterThan(0));
+    expect(saved.partial, greaterThan(0));
+    expect(saved.redFringe, 0);
+  });
   test('Hard Canvas clips follow paint transforms', () async {
     for (final pathClip in [false, true]) {
       for (final factor in [1.0, 2.0]) {

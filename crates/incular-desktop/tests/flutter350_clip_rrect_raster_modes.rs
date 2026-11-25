@@ -1,4 +1,4 @@
-//! Native Windows wgpu readback for both pinned ClipRRect raster modes.
+//! Native Windows wgpu readback for pinned rectangular and elliptical clip modes.
 #![cfg(target_os = "windows")]
 #[path = "support/clip_rrect_raster.rs"]
 mod fixture;
@@ -10,7 +10,7 @@ use incular_core::{Color, Offset, Rect, Size, Transform};
 use incular_rendering::{Canvas, ClipCoverage, DisplayList, FillRule, PathBuilder, RRect};
 use incular_runtime::Runtime;
 use incular_wgpu::{FrameOutcome, WgpuRenderer};
-use incular_widgets::{ClipOval, Positioned, Stack, Widget};
+use incular_widgets::{ClipOval, ClipRect, ClipShape, CustomClipper, Positioned, Stack, Widget};
 
 #[derive(Clone, Copy)]
 enum RawClip {
@@ -106,6 +106,56 @@ fn clip_samples(renderer: &mut WgpuRenderer, list: &DisplayList) -> ClipSamples 
         .count();
     (controls, partial, fringe)
 }
+
+fn assert_fractional_clip_rect_modes(renderer: &mut WgpuRenderer) {
+    struct FractionalBox;
+
+    impl CustomClipper for FractionalBox {
+        fn get_clip(&self, _: Size) -> ClipShape {
+            ClipShape::Rect(Rect::from_origin_size(
+                Offset::new(4.25, 4.25),
+                Size::new(35.5, 31.5),
+            ))
+        }
+    }
+
+    let mut samples = |mode: Option<Clip>| {
+        let size = Size::new(40., 40.);
+        let paints = [
+            Widget::box_(size, Color::rgba(255, 0, 0, 255)),
+            Widget::box_(size, Color::WHITE),
+        ];
+        let clip =
+            ClipRect::new(Stack::new(paints).fit(StackFit::Expand)).custom_clipper(FractionalBox);
+        let clip = match mode {
+            Some(mode) => clip.clip_behavior(mode),
+            None => clip,
+        };
+        let positioned = Positioned::new(clip)
+            .left(4.)
+            .top(4.)
+            .width(40.)
+            .height(40.);
+        let mut runtime = Runtime::new(Stack::new([Widget::from(positioned)]).into()).unwrap();
+        let (list, _) = runtime
+            .run_frame(Constraints::tight(Size::new(48., 48.)))
+            .unwrap();
+        clip_samples(renderer, &list)
+    };
+    let none = samples(Some(Clip::None));
+    let hard = samples(None);
+    let ordinary = samples(Some(Clip::AntiAlias));
+    let saved = samples(Some(Clip::AntiAliasWithSaveLayer));
+    assert_eq!(none, ([WHITE, WHITE, WHITE, BLACK], 0, 0));
+    let clipped = [BLACK, WHITE, WHITE, BLACK];
+    assert_eq!(hard, (clipped, 0, 0));
+    assert_eq!((ordinary.0, saved.0), (clipped, clipped));
+    assert!(
+        ordinary.1 > 0 && ordinary.2 > 0 && saved.1 > 0 && saved.2 == 0,
+        "expected per-draw and isolated fractional coverage: {ordinary:?}, {saved:?}"
+    );
+}
+
 #[test]
 fn flutter_350_clip_rrect_modes_distinguish_aa_and_saved_compositing() {
     with_renderer(|renderer| {
@@ -169,5 +219,6 @@ fn flutter_350_clip_rrect_modes_distinguish_aa_and_saved_compositing() {
                 && isolated_oval.2 == 0,
             "an isolated ellipse applies coverage once: {ordinary_oval:?}, {isolated_oval:?}"
         );
+        assert_fractional_clip_rect_modes(renderer);
     });
 }

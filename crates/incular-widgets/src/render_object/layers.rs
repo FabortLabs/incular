@@ -242,9 +242,11 @@ impl RenderLayers {
             // Clip widgets start with zero geometry like scrolling; layout
             // and the update path fill the retained shape from the node
             // size before any flatten can observe it.
-            WidgetKind::ClipRect { .. } if widget_clips(widget) => {
-                let clip =
-                    compositor.create_clip_rect(Rect::from_origin_size(Offset::ZERO, Size::ZERO));
+            WidgetKind::ClipRect { clip_behavior, .. } if widget_clips(widget) => {
+                let clip = compositor.create_clip_rect_with_coverage(
+                    Rect::from_origin_size(Offset::ZERO, Size::ZERO),
+                    shape_clip_coverage(*clip_behavior),
+                );
                 Self::create_clip_stage(compositor, root, picture, clip)
             }
             WidgetKind::ClipRRect { clip_behavior, .. } if widget_clips(widget) => {
@@ -1114,6 +1116,9 @@ impl RenderLayers {
         };
         // A coverage change does not recalculate cached clipper geometry.
         match kind {
+            RenderKind::ClipRect { clip_behavior, .. } => {
+                compositor.update_clip_rect_coverage(*clip, shape_clip_coverage(*clip_behavior));
+            }
             RenderKind::ClipRRect { clip_behavior, .. } => {
                 compositor.update_clip_rrect_coverage(*clip, shape_clip_coverage(*clip_behavior));
             }

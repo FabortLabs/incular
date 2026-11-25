@@ -369,6 +369,56 @@ fn clip_behavior_none_records_no_clip() {
 }
 
 #[test]
+fn rect_coverage_updates_keep_the_layout_and_distinguish_saved_compositing() {
+    let scene = |mode: Option<Clip>| {
+        let clip = ClipRect::new(labeled_action("clip content"));
+        match mode {
+            Some(mode) => Widget::from(clip.clip_behavior(mode)),
+            None => Widget::from(clip),
+        }
+    };
+    let size = Size::new(40., 30.);
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scene(None)).unwrap();
+    tree.layout(Constraints::tight(size)).unwrap();
+    let initial = tree.paint();
+    let rect = Rect::from_origin_size(Offset::ZERO, size);
+    assert!(initial.commands().iter().any(|command| {
+        matches!(command, PaintCommand::PushClip { rect: actual } if *actual == rect)
+    }));
+    let before = tree.diagnostics();
+    for (mode, expected, isolated) in [
+        (Clip::AntiAlias, Some(ClipCoverage::AntiAlias), false),
+        (
+            Clip::AntiAliasWithSaveLayer,
+            Some(ClipCoverage::AntiAliasWithSaveLayer),
+            true,
+        ),
+        (Clip::None, None, false),
+    ] {
+        tree.update(root, scene(Some(mode))).unwrap();
+        tree.layout(Constraints::tight(size)).unwrap();
+        let list = tree.paint();
+        let actual = list.commands().iter().find_map(|command| match command {
+            PaintCommand::PushClipRRect {
+                rrect,
+                coverage,
+                isolation,
+            } => {
+                assert_eq!((rrect.rect, rrect.radii), (rect, CornerRadii::ZERO));
+                assert_eq!(isolation.is_some(), isolated);
+                Some(*coverage)
+            }
+            PaintCommand::PushClip { .. } => panic!("the old hard clip remained active"),
+            _ => None,
+        });
+        assert_eq!(actual, expected);
+        assert_eq!(tree.diagnostics().layouts, before.layouts);
+        assert_eq!(tree.diagnostics().paints, before.paints);
+    }
+}
+
+#[test]
 fn clip_rect_records_world_clip() {
     let mut tree = WidgetTree::new();
     let root = tree

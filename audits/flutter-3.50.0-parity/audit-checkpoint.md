@@ -827,3 +827,6 @@ adds the original inherited-direction and no-reclip comparison,
 for 452 / 8,965 fully compared (5.04%), with 356 matches and 96
 historical mismatches. In a separate matched probe, the outline
 now follows the actual child rather than the maximum constraint.
+The separate [fractional ClipRect recheck](upstream-clip-visibility-focus.md#fractional-rectangular-clip-modes)
+verifies that the default stays hard and that ordinary antialiasing
+and isolated antialiasing now have distinct Windows wgpu edge behavior.

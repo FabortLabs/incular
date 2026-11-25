@@ -377,6 +377,7 @@ pub enum LayerKind {
     },
     ClipRect {
         rect: Rect,
+        coverage: ClipCoverage,
     },
     ClipRRect {
         rrect: RRect,
@@ -628,7 +629,15 @@ impl LayerTree {
         })
     }
     pub fn create_clip_rect(&mut self, rect: Rect) -> LayerId {
-        self.insert(LayerKind::ClipRect { rect })
+        self.create_clip_rect_with_coverage(rect, ClipCoverage::HardEdge)
+    }
+    /// Creates an axis-aligned clip with explicit edge coverage.
+    pub fn create_clip_rect_with_coverage(
+        &mut self,
+        rect: Rect,
+        coverage: ClipCoverage,
+    ) -> LayerId {
+        self.insert(LayerKind::ClipRect { rect, coverage })
     }
     /// Creates a rounded-rectangle clip stage in local space; the world
     /// shape resolves at flatten time like [`Self::create_clip_rect`].
@@ -1124,7 +1133,7 @@ impl LayerTree {
         let Some(layer) = self.layers.get_mut(id.0) else {
             return false;
         };
-        let LayerKind::ClipRect { rect: current } = &mut layer.kind else {
+        let LayerKind::ClipRect { rect: current, .. } = &mut layer.kind else {
             return false;
         };
         if *current == rect {
@@ -1132,6 +1141,26 @@ impl LayerTree {
         }
         *current = rect;
         layer.clip_cache = None;
+        layer.generation = next_generation(&mut self.next_generation);
+        self.scene_dirty = true;
+        self.diagnostics.clip_updates += 1;
+        true
+    }
+    /// Changes coverage without recalculating the clip geometry.
+    pub fn update_clip_rect_coverage(&mut self, id: LayerId, coverage: ClipCoverage) -> bool {
+        let Some(layer) = self.layers.get_mut(id.0) else {
+            return false;
+        };
+        let LayerKind::ClipRect {
+            coverage: current, ..
+        } = &mut layer.kind
+        else {
+            return false;
+        };
+        if *current == coverage {
+            return false;
+        }
+        *current = coverage;
         layer.generation = next_generation(&mut self.next_generation);
         self.scene_dirty = true;
         self.diagnostics.clip_updates += 1;
@@ -1600,16 +1629,25 @@ impl LayerTree {
     /// the emitted shape.
     fn clip_command(&mut self, id: LayerId, kind: &LayerKind, world: Transform) -> PaintCommand {
         match kind {
-            LayerKind::ClipRect { rect, .. } => match clip_space(world) {
-                ClipSpace::Translation | ClipSpace::Scale { .. } => PaintCommand::PushClip {
-                    rect: world.transform_rect_bbox(*rect),
-                },
+            LayerKind::ClipRect { rect, coverage } => match clip_space(world) {
+                ClipSpace::Translation | ClipSpace::Scale { .. } => {
+                    let rect = world.transform_rect_bbox(*rect);
+                    if *coverage == ClipCoverage::HardEdge {
+                        PaintCommand::PushClip { rect }
+                    } else {
+                        PaintCommand::PushClipRRect {
+                            rrect: RRect::new(rect, crate::CornerRadii::ZERO),
+                            coverage: *coverage,
+                            isolation: self.clip_isolation(id, *coverage),
+                        }
+                    }
+                }
                 ClipSpace::General => {
                     let rect = *rect;
                     PaintCommand::PushClipPath {
                         path: self.memoized_fallback_path(id, move || rect_as_path(rect), world),
                         fill_rule: FillRule::NonZero,
-                        coverage: ClipCoverage::HardEdge,
+                        coverage: *coverage,
                     }
                 }
             },

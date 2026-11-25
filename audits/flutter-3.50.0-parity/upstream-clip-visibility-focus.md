@@ -92,3 +92,22 @@ implementation and pinned Flutter outline the 100 by 40 child.
 All 35 focused Rust tests passed. The cache recognizes a shared
 shape instance; equality of distinct border values and generalized
 path raster coverage were not covered by this recheck.
+
+## Fractional rectangular clip modes
+
+On a fractional 35.5 by 31.5 rectangular clip, pinned Flutter
+distinguishes default HardEdge, None, ordinary AntiAlias and
+AntiAliasWithSaveLayer. Windows wgpu previously treated both AA
+modes as binary and showed zero partial pixels. The corrected
+analytic box mask measures coverage in device pixels. The ordinary
+mode permits red from an earlier draw at a partially covered edge;
+the isolated mode retains partial coverage but does not leak red.
+HardEdge and None retain their sampled interior/exterior controls.
+The retained-mode test additionally detects an unintended relayout
+or child repaint on coverage-only transitions.
+
+All seven pinned authored raster checks, the focused native rounded,
+elliptical and rectangular mode checks, seven native path controls,
+and 31 retained/input tests pass. This is not an original golden
+comparison. Hard-edge snapping at other fractional offsets, rotated
+paths and destination-reading effect coverage remain separate.
