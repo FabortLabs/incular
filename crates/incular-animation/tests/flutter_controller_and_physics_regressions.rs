@@ -27,6 +27,22 @@ fn zero_bounce_is_critically_damped() {
         }),
         cases.map(|(_, expected)| expected),
     );
+    let exact = SpringDescription::with_duration_and_bounce(duration, 0.);
+    assert_eq!(exact.bounce(), 0.);
+    for (bits, expected) in [
+        (exact.damping.to_bits() - 1, SpringType::UnderDamped),
+        (exact.damping.to_bits() + 1, SpringType::OverDamped),
+    ] {
+        let neighbor = SpringDescription {
+            damping: f32::from_bits(bits),
+            ..exact
+        };
+        assert_eq!(
+            neighbor.spring_type(),
+            expected,
+            "only one representable value is critical"
+        );
+    }
 }
 
 // C20: Flutter physics/friction_simulation.dart checks the unrounded distance.
@@ -37,6 +53,8 @@ fn bounded_friction_does_not_settle_before_reaching_distance_tolerance() {
     let done = times.map(|time| simulation.is_done(time));
     let positions = times.map(|time| f64::from(simulation.position(time)));
     assert_eq!(done, [false, false, true], "positions={positions:?}");
+    let negative = BoundedFrictionSimulation::new(0.5, -8191., -1., -8192., -8190.);
+    assert_eq!(times.map(|time| negative.is_done(time)), done);
 }
 
 // C21: Flutter Tween.transform returns the endpoint itself before interpolating.

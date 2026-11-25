@@ -26,6 +26,24 @@ categorical behavior. See pinned Flutter
 `foundation/constants.dart:66–71`, and
 Incular `crates/incular-animation/src/physics.rs:130–153,627–644`.
 
+## Simulation edge repairs
+
+The 500 ms zero-bounce case now chooses the critical solution, while its
+closest representable damping values below and above it still choose
+under- and overdamping. The Rust solver caches that discriminant when
+constructing the simulation. For a spring configured with an invalid
+sub-millisecond duration, debug builds now reject it; the pinned original
+line 114 was rerun. Rust durations are unsigned and release still uses
+the safe one-millisecond fallback.
+
+Bounded friction now checks its distance limit before rounding position
+for display. At both ±8192 boundaries the pinned Flutter and Rust cases
+agree at 1700, 1701 and 1702 ms. ClampedSimulation maps inner NaN
+position/velocity to the upper bounds and rejects inverted bounds in
+debug, matching the authored Flutter controls. All 21 existing focused
+physics tests and the repaired regression cases pass. The separate
+unbounded-friction precision differences are not fixed by this change.
+
 ## Reproduction
 
 Copy only the three named upstream test files from

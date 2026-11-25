@@ -62,9 +62,13 @@ fn near_zero_f64(a: f64, epsilon: f64) -> bool {
 /// Flutter `clampDouble` for the bounds this module uses; it never panics
 /// on inverted bounds, unlike `f32::clamp`.
 fn clamp_value(value: f32, min: f32, max: f32) -> f32 {
+    clamp_value_f64(f64::from(value), f64::from(min), f64::from(max)) as f32
+}
+
+fn clamp_value_f64(value: f64, min: f64, max: f64) -> f64 {
     if value < min {
         min
-    } else if value > max {
+    } else if value > max || value.is_nan() {
         max
     } else {
         value
@@ -130,11 +134,15 @@ impl SpringDescription {
     /// Flutter `SpringDescription.withDurationAndBounce`.
     ///
     /// Flutter truncates the duration to whole milliseconds and asserts that it
-    /// is positive. A zero duration is treated as one millisecond here so the
-    /// stiffness stays finite. The bounce is not clamped, so a negative bounce
+    /// is positive. Release builds retain a one-millisecond fallback for
+    /// invalid durations. The bounce is not clamped, so a negative bounce
     /// gives an overdamped spring.
     #[must_use]
     pub fn with_duration_and_bounce(duration: Duration, bounce: f32) -> Self {
+        debug_assert!(
+            duration.as_millis() > 0,
+            "spring duration must be at least one millisecond"
+        );
         let millis = duration.as_millis().max(1) as f64;
         let seconds = millis / 1000.0;
         let mass = 1.0_f64;
@@ -145,7 +153,13 @@ impl SpringDescription {
         } else {
             1.0 / (bounce + 1.0)
         };
-        let damping = ratio * 2.0 * (mass * stiffness).sqrt();
+        // A zero bounce is critical in the stored precision, not merely
+        // critical before the two coefficients are separately rounded.
+        let damping = if ratio == 1. {
+            2.0 * (mass * f64::from(stiffness as f32)).sqrt()
+        } else {
+            ratio * 2.0 * (mass * stiffness).sqrt()
+        };
         Self {
             mass: mass as f32,
             stiffness: stiffness as f32,
@@ -165,8 +179,11 @@ impl SpringDescription {
     /// Flutter `SpringDescription.bounce`: the bounce implied by the damping ratio.
     #[must_use]
     pub fn bounce(&self) -> f32 {
-        let ratio = f64::from(self.damping)
-            / (2.0 * (f64::from(self.mass) * f64::from(self.stiffness)).sqrt());
+        let critical = 2.0 * (f64::from(self.mass) * f64::from(self.stiffness)).sqrt();
+        if self.damping > 0. && self.damping.is_finite() && self.damping == critical as f32 {
+            return 0.;
+        }
+        let ratio = f64::from(self.damping) / critical;
         let bounce = if ratio < 1.0 {
             1.0 - ratio
         } else {
@@ -177,14 +194,25 @@ impl SpringDescription {
 
     #[must_use]
     pub fn spring_type(&self) -> SpringType {
-        let discriminant = f64::from(self.damping) * f64::from(self.damping)
-            - 4.0 * f64::from(self.mass) * f64::from(self.stiffness);
+        let discriminant = self.discriminant();
         if discriminant > 0.0 {
             SpringType::OverDamped
         } else if discriminant < 0.0 {
             SpringType::UnderDamped
         } else {
             SpringType::CriticallyDamped
+        }
+    }
+
+    fn discriminant(&self) -> f64 {
+        let squared_critical = 4.0 * f64::from(self.mass) * f64::from(self.stiffness);
+        let damping = f64::from(self.damping);
+        // No interval of near-critical damping is treated as equal: only
+        // the single f32 value that represents critical damping can match.
+        if self.damping.is_finite() && self.damping.abs() == squared_critical.sqrt() as f32 {
+            0.
+        } else {
+            damping * damping - squared_critical
         }
     }
 }
@@ -215,17 +243,16 @@ pub trait Simulation {
 /// sign of the discriminant. Velocity is the analytic derivative of each form.
 fn spring_solution(
     spring: SpringDescription,
+    discriminant: f64,
     initial_displacement: f64,
     initial_velocity: f64,
     t: Duration,
 ) -> (f64, f64) {
     let sec = t.as_secs_f64();
     let m = f64::from(spring.mass);
-    let k = f64::from(spring.stiffness);
     let c = f64::from(spring.damping);
     let x0 = initial_displacement;
     let v0 = initial_velocity;
-    let discriminant = c * c - 4.0 * m * k;
 
     if discriminant > 0.0 {
         // Overdamped, Flutter `_OverdampedSolution`.
@@ -264,6 +291,7 @@ fn spring_solution(
 #[derive(Clone, Debug, PartialEq)]
 pub struct SpringSimulation {
     spring: SpringDescription,
+    discriminant: f64,
     start: f32,
     end: f32,
     initial_velocity: f32,
@@ -282,6 +310,7 @@ impl SpringSimulation {
     ) -> Self {
         Self {
             spring,
+            discriminant: spring.discriminant(),
             start,
             end,
             initial_velocity,
@@ -307,6 +336,7 @@ impl SpringSimulation {
     fn solution(&self, t: Duration) -> (f64, f64) {
         spring_solution(
             self.spring,
+            self.discriminant,
             f64::from(self.start) - f64::from(self.end),
             f64::from(self.initial_velocity),
             t,
@@ -622,11 +652,19 @@ impl BoundedFrictionSimulation {
     pub fn set_tolerance(&mut self, tolerance: Tolerance) {
         self.friction.set_tolerance(tolerance);
     }
+
+    fn clamped_position(&self, t: Duration) -> f64 {
+        clamp_value_f64(
+            self.friction.x_at(t.as_secs_f64()),
+            f64::from(self.min),
+            f64::from(self.max),
+        )
+    }
 }
 
 impl Simulation for BoundedFrictionSimulation {
     fn position(&self, t: Duration) -> f32 {
-        clamp_value(self.friction.position(t), self.min, self.max)
+        self.clamped_position(t) as f32
     }
 
     fn velocity(&self, t: Duration) -> f32 {
@@ -637,7 +675,7 @@ impl Simulation for BoundedFrictionSimulation {
         if self.friction.is_done(t) {
             return true;
         }
-        let position = f64::from(self.position(t));
+        let position = self.clamped_position(t);
         let distance = f64::from(self.friction.tolerance.distance);
         (position - f64::from(self.min)).abs() < distance
             || (position - f64::from(self.max)).abs() < distance
@@ -721,6 +759,7 @@ impl<S: Simulation> ClampedSimulation<S> {
     /// Clamps positions to `[min, max]`; velocities are unbounded.
     #[must_use]
     pub fn new(inner: S, min: f32, max: f32) -> Self {
+        debug_assert!(min <= max, "inverted position bounds");
         Self {
             inner,
             min,
@@ -733,6 +772,7 @@ impl<S: Simulation> ClampedSimulation<S> {
     /// Flutter `dxMin` and `dxMax`: clamps the reported velocity to `[dx_min, dx_max]`.
     #[must_use]
     pub fn with_velocity_bounds(mut self, dx_min: f32, dx_max: f32) -> Self {
+        debug_assert!(dx_min <= dx_max, "inverted velocity bounds");
         self.dx_min = dx_min;
         self.dx_max = dx_max;
         self

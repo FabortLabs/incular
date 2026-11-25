@@ -19,11 +19,13 @@ void main() {
   });
   test('bounded friction respects tolerance around 8192', () {
     final sim = BoundedFrictionSimulation(.5, 8191, 1, 8190, 8192);
+    final negative = BoundedFrictionSimulation(.5, -8191, -1, -8192, -8190);
     for (final entry in [(1.700, false), (1.702, true), (1.701, false)]) {
       print(
         'time=${entry.$1} x=${sim.x(entry.$1)} done=${sim.isDone(entry.$1)}',
       );
       expect(sim.isDone(entry.$1), entry.$2);
+      expect(negative.isDone(entry.$1), entry.$2);
     }
   });
 }
