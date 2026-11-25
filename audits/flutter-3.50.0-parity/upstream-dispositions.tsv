@@ -198,8 +198,8 @@ packages/flutter/test/widgets/opacity_test.dart	19	Opacity	partial-match	upstrea
 packages/flutter/test/widgets/opacity_test.dart	152	offset is correctly handled in Opacity	partial-match	upstream-opacity-hover-flex-notifier-futures.md
 packages/flutter/test/widgets/opacity_test.dart	179	empty opacity does not crash	partial-match	upstream-opacity-hover-flex-notifier-futures.md
 packages/flutter/test/widgets/mouse_region_test.dart	366	doesn't trigger pointer exit when widget disappears	paired-match	upstream-opacity-hover-flex-notifier-futures.md
-packages/flutter/test/widgets/mouse_region_test.dart	393	triggers pointer enter when widget moves in	paired-mismatch	upstream-opacity-hover-flex-notifier-futures.md
-packages/flutter/test/widgets/mouse_region_test.dart	433	triggers pointer exit when widget moves out	paired-mismatch	upstream-opacity-hover-flex-notifier-futures.md
+packages/flutter/test/widgets/mouse_region_test.dart	393	triggers pointer enter when widget moves in	paired-match	upstream-mouse-region-local-motion.md#stationary-pointer
+packages/flutter/test/widgets/mouse_region_test.dart	433	triggers pointer exit when widget moves out	paired-match	upstream-mouse-region-local-motion.md#stationary-pointer
 packages/flutter/test/widgets/mouse_region_test.dart	699	MouseRegion uses updated callbacks	paired-match	upstream-opacity-hover-flex-notifier-futures.md
 packages/flutter/test/widgets/spacer_test.dart	9	Spacer takes up space.	paired-match	upstream-opacity-hover-flex-notifier-futures.md
 packages/flutter/test/widgets/spacer_test.dart	24	Spacer takes up space proportional to flex.	paired-match	upstream-opacity-hover-flex-notifier-futures.md
@@ -920,3 +920,7 @@ packages/flutter/test/widgets/transitions_test.dart	1168	does not crash at zero 
 packages/flutter/test/widgets/transitions_test.dart	1194	 rebuilds when changed	paired-match	upstream-disposable-listenable-builders.md
 packages/flutter/test/widgets/transitions_test.dart	1224	doesn't rebuild the child	paired-match	upstream-disposable-listenable-builders.md
 packages/flutter/test/widgets/transitions_test.dart	1260	does not crash at zero area	paired-match	upstream-disposable-listenable-builders.md
+packages/flutter/test/widgets/mouse_region_test.dart	168	onEnter and onExit can be triggered with mouse buttons pressed	paired-match	upstream-mouse-region-local-motion.md
+packages/flutter/test/widgets/mouse_region_test.dart	207	detects pointer enter	paired-match	upstream-mouse-region-local-motion.md
+packages/flutter/test/widgets/mouse_region_test.dart	241	detects pointer exiting	paired-match	upstream-mouse-region-local-motion.md
+packages/flutter/test/widgets/mouse_region_test.dart	788	works with transform	paired-match	upstream-mouse-region-local-motion.md

@@ -4,7 +4,8 @@
 
 use incular_config::Constraints;
 use incular_core::{
-    Color, InputEvent, Offset, PointerDeviceKind, PointerPhase, PointerSampleMetadata, Size,
+    Color, InputEvent, Offset, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase,
+    PointerSampleMetadata, Size,
 };
 use incular_runtime::Runtime;
 use incular_widgets::{Align, Alignment, MouseRegion, Widget, internal::Key};
@@ -112,20 +113,25 @@ impl Host {
     }
 
     fn move_mouse(&mut self, position: Offset) {
+        self.pointer(PointerPhase::Move, position, 0);
+        self.frame();
+    }
+
+    fn pointer(&mut self, phase: PointerPhase, position: Offset, buttons: u32) {
         let _ = self.runtime.handle_input_at(
             InputEvent::PointerWithMetadata {
                 pointer: 1,
                 device: 1,
                 kind: PointerDeviceKind::Mouse,
-                buttons: 0,
-                button: None,
+                buttons,
+                button: matches!(phase, PointerPhase::Down | PointerPhase::Up)
+                    .then_some(PRIMARY_POINTER_BUTTON),
                 sample: PointerSampleMetadata::default(),
-                phase: PointerPhase::Move,
+                phase,
                 position,
             },
             self.now,
         );
-        self.frame();
     }
 }
 
@@ -249,4 +255,113 @@ fn retained_mouse_region_uses_replaced_enter_hover_and_exit_callbacks() {
             ]
         );
     }
+}
+
+fn sample(kind: Kind, global: (f32, f32), local: (f32, f32)) -> Sample {
+    Sample {
+        kind,
+        version: 1,
+        global: Offset::new(global.0, global.1),
+        local: Offset::new(local.0, local.1),
+    }
+}
+
+#[test]
+fn enter_and_exit_are_localized_even_with_the_mouse_button_down() {
+    let scene = Scene::default();
+    let mut host = Host::mount(scene.widget(Alignment::CENTER, Some(1)));
+    host.move_mouse(Offset::ZERO);
+    host.pointer(PointerPhase::Down, Offset::ZERO, PRIMARY_POINTER_BUTTON);
+    host.frame();
+    assert!(scene.take().is_empty());
+    host.pointer(
+        PointerPhase::Move,
+        Offset::new(400., 300.),
+        PRIMARY_POINTER_BUTTON,
+    );
+    assert_eq!(
+        scene.take(),
+        [sample(Kind::Enter, (400., 300.), (50., 50.))]
+    );
+    host.pointer(
+        PointerPhase::Move,
+        Offset::new(1., 1.),
+        PRIMARY_POINTER_BUTTON,
+    );
+    assert_eq!(scene.take(), [sample(Kind::Exit, (1., 1.), (-349., -249.))]);
+    host.pointer(PointerPhase::Up, Offset::new(1., 1.), 0);
+}
+
+#[test]
+fn a_buttonless_move_delivers_enter_then_hover_in_local_coordinates() {
+    let scene = Scene::default();
+    let mut host = Host::mount(scene.widget(Alignment::CENTER, Some(1)));
+    host.move_mouse(Offset::ZERO);
+    assert!(scene.take().is_empty());
+    host.pointer(PointerPhase::Move, Offset::new(400., 300.), 0);
+    assert_eq!(
+        scene.take(),
+        [
+            sample(Kind::Enter, (400., 300.), (50., 50.)),
+            sample(Kind::Hover, (400., 300.), (50., 50.)),
+        ]
+    );
+}
+
+#[test]
+fn moving_outside_delivers_only_exit_in_the_previous_regions_coordinates() {
+    let scene = Scene::default();
+    let mut host = Host::mount(scene.widget(Alignment::CENTER, Some(1)));
+    host.move_mouse(Offset::ZERO);
+    host.move_mouse(Offset::new(400., 300.));
+    scene.take();
+    host.pointer(PointerPhase::Move, Offset::new(1., 1.), 0);
+    assert_eq!(scene.take(), [sample(Kind::Exit, (1., 1.), (-349., -249.))]);
+}
+
+#[test]
+fn a_scaled_mouse_region_emits_global_and_local_hover_deltas() {
+    use incular_widgets::Transform;
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let enter = events.clone();
+    let hover = events.clone();
+    let exit = events.clone();
+    let key = Key::from("scaled child");
+    let child = Widget::box_(Size::new(150., 100.), Color::WHITE).with_key(key.clone());
+    let region = MouseRegion::new(child)
+        .on_enter(move |event| enter.borrow_mut().push((Kind::Enter, event)))
+        .on_hover(move |event| hover.borrow_mut().push((Kind::Hover, event)))
+        .on_exit(move |event| exit.borrow_mut().push((Kind::Exit, event)));
+    let root = Align::new(Alignment::CENTER, Transform::scale(2., region));
+    let mut host = Host::mount(root.into());
+    let bounds = host
+        .runtime
+        .tree()
+        .element_bounds(host.runtime.tree().element_with_key(&key).unwrap())
+        .unwrap();
+    assert_eq!(bounds.size, Size::new(300., 200.));
+    let top_left = bounds.origin;
+    let bottom_left = top_left + Offset::new(0., bounds.size.height);
+    host.move_mouse(top_left - Offset::new(1., 1.));
+    assert!(events.take().is_empty());
+
+    host.move_mouse(top_left + Offset::new(1., 1.));
+    let moved = events.take();
+    assert_eq!(moved.len(), 2);
+    assert_eq!((moved[0].0, moved[1].0), (Kind::Enter, Kind::Hover));
+    assert_eq!(moved[0].1.local_position, Offset::new(0.5, 0.5));
+    assert_eq!(moved[1].1.local_position, Offset::new(0.5, 0.5));
+
+    host.move_mouse(bottom_left + Offset::new(1., -1.));
+    let moved = events.take();
+    assert_eq!(moved.len(), 1);
+    assert_eq!(moved[0].0, Kind::Hover);
+    assert_eq!(moved[0].1.delta, Offset::new(0., 198.));
+    assert_eq!(moved[0].1.local_delta, Offset::new(0., 99.));
+
+    host.move_mouse(bottom_left + Offset::new(1., 1.));
+    let moved = events.take();
+    assert_eq!(moved.len(), 1);
+    assert_eq!(moved[0].0, Kind::Exit);
+    assert_eq!(moved[0].1.local_position, Offset::new(0.5, 100.5));
 }

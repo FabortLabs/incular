@@ -1301,7 +1301,9 @@ struct InputState {
     raw_pointer_routes: HashMap<GestureArenaKey, Vec<RawPointerRouteEntry>>,
     /// The previous raw position of each pointer, for Flutter's `delta`.
     raw_pointer_positions: HashMap<GestureArenaKey, Offset>,
-    mouse_hover: HashMap<GestureArenaKey, Vec<ElementId>>,
+    /// The most recent hit-transform for each hovered annotation. Exits
+    /// are delivered in its previous local coordinates, even after layout.
+    mouse_hover: HashMap<GestureArenaKey, Vec<RawPointerRouteEntry>>,
     consumed_tap_pointers: HashSet<GestureArenaKey>,
     pointer_captures: HashMap<GestureArenaKey, ElementId>,
     active_drags: HashMap<GestureArenaKey, ActiveDrag>,

@@ -577,96 +577,94 @@ impl WidgetTree {
             // from a previous surface visit.
             return;
         }
-        if event.phase == PointerPhase::Exit {
-            let previous = self.input.mouse_hover.remove(&key).unwrap_or_default();
-            let exit_callbacks = previous
-                .iter()
-                .filter(|id| self.elements.contains(id.0))
-                .filter_map(|id| {
-                    self.mouse_region_config(*id)
-                        .and_then(|(callbacks, ..)| callbacks.on_exit)
-                })
-                .collect::<Vec<_>>();
-            // Focus behaviors ride the same hover sets as mouse regions;
-            // leaving the window exits every tracked behavior.
-            let exit_behaviors = previous
-                .iter()
-                .filter(|id| self.elements.contains(id.0))
-                .filter_map(|id| self.focus_behavior_for(*id))
-                .collect::<Vec<_>>();
-            for callback in exit_callbacks {
-                callback(event);
-            }
-            for behavior in exit_behaviors {
-                behavior.mouse_exit();
-            }
-            return;
-        }
         // Mouse regions enter the hover sets directly; focus behaviors
         // join through their hovered descendants so nested detectors all
         // track without a second hover map.
-        let mut next = hit
-            .raw()
-            .iter()
-            .copied()
-            .filter(|id| self.mouse_region_config(*id).is_some())
-            .collect::<Vec<_>>();
-        for id in self.focus_behavior_elements(hit.target()) {
-            if !next.contains(&id) {
-                next.push(id);
+        let mut next = Vec::new();
+        if event.phase != PointerPhase::Exit {
+            next.extend(hit.raw().iter().copied().filter_map(|element| {
+                self.mouse_region_config(element)?;
+                Some(RawPointerRouteEntry {
+                    element,
+                    world_to_local: self
+                        .render_id(element)
+                        .and_then(|id| self.pointer_world_to_local(id)),
+                })
+            }));
+            for element in self.focus_behavior_elements(hit.target()) {
+                if !next.iter().any(|entry| entry.element == element) {
+                    next.push(RawPointerRouteEntry {
+                        element,
+                        world_to_local: None,
+                    });
+                }
             }
         }
-        let previous = self.input.mouse_hover.insert(key, next).unwrap_or_default();
-        let Some(next) = self.input.mouse_hover.get(&key) else {
-            return;
-        };
-        let previous_live = previous
-            .into_iter()
-            .filter(|id| self.elements.contains(id.0))
-            .collect::<Vec<_>>();
-        let exits = previous_live
-            .iter()
-            .copied()
-            .filter(|id| !next.contains(id))
-            .collect::<Vec<_>>();
-        let enters = next
-            .iter()
-            .copied()
-            .filter(|id| !previous_live.contains(id))
-            .collect::<Vec<_>>();
+        let previous = if next.is_empty() {
+            self.input.mouse_hover.remove(&key)
+        } else {
+            self.input.mouse_hover.insert(key, next)
+        }
+        .unwrap_or_default();
+        let next = self
+            .input
+            .mouse_hover
+            .get(&key)
+            .map_or(&[][..], Vec::as_slice);
+        let exits = previous.iter().filter(|entry| {
+            self.elements.contains(entry.element.0)
+                && !next.iter().any(|next| next.element == entry.element)
+        });
+        // Flutter sends exits in old hit-test order and enters in reverse
+        // new order, so the outer region is entered before its inner one.
+        let enters = next.iter().filter(|entry| {
+            !previous
+                .iter()
+                .any(|previous| previous.element == entry.element)
+        });
         let exit_callbacks = exits
-            .iter()
-            .filter_map(|id| {
-                self.mouse_region_config(*id)
+            .clone()
+            .filter_map(|entry| {
+                self.mouse_region_config(entry.element)
                     .and_then(|(callbacks, ..)| callbacks.on_exit)
+                    .map(|callback| (callback, entry.world_to_local))
             })
             .collect::<Vec<_>>();
-        // Flutter `MouseTracker`: enter events go in reverse hit-test order, so
-        // an outer region is entered before the inner region it contains.
         let enter_callbacks = enters
-            .iter()
+            .clone()
             .rev()
-            .filter_map(|id| {
-                self.mouse_region_config(*id)
+            .filter_map(|entry| {
+                self.mouse_region_config(entry.element)
                     .and_then(|(callbacks, ..)| callbacks.on_enter)
+                    .map(|callback| (callback, entry.world_to_local))
             })
-            .collect::<Vec<_>>();
-        let enter_behaviors = enters
-            .iter()
-            .filter_map(|id| self.focus_behavior_for(*id))
             .collect::<Vec<_>>();
         let exit_behaviors = exits
-            .iter()
-            .filter_map(|id| self.focus_behavior_for(*id))
+            .filter_map(|entry| self.focus_behavior_for(entry.element))
             .collect::<Vec<_>>();
-        for callback in exit_callbacks {
-            callback(event);
+        let enter_behaviors = enters
+            .filter_map(|entry| self.focus_behavior_for(entry.element))
+            .collect::<Vec<_>>();
+        for (callback, transform) in exit_callbacks {
+            callback(localize_with_transform(
+                transform,
+                RawPointerEvent {
+                    phase: PointerPhase::Exit,
+                    ..event
+                },
+            ));
         }
         for behavior in exit_behaviors {
             behavior.mouse_exit();
         }
-        for callback in enter_callbacks {
-            callback(event);
+        for (callback, transform) in enter_callbacks {
+            callback(localize_with_transform(
+                transform,
+                RawPointerEvent {
+                    phase: PointerPhase::Enter,
+                    ..event
+                },
+            ));
         }
         for behavior in enter_behaviors {
             behavior.mouse_enter();
@@ -674,13 +672,14 @@ impl WidgetTree {
         if send_hover && event.phase == PointerPhase::Move && event.buttons == 0 {
             let hover_callbacks = next
                 .iter()
-                .filter_map(|id| {
-                    self.mouse_region_config(*id)
+                .filter_map(|entry| {
+                    self.mouse_region_config(entry.element)
                         .and_then(|(callbacks, ..)| callbacks.on_hover)
+                        .map(|callback| (callback, entry.world_to_local))
                 })
                 .collect::<Vec<_>>();
-            for callback in hover_callbacks {
-                callback(event);
+            for (callback, transform) in hover_callbacks {
+                callback(localize_with_transform(transform, event));
             }
         }
     }
@@ -1140,7 +1139,7 @@ impl WidgetTree {
             !route.is_empty()
         });
         self.input.mouse_hover.retain(|_, hover| {
-            hover.retain(|candidate| *candidate != element);
+            hover.retain(|candidate| candidate.element != element);
             !hover.is_empty()
         });
         if let Some(mut recognizers) = self.input.raw_recognizers.remove(&element) {

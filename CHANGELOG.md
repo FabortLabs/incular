@@ -232,6 +232,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-widgets`: MouseRegion callbacks report local positions and
+  deltas, and exits keep the previous hit transform after layout moves.
+
 - `incular-runtime`: a retained build dependency now requests the next
   frame when it changes, even when nothing else needs drawing.
 

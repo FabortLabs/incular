@@ -767,7 +767,13 @@ impl WidgetTree {
             .values()
             .flatten()
             .map(|entry| entry.element)
-            .chain(self.input.mouse_hover.values().flatten().copied())
+            .chain(
+                self.input
+                    .mouse_hover
+                    .values()
+                    .flatten()
+                    .map(|entry| entry.element),
+            )
             .find(|id| !live(id))
         {
             return Err(Self::invariant_error(
