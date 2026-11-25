@@ -123,3 +123,18 @@ still keeps the same element, a pending or confirmed primary focus,
 and the correct new ancestor focus. :812 is partial because the native
 fixture does not call Flutter's root `setFirstFocus` on an explicitly
 attached ScopeNode or assert the two labels during the scope move.
+
+## Idle focus requests and ExcludeFocus
+
+A mounted node previously queued its focus request but did not request a
+frame. Native focused coverage verifies that a keyboard-only Focus with
+semantics disabled schedules an idle runtime on both request and
+unfocus. The exact pinned authored probe `idle_focus_request_test.dart`
+settles the focus change with the framework's microtask queue without
+needing another input. The Rust runtime supplies its standard frame
+scheduler at attachment and removes that connection at last detach.
+
+The pinned :1907 and :2007 `ExcludeFocus` originals passed by exact
+name. Native tests verify both an outer and an inner request are
+denied without a focus-change callback, and that the wrapper adds
+no accessibility node versus the same child alone.

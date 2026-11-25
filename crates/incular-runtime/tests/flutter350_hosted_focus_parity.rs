@@ -159,3 +159,25 @@ fn parent_focus_within_survives_child_switches_without_a_false_transition() {
     assert!(!parent.has_focus());
     assert_eq!(trace.borrow().as_slice(), [true, false]);
 }
+
+#[test]
+fn a_focus_change_without_semantics_requests_a_frame_from_an_idle_runtime() {
+    let node = FocusNode::new();
+    let widget = Focus::new(SizedBox::shrink())
+        .node(node.clone())
+        .include_semantics(false);
+    let mut runtime = Runtime::new(widget.into()).unwrap();
+    frame(&mut runtime);
+    assert!(!runtime.frame_requested());
+    node.request_focus();
+    assert!(!node.has_focus());
+    assert!(runtime.frame_requested());
+    frame(&mut runtime);
+    assert!(node.has_primary_focus());
+    frame(&mut runtime);
+    assert!(!runtime.frame_requested());
+    node.unfocus();
+    assert!(runtime.frame_requested());
+    frame(&mut runtime);
+    assert!(runtime.focused_element().is_none());
+}

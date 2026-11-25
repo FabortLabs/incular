@@ -279,3 +279,51 @@ fn a_separate_semantic_control_keeps_its_own_label_and_activation() {
     assert!(activated.get());
     assert!(!focus.has_focus());
 }
+
+#[test]
+fn excluding_focus_denies_outer_and_inner_explicit_requests_without_callbacks() {
+    use incular_widgets::{ExcludeFocus, SizedBox};
+    use std::{cell::Cell, rc::Rc};
+
+    let parent = FocusNode::new();
+    let child = FocusNode::new();
+    let callback_state = Rc::new(Cell::new(None));
+    let widget = ExcludeFocus::new(
+        Focus::new(Focus::new(SizedBox::shrink()).node(child.clone()))
+            .node(parent.clone())
+            .on_focus_change({
+                let callback_state = callback_state.clone();
+                move |focused| callback_state.set(Some(focused))
+            }),
+    );
+    let mut runtime = Runtime::new(widget.into()).unwrap();
+    let view = Constraints::tight(Size::new(800., 600.));
+    runtime.run_frame(view).unwrap();
+    for candidate in [&parent, &child] {
+        candidate.request_focus();
+        runtime.run_frame(view).unwrap();
+        assert!(!parent.has_focus());
+        assert!(!child.has_focus());
+        assert!(runtime.focused_element().is_none());
+        assert_eq!(callback_state.get(), None);
+    }
+}
+
+#[test]
+fn exclude_focus_does_not_add_an_accessibility_node_of_its_own() {
+    use incular_widgets::{ExcludeFocus, SizedBox};
+
+    let view = Constraints::tight(Size::new(800., 600.));
+    let mut baseline = Runtime::new(SizedBox::shrink().into()).unwrap();
+    baseline.run_frame(view).unwrap();
+    let mut covered = Runtime::new(ExcludeFocus::new(SizedBox::shrink()).into()).unwrap();
+    covered.run_frame(view).unwrap();
+    assert_eq!(
+        baseline.tree().semantics().roots(),
+        covered.tree().semantics().roots()
+    );
+    assert_eq!(
+        baseline.tree().semantics().iter().count(),
+        covered.tree().semantics().iter().count()
+    );
+}

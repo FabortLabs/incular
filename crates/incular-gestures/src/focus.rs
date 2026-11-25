@@ -58,6 +58,7 @@ struct FocusState {
     requested: Cell<Option<u64>>,
     authority: Cell<FocusAuthority>,
     host_attachment_count: Cell<usize>,
+    schedule_host_frame: Cell<Option<fn()>>,
     enabled: Cell<bool>,
     can_request_focus: Cell<bool>,
     skip_traversal: Cell<bool>,
@@ -97,6 +98,7 @@ impl Drop for FocusNodeAttachment {
         let remaining = state.host_attachment_count.get() - 1;
         state.host_attachment_count.set(remaining);
         if remaining == 0 {
+            state.schedule_host_frame.set(None);
             self.node.set_host_enclosing_scope(None);
             self.node.apply_host_focus(false);
         }
@@ -104,6 +106,12 @@ impl Drop for FocusNodeAttachment {
 }
 
 impl FocusState {
+    fn schedule_host_frame(&self) {
+        if let Some(schedule) = self.schedule_host_frame.get() {
+            schedule();
+        }
+    }
+
     fn notify(&self) {
         self.revision.set(
             self.revision
@@ -146,6 +154,7 @@ impl FocusNode {
                 requested: Cell::new(None),
                 authority: Cell::new(FocusAuthority::Unattached),
                 host_attachment_count: Cell::new(0),
+                schedule_host_frame: Cell::new(None),
                 enabled: Cell::new(true),
                 can_request_focus: Cell::new(true),
                 skip_traversal: Cell::new(false),
@@ -185,14 +194,19 @@ impl FocusNode {
             let request = FOCUS_EPOCH.get().wrapping_add(1);
             self.state.requested.set(Some(request));
             FOCUS_EPOCH.set(request);
+            self.state.schedule_host_frame();
             if self.state.authority.get() == FocusAuthority::Standalone {
                 self.state.set_focused(true);
             }
         }
     }
     pub fn unfocus(&self) {
-        self.state.requested.set(None);
+        let request_was_pending = self.state.requested.take().is_some();
+        let focus_was_held = self.state.focused.get();
         self.state.set_focused(false);
+        if request_was_pending || focus_was_held {
+            self.state.schedule_host_frame();
+        }
     }
 
     /// Whether application code asked this node for focus through
@@ -207,13 +221,15 @@ impl FocusNode {
     /// input or frame boundary. A detached node cannot grant itself focus.
     #[doc(hidden)]
     #[must_use]
-    pub fn attach_to_focus_host(&self) -> FocusNodeAttachment {
+    pub fn attach_to_focus_host(&self, schedule_frame: fn()) -> FocusNodeAttachment {
         let count = self.state.host_attachment_count.get();
         self.state.host_attachment_count.set(count + 1);
         if count == 0 {
+            self.state.schedule_host_frame.set(Some(schedule_frame));
             self.state.authority.set(FocusAuthority::Hosted);
             self.state.set_focused(false);
             if self.has_pending_focus_request() {
+                self.state.schedule_host_frame();
                 FOCUS_EPOCH.set(FOCUS_EPOCH.get().wrapping_add(1));
             }
         }
@@ -363,6 +379,7 @@ impl FocusNode {
     }
     pub fn set_descendants_are_focusable(&self, focusable: bool) {
         if self.state.descendants_are_focusable.replace(focusable) != focusable {
+            self.state.schedule_host_frame();
             self.state.notify();
         }
     }

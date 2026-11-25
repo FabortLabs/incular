@@ -1319,3 +1319,5 @@ packages/flutter/test/widgets/focus_manager_test.dart	1607	Scopes can be focused
 packages/flutter/test/widgets/focus_manager_test.dart	781	FocusScopeNode.canRequestFocus affects descendantsAreFocusable	paired-match	upstream-mounted-focus-scope-nodes.md#scope-request-and-descendant-permissions
 packages/flutter/test/widgets/focus_manager_test.dart	801	canRequestFocus affects children.	partial-match	upstream-mounted-focus-scope-nodes.md#scope-request-and-descendant-permissions
 packages/flutter/test/widgets/focus_manager_test.dart	739	Can move node with focus without losing focus	partial-match	upstream-mounted-focus-scope-nodes.md#retained-focused-child-history
+packages/flutter/test/widgets/focus_scope_test.dart	1907	Descendants of ExcludeFocus aren't focusable.	paired-match	upstream-focus-widget-semantics.md#idle-focus-requests-and-excludefocus
+packages/flutter/test/widgets/focus_scope_test.dart	2007	ExcludeFocus doesn't introduce a Semantics node	paired-match	upstream-focus-widget-semantics.md#idle-focus-requests-and-excludefocus

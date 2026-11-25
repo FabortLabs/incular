@@ -222,7 +222,10 @@ impl WidgetTree {
                     .get(&id)
                     .is_some_and(|binding| binding.node() == node)
                 {
-                    hosted.insert(id, node.attach_to_focus_host());
+                    hosted.insert(
+                        id,
+                        node.attach_to_focus_host(incular_animation::scheduler::schedule_frame),
+                    );
                     if node.has_pending_focus_request() {
                         self.pending_focus_attachment_revision =
                             self.pending_focus_attachment_revision.wrapping_add(1);
