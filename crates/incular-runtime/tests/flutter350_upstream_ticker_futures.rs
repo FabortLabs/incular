@@ -97,3 +97,16 @@ fn releasing_the_last_controller_handle_cancels_an_awaiting_run() {
         (Poll::Ready(()), &["start", "caught", "end"][..]),
     );
 }
+
+#[test]
+fn only_the_last_handle_cancels_even_without_a_scheduler_ticker() {
+    let controller = AnimationController::new(Duration::from_millis(100));
+    let other_owner = controller.clone();
+    let future = controller.forward_on_next_tick();
+    let mut cancel = pin!(future.or_cancel());
+    let mut context = Context::from_waker(Waker::noop());
+    drop(controller);
+    assert_eq!(cancel.as_mut().poll(&mut context), Poll::Pending);
+    drop(other_owner);
+    assert_eq!(cancel.poll(&mut context), Poll::Ready(Err(TickerCanceled)));
+}

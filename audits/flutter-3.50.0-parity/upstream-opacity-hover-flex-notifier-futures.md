@@ -47,3 +47,13 @@ Pinned Flutter 3.50.0 `ab2912035e`; Incular production `c647cb85`.
   Rust's associated future remains Pending instead of reporting
   cancellation across the next bounded frame/poll. See
   `flutter350_upstream_ticker_futures`.
+## Last controller owner cancels its future
+
+The pinned line :122 original still passes. After releasing the last
+controller, the Rust continuation now catches TickerCanceled and reaches
+its end instead of waiting forever. The controller owns a distinct future
+from its optional scheduler ticker. A control verifies that dropping
+one of two handles does not cancel a non-vsync controller; dropping
+the last one does. The authored lifecycle and callback controls remain
+green. This recheck keeps the original's explicit Flutter dispose vs.
+Rust RAII distinction in the ledger.

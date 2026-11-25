@@ -202,7 +202,7 @@ packages/flutter/test/widgets/scroll_simulation_test.dart	43	ClampingScrollSimul
 packages/flutter/test/widgets/scroll_simulation_test.dart	65	ClampingScrollSimulation is ballistic	partial-mismatch	upstream-semantic-headings-clamping-and-dilation.md
 packages/flutter/test/widgets/scroll_simulation_test.dart	101	ClampingScrollSimulation satisfies a physical acceleration formula	paired-match	upstream-semantic-headings-clamping-and-dilation.md
 packages/flutter/test/scheduler/animation_test.dart	17	Check for a time dilation being in effect	paired-match	upstream-semantic-headings-clamping-and-dilation.md
-packages/flutter/test/scheduler/animation_test.dart	21	Can cancel queued callback	partial-mismatch	upstream-semantic-headings-clamping-and-dilation.md
+packages/flutter/test/scheduler/animation_test.dart	21	Can cancel queued callback	paired-match	upstream-semantic-headings-clamping-and-dilation.md#exact-queued-callback-recheck
 packages/flutter/test/scheduler/ticker_test.dart	118	Ticker can be sped up with time dilation	paired-match	upstream-semantic-headings-clamping-and-dilation.md
 packages/flutter/test/scheduler/ticker_test.dart	136	Ticker can be slowed down with time dilation	paired-match	upstream-semantic-headings-clamping-and-dilation.md
 packages/flutter/test/widgets/fitted_box_test.dart	41	Can contain child	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md

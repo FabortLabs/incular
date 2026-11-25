@@ -43,3 +43,13 @@ Pinned Flutter 3.50.0 `ab2912035e`; Incular production `c647cb85`.
   partially adapted fixture with an extra later control and no
   comparison of Flutter's relative epoch origins. It is not
   another independent bug.
+
+## Exact queued callback recheck
+
+Pinned `scheduler/animation_test.dart:21` and the permanent Rust
+port pass. The first callback observes zero elapsed time relative
+to the first frame, cancels the second callback from that same
+snapshot, and neither executes on the next frame. The Rust API
+exposes an absolute Instant, so the port checks it equals the
+first raw timestamp that defines the epoch. This completes the
+earlier partial comparison.

@@ -878,3 +878,9 @@ next frame under both runners. The original audit count is unchanged.
 adds one matched foundation original: 461 / 8,965 fully compared (5.14%),
 365 matches and 96 historical mismatches. Equal assignments do not
 notify or rebuild a subscribed widget; unequal assignments do.
+
+The [exact scheduler cancellation recheck](upstream-semantic-headings-clamping-and-dilation.md#exact-queued-callback-recheck)
+moves the previous partial into the matched column: 462 / 8,965
+original cases fully compared (5.15%), 366 matches and 96
+historical mismatches. The same focused run verifies a dropped last
+animation controller cancels its awaiting future instead of hanging.

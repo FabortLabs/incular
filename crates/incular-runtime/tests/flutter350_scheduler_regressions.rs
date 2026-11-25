@@ -11,7 +11,47 @@ use incular_widgets::Widget;
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
+    time::Duration,
 };
+
+/// scheduler/animation_test.dart:21: first frame runs only the first
+/// callback, cancellation prevents the second from leaking to frame two.
+#[test]
+fn flutter_queued_callback_cancellation_preserves_the_first_frame_epoch() {
+    let size = Size::new(100., 100.);
+    let bounds = Constraints::tight(size);
+    let mut runtime = Runtime::new(Widget::box_(size, Color::WHITE)).unwrap();
+    let first_frame = Instant::now() + Duration::from_millis(16);
+    let second_id = Rc::new(Cell::new(None));
+    let observed = Rc::new(Cell::new((false, false)));
+
+    schedule_frame_callback({
+        let second_id = second_id.clone();
+        let observed = observed.clone();
+        move |timestamp| {
+            assert_eq!(observed.get(), (false, false));
+            assert_eq!(timestamp, first_frame);
+            observed.set((true, false));
+            assert!(cancel_frame_callback(second_id.get().unwrap()));
+        }
+    });
+    second_id.set(Some(schedule_frame_callback({
+        let observed = observed.clone();
+        move |timestamp| {
+            assert_eq!(observed.get(), (true, false));
+            assert_eq!(timestamp, first_frame);
+            observed.set((true, true));
+        }
+    })));
+    runtime.run_frame_at(bounds, first_frame).unwrap();
+    assert_eq!(observed.get(), (true, false));
+
+    observed.set((false, false));
+    runtime
+        .run_frame_at(bounds, first_frame + Duration::from_millis(16))
+        .unwrap();
+    assert_eq!(observed.get(), (false, false));
+}
 
 #[test]
 fn transient_callback_can_cancel_a_later_callback_in_the_same_batch() {

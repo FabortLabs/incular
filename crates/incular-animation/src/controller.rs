@@ -360,7 +360,6 @@ fn remove_registration<F: ?Sized>(
     Some(removed)
 }
 
-#[derive(Default)]
 struct ControllerState {
     state: State,
     run: Option<Run>,
@@ -374,11 +373,44 @@ struct ControllerState {
     future: Option<TickerFuture>,
 }
 
+impl ControllerState {
+    fn new(state: State) -> Self {
+        Self {
+            state,
+            run: None,
+            listeners: Vec::new(),
+            status_listeners: Vec::new(),
+            next_listener: 0,
+            ticker: None,
+            future: None,
+        }
+    }
+}
+
+impl Default for ControllerState {
+    fn default() -> Self {
+        Self::new(State::default())
+    }
+}
+
+impl Drop for ControllerState {
+    fn drop(&mut self) {
+        // The controller has its own run future, independent of its optional
+        // scheduler ticker. Dropping only the ticker would leave orCancel
+        // waiters on the controller's run pending.
+        drop(self.ticker.take());
+        if let Some(future) = self.future.take() {
+            future.resolve(false);
+        }
+    }
+}
+
 /// A cloneable controller advanced by timestamps.
 ///
 /// `tick` is deterministic and can be driven by a frame scheduler, a test
 /// clock, or a native animation callback. Values are always kept inside the
 /// configured bounds.
+/// Dropping the last handle cancels an unfinished run.
 #[derive(Clone, Default)]
 pub struct AnimationController {
     changes: incular_core::reactivity::DependencySource,
@@ -446,10 +478,7 @@ impl AnimationController {
         };
         Self {
             changes: incular_core::reactivity::DependencySource::default(),
-            inner: Rc::new(RefCell::new(ControllerState {
-                state,
-                ..ControllerState::default()
-            })),
+            inner: Rc::new(RefCell::new(ControllerState::new(state))),
         }
     }
 
