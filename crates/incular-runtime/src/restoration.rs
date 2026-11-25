@@ -5,7 +5,7 @@
 //! callbacks, gestures, and semantics are never part of a snapshot.
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     fmt,
     fs::{self, File},
     io::Read,
@@ -418,6 +418,10 @@ struct SnapshotDocument {
     application_id: String,
     #[serde(default)]
     state: BTreeMap<String, Value>,
+    // Older snapshots encode only values. A scope that has been claimed
+    // can persist without inventing an application value inside it.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    claimed_scopes: BTreeSet<String>,
     #[serde(default)]
     windows: Vec<RestoredWindow>,
 }
@@ -430,6 +434,7 @@ impl SnapshotDocument {
             snapshot_generation: 0,
             application_id: config.application_id.clone(),
             state: BTreeMap::new(),
+            claimed_scopes: BTreeSet::new(),
             windows: Vec::new(),
         }
     }
@@ -470,7 +475,7 @@ pub struct RestorationDiagnostics {
 
 struct ManagerState {
     snapshot: SnapshotDocument,
-    /// Value count per scope, kept in step with `snapshot.state`.
+    /// Value count per scope plus one for each explicitly claimed scope.
     scope_counts: BTreeMap<String, usize>,
     diagnostics: RestorationDiagnostics,
     dirty: bool,
@@ -517,9 +522,9 @@ impl RestorationHandle {
         self.manager.flush();
     }
 
-    /// Explicitly removes all values below a stable scope. This is suitable
-    /// for a permanently popped restorable route; temporary rebuilds should
-    /// keep their scope intact.
+    /// Explicitly removes a stable scope and its descendants, returning
+    /// the number of values removed. Temporary rebuilds should keep their
+    /// scopes intact.
     pub fn remove_scope(&self, scope: &RestorationScope) -> usize {
         self.manager.remove_scope(scope.path())
     }
@@ -534,11 +539,12 @@ impl RestorationHandle {
     /// claim of the same path fails instead of silently sharing persistence
     /// state; windows already hold claims for their own scopes, so use this
     /// for application-owned dynamic scopes that must stay unique while
-    /// mounted. Dropping the guard releases the path.
+    /// mounted. A new bucket is persisted even when empty. Dropping the
+    /// guard releases ownership, not the persisted bucket.
     pub fn claim_scope(&self, scope: &RestorationScope) -> Result<ClaimedRestorationScope, String> {
-        self.manager
-            .acquire_scope(scope.path())
-            .map(|lease| ClaimedRestorationScope { _lease: lease })
+        let lease = self.manager.acquire_scope(scope.path())?;
+        self.manager.remember_claimed_scope(&lease.path);
+        Ok(ClaimedRestorationScope { _lease: lease })
     }
 
     #[must_use]
@@ -587,7 +593,10 @@ impl RestorationManager {
             }
         }
         diagnostics.restoration_values = snapshot.state.len();
-        let scope_counts = scope_counts_of(&snapshot.state);
+        let mut scope_counts = scope_counts_of(&snapshot.state);
+        for scope in &snapshot.claimed_scopes {
+            *scope_counts.entry(scope.clone()).or_default() += 1;
+        }
         diagnostics.restoration_scopes = scope_counts.len();
         diagnostics.dirty_generation = snapshot.snapshot_generation;
         diagnostics.persisted_generation = snapshot.snapshot_generation;
@@ -682,11 +691,20 @@ impl RestorationManager {
             keep
         });
         let removed = before - state.snapshot.state.len();
-        if removed > 0 {
+        let scopes_before = state.snapshot.claimed_scopes.len();
+        state.snapshot.claimed_scopes.retain(|scope| {
+            let keep = scope != &prefix && !scope.starts_with(&prefix_with_separator);
+            if !keep {
+                decrement_scope(scope_counts, scope);
+            }
+            keep
+        });
+        let changed = removed > 0 || scopes_before != state.snapshot.claimed_scopes.len();
+        if changed {
             refresh_counts(state);
         }
         drop(guard);
-        if removed > 0 {
+        if changed {
             self.mark_dirty();
         }
         removed
@@ -695,6 +713,7 @@ impl RestorationManager {
     pub(crate) fn reset(&self) {
         let mut state = self.inner.state.borrow_mut();
         state.snapshot.state.clear();
+        state.snapshot.claimed_scopes.clear();
         state.snapshot.windows.clear();
         state.scope_counts.clear();
         refresh_counts(&mut state);
@@ -787,6 +806,32 @@ impl RestorationManager {
             manager: Rc::downgrade(&self.inner),
             path,
         })
+    }
+
+    fn remember_claimed_scope(&self, path: &str) {
+        if path.is_empty() {
+            return;
+        }
+        let mut state = self.inner.state.borrow_mut();
+        if state.snapshot.claimed_scopes.contains(path) {
+            return;
+        }
+        // A legacy snapshot can already imply this bucket from a value
+        // or another bucket below it. Merely opening it is not a write.
+        let prefix = format!("{path}/");
+        let already_present = state.scope_counts.contains_key(path)
+            || state
+                .scope_counts
+                .range(prefix.clone()..)
+                .next()
+                .is_some_and(|(scope, _)| scope.starts_with(&prefix));
+        state.snapshot.claimed_scopes.insert(path.to_owned());
+        *state.scope_counts.entry(path.to_owned()).or_default() += 1;
+        refresh_counts(&mut state);
+        drop(state);
+        if !already_present {
+            self.mark_dirty();
+        }
     }
 
     fn mark_dirty(&self) {
@@ -1133,7 +1178,10 @@ fn count_scope(counts: &mut BTreeMap<String, usize>, key: &str) {
 }
 
 fn uncount_scope(counts: &mut BTreeMap<String, usize>, key: &str) {
-    let scope = scope_of(key);
+    decrement_scope(counts, scope_of(key));
+}
+
+fn decrement_scope(counts: &mut BTreeMap<String, usize>, scope: &str) {
     if let Some(count) = counts.get_mut(scope) {
         *count -= 1;
         if *count == 0 {

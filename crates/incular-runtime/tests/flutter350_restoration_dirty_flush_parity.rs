@@ -41,6 +41,10 @@ impl Fixture {
             }))
             .unwrap(),
         ));
+        Self::open(store)
+    }
+
+    fn open(store: Arc<InMemoryRestorationStore>) -> Self {
         let captured = Rc::new(RefCell::new(None));
         let slot = captured.clone();
         let app = Application::new_with_restoration(
@@ -92,8 +96,17 @@ impl Fixture {
     }
 
     fn saved_state(&self, path: &str) -> Option<Value> {
-        let document: Value = serde_json::from_slice(&self.store.bytes().unwrap()).unwrap();
-        document["state"].get(path).cloned()
+        self.document()["state"].get(path).cloned()
+    }
+
+    fn document(&self) -> Value {
+        serde_json::from_slice(&self.store.bytes().unwrap()).unwrap()
+    }
+
+    fn saved_scope(&self, path: &str) -> bool {
+        self.document()["claimed_scopes"]
+            .as_array()
+            .is_some_and(|scopes| scopes.iter().any(|scope| scope.as_str() == Some(path)))
     }
 }
 
@@ -117,18 +130,31 @@ fn claiming_an_existing_child_loads_values_without_requesting_a_save() {
     );
 }
 
-// services/restoration_bucket_test.dart:172 value persistence plus whether
-// merely claiming a new empty owner marks the state dirty. Rust's flat store
-// has no stand-alone serializable empty child object.
+// services/restoration_bucket_test.dart:172. The local snapshot persists
+// the shape of an empty bucket without inventing an application value.
 #[test]
 fn claiming_a_new_child_requests_a_save_before_its_first_value_write() {
     let mut fixture = Fixture::new();
     assert_eq!(fixture.saved_state("application/child2/foo"), None);
     let requests = fixture.handle.diagnostics().save_requests;
     let child = fixture.root.child_unchecked(key("child2"));
-    let _lease = fixture.handle.claim_scope(&child).unwrap();
-    let requests_after_claim = fixture.handle.diagnostics().save_requests;
+    let lease = fixture.handle.claim_scope(&child).unwrap();
+    assert_eq!(fixture.handle.diagnostics().save_requests, requests + 1);
+    fixture.handle.flush();
+    fixture.drain_save();
+    assert!(fixture.saved_scope("application/child2"));
+    assert_eq!(fixture.saved_state("application/child2/foo"), None);
 
+    let store = fixture.store.clone();
+    drop(lease);
+    fixture.app.shutdown();
+    drop(fixture);
+
+    let mut fixture = Fixture::open(store);
+    let child = fixture.root.child_unchecked(key("child2"));
+    let requests = fixture.handle.diagnostics().save_requests;
+    let _lease = fixture.handle.claim_scope(&child).unwrap();
+    assert_eq!(fixture.handle.diagnostics().save_requests, requests);
     child.set_json(&key("foo"), json!(55));
     assert_eq!(child.get_json(&key("foo")), Some(json!(55)));
     fixture.handle.flush();
@@ -137,10 +163,30 @@ fn claiming_a_new_child_requests_a_save_before_its_first_value_write() {
         fixture.saved_state("application/child2/foo"),
         Some(json!(55))
     );
-    assert!(
-        requests_after_claim > requests,
-        "claiming the empty child did not mark restoration state dirty"
-    );
+}
+
+#[test]
+fn removing_empty_bucket_metadata_keeps_neighboring_scope_paths() {
+    let mut fixture = Fixture::new();
+    let parent = fixture.root.child_unchecked(key("new"));
+    let nested = parent.child_unchecked(key("empty"));
+    let sibling = fixture.root.child_unchecked(key("new-sibling"));
+    let _nested = fixture.handle.claim_scope(&nested).unwrap();
+    let _sibling = fixture.handle.claim_scope(&sibling).unwrap();
+    let requests = fixture.handle.diagnostics().save_requests;
+    let _parent = fixture.handle.claim_scope(&parent).unwrap();
+    assert_eq!(fixture.handle.diagnostics().save_requests, requests);
+    fixture.handle.flush();
+    fixture.drain_save();
+    assert!(fixture.saved_scope("application/new/empty"));
+    assert!(fixture.saved_scope("application/new-sibling"));
+    assert_eq!(fixture.handle.remove_scope(&parent), 0);
+    assert_eq!(fixture.handle.diagnostics().save_requests, requests + 1);
+    fixture.handle.flush();
+    fixture.drain_save();
+    assert!(!fixture.saved_scope("application/new"));
+    assert!(!fixture.saved_scope("application/new/empty"));
+    assert!(fixture.saved_scope("application/new-sibling"));
 }
 
 // services/restoration_test.dart:238. Timing comparison uses save starts

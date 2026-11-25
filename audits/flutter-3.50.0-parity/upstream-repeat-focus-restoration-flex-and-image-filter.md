@@ -109,3 +109,16 @@ suspend and shutdown can still force persistence without a frame.
 All 26 selected Rust tests passed. The separate empty-bucket dirty
 case (:172) is not part of this fix; the engine channel and snapshot
 format are not claimed equivalent.
+
+### Empty restoration buckets survive a save
+
+The :172 behavioral mismatch is repaired: claiming a new empty scope
+requests a save before its first value write. The optional, backward-
+compatible snapshot field records bucket paths separately from values.
+Reopening an empty persisted bucket is clean; releasing a live lease
+does not delete data. Removing an empty subtree updates persistence
+without deleting similarly prefixed siblings. The pinned originals
+:147, :172 and :238 pass, and the five Rust timing/bucket tests plus
+23 restoration regressions pass. The separate same-turn handoff
+port still reports the existing strict duplicate-lease mismatch.
+The Flutter engine binary format is outside these behavioral matches.
