@@ -1258,7 +1258,19 @@ impl WidgetTree {
             }
         }
         state.text_direction = state.text_direction.or(merged.direction).or_else(|| {
-            (default_label.is_some() || entry.widget.semantic_properties().label.is_some())
+            let has_text = default_label.is_some()
+                || merged_label.is_some()
+                || properties.label.is_some()
+                || value.is_some()
+                || properties.description.is_some()
+                || properties
+                    .explicit
+                    .as_ref()
+                    .is_some_and(|explicit| explicit.description.is_some())
+                || state.tooltip.is_some()
+                || state.increased_value.is_some()
+                || state.decreased_value.is_some();
+            has_text
                 .then(|| self.semantic_label_direction(element, entry))
                 .flatten()
         });

@@ -593,6 +593,7 @@ impl Semantics {
     #[must_use]
     pub fn explicit(&self) -> Option<crate::ExplicitSemantics> {
         let has_metadata = self.role.is_some()
+            || self.locale_for_subtree.is_some()
             || self.label.is_some()
             || self.value.is_some()
             || self.description.is_some()

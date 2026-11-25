@@ -208,9 +208,9 @@ packages/flutter/test/foundation/change_notifier_test.dart	457	hasListeners	pair
 packages/flutter/test/animation/futures_test.dart	122	awaiting animation controllers and failing	partial-match	upstream-opacity-hover-flex-notifier-futures.md#awaited-controller-chains-under-uneven-frame-times
 packages/flutter/test/animation/futures_test.dart	153	creating orCancel future later	paired-match	upstream-opacity-hover-flex-notifier-futures.md
 packages/flutter/test/animation/futures_test.dart	167	creating orCancel future later	paired-match	upstream-opacity-hover-flex-notifier-futures.md
-packages/flutter/test/widgets/semantics_test.dart	100	Semantics tooltip	partial-match	upstream-semantic-headings-clamping-and-dilation.md
+packages/flutter/test/widgets/semantics_test.dart	100	Semantics tooltip	paired-match	upstream-semantics-text-and-locale.md
 packages/flutter/test/widgets/semantics_test.dart	1525	Semantics excludeSemantics ignores children	partial-match	upstream-semantic-headings-clamping-and-dilation.md
-packages/flutter/test/widgets/semantics_test.dart	1876	Semantics with zero transform gets dropped	partial-mismatch	upstream-semantic-headings-clamping-and-dilation.md
+packages/flutter/test/widgets/semantics_test.dart	1876	Semantics with zero transform gets dropped	partial-match	upstream-semantic-headings-clamping-and-dilation.md#empty-fitted-content
 packages/flutter/test/widgets/semantics_test.dart	2020	supports heading levels	paired-match	upstream-semantic-headings-clamping-and-dilation.md#heading-level-remediation
 packages/flutter/test/widgets/semantics_test.dart	2039	parent heading level takes precedence when it absorbs a child	partial-mismatch	upstream-semantic-headings-clamping-and-dilation.md
 packages/flutter/test/widgets/scroll_simulation_test.dart	11	ClampingScrollSimulation has a stable initial conditions	partial-mismatch	upstream-semantic-headings-clamping-and-dilation.md
@@ -1483,3 +1483,13 @@ packages/flutter/test/widgets/animated_align_test.dart	126	AnimatedAlign null wi
 packages/flutter/test/widgets/semantics_test.dart	995	MergeSemantics merges children with AccessiblityFocusBlockType.blockNode	paired-match	upstream-semantics-binding.md#label-absorption-in-blocked-subtrees
 packages/flutter/test/widgets/semantics_test.dart	1043	AccessiblityFocusBlockType.blockNode doesnt merge up or merge down	paired-match	upstream-semantics-binding.md#label-absorption-in-blocked-subtrees
 packages/flutter/test/widgets/semantics_test.dart	1098	AccessiblityFocusBlockType.blockSubtree doesnt merge up	paired-match	upstream-semantics-binding.md#label-absorption-in-blocked-subtrees
+packages/flutter/test/widgets/semantics_test.dart	188	different locale will not merge	paired-match	upstream-semantics-text-and-locale.md
+packages/flutter/test/widgets/semantics_test.dart	225	Semantics and Directionality - RTL	paired-match	upstream-semantics-text-and-locale.md
+packages/flutter/test/widgets/semantics_test.dart	239	Semantics and Directionality - LTR	paired-match	upstream-semantics-text-and-locale.md
+packages/flutter/test/widgets/semantics_test.dart	253	Semantics and Directionality - cannot override RTL with LTR	paired-match	upstream-semantics-text-and-locale.md
+packages/flutter/test/widgets/semantics_test.dart	278	Semantics and Directionality - cannot override LTR with RTL	paired-match	upstream-semantics-text-and-locale.md
+packages/flutter/test/widgets/semantics_test.dart	303	Semantics label and hint	paired-match	upstream-semantics-text-and-locale.md
+packages/flutter/test/widgets/semantics_test.dart	331	Semantics hints can merge	reference-ran-incular-open	upstream-semantics-text-and-locale.md
+packages/flutter/test/widgets/semantics_test.dart	362	Semantics values do not merge	paired-match	upstream-semantics-text-and-locale.md
+packages/flutter/test/widgets/semantics_test.dart	398	Semantics value and hint can merge	reference-ran-incular-open	upstream-semantics-text-and-locale.md
+packages/flutter/test/widgets/semantics_test.dart	1199	Increased/decreased values are annotated	paired-match	upstream-semantics-text-and-locale.md

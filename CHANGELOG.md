@@ -323,6 +323,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- Locale-only semantics are retained. Hints, tooltips and values preserve
+  their reading direction even when the node has no label.
+
 - A blocked accessibility subtree combines compatible labels without dropping
   explicit child nodes or their actions.
 
