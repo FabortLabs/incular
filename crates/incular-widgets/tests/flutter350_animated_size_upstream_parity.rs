@@ -1,6 +1,6 @@
 //! Flutter 3.50.0 animated_size_test.dart public sizes, paint and lifecycle.
 use incular_config::Constraints;
-use incular_core::Size;
+use incular_core::{Color, Size};
 use incular_rendering::PaintCommand;
 use incular_widgets::{
     AnimatedSize, SizedBox, Text, TextDirection, Widget,
@@ -84,6 +84,7 @@ fn stable_child_grows_then_shrinks_and_clips_only_when_it_overflows() {
     let grow_half = probe.frame(1100);
     let grow_clip = probe.has_clip();
     let grew = probe.frame(1200);
+    assert!(!probe.has_clip(), "the settled child fits exactly");
     probe.update(100., 1300);
     let shrink_half = probe.frame(1400);
     let shrink_clip = probe.has_clip();
@@ -158,4 +159,26 @@ fn animated_size_can_lay_out_a_text_child_at_zero_size() {
     tree.layout(Constraints::tight(Size::ZERO)).unwrap();
     let _ = tree.paint();
     assert_eq!(tree.element_bounds(root).unwrap().size, Size::ZERO);
+}
+
+#[test]
+fn clip_none_paints_while_the_larger_child_overflows() {
+    use incular_config::Clip;
+    let side = |value| {
+        Widget::from(
+            AnimatedSize::new(
+                Duration::from_millis(200),
+                Widget::box_(Size::new(value, value), Color::WHITE),
+            )
+            .clip_behavior(Clip::None),
+        )
+    };
+    let mut probe = Fixture::new(100., Constraints::loose(LARGE));
+    probe.tree.update(probe.root, side(100.)).unwrap();
+    probe.frame(32);
+    probe.tree.update(probe.root, side(200.)).unwrap();
+    probe.frame(1000);
+    probe.frame(1000);
+    assert_eq!(probe.frame(1100), Size::new(150., 150.));
+    assert!(!probe.has_clip());
 }

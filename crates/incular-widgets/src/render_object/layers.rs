@@ -50,6 +50,9 @@ fn widget_clips(widget: &WidgetKind) -> bool {
         | WidgetKind::IndexedStack { clip_behavior, .. }
         | WidgetKind::Scroll { clip_behavior, .. } => *clip_behavior != Clip::None,
         WidgetKind::SliverViewport { config } => config.clip_behavior != Clip::None,
+        WidgetKind::CustomLayout { delegate, .. } => delegate
+            .overflow_clip()
+            .is_some_and(|clip| clip != Clip::None),
         _ => false,
     }
 }
@@ -101,6 +104,7 @@ impl LayerSpec {
             | WidgetKind::Flex { .. }
             | WidgetKind::Stack { .. }
             | WidgetKind::IndexedStack { .. }
+            | WidgetKind::CustomLayout { .. }
                 if widget_clips(widget) =>
             {
                 AttachmentSpec::Clip
@@ -273,6 +277,14 @@ impl RenderLayers {
                 let clip = compositor.create_clip_rect_with_coverage(
                     Rect::from_origin_size(Offset::ZERO, Size::ZERO),
                     shape_clip_coverage(*clip_behavior),
+                );
+                Self::create_clip_stage(compositor, root, picture, clip)
+            }
+            WidgetKind::CustomLayout { delegate, .. } if widget_clips(widget) => {
+                let behavior = delegate.overflow_clip().expect("clip is enabled");
+                let clip = compositor.create_clip_rect_with_coverage(
+                    Rect::from_origin_size(Offset::ZERO, Size::ZERO),
+                    shape_clip_coverage(behavior),
                 );
                 Self::create_clip_stage(compositor, root, picture, clip)
             }
@@ -1147,8 +1159,14 @@ impl RenderLayers {
     /// and the current delegate does not reclip against the one that produced it
     /// (`CustomClipper::should_reclip`), as Flutter's `_RenderCustomClip` does.
     fn apply_clip(&self, compositor: &mut LayerTree, kind: &RenderKind, size: Size) {
+        if let RenderKind::CustomLayout { delegate } = kind
+            && let Some(behavior) = delegate.overflow_clip()
+        {
+            self.apply_fitted_clip(compositor, size, behavior, self.layout_overflow.get());
+            return;
+        }
         if let RenderKind::Flex { clip_behavior, .. }
-            | RenderKind::Unconstrained { clip_behavior, .. } = *kind
+        | RenderKind::Unconstrained { clip_behavior, .. } = *kind
         {
             self.apply_fitted_clip(compositor, size, clip_behavior, self.layout_overflow.get());
             return;

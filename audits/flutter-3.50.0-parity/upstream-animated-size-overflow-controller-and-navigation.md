@@ -41,3 +41,15 @@ Pinned Flutter 3.50.0 `ab2912035e`; unchanged Incular production `c647cb85`.
   dispatches a distinct didRemove notification; Incular reports
   Popped. Stack advancement still works. See
   `flutter_navigator_observer_upstream_parity`.
+
+## Current AnimatedSize clipping
+
+Pinned :20 and the native retained counterpart now agree at all four size
+checkpoints. The 150px box clips while its child grows to 200px, but does
+not add a clip while shrinking around a child already sized at 100px.
+The retained clip stage is reused when overflow returns and bypassed when
+the child fits; a separate painted wrapper is no longer needed.
+The authored `animated_size_clip_none_test.dart` also passes on both
+runtimes: the deliberately overflowing child is painted without a clip.
+Seventeen targeted AnimatedSize and adjacent AnimatedCrossFade tests passed.
+These are clip-command comparisons, not native GPU captures.

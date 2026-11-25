@@ -229,38 +229,58 @@ pub enum CustomLayoutDelegate {
 /// `child.size`, such as `RenderAnimatedSize`'s.
 #[derive(Clone)]
 #[doc(hidden)]
-pub struct ChildSizedLayout(Rc<dyn Fn(Constraints, Size) -> (Size, Offset)>, bool);
+pub struct ChildSizedLayout {
+    layout: Rc<dyn Fn(Constraints, Size) -> (Size, Offset)>,
+    reflow: bool,
+    overflow_clip: Option<incular_config::Clip>,
+}
 
 impl ChildSizedLayout {
     /// `layout(constraints, child_size)` returns the box size, constrained
     /// afterwards, and the child's offset. Without a child the size is
     /// `Size::ZERO`.
     pub(crate) fn new(layout: impl Fn(Constraints, Size) -> (Size, Offset) + 'static) -> Self {
-        Self(Rc::new(layout), false)
+        Self {
+            layout: Rc::new(layout),
+            reflow: false,
+            overflow_clip: None,
+        }
     }
 
     /// Like [`Self::new`], but a box size that differs from the child's lays
     /// the child out again, tightly, at that size (text reflows).
     pub(crate) fn reflowing(layout: impl Fn(Constraints, Size) -> Size + 'static) -> Self {
-        Self(
-            Rc::new(move |constraints, child| (layout(constraints, child), Offset::ZERO)),
-            true,
-        )
+        Self {
+            layout: Rc::new(move |constraints, child| (layout(constraints, child), Offset::ZERO)),
+            reflow: true,
+            overflow_clip: None,
+        }
     }
 
     pub(crate) fn layout(&self, constraints: Constraints, child: Size) -> (Size, Offset) {
-        (self.0)(constraints, child)
+        (self.layout)(constraints, child)
     }
 
     pub(crate) fn reflows(&self) -> bool {
-        self.1
+        self.reflow
+    }
+
+    pub(crate) fn clip_overflow(mut self, behavior: incular_config::Clip) -> Self {
+        self.overflow_clip = Some(behavior);
+        self
+    }
+
+    pub(crate) fn overflow_clip(&self) -> Option<incular_config::Clip> {
+        self.overflow_clip
     }
 }
 
 /// A new layout closure always lays out again.
 impl PartialEq for ChildSizedLayout {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.0, &other.0)
+        Rc::ptr_eq(&self.layout, &other.layout)
+            && self.reflow == other.reflow
+            && self.overflow_clip == other.overflow_clip
     }
 }
 
@@ -271,6 +291,14 @@ impl fmt::Debug for CustomLayoutDelegate {
 }
 
 impl CustomLayoutDelegate {
+    #[doc(hidden)]
+    pub fn overflow_clip(&self) -> Option<incular_config::Clip> {
+        match self {
+            Self::ChildSized(layout) => layout.overflow_clip(),
+            _ => None,
+        }
+    }
+
     pub(crate) fn tracked(&self) -> Self {
         match self {
             Self::Single(delegate) => Self::Single(delegate.tracked()),

@@ -11,9 +11,9 @@ use incular_animation::{AnimationController, AnimationStatus, Curve};
 use incular_config::{Alignment, Clip, Constraints};
 use incular_core::{Offset, Size};
 
+use crate::Widget;
 use crate::custom_layout::{ChildSizedLayout, CustomLayoutDelegate};
 use crate::tree::{RetainedState, WidgetKind};
-use crate::{ClipRect, Widget};
 
 /// Flutter's `AnimatedSize`: when the child's size changes, this widget's
 /// size animates from its current size to the child's over `duration`,
@@ -237,17 +237,17 @@ impl SizeState {
                 Some(state) => state.perform_layout(constraints, child),
                 None => (constraints.constrain(child), Offset::ZERO),
             })
+            .clip_overflow(config.clip_behavior)
         };
         let sized = Widget::from_kind(WidgetKind::CustomLayout {
             delegate: CustomLayoutDelegate::ChildSized(layout),
             children: vec![config.child.clone()],
         });
-        let clipped = ClipRect::new(sized).clip_behavior(config.clip_behavior);
         Widget::animation_ticker_with_revision(
             self.controller.clone(),
             false,
             self.revision.borrow().clone(),
-            clipped,
+            sized,
         )
     }
 }

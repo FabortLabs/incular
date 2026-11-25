@@ -178,7 +178,7 @@ impl WidgetTree {
                 (result.size, offsets)
             }
             RenderKind::CustomLayout { ref delegate } => {
-                self.layout_custom(delegate, children, constraints)?
+                self.layout_custom(id, delegate, children, constraints)?
             }
             RenderKind::Flexible { .. }
             | RenderKind::Positioned { .. }
@@ -835,6 +835,7 @@ impl WidgetTree {
     /// and `RenderFlow`.
     fn layout_custom(
         &mut self,
+        id: RenderObjectId,
         delegate: &CustomLayoutDelegate,
         children: &[RenderObjectId],
         constraints: Constraints,
@@ -855,6 +856,7 @@ impl WidgetTree {
             }
             CustomLayoutDelegate::ChildSized(layout) => {
                 let Some(&child) = children.first() else {
+                    self.set_layout_overflow(id, false);
                     let (size, _) = layout.layout(constraints, Size::ZERO);
                     return Ok((constraints.constrain(size), ChildOffsets::default()));
                 };
@@ -863,12 +865,18 @@ impl WidgetTree {
                     .render_live(child, "retained render must remain live")
                     .size;
                 let (size, offset) = layout.layout(constraints, child_size);
-                if layout.reflows() && constraints.constrain(size) != child_size {
-                    let size = constraints.constrain(size);
+                let size = constraints.constrain(size);
+                if layout.reflows() && size != child_size {
                     self.layout_render(child, Constraints::tight(size))?;
-                    return Ok((size, ChildOffsets::One(offset)));
+                    self.set_layout_overflow(id, false);
+                } else {
+                    self.set_layout_overflow(
+                        id,
+                        layout.overflow_clip().is_some()
+                            && (child_size.width > size.width || child_size.height > size.height),
+                    );
                 }
-                Ok((constraints.constrain(size), ChildOffsets::One(offset)))
+                Ok((size, ChildOffsets::One(offset)))
             }
             CustomLayoutDelegate::Multi(delegate) => {
                 let delegate = delegate.get();

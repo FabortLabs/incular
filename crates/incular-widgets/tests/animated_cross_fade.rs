@@ -137,12 +137,16 @@ fn cross_fade_forwards_clip_to_both_layouts() {
         let mut result = Vec::new();
         let mut elements = vec![h.root];
         while let Some(id) = elements.pop() {
-            if let Some(RenderKind::ClipRect { clip_behavior, .. }) = h
+            match h
                 .tree
                 .render_id(id)
                 .and_then(|render| h.tree.render_object_kind(render))
             {
-                result.push(*clip_behavior);
+                Some(RenderKind::ClipRect { clip_behavior, .. }) => result.push(*clip_behavior),
+                Some(RenderKind::CustomLayout { delegate }) => {
+                    result.extend(delegate.overflow_clip());
+                }
+                _ => {}
             }
             elements.extend(h.tree.children(id).unwrap_or_default());
         }
