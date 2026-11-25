@@ -27,3 +27,14 @@ canvas, not native drawing. Incular does not forward an unchecked
 nine-slice draw command and this is not counted as paired.
 
 Four focused Rust targets passed (32 tests).
+
+## Ordinary image repetition
+
+The authored `image_scale_paint_reference_test.dart` now also records
+repeated image draws. Both axes and each single axis place the same
+20×20 tiles as Flutter in a 50×50 box. Every tile is drawn under one
+bounds clip. When a single tile fills the box, both implementations
+skip the clip and emit just one draw. The first Rust run failed because
+ordinary retained images emitted partial edge tiles with no clip.
+The three focused Rust targets passed (25 tests), and both authored
+reference cases passed. This adds no original registration credit.

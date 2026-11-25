@@ -98,14 +98,10 @@ impl WidgetTree {
                     Offset::ZERO,
                     Size::new(intrinsic.width() as f32, intrinsic.height() as f32),
                 );
-                let (source, destination) = image_fit_rects_scaled(
-                    source,
-                    Rect::from_origin_size(Offset::ZERO, size),
-                    fit,
-                    alignment,
-                    scale,
-                );
-                if matches!(repeat, ImageRepeat::NoRepeat) {
+                let bounds = Rect::from_origin_size(Offset::ZERO, size);
+                let (source, destination) =
+                    image_fit_rects_scaled(source, bounds, fit, alignment, scale);
+                if repeat == ImageRepeat::NoRepeat || destination.size == bounds.size {
                     cache.push(PaintCommand::Image {
                         image: image.clone(),
                         source,
@@ -113,11 +109,8 @@ impl WidgetTree {
                         sampling,
                     });
                 } else {
-                    for destination in image_repeat_destinations(
-                        destination,
-                        Rect::from_origin_size(Offset::ZERO, size),
-                        repeat,
-                    ) {
+                    cache.push(PaintCommand::PushClip { rect: bounds });
+                    for destination in image_repeat_destinations(destination, bounds, repeat) {
                         cache.push(PaintCommand::Image {
                             image: image.clone(),
                             source,
@@ -125,6 +118,7 @@ impl WidgetTree {
                             sampling,
                         });
                     }
+                    cache.push(PaintCommand::PopClip);
                 }
             }
             RenderKind::TextField(ref field) => {

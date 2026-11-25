@@ -788,3 +788,63 @@ fn scaled_pixels_are_fitted_in_logical_units_even_with_explicit_bounds() {
         assert_eq!(image_commands(&tree.paint()), [(crop, local)], "{fit:?}");
     }
 }
+
+#[test]
+fn repeating_image_clips_partial_tiles_and_elides_an_unneeded_clip() {
+    let source = handle(20, 20);
+    for (size, repeat, x, y) in [
+        (
+            50.,
+            ImageRepeat::Repeat,
+            &[-5., 15., 35.][..],
+            &[-5., 15., 35.][..],
+        ),
+        (50., ImageRepeat::RepeatX, &[-5., 15., 35.][..], &[15.][..]),
+        (50., ImageRepeat::RepeatY, &[15.][..], &[-5., 15., 35.][..]),
+        (20., ImageRepeat::Repeat, &[0.][..], &[0.][..]),
+    ] {
+        let bounds = Size::new(size, size);
+        let (mut tree, _) = layout(
+            || {
+                Image::new(source.clone())
+                    .width(size)
+                    .height(size)
+                    .fit(ImageFit::None)
+                    .repeat(repeat)
+                    .into()
+            },
+            Constraints::tight(bounds),
+        );
+        let canvas = tree.paint();
+        let mut clip_depth = 0;
+        let mut clips = 0;
+        let mut offsets = Vec::new();
+        for command in canvas.commands() {
+            match command {
+                PaintCommand::PushClip { rect } => {
+                    assert_eq!(*rect, Rect::from_origin_size(Offset::ZERO, bounds));
+                    clips += 1;
+                    clip_depth += 1;
+                }
+                PaintCommand::PopClip => clip_depth -= 1,
+                PaintCommand::Image { destination, .. } => {
+                    assert_eq!(clip_depth, i32::from(size != 20.), "{repeat:?}");
+                    assert_eq!(destination.size, Size::new(20., 20.));
+                    offsets.push(destination.origin);
+                }
+                _ => {}
+            }
+        }
+        assert_eq!(clip_depth, 0);
+        assert_eq!(clips, usize::from(size != 20.));
+        assert_eq!(offsets.len(), x.len() * y.len());
+        for &x in x {
+            for &y in y {
+                assert!(
+                    offsets.contains(&Offset::new(x, y)),
+                    "{repeat:?}, ({x}, {y})"
+                );
+            }
+        }
+    }
+}
