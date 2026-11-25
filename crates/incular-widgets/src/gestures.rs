@@ -49,6 +49,14 @@ impl GestureDetector {
         }
     }
 
+    /// Limits new pointer presses and trackpad gestures to these devices.
+    /// Without an allowlist, all pointer devices are eligible.
+    #[must_use]
+    pub fn supported_devices(mut self, kinds: impl IntoIterator<Item = PointerDeviceKind>) -> Self {
+        self.callbacks.set_supported_devices(kinds);
+        self
+    }
+
     /// Excludes the detector's gestures from accessibility without disabling pointer handling.
     #[must_use]
     pub fn exclude_from_semantics(mut self, exclude: bool) -> Self {

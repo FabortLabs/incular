@@ -488,6 +488,9 @@ pub struct GestureCallbacks {
     /// Wait for drag slop even when the arena has already been won
     /// (Flutter `DragGestureRecognizer.onlyAcceptDragOnThreshold`).
     pub only_accept_drag_on_threshold: bool,
+    /// Pointer categories admitted at the start of a press. None accepts
+    /// all devices; an empty accepted set accepts none.
+    pub supported_devices: Option<Rc<[PointerDeviceKind]>>,
     /// Called with `true` when keyboard focus enters this region's subtree
     /// (itself or a descendant) and `false` when it leaves. Purely
     /// observational: it never makes the region focusable.
@@ -501,6 +504,21 @@ pub struct GestureCallbacks {
 }
 
 impl GestureCallbacks {
+    /// Replaces the device allowlist. The order of the input is immaterial.
+    pub fn set_supported_devices(&mut self, kinds: impl IntoIterator<Item = PointerDeviceKind>) {
+        let mut kinds: Vec<_> = kinds.into_iter().collect();
+        kinds.sort_unstable_by_key(|kind| *kind as u8);
+        kinds.dedup();
+        self.supported_devices = Some(kinds.into());
+    }
+
+    #[must_use]
+    pub fn allows_pointer_device(&self, kind: PointerDeviceKind) -> bool {
+        self.supported_devices
+            .as_ref()
+            .is_none_or(|kinds| kinds.contains(&kind))
+    }
+
     /// The callbacks a press made with `class` competes with, as Flutter
     /// routes a press to the recognizers whose `allowedButtonsFilter` accepts
     /// its buttons. A primary press keeps every callback. A secondary or
@@ -528,6 +546,7 @@ impl GestureCallbacks {
             on_long_press_end: buttons.on_long_press_end.clone(),
             on_cancel: self.on_cancel.clone(),
             drag_start_behavior: self.drag_start_behavior,
+            supported_devices: self.supported_devices.clone(),
             ..Self::default()
         }
     }

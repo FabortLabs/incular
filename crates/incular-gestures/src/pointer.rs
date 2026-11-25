@@ -252,6 +252,11 @@ impl PointerGestureRecognizer {
     pub fn set_gesture_settings(&mut self, settings: DeviceGestureSettings) {
         self.gesture_settings = settings;
     }
+    /// Filters new raw pointer presses by device category.
+    pub fn set_supported_devices(&mut self, kinds: impl IntoIterator<Item = PointerDeviceKind>) {
+        self.callbacks.set_supported_devices(kinds);
+    }
+
     /// The platform slop overrides in effect.
     #[must_use]
     pub fn gesture_settings(&self) -> DeviceGestureSettings {
@@ -793,6 +798,17 @@ impl PointerGestureRecognizer {
     /// retained arena delay observable behavior until it has accepted this
     /// recognizer. Direct users should normally keep using [`Self::handle`].
     pub fn observe(&mut self, event: PointerEvent) -> GestureDecision {
+        if event.phase == PointerPhase::Down {
+            if !self
+                .callbacks
+                .allows_pointer_device(PointerDeviceKind::Unknown)
+            {
+                return GestureDecision::Reject;
+            }
+            if self.down.is_none_or(|press| press.pointer == event.pointer) {
+                self.kind = PointerDeviceKind::Unknown;
+            }
+        }
         self.observe_with_buttons(event, None, false)
     }
 
@@ -1379,7 +1395,14 @@ impl GestureRecognizer for PointerGestureRecognizer {
     }
 
     fn observe_raw(&mut self, event: crate::details::RawPointerEvent) -> GestureDecision {
-        self.kind = event.kind;
+        if event.phase == PointerPhase::Down {
+            if !self.callbacks.allows_pointer_device(event.kind) {
+                return GestureDecision::Reject;
+            }
+            if self.down.is_none_or(|press| press.pointer == event.pointer) {
+                self.kind = event.kind;
+            }
+        }
         self.observe_with_buttons(event.legacy(), Some(event.buttons), event.synthesized)
     }
 

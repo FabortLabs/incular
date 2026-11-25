@@ -107,7 +107,9 @@ impl WidgetTree {
     fn has_trackpad_gesture_callback(&self, element: ElementId) -> bool {
         matches!(
             self.elements.get(element.0).map(|e| e.widget.kind()),
-            Some(WidgetKind::Gesture { callbacks, .. }) if callbacks.on_trackpad_gesture.is_some()
+            Some(WidgetKind::Gesture { callbacks, .. })
+                if callbacks.on_trackpad_gesture.is_some()
+                    && callbacks.allows_pointer_device(crate::raw_input::PointerDeviceKind::Trackpad)
         )
     }
 
@@ -847,6 +849,9 @@ impl WidgetTree {
                 let Some(callbacks) = self.gesture_callbacks(candidate) else {
                     continue;
                 };
+                if !callbacks.allows_pointer_device(kind) {
+                    continue;
+                }
                 // A press competes only with the callbacks of its own button.
                 let mut callbacks = callbacks.for_button_class(button_class);
                 if inner_button.is_some() {

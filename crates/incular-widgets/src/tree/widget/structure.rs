@@ -1845,6 +1845,8 @@ fn gesture_callbacks_eq(left: &GestureCallbacks, right: &GestureCallbacks) -> bo
         && left.include_semantics == right.include_semantics
         && left.mouse_cursor == right.mouse_cursor
         && left.drag_start_behavior == right.drag_start_behavior
+        && left.only_accept_drag_on_threshold == right.only_accept_drag_on_threshold
+        && left.supported_devices == right.supported_devices
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

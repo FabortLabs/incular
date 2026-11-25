@@ -1022,3 +1022,6 @@ packages/flutter/test/gestures/drag_test.dart	1806	Button change before acceptan
 packages/flutter/test/gestures/drag_test.dart	1824	Button change before acceptance should not prevent the next drag	paired-match	upstream-monodrag-arena-threshold.md#button-changes-terminate-the-current-drag
 packages/flutter/test/gestures/drag_test.dart	1857	Button change after acceptance should lead to immediate end	paired-match	upstream-monodrag-arena-threshold.md#button-changes-terminate-the-current-drag
 packages/flutter/test/gestures/drag_test.dart	1880	Button change after acceptance should not prevent the next drag	paired-match	upstream-monodrag-arena-threshold.md#button-changes-terminate-the-current-drag
+packages/flutter/test/gestures/drag_test.dart	189	Should reject mouse drag when configured to ignore mouse pointers - Horizontal	paired-match	upstream-monodrag-arena-threshold.md#supported-device-filtering
+packages/flutter/test/gestures/drag_test.dart	241	Should reject mouse drag when configured to ignore mouse pointers - Vertical	paired-match	upstream-monodrag-arena-threshold.md#supported-device-filtering
+packages/flutter/test/gestures/drag_test.dart	1699	Can filter drags based on device kind	paired-match	upstream-monodrag-arena-threshold.md#supported-device-filtering

@@ -69,3 +69,18 @@ path as a cancelled drag; prior state decides cancel versus
 end. It keeps the prior drag position and Flutter's ordering
 of velocity sampling before the button check. Ordinary tap
 and long-press button controls remain green.
+
+## Supported device filtering
+
+Pinned `gestures/drag_test.dart:189,241,1699` verifies that touch-only
+horizontal and vertical recognizers ignore a mouse sequence and that a
+mouse-only recognizer ignores touch before handling a normal mouse drag.
+Incular now filters on pointer down before entering the gesture arena. An
+omitted device set accepts every device; an explicitly empty set accepts none.
+Subsequent events for an accepted pointer retain its original device.
+
+The three matching assertions run in `flutter350_drag_supported_devices`.
+The separate retained-tree test `flutter350_gesture_device_allowlist` verifies
+that an excluded inner detector does not delay an eligible ancestor, and that
+the touch-only child still wins for touch. Existing button-change, transformed
+drag, device slop and tap/drag targets also passed.
