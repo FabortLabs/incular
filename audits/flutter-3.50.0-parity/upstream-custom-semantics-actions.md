@@ -55,3 +55,17 @@ control invokes the hint's custom ID without running a callback, then
 invokes the standard action and observes exactly one call. The mobile
 projection accepts named choices, not hints masquerading as custom
 requests. Platform-specific phrasing is not part of the comparison.
+
+## Point-addressed actions
+
+Pinned `semantics/semantics_owner_test.dart:262` passes: sending two
+custom IDs at the same point on a merged node selects the correct
+inner and outer owners. The Rust entry point takes logical window
+pixels rather than Flutter's physical semantics-root coordinate space.
+It rejects the right edge and unknown actions without invoking any
+handler. An authored rotation check passes on both sides: a point
+inside the world bounding box, but outside the rotated semantic square,
+must not fire. The inverse-transformed local bounds decide the result.
+
+Twenty-nine focused Rust checks passed. Overlapping nodes with custom
+traversal order and native coordinate conversion are separate cases.

@@ -11,7 +11,7 @@
 
 use super::*;
 use incular_semantics::{
-    AccessibilityFocusBlockType, CustomSemanticsAction, CustomSemanticsActionId,
+    AccessibilityFocusBlockType, CustomSemanticsAction, CustomSemanticsActionId, SemanticAction,
 };
 use std::borrow::Cow;
 
@@ -1374,6 +1374,70 @@ impl WidgetTree {
         None
     }
 
+    /// Selects a retained semantic action target at a logical window point.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn semantic_action_target_at(
+        &self,
+        position: Offset,
+        action: &SemanticAction,
+    ) -> Option<SemanticNodeId> {
+        self.semantics
+            .roots()
+            .iter()
+            .rev()
+            .find_map(|&node| self.semantic_action_in_subtree(node, position, action))
+    }
+
+    fn semantic_action_in_subtree(
+        &self,
+        node: SemanticNodeId,
+        position: Offset,
+        action: &SemanticAction,
+    ) -> Option<SemanticNodeId> {
+        let semantic = self.semantics.node(node)?;
+        // Test the world AABB before reconstructing the local coordinates.
+        if !semantic.bounds.contains(position) {
+            return None;
+        }
+        let element = self.element_for_semantic_node(node)?;
+        let render_id = self.render_id(element)?;
+        let render = self.renders.get(render_id.0)?;
+        let world = self.render_world_transform(render_id);
+        let child_world = world.then(self.child_content_transform(render_id));
+        let local = self
+            .semantic_bounds_transform(render_id, world, child_world)
+            .inverse_transform_point(position)?;
+        // Like Flutter's Rect.contains, a semantic box excludes its right
+        // and bottom edges. The pointer path has separate edge semantics.
+        if !(local.x >= 0.0
+            && local.x < render.size.width
+            && local.y >= 0.0
+            && local.y < render.size.height)
+        {
+            return None;
+        }
+
+        if let Some(child) = semantic
+            .children
+            .iter()
+            .rev()
+            .find_map(|&child| self.semantic_action_in_subtree(child, position, action))
+        {
+            return Some(child);
+        }
+        if !semantic.actions.contains(&action.kind()) {
+            return None;
+        }
+        match action {
+            SemanticAction::Custom(id) => self
+                .custom_semantic_action_callback(element, *id)
+                .is_some()
+                .then_some(node),
+            _ => Some(node),
+        }
+    }
+
     fn fitted_children_have_no_semantic_geometry(&self, entry: &Element) -> bool {
         matches!(entry.widget.kind(), WidgetKind::FittedBox { .. })
             && !self.fitted_content_is_visible(entry.render)
@@ -1387,14 +1451,24 @@ impl WidgetTree {
         child_world: CoreTransform,
     ) -> Rect {
         let render = self.render_live(render_id, "semantic render must remain live");
-        let bounds_world = if self.content_transform(render_id).is_some()
+        self.semantic_bounds_transform(render_id, world, child_world)
+            .transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, render.size))
+    }
+
+    fn semantic_bounds_transform(
+        &self,
+        render_id: RenderObjectId,
+        world: CoreTransform,
+        child_world: CoreTransform,
+    ) -> CoreTransform {
+        let render = self.render_live(render_id, "semantic render must remain live");
+        if self.content_transform(render_id).is_some()
             || matches!(render.object.kind(), RenderKind::Follower { .. })
         {
             child_world
         } else {
             world
-        };
-        bounds_world.transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, render.size))
+        }
     }
 }
 

@@ -1140,6 +1140,19 @@ impl Runtime {
         }
         handled
     }
+    /// Dispatches an action to the retained semantic target at a window
+    /// position. Positions are logical pixels, like other Runtime input.
+    /// A position with no node supporting the action is left untouched.
+    pub fn dispatch_semantic_action_at(
+        &mut self,
+        position: Offset,
+        action: SemanticAction,
+    ) -> bool {
+        self.tree
+            .semantic_action_target_at(position, &action)
+            .is_some_and(|node| self.dispatch_semantic_action(node, action))
+    }
+
     #[must_use]
     pub fn focus_diagnostics(&self) -> FocusDiagnostics {
         FocusDiagnostics {

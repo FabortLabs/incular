@@ -321,3 +321,75 @@ fn tap_and_long_press_hints_are_overrides_not_additional_callbacks() {
     }
     assert_eq!(calls.get(), [1, 1]);
 }
+
+#[test]
+fn a_point_inside_a_merged_node_routes_to_each_custom_owner() {
+    use incular_core::Offset;
+    use incular_widgets::Center;
+
+    let outer = CustomSemanticsAction::new("outer");
+    let inner = CustomSemanticsAction::new("inner");
+    let calls = Rc::new(Cell::new([0, 0]));
+    let callback = |index| {
+        let calls = calls.clone();
+        move || {
+            let mut next = calls.get();
+            next[index] += 1;
+            calls.set(next);
+        }
+    };
+    let target = Semantics::new(SizedBox::square(40.0))
+        .label("hit")
+        .custom_action(inner.clone(), callback(1));
+    let merged = MergeSemantics::new(
+        Semantics::new(Padding::new(EdgeInsets::ZERO, target))
+            .custom_action(outer.clone(), callback(0)),
+    );
+    let mut runtime = Runtime::new(Center::new(merged).into()).unwrap();
+    frame(&mut runtime);
+    let center = Offset::new(50.0, 50.0);
+    let inner = SemanticAction::Custom(inner.get_identifier());
+    let outer = SemanticAction::Custom(outer.get_identifier());
+    assert!(!runtime.dispatch_semantic_action_at(Offset::new(70.0, 50.0), inner.clone()));
+    assert_eq!(calls.get(), [0, 0]);
+    assert!(runtime.dispatch_semantic_action_at(center, inner));
+    assert_eq!(calls.get(), [0, 1]);
+    assert!(runtime.dispatch_semantic_action_at(center, outer));
+    assert_eq!(calls.get(), [1, 1]);
+    let unknown = CustomSemanticsAction::new("unknown").get_identifier();
+    assert!(!runtime.dispatch_semantic_action_at(center, SemanticAction::Custom(unknown)));
+}
+
+#[test]
+fn a_rotated_action_uses_local_semantic_geometry_not_its_bounding_box() {
+    use incular_core::Offset;
+    use incular_widgets::{Center, Transform};
+
+    let action = CustomSemanticsAction::new("rotate target");
+    let id = action.get_identifier();
+    let calls = Rc::new(Cell::new(0));
+    let seen = calls.clone();
+    let target = Semantics::new(SizedBox::square(40.0))
+        .label("rotated")
+        .custom_action(action, move || seen.set(seen.get() + 1));
+    let mut runtime =
+        Runtime::new(Center::new(Transform::rotation(std::f32::consts::FRAC_PI_4, target)).into())
+            .unwrap();
+    frame(&mut runtime);
+    let bounds = runtime
+        .tree()
+        .semantics()
+        .node(labelled_node(&runtime, "rotated"))
+        .unwrap()
+        .bounds;
+    let false_hit = Offset::new(72.0, 72.0);
+    assert!(
+        bounds.contains(false_hit),
+        "outside the rotated square, inside its AABB"
+    );
+    assert!(!runtime.dispatch_semantic_action_at(false_hit, SemanticAction::Custom(id)));
+    assert!(
+        runtime.dispatch_semantic_action_at(Offset::new(50.0, 30.0), SemanticAction::Custom(id))
+    );
+    assert_eq!(calls.get(), 1);
+}

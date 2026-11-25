@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-runtime`: accessibility actions can target a logical window
+  position, including custom actions on a merged or transformed node.
+
 - `incular-widgets`: semantic tap and long-press hints describe the
   standard action without registering a second callback.
 

@@ -908,3 +908,4 @@ packages/flutter/test/semantics/semantics_owner_test.dart	55	routes to inner or 
 packages/flutter/test/semantics/semantics_owner_test.dart	108	routes to the correct node in a three-deep merged nest	paired-match	upstream-custom-semantics-actions.md#registration-and-merged-dispatch
 packages/flutter/test/semantics/semantics_owner_test.dart	178	routes to the correct sibling descendant inside the merge group	paired-match	upstream-custom-semantics-actions.md#registration-and-merged-dispatch
 packages/flutter/test/widgets/semantics_test.dart	791	onTapHint and onLongPressHint create custom actions	paired-match	upstream-custom-semantics-actions.md#standard-action-hints
+packages/flutter/test/semantics/semantics_owner_test.dart	262	performActionAt routes custom actions through merged descendants	paired-match	upstream-custom-semantics-actions.md#point-addressed-actions
