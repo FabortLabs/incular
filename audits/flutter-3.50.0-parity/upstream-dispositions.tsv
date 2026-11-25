@@ -744,3 +744,6 @@ packages/flutter/test/widgets/clip_test.dart	123	ClipOval updates clipBehavior i
 packages/flutter/test/widgets/clip_test.dart	139	ClipPath updates clipBehavior in updateRenderObject	paired-match	upstream-clip-visibility-focus.md#default-and-childless-clip-path
 packages/flutter/test/widgets/clip_test.dart	976	ClipPath does not crash at zero area	paired-match	upstream-clip-visibility-focus.md#default-and-childless-clip-path
 packages/flutter/test/widgets/clip_test.dart	741	ClipPath.shape	paired-match	upstream-clip-visibility-focus.md#shape-clip-direction-and-actual-layout-size
+packages/flutter/test/widgets/clip_test.dart	66	ClipRect with a FittedBox child sized to zero works with semantics	paired-match	upstream-clip-visibility-focus.md#childless-rect-clips-and-zero-sized-fitted-semantics
+packages/flutter/test/widgets/clip_test.dart	85	ClipRect updates clipBehavior in updateRenderObject	paired-match	upstream-clip-visibility-focus.md#childless-rect-clips-and-zero-sized-fitted-semantics
+packages/flutter/test/widgets/clip_test.dart	917	ClipRect does not crash at zero area	paired-match	upstream-clip-visibility-focus.md#childless-rect-clips-and-zero-sized-fitted-semantics

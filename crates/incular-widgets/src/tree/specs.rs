@@ -658,7 +658,7 @@ pub(crate) enum WidgetKind {
     ClipRect {
         clip_behavior: Clip,
         clipper: Option<crate::layout::ClipDelegate>,
-        child: Widget,
+        child: Option<Widget>,
     },
     ClipRRect {
         radius: CornerRadii,

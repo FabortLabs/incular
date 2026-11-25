@@ -111,3 +111,15 @@ elliptical and rectangular mode checks, seven native path controls,
 and 31 retained/input tests pass. This is not an original golden
 comparison. Hard-edge snapping at other fractional offsets, rotated
 paths and destination-reading effect coverage remain separate.
+
+## Childless rect clips and zero-sized fitted semantics
+
+The pinned :66, :85, and :917 originals pass, with matching Rust
+regressions. A ClipRect can now have no child and keeps the same
+render object through its default HardEdge, AntiAlias, and None
+updates without emitting any clip commands. A childless custom
+ClipRect centered in a zero viewport remains size zero even though
+its delegate describes a non-empty rectangle. A FittedBox with
+zero-size image semantics survives layout, paint, and semantics
+under a ClipRect and remains in the retained tree. All 39 focused
+clip, input, and shape tests pass.

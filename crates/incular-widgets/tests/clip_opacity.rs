@@ -418,6 +418,89 @@ fn rect_coverage_updates_keep_the_layout_and_distinguish_saved_compositing() {
     }
 }
 
+/// clip_test.dart:85. Flutter keeps this render object with no child.
+#[test]
+fn childless_rect_clip_retains_render_object_when_mode_changes() {
+    let scene = |mode| {
+        Widget::from(match mode {
+            None => ClipRect::builder().build(),
+            Some(mode) => ClipRect::builder().clip_behavior(mode).build(),
+        })
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scene(None)).unwrap();
+    let render = tree.render_id(root).unwrap();
+    for (mode, expected) in [
+        (None, Clip::HardEdge),
+        (Some(Clip::AntiAlias), Clip::AntiAlias),
+        (Some(Clip::None), Clip::None),
+    ] {
+        if mode.is_some() {
+            tree.update(root, scene(mode)).unwrap();
+        }
+        tree.layout(Constraints::tight(Size::new(800., 600.)))
+            .unwrap();
+        assert_eq!(tree.render_id(root), Some(render));
+        assert!(tree.children(root).unwrap().is_empty());
+        assert!(matches!(
+            tree.render_object_kind(render),
+            Some(RenderKind::ClipRect { clip_behavior, .. }) if *clip_behavior == expected
+        ));
+        assert!(world_clips(&tree.paint()).is_empty());
+    }
+}
+
+/// clip_test.dart:917. The custom geometry does not size a childless clip.
+#[test]
+fn a_childless_custom_rect_clip_finishes_a_zero_viewport_frame() {
+    struct Fixed;
+    impl CustomClipper for Fixed {
+        fn get_clip(&self, _: Size) -> ClipShape {
+            ClipShape::Rect(Rect::from_origin_size(
+                Offset::new(50., 50.),
+                Size::new(100., 100.),
+            ))
+        }
+    }
+
+    let key = incular_widgets::internal::Key::from("zero viewport rect clip");
+    let clip =
+        Widget::from(ClipRect::builder().build().custom_clipper(Fixed)).with_key(key.clone());
+    let mut tree = WidgetTree::new();
+    tree.mount(Directionality::new(TextDirection::Ltr, Center::new(clip)).into())
+        .unwrap();
+    tree.layout(Constraints::tight(Size::ZERO)).unwrap();
+    let render = tree
+        .render_id(tree.element_with_key(&key).unwrap())
+        .unwrap();
+    assert_eq!(tree.render_size(render), Some(Size::ZERO));
+    let list = tree.paint();
+    assert!(world_clips(&list).is_empty());
+}
+
+/// clip_test.dart:66. The zero-sized child must not poison geometry
+/// when the semantics pipeline traverses a fitted transform under a clip.
+#[test]
+fn clip_rect_with_zero_sized_fitted_content_finishes_semantics() {
+    let key = incular_widgets::internal::Key::from("zero fitted box");
+    let image = Semantics::builder().build().image(true).label("Image");
+    let content = SizedBox::from_size(Size::ZERO).child(image);
+    let fitted = Widget::from(FittedBox::new(content)).with_key(key.clone());
+    let mut tree = WidgetTree::new();
+    tree.mount(Directionality::new(TextDirection::Ltr, ClipRect::new(fitted)).into())
+        .unwrap();
+    tree.layout(Constraints::tight(Size::new(800., 600.)))
+        .unwrap();
+    let _ = tree.paint();
+    tree.update_semantics();
+    let element = tree.element_with_key(&key).unwrap();
+    assert!(matches!(
+        tree.render_id(element)
+            .and_then(|id| tree.render_object_kind(id)),
+        Some(RenderKind::FittedBox { .. })
+    ));
+}
+
 #[test]
 fn clip_rect_records_world_clip() {
     let mut tree = WidgetTree::new();

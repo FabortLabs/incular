@@ -116,6 +116,7 @@ pub(crate) fn install_listener(
             .and_then(|child| install_listener(child, wrap)),
         WidgetKind::RawInput { child, .. }
         | WidgetKind::ColorFiltered { child, .. }
+        | WidgetKind::ClipRect { child, .. }
         | WidgetKind::ClipPath { child, .. } => child
             .as_mut()
             .and_then(|child| install_listener(child, wrap)),
@@ -144,7 +145,6 @@ pub(crate) fn install_listener(
         | WidgetKind::Flexible { child, .. }
         | WidgetKind::Positioned { child, .. }
         | WidgetKind::SafeArea { child, .. }
-        | WidgetKind::ClipRect { child, .. }
         | WidgetKind::ClipRRect { child, .. }
         | WidgetKind::ClipOval { child, .. }
         | WidgetKind::Visibility { child, .. }

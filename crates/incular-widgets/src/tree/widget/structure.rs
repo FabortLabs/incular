@@ -2325,8 +2325,8 @@ impl WidgetKind {
             WidgetKind::ClipRect { child, .. } => (
                 WidgetType::ClipRect,
                 Layout,
-                Single,
-                WidgetChildren::Single(child),
+                Optional,
+                WidgetChildren::Optional(child.as_ref()),
             ),
             WidgetKind::ClipRRect { child, .. } => (
                 WidgetType::ClipRRect,

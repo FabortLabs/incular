@@ -139,8 +139,8 @@ pub struct ClipRect {
     clip_behavior: Clip,
     #[builder(default, setter(strip_option))]
     clipper: Option<ClipDelegate>,
-    #[builder(setter(into))]
-    child: Widget,
+    #[builder(default, setter(strip_option, into))]
+    child: Option<Widget>,
 }
 
 impl ClipRect {
@@ -150,7 +150,7 @@ impl ClipRect {
         Self {
             clip_behavior: Clip::HardEdge,
             clipper: None,
-            child: child.into(),
+            child: Some(child.into()),
         }
     }
 

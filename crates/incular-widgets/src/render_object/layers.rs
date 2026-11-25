@@ -19,10 +19,14 @@ use crate::tree::{RenderKind, WidgetKind};
 /// `Clip::None` disables clipping; every other behavior clips.
 fn widget_clips(widget: &WidgetKind) -> bool {
     match widget {
-        WidgetKind::ClipRect { clip_behavior, .. }
-        | WidgetKind::ClipRRect { clip_behavior, .. }
+        WidgetKind::ClipRRect { clip_behavior, .. }
         | WidgetKind::ClipOval { clip_behavior, .. } => *clip_behavior != Clip::None,
-        WidgetKind::ClipPath {
+        WidgetKind::ClipRect {
+            clip_behavior,
+            child,
+            ..
+        }
+        | WidgetKind::ClipPath {
             clip_behavior,
             child,
             ..

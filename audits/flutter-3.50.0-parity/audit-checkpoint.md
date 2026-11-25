@@ -830,3 +830,8 @@ now follows the actual child rather than the maximum constraint.
 The separate [fractional ClipRect recheck](upstream-clip-visibility-focus.md#fractional-rectangular-clip-modes)
 verifies that the default stays hard and that ordinary antialiasing
 and isolated antialiasing now have distinct Windows wgpu edge behavior.
+
+[Childless and zero-size rect clips](upstream-clip-visibility-focus.md#childless-rect-clips-and-zero-sized-fitted-semantics)
+add three matched originals, for 455 / 8,965 fully compared (5.08%):
+359 matches and 96 historical mismatches. This includes clipping
+a zero-size FittedBox with semantics enabled.
