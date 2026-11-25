@@ -1434,7 +1434,7 @@ impl Widget {
                     axis,
                     reverse,
                     text_direction: None,
-                    rtl_delegate: None,
+                    axis_resolution: Default::default(),
                     physics,
                     cache_extent: crate::ScrollCacheExtent::pixels(cache_extent.max(0.)),
                     shrink_wrap,
@@ -1450,6 +1450,16 @@ impl Widget {
             semantics: None,
         })
     }
+    pub(crate) fn with_ambient_sliver_axis(mut self) -> Self {
+        if let WidgetKind::SliverViewport { config } = self.kind_mut()
+            && config.axis == Axis::Horizontal
+        {
+            Rc::make_mut(config).axis_resolution =
+                crate::scrolling::SliverAxisResolution::Inherited;
+        }
+        self
+    }
+
     pub(crate) fn with_sliver_cache_extent(
         mut self,
         cache_extent: crate::ScrollCacheExtent,

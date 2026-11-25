@@ -660,14 +660,16 @@ fn custom_scroll_view_widget(value: CustomScrollView, ambient_horizontal_axis: b
             Rc::new(SequenceViewportDelegate::centered(render_slivers, center))
         };
     let delegate = make_delegate(&value.slivers, &controller, reverse);
-    let rtl_delegate = if ambient_horizontal_axis && axis == Axis::Horizontal {
+    let axis_resolution = if ambient_horizontal_axis && axis == Axis::Horizontal {
         let controller = controller.clone();
         let slivers = value.slivers;
-        Some(Rc::new(geometry::AlternateSliverDelegate::new(move || {
-            make_delegate(&slivers, &controller, !reverse)
-        })))
+        SliverAxisResolution::InheritedWithDelegate(Rc::new(
+            geometry::AlternateSliverDelegate::new(move || {
+                make_delegate(&slivers, &controller, !reverse)
+            }),
+        ))
     } else {
-        None
+        SliverAxisResolution::Physical
     };
     let mut widget = Widget::sliver_viewport_with_delegate_options(
         controller,
@@ -684,7 +686,7 @@ fn custom_scroll_view_widget(value: CustomScrollView, ambient_horizontal_axis: b
     if let WidgetKind::SliverViewport { config } = widget.kind_mut() {
         let config = Rc::make_mut(config);
         config.paint_order = value.paint_order;
-        config.rtl_delegate = rtl_delegate;
+        config.axis_resolution = axis_resolution;
     }
     widget
 }

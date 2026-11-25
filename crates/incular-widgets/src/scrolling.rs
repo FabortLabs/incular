@@ -40,7 +40,9 @@ pub use geometry::{
     RenderSliver, ScrollCacheExtent, SliverChildId, SliverChildLayout, SliverChildPlacement,
     SliverLayout, SliverPaintOrder, SliverScrollDependency, SliverViewportConfig,
 };
-pub(crate) use geometry::{SliverViewportDelegate, SliverViewportLayout, sliver_paint_slots};
+pub(crate) use geometry::{
+    SliverAxisResolution, SliverViewportDelegate, SliverViewportLayout, sliver_paint_slots,
+};
 
 pub use layout::SliverOverlapHandle;
 use layout::{

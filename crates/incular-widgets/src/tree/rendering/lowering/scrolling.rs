@@ -92,11 +92,16 @@ pub(super) fn lower_scrolling(widget: &Widget, context: &DependencyContext) -> R
                 config.physics = physics;
                 config.behavior = resolved;
                 config.text_direction = text_direction;
-                if text_direction == Some(TextDirection::Rtl)
-                    && let Some(alternate) = &config.rtl_delegate
-                {
-                    config.reverse = !config.reverse;
-                    config.delegate = alternate.get();
+                if text_direction == Some(TextDirection::Rtl) {
+                    use crate::scrolling::SliverAxisResolution;
+                    match &config.axis_resolution {
+                        SliverAxisResolution::Physical => {}
+                        SliverAxisResolution::Inherited => config.reverse = !config.reverse,
+                        SliverAxisResolution::InheritedWithDelegate(alternate) => {
+                            config.reverse = !config.reverse;
+                            config.delegate = alternate.get();
+                        }
+                    }
                 }
                 Rc::new(config)
             };

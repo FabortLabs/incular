@@ -701,6 +701,7 @@ fn list_view_widget(value: ListView) -> Widget {
         },
         sliver,
     )
+    .with_ambient_sliver_axis()
 }
 
 fn build_list_render_sliver(
@@ -1038,6 +1039,7 @@ fn grid_view_widget(value: GridView) -> Widget {
         },
         sliver,
     )
+    .with_ambient_sliver_axis()
 }
 
 /// Controller for paged views (Flutter `PageController`).
@@ -1741,4 +1743,5 @@ fn page_view_widget(value: PageView) -> Widget {
         }
     }
     .with_sliver_cache_extent(cache_extent)
+    .with_ambient_sliver_axis()
 }

@@ -91,3 +91,21 @@ zero. The original Rust iOS comparison moved 50px for Control; the
 Runtime now chooses the native shortcut table's modifier. All three
 Flutter variants and 22 targeted Rust tests passed. This doesn't
 count as an additional original registration or verify web defaults.
+
+## ListView, GridView and PageView horizontal axes
+
+The authored `box_scroll_direction_reference_test.dart` passes for all
+three high-level views with explicit reverse on and off. It keeps the
+same first child while switching LTR → RTL → LTR, checking its full
+paint rectangle and a pointer hit at offsets zero and 30. Reverse
+placement mirrors a 250px list/grid item to x=50 and a 240px
+unpadded fractional PageView page to x=60. Before the fix, all three
+stayed at x=0 under ambient RTL without explicit reverse.
+
+All three now use the common resolved horizontal axis without
+recreating their built-in sliver delegate. Raw viewports retain an
+explicit axis and the custom-sliver constructor path still receives
+physical reverse. Five focused widget binaries passed (67 tests),
+as did the nine PageView cache controls. The separate known PageView
+eviction failure after a partial jump remains open; see
+[the prior retained-lifecycle recheck](frame-retained-text-implicit-rechecks.md).

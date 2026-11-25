@@ -305,6 +305,15 @@ impl AlternateSliverDelegate {
     }
 }
 
+#[derive(Clone, Default)]
+pub(crate) enum SliverAxisResolution {
+    #[default]
+    Physical,
+    Inherited,
+    /// Custom slivers can use the resolved direction at creation time.
+    InheritedWithDelegate(Rc<AlternateSliverDelegate>),
+}
+
 #[derive(Clone)]
 pub struct SliverViewportConfig {
     pub(crate) controller: ScrollController,
@@ -314,9 +323,9 @@ pub struct SliverViewportConfig {
     pub(crate) axis: Axis,
     pub(crate) reverse: bool,
     pub(crate) text_direction: Option<TextDirection>,
-    /// Only a horizontal high-level CustomScrollView uses an ambient axis.
-    /// Raw viewports provide a physical axis explicitly.
-    pub(crate) rtl_delegate: Option<Rc<AlternateSliverDelegate>>,
+    /// Raw viewports supply a physical axis; high-level scroll views
+    /// resolve a horizontal axis against Directionality.
+    pub(crate) axis_resolution: SliverAxisResolution,
     pub(crate) physics: ScrollPhysics,
     pub(crate) cache_extent: ScrollCacheExtent,
     pub(crate) shrink_wrap: bool,
