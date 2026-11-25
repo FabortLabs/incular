@@ -22,3 +22,17 @@ Dart RenderWrap formatting (:851,:858) and the clipBehavior
 setter (:962) have no equivalent and are reference-only. All
 22 original registrations in this file are now disposed of
 as paired, partial, or reference-only, not all matches.
+
+## Current baseline behavior
+
+Wrap now reports the highest actual child baseline, including its positioned
+Y offset. The old single-text regression is green. A new paired authored case
+reverses two runs with a 7px gap, verifies that the second logical child is
+the highest visual baseline, and then replaces both with a baseline-less box
+to check that no stale baseline remains. The original Flutter control and both
+authored Flutter cases passed on the pinned SDK; 18 focused native tests
+passed across the Wrap constraints and builder targets.
+
+The original registration remains a partial comparison because its 100×100
+FlutterTest glyph and fixed 200px outer height are font-specific. The native
+test measures its own font and compares direct text with the wrapped result.

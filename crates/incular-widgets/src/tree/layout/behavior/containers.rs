@@ -373,6 +373,16 @@ impl WidgetTree {
                     .collect::<Vec<_>>();
 
                 let result = incular_layout::layout_wrap(constraints, &wrap_children, wrap);
+                let baseline = children
+                    .iter()
+                    .zip(&result.children)
+                    .filter_map(|(child, placement)| {
+                        self.render_live(child, "wrapped child remains live")
+                            .baseline
+                            .map(|local| local + placement.offset.y)
+                    })
+                    .reduce(f32::min);
+                self.render_live_mut(id, "wrap remains live").baseline = baseline;
                 (
                     result.size,
                     result.children.into_iter().map(|c| c.offset).collect(),

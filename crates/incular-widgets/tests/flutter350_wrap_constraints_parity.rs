@@ -357,3 +357,46 @@ fn wrap_propagates_its_child_text_baseline() {
         text_baseline
     );
 }
+
+#[test]
+fn wrap_uses_the_topmost_actual_baseline_across_reversed_runs() {
+    use incular_config::VerticalDirection;
+    let line = |key, height, font_size| {
+        Widget::from(
+            SizedBox::new().width(80.).height(height).child(
+                Text::new("X")
+                    .text_direction(TextDirection::Ltr)
+                    .style(TextStyle::default().font_size(font_size).height(Some(1.))),
+            ),
+        )
+        .with_key(Key::Value(key))
+    };
+    let scene = Align::new(
+        Alignment::TOP_LEFT,
+        SizedBox::new()
+            .width(100.)
+            .child(key(Wrap::new([line(0, 40., 30.), line(1, 20., 12.)])
+                .text_direction(TextDirection::Ltr)
+                .vertical_direction(VerticalDirection::Up)
+                .run_spacing(7.))),
+    );
+    let mut t = mount(scene);
+    let baseline = |tree: &WidgetTree, i| {
+        let element = tree.element_with_key(&Key::Value(i)).unwrap();
+        tree.baseline(tree.render_id(element).unwrap())
+    };
+    let topmost = baseline(&t, 1).unwrap() + bounds(&t, 1).origin.y - bounds(&t, WRAP).origin.y;
+    let logical_first =
+        baseline(&t, 0).unwrap() + bounds(&t, 0).origin.y - bounds(&t, WRAP).origin.y;
+    assert!(topmost < logical_first && bounds(&t, 0).origin.y == 27.);
+    assert_eq!(baseline(&t, WRAP), Some(topmost));
+
+    let wrap = t.element_with_key(&Key::Value(WRAP)).unwrap();
+    t.update(wrap, key(wrap_without_text())).unwrap();
+    t.layout(Constraints::tight(HOST)).unwrap();
+    assert_eq!(baseline(&t, WRAP), None);
+}
+
+fn wrap_without_text() -> Wrap {
+    Wrap::new([SizedBox::new().width(80.).height(20.)]).text_direction(TextDirection::Ltr)
+}
