@@ -11,7 +11,9 @@ use incular_platform::PhysicalSize;
 use incular_rendering::ColorFilter;
 use incular_runtime::Runtime;
 use incular_wgpu::{FrameOutcome, WgpuRenderer, WindowSurfaceTarget};
-use incular_widgets::{ClipRect, ColorFiltered, Opacity, Positioned, SizedBox, Stack, Widget};
+use incular_widgets::{
+    ClipRect, ColorFiltered, Opacity, Padding, Positioned, SizedBox, Stack, Widget,
+};
 use winit::{event_loop::EventLoop, platform::windows::EventLoopBuilderExtWindows, window::Window};
 
 const WIDTH: u32 = 64;
@@ -60,12 +62,27 @@ fn capture(renderer: &mut WgpuRenderer, child: Widget) -> Vec<u8> {
     frame.rgba8
 }
 
-fn first_mismatch(label: &str, rgba: &[u8], expected: [u8; 4], inside: bool) -> Option<String> {
+fn first_mismatch(
+    label: &str,
+    rgba: &[u8],
+    foreground: [u8; 4],
+    backdrop: [u8; 4],
+    clip_padding: u32,
+) -> Option<String> {
     for y in 0..HEIGHT {
         for x in 0..WIDTH {
-            if ((8..40).contains(&x) && (12..36).contains(&y)) != inside {
-                continue;
-            }
+            let inside = (8 + clip_padding..40 + clip_padding).contains(&x)
+                && (12 + clip_padding..36 + clip_padding).contains(&y);
+            let outside_clip = clip_padding != 0
+                && !((8..40 + 2 * clip_padding).contains(&x)
+                    && (12..36 + 2 * clip_padding).contains(&y));
+            let expected = if inside {
+                foreground
+            } else if outside_clip {
+                BLACK
+            } else {
+                backdrop
+            };
             let index = ((y * WIDTH + x) * 4) as usize;
             let actual = &rgba[index..index + 4];
             if actual.iter().zip(expected).any(|(a, b)| a.abs_diff(b) > 1) {
@@ -103,51 +120,70 @@ fn flutter_350_color_filtered_matrix_recovers_alpha_and_respects_opacity_order()
         Color::BLACK,
     ))
     .unwrap();
+    let mut half_alpha = MATRIX;
+    half_alpha[19] = 128.;
+    let padded_clip = ClipRect::new(Padding::all(
+        4.,
+        ColorFiltered::new(ColorFilter::flutter_matrix(half_alpha), fill(OPAQUE)),
+    ));
     let cases = [
         (
             "unfiltered translucent",
             fill(HALF),
             [32, 48, 64, 255],
             BLACK,
+            0,
         ),
         (
             "alpha-preserving matrix",
             filter_preserving_alpha(fill(HALF)),
             FILTERED_HALF,
             BLACK,
+            0,
         ),
-        ("filtered opaque", filter(fill(OPAQUE)), FILTERED, MATTE),
-        ("filtered translucent", filter(fill(HALF)), FILTERED, MATTE),
+        ("filtered opaque", filter(fill(OPAQUE)), FILTERED, MATTE, 0),
+        (
+            "filtered translucent",
+            filter(fill(HALF)),
+            FILTERED,
+            MATTE,
+            0,
+        ),
         (
             "filter then opacity",
             Opacity::new(0.5, filter(fill(OPAQUE))).into(),
             FILTERED_HALF,
             BLACK,
+            0,
         ),
         (
             "opacity then filter",
             filter(Opacity::new(0.5, fill(OPAQUE))),
             FILTERED,
             MATTE,
+            0,
         ),
         (
             "clipped filter",
             ClipRect::new(filter(fill(OPAQUE))).into(),
             FILTERED,
             BLACK,
+            0,
         ),
-        ("empty filter", filter(SizedBox::shrink()), BLACK, BLACK),
+        (
+            "clip larger than translucent matte",
+            padded_clip.into(),
+            FILTERED_HALF,
+            [0, 16, 0, 255],
+            4,
+        ),
+        ("empty filter", filter(SizedBox::shrink()), BLACK, BLACK, 0),
     ];
     let mismatches: Vec<_> = cases
         .into_iter()
-        .flat_map(|(label, child, source, backdrop)| {
+        .filter_map(|(label, child, source, backdrop, clip_padding)| {
             let rgba = capture(&mut renderer, child);
-            [
-                first_mismatch(label, &rgba, source, true),
-                first_mismatch(label, &rgba, backdrop, false),
-            ]
-            .into_iter()
-            .flatten()
+            first_mismatch(label, &rgba, source, backdrop, clip_padding)
         })
         .collect();
     assert!(mismatches.is_empty(), "{}", mismatches.join("\n"));

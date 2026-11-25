@@ -26,6 +26,10 @@ const _preserveAlpha = ui.ColorFilter.matrix([
   ..._rgbRows,
   0, 0, 0, 1, 0, // A' = A.
 ]);
+const _halfAlpha = ui.ColorFilter.matrix([
+  ..._rgbRows,
+  0, 0, 0, 0, 128, // A' = 128.
+]);
 
 Widget _box(Color color) =>
     ColoredBox(color: color, child: const SizedBox(width: 32, height: 24));
@@ -39,6 +43,7 @@ Future<void> _check(
   Widget child,
   List<int> foreground, {
   List<int> backdrop = _blackPixel,
+  int clipPadding = 0,
 }) async {
   final key = GlobalKey();
   await tester.pumpWidget(
@@ -72,8 +77,22 @@ Future<void> _check(
       ))!;
       for (var y = 0; y < _height; y++) {
         for (var x = 0; x < _width; x++) {
-          final inside = x >= 8 && x < 40 && y >= 12 && y < 36;
-          final expected = inside ? foreground : backdrop;
+          final inside =
+              x >= 8 + clipPadding &&
+              x < 40 + clipPadding &&
+              y >= 12 + clipPadding &&
+              y < 36 + clipPadding;
+          final outsideClip =
+              clipPadding != 0 &&
+              (x < 8 ||
+                  x >= 40 + 2 * clipPadding ||
+                  y < 12 ||
+                  y >= 36 + 2 * clipPadding);
+          final expected = inside
+              ? foreground
+              : outsideClip
+              ? _blackPixel
+              : backdrop;
           final index = (y * _width + x) * 4;
           final actual = List.generate(4, (c) => bytes.getUint8(index + c));
           if (List.generate(
@@ -149,6 +168,19 @@ void main() {
         'clipped filter',
         ClipRect(child: _filter(_box(_opaque))),
         _filtered,
+      );
+      await _check(
+        tester,
+        'clip larger than translucent matte',
+        ClipRect(
+          child: Padding(
+            padding: const EdgeInsets.all(4),
+            child: _filter(_box(_opaque), _halfAlpha),
+          ),
+        ),
+        _filteredHalf,
+        backdrop: [0, 16, 0, 255],
+        clipPadding: 4,
       );
       await _check(
         tester,

@@ -51,3 +51,15 @@ Pinned Flutter 3.50.0 `ab2912035e`; Incular production `c647cb85`.
   bounds discrepancy, not separate defects per nesting case.
   See `flutter350_color_filter_alpha_order_raster` and
   `color_filter_alpha_order_raster_test.dart`.
+
+### Color filter bounds recheck
+
+Windows wgpu now matches all pixels in the authored color filter probe.
+When the matrix maps transparent black to a nontransparent color, that
+color covers the current clip beyond the child texture. The child still
+shows its own filtered pixels, and a larger offset clip correctly shows
+both the translucent matte and the untouched background. Parent opacity,
+zero-area content, and alpha-preserving matrices retain their controls.
+The fix extends the composite quad only; it does not enlarge the cached
+GPU source or effect textures. The pinned Flutter probe passes all three
+registrations. This does not upgrade the original sepia golden comparison.

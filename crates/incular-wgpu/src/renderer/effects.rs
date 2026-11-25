@@ -275,15 +275,45 @@ impl WgpuRenderer {
             return Ok(None);
         };
         self.counters.effect_chain_compilations += 1;
+        let parent = Placed::new(self.target_origin, self.target_width, self.target_height);
+        let target = Placed::new(effect.origin, effect.width, effect.height);
+        let mut instance = composite_instance(target, parent, scale, 1.);
+        // Filtered transparent black can itself have color/alpha. Extend
+        // just the composite, not the cached source or matrix textures, to
+        // the enclosing clip. The shader substitutes the constant matte
+        // outside the source texture instead of sampling its clamped edge.
+        let [r, g, b, a] = filter.apply([0.; 4]);
+        if a > 0. {
+            let Some(visible) =
+                clip_device_region(parent_clip, scale, self.target_width, self.target_height)
+            else {
+                return Ok(None);
+            };
+            let source_x = ((effect.origin.x - self.target_origin.x) * scale).round();
+            let source_y = ((effect.origin.y - self.target_origin.y) * scale).round();
+            let x = visible.x as f32;
+            let y = visible.y as f32;
+            let width = effect.width as f32;
+            let height = effect.height as f32;
+            let visible_target = Placed::new(
+                self.target_origin + Offset::new(x / scale, y / scale),
+                visible.width,
+                visible.height,
+            );
+            instance = composite_instance(visible_target, parent, scale, 1.);
+            instance.uv = [
+                (x - source_x) / width,
+                (y - source_y) / height,
+                (x + visible.width as f32 - source_x) / width,
+                (y + visible.height as f32 - source_y) / height,
+            ];
+            instance.options[0] = 2.;
+            instance.color = [r * a, g * a, b * a, a];
+        }
         Ok(Some(DrawBatch::Filtered {
             clip: parent_clip,
             layer,
-            instance: composite_instance(
-                Placed::new(effect.origin, effect.width, effect.height),
-                Placed::new(self.target_origin, self.target_width, self.target_height),
-                scale,
-                1.,
-            ),
+            instance,
         }))
     }
 

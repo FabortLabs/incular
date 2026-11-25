@@ -30,6 +30,10 @@ fn rounded_coverage(p: vec2<f32>, rect: vec4<f32>, radii: vec4<f32>) -> f32 {
 fn draw_color(input: Out) -> vec4<f32> {
   let sample = textureSample(group_texture, target_sampler, input.uv);
   let alpha = input.alpha * rounded_coverage(input.position.xy, input.clip_rect, input.clip_radii);
+  if (input.mode > 1.5) {
+    let in_source = all(input.uv >= vec2<f32>(0.)) && all(input.uv < vec2<f32>(1.));
+    return select(input.color, sample, in_source) * alpha;
+  }
   if (input.mode > 0.5) {
     let a = sample.a * input.color.a * alpha;
     return vec4<f32>(input.color.rgb * a, a);
