@@ -153,6 +153,8 @@ pub struct Runtime {
     hover_devices: hover_devices::HoverDevices,
     hover_hit_revision: u64,
     pub(crate) focused: Option<ElementId>,
+    primary_focus_node: Option<FocusNode>,
+    primary_focus_changes: incular_core::reactivity::DependencySource,
     parked_focus: Option<ParkedFocus>,
     focused_selection_lease: Option<incular_text::FocusedSelectionLease>,
     adopted_focus_epoch: Option<u64>,
@@ -374,6 +376,8 @@ impl Runtime {
             hover_devices: hover_devices::HoverDevices::default(),
             hover_hit_revision: 0,
             focused: None,
+            primary_focus_node: None,
+            primary_focus_changes: incular_core::reactivity::DependencySource::default(),
             parked_focus: None,
             focused_selection_lease: None,
             adopted_focus_epoch: None,
@@ -1005,6 +1009,17 @@ impl Runtime {
     pub fn focused_element(&self) -> Option<ElementId> {
         self.focused
     }
+    /// Observes changes of this window's primary focus, after focus state
+    /// and the text input client have both been updated. Retain the token
+    /// for as long as the callback should remain registered.
+    #[must_use]
+    pub fn observe_primary_focus(
+        &self,
+        callback: impl Fn() + 'static,
+    ) -> incular_core::reactivity::Subscription {
+        self.primary_focus_changes.subscribe((), callback)
+    }
+
     /// Dispatches an owned semantic action through the same control state used
     /// by pointer and keyboard input. Native adapters queue these requests;
     /// they never borrow mutable element storage. Eligibility reuses the
@@ -2190,7 +2205,8 @@ impl Runtime {
         // Explicit input (including clearing focus) wins over a pending initial
         // autofocus request, even when it leaves the focused element unchanged.
         self.initial_focus = InitialFocus::Settled;
-        if self.focused == next {
+        let next_node = next.and_then(|element| self.tree.focus_node_at(element));
+        if self.focused == next && self.primary_focus_node == next_node {
             return;
         }
         // A focus change retires the native client behind any open
@@ -2209,6 +2225,7 @@ impl Runtime {
             self.hide_text_field_handles(previous);
         }
         self.focused = next;
+        self.primary_focus_node = next_node;
         let focus_policy = self.sync_focused_selection_lease();
         self.tree.sync_hosted_focus_chain(next);
         if let Some(current) = next {
@@ -2223,6 +2240,14 @@ impl Runtime {
         }
         self.frame_requested = true;
         self.sync_text_input_client();
+        for failure in self.primary_focus_changes.notify_collecting_panics() {
+            let message = failure
+                .downcast_ref::<&str>()
+                .copied()
+                .or_else(|| failure.downcast_ref::<String>().map(String::as_str))
+                .unwrap_or("non-string primary focus listener panic");
+            tracing::error!(%message, "primary focus listener failed");
+        }
     }
 
     fn sync_focused_selection_lease(&mut self) -> Option<(TextEditingController, bool)> {
@@ -2257,15 +2282,30 @@ impl Runtime {
         // Scanning focusable elements allocates, so only look when some
         // focus node changed since the last check.
         let epoch = self.tree.focus_epoch();
-        if self.adopted_focus_epoch == Some(epoch) {
+        let replaced = self.primary_focus_node_replaced();
+        if !replaced && self.adopted_focus_epoch == Some(epoch) {
             return;
         }
-        if let Some(next) = self.tree.external_focus_change(self.focused) {
+        let current = if replaced { None } else { self.focused };
+        if let Some(next) = self.tree.external_focus_change(current) {
             self.set_focus(next);
+        } else if replaced {
+            // An Element reused for a different explicit FocusNode must
+            // not silently transfer focus to the replacement. The next
+            // focused node still needs a real request or autofocus.
+            self.set_focus(None);
         }
         // Focus observers can queue another request while a transition is
         // being delivered. Do not acknowledge that newer request here.
         self.adopted_focus_epoch = Some(epoch);
+    }
+
+    fn primary_focus_node_replaced(&self) -> bool {
+        self.focused.is_some_and(|element| {
+            self.primary_focus_node
+                .as_ref()
+                .is_some_and(|node| self.tree.focus_node_at(element).as_ref() != Some(node))
+        })
     }
 
     fn reconcile_focus_and_selection_captures(&mut self) {
@@ -2289,6 +2329,9 @@ impl Runtime {
             !self.tree.is_selectable_text(label) || !self.tree.can_request_focus(label)
         }) {
             self.captured_selectable_text = None;
+        }
+        if self.primary_focus_node_replaced() {
+            self.adopt_external_focus_change();
         }
         if self
             .focused

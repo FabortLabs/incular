@@ -1309,3 +1309,5 @@ packages/flutter/test/painting/gradient_test.dart	982	Gradient lerp test (with R
 packages/flutter/test/painting/gradient_test.dart	1026	Gradients can handle missing stops and report mismatched stops	paired-match	upstream-radial-gradients.md#generic-interpolation-and-stop-validation
 packages/flutter/test/widgets/focus_manager_test.dart	2107	FocusManager.addEarlyKeyEventHandler works	partial-match	upstream-focus-key-stages.md
 packages/flutter/test/widgets/focus_manager_test.dart	2186	FocusManager.addLateKeyEventHandler works	partial-match	upstream-focus-key-stages.md
+packages/flutter/test/widgets/focus_manager_test.dart	2045	Focus changes notify listeners.	partial-match	upstream-primary-focus-observers.md
+packages/flutter/test/widgets/focus_manager_test.dart	2265	FocusManager notifies listeners when a widget loses focus because it was removed.	paired-match	upstream-primary-focus-observers.md
