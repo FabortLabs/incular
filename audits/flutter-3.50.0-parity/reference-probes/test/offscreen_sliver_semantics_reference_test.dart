@@ -3,8 +3,12 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  for (final ensure in [false, true]) {
-    testWidgets('off-cache adapter semantics after a jump, ensure=$ensure', (
+  for (final (ensure, clip) in [
+    (false, Clip.hardEdge),
+    (true, Clip.hardEdge),
+    (false, Clip.none),
+  ]) {
+    testWidgets('off-cache adapter semantics, ensure=$ensure clip=$clip', (
       tester,
     ) async {
       final handle = tester.ensureSemantics();
@@ -19,6 +23,7 @@ void main() {
                 height: 200,
                 child: CustomScrollView(
                   controller: controller,
+                  clipBehavior: clip,
                   slivers: List<Widget>.generate(30, (i) {
                     final sliver = SliverToBoxAdapter(
                       child: SizedBox(height: 200, child: Text('Item $i')),
@@ -64,12 +69,39 @@ void main() {
           final node = nodes.remove('Item $i')!.single;
           expect(
             node.getSemanticsData().flagsCollection.isHidden,
-            i == 0 || i == 3,
+            clip != Clip.none && (i == 0 || i == 3),
           );
         }
         expect(nodes.keys, ensure ? ['Item 4'] : isEmpty);
         if (ensure) {
           expect(nodes['Item 4'], hasLength(1));
+          expect(
+            nodes['Item 4']!.single.getSemanticsData().flagsCollection.isHidden,
+            isFalse,
+          );
+
+          controller.jumpTo(450);
+          await tester.pump();
+          nodes.clear();
+          collect(
+            tester
+                .binding
+                .renderViews
+                .single
+                .owner!
+                .semanticsOwner!
+                .rootSemanticsNode!,
+          );
+          for (final (index, hidden) in [
+            (1, true),
+            (2, false),
+            (3, false),
+            (4, true),
+          ]) {
+            final node = nodes.remove('Item $index')!.single;
+            expect(node.getSemanticsData().flagsCollection.isHidden, hidden);
+          }
+          expect(nodes, isEmpty);
         }
       } finally {
         handle.dispose();

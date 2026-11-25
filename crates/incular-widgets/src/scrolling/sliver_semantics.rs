@@ -152,9 +152,7 @@ impl RenderSliver for SemanticsRenderSliver {
 }
 
 /// Flutter's `SliverEnsureSemantics`: keeps a sliver in the semantics tree
-/// while it is outside the viewport and its cache extent. Incular's
-/// viewport already keeps every child its slivers build in the semantics
-/// tree, wherever it is, so this passes the sliver through unchanged.
+/// even while it is outside the viewport and its cache extent.
 pub struct SliverEnsureSemantics {
     sliver: Box<dyn Sliver>,
 }
@@ -192,6 +190,10 @@ impl Sliver for SliverEnsureSemantics {
         axis: Axis,
         reverse: bool,
     ) -> Box<dyn RenderSliver> {
-        self.sliver.create_render_sliver(controller, axis, reverse)
+        Box::new(WidgetWrapRenderSliver {
+            inner: RefCell::new(self.sliver.create_render_sliver(controller, axis, reverse)),
+            wrap: Rc::new(Widget::with_ensured_sliver_semantics),
+            hidden: false,
+        })
     }
 }

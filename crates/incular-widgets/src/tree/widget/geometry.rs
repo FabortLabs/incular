@@ -105,7 +105,10 @@ pub(in crate::tree) fn sliver_anchor(
         .iter()
         // Reverse-growing children move away from the center as estimates
         // refine, as in Flutter, so only forward children anchor.
-        .filter(|child| !layout.grows_in_reverse(child))
+        .filter(|child| {
+            !layout.grows_in_reverse(child)
+                && child.placement != crate::scrolling::SliverChildPlacement::Parked
+        })
         .find(|child| {
             child.offset + child.extent > physical_offset
                 || (child.extent <= 0. && child.offset >= physical_offset)

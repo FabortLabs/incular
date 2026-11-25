@@ -237,6 +237,8 @@ pub(crate) struct SemanticProperties {
     /// Parent-data request from a `KeepAlive` wrapper: the sliver that
     /// materializes this child keeps it retained outside the cache window.
     pub(super) keep_alive: bool,
+    /// Keep this sliver child in accessibility outside its viewport cache.
+    pub(super) ensures_sliver_semantics: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

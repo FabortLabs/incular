@@ -36,3 +36,25 @@ retained anchor corrections are not disabled. The literal offset
 check, three sliver correction tests, 39 scrolling tests, and eight
 centered viewport tests passed. The separate accessibility-tree
 assertions remain open at this checkpoint.
+
+## Cached accessibility membership and hidden flags repaired
+
+At the first frame with literal offset 300, the retained tree now
+exposes exactly four adapter labels: Items 1 and 2 visible and
+cached Items 0 and 3 hidden. The post-layout jump gives the same
+result. A fitting visual layer is not the test: these checks assert
+the retained semantics tree separately from paint.
+
+An enclosing viewport now supplies its main-axis cache window and
+optional paint clip. `Clip.none` leaves cached labels unhidden but
+does not admit off-cache labels. A `SliverEnsureSemantics` wrapper
+keeps Item 4 present and unhidden outside the cache; after a jump to
+450 puts it in the normal cache, it becomes hidden. The same
+transition also drops Item 0 exactly at the cache boundary.
+
+The official Flutter case and three authored checks passed, along
+with 66 focused Rust tests. The registration remains a paired
+mismatch at this checkpoint because the original also asserts
+`hasImplicitScrolling`, directional scroll actions, and
+`scrollToOffset` on its viewport semantic node. The visibility and
+offset repairs do not establish those action/flag requirements.
