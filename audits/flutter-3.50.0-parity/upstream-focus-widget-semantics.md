@@ -105,3 +105,20 @@ does not expose. Native Android IME behavior is not inferred from the
 normalized hardware key test. Four focused Rust targets passed (24
 tests), followed by a rerun with both key phases and real platform
 startup policy in the new focus highlight target.
+
+## Focus movement and reactive labels
+
+The pinned originals :16, :30, and :65 in `focus_scope_test.dart`
+passed by exact name. The new retained application test builds its
+status text reactively from live FocusNodes. It verifies the initial
+state, each node's focus state, and the exact labels in the committed
+semantic tree after a request or autofocus. :65 is paired. :16 and :30
+are partial, since the mounted Rust fixtures request the node directly
+rather than looking up an attached scope with `FocusScope.of`.
+
+After the primary-focus ownership fix, the pinned :812 cross-scope
+case and the :1825 manager case were rerun. The native GlobalKey test
+still keeps the same element, a pending or confirmed primary focus,
+and the correct new ancestor focus. :812 is partial because the native
+fixture does not call Flutter's root `setFirstFocus` on an explicitly
+attached ScopeNode or assert the two labels during the scope move.
