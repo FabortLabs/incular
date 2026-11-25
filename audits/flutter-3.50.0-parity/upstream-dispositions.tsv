@@ -1439,3 +1439,6 @@ packages/flutter/test/services/delta_text_input_test.dart	65	Invalid TextRange f
 packages/flutter/test/services/delta_text_input_test.dart	115	Invalid TextRange fails loudly when being converted to JSON - Faulty deltaStart and deltaEnd	partial-match	upstream-delta-text-input-channel.md
 packages/flutter/test/services/delta_text_input_test.dart	161	Invalid TextRange fails loudly when being converted to JSON - Faulty Selection	partial-match	upstream-delta-text-input-channel.md
 packages/flutter/test/services/delta_text_input_test.dart	214	Invalid TextRange fails loudly when being converted to JSON - Faulty Composing Region	partial-match	upstream-delta-text-input-channel.md
+packages/flutter/test/widgets/focus_scope_test.dart	394	Adding a new FocusScope attaches the child to its parent.	partial-match	upstream-owned-focus-scopes.md
+packages/flutter/test/widgets/focus_scope_test.dart	563	Removing focused widget doesn't move focus to next widget within FocusScope	paired-match	upstream-owned-focus-scopes.md
+packages/flutter/test/widgets/focus_scope_test.dart	611	Removing a FocusScope removes its node from the tree	partial-match	upstream-owned-focus-scopes.md

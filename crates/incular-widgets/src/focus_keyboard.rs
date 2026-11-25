@@ -268,14 +268,16 @@ impl From<FocusScope> for Widget {
                 callbacks.focus_scope = Some(node.clone());
             }
             widget
-        } else if let Some(allowed) = value.can_request_focus {
-            let mut widget = Widget::from(Focus::new(child).can_request_focus(allowed));
+        } else {
+            // Flutter always mounts a scope node, even without a supplied
+            // node or explicit focus permission. Mount-owned descriptors
+            // retain that identity and its focused-child history on rebuild.
+            let focus = Focus::new(child).can_request_focus(value.can_request_focus.unwrap_or(true));
+            let mut widget = Widget::from(focus);
             if let WidgetKind::Gesture { callbacks, .. } = widget.kind_mut() {
                 callbacks.owns_focus_scope = true;
             }
             widget
-        } else {
-            child
         };
         scope
             .with_focus_traversal_policy(value.policy)
