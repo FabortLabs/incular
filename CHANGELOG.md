@@ -174,6 +174,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-widgets`: callback shortcuts preserve single-activator Num Lock
+  policies and run every distinct binding that matches.
+
 - `incular-runtime`: irregular keyboard transitions still update and reach
   handlers; per-window opt-in diagnostics show the event and before/after state.
 

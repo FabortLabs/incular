@@ -6,9 +6,9 @@ use incular_core::KeyboardEvent;
 pub use incular_gestures::{
     Action, ActionInvocationPhase, ActionResult, Actions, Command, CommandId, FocusBehavior,
     FocusManager, FocusNode, FocusOrder, FocusScopeNode, FocusScopeSubscription,
-    FocusTraversalPolicy, FocusTraversalPolicyKind, Intent, LogicalKeySet, LogicalShortcutKey,
-    OrderedTraversalPolicy, ReadingOrderTraversalPolicy, ShortcutActivator, ShortcutKey,
-    ShortcutTrigger, Shortcuts, SingleActivator, WidgetOrderTraversalPolicy,
+    FocusTraversalPolicy, FocusTraversalPolicyKind, Intent, LockState, LogicalKeySet,
+    LogicalShortcutKey, OrderedTraversalPolicy, ReadingOrderTraversalPolicy, ShortcutActivator,
+    ShortcutKey, ShortcutTrigger, Shortcuts, SingleActivator, WidgetOrderTraversalPolicy,
 };
 
 use crate::{Widget, WidgetKind};
@@ -412,7 +412,12 @@ impl CallbackShortcuts {
         activator: impl Into<ShortcutActivator>,
         callback: impl Fn() + 'static,
     ) -> Self {
-        self.bindings.push((activator.into(), Rc::new(callback)));
+        let activator = activator.into();
+        if let Some((_, existing)) = self.bindings.iter_mut().find(|(key, _)| key == &activator) {
+            *existing = Rc::new(callback);
+        } else {
+            self.bindings.push((activator, Rc::new(callback)));
+        }
         self
     }
 
@@ -423,63 +428,27 @@ impl CallbackShortcuts {
         A: Into<ShortcutActivator>,
         F: Fn() + 'static,
     {
-        self.bindings.extend(
-            bindings
-                .into_iter()
-                .map(|(activator, callback)| (activator.into(), Rc::new(callback) as Rc<dyn Fn()>)),
-        );
+        for (activator, callback) in bindings {
+            self = self.shortcut(activator, callback);
+        }
         self
-    }
-}
-
-fn register_callback_shortcut(
-    shortcuts: &mut Shortcuts,
-    activator: &ShortcutActivator,
-    callback: Rc<dyn Fn()>,
-) {
-    match activator {
-        ShortcutActivator::Physical { key, trigger } => {
-            shortcuts.register_on(*key, *trigger, move || callback());
-        }
-        ShortcutActivator::Logical { key, trigger } => {
-            shortcuts.register_logical_on(key.clone(), *trigger, move || callback());
-        }
-        ShortcutActivator::Single(activator) => {
-            let trigger = if activator.include_repeats {
-                ShortcutTrigger::Down
-            } else {
-                ShortcutTrigger::Press
-            };
-            shortcuts.register_logical_on(
-                LogicalShortcutKey::new(activator.trigger.clone(), activator.modifiers),
-                trigger,
-                move || callback(),
-            );
-        }
     }
 }
 
 impl From<CallbackShortcuts> for Widget {
     fn from(value: CallbackShortcuts) -> Self {
-        let mut shortcuts = Shortcuts::new();
-        for (activator, callback) in &value.bindings {
-            register_callback_shortcut(&mut shortcuts, activator, callback.clone());
-        }
-        let shortcuts = Rc::new(shortcuts);
-        let scope = shortcuts.erased_scope();
-        let dispatch_scope = scope.clone();
+        let bindings = value.bindings;
         let callbacks = incular_gestures::GestureCallbacks {
-            on_shortcut: Some(Rc::new(move |event| {
-                dispatch_scope.find(event).is_some_and(|matched| {
-                    if let incular_gestures::ShortcutMatch::Callback(callback) = matched {
+            on_shortcut_with_lock_modes: Some(Rc::new(move |event, lock_modes| {
+                let mut handled = false;
+                for (activator, callback) in &bindings {
+                    if activator.accepts_with_lock_modes(&event, lock_modes) {
                         callback();
-                        true
-                    } else {
-                        false
+                        handled = true;
                     }
-                })
+                }
+                handled
             })),
-            shortcut_scope: Some(scope),
             include_semantics: false,
             ..incular_gestures::GestureCallbacks::default()
         };

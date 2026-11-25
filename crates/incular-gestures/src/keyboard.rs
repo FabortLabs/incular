@@ -18,6 +18,7 @@ impl GestureCallbacks {
             || self.on_key_repeat.is_some()
             || self.on_key_up.is_some()
             || self.on_shortcut.is_some()
+            || self.on_shortcut_with_lock_modes.is_some()
             || self.focus_node.is_some()
     }
 
@@ -37,6 +38,24 @@ impl GestureCallbacks {
     /// phase-specific callbacks run.
     #[must_use]
     pub fn handle_keyboard(&self, event: KeyboardEvent) -> bool {
+        let lock_modes = event.modifiers;
+        self.handle_keyboard_with_lock_modes(event, lock_modes)
+    }
+
+    /// Routes keyboard shortcuts with a host-provided lock snapshot.
+    #[must_use]
+    pub fn handle_keyboard_with_lock_modes(
+        &self,
+        event: KeyboardEvent,
+        lock_modes: Modifiers,
+    ) -> bool {
+        if self
+            .on_shortcut_with_lock_modes
+            .as_ref()
+            .is_some_and(|callback| callback(event.clone(), lock_modes))
+        {
+            return true;
+        }
         if self
             .on_shortcut
             .as_ref()
@@ -693,15 +712,26 @@ impl ShortcutKey {
     }
 }
 
+/// Whether a shortcut requires Num Lock to be on, off, or either.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum LockState {
+    #[default]
+    Ignored,
+    Locked,
+    Unlocked,
+}
+
 /// A logical single-key shortcut with the modifier state required by the
 /// shortcut. This is the retained equivalent of Flutter's
 /// `SingleActivator`: the four shortcut modifiers are matched independently,
-/// while lock-state and unrelated non-modifier keys do not affect a match.
+/// while unrelated non-modifier keys do not affect a match. Num Lock is
+/// ignored unless the activator requests a particular state.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SingleActivator {
     pub trigger: KeyboardKey,
     pub modifiers: Modifiers,
     pub include_repeats: bool,
+    pub num_lock: LockState,
 }
 
 impl SingleActivator {
@@ -711,12 +741,19 @@ impl SingleActivator {
             trigger,
             modifiers: shortcut_modifiers(modifiers),
             include_repeats: true,
+            num_lock: LockState::Ignored,
         }
     }
 
     #[must_use]
     pub fn with_repeats(mut self, include_repeats: bool) -> Self {
         self.include_repeats = include_repeats;
+        self
+    }
+
+    #[must_use]
+    pub fn with_num_lock(mut self, num_lock: LockState) -> Self {
+        self.num_lock = num_lock;
         self
     }
 
@@ -737,7 +774,20 @@ impl SingleActivator {
 
     #[must_use]
     pub fn accepts(&self, event: &KeyboardEvent) -> bool {
-        event.state.is_down()
+        self.accepts_with_lock_modes(event, event.modifiers)
+    }
+
+    /// Tests the event against a separate hardware lock snapshot.
+    #[must_use]
+    pub fn accepts_with_lock_modes(&self, event: &KeyboardEvent, lock_modes: Modifiers) -> bool {
+        let num_locked = lock_modes.contains(Modifiers::NUM_LOCK);
+        let lock_matches = match self.num_lock {
+            LockState::Ignored => true,
+            LockState::Locked => num_locked,
+            LockState::Unlocked => !num_locked,
+        };
+        lock_matches
+            && event.state.is_down()
             && (self.include_repeats || !event.repeat)
             && event.key == self.trigger
             && shortcut_modifiers(event.modifiers) == self.modifiers
@@ -797,6 +847,11 @@ impl ShortcutActivator {
 
     #[must_use]
     pub fn accepts(&self, event: &KeyboardEvent) -> bool {
+        self.accepts_with_lock_modes(event, event.modifiers)
+    }
+
+    #[must_use]
+    pub fn accepts_with_lock_modes(&self, event: &KeyboardEvent, lock_modes: Modifiers) -> bool {
         match self {
             Self::Physical { key, trigger } => {
                 key.code == event.code && key.modifiers == event.modifiers && trigger.matches(event)
@@ -804,7 +859,7 @@ impl ShortcutActivator {
             Self::Logical { key, trigger } => {
                 key.key == event.key && key.modifiers == event.modifiers && trigger.matches(event)
             }
-            Self::Single(activator) => activator.accepts(event),
+            Self::Single(activator) => activator.accepts_with_lock_modes(event, lock_modes),
         }
     }
 }

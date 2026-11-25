@@ -23,3 +23,15 @@ their produced case in Flutter. Incular accepts both. The Rust target
 pinned Flutter counterpart with
 `./audits/flutter-3.50.0-parity/run-reference-probe.ps1 -Test shortcut_character_case_reference_test.dart`.
 This is a semantic difference, not a claim about OS key translation.
+
+## Num Lock and mounted callback scopes
+
+Five exact originals at :528, :571, :614, :1602 and :1637 passed.
+Rust verifies both Num Lock states for locked, unlocked and ignored
+activators after real Runtime key dispatch. The state reaches mounted
+callback shortcuts separately from native modifier flags. Exact callback
+controls cover distinct keys, no dispatch on release and inner-scope
+propagation. One authored reference also confirms that multiple distinct
+matches run in order and a duplicate binding replaces in place.
+Thirteen focused Rust checks, five Flutter originals and the authored
+probe passed. This does not verify all native lock key normalization.

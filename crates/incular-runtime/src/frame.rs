@@ -2280,7 +2280,10 @@ impl Runtime {
         }
         // A window-wide handler cannot suppress notification of the focused
         // keyboard scope. Both results gate fallback editing and traversal.
-        let focused_handled = self.tree.dispatch_keyboard(self.focused, event.clone());
+        let lock_modes = event.modifiers | self.hardware_keyboard.lock_modes_enabled();
+        let focused_handled =
+            self.tree
+                .dispatch_keyboard_with_lock_modes(self.focused, event.clone(), lock_modes);
         if hardware.handled || focused_handled {
             self.frame_requested = true;
             return true;

@@ -209,7 +209,7 @@ pub use focus_keyboard::{
     Command, CommandId, ExcludeFocus, ExcludeFocusTraversal, Focus, FocusManager, FocusNode,
     FocusOrder, FocusScope, FocusScopeNode, FocusScopeSubscription, FocusTraversalGroup,
     FocusTraversalOrder, FocusTraversalPolicy, FocusTraversalPolicyKind, FocusableActionDetector,
-    Intent, KeyboardListener, LogicalKeySet, LogicalShortcutKey, OrderedTraversalPolicy,
+    Intent, KeyboardListener, LockState, LogicalKeySet, LogicalShortcutKey, OrderedTraversalPolicy,
     ReadingOrderTraversalPolicy, ShortcutActivator, ShortcutKey, ShortcutTrigger, Shortcuts,
     SingleActivator, WidgetOrderTraversalPolicy,
 };

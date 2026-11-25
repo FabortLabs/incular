@@ -441,6 +441,9 @@ pub struct GestureCallbacks {
     /// An optional typed shortcut dispatcher. Widgets owns the closure so
     /// this crate remains independent from the retained runtime.
     pub on_shortcut: Option<Rc<dyn Fn(KeyboardEvent) -> bool>>,
+    /// Optional shortcut dispatcher with the separate observed lock state.
+    pub on_shortcut_with_lock_modes:
+        Option<Rc<dyn Fn(KeyboardEvent, incular_core::Modifiers) -> bool>>,
     /// A typed shortcut scope retained separately from the callback above so
     /// the widget tree can resolve an intent against action ancestors.
     pub shortcut_scope: Option<Rc<ErasedShortcutScope>>,

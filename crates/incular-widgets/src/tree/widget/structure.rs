@@ -1787,6 +1787,10 @@ fn gesture_callbacks_eq(left: &GestureCallbacks, right: &GestureCallbacks) -> bo
         && same_rc(&left.on_key_repeat, &right.on_key_repeat)
         && same_rc(&left.on_key_up, &right.on_key_up)
         && same_rc(&left.on_shortcut, &right.on_shortcut)
+        && same_rc(
+            &left.on_shortcut_with_lock_modes,
+            &right.on_shortcut_with_lock_modes,
+        )
         && same_rc(&left.shortcut_scope, &right.shortcut_scope)
         && same_rc(&left.action_scope, &right.action_scope)
         && same_rc(&left.action_listener, &right.action_listener)

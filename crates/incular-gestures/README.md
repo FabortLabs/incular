@@ -40,3 +40,7 @@ registrations and no persistent event history. Application transition sequences
 must converge. A callback panic propagates, leaves committed state intact and
 discards unfinished delivery; later changes remain usable. This contract concerns
 modality, not focus-scope selection transactions.
+
+Use `SingleActivator::with_num_lock` to require a locked or unlocked
+Num Lock state. The default is `LockState::Ignored`. Mounted
+`CallbackShortcuts` receive the runtime's separate lock snapshot.
