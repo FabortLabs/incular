@@ -351,6 +351,7 @@ pub struct TextFieldSpec {
     pub(crate) enabled: bool,
     pub(crate) read_only: bool,
     pub(crate) obscure_text: bool,
+    pub(crate) keyboard_selection_enabled: bool,
     pub(crate) cursor_width: f32,
     pub(crate) cursor_height: Option<f32>,
     pub(crate) cursor_radius: f32,

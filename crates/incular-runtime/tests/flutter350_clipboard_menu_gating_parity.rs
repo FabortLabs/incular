@@ -44,9 +44,18 @@ fn mount(
     read_only: bool,
     obscured: bool,
 ) -> (Runtime, TextEditingController, ShownMenu) {
+    mount_with_selection(text, read_only, obscured, None)
+}
+
+fn mount_with_selection(
+    text: &str,
+    read_only: bool,
+    obscured: bool,
+    interactive: Option<bool>,
+) -> (Runtime, TextEditingController, ShownMenu) {
     let controller = TextEditingController::with_text(text);
     let shown = ShownMenu::default();
-    let field = EditableText::new(controller.clone())
+    let mut field = EditableText::new(controller.clone())
         .size(Size::new(300., 40.))
         .text_direction(TextDirection::Ltr)
         .read_only(read_only)
@@ -58,6 +67,9 @@ fn mount(
                 IgnorePointer::new(SizedBox::shrink()).into()
             }
         });
+    if let Some(interactive) = interactive {
+        field = field.enable_interactive_selection(interactive);
+    }
     let mut runtime = Runtime::new(field.into()).unwrap();
     runtime.set_text_shortcut_platform(TextShortcutPlatform::Windows);
     runtime.set_clipboard(Box::new(incular_platform::MemoryClipboard::default()));
@@ -158,4 +170,61 @@ fn select_all_action_keeps_read_only_obscured_text_unselected() {
         "read-only obscured selection became {:?}",
         controller.selection()
     );
+}
+
+#[test]
+fn select_all_action_respects_explicit_selection_overrides() {
+    for (read_only, obscured, interactive, allowed) in [
+        (false, false, Some(false), false),
+        (true, true, Some(true), true),
+        (false, true, None, true),
+    ] {
+        let (mut runtime, controller, _) =
+            mount_with_selection("blah blah", read_only, obscured, interactive);
+        controller.set_selection(TextSelection::collapsed(0));
+        select_all_shortcut(&mut runtime);
+        let expected = if allowed {
+            TextSelection::new(0, 9)
+        } else {
+            TextSelection::collapsed(0)
+        };
+        assert_eq!(
+            controller.selection(),
+            expected,
+            "interactive={interactive:?}"
+        );
+    }
+}
+
+#[test]
+fn keyboard_selection_policy_changes_without_replacing_the_focused_editor() {
+    let controller = TextEditingController::with_text("blah blah");
+    let scene = |interactive: Option<bool>| {
+        let field = EditableText::new(controller.clone())
+            .size(Size::new(300., 40.))
+            .text_direction(TextDirection::Ltr)
+            .read_only(true)
+            .obscure_text(true);
+        match interactive {
+            Some(interactive) => field.enable_interactive_selection(interactive).into(),
+            None => field.into(),
+        }
+    };
+    let mut runtime = Runtime::new(scene(None)).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Windows);
+    frame(&mut runtime);
+    click(&mut runtime, PRIMARY_POINTER_BUTTON);
+    let focused = runtime.focused_element().expect("editor focus");
+    let root = runtime.tree().root().unwrap();
+    for (configured, expected) in [
+        (Some(true), TextSelection::new(0, 9)),
+        (None, TextSelection::collapsed(0)),
+    ] {
+        runtime.schedule_update(root, scene(configured)).unwrap();
+        frame(&mut runtime);
+        assert_eq!(runtime.focused_element(), Some(focused));
+        controller.set_selection(TextSelection::collapsed(0));
+        select_all_shortcut(&mut runtime);
+        assert_eq!(controller.selection(), expected);
+    }
 }

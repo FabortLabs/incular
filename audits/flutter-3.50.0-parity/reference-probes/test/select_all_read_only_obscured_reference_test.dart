@@ -6,7 +6,11 @@ void main() {
   testWidgets('Ctrl+A respects read-only obscured Select All gate', (
     tester,
   ) async {
-    Future<TextSelection> check(bool obscure) async {
+    Future<TextSelection> check(
+      bool obscure, {
+      bool readOnly = true,
+      bool? enableInteractiveSelection,
+    }) async {
       final controller = TextEditingController.fromValue(
         const TextEditingValue(
           text: 'blah blah',
@@ -26,8 +30,9 @@ void main() {
                 style: const TextStyle(fontSize: 14),
                 cursorColor: const Color(0xff000000),
                 backgroundCursorColor: const Color(0xff000000),
-                readOnly: true,
+                readOnly: readOnly,
                 obscureText: obscure,
+                enableInteractiveSelection: enableInteractiveSelection,
                 autofocus: true,
               ),
             ),
@@ -52,5 +57,17 @@ void main() {
       const TextSelection(baseOffset: 0, extentOffset: 9),
     );
     expect(await check(true), const TextSelection.collapsed(offset: 0));
+    expect(
+      await check(false, readOnly: false, enableInteractiveSelection: false),
+      const TextSelection.collapsed(offset: 0),
+    );
+    expect(
+      await check(true, enableInteractiveSelection: true),
+      const TextSelection(baseOffset: 0, extentOffset: 9),
+    );
+    expect(
+      await check(true, readOnly: false),
+      const TextSelection(baseOffset: 0, extentOffset: 9),
+    );
   }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
 }

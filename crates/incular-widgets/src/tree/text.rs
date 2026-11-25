@@ -118,6 +118,18 @@ impl WidgetTree {
         })
     }
 
+    /// The widget's selection flag for keyboard actions. Pointer and native
+    /// selection use the stricter flag on the input traits.
+    #[must_use]
+    pub fn text_field_keyboard_selection_enabled(&self, id: ElementId) -> bool {
+        self.elements.get(id.0).is_some_and(|element| {
+            matches!(
+                element.widget.kind(),
+                WidgetKind::TextField(spec) if spec.enabled && spec.keyboard_selection_enabled
+            )
+        })
+    }
+
     #[must_use]
     pub fn text_field_is_read_only(&self, id: ElementId) -> bool {
         self.elements.get(id.0).is_some_and(|element| {

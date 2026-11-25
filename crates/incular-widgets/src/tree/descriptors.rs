@@ -1633,6 +1633,12 @@ impl From<EditableText> for Widget {
             value.input_formatters,
             value.edit_transform,
         );
+        let can_select_with_pointer = !value.read_only || !value.obscure_text;
+        // EditableText.selectionEnabled controls key actions. Its stricter
+        // _userSelectionEnabled is used by native input and pointer handles.
+        let keyboard_selection_enabled = value
+            .enable_interactive_selection
+            .unwrap_or(can_select_with_pointer);
         let spec = TextFieldSpec {
             context_menu: None,
             selection_handles: None,
@@ -1659,6 +1665,7 @@ impl From<EditableText> for Widget {
             enabled: value.enabled,
             read_only: value.read_only,
             obscure_text: value.obscure_text,
+            keyboard_selection_enabled,
             cursor_width: value.cursor_width,
             cursor_height: value.cursor_height,
             cursor_radius: value.cursor_radius,
@@ -1672,8 +1679,7 @@ impl From<EditableText> for Widget {
                     .autocorrect
                     .unwrap_or_else(|| infer_autocorrect(value.autofill_hints.as_deref())),
                 enable_suggestions: value.enable_suggestions,
-                enable_interactive_selection: value.enable_interactive_selection.unwrap_or(true)
-                    && (!value.read_only || !value.obscure_text),
+                enable_interactive_selection: keyboard_selection_enabled && can_select_with_pointer,
                 text_capitalization: value.text_capitalization,
                 keyboard_appearance: value.keyboard_appearance,
                 autofill_hints: value.autofill_hints,

@@ -87,6 +87,13 @@ fn read_only_obscured_fields_disable_interactive_selection() {
     );
     assert!(snapshot_traits(|field| field.read_only(true)).enable_interactive_selection);
     assert!(
+        !snapshot_traits(|field| field
+            .read_only(true)
+            .obscure_text(true)
+            .enable_interactive_selection(true))
+        .enable_interactive_selection
+    );
+    assert!(
         !snapshot_traits(|field| field.enable_interactive_selection(false))
             .enable_interactive_selection
     );

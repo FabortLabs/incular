@@ -150,6 +150,9 @@ impl Runtime {
                 true
             }
             SelectAll => {
+                if !self.tree.text_field_keyboard_selection_enabled(field) {
+                    return false;
+                }
                 controller.select_all();
                 true
             }

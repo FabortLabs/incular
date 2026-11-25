@@ -113,3 +113,16 @@ under zero, loose, and tight constraints, and reconciles a child in
 and out. Pinned Flutter and Windows wgpu both leave the background
 unchanged for an absent child even when the matrix would color
 transparent black in a populated filter.
+
+### Keyboard Select All honors EditableText selection policy
+
+The pinned Windows Ctrl+A probe and Rust controls now agree: a
+read-only obscured field keeps its selection unchanged by default,
+an explicit false disables the shortcut in a plain editor, and
+an explicit true permits the keyboard action in a read-only
+obscured editor. The latter still does not enable pointer handles
+or keyboard-platform selection. The focused editor can adopt the
+option on rebuild without replacing its focus. Clipboard menus
+and native input controls remain green. The :3235 case is still a
+partial port: the pinned original calls the programmatic setter,
+not the keyboard action.

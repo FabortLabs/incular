@@ -705,6 +705,7 @@ impl PartialEq for TextFieldSpec {
             && self.enabled == other.enabled
             && self.read_only == other.read_only
             && self.obscure_text == other.obscure_text
+            && self.keyboard_selection_enabled == other.keyboard_selection_enabled
             && self.cursor_width == other.cursor_width
             && self.cursor_height == other.cursor_height
             && self.cursor_radius == other.cursor_radius
