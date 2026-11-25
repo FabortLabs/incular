@@ -1042,3 +1042,8 @@ packages/flutter/test/rendering/relative_rect_test.dart	67	RelativeRect.lerp	pai
 packages/flutter/test/rendering/relative_rect_test.dart	73	RelativeRect.lerp identical a,b	partial-match	upstream-relative-rect.md
 packages/flutter/test/widgets/positioned_test.dart	12	Positioned constructors	paired-match	upstream-stack.md#directional-positioning-and-empty-parent-data
 packages/flutter/test/widgets/positioned_test.dart	133	Positioned does not crash at zero area	paired-match	upstream-stack.md#directional-positioning-and-empty-parent-data
+packages/flutter/test/rendering/baseline_test.dart	83	RenderFlex and RenderIgnoreBaseline (control test -- with baseline)	partial-match	upstream-ignore-baseline.md
+packages/flutter/test/rendering/baseline_test.dart	114	RenderFlex and RenderIgnoreBaseline (with ignored baseline)	paired-match	upstream-ignore-baseline.md
+packages/flutter/test/widgets/basic_test.dart	1762	Row and IgnoreBaseline (control -- with baseline)	partial-match	upstream-ignore-baseline.md
+packages/flutter/test/widgets/basic_test.dart	1792	Row and IgnoreBaseline (with ignored baseline)	paired-match	upstream-ignore-baseline.md
+packages/flutter/test/widgets/basic_test.dart	1856	IgnoreBaseline does not crash at zero area	paired-match	upstream-ignore-baseline.md

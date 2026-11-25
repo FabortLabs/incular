@@ -248,6 +248,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-widgets`: IgnoreBaseline keeps its child’s size without letting
+  its baseline push down adjacent children in a baseline-aligned row.
+
 - `incular-widgets`: a Positioned child without any insets or explicit size
   contributes to Stack sizing instead of forcing the stack to fill its parent.
 

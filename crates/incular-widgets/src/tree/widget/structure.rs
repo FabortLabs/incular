@@ -1893,6 +1893,7 @@ pub(crate) enum WidgetType {
     Unconstrained,
     IntrinsicWidth,
     IntrinsicHeight,
+    IgnoreBaseline,
     RotatedBox,
     Fractional,
     Baseline,
@@ -1983,6 +1984,7 @@ impl WidgetType {
             Self::Unconstrained => "UnconstrainedBox",
             Self::IntrinsicWidth => "IntrinsicWidth",
             Self::IntrinsicHeight => "IntrinsicHeight",
+            Self::IgnoreBaseline => "IgnoreBaseline",
             Self::RotatedBox => "RotatedBox",
             Self::Fractional => "FractionallySizedBox",
             Self::Baseline => "Baseline",
@@ -2273,6 +2275,7 @@ impl WidgetKind {
                 match mode {
                     ChildLayoutMode::IntrinsicWidth { .. } => WidgetType::IntrinsicWidth,
                     ChildLayoutMode::IntrinsicHeight => WidgetType::IntrinsicHeight,
+                    ChildLayoutMode::IgnoreBaseline => WidgetType::IgnoreBaseline,
                     ChildLayoutMode::QuarterTurns(_) => WidgetType::RotatedBox,
                 },
                 Layout,

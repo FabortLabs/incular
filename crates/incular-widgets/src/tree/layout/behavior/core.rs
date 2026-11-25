@@ -397,6 +397,15 @@ impl WidgetTree {
                             .size;
                         (size, ChildOffsets::One(Offset::ZERO))
                     }
+                    ChildLayoutMode::IgnoreBaseline => {
+                        self.layout_render(child, constraints)?;
+                        let size = self
+                            .render_live(child, "baseline-ignored child must remain live")
+                            .size;
+                        self.render_live_mut(id, "IgnoreBaseline must remain live")
+                            .baseline = None;
+                        (size, ChildOffsets::One(Offset::ZERO))
+                    }
                     ChildLayoutMode::QuarterTurns(turns) if turns.rem_euclid(2) == 0 => {
                         self.layout_render(child, constraints)?;
                         let size = self

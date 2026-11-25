@@ -15,7 +15,7 @@ use std::{
 use incular_config::{Constraints, TextDirection};
 use incular_core::{Offset, Size, Transform as CoreTransform};
 
-use crate::tree::{OpacityController, RetainedState, WidgetKind};
+use crate::tree::{ChildLayoutMode, OpacityController, RetainedState, WidgetKind};
 use crate::{Builder, Opacity, Positioned, Widget};
 
 /// Flutter's `SingleChildLayoutDelegate`: sizes the box, constrains the
@@ -786,8 +786,9 @@ impl IgnoreBaseline {
 
 impl From<IgnoreBaseline> for Widget {
     fn from(value: IgnoreBaseline) -> Self {
-        // A builder is its own render object, and only text reports a
-        // baseline, so the child's never reaches the parent.
-        Builder::new(move |_| value.child.clone()).into()
+        Widget::from_kind(WidgetKind::ProxyLayout {
+            mode: ChildLayoutMode::IgnoreBaseline,
+            child: value.child,
+        })
     }
 }

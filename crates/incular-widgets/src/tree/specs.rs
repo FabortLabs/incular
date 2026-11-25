@@ -486,6 +486,8 @@ pub enum ChildLayoutMode {
     },
     /// `RenderIntrinsicHeight`: tightens the child height to its intrinsic height.
     IntrinsicHeight,
+    /// Passes through layout without exposing the child’s baseline.
+    IgnoreBaseline,
     /// `RenderRotatedBox`: lays out the child with swapped axes on odd quarter turns.
     QuarterTurns(i32),
 }
