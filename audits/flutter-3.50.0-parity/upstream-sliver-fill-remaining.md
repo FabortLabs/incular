@@ -1,5 +1,13 @@
 # SliverFillRemaining viewport geometry and semantics
 
+## Reverification after the trailing-stretch fix
+
+- :186, :221, :479, :515, :1081 and :1125 now match. At y=600 the real runtime semantics node is hidden inside the 250px cache. At y=850 it is absent. Both default modes and the fillOverscroll mode are checked separately.
+- :555 and :600–:744 now match. A touch swipe grows the 450px expandable fill and it returns to 450px when the spring settles. The four jump regressions check exact boxes, return to rest, and include the reversed vertical hit at (400,25). The fix adds the part clipped by the sliver-local scroll offset to the child's layout budget, without adding it to the scroll range.
+- The three native targets give 22 passes and one outstanding partial mismatch (:838, the padded intrinsic child after a long fixed list). :793 and :958 now match the geometry exercised by the neutral button/logo analogues. :902 and :1283 agree on final-row semantics but do not equate a Flutter finder with a native paint intersection.
+
+The rest of this file records the original pre-fix baseline.
+
 Pinned Flutter 3.50.0 passed the fourteen selected originals for default fill, non-scrolling fill, and the two non-overscroll accessibility groups. The Rust target has eight passes and two intentional failures.
 
 | Registrations | Result |

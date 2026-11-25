@@ -1639,8 +1639,12 @@ impl FillRemainingRenderSliver {
     /// remaining extent and a maximum that includes overscroll.
     fn overscroll_layout(&mut self, constraints: SliverConstraints, extent: f32) -> SliverLayout {
         self.extent.set(extent);
-        let max_extent = (constraints.remaining_paint_extent - constraints.overlap.min(0.))
-            .max(0.)
+        // The viewport caps the paint budget at its own extent; past this
+        // sliver's leading edge, the clipped part of the child is carried in
+        // scroll_offset. Keep that part in the child's layout budget so its
+        // visible trailing edge can still reach the end of the viewport.
+        let max_extent = (constraints.remaining_paint_extent - constraints.overlap.min(0.)
+            + constraints.scroll_offset)
             .max(extent);
         let paint_extent = max_extent.min(constraints.remaining_paint_extent).max(0.);
         let mut geometry = SliverGeometry::from_scroll_extent(constraints, extent);
