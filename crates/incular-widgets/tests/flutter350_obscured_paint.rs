@@ -134,3 +134,57 @@ fn masking_a_retained_field_masks_its_accessible_value_without_rewriting_the_mod
         assert_eq!(controller.text(), "é👩‍💻");
     }
 }
+
+#[test]
+fn a_custom_mask_uses_the_selected_glyph_without_losing_the_retained_editor() {
+    let controller = TextEditingController::with_text("super-secret-password!!1");
+    let describe = |glyph| {
+        EditableText::new(controller.clone())
+            .text_direction(TextDirection::Ltr)
+            .obscure_text(true)
+            .obscuring_character(glyph)
+    };
+    let mut masked = WidgetTree::new();
+    let descriptor = describe('#');
+    assert_eq!(descriptor.get_obscuring_character(), '#');
+    let id = masked.mount(descriptor.into()).unwrap();
+    let size = Constraints::tight(Size::new(240., 50.));
+    masked.layout(size).unwrap();
+    let (mut hashes, _) = editor(&"#".repeat(24), false);
+    assert_eq!(glyphs(&mut masked), glyphs(&mut hashes));
+    masked.update_semantics();
+    let semantic = masked.semantic_node_for_element(id).unwrap();
+
+    controller.set_text("é👩‍💻");
+    masked.update(id, describe('é').into()).unwrap();
+    masked.layout(size).unwrap();
+    masked.update_semantics();
+    assert_eq!(masked.semantic_node_for_element(id), Some(semantic));
+    let (mut letters, plain) = editor("éééééé", false);
+    assert_eq!(glyphs(&mut masked), glyphs(&mut letters));
+    assert_eq!(
+        masked.semantics().node(semantic).unwrap().value.as_deref(),
+        Some("éééééé")
+    );
+    let caret = masked
+        .text_field_offset_rect(id, 6, TextAffinity::Downstream)
+        .unwrap();
+    let third = letters
+        .text_field_offset_rect(plain, 6, TextAffinity::Downstream)
+        .unwrap();
+    assert_eq!(caret, third);
+    assert_eq!(
+        masked
+            .text_field_position_at(id, Offset::new(caret.origin.x, caret.origin.y + 2.))
+            .unwrap()
+            .0,
+        6
+    );
+    assert_eq!(controller.text(), "é👩‍💻");
+}
+
+#[test]
+#[should_panic(expected = "obscuring character must be one UTF-16 code unit")]
+fn a_surrogate_pair_is_not_a_single_mask_glyph() {
+    let _ = EditableText::new(TextEditingController::new()).obscuring_character('🙂');
+}

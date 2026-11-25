@@ -84,3 +84,15 @@ glyph and caret evidence without counting a new original.
 
 Forty focused Rust tests passed, including the retained toggle,
 platform text input, spell checking, and keyboard deletion.
+
+## Configurable obscuring character
+
+The pinned :5607 original now pairs. The editor accepts a typed
+mask character and shapes 24 hashes for the original 24-character
+ASCII fixture. An authored Flutter control and Rust counterpart
+also replace the mask on a retained editor, using a non-ASCII BMP
+glyph for a six-unit password. Glyphs, projected caret, a pointer
+hit, and the masked semantic value continue to agree with the
+selected mask, without changing the controller text. A supplementary
+character is rejected since Flutter requires exactly one UTF-16 unit.
+Both authored cases and 45 focused Rust tests passed.

@@ -167,6 +167,7 @@ impl WidgetTree {
                     text_align,
                     text_direction,
                     obscure_text,
+                    obscuring_character,
                     paragraph_layout,
                     content_padding,
                     read_only,
@@ -197,8 +198,9 @@ impl WidgetTree {
                 .text_direction(text_direction)
                 .soft_wrap(multiline)
                 .max_lines(max_lines);
+                let mask = obscure_text.then_some(obscuring_character);
                 let (metrics, layout, document) =
-                    with_text_field_display(controller, placeholder, obscure_text, |display| {
+                    with_text_field_display(controller, placeholder, mask, |display| {
                         let _external_call = self
                             .recursion_diagnostics
                             .external_text_call("TextEngine::layout_with_options", display);
@@ -226,7 +228,7 @@ impl WidgetTree {
                 let decorations = text_field_decorations(
                     controller,
                     placeholder,
-                    obscure_text,
+                    mask,
                     style,
                     spell_runs.as_ref(),
                 );
@@ -353,7 +355,7 @@ impl WidgetTree {
 fn text_field_decorations(
     controller: &TextEditingController,
     placeholder: &str,
-    obscure_text: bool,
+    mask: Option<char>,
     style: &TextStyle,
     spell_runs: Option<&(String, Vec<incular_text::StyledTextRun>)>,
 ) -> Arc<[incular_text::StyledTextRun]> {
@@ -362,7 +364,7 @@ fn text_field_decorations(
             .decoration
             .is_some_and(|decoration| !decoration.is_empty())
     };
-    with_text_field_display(controller, placeholder, obscure_text, |display| {
+    with_text_field_display(controller, placeholder, mask, |display| {
         if controller.with_value(|value| value.text.is_empty()) {
             return Arc::from([]);
         }

@@ -932,7 +932,7 @@ impl WidgetTree {
                         super::text::with_text_field_display(
                             &spec.controller,
                             "",
-                            true,
+                            Some(spec.obscuring_character),
                             str::to_owned,
                         )
                     } else {

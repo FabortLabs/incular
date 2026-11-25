@@ -1207,3 +1207,4 @@ packages/flutter/test/widgets/editable_text_test.dart	17767	code points are trea
 packages/flutter/test/widgets/editable_text_test.dart	17872	when manually placing the cursor in the middle of a code point	reference-ran-incular-open	upstream-editable-focus-selection.md#obscured-code-point-movement-and-deletion
 packages/flutter/test/widgets/editable_text_test.dart	5423	password fields have correct semantics	partial-match	upstream-editable-focus-selection.md#default-mask-geometry-and-accessibility
 packages/flutter/test/widgets/editable_text_test.dart	5482	password fields become obscured with the right semantics when set	partial-match	upstream-editable-focus-selection.md#default-mask-geometry-and-accessibility
+packages/flutter/test/widgets/editable_text_test.dart	5607	password fields can have their obscuring character customized	paired-match	upstream-editable-focus-selection.md#configurable-obscuring-character

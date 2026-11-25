@@ -217,7 +217,7 @@ impl WidgetTree {
         let current = text_field_display_offset(
             controller,
             controller.selection().extent,
-            field.obscure_text,
+            field.obscure_text.then_some(field.obscuring_character),
         );
         let line = line_for_byte(&layout, current);
         let last = layout.line_count().saturating_sub(1);
@@ -233,7 +233,12 @@ impl WidgetTree {
             line_caret_x_for_affinity(&layout, line, current, controller.caret_affinity())
         });
         let (target, affinity) = caret_for_line_position(&layout, target_line, x);
-        let target = text_field_source_offset(controller, target, affinity, field.obscure_text);
+        let target = text_field_source_offset(
+            controller,
+            target,
+            affinity,
+            field.obscure_text.then_some(field.obscuring_character),
+        );
         controller.move_cursor_with_affinity(target, affinity, extend);
         controller.set_preferred_caret_x(x);
         self.mark_render_paint(render);
@@ -579,7 +584,7 @@ impl WidgetTree {
         point: Offset,
     ) -> Option<(usize, incular_text::TextAffinity)> {
         let render = self.render_id(id)?;
-        let (layout, scroll_x, scroll_y, multiline, padding, controller, obscured) =
+        let (layout, scroll_x, scroll_y, multiline, padding, controller, mask) =
             match self.renders.get(render.0).map(|node| {
                 let state = self.text_field_state_live(render);
                 (
@@ -596,7 +601,7 @@ impl WidgetTree {
                     field.multiline,
                     field.content_padding,
                     field.controller.clone(),
-                    field.obscure_text,
+                    field.obscure_text.then_some(field.obscuring_character),
                 ),
                 _ => return None,
             };
@@ -619,7 +624,7 @@ impl WidgetTree {
                         })
                 });
         Some((
-            text_field_source_offset(&controller, index, affinity, obscured),
+            text_field_source_offset(&controller, index, affinity, mask),
             affinity,
         ))
     }
@@ -1649,7 +1654,6 @@ impl WidgetTree {
     }
 }
 
-const OBSCURING_GLYPH: &str = "•";
 const OBSCURE_MASK: &str = concat!(
     "••••••••••••••••",
     "••••••••••••••••",
@@ -1671,11 +1675,11 @@ fn utf16_units(text: &str) -> usize {
 pub(super) fn text_field_display_offset(
     controller: &TextEditingController,
     byte: usize,
-    obscure_text: bool,
+    mask: Option<char>,
 ) -> usize {
-    if !obscure_text {
+    let Some(mask) = mask else {
         return byte;
-    }
+    };
     let preedit = controller.preedit();
     let units = controller.with_value(|value| {
         let text = value.text.as_str();
@@ -1692,7 +1696,7 @@ pub(super) fn text_field_display_offset(
         }
         utf16_units(&text[..byte])
     });
-    units * OBSCURING_GLYPH.len()
+    units * mask.len_utf8()
 }
 
 fn source_byte_at_utf16(text: &str, unit: usize, affinity: incular_text::TextAffinity) -> usize {
@@ -1721,15 +1725,15 @@ fn text_field_source_offset(
     controller: &TextEditingController,
     byte: usize,
     affinity: incular_text::TextAffinity,
-    obscure_text: bool,
+    mask: Option<char>,
 ) -> usize {
-    let preedit = obscure_text.then(|| controller.preedit()).flatten();
+    let preedit = mask.and_then(|_| controller.preedit());
     controller.with_value(|value| {
         let text = value.text.as_str();
-        if !obscure_text {
+        let Some(mask) = mask else {
             return byte.min(text.len());
-        }
-        let mut unit = byte / OBSCURING_GLYPH.len();
+        };
+        let mut unit = byte / mask.len_utf8();
         if let Some(preedit) = preedit.as_deref() {
             let selected = value.selection.range();
             let prefix = utf16_units(&text[..selected.start]);
@@ -1745,12 +1749,20 @@ fn text_field_source_offset(
     })
 }
 
-/// Runs `f` with the text a field displays. The common case (no preedit, not
-/// obscured) borrows the controller's text or the placeholder without copying.
+fn with_obscured<R>(glyph: char, units: usize, f: impl FnOnce(&str) -> R) -> R {
+    if glyph == '•' && units <= OBSCURE_MASK.len() / glyph.len_utf8() {
+        return f(&OBSCURE_MASK[..units * glyph.len_utf8()]);
+    }
+    let mut bytes = [0; 4];
+    f(&glyph.encode_utf8(&mut bytes).repeat(units))
+}
+
+/// Runs `f` with the text a field displays. The common case (no preedit,
+/// no mask) borrows the controller's text or placeholder without copying.
 pub(super) fn with_text_field_display<R>(
     controller: &TextEditingController,
     placeholder: &str,
-    obscure_text: bool,
+    mask: Option<char>,
     f: impl FnOnce(&str) -> R,
 ) -> R {
     // Only the mask reaches shaping or paint. Position projection is
@@ -1762,20 +1774,15 @@ pub(super) fn with_text_field_display<R>(
             let range = value.selection.range();
             let mut text = value.text.clone();
             text.replace_range(range.as_range(), &preedit);
-            if obscure_text {
-                text = OBSCURING_GLYPH.repeat(utf16_units(&text));
+            if let Some(glyph) = mask {
+                with_obscured(glyph, utf16_units(&text), f)
+            } else {
+                f(&text)
             }
-            f(&text)
         } else if value.text.is_empty() {
             f(placeholder)
-        } else if obscure_text {
-            let units = utf16_units(&value.text);
-            let len = units * OBSCURING_GLYPH.len();
-            if len <= OBSCURE_MASK.len() {
-                f(&OBSCURE_MASK[..len])
-            } else {
-                f(&OBSCURING_GLYPH.repeat(units))
-            }
+        } else if let Some(glyph) = mask {
+            with_obscured(glyph, utf16_units(&value.text), f)
         } else {
             f(&value.text)
         }
@@ -1997,7 +2004,11 @@ pub(super) fn text_field_caret_geometry(
     text_is_empty: bool,
     field: &TextFieldRender,
 ) -> (f32, f32, f32) {
-    let byte = text_field_display_offset(&field.controller, byte, field.obscure_text);
+    let byte = text_field_display_offset(
+        &field.controller,
+        byte,
+        field.obscure_text.then_some(field.obscuring_character),
+    );
     let (mut x, y, height) = caret_geometry(layout, byte, affinity);
     if text_is_empty
         && field.controller.preedit().is_none()

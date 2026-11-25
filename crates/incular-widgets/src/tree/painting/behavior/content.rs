@@ -132,6 +132,7 @@ impl WidgetTree {
                     content_padding,
                     multiline,
                     obscure_text,
+                    obscuring_character,
                     cursor_width,
                     cursor_height,
                     cursor_radius,
@@ -158,8 +159,9 @@ impl WidgetTree {
                 let reveal_key = (controller.revisions().0, value_selection, focused, size);
                 let reveal = revealed != Some(reveal_key);
                 let has_layout = layout.is_some();
+                let mask = obscure_text.then_some(obscuring_character);
                 let shows_placeholder = value_empty
-                    && with_text_field_display(controller, placeholder, obscure_text, |display| {
+                    && with_text_field_display(controller, placeholder, mask, |display| {
                         display == placeholder.as_str()
                     });
                 let mut active_scroll_x = scroll_x;
@@ -223,8 +225,8 @@ impl WidgetTree {
                     let selection = value_selection.range();
                     if focused && !selection.is_empty() {
                         let selection = TextRange::new(
-                            text_field_display_offset(controller, selection.start, obscure_text),
-                            text_field_display_offset(controller, selection.end, obscure_text),
+                            text_field_display_offset(controller, selection.start, mask),
+                            text_field_display_offset(controller, selection.end, mask),
                         );
                         for rect in selection_rects(
                             &layout,

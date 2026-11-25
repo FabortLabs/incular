@@ -195,6 +195,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                 enabled: spec.enabled,
                 read_only: spec.read_only,
                 obscure_text: spec.obscure_text,
+                obscuring_character: spec.obscuring_character,
                 cursor_width: spec.cursor_width,
                 cursor_height: spec.cursor_height,
                 cursor_radius: spec.cursor_radius,

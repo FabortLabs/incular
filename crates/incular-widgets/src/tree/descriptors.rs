@@ -1039,6 +1039,7 @@ pub struct EditableText {
     enabled: bool,
     read_only: bool,
     obscure_text: bool,
+    obscuring_character: char,
     cursor_width: f32,
     cursor_height: Option<f32>,
     cursor_radius: f32,
@@ -1099,6 +1100,7 @@ impl EditableText {
             enabled: true,
             read_only: false,
             obscure_text: false,
+            obscuring_character: '•',
             // Flutter's EditableText default cursorWidth is 2.0.
             cursor_width: 2.0,
             cursor_height: None,
@@ -1346,6 +1348,24 @@ impl EditableText {
     pub fn obscure_text(mut self, obscure_text: bool) -> Self {
         self.obscure_text = obscure_text;
         self
+    }
+
+    /// Flutter `obscuringCharacter`, default `•`. The mask must be one
+    /// UTF-16 code unit so each edit position retains its visual slot.
+    #[must_use]
+    pub fn obscuring_character(mut self, character: char) -> Self {
+        assert_eq!(
+            character.len_utf16(),
+            1,
+            "obscuring character must be one UTF-16 code unit"
+        );
+        self.obscuring_character = character;
+        self
+    }
+
+    #[must_use]
+    pub fn get_obscuring_character(&self) -> char {
+        self.obscuring_character
     }
 
     /// Lays out a multi-line field one hard-broken paragraph at a time, as a
@@ -1704,6 +1724,7 @@ impl From<EditableText> for Widget {
             enabled: value.enabled,
             read_only: value.read_only,
             obscure_text: value.obscure_text,
+            obscuring_character: value.obscuring_character,
             keyboard_selection_enabled,
             cursor_width: value.cursor_width,
             cursor_height: value.cursor_height,

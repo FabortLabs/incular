@@ -70,4 +70,33 @@ void main() {
     await tester.pump();
     expect(obscured.buildTextSpan().toPlainText(), '••••••••');
   }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+  testWidgets('a retained editor can replace its mask with a BMP character', (
+    WidgetTester tester,
+  ) async {
+    final controller = TextEditingController(text: 'é👩‍💻');
+    final focus = FocusNode();
+    addTearDown(controller.dispose);
+    addTearDown(focus.dispose);
+    EditableText field(String glyph) => EditableText(
+      controller: controller,
+      focusNode: focus,
+      obscureText: true,
+      obscuringCharacter: glyph,
+      style: const TextStyle(fontSize: 14, color: Color(0xff000000)),
+      cursorColor: const Color(0xff000000),
+      backgroundCursorColor: const Color(0xff808080),
+    );
+    EditableTextState? retained;
+    for (final glyph in ['#', 'é', '•']) {
+      await tester.pumpWidget(
+        Directionality(textDirection: TextDirection.ltr, child: field(glyph)),
+      );
+      final state = tester.state<EditableTextState>(find.byType(EditableText));
+      retained ??= state;
+      expect(state, same(retained));
+      expect(state.buildTextSpan().toPlainText(), glyph * 6);
+      expect(controller.text, 'é👩‍💻');
+    }
+    expect(() => field('🙂'), throwsAssertionError);
+  });
 }
