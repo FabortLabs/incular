@@ -61,6 +61,14 @@ pub struct Semantics {
     #[builder(default)]
     on_scroll_backward: Option<Rc<dyn Fn() + 'static>>,
     #[builder(default)]
+    on_scroll_left: Option<Rc<dyn Fn() + 'static>>,
+    #[builder(default)]
+    on_scroll_right: Option<Rc<dyn Fn() + 'static>>,
+    #[builder(default)]
+    on_scroll_up: Option<Rc<dyn Fn() + 'static>>,
+    #[builder(default)]
+    on_scroll_down: Option<Rc<dyn Fn() + 'static>>,
+    #[builder(default)]
     on_long_press: Option<Rc<dyn Fn() + 'static>>,
     #[builder(default)]
     state: SemanticState,
@@ -90,6 +98,10 @@ impl Semantics {
             on_decrease: None,
             on_scroll_forward: None,
             on_scroll_backward: None,
+            on_scroll_left: None,
+            on_scroll_right: None,
+            on_scroll_up: None,
+            on_scroll_down: None,
             on_long_press: None,
             state: SemanticState::default(),
             child: Some(child.into()),
@@ -461,26 +473,40 @@ impl Semantics {
 
     #[must_use]
     pub fn on_scroll_left(mut self, callback: impl Fn() + 'static) -> Self {
-        self.on_scroll_backward = Some(Rc::new(callback));
-        self.action(SemanticAction::ScrollBackward)
+        self.on_scroll_left = Some(Rc::new(callback));
+        self.action(SemanticAction::ScrollLeft)
     }
 
     #[must_use]
     pub fn on_scroll_right(mut self, callback: impl Fn() + 'static) -> Self {
-        self.on_scroll_forward = Some(Rc::new(callback));
-        self.action(SemanticAction::ScrollForward)
+        self.on_scroll_right = Some(Rc::new(callback));
+        self.action(SemanticAction::ScrollRight)
     }
 
     #[must_use]
     pub fn on_scroll_up(mut self, callback: impl Fn() + 'static) -> Self {
-        self.on_scroll_backward = Some(Rc::new(callback));
-        self.action(SemanticAction::ScrollBackward)
+        self.on_scroll_up = Some(Rc::new(callback));
+        self.action(SemanticAction::ScrollUp)
     }
 
     #[must_use]
     pub fn on_scroll_down(mut self, callback: impl Fn() + 'static) -> Self {
+        self.on_scroll_down = Some(Rc::new(callback));
+        self.action(SemanticAction::ScrollDown)
+    }
+
+    /// Registers a logical forward action independently of the four arrows.
+    #[must_use]
+    pub fn on_scroll_forward(mut self, callback: impl Fn() + 'static) -> Self {
         self.on_scroll_forward = Some(Rc::new(callback));
         self.action(SemanticAction::ScrollForward)
+    }
+
+    /// Registers a logical backward action independently of the four arrows.
+    #[must_use]
+    pub fn on_scroll_backward(mut self, callback: impl Fn() + 'static) -> Self {
+        self.on_scroll_backward = Some(Rc::new(callback));
+        self.action(SemanticAction::ScrollBackward)
     }
 
     /// Returns the retained semantic descriptor that will be attached during
@@ -498,6 +524,10 @@ impl Semantics {
             || self.label.is_some()
             || self.value.is_some()
             || self.description.is_some()
+            || self.on_scroll_left.is_some()
+            || self.on_scroll_right.is_some()
+            || self.on_scroll_up.is_some()
+            || self.on_scroll_down.is_some()
             || !self.actions.is_empty()
             || self.state != SemanticState::default();
         if !has_metadata {
@@ -562,6 +592,28 @@ impl From<Semantics> for Widget {
                 incular_semantics::SemanticActionKind::ScrollBackward,
                 callback,
             );
+        }
+        for (action, callback) in [
+            (
+                incular_semantics::SemanticActionKind::ScrollLeft,
+                value.on_scroll_left,
+            ),
+            (
+                incular_semantics::SemanticActionKind::ScrollRight,
+                value.on_scroll_right,
+            ),
+            (
+                incular_semantics::SemanticActionKind::ScrollUp,
+                value.on_scroll_up,
+            ),
+            (
+                incular_semantics::SemanticActionKind::ScrollDown,
+                value.on_scroll_down,
+            ),
+        ] {
+            if let Some(callback) = callback {
+                widget = widget.with_semantic_callback(action, callback);
+            }
         }
         if !value.custom_actions.is_empty() {
             widget = widget.with_custom_semantic_actions(value.custom_actions);

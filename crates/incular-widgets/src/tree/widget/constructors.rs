@@ -358,11 +358,11 @@ impl Widget {
             | SemanticActionKind::SetText
             | SemanticActionKind::SetSelection
             | SemanticActionKind::ShowOnScreen
-            | SemanticActionKind::ScrollLeft
+            | SemanticActionKind::Custom => {}
+            SemanticActionKind::ScrollLeft
             | SemanticActionKind::ScrollRight
             | SemanticActionKind::ScrollUp
-            | SemanticActionKind::ScrollDown
-            | SemanticActionKind::Custom => {}
+            | SemanticActionKind::ScrollDown => callbacks.set_directional_scroll(action, callback),
         }
         self
     }

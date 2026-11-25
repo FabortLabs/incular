@@ -947,6 +947,10 @@ impl WidgetTree {
             SemanticActionKind::Decrement,
             SemanticActionKind::ScrollForward,
             SemanticActionKind::ScrollBackward,
+            SemanticActionKind::ScrollLeft,
+            SemanticActionKind::ScrollRight,
+            SemanticActionKind::ScrollUp,
+            SemanticActionKind::ScrollDown,
             SemanticActionKind::LongPress,
         ] {
             if entry

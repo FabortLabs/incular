@@ -831,13 +831,27 @@ impl AccessKitProjection {
             Action::ScrollDown if supports(&projected.semantic, SemanticActionKind::ScrollDown) => {
                 Some(SemanticAction::ScrollDown)
             }
-            Action::ScrollDown | Action::ScrollRight
+            Action::ScrollDown
                 if supports(&projected.semantic, SemanticActionKind::ScrollForward) =>
             {
                 Some(SemanticAction::ScrollForward)
             }
-            Action::ScrollUp | Action::ScrollLeft
+            Action::ScrollUp
                 if supports(&projected.semantic, SemanticActionKind::ScrollBackward) =>
+            {
+                Some(SemanticAction::ScrollBackward)
+            }
+            // Retain the logical fallback for real scroll containers, but
+            // never turn a withdrawn custom arrow into a different callback.
+            Action::ScrollRight
+                if matches!(projected.semantic.role, Role::ScrollView | Role::List)
+                    && supports(&projected.semantic, SemanticActionKind::ScrollForward) =>
+            {
+                Some(SemanticAction::ScrollForward)
+            }
+            Action::ScrollLeft
+                if matches!(projected.semantic.role, Role::ScrollView | Role::List)
+                    && supports(&projected.semantic, SemanticActionKind::ScrollBackward) =>
             {
                 Some(SemanticAction::ScrollBackward)
             }

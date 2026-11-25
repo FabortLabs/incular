@@ -46,3 +46,24 @@ globalPosition fallback for its localPosition. End reports the
 center plus delta transformed into world space, zero velocity,
 and zero primary velocity for the axis versus no primary
 velocity for pan. Cancellation is not synthesized.
+
+## Explicit Semantics callbacks
+
+A pinned Flutter widget probe installs onScrollLeft, onScrollRight,
+onScrollUp and onScrollDown together, then executes all four in
+turn. Before the Rust fix these methods shared two callback slots,
+so the later vertical registrations overwrote the horizontal ones.
+The mounted Rust counterpart now advertises four physical actions
+and invokes left, right, up and down independently. Builder-only
+annotations expose their action even without a label.
+
+The retained AccessKit control removes the left callback while
+logical backward and physical down stay installed. The stable
+native ID no longer accepts the old left request; it cannot fall
+through to the unrelated backward callback. Genuine scroll
+containers still retain their logical fallback, and callers can
+register logical forward/backward callbacks explicitly.
+
+Pinned `widgets/semantics_test.dart:474` passes on Flutter. This
+is partial for that registration: it also covers dismiss, clipboard,
+cursor movement and additional actions beyond this directional batch.

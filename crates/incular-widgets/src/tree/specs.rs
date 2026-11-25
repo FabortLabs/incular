@@ -289,6 +289,8 @@ impl GestureSemanticPolicy {
     }
 }
 
+type SemanticActionCallback = Rc<dyn Fn() + 'static>;
+
 #[derive(Clone, Default)]
 pub(super) struct SemanticCallbacks {
     pub(super) gesture_policy: Option<GestureSemanticPolicy>,
@@ -298,6 +300,7 @@ pub(super) struct SemanticCallbacks {
     pub(super) decrement: Option<Rc<dyn Fn() + 'static>>,
     pub(super) scroll_forward: Option<Rc<dyn Fn() + 'static>>,
     pub(super) scroll_backward: Option<Rc<dyn Fn() + 'static>>,
+    directional_scroll: Option<Box<[Option<SemanticActionCallback>; 4]>>,
     pub(super) long_press: Option<Rc<dyn Fn() + 'static>>,
 }
 
@@ -312,6 +315,12 @@ impl std::fmt::Debug for SemanticCallbacks {
             .field("decrement", &self.decrement.is_some())
             .field("scroll_forward", &self.scroll_forward.is_some())
             .field("scroll_backward", &self.scroll_backward.is_some())
+            .field(
+                "directional_scroll",
+                &self.directional_scroll.as_ref().map(|callbacks| {
+                    std::array::from_fn::<_, 4, _>(|index| callbacks[index].is_some())
+                }),
+            )
             .field("long_press", &self.long_press.is_some())
             .finish()
     }
@@ -326,12 +335,44 @@ impl PartialEq for SemanticCallbacks {
             && same_rc(&self.decrement, &other.decrement)
             && same_rc(&self.scroll_forward, &other.scroll_forward)
             && same_rc(&self.scroll_backward, &other.scroll_backward)
+            && match (&self.directional_scroll, &other.directional_scroll) {
+                (Some(a), Some(b)) => a.iter().zip(b.iter()).all(|(a, b)| same_rc(a, b)),
+                (None, None) => true,
+                _ => false,
+            }
             && same_rc(&self.long_press, &other.long_press)
     }
 }
 
 impl SemanticCallbacks {
+    fn direction_index(action: SemanticActionKind) -> Option<usize> {
+        match action {
+            SemanticActionKind::ScrollLeft => Some(0),
+            SemanticActionKind::ScrollRight => Some(1),
+            SemanticActionKind::ScrollUp => Some(2),
+            SemanticActionKind::ScrollDown => Some(3),
+            _ => None,
+        }
+    }
+
+    pub(super) fn set_directional_scroll(
+        &mut self,
+        action: SemanticActionKind,
+        callback: SemanticActionCallback,
+    ) {
+        if let Some(index) = Self::direction_index(action) {
+            self.directional_scroll
+                .get_or_insert_with(|| Box::new([None, None, None, None]))[index] = Some(callback);
+        }
+    }
+
     pub(super) fn callback(&self, action: SemanticActionKind) -> Option<Rc<dyn Fn() + 'static>> {
+        if let Some(index) = Self::direction_index(action) {
+            return self
+                .directional_scroll
+                .as_ref()
+                .and_then(|callbacks| callbacks[index].clone());
+        }
         match action {
             SemanticActionKind::Activate => self.activate.clone(),
             SemanticActionKind::Increment => self.increment.clone(),
