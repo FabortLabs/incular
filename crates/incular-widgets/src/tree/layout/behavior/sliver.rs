@@ -338,8 +338,10 @@ impl WidgetTree {
                     perform_layout(config.controller.offset(), viewport_extent)?,
                 );
 
+                const ORDINARY_SWEEPS: usize = 3;
+                const MAX_GROWING_CACHE_SWEEPS: usize = 32;
                 let mut converged = false;
-                for _ in 0..3 {
+                for sweep in 1..=MAX_GROWING_CACHE_SWEEPS {
                     let offset_before = config.controller.offset();
                     let corrections_before = explicit_corrections.get();
                     let anchor_before = has_prior_layout
@@ -427,7 +429,17 @@ impl WidgetTree {
                             }
                         }
                     }
+                    // A natural-extent list can reveal more rows as early
+                    // measurements replace its conservative estimates. Finish
+                    // that growing cache window in this frame, but do not let
+                    // an oscillating size or a pathological delegate make
+                    // the viewport unbounded. Shrink-wrap retains its
+                    // separate three-sweep size convergence contract.
+                    let growing = next_layout.children.len() > sliver_layout.children.len();
                     sliver_layout = next_layout;
+                    if sweep >= ORDINARY_SWEEPS && (config.shrink_wrap || !growing) {
+                        break;
+                    }
                 }
                 // Bounded fallback: retain the last published attempt as one
                 // consistent frame instead of mixing state across attempts.
@@ -454,11 +466,10 @@ impl WidgetTree {
                 // paint window. A later dirty layout re-measures from the
                 // retained estimates.
                 //
-                // Measurement work stays bounded: at most three convergence
-                // sweeps plus this one positioning sweep — four child
-                // measurement sweeps per viewport layout (nested viewports
-                // recurse under their own identical bound). No extra passes,
-                // frames, or loops are scheduled.
+                // Shrink-wrap stays bounded at three convergence sweeps
+                // and one positioning sweep. A fixed-size viewport can add
+                // bounded growing-cache sweeps above; its fallback also
+                // applies the final published child list without feedback.
                 let mut overflow = sliver_layout.geometry.has_visual_overflow;
                 if config.shrink_wrap
                     && !converged
@@ -479,6 +490,8 @@ impl WidgetTree {
                     let _ = self.measure_sliver_children(id, config, &snapshot.layout, false)?;
                     size = snapshot.size;
                     overflow = snapshot.layout.geometry.has_visual_overflow;
+                } else if !config.shrink_wrap && !converged {
+                    let _ = self.measure_sliver_children(id, config, &sliver_layout, false)?;
                 }
                 self.render_live(id, "sliver viewport render must remain live")
                     .object

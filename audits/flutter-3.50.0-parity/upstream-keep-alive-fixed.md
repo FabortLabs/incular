@@ -60,3 +60,21 @@ is still red: on the first 600px frame with 12.3px natural rows,
 Incular does not even mount Item 30. That divergence occurs before
 any keep-alive request and is tracked separately from the passing
 local request/revocation control in a smaller variable viewport.
+
+## Natural rows fill the initial cache before painting
+
+The original variable-list registration :98 now pairs as well. Its
+12.3px rows were shorter than the existing initial extent estimates.
+Three reconciliation sweeps stopped before the shrinking measurements
+could expose enough subsequent children. A fixed-size viewport now
+continues the same frame while the measured cache discovery is still
+growing, with a separate finite cap. It applies the final published
+child set before painting, and the established three-sweep
+shrink-wrap bounds are unchanged.
+
+A one-million-item authored control checks the full set of first-frame
+rectangles, the edge at y=600, and the exact number of builder calls
+with no cache extension. Both Flutter and Rust build exactly the 49
+intersecting rows and none beyond them. Sixty-four focused Rust tests
+passed, including the three original keep-alive input sequences and
+the existing deep-jump and structural-work controls.
