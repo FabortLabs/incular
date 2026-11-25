@@ -55,3 +55,7 @@ that share the source. Rust cursors clone values as they yield them.
 `time::lerp_duration_micros` interpolates signed duration values in
 microseconds and rounds the final result. It does not change the unsigned
 `Duration` type used by the runtime clocks.
+
+Use `MergedListenable` to track or subscribe to several dependency sources.
+Construction attaches no listener. Dropping an owned `MergedSubscription`
+detaches it from every source.

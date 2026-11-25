@@ -824,3 +824,8 @@ packages/flutter/test/foundation/basic_types_test.dart	24	linearly interpolates 
 packages/flutter/test/foundation/basic_types_test.dart	31	starts at first Duration	paired-match	upstream-foundation-scroll-comparisons.md#signed-duration-interpolation
 packages/flutter/test/foundation/basic_types_test.dart	38	ends at second Duration	paired-match	upstream-foundation-scroll-comparisons.md#signed-duration-interpolation
 packages/flutter/test/foundation/basic_types_test.dart	45	time values beyond 1.0 have a multiplier effect	paired-match	upstream-foundation-scroll-comparisons.md#signed-duration-interpolation
+packages/flutter/test/foundation/change_notifier_test.dart	277	Merging change notifiers	paired-match	upstream-foundation-scroll-comparisons.md#merged-listener-subscriptions
+packages/flutter/test/foundation/change_notifier_test.dart	315	Merging change notifiers supports any iterable	paired-match	upstream-foundation-scroll-comparisons.md#merged-listener-subscriptions
+packages/flutter/test/foundation/change_notifier_test.dart	330	Merging change notifiers ignores null	paired-match	upstream-foundation-scroll-comparisons.md#merged-listener-subscriptions
+packages/flutter/test/foundation/change_notifier_test.dart	347	Can remove from merged notifier	paired-match	upstream-foundation-scroll-comparisons.md#merged-listener-subscriptions
+packages/flutter/test/foundation/change_notifier_test.dart	438	Listenable.merge does not leak	paired-match	upstream-foundation-scroll-comparisons.md#merged-listener-subscriptions

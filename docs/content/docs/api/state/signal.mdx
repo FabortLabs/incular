@@ -99,3 +99,7 @@ resumes the first panic after delivery, or callers can use
 For passive observer lists rather than reactive signals, see
 `incular::core::ObserverList` (all registrations) and
 `incular::core::HashedObserverList` (distinct values with registration counts).
+
+A `MergedListenable` can follow several low-level dependency sources in one
+`ListenableBuilder`. For a manual listener, dropping the returned subscription
+removes its registrations from all of the sources.

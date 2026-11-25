@@ -286,3 +286,31 @@ fn transition_controllers_can_start_on_the_next_frame() {
 fn size_transition_rejects_a_negative_fixed_cross_axis_factor() {
     let _ = SizeTransition::new(0.5, red_box(40., 60.)).fixed_cross_axis_size_factor(-1.0);
 }
+
+#[test]
+fn listenable_builder_tracks_every_merged_source() {
+    use incular_core::{MergedListenable, reactivity::DependencySource};
+
+    let first = DependencySource::default();
+    let second = DependencySource::default();
+    let unrelated = DependencySource::default();
+    let merged = MergedListenable::from_sources([first.clone(), second.clone()]);
+    let builds = Rc::new(Cell::new(0));
+    let mut tree = mount(ListenableBuilder::new(merged, {
+        let builds = builds.clone();
+        move |_, _| {
+            builds.set(builds.get() + 1);
+            red_box(10., 10.)
+        }
+    }));
+    let initial = builds.get();
+    first.notify();
+    layout(&mut tree);
+    assert_eq!(builds.get(), initial + 1);
+    second.notify();
+    layout(&mut tree);
+    assert_eq!(builds.get(), initial + 2);
+    unrelated.notify();
+    layout(&mut tree);
+    assert_eq!(builds.get(), initial + 2);
+}

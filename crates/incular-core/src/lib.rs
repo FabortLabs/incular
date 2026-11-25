@@ -15,6 +15,7 @@ pub mod input;
 mod key;
 mod math;
 pub mod memory;
+mod merged_listenable;
 mod observer_list;
 pub mod reactivity;
 mod restoration;
@@ -40,6 +41,7 @@ pub use input::{
 };
 pub use key::{Key, KeyHandle, KeyId, KeyObject, LocalKey, StringKey, UniqueKey, ValueKey};
 pub use math::{InvalidClampBounds, clamp_double, try_clamp_double};
+pub use merged_listenable::{MergedListenable, MergedSubscription};
 pub use observer_list::{HashedObserverList, ObserverList};
 pub use restoration::{RestorationBackend, RestorationKey, RestorationKeyError, RestorationScope};
 pub use value_notifier::ValueNotifier;

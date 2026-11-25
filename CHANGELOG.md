@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-core` and `incular-widgets`: added merged dependency listeners
+  with owned detach and `ListenableBuilder` support.
+
 - `incular-core`: added Flutter-style signed duration interpolation in
   microseconds, including negative durations and extrapolation.
 

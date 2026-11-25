@@ -63,3 +63,13 @@ existing unsigned clock durations unchanged. An authored native Flutter
 probe also matches half-microsecond ties, finite saturation, the signed
 subtraction wrap at integer limits, and rejection of non-finite results.
 Nine focused Rust tests, six exact originals and the authored probe passed.
+
+## Merged listener subscriptions
+
+Five exact pinned registrations in `foundation/change_notifier_test.dart`
+pair fan-out, registration order, non-array iterable input, absent entries,
+and complete detachment. Construction adds no upstream registrations, and
+dropping the Rust subscription releases all edges. An extra control checks
+repeated sources without deduplicating their subscriptions. A mounted
+`ListenableBuilder` reruns for either selected source and ignores an unrelated
+source. Nineteen focused Rust tests and the five Flutter originals passed.
