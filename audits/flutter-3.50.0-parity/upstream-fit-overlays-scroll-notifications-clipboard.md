@@ -63,3 +63,11 @@ zero-area content, and alpha-preserving matrices retain their controls.
 The fix extends the composite quad only; it does not enlarge the cached
 GPU source or effect textures. The pinned Flutter probe passes all three
 registrations. This does not upgrade the original sepia golden comparison.
+
+The original layer-reuse and zero-area cases (:97 and :119) both
+pass on the pinned SDK. Incular's `paint_options` ports verify that
+changing the color updates the emitted filter without replacing
+its layer ID, and that a zero-area filter lays out at zero size
+and paints without error. They use Screen instead of Flutter's
+BlendMode.color, which Incular does not expose, so neither port
+is recorded as an exact comparison.

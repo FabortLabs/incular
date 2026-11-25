@@ -425,6 +425,61 @@ fn backdrop_filter_accepts_only_executable_filters() {
     assert_eq!(filters, [Some(composed)]);
 }
 
+#[test]
+fn flutter350_color_filtered_reuses_layer_when_the_color_changes() {
+    use incular_widgets::ColorFiltered;
+
+    // BlendMode.color is not yet exposed by Incular. A supported
+    // nontrivial color blend exercises the same retained-layer boundary.
+    let filter = |color| ColorFilter::blend(color, BlendMode::Screen);
+    let widget = |color| {
+        ColorFiltered::new(
+            filter(color),
+            Widget::box_(Size::new(40., 20.), Color::rgba(80, 120, 190, 255)),
+        )
+        .into()
+    };
+    let draw = |tree: &mut WidgetTree| {
+        tree.layout(Constraints::tight(Size::new(40., 20.)))
+            .unwrap();
+        tree.update_compositor(incular_core::time::Instant::now())
+            .unwrap();
+        tree.paint()
+            .commands()
+            .iter()
+            .find_map(|cmd| match cmd {
+                PaintCommand::PushColorFilter { layer, filter, .. } => Some((*layer, *filter)),
+                _ => None,
+            })
+            .expect("non-identity color filter layer")
+    };
+    let red = Color::rgba(255, 0, 0, 255);
+    let green = Color::rgba(0, 255, 0, 255);
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(widget(red)).unwrap();
+    let (before, initial) = draw(&mut tree);
+    assert_eq!(initial, filter(red));
+    tree.update(root, widget(green)).unwrap();
+    let (after, updated) = draw(&mut tree);
+    assert_eq!(updated, filter(green));
+    assert_eq!(after, before, "repaint keeps the same color filter layer");
+}
+
+#[test]
+fn flutter350_color_filtered_at_zero_area_keeps_zero_layout_size() {
+    use incular_widgets::ColorFiltered;
+
+    let filter = ColorFilter::blend(Color::rgba(0, 0, 255, 255), BlendMode::Screen);
+    let mut tree = WidgetTree::new();
+    tree.mount(ColorFiltered::new(filter, SizedBox::shrink()).into())
+        .unwrap();
+    tree.layout(Constraints::tight(Size::ZERO)).unwrap();
+    assert_eq!(tree.root_layout_size(), Some(Size::ZERO));
+    tree.update_compositor(incular_core::time::Instant::now())
+        .unwrap();
+    let _ = tree.paint();
+}
+
 fn pushes_filter(commands: &[PaintCommand], expected: ColorFilter) -> bool {
     commands.iter().any(|command| {
         matches!(
