@@ -360,7 +360,7 @@ pub use scrolling::{
     CustomScrollView, DecoratedSliver, EnsureVisible, FloatingHeaderSnapMode, GridView, ListBody,
     ListView, NestedScrollView, NotificationListener, PageController, PageView,
     PersistentHeaderBuilder, PinnedHeaderSliver, ReorderableDelayedDragStartListener,
-    ReorderableDragStartListener, ReorderableList, ScrollNotificationObserver,
+    ReorderableDragStartListener, ReorderableList, ScrollCacheExtent, ScrollNotificationObserver,
     ScrollPositionAlignmentPolicy, Scrollable, SemanticIndexCallback, ShrinkWrappingViewport,
     SingleChildScrollView, Sliver, SliverAnimatedList, SliverAnimatedListController,
     SliverAnimatedOpacity, SliverChildBuilderDelegate, SliverChildDelegate,

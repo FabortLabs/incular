@@ -168,9 +168,9 @@ impl WidgetTree {
                 // untouched.
                 let mut size = sliver_viewport_size(config.axis, constraints, config.shrink_wrap);
                 let mut viewport_extent = scroll_viewport_extent(config.axis, size);
-                let cache_extent = config.cache_extent.max(0.);
                 let cross_extent = config.axis.cross_extent(size);
                 let make_constraints = |scroll_offset: f32, viewport: f32| {
+                    let cache_extent = config.cache_extent.resolve(viewport);
                     // Match RenderViewport's forward layout contract for
                     // overscroll: a negative scroll position is represented
                     // as leading overlap and a reduced paint extent, while

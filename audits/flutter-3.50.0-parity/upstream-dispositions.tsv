@@ -641,14 +641,14 @@ packages/flutter/test/widgets/page_view_test.dart	1463	animateToPage assertion i
 packages/flutter/test/widgets/page_view_test.dart	1490	jumpToPage assertion is working properly when pageController is attached to multiple PageViews	partial-match	upstream-page-view-boundaries.md
 packages/flutter/test/widgets/page_view_test.dart	1515	Assert behavior of animateToPage works properly	partial-mismatch	upstream-page-view-boundaries.md
 packages/flutter/test/widgets/page_view_test.dart	1548	Assert behavior of jumpToPage works properly	partial-mismatch	upstream-page-view-boundaries.md
-packages/flutter/test/widgets/page_view_test.dart	1678	PageView respects scrollCacheExtent	reference-ran-incular-open	upstream-page-view-boundaries.md
-packages/flutter/test/widgets/page_view_test.dart	1701	PageView scrollCacheExtent defaults to allowImplicitScrolling behavior	partial-match	upstream-page-view-boundaries.md
-packages/flutter/test/widgets/page_view_test.dart	1730	PageView updates scrollCacheExtent dynamically	reference-ran-incular-open	upstream-page-view-boundaries.md
-packages/flutter/test/widgets/page_view_test.dart	1763	PageView semantics respects allowImplicitScrolling	partial-match	upstream-page-view-boundaries.md
-packages/flutter/test/widgets/page_view_test.dart	1794	PageView asserts when scrollCacheExtent and allowImplicitScrolling are inconsistent	reference-ran-incular-open	upstream-page-view-boundaries.md
-packages/flutter/test/widgets/page_view_test.dart	1818	PageView showOnScreen scrolls when allowImplicitScrolling is true	reference-ran-incular-open	upstream-page-view-boundaries.md
-packages/flutter/test/widgets/page_view_test.dart	1847	PageView showOnScreen scrolling behavior is consistent with default scrollCacheExtent	reference-ran-incular-open	upstream-page-view-boundaries.md
-packages/flutter/test/widgets/page_view_test.dart	1884	PageView updates _ForceImplicitScrollPhysics when allowImplicitScrolling changes	reference-ran-incular-open	upstream-page-view-boundaries.md
+packages/flutter/test/widgets/page_view_test.dart	1678	PageView respects scrollCacheExtent	paired-match	upstream-page-view-boundaries.md#opt-in-cache-and-implicit-reveal
+packages/flutter/test/widgets/page_view_test.dart	1701	PageView scrollCacheExtent defaults to allowImplicitScrolling behavior	paired-match	upstream-page-view-boundaries.md#opt-in-cache-and-implicit-reveal
+packages/flutter/test/widgets/page_view_test.dart	1730	PageView updates scrollCacheExtent dynamically	paired-match	upstream-page-view-boundaries.md#opt-in-cache-and-implicit-reveal
+packages/flutter/test/widgets/page_view_test.dart	1763	PageView semantics respects allowImplicitScrolling	paired-match	upstream-page-view-boundaries.md#opt-in-cache-and-implicit-reveal
+packages/flutter/test/widgets/page_view_test.dart	1794	PageView asserts when scrollCacheExtent and allowImplicitScrolling are inconsistent	paired-match	upstream-page-view-boundaries.md#opt-in-cache-and-implicit-reveal
+packages/flutter/test/widgets/page_view_test.dart	1818	PageView showOnScreen scrolls when allowImplicitScrolling is true	paired-match	upstream-page-view-boundaries.md#opt-in-cache-and-implicit-reveal
+packages/flutter/test/widgets/page_view_test.dart	1847	PageView showOnScreen scrolling behavior is consistent with default scrollCacheExtent	paired-match	upstream-page-view-boundaries.md#opt-in-cache-and-implicit-reveal
+packages/flutter/test/widgets/page_view_test.dart	1884	PageView updates _ForceImplicitScrollPhysics when allowImplicitScrolling changes	partial-match	upstream-page-view-boundaries.md#opt-in-cache-and-implicit-reveal
 packages/flutter/test/widgets/page_view_test.dart	1914	PageView skips updating _ForceImplicitScrollPhysics when allowImplicitScrolling is unchanged	reference-ran-incular-open	upstream-page-view-boundaries.md
 packages/flutter/test/services/text_formatter_test.dart	22	test const constructor	reference-ran-incular-open	upstream-text-formatters.md
 packages/flutter/test/services/text_formatter_test.dart	29	withFunction wraps formatting function	reference-ran-incular-open	upstream-text-formatters.md

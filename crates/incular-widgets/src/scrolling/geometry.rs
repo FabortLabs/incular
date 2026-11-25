@@ -1,6 +1,40 @@
 use super::*;
 use std::any::Any;
 
+/// Amount of offscreen content a scroll viewport caches on each side.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ScrollCacheExtent {
+    Pixels(f32),
+    Viewport(f32),
+}
+
+impl ScrollCacheExtent {
+    #[must_use]
+    pub const fn pixels(value: f32) -> Self {
+        Self::Pixels(value)
+    }
+
+    #[must_use]
+    pub const fn viewport(value: f32) -> Self {
+        Self::Viewport(value)
+    }
+
+    #[must_use]
+    pub const fn value(self) -> f32 {
+        match self {
+            Self::Pixels(value) | Self::Viewport(value) => value,
+        }
+    }
+
+    #[must_use]
+    pub fn resolve(self, viewport_extent: f32) -> f32 {
+        match self {
+            Self::Pixels(value) => value.max(0.),
+            Self::Viewport(value) => (value * viewport_extent).max(0.),
+        }
+    }
+}
+
 /// Stable identity for a child materialized by a sliver.
 ///
 /// The low 32 bits are owned by the leaf sliver. The high 32 bits contain a
@@ -239,7 +273,7 @@ pub struct SliverViewportConfig {
     pub(crate) axis: Axis,
     pub(crate) reverse: bool,
     pub(crate) physics: ScrollPhysics,
-    pub(crate) cache_extent: f32,
+    pub(crate) cache_extent: ScrollCacheExtent,
     pub(crate) shrink_wrap: bool,
     pub(crate) clip_behavior: Clip,
     pub(crate) drag_start_behavior: DragStartBehavior,

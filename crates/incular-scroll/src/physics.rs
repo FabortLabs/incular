@@ -195,6 +195,7 @@ pub struct ScrollPhysics {
     /// `ScrollMetrics.devicePixelRatio`).
     device_pixel_ratio: f32,
     page_geometry_fraction: Option<f32>,
+    implicit_scrolling: Option<bool>,
 }
 
 impl Default for ScrollPhysics {
@@ -223,6 +224,7 @@ impl ScrollPhysics {
             maintain_range: false,
             device_pixel_ratio: 1.,
             page_geometry_fraction: None,
+            implicit_scrolling: None,
         }
     }
 
@@ -340,12 +342,22 @@ impl ScrollPhysics {
     /// It does not constrain explicit scroll commands.
     #[must_use]
     pub const fn allows_implicit_scrolling(self) -> bool {
+        if let Some(allow) = self.implicit_scrolling {
+            return allow;
+        }
         self.page_geometry_fraction.is_none()
             && !matches!(
                 self.snap,
                 SnapPhysics::PageViewport | SnapPhysics::Page { .. }
             )
             && !matches!(self.scrollability, Scrollability::Never)
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub const fn with_implicit_scrolling(mut self, allow: bool) -> Self {
+        self.implicit_scrolling = Some(allow);
+        self
     }
 
     #[must_use]
@@ -1149,21 +1161,10 @@ impl ScrollController {
         if matches!(update.physics.snap, SnapPhysics::PageViewport) {
             if previous_physics
                 .is_some_and(|physics| !matches!(physics.snap, SnapPhysics::PageViewport))
-                && attachment.is_some()
-                && viewport > 0.
-                && !state.activity_active
-                && state.pending_animation.is_none()
-                && !state.pending_settle
-                && state.offset > min
-                && state.offset < max
-                && update
-                    .physics
-                    .snap_target_for_extent(state.offset, 0., min, max, viewport)
-                    != state.offset
             {
                 // Like applying new dimensions to Flutter's idle position,
                 // enabling page physics starts a zero-velocity ballistic.
-                state.pending_page_snap = true;
+                state.queue_idle_page_snap(update.physics);
             }
         } else {
             state.pending_page_snap = false;

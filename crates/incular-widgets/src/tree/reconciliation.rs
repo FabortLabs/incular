@@ -1564,7 +1564,7 @@ impl WidgetTree {
             return false;
         };
         let viewport = config.axis.main_extent(render.size).max(0.);
-        let cache = config.cache_extent.max(0.);
+        let cache = config.cache_extent.resolve(viewport);
         let content_end = (config.controller.max_offset() + viewport).max(0.);
         let physical = config.controller.offset().clamp(0., content_end);
         if !physical.is_finite()

@@ -37,8 +37,8 @@ mod sliver_lists;
 mod sliver_semantics;
 
 pub use geometry::{
-    RenderSliver, SliverChildId, SliverChildLayout, SliverChildPlacement, SliverLayout,
-    SliverPaintOrder, SliverScrollDependency, SliverViewportConfig,
+    RenderSliver, ScrollCacheExtent, SliverChildId, SliverChildLayout, SliverChildPlacement,
+    SliverLayout, SliverPaintOrder, SliverScrollDependency, SliverViewportConfig,
 };
 pub(crate) use geometry::{SliverViewportDelegate, SliverViewportLayout, sliver_paint_slots};
 

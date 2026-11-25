@@ -1267,11 +1267,6 @@ enum PageViewStrategy {
     },
 }
 
-/// Pixel cache extent for a page viewport. Flutter's `PageView` uses
-/// `allowImplicitScrolling ? 1.0 : 0.0` viewport fractions, and Incular has no
-/// implicit-scrolling option, so the default `false` applies: no cache.
-const PAGE_VIEW_CACHE_EXTENT: f32 = 0.;
-
 /// A first-class paged scrollable descriptor.
 #[derive(Clone, TypedBuilder)]
 #[builder(builder_method(name = typed_builder))]
@@ -1290,6 +1285,10 @@ pub struct PageView {
     reverse: bool,
     #[builder(default = true)]
     page_snapping: bool,
+    #[builder(default)]
+    allow_implicit_scrolling: bool,
+    #[builder(default, setter(strip_option))]
+    scroll_cache_extent: Option<ScrollCacheExtent>,
     #[builder(default = 1.0, setter(transform = |value: f32| value.max(0.01)))]
     viewport_fraction: f32,
     /// Flutter `padEnds`: with a `viewport_fraction` below one, the first
@@ -1333,6 +1332,8 @@ impl PageView {
             scroll_direction: WidgetDefaults::DEFAULT.page_scroll_direction,
             reverse: false,
             page_snapping: true,
+            allow_implicit_scrolling: false,
+            scroll_cache_extent: None,
             viewport_fraction: 1.0,
             pad_ends: true,
             physics: None,
@@ -1360,6 +1361,8 @@ impl PageView {
             scroll_direction: WidgetDefaults::DEFAULT.page_scroll_direction,
             reverse: false,
             page_snapping: true,
+            allow_implicit_scrolling: false,
+            scroll_cache_extent: None,
             viewport_fraction: 1.0,
             pad_ends: true,
             physics: None,
@@ -1405,6 +1408,32 @@ impl PageView {
     pub fn page_snapping(mut self, page_snapping: bool) -> Self {
         self.page_snapping = page_snapping;
         self
+    }
+
+    /// Allows implicit reveal and access to cached offscreen pages.
+    #[must_use]
+    pub fn allow_implicit_scrolling(mut self, allow: bool) -> Self {
+        self.allow_implicit_scrolling = allow;
+        self
+    }
+
+    /// Sets the amount of offscreen content cached by this view. A nonzero
+    /// extent requires implicit scrolling and vice versa.
+    #[must_use]
+    pub fn scroll_cache_extent(mut self, extent: ScrollCacheExtent) -> Self {
+        self.scroll_cache_extent = Some(extent);
+        self
+    }
+
+    #[must_use]
+    pub fn effective_scroll_cache_extent(&self) -> ScrollCacheExtent {
+        self.scroll_cache_extent.unwrap_or_else(|| {
+            ScrollCacheExtent::viewport(if self.allow_implicit_scrolling {
+                1.
+            } else {
+                0.
+            })
+        })
     }
 
     /// Sets the fraction of the viewport occupied by each page.
@@ -1561,6 +1590,12 @@ impl crate::tree::RetainedState for MountedPageView {
 
 impl From<PageView> for Widget {
     fn from(value: PageView) -> Self {
+        debug_assert!(
+            value
+                .scroll_cache_extent
+                .is_none_or(|extent| { (extent.value() > 0.) == value.allow_implicit_scrolling }),
+            "scroll cache extent and implicit scrolling must be consistent"
+        );
         let initial_page = value
             .controller
             .as_ref()
@@ -1636,13 +1671,17 @@ fn build_mounted_page_view(
 }
 
 fn page_view_widget(value: PageView) -> Widget {
+    let cache_extent = value.effective_scroll_cache_extent();
     let page = value.controller.unwrap_or_default();
     let controller = page.scroll_controller();
     let fraction = value.viewport_fraction.max(0.01);
     // Flutter composes page snapping on the resolved physics (user
     // physics or the default), it never replaces them.
     let physics_for_extent = || {
-        let physics = value.physics.unwrap_or_default();
+        let physics = value
+            .physics
+            .unwrap_or_default()
+            .with_implicit_scrolling(value.allow_implicit_scrolling);
         if value.page_snapping {
             physics.with_page_viewport_fraction(fraction)
         } else {
@@ -1666,7 +1705,7 @@ fn page_view_widget(value: PageView) -> Widget {
                     axis: value.scroll_direction,
                     reverse: value.reverse,
                     physics: physics_for_extent(),
-                    cache_extent: PAGE_VIEW_CACHE_EXTENT,
+                    cache_extent: 0.,
                     clip_behavior: value.clip_behavior,
                     drag_start_behavior: value.drag_start_behavior,
                     hit_test_behavior: value.hit_test_behavior,
@@ -1691,7 +1730,7 @@ fn page_view_widget(value: PageView) -> Widget {
                     axis: value.scroll_direction,
                     reverse: value.reverse,
                     physics: physics_for_extent(),
-                    cache_extent: PAGE_VIEW_CACHE_EXTENT,
+                    cache_extent: 0.,
                     clip_behavior: value.clip_behavior,
                     drag_start_behavior: value.drag_start_behavior,
                     hit_test_behavior: value.hit_test_behavior,
@@ -1701,4 +1740,5 @@ fn page_view_widget(value: PageView) -> Widget {
             )
         }
     }
+    .with_sliver_cache_extent(cache_extent)
 }

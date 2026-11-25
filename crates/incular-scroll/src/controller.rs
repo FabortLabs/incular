@@ -223,6 +223,32 @@ pub(crate) struct ScrollState {
     pub(crate) pending_ballistic: Option<(f32, crate::physics::ScrollPhysics)>,
 }
 
+impl ScrollState {
+    pub(crate) fn queue_idle_page_snap(&mut self, physics: ScrollPhysics) -> bool {
+        if matches!(physics.snap, crate::physics::SnapPhysics::PageViewport)
+            && self.metric_attachment.is_some()
+            && self.viewport_extent > 0.
+            && !self.activity_active
+            && self.pending_animation.is_none()
+            && !self.pending_settle
+            && self.offset > self.min_offset
+            && self.offset < self.max_offset
+            && physics.snap_target_for_extent(
+                self.offset,
+                0.,
+                self.min_offset,
+                self.max_offset,
+                self.viewport_extent,
+            ) != self.offset
+        {
+            self.pending_page_snap = true;
+            true
+        } else {
+            false
+        }
+    }
+}
+
 impl ScrollController {
     #[must_use]
     pub fn new() -> Self {
@@ -652,6 +678,25 @@ impl ScrollController {
             self.dispatch_notification(ScrollNotificationType::Update, delta, 0.);
         }
         moved
+    }
+
+    /// Flutter's implicit reveal jumps to the target, then starts the
+    /// paged position's zero-velocity ballistic if the target is between
+    /// pages. It does not change the contract of an explicit Rust jump.
+    #[doc(hidden)]
+    pub fn reveal_at(&self, offset: f32) {
+        if !self.jump_to(offset) {
+            return;
+        }
+        let scheduled = {
+            let mut state = self.state.borrow_mut();
+            state
+                .last_physics
+                .is_some_and(|physics| state.queue_idle_page_snap(physics))
+        };
+        if scheduled {
+            self.changes.notify();
+        }
     }
 
     /// Whether the attached viewport has a pending settling simulation.

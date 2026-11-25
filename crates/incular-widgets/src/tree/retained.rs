@@ -878,7 +878,9 @@ impl WidgetTree {
             materialized_range: start..end,
             scroll_offset: config.controller.offset(),
             viewport_extent: config.axis.main_extent(render.size),
-            cache_extent: config.cache_extent,
+            cache_extent: config
+                .cache_extent
+                .resolve(config.axis.main_extent(render.size)),
             element_count: self.elements.len(),
             render_object_count: self.renders.len(),
             picture_layer_count: self.compositor.diagnostics().layers as usize,

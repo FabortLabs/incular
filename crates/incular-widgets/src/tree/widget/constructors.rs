@@ -1414,7 +1414,7 @@ impl Widget {
                     axis,
                     reverse,
                     physics,
-                    cache_extent: cache_extent.max(0.),
+                    cache_extent: crate::ScrollCacheExtent::pixels(cache_extent.max(0.)),
                     shrink_wrap,
                     clip_behavior,
                     drag_start_behavior,
@@ -1428,6 +1428,16 @@ impl Widget {
             semantics: None,
         })
     }
+    pub(crate) fn with_sliver_cache_extent(
+        mut self,
+        cache_extent: crate::ScrollCacheExtent,
+    ) -> Self {
+        if let WidgetKind::SliverViewport { config } = self.kind_mut() {
+            Rc::make_mut(config).cache_extent = cache_extent;
+        }
+        self
+    }
+
     #[must_use]
     pub fn translate(controller: TranslationController, child: Self) -> Self {
         Self::from_node(WidgetNode {

@@ -56,3 +56,27 @@ to 100px and snapping then settles back to 0. That is a different
 behavior than never moving. Incular's opt-in API and cache defaults are
 not covered by this default-path repair. Authored checks add no original
 registration to the coverage ledger.
+
+## Opt-in cache and implicit reveal
+
+PageView now separates the implicit reveal policy from the actual cache
+extent. The effective default is zero viewport lengths when disabled
+and one viewport length when enabled. Explicit viewport multiples
+are resolved at layout; pixel values stay fixed when the viewport
+resizes. A mismatched explicit value/flag pair is rejected in debug.
+
+Exact pinned registrations `:1678`, `:1701`, `:1730`, `:1763`,
+`:1794`, `:1818` and `:1847` have matching behaviors. The tests check
+which keyed pages actually mount, which semantic labels are present,
+the retained page when the setting changes, the rejection paths, and
+the actual final offset after an explicit or default cached reveal.
+The authored pixel/viewport comparison resizes from 400px to 200px:
+a fixed 300px cache grows from two materialized pages to three, while
+a one-viewport cache still retains two.
+
+A partly visible fractional page also matches both phases of the pinned
+opt-in comparison: immediate movement to 100px, then a spring back to
+0; the default continues not to move. The effect of the scroll-physics
+switch at `:1884` is covered, but Dart object's pointer identity is not.
+These checks compare portable semantics and do not verify native
+screen-reader focus behavior.

@@ -74,7 +74,11 @@ pub(super) fn lower_scrolling(widget: &Widget, context: &DependencyContext) -> R
                 config
                     .physics
                     .page_geometry_fraction()
-                    .map_or(physics, |fraction| physics.with_page_geometry(fraction))
+                    .map_or(physics, |fraction| {
+                        physics
+                            .with_page_geometry(fraction)
+                            .with_implicit_scrolling(config.physics.allows_implicit_scrolling())
+                    })
             });
             let resolved = behavior.resolve();
             let config = if physics == config.physics && resolved == config.behavior {
