@@ -199,3 +199,74 @@ fn finished_token_needs_no_further_cleanup() {
         "generations advance across brackets"
     );
 }
+
+#[test]
+fn accepted_drag_notifies_only_direction_changes_then_idle_after_end() {
+    use incular_scroll::ScrollNotificationType::{End, Start, Update, UserScroll};
+    let controller = ScrollController::new();
+    controller.update_extents(500., 100.).unwrap();
+    let samples = Rc::new(RefCell::new(Vec::new()));
+    let observed = samples.clone();
+    let _guard = controller.add_listener(move |notification: ScrollNotification| {
+        observed
+            .borrow_mut()
+            .push((notification.kind, notification.delta));
+        false
+    });
+    let drag = controller.start_owned_activity(ActivityOrigin::Drag);
+    let physics = incular_scroll::ScrollPhysics::clamping();
+    controller.apply_user_drag(physics, 20.);
+    controller.apply_user_drag(physics, 15.);
+    controller.apply_user_drag(physics, -5.);
+    assert!(drag.finish());
+    assert_eq!(
+        samples.borrow().as_slice(),
+        &[
+            (Start, 0.),
+            (UserScroll, 20.),
+            (Update, 20.),
+            (Update, 15.),
+            (UserScroll, -5.),
+            (Update, -5.),
+            (End, 0.),
+            (UserScroll, 0.),
+        ]
+    );
+}
+
+#[test]
+fn reentrant_takeover_in_direction_notification_prevents_the_stale_drag_write() {
+    use incular_scroll::ScrollNotificationType::{End, Start, UserScroll};
+    let controller = ScrollController::new();
+    controller.update_extents(500., 100.).unwrap();
+    let (events, _log) = event_log(&controller);
+    let takeover = Rc::new(RefCell::new(None));
+    let _guard = controller.add_listener({
+        let controller = controller.clone();
+        let takeover = takeover.clone();
+        move |notification: ScrollNotification| {
+            if notification.kind == UserScroll && notification.delta != 0. {
+                *takeover.borrow_mut() =
+                    Some(controller.start_owned_activity(ActivityOrigin::Animation));
+            }
+            false
+        }
+    });
+    let drag = controller.start_owned_activity(ActivityOrigin::Drag);
+    assert!(
+        !controller
+            .apply_user_drag(incular_scroll::ScrollPhysics::clamping(), 20.)
+            .accepted
+    );
+    assert_eq!(controller.offset(), 0.);
+    assert!(!drag.finish());
+    let newer = takeover
+        .borrow_mut()
+        .take()
+        .expect("reentrant newer activity");
+    assert!(newer.finish());
+    assert_eq!(
+        events.borrow().as_slice(),
+        &[Start, UserScroll, End, UserScroll]
+    );
+}

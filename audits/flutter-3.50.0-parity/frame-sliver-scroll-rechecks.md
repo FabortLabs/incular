@@ -31,3 +31,20 @@ the reported Flutter 97856.2010603 narrows **exactly** to
 97856.203125 as f32, the observed Incular value. Preserve the strict
 scalar result, but do not treat it as a separate observed scroll motion
 bug or assert a target finer than its public numeric representation.
+
+## Accepted user-drag direction changes
+
+The two native touch fixtures originally emitted Start followed immediately
+by Overscroll or Update. They now publish the direction event before that
+offset sample, once per direction, and keep it through the ballistic
+continuation. A terminal End is followed by a zero-delta idle event when
+the drag had an active direction. An older activity does not send idle
+into a replacement bracket, and a reentrant takeover in a direction
+listener prevents the old drag from writing.
+
+Two pinned authored controls pass: steady leading-edge clamping followed
+by a reversal, and a bouncing fling that retains direction until it
+settles. Both pre-existing native touch regressions pass, as do the nine
+SliverFillRemaining drag/semantics checks and focused ownership/coordination
+suites. The strict existing drag and fling frame registrations are being
+rechecked separately; this targeted repair does not itself change them.

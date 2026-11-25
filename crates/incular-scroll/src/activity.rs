@@ -107,19 +107,54 @@ impl ScrollController {
 
     /// Ends a user-driven scroll activity and emits one `End` event.
     pub fn end_activity(&self) -> bool {
-        let ended = {
+        self.end_owned_or_current_activity(None)
+    }
+
+    fn end_owned_or_current_activity(&self, generation: Option<u64>) -> bool {
+        let (closed, had_direction) = {
             let mut state = self.state.borrow_mut();
-            if !state.activity_active {
-                false
-            } else {
-                state.activity_active = false;
-                true
+            if !state.activity_active
+                || generation.is_some_and(|generation| state.activity_generation != generation)
+            {
+                return false;
             }
+            state.activity_active = false;
+            let had_direction = std::mem::take(&mut state.activity_drag_direction) != 0;
+            (state.activity_generation, had_direction)
         };
-        if ended {
-            self.dispatch_notification(ScrollNotificationType::End, 0., 0.);
+        self.dispatch_notification(ScrollNotificationType::End, 0., 0.);
+        if had_direction {
+            // An End listener may open a replacement activity. Never inject
+            // an idle sample into that newer owner's notification bracket.
+            let still_closed = {
+                let state = self.state.borrow();
+                !state.activity_active && state.activity_generation == closed
+            };
+            if still_closed {
+                self.dispatch_notification(ScrollNotificationType::UserScroll, 0., 0.);
+            }
         }
-        ended
+        true
+    }
+
+    /// Publishes a changed drag direction before its offset/overscroll.
+    /// Returns false if a notification listener replaced the current owner.
+    pub(crate) fn update_activity_drag_direction(&self, delta: f32) -> bool {
+        if !delta.is_finite() || delta == 0. {
+            return true;
+        }
+        let generation = {
+            let mut state = self.state.borrow_mut();
+            let direction = if delta > 0. { 1 } else { -1 };
+            if !state.activity_active || state.activity_drag_direction == direction {
+                return true;
+            }
+            state.activity_drag_direction = direction;
+            state.activity_generation
+        };
+        self.dispatch_notification(ScrollNotificationType::UserScroll, delta, 0.);
+        let state = self.state.borrow();
+        state.activity_active && state.activity_generation == generation
     }
 
     /// Emits a user-scroll direction sample. The first sample implicitly
@@ -360,22 +395,8 @@ impl OwnedActivity {
     /// already-closed bracket. Consuming: each token finishes at most
     /// once by construction.
     pub fn finish(self) -> bool {
-        let ended = {
-            let mut state = self.controller.state.borrow_mut();
-            if state.activity_active && state.activity_generation == self.generation {
-                state.activity_active = false;
-                true
-            } else {
-                false
-            }
-        };
-        // The implicit drop afterwards finds a closed bracket and changes
-        // nothing — explicit finish and silent teardown compose safely.
-        if ended {
-            self.controller
-                .dispatch_notification(ScrollNotificationType::End, 0., 0.);
-        }
-        ended
+        self.controller
+            .end_owned_or_current_activity(Some(self.generation))
     }
 }
 
@@ -387,6 +408,7 @@ impl Drop for OwnedActivity {
         let mut state = self.controller.state.borrow_mut();
         if state.activity_active && state.activity_generation == self.generation {
             state.activity_active = false;
+            state.activity_drag_direction = 0;
         }
     }
 }

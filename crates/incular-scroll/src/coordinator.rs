@@ -533,6 +533,13 @@ impl ScrollController {
     /// Applies one user drag update: through the drive delegate when one is
     /// installed, otherwise [`apply_physics`](Self::apply_physics).
     pub fn apply_user_drag(&self, physics: ScrollPhysics, delta: f32) -> ScrollDelta {
+        if !self.update_activity_drag_direction(delta) {
+            return ScrollDelta {
+                position: self.offset(),
+                unconsumed: delta,
+                ..ScrollDelta::default()
+            };
+        }
         let delegate = self.state.borrow().drive_delegate.clone();
         match delegate {
             Some(delegate) => delegate.apply_user_drag(self, physics, delta),
