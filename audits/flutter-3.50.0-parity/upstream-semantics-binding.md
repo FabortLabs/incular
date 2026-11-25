@@ -15,3 +15,21 @@ dispatch. They do not exercise OS accessibility adapters, cross-view
 lookups, or invalid view IDs.
 
 Rust target: `flutter350_upstream_semantics_binding`.
+
+## Ordinal sort keys and role updates
+
+- `semantics_test.dart:553`: all 16 differently named comparisons
+  match, with unnamed keys first and names overriding numeric order.
+- `:528`: all eight numeric comparisons for equal names match. The
+  separate assertion for comparing to a different sort-key subclass is
+  not a Rust runtime operation for this concrete, typed API.
+- `:453`: changing a generic node to Tab marks the same node dirty
+  without a geometry update. Rust tracks this with revision deltas and
+  has no separate Flutter "none" role, so this is partial.
+
+An authored probe also verifies UTF-16 group-name ordering and that
+positive and negative zero are ties. The mounted Rust test previously
+reordered the signed-zero siblings; using the ordinal comparison now
+retains their traversal order. All 33 focused Rust semantics tests
+passed. Groups still keep their relative traversal positions; the
+public key comparison does not globally reorder named groups.

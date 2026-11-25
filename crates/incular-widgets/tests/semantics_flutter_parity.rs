@@ -247,6 +247,22 @@ fn sort_keys_reorder_keyed_siblings_and_keep_unkeyed_order() {
     assert_eq!(child_labels(&split, "split"), ["X", "A", "C"]);
 }
 
+#[test]
+fn ordinal_sort_keys_keep_widget_order_for_signed_zero_ties() {
+    let tree = mounted(
+        Semantics::new(Column::new([
+            Widget::from(button("positive zero").sort_key(OrdinalSortKey::new(0.))),
+            Widget::from(button("negative zero").sort_key(OrdinalSortKey::new(-0.))),
+        ]))
+        .label("zero ties")
+        .group(true),
+    );
+    assert_eq!(
+        child_labels(&tree, "zero ties"),
+        ["positive zero", "negative zero"]
+    );
+}
+
 /// semantics-012: `widgets/basic.dart:7942`. `container(true)` makes a bare
 /// annotation its own accessibility node.
 #[test]

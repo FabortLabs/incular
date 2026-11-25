@@ -1,5 +1,8 @@
 use incular_core::{ArenaId, Offset, Rect, Size};
-use incular_semantics::{Role, SemanticNode, SemanticNodeId, SemanticState, SemanticsTree};
+use incular_semantics::{
+    OrdinalSortKey, Role, SemanticNode, SemanticNodeId, SemanticState, SemanticsTree,
+};
+use std::cmp::Ordering::{Equal, Greater, Less};
 
 fn node(id: SemanticNodeId) -> SemanticNode {
     SemanticNode {
@@ -38,6 +41,82 @@ fn updates_distinguish_property_and_geometry_changes() {
     assert_eq!(tree.diagnostics().nodes_updated, 2);
     assert_eq!(tree.diagnostics().property_updates, 1);
     assert_eq!(tree.diagnostics().geometry_updates, 1);
+}
+
+#[test]
+fn a_role_change_marks_the_same_semantic_node_dirty() {
+    let mut tree = SemanticsTree::new();
+    let id = tree.insert(SemanticNode {
+        role: Role::GenericContainer,
+        ..node(placeholder())
+    });
+    let clean = tree.revision();
+    assert_eq!(tree.node(id).unwrap().role, Role::GenericContainer);
+    assert_eq!(tree.changed_since(clean).count(), 0);
+    let mut updated = tree.node(id).unwrap().clone();
+    updated.role = Role::Tab;
+    assert!(tree.update(id, updated));
+    assert_eq!(
+        tree.changed_since(clean)
+            .map(|(id, node)| (id, node.role))
+            .collect::<Vec<_>>(),
+        [(id, Role::Tab)]
+    );
+    assert_eq!(tree.diagnostics().property_updates, 1);
+    assert_eq!(tree.diagnostics().geometry_updates, 0);
+}
+
+#[test]
+fn ordinal_sort_keys_compare_numbers_only_within_the_same_name() {
+    for name in [None, Some("a")] {
+        for (left, right, expected) in [
+            (0., 0., Equal),
+            (0., 1., Less),
+            (1., 0., Greater),
+            (1., 1., Equal),
+        ] {
+            assert_eq!(
+                ordinal(left, name).compare_to(&ordinal(right, name)),
+                expected
+            );
+        }
+    }
+}
+
+#[test]
+fn ordinal_sort_keys_compare_names_before_numbers() {
+    for (left_name, right_name, expected) in [
+        (None, Some("bar"), Less),
+        (Some("foo"), None, Greater),
+        (Some("foo"), Some("bar"), Greater),
+        (Some("bar"), Some("foo"), Less),
+    ] {
+        for left in [0., 1.] {
+            for right in [0., 1.] {
+                assert_eq!(
+                    ordinal(left, left_name).compare_to(&ordinal(right, right_name)),
+                    expected
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn ordinal_sort_key_ties_signed_zero_and_compares_unicode_names_in_utf16_order() {
+    assert_eq!(ordinal(0., None).compare_to(&ordinal(-0., None)), Equal);
+    assert_eq!(ordinal(-0., None).compare_to(&ordinal(0., None)), Equal);
+    assert_eq!(
+        ordinal(9., Some("😀")).compare_to(&ordinal(-9., Some("\u{e000}"))),
+        Less
+    );
+}
+
+fn ordinal(order: f64, name: Option<&str>) -> OrdinalSortKey {
+    match name {
+        Some(name) => OrdinalSortKey::named(order, name),
+        None => OrdinalSortKey::new(order),
+    }
 }
 
 fn placeholder() -> SemanticNodeId {

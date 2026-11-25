@@ -6,6 +6,7 @@
 //! `SemanticAction`.
 
 use incular_core::{Arena, ArenaId, Rect};
+use std::cmp::Ordering;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct SemanticNodeId(pub ArenaId);
@@ -117,6 +118,22 @@ impl OrdinalSortKey {
         Self {
             name: Some(name.into()),
             ..Self::new(order)
+        }
+    }
+
+    /// Flutter's ordinal comparison: unnamed keys precede named ones,
+    /// different names compare by UTF-16 code units, and identical names
+    /// defer to the numeric value. Signed zero remains a numeric tie.
+    #[must_use]
+    pub fn compare_to(&self, other: &Self) -> Ordering {
+        match (&self.name, &other.name) {
+            (None, Some(_)) => Ordering::Less,
+            (Some(_), None) => Ordering::Greater,
+            (Some(left), Some(right)) if left != right => {
+                left.encode_utf16().cmp(right.encode_utf16())
+            }
+            _ if self.order == other.order => Ordering::Equal,
+            _ => self.order.total_cmp(&other.order),
         }
     }
 }

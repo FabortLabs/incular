@@ -1033,10 +1033,9 @@ impl WidgetTree {
             if self.element_sort_key(group[run_start].2).is_some() {
                 // A stable sort keeps widget order among equal keys.
                 group[run_start..run_end].sort_by(|a, b| {
-                    let order = |edge: &(u32, u32, ElementId)| {
-                        self.element_sort_key(edge.2).map_or(0.0, |key| key.order)
-                    };
-                    order(a).total_cmp(&order(b))
+                    let a = self.element_sort_key(a.2).expect("keyed sort run");
+                    let b = self.element_sort_key(b.2).expect("keyed sort run");
+                    a.compare_to(b)
                 });
             }
             run_start = run_end;
