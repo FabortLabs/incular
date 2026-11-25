@@ -1,7 +1,7 @@
 use crate::{
     controller::{ScrollController, ScrollState},
     notifications::ScrollNotificationType,
-    physics::BoundaryPhysics,
+    physics::{BoundaryPhysics, ScrollDelta, ScrollPhysics},
     restoration::persist_scroll_offset,
 };
 
@@ -119,7 +119,7 @@ impl ScrollController {
                 return false;
             }
             state.activity_active = false;
-            let had_direction = std::mem::take(&mut state.activity_drag_direction) != 0;
+            let had_direction = std::mem::take(&mut state.activity_user_direction) != 0;
             (state.activity_generation, had_direction)
         };
         self.dispatch_notification(ScrollNotificationType::End, 0., 0.);
@@ -139,22 +139,94 @@ impl ScrollController {
 
     /// Publishes a changed drag direction before its offset/overscroll.
     /// Returns false if a notification listener replaced the current owner.
-    pub(crate) fn update_activity_drag_direction(&self, delta: f32) -> bool {
+    pub(crate) fn update_activity_user_direction(&self, delta: f32) -> bool {
         if !delta.is_finite() || delta == 0. {
             return true;
         }
         let generation = {
             let mut state = self.state.borrow_mut();
             let direction = if delta > 0. { 1 } else { -1 };
-            if !state.activity_active || state.activity_drag_direction == direction {
+            if !state.activity_active || state.activity_user_direction == direction {
                 return true;
             }
-            state.activity_drag_direction = direction;
+            state.activity_user_direction = direction;
             state.activity_generation
         };
         self.dispatch_notification(ScrollNotificationType::UserScroll, delta, 0.);
         let state = self.state.borrow();
         state.activity_active && state.activity_generation == generation
+    }
+
+    /// Applies an ordinary pointer-wheel signal. Unlike a drag, the wheel
+    /// clamps even with bouncing physics, never reports the clipped remainder
+    /// as overscroll, and opens a bracket only when it moves the position.
+    #[doc(hidden)]
+    pub fn apply_pointer_scroll(&self, mut physics: ScrollPhysics, delta: f32) -> ScrollDelta {
+        physics.boundary = BoundaryPhysics::Clamping;
+        let (previous, revision, generation, active, result) = {
+            let state = self.state.borrow();
+            let result = physics.apply_delta_in_viewport(
+                state.offset,
+                delta,
+                state.min_offset,
+                state.max_offset,
+                state.viewport_extent,
+            );
+            (
+                state.offset,
+                state.revision,
+                state.activity_generation,
+                state.activity_active,
+                result,
+            )
+        };
+        if delta == 0. || result.position == previous || !result.accepted {
+            return result;
+        }
+        if active {
+            // Flutter pointerScroll first ends the interrupted activity.
+            // A replacement opened by an End listener has priority.
+            self.end_activity();
+        }
+        let unclaimed = || {
+            let state = self.state.borrow();
+            !state.activity_active
+                && state.activity_generation == generation
+                && state.revision == revision
+        };
+        let superseded = || ScrollDelta {
+            position: self.offset(),
+            ..ScrollDelta::default()
+        };
+        if !unclaimed() {
+            return superseded();
+        }
+        // The direction is observable before forcePixels. Start and Update
+        // both observe the committed position, not the previous one.
+        self.dispatch_notification(ScrollNotificationType::UserScroll, delta, 0.);
+        if !unclaimed() {
+            return superseded();
+        }
+        let (persistence, committed) = {
+            let mut state = self.state.borrow_mut();
+            state.offset = result.position;
+            state.pending_restored_offset = None;
+            state.revision += 1;
+            state.activity_user_direction = if delta > 0. { 1 } else { -1 };
+            (state.restoration.clone(), state.revision)
+        };
+        let sample = self.start_owned_activity(ActivityOrigin::Wheel);
+        if self.revision() == committed {
+            persist_scroll_offset(persistence, result.position);
+        }
+        if sample.is_current() && self.revision() == committed {
+            self.dispatch_notification(ScrollNotificationType::Update, result.consumed, 0.);
+        }
+        sample.finish();
+        ScrollDelta {
+            overscroll: 0.,
+            ..result
+        }
     }
 
     /// Emits a user-scroll direction sample. The first sample implicitly
@@ -408,7 +480,7 @@ impl Drop for OwnedActivity {
         let mut state = self.controller.state.borrow_mut();
         if state.activity_active && state.activity_generation == self.generation {
             state.activity_active = false;
-            state.activity_drag_direction = 0;
+            state.activity_user_direction = 0;
         }
     }
 }

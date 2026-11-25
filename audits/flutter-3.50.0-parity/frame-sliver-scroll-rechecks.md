@@ -56,3 +56,19 @@ fling frames. The offsets and cumulative Start, Update, Overscroll,
 End, and UserScroll registers now match. Both existing frame
 registrations move to match. The Linux runner uses a scratch package
 and executes only the selected existing scenarios.
+
+## Pointer-wheel notification order
+
+A native wheel signal is not an accepted touch drag. Pinned Flutter
+and both focused Runtime probes now clamp the wheel even under
+BouncingScrollPhysics. An outward wheel shift at a pinned extent does
+not publish a bracket. A moving signal publishes its direction with
+the old pixels, then Start, Update, End and the idle direction with
+the committed pixels. A partial clamp consumes 60px of a 90px
+return without publishing a touch Overscroll event. The independent
+nested remainder policy is unchanged.
+
+A newer activity opened during the direction callback owns its own
+Start/End. The superseded wheel sample does not overwrite its offset
+or terminate the replacement. The touch direction tests and eleven
+neighboring pointer-input tests also pass.

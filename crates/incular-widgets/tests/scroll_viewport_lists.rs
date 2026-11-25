@@ -1388,11 +1388,10 @@ fn no_public_route_bypasses_attachment_authority() {
 
 #[test]
 fn wheel_sample_completion_preserves_reentrant_activity() {
-    // Through the real wheel adapter: a newer activity started inside a
-    // sample's notification survives the old sample's completion — the
-    // sample's token went stale at takeover, so its finish stays silent
-    // instead of ending the newer bracket.
-    use incular_scroll::ScrollNotificationType::{End, Start, Update, UserScroll};
+    // The direction precedes a wheel bracket. A successor created by that
+    // listener owns its own Start and End, while the stale sample writes
+    // neither pixels nor an idle event into the successor.
+    use incular_scroll::ScrollNotificationType::{End, Start, UserScroll};
     let controller = ScrollController::new();
     let mut tree = WidgetTree::new();
     mount_tight(
@@ -1419,10 +1418,11 @@ fn wheel_sample_completion_preserves_reentrant_activity() {
             false
         }
     });
-    assert!(tree.scroll_at(Offset::new(50., 50.), Offset::new(0., 20.)));
+    assert!(!tree.scroll_at(Offset::new(50., 50.), Offset::new(0., 20.)));
+    assert_eq!(controller.offset(), 0.);
     assert_eq!(
         events.borrow().as_slice(),
-        &[Start, UserScroll, Update],
+        &[UserScroll, Start],
         "sample completion stays silent after takeover"
     );
     let taken = taken_handle
@@ -1433,7 +1433,7 @@ fn wheel_sample_completion_preserves_reentrant_activity() {
     assert!(taken.finish());
     assert_eq!(
         events.borrow().as_slice(),
-        &[Start, UserScroll, Update, End]
+        &[UserScroll, Start, End]
     );
 }
 

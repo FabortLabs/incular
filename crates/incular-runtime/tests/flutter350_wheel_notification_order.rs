@@ -5,15 +5,14 @@ use incular_runtime::Runtime;
 use incular_widgets::{ListView, ScrollController, ScrollNotificationType, ScrollPhysics, Widget};
 use std::{cell::RefCell, rc::Rc};
 
-#[test]
-fn a_wheel_sample_commits_one_bracket_and_an_edge_has_no_events() {
+fn check_wheel(physics: ScrollPhysics) {
     use ScrollNotificationType::{End, Start, Update, UserScroll};
     let controller = ScrollController::new();
     let layout = Constraints::tight(Size::new(800., 600.));
     let list = ListView::builder(40, |_| Widget::box_(Size::new(800., 50.), Color::WHITE))
         .item_extent(50.)
         .controller(controller.clone())
-        .physics(ScrollPhysics::clamping());
+        .physics(physics);
     let mut runtime = Runtime::new(list.into()).unwrap();
     runtime.run_frame(layout).unwrap();
     let trace = Rc::new(RefCell::new(Vec::new()));
@@ -60,4 +59,14 @@ fn a_wheel_sample_commits_one_bracket_and_an_edge_has_no_events() {
             ],
         ],
     );
+}
+
+#[test]
+fn a_wheel_sample_commits_one_bracket_and_an_edge_has_no_events() {
+    check_wheel(ScrollPhysics::clamping());
+}
+
+#[test]
+fn bouncing_physics_still_clamp_pointer_signals_to_content() {
+    check_wheel(ScrollPhysics::BOUNCING);
 }

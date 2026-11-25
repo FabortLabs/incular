@@ -219,9 +219,10 @@ pub(crate) struct ScrollState {
     pub(crate) next_notification_listener: u64,
     pub(crate) notification_context: Option<(incular_config::Axis, bool)>,
     pub(crate) activity_active: bool,
-    /// Last offset direction emitted by an accepted drag, held through its
+    /// Last offset direction emitted by accepted user input, held through a drag
+    /// and its
     /// ballistic continuation. Zero means idle.
-    pub(crate) activity_drag_direction: i8,
+    pub(crate) activity_user_direction: i8,
     /// Latest activity generation. Bumped on every bracket start and
     /// every takeover; tokens compare against it to prove currency.
     pub(crate) activity_generation: u64,
@@ -517,7 +518,7 @@ impl ScrollController {
         let mut state = self.state.borrow_mut();
         if state.activity_active {
             state.activity_active = false;
-            state.activity_drag_direction = 0;
+            state.activity_user_direction = 0;
             true
         } else {
             false

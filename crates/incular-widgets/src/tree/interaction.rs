@@ -4257,17 +4257,7 @@ fn apply_wheel_to_viewports(
             continue;
         }
         let logical = if *reverse { -physical } else { physical };
-        // Pointer-wheel samples are complete user activities in this
-        // high-level adapter, each owned by its own token: the implicit
-        // begin inside the sample notification reuses the open bracket, and
-        // only the still-current token closes it — so a newer activity
-        // started reentrantly during the sample survives this sample's
-        // completion. Drag recognizers keep longer activities open with
-        // owned tokens rather than raw begin/end calls.
-        let sample = controller.start_owned_activity(ActivityOrigin::Wheel);
-        controller.notify_user_scroll(logical);
-        let result = controller.apply_physics(*physics, logical);
-        sample.finish();
+        let result = controller.apply_pointer_scroll(*physics, logical);
         let physical_consumed = if *reverse {
             -result.consumed
         } else {
