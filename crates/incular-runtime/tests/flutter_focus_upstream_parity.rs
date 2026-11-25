@@ -192,3 +192,57 @@ fn unfocusable_mounted_node_ignores_request_and_does_not_notify() {
     assert_eq!(runtime.focused_element(), None);
     assert_eq!(calls.get(), 0);
 }
+
+#[test]
+fn global_key_reparenting_keeps_active_or_queued_focus_and_updates_ancestors() {
+    use incular_widgets::{Directionality, GlobalKey, TextDirection};
+
+    for focus_before_move in [false, true] {
+        let child = FocusNode::new();
+        let left = FocusNode::new();
+        let right = FocusNode::new();
+        let global = GlobalKey::new();
+        let scene = |left_side| {
+            let keyed =
+                Widget::from(Focus::new(SizedBox::shrink()).node(child.clone())).with_key(global);
+            let slot = |node: &FocusNode, contains_child| {
+                let content = if contains_child {
+                    keyed.clone()
+                } else {
+                    SizedBox::shrink().into()
+                };
+                FocusScope::new(Focus::new(content).node(node.clone()))
+            };
+            Directionality::new(
+                TextDirection::Ltr,
+                Column::new([
+                    Widget::from(slot(&left, left_side)),
+                    slot(&right, !left_side).into(),
+                ]),
+            )
+            .into()
+        };
+
+        let mut runtime = Runtime::new(scene(true)).unwrap();
+        frame(&mut runtime);
+        let original = runtime.tree().element_with_key(&global.into()).unwrap();
+        child.request_focus();
+        if focus_before_move {
+            frame(&mut runtime);
+            assert!(child.has_primary_focus() && left.has_focus());
+        }
+
+        runtime
+            .schedule_update(runtime.tree().root().unwrap(), scene(false))
+            .unwrap();
+        frame(&mut runtime);
+        assert_eq!(
+            runtime.tree().element_with_key(&global.into()),
+            Some(original)
+        );
+        assert_eq!(runtime.focused_element(), Some(original));
+        assert!(child.has_primary_focus());
+        assert!(right.has_focus() && !right.has_primary_focus());
+        assert!(!left.has_focus());
+    }
+}

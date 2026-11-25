@@ -72,3 +72,16 @@ Incular also verifies on actual Tab input that skip-remaining prevents
 the default framework traversal and still returns unconsumed at the
 Runtime boundary. Tests use normalized keyboard events, not native OS
 delivery or system shortcuts. Five focused Rust targets passed (20 tests).
+
+## Retained identity across focus reparenting
+
+The pinned `widgets/focus_manager_test.dart:1825` original and the
+mounted Incular fixture both keep the child focused after a GlobalKey
+move and update the new ancestor's focus. Incular checks both a pending
+request and already-applied focus, the same retained element ID, and loss
+of focus on the old parent. This is partial: Flutter explicitly supplies
+separate FocusScopeNodes and requests scope autofocus; the Rust fixture
+uses a queued child request and mounted Focus nodes inside the two policy
+scopes. The pinned :1752 and the focused Rust replacement case were also
+rerun; detached autofocus replacement is now a match in the ledger.
+Six focused Rust tests passed.

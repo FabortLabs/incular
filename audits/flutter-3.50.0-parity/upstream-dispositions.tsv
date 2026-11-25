@@ -120,7 +120,7 @@ packages/flutter/test/painting/gradient_test.dart	229	LinearGradient lerp test w
 packages/flutter/test/painting/gradient_test.dart	736	RadialGradient.scale preserves transform	reference-ran-incular-open	upstream-pointer-wheel-gradients.md
 packages/flutter/test/painting/gradient_test.dart	800	SweepGradient lerp test with stops	reference-ran-incular-open	upstream-pointer-wheel-gradients.md
 packages/flutter/test/widgets/focus_manager_test.dart	633	Requesting focus before adding to tree results in a request after adding	partial-mismatch	upstream-focus-corners-curves-previews.md
-packages/flutter/test/widgets/focus_manager_test.dart	1752	works when the previous focused node is detached	paired-mismatch	upstream-focus-corners-curves-previews.md
+packages/flutter/test/widgets/focus_manager_test.dart	1752	works when the previous focused node is detached	paired-match	upstream-focus-widget-semantics.md#retained-identity-across-focus-reparenting
 packages/flutter/test/widgets/focus_manager_test.dart	1801	autofocus the first candidate	paired-match	upstream-focus-corners-curves-previews.md
 packages/flutter/test/widgets/focus_scope_test.dart	1233	Focus is ignored when set to not focusable.	paired-match	upstream-focus-policy-tween-dtd.md#mounted-focus-callbacks-and-permissions
 packages/flutter/test/painting/border_radius_test.dart	146	BorderRadius.lerp() invariants	paired-match	upstream-focus-corners-curves-previews.md#rounded-corner-value-parity-follow-up
@@ -1129,3 +1129,4 @@ packages/flutter/test/painting/paint_image_test.dart	269	Reports Image painting 
 packages/flutter/test/painting/paint_image_test.dart	312	Reports Image painting - no debug label	reference-ran-incular-open	upstream-decoration-image-paint.md#flutter-specific-paint-diagnostics
 packages/flutter/test/widgets/focus_scope_test.dart	1643	Focus updates the onKey handler when the widget updates	reference-ran-incular-open	upstream-focus-widget-semantics.md#focus-key-routing-and-handler-replacement
 packages/flutter/test/widgets/focus_scope_test.dart	1696	Focus updates the onKeyEvent handler when the widget updates	partial-match	upstream-focus-widget-semantics.md#focus-key-routing-and-handler-replacement
+packages/flutter/test/widgets/focus_manager_test.dart	1825	Autofocus works with global key reparenting	partial-match	upstream-focus-widget-semantics.md#retained-identity-across-focus-reparenting
