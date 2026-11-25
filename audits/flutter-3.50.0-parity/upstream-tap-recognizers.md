@@ -86,3 +86,11 @@ The equivalent observable trace in upstream `double_tap_test.dart:733`
 also passes. It stays partial because Flutter directly constructs and
 sweeps two independent arena entries, whereas the Incular counterpart
 routes actual taps through the retained parent and child detectors.
+
+## Current overlapping release order
+
+The exact FILO original at :252 passed on the pinned SDK again. Both
+native overlapping-release orders passed: releasing pointer 2 before
+pointer 1 emits nothing for pointer 2 and still recognizes pointer 1 once.
+This closes the old ledger mismatch; it does not change the separate
+partial arena-close comparison for outside-slop cancellation.
