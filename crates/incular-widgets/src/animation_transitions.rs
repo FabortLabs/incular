@@ -11,7 +11,7 @@ use incular_animation::{
     OptionalColorTween,
 };
 use incular_config::{Alignment, AlignmentDirectional, Axis, TextDirection};
-use incular_core::{Lerp, Rect, Size, Transform as CoreTransform};
+use incular_core::{Lerp, Offset, Rect, Size, Transform as CoreTransform};
 use incular_text::TextStyle;
 
 use crate::explicit_animations::animated_widget_for;
@@ -69,24 +69,75 @@ impl RelativeRect {
         )
     }
 
-    /// Flutter `RelativeRect.toRect`: the rectangle inside `container`.
+    /// Resolves start/end in the supplied text direction.
+    #[must_use]
+    pub const fn from_directional(
+        start: f32,
+        top: f32,
+        end: f32,
+        bottom: f32,
+        text_direction: TextDirection,
+    ) -> Self {
+        match text_direction {
+            TextDirection::Ltr => Self::from_ltrb(start, top, end, bottom),
+            TextDirection::Rtl => Self::from_ltrb(end, top, start, bottom),
+        }
+    }
+
+    /// Flutter `RelativeRect.toRect`: the rectangle in the container's local
+    /// coordinates. The container's origin is not applied.
     #[must_use]
     pub fn to_rect(self, container: Rect) -> Rect {
         Rect::from_origin_size(
-            incular_core::Offset::new(
-                container.origin.x + self.left,
-                container.origin.y + self.top,
-            ),
-            Size::new(
-                container.size.width - self.left - self.right,
-                container.size.height - self.top - self.bottom,
-            ),
+            Offset::new(self.left, self.top),
+            // Unlike a layout size, an intersection may have inverted edges.
+            Size {
+                width: (container.size.width - self.right) - self.left,
+                height: (container.size.height - self.bottom) - self.top,
+            },
+        )
+    }
+
+    /// Converts to the container's enclosing coordinate space, applying its
+    /// origin. This is the inverse of `from_rect`.
+    #[must_use]
+    pub fn to_global_rect(self, container: Rect) -> Rect {
+        let rect = self.to_rect(container);
+        Rect::from_origin_size(container.origin + rect.origin, rect.size)
+    }
+
+    /// Returns signed geometric extents, not a constrained layout size.
+    #[must_use]
+    pub fn to_size(self, container: Size) -> Size {
+        Size {
+            width: container.width - self.left - self.right,
+            height: container.height - self.top - self.bottom,
+        }
+    }
+
+    /// Intersects four inset distances without normalizing disjoint edges.
+    #[must_use]
+    pub fn intersect(self, other: Self) -> Self {
+        let inward_edge = |a: f32, b: f32| {
+            if a.is_nan() || b.is_nan() {
+                f32::NAN
+            } else if a.total_cmp(&b).is_lt() {
+                b
+            } else {
+                a
+            }
+        };
+        Self::from_ltrb(
+            inward_edge(self.left, other.left),
+            inward_edge(self.top, other.top),
+            inward_edge(self.right, other.right),
+            inward_edge(self.bottom, other.bottom),
         )
     }
 
     /// Flutter `RelativeRect.shift`.
     #[must_use]
-    pub fn shift(self, offset: incular_core::Offset) -> Self {
+    pub fn shift(self, offset: Offset) -> Self {
         Self::from_ltrb(
             self.left + offset.x,
             self.top + offset.y,
@@ -117,12 +168,33 @@ impl RelativeRect {
     pub fn has_insets(self) -> bool {
         self.left > 0.0 || self.top > 0.0 || self.right > 0.0 || self.bottom > 0.0
     }
+
+    /// Interpolates a missing endpoint as `FILL`, as documented by Flutter.
+    /// Two missing endpoints return `None`.
+    #[must_use]
+    pub fn lerp_optional(begin: Option<Self>, end: Option<Self>, t: f32) -> Option<Self> {
+        let scale = |rect: Self, k: f32| {
+            Self::from_ltrb(rect.left * k, rect.top * k, rect.right * k, rect.bottom * k)
+        };
+        match (begin, end) {
+            (None, None) => None,
+            (None, Some(end)) => Some(scale(end, t)),
+            (Some(begin), None) => Some(scale(begin, 1.0 - t)),
+            (Some(begin), Some(end)) => Some(begin.lerp(&end, t)),
+        }
+    }
 }
 
 impl Lerp for RelativeRect {
     /// Flutter `RelativeRect.lerp`: each side independently, not clamped.
     fn lerp(&self, other: &Self, t: f32) -> Self {
-        let mix = |a: f32, b: f32| a + (b - a) * t;
+        let mix = |a: f32, b: f32| {
+            if a == b || (a.is_nan() && b.is_nan()) {
+                return a;
+            }
+            debug_assert!(a.is_finite() && b.is_finite() && t.is_finite());
+            a * (1.0 - t) + b * t
+        };
         Self::from_ltrb(
             mix(self.left, other.left),
             mix(self.top, other.top),

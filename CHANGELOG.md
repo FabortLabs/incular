@@ -196,6 +196,9 @@ a version and date when publishing.
 
 ### Changed
 
+- **Breaking (`incular-widgets`):** `RelativeRect::to_rect` returns container-local
+  coordinates, matching Flutter. Use `to_global_rect` if you need the container
+  origin applied as in previous releases.
 - **Breaking (`incular-semantics`):** exhaustive `SemanticState` literals
   need `accessibility_focus_block_type: AccessibilityFocusBlockType::None`
   unless the annotation blocks accessibility focus. Struct literals using
