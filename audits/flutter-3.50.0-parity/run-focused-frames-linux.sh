@@ -86,4 +86,9 @@ while IFS=$'\t' read -r scenario file; do
     failed=1
   fi
 done <<< "$case_map"
+# Keep both sides' logs, JSON, and comparison reports, but drop the
+# Dart compiler output for a successful isolated package.
+if (( failed == 0 )) && [[ ${INCULAR_AUDIT_KEEP_DART_BUILD:-0} != 1 ]]; then
+  rm -rf -- "$out/reference/build"
+fi
 exit "$failed"

@@ -65,6 +65,10 @@ Pub cache, set `INCULAR_BOOTSTRAP_PUB=1` to populate dependencies for the
 selected scratch package. Subsequent runs resolve dependencies offline.
 The Linux runner checks the revision, runs one file with test concurrency
 one, and verifies that upstream runs actually executed the named tests.
+Successful Linux reference and [focused frame](run-focused-frames-linux.sh)
+runs keep test logs and any comparison reports/JSON, but discard compiled
+Dart build products. Set `INCULAR_AUDIT_KEEP_DART_BUILD=1` for a run that
+needs to keep those products. Failed runs retain their isolated package.
 
 ## Inventory by public entrypoint
 

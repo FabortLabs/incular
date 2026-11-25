@@ -151,3 +151,9 @@ if Counter(reported) != Counter(sys.argv[1:]):
     raise SystemExit(f"Selected test names do not match the reporter: {reported!r}")
 PY
 fi
+
+# Logs and source probes are the evidence. Don't accumulate a compiled
+# Dart kernel for every successful isolated reference runner invocation.
+if [[ "$mode" != tooling && ${INCULAR_AUDIT_KEEP_DART_BUILD:-0} != 1 ]]; then
+  rm -rf -- "$scratch/build"
+fi
