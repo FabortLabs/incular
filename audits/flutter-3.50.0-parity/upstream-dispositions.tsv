@@ -1354,3 +1354,8 @@ packages/flutter/test/rendering/box_test.dart	563	handles flow layout	partial-ma
 packages/flutter/test/rendering/box_test.dart	584	paints even when its size is empty	partial-match	upstream-constraints-transform.md
 packages/flutter/test/widgets/basic_test.dart	1044	does not crash at zero area	paired-match	upstream-constraints-transform.md#childless-and-zero-area-constraints-proxies
 packages/flutter/test/widgets/basic_test.dart	1078	ConstraintsTransformBox does not crash at zero area	paired-match	upstream-constraints-transform.md#childless-and-zero-area-constraints-proxies
+packages/flutter/test/rendering/box_test.dart	856	BoxHitTestResult wrapping HitTestResult	paired-match	upstream-hit-transforms.md
+packages/flutter/test/rendering/box_test.dart	882	addWithPaintTransform	paired-match	upstream-hit-transforms.md
+packages/flutter/test/rendering/box_test.dart	966	addWithPaintOffset	paired-match	upstream-hit-transforms.md
+packages/flutter/test/rendering/box_test.dart	1037	addWithRawTransform	paired-match	upstream-hit-transforms.md
+packages/flutter/test/rendering/box_test.dart	1108	addWithOutOfBandPosition	paired-match	upstream-hit-transforms.md

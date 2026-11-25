@@ -1084,7 +1084,7 @@ impl WidgetTree {
             };
             local_to_world = to_parent.then(local_to_world);
         }
-        local_to_world.inverse()
+        incular_gestures::HitTestTransform::Paint(local_to_world).resolve()
     }
 
     /// Position of `node` in its parent's hit-test space, including the

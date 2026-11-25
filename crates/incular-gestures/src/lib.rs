@@ -10,6 +10,7 @@ pub mod constants;
 mod details;
 mod focus;
 mod force_press;
+mod hit_test;
 mod keyboard;
 mod mouse;
 mod multidrag;
@@ -35,6 +36,7 @@ pub use details::{
     PointerButtonClass, PointerDeviceKind, PointerEvent, RawPointerEvent, TapDownDetails,
     TapMoveDetails, TapUpDetails, Velocity,
 };
+pub use hit_test::{BoxHitTestResult, HitTestEntry, HitTestResult, HitTestTransform};
 pub use focus::{
     DirectionalFocusCandidate, FocusBehavior, FocusHighlightManager, FocusHighlightMode,
     FocusHighlightStrategy, FocusHighlightSubscription, FocusManager, FocusNode,
