@@ -14,8 +14,8 @@ mod transient;
 
 pub use alignment::{
     Alignment, AlignmentDirectional, Axis, AxisDirection, Clip, CrossAxisAlignment, FlexFit,
-    FractionalOffset, MainAxisAlignment, MainAxisSize, StackFit, TextDirection, VerticalDirection,
-    WrapAlignment, WrapCrossAlignment,
+    FractionalOffset, MainAxisAlignment, MainAxisSize, StackFit, VerticalDirection, WrapAlignment,
+    WrapCrossAlignment,
 };
 pub use constraints::{ConstraintError, Constraints, ViewConstraints};
 pub use defaults::{ApplicationDefaults, TransparencyMode, WidgetDefaults, WindowSizePolicy};
@@ -24,6 +24,7 @@ pub use environment::{
     DisplayFeatureType, InputCapabilities, NavigationMode, RuntimeEnvironment, TargetPlatform,
 };
 pub use icu_locale::Locale;
+pub use incular_core::TextDirection;
 pub use insets::{EdgeInsets, EdgeInsetsDirectional};
 pub use localization::{
     LocaleResolver, LocalizationCatalog, LocalizationError, LocalizedMessage, PluralCategory,

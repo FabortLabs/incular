@@ -1049,3 +1049,22 @@ packages/flutter/test/widgets/basic_test.dart	1792	Row and IgnoreBaseline (with 
 packages/flutter/test/widgets/basic_test.dart	1856	IgnoreBaseline does not crash at zero area	paired-match	upstream-ignore-baseline.md
 packages/flutter/test/widgets/basic_test.dart	1892	PositionedDirectional does not crash at zero area	paired-match	upstream-ignore-baseline.md#intrinsicheight-forwards-baselines
 packages/flutter/test/widgets/basic_test.dart	1908	IntrinsicHeight does not crash at zero area	paired-match	upstream-ignore-baseline.md#intrinsicheight-forwards-baselines
+packages/flutter/test/semantics/semantics_test.dart	1122	basic functionality with default separator	paired-match	upstream-semantics-label-builder.md
+packages/flutter/test/semantics/semantics_test.dart	1138	custom separator	paired-match	upstream-semantics-label-builder.md
+packages/flutter/test/semantics/semantics_test.dart	1149	empty separator	paired-match	upstream-semantics-label-builder.md
+packages/flutter/test/semantics/semantics_test.dart	1159	ignores empty parts	paired-match	upstream-semantics-label-builder.md
+packages/flutter/test/semantics/semantics_test.dart	1171	single part	paired-match	upstream-semantics-label-builder.md
+packages/flutter/test/semantics/semantics_test.dart	1179	empty builder	paired-match	upstream-semantics-label-builder.md
+packages/flutter/test/semantics/semantics_test.dart	1185	clear functionality	paired-match	upstream-semantics-label-builder.md
+packages/flutter/test/semantics/semantics_test.dart	1201	reusable builder	paired-match	upstream-semantics-label-builder.md
+packages/flutter/test/semantics/semantics_test.dart	1218	reuse without clearing	paired-match	upstream-semantics-label-builder.md
+packages/flutter/test/semantics/semantics_test.dart	1243	no text direction embedding when overall direction is null	paired-match	upstream-semantics-label-builder.md
+packages/flutter/test/semantics/semantics_test.dart	1253	text direction embedding with LTR overall direction	paired-match	upstream-semantics-label-builder.md
+packages/flutter/test/semantics/semantics_test.dart	1264	text direction embedding with RTL overall direction	paired-match	upstream-semantics-label-builder.md
+packages/flutter/test/semantics/semantics_test.dart	1274	no embedding when all parts have same direction	paired-match	upstream-semantics-label-builder.md
+packages/flutter/test/semantics/semantics_test.dart	1284	part direction falls back to overall direction	paired-match	upstream-semantics-label-builder.md
+packages/flutter/test/semantics/semantics_test.dart	1294	complex multilingual example	paired-match	upstream-semantics-label-builder.md
+packages/flutter/test/semantics/semantics_test.dart	1307	very long labels	paired-match	upstream-semantics-label-builder.md
+packages/flutter/test/semantics/semantics_test.dart	1321	many parts	paired-match	upstream-semantics-label-builder.md
+packages/flutter/test/semantics/semantics_test.dart	1334	special characters in separators	paired-match	upstream-semantics-label-builder.md
+packages/flutter/test/semantics/semantics_test.dart	1345	Unicode characters in content	paired-match	upstream-semantics-label-builder.md

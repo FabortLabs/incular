@@ -9,7 +9,10 @@ use incular_core::{Arena, ArenaId, Rect};
 use std::cmp::Ordering;
 
 mod custom_action;
+mod label_builder;
 pub use custom_action::{CustomSemanticsAction, CustomSemanticsActionId};
+pub use incular_core::TextDirection;
+pub use label_builder::SemanticsLabelBuilder;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct SemanticNodeId(pub ArenaId);

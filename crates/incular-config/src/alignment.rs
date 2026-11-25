@@ -1,3 +1,4 @@
+use crate::TextDirection;
 use incular_core::{Offset, Rect, Size};
 
 /// Direction in which a linear layout consumes its main axis.
@@ -75,13 +76,6 @@ impl AxisDirection {
     pub const fn is_reversed(self) -> bool {
         matches!(self, Self::Left | Self::Up)
     }
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub enum TextDirection {
-    #[default]
-    Ltr,
-    Rtl,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]

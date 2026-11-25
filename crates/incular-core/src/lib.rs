@@ -53,3 +53,13 @@ pub use observer_list::{HashedObserverList, ObserverList};
 pub use restoration::{RestorationBackend, RestorationKey, RestorationKeyError, RestorationScope};
 pub use value_notifier::ValueNotifier;
 pub use widget::{BuildableWidget, Widget};
+
+/// The horizontal reading direction for layout and accessibility text.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum TextDirection {
+    /// Left to right.
+    #[default]
+    Ltr,
+    /// Right to left.
+    Rtl,
+}
