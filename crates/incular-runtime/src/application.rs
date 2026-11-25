@@ -1881,6 +1881,14 @@ impl Application {
             .clone()
     }
 
+    /// Delivers a host's native frame-phase timestamps to timeline observers.
+    /// The regular renderer summary does not imply these timestamps exist.
+    pub fn report_native_frame_timings(&self, timings: &[crate::NativeFrameTiming]) {
+        if let Some(callbacks) = &self.timing_callbacks {
+            callbacks.report_native_timeline(timings);
+        }
+    }
+
     /// Merges renderer-reported metrics into one window's latest record and
     /// feeds the application profiler history with a complete frame sample.
     pub fn note_render_metrics(

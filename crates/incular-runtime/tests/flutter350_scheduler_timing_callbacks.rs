@@ -107,3 +107,71 @@ fn frame_timing_callback_receives_the_completed_renderer_merged_record() {
     );
     assert_eq!(records[0].timings.build, stats.timings.build);
 }
+
+#[test]
+fn native_timeline_event_preserves_exact_flutter_sample_and_units() {
+    use incular_runtime::{FrameTimelineEvent, NativeFrameTiming};
+    let size = Size::new(100., 100.);
+    let mut app = Application::new(move |_| Widget::box_(size, Color::WHITE)).unwrap();
+    let callbacks = app.frame_timing_callbacks();
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let _listen = callbacks.add_timeline({
+        let seen = seen.clone();
+        move |event| seen.borrow_mut().push(event)
+    });
+    let window = app.primary_window();
+    app.run_window_frame_at(window, Constraints::tight(size), Instant::now())
+        .unwrap();
+    app.note_render_metrics(window, RenderFrameMetrics::default(), None);
+    assert!(
+        seen.borrow().is_empty(),
+        "ordinary metrics have no raw timestamps"
+    );
+
+    let timing = NativeFrameTiming {
+        frame_number: 1991,
+        vsync_start_us: 5000,
+        build_start_us: 10000,
+        build_finish_us: 15000,
+        raster_start_us: 16000,
+        raster_finish_us: 20000,
+    };
+    app.report_native_frame_timings(&[timing]);
+    assert_eq!(seen.borrow().len(), 1);
+    assert_eq!(FrameTimelineEvent::NAME, "Incular.Frame");
+    assert_eq!(
+        serde_json::to_value(seen.borrow()[0]).unwrap(),
+        serde_json::json!({
+            "number": 1991,
+            "startTime": 10000,
+            "elapsed": 15000,
+            "build": 5000,
+            "raster": 4000,
+            "vsyncOverhead": 5000
+        })
+    );
+
+    // A missing/reordered timestamp is not a synthetic fast frame.
+    app.report_native_frame_timings(&[NativeFrameTiming {
+        raster_start_us: 1000,
+        ..timing
+    }]);
+    assert_eq!(seen.borrow().len(), 1);
+    app.report_native_frame_timings(&[
+        NativeFrameTiming {
+            frame_number: 1992,
+            ..timing
+        },
+        NativeFrameTiming {
+            frame_number: 1993,
+            ..timing
+        },
+    ]);
+    assert_eq!(
+        seen.borrow()
+            .iter()
+            .map(|frame| frame.number)
+            .collect::<Vec<_>>(),
+        [1991, 1992, 1993]
+    );
+}

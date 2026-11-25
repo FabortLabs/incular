@@ -240,3 +240,16 @@ This comparison is scoped request arbitration and lifetime, not
 Dart VM GC behavior or changes to wgpu device selection. The original
 registrations assert only the requested scheduler mode and handle
 events, not measured latency, throughput, or process memory.
+
+## Native timeline payload
+
+Pinned `scheduler/scheduler_test.dart:204` passed. The Rust application
+accepts the same ordered host timestamps and dispatches one diagnostic
+event with exactly frame 1991, start 10000, elapsed 15000, build 5000,
+raster 4000 and vsync overhead 5000, all times in microseconds. Batched
+reports preserve order; invalid phase ordering emits nothing. Ordinary
+renderer summaries still produce only the existing frame callbacks.
+
+This is partial: Incular's typed event is named Incular.Frame rather
+than a Dart VM service event, and native adapters without phase
+timestamps do not invent a sample or a GPU timing.

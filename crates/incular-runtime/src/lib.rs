@@ -101,7 +101,8 @@ pub use tasks::{
 };
 pub use text_shortcuts::TextShortcutPlatform;
 pub use timing_callbacks::{
-    FrameTimingCallbackError, FrameTimingCallbacks, FrameTimingSubscription,
+    FrameTimelineEvent, FrameTimingCallbackError, FrameTimingCallbacks, FrameTimingSubscription,
+    NativeFrameTiming,
 };
 pub use transient_presentation::{
     ResolvedTransientPresentation, TransientFallbackReason, TransientPresentationResolution,
