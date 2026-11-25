@@ -3,7 +3,7 @@
 
 use std::{cell::RefCell, rc::Rc, sync::Arc, thread, time::Duration};
 
-use incular_animation::schedule_frame;
+use incular_animation::{add_post_frame_callback, schedule_frame};
 use incular_config::Constraints;
 use incular_core::{Color, RestorationKey, RestorationScope, Size, time::Instant};
 use incular_platform::WindowOptions;
@@ -172,4 +172,31 @@ fn explicit_flush_defers_until_scheduled_frame_but_starts_immediately_when_idle(
         starts_before_frame, starts,
         "flush started before the frame"
     );
+}
+
+#[test]
+fn pending_flush_captures_restoration_changes_made_by_the_frame() {
+    let mut fixture = Fixture::new();
+    fixture.frame();
+    let starts = fixture.handle.diagnostics().saves_started;
+    fixture.root.set_json(&key("foo"), json!(1));
+    let scope = fixture.root.clone();
+    let handle = fixture.handle.clone();
+    add_post_frame_callback(move |_| {
+        assert_eq!(handle.diagnostics().saves_started, starts);
+        scope.set_json(&key("foo"), json!(11));
+    });
+    // A desktop/mobile host may already have requested a redraw without
+    // an explicit scheduler callback asking for a frame.
+    fixture
+        .app
+        .note_frame_requested(fixture.app.primary_window());
+    assert!(fixture.app.flush_restoration());
+    fixture.app.process_runtime_work();
+    assert_eq!(fixture.handle.diagnostics().saves_started, starts);
+    assert_eq!(fixture.saved_state("application/foo"), None);
+    fixture.frame();
+    fixture.drain_save();
+    assert_eq!(fixture.handle.diagnostics().saves_started, starts + 1);
+    assert_eq!(fixture.saved_state("application/foo"), Some(json!(11)));
 }

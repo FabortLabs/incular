@@ -98,3 +98,14 @@ entering the middle Focus, preserving it across a child height change,
 and then continuing to the following control. Initial autofocus and
 supplied-node behavior still pass. All 29 focused Rust checks passed;
 this authored verification does not add an original registration.
+
+### Explicit restoration flush follows scheduled frames
+
+The :238 timing mismatch is repaired. Application flushes wait for
+a scheduled framework frame or a native redraw, include changes made
+by post-frame callbacks, and bypass the debounce when no frame is
+scheduled. Unscheduled headless layout does not stall a save, and
+suspend and shutdown can still force persistence without a frame.
+All 26 selected Rust tests passed. The separate empty-bucket dirty
+case (:172) is not part of this fix; the engine channel and snapshot
+format are not claimed equivalent.

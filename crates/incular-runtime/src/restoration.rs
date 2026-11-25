@@ -475,6 +475,7 @@ struct ManagerState {
     diagnostics: RestorationDiagnostics,
     dirty: bool,
     debounce_pending: bool,
+    flush_after_frame: bool,
     save_in_flight: bool,
     consecutive_save_failures: u32,
     retry_pending: bool,
@@ -600,6 +601,7 @@ impl RestorationManager {
                     diagnostics,
                     dirty: false,
                     debounce_pending: false,
+                    flush_after_frame: false,
                     save_in_flight: false,
                     consecutive_save_failures: 0,
                     retry_pending: false,
@@ -826,9 +828,21 @@ impl RestorationManager {
         );
     }
 
+    pub(crate) fn defer_flush_until_frame(&self) {
+        self.inner.state.borrow_mut().flush_after_frame = true;
+    }
+
+    pub(crate) fn finish_frame(&self) {
+        let pending = self.inner.state.borrow().flush_after_frame;
+        if pending {
+            self.flush();
+        }
+    }
+
     pub(crate) fn flush(&self) {
         {
             let mut state = self.inner.state.borrow_mut();
+            state.flush_after_frame = false;
             state.debounce_pending = false;
         }
         self.start_save();
@@ -844,6 +858,9 @@ impl RestorationManager {
     fn start_save(&self) {
         let (snapshot, generation) = {
             let mut state = self.inner.state.borrow_mut();
+            if state.flush_after_frame {
+                return;
+            }
             state.debounce_pending = false;
             if !state.dirty || state.save_in_flight {
                 return;

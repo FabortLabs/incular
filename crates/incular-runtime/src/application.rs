@@ -1588,6 +1588,7 @@ impl Application {
             self.scheduler_counters.redraw_requests.wrapping_add(1);
         let _ = self.with_window_mut(window_id, |record| {
             record.requested_frames = record.requested_frames.wrapping_add(1);
+            record.frame_scheduled = true;
         });
     }
 
@@ -1610,6 +1611,7 @@ impl Application {
         let mut content_size_request = None;
         let outcome = self
             .with_window_mut(window_id, |record| {
+                record.frame_scheduled = false;
                 if record.metrics.physical_size.is_zero() {
                     record.skipped_frames = record.skipped_frames.wrapping_add(1);
                     scheduler_counters::FRAMES_SKIPPED.fetch_add(1, Ordering::Relaxed);
@@ -1675,6 +1677,9 @@ impl Application {
             scheduler_counters::FRAMES_STARTED.fetch_add(1, Ordering::Relaxed);
             self.scheduler_counters.frames_started =
                 self.scheduler_counters.frames_started.wrapping_add(1);
+            if let Some(restoration) = &self.restoration {
+                restoration.finish_frame();
+            }
         }
         outcome
     }
@@ -2731,13 +2736,26 @@ impl Application {
         true
     }
 
-    /// Bypasses the normal 250ms debounce but still writes on Tokio's blocking
-    /// pool. This is useful for an explicit user action or lifecycle flush.
+    /// Bypasses the normal 250ms debounce but still writes on Tokio's
+    /// blocking pool. A pending frame gets to finish first so its state
+    /// changes are saved with the rest. A lifecycle shutdown flushes
+    /// without waiting for a frame.
     pub fn flush_restoration(&mut self) -> bool {
         let Some(restoration) = &self.restoration else {
             return false;
         };
-        restoration.flush();
+        let scheduler_frame = incular_animation::scheduler::has_scheduled_frame();
+        let pending_frame = self.registry.borrow().slots.iter().any(|slot| {
+            slot.record.as_ref().is_some_and(|record| {
+                !record.metrics.physical_size.is_zero()
+                    && (scheduler_frame || record.frame_scheduled)
+            })
+        });
+        if pending_frame {
+            restoration.defer_flush_until_frame();
+        } else {
+            restoration.flush();
+        }
         true
     }
 
