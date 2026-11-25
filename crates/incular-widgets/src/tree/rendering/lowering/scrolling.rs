@@ -92,6 +92,12 @@ pub(super) fn lower_scrolling(widget: &Widget, context: &DependencyContext) -> R
                 config.physics = physics;
                 config.behavior = resolved;
                 config.text_direction = text_direction;
+                if text_direction == Some(TextDirection::Rtl)
+                    && let Some(alternate) = &config.rtl_delegate
+                {
+                    config.reverse = !config.reverse;
+                    config.delegate = alternate.get();
+                }
                 Rc::new(config)
             };
             RenderKind::SliverViewport { config }

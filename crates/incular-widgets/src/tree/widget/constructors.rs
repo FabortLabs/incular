@@ -1434,6 +1434,7 @@ impl Widget {
                     axis,
                     reverse,
                     text_direction: None,
+                    rtl_delegate: None,
                     physics,
                     cache_extent: crate::ScrollCacheExtent::pixels(cache_extent.max(0.)),
                     shrink_wrap,

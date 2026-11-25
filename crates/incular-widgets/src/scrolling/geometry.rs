@@ -1,6 +1,6 @@
 use super::*;
 use incular_config::TextDirection;
-use std::any::Any;
+use std::{any::Any, cell::OnceCell};
 
 /// Amount of offscreen content a scroll viewport caches on each side.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -274,6 +274,37 @@ pub(crate) trait SliverViewportDelegate {
     fn set_reduced_motion(&self, _reduced: bool) {}
 }
 
+type SliverDelegateFactory = Box<dyn FnOnce() -> Rc<dyn SliverViewportDelegate>>;
+
+/// Builds the opposite horizontal sliver sequence only if directionality needs it.
+/// Custom slivers receive the same physical axis at construction and at layout.
+pub(crate) struct AlternateSliverDelegate {
+    value: OnceCell<Rc<dyn SliverViewportDelegate>>,
+    factory: RefCell<Option<SliverDelegateFactory>>,
+}
+
+impl AlternateSliverDelegate {
+    pub(super) fn new(factory: impl FnOnce() -> Rc<dyn SliverViewportDelegate> + 'static) -> Self {
+        Self {
+            value: OnceCell::new(),
+            factory: RefCell::new(Some(Box::new(factory))),
+        }
+    }
+
+    pub(crate) fn get(&self) -> Rc<dyn SliverViewportDelegate> {
+        self.value
+            .get_or_init(|| {
+                let factory = self
+                    .factory
+                    .borrow_mut()
+                    .take()
+                    .expect("sliver delegate factory");
+                factory()
+            })
+            .clone()
+    }
+}
+
 #[derive(Clone)]
 pub struct SliverViewportConfig {
     pub(crate) controller: ScrollController,
@@ -283,6 +314,9 @@ pub struct SliverViewportConfig {
     pub(crate) axis: Axis,
     pub(crate) reverse: bool,
     pub(crate) text_direction: Option<TextDirection>,
+    /// Only a horizontal high-level CustomScrollView uses an ambient axis.
+    /// Raw viewports provide a physical axis explicitly.
+    pub(crate) rtl_delegate: Option<Rc<AlternateSliverDelegate>>,
     pub(crate) physics: ScrollPhysics,
     pub(crate) cache_extent: ScrollCacheExtent,
     pub(crate) shrink_wrap: bool,

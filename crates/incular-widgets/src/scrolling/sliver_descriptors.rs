@@ -619,60 +619,72 @@ impl CustomScrollView {
 }
 
 impl From<CustomScrollView> for Widget {
-    fn from(mut value: CustomScrollView) -> Self {
-        let implicit = value.controller.is_none() && value.page_storage_key.is_none();
-        let controller = value
+    fn from(value: CustomScrollView) -> Self {
+        value.into_viewport(true)
+    }
+}
+
+impl CustomScrollView {
+    fn into_viewport(mut self, ambient_horizontal_axis: bool) -> Widget {
+        let implicit = self.controller.is_none() && self.page_storage_key.is_none();
+        let controller = self
             .controller
             .get_or_insert_with(ScrollController::default)
             .clone();
-        let key = value.page_storage_key.take();
-        let inherit = value
+        let key = self.page_storage_key.take();
+        let inherit = self
             .physics
             .is_none()
             .then_some(super::scroll_views::InheritedPhysics::Scroll);
-        let mut viewport = custom_scroll_view_widget(value);
+        let mut viewport = custom_scroll_view_widget(self, ambient_horizontal_axis);
         if implicit && let WidgetKind::SliverViewport { config } = viewport.kind_mut() {
             Rc::make_mut(config).preserve_implicit_scroll_position = true;
         }
         keep_scroll_offset(super::inherit_physics(viewport, inherit), &controller, key)
     }
 }
-fn custom_scroll_view_widget(value: CustomScrollView) -> Widget {
+fn custom_scroll_view_widget(value: CustomScrollView, ambient_horizontal_axis: bool) -> Widget {
     let controller = value.controller.unwrap_or_default();
-    let render_slivers = value
-        .slivers
-        .iter()
-        .map(|sliver| {
-            sliver.create_render_sliver(&controller, value.scroll_direction, value.reverse)
-        })
-        .collect();
-    with_sliver_paint_order(
-        Widget::sliver_viewport_with_delegate_options(
-            controller,
-            value.scroll_direction,
-            value.reverse,
-            value.physics.unwrap_or_default(),
-            value.cache_extent,
-            false,
-            value.clip_behavior,
-            value.drag_start_behavior,
-            value.hit_test_behavior,
-            Rc::new(SequenceViewportDelegate::centered(
-                render_slivers,
-                ViewportCenter {
-                    index: value.center,
-                    anchor: value.anchor,
-                },
-            )),
-        ),
-        value.paint_order,
-    )
-}
-
-/// Sets a built sliver viewport's paint order (Flutter `Viewport.paintOrder`).
-fn with_sliver_paint_order(mut widget: Widget, order: SliverPaintOrder) -> Widget {
+    let axis = value.scroll_direction;
+    let reverse = value.reverse;
+    let center = ViewportCenter {
+        index: value.center,
+        anchor: value.anchor,
+    };
+    let make_delegate =
+        move |slivers: &[Box<dyn Sliver>], controller: &ScrollController, reverse| {
+            let render_slivers = slivers
+                .iter()
+                .map(|sliver| sliver.create_render_sliver(controller, axis, reverse))
+                .collect();
+            Rc::new(SequenceViewportDelegate::centered(render_slivers, center))
+        };
+    let delegate = make_delegate(&value.slivers, &controller, reverse);
+    let rtl_delegate = if ambient_horizontal_axis && axis == Axis::Horizontal {
+        let controller = controller.clone();
+        let slivers = value.slivers;
+        Some(Rc::new(geometry::AlternateSliverDelegate::new(move || {
+            make_delegate(&slivers, &controller, !reverse)
+        })))
+    } else {
+        None
+    };
+    let mut widget = Widget::sliver_viewport_with_delegate_options(
+        controller,
+        axis,
+        reverse,
+        value.physics.unwrap_or_default(),
+        value.cache_extent,
+        false,
+        value.clip_behavior,
+        value.drag_start_behavior,
+        value.hit_test_behavior,
+        delegate,
+    );
     if let WidgetKind::SliverViewport { config } = widget.kind_mut() {
-        Rc::make_mut(config).paint_order = order;
+        let config = Rc::make_mut(config);
+        config.paint_order = value.paint_order;
+        config.rtl_delegate = rtl_delegate;
     }
     widget
 }
@@ -892,7 +904,7 @@ impl From<Viewport> for Widget {
             // RenderViewport itself is not the opaque Scrollable surface.
             // Space between sliver children exposes the underlying hit path.
             .hit_test_behavior(crate::gestures::HitTestBehavior::DeferToChild)
-            .into()
+            .into_viewport(false)
     }
 }
 
