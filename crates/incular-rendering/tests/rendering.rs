@@ -1538,7 +1538,7 @@ fn rrect_under_scale_selects_representation() {
             8.,
         ))
     });
-    let PaintCommand::PushClipRRect { rrect } = command else {
+    let PaintCommand::PushClipRRect { rrect, .. } = command else {
         panic!("uniformly scaled rounded rect stays analytic, got {command:?}");
     };
     assert_eq!(
@@ -1607,7 +1607,7 @@ fn fallback_path_under(world: Transform) -> Path {
 #[test]
 fn positive_uniform_scale_keeps_distinct_radii() {
     let command = flatten_clip_under(Transform::scale(3.), distinct_rrect_clip);
-    let PaintCommand::PushClipRRect { rrect } = command else {
+    let PaintCommand::PushClipRRect { rrect, .. } = command else {
         panic!("positive uniform scale stays analytic, got {command:?}");
     };
     assert_eq!(

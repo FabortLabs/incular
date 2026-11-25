@@ -23,8 +23,8 @@ pub use compositor::{
     resolve_follower_target, resolve_linked_follower_world_transform,
 };
 pub use display_list::{
-    BackdropKey, Canvas, DisplayList, ImageSampling, PaintCommand, SurfacePartitionId,
-    UnbalancedCanvas,
+    BackdropKey, Canvas, ClipCoverage, DisplayList, ImageSampling, PaintCommand,
+    SurfacePartitionId, UnbalancedCanvas,
 };
 pub use effects::{
     BlendMode, ColorFilter, ColorFilterStage, ColorMatrix, DropShadowEffect, Effect, EffectChain,

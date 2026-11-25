@@ -65,3 +65,15 @@ transformed, only the painted-only point arrives, locally (16.5,13.5);
 without hit transformation, only the layout-only point arrives, locally
 (5,4). The geometry check is not a GPU raster assertion. All 39 focused
 transform, follower, pointer and stack tests passed.
+
+## Rounded clip coverage in retained display lists
+
+The renderer-neutral commands now retain HardEdge, AntiAlias, or
+AntiAliasWithSaveLayer. Updating the mode on a retained ClipRRect does
+not remeasure the child or replace its shape; a rotated clip carries the
+same mode through its cached fallback path. Clip.none still emits no clip.
+The focused renderer and widget suite passed all 23 selected checks.
+
+This is coverage state propagation, not a raster fix. The pinned Flutter
+pixel controls still pass and the Windows wgpu raster target independently
+reproduced the hard-edge fallback for both antialiased modes.

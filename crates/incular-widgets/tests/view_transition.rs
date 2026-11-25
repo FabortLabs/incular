@@ -125,7 +125,9 @@ fn a_circle_reveal_clips_the_old_scene_around_a_growing_hole() {
         .iter()
         .rev()
         .find_map(|command| match command {
-            PaintCommand::PushClipPath { path, fill_rule } => Some((path.clone(), *fill_rule)),
+            PaintCommand::PushClipPath {
+                path, fill_rule, ..
+            } => Some((path.clone(), *fill_rule)),
             _ => None,
         })
         .expect("a reveal clip");

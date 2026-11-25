@@ -31,6 +31,18 @@ impl Default for BackdropKey {
     }
 }
 
+/// Coverage and compositing policy of an active clip.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum ClipCoverage {
+    /// Binary inside/outside coverage.
+    #[default]
+    HardEdge,
+    /// Applies fractional edge coverage to each enclosed operation.
+    AntiAlias,
+    /// Composites enclosed operations before applying edge coverage once.
+    AntiAliasWithSaveLayer,
+}
+
 /// Renderer-neutral identity for a detachable composition subtree.
 ///
 /// The retained widget layer maps its generational transient-surface identity
@@ -107,6 +119,7 @@ pub enum PaintCommand {
     },
     PushClipRRect {
         rrect: RRect,
+        coverage: ClipCoverage,
     },
     PushClipOval {
         rect: Rect,
@@ -114,6 +127,7 @@ pub enum PaintCommand {
     PushClipPath {
         path: Arc<Path>,
         fill_rule: FillRule,
+        coverage: ClipCoverage,
     },
     PopClip,
     PushTransform {
@@ -270,12 +284,14 @@ impl PaintCommand {
                 Self::PushClipPath {
                     path: a,
                     fill_rule: ra,
+                    coverage: ca,
                 },
                 Self::PushClipPath {
                     path: b,
                     fill_rule: rb,
+                    coverage: cb,
                 },
-            ) => ra == rb && shared(a, b),
+            ) => ra == rb && ca == cb && shared(a, b),
             _ => self == other,
         }
     }
@@ -664,17 +680,32 @@ impl Canvas {
         self.list.push(PaintCommand::PushClip { rect });
     }
     pub fn save_clip_rrect(&mut self, rrect: RRect) {
+        self.save_clip_rrect_with_coverage(rrect, ClipCoverage::HardEdge);
+    }
+    pub fn save_clip_rrect_with_coverage(&mut self, rrect: RRect, coverage: ClipCoverage) {
         self.saves.push(SaveKind::Clip);
-        self.list.push(PaintCommand::PushClipRRect { rrect });
+        self.list
+            .push(PaintCommand::PushClipRRect { rrect, coverage });
     }
     pub fn save_clip_oval(&mut self, rect: Rect) {
         self.saves.push(SaveKind::Clip);
         self.list.push(PaintCommand::PushClipOval { rect });
     }
     pub fn save_clip_path(&mut self, path: Arc<Path>, fill_rule: FillRule) {
+        self.save_clip_path_with_coverage(path, fill_rule, ClipCoverage::HardEdge);
+    }
+    pub fn save_clip_path_with_coverage(
+        &mut self,
+        path: Arc<Path>,
+        fill_rule: FillRule,
+        coverage: ClipCoverage,
+    ) {
         self.saves.push(SaveKind::Clip);
-        self.list
-            .push(PaintCommand::PushClipPath { path, fill_rule });
+        self.list.push(PaintCommand::PushClipPath {
+            path,
+            fill_rule,
+            coverage,
+        });
     }
     /// Pops the most recent save (transform or clip).
     ///

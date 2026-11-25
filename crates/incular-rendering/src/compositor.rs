@@ -1,5 +1,5 @@
 use crate::display_list::{
-    BackdropKey, DisplayList, ImageSampling, PaintCommand, SurfacePartitionId,
+    BackdropKey, ClipCoverage, DisplayList, ImageSampling, PaintCommand, SurfacePartitionId,
 };
 use crate::effects::{
     BlendMode, ColorFilter, DropShadowEffect, GaussianBlur, ImageFilter, blur_bounds,
@@ -379,6 +379,7 @@ pub enum LayerKind {
     },
     ClipRRect {
         rrect: RRect,
+        coverage: ClipCoverage,
     },
     ClipOval {
         rect: Rect,
@@ -629,7 +630,14 @@ impl LayerTree {
     /// Creates a rounded-rectangle clip stage in local space; the world
     /// shape resolves at flatten time like [`Self::create_clip_rect`].
     pub fn create_clip_rrect(&mut self, rrect: RRect) -> LayerId {
-        self.insert(LayerKind::ClipRRect { rrect })
+        self.create_clip_rrect_with_coverage(rrect, ClipCoverage::HardEdge)
+    }
+    pub fn create_clip_rrect_with_coverage(
+        &mut self,
+        rrect: RRect,
+        coverage: ClipCoverage,
+    ) -> LayerId {
+        self.insert(LayerKind::ClipRRect { rrect, coverage })
     }
     /// Creates an oval clip stage in local space; the world shape resolves
     /// at flatten time like [`Self::create_clip_rect`].
@@ -1109,7 +1117,7 @@ impl LayerTree {
         let Some(layer) = self.layers.get_mut(id.0) else {
             return false;
         };
-        let LayerKind::ClipRRect { rrect: current } = &mut layer.kind else {
+        let LayerKind::ClipRRect { rrect: current, .. } = &mut layer.kind else {
             return false;
         };
         if *current == rrect {
@@ -1117,6 +1125,27 @@ impl LayerTree {
         }
         *current = rrect;
         layer.clip_cache = None;
+        layer.generation = next_generation(&mut self.next_generation);
+        self.scene_dirty = true;
+        self.diagnostics.clip_updates += 1;
+        true
+    }
+    /// Reuses the retained clip geometry (including any fallback path) when
+    /// only its coverage and composition policy changes.
+    pub fn update_clip_rrect_coverage(&mut self, id: LayerId, coverage: ClipCoverage) -> bool {
+        let Some(layer) = self.layers.get_mut(id.0) else {
+            return false;
+        };
+        let LayerKind::ClipRRect {
+            coverage: current, ..
+        } = &mut layer.kind
+        else {
+            return false;
+        };
+        if *current == coverage {
+            return false;
+        }
+        *current = coverage;
         layer.generation = next_generation(&mut self.next_generation);
         self.scene_dirty = true;
         self.diagnostics.clip_updates += 1;
@@ -1524,18 +1553,21 @@ impl LayerTree {
                     PaintCommand::PushClipPath {
                         path: self.memoized_fallback_path(id, move || rect_as_path(rect), world),
                         fill_rule: FillRule::NonZero,
+                        coverage: ClipCoverage::HardEdge,
                     }
                 }
             },
-            LayerKind::ClipRRect { rrect, .. } => match clip_space(world) {
+            LayerKind::ClipRRect { rrect, coverage } => match clip_space(world) {
                 ClipSpace::Translation => PaintCommand::PushClipRRect {
                     rrect: RRect::new(world.transform_rect_bbox(rrect.rect), rrect.radii),
+                    coverage: *coverage,
                 },
                 // Positive uniform scales keep corners circular; anything
                 // else (mirrors, nonuniform scales) would move corner
                 // ownership, so those shapes fall back to a path.
                 ClipSpace::Scale { x, y } if x > 0. && x == y => PaintCommand::PushClipRRect {
                     rrect: RRect::new(world.transform_rect_bbox(rrect.rect), rrect.radii.scaled(x)),
+                    coverage: *coverage,
                 },
                 _ => {
                     let (rect, radii) = (rrect.rect, rrect.radii);
@@ -1546,6 +1578,7 @@ impl LayerTree {
                             world,
                         ),
                         fill_rule: FillRule::NonZero,
+                        coverage: *coverage,
                     }
                 }
             },
@@ -1563,6 +1596,7 @@ impl LayerTree {
                             world,
                         ),
                         fill_rule: FillRule::NonZero,
+                        coverage: ClipCoverage::HardEdge,
                     }
                 }
             },
@@ -1571,6 +1605,7 @@ impl LayerTree {
             } => PaintCommand::PushClipPath {
                 path: self.memoized_clip_path(id, path, world),
                 fill_rule: *fill_rule,
+                coverage: ClipCoverage::HardEdge,
             },
             _ => unreachable!("clip emitter received a non-clip layer"),
         }

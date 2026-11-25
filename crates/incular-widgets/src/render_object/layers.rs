@@ -243,11 +243,14 @@ impl RenderLayers {
                     compositor.create_clip_rect(Rect::from_origin_size(Offset::ZERO, Size::ZERO));
                 Self::create_clip_stage(compositor, root, picture, clip)
             }
-            WidgetKind::ClipRRect { .. } if widget_clips(widget) => {
-                let clip = compositor.create_clip_rrect(RRect::new(
-                    Rect::from_origin_size(Offset::ZERO, Size::ZERO),
-                    CornerRadii::ZERO,
-                ));
+            WidgetKind::ClipRRect { clip_behavior, .. } if widget_clips(widget) => {
+                let clip = compositor.create_clip_rrect_with_coverage(
+                    RRect::new(
+                        Rect::from_origin_size(Offset::ZERO, Size::ZERO),
+                        CornerRadii::ZERO,
+                    ),
+                    rounded_clip_coverage(*clip_behavior),
+                );
                 Self::create_clip_stage(compositor, root, picture, clip)
             }
             WidgetKind::ClipOval { .. } if widget_clips(widget) => {
@@ -943,6 +946,15 @@ fn apply_clip_geometry(compositor: &mut LayerTree, clip: LayerId, geometry: &Cli
     }
 }
 
+fn rounded_clip_coverage(mode: Clip) -> incular_rendering::ClipCoverage {
+    use incular_rendering::ClipCoverage;
+    match mode {
+        Clip::None | Clip::HardEdge => ClipCoverage::HardEdge,
+        Clip::AntiAlias => ClipCoverage::AntiAlias,
+        Clip::AntiAliasWithSaveLayer => ClipCoverage::AntiAliasWithSaveLayer,
+    }
+}
+
 /// One resolved shape, used by raster and hit testing.
 #[derive(Clone, Debug)]
 struct CachedClip {
@@ -1087,6 +1099,11 @@ impl RenderLayers {
         let LayerAttachment::Clip { clip, .. } = &self.attachment else {
             return;
         };
+        if let RenderKind::ClipRRect { clip_behavior, .. } = kind {
+            // Coverage changes must be visible even when the cached custom
+            // clipper geometry does not need to be calculated again.
+            compositor.update_clip_rrect_coverage(*clip, rounded_clip_coverage(*clip_behavior));
+        }
         if let Some(cache) = &self.clip_geometry
             && let Some(geometry) = cached_clip(&mut cache.borrow_mut(), kind, size)
         {

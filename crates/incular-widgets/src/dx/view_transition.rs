@@ -276,6 +276,7 @@ pub(crate) fn paint(
                 output.push(PaintCommand::PushClipPath {
                     path: Arc::new(hole),
                     fill_rule: FillRule::NonZero,
+                    coverage: incular_rendering::ClipCoverage::HardEdge,
                 });
                 output.extend_from(&transition.old);
                 output.push(PaintCommand::PopClip);

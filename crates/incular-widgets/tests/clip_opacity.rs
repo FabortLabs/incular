@@ -13,7 +13,7 @@ mod common;
 use common::*;
 use incular_config::{Clip, Constraints};
 use incular_core::{Color, Offset, Rect, Size, Transform as CoreTransform};
-use incular_rendering::{CornerRadii, DisplayList, FillRule, PaintCommand, Path};
+use incular_rendering::{ClipCoverage, CornerRadii, DisplayList, FillRule, PaintCommand, Path};
 use incular_widgets::internal::*;
 use incular_widgets::*;
 use std::sync::Arc;
@@ -47,7 +47,7 @@ fn world_clips(list: &DisplayList) -> Vec<WorldClip> {
             PaintCommand::PushClip { rect } => out.push(WorldClip::Rect(
                 transforms.last().unwrap().transform_rect_bbox(*rect),
             )),
-            PaintCommand::PushClipRRect { rrect } => {
+            PaintCommand::PushClipRRect { rrect, .. } => {
                 let world = transforms.last().unwrap().transform_rect_bbox(rrect.rect);
                 out.push(WorldClip::RRect(incular_rendering::RRect::new(
                     world,
@@ -66,7 +66,9 @@ fn world_clips(list: &DisplayList) -> Vec<WorldClip> {
 
 fn clip_path_shape(list: &DisplayList) -> Option<(Arc<Path>, FillRule)> {
     list.commands().iter().find_map(|command| match command {
-        PaintCommand::PushClipPath { path, fill_rule } => Some((path.clone(), *fill_rule)),
+        PaintCommand::PushClipPath {
+            path, fill_rule, ..
+        } => Some((path.clone(), *fill_rule)),
         _ => None,
     })
 }
@@ -113,6 +115,71 @@ fn triangle_path() -> Arc<Path> {
         .line_to(Offset::new(0., 40.))
         .close();
     Arc::new(builder.build())
+}
+
+#[test]
+fn rounded_clip_coverage_survives_retained_mode_changes_and_world_path_fallback() {
+    let key = incular_widgets::internal::Key::Value(4242);
+    let bounds = Constraints::tight(Size::new(200., 200.));
+    for rotated in [false, true] {
+        let scene = |mode: Option<Clip>| {
+            let clip = ClipRRect::new(CornerRadii::uniform(12.), labeled_action("clip content"));
+            let clip = match mode {
+                Some(mode) => clip.clip_behavior(mode),
+                None => clip,
+            };
+            let clip = Widget::from(clip).with_key(key.clone());
+            if rotated {
+                Center::new(incular_widgets::Transform::rotation(0.3, clip)).into()
+            } else {
+                Center::new(clip).into()
+            }
+        };
+        let mut tree = WidgetTree::new();
+        let root = tree.mount(scene(None)).unwrap();
+        tree.layout(bounds).unwrap();
+        let clip_element = tree.element_with_key(&key).unwrap();
+        let mut retained_path = None;
+        for (step, (mode, wanted)) in [
+            (None, Some(ClipCoverage::AntiAlias)),
+            (Some(Clip::HardEdge), Some(ClipCoverage::HardEdge)),
+            (
+                Some(Clip::AntiAliasWithSaveLayer),
+                Some(ClipCoverage::AntiAliasWithSaveLayer),
+            ),
+            (Some(Clip::None), None),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            if step != 0 {
+                tree.update(root, scene(mode)).unwrap();
+                tree.layout(bounds).unwrap();
+            }
+            assert_eq!(tree.element_with_key(&key), Some(clip_element));
+            let list = tree.paint();
+            let actual = list.commands().iter().find_map(|command| match command {
+                PaintCommand::PushClipRRect { coverage, .. } => {
+                    assert!(!rotated);
+                    Some(*coverage)
+                }
+                PaintCommand::PushClipPath { path, coverage, .. } => {
+                    assert!(rotated);
+                    if let Some(previous) = retained_path {
+                        assert_eq!(
+                            path.id(),
+                            previous,
+                            "style changes keep the same resolved path"
+                        );
+                    }
+                    retained_path = Some(path.id());
+                    Some(*coverage)
+                }
+                _ => None,
+            });
+            assert_eq!(actual, wanted, "{mode:?}, rotated={rotated}");
+        }
+    }
 }
 
 #[test]

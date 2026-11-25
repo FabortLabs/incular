@@ -650,7 +650,7 @@ impl WgpuRenderer {
                     clip_masks.push(None);
                     self.counters.clip_rect_pushes += 1;
                 }
-                PaintCommand::PushClipRRect { rrect } => {
+                PaintCommand::PushClipRRect { rrect, .. } => {
                     let next = ClipRect {
                         rect: translated_rect(rrect.rect, translation),
                     };
@@ -715,7 +715,9 @@ impl WgpuRenderer {
                         clip_masks.push(None);
                     }
                 }
-                PaintCommand::PushClipPath { path, fill_rule } => {
+                PaintCommand::PushClipPath {
+                    path, fill_rule, ..
+                } => {
                     let parent = *clips.last().expect("clip stack");
                     let depth = stencil_depth(parent);
                     if depth == MAX_STENCIL_CLIP_DEPTH {
