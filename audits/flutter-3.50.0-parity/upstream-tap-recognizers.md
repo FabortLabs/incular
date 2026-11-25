@@ -68,3 +68,21 @@ The two pinned `gestures/transformed_double_tap_test.dart` originals
 separation delivers a double tap; 101 px does not. Both targeted Rust
 cases pass. The pre-existing direct tap-diagonal cancellation mismatch
 is unchanged.
+
+## Inner double tap versus an ancestor single tap
+
+The hold now follows the pointer route, not just the callback's own
+detector. When a child only accepts double taps and its parent only
+accepts single taps, the first release stays silent. Both pinned Flutter
+and Incular then deliver only the child's double on a qualifying second
+tap; only the parent's new single if the second press is outside the
+child; or the original parent's single at expiry if no second press
+arrives. All three Rust fixtures failed before the fix and pass after it,
+along with the eight same-detector and transform checks. The low-level
+tap-down/up/cancel families and drop order during unmount are not covered
+by this completion-callback slice.
+
+The equivalent observable trace in upstream `double_tap_test.dart:733`
+also passes. It stays partial because Flutter directly constructs and
+sweeps two independent arena entries, whereas the Incular counterpart
+routes actual taps through the retained parent and child detectors.

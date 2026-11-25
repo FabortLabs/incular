@@ -700,12 +700,12 @@ impl PointerGestureRecognizer {
         decision
     }
 
-    /// When an accepted ordinary tap still has to wait for a possible
-    /// double tap in a retained host.
+    /// Deadline of a first release that can still form a double tap.
+    /// A retained host can defer ordinary taps from the same arena until
+    /// this decision, even if they belong to a different detector.
     #[must_use]
-    pub fn deferred_single_tap_deadline(&self) -> Option<Instant> {
-        if self.callbacks.on_tap.is_some()
-            && self.callbacks.on_double_tap.is_some()
+    pub fn first_tap_hold_deadline(&self) -> Option<Instant> {
+        if self.callbacks.on_double_tap.is_some()
             && !self.double_tap_ignored
             && !self.double_tap_second
             && !self.double_tap_moved

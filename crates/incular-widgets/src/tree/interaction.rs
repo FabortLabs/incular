@@ -1815,7 +1815,7 @@ impl WidgetTree {
 
     fn deliver_deferred_tap(&mut self, index: usize) {
         let tap = self.input.deferred_single_taps.remove(index);
-        if let Some(memory) = self.input.tap_memories.get(&tap.owner) {
+        if let Some(memory) = self.input.tap_memories.get(&tap.double_tap_owner) {
             memory.set(incular_gestures::TapMemory::default());
         }
         if let Some(callback) = self
@@ -2116,6 +2116,18 @@ impl WidgetTree {
         ) {
             self.open_scroll_bracket(key, member);
         }
+        // A descendant's double recognizer can hold an ancestor's ordinary
+        // tap. Find the hold on the same pointer route before dispatching.
+        let double_hold = if matches!(action, GestureAction::Tap) {
+            self.input.active_gestures.get(&key).and_then(|active| {
+                active.members.iter().find_map(|candidate| {
+                    let deadline = candidate.recognizer.as_ref()?.first_tap_hold_deadline()?;
+                    Some((candidate.element, deadline))
+                })
+            })
+        } else {
+            None
+        };
         let mut start_update = None;
         if let Some(candidate) = self.input.active_gestures.get_mut(&key).and_then(|active| {
             active
@@ -2125,20 +2137,20 @@ impl WidgetTree {
         }) && let Some(recognizer) = candidate.recognizer.as_mut()
         {
             let owner = candidate.element;
-            if matches!(action, GestureAction::Tap)
-                && let Some(deadline) = recognizer.deferred_single_tap_deadline()
-            {
+            if let Some((double_tap_owner, deadline)) = double_hold {
                 self.input
                     .deferred_single_taps
                     .retain(|tap| tap.owner != owner);
-                self.input
-                    .deferred_single_taps
-                    .push(DeferredSingleTap { owner, deadline });
+                self.input.deferred_single_taps.push(DeferredSingleTap {
+                    owner,
+                    double_tap_owner,
+                    deadline,
+                });
             } else {
                 if matches!(action, GestureAction::DoubleTap) {
                     self.input
                         .deferred_single_taps
-                        .retain(|tap| tap.owner != owner);
+                        .retain(|tap| tap.double_tap_owner != owner);
                 }
                 recognizer.dispatch(action);
             }

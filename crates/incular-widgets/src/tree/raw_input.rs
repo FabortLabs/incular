@@ -1077,7 +1077,7 @@ impl WidgetTree {
     pub(super) fn raw_input_unmounted(&mut self, element: ElementId) {
         self.input
             .deferred_single_taps
-            .retain(|tap| tap.owner != element);
+            .retain(|tap| tap.owner != element && tap.double_tap_owner != element);
         self.input.tap_memories.remove(&element);
         self.cancel_raw_streams_for_element(element);
         self.input.raw_pointer_routes.retain(|_, route| {

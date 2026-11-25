@@ -1282,6 +1282,7 @@ struct RawPointerRouteEntry {
 
 struct DeferredSingleTap {
     owner: ElementId,
+    double_tap_owner: ElementId,
     deadline: Instant,
 }
 
