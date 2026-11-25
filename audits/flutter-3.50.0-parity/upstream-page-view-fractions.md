@@ -34,3 +34,13 @@ at fraction 0.75. Both frameworks preserve that fractional page instead
 of applying the incoming controller's configured initial page 4. This
 does not cover a controller swap while the viewport is collapsed to zero
 or while a ballistic motion is active.
+
+## Collapsed handoff and oversized resize
+
+Three authored comparisons pass against pinned Flutter. Replacing a
+controller at zero width retains page 2 despite the incoming controller's
+initial page 4; expanding to 300 pixels with fraction 0.75 yields offset
+450. A 200-to-300-pixel resize at fraction 1.25 uses the **new** centering
+origin with the **old** width to decode pixel 425, then yields page 1.55
+at 618.75 pixels, with snapping both on and off. These authored controls
+do not add original registrations to the ledger.

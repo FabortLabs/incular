@@ -266,6 +266,10 @@ a version and date when publishing.
 
 ### Fixed
 
+- PageView preserves the selected page when its controller changes while
+  collapsed, and applies the new centering origin to oversized pages when
+  resized, whether or not snapping is enabled.
+
 - PageController reports no page inside the view's first child build, until
   PageView has laid out its content. Later builds read the retained page.
 

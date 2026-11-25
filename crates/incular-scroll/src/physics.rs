@@ -1033,6 +1033,19 @@ impl ScrollController {
         let attachment = state.metric_attachment.map(|owner| owner.id);
         let cached_page = state.cached_zero_page.take();
         let page_fraction = update.physics.page_geometry_fraction();
+        let handoff = match update.position_handoff {
+            Some(crate::ViewportPositionHandoff::Pixels(offset)) if offset.is_finite() => {
+                Some((offset, None))
+            }
+            Some(crate::ViewportPositionHandoff::Page(page)) if page.is_finite() => page_fraction
+                .map(|fraction| {
+                    (
+                        crate::pixels_for_page(page, viewport, fraction),
+                        (viewport == 0.).then_some(page),
+                    )
+                }),
+            _ => None,
+        };
         if viewport == 0. && attachment.is_some() && page_fraction.is_some() {
             let startup_page = match state.pending_initial_offset {
                 Some(crate::controller::InitialOffset::Page { page, .. }) => Some(page),
@@ -1045,10 +1058,17 @@ impl ScrollController {
                 // decodes the old pixels. The centering origin for fractions
                 // greater than one is therefore zero on collapse, even though
                 // the divisor still uses the old width.
-                .map(|fraction| old_offset.max(0.) / (old_viewport * fraction));
+                .map(|fraction| {
+                    crate::controller::page_for_resized_viewport(
+                        old_offset,
+                        old_viewport,
+                        viewport,
+                        fraction,
+                    )
+                });
             state.cached_zero_page = Some(startup_page.or(old_page).or(cached_page).unwrap_or(0.));
         }
-        let fixed_start = if viewport > 0. || update.position_handoff.is_some() {
+        let fixed_start = if viewport > 0. || handoff.is_some() {
             state
                 .fixed_extent_start
                 .as_mut()
@@ -1056,12 +1076,15 @@ impl ScrollController {
         } else {
             None
         };
-        let persistence = if let Some(offset) = update.position_handoff.filter(|x| x.is_finite()) {
+        let persistence = if let Some((offset, zero_page)) = handoff {
             // The controller changed, not the viewport position. An incoming
             // initial item or restoration cannot replace that live position.
             state.pending_jump_offset = None;
             state.pending_restored_offset = None;
             state.pending_initial_offset = None;
+            if let Some(page) = zero_page {
+                state.cached_zero_page = Some(page);
+            }
             let next = offset.clamp(min, max);
             if next != state.offset {
                 state.offset = next;
@@ -1119,13 +1142,18 @@ impl ScrollController {
         } else {
             let extents_changed = (max - old_max_offset).abs() > f32::EPSILON
                 || (min - old_min_offset).abs() > f32::EPSILON;
-            let next = if matches!(update.physics.snap, SnapPhysics::PageViewport)
-                && old_viewport > 0.
-                && (old_viewport - state.viewport_extent).abs() > f32::EPSILON
-            {
-                // Flutter `_PagePosition.applyViewportDimension`: a page view
-                // keeps its (fractional) page when the viewport resizes.
-                (old_offset / old_viewport * state.viewport_extent).clamp(min, max)
+            let resize_fraction = page_fraction
+                .filter(|_| old_viewport > 0. && (old_viewport - viewport).abs() > f32::EPSILON);
+            let next = if let Some(fraction) = resize_fraction {
+                // The PagePosition owns this correction, independent of
+                // whether its physics will snap once scrolling settles.
+                let page = crate::controller::page_for_resized_viewport(
+                    old_offset,
+                    old_viewport,
+                    viewport,
+                    fraction,
+                );
+                crate::pixels_for_page(page, viewport, fraction).clamp(min, max)
             } else if update.physics.is_range_maintaining()
                 && extents_changed
                 && (old_offset < old_min_offset || old_offset > old_max_offset)

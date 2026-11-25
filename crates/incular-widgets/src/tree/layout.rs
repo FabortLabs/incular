@@ -329,7 +329,9 @@ impl WidgetTree {
                 physics,
             )
             .with_fixed_item_extent(item_extent)
-            .with_position_handoff(handoff),
+            .with_position_handoff(
+                handoff.map(incular_scroll::ViewportPositionHandoff::Pixels),
+            ),
         );
         let state = self.wheel_state_live_mut(id);
         let viewport = state

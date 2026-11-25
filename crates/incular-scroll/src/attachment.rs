@@ -267,6 +267,16 @@ impl MetricAttachment {
     }
 }
 
+/// The retained position to continue when a viewport changes controllers.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[doc(hidden)]
+pub enum ViewportPositionHandoff {
+    /// Ordinary scrolling retains a pixel offset.
+    Pixels(f32),
+    /// A page position retains a logical page even at zero viewport extent.
+    Page(f32),
+}
+
 /// One viewport's complete metric publication: geometry plus the
 /// axis/reversal context consumers use to interpret it. Authority and
 /// content commit together — validate authority, commit context and
@@ -293,7 +303,7 @@ pub struct ViewportMetricsUpdate {
     /// The fixed size of one item, for a fixed-extent position.
     pub fixed_item_extent: Option<f32>,
     /// Existing position of a retained viewport that is changing controller.
-    pub position_handoff: Option<f32>,
+    pub position_handoff: Option<ViewportPositionHandoff>,
 }
 
 impl ViewportMetricsUpdate {
@@ -344,11 +354,11 @@ impl ViewportMetricsUpdate {
         self
     }
 
-    /// Continues a retained position through a controller replacement.
+    /// Continues a retained position in pixels or pages through a controller replacement.
     #[doc(hidden)]
     #[must_use]
-    pub fn with_position_handoff(mut self, offset: Option<f32>) -> Self {
-        self.position_handoff = offset.filter(|offset| offset.is_finite());
+    pub fn with_position_handoff(mut self, handoff: Option<ViewportPositionHandoff>) -> Self {
+        self.position_handoff = handoff;
         self
     }
 

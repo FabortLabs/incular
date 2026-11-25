@@ -1,4 +1,5 @@
 use super::super::*;
+use incular_scroll::ViewportPositionHandoff;
 
 /// Computes the constrained shrink-wrap size and viewport main-axis extent
 /// from content in one place. Initial sizing and convergence corrections
@@ -51,7 +52,7 @@ impl WidgetTree {
         config: &crate::scrolling::SliverViewportConfig,
         last_published: &mut Option<PublishedViewportAttempt>,
         (size, viewport): (Size, f32),
-        position_handoff: Option<f32>,
+        position_handoff: Option<ViewportPositionHandoff>,
         layout: crate::scrolling::SliverViewportLayout,
     ) -> crate::scrolling::SliverViewportLayout {
         let content = layout.geometry.scroll_extent.max(0.);
@@ -253,26 +254,22 @@ impl WidgetTree {
                 // and reapplies the new controller's fraction to that page.
                 // Read the old lease before claiming; a failed claim must not
                 // change the incoming or outgoing controller's position.
+                let uses_page_geometry = config.physics.page_geometry_fraction().is_some();
                 let handoff = viewport_element.and_then(|element| {
                     let old = self.scroll_attachments.get(&element)?.first()?.controller();
                     if old == &config.controller {
                         return None;
                     }
-                    if let Some(fraction) = config.physics.page_geometry_fraction()
-                        && viewport_extent > 0.
-                    {
-                        return old.page_for_handoff().map(|page| {
-                            incular_scroll::pixels_for_page(page, viewport_extent, fraction)
-                        });
+                    if uses_page_geometry {
+                        return old.page_for_handoff().map(ViewportPositionHandoff::Page);
                     }
                     // Like Flutter's own ScrollPosition, the position of
                     // a controller-less CustomScrollView belongs to the
                     // mounted viewport, not the rebuilt descriptor.
                     config
                         .preserve_implicit_scroll_position
-                        .then(|| old.offset())
+                        .then(|| ViewportPositionHandoff::Pixels(old.offset()))
                 });
-                let uses_page_geometry = config.physics.page_geometry_fraction().is_some();
                 if let Some(viewport) = viewport_element {
                     self.claim_scroll_viewport(
                         viewport,

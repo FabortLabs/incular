@@ -19,6 +19,7 @@ pub use activity::{
 };
 pub use attachment::{
     AttachmentConflict, MetricAttachment, MetricOwner, MetricWriteError, ViewportMetricsUpdate,
+    ViewportPositionHandoff,
 };
 pub use ballistic::{FlingSimulation, ScrollSpring, ScrollTolerance};
 pub use controller::{ScrollAnimation, ScrollController, page_for_pixels, pixels_for_page};

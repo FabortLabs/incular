@@ -28,11 +28,23 @@ pub fn pixels_for_page(page: f32, viewport: f32, viewport_fraction: f32) -> f32 
 /// (`_PagePosition.getPageFromPixels`). Returns zero for a degenerate page.
 #[must_use]
 pub fn page_for_pixels(pixels: f32, viewport: f32, viewport_fraction: f32) -> f32 {
-    let extent = viewport * viewport_fraction;
+    page_for_resized_viewport(pixels, viewport, viewport, viewport_fraction)
+}
+
+/// Flutter applies its new viewport dimension before decoding the old pixels.
+/// The denominator still uses the previous extent, while the centering origin
+/// already belongs to the new viewport.
+pub(crate) fn page_for_resized_viewport(
+    pixels: f32,
+    old_viewport: f32,
+    new_viewport: f32,
+    viewport_fraction: f32,
+) -> f32 {
+    let extent = old_viewport * viewport_fraction;
     if extent.partial_cmp(&0.) != Some(std::cmp::Ordering::Greater) {
         return 0.;
     }
-    (pixels - initial_page_pixel_offset(viewport, viewport_fraction)).max(0.) / extent
+    (pixels - initial_page_pixel_offset(new_viewport, viewport_fraction)).max(0.) / extent
 }
 
 /// A starting position applied on the first extent publication, below any

@@ -248,3 +248,45 @@ fn out_of_range_jump_does_not_emit_a_page_change_from_the_last_page() {
     h.pump();
     assert_eq!((immediate, changes.borrow().clone()), (vec![], vec![]));
 }
+
+fn narrow_page_view(controller: &PageController, width: f32, snapping: bool) -> Widget {
+    let pages = PageView::new((0..6).map(|page| Text::new(format!("page {page}"))))
+        .controller(controller.clone())
+        .page_snapping(snapping);
+    Directionality::new(
+        TextDirection::Ltr,
+        Center::new(SizedBox::from_size(Size::new(width, 100.)).child(pages)),
+    )
+    .into()
+}
+
+#[test]
+fn replacing_the_controller_at_zero_width_retains_the_collapsed_position() {
+    let first = PageController::new().with_initial_page(2);
+    let second = PageController::new()
+        .with_initial_page(4)
+        .with_viewport_fraction(0.75);
+    let mut h = Host::new(narrow_page_view(&first, 200., true));
+    assert_eq!(first.page(), Some(2.));
+    h.update(narrow_page_view(&first, 0., true));
+    assert_eq!(first.page(), Some(2.));
+    h.update(narrow_page_view(&second, 0., true));
+    assert_eq!(first.page(), None);
+    assert_eq!(second.page(), Some(2.));
+    h.update(narrow_page_view(&second, 300., true));
+    assert_eq!(second.page(), Some(2.));
+    assert_eq!(second.offset(), 450.);
+}
+
+#[test]
+fn a_wide_fraction_uses_the_new_centering_origin_to_decode_the_old_pixels() {
+    for snapping in [true, false] {
+        let c = PageController::new().with_viewport_fraction(1.25);
+        let mut h = Host::new(narrow_page_view(&c, 200., snapping));
+        assert!(c.jump_to(425.));
+        assert_eq!(c.page(), Some(1.6));
+        h.update(narrow_page_view(&c, 300., snapping));
+        assert_eq!(c.page(), Some(1.55), "snapping={snapping}");
+        assert_eq!(c.offset(), 618.75, "snapping={snapping}");
+    }
+}
