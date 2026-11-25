@@ -144,6 +144,21 @@ fn fixed_extent_boundary(offset: f32, item_extent: f32) -> f64 {
     }
 }
 
+fn set_cached_keep_alive(
+    widgets: &mut HashMap<usize, Widget>,
+    index: usize,
+    keep_alive: bool,
+) -> bool {
+    let Some(widget) = widgets.get_mut(&index) else {
+        return false;
+    };
+    if widget.keep_alive_request() == keep_alive {
+        return false;
+    }
+    *widget = widget.clone().with_keep_alive_request(keep_alive);
+    true
+}
+
 /// Separates the live cache range from explicitly retained children. The
 /// ordinary case allocates no parking buffer.
 fn retain_fixed_cache(
@@ -213,6 +228,18 @@ impl FixedExtentRenderSliver {
 }
 
 impl RenderSliver for FixedExtentRenderSliver {
+    fn set_child_keep_alive(
+        &mut self,
+        child: SliverChildId,
+        grid_tile: Option<usize>,
+        keep_alive: bool,
+    ) -> bool {
+        grid_tile.is_none()
+            && child
+                .item_index()
+                .is_some_and(|index| set_cached_keep_alive(&mut self.widgets, index, keep_alive))
+    }
+
     fn child_count(&self) -> Option<usize> {
         Some(self.item_count)
     }
@@ -301,6 +328,15 @@ impl GridRenderSliver {
 }
 
 impl RenderSliver for GridRenderSliver {
+    fn set_child_keep_alive(
+        &mut self,
+        _child: SliverChildId,
+        grid_tile: Option<usize>,
+        keep_alive: bool,
+    ) -> bool {
+        grid_tile.is_some_and(|index| set_cached_keep_alive(&mut self.widgets, index, keep_alive))
+    }
+
     fn child_count(&self) -> Option<usize> {
         Some(self.item_count)
     }
@@ -548,6 +584,18 @@ impl VariableExtentRenderSliver {
 }
 
 impl RenderSliver for VariableExtentRenderSliver {
+    fn set_child_keep_alive(
+        &mut self,
+        child: SliverChildId,
+        grid_tile: Option<usize>,
+        keep_alive: bool,
+    ) -> bool {
+        grid_tile.is_none()
+            && child
+                .item_index()
+                .is_some_and(|index| set_cached_keep_alive(&mut self.widgets, index, keep_alive))
+    }
+
     fn child_count(&self) -> Option<usize> {
         Some(self.index.len())
     }
@@ -1706,6 +1754,18 @@ impl ViewportExtentRenderSliver {
 }
 
 impl RenderSliver for ViewportExtentRenderSliver {
+    fn set_child_keep_alive(
+        &mut self,
+        child: SliverChildId,
+        grid_tile: Option<usize>,
+        keep_alive: bool,
+    ) -> bool {
+        grid_tile.is_none()
+            && child
+                .item_index()
+                .is_some_and(|index| set_cached_keep_alive(&mut self.widgets, index, keep_alive))
+    }
+
     fn child_count(&self) -> Option<usize> {
         Some(self.item_count)
     }
@@ -2193,6 +2253,17 @@ pub(super) struct PaddingRenderSliver {
 }
 
 impl RenderSliver for PaddingRenderSliver {
+    fn set_child_keep_alive(
+        &mut self,
+        child: SliverChildId,
+        grid_tile: Option<usize>,
+        keep_alive: bool,
+    ) -> bool {
+        self.inner
+            .borrow_mut()
+            .set_child_keep_alive(child, grid_tile, keep_alive)
+    }
+
     fn scroll_layout_dependency(&self) -> SliverScrollDependency {
         self.inner.borrow().scroll_layout_dependency()
     }
@@ -2424,6 +2495,17 @@ pub(super) struct OverlapAbsorberRenderSliver {
 }
 
 impl RenderSliver for OverlapAbsorberRenderSliver {
+    fn set_child_keep_alive(
+        &mut self,
+        child: SliverChildId,
+        grid_tile: Option<usize>,
+        keep_alive: bool,
+    ) -> bool {
+        self.inner
+            .borrow_mut()
+            .set_child_keep_alive(child, grid_tile, keep_alive)
+    }
+
     fn scroll_layout_dependency(&self) -> SliverScrollDependency {
         self.inner.borrow().scroll_layout_dependency()
     }
@@ -2475,6 +2557,17 @@ impl RenderSliver for OverlapInjectorRenderSliver {
 }
 
 impl RenderSliver for WidgetWrapRenderSliver {
+    fn set_child_keep_alive(
+        &mut self,
+        child: SliverChildId,
+        grid_tile: Option<usize>,
+        keep_alive: bool,
+    ) -> bool {
+        self.inner
+            .borrow_mut()
+            .set_child_keep_alive(child, grid_tile, keep_alive)
+    }
+
     fn scroll_layout_dependency(&self) -> SliverScrollDependency {
         self.inner.borrow().scroll_layout_dependency()
     }
@@ -2661,6 +2754,19 @@ impl SequenceRenderSliver {
 }
 
 impl RenderSliver for SequenceRenderSliver {
+    fn set_child_keep_alive(
+        &mut self,
+        child: SliverChildId,
+        grid_tile: Option<usize>,
+        keep_alive: bool,
+    ) -> bool {
+        self.children.get(child.scope()).is_some_and(|sliver| {
+            sliver
+                .borrow_mut()
+                .set_child_keep_alive(child.local(), grid_tile, keep_alive)
+        })
+    }
+
     fn scroll_layout_dependency(&self) -> SliverScrollDependency {
         self.children
             .iter()
@@ -3328,6 +3434,17 @@ impl SequenceViewportDelegate {
 }
 
 impl SliverViewportDelegate for SequenceViewportDelegate {
+    fn set_child_keep_alive(
+        &self,
+        child: SliverChildId,
+        grid_tile: Option<usize>,
+        keep_alive: bool,
+    ) -> bool {
+        self.sequence
+            .borrow_mut()
+            .set_child_keep_alive(child, grid_tile, keep_alive)
+    }
+
     fn scroll_layout_dependency(&self) -> SliverScrollDependency {
         // Parked reverse slivers move with the position (see
         // `layout_centered`), so a viewport with slivers before its center

@@ -259,14 +259,63 @@ impl WidgetTree {
         // remain best-effort partial as before — just a single upfront
         // pass over what reconciliation would check level by level anyway.
         self.validate_widget_subtree(&widget, self.parent(id))?;
+        let old_request = self
+            .element_live(id, "updated child")
+            .widget
+            .keep_alive_request();
+        let new_request = widget.keep_alive_request();
         let changed = self.with_global_key_transaction(|tree| tree.update_existing(id, &widget))?;
         // A skipped root retains its complete subtree and existing listener
         // registrations. Rebuilding those registrations would walk unchanged
         // descendants after reconciliation had just avoided that work.
         if changed {
+            if old_request != new_request {
+                self.apply_materialized_keep_alive(id, new_request);
+            }
             self.refresh_notification_listeners();
         }
         Ok(())
+    }
+
+    /// KeepAlive is parent data. Route a local update to its materializer
+    /// before the next viewport pass so rebuilding the list is unnecessary.
+    fn apply_materialized_keep_alive(&mut self, id: ElementId, keep_alive: bool) {
+        let Some(parent) = self.parent(id) else {
+            return;
+        };
+        let parent_widget = &self.element_live(parent, "updated child's parent").widget;
+        let (owner, row, grid_tile) = if let Some(Key::GridCell(tile)) = parent_widget.key() {
+            let Some(row) = self.parent(parent) else {
+                return;
+            };
+            let Some(owner) = self.parent(row) else {
+                return;
+            };
+            (owner, row, Some(*tile))
+        } else {
+            (parent, id, None)
+        };
+        let viewport = self.element_live(owner, "keep-alive data owner");
+        let Some(slot) = viewport.children.iter().position(|child| *child == row) else {
+            return;
+        };
+        let Some(scoped) = viewport.sliver_child_ids().get(slot).copied() else {
+            return;
+        };
+        let render = viewport.render;
+        let RenderKind::SliverViewport { config } = self
+            .render_live(render, "keep-alive viewport")
+            .object
+            .kind()
+        else {
+            return;
+        };
+        if config
+            .delegate
+            .set_child_keep_alive(scoped, grid_tile, keep_alive)
+        {
+            self.mark_render_dirty(render, DirtyFlags::LAYOUT, true);
+        }
     }
 
     pub(super) fn mount_element(

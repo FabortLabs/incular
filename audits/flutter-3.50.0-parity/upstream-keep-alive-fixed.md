@@ -39,3 +39,24 @@ window; an earlier Flutter fling/rebuild comparison and the grid
 performance checks remain green. The authored case and 37 targeted
 Rust tests passed. This does not yet cover a request changed locally
 by a mounted grid tile.
+
+## A child changes its request without rebuilding its viewport
+
+The viewport previously kept reading the builder's original immutable
+request. An update to a mounted child now changes the cache's parent
+data and requests layout on the owning viewport. This works for
+variable and fixed list rows and for a grid tile inside its row.
+The child can revoke the request while parked; neither new input
+nor a viewport rebuild is needed. Three authored pinned reference
+scenes and their Rust counterpart pass.
+
+The exact 300px touch outward/return sequence from
+`widgets/keep_alive_test.dart:50, :147` also pairs:
+the fixed list and two-lane grid retain Item 60 but not 59 or 61
+after returning to the top. Item 60 keeps the same identity, does
+not appear in accessibility, and is disposed when it locally
+withdraws its request. The original variable-list fixture (:98)
+is still red: on the first 600px frame with 12.3px natural rows,
+Incular does not even mount Item 30. That divergence occurs before
+any keep-alive request and is tracked separately from the passing
+local request/revocation control in a smaller variable viewport.

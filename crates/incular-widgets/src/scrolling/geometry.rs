@@ -226,6 +226,18 @@ pub trait RenderSliver {
     /// unverified estimate for unbounded revalidation. The default is a
     /// no-op so stateless slivers ignore content rebuilds.
     fn invalidate_child_measurement(&mut self, _child: SliverChildId) {}
+
+    /// Updates parent data on a live child without rerunning the delegate.
+    /// Grid lanes pass the tile's own index inside the materialized row.
+    #[doc(hidden)]
+    fn set_child_keep_alive(
+        &mut self,
+        _child: SliverChildId,
+        _grid_tile: Option<usize>,
+        _keep_alive: bool,
+    ) -> bool {
+        false
+    }
 }
 
 /// Scroll input that invalidates a sliver's retained layout.
@@ -268,6 +280,14 @@ pub(crate) trait SliverViewportDelegate {
     /// content rebuild below it. Returns whether a sliver was found to
     /// notify; the default reports none.
     fn invalidate_sliver_child(&self, _child: SliverChildId) -> bool {
+        false
+    }
+    fn set_child_keep_alive(
+        &self,
+        _child: SliverChildId,
+        _grid_tile: Option<usize>,
+        _keep_alive: bool,
+    ) -> bool {
         false
     }
     /// Pushes the ambient reduced-motion policy toward snap-capable

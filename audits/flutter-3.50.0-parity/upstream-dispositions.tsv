@@ -1200,3 +1200,6 @@ packages/flutter/test/widgets/list_view_semantics_test.dart	17	forward vertical	
 packages/flutter/test/widgets/list_view_semantics_test.dart	55	reverse vertical	paired-match	upstream-semantic-scroll-offsets.md#directional-actions-and-edge-availability
 packages/flutter/test/widgets/list_view_semantics_test.dart	94	forward horizontal	paired-match	upstream-semantic-scroll-offsets.md#directional-actions-and-edge-availability
 packages/flutter/test/widgets/list_view_semantics_test.dart	133	reverse horizontal	paired-match	upstream-semantic-scroll-offsets.md#directional-actions-and-edge-availability
+packages/flutter/test/widgets/keep_alive_test.dart	50	KeepAlive with ListView with itemExtent	paired-match	upstream-keep-alive-fixed.md#a-child-changes-its-request-without-rebuilding-its-viewport
+packages/flutter/test/widgets/keep_alive_test.dart	98	KeepAlive with ListView without itemExtent	paired-mismatch	upstream-keep-alive-fixed.md#a-child-changes-its-request-without-rebuilding-its-viewport
+packages/flutter/test/widgets/keep_alive_test.dart	147	KeepAlive with GridView	paired-match	upstream-keep-alive-fixed.md#a-child-changes-its-request-without-rebuilding-its-viewport
