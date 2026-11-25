@@ -21,7 +21,7 @@ use crate::{
 use incular_core::finite_or_zero;
 use incular_core::time::Instant;
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     fmt,
     rc::{Rc, Weak},
     time::Duration,
@@ -341,15 +341,31 @@ impl State {
     }
 }
 
-type Listener = Rc<dyn Fn(f32)>;
-type StatusListener = Rc<dyn Fn(AnimationStatus)>;
+struct ListenerRegistration<F: ?Sized> {
+    id: usize,
+    active: Cell<bool>,
+    callback: F,
+}
+
+type Listener = Rc<ListenerRegistration<dyn Fn(f32)>>;
+type StatusListener = Rc<ListenerRegistration<dyn Fn(AnimationStatus)>>;
+
+fn remove_registration<F: ?Sized>(
+    listeners: &mut Vec<Rc<ListenerRegistration<F>>>,
+    id: usize,
+) -> Option<Rc<ListenerRegistration<F>>> {
+    let index = listeners.iter().position(|record| record.id == id)?;
+    let removed = listeners.remove(index);
+    removed.active.set(false);
+    Some(removed)
+}
 
 #[derive(Default)]
 struct ControllerState {
     state: State,
     run: Option<Run>,
-    listeners: Vec<(usize, Listener)>,
-    status_listeners: Vec<(usize, StatusListener)>,
+    listeners: Vec<Listener>,
+    status_listeners: Vec<StatusListener>,
     next_listener: usize,
     /// The frame-scheduler ticker of a [`AnimationController::with_vsync`]
     /// controller.
@@ -954,35 +970,37 @@ impl AnimationController {
     pub fn add_listener(&self, listener: impl Fn(f32) + 'static) -> usize {
         let mut controller = self.inner.borrow_mut();
         let id = next_listener_id(&mut controller);
-        controller.listeners.push((id, Rc::new(listener)));
+        controller.listeners.push(Rc::new(ListenerRegistration {
+            id,
+            active: Cell::new(true),
+            callback: listener,
+        }));
         id
     }
 
     pub fn remove_listener(&self, id: usize) -> bool {
-        let mut controller = self.inner.borrow_mut();
-        let before = controller.listeners.len();
-        controller
-            .listeners
-            .retain(|(listener_id, _)| *listener_id != id);
-        before != controller.listeners.len()
+        let removed = remove_registration(&mut self.inner.borrow_mut().listeners, id);
+        removed.is_some()
     }
 
     /// Flutter `addStatusListener`: called whenever the status changes.
     pub fn add_status_listener(&self, listener: impl Fn(AnimationStatus) + 'static) -> usize {
         let mut controller = self.inner.borrow_mut();
         let id = next_listener_id(&mut controller);
-        controller.status_listeners.push((id, Rc::new(listener)));
+        controller
+            .status_listeners
+            .push(Rc::new(ListenerRegistration {
+                id,
+                active: Cell::new(true),
+                callback: listener,
+            }));
         id
     }
 
     /// Flutter `removeStatusListener`.
     pub fn remove_status_listener(&self, id: usize) -> bool {
-        let mut controller = self.inner.borrow_mut();
-        let before = controller.status_listeners.len();
-        controller
-            .status_listeners
-            .retain(|(listener_id, _)| *listener_id != id);
-        before != controller.status_listeners.len()
+        let removed = remove_registration(&mut self.inner.borrow_mut().status_listeners, id);
+        removed.is_some()
     }
 
     fn forward_at(&self, now: Option<Instant>) -> TickerFuture {
@@ -1036,21 +1054,33 @@ impl AnimationController {
         if duration.is_zero() {
             // Flutter: a zero-duration run lands on the target at once.
             self.stop();
-            let changed = {
+            let value_changed = {
                 let mut controller = self.inner.borrow_mut();
                 let state = &mut controller.state;
-                let old = (state.value, state.status);
+                let changed = state.value != target;
                 state.forward = forward;
                 state.value = target;
-                state.status = if forward {
+                changed
+            };
+            if value_changed {
+                // Flutter delivers the value while the old status is still
+                // observable. The reactive invalidation below sees both new
+                // fields, without broadcasting the value a second time.
+                self.notify_value(false);
+            }
+            let status_changed = {
+                let mut controller = self.inner.borrow_mut();
+                let state = &mut controller.state;
+                let old = state.status;
+                state.status = if state.forward {
                     AnimationStatus::Completed
                 } else {
                     AnimationStatus::Dismissed
                 };
-                (state.value, state.status) != old
+                state.status != old
             };
-            if changed {
-                self.notify_value(true);
+            if value_changed || status_changed {
+                self.changes.notify();
             }
             self.notify_status();
             return TickerFuture::complete();
@@ -1195,17 +1225,12 @@ impl AnimationController {
     fn notify_value(&self, changed: bool) {
         let (listeners, value) = {
             let controller = self.inner.borrow();
-            (
-                controller
-                    .listeners
-                    .iter()
-                    .map(|(_, listener)| listener.clone())
-                    .collect::<Vec<_>>(),
-                controller.state.value,
-            )
+            (controller.listeners.clone(), controller.state.value)
         };
         for listener in listeners {
-            listener(value);
+            if listener.active.get() {
+                (listener.callback)(value);
+            }
         }
         if changed {
             self.changes.notify();
@@ -1225,20 +1250,14 @@ impl AnimationController {
             if !status.is_animating() {
                 controller.state.rests += 1;
             }
-            (
-                controller
-                    .status_listeners
-                    .iter()
-                    .map(|(_, listener)| listener.clone())
-                    .collect::<Vec<_>>(),
-                status,
-            )
+            (controller.status_listeners.clone(), status)
         };
         // Reactive readers are invalidated by the caller's value-or-status
-        // change (`notify_value`, or `start_run`), so they are not notified
-        // twice here.
+        // change, so they are not notified twice here.
         for listener in listeners {
-            listener(status);
+            if listener.active.get() {
+                (listener.callback)(status);
+            }
         }
     }
 

@@ -25,6 +25,21 @@ has no equivalent persistent default setting. Do not label the ordinary
 per-run sequence a mismatch. Other reverse/count terminal notifications and
 ticker disposal remain open.
 
+## Notification repair
+
+C34 and C35 now pass in the focused controller regression target. Value
+and status registrations removed during notification are skipped even
+if they were in the current snapshot; newly registered callbacks wait
+for the next notification. An equal-target run only reports a change in
+terminal status. When a zero-duration run has a different target, the
+value callback sees the preceding status, followed by the terminal
+status callback. The pinned forward and reverse cases agree; a status-only
+change still invalidates retained reactive readers once.
+
+Four targeted Rust lifecycle checks and all ten public-API checks passed.
+Five authored Flutter controls, including the mutation and direction-order
+extensions, also passed.
+
 ## Reproduction
 
 Pin the scratch Flutter package and run

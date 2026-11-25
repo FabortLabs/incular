@@ -7,7 +7,7 @@ use std::{
 };
 
 use incular_animation::{
-    AnimationController, AnimationStatus, BoundedFrictionSimulation, ClampedSimulation,
+    AnimationController, AnimationStatus, BoundedFrictionSimulation, ClampedSimulation, Curve,
     OptionalSizeTween, Simulation, SpringDescription, SpringType, TweenValue,
 };
 use incular_core::Size;
@@ -118,6 +118,89 @@ fn animating_to_the_current_value_notifies_terminal_status_only() {
     assert_eq!(controller.value(), 0.5);
     assert_eq!(*statuses.borrow(), [AnimationStatus::Completed]);
     assert!(values.borrow().is_empty(), "values={:?}", values.borrow());
+}
+
+#[test]
+fn zero_duration_value_listener_observes_preterminal_status_in_both_directions() {
+    let controller = AnimationController::new(Duration::from_secs(1));
+    controller.set_value(0.5);
+    let calls = Rc::new(RefCell::new(Vec::new()));
+    let value_id = controller.add_listener({
+        let controller = controller.clone();
+        let calls = calls.clone();
+        move |value| {
+            calls
+                .borrow_mut()
+                .push(("value", value, controller.status()))
+        }
+    });
+    let status_id = controller.add_status_listener({
+        let controller = controller.clone();
+        let calls = calls.clone();
+        move |status| {
+            calls
+                .borrow_mut()
+                .push(("status", controller.value(), status))
+        }
+    });
+    let now = Instant::now();
+    assert!(
+        controller
+            .animate_to_curved(now, 0.75, Some(Duration::ZERO), Curve::Linear)
+            .is_complete()
+    );
+    assert!(
+        controller
+            .animate_back_curved(now, 0.25, Some(Duration::ZERO), Curve::Linear)
+            .is_complete()
+    );
+    assert_eq!(
+        *calls.borrow(),
+        [
+            ("value", 0.75, AnimationStatus::Forward),
+            ("status", 0.75, AnimationStatus::Completed),
+            ("value", 0.25, AnimationStatus::Completed),
+            ("status", 0.25, AnimationStatus::Dismissed),
+        ]
+    );
+    assert!(controller.remove_listener(value_id));
+    assert!(controller.remove_status_listener(status_id));
+}
+
+#[test]
+fn status_listener_removal_and_addition_take_effect_at_the_correct_boundary() {
+    let controller = AnimationController::new(Duration::from_secs(1));
+    let calls = Rc::new(RefCell::new(Vec::new()));
+    let old_id = Rc::new(Cell::new(None));
+    let first_id = controller.add_status_listener({
+        let controller = controller.clone();
+        let calls = calls.clone();
+        let old_id = old_id.clone();
+        move |status| {
+            calls.borrow_mut().push(('A', status));
+            if let Some(id) = old_id.take() {
+                assert!(controller.remove_status_listener(id));
+                let calls = calls.clone();
+                controller
+                    .add_status_listener(move |status| calls.borrow_mut().push(('C', status)));
+            }
+        }
+    });
+    old_id.set(Some(controller.add_status_listener({
+        let calls = calls.clone();
+        move |status| calls.borrow_mut().push(('B', status))
+    })));
+    controller.set_value(0.5);
+    controller.set_value(1.);
+    assert_eq!(
+        *calls.borrow(),
+        [
+            ('A', AnimationStatus::Forward),
+            ('A', AnimationStatus::Completed),
+            ('C', AnimationStatus::Completed),
+        ]
+    );
+    assert!(controller.remove_status_listener(first_id));
 }
 
 struct ConstantSimulation {
