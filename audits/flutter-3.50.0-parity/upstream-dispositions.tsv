@@ -1329,3 +1329,8 @@ packages/flutter/test/widgets/focus_manager_test.dart	1081	Unfocus with disposit
 packages/flutter/test/widgets/focus_manager_test.dart	1172	Unfocus with disposition scope works properly	paired-match	upstream-mounted-focus-scope-nodes.md#unfocus-and-fallback-through-scope-history
 packages/flutter/test/widgets/focus_manager_test.dart	1265	Unfocus works properly when some nodes are unfocusable	paired-match	upstream-mounted-focus-scope-nodes.md#unfocus-and-fallback-through-scope-history
 packages/flutter/test/widgets/focus_manager_test.dart	1341	Requesting focus on a scope works properly when some focusedChild nodes are unfocusable	paired-match	upstream-mounted-focus-scope-nodes.md#unfocus-and-fallback-through-scope-history
+packages/flutter/test/rendering/proxy_box_test.dart	16	RenderFittedBox handles applying paint transform and hit-testing with empty size	partial-match	upstream-render-proxies.md
+packages/flutter/test/rendering/proxy_box_test.dart	30	RenderFittedBox does not paint with empty sizes	paired-match	upstream-render-proxies.md
+packages/flutter/test/rendering/proxy_box_test.dart	81	RenderPhysicalModel paints shadow only for non-zero elevation	paired-match	upstream-render-proxies.md
+packages/flutter/test/rendering/proxy_box_test.dart	122	shape change triggers repaint	paired-match	upstream-render-proxies.md
+packages/flutter/test/rendering/proxy_box_test.dart	583	RenderFittedBox respects clipBehavior	paired-match	upstream-render-proxies.md

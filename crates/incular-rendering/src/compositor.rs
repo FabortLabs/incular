@@ -2022,6 +2022,12 @@ impl LayerTree {
                 out.push(PaintCommand::PopEffect);
             }
             LayerKind::DropShadow { shadow } => {
+                if shadow.color.alpha == 0 {
+                    self.visit_children(id, false, |tree, child| {
+                        tree.flatten_layer(child, world_transform, clip, out)
+                    });
+                    return;
+                }
                 let bounds = self
                     .subtree_bounds(id, world_transform)
                     .unwrap_or_else(|| Rect::from_origin_size(Offset::ZERO, Size::ZERO));
@@ -2684,7 +2690,11 @@ impl LayerTree {
             LayerKind::Blur { blur } => child_bounds(self, world_transform)
                 .map(|bounds| blur_bounds(bounds, blur.sigma_x, blur.sigma_y)),
             LayerKind::DropShadow { shadow } => child_bounds(self, world_transform).map(|bounds| {
-                drop_shadow_bounds(bounds, shadow.offset, shadow.sigma_x, shadow.sigma_y)
+                if shadow.color.alpha == 0 {
+                    bounds
+                } else {
+                    drop_shadow_bounds(bounds, shadow.offset, shadow.sigma_x, shadow.sigma_y)
+                }
             }),
             LayerKind::Follower(follower) => {
                 let next = self.follower_transform(world_transform, follower)?;

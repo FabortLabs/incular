@@ -1,0 +1,26 @@
+# Flutter 3.50 rendering proxy comparisons
+
+Pinned `packages/flutter/test/rendering/proxy_box_test.dart` :16,
+:30, :81, :122 and :583 passed by exact name. Native checks run the
+retained layout, hit-test, repaint and compositor paths. The initial
+native ports found three distinct issues.
+
+- Empty FittedBox skipped drawing the retained child but still called
+  its painter. It now skips pending child paint while either measured
+  dimension is zero. The comparison checks the actual callback, misses
+  at the origin and a singular retained affine transform. Flutter's
+  full 4×4 paint-transform API has no exact analogue, so :16 is partial.
+- The physical model toggled between two widget types when PhysicalModel's
+  elevation went from zero to positive. A retained root rejected that
+  update. The same retained proxy now stays active, but a completely
+  transparent shadow is a compositor passthrough and adds neither an
+  effect command nor visual extent. The test counts zero, one, zero
+  shadow effects over retained updates; it does not claim matching the
+  Flutter ambient/spot shadow kernel.
+- Equivalent PhysicalShape geometry incurred repeated painting from a
+  fresh layout builder. The path is already local geometry, so a tight
+  positioned painter adopts the retained surface size directly. Equal
+  geometry does not repaint; changing a circle to a stadium does.
+- The 200×200 FittedBox child in the 100×100 viewport emits the expected
+  clipping coverage for default, none, hard-edge, antialias and
+  antialias-with-save-layer modes.

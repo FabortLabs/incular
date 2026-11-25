@@ -674,8 +674,10 @@ impl WidgetTree {
             node.object.kind(),
             RenderKind::Visibility { visible: false, .. }
         ) || flow_child_hidden(node.object.kind())
+            || (matches!(node.object.kind(), RenderKind::FittedBox { .. })
+                && !self.fitted_content_is_visible(id))
         {
-            // Hidden content keeps its pending paint until it is shown.
+            // Hidden or singular content keeps its pending paint until it is shown.
             return;
         }
         if node.dirty.contains(DirtyFlags::PAINT) {

@@ -182,11 +182,8 @@ impl From<PhysicalModel> for Widget {
                 .corner_radii(value.border_radius)
                 .into(),
         };
-        if value.elevation > 0.0 {
-            elevation_shadow(value.elevation, value.shadow_color, surface)
-        } else {
-            surface
-        }
+        // Keep the same retained proxy when elevation turns on or off.
+        elevation_shadow(value.elevation, value.shadow_color, surface)
     }
 }
 
@@ -196,8 +193,16 @@ impl From<PhysicalModel> for Widget {
 fn elevation_shadow(elevation: f32, shadow_color: Color, surface: impl Into<Widget>) -> Widget {
     DropShadow::new(
         Offset::new(0.0, elevation * 0.18),
-        (elevation * 0.55).max(1.0),
-        shadow_color,
+        if elevation > 0.0 {
+            (elevation * 0.55).max(1.0)
+        } else {
+            0.0
+        },
+        if elevation > 0.0 {
+            shadow_color
+        } else {
+            Color::TRANSPARENT
+        },
         surface,
     )
     .into()
@@ -276,17 +281,16 @@ impl From<PhysicalShape> for Widget {
                 .clip_behavior(clip)
                 .into(),
         };
-        let fill = LayoutBuilder::new(move |_, constraints| {
-            let size = constraints.biggest();
-            let mut canvas = Canvas::default();
-            canvas.fill_path(clipper.clone(), color, FillRule::NonZero);
-            let surface: Widget = CustomPaint::new(size, canvas.finish()).into();
-            if elevation > 0.0 {
-                elevation_shadow(elevation, shadow_color, surface)
-            } else {
-                surface
-            }
-        });
+        // The path is already local geometry. A tightly positioned
+        // CustomPaint adopts the Stack size without a fresh layout closure.
+        let mut canvas = Canvas::default();
+        canvas.fill_path(clipper, color, FillRule::NonZero);
+        let surface: Widget = CustomPaint::new(incular_core::Size::ZERO, canvas.finish()).into();
+        let fill = if elevation > 0.0 {
+            elevation_shadow(elevation, shadow_color, surface)
+        } else {
+            surface
+        };
         Stack::new([Positioned::fill(fill).into(), child])
             .fit(StackFit::Passthrough)
             .clip_behavior(Clip::None)
