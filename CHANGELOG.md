@@ -127,6 +127,10 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-widgets`: interpolating a `BoxDecoration` with itself retains
+  its blend mode. Its validity check now requires a color or a gradient
+  for background blending; a decoration image alone does not qualify.
+
 - `incular-widgets`: `Container` paints ordinary decorations supplied by
   its typed builder. With an explicit `BoxDecoration`, an opt-in clip
   follows the decoration's shape and leaves shadows and outside strokes

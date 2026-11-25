@@ -621,11 +621,7 @@ impl BoxDecoration {
         if self.shape == BoxShape::Circle && self.border_radius.is_some() {
             return false;
         }
-        if self.background_blend_mode.is_some()
-            && self.color.is_none()
-            && self.gradient.is_none()
-            && self.image.is_none()
-        {
+        if self.background_blend_mode.is_some() && self.color.is_none() && self.gradient.is_none() {
             return false;
         }
         true
@@ -660,9 +656,10 @@ impl incular_core::Lerp for BoxDecoration {
     /// Flutter `BoxDecoration.lerp`: a part present on one side only
     /// scales in or out (`Color.lerp(null, c, t)`, `BoxBorder.lerp`,
     /// `BoxShadow.lerpList`). The gradient and image switch at the midpoint,
-    /// and, as in Flutter, a blend mode is kept only at the ends.
+    /// and, as in Flutter, a blend mode is kept only at the ends or when
+    /// interpolating a decoration with itself.
     fn lerp(&self, other: &Self, t: f32) -> Self {
-        if t == 0.0 {
+        if std::ptr::eq(self, other) || t == 0.0 {
             return self.clone();
         }
         if t == 1.0 {

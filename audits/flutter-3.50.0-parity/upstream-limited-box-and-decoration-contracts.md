@@ -56,3 +56,20 @@ only partially paired here: Incular uses its analytic specializations
 instead of Flutter's literal ClipPath widget and compares the shadow paint
 order rather than reproducing Flutter's golden. All 51 focused Rust checks passed. No Incular GPU pixel
 comparison in this batch.
+
+## BoxDecoration blend equality and validation repair
+
+The exact equality registration at `painting/box_decoration_test.dart:187`
+now pairs transparent-color decorations using the actual Color and
+Difference blend modes. The image-only validity and self-interpolation
+regressions were reproduced in Rust, then fixed. An image does not make a
+background blend valid without a fill or gradient. Interpolating a
+decoration with itself preserves the blend; distinct instances with the
+same value still interpolate normally. The blend is absent at the
+midpoint for those distinct instances.
+
+The original identity registration (:63) remains partial: the Rust
+value-returning API preserves the full value on self-interpolation but
+does not provide Flutter's nullable inputs or return the identical object.
+All 18 focused Rust tests, two exact pinned originals, and four authored
+Flutter value/validation cases passed. No raster claim.

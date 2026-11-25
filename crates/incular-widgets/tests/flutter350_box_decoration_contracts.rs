@@ -55,3 +55,24 @@ fn flutter_350_box_decoration_image_alone_cannot_enable_background_blend() {
         "the blend applies to a background color or gradient, not the image"
     );
 }
+
+#[test]
+fn flutter_350_decorations_with_different_blend_modes_are_not_equal() {
+    let one = BoxDecoration::new()
+        .color(Color::TRANSPARENT)
+        .background_blend_mode(BlendMode::Color);
+    let two = BoxDecoration::new()
+        .color(Color::TRANSPARENT)
+        .background_blend_mode(BlendMode::Difference);
+    assert_ne!(one, two);
+}
+
+#[test]
+fn flutter_350_distinct_but_equal_decorations_still_interpolate() {
+    let from = BoxDecoration::new()
+        .color(Color::BLACK)
+        .background_blend_mode(BlendMode::Multiply);
+    let to = from.clone();
+    assert_eq!(from, to);
+    assert_eq!(from.lerp(&to, 0.5).background_blend_mode, None);
+}
