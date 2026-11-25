@@ -245,13 +245,18 @@ fn subtrees_with_composing_region(
     composing_within_current_text_range: bool,
 ) -> Vec<TextSpan> {
     let text = value.text.as_str();
-    let composing = value.composing.map_or(0..0, |range| range.start..range.end);
+    // Flutter represents an absent composing range with negative endpoints.
+    // Do not turn that into a real collapsed range at the start of the text.
+    let composing = value
+        .composing
+        .filter(|range| !composing_within_current_text_range && range.is_valid_for(text))
+        .map(|range| range.start..range.end);
     let underline = TextStyle::new().decoration(TextDecoration::UNDERLINE);
     let composing_style = style.map_or_else(|| underline.clone(), |style| style.merge(&underline));
     let joint = style.map_or_else(|| misspelled.clone(), |style| style.merge(misspelled));
     // A gap can add three pieces (composing region split) before each span.
     let mut children = Vec::with_capacity(spans.len() * 4 + 3);
-    let add_composing = |children: &mut Vec<TextSpan>, pointer: usize| {
+    let add_composing = |children: &mut Vec<TextSpan>, pointer: usize, composing: &Range<usize>| {
         // Flutter's `_addComposingRegionTextSpans`.
         children.extend(piece(text, pointer..composing.start, style));
         children.extend(piece(text, composing.clone(), Some(&composing_style)));
@@ -262,11 +267,11 @@ fn subtrees_with_composing_region(
         let current = &spans[index];
         if current.range.start > pointer {
             let end = current.range.start.min(text.len());
-            let within = composing.start >= pointer
+            if let Some(composing) = &composing
+                && composing.start >= pointer
                 && composing.end <= end
-                && !composing_within_current_text_range;
-            if within {
-                add_composing(&mut children, pointer);
+            {
+                add_composing(&mut children, pointer, composing);
                 children.extend(piece(text, composing.end..end, style));
             } else {
                 children.extend(piece(text, pointer..end, style));
@@ -274,9 +279,9 @@ fn subtrees_with_composing_region(
             pointer = end;
         } else {
             let end = current.range.end.min(text.len());
-            let is_composing = pointer >= composing.start
-                && end <= composing.end
-                && !composing_within_current_text_range;
+            let is_composing = composing
+                .as_ref()
+                .is_some_and(|range| pointer >= range.start && end <= range.end);
             let piece_style = if is_composing {
                 &composing_style
             } else {
@@ -288,8 +293,10 @@ fn subtrees_with_composing_region(
         }
     }
     if pointer < text.len() {
-        if pointer < composing.start && !composing_within_current_text_range {
-            add_composing(&mut children, pointer);
+        if let Some(composing) = &composing
+            && pointer < composing.start
+        {
+            add_composing(&mut children, pointer, composing);
             if composing.end != text.len() {
                 children.extend(piece(text, composing.end..text.len(), style));
             }
