@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-accessibility`: the desktop AccessKit projection exposes
+  labeled custom actions and validates requests against the live node.
+
 - `incular-widgets`: Semantics can register named custom actions, including
   dispatch to the correct visible child of a merged semantics node.
 

@@ -30,3 +30,17 @@ the inactive child can neither claim it nor receive a stale request.
 Forty-four focused Rust checks pass across the runtime and widget semantics
 targets. Point-addressed dispatch, standard action hint overrides, and
 native platform presentation are not part of these five dispositions.
+
+## Portable native bridge checks
+
+The AccessKit projection publishes a named action's label and canonical ID.
+It only accepts a nonnegative in-range ID advertised by that specific node
+and rejects a stale action after the node is updated. A focused integration
+test dispatches a translated request into the retained widget callback and
+verifies that the live runtime also rejects it before the old projection
+has caught up. The mobile projection validates per-node membership too;
+Android and iOS native menu integration was not exercised.
+
+This change does not claim live screen-reader behavior or native relabeling
+of standard actions. AccessKit cannot relabel a standard action and does not
+advertise an override as an additional named choice.

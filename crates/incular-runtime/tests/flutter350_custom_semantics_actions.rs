@@ -224,3 +224,50 @@ fn an_inactive_merged_child_cannot_advertise_or_handle_its_custom_action() {
     assert!(runtime.dispatch_semantic_action(retained, call_b));
     assert_eq!(seen.get(), [1, 1]);
 }
+
+#[test]
+fn an_accesskit_request_reaches_the_live_retained_custom_callback() {
+    use accesskit::{Action, ActionData, ActionRequest, NodeId, TreeId};
+    use incular_accessibility::AccessKitProjection;
+
+    let action = CustomSemanticsAction::new("Move down");
+    let action_id = action.get_identifier();
+    let calls = Rc::new(Cell::new(0));
+    let observed_calls = calls.clone();
+    let mut runtime = Runtime::new(
+        Semantics::new(SizedBox::shrink())
+            .label("Item")
+            .custom_action(action, move || observed_calls.set(observed_calls.get() + 1))
+            .into(),
+    )
+    .unwrap();
+    frame(&mut runtime);
+    let mut projection = AccessKitProjection::new();
+    projection.sync(runtime.tree().semantics(), 1.0).unwrap();
+    let target = labelled_node(&runtime, "Item");
+    let request = ActionRequest {
+        action: Action::CustomAction,
+        target_tree: TreeId::ROOT,
+        target_node: NodeId(projection.native_node_id(target).unwrap()),
+        data: Some(ActionData::CustomAction(
+            i32::try_from(action_id.0).unwrap(),
+        )),
+    };
+    let mapped = projection.translate_action(&request).unwrap();
+    assert!(runtime.dispatch_semantic_action(mapped.node, mapped.action.clone()));
+    assert_eq!(calls.get(), 1);
+
+    runtime
+        .schedule_update(
+            runtime.tree().root().unwrap(),
+            Semantics::new(SizedBox::shrink()).label("Item").into(),
+        )
+        .unwrap();
+    frame(&mut runtime);
+    // The live graph rejects an event from an older native projection.
+    assert_eq!(labelled_node(&runtime, "Item"), target);
+    assert!(!runtime.dispatch_semantic_action(mapped.node, mapped.action));
+    projection.sync(runtime.tree().semantics(), 1.0).unwrap();
+    assert!(projection.translate_action(&request).is_none());
+    assert_eq!(calls.get(), 1);
+}

@@ -6,9 +6,9 @@
 //! are private to one live native window and never enter widget/facade APIs.
 
 use accesskit::{
-    Action, ActionData, ActionRequest, Invalid, Live, Node, NodeId, Rect as AccessKitRect,
-    Role as AccessKitRole, TextPosition, TextSelection as AccessKitSelection, Toggled, Tree,
-    TreeId, TreeUpdate,
+    Action, ActionData, ActionRequest, CustomAction as AccessKitCustomAction, Invalid, Live, Node,
+    NodeId, Rect as AccessKitRect, Role as AccessKitRole, TextPosition,
+    TextSelection as AccessKitSelection, Toggled, Tree, TreeId, TreeUpdate,
 };
 use incular_core::{Offset, Rect, Size};
 use std::collections::{HashMap, hash_map::Entry};
@@ -332,7 +332,14 @@ impl MobileAccessibilityProjection {
                 self.diagnostics.stale_actions_rejected.wrapping_add(1);
             return None;
         };
-        if !semantic.actions.contains(&action.kind()) {
+        if !supports(semantic, action.kind())
+            || matches!(
+                &action,
+                SemanticAction::Custom(id)
+                    if !semantic.state.custom_actions.contains(id)
+                        || CustomSemanticsAction::get_action(*id).is_none()
+            )
+        {
             self.diagnostics.unsupported_actions =
                 self.diagnostics.unsupported_actions.wrapping_add(1);
             return None;
@@ -792,6 +799,20 @@ impl AccessKitProjection {
             Action::Click if supports(&projected.semantic, SemanticActionKind::Activate) => {
                 Some(SemanticAction::Activate)
             }
+            Action::CustomAction if supports(&projected.semantic, SemanticActionKind::Custom) => {
+                match request.data.as_ref() {
+                    Some(ActionData::CustomAction(raw)) => u32::try_from(*raw)
+                        .ok()
+                        .map(CustomSemanticsActionId)
+                        .filter(|id| {
+                            projected.semantic.state.custom_actions.contains(id)
+                                && CustomSemanticsAction::get_action(*id)
+                                    .is_some_and(|action| action.label().is_some())
+                        })
+                        .map(SemanticAction::Custom),
+                    _ => None,
+                }
+            }
             Action::Focus if supports(&projected.semantic, SemanticActionKind::Focus) => {
                 Some(SemanticAction::Focus)
             }
@@ -1021,6 +1042,24 @@ impl AccessKitProjection {
                 node.add_action(action);
             }
         }
+        if supports(semantic, SemanticActionKind::Custom) {
+            for id in &semantic.state.custom_actions {
+                let Some(action) = CustomSemanticsAction::get_action(*id) else {
+                    continue;
+                };
+                // AccessKit cannot relabel a standard action. Only genuine
+                // named actions are advertised as additional native choices.
+                if let (Ok(id), Some(label)) = (i32::try_from(id.0), action.label()) {
+                    node.push_custom_action(AccessKitCustomAction {
+                        id,
+                        description: label.into(),
+                    });
+                }
+            }
+            if !node.custom_actions().is_empty() {
+                node.add_action(Action::CustomAction);
+            }
+        }
         node.set_children(
             semantic
                 .children
@@ -1100,8 +1139,8 @@ fn map_action(action: SemanticActionKind) -> Option<Action> {
         SemanticActionKind::ScrollForward => Some(Action::ScrollDown),
         SemanticActionKind::ScrollBackward => Some(Action::ScrollUp),
         SemanticActionKind::ShowOnScreen => Some(Action::ScrollIntoView),
-        // AccessKit has no long-press action, so the desktop tree does not
-        // advertise it; the mobile projection carries it.
+        // AccessKit has no long-press action. The parameterized custom
+        // action is advertised only once its native descriptions are known.
         SemanticActionKind::LongPress | SemanticActionKind::Custom => None,
     }
 }
