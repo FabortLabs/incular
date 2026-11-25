@@ -3,7 +3,7 @@ use super::super::*;
 impl WidgetTree {
     pub(super) fn layout_effect_kind(
         &mut self,
-        _id: RenderObjectId,
+        id: RenderObjectId,
         kind: &RenderKind,
         children: &[RenderObjectId],
         constraints: Constraints,
@@ -42,14 +42,19 @@ impl WidgetTree {
                         child,
                         Constraints::new(0., f32::INFINITY, 0., f32::INFINITY),
                     )?;
-                    let child_size = self
-                        .render_live(child, "retained render must remain live")
-                        .size;
+                    let child = self.render_live(child, "retained render must remain live");
+                    let (child_size, baseline) = (child.size, child.baseline);
+                    // Flutter asks the unconstrained child for its real
+                    // baseline; the paint fit does not change this metric.
+                    self.render_live_mut(id, "fitted render must remain live")
+                        .baseline = baseline;
                     (
                         constraints.constrain(child_size),
                         ChildOffsets::One(Offset::ZERO),
                     )
                 } else {
+                    self.render_live_mut(id, "fitted render must remain live")
+                        .baseline = None;
                     (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }

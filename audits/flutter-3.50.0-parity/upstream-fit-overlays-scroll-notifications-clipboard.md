@@ -126,3 +126,13 @@ option on rebuild without replacing its focus. Clipboard menus
 and native input controls remain green. The :3235 case is still a
 partial port: the pinned original calls the programmatic setter,
 not the keyboard action.
+## FittedBox actual baselines
+
+An authored probe queries baselines during parent layout, as Flutter's
+render API requires. A tightly sized 200 by 200 FittedBox scales its
+visible child but reports the child's untransformed actual baseline.
+The old Incular returned None for a visible text child with a real
+baseline. Both now report the actual metric, then None when replacing
+the child with a baseline-free box, then the real baseline again on the
+same FittedBox render object. This does not compare font metrics between
+renderers or claim a public dry-baseline API.
