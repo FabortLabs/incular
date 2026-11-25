@@ -150,6 +150,9 @@ fn self_hit_after_children(kind: Option<&WidgetKind>) -> bool {
 pub(super) struct RawHitResult {
     elements: Vec<ElementId>,
     subtree_hit: bool,
+    /// A render target accepted the hit, not just a layout box containing
+    /// the point or a translucent annotation adding itself to the path.
+    accepts_hit: bool,
     /// Something in the subtree was hit itself: a leaf, or a widget whose
     /// hit-test behavior claims its bounds. A container's bounds alone do
     /// not count.
@@ -462,6 +465,7 @@ impl WidgetTree {
             return (
                 RawHitResult {
                     subtree_hit: true,
+                    accepts_hit: true,
                     content_hit: true,
                     blocks_siblings: true,
                     ..RawHitResult::default()
@@ -538,31 +542,59 @@ impl WidgetTree {
             precise,
             &mut result,
         );
+        let self_hit = self_hit_after_children(kind);
         if want_target && target.is_none() {
-            target = self_hit_after_children(kind).then_some(id);
+            target = self_hit.then_some(id);
         }
         if let (Some(element), Some(WidgetKind::RawInput { kind, .. })) = (element, kind) {
-            let include = kind.is_enabled()
-                && (kind.hit_test_behavior() != crate::gestures::HitTestBehavior::DeferToChild
-                    || child_hit);
+            use crate::gestures::HitTestBehavior::{DeferToChild, Opaque};
+            let behavior = kind.hit_test_behavior();
+            let annotation_child_hit = if matches!(
+                &**kind,
+                RawInputKind::TapRegionSurface
+                    | RawInputKind::TapRegion { .. }
+                    | RawInputKind::TextFieldTapRegion { .. }
+            ) {
+                // Flutter's surface caches a route only when a child
+                // actually accepts the hit. A translucent TapRegion
+                // still adds an annotation, without accepting on its own.
+                result.accepts_hit
+            } else {
+                child_hit
+            };
+            let include = kind.is_enabled() && (behavior != DeferToChild || annotation_child_hit);
             if include {
                 result.elements.push(element);
-                let behavior = kind.hit_test_behavior();
-                let hit_target = child_hit || behavior == crate::gestures::HitTestBehavior::Opaque;
-                result.content_hit |= behavior != crate::gestures::HitTestBehavior::DeferToChild;
+                let hit_target = child_hit || behavior == Opaque;
+                result.content_hit |= behavior != DeferToChild;
                 result.blocks_siblings = match kind.mouse_region_opaque() {
                     // RenderMouseRegion.hitTest: `super.hitTest(..) && _opaque`.
                     // The region is always recorded, but only an opaque region
                     // absorbs the pointer for the siblings behind it.
                     Some(opaque) => hit_target && opaque,
-                    None => behavior == crate::gestures::HitTestBehavior::Opaque,
+                    None => behavior == Opaque,
                 };
             }
+            result.accepts_hit |= behavior == Opaque;
+            if kind.mouse_region_opaque() == Some(false) {
+                result.accepts_hit = false;
+            }
+        } else {
+            use crate::gestures::HitTestBehavior::Opaque;
+            result.accepts_hit |= match kind {
+                Some(WidgetKind::Gesture { behavior, .. })
+                | Some(WidgetKind::Scroll {
+                    hit_test_behavior: behavior,
+                    ..
+                }) => *behavior == Opaque,
+                Some(WidgetKind::SliverViewport { config }) => config.hit_test_behavior == Opaque,
+                _ => self_hit,
+            };
         }
         // Flutter's rule for overlays: leaves hit themselves, and a widget
         // with children only through them unless its hit-test behavior
         // claims its own bounds.
-        result.content_hit |= self_hit_after_children(kind);
+        result.content_hit |= self_hit;
         (result, target)
     }
 
@@ -591,6 +623,7 @@ impl WidgetTree {
                 child_result.subtree_hit
             };
             result.content_hit |= child_result.content_hit;
+            result.accepts_hit |= child_result.accepts_hit;
             result.elements.extend(child_result.elements);
             if child_target.is_some() {
                 target = child_target;

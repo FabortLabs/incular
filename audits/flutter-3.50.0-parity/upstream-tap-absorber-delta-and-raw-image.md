@@ -56,6 +56,23 @@ the next contact on the same pointer can reach a recognizer again.
 This slice does not compare native OS context-menu routing or button
 chords.
 
+## Primary down, cancel, and empty hit regions
+
+The two primary down registrations (:39, :265) match at all five
+positions, including outside the surface, and Cancel does not emit
+another notification. In :405 the earlier Rust collector treated an
+empty child's layout bounds as a hit. Flutter requires an accepted hit,
+not merely a translucent entry in the path. The collector now tracks
+that distinction separately for TapRegion delivery. An empty defer
+target and an empty translucent target do not report inside; an empty
+opaque target does and notifies its whole group.
+
+All 31 focused pointer, semantics, navigation, hover and raw-arena
+tests passed after the change. All 19 original registrations in
+`widgets/tap_region_test.dart` now have paired dispositions. The
+ledger preserves the verified historical mismatches; the family
+checks do not cover native context menus or arbitrary pointer chords.
+
 ## Editing and raster defaults
 
 - Three original TextEditingDelta checks match the observable

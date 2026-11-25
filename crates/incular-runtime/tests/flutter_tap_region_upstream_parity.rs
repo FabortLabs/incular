@@ -9,8 +9,8 @@ use incular_core::{
 };
 use incular_runtime::Runtime;
 use incular_widgets::{
-    Column, Directionality, GestureDetector, Row, TapRegion, TapRegionSurface, TextDirection,
-    Widget, internal::Key,
+    Column, Directionality, GestureDetector, HitTestBehavior, Row, SizedBox, Stack, TapRegion,
+    TapRegionSurface, TextDirection, Widget, internal::Key,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -47,6 +47,7 @@ impl Spot {
 enum Report {
     OutsideDown,
     OutsideUp,
+    InsideDown,
     InsideUp,
 }
 
@@ -67,6 +68,7 @@ impl Scene {
         match report {
             Report::OutsideDown => region.on_tap_outside(report_spot),
             Report::OutsideUp => region.on_tap_up_outside(report_spot),
+            Report::InsideDown => region.on_tap_inside(report_spot),
             Report::InsideUp => region.on_tap_up_inside(report_spot),
         }
         .into()
@@ -164,6 +166,10 @@ impl Host {
     }
 
     fn click(&mut self, spot: Spot, scene: &Scene) -> [Vec<Spot>; 2] {
+        self.contact(spot, scene, PointerPhase::Up)
+    }
+
+    fn contact(&mut self, spot: Spot, scene: &Scene, end: PointerPhase) -> [Vec<Spot>; 2] {
         let tree = self.runtime.tree();
         let id = tree.element_with_key(&spot.key()).expect("target mounted");
         let (transform, size) = tree.element_geometry(id).expect("target geometry");
@@ -174,7 +180,7 @@ impl Host {
         );
         let pointer = self.next_pointer;
         self.next_pointer += 1;
-        [PointerPhase::Down, PointerPhase::Up].map(|phase| {
+        [PointerPhase::Down, end].map(|phase| {
             let _ = self.runtime.handle_input_at(
                 InputEvent::PointerWithMetadata {
                     pointer,
@@ -196,6 +202,86 @@ impl Host {
             scene.events()
         })
     }
+}
+
+#[test]
+fn tap_surface_reports_outside_on_primary_down_then_cancel() {
+    use Spot::{A, B, Outside, OutsideSurface, Solo};
+    let scene = Scene::default();
+    let mut host = Host::mount(scene.consume_scene(false));
+    assert!(scene.events().is_empty());
+    for (hit, expected) in [
+        (Solo, vec![A, B]),
+        (A, vec![Solo]),
+        (B, vec![Solo]),
+        (Outside, vec![Solo, A, B]),
+        (OutsideSurface, vec![]),
+    ] {
+        assert_eq!(
+            host.contact(hit, &scene, PointerPhase::Cancel),
+            [expected, vec![]]
+        );
+    }
+}
+
+#[test]
+fn tap_surface_reports_inside_on_primary_down_then_cancel() {
+    use Spot::{A, B, Outside, OutsideSurface, Solo};
+    let scene = Scene::default();
+    let mut host = Host::mount(
+        Column::new([
+            OutsideSurface.widget(),
+            scene.grouped_surface(Report::InsideDown, true, 1, false),
+        ])
+        .into(),
+    );
+    assert!(scene.events().is_empty());
+    for (hit, expected) in [
+        (Solo, vec![Solo]),
+        (A, vec![A, B]),
+        (B, vec![A, B]),
+        (Outside, vec![]),
+        (OutsideSurface, vec![]),
+    ] {
+        assert_eq!(
+            host.contact(hit, &scene, PointerPhase::Cancel),
+            [expected, vec![]]
+        );
+    }
+}
+
+#[test]
+fn tap_surface_distinguishes_empty_defer_opaque_and_translucent_regions() {
+    use Spot::{A, B, OutsideSurface, Solo};
+    let scene = Scene::default();
+    let widget = |spot: Spot, group, behavior| {
+        let stack = Widget::from(Stack::new(Vec::<Widget>::new())).with_key(spot.key());
+        let trace = Rc::clone(&scene.events);
+        let mut region = TapRegion::new(stack)
+            .behavior(behavior)
+            .on_tap_inside(move |_| trace.borrow_mut().push(spot));
+        if let Some(key) = group {
+            region = region.group_id(key);
+        }
+        Widget::from(SizedBox::from_dimensions(
+            Some(100.),
+            Some(100.),
+            Some(region),
+        ))
+    };
+    let row = Row::new([
+        widget(Solo, None, HitTestBehavior::DeferToChild),
+        widget(A, Some(1_u64), HitTestBehavior::Opaque),
+        widget(B, Some(1_u64), HitTestBehavior::Translucent),
+    ]);
+    let mut host = Host::mount(
+        Column::new([OutsideSurface.widget(), TapRegionSurface::new(row).into()]).into(),
+    );
+    assert!(scene.events().is_empty());
+    assert_eq!(
+        [Solo, A, B].map(|spot| host.click(spot, &scene)),
+        [[vec![], vec![]], [vec![A, B], vec![]], [vec![], vec![]]],
+    );
 }
 
 #[test]
