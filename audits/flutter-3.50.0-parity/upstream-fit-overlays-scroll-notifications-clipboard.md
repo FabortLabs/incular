@@ -68,6 +68,20 @@ The original layer-reuse and zero-area cases (:97 and :119) both
 pass on the pinned SDK. Incular's `paint_options` ports verify that
 changing the color updates the emitted filter without replacing
 its layer ID, and that a zero-area filter lays out at zero size
-and paints without error. They use Screen instead of Flutter's
-BlendMode.color, which Incular does not expose, so neither port
-is recorded as an exact comparison.
+and paints without error. These ports initially used Screen because
+BlendMode.color was missing.
+
+### Nonseparable color blends and original layer identity
+
+Hue, Saturation, Color and Luminosity now run on the CPU and on wgpu
+through a shared WGSL implementation for ColorFiltered and direct
+destination blending. The pinned Flutter and native readbacks agree
+within one byte per channel for all four modes, using both opaque and
+translucent destinations. The Rust test reconciles one retained tree
+through these cases so layer IDs do not alias between independent trees.
+
+The original layer-reuse port now uses the same Color blend over a
+Placeholder and asserts that changing red to green keeps the same
+layer identity; it is fully paired. The original zero-area case
+remains partial because Flutter omits the filter child and Incular
+currently requires one. These tests are not the original red golden.

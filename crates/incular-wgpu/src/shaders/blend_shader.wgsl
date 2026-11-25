@@ -16,25 +16,6 @@ fn straight_rgb(value: vec4<f32>) -> vec3<f32> {
   let rgb = clamp(value.rgb / max(alpha, .000001), vec3<f32>(0.), vec3<f32>(1.));
   return select(vec3<f32>(0.), rgb, alpha > .000001);
 }
-fn artistic(mode: u32, s: vec3<f32>, d: vec3<f32>) -> vec3<f32> {
-  var out = s;
-  if (mode == 11u) { out = s * d; }
-  else if (mode == 12u) { out = s + d - s * d; }
-  else if (mode == 13u) { out = select(2. * s * d, 1. - 2. * (1. - s) * (1. - d), d > vec3<f32>(.5)); }
-  else if (mode == 14u) { out = min(s, d); }
-  else if (mode == 15u) { out = max(s, d); }
-  else if (mode == 16u) { out = select(min(d / max(1. - s, vec3<f32>(.000001)), vec3<f32>(1.)), vec3<f32>(1.), s >= vec3<f32>(1.)); }
-  else if (mode == 17u) { out = select(max(1. - (1. - d) / max(s, vec3<f32>(.000001)), vec3<f32>(0.)), vec3<f32>(0.), s <= vec3<f32>(0.)); }
-  else if (mode == 18u) { out = select(2. * s * d, 1. - 2. * (1. - s) * (1. - d), s > vec3<f32>(.5)); }
-  else if (mode == 19u) {
-    let low = d - (1. - 2. * s) * d * (1. - d);
-    let g = select(sqrt(d), ((16. * d - 12.) * d + 4.) * d, d <= vec3<f32>(.25));
-    out = select(low, d + (2. * s - 1.) * (g - d), s > vec3<f32>(.5));
-  }
-  else if (mode == 20u) { out = abs(d - s); }
-  else if (mode == 21u) { out = s + d - 2. * s * d; }
-  return clamp(out, vec3<f32>(0.), vec3<f32>(1.));
-}
 @fragment fn fs_main(input: Out) -> @location(0) vec4<f32> {
   let src_sample = textureSampleLevel(source, blend_sampler, input.uv, 0.) * input.alpha;
   let dst_uv = input.position.xy / max(input.options.yz, vec2<f32>(1.));

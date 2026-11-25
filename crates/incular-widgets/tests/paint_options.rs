@@ -427,18 +427,10 @@ fn backdrop_filter_accepts_only_executable_filters() {
 
 #[test]
 fn flutter350_color_filtered_reuses_layer_when_the_color_changes() {
-    use incular_widgets::ColorFiltered;
+    use incular_widgets::{ColorFiltered, Placeholder};
 
-    // BlendMode.color is not yet exposed by Incular. A supported
-    // nontrivial color blend exercises the same retained-layer boundary.
-    let filter = |color| ColorFilter::blend(color, BlendMode::Screen);
-    let widget = |color| {
-        ColorFiltered::new(
-            filter(color),
-            Widget::box_(Size::new(40., 20.), Color::rgba(80, 120, 190, 255)),
-        )
-        .into()
-    };
+    let filter = |color| ColorFilter::blend(color, BlendMode::Color);
+    let widget = |color| ColorFiltered::new(filter(color), Placeholder::new()).into();
     let draw = |tree: &mut WidgetTree| {
         tree.layout(Constraints::tight(Size::new(40., 20.)))
             .unwrap();
@@ -469,7 +461,7 @@ fn flutter350_color_filtered_reuses_layer_when_the_color_changes() {
 fn flutter350_color_filtered_at_zero_area_keeps_zero_layout_size() {
     use incular_widgets::ColorFiltered;
 
-    let filter = ColorFilter::blend(Color::rgba(0, 0, 255, 255), BlendMode::Screen);
+    let filter = ColorFilter::blend(Color::rgba(0, 0, 255, 255), BlendMode::Color);
     let mut tree = WidgetTree::new();
     tree.mount(ColorFiltered::new(filter, SizedBox::shrink()).into())
         .unwrap();

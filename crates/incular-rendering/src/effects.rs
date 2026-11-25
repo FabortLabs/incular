@@ -604,6 +604,14 @@ pub enum BlendMode {
     /// Component-wise source/destination modulation. Flutter uses this as
     /// the default blend mode for [`ShaderMask`](https://api.flutter.dev/flutter/widgets/ShaderMask-class.html).
     Modulate,
+    /// Source hue, destination saturation and luminosity.
+    Hue,
+    /// Source saturation, destination hue and luminosity.
+    Saturation,
+    /// Source hue and saturation, destination luminosity.
+    Color,
+    /// Source luminosity, destination hue and saturation.
+    Luminosity,
 }
 impl BlendMode {
     #[must_use]
@@ -649,6 +657,10 @@ impl BlendMode {
             Self::Difference => 20,
             Self::Exclusion => 21,
             Self::Modulate => 22,
+            Self::Hue => 23,
+            Self::Saturation => 24,
+            Self::Color => 25,
+            Self::Luminosity => 26,
         }
     }
 }
@@ -747,6 +759,12 @@ fn straight_rgb(value: [f32; 4]) -> [f32; 3] {
     }
 }
 fn artistic_blend_rgb(mode: BlendMode, source: [f32; 3], destination: [f32; 3]) -> [f32; 3] {
+    match mode {
+        BlendMode::Hue | BlendMode::Saturation | BlendMode::Color | BlendMode::Luminosity => {
+            return nonseparable_blend_rgb(mode, source, destination);
+        }
+        _ => {}
+    }
     let mut result = [0.; 3];
     for index in 0..3 {
         let s = source[index];
@@ -803,6 +821,52 @@ fn artistic_blend_rgb(mode: BlendMode, source: [f32; 3], destination: [f32; 3]) 
         };
     }
     result.map(|value| value.clamp(0., 1.))
+}
+
+/// Nonseparable blends operate on the three straight RGB channels together.
+/// The luminosity correction rescales the distance from gray to stay within
+/// the RGB gamut, preserving luminosity rather than independently clipping
+/// overflowing channels.
+fn nonseparable_blend_rgb(mode: BlendMode, source: [f32; 3], destination: [f32; 3]) -> [f32; 3] {
+    fn lum([r, g, b]: [f32; 3]) -> f32 {
+        0.3 * r + 0.59 * g + 0.11 * b
+    }
+    fn range([r, g, b]: [f32; 3]) -> (f32, f32) {
+        (r.min(g).min(b), r.max(g).max(b))
+    }
+    fn sat(color: [f32; 3]) -> f32 {
+        let (min, max) = range(color);
+        max - min
+    }
+    fn with_sat(color: [f32; 3], saturation: f32) -> [f32; 3] {
+        let (min, max) = range(color);
+        if min == max {
+            [0.; 3]
+        } else {
+            color.map(|v| (v - min) * saturation / (max - min))
+        }
+    }
+    fn with_lum(color: [f32; 3], luminosity: f32) -> [f32; 3] {
+        let shift = luminosity - lum(color);
+        let mut adjusted = color.map(|v| v + shift);
+        let (min, max) = range(adjusted);
+        if min < 0. {
+            adjusted =
+                adjusted.map(|v| luminosity + (v - luminosity) * luminosity / (luminosity - min));
+        }
+        if max > 1. {
+            adjusted = adjusted
+                .map(|v| luminosity + (v - luminosity) * (1. - luminosity) / (max - luminosity));
+        }
+        adjusted.map(|v| v.clamp(0., 1.))
+    }
+    match mode {
+        BlendMode::Hue => with_lum(with_sat(source, sat(destination)), lum(destination)),
+        BlendMode::Saturation => with_lum(with_sat(destination, sat(source)), lum(destination)),
+        BlendMode::Color => with_lum(source, lum(destination)),
+        BlendMode::Luminosity => with_lum(destination, lum(source)),
+        _ => unreachable!("a nonseparable blend mode"),
+    }
 }
 
 /// Flutter's `ui.ImageFilter` as a renderer-neutral value: the filter forms

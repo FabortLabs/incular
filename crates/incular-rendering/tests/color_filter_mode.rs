@@ -153,3 +153,38 @@ fn staged_filters_fuse_only_when_order_is_kept() {
         .optimized();
     assert_eq!(chain.effects().len(), 2);
 }
+
+#[test]
+fn nonseparable_modes_match_pinned_flutter_premultiplied_samples() {
+    let src = Color::rgba(200, 40, 90, 160);
+    let source = premultiply([200. / 255., 40. / 255., 90. / 255., 160. / 255.]);
+    for (mode, opaque, translucent) in [
+        (BlendMode::Hue, [148, 94, 142, 255], [137, 60, 99, 208]),
+        (
+            BlendMode::Saturation,
+            [70, 121, 211, 255],
+            [98, 73, 134, 208],
+        ),
+        (BlendMode::Color, [169, 84, 141, 255], [147, 55, 99, 208]),
+        (
+            BlendMode::Luminosity,
+            [66, 106, 176, 255],
+            [96, 66, 117, 208],
+        ),
+    ] {
+        let filter = ColorFilter::blend(src, mode);
+        for (alpha, expected) in [(1., opaque), (128. / 255., translucent)] {
+            let dest = [80. / 255., 120. / 255., 190. / 255., alpha];
+            let filtered = premultiply(filter.apply(dest));
+            let blended = blend_premultiplied(mode, source, premultiply(dest));
+            for candidate in [filtered, blended] {
+                let rgba = candidate.map(|value| (value * 255.).round() as u8);
+                assert!(
+                    rgba.iter().zip(expected).all(|(a, b)| a.abs_diff(b) <= 1),
+                    "{mode:?} with destination alpha {alpha}: {rgba:?} != {expected:?}"
+                );
+            }
+        }
+        assert_eq!(blend_premultiplied(mode, source, [0.; 4]), source);
+    }
+}

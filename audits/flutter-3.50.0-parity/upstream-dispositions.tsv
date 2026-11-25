@@ -731,4 +731,4 @@ packages/flutter/test/widgets/listener_test.dart	376	RenderPointerListener's deb
 packages/flutter/test/gestures/transformed_double_tap_test.dart	12	kTouchSlop is evaluated in the global coordinate space when scaled up	paired-match	upstream-tap-recognizers.md#single-and-double-tap-on-the-same-detector
 packages/flutter/test/gestures/transformed_double_tap_test.dart	53	kTouchSlop is evaluated in the global coordinate space when scaled down	paired-match	upstream-tap-recognizers.md#single-and-double-tap-on-the-same-detector
 packages/flutter/test/gestures/double_tap_test.dart	733	Unfinished DoubleTap does not prevent competing Tap	partial-match	upstream-tap-recognizers.md#inner-double-tap-versus-an-ancestor-single-tap
-packages/flutter/test/widgets/color_filter_test.dart	97	Color filter - reuses its layer	partial-match	upstream-fit-overlays-scroll-notifications-clipboard.md#color-filter-bounds-recheck
+packages/flutter/test/widgets/color_filter_test.dart	97	Color filter - reuses its layer	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md#nonseparable-color-blends-and-original-layer-identity

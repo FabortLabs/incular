@@ -14,6 +14,7 @@ fn main() {
     let source_dir = PathBuf::from("src/shaders");
     println!("cargo:rerun-if-changed={}", source_dir.display());
     println!("cargo:rerun-if-changed=src/soft_clip.wgsl");
+    println!("cargo:rerun-if-changed=src/artistic_blend.wgsl");
     let output = PathBuf::from(env::var_os("OUT_DIR").expect("Cargo provides OUT_DIR"));
     let mut paths: Vec<_> = fs::read_dir(&source_dir)
         .expect("built-in shader directory")
@@ -34,6 +35,11 @@ fn main() {
             .expect("shader stem")
             .to_str()
             .expect("UTF-8 shader name");
+        let base = if matches!(name, "blend_shader" | "color_matrix_shader") {
+            format!("{base}\n{}", include_str!("src/artistic_blend.wgsl"))
+        } else {
+            base
+        };
         #[cfg(feature = "d3d11")]
         if native && name != "bootstrap_shader" {
             fs::write(output.join(format!("{name}.hlsl")), direct3d_shader(&base))

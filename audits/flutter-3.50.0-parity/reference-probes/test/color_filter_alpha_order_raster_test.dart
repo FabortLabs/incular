@@ -37,6 +37,31 @@ Widget _box(Color color) =>
 Widget _filter(Widget child, [ui.ColorFilter matrix = _matrix]) =>
     ColorFiltered(colorFilter: matrix, child: child);
 
+class _DirectBlend extends CustomPainter {
+  const _DirectBlend(this.destination, this.source, this.mode);
+
+  final Color destination;
+  final Color source;
+  final ui.BlendMode mode;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    canvas.saveLayer(rect, ui.Paint());
+    canvas.drawRect(rect, ui.Paint()..color = destination);
+    canvas.drawRect(
+      rect,
+      ui.Paint()
+        ..color = source
+        ..blendMode = mode,
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_DirectBlend oldDelegate) => true;
+}
+
 Future<void> _check(
   WidgetTester tester,
   String label,
@@ -110,6 +135,43 @@ Future<void> _check(
 }
 
 void main() {
+  testWidgets('Nonseparable modes blend whole RGB colors', (tester) async {
+    const source = Color(0xa0c8285a);
+    const cases = [
+      (ui.BlendMode.hue, [148, 94, 142, 255], [137, 60, 99, 255]),
+      (ui.BlendMode.saturation, [70, 121, 211, 255], [98, 73, 134, 255]),
+      (ui.BlendMode.color, [169, 84, 141, 255], [147, 55, 99, 255]),
+      (ui.BlendMode.luminosity, [66, 106, 176, 255], [96, 66, 117, 255]),
+    ];
+    for (final (mode, opaque, translucent) in cases) {
+      for (final (destination, expected) in [
+        (const Color(0xff5078be), opaque),
+        (const Color(0x805078be), translucent),
+      ]) {
+        await _check(
+          tester,
+          'ColorFilter.mode($mode) with $destination',
+          ClipRect(
+            child: _filter(
+              _box(destination),
+              ui.ColorFilter.mode(source, mode),
+            ),
+          ),
+          expected,
+        );
+        await _check(
+          tester,
+          'Canvas blend $mode with $destination',
+          CustomPaint(
+            size: const Size(32, 24),
+            painter: _DirectBlend(destination, source, mode),
+          ),
+          expected,
+        );
+      }
+    }
+  });
+
   testWidgets(
     'ColorFiltered matrix recovers straight RGB before replacing alpha',
     (tester) async {
