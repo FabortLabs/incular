@@ -37,9 +37,17 @@ launcher dependencies. It is not credited as a paired registration.
 Three exact hermetic tool registrations passed in the pinned Flutter SDK:
 valid manifest fields, initial/stale SDK scaffold regeneration, and root
 pubspec changes. Flutter's manifest records manifest and Dart SDK versions
-and project pubspec hashes. Incular does not yet generate a preview
-scaffold or equivalent cache manifest, so the three results are reference
-only and are excluded from the paired count.
+and project pubspec hashes. The native `incular_devtools::preview_manifest`
+now pairs those three behaviors using Cargo manifests. It records the
+schema, SDK identity, and dependency fingerprints, requests full
+regeneration for a missing or SDK-incompatible scaffold, and refreshes
+only metadata after a project edit. It uses parsed TOML and a stable
+cache fingerprint rather than the Dart pubspec schema or MD5 bytes.
+
+The five native tests also cover comment-only edits, removed members,
+corrupt metadata, invalid project TOML, and preserving host fields on
+atomic refresh. This component does not generate or launch the preview
+host, discover annotations, or implement DTD; those cases remain open.
 
 To repeat against the SDK's initialized `flutter_tools` package:
 
