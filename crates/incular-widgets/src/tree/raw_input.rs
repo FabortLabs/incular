@@ -417,43 +417,49 @@ impl WidgetTree {
         event: RawPointerEvent,
         hit: &[ElementId],
     ) {
-        let current = self.listener_ids(hit);
         let hover_event = event.phase == PointerPhase::Move
             && event.buttons == 0
             && !self.input.raw_pointer_routes.contains_key(&key);
+        if event.phase == PointerPhase::Down && !self.input.raw_pointer_routes.contains_key(&key) {
+            // Flutter retains both the recipient and its hit-test transform
+            // for the contact. Layout or scrolling may move it afterwards.
+            let route = self
+                .listener_ids(hit)
+                .into_iter()
+                .map(|element| RawPointerRouteEntry {
+                    element,
+                    world_to_local: self
+                        .render_id(element)
+                        .and_then(|id| self.pointer_world_to_local(id)),
+                })
+                .collect();
+            self.input.raw_pointer_routes.insert(key, route);
+        }
+        let finished;
         let route = match event.phase {
-            PointerPhase::Down => {
-                if let Some(route) = self.input.raw_pointer_routes.get(&key) {
-                    route.clone()
-                } else {
-                    self.input.raw_pointer_routes.insert(key, current.clone());
-                    current.clone()
-                }
+            PointerPhase::Cancel => {
+                finished = self.input.raw_pointer_routes.remove(&key);
+                finished.as_ref()
             }
-            PointerPhase::Move => self
-                .input
-                .raw_pointer_routes
-                .get(&key)
-                .cloned()
-                .unwrap_or_default(),
-            PointerPhase::Up if event.buttons != 0 => self
-                .input
-                .raw_pointer_routes
-                .get(&key)
-                .cloned()
-                .unwrap_or_default(),
-            PointerPhase::Up | PointerPhase::Cancel => self
-                .input
-                .raw_pointer_routes
-                .remove(&key)
-                .unwrap_or_default(),
-            PointerPhase::Enter | PointerPhase::Exit => Vec::new(),
+            PointerPhase::Up if event.buttons == 0 => {
+                finished = self.input.raw_pointer_routes.remove(&key);
+                finished.as_ref()
+            }
+            PointerPhase::Down | PointerPhase::Move | PointerPhase::Up => {
+                self.input.raw_pointer_routes.get(&key)
+            }
+            PointerPhase::Enter | PointerPhase::Exit => None,
         };
         let callbacks = route
-            .iter()
-            .filter_map(|id| {
-                self.listener_callbacks(*id)
-                    .map(|callbacks| (callbacks, self.localized_event(*id, event)))
+            .into_iter()
+            .flatten()
+            .filter_map(|entry| {
+                self.listener_callbacks(entry.element).map(|callbacks| {
+                    (
+                        callbacks,
+                        localize_with_transform(entry.world_to_local, event),
+                    )
+                })
             })
             .collect::<Vec<_>>();
         for (callback, event) in callbacks {
@@ -482,11 +488,12 @@ impl WidgetTree {
             }
         }
         if hover_event {
-            let hovers = current
-                .iter()
+            let hovers = self
+                .listener_ids(hit)
+                .into_iter()
                 .filter_map(|id| {
-                    self.listener_callbacks(*id)
-                        .map(|callbacks| (callbacks, self.localized_event(*id, event)))
+                    self.listener_callbacks(id)
+                        .map(|callbacks| (callbacks, self.localized_event(id, event)))
                 })
                 .collect::<Vec<_>>();
             for (callback, event) in hovers {
@@ -531,20 +538,12 @@ impl WidgetTree {
     pub(super) fn localized_event(
         &self,
         element: ElementId,
-        mut event: RawPointerEvent,
+        event: RawPointerEvent,
     ) -> RawPointerEvent {
-        let Some(render) = self.render_id(element) else {
-            return event;
-        };
-        let transform = self.render_world_transform(render);
-        if let (Some(local), Some(previous)) = (
-            transform.inverse_transform_point(event.position),
-            transform.inverse_transform_point(event.position - event.delta),
-        ) {
-            event.local_position = local;
-            event.local_delta = local - previous;
-        }
-        event
+        let inverse = self
+            .render_id(element)
+            .and_then(|id| self.pointer_world_to_local(id));
+        localize_with_transform(inverse, event)
     }
 
     /// Diffs the device's hovered regions against `hit` and runs their enter
@@ -1078,7 +1077,7 @@ impl WidgetTree {
     pub(super) fn raw_input_unmounted(&mut self, element: ElementId) {
         self.cancel_raw_streams_for_element(element);
         self.input.raw_pointer_routes.retain(|_, route| {
-            route.retain(|candidate| *candidate != element);
+            route.retain(|candidate| candidate.element != element);
             !route.is_empty()
         });
         self.input.mouse_hover.retain(|_, hover| {
@@ -1091,6 +1090,19 @@ impl WidgetTree {
             }
         }
     }
+}
+
+fn localize_with_transform(
+    world_to_local: Option<CoreTransform>,
+    mut event: RawPointerEvent,
+) -> RawPointerEvent {
+    if let Some(transform) = world_to_local {
+        let local = transform.transform_point(event.position);
+        let previous = transform.transform_point(event.position - event.delta);
+        event.local_position = local;
+        event.local_delta = local - previous;
+    }
+    event
 }
 
 fn is_inside_tap_region(

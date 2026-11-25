@@ -6,7 +6,9 @@ use std::{cell::RefCell, rc::Rc, time::Instant};
 use incular_config::{Constraints, EdgeInsets};
 use incular_core::{Color, Offset, PointerDeviceKind, PointerPhase, Size, Transform};
 use incular_widgets::internal::WidgetTree;
-use incular_widgets::{Listener, Padding, RawPointerEvent, Widget};
+use incular_widgets::{
+    Listener, Padding, Positioned, RawPointerEvent, Stack, Widget, internal::Key,
+};
 
 fn record(child: impl Fn(Widget) -> Widget) -> (WidgetTree, Rc<RefCell<Vec<RawPointerEvent>>>) {
     let seen = Rc::new(RefCell::new(Vec::new()));
@@ -93,4 +95,107 @@ fn local_delta_follows_the_listener_transform() {
     // Scaled by two about the origin: local = global / 2.
     assert_eq!(moved.local_position, Offset::new(15., 13.));
     assert_eq!(moved.local_delta, Offset::new(5., 3.));
+}
+
+#[test]
+fn active_listener_keeps_its_down_coordinates_after_moving_and_rescaling() {
+    let (mut tree, seen) = moving_listener(true);
+    send(&mut tree, PointerPhase::Down, 1, 20., 20.);
+    move_listener(&mut tree, &seen, true);
+    send(&mut tree, PointerPhase::Move, 1, 30., 28.);
+    send(&mut tree, PointerPhase::Up, 0, 30., 28.);
+    send(&mut tree, PointerPhase::Move, 0, 60., 20.);
+    send(&mut tree, PointerPhase::Down, 1, 60., 20.);
+    assert_eq!(
+        local_samples(&seen),
+        [
+            (Offset::new(10., 10.), Offset::ZERO),
+            (Offset::new(15., 14.), Offset::new(5., 4.)),
+            (Offset::new(15., 14.), Offset::ZERO),
+            (Offset::new(5., 5.), Offset::new(7.5, -2.)),
+            (Offset::new(5., 5.), Offset::ZERO),
+        ],
+    );
+}
+
+#[test]
+fn disabled_hit_transform_never_enters_the_listener_coordinate_path() {
+    let (mut tree, seen) = moving_listener(false);
+    send(&mut tree, PointerPhase::Down, 1, 20., 20.);
+    move_listener(&mut tree, &seen, false);
+    send(&mut tree, PointerPhase::Move, 1, 30., 28.);
+    send(&mut tree, PointerPhase::Up, 0, 30., 28.);
+    send(&mut tree, PointerPhase::Move, 0, 60., 20.);
+    send(&mut tree, PointerPhase::Down, 1, 60., 20.);
+    assert_eq!(
+        local_samples(&seen),
+        [
+            (Offset::new(20., 20.), Offset::ZERO),
+            (Offset::new(30., 28.), Offset::new(10., 8.)),
+            (Offset::new(30., 28.), Offset::ZERO),
+            (Offset::new(20., 20.), Offset::new(30., -8.)),
+            (Offset::new(20., 20.), Offset::ZERO),
+        ],
+    );
+}
+
+type Trace = Rc<RefCell<Vec<RawPointerEvent>>>;
+
+fn moving_scene(trace: &Trace, left: f32, scale: f32, transform_hits: bool) -> Widget {
+    let record = || {
+        let trace = trace.clone();
+        move |event| trace.borrow_mut().push(event)
+    };
+    let child = Widget::from(
+        Listener::new(Widget::box_(Size::new(40., 40.), Color::WHITE))
+            .on_pointer_down(record())
+            .on_pointer_move(record())
+            .on_pointer_up(record())
+            .on_pointer_hover(record()),
+    )
+    .with_key(Key::Value(1));
+    let transform = if transform_hits {
+        Widget::from(incular_widgets::Transform::new(
+            Transform::scale(scale),
+            child,
+        ))
+    } else {
+        Widget::from(
+            incular_widgets::FractionalTranslation::new(Offset::new(scale / 2., 0.), child)
+                .transform_hit_tests(false),
+        )
+    };
+    Stack::new([Positioned::new(transform).left(left).top(0.)]).into()
+}
+
+fn moving_listener(transform_hits: bool) -> (WidgetTree, Trace) {
+    let trace = Rc::new(RefCell::new(Vec::new()));
+    let mut tree = WidgetTree::new();
+    tree.mount(moving_scene(&trace, 0., 2., transform_hits))
+        .unwrap();
+    tree.layout(Constraints::tight(Size::new(200., 200.)))
+        .unwrap();
+    (tree, trace)
+}
+
+fn move_listener(tree: &mut WidgetTree, trace: &Trace, transform_hits: bool) {
+    let key = Key::Value(1);
+    let before = tree.element_with_key(&key);
+    tree.update(
+        tree.root().unwrap(),
+        moving_scene(trace, 40., 4., transform_hits),
+    )
+    .unwrap();
+    tree.layout(Constraints::tight(Size::new(200., 200.)))
+        .unwrap();
+    assert!(before.is_some());
+    assert_eq!(tree.element_with_key(&key), before);
+}
+
+fn local_samples(trace: &Trace) -> Vec<(Offset, Offset)> {
+    trace
+        .borrow()
+        .iter()
+        .map(|e| (e.local_position, e.local_delta))
+        .collect()
 }

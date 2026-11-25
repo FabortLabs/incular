@@ -761,20 +761,21 @@ impl WidgetTree {
                 ));
             }
         }
-        for route in self
+        if let Some(element) = self
             .input
             .raw_pointer_routes
             .values()
-            .chain(self.input.mouse_hover.values())
+            .flatten()
+            .map(|entry| entry.element)
+            .chain(self.input.mouse_hover.values().flatten().copied())
+            .find(|id| !live(id))
         {
-            if let Some(element) = route.iter().find(|id| !live(id)) {
-                return Err(Self::invariant_error(
-                    InvariantCategory::Interaction,
-                    "pointer route references a dead element",
-                    Some(*element),
-                    None,
-                ));
-            }
+            return Err(Self::invariant_error(
+                InvariantCategory::Interaction,
+                "pointer route references a dead element",
+                Some(element),
+                None,
+            ));
         }
         if let Some((element, _)) = self
             .input

@@ -306,6 +306,15 @@ paths or continue from the preceding crate path.
   (`gestures/binding.dart:408–438,506–508`, `gestures/hit_test.dart:185–193`,
   `rendering/box.dart:837–849`;
   `crates/incular-widgets/src/tree/raw_input.rs:420–456,529–546`).
+- **G02 repair.** Raw Listener routes now retain the Down event's hit-test
+  transform, through Move, Up and Cancel. Hover and new presses use the
+  current hit geometry. Scaled/translated content moving from x=0 at 2×
+  to x=40 at 4× now keeps its original local Move position (15,14)
+  and delta (5,4), then reports local position (5,5) at a fresh hover.
+  A separate FractionalTranslation fixture verifies that a paint-only
+  transform never leaks into local event coordinates. Both pinned authored
+  Flutter fixtures pass; both Rust fixtures failed before and pass after
+  the fix, with all 15 focused Rust pointer and routing checks green.
 - **G03: single vs double tap and exact deadlines** (source-traced). With both
   callbacks installed, same-position Down/Up at 0/10 ms and 50/60 ms produces
   one double and zero singles in Flutter; Incular dispatches a single on Up 1

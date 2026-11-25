@@ -1274,6 +1274,12 @@ impl DeepTraceCapture {
     }
 }
 
+#[derive(Clone, Copy)]
+struct RawPointerRouteEntry {
+    element: ElementId,
+    world_to_local: Option<CoreTransform>,
+}
+
 /// Per-pointer and per-gesture interaction state, kept apart from the
 /// element and render arenas it refers to by id.
 #[derive(Default)]
@@ -1283,7 +1289,7 @@ struct InputState {
     active_trackpad_gestures: HashMap<GestureArenaKey, ActiveTrackpadGesture>,
     raw_recognizers: HashMap<ElementId, HashMap<TypeId, Box<dyn GestureRecognizer>>>,
     raw_gesture_streams: HashMap<GestureArenaKey, ActiveRawGesture>,
-    raw_pointer_routes: HashMap<GestureArenaKey, Vec<ElementId>>,
+    raw_pointer_routes: HashMap<GestureArenaKey, Vec<RawPointerRouteEntry>>,
     /// The previous raw position of each pointer, for Flutter's `delta`.
     raw_pointer_positions: HashMap<GestureArenaKey, Offset>,
     mouse_hover: HashMap<GestureArenaKey, Vec<ElementId>>,

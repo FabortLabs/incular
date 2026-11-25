@@ -445,17 +445,7 @@ impl WidgetTree {
         // always follow the visual transform. Follower placement resolves
         // through the same shared projection, so hits land where the
         // content paints; hidden followers return above.
-        if matches!(
-            node.object.kind(),
-            RenderKind::Transform {
-                transform_hit_tests: true,
-                ..
-            } | RenderKind::Scale { .. }
-                | RenderKind::Affine { .. }
-                | RenderKind::Rotation { .. }
-                | RenderKind::Follower { .. }
-                | RenderKind::FittedBox { .. }
-        ) {
+        if hit_test_transforms_children(node.object.kind()) {
             let current = origin + node.offset;
             let Some(local) = self
                 .child_content_transform(id)
@@ -885,17 +875,7 @@ impl WidgetTree {
         if flow_child_hidden(node.object.kind()) {
             return None;
         }
-        if matches!(
-            node.object.kind(),
-            RenderKind::Transform {
-                transform_hit_tests: true,
-                ..
-            } | RenderKind::Scale { .. }
-                | RenderKind::Affine { .. }
-                | RenderKind::Rotation { .. }
-                | RenderKind::Follower { .. }
-                | RenderKind::FittedBox { .. }
-        ) {
+        if hit_test_transforms_children(node.object.kind()) {
             let current = origin + node.offset;
             let local = self
                 .child_content_transform(id)
@@ -956,19 +936,9 @@ impl WidgetTree {
         point: Offset,
         origin: Offset,
     ) -> bool {
-        if matches!(
-            node.object.kind(),
-            RenderKind::Gesture
-                | RenderKind::Transform {
-                    transform_hit_tests: true,
-                    ..
-                }
-                | RenderKind::Scale { .. }
-                | RenderKind::Affine { .. }
-                | RenderKind::Rotation { .. }
-                | RenderKind::Follower { .. }
-                | RenderKind::FittedBox { .. }
-        ) {
+        if matches!(node.object.kind(), RenderKind::Gesture)
+            || hit_test_transforms_children(node.object.kind())
+        {
             return false;
         }
         let current = self.hit_origin(id, node, origin);
@@ -977,6 +947,25 @@ impl WidgetTree {
                 .object
                 .layers
                 .accepts_clip_hit(node.object.kind(), node.size, point - current)
+    }
+
+    /// The same coordinate path used by hit testing, not by paint.
+    /// Accumulating upwards avoids allocating a path for each listener.
+    pub(super) fn pointer_world_to_local(&self, id: RenderObjectId) -> Option<CoreTransform> {
+        let mut node = self.renders.get(id.0)?;
+        let mut local_to_world =
+            CoreTransform::translation(self.hit_origin(id, node, Offset::ZERO));
+        while let Some(parent) = node.parent {
+            node = self.renders.get(parent.0)?;
+            let origin = self.hit_origin(parent, node, Offset::ZERO);
+            let to_parent = if hit_test_transforms_children(node.object.kind()) {
+                CoreTransform::translation(origin).then(self.child_content_transform(parent))
+            } else {
+                CoreTransform::translation(hit_child_origin(node.object.kind(), origin))
+            };
+            local_to_world = to_parent.then(local_to_world);
+        }
+        local_to_world.inverse()
     }
 
     /// Position of `node` in its parent's hit-test space, including the
@@ -1296,6 +1285,20 @@ fn retained_self_hit(kind: Option<&WidgetKind>) -> bool {
         Some(WidgetKind::Banner { .. } | WidgetKind::Positioned { .. }) => false,
         _ => true,
     }
+}
+
+fn hit_test_transforms_children(kind: &RenderKind) -> bool {
+    matches!(
+        kind,
+        RenderKind::Transform {
+            transform_hit_tests: true,
+            ..
+        } | RenderKind::Scale { .. }
+            | RenderKind::Affine { .. }
+            | RenderKind::Rotation { .. }
+            | RenderKind::Follower { .. }
+            | RenderKind::FittedBox { .. }
+    )
 }
 
 /// Origin of a node's children in hit-test space: scroll views translate
