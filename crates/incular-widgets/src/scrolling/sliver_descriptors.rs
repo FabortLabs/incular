@@ -869,6 +869,9 @@ impl From<Viewport> for Widget {
             .paint_order(value.paint_order)
             .center(value.center)
             .anchor(value.anchor)
+            // RenderViewport itself is not the opaque Scrollable surface.
+            // Space between sliver children exposes the underlying hit path.
+            .hit_test_behavior(crate::gestures::HitTestBehavior::DeferToChild)
             .into()
     }
 }

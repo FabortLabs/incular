@@ -103,3 +103,18 @@ when the same direction-relative padding is resolved by the Rust
 caller. These are partial because the current typed SliverPadding
 accepts physical edges, not an ambient-direction-resolving value.
 Three pinned originals and 13 focused Rust tests passed.
+
+## Hit boundaries in all four scroll directions
+
+All four pinned hit registrations pass. The retained comparisons
+check the whole viewport, all three laid-out boxes, and five actual
+hit results per direction. The first strict Rust comparison found the
+underlying Viewport itself claiming padding gaps. A raw Viewport now
+defers to the child, so a gap has no sliver hit, while the higher-level
+CustomScrollView still exposes its opaque scrolling surface.
+
+:217, :242, and :267 pair the observed label and gap hits for up,
+left, and right. :191 is partial: descending geometry and hits match,
+but the Rust layout-only SliverPadding does not add a retained
+ancillary entry analogous to Flutter's RenderSliverPadding hit-path
+entry. Four focused Rust targets passed (61 tests).

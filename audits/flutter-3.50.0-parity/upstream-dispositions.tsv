@@ -1174,3 +1174,7 @@ packages/flutter/test/widgets/slivers_padding_test.dart	419	Viewport+SliverPaddi
 packages/flutter/test/widgets/slivers_padding_test.dart	65	Viewport+SliverPadding basic test (VISUAL)	paired-match	upstream-sliver-padding.md#three-sliver-placements-across-the-full-scroll-sample
 packages/flutter/test/widgets/slivers_padding_test.dart	107	Viewport+SliverPadding basic test (LTR)	partial-match	upstream-sliver-padding.md#three-sliver-placements-across-the-full-scroll-sample
 packages/flutter/test/widgets/slivers_padding_test.dart	149	Viewport+SliverPadding basic test (RTL)	partial-match	upstream-sliver-padding.md#three-sliver-placements-across-the-full-scroll-sample
+packages/flutter/test/widgets/slivers_padding_test.dart	191	Viewport+SliverPadding hit testing	partial-match	upstream-sliver-padding.md#hit-boundaries-in-all-four-scroll-directions
+packages/flutter/test/widgets/slivers_padding_test.dart	217	Viewport+SliverPadding hit testing up	paired-match	upstream-sliver-padding.md#hit-boundaries-in-all-four-scroll-directions
+packages/flutter/test/widgets/slivers_padding_test.dart	242	Viewport+SliverPadding hit testing left	paired-match	upstream-sliver-padding.md#hit-boundaries-in-all-four-scroll-directions
+packages/flutter/test/widgets/slivers_padding_test.dart	267	Viewport+SliverPadding hit testing right	paired-match	upstream-sliver-padding.md#hit-boundaries-in-all-four-scroll-directions
