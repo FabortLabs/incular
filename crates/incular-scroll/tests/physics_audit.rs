@@ -514,3 +514,26 @@ fn no_simulation_under_the_tolerance_velocity_or_for_bad_input() {
             .is_none()
     );
 }
+
+#[test]
+fn viewport_page_ballistics_use_fractional_extent_and_centering_origin() {
+    use incular_scroll::ScrollPhysics;
+
+    let viewport = 800.;
+    for (fraction, position, target) in [(0.75, 960., 1200.), (1.25, 1750., 2100.)] {
+        let physics = ScrollPhysics::CLAMPING.with_page_viewport_fraction(fraction);
+        assert_eq!(physics.snap_extent(viewport), Some(viewport * fraction));
+        assert_eq!(
+            physics
+                .release_simulation(position, 0., 0., 5000., viewport)
+                .unwrap()
+                .final_x(),
+            target
+        );
+        assert!(
+            physics
+                .release_simulation(target, 0., 0., 5000., viewport)
+                .is_none()
+        );
+    }
+}

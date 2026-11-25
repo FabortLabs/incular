@@ -165,6 +165,9 @@ pub(crate) struct ScrollState {
     /// viewport: the viewport springs it back on its next frame (Flutter's
     /// `goBallistic(0)` after `jumpTo`).
     pub(crate) pending_settle: bool,
+    /// The idle PageView just enabled snapping; settle with its newly
+    /// published viewport-based page geometry.
+    pub(crate) pending_page_snap: bool,
     /// Set while a position beyond an extent is springing back, so unchanged
     /// republications keep it until it re-enters the range.
     pub(crate) springing_back: bool,
@@ -429,6 +432,7 @@ impl ScrollController {
             let mut state = self.state.borrow_mut();
             state.pending_animation = None;
             state.pending_settle = false;
+            state.pending_page_snap = false;
             state.pending_ballistic = None;
             state.activity_active
         };
@@ -546,6 +550,7 @@ impl ScrollController {
                 state.offset = value;
                 state.pending_restored_offset = None;
                 state.pending_settle = false;
+                state.pending_page_snap = false;
                 state.springing_back = false;
                 state.revision += 1;
             }
@@ -559,22 +564,27 @@ impl ScrollController {
         moved
     }
 
-    /// Whether a jump left the position beyond an extent of an attached
-    /// viewport, and the spring back into range has not started yet.
+    /// Whether the attached viewport has a pending settling simulation.
     #[must_use]
     pub fn has_pending_settle(&self) -> bool {
         let state = self.state.borrow();
-        state.pending_settle || state.pending_ballistic.is_some()
+        state.pending_settle || state.pending_page_snap || state.pending_ballistic.is_some()
     }
 
-    /// Takes the spring back into range requested by an out-of-range jump,
-    /// as the simulation the physics runs from the current position with no
-    /// velocity (Flutter `ScrollPhysics.createBallisticSimulation`). Returns
-    /// `None` when nothing needs settling. Framework-internal: the viewport
-    /// that owns the controller starts it.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn has_pending_page_snap(&self) -> bool {
+        let state = self.state.borrow();
+        state.pending_page_snap && !state.pending_settle && state.pending_ballistic.is_none()
+    }
+
+    /// Takes a pending ballistic simulation from the current position,
+    /// whether to recover from overscroll, settle a paged position, or
+    /// run a delegate's handoff. The owning viewport starts the simulation.
     #[doc(hidden)]
     pub fn take_pending_settle(&self) -> Option<FlingSimulation> {
         let mut state = self.state.borrow_mut();
+        let snap = std::mem::take(&mut state.pending_page_snap);
         if let Some((velocity, physics)) = state.pending_ballistic.take() {
             state.pending_settle = false;
             return crate::coordinator::clamped_ballistic(
@@ -585,12 +595,21 @@ impl ScrollController {
                 state.max_offset,
             );
         }
-        if !std::mem::take(&mut state.pending_settle) {
-            return None;
-        }
-        state.springing_back = true;
         let physics = state.last_physics.unwrap_or_default();
-        physics.ballistic_simulation(state.offset, 0., state.min_offset, state.max_offset)
+        if std::mem::take(&mut state.pending_settle) {
+            state.springing_back = true;
+            physics.ballistic_simulation(state.offset, 0., state.min_offset, state.max_offset)
+        } else if snap && !state.activity_active && state.pending_animation.is_none() {
+            physics.release_simulation(
+                state.offset,
+                0.,
+                state.min_offset,
+                state.max_offset,
+                state.viewport_extent,
+            )
+        } else {
+            None
+        }
     }
 
     /// Requests a programmatic position before the viewport has established
@@ -632,11 +651,15 @@ impl ScrollController {
             self.state.borrow_mut().pending_animation = None;
             return self.jump_to(offset);
         }
-        self.state.borrow_mut().pending_animation = Some(ScrollAnimation {
-            target: offset,
-            duration,
-            curve,
-        });
+        {
+            let mut state = self.state.borrow_mut();
+            state.pending_page_snap = false;
+            state.pending_animation = Some(ScrollAnimation {
+                target: offset,
+                duration,
+                curve,
+            });
+        }
         // Wake whatever reads this controller so the runtime schedules the
         // frame that starts the motion.
         self.changes.notify();

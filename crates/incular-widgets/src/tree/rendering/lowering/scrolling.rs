@@ -69,9 +69,14 @@ pub(super) fn lower_scrolling(widget: &Widget, context: &DependencyContext) -> R
         WidgetKind::NotificationListener { .. } => RenderKind::Gesture,
         WidgetKind::SliverViewport { config } => {
             let behavior = ambient_scroll_behavior(context);
-            let physics = config
-                .inherit_physics
-                .map_or(config.physics, |page| inherited_physics(&behavior, page));
+            let physics = config.inherit_physics.map_or(config.physics, |page| {
+                let physics = behavior.get_scroll_physics();
+                if page {
+                    physics.with_page_viewport_fraction(config.physics.page_viewport_fraction())
+                } else {
+                    physics
+                }
+            });
             let resolved = behavior.resolve();
             let config = if physics == config.physics && resolved == config.behavior {
                 config.clone()

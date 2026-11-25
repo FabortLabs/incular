@@ -220,6 +220,7 @@ impl MetricAttachment {
         match state.metric_attachment {
             Some(live) if live.id == self.id => {
                 state.metric_attachment = None;
+                state.pending_page_snap = false;
                 true
             }
             _ => false,

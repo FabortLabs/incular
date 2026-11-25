@@ -1761,16 +1761,21 @@ impl WidgetTree {
             .collect();
         for controller in controllers {
             if controller.has_pending_settle() {
-                // An out-of-range jump springs back, as Flutter's
-                // `goBallistic(0)` does. Reduced motion lands on the edge.
+                // An out-of-range jump or enabling PageView snapping on an
+                // idle position can start Flutter's `goBallistic(0)` motion.
+                let page_snap = controller.has_pending_page_snap();
                 let Some(simulation) = controller.take_pending_settle() else {
                     continue;
                 };
                 if reduced_motion {
-                    let edge = controller
-                        .offset()
-                        .clamp(controller.min_offset(), controller.max_offset());
-                    controller.jump_to(edge);
+                    let target = if page_snap {
+                        simulation.final_x()
+                    } else {
+                        controller
+                            .offset()
+                            .clamp(controller.min_offset(), controller.max_offset())
+                    };
+                    controller.jump_to(target);
                     continue;
                 }
                 self.hold_scroll_flings(&controller);

@@ -194,6 +194,7 @@ pub struct ScrollPhysics {
     /// Device pixel ratio that scales the tolerances (Flutter reads it from
     /// `ScrollMetrics.devicePixelRatio`).
     device_pixel_ratio: f32,
+    page_viewport_fraction: f32,
 }
 
 impl Default for ScrollPhysics {
@@ -221,6 +222,7 @@ impl ScrollPhysics {
             snap: SnapPhysics::None,
             maintain_range: false,
             device_pixel_ratio: 1.,
+            page_viewport_fraction: 1.,
         }
     }
 
@@ -300,9 +302,25 @@ impl ScrollPhysics {
     /// equivalent of Flutter's `PageScrollPhysics` when the page extent is
     /// supplied by the viewport rather than a fixed constructor argument.
     #[must_use]
-    pub const fn page(mut self) -> Self {
+    pub const fn page(self) -> Self {
+        self.with_page_viewport_fraction(1.)
+    }
+
+    /// Enables PageView snapping for pages occupying a fraction of the viewport.
+    #[must_use]
+    pub const fn with_page_viewport_fraction(mut self, fraction: f32) -> Self {
         self.snap = SnapPhysics::PageViewport;
+        self.page_viewport_fraction = if fraction.is_finite() && fraction > 0. {
+            fraction
+        } else {
+            1.
+        };
         self
+    }
+
+    #[must_use]
+    pub const fn page_viewport_fraction(self) -> f32 {
+        self.page_viewport_fraction
     }
 
     #[must_use]
@@ -416,12 +434,18 @@ impl ScrollPhysics {
         let extent = match self.snap {
             SnapPhysics::None => return position.clamp(min.min(max), max.max(min)),
             SnapPhysics::Page { extent } | SnapPhysics::FixedExtent { extent } => extent,
-            SnapPhysics::PageViewport => viewport_extent,
+            SnapPhysics::PageViewport => viewport_extent * self.page_viewport_fraction,
         };
         if !extent.is_finite() || extent <= 0. {
             return position.clamp(min.min(max), max.max(min));
         }
-        let unit = position / extent;
+        let page_origin = match self.snap {
+            SnapPhysics::PageViewport => {
+                crate::pixels_for_page(0., viewport_extent, self.page_viewport_fraction)
+            }
+            _ => 0.,
+        };
+        let unit = (position - page_origin) / extent;
         let index = match self.snap {
             // Flutter `PageScrollPhysics._getTargetPixels` (page_view.dart:590).
             SnapPhysics::Page { .. } | SnapPhysics::PageViewport => {
@@ -445,7 +469,7 @@ impl ScrollPhysics {
                 (natural.clamp(min.min(max), max.max(min)) / extent).round()
             }
         };
-        (index * extent).clamp(min.min(max), max.max(min))
+        (page_origin + index * extent).clamp(min.min(max), max.max(min))
     }
 
     /// Returns the page/fixed-item step used for semantic scroll actions.
@@ -454,7 +478,7 @@ impl ScrollPhysics {
     pub fn snap_extent(self, viewport_extent: f32) -> Option<f32> {
         let extent = match self.snap {
             SnapPhysics::Page { extent } | SnapPhysics::FixedExtent { extent } => extent,
-            SnapPhysics::PageViewport => viewport_extent,
+            SnapPhysics::PageViewport => viewport_extent * self.page_viewport_fraction,
             SnapPhysics::None => return None,
         };
         (extent.is_finite() && extent > 0.).then_some(extent)
@@ -953,7 +977,7 @@ impl ScrollController {
         state.min_offset = -leading;
         state.max_offset = (state.content_extent - leading - state.viewport_extent).max(0.);
         let (min, max) = (state.min_offset, state.max_offset);
-        state.last_physics = Some(update.physics);
+        let previous_physics = state.last_physics.replace(update.physics);
         if let Some((axis, reverse)) = update.context {
             state.notification_context = Some((axis, reverse));
         }
@@ -1071,6 +1095,28 @@ impl ScrollController {
         };
         if (min..=max).contains(&state.offset) {
             state.springing_back = false;
+        }
+        if matches!(update.physics.snap, SnapPhysics::PageViewport) {
+            if previous_physics
+                .is_some_and(|physics| !matches!(physics.snap, SnapPhysics::PageViewport))
+                && attachment.is_some()
+                && viewport > 0.
+                && !state.activity_active
+                && state.pending_animation.is_none()
+                && !state.pending_settle
+                && state.offset > min
+                && state.offset < max
+                && update
+                    .physics
+                    .snap_target_for_extent(state.offset, 0., min, max, viewport)
+                    != state.offset
+            {
+                // Like applying new dimensions to Flutter's idle position,
+                // enabling page physics starts a zero-velocity ballistic.
+                state.pending_page_snap = true;
+            }
+        } else {
+            state.pending_page_snap = false;
         }
         ExtentPublication {
             persistence,

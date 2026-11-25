@@ -356,3 +356,50 @@ fn reusing_one_page_descriptor_does_not_link_mounted_controllers() {
     let remounted = Host::new(widget);
     assert_eq!(remounted.visible(), [0]);
 }
+
+#[test]
+fn reenabling_snapping_aligns_fractional_page_without_a_duplicate_callback() {
+    use incular_widgets::PageController;
+
+    let controller = PageController::new().with_viewport_fraction(0.75);
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let build = |snapping| {
+        let log = log.clone();
+        Directionality::new(
+            TextDirection::Ltr,
+            PageView::new(
+                (0..5).map(|i| Widget::from(Text::new(i.to_string())).with_key(Key::Value(i))),
+            )
+            .controller(controller.clone())
+            .page_snapping(snapping)
+            .on_page_changed(move |page| log.borrow_mut().push(page)),
+        )
+        .into()
+    };
+
+    let mut host = Host::new(build(false));
+    host.send(PointerPhase::Down, 400., 300., 16);
+    for x in [370., 130., -110., -350., -590.] {
+        host.send(PointerPhase::Move, x, 300., 16);
+    }
+    host.now += Duration::from_millis(180);
+    host.send(PointerPhase::Up, -590., 300., 0);
+    host.settle();
+    let before = controller.page().unwrap();
+    assert!(
+        (1.5..2.).contains(&before),
+        "fractional page before snapping: {before}"
+    );
+    assert_eq!(&*log.borrow(), &[1, 2]);
+
+    host.update(build(true));
+    assert!(
+        host.r.frame_requested(),
+        "the newly enabled snap must wake an idle window"
+    );
+    host.settle();
+    assert_eq!(controller.page(), Some(2.));
+    assert_eq!(controller.offset(), 1200.);
+    assert_eq!(&*log.borrow(), &[1, 2]);
+    assert_eq!(host.bounds(2).unwrap().origin.x, 100.);
+}

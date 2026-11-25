@@ -34,3 +34,16 @@ jumps to the beginning nor repeats the last reported page, and the
 second swipe selects page 2. Reenabling snapping still leaves pages 1
 and 2 partly visible instead of aligning page 2. That assertion remains
 red until the position starts the correct settling motion.
+
+## Restore snapping on the retained idle position
+
+The complete pinned `:634` sequence now matches. The free swipe retains
+its fractional position; reenabling snapping wakes the window and a
+zero-velocity spring aligns page 2 without a redundant callback. Both
+frameworks also pass an authored 0.75-fraction control: an 800px viewport
+settles on scroll offset 1200 and page 2 starts at x=100. Callbacks
+are [1, 2] after the free drag and remain [1, 2] after settling. A
+Rust physics control separately covers a fraction larger than one,
+where the first page's centering offset is part of each snap target.
+These are idle-position checks, not parity claims for changing physics
+during an active drag or fling.

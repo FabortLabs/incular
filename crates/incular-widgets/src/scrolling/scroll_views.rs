@@ -1580,7 +1580,7 @@ fn page_view_widget(value: PageView) -> Widget {
     let physics_for_extent = || {
         let physics = value.physics.unwrap_or_default();
         if value.page_snapping {
-            physics.page()
+            physics.with_page_viewport_fraction(fraction)
         } else {
             physics
         }
