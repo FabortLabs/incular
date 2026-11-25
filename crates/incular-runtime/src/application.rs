@@ -1450,16 +1450,7 @@ impl Application {
     /// retained window root. Window focus remains a separate per-window
     /// lifecycle channel and never synthesizes these application states.
     pub fn handle_application_lifecycle(&mut self, lifecycle: PlatformLifecycle) {
-        self.manager.application_lifecycle.set(match lifecycle {
-            PlatformLifecycle::Active | PlatformLifecycle::Resumed => {
-                crate::application_types::ApplicationLifecycle::Active
-            }
-            PlatformLifecycle::Inactive => crate::application_types::ApplicationLifecycle::Inactive,
-            PlatformLifecycle::Suspended => {
-                crate::application_types::ApplicationLifecycle::Suspended
-            }
-            PlatformLifecycle::Stopping => crate::application_types::ApplicationLifecycle::Stopping,
-        });
+        self.manager.application_lifecycle.set(lifecycle.into());
         if matches!(lifecycle, PlatformLifecycle::Stopping) {
             self.shutdown();
             return;

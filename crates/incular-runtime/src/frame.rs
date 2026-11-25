@@ -725,6 +725,8 @@ impl Runtime {
         }
         true
     }
+    /// Applies one literal lifecycle transition. Host events go through
+    /// the ordered platform projection in [`Self::handle_platform_event`].
     pub fn transition_lifecycle(&mut self, lifecycle: ApplicationLifecycle) -> bool {
         if self.lifecycle == lifecycle {
             return false;
@@ -753,6 +755,25 @@ impl Runtime {
         }
         true
     }
+    fn handle_platform_lifecycle(&mut self, lifecycle: PlatformLifecycle) {
+        use ApplicationLifecycle::{Active, Inactive, Starting, Suspended};
+
+        let target = ApplicationLifecycle::from(lifecycle);
+        // Flutter traverses intermediate states when its host skips one.
+        // Project those edges on states Incular actually exposes; Hidden
+        // and reversible Detached are not aliases for terminal states.
+        if self.lifecycle == Starting && matches!(target, Inactive | Suspended) {
+            self.transition_lifecycle(Active);
+        }
+        if matches!(
+            (self.lifecycle, target),
+            (Active, Suspended) | (Suspended, Active)
+        ) {
+            self.transition_lifecycle(Inactive);
+        }
+        self.transition_lifecycle(target);
+    }
+
     fn update_focus_for_lifecycle(&mut self, lifecycle: ApplicationLifecycle) {
         match lifecycle {
             ApplicationLifecycle::Inactive | ApplicationLifecycle::Suspended
@@ -1192,13 +1213,7 @@ impl Runtime {
                 None
             }
             PlatformEvent::Lifecycle(lifecycle) => {
-                self.transition_lifecycle(match lifecycle {
-                    PlatformLifecycle::Active => ApplicationLifecycle::Active,
-                    PlatformLifecycle::Inactive => ApplicationLifecycle::Inactive,
-                    PlatformLifecycle::Suspended => ApplicationLifecycle::Suspended,
-                    PlatformLifecycle::Resumed => ApplicationLifecycle::Active,
-                    PlatformLifecycle::Stopping => ApplicationLifecycle::Stopping,
-                });
+                self.handle_platform_lifecycle(lifecycle);
                 None
             }
             PlatformEvent::ExternalDrag(event) => {

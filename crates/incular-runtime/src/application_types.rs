@@ -2,7 +2,7 @@ use crate::context::BuildContext;
 use crate::profiling::SchedulerCounters;
 use crate::tasks::TaskFailure;
 use incular_core::RestorationKey;
-use incular_platform::WindowOptionsError;
+use incular_platform::{PlatformLifecycle, WindowOptionsError};
 use incular_widgets::Widget;
 use incular_widgets::internal::TreeError;
 use std::rc::Rc;
@@ -38,6 +38,17 @@ pub enum ApplicationLifecycle {
     Suspended,
     Stopping,
     Terminated,
+}
+
+impl From<PlatformLifecycle> for ApplicationLifecycle {
+    fn from(value: PlatformLifecycle) -> Self {
+        match value {
+            PlatformLifecycle::Active | PlatformLifecycle::Resumed => Self::Active,
+            PlatformLifecycle::Inactive => Self::Inactive,
+            PlatformLifecycle::Suspended => Self::Suspended,
+            PlatformLifecycle::Stopping => Self::Stopping,
+        }
+    }
 }
 
 /// A lifecycle update normalized by a platform adapter.

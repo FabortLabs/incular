@@ -207,6 +207,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-runtime`: app lifecycle observers now receive supported
+  intermediate states when a native event skips directly across them.
+
 - `incular-runtime`: desktop app deactivation parks focus and restores it
   on resume only if the target is still mounted and nothing else took focus.
 

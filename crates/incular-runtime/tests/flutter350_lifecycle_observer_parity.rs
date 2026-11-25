@@ -87,3 +87,45 @@ fn explicit_host_edges_are_delivered_in_order_and_duplicates_are_ignored() {
         ]
     );
 }
+
+// Upstream :124 projected on the shared states. The runtime has no Hidden
+// or restart callback, but it does expose the intermediate Inactive state.
+#[test]
+fn a_direct_resume_from_suspend_notifies_inactive_before_active() {
+    let (mut runtime, log) = observed_runtime();
+    for event in [
+        PlatformLifecycle::Active,
+        PlatformLifecycle::Inactive,
+        PlatformLifecycle::Suspended,
+    ] {
+        send(&mut runtime, event);
+    }
+    log.take();
+
+    send(&mut runtime, PlatformLifecycle::Resumed);
+    assert_eq!(runtime.lifecycle(), Active);
+    assert_eq!(log.take(), [(Suspended, Inactive), (Inactive, Active)]);
+}
+
+#[test]
+fn a_direct_suspend_at_start_notifies_each_supported_edge() {
+    let (mut runtime, log) = observed_runtime();
+    send(&mut runtime, PlatformLifecycle::Suspended);
+    assert_eq!(runtime.lifecycle(), Suspended);
+    assert_eq!(
+        log.take(),
+        [
+            (Starting, Active),
+            (Active, Inactive),
+            (Inactive, Suspended)
+        ]
+    );
+}
+
+#[test]
+fn a_direct_local_transition_remains_literal() {
+    let (mut runtime, log) = observed_runtime();
+    assert!(runtime.transition_lifecycle(Suspended));
+    assert!(!runtime.transition_lifecycle(Suspended));
+    assert_eq!(log.take(), [(Starting, Suspended)]);
+}

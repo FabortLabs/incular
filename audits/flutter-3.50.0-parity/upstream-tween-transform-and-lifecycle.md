@@ -166,3 +166,17 @@ assertions as Flutter, with unchanged interior and exterior controls.
 Rounded save-layer, color-matrix/opacity compositing, and seven native
 path/draw controls also pass. This is an authored probe, not an extra
 original registration; rotated and general paths remain open.
+
+### Supported application lifecycle transitions
+
+The original AppLifecycleListener :91 and :124 cases passed again.
+Incular now synthesizes the observable intermediate states when a host
+event jumps from starting to inactive/suspended, active to suspended,
+or suspended to active. An already explicit sequence is not duplicated.
+The low-level direct transition API still applies exactly one requested
+state. Per-window focus events do not synthesize app transitions.
+
+The four gap assertions failed before the change. These cases remain
+partial matches: Flutter's Hidden/show/restart and reversible Detached
+are not part of the Incular lifecycle projection. Stopping and
+Terminated keep their own shutdown meaning.

@@ -318,8 +318,8 @@ packages/flutter/test/widgets/rotated_box_test.dart	53	RotatedBox does not crash
 packages/flutter/test/widgets/stateful_component_test.dart	60	Don't rebuild subwidgets	paired-match	upstream-tween-transform-and-lifecycle.md
 packages/flutter/test/widgets/stateful_components_test.dart	47	resync stateful widget	partial-match	upstream-tween-transform-and-lifecycle.md
 packages/flutter/test/widgets/framework_test.dart	1776	Widget and State properties are nulled out when unmounted	partial-match	upstream-tween-transform-and-lifecycle.md
-packages/flutter/test/widgets/app_lifecycle_listener_test.dart	91	listens to AppLifecycleState	partial-mismatch	upstream-tween-transform-and-lifecycle.md
-packages/flutter/test/widgets/app_lifecycle_listener_test.dart	124	Triggers correct state transition callbacks	partial-mismatch	upstream-tween-transform-and-lifecycle.md
+packages/flutter/test/widgets/app_lifecycle_listener_test.dart	91	listens to AppLifecycleState	partial-match	upstream-tween-transform-and-lifecycle.md#supported-application-lifecycle-transitions
+packages/flutter/test/widgets/app_lifecycle_listener_test.dart	124	Triggers correct state transition callbacks	partial-match	upstream-tween-transform-and-lifecycle.md#supported-application-lifecycle-transitions
 packages/flutter/test/widgets/raw_tooltip_test.dart	1186	Tooltip can be dismissed by escape key	paired-mismatch	upstream-tooltip-escape-modal-keys-and-path-bounds.md
 packages/flutter/test/widgets/raw_tooltip_test.dart	1241	Multiple Tooltips are dismissed by escape key	paired-mismatch	upstream-tooltip-escape-modal-keys-and-path-bounds.md
 packages/flutter/test/widgets/raw_tooltip_test.dart	3290	Escape key dismisses open RawTooltip inside WidgetsApp without invoking ancestor DismissIntent	partial-mismatch	upstream-tooltip-escape-modal-keys-and-path-bounds.md
