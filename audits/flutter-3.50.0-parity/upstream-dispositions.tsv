@@ -343,7 +343,7 @@ packages/flutter/test/animation/animations_test.dart	51	ProxyAnimation.toString 
 packages/flutter/test/animation/animations_test.dart	60	ProxyAnimation set parent generates value changed	paired-match	upstream-raw-menu-animation-observer-and-shadow.md
 packages/flutter/test/animation/animations_test.dart	77	ReverseAnimation calls listeners	partial-match	upstream-raw-menu-animation-observer-and-shadow.md
 packages/flutter/test/animation/animations_test.dart	97	TrainHoppingAnimation	partial-match	upstream-raw-menu-animation-observer-and-shadow.md
-packages/flutter/test/animation/animations_test.dart	136	TrainHoppingAnimation notifies status listeners	paired-mismatch	upstream-raw-menu-animation-observer-and-shadow.md
+packages/flutter/test/animation/animations_test.dart	136	TrainHoppingAnimation notifies status listeners	paired-match	upstream-raw-menu-animation-observer-and-shadow.md
 packages/flutter/test/painting/box_painter_test.dart	101	BoxShadow control test	partial-match	upstream-raw-menu-animation-observer-and-shadow.md
 packages/flutter/test/painting/box_painter_test.dart	138	BoxShadow BlurStyle test	partial-match	upstream-raw-menu-animation-observer-and-shadow.md
 packages/flutter/test/rendering/limited_box_test.dart	13	LimitedBox: parent max size is unconstrained	partial-match	upstream-limited-box-and-decoration-contracts.md

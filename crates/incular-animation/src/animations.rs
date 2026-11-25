@@ -12,7 +12,7 @@
 //! change therefore takes effect, and fires its callbacks, on the change itself.
 
 use crate::{Animatable, AnimationController, AnimationStatus, Curve, Tween};
-use incular_core::reactivity::{DependencySource, Subscription};
+use incular_core::reactivity::{DependencySource, Subscription, TrackingGuard};
 use std::{
     cell::{Cell, RefCell},
     rc::{Rc, Weak},
@@ -118,20 +118,36 @@ impl DoubleAnimation {
     /// only when the value actually changes.
     #[must_use = "keep the subscription alive to observe changes"]
     pub fn observe(&self, listener: impl Fn(f32) + 'static) -> Subscription {
-        let node = self.clone();
-        self.0
-            .changes()
-            .subscribe((), move || listener(node.value()))
+        self.observe_distinct(Self::value, listener)
     }
 
     /// Flutter `Animation.addStatusListener` for a derived node. As with
     /// [`Self::observe`], it runs when the status changes.
     #[must_use = "keep the subscription alive to observe changes"]
     pub fn observe_status(&self, listener: impl Fn(AnimationStatus) + 'static) -> Subscription {
+        self.observe_distinct(Self::status, listener)
+    }
+
+    fn observe_distinct<T: Copy + PartialEq + 'static>(
+        &self,
+        read: fn(&Self) -> T,
+        listener: impl Fn(T) + 'static,
+    ) -> Subscription {
         let node = self.clone();
-        self.0
-            .changes()
-            .subscribe((), move || listener(node.status()))
+        let previous = {
+            // Snapshot only this observation's state. Constructing an
+            // observer inside a reactive build is not itself a value read.
+            let _skip_build_tracking = TrackingGuard::enter(|_| {});
+            Cell::new(read(&node))
+        };
+        self.0.changes().subscribe((), move || {
+            let now = read(&node);
+            // Store before invoking user code; a reentrant mutation must
+            // compare with the value already delivered to its observer.
+            if previous.replace(now) != now {
+                listener(now);
+            }
+        })
     }
 
     /// `CurvedAnimation(parent: self, curve: curve)`.
@@ -622,6 +638,9 @@ impl ProxyAnimation {
     pub fn set_parent(&self, parent: Option<DoubleAnimation>) {
         let changes = {
             let mut state = self.state.borrow_mut();
+            if state.parent == parent {
+                return;
+            }
             if let Some(old) = state.parent.take() {
                 state.value = old.value();
                 state.status = old.status();

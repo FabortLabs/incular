@@ -186,3 +186,37 @@ fn proxy_channels_follow_only_changed_values_and_statuses_when_swapping_parents(
         ],
     );
 }
+
+#[test]
+fn registering_graph_observers_does_not_add_a_build_dependency() {
+    use incular_core::reactivity::TrackingGuard;
+
+    let parent = controller(0.5);
+    let animation: DoubleAnimation = (&parent).into();
+    let tracked = Rc::new(Cell::new(0));
+    let seen = tracked.clone();
+    let _build = TrackingGuard::enter(move |_| seen.set(seen.get() + 1));
+    let _value = animation.observe(|_| {});
+    let _status = animation.observe_status(|_| {});
+    assert_eq!(tracked.get(), 0);
+    assert_eq!(animation.value(), 0.5);
+    assert_eq!(tracked.get(), 1, "ordinary reads are still reactive");
+}
+
+#[test]
+fn reentrant_value_observation_delivers_each_distinct_state_once() {
+    let parent = controller(0.5);
+    let animation: DoubleAnimation = (&parent).into();
+    let values = Rc::new(RefCell::new(Vec::new()));
+    let hits = values.clone();
+    let controller = parent.clone();
+    let _value = animation.observe(move |value| {
+        hits.borrow_mut().push(value);
+        if value == 0.6 {
+            controller.set_value(0.6);
+            controller.set_value(0.7);
+        }
+    });
+    parent.set_value(0.6);
+    assert_eq!(&*values.borrow(), &[0.6, 0.7]);
+}

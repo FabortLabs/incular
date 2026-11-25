@@ -41,3 +41,14 @@ The authored pinned Flutter and native BoxShadow samples now agree at
 -0.5, 0.5 and 1.5 for color, offset, blur and spread. The shared color
 helper accepts an unclamped factor for shadows and saturates only the
 output channels. Generic bounded color interpolation stays unchanged.
+
+## Distinct value and status observations
+
+Pinned TrainHoppingAnimation `:136` now reports [Forward] and then
+[Dismissed], not two of each when both tween inputs share a controller.
+The authored Proxy comparison also now matches: identical and equal
+swaps notify neither channel, a status-only swap reports only status,
+a value-only swap only value, and the detached parent cannot notify.
+Observing does not add a reactive build dependency; regular reads still
+track normally. Reentrant value changes report each distinct value once.
+This does not yet certify the exact relative order of a hop's callbacks.

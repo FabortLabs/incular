@@ -311,6 +311,10 @@ a version and date when publishing.
 
 ### Fixed
 
+- Derived animation observers notify only when their own value or status
+  changes. Repeated train notifications and equal ProxyAnimation swaps
+  no longer duplicate observer callbacks.
+
 - MouseRegion cursor and hit-policy updates replay paint in their shared
   region while preserving independent repaint boundaries and hover state.
 
