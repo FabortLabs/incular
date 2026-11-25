@@ -3,7 +3,12 @@
 //! (`painting/rounded_rectangle_border.dart`), and the circle, oval,
 //! beveled, continuous and linear borders.
 
-use std::{f64::consts::PI, rc::Rc, sync::Arc};
+use std::{
+    f64::consts::PI,
+    hash::{Hash, Hasher},
+    rc::Rc,
+    sync::Arc,
+};
 
 use incular_config::{EdgeInsets, TextDirection};
 use incular_core::{Offset, Rect, Size};
@@ -1506,9 +1511,14 @@ impl Default for LinearBorderEdge {
 }
 
 impl LinearBorderEdge {
-    /// `size` clamps to `0..=1`.
+    /// Constructs an edge. Flutter rejects an out-of-range size in debug
+    /// builds; release retains Incular's clamp for finite inputs.
     #[must_use]
     pub fn new(size: f32, alignment: f32) -> Self {
+        debug_assert!(
+            (0.0..=1.0).contains(&size),
+            "linear border size must be in 0..=1"
+        );
         Self {
             size: size.clamp(0.0, 1.0),
             alignment,
@@ -1519,16 +1529,31 @@ impl LinearBorderEdge {
     /// at the other edge's alignment.
     #[must_use]
     pub fn lerp(a: Option<Self>, b: Option<Self>, t: f32) -> Option<Self> {
+        if a == b {
+            return a;
+        }
         let (a, b) = match (a, b) {
             (None, None) => return None,
             (Some(a), None) => (a, Self { size: 0.0, ..a }),
             (None, Some(b)) => (Self { size: 0.0, ..b }, b),
             (Some(a), Some(b)) => (a, b),
         };
-        Some(Self {
-            size: a.size + (b.size - a.size) * t,
-            alignment: a.alignment + (b.alignment - a.alignment) * t,
-        })
+        Some(Self::new(
+            a.size + (b.size - a.size) * t,
+            a.alignment + (b.alignment - a.alignment) * t,
+        ))
+    }
+}
+
+// Both positive and negative zero compare equal in these value types.
+fn hash_border_float(value: f32, state: &mut impl Hasher) {
+    (if value == 0.0 { 0 } else { value.to_bits() }).hash(state);
+}
+
+impl Hash for LinearBorderEdge {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        hash_border_float(self.size, state);
+        hash_border_float(self.alignment, state);
     }
 }
 
@@ -1592,6 +1617,47 @@ impl LinearBorder {
         }
     }
 
+    /// Copies this border, retaining the side or edge for each omitted input.
+    #[must_use]
+    pub fn copy_with(
+        self,
+        side: Option<BorderSide>,
+        start: Option<LinearBorderEdge>,
+        end: Option<LinearBorderEdge>,
+        top: Option<LinearBorderEdge>,
+        bottom: Option<LinearBorderEdge>,
+    ) -> Self {
+        Self {
+            side: side.unwrap_or(self.side),
+            start: start.or(self.start),
+            end: end.or(self.end),
+            top: top.or(self.top),
+            bottom: bottom.or(self.bottom),
+        }
+    }
+
+    /// Flutter scales the side but clears all selected edges.
+    #[must_use]
+    pub fn scale(self, t: f32) -> Self {
+        Self {
+            side: self.side.scale(t),
+            ..Self::NONE
+        }
+    }
+
+    /// Interpolates two nullable instances as Flutter's OutlinedBorder
+    /// does for LinearBorder. An absent endpoint uses `scale`.
+    #[must_use]
+    pub fn lerp_optional(a: Option<Self>, b: Option<Self>, t: f32) -> Option<Self> {
+        match (a, b) {
+            (None, None) => None,
+            (Some(a), None) => Some(a.scale(1. - t)),
+            (None, Some(b)) => Some(b.scale(t)),
+            (Some(a), Some(b)) if a == b => Some(a),
+            (Some(a), Some(b)) => Some(incular_core::Lerp::lerp(&a, &b, t)),
+        }
+    }
+
     /// Flutter `dimensions`: the side width on each edge that is present
     /// (left, top, right, bottom).
     fn insets(&self) -> [f32; 4] {
@@ -1604,6 +1670,19 @@ impl LinearBorder {
             width(self.end),
             width(self.bottom),
         ]
+    }
+}
+
+impl Hash for LinearBorder {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.side.color.hash(state);
+        self.side.style.hash(state);
+        hash_border_float(self.side.width, state);
+        hash_border_float(self.side.stroke_align, state);
+        self.start.hash(state);
+        self.end.hash(state);
+        self.top.hash(state);
+        self.bottom.hash(state);
     }
 }
 
@@ -1674,7 +1753,8 @@ impl ShapeBorder for LinearBorder {
                 builder
                     .line_to(Offset::new(x + edge.size.width, y))
                     .line_to(Offset::new(x + edge.size.width, y + edge.size.height))
-                    .line_to(Offset::new(x, y + edge.size.height));
+                    .line_to(Offset::new(x, y + edge.size.height))
+                    .close();
                 canvas.fill_path(
                     Arc::new(builder.build()),
                     color,

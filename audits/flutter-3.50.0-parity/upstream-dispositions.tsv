@@ -949,7 +949,6 @@ packages/flutter/test/painting/circle_border_test.dart	11	CircleBorder defaults	
 packages/flutter/test/painting/oval_border_test.dart	9	OvalBorder defaults	paired-match	upstream-border-constraints-formatters.md#outlined-shapes-default-to-no-stroke
 packages/flutter/test/painting/beveled_rectangle_border_test.dart	9	BeveledRectangleBorder defaults	paired-match	upstream-border-constraints-formatters.md#outlined-shapes-default-to-no-stroke
 packages/flutter/test/painting/continuous_rectangle_border_test.dart	34	ContinuousRectangleBorder defaults	paired-match	upstream-border-constraints-formatters.md#outlined-shapes-default-to-no-stroke
-packages/flutter/test/painting/linear_border_test.dart	28	LinearBorder defaults	partial-match	upstream-border-constraints-formatters.md#outlined-shapes-default-to-no-stroke
 packages/flutter/test/painting/rounded_superellipse_border_test.dart	170	RoundedSuperellipseBorder.dimensions and CircleBorder.dimensions	paired-match	upstream-border-constraints-formatters.md#native-superellipse-edge-fitting
 packages/flutter/test/painting/rounded_superellipse_border_test.dart	198	RoundedSuperellipseBorder.lerp with different StrokeAlign	paired-match	upstream-border-constraints-formatters.md#native-superellipse-edge-fitting
 packages/flutter/test/painting/border_test.dart	61	Border.add	paired-match	upstream-border-constraints-formatters.md#physical-border-addition
@@ -1442,3 +1441,12 @@ packages/flutter/test/services/delta_text_input_test.dart	214	Invalid TextRange 
 packages/flutter/test/widgets/focus_scope_test.dart	394	Adding a new FocusScope attaches the child to its parent.	partial-match	upstream-owned-focus-scopes.md
 packages/flutter/test/widgets/focus_scope_test.dart	563	Removing focused widget doesn't move focus to next widget within FocusScope	paired-match	upstream-owned-focus-scopes.md
 packages/flutter/test/widgets/focus_scope_test.dart	611	Removing a FocusScope removes its node from the tree	partial-match	upstream-owned-focus-scopes.md
+packages/flutter/test/painting/linear_border_test.dart	23	LinearBorderEdge defaults	paired-match	upstream-linear-border.md
+packages/flutter/test/painting/linear_border_test.dart	28	LinearBorder defaults	paired-match	upstream-linear-border.md
+packages/flutter/test/painting/linear_border_test.dart	66	LinearBorder copyWith, ==, hashCode	paired-match	upstream-linear-border.md
+packages/flutter/test/painting/linear_border_test.dart	73	LinearBorder lerp identical a,b	partial-match	upstream-linear-border.md
+packages/flutter/test/painting/linear_border_test.dart	79	LinearBorderEdge.lerp identical a,b	partial-match	upstream-linear-border.md
+packages/flutter/test/painting/linear_border_test.dart	117	LinearBorder.start()	paired-match	upstream-linear-border.md
+packages/flutter/test/painting/linear_border_test.dart	131	LinearBorder.end()	paired-match	upstream-linear-border.md
+packages/flutter/test/painting/linear_border_test.dart	145	LinearBorder.top()	paired-match	upstream-linear-border.md
+packages/flutter/test/painting/linear_border_test.dart	154	LinearBorder.bottom()	paired-match	upstream-linear-border.md
