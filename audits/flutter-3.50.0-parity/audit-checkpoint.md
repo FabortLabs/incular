@@ -913,3 +913,7 @@ when the fit actually crops; the 81-case layer adaptation is partial.
 The [directional FittedBox recheck](upstream-fit-overlays-scroll-notifications-clipboard.md#fittedbox-directional-alignment)
 adds one paired original: 471 / 8,965 (5.25%), with 375 matches
 and 96 historical mismatches. All FittedBox originals are classified.
+
+The [AspectRatio physical view recheck](upstream-current-route-aspect-and-long-press.md#aspectratio-physical-view-recheck)
+completes one partial: 472 / 8,965 (5.26%), with 376 matches
+and 96 historical mismatches.

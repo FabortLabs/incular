@@ -28,3 +28,13 @@ Pinned Flutter 3.50.0 `ab2912035e`; Incular production `c647cb85`.
   activation. Incular misses Cancel and fires Start and End;
   the next valid primary press still works. The new mask reaches
   Runtime input but is dropped on the ordinary recognizer move path.
+
+## AspectRatio physical view recheck
+
+Pinned :54 passes. Its permanent Runtime port now delivers actual
+physical view metrics rather than constructing an unrelated zero
+constraint. The centered Placeholder lays out at zero when the
+physical viewport is zero. Its original nonzero size returns on the
+next nonzero viewport, including scale-factor conversion. All three
+AspectRatio originals are fully compared; the Runtime fixture does not
+claim native window-manager behavior.

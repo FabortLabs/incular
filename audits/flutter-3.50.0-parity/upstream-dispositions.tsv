@@ -168,7 +168,7 @@ packages/flutter/test/services/text_editing_delta_test.dart	336	Verify non text 
 packages/flutter/test/widgets/tap_region_test.dart	1133	TapRegion on non-current routes should not respond to onTapOutside events	paired-mismatch	upstream-current-route-aspect-and-long-press.md
 packages/flutter/test/widgets/aspect_ratio_test.dart	26	Aspect ratio control test	paired-match	upstream-current-route-aspect-and-long-press.md
 packages/flutter/test/widgets/aspect_ratio_test.dart	37	Aspect ratio infinite width	paired-match	upstream-current-route-aspect-and-long-press.md
-packages/flutter/test/widgets/aspect_ratio_test.dart	54	AspectRatio does not crash at zero area	partial-match	upstream-current-route-aspect-and-long-press.md
+packages/flutter/test/widgets/aspect_ratio_test.dart	54	AspectRatio does not crash at zero area	paired-match	upstream-current-route-aspect-and-long-press.md#aspectratio-physical-view-recheck
 packages/flutter/test/gestures/long_press_test.dart	61	Should recognize long press	partial-match	upstream-current-route-aspect-and-long-press.md
 packages/flutter/test/gestures/long_press_test.dart	106	Moving before accept cancels	partial-match	upstream-current-route-aspect-and-long-press.md
 packages/flutter/test/gestures/long_press_test.dart	365	Moving after accept does not cancel	partial-match	upstream-current-route-aspect-and-long-press.md
