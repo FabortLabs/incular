@@ -50,6 +50,11 @@ or fixed-extent snap. Bouncing is finite and resistant; applications advance
 its `spring_step` with monotonic frame elapsed time and apply the result to a
 controller, so policy code never sleeps or owns an executor.
 
+Use `FlingSimulation::bouncing` when the caller already owns the scroll's
+explicit spring, extents, and stopping tolerance. This is the direct
+counterpart to Flutter's `BouncingScrollSimulation`; ordinary scroll
+views continue to obtain ballistics from `ScrollPhysics`.
+
 `NestedScrollCoordinator` accepts controllers innermost-first. It applies a
 wheel, drag, or momentum delta to one controller, then transfers only a
 clamped boundary remainder to the next controller. This prevents the same

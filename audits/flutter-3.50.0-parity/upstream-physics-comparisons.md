@@ -208,3 +208,17 @@ debug guard rejects zero and sub-millisecond durations while a whole
 millisecond works. Rust Duration cannot represent a negative input;
 the release-mode fallback remains intentionally documented. This is a
 recheck of an existing pair. All 52 selected Rust tests pass.
+
+## Explicit bouncing scroll simulations
+
+The existing friction-to-spring simulation is now directly constructible
+with caller-supplied spring, extents, deceleration, and tolerances.
+Pinned `newton_test.dart:242` and `:296` both match using the original
+parameters: both +/-800 px/s flings finish by 3.5 seconds, and the
+-7,500 px/s case matches position and velocity before and after
+underscroll, can rewind to time zero, and snaps exactly to zero when
+done. Thirty-one focused Rust scroll tests passed.
+
+These pairs account for the two remaining original registrations in
+the 30-site physics catalog. This is coverage of those original cases,
+not a claim that all possible simulation inputs have parity.

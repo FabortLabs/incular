@@ -518,7 +518,19 @@ impl FlingSimulation {
         }
     }
 
-    pub(crate) fn bouncing(
+    /// Flutter's `BouncingScrollSimulation` with an explicit spring,
+    /// extents and stopping tolerance. Use zero constant deceleration for
+    /// the ordinary friction curve. Position and extents use logical
+    /// pixels; velocity uses logical pixels per second.
+    ///
+    /// The leading extent must not exceed the trailing extent. Either
+    /// extent can be infinite.
+    ///
+    /// # Panics
+    ///
+    /// In debug builds, panics if the extents are not ordered.
+    #[must_use]
+    pub fn bouncing(
         spring: ScrollSpring,
         position: f32,
         velocity: f32,
@@ -527,6 +539,10 @@ impl FlingSimulation {
         constant_deceleration: f32,
         tolerance: ScrollTolerance,
     ) -> Self {
+        debug_assert!(
+            leading <= trailing,
+            "bouncing scroll extents must be ordered"
+        );
         Self {
             map: None,
             model: FlingModel::Bouncing(BouncingMotion::new(
