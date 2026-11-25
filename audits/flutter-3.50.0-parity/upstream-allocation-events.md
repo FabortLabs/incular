@@ -16,3 +16,14 @@ installation, and its error reporter aggregates structured exceptions.
 Rust catches observer panics, the standard panic hook reports each,
 and the dispatch call returns the number of failures. Full SDK and
 other framework publishers are not credited.
+
+## Notifier publishers
+
+Pinned :176 passed. The two neutral notifier lifetimes now pair:
+a ValueNotifier is observed immediately and ends when its final Rust
+owner drops; a plain ChangeNotifier is observed on its first
+listener and ends once on explicit disposal. Cloning the handle,
+adding later listeners, or disposing a never-observed notifier
+does not add events. The original stays partial because its
+additional Dart UI Image/Picture publishers are not paired. The
+separate :155 SDK hook unsubscription case ran on Flutter only.

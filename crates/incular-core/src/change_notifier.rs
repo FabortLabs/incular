@@ -22,6 +22,10 @@ struct State {
     depth: usize,
     next_id: u64,
     disposed: bool,
+    #[cfg(debug_assertions)]
+    observed: bool,
+    #[cfg(debug_assertions)]
+    allocation: Option<crate::memory::allocations::ObjectLifetime>,
 }
 
 impl State {
@@ -64,6 +68,8 @@ impl ChangeNotifier {
     /// # Panics
     /// Panics if the notifier has been disposed.
     pub fn add_listener(&self, callback: impl Fn() + 'static) -> ChangeNotifierSubscription {
+        #[cfg(debug_assertions)]
+        self.observe_first_listener();
         let mut state = self.0.borrow_mut();
         state.assert_alive();
         let id = state.next_id;
@@ -78,6 +84,25 @@ impl ChangeNotifier {
         ChangeNotifierSubscription {
             state: Rc::downgrade(&self.0),
             id,
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    fn observe_first_listener(&self) {
+        {
+            let mut state = self.0.borrow_mut();
+            state.assert_alive();
+            if std::mem::replace(&mut state.observed, true) {
+                return;
+            }
+        }
+        // Allocation observers can themselves use or dispose this notifier.
+        // Do not hold its state borrow while invoking them.
+        let lifetime =
+            crate::memory::allocations::ObjectLifetime::new("foundation", "ChangeNotifier");
+        let mut state = self.0.borrow_mut();
+        if !state.disposed {
+            state.allocation = Some(lifetime);
         }
     }
 
@@ -179,7 +204,12 @@ impl ChangeNotifier {
             );
             state.disposed = true;
             state.live_listeners = 0;
-            (std::mem::take(&mut state.listeners), state.tracked.take())
+            (
+                std::mem::take(&mut state.listeners),
+                state.tracked.take(),
+                #[cfg(debug_assertions)]
+                state.allocation.take(),
+            )
         };
         // Captures can own other subscriptions on this notifier.
         drop(listeners);

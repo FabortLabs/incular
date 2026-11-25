@@ -115,3 +115,43 @@ fn removal_skips_later_listener_and_panics_do_not_truncate_delivery() {
     drop((first, second, bad, third, tap));
     assert!(!registry.has_listeners());
 }
+
+#[test]
+fn notifier_publishers_match_eager_value_and_lazy_change_lifetimes() {
+    use incular_core::{ChangeNotifier, ValueNotifier};
+
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let _observe = MemoryAllocations::current().add_listener({
+        let log = log.clone();
+        move |event| log.borrow_mut().push(event)
+    });
+    let cold = ChangeNotifier::new();
+    cold.dispose();
+    let change = ChangeNotifier::new();
+    assert!(log.borrow().is_empty());
+    let value = ValueNotifier::new(true);
+    let value_clone = value.clone();
+    assert_eq!(log.borrow().len(), 1);
+    let listeners = [change.add_listener(|| {}), change.add_listener(|| {})];
+    assert_eq!(log.borrow().len(), 2);
+    drop(value);
+    assert_eq!(log.borrow().len(), 2);
+    drop(value_clone);
+    change.dispose();
+    drop(change);
+    drop(listeners);
+    let trace = log.borrow();
+    assert_eq!(trace.len(), 4);
+    assert_eq!(trace[0].class_name, "ValueNotifier");
+    assert_eq!(trace[1].class_name, "ChangeNotifier");
+    assert_eq!(
+        [trace[0].kind, trace[1].kind],
+        [ObjectEventKind::Created; 2]
+    );
+    assert_eq!(
+        [trace[2].kind, trace[3].kind],
+        [ObjectEventKind::Disposed; 2]
+    );
+    assert_eq!(trace[0].id, trace[2].id);
+    assert_eq!(trace[1].id, trace[3].id);
+}
