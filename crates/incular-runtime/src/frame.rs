@@ -1126,9 +1126,18 @@ impl Runtime {
             | SemanticAction::ScrollDown) => self
                 .tree
                 .semantic_action_callback(element, direction.kind())
-                .is_some_and(|callback| {
+                .map(|callback| {
                     callback();
                     true
+                })
+                .unwrap_or_else(|| {
+                    self.tree
+                        .semantics()
+                        .node(node)
+                        .is_some_and(|semantic| semantic.actions.contains(&direction.kind()))
+                        && self
+                            .tree
+                            .semantic_scroll_direction(element, direction.kind())
                 }),
             SemanticAction::Increment => self
                 .tree

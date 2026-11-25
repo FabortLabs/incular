@@ -817,6 +817,18 @@ impl AccessKitProjection {
             Action::Focus if supports(&projected.semantic, SemanticActionKind::Focus) => {
                 Some(SemanticAction::Focus)
             }
+            Action::ScrollLeft | Action::ScrollRight | Action::ScrollUp | Action::ScrollDown
+                if projected.semantic.state.scroll_metrics.is_some() =>
+            {
+                let action = match request.action {
+                    Action::ScrollUp => SemanticAction::ScrollDown,
+                    Action::ScrollDown => SemanticAction::ScrollUp,
+                    Action::ScrollLeft => SemanticAction::ScrollRight,
+                    Action::ScrollRight => SemanticAction::ScrollLeft,
+                    _ => unreachable!("matched native scroll directions"),
+                };
+                supports(&projected.semantic, action.kind()).then_some(action)
+            }
             Action::ScrollLeft if supports(&projected.semantic, SemanticActionKind::ScrollLeft) => {
                 Some(SemanticAction::ScrollLeft)
             }
@@ -1105,7 +1117,22 @@ impl AccessKitProjection {
             }
         }
         for action in &semantic.actions {
-            if let Some(action) = map_action(*action) {
+            let native = if semantic.state.scroll_metrics.is_some() {
+                // AccessKit names the viewport's motion, while Flutter
+                // names the contents' swipe. Do not also expose axis-agnostic
+                // aliases, which would incorrectly add vertical arrows.
+                match action {
+                    SemanticActionKind::ScrollForward | SemanticActionKind::ScrollBackward => None,
+                    SemanticActionKind::ScrollUp => Some(Action::ScrollDown),
+                    SemanticActionKind::ScrollDown => Some(Action::ScrollUp),
+                    SemanticActionKind::ScrollLeft => Some(Action::ScrollRight),
+                    SemanticActionKind::ScrollRight => Some(Action::ScrollLeft),
+                    _ => map_action(*action),
+                }
+            } else {
+                map_action(*action)
+            };
+            if let Some(action) = native {
                 node.add_action(action);
             }
         }

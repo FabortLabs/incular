@@ -60,7 +60,7 @@ packages/flutter/test/widgets/shortcuts_test.dart	283	handles Ctrl-C	paired-matc
 packages/flutter/test/widgets/shortcuts_test.dart	1425	handles repeated events	paired-match	upstream-shortcut-comparisons.md
 packages/flutter/test/widgets/shortcuts_test.dart	1446	rejects repeated events if requested	paired-match	upstream-shortcut-comparisons.md
 packages/flutter/test/scheduler/binding_test.dart	44	Adding a persistent frame callback during a persistent frame callback	paired-match	scheduler-callback-phases-comparisons.md
-packages/flutter/test/widgets/sliver_semantics_test.dart	246	Offscreen sliver are hidden in semantics tree	paired-mismatch	offscreen-sliver-semantics-comparisons.md
+packages/flutter/test/widgets/sliver_semantics_test.dart	246	Offscreen sliver are hidden in semantics tree	paired-match	offscreen-sliver-semantics-comparisons.md
 packages/flutter/test/widgets/scroll_physics_test.dart	376	on leading edge overscroll	partial-mismatch	upstream-rubber-band-comparisons.md
 packages/flutter/test/widgets/scroll_physics_test.dart	407	on trailing edge overscroll	partial-mismatch	upstream-rubber-band-comparisons.md
 packages/flutter/test/painting/border_side_test.dart	79	BorderSide - scale	paired-match	upstream-border-constraints-formatters.md
@@ -1192,7 +1192,11 @@ packages/flutter/test/widgets/grid_view_test.dart	611	GridView does not cache it
 packages/flutter/test/widgets/grid_view_test.dart	644	GridView does not report visual overflow unnecessarily	paired-match	upstream-grid-direction-and-cache.md#viewport-clip-policy
 packages/flutter/test/widgets/grid_view_test.dart	668	GridView respects clipBehavior	paired-match	upstream-grid-direction-and-cache.md#viewport-clip-policy
 packages/flutter/test/widgets/grid_view_test.dart	735	GridView.builder respects clipBehavior	paired-match	upstream-grid-direction-and-cache.md#viewport-clip-policy
-packages/flutter/test/widgets/scrollable_semantics_test.dart	101	Vertical scrollable responds to scrollToOffset	partial-match	upstream-semantic-scroll-offsets.md
-packages/flutter/test/widgets/scrollable_semantics_test.dart	132	Horizontal scrollable responds to scrollToOffset	partial-match	upstream-semantic-scroll-offsets.md
+packages/flutter/test/widgets/scrollable_semantics_test.dart	101	Vertical scrollable responds to scrollToOffset	paired-match	upstream-semantic-scroll-offsets.md
+packages/flutter/test/widgets/scrollable_semantics_test.dart	132	Horizontal scrollable responds to scrollToOffset	paired-match	upstream-semantic-scroll-offsets.md
 packages/flutter/test/widgets/scrollable_semantics_test.dart	164	Unscrollable scrollable does not respond to scrollToOffset	paired-match	upstream-semantic-scroll-offsets.md
 packages/flutter/test/widgets/scrollable_semantics_test.dart	210	scrollToOffset respects implicit scrolling configuration	paired-match	upstream-semantic-scroll-offsets.md
+packages/flutter/test/widgets/list_view_semantics_test.dart	17	forward vertical	paired-match	upstream-semantic-scroll-offsets.md#directional-actions-and-edge-availability
+packages/flutter/test/widgets/list_view_semantics_test.dart	55	reverse vertical	paired-match	upstream-semantic-scroll-offsets.md#directional-actions-and-edge-availability
+packages/flutter/test/widgets/list_view_semantics_test.dart	94	forward horizontal	paired-match	upstream-semantic-scroll-offsets.md#directional-actions-and-edge-availability
+packages/flutter/test/widgets/list_view_semantics_test.dart	133	reverse horizontal	paired-match	upstream-semantic-scroll-offsets.md#directional-actions-and-edge-availability

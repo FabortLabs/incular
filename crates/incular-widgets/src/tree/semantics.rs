@@ -1805,20 +1805,49 @@ fn semantic_scroll_allows_implicit(kind: &RenderKind) -> bool {
     }
 }
 
+/// Flutter names its semantics actions for the swipe direction. A normal
+/// downwards viewport advances when its contents move upwards, for example.
+pub(super) fn semantic_scroll_directions(
+    axis: Axis,
+    reverse: bool,
+) -> (SemanticActionKind, SemanticActionKind) {
+    use SemanticActionKind::{ScrollDown, ScrollLeft, ScrollRight, ScrollUp};
+    match (axis, reverse) {
+        (Axis::Vertical, false) => (ScrollUp, ScrollDown),
+        (Axis::Vertical, true) => (ScrollDown, ScrollUp),
+        (Axis::Horizontal, false) => (ScrollLeft, ScrollRight),
+        (Axis::Horizontal, true) => (ScrollRight, ScrollLeft),
+    }
+}
+
 fn scroll_edge_actions(
     controller: &ScrollController,
     kind: &RenderKind,
 ) -> Vec<SemanticActionKind> {
+    let (axis, reverse, physics) = match kind {
+        RenderKind::Scroll {
+            axis,
+            reverse,
+            physics,
+            ..
+        } => (*axis, *reverse, *physics),
+        RenderKind::SliverViewport { config } => (config.axis, config.reverse, config.physics),
+        _ => return Vec::new(),
+    };
     let offset = controller.offset();
-    let mut actions = Vec::with_capacity(3);
-    if semantic_scroll_allows_implicit(kind) && controller.max_offset() > controller.min_offset() {
+    let (min, max) = (controller.min_offset(), controller.max_offset());
+    let mut actions = Vec::with_capacity(5);
+    if physics.allows_implicit_scrolling() && max > min {
         actions.push(SemanticActionKind::ScrollToOffset);
     }
-    if offset < controller.max_offset() {
-        actions.push(SemanticActionKind::ScrollForward);
-    }
-    if offset > controller.min_offset() {
-        actions.push(SemanticActionKind::ScrollBackward);
+    if physics.should_accept_user_offset(offset, min, max) {
+        let (forward, backward) = semantic_scroll_directions(axis, reverse);
+        if offset < max {
+            actions.extend([forward, SemanticActionKind::ScrollForward]);
+        }
+        if offset > min {
+            actions.extend([backward, SemanticActionKind::ScrollBackward]);
+        }
     }
     actions
 }
@@ -2172,12 +2201,17 @@ pub(super) fn semantic_action_is_executable(
                     if spec.enabled && (spec.has_callback || spec.action != ActionId(0))
             ) || gesture_can_execute(kind, callbacks.gesture_policy, action)
         }
-        SemanticActionKind::LongPress
-        | SemanticActionKind::ScrollLeft
+        SemanticActionKind::LongPress => {
+            gesture_can_execute(kind, callbacks.gesture_policy, action)
+        }
+        SemanticActionKind::ScrollLeft
         | SemanticActionKind::ScrollRight
         | SemanticActionKind::ScrollUp
         | SemanticActionKind::ScrollDown => {
-            gesture_can_execute(kind, callbacks.gesture_policy, action)
+            matches!(
+                kind,
+                WidgetKind::Scroll { .. } | WidgetKind::SliverViewport { .. }
+            ) || gesture_can_execute(kind, callbacks.gesture_policy, action)
         }
         SemanticActionKind::SetText | SemanticActionKind::SetSelection => {
             matches!(kind, WidgetKind::TextField(_))

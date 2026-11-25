@@ -3877,6 +3877,55 @@ impl WidgetTree {
         controller.jump_to(offset as f32)
     }
 
+    /// Flutter's accessibility swipe scrolls 80 percent of a viewport in
+    /// the physical swipe direction, independent of the logical aliases.
+    pub fn semantic_scroll_direction(
+        &mut self,
+        id: ElementId,
+        action: incular_semantics::SemanticActionKind,
+    ) -> bool {
+        let Some(render) = self.render_id(id).and_then(|id| self.renders.get(id.0)) else {
+            return false;
+        };
+        let (controller, axis, reverse, physics) = match render.object.kind() {
+            RenderKind::Scroll {
+                controller,
+                axis,
+                reverse,
+                physics,
+                ..
+            } => (controller, *axis, *reverse, *physics),
+            RenderKind::SliverViewport { config } => (
+                &config.controller,
+                config.axis,
+                config.reverse,
+                config.physics,
+            ),
+            _ => return false,
+        };
+        let offset = controller.offset();
+        let (min, max) = (controller.min_offset(), controller.max_offset());
+        if !self.viewport_lease_live(id, controller)
+            || !physics.should_accept_user_offset(offset, min, max)
+        {
+            return false;
+        }
+        let (forward, backward) = super::semantics::semantic_scroll_directions(axis, reverse);
+        let step = 0.8 * controller.viewport_extent();
+        let delta = if action == forward && offset < max {
+            step
+        } else if action == backward && offset > min {
+            -step
+        } else {
+            return false;
+        };
+        let changed = controller.apply_physics(physics, delta).consumed != 0.;
+        if changed {
+            self.diagnostics.scroll_events += 1;
+        }
+        changed
+    }
+
     pub fn semantic_scroll(&mut self, id: ElementId, forward: bool) -> bool {
         let Some(render) = self.render_id(id) else {
             return false;

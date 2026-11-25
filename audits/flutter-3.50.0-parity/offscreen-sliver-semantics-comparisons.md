@@ -58,3 +58,11 @@ mismatch at this checkpoint because the original also asserts
 `hasImplicitScrolling`, directional scroll actions, and
 `scrollToOffset` on its viewport semantic node. The visibility and
 offset repairs do not establish those action/flag requirements.
+
+## Viewport actions and flag also paired
+
+The original :246 now also pairs implicit-scrolling state,
+the three canonical actions, the four labels' child order, and
+their LTR text direction. This comparison normalizes Flutter's
+transparent wrapper nodes and Incular's existing logical action
+aliases, which are not part of the Flutter-facing action set.

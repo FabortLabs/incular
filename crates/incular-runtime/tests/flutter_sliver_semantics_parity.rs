@@ -59,6 +59,33 @@ fn sliver_box_adapters_apply_the_literal_initial_scroll_offset() {
     let mut expected = [None; ROWS];
     expected[..4].copy_from_slice(&[Some(true), Some(false), Some(false), Some(true)]);
     assert_eq!(statuses(&runtime), expected);
+    let tree = runtime.tree().semantics();
+    let viewport = tree
+        .iter()
+        .find_map(|(_, node)| (node.role == incular_semantics::Role::ScrollView).then_some(node))
+        .unwrap();
+    assert!(viewport.state.has_implicit_scrolling);
+    use incular_semantics::SemanticActionKind as Action;
+    let actions: Vec<_> = viewport
+        .actions
+        .iter()
+        .copied()
+        .filter(|action| !matches!(action, Action::ScrollForward | Action::ScrollBackward))
+        .collect();
+    assert_eq!(actions.len(), 3);
+    for action in [Action::ScrollUp, Action::ScrollDown, Action::ScrollToOffset] {
+        assert!(actions.contains(&action));
+    }
+    let children: Vec<_> = viewport
+        .children
+        .iter()
+        .map(|id| {
+            let node = tree.node(*id).unwrap();
+            assert_eq!(node.state.text_direction, Some(TextDirection::Ltr));
+            node.label.as_deref().unwrap()
+        })
+        .collect();
+    assert_eq!(children, ["Item 0", "Item 1", "Item 2", "Item 3"]);
 }
 
 #[test]
