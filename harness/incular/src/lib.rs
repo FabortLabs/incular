@@ -517,7 +517,7 @@ fn opacity(tree: &WidgetTree, element: ElementId) -> f64 {
                 .and_then(|render| tree.render_object_kind(render)),
         ) && tree
             .children(id)
-            .is_some_and(|children| children.get(*index) != Some(&child))
+            .is_some_and(|children| index.and_then(|index| children.get(index)) != Some(&child))
         {
             opacity = 0.;
         }

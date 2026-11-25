@@ -43,3 +43,14 @@ writes fresh logs, reports and `results.json` under the ignored
 `.tmp/flutter350-full-audit/frame-batches/` directory. It returns nonzero
 on a mismatch or missing/failed result. Validated with both matching
 fixtures and a repeat of the fade-pop divergence.
+
+On Linux, use the same exact bounded scenario selection:
+
+```sh
+bash audits/flutter-3.50.0-parity/run-focused-frames-linux.sh \
+  scroll__drag__notification_order scroll__fling__notification_order
+```
+
+This variant runs with the pinned SDK and cached dependencies, isolates
+the reference package in scratch, and serializes the native build and
+test. It leaves the source harness manifest unchanged.

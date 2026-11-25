@@ -47,3 +47,8 @@ This is a second frame registration, not a second underlying bug.
 
 Five ordinary physics fixtures match; they do not supersede the
 narrow precision, NaN, bounds-validation and classification regressions.
+
+The fresh strict Linux run of `text__editable_enter_callback_order`
+matches all five frames and callback counters. The raw Enter key and
+the platform editing action remain separate; the desktop fallback is
+not being compared in this fixture.

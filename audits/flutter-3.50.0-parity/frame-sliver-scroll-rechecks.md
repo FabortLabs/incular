@@ -48,3 +48,11 @@ settles. Both pre-existing native touch regressions pass, as do the nine
 SliverFillRemaining drag/semantics checks and focused ownership/coordination
 suites. The strict existing drag and fling frame registrations are being
 rechecked separately; this targeted repair does not itself change them.
+
+## Strict drag and fling recheck
+
+Fresh pinned Flutter and Incular runs agree for all 63 drag and 96
+fling frames. The offsets and cumulative Start, Update, Overscroll,
+End, and UserScroll registers now match. Both existing frame
+registrations move to match. The Linux runner uses a scratch package
+and executes only the selected existing scenarios.

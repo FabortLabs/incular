@@ -320,12 +320,12 @@ fn bouncing_scroll_extent_handoff(h: &mut FrameHarness) {
         .ballistic_simulation(90., 3000., 0., 100.)
         .expect("fling crosses the trailing extent");
     h.value("x", {
-        let simulation_for_x = simulation;
+        let simulation_for_x = simulation.clone();
         let clock = Rc::clone(&clock);
         move || f64::from(simulation_for_x.x(clock.get() as f32 / 1_000_000.))
     });
     h.value("dx", {
-        let simulation_for_dx = simulation;
+        let simulation_for_dx = simulation.clone();
         let clock = Rc::clone(&clock);
         move || f64::from(simulation_for_dx.dx(clock.get() as f32 / 1_000_000.))
     });
@@ -369,12 +369,12 @@ fn clamping_scroll_spline(h: &mut FrameHarness) {
         .ballistic_simulation(70., 500., 0., 320.)
         .expect("fast enough");
     h.value("x", {
-        let simulation_for_x = simulation;
+        let simulation_for_x = simulation.clone();
         let clock = Rc::clone(&clock);
         move || f64::from(simulation_for_x.x(clock.get() as f32 / 1_000_000.))
     });
     h.value("dx", {
-        let simulation_for_dx = simulation;
+        let simulation_for_dx = simulation.clone();
         let clock = Rc::clone(&clock);
         move || f64::from(simulation_for_dx.dx(clock.get() as f32 / 1_000_000.))
     });
@@ -396,10 +396,12 @@ fn clamping_scroll_spline(h: &mut FrameHarness) {
 fn record_fling(h: &mut FrameHarness, clock: &Rc<Cell<u64>>, simulation: FlingSimulation) {
     h.value("x", {
         let clock = Rc::clone(clock);
+        let simulation = simulation.clone();
         move || f64::from(simulation.x(clock.get() as f32 / 1_000_000.))
     });
     h.value("dx", {
         let clock = Rc::clone(clock);
+        let simulation = simulation.clone();
         move || f64::from(simulation.dx(clock.get() as f32 / 1_000_000.))
     });
     h.value("done", {

@@ -16,3 +16,8 @@ the cache Flutter reports no focus on its external FocusNode and Incular's
 node still reports focus. The first divergent sample is frame 6, 96 ms;
 the field differs in six frames. This is an observable stale node state,
 not a difference in whether PageDown moves the scroll position.
+
+A fresh pinned Linux recheck of `focus_input__keyboard_page_scroll`
+matches all 12 frames, including the scroll offset, held row focus and
+retained interactive geometry. This replaces the original mismatch
+after the keyboard scroll routing fixes.

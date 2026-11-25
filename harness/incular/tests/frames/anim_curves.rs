@@ -21,7 +21,7 @@ fn add_curve_samples(h: &mut FrameHarness, name: &str, curve: Curve) {
         ("p79", 0.79),
         ("p100", 1.0),
     ] {
-        add_sample(h, &format!("{name}_{suffix}"), curve, t);
+        add_sample(h, &format!("{name}_{suffix}"), curve.clone(), t);
     }
 }
 
@@ -232,7 +232,7 @@ fn scalar_tweens(h: &mut FrameHarness) {
         end: 13.0_f32,
     };
     let curve_tween = CurveTween(Curves::EASE_OUT_BACK);
-    let chained = tween.chain(curve_tween);
+    let chained = tween.chain(curve_tween.clone());
     let reversed = ReverseTween(tween);
     for (name, progress) in [
         ("linear_start", 0.0_f32),
@@ -244,6 +244,7 @@ fn scalar_tweens(h: &mut FrameHarness) {
         h.value(name, move || f64::from(tween.value_at(progress)));
     }
     for (name, progress) in [("curve_tween", 0.4_f32), ("curve_tween_end", 1.0)] {
+        let curve_tween = curve_tween.clone();
         h.value(name, move || f64::from(curve_tween.value_at(progress)));
     }
     h.value("chained_tween", move || f64::from(chained.value_at(0.4)));
@@ -262,6 +263,7 @@ fn typed_tweens(h: &mut FrameHarness) {
         ("int_round_half", 0.5),
         ("int_round_above_half", 0.65),
     ] {
+        let int_tween = int_tween.clone();
         h.value(name, move || f64::from(int_tween.evaluate(progress)));
     }
     for (name, progress) in [
