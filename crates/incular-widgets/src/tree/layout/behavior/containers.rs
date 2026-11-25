@@ -75,8 +75,10 @@ impl WidgetTree {
                     .collect::<Vec<_>>();
 
                 let mut flex_children = Vec::with_capacity(children.len());
-                let mut occupied_non_flex = 0.0;
-                for (child, (f, fit)) in children.iter().zip(&flex_meta) {
+                let spacing =
+                    f64::from(flex.spacing.max(0.0)) * children.len().saturating_sub(1) as f64;
+                let mut occupied_non_flex = spacing;
+                for (child, (f, _)) in children.iter().zip(&flex_meta) {
                     if *f == 0 || !main_max.is_finite() {
                         self.layout_render(*child, non_flex)?;
                         let render = self.render_live(child, "retained render must remain live");
@@ -88,24 +90,20 @@ impl WidgetTree {
                         if let Some(baseline) = render.baseline {
                             flex_child = flex_child.with_baseline(baseline);
                         }
-                        occupied_non_flex += flex.direction.main_extent(size);
+                        occupied_non_flex += f64::from(flex.direction.main_extent(size));
                         flex_children.push(flex_child);
                     } else {
-                        flex_children.push(incular_layout::FlexChild::flexible(
-                            Size::ZERO,
-                            *f,
-                            *fit,
-                        ));
+                        flex_children.push(incular_layout::FlexChild::new(Size::ZERO));
                     }
                 }
 
-                let total_flex: u32 = flex_meta.iter().map(|(f, _)| *f).sum();
-                let spacing = flex.spacing.max(0.0) * children.len().saturating_sub(1) as f32;
+                let total_flex: u64 = flex_meta.iter().map(|(f, _)| u64::from(*f)).sum();
                 if main_max.is_finite() && total_flex > 0 {
-                    let available_for_flex = (main_max - occupied_non_flex - spacing).max(0.0);
+                    let space_per_flex =
+                        (f64::from(main_max) - occupied_non_flex).max(0.0) / total_flex as f64;
                     for (i, (child, (f, fit))) in children.iter().zip(&flex_meta).enumerate() {
                         if *f > 0 {
-                            let allocation = available_for_flex * *f as f32 / total_flex as f32;
+                            let allocation = (space_per_flex * f64::from(*f)) as f32;
                             let child_constraints = match flex.direction {
                                 Axis::Horizontal => Constraints::new(
                                     if *fit == FlexFit::Tight {
@@ -132,8 +130,9 @@ impl WidgetTree {
                             let render =
                                 self.render_live(child, "retained render must remain live");
                             let size = render.size;
-                            let mut flex_child =
-                                incular_layout::FlexChild::flexible(size, *f, *fit);
+                            // Placement uses measured sizes, without allocating the same
+                            // flexible shares a second time from rounded inputs.
+                            let mut flex_child = incular_layout::FlexChild::new(size);
                             if let Some(baseline) = render.baseline {
                                 flex_child = flex_child.with_baseline(baseline);
                             }
@@ -143,18 +142,19 @@ impl WidgetTree {
                 }
 
                 let result = incular_layout::layout_flex(constraints, &flex_children, flex);
-                let mut used_main = f64::from(spacing);
                 let offsets = result
                     .children
                     .into_iter()
-                    .map(|child| {
-                        used_main += f64::from(flex.direction.main_extent(child.size));
-                        child.offset
-                    })
+                    .map(|child| child.offset)
                     .collect();
-                let main = f64::from(flex.direction.main_extent(result.size));
-                // Flutter ignores overflow within precisionErrorTolerance.
-                self.set_layout_overflow(id, used_main - main > 1e-10);
+                // Only unbounded non-flex children and spacing can exceed the
+                // budget. Re-summing independently rounded flexible shares
+                // can otherwise report overflow for children that fit.
+                // Compare non-flex occupancy at the layout coordinate precision
+                // before applying Flutter's precisionErrorTolerance.
+                let overflow = main_max.is_finite()
+                    && f64::from(occupied_non_flex as f32) - f64::from(main_max) > 1e-10;
+                self.set_layout_overflow(id, overflow);
                 (result.size, offsets)
             }
             RenderKind::CustomLayout { ref delegate } => {

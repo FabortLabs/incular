@@ -79,4 +79,45 @@ void main() {
     expect(tester.renderObject(find.byKey(key)), same(render));
     expect(inspect(render), clipped);
   });
+
+  testWidgets('Fractional flex shares do not trigger the overflow clip', (
+    WidgetTester tester,
+  ) async {
+    const key = ValueKey<String>('fractional-flex');
+    await tester.pumpWidget(
+      const Directionality(
+        textDirection: TextDirection.ltr,
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: 500,
+            child: Flex(
+              direction: Axis.horizontal,
+              key: key,
+              clipBehavior: Clip.hardEdge,
+              children: [
+                Expanded(child: SizedBox(height: 20)),
+                Expanded(child: SizedBox(height: 20)),
+                Expanded(child: SizedBox(height: 20)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(tester.takeException(), isNull);
+    final flex = tester.renderObject<RenderFlex>(find.byKey(key));
+    expect(flex.size, const Size(500, 20));
+    var child = flex.firstChild;
+    for (int i = 0; i < 3; i++) {
+      expect(child!.size.width, closeTo(500 / 3, 1e-10));
+      final data = child.parentData! as FlexParentData;
+      expect(data.offset.dx, closeTo(i * 500 / 3, 1e-10));
+      child = flex.childAfter(child);
+    }
+    final context = RecordingClipContext(ContainerLayer());
+    flex.paint(context, Offset.zero);
+    expect(context.clips, isEmpty);
+    context.dispose();
+  });
 }

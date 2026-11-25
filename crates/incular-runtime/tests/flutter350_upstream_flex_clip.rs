@@ -1,8 +1,8 @@
-use incular_config::{Axis, Clip, Constraints, TextDirection};
+use incular_config::{Axis, Clip, Constraints, MainAxisSize, TextDirection};
 use incular_core::{Color, Offset, Rect, Size};
 use incular_rendering::{ClipCoverage, DisplayList, PaintCommand};
 use incular_runtime::Runtime;
-use incular_widgets::{Flex, Widget};
+use incular_widgets::{Expanded, Flex, SizedBox, Widget};
 
 fn view(mode: Option<Clip>) -> Widget {
     let mut flex = Flex::new(
@@ -99,4 +99,96 @@ fn flex_records_the_configured_clip_only_when_the_main_axis_overflows() {
         .schedule_update(root, view(Some(Clip::None)))
         .unwrap();
     assert_eq!(clip(&paint(&mut runtime, 100.)), []);
+}
+
+#[test]
+fn tightly_constrained_flex_keeps_the_parent_size() {
+    let mut runtime = Runtime::new(
+        Flex::horizontal([Widget::box_(Size::ZERO, Color::TRANSPARENT)])
+            .text_direction(TextDirection::Ltr)
+            .into(),
+    )
+    .unwrap();
+    runtime
+        .run_frame(Constraints::tight(Size::new(200., 200.)))
+        .unwrap();
+    let tree = runtime.tree();
+    assert_eq!(
+        tree.element_bounds(tree.root().unwrap()).unwrap().size,
+        Size::new(200., 200.)
+    );
+}
+
+#[test]
+fn shrink_wrapped_overflow_keeps_parent_bounds_and_clips_the_real_child() {
+    let build = |max_width| {
+        incular_widgets::OverflowBox::new(
+            Flex::horizontal([Widget::box_(Size::new(438.85715, 100.), Color::WHITE)])
+                .main_axis_size(MainAxisSize::Min)
+                .clip_behavior(Clip::HardEdge)
+                .text_direction(TextDirection::Ltr),
+        )
+        .min_width(0.)
+        .max_width(max_width)
+        .min_height(0.)
+        .max_height(400.)
+        .into()
+    };
+    let pinned_max = 438.85714285714283_f64 as f32;
+    assert_eq!(438.8571428571429_f64 as f32, pinned_max);
+    let mut runtime = Runtime::new(build(pinned_max)).unwrap();
+    let root = runtime.tree().root().unwrap();
+
+    let check = |runtime: &mut Runtime, max_width, expected_clip: bool| {
+        let list = paint(runtime, 100.);
+        let tree = runtime.tree();
+        let flex = tree.children(root).unwrap()[0];
+        assert_eq!(
+            tree.element_bounds(flex).unwrap().size,
+            Size::new(max_width, 100.)
+        );
+        let clips = clip(&list);
+        assert_eq!(clips.len(), usize::from(expected_clip));
+        if let Some((coverage, bounds, isolation)) = clips.first() {
+            assert_eq!(*coverage, ClipCoverage::HardEdge);
+            assert_eq!(bounds.size, Size::new(max_width, 100.));
+            assert!(!isolation);
+        }
+    };
+    check(&mut runtime, pinned_max, false);
+    let lower = f32::from_bits(pinned_max.to_bits() - 1);
+    runtime.schedule_update(root, build(lower)).unwrap();
+    check(&mut runtime, lower, true);
+}
+
+#[test]
+fn fractional_flex_allocations_do_not_activate_an_overflow_clip() {
+    let mut runtime = Runtime::new(
+        Flex::horizontal([
+            Expanded::new(SizedBox::from_size(Size::new(1., 20.))),
+            Expanded::new(SizedBox::from_size(Size::new(1., 20.))),
+            Expanded::new(SizedBox::from_size(Size::new(1., 20.))),
+        ])
+        .clip_behavior(Clip::HardEdge)
+        .text_direction(TextDirection::Ltr)
+        .into(),
+    )
+    .unwrap();
+    let list = runtime
+        .run_frame(Constraints::at_most(500., 100.))
+        .unwrap()
+        .0;
+    let tree = runtime.tree();
+    let root = tree.root().unwrap();
+    assert_eq!(
+        tree.element_bounds(root).unwrap().size,
+        Size::new(500., 20.)
+    );
+    let children = tree.children(root).unwrap();
+    for (index, child) in children.iter().enumerate() {
+        let bounds = tree.element_bounds(*child).unwrap();
+        assert!((bounds.size.width - 500. / 3.).abs() < 0.0001);
+        assert!((bounds.origin.x - index as f32 * (500. / 3.)).abs() < 0.0001);
+    }
+    assert_eq!(clip(&list), []);
 }

@@ -244,7 +244,7 @@ where
     let line_main = if matches!(config.main_axis_size, MainAxisSize::Max) && max_main.is_finite() {
         max_main
     } else {
-        used_main.max(min_main)
+        used_main.max(min_main).min(max_main)
     };
     // Baseline alignment applies only to a horizontal axis; a vertical baseline
     // has no baseline offset and places children at 0.0 (flex.dart

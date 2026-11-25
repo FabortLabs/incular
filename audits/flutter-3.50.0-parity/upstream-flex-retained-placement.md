@@ -57,3 +57,24 @@ Flutter reports a debug layout exception in each; Incular returns
 an intrinsic 300×100 layout in both. That is the documented retained
 fallback, and these cases record the mismatch rather than claiming
 diagnostic parity.
+
+## Constrained overflow and rounding
+
+Pinned `:16` fills the tight 200×200 parent in both engines even
+with a contentless decorated child. Pinned `:33` shrinks to the
+parent's main-axis maximum without an overflow exception. Its
+two f64 extents round to the same f32 coordinate in Incular, so
+it is partial: the retained control verifies no clip at that
+coordinate, then reduces the maximum by one representable f32
+step. The latter must clamp the Flex to the new bound and clip
+the child, not grow the Flex beyond its parent.
+
+A second pinned Flutter probe and a retained Rust test split
+500px among three tight children. Both place the children at
+0, 500/3, and 1000/3 within coordinate precision and emit no
+overflow clip. Before the fix, Incular emitted a hard clip
+because the independently rounded shares summed to slightly
+more than 500px in f64. Placement now uses the measured
+children without repeating their allocation, while the
+overflow check compares the space that is free to exceed the
+budget (nonflex children and spacing) against the constraint.
