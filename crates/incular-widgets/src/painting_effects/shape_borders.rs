@@ -730,8 +730,16 @@ impl BeveledRectangleBorder {
     }
 
     fn path(&self, rect: Rect, delta: f32) -> Path {
+        // The inner rectangle may invert for a thick border. Keep its
+        // edge coordinates until the polygon is built, rather than
+        // constructing a negative Incular Size.
         bevel_path(
-            inflate(rect, delta),
+            [
+                rect.origin.x - delta,
+                rect.origin.y - delta,
+                rect.origin.x + rect.size.width + delta,
+                rect.origin.y + rect.size.height + delta,
+            ],
             inflate_radii(self.border_radius.to_corner_radii(), delta),
         )
     }
@@ -751,11 +759,13 @@ impl ShapeBorder for BeveledRectangleBorder {
     }
 
     fn paint(&self, canvas: &mut Canvas, rect: Rect) {
-        if self.side.style == BorderStyle::None {
+        if self.side.style == BorderStyle::None || rect.size.width == 0. || rect.size.height == 0. {
             return;
         }
-        let offset = (self.side.stroke_outset() - self.side.stroke_inset()) / 2.0;
-        stroke(canvas, &self.side, self.path(rect, offset));
+        let mut path = Path::builder();
+        path.append(&self.path(rect, self.side.stroke_outset()));
+        path.append(&self.inner_path(rect));
+        stroke(canvas, &self.side, path.build());
     }
 }
 
@@ -787,10 +797,8 @@ fn ellipse_path(rect: Rect) -> Path {
 /// Flutter `BeveledRectangleBorder._getPath`: the eight vertices where each
 /// corner's radii meet the sides, closed as a polygon. Radii are clamped to
 /// zero and not scaled to fit, matching the vertex formulas.
-fn bevel_path(rect: Rect, radii: CornerRadii) -> Path {
-    let (left, top) = (rect.origin.x, rect.origin.y);
-    let (right, bottom) = (left + rect.size.width, top + rect.size.height);
-    let (cx, cy) = (left + rect.size.width / 2.0, top + rect.size.height / 2.0);
+fn bevel_path([left, top, right, bottom]: [f32; 4], radii: CornerRadii) -> Path {
+    let (cx, cy) = (left + (right - left) / 2.0, top + (bottom - top) / 2.0);
     let [tl, tr, br, bl] = [
         radii.top_left,
         radii.top_right,
@@ -810,8 +818,12 @@ fn bevel_path(rect: Rect, radii: CornerRadii) -> Path {
     ];
     let mut builder = Path::builder();
     builder.move_to(vertices[0]);
-    for vertex in &vertices[1..] {
-        builder.line_to(*vertex);
+    let mut previous = vertices[0];
+    for vertex in vertices[1..].iter().copied() {
+        if vertex != previous {
+            builder.line_to(vertex);
+            previous = vertex;
+        }
     }
     builder.close();
     builder.build()

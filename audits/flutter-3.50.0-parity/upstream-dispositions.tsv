@@ -1450,3 +1450,4 @@ packages/flutter/test/painting/linear_border_test.dart	117	LinearBorder.start()	
 packages/flutter/test/painting/linear_border_test.dart	131	LinearBorder.end()	paired-match	upstream-linear-border.md
 packages/flutter/test/painting/linear_border_test.dart	145	LinearBorder.top()	paired-match	upstream-linear-border.md
 packages/flutter/test/painting/linear_border_test.dart	154	LinearBorder.bottom()	paired-match	upstream-linear-border.md
+packages/flutter/test/painting/beveled_rectangle_border_test.dart	56	BeveledRectangleBorder BorderRadius.zero	paired-match	upstream-beveled-border.md
