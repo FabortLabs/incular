@@ -529,6 +529,25 @@ impl ScrollController {
 }
 
 impl ScrollController {
+    /// Applies a sliver viewport's in-layout correction before its new
+    /// content extents are known. This is Flutter's `ViewportOffset.correctBy`:
+    /// it neither clamps against stale metrics nor sends a scroll event.
+    #[doc(hidden)]
+    pub fn apply_layout_correction_by(&self, delta: f32) -> bool {
+        if !delta.is_finite() {
+            return false;
+        }
+        let mut state = self.state.borrow_mut();
+        let offset = state.offset + delta;
+        if !offset.is_finite() || offset == state.offset {
+            return false;
+        }
+        state.offset = offset;
+        state.pending_restored_offset = None;
+        state.revision += 1;
+        true
+    }
+
     /// Flutter `ScrollPosition.jumpTo`: moves the offset without animation.
     ///
     /// When the position changes outside an open activity bracket, one

@@ -33,3 +33,20 @@ The direct padding control proves it forwards a correction already
 emitted by its child. The variable-list or viewport path must still
 produce, apply, and lay out the correction in the same frame. Passing
 the direct wrapper check does not close the retained regression.
+
+## Applying explicit corrections before paint
+
+The authored `sliver_viewport_correction_reference_test.dart` verifies
+a viewport retries immediately, in either direction, when its sliver
+returns an offset correction instead of render geometry. Rust initially
+tried [0, 0, 0] and never left offset zero, because the correction was
+applied after publishing the empty correction range. Now the viewport
+accepts the correction without clamping to old content extents and
+retries before it publishes or positions children. A custom correction
+that never converges gets a bounded typed error. The direct cases now
+paint the same child at y=-200 on the same frame in both engines.
+
+Four focused Rust targets passed (46 tests). This is authored coverage,
+not an extra original registration. The changing-leading-row regression
+above remains open: its ordinary variable-extent list has to produce the
+correction before the viewport can apply it.

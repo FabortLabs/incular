@@ -191,6 +191,40 @@ impl WidgetTree {
                         -cache_extent,
                     )
                 };
+                let explicit_corrections = std::cell::Cell::new(0u64);
+                let perform_layout = |offset, viewport| {
+                    let starting_offset = config.controller.offset();
+                    let mut layout = config
+                        .delegate
+                        .perform_layout(make_constraints(offset, viewport));
+                    // A correction is a request to retry, not valid content
+                    // geometry. Publishing it would clamp against the empty
+                    // range that accompanies the correction.
+                    for _ in 0..10 {
+                        let Some(delta) = layout.geometry.scroll_offset_correction else {
+                            return Ok(layout);
+                        };
+                        if !config.controller.apply_layout_correction_by(delta) {
+                            break;
+                        }
+                        explicit_corrections.set(explicit_corrections.get() + 1);
+                        layout = config
+                            .delegate
+                            .perform_layout(make_constraints(config.controller.offset(), viewport));
+                    }
+                    if layout.geometry.scroll_offset_correction.is_none() {
+                        return Ok(layout);
+                    }
+                    // Do not leave the controller at an unvalidated attempt
+                    // if a custom sliver keeps returning corrections.
+                    config
+                        .controller
+                        .apply_layout_correction_by(starting_offset - config.controller.offset());
+                    Err(TreeError::InvalidWidgetConfiguration {
+                        widget: "SliverViewport",
+                        reason: "sliver scroll offset correction did not converge".into(),
+                    })
+                };
                 // Records each metrics publication so the bounded fallback can
                 // retain the last published attempt as one consistent frame.
                 // Only shrink-wrapping viewports need it: fixed viewports
@@ -235,10 +269,7 @@ impl WidgetTree {
                     &mut last_published,
                     (size, viewport_extent),
                     handoff,
-                    config.delegate.perform_layout(make_constraints(
-                        config.controller.offset(),
-                        viewport_extent,
-                    )),
+                    perform_layout(config.controller.offset(), viewport_extent)?,
                 );
                 // Content extent the current size/viewport were computed
                 // from. Fixed-size viewports never consult it; shrink-wrap
@@ -264,10 +295,7 @@ impl WidgetTree {
                         &mut last_published,
                         (size, viewport_extent),
                         None,
-                        config.delegate.perform_layout(make_constraints(
-                            config.controller.offset(),
-                            viewport_extent,
-                        )),
+                        perform_layout(config.controller.offset(), viewport_extent)?,
                     );
                 }
 
@@ -281,10 +309,7 @@ impl WidgetTree {
                     &mut last_published,
                     (size, viewport_extent),
                     None,
-                    config.delegate.perform_layout(make_constraints(
-                        config.controller.offset(),
-                        viewport_extent,
-                    )),
+                    perform_layout(config.controller.offset(), viewport_extent)?,
                 );
 
                 // Hygiene: establish row identity before any anchor is
@@ -298,15 +323,13 @@ impl WidgetTree {
                     &mut last_published,
                     (size, viewport_extent),
                     None,
-                    config.delegate.perform_layout(make_constraints(
-                        config.controller.offset(),
-                        viewport_extent,
-                    )),
+                    perform_layout(config.controller.offset(), viewport_extent)?,
                 );
 
                 let mut converged = false;
                 for _ in 0..3 {
                     let offset_before = config.controller.offset();
+                    let corrections_before = explicit_corrections.get();
                     let anchor_before = sliver_anchor(&sliver_layout, offset_before);
                     let (pass_changed, mapping_changed) =
                         self.measure_sliver_children(id, config, &sliver_layout, true)?;
@@ -343,9 +366,7 @@ impl WidgetTree {
                         &mut last_published,
                         (size, viewport_extent),
                         None,
-                        config
-                            .delegate
-                            .perform_layout(make_constraints(offset_before, viewport_extent)),
+                        perform_layout(offset_before, viewport_extent)?,
                     );
                     // Publishing the measured extents may clamp the offset.
                     // Recompute the layout after updating extents before
@@ -358,10 +379,7 @@ impl WidgetTree {
                             &mut last_published,
                             (size, viewport_extent),
                             None,
-                            config.delegate.perform_layout(make_constraints(
-                                offset_after_extent,
-                                viewport_extent,
-                            )),
+                            perform_layout(offset_after_extent, viewport_extent)?,
                         );
                     }
                     // A structural layout keeps pixels: moved index names
@@ -370,6 +388,7 @@ impl WidgetTree {
                     // flag is sticky because later passes see a stable
                     // mapping; genuine refinements then correct as before.
                     if !structural
+                        && corrections_before == explicit_corrections.get()
                         && let Some((anchor_id, anchor_offset)) = anchor_before
                         && let Some(updated) = next_layout
                             .children
@@ -389,10 +408,7 @@ impl WidgetTree {
                                     &mut last_published,
                                     (size, viewport_extent),
                                     None,
-                                    config.delegate.perform_layout(make_constraints(
-                                        config.controller.offset(),
-                                        viewport_extent,
-                                    )),
+                                    perform_layout(config.controller.offset(), viewport_extent)?,
                                 );
                             }
                         }
@@ -447,12 +463,6 @@ impl WidgetTree {
                     );
                     let _ = self.measure_sliver_children(id, config, &snapshot.layout, false)?;
                     size = snapshot.size;
-                    sliver_layout = snapshot.layout;
-                }
-                if let Some(correction) = sliver_layout.geometry.scroll_offset_correction {
-                    let corrected = (config.controller.offset() + correction)
-                        .max(config.controller.min_offset());
-                    config.controller.correct_to(corrected);
                 }
                 self.diagnostics.lazy_layouts += 1;
                 (size, ChildOffsets::default())
