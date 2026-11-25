@@ -1232,6 +1232,12 @@ impl Runtime {
                 self.handle_text_editing_state(state);
                 None
             }
+            PlatformEvent::RequestExistingTextInputState => {
+                if self.text_input_client.is_some() {
+                    self.sync_text_input_client_for_host(true);
+                }
+                None
+            }
             PlatformEvent::Metrics(metrics) => {
                 self.update_window_metrics(metrics);
                 None
@@ -2289,6 +2295,10 @@ impl Runtime {
     }
 
     fn sync_text_input_client(&mut self) {
+        self.sync_text_input_client_for_host(false);
+    }
+
+    fn sync_text_input_client_for_host(&mut self, resend_client: bool) {
         // This runs every frame. While the focused field still holds the
         // value last sent to the input client, that state is reused instead
         // of copying the field's text again, which matters for a long
@@ -2381,7 +2391,8 @@ impl Runtime {
         };
         let client_changed = self.text_input_client != Some(client);
         let configuration_changed = self.text_input_configuration.as_ref() != Some(&configuration);
-        if client_changed || configuration_changed {
+        let set_client = resend_client || client_changed || configuration_changed;
+        if set_client {
             self.text_input_commands
                 .push_back(TextInputCommand::SetClient {
                     configuration: configuration.clone(),
@@ -2395,10 +2406,7 @@ impl Runtime {
                     state: state.clone(),
                 });
         }
-        if !client_changed
-            && self.text_input_caret_rect != Some(snapshot.caret_rect)
-            && !configuration_changed
-        {
+        if !set_client && self.text_input_caret_rect != Some(snapshot.caret_rect) {
             self.text_input_commands
                 .push_back(TextInputCommand::SetCaretRect {
                     client,

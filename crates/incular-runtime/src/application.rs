@@ -1391,6 +1391,11 @@ impl Application {
                     record.runtime.handle_text_editing_state(state);
                 });
             }
+            WindowEventKind::Platform(event @ PlatformEvent::RequestExistingTextInputState) => {
+                let _ = self.with_window_mut(window_id, |record| {
+                    let _ = record.runtime.handle_platform_event(event);
+                });
+            }
             WindowEventKind::Platform(PlatformEvent::Lifecycle(lifecycle)) => {
                 self.handle_application_lifecycle(lifecycle);
             }

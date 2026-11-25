@@ -746,6 +746,9 @@ pub enum PlatformEvent {
     /// runtime applies the difference as a user edit, so input formatters
     /// run, and sends the field's state back only when they changed it.
     TextEditingState(TextInputState),
+    /// The host lost its editing snapshot and requests the active client's
+    /// configuration and latest value again, without reopening the keyboard.
+    RequestExistingTextInputState,
     Metrics(WindowMetrics),
     /// Complete normalized environment replacement produced by the native
     /// shell. Runtime dependency tracking decides which consumers invalidate.

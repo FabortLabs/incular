@@ -7,7 +7,9 @@ use incular_platform::{PlatformEvent, TextInputCommand, TextInputState};
 use incular_runtime::Runtime;
 use incular_text::{TextEditingValue, TextSelection};
 use incular_widgets::internal::{TextEditingController, TextRange};
-use incular_widgets::{EditableText, KeyboardListener, TextDirection, TextInputFormatter, Widget};
+use incular_widgets::{
+    EditableText, FocusNode, KeyboardListener, TextDirection, TextInputFormatter, Widget,
+};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
@@ -307,4 +309,91 @@ fn native_selection_only_update_does_not_run_text_formatters() {
         );
         assert_eq!(calls.get(), expected_calls, "composing={composing:?}");
     }
+}
+
+#[test]
+fn reattach_sends_the_same_client_and_current_value_without_showing_the_keyboard() {
+    for text in ["test1", ""] {
+        let controller = TextEditingController::from_value(TextEditingValue::new(text));
+        let focus = FocusNode::new();
+        let mut runtime = Runtime::new(
+            EditableText::new(controller.clone())
+                .text_direction(TextDirection::Ltr)
+                .focus_node(focus.clone())
+                .into(),
+        )
+        .unwrap();
+        runtime.run_frame(constraints()).unwrap();
+        let _ = runtime.handle_platform_event(PlatformEvent::RequestExistingTextInputState);
+        assert!(runtime.take_text_input_commands().is_empty());
+
+        focus.request_focus();
+        runtime.run_frame(constraints()).unwrap();
+        let original = runtime.take_text_input_commands();
+        let [
+            attach @ TextInputCommand::SetClient {
+                configuration,
+                state,
+                ..
+            },
+            TextInputCommand::Show { client },
+        ] = original.as_slice()
+        else {
+            panic!("expected initial attach and show: {original:?}");
+        };
+        assert_eq!(configuration.client, *client);
+        assert_eq!(state.text, text);
+        assert_eq!(state.composing, None);
+
+        let _ = runtime.handle_platform_event(PlatformEvent::RequestExistingTextInputState);
+        assert_eq!(runtime.take_text_input_commands(), [attach.clone()]);
+        runtime.run_frame(constraints()).unwrap();
+        assert!(runtime.take_text_input_commands().is_empty());
+    }
+}
+
+#[test]
+fn reattach_reads_programmatic_edits_that_have_not_reached_the_host() {
+    let controller = TextEditingController::new();
+    let mut runtime = editor(&controller);
+    tap(&mut runtime);
+    runtime.run_frame(constraints()).unwrap();
+    let original = runtime.take_text_input_commands();
+    let Some(TextInputCommand::SetClient {
+        configuration: original_configuration,
+        ..
+    }) = original.first()
+    else {
+        panic!("expected initial attach: {original:?}");
+    };
+
+    controller.set_value(TextEditingValue {
+        text: "a😀".into(),
+        selection: TextSelection::new(5, 1),
+        composing: Some(TextRange::new(1, 5)),
+    });
+    let _ = runtime.handle_platform_event(PlatformEvent::RequestExistingTextInputState);
+    let commands = runtime.take_text_input_commands();
+    let [
+        TextInputCommand::SetClient {
+            configuration,
+            state,
+            ..
+        },
+    ] = commands.as_slice()
+    else {
+        panic!("expected one replay without reopening the keyboard: {commands:?}");
+    };
+    assert_eq!(configuration, original_configuration);
+    assert_eq!(state.text, "a😀");
+    assert_eq!((state.selection_start, state.selection_end), (5, 1));
+    assert_eq!(state.composing, Some((1, 5)));
+
+    runtime.run_frame(constraints()).unwrap();
+    assert!(!runtime.take_text_input_commands().iter().any(|command| {
+        matches!(
+            command,
+            TextInputCommand::SetClient { .. } | TextInputCommand::Update { .. }
+        )
+    }));
 }
