@@ -172,3 +172,31 @@ fn changing_only_tags_does_not_publish_a_mobile_state_event_or_accesskit_patch()
     assert_eq!(update.nodes[0].0.0, desktop_id);
     assert!(update.nodes[0].1.is_disabled());
 }
+
+#[test]
+fn web_projection_receives_hit_test_policy_updates_at_unchanged_bounds() {
+    let mut tree = SemanticsTree::new();
+    let id = tree.insert(node("overlay", vec![]));
+    tree.set_root(Some(id));
+    let mut projection = MobileAccessibilityProjection::new();
+    let initial = projection.sync(&tree).unwrap();
+    let native_id = initial.nodes[0].native_id;
+    let bounds = initial.nodes[0].semantic.bounds;
+
+    for policy in [
+        SemanticsHitTestBehavior::Opaque,
+        SemanticsHitTestBehavior::Transparent,
+        SemanticsHitTestBehavior::Defer,
+    ] {
+        let mut changed = tree.node(id).unwrap().clone();
+        changed.state.hit_test_behavior = policy;
+        assert!(tree.update(id, changed));
+        let changed = projection
+            .sync(&tree)
+            .expect("semantic overlay style changed");
+        assert_eq!(changed.nodes.len(), 1);
+        assert_eq!(changed.nodes[0].native_id, native_id);
+        assert_eq!(changed.nodes[0].semantic.bounds, bounds);
+        assert_eq!(changed.nodes[0].semantic.state.hit_test_behavior, policy);
+    }
+}

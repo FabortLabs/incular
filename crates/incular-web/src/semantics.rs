@@ -15,8 +15,9 @@
 //! - The application's focused node takes the page focus, unless a text
 //!   field's editor holds it.
 //!
-//! The elements ignore the pointer; mouse and touch input keep reaching the
-//! canvas.
+//! Without an explicit opaque semantic hit-test override, mouse and touch
+//! input keep reaching the canvas. An explicitly opaque node receives
+//! pointer events through its semantic overlay.
 
 use std::{
     cell::RefCell,
@@ -25,6 +26,7 @@ use std::{
 
 use incular_accessibility::{
     MobileAccessibilityNode, MobileAccessibilityUpdate, Role, SemanticAction, SemanticActionKind,
+    SemanticsHitTestBehavior,
 };
 use incular_core::Rect;
 use incular_desktop::DesktopSemanticsEvent;
@@ -36,7 +38,7 @@ const HOST_STYLE: &str = "position:fixed;left:0;top:0;margin:0;padding:0;border:
 
 const NODE_STYLE: &str = "position:fixed;display:block;margin:0;padding:0;border:0;\
      box-sizing:border-box;overflow:hidden;color:transparent;background:transparent;\
-     outline:none;font-size:1px;line-height:1;white-space:pre;pointer-events:none;";
+     outline:none;font-size:1px;line-height:1;white-space:pre;";
 
 const PLACEHOLDER_STYLE: &str = "position:fixed;left:0;top:0;width:1px;height:1px;margin:0;\
      padding:0;border:0;overflow:hidden;opacity:0;pointer-events:none;";
@@ -72,6 +74,7 @@ struct NodeElement {
     tag: &'static str,
     /// The bounds the element's style was last written with.
     bounds: Rect,
+    accepts_pointer_events: bool,
     actions: Vec<SemanticActionKind>,
     /// Kept so the element receives the page focus for this node.
     focus_target: bool,
@@ -283,13 +286,20 @@ fn apply_node(
     let semantic = &node.semantic;
     let (tag, role) = element_kind(semantic.role, semantic.label.is_some());
     let bounds = semantic.bounds;
+    let accepts_pointer_events =
+        semantic.state.hit_test_behavior == SemanticsHitTestBehavior::Opaque;
     let existing = semantics
         .nodes
         .get(&node.native_id)
         .filter(|existing| existing.tag == tag)
-        .map(|existing| (existing.element.clone(), existing.bounds));
-    let (element, placed) = match existing {
-        Some((element, old_bounds)) => (element, old_bounds != bounds),
+        .map(|existing| {
+            (
+                existing.element.clone(),
+                existing.bounds != bounds || existing.accepts_pointer_events != accepts_pointer_events,
+            )
+        });
+    let (element, needs_style) = match existing {
+        Some(pair) => pair,
         None => {
             let Some(element) = create_node_element(document, window, node.native_id, tag) else {
                 return;
@@ -304,11 +314,12 @@ fn apply_node(
             (element, true)
         }
     };
-    if placed {
+    if needs_style {
+        let pointer_events = if accepts_pointer_events { "all" } else { "none" };
         let _ = element.set_attribute(
             "style",
             &format!(
-                "{NODE_STYLE}left:{}px;top:{}px;width:{}px;height:{}px;",
+                "{NODE_STYLE}left:{}px;top:{}px;width:{}px;height:{}px;pointer-events:{pointer_events};",
                 bounds.origin.x,
                 bounds.origin.y,
                 bounds.size.width.max(0.0),
@@ -438,6 +449,7 @@ fn apply_node(
             element,
             tag,
             bounds,
+            accepts_pointer_events,
             actions: semantic.actions.clone(),
             focus_target: state.focused && !state.editable,
         },
