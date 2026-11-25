@@ -17,7 +17,7 @@ packages/flutter/test/physics/gravity_simulation_test.dart	14	Gravity simulation
 packages/flutter/test/physics/clamped_simulation_test.dart	9	Clamped simulation 1	paired-match	upstream-physics-comparisons.md
 packages/flutter/test/physics/clamped_simulation_test.dart	20	Clamped simulation 2	paired-match	upstream-physics-comparisons.md
 packages/flutter/test/physics/near_equal_test.dart	9	test_friction	paired-match	upstream-physics-helper-comparisons.md
-packages/flutter/test/physics/near_equal_test.dart	16	test_null	reference-ran-incular-open	upstream-physics-helper-comparisons.md
+packages/flutter/test/physics/near_equal_test.dart	16	test_null	paired-match	upstream-physics-helper-comparisons.md#optional-operands-and-decimal-gravity
 packages/flutter/test/physics/utils_test.dart	9	nearEquals	paired-match	upstream-physics-helper-comparisons.md
 packages/flutter/test/physics/tolerance_test.dart	9	Tolerance control test	paired-match	upstream-physics-helper-comparisons.md
 packages/flutter/test/services/asset_bundle_test.dart	59	Caching asset bundle test	paired-match	upstream-assets-newton-comparisons.md

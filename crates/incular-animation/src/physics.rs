@@ -39,10 +39,15 @@ impl Default for Tolerance {
 }
 
 /// Flutter `nearEqual`: whether `a` lies strictly within `epsilon` of `b`, or equals it.
+/// An absent value is equal only to another absent value.
 #[must_use]
-pub fn near_equal(a: f32, b: f32, epsilon: f32) -> bool {
+pub fn near_equal(a: impl Into<Option<f32>>, b: impl Into<Option<f32>>, epsilon: f32) -> bool {
     debug_assert!(epsilon >= 0.0, "epsilon must be nonnegative");
-    near_equal_f64(f64::from(a), f64::from(b), f64::from(epsilon))
+    match (a.into(), b.into()) {
+        (Some(a), Some(b)) => near_equal_f64(f64::from(a), f64::from(b), f64::from(epsilon)),
+        (None, None) => true,
+        _ => false,
+    }
 }
 
 /// Flutter `nearZero`: whether `a` lies strictly within `epsilon` of zero, or is zero.
@@ -689,7 +694,7 @@ impl Simulation for BoundedFrictionSimulation {
 /// Constant gravitational acceleration simulation.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GravitySimulation {
-    acceleration: f32,
+    acceleration: f64,
     start: f32,
     end: f32,
     initial_velocity: f32,
@@ -698,9 +703,10 @@ pub struct GravitySimulation {
 
 impl GravitySimulation {
     #[must_use]
-    pub fn new(acceleration: f32, start: f32, end: f32, initial_velocity: f32) -> Self {
+    pub fn new(acceleration: impl Into<f64>, start: f32, end: f32, initial_velocity: f32) -> Self {
         Self {
-            acceleration,
+            // Keep the input coefficient precise before multiplying by t².
+            acceleration: acceleration.into(),
             start,
             end,
             initial_velocity,
@@ -715,8 +721,9 @@ impl GravitySimulation {
     }
 
     fn position_f64(&self, t: f64) -> f64 {
-        let a = f64::from(self.acceleration);
-        f64::from(self.start) + f64::from(self.initial_velocity) * t + 0.5 * a * t * t
+        f64::from(self.start)
+            + f64::from(self.initial_velocity) * t
+            + 0.5 * self.acceleration * t * t
     }
 }
 
@@ -726,7 +733,7 @@ impl Simulation for GravitySimulation {
     }
 
     fn velocity(&self, t: Duration) -> f32 {
-        (f64::from(self.initial_velocity) + f64::from(self.acceleration) * t.as_secs_f64()) as f32
+        (f64::from(self.initial_velocity) + self.acceleration * t.as_secs_f64()) as f32
     }
 
     /// Flutter `GravitySimulation.isDone`: the distance from the origin reaches

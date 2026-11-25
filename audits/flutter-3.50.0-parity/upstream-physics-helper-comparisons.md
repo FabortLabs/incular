@@ -1,5 +1,24 @@
 # Upstream numeric helpers and tolerance diagnostics
 
+## Optional operands and decimal gravity
+
+Pinned `near_equal_test.dart:16` and its Rust port return false for
+one absent operand and true for two. Existing finite, infinity and
+strict-epsilon checks remain unchanged. This adds one full pair.
+
+Both dedicated pinned `gravity_simulation_test.dart` originals
+(:9 and :14) were rerun. The old Rust path narrowed 9.81 before
+multiplying by elapsed time squared and missed the original strict
+500.5 position assertion. Preserving the coefficient at full
+precision produces the expected position without changing the
+existing f32 output boundary. The turnaround case still matches
+all four exact position/velocity pairs and absolute-distance
+completion. These two are historical pairs, not additional cases.
+All 45 selected physics and controller tests pass. The two historical
+strict friction checks remain separate.
+
+## Initial comparison
+
 Flutter 3.50.0 `ab2912035e`, Incular `c647cb85`. Unmodified pinned
 `near_equal_test.dart`, `utils_test.dart`, and `tolerance_test.dart`
 passed all four targeted upstream registrations. Rust passed the

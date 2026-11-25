@@ -848,3 +848,8 @@ its axis-aligned bounding box on Windows wgpu.
 add one matched Flutter original, for 458 / 8,965 fully compared
 (5.11%): 362 matches and 96 historical mismatches. A geometry change
 can now reclip a mounted child without layout or picture recording.
+
+[Optional numeric operands and dedicated gravity](upstream-physics-helper-comparisons.md#optional-operands-and-decimal-gravity)
+add one original comparison: 459 / 8,965 (5.12%), 363 matches
+and 96 historical mismatches. The same batch repairs the known
+9.81 gravity drift without double-counting the earlier cases.

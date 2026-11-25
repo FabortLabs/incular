@@ -102,6 +102,31 @@ fn flutter_gravity_reports_position_velocity_and_completion() {
     assert_eq!(f.position(ds(2.5)), 725.);
     assert_eq!(f.velocity(ds(2.5)), 500.);
 }
+
+/// physics/gravity_simulation_test.dart:9.
+#[test]
+fn flutter_gravity_dedicated_description_and_decimal_acceleration() {
+    let gravity = GravitySimulation::new(9.81, 10., 0., 0.);
+    let description = format!("{gravity:?}");
+    assert!(description.starts_with("GravitySimulation") && !description.contains('\n'));
+    assert!((f64::from(gravity.position(ds(10.))) - (50. * 9.81 + 10.)).abs() <= 1e-10);
+}
+
+/// physics/gravity_simulation_test.dart:14.
+#[test]
+fn flutter_gravity_dedicated_turnaround_and_absolute_completion() {
+    let gravity = GravitySimulation::new(-10., 0., 6., 10.);
+    for (t, x, dx, done_t, done) in [
+        (0., 0., 10., 0., false),
+        (1., 5., 0., 0.2, false),
+        (2., 0., -10., 2., false),
+        (3., -15., -20., 3., true),
+    ] {
+        assert_eq!(gravity.position(ds(t)), x);
+        assert_eq!(gravity.velocity(ds(t)), dx);
+        assert_eq!(gravity.is_done(ds(done_t)), done);
+    }
+}
 #[test]
 fn flutter_spring_description_classifies_damping() {
     for (ratio, kind) in [
@@ -197,6 +222,14 @@ fn flutter_near_equal_is_symmetric_at_finite_distances() {
     assert!(near_equal(6., 5., 2.));
     assert!(!near_equal(5., 6., 0.5));
     assert!(!near_equal(6., 5., 0.5));
+}
+
+/// physics/near_equal_test.dart:16.
+#[test]
+fn flutter_near_equal_distinguishes_one_absent_operand_from_two() {
+    assert!(!near_equal(5., None, 2.));
+    assert!(!near_equal(None, 5., 2.));
+    assert!(near_equal(None, None, 2.));
 }
 #[test]
 fn flutter_near_equal_handles_infinities_and_finite_equality() {
