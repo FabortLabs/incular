@@ -41,8 +41,8 @@ pub use physics::{
 pub use scheduler::{
     FrameCallbackId, InvalidTimeDilation, Ticker, TickerCanceled, TickerFuture, TickerOrCancel,
     add_persistent_frame_callback, add_post_frame_callback, cancel_frame_callback,
-    current_frame_time, schedule_frame, schedule_frame_callback, set_time_dilation, time_dilation,
-    try_set_time_dilation,
+    current_frame_time, current_system_frame_time, schedule_frame, schedule_frame_callback,
+    set_time_dilation, time_dilation, try_set_time_dilation,
 };
 pub use style::AnimationStyle;
 pub use tween::{

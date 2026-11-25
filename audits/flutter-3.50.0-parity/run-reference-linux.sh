@@ -101,8 +101,12 @@ import sys
 reported = []
 for line in Path("result.log").read_text(encoding="utf-8").splitlines():
     match = re.fullmatch(r"\d+:\d+ \+\d+: (.+)", line)
-    if match and not match[1].startswith("loading ") and match[1] != "All tests passed!":
-        reported.append(match[1])
+    if not match:
+        continue
+    name = match[1]
+    if name.startswith("loading ") or name in {"All tests passed!", "(setUpAll)", "(tearDownAll)"}:
+        continue
+    reported.append(name)
 if Counter(reported) != Counter(sys.argv[1:]):
     raise SystemExit(f"Selected test names do not match the reporter: {reported!r}")
 PY

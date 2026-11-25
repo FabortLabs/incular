@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-animation`: `current_system_frame_time()` reads the latest
+  raw host timestamp without animation dilation or epoch adjustment.
+
 - `incular-widgets`: `Container::transform_alignment` selects a physical
   or direction-relative transform pivot without changing layout.
 

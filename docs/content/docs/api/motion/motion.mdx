@@ -144,3 +144,10 @@ replays enter animations.
 Related: [`.transition()`](/docs/api/motion/transition),
 [effect chains](/docs/api/extensions/animate),
 [shared elements](/docs/api/motion/shared-elements).
+
+## Scheduler timestamps
+
+`incular::animation::current_frame_time()` is the active frame's
+animation clock. `current_system_frame_time()` reports the latest raw
+host timestamp instead, without dilation, and is available between
+frames after the first one.

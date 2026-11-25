@@ -59,3 +59,29 @@ fn dilation_slows_ticker_time_from_the_next_frame() {
         "dilated time trails real time by the slowed and lost intervals"
     );
 }
+
+#[test]
+fn the_system_frame_clock_keeps_raw_timestamps_across_epoch_changes() {
+    use incular_animation::{current_frame_time, current_system_frame_time};
+
+    let origin = Instant::now();
+    let first_raw = origin + Duration::from_secs(2);
+    assert_eq!(current_system_frame_time(), None);
+    for (raw_seconds, adjusted_seconds) in [(2, 0), (4, 2), (6, 2), (8, 3)] {
+        if raw_seconds == 6 {
+            set_time_dilation(2.0);
+        }
+        let raw = origin + Duration::from_secs(raw_seconds);
+        let adjusted = first_raw + Duration::from_secs(adjusted_seconds);
+        schedule_frame_callback(move |stamp| {
+            assert_eq!(stamp, adjusted);
+            assert_eq!(current_frame_time(), Some(adjusted));
+            assert_eq!(current_system_frame_time(), Some(raw));
+        });
+        scheduler::begin_frame(raw);
+        scheduler::end_frame(raw);
+        assert_eq!(current_frame_time(), None);
+        assert_eq!(current_system_frame_time(), Some(raw));
+    }
+    set_time_dilation(1.0);
+}

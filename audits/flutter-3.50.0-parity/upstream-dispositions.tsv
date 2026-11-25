@@ -802,3 +802,4 @@ packages/flutter/test/widgets/container_test.dart	792	Container does not crash a
 packages/flutter/test/widgets/container_test.dart	806	DecoratedBox does not crash at zero area	paired-match	upstream-limited-box-and-decoration-contracts.md#childless-and-zero-area-container-layout
 packages/flutter/test/widgets/container_test.dart	567	Container transformAlignment	paired-match	upstream-limited-box-and-decoration-contracts.md#container-transform-alignment
 packages/flutter/test/scheduler/ticker_test.dart	21	Ticker mute control test	partial-match	scheduler-callback-phases-comparisons.md#ticker-scheduling-order-and-muting
+packages/flutter/test/scheduler/scheduler_test.dart	241	currentSystemFrameTimeStamp is the raw timestamp	paired-match	scheduler-callback-phases-comparisons.md#raw-system-frame-timestamps

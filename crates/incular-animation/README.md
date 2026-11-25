@@ -15,3 +15,9 @@ curves, tweens, controllers, and animation progress values.
 monotonic `Instant`; it creates no per-widget timer or event loop. It currently
 supports forward/reverse/stop/reset, linear/ease-in-out curves, and interpolation
 for `f32` and `Offset`.
+
+### Frame clocks
+
+`current_frame_time()` returns the active frame's time adjusted for
+animation dilation. Use `current_system_frame_time()` when you need
+the most recent raw host timestamp, even between frames.

@@ -319,6 +319,14 @@ pub fn current_frame_time() -> Option<Instant> {
     SCHEDULER.with(|scheduler| scheduler.borrow().frame_time)
 }
 
+/// Raw timestamp of the latest frame supplied by the host, without epoch
+/// adjustment or [`time_dilation`]. This remains available while idle after
+/// a frame, and is `None` before the scheduler has received one.
+#[must_use]
+pub fn current_system_frame_time() -> Option<Instant> {
+    SCHEDULER.with(|scheduler| scheduler.borrow().last_raw)
+}
+
 /// Whether a frame is wanted: one was asked for, a frame callback waits, or
 /// an unmuted ticker runs. The runtime keeps producing frames while true.
 #[must_use]

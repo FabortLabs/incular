@@ -43,3 +43,14 @@ duplicate start does not emit Flutter's debug error or diagnostics.
 Both authored Flutter cases and 47 focused Rust checks passed. The
 queue reuses its dispatch buffers and stores a weak ticker reference
 instead of allocating a closure for each recurring tick.
+
+## Raw system frame timestamps
+
+Exact `scheduler/scheduler_test.dart:241` pairs all four timestamps
+after anchoring Rust's monotonic instants to the first raw frame:
+the raw clock reports 2, 4, 6, 8 seconds while callback time advances
+by 0, 2, 2, 3 seconds. A dilation change only affects the callback
+clock. Rust also verifies the raw timestamp is still accessible while
+idle after a frame. Thirteen focused Rust checks and the exact pinned
+Flutter case passed. The Linux runner now ignores only the reporter's
+suite setup/teardown markers when checking the exact selected names.
