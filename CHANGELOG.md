@@ -198,6 +198,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-gestures`: release velocity estimation no longer allocates
+  temporary buffers for its bounded history.
+
 - `incular-rendering`: public path bounds enclose Bézier control points
   like Flutter; layout, paint damage and wgpu culling retain tight bounds.
 

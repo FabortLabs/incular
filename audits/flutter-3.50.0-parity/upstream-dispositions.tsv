@@ -881,3 +881,4 @@ packages/flutter/test/painting/box_decoration_test.dart	134	BoxDecoration with L
 packages/flutter/test/gestures/velocity_tracker_test.dart	138	Makes consistent velocity estimates with consistent velocity	paired-match	upstream-geometry-input-gestures.md#standalone-velocity-tracker-comparisons
 packages/flutter/test/gestures/velocity_tracker_test.dart	177	Assume zero velocity when there are no recent samples - IOS	paired-match	upstream-geometry-input-gestures.md#standalone-velocity-tracker-comparisons
 packages/flutter/test/gestures/velocity_tracker_test.dart	196	Assume zero velocity when there are no recent samples - MacOS	paired-match	upstream-geometry-input-gestures.md#standalone-velocity-tracker-comparisons
+packages/flutter/test/gestures/velocity_tracker_test.dart	38	Velocity tracker gives expected results	paired-match	upstream-geometry-input-gestures.md#recorded-drag-velocity-and-scratch-allocation

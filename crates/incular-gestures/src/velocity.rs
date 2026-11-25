@@ -98,9 +98,12 @@ impl VelocityTracker {
             };
         }
 
-        let mut x = Vec::with_capacity(self.samples.len());
-        let mut y = Vec::with_capacity(self.samples.len());
-        let mut time = Vec::with_capacity(self.samples.len());
+        // The ring history is bounded, so fitting a drag does not need
+        // heap scratch buffers.
+        let mut x = [0.0; Self::HISTORY_SIZE];
+        let mut y = [0.0; Self::HISTORY_SIZE];
+        let mut time = [0.0; Self::HISTORY_SIZE];
+        let mut count = 0;
         let mut oldest_point = newest_point;
         let mut previous_time = newest_time;
         for &(sample_time, point) in self.samples.iter().rev() {
@@ -113,18 +116,21 @@ impl VelocityTracker {
                 break;
             }
             oldest_point = point;
-            x.push(f64::from(point.x));
-            y.push(f64::from(point.y));
-            time.push(-age);
+            x[count] = f64::from(point.x);
+            y[count] = f64::from(point.y);
+            time[count] = -age;
+            count += 1;
         }
         let offset = Offset::new(
             newest_point.x - oldest_point.x,
             newest_point.y - oldest_point.y,
         );
 
-        if time.len() >= Self::MIN_SAMPLE_SIZE
-            && let (Some(slope_x), Some(slope_y)) =
-                (solve_linear_slope(&time, &x), solve_linear_slope(&time, &y))
+        if count >= Self::MIN_SAMPLE_SIZE
+            && let (Some(slope_x), Some(slope_y)) = (
+                solve_linear_slope(&time[..count], &x[..count]),
+                solve_linear_slope(&time[..count], &y[..count]),
+            )
         {
             // The slopes are in pixels per millisecond; report pixels per second.
             return VelocityEstimate {
@@ -239,6 +245,63 @@ fn dot(left: &[f64], right: &[f64]) -> f64 {
 mod flutter350_velocity {
     use super::*;
     use std::time::Duration;
+
+    #[test]
+    fn recorded_gestures_match_all_thirteen_flutter_release_velocities() {
+        let trace = include_str!("../tests/fixtures/flutter350_velocity/trace.csv");
+        let expected = [
+            (219.59280094228163, 1304.701682306001),
+            (355.71046950050845, 967.2112857054104),
+            (12.657970884022308, -36.90447839251946),
+            (714.1399654786744, -2561.534447931869),
+            (-19.668121066218564, -2910.105747052462),
+            (646.8690114934209, 2976.977762577527),
+            (396.6988447819592, 2106.225572911095),
+            (298.31594440044495, -3660.8315955215294),
+            (-1.7334232785165882, -3288.13174127454),
+            (384.6361280392334, -2645.6612524779835),
+            (176.37900397918557, 2711.2542876273264),
+            (396.9328560260098, 4280.651578291764),
+            (-71.51939428321249, 3716.7385187526947),
+        ];
+        let start = Instant::now();
+        let mut tracker = VelocityTracker::new(VelocityTrackerKind::LeastSquares);
+        let mut last_sample = start;
+        let mut releases = 0;
+        let mut records = 0;
+        for row in trace.lines().filter(|row| !row.starts_with('#')) {
+            let [phase, ms, _pointer, x, y]: [&str; 5] = row
+                .split(',')
+                .collect::<Vec<_>>()
+                .try_into()
+                .expect("valid trace row");
+            let time = start + Duration::from_millis(ms.parse().unwrap());
+            assert!(time >= last_sample);
+            records += 1;
+            match phase {
+                "down" | "move" => {
+                    tracker.add_position(time, Offset::new(x.parse().unwrap(), y.parse().unwrap()));
+                    last_sample = time;
+                }
+                "up" => {
+                    // The original replays the trace immediately: its wall
+                    // clock has not stopped the pointer at the release.
+                    let actual = tracker.estimate_at(last_sample).pixels_per_second;
+                    let (x, y) = expected[releases];
+                    for (actual, expected) in [(f64::from(actual.x), x), (f64::from(actual.y), y)] {
+                        assert!(
+                            ((actual - expected) / expected).abs() < 0.001,
+                            "release {releases}: {actual} vs {expected}",
+                        );
+                    }
+                    releases += 1;
+                }
+                _ => panic!("unexpected trace phase {phase}"),
+            }
+        }
+        assert_eq!(releases, expected.len());
+        assert_eq!(records, 306);
+    }
 
     #[test]
     fn interrupted_motion_uses_only_the_samples_after_the_gap() {

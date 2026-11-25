@@ -103,3 +103,15 @@ weighting also reports exactly (0,−1) once four samples of the
 constant trajectory exist. Explicit timestamps replace the Dart test
 clock. All four focused Rust tests passed. This is behavior coverage,
 not equivalence of public estimator types or host touch events.
+
+## Recorded drag velocity and scratch allocation
+
+The exact `velocity_tracker_test.dart:38` replay passed. Incular uses
+all 306 numerical events from the pinned original fixture, preserving
+history across its 13 releases, and all 26 velocity components agree
+within the reference's 0.1% tolerance. Releases estimate immediately
+after the last delivered sample as in Flutter's fast replay. The same
+vectors held before and after replacing the three heap scratch buffers
+with bounded stack arrays. Ten focused tracker and pan tests passed;
+the separate, already documented synthesized scale-move mismatch
+still reproduced in a broader run and is not addressed here.
