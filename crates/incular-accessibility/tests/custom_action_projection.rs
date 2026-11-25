@@ -79,7 +79,12 @@ fn desktop_exports_named_actions_and_validates_the_requested_id() {
 fn mobile_projection_rejects_an_id_not_advertised_by_this_node() {
     let id = CustomSemanticsAction::new("Move up").get_identifier();
     let other = CustomSemanticsAction::new("Move down").get_identifier();
-    let (tree, semantics) = fixture(id);
+    let hint = CustomSemanticsAction::overriding_action(SemanticActionKind::Activate, "Choose")
+        .get_identifier();
+    let (mut tree, semantics) = fixture(id);
+    let mut configured = tree.node(semantics).unwrap().clone();
+    configured.state.custom_actions = Box::new([id, hint]);
+    assert!(tree.update(semantics, configured));
     let mut projection = MobileAccessibilityProjection::new();
     projection.activate();
     let update = projection.sync(&tree).unwrap();
@@ -88,10 +93,15 @@ fn mobile_projection_rejects_an_id_not_advertised_by_this_node() {
         .iter()
         .find(|node| node.semantic.id == semantics)
         .unwrap();
-    assert_eq!(node.semantic.state.custom_actions.as_ref(), &[id]);
+    assert_eq!(node.semantic.state.custom_actions.as_ref(), &[id, hint]);
     assert!(
         projection
             .translate_action(node.native_id, SemanticAction::Custom(other))
+            .is_none()
+    );
+    assert!(
+        projection
+            .translate_action(node.native_id, SemanticAction::Custom(hint))
             .is_none()
     );
     assert_eq!(

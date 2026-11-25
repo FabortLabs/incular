@@ -271,3 +271,53 @@ fn an_accesskit_request_reaches_the_live_retained_custom_callback() {
     assert!(projection.translate_action(&request).is_none());
     assert_eq!(calls.get(), 1);
 }
+
+#[test]
+fn tap_and_long_press_hints_are_overrides_not_additional_callbacks() {
+    use incular_semantics::SemanticActionKind;
+
+    let calls = Rc::new(Cell::new([0, 0]));
+    for (kind, hint, index) in [
+        (SemanticActionKind::Activate, "test", 0usize),
+        (SemanticActionKind::LongPress, "foo", 1usize),
+    ] {
+        let observed = calls.clone();
+        let callback = move || {
+            let mut next = observed.get();
+            next[index] += 1;
+            observed.set(next);
+        };
+        let widget = Semantics::new(SizedBox::shrink())
+            .container(true)
+            .label("Target");
+        let (widget, action) = if kind == SemanticActionKind::Activate {
+            (
+                widget
+                    .on_tap(callback)
+                    .on_tap_hint("earlier")
+                    .on_tap_hint(hint),
+                SemanticAction::Activate,
+            )
+        } else {
+            (
+                widget.on_long_press(callback).on_long_press_hint(hint),
+                SemanticAction::LongPress,
+            )
+        };
+        let mut runtime = Runtime::new(widget.into()).unwrap();
+        frame(&mut runtime);
+        let id = labelled_node(&runtime, "Target");
+        let projected = runtime.tree().semantics().node(id).unwrap();
+        assert!(projected.actions.contains(&kind));
+        assert!(!projected.actions.contains(&SemanticActionKind::Custom));
+        assert_eq!(projected.state.custom_actions.len(), 1);
+        let override_id = projected.state.custom_actions[0];
+        let description = CustomSemanticsAction::get_action(override_id).unwrap();
+        assert_eq!(description.label(), None);
+        assert_eq!(description.hint(), Some(hint));
+        assert_eq!(description.action(), Some(kind));
+        assert!(!runtime.dispatch_semantic_action(id, SemanticAction::Custom(override_id)));
+        assert!(runtime.dispatch_semantic_action(id, action));
+    }
+    assert_eq!(calls.get(), [1, 1]);
+}

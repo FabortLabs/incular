@@ -337,7 +337,8 @@ impl MobileAccessibilityProjection {
                 &action,
                 SemanticAction::Custom(id)
                     if !semantic.state.custom_actions.contains(id)
-                        || CustomSemanticsAction::get_action(*id).is_none()
+                        || !CustomSemanticsAction::get_action(*id)
+                            .is_some_and(|action| action.label().is_some())
             )
         {
             self.diagnostics.unsupported_actions =

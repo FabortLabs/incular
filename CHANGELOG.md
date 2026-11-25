@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-widgets`: semantic tap and long-press hints describe the
+  standard action without registering a second callback.
+
 - `incular-accessibility`: the desktop AccessKit projection exposes
   labeled custom actions and validates requests against the live node.
 

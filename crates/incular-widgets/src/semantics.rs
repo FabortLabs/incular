@@ -1,7 +1,8 @@
 //! Accessible semantic annotation widgets.
 
 use incular_semantics::{
-    AccessibilityFocusBlockType, CustomSemanticsAction, SemanticAction, SemanticRole, SemanticState,
+    AccessibilityFocusBlockType, CustomSemanticsAction, SemanticAction, SemanticActionKind,
+    SemanticRole, SemanticState,
 };
 use smart_default::SmartDefault;
 use std::rc::Rc;
@@ -12,7 +13,7 @@ use crate::Widget;
 #[derive(Clone)]
 pub(crate) struct CustomActionBinding {
     pub(crate) action: CustomSemanticsAction,
-    pub(crate) callback: Rc<dyn Fn() + 'static>,
+    pub(crate) callback: Option<Rc<dyn Fn() + 'static>>,
 }
 
 impl std::fmt::Debug for CustomActionBinding {
@@ -25,7 +26,12 @@ impl std::fmt::Debug for CustomActionBinding {
 
 impl PartialEq for CustomActionBinding {
     fn eq(&self, other: &Self) -> bool {
-        self.action == other.action && Rc::ptr_eq(&self.callback, &other.callback)
+        self.action == other.action
+            && match (&self.callback, &other.callback) {
+                (Some(a), Some(b)) => Rc::ptr_eq(a, b),
+                (None, None) => true,
+                _ => false,
+            }
     }
 }
 
@@ -140,7 +146,30 @@ impl Semantics {
     ) -> Self {
         self.custom_actions.push(CustomActionBinding {
             action,
-            callback: Rc::new(callback),
+            callback: Some(Rc::new(callback)),
+        });
+        self
+    }
+
+    /// Describes the standard accessibility tap without adding a second action.
+    #[must_use]
+    pub fn on_tap_hint(self, hint: impl Into<String>) -> Self {
+        self.with_standard_action_hint(SemanticActionKind::Activate, hint.into())
+    }
+
+    /// Describes the standard accessibility long press without adding a
+    /// second action.
+    #[must_use]
+    pub fn on_long_press_hint(self, hint: impl Into<String>) -> Self {
+        self.with_standard_action_hint(SemanticActionKind::LongPress, hint.into())
+    }
+
+    fn with_standard_action_hint(mut self, kind: SemanticActionKind, hint: String) -> Self {
+        self.custom_actions
+            .retain(|binding| binding.callback.is_some() || binding.action.action() != Some(kind));
+        self.custom_actions.push(CustomActionBinding {
+            action: CustomSemanticsAction::overriding_action(kind, hint),
+            callback: None,
         });
         self
     }

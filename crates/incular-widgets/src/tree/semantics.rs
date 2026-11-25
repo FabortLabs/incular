@@ -30,16 +30,15 @@ struct MergedSemanticSummary {
     heading: Option<u8>,
     focus_block: AccessibilityFocusBlockType,
     custom_actions: Vec<CustomSemanticsActionId>,
+    has_custom_callback: bool,
 }
 
 impl MergedSemanticSummary {
     fn add_custom_actions(&mut self, callbacks: &SemanticCallbacks) {
-        self.custom_actions.extend(
-            callbacks
-                .custom
-                .iter()
-                .map(|binding| binding.action.get_identifier()),
-        );
+        for binding in &callbacks.custom {
+            self.custom_actions.push(binding.action.get_identifier());
+            self.has_custom_callback |= binding.callback.is_some();
+        }
     }
 }
 
@@ -967,7 +966,7 @@ impl WidgetTree {
         merged.custom_actions.sort_unstable_by_key(|id| id.0);
         merged.custom_actions.dedup();
         state.custom_actions = merged.custom_actions.into_boxed_slice();
-        if !state.custom_actions.is_empty() {
+        if merged.has_custom_callback {
             actions.push(SemanticActionKind::Custom);
         }
         if semantic_parent == RETAINED_LIST && role.is_some() != retained {
@@ -1354,15 +1353,16 @@ impl WidgetTree {
         if !self.can_contribute_merged_semantics(entry) {
             return None;
         }
-        if let Some(binding) = entry
+        if let Some(callback) = entry
             .widget
             .semantic_properties()
             .callbacks
             .custom
             .iter()
-            .find(|binding| &binding.action == action)
+            .filter(|binding| &binding.action == action)
+            .find_map(|binding| binding.callback.as_ref())
         {
-            return Some(binding.callback.clone());
+            return Some(callback.clone());
         }
         if search_descendants {
             for &child in self.visible_semantic_children(element, entry).iter() {

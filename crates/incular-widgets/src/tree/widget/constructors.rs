@@ -350,11 +350,21 @@ impl Widget {
     ) -> Self {
         let custom = &mut self.semantic_properties_mut().callbacks.custom;
         for binding in bindings {
+            if binding.callback.is_none() {
+                custom.retain(|existing| {
+                    existing.callback.is_some()
+                        || existing.action.action() != binding.action.action()
+                });
+            }
             if let Some(existing) = custom
                 .iter_mut()
                 .find(|existing| existing.action == binding.action)
             {
-                *existing = binding;
+                // A descriptor set as a hint does not discard an explicitly
+                // registered callback with the same description.
+                if binding.callback.is_some() || existing.callback.is_none() {
+                    *existing = binding;
+                }
             } else {
                 custom.push(binding);
             }

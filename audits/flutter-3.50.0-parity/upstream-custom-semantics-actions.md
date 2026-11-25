@@ -44,3 +44,14 @@ Android and iOS native menu integration was not exercised.
 This change does not claim live screen-reader behavior or native relabeling
 of standard actions. AccessKit cannot relabel a standard action and does not
 advertise an override as an additional named choice.
+
+## Standard action hints
+
+Pinned `widgets/semantics_test.dart:791` confirms that tap and long-press
+hints are stored as canonical descriptions of the corresponding standard
+action. The Rust port checks the same action kinds and strings, and
+retains the latest value for a repeated hint setter. A paired authored
+control invokes the hint's custom ID without running a callback, then
+invokes the standard action and observes exactly one call. The mobile
+projection accepts named choices, not hints masquerading as custom
+requests. Platform-specific phrasing is not part of the comparison.
