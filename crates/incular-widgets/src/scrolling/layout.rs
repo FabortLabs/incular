@@ -530,7 +530,9 @@ impl RenderSliver for VariableExtentRenderSliver {
         let mut children = Vec::with_capacity(kept.len() + range.len());
         for &index in &kept[..split] {
             let edges = self.index.offsets_for_range(index..index + 1);
-            children.push(self.variable_child_layout(index, edges[0], edges[1], constraints));
+            let mut child = self.variable_child_layout(index, edges[0], edges[1], constraints);
+            child.placement = SliverChildPlacement::Parked;
+            children.push(child);
         }
         // Both edges of every materialized row, from one walk of the index.
         let offsets = self.index.offsets_for_range(range.clone());
@@ -558,7 +560,9 @@ impl RenderSliver for VariableExtentRenderSliver {
         }
         for &index in &kept[split..] {
             let edges = self.index.offsets_for_range(index..index + 1);
-            children.push(self.variable_child_layout(index, edges[0], edges[1], constraints));
+            let mut child = self.variable_child_layout(index, edges[0], edges[1], constraints);
+            child.placement = SliverChildPlacement::Parked;
+            children.push(child);
         }
         self.kept = kept;
         SliverLayout {

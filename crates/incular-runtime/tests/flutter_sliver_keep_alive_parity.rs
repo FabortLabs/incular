@@ -8,19 +8,25 @@ use incular_core::{Color, Size};
 use incular_rendering::{Brush, PaintCommand};
 use incular_runtime::Runtime;
 use incular_widgets::{
-    CustomScrollView, KeepAlive, Positioned, ScrollController, SizedBox, Sliver, SliverList, Stack,
-    Widget, internal::Key,
+    CustomScrollView, KeepAlive, Positioned, ScrollController, Semantics, SizedBox, Sliver,
+    SliverList, Stack, Widget, internal::Key,
 };
 
 #[test]
 fn off_cache_kept_alive_row_does_not_paint_outside_an_unclipped_viewport() {
     const MARKER: Color = Color::rgba(0xFF, 0x57, 0x22, 0xFF);
+    const LABEL: &str = "kept-alive marker";
     let marker_key = Key::from(2_u64);
     let sliver = SliverList::builder(40, {
         let marker_key = marker_key.clone();
         move |index| {
-            let child = if index == 2 {
-                Widget::box_(Size::new(100., 50.), MARKER).with_key(marker_key.clone())
+            let child: Widget = if index == 2 {
+                Semantics::new(
+                    Widget::box_(Size::new(100., 50.), MARKER).with_key(marker_key.clone()),
+                )
+                .container(true)
+                .label(LABEL)
+                .into()
             } else {
                 SizedBox::new().height(50.).into()
             };
@@ -57,6 +63,15 @@ fn off_cache_kept_alive_row_does_not_paint_outside_an_unclipped_viewport() {
             .element_with_key(&marker_key)
             .expect("kept-alive row remains mounted");
         assert_eq!(id, *original_id.get_or_insert(id), "same retained row");
+        assert_eq!(
+            runtime
+                .tree()
+                .semantics()
+                .iter()
+                .any(|(_, node)| node.label.as_deref() == Some(LABEL)),
+            frame != 1,
+            "parked pixels do not leave an accessibility label",
+        );
 
         list.commands().iter().any(|command| match command {
             PaintCommand::Rect { color, .. }

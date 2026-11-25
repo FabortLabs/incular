@@ -61,3 +61,27 @@ with a 40px cache: the same first page survives at offsets 800 and
 not lay out any render objects. All four authored Flutter cases and
 13 targeted Rust tests passed. The standalone keep-alive paint
 mismatch above remains separate.
+
+### Kept-alive row presentation repair
+
+The authored unclipped sliver control now agrees. A variable-extent
+row carrying KeepAlive stays mounted at the same identity when the
+viewport jumps from 0 to 450, but no longer submits its orange paint
+commands or contributes its accessibility label. Returning to offset
+zero restores both. The pinned Flutter reference checks transparent
+pixels at the formerly painted position and the same retained State
+throughout; Rust checks the retained display list, element identity
+and semantics tree.
+
+Parked rows keep their element and render state but are left out of
+the active paint, hit-test, semantics, and measurement paths. An
+ordinary cached row is not parked. A parked row does not extend
+active cache coverage, and a global-key move to a different parent
+does not carry over its former viewport's presentation decision.
+
+Fifty-three focused Rust tests passed (including grid clipping, page
+boundaries, sliver semantics and tree performance controls). The two
+separate, long-standing static-box adapter failures were reproduced
+with the same values listed in
+[the offscreen-sliver comparison](offscreen-sliver-semantics-comparisons.md).
+This authored probe does not count as an extra original registration.

@@ -120,8 +120,9 @@ impl WidgetTree {
         let render = self
             .element_live(id, "global key element must remain live")
             .render;
-        self.render_live_mut(render, "global key render must remain live")
-            .parent = None;
+        let node = self.render_live_mut(render, "global key render must remain live");
+        node.parent = None;
+        node.parked = false;
     }
 
     /// Takes over the element that owns `widget`'s global key for a mount

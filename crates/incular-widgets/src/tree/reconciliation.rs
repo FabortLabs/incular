@@ -406,6 +406,7 @@ impl WidgetTree {
                 baseline: None,
             },
             dirty: DirtyFlags::LAYOUT | DirtyFlags::PAINT,
+            parked: false,
             subtree_needs_paint: true,
             semantics_dirty: SemanticsDirty::Subtree,
             subtree_needs_semantics: true,
@@ -1141,6 +1142,19 @@ impl WidgetTree {
             }
         }
 
+        for (&element, layout) in reconciled.children.iter().zip(&layout.children) {
+            let render = self
+                .element_live(element, "materialized sliver child")
+                .render;
+            let node = self.render_live_mut(render, "materialized sliver child render");
+            let parked = layout.placement == crate::scrolling::SliverChildPlacement::Parked;
+            if node.parked != parked {
+                node.parked = parked;
+                self.input.hover_hit_revision = self.input.hover_hit_revision.wrapping_add(1);
+                self.mark_render_semantics(render, SemanticsDirty::Subtree);
+            }
+        }
+
         let element = self.element_live_mut(element_id, "sliver viewport element must remain live");
         element.children = reconciled.children;
         let scrolling = element.scrolling_state_mut();
@@ -1150,7 +1164,11 @@ impl WidgetTree {
         scrolling.sliver_overlay_ids.clear();
         for child in &layout.children {
             let child_id = child.id;
-            if child.placement != crate::scrolling::SliverChildPlacement::Flow {
+            if matches!(
+                child.placement,
+                crate::scrolling::SliverChildPlacement::Pinned
+                    | crate::scrolling::SliverChildPlacement::Floating
+            ) {
                 scrolling.sliver_overlay_ids.insert(child_id);
             }
             scrolling.sliver_child_semantic_indices.push(
@@ -1594,6 +1612,9 @@ impl WidgetTree {
             let Some(child_render) = self.renders.get(child_element.render.0) else {
                 return false;
             };
+            if child_render.parked {
+                continue;
+            }
             let child_start = match config.axis {
                 Axis::Horizontal => child_render.offset.x,
                 Axis::Vertical => child_render.offset.y,
@@ -1613,7 +1634,7 @@ impl WidgetTree {
             // Coverage alone overlooks a page that was mounted during a
             // partial transition and has now moved completely out of cache.
             // Keep the compositor-only path while every page still overlaps.
-            if config.evict_outside_cache
+            if (config.evict_outside_cache || child_element.widget.keep_alive_request())
                 && child_extent > 0.
                 && (child_end <= wanted_start || child_start >= wanted_end)
             {
@@ -2539,15 +2560,23 @@ impl WidgetTree {
             self.tracked.notification_subscriptions_dirty = true;
             self.mark_render_semantics(render, SemanticsDirty::Subtree);
         }
-        let mut child_layers = render_children
-            .iter()
-            .map(|child| {
-                self.render_live(*child, "mounted child render must remain live")
-                    .object
-                    .layers
-                    .root
-            })
-            .collect::<Vec<_>>();
+        let layer_for_child = |index: usize| {
+            let child = self.render_live(
+                *render_children.get(index)?,
+                "mounted child render must remain live",
+            );
+            (!child.parked).then_some(child.object.layers.root)
+        };
+        let mut child_layers = if let Some(slots) = paint_slots {
+            slots
+                .into_iter()
+                .filter_map(layer_for_child)
+                .collect::<Vec<_>>()
+        } else {
+            (0..render_children.len())
+                .filter_map(layer_for_child)
+                .collect()
+        };
         let object = &self
             .renders
             .get(render.0)
@@ -2564,13 +2593,6 @@ impl WidgetTree {
                 child_layers.clear();
                 child_layers.extend(selected);
             }
-            RenderKind::SliverViewport { .. } if paint_slots.is_some() => {
-                child_layers = paint_slots
-                    .iter()
-                    .flatten()
-                    .filter_map(|slot| child_layers.get(*slot).copied())
-                    .collect();
-            }
             _ => {}
         }
         object
@@ -2580,7 +2602,7 @@ impl WidgetTree {
         for child in render_children {
             let child = self.render_live_mut(child, "mounted child render must remain live");
             child.parent = Some(render);
-            child_needs_paint |= child.subtree_needs_paint;
+            child_needs_paint |= !child.parked && child.subtree_needs_paint;
         }
         if children_changed {
             self.mark_render_dirty(render, DirtyFlags::LAYOUT | DirtyFlags::PAINT, true);

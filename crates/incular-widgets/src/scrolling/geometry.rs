@@ -137,6 +137,8 @@ pub struct SliverChildLayout {
 pub enum SliverChildPlacement {
     /// Translate with the content and use normal paint order.
     Flow,
+    /// Keep the element alive outside the sliver cache without displaying it.
+    Parked,
     /// Pin to the viewport edge and paint above flowing content.
     Pinned,
     /// Use sliver-computed placement and paint above flowing content.

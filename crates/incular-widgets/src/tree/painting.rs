@@ -661,7 +661,7 @@ impl WidgetTree {
     /// skipped whole: its retained pictures stay attached as they are.
     pub(super) fn paint_render_inner(&mut self, id: RenderObjectId) {
         let node = self.render_live(id, "retained render must remain live");
-        if !node.subtree_needs_paint {
+        if node.parked || !node.subtree_needs_paint {
             self.diagnostics.display_lists_reused += 1;
             return;
         }
@@ -704,7 +704,7 @@ impl WidgetTree {
             || visible_paint_children(node).iter().any(|child| {
                 self.renders
                     .get(child.0)
-                    .is_some_and(|child| child.subtree_needs_paint)
+                    .is_some_and(|child| !child.parked && child.subtree_needs_paint)
             });
         self.render_live_mut(id, "retained render must remain live")
             .subtree_needs_paint = pending;
@@ -1031,6 +1031,9 @@ impl WidgetTree {
         point: Offset,
         origin: Offset,
     ) -> bool {
+        if node.parked {
+            return true;
+        }
         if matches!(
             node.object.kind(),
             RenderKind::Gesture | RenderKind::Positioned { .. }

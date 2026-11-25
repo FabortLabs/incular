@@ -378,6 +378,8 @@ pub(crate) struct RenderNode {
     pub(crate) children: Vec<RenderObjectId>,
     pub(crate) geometry: RenderGeometry,
     pub(crate) dirty: DirtyFlags,
+    /// Retained for state while excluded from presentation by its parent.
+    pub(crate) parked: bool,
     /// Whether this node or a descendant still has [`DirtyFlags::PAINT`].
     /// Derived from `dirty`: paint invalidation sets it on the node and its
     /// ancestors, and the paint pass clears it once the subtree is clean, so

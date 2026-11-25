@@ -13,14 +13,18 @@ class Marker extends StatefulWidget {
 
 class MarkerState extends State<Marker> {
   @override
-  Widget build(BuildContext context) =>
-      const ColoredBox(color: Color(0xFFFF5722));
+  Widget build(BuildContext context) => Semantics(
+    container: true,
+    label: 'kept-alive marker',
+    child: const ColoredBox(color: Color(0xFFFF5722)),
+  );
 }
 
 void main() {
   testWidgets(
     'unclipped parked kept-alive row stays mounted but never paints',
     (tester) async {
+      final finder = find.bySemanticsLabel('kept-alive marker');
       final controller = ScrollController();
       addTearDown(controller.dispose);
       final marker = GlobalKey<MarkerState>();
@@ -89,17 +93,20 @@ void main() {
       }
 
       expect(await pixelAt(520), [255, 87, 34, 255]);
+      expect(finder, findsOneWidget);
       controller.jumpTo(450);
       await tester.pump(const Duration(milliseconds: 16));
       expect(controller.offset, 450);
       expect(marker.currentState, same(original));
       expect((await pixelAt(65))[3], 0);
+      expect(finder, findsNothing);
 
       controller.jumpTo(0);
       await tester.pump(const Duration(milliseconds: 16));
       expect(controller.offset, 0);
       expect(marker.currentState, same(original));
       expect(await pixelAt(520), [255, 87, 34, 255]);
+      expect(finder, findsOneWidget);
     },
   );
 }

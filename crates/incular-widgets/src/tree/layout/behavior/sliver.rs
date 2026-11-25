@@ -113,6 +113,9 @@ impl WidgetTree {
                 .render_live(id, "sliver viewport render must remain live")
                 .children[index];
             let layout = &sliver_layout.children[index];
+            if layout.placement == crate::scrolling::SliverChildPlacement::Parked {
+                continue;
+            }
             self.layout_render(child, layout.constraints)?;
             let measured = config.axis.main_extent(
                 self.render_live(child, "sliver child render must remain live")

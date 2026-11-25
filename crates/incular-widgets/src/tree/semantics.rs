@@ -354,7 +354,7 @@ impl WidgetTree {
             let Some(entry) = self.elements.get(element.0) else {
                 continue;
             };
-            if semantics_hidden(entry) {
+            if self.semantics_hidden(entry) {
                 continue;
             }
             stack.extend(self.semantic_children(element, entry).iter().rev());
@@ -675,7 +675,7 @@ impl WidgetTree {
         } = visit;
         let _node_guard = self.guard_element(FramePhase::Semantics, element);
         let entry = self.element_live(element, "semantic traversal element must remain live");
-        if semantics_hidden(entry) {
+        if self.semantics_hidden(entry) {
             return;
         }
         let own_focus_block = if subtree_focus_blocked {
@@ -1528,8 +1528,16 @@ impl WidgetTree {
         }
     }
 
+    fn semantics_hidden(&self, entry: &Element) -> bool {
+        semantics_hidden(entry)
+            || self
+                .renders
+                .get(entry.render.0)
+                .is_some_and(|render| render.parked)
+    }
+
     fn can_contribute_merged_semantics(&self, entry: &Element) -> bool {
-        !semantics_hidden(entry)
+        !self.semantics_hidden(entry)
             && (!matches!(
                 entry.widget.kind(),
                 WidgetKind::CompositedTransformFollower { .. }
