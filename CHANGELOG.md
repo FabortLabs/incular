@@ -177,6 +177,10 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-widgets`: omitted directional border sides no longer paint
+  a default line. Physical and directional border dimensions count only
+  the inset portion of each stroke.
+
 - `incular-widgets`: mounted shortcut registrars apply Num Lock policies
   using the runtime hardware keyboard state.
 

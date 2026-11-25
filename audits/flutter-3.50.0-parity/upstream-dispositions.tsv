@@ -858,3 +858,7 @@ packages/flutter/test/widgets/shortcuts_test.dart	1921	non-overlapping nested Sh
 packages/flutter/test/widgets/shortcuts_test.dart	1467	handles Alt, Ctrl and Meta	paired-match	upstream-shortcut-comparisons.md#mounted-character-callbacks
 packages/flutter/test/widgets/shortcuts_test.dart	1667	non-overlapping nested CallbackShortcuts fire appropriately	paired-match	upstream-shortcut-comparisons.md#mounted-character-callbacks
 packages/flutter/test/widgets/shortcuts_test.dart	1703	Works correctly with Shortcuts too	paired-match	upstream-shortcut-comparisons.md#mounted-character-callbacks
+packages/flutter/test/painting/border_test.dart	94	Border.scale	paired-match	upstream-border-constraints-formatters.md#box-border-defaults-and-stroke-insets
+packages/flutter/test/painting/border_test.dart	108	Border.dimensions	paired-match	upstream-border-constraints-formatters.md#box-border-defaults-and-stroke-insets
+packages/flutter/test/painting/border_test.dart	120	Border.isUniform	paired-match	upstream-border-constraints-formatters.md#box-border-defaults-and-stroke-insets
+packages/flutter/test/painting/border_test.dart	256	Border.dimension	paired-match	upstream-border-constraints-formatters.md#box-border-defaults-and-stroke-insets

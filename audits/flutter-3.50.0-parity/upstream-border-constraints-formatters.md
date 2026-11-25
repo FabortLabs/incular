@@ -76,3 +76,24 @@ becomes 15×10, without dividing by the zero axis. Rust also checks the
 transposed example and rejects NaN and positive-infinite minimums instead
 of admitting invalid layout values. All 11 focused Rust tests and both
 exact Flutter registrations passed on Linux; no raster output is involved.
+
+## Box border defaults and stroke insets
+
+Four exact Flutter painting registrations at
+`border_test.dart:94,108,120,256` passed with public Incular equivalents.
+They cover scale to zero, width/color/style/alignment uniformity, edge
+order, and the inset of inside, centered, outside, and mixed strokes in
+both physical and directional borders. Before the fix Incular reported
+10 for a centered 10-wide side instead of 5, and directional dimensions
+had no direct API. Decorations already used stroke insets internally;
+the public physical query now uses that same calculation.
+
+The separate authored `directional_border_defaults_test.dart` showed that
+Flutter omits all unconfigured directional strokes. Incular previously
+defaulted each side to a one-logical-pixel solid stroke, reserving and
+painting a line even when no side was requested. After the fix, omitted
+sides produce no paint command or inset. An explicitly requested
+zero-width stroke still produces one hairline on the leading edge in
+each text direction. Both the Flutter canvas and Incular display list
+assert the zero width and edge coordinates; no new GPU raster comparison
+was run. Sixteen focused Rust checks passed.

@@ -99,7 +99,7 @@ impl BorderSide {
 
     /// Flutter `strokeInset`: how far the stroke reaches inside the shape.
     #[must_use]
-    pub fn stroke_inset(&self) -> f32 {
+    pub const fn stroke_inset(&self) -> f32 {
         self.width * (1.0 - (1.0 + self.stroke_align) / 2.0)
     }
 
@@ -244,26 +244,22 @@ impl Border {
         Self::all(side)
     }
 
-    #[must_use]
-    pub const fn dimensions(self) -> incular_config::EdgeInsets {
-        incular_config::EdgeInsets::only(
-            self.left.width,
-            self.top.width,
-            self.right.width,
-            self.bottom.width,
-        )
-    }
-
     /// Flutter `Border.dimensions`: each side's `strokeInset`, the padding
     /// a decoration with this border adds.
     #[must_use]
-    pub fn stroke_insets(self) -> incular_config::EdgeInsets {
+    pub const fn dimensions(self) -> incular_config::EdgeInsets {
         incular_config::EdgeInsets::only(
             self.left.stroke_inset(),
             self.top.stroke_inset(),
             self.right.stroke_inset(),
             self.bottom.stroke_inset(),
         )
+    }
+
+    /// Alias for [`Self::dimensions`].
+    #[must_use]
+    pub const fn stroke_insets(self) -> incular_config::EdgeInsets {
+        self.dimensions()
     }
 
     /// Flutter `Border.scale`: every side scaled by `t`.
@@ -307,16 +303,20 @@ impl From<Border> for incular_rendering::Border {
     }
 }
 
-/// Directional border with start and end sides.
-#[derive(Clone, Copy, Debug, Default, PartialEq, TypedBuilder)]
+/// Directional border with start and end sides. Omitted sides do not paint.
+#[derive(Clone, Copy, Debug, PartialEq, TypedBuilder, SmartDefault)]
 pub struct BorderDirectional {
-    #[builder(default = BorderSide::default())]
+    #[builder(default = BorderSide::NONE)]
+    #[default(BorderSide::NONE)]
     pub top: BorderSide,
-    #[builder(default = BorderSide::default())]
+    #[builder(default = BorderSide::NONE)]
+    #[default(BorderSide::NONE)]
     pub start: BorderSide,
-    #[builder(default = BorderSide::default())]
+    #[builder(default = BorderSide::NONE)]
+    #[default(BorderSide::NONE)]
     pub end: BorderSide,
-    #[builder(default = BorderSide::default())]
+    #[builder(default = BorderSide::NONE)]
+    #[default(BorderSide::NONE)]
     pub bottom: BorderSide,
 }
 
@@ -334,6 +334,17 @@ impl BorderDirectional {
             end,
             bottom,
         }
+    }
+
+    /// The part of each stroke inside the painted bounds, in logical edge order.
+    #[must_use]
+    pub const fn dimensions(self) -> incular_config::EdgeInsetsDirectional {
+        incular_config::EdgeInsetsDirectional::only(
+            self.start.stroke_inset(),
+            self.top.stroke_inset(),
+            self.end.stroke_inset(),
+            self.bottom.stroke_inset(),
+        )
     }
 
     #[must_use]
