@@ -266,6 +266,25 @@ fn flutter_350_compatible_unkeyed_page_retains_route_editor_and_focus() {
 }
 
 #[test]
+fn flutter_350_page_update_keeps_mounted_pageless_focus() {
+    let navigator = Navigator::new();
+    let base = || plain_page("editor").key(PageKey::new("editor").unwrap());
+    navigator.set_pages([base()]).unwrap();
+    let mut harness = harness(&navigator);
+    let dialog_node = FocusNode::new();
+    let dialog = navigator.push(Route::new("dialog", focus_child(&dialog_node)));
+    present(&mut harness);
+    tab_until(&mut harness.runtime, &dialog_node);
+    let before_focus = harness.runtime.focused_element().expect("dialog focus");
+
+    navigator.set_pages([base()]).unwrap();
+    present(&mut harness);
+    assert_eq!(navigator.current().unwrap().id, dialog);
+    assert_eq!(harness.runtime.focused_element(), Some(before_focus));
+    assert!(dialog_node.has_focus());
+}
+
+#[test]
 fn outlet_reorder_preserves_and_repush_forgets() {
     let navigator = Navigator::new();
     let mut harness = harness(&navigator);

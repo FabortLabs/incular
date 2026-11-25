@@ -36,7 +36,24 @@ middle route; only the middle route is recreated. The Incular navigator
 checks the corresponding route IDs, new settings, and previous middle
 lifetime. The Runtime's C24 fixture continues to check both editor
 element identity and actual focus, with and without an explicit page key.
-This does not change C25's pageless-attachment policy.
+The C24 change alone did not change pageless-attachment policy.
+
+## C25 remediation
+
+Unkeyed imperative routes stay with their retained declarative page,
+including when keyed pages reorder. Removing the owning page retires
+its pageless entries and their lifetimes without disturbing a different
+page's entries. The pinned Flutter probe also confirms that an
+unchanged retained page does not take focus away from the imperative
+route above it. Incular's mounted RouteOutlet fixture checks the same
+active route and focused element before and after the update.
+
+All five pinned probes, 87 navigation tests, 10 transition-delegate
+tests, and the focused pageless-focus Runtime test passed. Leading
+pageless routes without a declarative owner, Flutter's precise
+transition-delegate grouping, and unrelated RouteOutlet focus failures
+are not claimed by this change. C24/C25 are custom probes, not additional
+original Flutter registration sites.
 
 ## Reproduction
 

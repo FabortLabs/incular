@@ -110,6 +110,8 @@ void main() {
   });
   testWidgets('pageless route stays attached to a retained page', (t) async {
     final nav = GlobalKey<NavigatorState>();
+    final focus = FocusNode();
+    addTearDown(focus.dispose);
     Widget shell() => MediaQuery(
       data: MediaQueryData.fromView(t.view),
       child: Directionality(
@@ -125,14 +127,68 @@ void main() {
     final pushed = PageRouteBuilder<void>(
       transitionDuration: Duration.zero,
       reverseTransitionDuration: Duration.zero,
-      pageBuilder: (_, __, ___) => const Text('imperative'),
+      pageBuilder: (_, __, ___) =>
+          Focus(focusNode: focus, child: const Text('imperative')),
     );
     nav.currentState!.push<void>(pushed);
     await t.pumpAndSettle();
     expect(find.text('imperative'), findsOneWidget);
+    focus.requestFocus();
+    await t.pumpAndSettle();
+    expect(focus.hasPrimaryFocus, isTrue);
     await t.pumpWidget(shell());
     await t.pumpAndSettle();
     expect(find.text('imperative'), findsOneWidget);
     expect(pushed.isCurrent, isTrue);
+    expect(focus.hasPrimaryFocus, isTrue);
+  });
+  testWidgets('pageless routes follow a reordered page and leave with it', (t) async {
+    final nav = GlobalKey<NavigatorState>();
+    TrackedPage keyed(String name) => TrackedPage(name, key: ValueKey(name));
+    Widget shell(List<TrackedPage> pages) => MediaQuery(
+      data: MediaQueryData.fromView(t.view),
+      child: Directionality(
+        textDirection: TextDirection.ltr,
+        child: Navigator(key: nav, pages: pages, onDidRemovePage: (_) {}),
+      ),
+    );
+    Route<void> push(String name) {
+      final route = PageRouteBuilder<void>(
+        settings: RouteSettings(name: name),
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+        pageBuilder: (_, __, ___) => Text(name),
+      );
+      nav.currentState!.push<void>(route);
+      return route;
+    }
+
+    final a = keyed('a');
+    await t.pumpWidget(shell([a]));
+    final aDialog = push('a dialog');
+    await t.pumpAndSettle();
+    expect(aDialog.isCurrent, isTrue);
+    final b = keyed('b');
+    await t.pumpWidget(shell([keyed('a'), b]));
+    await t.pumpAndSettle();
+    expect(b.created!.isCurrent, isTrue);
+    expect(aDialog.isActive, isTrue);
+    final bDialog = push('b dialog');
+    final bConfirm = push('b confirm');
+    await t.pumpAndSettle();
+    expect(bConfirm.isCurrent, isTrue);
+
+    await t.pumpWidget(shell([keyed('b'), keyed('a')]));
+    await t.pumpAndSettle();
+    expect(aDialog.isCurrent, isTrue);
+    expect(bDialog.isActive, isTrue);
+    expect(bConfirm.isActive, isTrue);
+
+    await t.pumpWidget(shell([keyed('a')]));
+    await t.pumpAndSettle();
+    expect(aDialog.isCurrent, isTrue);
+    expect(b.created!.isActive, isFalse);
+    expect(bDialog.isActive, isFalse);
+    expect(bConfirm.isActive, isFalse);
   });
 }

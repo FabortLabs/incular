@@ -502,6 +502,43 @@ fn flutter_350_pageless_route_stays_current_above_an_equivalent_keyed_page() {
 }
 
 #[test]
+fn pageless_routes_follow_their_page_on_reorder_and_retire_when_it_leaves() {
+    let navigator = Navigator::new();
+    let keyed = |name| Page::new(name, page()).key(PageKey::new(name).unwrap());
+    let stack = || {
+        navigator
+            .routes()
+            .into_iter()
+            .map(|route| route.id)
+            .collect::<Vec<_>>()
+    };
+    navigator.set_pages([keyed("a")]).unwrap();
+    let a = navigator.current().unwrap().id;
+    let a_dialog = navigator.push(Route::new("a dialog", page()));
+    navigator.set_pages([keyed("a"), keyed("b")]).unwrap();
+    let b = navigator.current().unwrap().id;
+    let b_dialog = navigator.push(Route::new("b dialog", page()));
+    let b_confirm = navigator.push(Route::new("b confirm", page()));
+    let a_dialog_lifetime = navigator.lifetime_of(a_dialog).unwrap();
+    let b_dialog_lifetime = navigator.lifetime_of(b_dialog).unwrap();
+    let b_confirm_lifetime = navigator.lifetime_of(b_confirm).unwrap();
+    assert_eq!(stack(), [a, a_dialog, b, b_dialog, b_confirm]);
+
+    navigator.set_pages([keyed("b"), keyed("a")]).unwrap();
+    assert_eq!(stack(), [b, b_dialog, b_confirm, a, a_dialog]);
+    assert_eq!(navigator.current().unwrap().id, a_dialog);
+    assert!(a_dialog_lifetime.is_live());
+    assert!(b_dialog_lifetime.is_live());
+    assert!(b_confirm_lifetime.is_live());
+
+    navigator.set_pages([keyed("a")]).unwrap();
+    assert_eq!(stack(), [a, a_dialog]);
+    assert!(a_dialog_lifetime.is_live());
+    assert!(!b_dialog_lifetime.is_live());
+    assert!(!b_confirm_lifetime.is_live());
+}
+
+#[test]
 fn compatible_unkeyed_pages_preserve_route_id_when_reconciled() {
     let navigator = Navigator::new();
     navigator

@@ -777,6 +777,9 @@ impl Navigator {
     /// A reused route retains its ID, restoration metadata, and scope data
     /// while its child, transition and presentation follow the latest page.
     /// Names are routing metadata, never identity.
+    /// Unkeyed imperative routes pushed above a declarative page remain
+    /// attached to that page if it survives, even when it changes order.
+    /// They retire with their owning page when it is removed.
     ///
     /// The caller's iterator drains fully before any state is borrowed,
     /// so an iterator may inspect or mutate the navigator; those changes
@@ -808,10 +811,10 @@ impl Navigator {
                 .into_iter()
                 .map(Some)
                 .collect();
-            let previous_ids: Vec<RouteId> = previous
+            let previous_identity: Vec<_> = previous
                 .iter()
                 .flatten()
-                .map(|entry| entry.route.id)
+                .map(|entry| (entry.route.id, entry.page_based))
                 .collect();
             let mut added = Vec::with_capacity(pages.len());
             let mut by_key: HashMap<PageKey, usize> = HashMap::new();
@@ -876,6 +879,38 @@ impl Navigator {
                     });
                 }
             }
+            // In the original stack, each pageless route belongs to the
+            // preceding declarative page, not the same numeric slot.
+            // Incular's keyed imperative pages retain their existing
+            // explicit-key claim rules and are not pageless attachments.
+            let mut owner = None;
+            let mut attachments: HashMap<RouteId, Vec<RouteEntry>> = HashMap::new();
+            for (&(id, page_based), slot) in previous_identity.iter().zip(&mut previous) {
+                if page_based {
+                    owner = slot.is_none().then_some(id);
+                } else if let Some(owner) = owner
+                    && slot.as_ref().is_some_and(|entry| entry.key.is_none())
+                    && let Some(entry) = slot.take()
+                {
+                    attachments.entry(owner).or_default().push(entry);
+                }
+            }
+            if !attachments.is_empty() {
+                let attachment_count: usize = attachments.values().map(Vec::len).sum();
+                let mut stacked = Vec::with_capacity(next.len() + attachment_count);
+                let mut stacked_added = Vec::with_capacity(stacked.capacity());
+                for (entry, added) in next.into_iter().zip(added) {
+                    let attached = attachments.remove(&entry.route.id);
+                    stacked.push(entry);
+                    stacked_added.push(added);
+                    if let Some(attached) = attached {
+                        stacked_added.resize(stacked_added.len() + attached.len(), false);
+                        stacked.extend(attached);
+                    }
+                }
+                next = stacked;
+                added = stacked_added;
+            }
             // Unmatched entries retire outside the borrow below, without
             // the pop-only scope bridge: declarative reconciliation retains
             // persisted scope data by design.
@@ -883,7 +918,7 @@ impl Navigator {
             // above the nearest kept route below it in the old stack.
             let mut location = None;
             let mut exiting = Vec::new();
-            for (id, slot) in previous_ids.iter().zip(&previous) {
+            for ((id, _), slot) in previous_identity.iter().zip(&previous) {
                 match slot {
                     None => location = Some(*id),
                     Some(entry) => exiting.push((
