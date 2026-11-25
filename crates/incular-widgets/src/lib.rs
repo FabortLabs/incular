@@ -221,8 +221,8 @@ pub use forms::{
     TextInputFormatter, UndoHistory,
 };
 pub use gestures::{
-    AbsorbPointer, DragEndDetails, DragStartDetails, DragUpdateDetails, ForcePressDetails,
-    GestureDetector, HitTestBehavior, IgnorePointer, TapUpDetails,
+    AbsorbPointer, DragDownDetails, DragEndDetails, DragStartDetails, DragUpdateDetails,
+    ForcePressDetails, GestureDetector, HitTestBehavior, IgnorePointer, TapUpDetails,
 };
 pub use hero::{
     CreateRectTween, Hero, HeroFlightDirection, HeroFlightShuttleBuilder, HeroMode,

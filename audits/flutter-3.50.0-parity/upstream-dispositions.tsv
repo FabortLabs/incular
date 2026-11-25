@@ -995,3 +995,6 @@ packages/flutter/test/scheduler/scheduler_test.dart	167	2 calls to scheduleWarmU
 packages/flutter/test/scheduler/scheduler_test.dart	204	Flutter.Frame event fired	reference-ran-incular-open	scheduler-callback-phases-comparisons.md#frame-timing-observers
 packages/flutter/test/scheduler/scheduler_test.dart	229	TimingsCallback exceptions are caught	paired-match	scheduler-callback-phases-comparisons.md#frame-timing-observers
 packages/flutter/test/rendering/proxy_box_test.dart	100	RenderSemanticsGestureHandler adds/removes correct semantic actions	paired-match	upstream-semantic-gesture-directions.md
+packages/flutter/test/widgets/gesture_detector_semantics_test.dart	13	Vertical gesture detector has up/down actions	paired-match	upstream-semantic-gesture-directions.md#gesturedetector-recognizer-phases
+packages/flutter/test/widgets/gesture_detector_semantics_test.dart	62	Horizontal gesture detector has up/down actions	paired-match	upstream-semantic-gesture-directions.md#gesturedetector-recognizer-phases
+packages/flutter/test/widgets/gesture_detector_semantics_test.dart	111	All registered handlers for the gesture kind are called	paired-match	upstream-semantic-gesture-directions.md#gesturedetector-recognizer-phases

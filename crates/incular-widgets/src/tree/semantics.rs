@@ -1579,6 +1579,91 @@ fn push_merged_label(merged: &mut String, label: &str) {
     merged.push_str(label);
 }
 
+struct DragSemanticPhases<'a> {
+    down: &'a Option<Rc<dyn Fn(incular_gestures::DragDownDetails)>>,
+    start: &'a Option<Rc<dyn Fn(DragStartDetails)>>,
+    update: &'a Option<Rc<dyn Fn(DragUpdateDetails)>>,
+    end: &'a Option<Rc<dyn Fn(DragEndDetails)>>,
+    has_cancel: bool,
+}
+
+impl<'a> DragSemanticPhases<'a> {
+    fn for_axis(callbacks: &'a GestureCallbacks, axis: Option<Axis>) -> Self {
+        match axis {
+            Some(Axis::Horizontal) => Self {
+                down: &callbacks.on_horizontal_drag_down,
+                start: &callbacks.on_horizontal_drag_start,
+                update: &callbacks.on_horizontal_drag_update,
+                end: &callbacks.on_horizontal_drag_end,
+                has_cancel: callbacks.on_horizontal_drag_cancel.is_some(),
+            },
+            Some(Axis::Vertical) => Self {
+                down: &callbacks.on_vertical_drag_down,
+                start: &callbacks.on_vertical_drag_start,
+                update: &callbacks.on_vertical_drag_update,
+                end: &callbacks.on_vertical_drag_end,
+                has_cancel: callbacks.on_vertical_drag_cancel.is_some(),
+            },
+            None => Self {
+                down: &callbacks.on_pan_down,
+                start: &callbacks.on_pan_start,
+                update: &callbacks.on_pan_update,
+                end: &callbacks.on_pan_end,
+                has_cancel: callbacks.on_pan_cancel.is_some(),
+            },
+        }
+    }
+
+    fn has_recognizer(&self) -> bool {
+        self.down.is_some()
+            || self.start.is_some()
+            || self.update.is_some()
+            || self.end.is_some()
+            || self.has_cancel
+    }
+
+    fn bind(
+        &self,
+        start: DragStartDetails,
+        update: DragUpdateDetails,
+        end: DragEndDetails,
+    ) -> impl Fn() + 'static + use<> {
+        let (on_down, on_start, on_update, on_end) = (
+            self.down.clone(),
+            self.start.clone(),
+            self.update.clone(),
+            self.end.clone(),
+        );
+        move || {
+            if let Some(callback) = &on_down {
+                callback(incular_gestures::DragDownDetails {
+                    global_position: start.global_position,
+                    local_position: start.local_position,
+                });
+            }
+            if let Some(callback) = &on_start {
+                callback(start);
+            }
+            if let Some(callback) = &on_update {
+                callback(update);
+            }
+            if let Some(callback) = &on_end {
+                callback(end);
+            }
+        }
+    }
+}
+
+fn semantic_drag_axis(action: SemanticActionKind) -> Option<(Axis, f32)> {
+    match action {
+        SemanticActionKind::ScrollLeft => Some((Axis::Horizontal, -1.)),
+        SemanticActionKind::ScrollRight => Some((Axis::Horizontal, 1.)),
+        SemanticActionKind::ScrollUp => Some((Axis::Vertical, -1.)),
+        SemanticActionKind::ScrollDown => Some((Axis::Vertical, 1.)),
+        _ => None,
+    }
+}
+
 fn gesture_supports(
     callbacks: &GestureCallbacks,
     policy: Option<GestureSemanticPolicy>,
@@ -1588,13 +1673,10 @@ fn gesture_supports(
         && match action {
             SemanticActionKind::Activate => callbacks.on_tap.is_some(),
             SemanticActionKind::LongPress => callbacks.on_long_press.is_some(),
-            SemanticActionKind::ScrollLeft | SemanticActionKind::ScrollRight => {
-                callbacks.on_horizontal_drag_update.is_some()
-            }
-            SemanticActionKind::ScrollUp | SemanticActionKind::ScrollDown => {
-                callbacks.on_vertical_drag_update.is_some()
-            }
-            _ => false,
+            _ => semantic_drag_axis(action).is_some_and(|(axis, _)| {
+                DragSemanticPhases::for_axis(callbacks, Some(axis)).has_recognizer()
+                    || DragSemanticPhases::for_axis(callbacks, None).has_recognizer()
+            }),
         }
 }
 
@@ -1629,53 +1711,50 @@ impl WidgetTree {
             SemanticActionKind::Activate => callbacks.on_tap.clone(),
             SemanticActionKind::LongPress => callbacks.on_long_press.clone(),
             _ => {
+                let (axis, sign) = semantic_drag_axis(action)?;
                 let size = self.renders.get(element.render.0)?.size;
-                let factor = policy.unwrap_or_default().scroll_factor;
-                let (callback, delta, primary_delta) = match action {
-                    SemanticActionKind::ScrollLeft | SemanticActionKind::ScrollRight => {
-                        let primary = size.width
-                            * factor
-                            * if action == SemanticActionKind::ScrollLeft {
-                                -1.
-                            } else {
-                                1.
-                            };
-                        (
-                            callbacks.on_horizontal_drag_update.clone()?,
-                            Offset::new(primary, 0.),
-                            primary,
-                        )
-                    }
-                    SemanticActionKind::ScrollUp | SemanticActionKind::ScrollDown => {
-                        let primary = size.height
-                            * factor
-                            * if action == SemanticActionKind::ScrollUp {
-                                -1.
-                            } else {
-                                1.
-                            };
-                        (
-                            callbacks.on_vertical_drag_update.clone()?,
-                            Offset::new(0., primary),
-                            primary,
-                        )
-                    }
-                    _ => return None,
+                let primary_delta =
+                    axis.main_extent(size) * policy.unwrap_or_default().scroll_factor * sign;
+                let delta = axis.offset(primary_delta, 0.);
+                let world = self.render_world_transform(element.render);
+                let local_position = Offset::new(size.width / 2., size.height / 2.);
+                let global_position = world.transform_point(local_position);
+                let start = DragStartDetails {
+                    source_time: None,
+                    local_position,
+                    global_position,
+                    kind: incular_core::PointerDeviceKind::Unknown,
                 };
-                let global_position = self
-                    .render_world_transform(element.render)
-                    .transform_point(Offset::new(size.width / 2., size.height / 2.));
+                let update = DragUpdateDetails {
+                    source_time: None,
+                    delta,
+                    primary_delta: Some(primary_delta),
+                    global_position,
+                    // Flutter creates this update with only globalPosition.
+                    local_position: global_position,
+                    kind: incular_core::PointerDeviceKind::Unknown,
+                };
+                let local_end = local_position + delta;
+                let end = DragEndDetails {
+                    velocity: incular_gestures::Velocity::ZERO,
+                    primary_velocity: Some(0.),
+                    local_position: local_end,
+                    global_position: world.transform_point(local_end),
+                };
+                let directional =
+                    DragSemanticPhases::for_axis(callbacks, Some(axis)).bind(start, update, end);
+                let pan = DragSemanticPhases::for_axis(callbacks, None).bind(
+                    start,
+                    update,
+                    DragEndDetails {
+                        primary_velocity: None,
+                        ..end
+                    },
+                );
                 Some(Rc::new(move || {
-                    callback(DragUpdateDetails {
-                        source_time: None,
-                        delta,
-                        primary_delta: Some(primary_delta),
-                        global_position,
-                        // Flutter supplies only globalPosition for these
-                        // synthetic updates; localPosition defaults to it.
-                        local_position: global_position,
-                        kind: incular_core::PointerDeviceKind::Unknown,
-                    });
+                    // Flutter dispatches the axis recognizer before the pan.
+                    directional();
+                    pan();
                 }))
             }
         }

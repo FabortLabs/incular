@@ -28,3 +28,21 @@ Existing logical forward/backward actions on scrollable views
 remain supported and their legacy projection tests pass.
 These probes use the actual portable graph and native data
 adapter, not a live OS screen reader.
+
+## GestureDetector recognizer phases
+
+Pinned `widgets/gesture_detector_semantics_test.dart` :13 and
+:62 use start-only recognizers. A vertical recognizer advertises
+and receives only up/down; a horizontal one only left/right.
+Previously Incular needed an update callback even to expose
+the action, so neither start-only recognizer was reachable.
+:111 registers an axis recognizer and a pan; both are invoked.
+
+The authored Flutter and Rust fixtures check the full four
+phases for each installed recognizer, axis first and pan
+second. Down/start report the true local and transformed
+global centers. Update retains the synthetic delta and the
+globalPosition fallback for its localPosition. End reports the
+center plus delta transformed into world space, zero velocity,
+and zero primary velocity for the axis versus no primary
+velocity for pan. Cancellation is not synthesized.
