@@ -118,3 +118,131 @@ fn round_trip_builder_isolates_metadata_and_wrappers() {
     builder.group = Some(String::new());
     assert_eq!(builder.build().group(), "");
 }
+
+struct Greeting(Vec<incular_config::Locale>);
+
+impl incular_config::LocalizationCatalog for Greeting {
+    fn supported_locales(&self) -> &[incular_config::Locale] {
+        &self.0
+    }
+
+    fn message(&self, locale: &incular_config::Locale, key: &str) -> Option<&str> {
+        if key != "hello" {
+            return None;
+        }
+        match locale.to_string().as_str() {
+            "en" => Some("Hello"),
+            "es" => Some("Hola"),
+            "ar" => Some("مرحبا"),
+            _ => None,
+        }
+    }
+}
+
+#[test]
+fn preview_locale_scope_retains_its_child_as_the_platform_locale_changes() {
+    use incular_config::{Locale, LocalizationCatalog, RuntimeEnvironment, TextDirection};
+    use incular_widgets::internal::Key;
+    use incular_widgets::widget_previews::PreviewLocalizationsData;
+
+    let locales = ["en", "es", "ar"].map(|tag| tag.parse::<Locale>().unwrap());
+    let catalog: Rc<dyn LocalizationCatalog> = Rc::new(Greeting(locales.to_vec()));
+    let target = Key::from("preview content");
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let child = Builder::new({
+        let target = target.clone();
+        let seen = seen.clone();
+        move |context| {
+            let (locale, catalog) = context
+                .depend_on::<(Locale, Rc<dyn LocalizationCatalog>)>()
+                .unwrap();
+            seen.borrow_mut().push((
+                locale.to_string(),
+                catalog.message(&locale, "hello").unwrap().to_owned(),
+                context.text_direction().unwrap(),
+            ));
+            leaf().with_key(target.clone())
+        }
+    });
+    let calls = Rc::new(Cell::new(0));
+    let mut builder = PreviewBuilder::new();
+    builder.localizations = Some(Rc::new({
+        let catalog = catalog.clone();
+        let locales = locales.clone();
+        let calls = calls.clone();
+        move || {
+            calls.set(calls.get() + 1);
+            PreviewLocalizationsData {
+                supported_locales: locales.to_vec(),
+                catalog: Some(catalog.clone()),
+                ..Default::default()
+            }
+        }
+    }));
+    let preview = builder.build();
+    assert_eq!(calls.get(), 0);
+    let mut tree = WidgetTree::new();
+    let view = Constraints::loose(Size::new(100., 100.));
+    tree.set_environment(RuntimeEnvironment {
+        locales: vec![locales[0].clone()],
+        ..Default::default()
+    });
+    tree.mount(preview.apply_localizations(child)).unwrap();
+    tree.layout(view).unwrap();
+    let old = tree.element_with_key(&target).unwrap();
+    for locale in &locales[1..] {
+        tree.set_environment(RuntimeEnvironment {
+            locales: vec![locale.clone()],
+            ..Default::default()
+        });
+        tree.layout(view).unwrap();
+        assert_eq!(tree.element_with_key(&target), Some(old));
+    }
+    assert_eq!(
+        *seen.borrow(),
+        [
+            ("en".to_owned(), "Hello".to_owned(), TextDirection::Ltr),
+            ("es".to_owned(), "Hola".to_owned(), TextDirection::Ltr),
+            ("ar".to_owned(), "مرحبا".to_owned(), TextDirection::Rtl),
+        ]
+    );
+    assert_eq!(calls.get(), 1);
+}
+
+#[test]
+fn preview_locale_resolution_prefers_an_explicit_locale_and_ordered_callbacks() {
+    use incular_config::Locale;
+    use incular_widgets::widget_previews::PreviewLocalizationsData;
+    let locale = |tag: &str| tag.parse::<Locale>().unwrap();
+    let calls = Rc::new(RefCell::new(Vec::new()));
+    let mut data = PreviewLocalizationsData {
+        locale: Some(locale("es")),
+        supported_locales: vec![locale("en"), locale("es"), locale("ar")],
+        locale_list_resolution: Some(Rc::new({
+            let calls = calls.clone();
+            move |preferred, _| {
+                calls.borrow_mut().push("list");
+                assert_eq!(preferred, [locale("es")]);
+                None
+            }
+        })),
+        locale_resolution: Some(Rc::new({
+            let calls = calls.clone();
+            move |preferred, supported| {
+                calls.borrow_mut().push("single");
+                assert_eq!(preferred, Some(&locale("es")));
+                Some(supported[2].clone())
+            }
+        })),
+        ..Default::default()
+    };
+    assert_eq!(data.resolve(&[locale("en")]), Some(locale("ar")));
+    assert_eq!(*calls.borrow(), ["list", "single"]);
+    data.locale_list_resolution = Some(Rc::new(|preferred, _| Some(preferred[0].clone())));
+    assert_eq!(data.resolve(&[locale("en")]), Some(locale("es")));
+    assert_eq!(*calls.borrow(), ["list", "single"]);
+    assert_eq!(
+        PreviewLocalizationsData::default().resolve(&[locale("ar")]),
+        Some(locale("en-US"))
+    );
+}

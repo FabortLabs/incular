@@ -10,10 +10,27 @@ The facade is `incular::widget_previews` and depends on no design system.
 
 This closes the authored wrapper/theme API gap recorded in
 [listener-tween-preview-comparisons.md](listener-tween-preview-comparisons.md).
-This is only runtime composition. Locale/delegate integration, annotation
-discovery, generator, scaffold, host/rendering, file watching/reload,
-and DTD/IDE integration remain outside this slice. These authored cases
-do not count as any of the 113 upstream tooling registrations.
+This is only runtime composition. Annotation discovery, generator, scaffold,
+host/rendering, file watching/reload, and DTD/IDE integration remain outside
+this slice. These authored cases do not count as any of the 113 upstream
+tooling registrations.
+
+## Localized preview subtrees
+
+`PreviewLocalizationsData` and `Preview::apply_localizations` install
+catalog resources and resolved directionality in the retained preview.
+Pinned `preview_localizations_reference_test.dart` exercises the actual
+Flutter preview descriptor and the resolver used by its scaffold. Both
+sides propagate English, Spanish, and Arabic resources; change inherited
+direction without remounting the child; and invoke the list override
+before the single-locale override when an explicit locale is supplied.
+The Rust environment and preview targets passed 11 tests; the authored
+Flutter probe passed both comparisons.
+
+Incular catalogs are not Flutter delegate lists. This probe does not
+execute the actual `widget_preview_scaffold/test/localizations_test.dart:50`
+registration: the offline SDK cache lacks that tool's design-system and
+launcher dependencies. It is not credited as a paired registration.
 
 ## Preview scaffold manifest
 
