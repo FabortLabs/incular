@@ -1,6 +1,6 @@
 //! Box decoration primitives and their painting data.
 
-use incular_core::{Color, Offset};
+use incular_core::{Color, Lerp, Offset};
 use incular_image::ImageHandle;
 use incular_rendering::{BlendMode, Brush, FilterQuality};
 use smart_default::SmartDefault;
@@ -288,6 +288,17 @@ impl Border {
         }
     }
 
+    /// Interpolates borders, scaling the present endpoint when the other is absent.
+    #[must_use]
+    pub fn lerp_optional(begin: Option<Self>, end: Option<Self>, t: f32) -> Option<Self> {
+        match (begin, end) {
+            (Some(a), Some(b)) => Some(a.lerp(&b, t)),
+            (Some(a), None) => Some(a.scale(1.0 - t)),
+            (None, Some(b)) => Some(b.scale(t)),
+            (None, None) => None,
+        }
+    }
+
     /// Flutter `Border.isUniform`: every side has the same color, width,
     /// style and stroke alignment.
     #[must_use]
@@ -386,6 +397,17 @@ impl BorderDirectional {
             self.end.scale(t),
             self.bottom.scale(t),
         )
+    }
+
+    /// Interpolates logical sides without resolving either border's direction.
+    #[must_use]
+    pub fn lerp_optional(begin: Option<Self>, end: Option<Self>, t: f32) -> Option<Self> {
+        match (begin, end) {
+            (Some(a), Some(b)) => Some(a.lerp(&b, t)),
+            (Some(a), None) => Some(a.scale(1.0 - t)),
+            (None, Some(b)) => Some(b.scale(t)),
+            (None, None) => None,
+        }
     }
 
     /// Whether color, width, style and stroke alignment agree on every side.
@@ -731,12 +753,7 @@ impl incular_core::Lerp for BoxDecoration {
             } else {
                 other.image.clone()
             },
-            border: match (self.border, other.border) {
-                (Some(a), Some(b)) => Some(a.lerp(&b, t)),
-                (Some(a), None) => Some(a.scale(1.0 - t)),
-                (None, Some(b)) => Some(b.scale(t)),
-                (None, None) => None,
-            },
+            border: Border::lerp_optional(self.border, other.border, t),
             border_radius: match (self.border_radius, other.border_radius) {
                 (None, None) => None,
                 (a, b) => Some(a.unwrap_or_default().lerp(&b.unwrap_or_default(), t)),

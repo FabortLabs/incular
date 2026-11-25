@@ -122,3 +122,14 @@ dimensions keep start/top/end/bottom order, scaling preserves the logical
 edges and color, and uniformity compares width, color, style and alignment.
 Thirteen focused Rust checks passed. Mixed-representation composition and
 nullable interpolation are separate contracts.
+
+## Nullable border interpolation
+
+The pinned `border_test.dart:195` and `border_rtl_test.dart:866` passed.
+Each public Rust port checks the same 24 cases at six factors: absent
+endpoints stay absent only when both are missing; a single present end
+scales in or out; two present ends interpolate their own edge values.
+Scaling to zero produces an absent stroke, while a solid pair that
+extrapolates to exactly zero still yields a hairline. Logical sides
+remain independent of direction. Fifteen focused Rust tests passed.
+This does not cover transitions between physical and directional types.

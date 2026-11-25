@@ -869,3 +869,5 @@ packages/flutter/test/painting/border_rtl_test.dart	567	BorderDirectional.merge	
 packages/flutter/test/painting/border_rtl_test.dart	606	BorderDirectional.dimensions	paired-match	upstream-border-constraints-formatters.md#physical-and-directional-border-values
 packages/flutter/test/painting/border_rtl_test.dart	618	BorderDirectional.isUniform	paired-match	upstream-border-constraints-formatters.md#physical-and-directional-border-values
 packages/flutter/test/painting/border_rtl_test.dart	852	BorderDirectional.scale	paired-match	upstream-border-constraints-formatters.md#physical-and-directional-border-values
+packages/flutter/test/painting/border_test.dart	195	Border.lerp	paired-match	upstream-border-constraints-formatters.md#nullable-border-interpolation
+packages/flutter/test/painting/border_rtl_test.dart	866	BorderDirectional.lerp	paired-match	upstream-border-constraints-formatters.md#nullable-border-interpolation

@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-widgets`: physical and directional borders support optional
+  interpolation endpoints, including extrapolation.
+
 - `incular-widgets`: physical and directional borders can merge compatible
   sides; directional borders expose per-side scaling and uniformity.
 
