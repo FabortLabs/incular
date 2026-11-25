@@ -55,6 +55,12 @@ fn main() {
 `label` names the node; [`MergeSemantics`](/docs/api/platform/semantics) fuses a subtree; [`ExcludeSemantics`](/docs/api/platform/semantics)
 hides one — all exercised in the runnable program above.
 
+`Semantics::text_direction` sets the accessible label's reading direction
+independently of visual layout. When labels merge, a phrase in the
+opposing direction keeps its direction. For labels assembled directly
+from multiple strings, use `incular::semantics::SemanticsLabelBuilder`.
+
+
 [`CheckedState`](/docs/api/platform/semantics): `Unchecked` (default) / `Checked` / `Indeterminate`;
 `is_checked()`, `From<bool>`, displays `"false"` / `"true"` / `"mixed"`.
 

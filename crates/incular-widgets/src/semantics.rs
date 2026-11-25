@@ -122,6 +122,14 @@ impl Semantics {
         self
     }
 
+    /// Sets the reading direction of the accessible label independently of
+    /// its visual layout or the surrounding Directionality.
+    #[must_use]
+    pub fn text_direction(mut self, direction: incular_config::TextDirection) -> Self {
+        self.state.text_direction = Some(direction);
+        self
+    }
+
     /// Sets the accessible current value.
     #[must_use]
     pub fn value(mut self, value: impl Into<String>) -> Self {

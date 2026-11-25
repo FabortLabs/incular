@@ -337,3 +337,116 @@ fn changing_only_the_role_marks_a_node_changed_and_publishes_the_new_role() {
     assert_eq!(update.nodes[0].1.role(), AccessKitRole::Tab);
     assert!(accesskit.sync(tree, 1.).is_none());
 }
+
+#[test]
+fn a_merged_native_label_tracks_an_opposing_descendants_retained_direction() {
+    let subject = |outer, inner| {
+        scene(MergeSemantics::new(
+            Semantics::new(Padding::zero(Directionality::new(
+                inner,
+                Semantics::new(SizedBox::square(10.))
+                    .label("مرحبا")
+                    .container(true),
+            )))
+            .label(outer)
+            .role(Role::Group),
+        ))
+    };
+    let mut runtime = Runtime::new(subject("Welcome", TextDirection::Rtl)).unwrap();
+    frame(&mut runtime);
+    let node = runtime
+        .tree()
+        .semantics()
+        .iter()
+        .find_map(|(id, node)| (node.role == Role::Group).then_some(id))
+        .unwrap();
+    let mut accesskit = AccessKitProjection::new();
+    let mut mobile = MobileAccessibilityProjection::new();
+    let sem = runtime.tree().semantics();
+    assert_eq!(
+        sem.node(node).unwrap().label.as_deref(),
+        Some("Welcome\n\u{202b}مرحبا\u{202c}")
+    );
+    let output = accesskit.sync(sem, 1.).unwrap().into_accesskit();
+    let native_id = NodeId(accesskit.native_node_id(node).unwrap());
+    assert!(
+        output
+            .nodes
+            .iter()
+            .any(|(id, n)| *id == native_id && n.label() == Some("Welcome\n\u{202b}مرحبا\u{202c}"))
+    );
+    assert_eq!(
+        mobile.sync(sem).unwrap().nodes[0].semantic.label.as_deref(),
+        Some("Welcome\n\u{202b}مرحبا\u{202c}")
+    );
+    let mobile_id = mobile.native_node_id(node).unwrap();
+
+    for (outer, dir, expected) in [
+        ("Welcome", TextDirection::Ltr, "Welcome\nمرحبا"),
+        ("", TextDirection::Rtl, "\u{202b}مرحبا\u{202c}"),
+    ] {
+        patch(&mut runtime, subject(outer, dir));
+        let sem = runtime.tree().semantics();
+        assert_eq!(sem.node(node).unwrap().label.as_deref(), Some(expected));
+        let update = accesskit.sync(sem, 1.).unwrap().into_accesskit();
+        assert_eq!(update.nodes.len(), 1);
+        assert_eq!(update.nodes[0].0, native_id);
+        assert_eq!(update.nodes[0].1.label(), Some(expected));
+        let update = mobile.sync(sem).unwrap();
+        assert_eq!(update.nodes.len(), 1);
+        assert_eq!(update.nodes[0].native_id, mobile_id);
+        assert_eq!(update.nodes[0].semantic.label.as_deref(), Some(expected));
+    }
+}
+
+#[test]
+fn explicit_reading_direction_overrides_ambient_and_reaches_both_projections() {
+    let subject = |direction| {
+        scene(
+            Semantics::new(SizedBox::square(10.))
+                .label("مرحبا")
+                .role(Role::Group)
+                .text_direction(direction),
+        )
+    };
+    let mut runtime = Runtime::new(subject(TextDirection::Rtl)).unwrap();
+    frame(&mut runtime);
+    let node = semantic_id(&runtime, "مرحبا");
+    let mut accesskit = AccessKitProjection::new();
+    let mut mobile = MobileAccessibilityProjection::new();
+    let before = runtime.tree().semantics();
+    let native_before = accesskit.sync(before, 1.).unwrap().into_accesskit();
+    let native_id = NodeId(accesskit.native_node_id(node).unwrap());
+    assert_eq!(
+        native_before
+            .nodes
+            .iter()
+            .find(|(id, _)| *id == native_id)
+            .unwrap()
+            .1
+            .text_direction(),
+        Some(accesskit::TextDirection::RightToLeft)
+    );
+    let mobile_before = mobile.sync(before).unwrap();
+    assert_eq!(
+        mobile_before.nodes[0].semantic.state.text_direction,
+        Some(TextDirection::Rtl)
+    );
+
+    patch(&mut runtime, subject(TextDirection::Ltr));
+    let after = runtime.tree().semantics();
+    let native_after = accesskit.sync(after, 1.).unwrap().into_accesskit();
+    assert_eq!(native_after.nodes.len(), 1);
+    assert_eq!(native_after.nodes[0].0, native_id);
+    assert_eq!(
+        native_after.nodes[0].1.text_direction(),
+        Some(accesskit::TextDirection::LeftToRight)
+    );
+    assert_eq!(
+        mobile.sync(after).unwrap().nodes[0]
+            .semantic
+            .state
+            .text_direction,
+        Some(TextDirection::Ltr)
+    );
+}

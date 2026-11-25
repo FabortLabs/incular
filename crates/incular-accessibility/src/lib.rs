@@ -987,6 +987,12 @@ impl AccessKitProjection {
         if semantic.state.live_region {
             node.set_live(Live::Polite);
         }
+        if let Some(direction) = semantic.state.text_direction {
+            node.set_text_direction(match direction {
+                TextDirection::Ltr => accesskit::TextDirection::LeftToRight,
+                TextDirection::Rtl => accesskit::TextDirection::RightToLeft,
+            });
+        }
         if let Some(tooltip) = &semantic.state.tooltip {
             node.set_tooltip(tooltip.as_str());
         }

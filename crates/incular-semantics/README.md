@@ -28,3 +28,7 @@ Use `SemanticsLabelBuilder` for a small reusable label made from multiple
 phrases. It skips empty parts, defaults to a space separator, and can mark
 subsequent phrases whose reading direction differs from that of the label.
 The usual `incular_config::TextDirection` value also works here.
+
+`SemanticState::text_direction` carries the optional reading direction of a
+retained node's label. Merged widget labels preserve opposing parts before
+projection to the platform.

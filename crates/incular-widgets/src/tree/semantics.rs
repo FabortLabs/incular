@@ -27,6 +27,7 @@ pub(super) struct SemanticCollectionContext {
 #[derive(Default)]
 struct MergedSemanticSummary {
     label: String,
+    direction: Option<TextDirection>,
     heading: Option<u8>,
     focus_block: AccessibilityFocusBlockType,
     custom_actions: Vec<CustomSemanticsActionId>,
@@ -34,6 +35,30 @@ struct MergedSemanticSummary {
 }
 
 impl MergedSemanticSummary {
+    fn add_label(&mut self, label: &str, direction: Option<TextDirection>) {
+        if self.direction.is_none() {
+            self.direction = direction;
+        }
+        if label.is_empty() {
+            return;
+        }
+        if !self.label.is_empty() {
+            self.label.push('\n');
+        }
+        if let Some(direction) = direction
+            && Some(direction) != self.direction
+        {
+            self.label.push(match direction {
+                TextDirection::Ltr => '\u{202a}',
+                TextDirection::Rtl => '\u{202b}',
+            });
+            self.label.push_str(label);
+            self.label.push('\u{202c}');
+        } else {
+            self.label.push_str(label);
+        }
+    }
+
     fn add_custom_actions(&mut self, callbacks: &SemanticCallbacks) {
         for binding in &callbacks.custom {
             self.custom_actions.push(binding.action.get_identifier());
@@ -902,7 +927,14 @@ impl WidgetTree {
         merged.add_custom_actions(&properties.callbacks);
         if absorbs_descendant_semantics(entry) {
             if let Some(own) = element_own_label(entry) {
-                push_merged_label(&mut merged.label, &own);
+                merged.add_label(&own, self.semantic_label_direction(element, entry));
+            } else {
+                merged.direction = entry
+                    .widget
+                    .semantic_properties()
+                    .explicit
+                    .as_ref()
+                    .and_then(|node| node.state.text_direction);
             }
             for &child in self.visible_semantic_children(element, entry).iter() {
                 self.push_merged_semantics(child, &mut merged);
@@ -930,6 +962,11 @@ impl WidgetTree {
                 actions = actions_with_room(&explicit.actions);
             }
         }
+        state.text_direction = state.text_direction.or(merged.direction).or_else(|| {
+            (default_label.is_some() || entry.widget.semantic_properties().label.is_some())
+                .then(|| self.semantic_label_direction(element, entry))
+                .flatten()
+        });
         // Flutter absorption preserves the parent's level if present.
         // Otherwise the first descendant with a heading supplies it.
         state.heading_level = state.heading_level.or(merged.heading);
@@ -1137,6 +1174,24 @@ impl WidgetTree {
             .read::<TextDirection>()
     }
 
+    fn semantic_label_direction(
+        &self,
+        element: ElementId,
+        entry: &Element,
+    ) -> Option<TextDirection> {
+        entry
+            .widget
+            .semantic_properties()
+            .explicit
+            .as_ref()
+            .and_then(|node| node.state.text_direction)
+            .or_else(|| match entry.widget.kind() {
+                WidgetKind::Text { text_direction, .. } => *text_direction,
+                _ => None,
+            })
+            .or_else(|| self.semantic_reading_direction(element))
+    }
+
     fn sort_by_reading_order(
         &self,
         parent: ElementId,
@@ -1333,7 +1388,14 @@ impl WidgetTree {
             return;
         }
         if let Some(label) = element_own_label(entry) {
-            push_merged_label(&mut merged.label, &label);
+            merged.add_label(&label, self.semantic_label_direction(element, entry));
+        } else if merged.direction.is_none() {
+            merged.direction = entry
+                .widget
+                .semantic_properties()
+                .explicit
+                .as_ref()
+                .and_then(|node| node.state.text_direction);
         }
         merged.add_custom_actions(&entry.widget.semantic_properties().callbacks);
         merged.focus_block = merged.focus_block.merge(explicit_focus_block(entry));
@@ -1572,17 +1634,6 @@ fn element_own_label(entry: &Element) -> Option<Cow<'_, str>> {
         })
 }
 
-/// Appends a non-empty label to a merged label, newline-separated.
-fn push_merged_label(merged: &mut String, label: &str) {
-    if label.is_empty() {
-        return;
-    }
-    if !merged.is_empty() {
-        merged.push('\n');
-    }
-    merged.push_str(label);
-}
-
 struct DragSemanticPhases<'a> {
     down: &'a Option<Rc<dyn Fn(incular_gestures::DragDownDetails)>>,
     start: &'a Option<Rc<dyn Fn(DragStartDetails)>>,
@@ -1799,6 +1850,7 @@ fn overlay_semantic_state(base: &mut SemanticState, overlay: &SemanticState) {
         toggled,
         hidden,
         live_region,
+        text_direction,
         tooltip,
         link_url,
         identifier,

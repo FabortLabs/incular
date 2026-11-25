@@ -287,6 +287,8 @@ pub struct SemanticState {
     pub hidden: bool,
     /// Flutter's `isLiveRegion`: changes are announced politely.
     pub live_region: bool,
+    /// Base direction of the node’s accessible label.
+    pub text_direction: Option<TextDirection>,
     /// Flutter's `tooltip`.
     pub tooltip: Option<String>,
     /// Flutter's `linkUrl`: where a link node navigates.
@@ -342,6 +344,7 @@ impl Default for SemanticState {
             toggled: None,
             hidden: false,
             live_region: false,
+            text_direction: None,
             tooltip: None,
             link_url: None,
             identifier: None,

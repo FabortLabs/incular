@@ -203,6 +203,9 @@ a version and date when publishing.
 
 ### Changed
 
+- **Breaking (`incular-semantics`):** exhaustive `SemanticState` literals need
+  `text_direction: None` unless the accessible label needs an explicit
+  direction. Literals using `..SemanticState::default()` are unchanged.
 - **Breaking (`incular-widgets`):** `RelativeRect::to_rect` returns container-local
   coordinates, matching Flutter. Use `to_global_rect` if you need the container
   origin applied as in previous releases.
@@ -247,6 +250,9 @@ a version and date when publishing.
   `EditableText` does there. Mouse and stylus presses still unfocus it.
 
 ### Fixed
+
+- `incular-widgets`: merged accessibility labels retain the reading direction
+  of individual phrases in mixed-language text.
 
 - `incular-widgets`: IgnoreBaseline keeps its child’s size without letting
   its baseline push down adjacent children in a baseline-aligned row.

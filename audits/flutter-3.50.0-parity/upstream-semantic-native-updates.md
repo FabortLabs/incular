@@ -24,3 +24,20 @@ attributed speech spans (:95), engine traversal matrices for nested portals
 (:194), and unresolved explicit traversal-parent identifiers (:271).
 These do not count as paired. This slice validates update data and the real
 AccessKit consumer, not native assistive-technology speech.
+
+## Mixed-direction merged labels
+
+The authored `merged_semantic_label_directions_test.dart` reads Flutter's
+merged semantics data, not the outer node's unmerged label. A stable LTR
+node publishes `Welcome\n\u202Bمرحبا\u202C` for its RTL child. Changing only
+the child's direction to LTR removes the marks without changing the node ID.
+With an empty but LTR outer label, the opposing first contribution is still
+wrapped, unlike the standalone label builder.
+
+Incular's retained test previously got plain newline concatenation. It now
+matches all three strings using its ambient Directionality and publishes
+only the same changed leaf to AccessKit and mobile. An additional control
+changes only the explicit semantic direction and verifies the native property
+overrides surrounding direction. The focused binding, custom action, forest,
+and incremental adapter controls pass. This authored probe does not change
+the upstream count and does not assert native speech or mixed-direction hints.
