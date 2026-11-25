@@ -131,3 +131,19 @@ fn upstream_block_propagates_within_boundary_only() {
     assert_eq!(labels,expected);
 }
 ```
+
+## Current retained blocker behavior
+
+All three exact Flutter registrations passed again. A semantic blocker now
+propagates through an ordinary layout wrapper and stops at an explicit
+semantic container. Nested annotations keep both #2.2 and #2.2.1 rather
+than overwriting each other. A boundary with the blocking flag set on that
+same node also blocks the earlier exterior sibling, as in :88. The
+Rust fixture sets both flags on its single retained blocker; it does not
+reimplement Dart's custom render-object API.
+
+The pinned authored Padding case passed, as did the retained toggle in Rust:
+a blocker underneath Padding hides, restores and re-hides the earlier
+label without replacing the front child. An unselected IndexedStack child
+does not block any external labels. All 32 focused native semantics tests
+passed. No physical screen reader or accessibility adapter is claimed.

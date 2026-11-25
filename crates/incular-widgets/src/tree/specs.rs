@@ -493,6 +493,10 @@ pub enum ChildLayoutMode {
     IntrinsicHeight,
     /// Passes through layout without exposing the child’s baseline.
     IgnoreBaseline,
+    /// A pure semantics annotation wrapper that leaves layout unchanged.
+    SemanticAnnotation,
+    /// A retained wrapper for the previous-sibling semantics blocker.
+    SemanticBlocker,
     /// `RenderRotatedBox`: lays out the child with swapped axes on odd quarter turns.
     QuarterTurns(i32),
 }

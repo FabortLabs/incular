@@ -1770,6 +1770,10 @@ impl Widget {
         self.semantic_properties_mut().description = Some(description.into());
         self
     }
+    pub(crate) fn has_explicit_semantics(&self) -> bool {
+        self.semantic_properties().explicit.is_some()
+    }
+
     /// Supplies explicit Incular semantic metadata for this visual widget.
     /// This is useful for icon-only controls, meaningful images, headings,
     /// dialogs, and custom-painted controls; it never exposes native adapter

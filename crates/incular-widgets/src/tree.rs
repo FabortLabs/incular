@@ -1396,6 +1396,8 @@ pub struct WidgetTree {
     input: InputState,
     semantics: SemanticsTree,
     semantic_ids: FastHashMap<ElementId, SemanticNodeId>,
+    // Each blocker and the non-boundary ancestors through which it reaches siblings.
+    semantics_block_reach: FastHashSet<ElementId>,
     /// Collect every element on the next semantics pass, ignoring the
     /// per-render marks (first pass, and after semantics were re-enabled).
     semantics_full_pass: bool,

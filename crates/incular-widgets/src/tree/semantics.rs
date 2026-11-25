@@ -267,6 +267,7 @@ impl WidgetTree {
         {
             return;
         }
+        self.refresh_semantics_block_reach();
         let _phase_guard = self.guard_phase_root(FramePhase::Semantics);
         #[cfg(feature = "devtools")]
         let trace = self.devtools_trace_begin_element(root, TracePhase::Semantics);
@@ -374,6 +375,55 @@ impl WidgetTree {
         }
     }
 
+    fn refresh_semantics_block_reach(&mut self) {
+        if self.tracked.sibling_blockers.is_empty() && self.semantics_block_reach.is_empty() {
+            return;
+        }
+        let mut next = FastHashSet::default();
+        for &blocker in &self.tracked.sibling_blockers {
+            let mut current = blocker;
+            while let Some(entry) = self.elements.get(current.0) {
+                if !self.can_contribute_merged_semantics(entry) || !next.insert(current) {
+                    break;
+                }
+                let Some(parent) = entry.parent else {
+                    break;
+                };
+                let Some(parent_entry) = self.elements.get(parent.0) else {
+                    break;
+                };
+                let props = parent_entry.widget.semantic_properties();
+                // The block still applies to siblings immediately inside
+                // this container. It must not suppress siblings outside it.
+                if props
+                    .explicit
+                    .as_ref()
+                    .is_some_and(|explicit| explicit.state.container)
+                    || absorbs_descendant_semantics(parent_entry)
+                    || self.semantics_hidden(parent_entry)
+                    || self.fitted_children_have_no_semantic_geometry(parent_entry)
+                    || matches!(parent_entry.widget.kind(), WidgetKind::Button(_))
+                    || matches!(parent_entry.widget.kind(), WidgetKind::IndexedStack { index, .. }
+                        if index.and_then(|slot| parent_entry.children.get(slot)) != Some(&current))
+                {
+                    break;
+                }
+                current = parent;
+            }
+        }
+        let previous = std::mem::replace(&mut self.semantics_block_reach, next);
+        let changed_parents = previous
+            .symmetric_difference(&self.semantics_block_reach)
+            .filter_map(|child| self.elements.get(child.0)?.parent)
+            .filter_map(|parent| self.elements.get(parent.0).map(|entry| entry.render))
+            .collect::<FastHashSet<_>>();
+        for parent in changed_parents {
+            // For example, a visibility change nested in an ordinary padding
+            // can change the accessible child list of its outer parent.
+            self.mark_render_semantics(parent, SemanticsDirty::Subtree);
+        }
+    }
+
     /// The children whose semantics `entry` exposes: none for a node that
     /// merges its subtree, the selected child of an indexed stack, and the
     /// children from the last one that blocks its previous siblings.
@@ -409,17 +459,13 @@ impl WidgetTree {
         if let Some(grouped) = self.sliver_semantics_children(element, entry) {
             return Cow::Owned(grouped);
         }
-        if self.tracked.sibling_blockers.is_empty() {
+        if self.semantics_block_reach.is_empty() {
             return Cow::Borrowed(&entry.children);
         }
         let first_visible_child = entry
             .children
             .iter()
-            .rposition(|child| {
-                self.elements
-                    .get(child.0)
-                    .is_some_and(|child| child.widget.semantic_properties().block_previous_siblings)
-            })
+            .rposition(|child| self.semantics_block_reach.contains(child))
             .unwrap_or(0);
         Cow::Borrowed(&entry.children[first_visible_child..])
     }

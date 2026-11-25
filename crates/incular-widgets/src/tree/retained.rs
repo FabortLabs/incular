@@ -43,6 +43,7 @@ impl WidgetTree {
             input: InputState::default(),
             semantics: SemanticsTree::new(),
             semantic_ids: FastHashMap::default(),
+            semantics_block_reach: FastHashSet::default(),
             semantics_full_pass: true,
             semantics_geometry_stamp: (0, 0, 0),
             semantics_scratch: Default::default(),

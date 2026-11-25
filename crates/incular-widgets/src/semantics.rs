@@ -8,7 +8,10 @@ use smart_default::SmartDefault;
 use std::{rc::Rc, sync::Arc};
 use typed_builder::TypedBuilder;
 
-use crate::Widget;
+use crate::{
+    Widget,
+    tree::{ChildLayoutMode, WidgetKind},
+};
 
 #[derive(Clone)]
 pub(crate) struct CustomActionBinding {
@@ -612,6 +615,14 @@ impl From<Semantics> for Widget {
             .child
             .unwrap_or_else(|| crate::SizedBox::shrink().into());
         if let Some(explicit) = explicit {
+            // An outer annotation must not overwrite an already configured
+            // descendant node (in particular a nested semantic container).
+            if widget.has_explicit_semantics() {
+                widget = Widget::from_kind(WidgetKind::ProxyLayout {
+                    mode: ChildLayoutMode::SemanticAnnotation,
+                    child: widget,
+                });
+            }
             widget = widget.semantics(explicit);
         }
         if let Some(locale) = value.locale_for_subtree {
@@ -766,9 +777,12 @@ impl BlockSemantics {
 
 impl From<BlockSemantics> for Widget {
     fn from(value: BlockSemantics) -> Self {
-        let widget: Widget = value
-            .child
-            .unwrap_or_else(|| crate::SizedBox::shrink().into());
+        let widget = Widget::from_kind(WidgetKind::ProxyLayout {
+            mode: ChildLayoutMode::SemanticBlocker,
+            child: value
+                .child
+                .unwrap_or_else(|| crate::SizedBox::shrink().into()),
+        });
         if value.blocking {
             widget.block_semantics()
         } else {

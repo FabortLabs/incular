@@ -435,3 +435,109 @@ fn nodes_inside_a_scroll_view_advertise_show_on_screen() {
     let outside = labelled(&tree, "Outside").expect("outside node");
     assert!(!outside.actions.contains(&SemanticActionKind::ShowOnScreen));
 }
+
+fn blocked_fixture_label(label: &str) -> Widget {
+    Semantics::new(SizedBox::new().width(240.).height(160.))
+        .label(label)
+        .into()
+}
+
+#[test]
+fn semantic_blocker_preserves_nested_labels_and_stops_at_its_boundary() {
+    use incular_widgets::BlockSemantics;
+    let tag = blocked_fixture_label;
+    let container = Semantics::new(SizedBox::new().width(240.).height(160.))
+        .container(true)
+        .label("#2.2.1");
+    let wrapper = Semantics::new(BlockSemantics::new(container)).label("#2.2");
+    let boundary = Semantics::new(Stack::new([tag("NOT#2.1"), wrapper.into(), tag("#2.3")]))
+        .container(true)
+        .explicit_child_nodes(true)
+        .label("#2");
+    let tree = mounted(Stack::new([tag("#1"), boundary.into(), tag("#3")]));
+    for label in ["#1", "#2", "#2.2", "#2.2.1", "#2.3", "#3"] {
+        assert!(labelled(&tree, label).is_some(), "{label} must remain");
+    }
+    assert!(labelled(&tree, "NOT#2.1").is_none());
+}
+
+#[test]
+fn a_boundary_can_itself_block_earlier_semantics() {
+    use incular_widgets::BlockSemantics;
+    let tag = blocked_fixture_label;
+    let middle = Semantics::new(BlockSemantics::new(tag("#2.1"))).container(true);
+    let tree = mounted(Stack::new([tag("NOT#1"), middle.into(), tag("#3")]));
+    assert!(labelled(&tree, "NOT#1").is_none());
+    assert!(labelled(&tree, "#2.1").is_some());
+    assert!(labelled(&tree, "#3").is_some());
+}
+
+#[test]
+fn blocker_propagates_through_padding_and_updates_without_remounting_front() {
+    use incular_widgets::{BlockSemantics, Padding};
+    let tag = blocked_fixture_label;
+    let frame = |blocking| -> Widget {
+        let front = tag("front").with_key(Key::Value(210));
+        let middle = Padding::all(3., BlockSemantics::new(front).blocking(blocking));
+        Stack::new([tag("behind"), middle.into(), tag("later")]).into()
+    };
+    let mut tree = mounted(frame(true));
+    let front = tree.element_with_key(&Key::Value(210));
+    assert!(front.is_some() && labelled(&tree, "front").is_some());
+    assert!(labelled(&tree, "later").is_some());
+    assert!(labelled(&tree, "behind").is_none());
+
+    for blocking in [false, true, false] {
+        tree.update(tree.root().unwrap(), frame(blocking)).unwrap();
+        tree.layout(Constraints::tight(Size::new(240., 160.)))
+            .unwrap();
+        tree.update_semantics();
+        assert_eq!(tree.element_with_key(&Key::Value(210)), front);
+        assert_eq!(labelled(&tree, "behind").is_none(), blocking);
+    }
+}
+
+#[test]
+fn removing_a_direct_childless_blocker_restores_the_prior_label() {
+    use incular_widgets::BlockSemantics;
+    let layer_1 = blocked_fixture_label("layer#1");
+    let mut tree = mounted(Stack::new([
+        layer_1.clone(),
+        BlockSemantics::default().into(),
+        blocked_fixture_label("layer#2"),
+    ]));
+    assert!(labelled(&tree, "layer#1").is_none());
+    assert!(labelled(&tree, "layer#2").is_some());
+    tree.update(tree.root().unwrap(), Stack::new([layer_1]).into())
+        .unwrap();
+    tree.layout(Constraints::tight(Size::new(240., 160.)))
+        .unwrap();
+    tree.update_semantics();
+    assert!(labelled(&tree, "layer#1").is_some());
+}
+
+#[test]
+fn an_inactive_subtree_cannot_block_external_semantics() {
+    use incular_widgets::{BlockSemantics, IndexedStack};
+    let frame = |index| {
+        Stack::new([
+            blocked_fixture_label("external"),
+            IndexedStack::new([
+                blocked_fixture_label("first"),
+                Widget::from(BlockSemantics::new(blocked_fixture_label("second"))),
+            ])
+            .index(index)
+            .into(),
+        ])
+    };
+    let mut tree = mounted(frame(0));
+    assert!(labelled(&tree, "external").is_some());
+    for (index, exposes_external) in [(1, false), (0, true)] {
+        tree.update(tree.root().unwrap(), frame(index).into())
+            .unwrap();
+        tree.layout(Constraints::tight(Size::new(240., 160.)))
+            .unwrap();
+        tree.update_semantics();
+        assert_eq!(labelled(&tree, "external").is_some(), exposes_external);
+    }
+}

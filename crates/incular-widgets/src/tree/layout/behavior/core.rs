@@ -461,6 +461,14 @@ impl WidgetTree {
                             .baseline = baseline;
                         (size, ChildOffsets::One(Offset::ZERO))
                     }
+                    ChildLayoutMode::SemanticAnnotation | ChildLayoutMode::SemanticBlocker => {
+                        self.layout_render(child, constraints)?;
+                        let child = self.render_live(child, "semantics child remains live");
+                        let (size, baseline) = (child.size, child.baseline);
+                        self.render_live_mut(id, "semantics proxy remains live")
+                            .baseline = baseline;
+                        (size, ChildOffsets::One(Offset::ZERO))
+                    }
                     ChildLayoutMode::IgnoreBaseline => {
                         self.layout_render(child, constraints)?;
                         let size = self
