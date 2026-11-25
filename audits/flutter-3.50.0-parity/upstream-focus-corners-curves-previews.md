@@ -135,3 +135,13 @@ images. The ordinary image tests also verify an oversized `None` fit
 crops instead of scaling. `FittedBox` still transforms its child widget
 and uses its own clipping behavior, checked separately. These are
 public value and retained draw-command comparisons, not GPU pixels.
+
+The authored `image_scale_paint_reference_test.dart` verifies both
+default ScaleDown and explicit None with scale 2. In a 100×100 logical box
+all 40×20 source pixels paint into a centered 20×10 destination; in a
+10×20 box the None fit draws the centered 20×20 source crop into a
+10×10 destination. Previously ordinary paint used the decoded pixel
+dimensions as logical units even though layout already honored scale.
+The pinned Flutter paint calls and Incular retained commands now agree.
+This probe adds no upstream registration credit. Four focused Rust targets
+passed (31 tests).

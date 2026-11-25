@@ -295,9 +295,33 @@ pub fn image_fit_rects(
     fit: ImageFit,
     alignment: Alignment,
 ) -> (Rect, Rect) {
-    let fit = crate::apply_box_fit(fit, source.size, bounds.size);
+    image_fit_rects_scaled(source, bounds, fit, alignment, 1.0)
+}
+
+pub(super) fn image_fit_rects_scaled(
+    source: Rect,
+    bounds: Rect,
+    fit: ImageFit,
+    alignment: Alignment,
+    scale: f32,
+) -> (Rect, Rect) {
+    // Fit in logical units, while inscribing the crop in original image
+    // pixels. This distinction affects None and ScaleDown even without
+    // a crop, since they use the image's scale to limit the destination.
+    let (fit, pixels) = if scale == 1.0 {
+        let fit = crate::apply_box_fit(fit, source.size, bounds.size);
+        (fit, fit.source)
+    } else {
+        let logical = Size::new(source.size.width / scale, source.size.height / scale);
+        let fit = crate::apply_box_fit(fit, logical, bounds.size);
+        let pixels = Size::new(
+            (fit.source.width * scale).min(source.size.width),
+            (fit.source.height * scale).min(source.size.height),
+        );
+        (fit, pixels)
+    };
     (
-        alignment.inscribe(fit.source, source),
+        alignment.inscribe(pixels, source),
         alignment.inscribe(fit.destination, bounds),
     )
 }

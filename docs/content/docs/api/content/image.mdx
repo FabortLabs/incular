@@ -85,8 +85,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-[`ImageFit`](/docs/api/values/box-fit): `Fill` / `Contain` (default) / `Cover` / `FitWidth` / `FitHeight` /
-`None` / `ScaleDown`. [`ImageRepeat`](/docs/api/content/image): `NoRepeat` (default) / `RepeatX` /
+[`ImageFit`](/docs/api/values/box-fit): `Fill` / `Contain` / `Cover` / `FitWidth` / `FitHeight` /
+`None` / `ScaleDown`. The default is `ScaleDown`, or `Fill` when a center slice is set.
+Image scale maps source pixels to logical units for both measurement and painting.
+For example, a 40 × 20 pixel image at scale 2 has a natural size of 20 × 10 logical units.
+[`ImageRepeat`](/docs/api/content/image): `NoRepeat` (default) / `RepeatX` /
 `RepeatY` / `Repeat`.
 
 [`RawImage`](/docs/api/content/image) adds `color` tint; `ImageIcon::new(image).size(24.0).color(c)`;

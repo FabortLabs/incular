@@ -86,6 +86,7 @@ impl WidgetTree {
             | RenderKind::SemanticsDebugger { .. } => {}
             RenderKind::Image {
                 ref image,
+                scale,
                 fit,
                 repeat,
                 alignment,
@@ -97,11 +98,12 @@ impl WidgetTree {
                     Offset::ZERO,
                     Size::new(intrinsic.width() as f32, intrinsic.height() as f32),
                 );
-                let (source, destination) = image_fit_rects(
+                let (source, destination) = image_fit_rects_scaled(
                     source,
                     Rect::from_origin_size(Offset::ZERO, size),
                     fit,
                     alignment,
+                    scale,
                 );
                 if matches!(repeat, ImageRepeat::NoRepeat) {
                     cache.push(PaintCommand::Image {

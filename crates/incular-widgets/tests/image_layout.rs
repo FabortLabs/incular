@@ -751,3 +751,40 @@ fn raw_image_alignment_positions_the_fitted_image() {
         Offset::new(0., 50.)
     );
 }
+
+#[test]
+fn scaled_pixels_are_fitted_in_logical_units_even_with_explicit_bounds() {
+    // At scale 2, a 40x20-pixel image occupies 20x10 logical units. Test
+    // all pixels are used in a large box and the right pixel crop in a
+    // smaller box independent of widget size and fit.
+    let source = handle(40, 20);
+    for (fit, bounds, crop, local) in [
+        (
+            None,
+            Size::new(100., 100.),
+            Rect::from_origin_size(Offset::ZERO, Size::new(40., 20.)),
+            Rect::from_origin_size(Offset::new(40., 45.), Size::new(20., 10.)),
+        ),
+        (
+            Some(ImageFit::None),
+            Size::new(10., 20.),
+            Rect::from_origin_size(Offset::new(10., 0.), Size::new(20., 20.)),
+            Rect::from_origin_size(Offset::new(0., 5.), Size::new(10., 10.)),
+        ),
+    ] {
+        let (mut tree, _) = layout(
+            || {
+                let mut image = Image::new(source.clone())
+                    .scale(2.)
+                    .width(bounds.width)
+                    .height(bounds.height);
+                if let Some(fit) = fit {
+                    image = image.fit(fit);
+                }
+                image.into()
+            },
+            Constraints::tight(bounds),
+        );
+        assert_eq!(image_commands(&tree.paint()), [(crop, local)], "{fit:?}");
+    }
+}
