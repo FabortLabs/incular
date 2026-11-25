@@ -285,6 +285,42 @@ fn flutter_350_page_update_keeps_mounted_pageless_focus() {
 }
 
 #[test]
+fn outlet_restores_focus_after_superseded_navigation_attempt() {
+    let navigator = Navigator::new();
+    let mut harness = harness(&navigator);
+    let original_node = FocusNode::new();
+    let original = navigator.push_page(focus_page("original", &original_node));
+    present(&mut harness);
+    tab_until(&mut harness.runtime, &original_node);
+    let original_focus = harness.runtime.focused_element().expect("original focus");
+
+    let push_once = Cell::new(true);
+    let intermediate = LayoutBuilder::new({
+        let navigator = navigator.clone();
+        move |_, _| {
+            if push_once.take() {
+                navigator.push_page(plain_page("actual destination"));
+            }
+            Widget::box_(Size::new(40., 40.), BLUE)
+        }
+    });
+    navigator.push_page(Page::new("superseded", intermediate));
+    present(&mut harness);
+    assert_eq!(navigator.current().unwrap().name, "actual destination");
+    assert!(harness.outlet.borrow().needs_frame());
+    present(&mut harness);
+    assert!(!original_node.has_focus(), "covered page is not focused");
+
+    navigator.pop();
+    navigator.pop();
+    present(&mut harness);
+    assert_eq!(navigator.current().unwrap().id, original);
+    assert!(harness.runtime.tree().element_exists(original_focus));
+    assert_eq!(harness.runtime.focused_element(), Some(original_focus));
+    assert!(original_node.has_focus());
+}
+
+#[test]
 fn outlet_reorder_preserves_and_repush_forgets() {
     let navigator = Navigator::new();
     let mut harness = harness(&navigator);
@@ -2226,6 +2262,12 @@ fn outlet_combined_receipt_scheduling_closeout() {
         Constraints::tight(Size::new(200., 200.)),
     )
     .expect_err("duplicate keys fail the rebuild");
+    // The retained declarative page keeps its imperative routes across
+    // list updates. Dismiss the intentionally malformed route explicitly.
+    assert_eq!(
+        outer_nav.pop().expect("dismiss malformed route").name,
+        "bad"
+    );
     outer_nav
         .set_pages([Page::new(
             "solo",

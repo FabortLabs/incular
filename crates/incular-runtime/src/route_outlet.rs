@@ -172,7 +172,7 @@ impl FrameAttempt {
 
 /// One uncommitted frame transition, tracking four independent concerns:
 /// - the outgoing focus save (`previous`/`saved`), which survives retries
-///   untouched — rebuilding re-records consumption without re-reading;
+///   and a changed destination while the outgoing route is the same;
 /// - the navigation snapshot for this attempt (`attempt`), adopted from
 ///   what composition actually consumed (see `consumed`);
 /// - newer-work detection, via the consumed revision versus live state
@@ -1389,11 +1389,11 @@ impl RouteOutlet {
 
     /// Captures a pending transition when none is outstanding and the
     /// active route moved since the last commit. The outgoing focus is
-    /// read once into the pending slot — never into the records — alongside
-    /// the attempt snapshot, so a later retry cannot overwrite it with
-    /// intermediate focus, and abandoning the capture drops it without
-    /// touching committed state.
-    fn capture_transition(&mut self, runtime: &Runtime) {
+    /// read once into the pending slot — never into the records. An
+    /// abandoned destination can still cover the outgoing widget and clear
+    /// its focus, so reuse that initial read when recapturing the same
+    /// outgoing route. Committed records change only on a valid transition.
+    fn capture_transition(&mut self, runtime: &Runtime, prior: Option<&PendingTransition>) {
         if self.pending.is_some() {
             return;
         }
@@ -1401,13 +1401,16 @@ impl RouteOutlet {
         if active == self.presented {
             return;
         }
-        let saved = self.presented.and_then(|previous| {
-            self.navigator
-                .lifetime_of(previous)
-                .is_some()
-                .then(|| self.focus.read_owned_focus(runtime, previous))
-                .flatten()
-        });
+        let saved = self
+            .presented
+            .filter(|&previous| self.navigator.lifetime_of(previous).is_some())
+            .and_then(|previous| {
+                if let Some(prior) = prior.filter(|prior| prior.previous == Some(previous)) {
+                    prior.saved
+                } else {
+                    self.focus.read_owned_focus(runtime, previous)
+                }
+            });
         self.pending = Some(PendingTransition {
             previous: self.presented,
             incoming: active,
@@ -1437,7 +1440,7 @@ impl RouteOutlet {
         {
             // Stale capture (already taken above): re-capture fresh for the
             // route that actually won, without writing anything first.
-            self.capture_transition(runtime);
+            self.capture_transition(runtime, Some(&pending));
             return false;
         }
         if let Some(previous) = pending.previous {
@@ -1590,7 +1593,7 @@ impl RouteOutlet {
                 .checked_add(1)
                 .expect("revision exhausted"),
         );
-        self.capture_transition(runtime);
+        self.capture_transition(runtime, None);
         for nested in self.live_nested() {
             nested.borrow_mut().begin_frame(runtime, now);
         }

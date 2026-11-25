@@ -55,6 +55,19 @@ transition-delegate grouping, and unrelated RouteOutlet focus failures
 are not claimed by this change. C24/C25 are custom probes, not additional
 original Flutter registration sites.
 
+## Focus after superseded navigation
+
+An Incular-specific RouteOutlet test presents a focused route, pushes a
+second route whose build pushes a third, presents the final destination,
+then returns directly to the original route. The original element
+stays mounted and is not focused while covered. Before the fix it also
+had no focus after returning: re-capture read focus after the covered
+element had already lost it. The original outgoing focus snapshot now
+travels with the attempt while the same outgoing route is live. This
+does not keep keyboard focus on a covered page or transfer a save to
+a different route. Mid-build navigation is an Incular-specific
+integration case, not a new fully paired Flutter registration.
+
 ## Reproduction
 
 Use the pinned Flutter scratch package from [paired comparisons](focused-comparisons.md)
