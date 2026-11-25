@@ -9,6 +9,7 @@ use std::{
     rc::{Rc, Weak},
 };
 
+use incular_animation::scheduler::{add_post_frame_callback, schedule_frame};
 use incular_core::{Lerp, Offset, Rect, Size};
 use incular_rendering::LayerLink;
 
@@ -133,8 +134,8 @@ pub type CreateRectTween = Rc<dyn Fn(Rect, Rect) -> HeroRectTween>;
 /// What a [`HeroFlightShuttleBuilder`] builds the flying widget from.
 #[derive(Clone)]
 pub struct HeroShuttleContext {
-    /// The flight's progress: the route animation through
-    /// `Curves.fastOutSlowIn`.
+    /// The curved route animation. Unlike the rectangle's progress, this
+    /// runs from 1 toward 0 on a pop, just like the Flutter shuttle input.
     pub animation: f32,
     pub direction: HeroFlightDirection,
     /// The child of the hero the flight leaves.
@@ -162,6 +163,8 @@ pub struct Hero {
     create_rect_tween: Option<CreateRectTween>,
     flight_shuttle_builder: Option<HeroFlightShuttleBuilder>,
     placeholder_builder: Option<HeroPlaceholderBuilder>,
+    curve: Curve,
+    reverse_curve: Option<Curve>,
     transition_on_user_gestures: bool,
 }
 
@@ -174,6 +177,8 @@ impl Hero {
             create_rect_tween: None,
             flight_shuttle_builder: None,
             placeholder_builder: None,
+            curve: Curve::FastOutSlowIn,
+            reverse_curve: None,
             transition_on_user_gestures: false,
         }
     }
@@ -208,6 +213,22 @@ impl Hero {
         builder: impl Fn(&BuildContext<'_>, Size, Widget) -> Widget + 'static,
     ) -> Self {
         self.placeholder_builder = Some(Rc::new(builder));
+        self
+    }
+
+    /// The curve for a push flight ending at this hero. Defaults to
+    /// `Curves.fastOutSlowIn`.
+    #[must_use]
+    pub fn curve(mut self, curve: Curve) -> Self {
+        self.curve = curve;
+        self
+    }
+
+    /// The route curve for a pop flight leaving this hero. The default is
+    /// its forward curve flipped in both axes.
+    #[must_use]
+    pub fn reverse_curve(mut self, curve: impl Into<Option<Curve>>) -> Self {
+        self.reverse_curve = curve.into();
         self
     }
 
@@ -482,10 +503,6 @@ impl RouteHeroes {
             .get(tag)
             .is_some_and(|hero| hero.placeholder.get().is_some())
     }
-
-    fn generation(&self) -> u64 {
-        self.0.content.leader_generation()
-    }
 }
 
 /// `_HeroFlightManifest`.
@@ -497,12 +514,22 @@ struct Manifest {
     to_hero: Rc<HeroEntry>,
     to_route: RouteHeroes,
     create_rect_tween: Option<CreateRectTween>,
+    curve: Curve,
 }
 
 impl Manifest {
-    /// `animation`: the route animation through `Curves.fastOutSlowIn`.
+    /// The shuttle gets the curved route animation. The rectangle uses
+    /// Flutter's ReverseAnimation of that animation for a pop.
     fn value(&self) -> f32 {
-        Curve::FastOutSlowIn.apply(self.animation.value())
+        self.curve.apply(self.animation.value())
+    }
+
+    fn progress(&self) -> f32 {
+        let value = self.value();
+        match self.direction {
+            HeroFlightDirection::Push => value,
+            HeroFlightDirection::Pop => 1. - value,
+        }
     }
 
     /// `createHeroRectTween`: the destination hero's, the controller's, or
@@ -572,7 +599,7 @@ impl Flight {
     /// `divert` for a flight redirected by a transition in the same
     /// direction: it continues from where it is to the new destination.
     fn divert(&mut self, manifest: Manifest, to: Rect) {
-        let here = self.tween.transform(self.manifest.value());
+        let here = self.tween.transform(self.manifest.progress());
         self.tween = self.manifest.tween(here, to);
         self.manifest.from_hero.end_flight(true);
         self.manifest.to_hero.end_flight(true);
@@ -605,7 +632,7 @@ impl Flight {
                 }
             }
             None if self.fade_from.is_none() => {
-                self.fade_from = Some(self.manifest.value());
+                self.fade_from = Some(self.manifest.progress());
             }
             None => {}
         }
@@ -617,7 +644,7 @@ impl Flight {
         let Some(start) = self.fade_from else {
             return 1.;
         };
-        let value = self.manifest.value();
+        let value = self.manifest.progress();
         if start >= 1. {
             return 0.;
         }
@@ -656,14 +683,11 @@ struct PendingTransition {
     to: RouteHeroes,
     direction: Option<HeroFlightDirection>,
     animation: AnimationController,
-    generation: u64,
-    waited: u32,
 }
 
 struct FlightsInner {
     create_rect_tween: Option<CreateRectTween>,
     flights: RefCell<HashMap<HeroTag, Flight>>,
-    pending: RefCell<Vec<PendingTransition>>,
     driver: RefCell<Option<AnimationController>>,
     revision: RefCell<Rc<Cell<u64>>>,
 }
@@ -682,7 +706,6 @@ impl HeroFlights {
         Self(Rc::new(FlightsInner {
             create_rect_tween,
             flights: RefCell::new(HashMap::new()),
-            pending: RefCell::new(Vec::new()),
             driver: RefCell::new(None),
             revision: RefCell::new(Rc::new(Cell::new(0))),
         }))
@@ -703,19 +726,35 @@ impl HeroFlights {
             from: from.clone(),
             to: to.clone(),
             direction,
-            generation: to.generation(),
             animation: animation.clone(),
-            waited: 0,
         };
         if direction.is_none() {
             // Nothing flies, so nothing waits for geometry: the revealed
             // route shows its heroes in its first frame.
             self.start(&pending);
+            self.invalidate_overlay();
         } else {
             *self.0.driver.borrow_mut() = Some(animation);
-            self.0.pending.borrow_mut().push(pending);
+            self.invalidate_overlay();
+            let flights = Rc::downgrade(&self.0);
+            // A controller may call its listeners several times in a
+            // frame, before either route's new links have published.
+            // Flutter measures the two heroes after that frame's paint.
+            add_post_frame_callback(move |_| {
+                if let Some(inner) = flights.upgrade()
+                    && pending.animation.is_animating()
+                {
+                    let flights = Self(inner);
+                    flights.start(&pending);
+                    flights.invalidate_overlay();
+                    schedule_frame();
+                }
+            });
         }
-        let revision = self.0.revision.borrow().clone();
+    }
+
+    fn invalidate_overlay(&self) {
+        let revision = self.0.revision.borrow();
         revision.set(revision.get().wrapping_add(1));
     }
 
@@ -733,14 +772,28 @@ impl HeroFlights {
         for (tag, from_hero) in from_heroes {
             let existing = flights.contains_key(&tag);
             let manifest = match (to_heroes.get(&tag), pending.direction) {
-                (Some(to_hero), Some(direction)) => Some(Manifest {
-                    direction,
-                    animation: pending.animation.clone(),
-                    from_hero: from_hero.clone(),
-                    to_hero: to_hero.clone(),
-                    to_route: pending.to.clone(),
-                    create_rect_tween: self.0.create_rect_tween.clone(),
-                }),
+                (Some(to_hero), Some(direction)) => {
+                    let spec = match direction {
+                        HeroFlightDirection::Push => to_hero.config.borrow(),
+                        HeroFlightDirection::Pop => from_hero.config.borrow(),
+                    };
+                    let curve = if direction == HeroFlightDirection::Pop && !existing {
+                        spec.reverse_curve
+                            .clone()
+                            .unwrap_or_else(|| spec.curve.clone().flipped())
+                    } else {
+                        spec.curve.clone()
+                    };
+                    Some(Manifest {
+                        direction,
+                        animation: pending.animation.clone(),
+                        from_hero: from_hero.clone(),
+                        to_hero: to_hero.clone(),
+                        to_route: pending.to.clone(),
+                        create_rect_tween: self.0.create_rect_tween.clone(),
+                        curve,
+                    })
+                }
                 _ => None,
             };
             // `isValid`: the destination is laid out, and so is the origin
@@ -773,29 +826,9 @@ impl HeroFlights {
         }
     }
 
-    /// Starts the pending transitions whose destination has been laid out
-    /// since it was requested, or after two ticks regardless.
-    fn start_ready(&self) {
-        let ready: Vec<PendingTransition> = self
-            .0
-            .pending
-            .borrow_mut()
-            .extract_if(.., |transition| {
-                transition.waited += 1;
-                transition.to.generation() != transition.generation || transition.waited > 2
-            })
-            .collect();
-        for transition in &ready {
-            self.start(transition);
-        }
-    }
-
-    /// On every tick of the route animation, before the frame builds:
-    /// starts the transitions that are ready and ends the flights whose
-    /// animation stopped, so the heroes change in the same frame as the
-    /// shuttles.
+    /// Ends completed flights before the frame builds, so the heroes
+    /// change in the same frame as their shuttles.
     fn advance(&self) {
-        self.start_ready();
         self.0.flights.borrow_mut().retain(|_, flight| {
             if flight.is_animating() {
                 return true;
@@ -811,7 +844,7 @@ impl HeroFlights {
         let mut shuttles = Vec::with_capacity(flights.len());
         for flight in flights.values_mut() {
             flight.tick();
-            let rect = flight.tween.transform(flight.manifest.value());
+            let rect = flight.tween.transform(flight.manifest.progress());
             shuttles.push(Widget::from(
                 Positioned::new(IgnorePointer::new(Opacity::new(
                     flight.opacity(),
