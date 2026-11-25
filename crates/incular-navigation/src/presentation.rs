@@ -18,7 +18,7 @@ use super::{PageKey, RouteId, RouteSettings};
 /// description to be placed in multiple navigators. The optional key is the
 /// page's stable reconciliation identity: keyed pages retain their mounted
 /// route across [`set_pages`](super::Navigator::set_pages) builds, while
-/// unkeyed pages carry no identity and mount anew on every reconciliation.
+/// unkeyed declarative pages can retain a route along matching list edges.
 /// Presentation and transition ride along declaratively: pushing or
 /// reconciling a keyed page with a popup or modal presentation mounts it
 /// that way, and same-key updates apply the latest configuration to the

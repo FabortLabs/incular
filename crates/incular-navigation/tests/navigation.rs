@@ -502,17 +502,68 @@ fn flutter_350_pageless_route_stays_current_above_an_equivalent_keyed_page() {
 }
 
 #[test]
-fn unkeyed_pages_mount_anew_on_every_reconciliation() {
+fn compatible_unkeyed_pages_preserve_route_id_when_reconciled() {
     let navigator = Navigator::new();
     navigator
         .set_pages([Page::new("home", page()), Page::new("settings", page())])
         .unwrap();
     let ids: Vec<RouteId> = navigator.routes().iter().map(|route| route.id).collect();
     navigator
-        .set_pages([Page::new("home", page()), Page::new("settings", page())])
+        .set_pages([
+            Page::new("renamed home", page()),
+            Page::new("renamed settings", page()),
+        ])
         .unwrap();
-    let fresh: Vec<RouteId> = navigator.routes().iter().map(|route| route.id).collect();
-    assert_ne!(ids, fresh);
+    let routes = navigator.routes();
+    let retained: Vec<RouteId> = routes.iter().map(|route| route.id).collect();
+    assert_eq!(ids, retained);
+    assert_eq!(routes[0].settings.name(), "renamed home");
+    assert_eq!(routes[1].settings.name(), "renamed settings");
+}
+
+#[test]
+fn unkeyed_pages_match_at_list_edges_but_not_in_an_unmatched_middle() {
+    let navigator = Navigator::new();
+    let keyed = |name| Page::new(name, page()).key(PageKey::new(name).unwrap());
+    navigator
+        .set_pages([
+            Page::new("bottom", page()),
+            keyed("a"),
+            Page::new("middle", page()),
+            keyed("b"),
+            Page::new("top", page()),
+        ])
+        .unwrap();
+    let old = navigator.routes();
+    let middle_lifetime = navigator.lifetime_of(old[2].id).unwrap();
+    navigator
+        .set_pages([
+            Page::new("new bottom", page()),
+            keyed("b"),
+            Page::new("middle", page()),
+            keyed("a"),
+            Page::new("new top", page()),
+        ])
+        .unwrap();
+    let new = navigator.routes();
+    assert_eq!(
+        [new[0].id, new[1].id, new[3].id, new[4].id],
+        [old[0].id, old[3].id, old[1].id, old[4].id]
+    );
+    assert_ne!(new[2].id, old[2].id);
+    assert!(!middle_lifetime.is_live());
+    assert_eq!(new[0].settings.name(), "new bottom");
+    assert_eq!(new[4].settings.name(), "new top");
+}
+
+#[test]
+fn unkeyed_imperative_route_cannot_substitute_for_an_unkeyed_page() {
+    let navigator = Navigator::new();
+    let imperative = navigator.push(Route::new("same name", page()));
+    navigator
+        .set_pages([Page::new("same name", page())])
+        .unwrap();
+    assert_ne!(navigator.current().unwrap().id, imperative);
 }
 
 #[test]

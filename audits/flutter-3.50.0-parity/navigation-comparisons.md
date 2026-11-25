@@ -26,6 +26,18 @@ Flutter `widgets/navigator.dart:763,4165–4253,4413–4418`; Incular
 Reordering, added/removed pages, explicit pop results, transition and focus
 restoration interactions remain open.
 
+## C24 remediation
+
+Compatible unkeyed declarative pages now reuse routes along the matching
+bottom and top of the list, like pinned Flutter. An unkeyed page in the
+unmatched middle still remounts. The permanent Flutter probe checks
+both list edges alongside a reordered keyed pair and a recreated unkeyed
+middle route; only the middle route is recreated. The Incular navigator
+checks the corresponding route IDs, new settings, and previous middle
+lifetime. The Runtime's C24 fixture continues to check both editor
+element identity and actual focus, with and without an explicit page key.
+This does not change C25's pageless-attachment policy.
+
 ## Reproduction
 
 Use the pinned Flutter scratch package from [paired comparisons](focused-comparisons.md)

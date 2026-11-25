@@ -13,6 +13,20 @@ class ProbePage extends Page<void> {
   );
 }
 
+class TrackedPage extends Page<void> {
+  TrackedPage(String name, {super.key}) : super(name: name);
+
+  Route<void>? created;
+
+  @override
+  Route<void> createRoute(BuildContext context) => created = PageRouteBuilder<void>(
+    settings: this,
+    transitionDuration: Duration.zero,
+    reverseTransitionDuration: Duration.zero,
+    pageBuilder: (_, __, ___) => Text(name!),
+  );
+}
+
 class Counter extends StatefulWidget {
   const Counter({super.key});
   @override
@@ -58,6 +72,42 @@ void main() {
       },
     );
   }
+  testWidgets('unkeyed pages match only at compatible list edges', (t) async {
+    TrackedPage keyed(String name) => TrackedPage(name, key: ValueKey(name));
+    final old = [
+      TrackedPage('bottom'),
+      keyed('a'),
+      TrackedPage('middle'),
+      keyed('b'),
+      TrackedPage('top'),
+    ];
+    final next = [
+      TrackedPage('new bottom'),
+      keyed('b'),
+      TrackedPage('middle'),
+      keyed('a'),
+      TrackedPage('new top'),
+    ];
+    Widget shell(List<TrackedPage> pages) => MediaQuery(
+      data: MediaQueryData.fromView(t.view),
+      child: Directionality(
+        textDirection: TextDirection.ltr,
+        child: Navigator(pages: pages, onDidRemovePage: (_) {}),
+      ),
+    );
+    await t.pumpWidget(shell(old));
+    final routes = old.map((page) => page.created!).toList();
+    await t.pumpWidget(shell(next));
+    await t.pumpAndSettle();
+    for (final (index, routeIndex) in [(0, 0), (1, 3), (3, 1), (4, 4)]) {
+      expect(next[index].created, isNull);
+      expect(routes[routeIndex].settings, same(next[index]));
+    }
+    expect(next[2].created, isNotNull);
+    expect(next[2].created, isNot(same(routes[2])));
+    expect(routes[2].isActive, isFalse);
+    expect(routes[4].isCurrent, isTrue);
+  });
   testWidgets('pageless route stays attached to a retained page', (t) async {
     final nav = GlobalKey<NavigatorState>();
     Widget shell() => MediaQuery(

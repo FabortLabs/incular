@@ -254,14 +254,65 @@ impl fmt::Debug for NavigatorObserver {
 /// restorable routes can interleave without positional zip bookkeeping.
 /// `key` records the declarative page key that claimed the entry, if any;
 /// entries pushed imperatively carry none unless their page supplied one.
-/// `lifetime` is the entry's mounted identity: keyed reuse moves it with
+/// `page_based` distinguishes declarative unkeyed pages from unkeyed
+/// imperative routes, which cannot be claimed by list position.
+/// `lifetime` is the entry's mounted identity: page reuse moves it with
 /// the entry, and permanent removal ends it exactly once through `end`.
 #[derive(Clone)]
 struct RouteEntry {
     route: Route,
     restorable: Option<RestorableRoute>,
     key: Option<PageKey>,
+    page_based: bool,
     lifetime: RouteLifetime,
+}
+
+/// Match compatible edges before matching the remaining pages by key.
+/// Incular has one concrete Page type, so compatibility here is equal keys.
+/// A keyed imperative push remains claimable, but only the top claimant
+/// may match at an edge, just as for a keyed move in the middle.
+fn match_unkeyed_page_edges(
+    pages: &[Page],
+    previous: &[Option<RouteEntry>],
+    by_key: &HashMap<PageKey, usize>,
+) -> Vec<Option<usize>> {
+    let old_pages = previous
+        .iter()
+        .enumerate()
+        .filter_map(|(slot, entry)| {
+            let entry = entry.as_ref()?;
+            (entry.page_based || entry.key.is_some()).then_some((slot, entry.key.as_ref()))
+        })
+        .collect::<Vec<_>>();
+    let compatible = |&(slot, old_key): &(usize, Option<&PageKey>), page: &Page| {
+        page.key.as_ref() == old_key && old_key.is_none_or(|key| by_key.get(key) == Some(&slot))
+    };
+    let mut claimed = vec![None; pages.len()];
+    let mut bottom = 0;
+    while bottom < old_pages.len()
+        && bottom < pages.len()
+        && compatible(&old_pages[bottom], &pages[bottom])
+    {
+        if pages[bottom].key.is_none() {
+            claimed[bottom] = Some(old_pages[bottom].0);
+        }
+        bottom += 1;
+    }
+    for ((index, page), old) in pages
+        .iter()
+        .enumerate()
+        .skip(bottom)
+        .rev()
+        .zip(old_pages[bottom..].iter().rev())
+    {
+        if !compatible(old, page) {
+            break;
+        }
+        if page.key.is_none() {
+            claimed[index] = Some(old.0);
+        }
+    }
+    claimed
 }
 
 /// A declarative page list rejected before touching navigator state.
@@ -526,6 +577,7 @@ impl Navigator {
                 route: route.clone(),
                 restorable,
                 key,
+                page_based: false,
                 lifetime: RouteLifetime::new(),
             });
             state.revision = state.revision.checked_add(1).expect("revision exhausted");
@@ -578,6 +630,7 @@ impl Navigator {
                     },
                     restorable: Some(route),
                     key: None,
+                    page_based: false,
                     lifetime: RouteLifetime::new(),
                 });
             }
@@ -616,6 +669,7 @@ impl Navigator {
                     },
                     restorable: None,
                     key: None,
+                    page_based: false,
                     lifetime: RouteLifetime::new(),
                 }],
             );
@@ -717,13 +771,12 @@ impl Navigator {
 
     /// Reconciles the stack to declarative pages.
     ///
-    /// Only page keys identify retained routes: a keyed page reuses the
-    /// live entry carrying that key, preserving its route ID, restoration
-    /// metadata, and scope data while child, transition, and presentation
-    /// follow the latest page. Configuration never ends a lifetime — only
-    /// key removal (or no key at all) does. Names are routing metadata,
-    /// never identity, so repeated names with different keys coexist.
-    /// Pages without a key carry no identity and always mount anew.
+    /// Keyed pages claim their existing routes. Compatible unkeyed
+    /// declarative pages can also reuse routes along the matching bottom
+    /// and top edges, but unkeyed pages in the unmatched middle mount anew.
+    /// A reused route retains its ID, restoration metadata, and scope data
+    /// while its child, transition and presentation follow the latest page.
+    /// Names are routing metadata, never identity.
     ///
     /// The caller's iterator drains fully before any state is borrowed,
     /// so an iterator may inspect or mutate the navigator; those changes
@@ -761,12 +814,17 @@ impl Navigator {
                 .map(|entry| entry.route.id)
                 .collect();
             let mut added = Vec::with_capacity(pages.len());
-            let mut by_key: HashMap<PageKey, Vec<usize>> = HashMap::new();
+            let mut by_key: HashMap<PageKey, usize> = HashMap::new();
             for (index, entry) in previous.iter().enumerate() {
                 if let Some(key) = entry.as_ref().and_then(|entry| entry.key.clone()) {
-                    by_key.entry(key).or_default().push(index);
+                    // Slots ascend, so the last claimant is topmost.
+                    by_key.insert(key, index);
                 }
             }
+            let unkeyed = pages
+                .iter()
+                .any(|page| page.key.is_none())
+                .then(|| match_unkeyed_page_edges(&pages, &previous, &by_key));
             let mut next = Vec::with_capacity(pages.len());
             // Replaced children retire outside the borrow below: assignment
             // would drop the old child here, where its destructor could
@@ -775,23 +833,19 @@ impl Navigator {
             // same way: overlay entries own widgets with the same hazard.
             let mut retired_children: Vec<Widget> = Vec::new();
             let mut retired_owned: Vec<(RouteTransition, RoutePresentation)> = Vec::new();
-            for page in pages {
-                // Pop takes the topmost claimant: slots ascend, so the
-                // last slot is the most recently pushed entry.
+            for (page_index, page) in pages.into_iter().enumerate() {
                 let claimed = match &page.key {
-                    Some(key) => by_key.get_mut(key).and_then(|slots| slots.pop()),
-                    None => None,
+                    Some(key) => by_key.get(key).copied(),
+                    None => unkeyed.as_ref().and_then(|slots| slots[page_index]),
                 };
                 if let Some(index) = claimed {
                     let mut entry = previous[index]
                         .take()
                         .expect("a claimed slot holds its entry exactly once");
-                    // Lifetime rule: the key owns the lifetime (route ID,
-                    // restoration metadata, scope data), while child,
-                    // transition, and presentation follow the latest page.
-                    // Only key removal — or no key at all — ends the
-                    // lifetime; configuration never does. A renamed page
-                    // updates the name and its settings mirror.
+                    // Matching keeps the lifetime; configuration follows
+                    // the new page. A keyed imperative match is now part
+                    // of the declarative history.
+                    entry.page_based = true;
                     entry.route.name = page.name.clone();
                     entry.route.settings.rename(page.name.clone());
                     retired_children.push(std::mem::replace(&mut entry.route.child, page.child));
@@ -817,6 +871,7 @@ impl Navigator {
                         },
                         restorable: None,
                         key: page.key,
+                        page_based: true,
                         lifetime: RouteLifetime::new(),
                     });
                 }
@@ -989,6 +1044,7 @@ impl Navigator {
                 route: route.clone(),
                 restorable: None,
                 key: None,
+                page_based: false,
                 lifetime: RouteLifetime::new(),
             });
             state.revision = state.revision.checked_add(1).expect("revision exhausted");
@@ -1114,6 +1170,7 @@ impl Navigator {
                 route: route.clone(),
                 restorable: None,
                 key: None,
+                page_based: false,
                 lifetime: RouteLifetime::new(),
             });
             state.revision = state.revision.checked_add(1).expect("revision exhausted");
