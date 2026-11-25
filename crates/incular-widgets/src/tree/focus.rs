@@ -630,6 +630,16 @@ impl WidgetTree {
         incular_gestures::focus_epoch()
     }
 
+    /// Drops requests queued before the host parks focus at the app root.
+    #[doc(hidden)]
+    pub fn clear_hosted_focus_requests(&self) {
+        if let Some(hosted) = &self.hosted_focus_nodes {
+            for binding in hosted.values() {
+                binding.node().clear_pending_focus_request();
+            }
+        }
+    }
+
     /// A focus change application code made through a [`FocusNode`] since the
     /// runtime last focused `current`: `Some(Some(element))` when another
     /// focusable node has an eligible pending request, `Some(None)`

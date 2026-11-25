@@ -45,7 +45,7 @@ use incular_widgets::internal::{
     PointerDeviceKind, PointerHitTest, RawPointerEvent, TextEditingController, TextRange,
     TextSelection, TreeError, WidgetTree, WindowInteraction,
 };
-use incular_widgets::{TextInputActionHint, TextInputTypeHint, Widget};
+use incular_widgets::{FocusNode, TextInputActionHint, TextInputTypeHint, Widget};
 use std::{
     cell::{Cell, RefCell},
     collections::{HashMap, VecDeque},
@@ -125,6 +125,12 @@ enum InitialFocus {
     Settled,
 }
 
+/// Focus parked at the app root on desktop/web while inactive.
+struct ParkedFocus {
+    target: ElementId,
+    node: Option<FocusNode>,
+}
+
 /// Retained application execution, input dispatch and frame coordination.
 pub struct Runtime {
     pub(crate) tree: WidgetTree,
@@ -153,6 +159,7 @@ pub struct Runtime {
     /// `last_pointer` when layout or scrolling moves content under it.
     last_hover_sample: Option<RawPointerEvent>,
     pub(crate) focused: Option<ElementId>,
+    parked_focus: Option<ParkedFocus>,
     focused_selection_lease: Option<incular_text::FocusedSelectionLease>,
     adopted_focus_epoch: Option<u64>,
     initial_focus: InitialFocus,
@@ -341,6 +348,7 @@ impl Runtime {
             pointer_tracking: PointerTracking::Outside,
             last_hover_sample: None,
             focused: None,
+            parked_focus: None,
             focused_selection_lease: None,
             adopted_focus_epoch: None,
             initial_focus: InitialFocus::AwaitingLayout,
@@ -732,6 +740,7 @@ impl Runtime {
                 | ApplicationLifecycle::Stopping
                 | ApplicationLifecycle::Terminated
         ));
+        self.update_focus_for_lifecycle(lifecycle);
         for observer in &self.lifecycle_observers {
             observer(transition);
         }
@@ -744,6 +753,48 @@ impl Runtime {
         }
         true
     }
+    fn update_focus_for_lifecycle(&mut self, lifecycle: ApplicationLifecycle) {
+        match lifecycle {
+            ApplicationLifecycle::Inactive | ApplicationLifecycle::Suspended
+                if cfg!(target_arch = "wasm32")
+                    || !matches!(
+                        self.text_shortcut_platform,
+                        TextShortcutPlatform::Android | TextShortcutPlatform::Ios
+                    ) =>
+            {
+                if let Some(target) = self.focused {
+                    self.parked_focus = Some(ParkedFocus {
+                        target,
+                        node: self.tree.focus_node_at(target),
+                    });
+                    // Parking replaces a request already queued at the time of
+                    // deactivation. Requests made after that boundary may win.
+                    self.tree.clear_hosted_focus_requests();
+                    self.set_focus(None);
+                }
+            }
+            ApplicationLifecycle::Active => {
+                if let Some(parked) = self.parked_focus.take()
+                    && self.focused.is_none()
+                {
+                    self.adopt_external_focus_change();
+                    if self.focused.is_none()
+                        && self.tree.can_request_focus(parked.target)
+                        && self.tree.focus_node_at(parked.target) == parked.node
+                    {
+                        // Restoring the same editor is not traversal; preserve
+                        // its caret or selected range instead of selecting all.
+                        self.set_focus_with_external_selection(Some(parked.target), false);
+                    }
+                }
+            }
+            ApplicationLifecycle::Stopping | ApplicationLifecycle::Terminated => {
+                self.parked_focus = None;
+            }
+            _ => {}
+        }
+    }
+
     pub fn observe_lifecycle(&mut self, observer: impl Fn(LifecycleTransition) + 'static) {
         self.lifecycle_observers.push(Rc::new(observer));
     }
@@ -2021,6 +2072,12 @@ impl Runtime {
     }
 
     fn reconcile_focus_and_selection_captures(&mut self) {
+        if self.parked_focus.as_ref().is_some_and(|parked| {
+            !self.tree.element_exists(parked.target)
+                || self.tree.focus_node_at(parked.target) != parked.node
+        }) {
+            self.parked_focus = None;
+        }
         if self.pending_mobile_text_touch.is_some_and(|press| {
             !self.tree.is_text_field(press.field) || !self.tree.can_request_focus(press.field)
         }) {

@@ -895,3 +895,7 @@ packages/flutter/test/widgets/editable_text_test.dart	17581	when selectAllOnFocu
 packages/flutter/test/widgets/editable_text_test.dart	17613	when having focus regained after the app resumed	paired-match	upstream-editable-focus-selection.md
 packages/flutter/test/widgets/editable_text_test.dart	17645	moving focus after the app resumed should select all the content on desktop	paired-match	upstream-editable-focus-selection.md
 packages/flutter/test/widgets/editable_text_test.dart	17439	Selection is updated when the field has focus and the new selection is invalid	paired-match	upstream-editable-focus-selection.md#programmatic-text-replacement-with-an-invalid-selection
+packages/flutter/test/widgets/focus_manager_test.dart	358	FocusManager ignores app lifecycle changes on Android and iOS.	paired-match	upstream-focus-lifecycle.md
+packages/flutter/test/widgets/focus_manager_test.dart	393	FocusManager responds to app lifecycle changes.	paired-match	upstream-focus-lifecycle.md
+packages/flutter/test/widgets/focus_manager_test.dart	420	Node is removed completely even if app is paused.	paired-match	upstream-focus-lifecycle.md
+packages/flutter/test/widgets/focus_manager_test.dart	448	Suspended focus is not restored on resume when another node claimed focus.	paired-match	upstream-focus-lifecycle.md

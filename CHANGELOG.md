@@ -207,6 +207,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-runtime`: desktop app deactivation parks focus and restores it
+  on resume only if the target is still mounted and nothing else took focus.
+
 - `incular-runtime`: focus requests made before attachment now settle during
   the first layout that mounts their target, before competing autofocus.
 
