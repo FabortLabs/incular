@@ -18,5 +18,16 @@ void main() {
       ),
       const BorderRadius.all(extrapolated),
     );
+    expect(
+      BorderRadiusDirectional.lerp(
+        const BorderRadiusDirectional.all(a),
+        const BorderRadiusDirectional.all(b),
+        1.5,
+      ),
+      const BorderRadiusDirectional.all(extrapolated),
+    );
+    expect(Radius.lerp(null, a, -0.5), const Radius.elliptical(-5, -1));
+    expect(Radius.lerp(a, null, 1.5), const Radius.elliptical(-5, -1));
+    expect(Radius.lerp(null, null, 0.5), isNull);
   });
 }

@@ -58,19 +58,33 @@ fn directional_border_radius_lerps_elliptical_corners_independently() {
 }
 
 #[test]
-fn non_null_border_radius_quarter_lerp_preserves_expected_values() {
-    assert_eq!(
-        BorderRadius::circular(10.).lerp(&BorderRadius::circular(20.), 0.25),
-        BorderRadius::circular(12.5)
-    );
+fn physical_border_radius_lerp_invariants() {
+    let a = BorderRadius::circular(10.);
+    let b = BorderRadius::circular(20.);
+    let lerp = BorderRadius::lerp_optional;
+    let value = lerp(Some(a), Some(b), 0.25).unwrap();
+    assert_eq!(value, a * 1.25);
+    assert_eq!(value, b * 0.625);
+    assert_eq!(value, a + BorderRadius::circular(2.5));
+    assert_eq!(value, b - BorderRadius::circular(7.5));
+    assert_eq!(lerp(None, None, 0.25), None);
+    assert_eq!(lerp(None, Some(b), 0.25), Some(b * 0.25));
+    assert_eq!(lerp(Some(a), None, 0.25), Some(a * 0.75));
 }
 
 #[test]
-fn non_null_directional_radius_quarter_lerp_preserves_expected_values() {
-    assert_eq!(
-        Directional::circular(10.).lerp(&Directional::circular(20.), 0.25),
-        Directional::circular(12.5)
-    );
+fn directional_border_radius_lerp_invariants() {
+    let a = Directional::circular(10.);
+    let b = Directional::circular(20.);
+    let lerp = Directional::lerp_optional;
+    let value = lerp(Some(a), Some(b), 0.25).unwrap();
+    assert_eq!(value, a * 1.25);
+    assert_eq!(value, b * 0.625);
+    assert_eq!(value, a + Directional::circular(2.5));
+    assert_eq!(value, b - Directional::circular(7.5));
+    assert_eq!(lerp(None, None, 0.25), None);
+    assert_eq!(lerp(None, Some(b), 0.25), Some(b * 0.25));
+    assert_eq!(lerp(Some(a), None, 0.25), Some(a * 0.75));
 }
 
 #[test]
@@ -81,8 +95,39 @@ fn radius_and_border_radius_keep_overshooting_negative_components() {
     assert_eq!(
         (
             a.lerp(&b, 1.5),
-            BorderRadius::all(a).lerp(&BorderRadius::all(b), 1.5)
+            BorderRadius::all(a).lerp(&BorderRadius::all(b), 1.5),
+            Directional::all(a).lerp(&Directional::all(b), 1.5)
         ),
-        (r(-2., 14.), BorderRadius::all(r(-2., 14.)))
+        (
+            r(-2., 14.),
+            BorderRadius::all(r(-2., 14.)),
+            Directional::all(r(-2., 14.))
+        )
     );
+    assert_eq!(
+        Radius::lerp_optional(None, Some(a), -0.5),
+        Some(r(-5., -1.))
+    );
+    assert_eq!(Radius::lerp_optional(Some(a), None, 1.5), Some(r(-5., -1.)));
+    assert_eq!(Radius::lerp_optional(None, None, 0.5), None);
+}
+
+#[test]
+fn copy_with_replaces_and_restores_one_corner_at_a_time() {
+    let radius = Radius::circular(10.);
+    let border = BorderRadius::all(radius);
+    let z = Some(Radius::ZERO);
+    let old = Some(radius);
+    let tl = border.copy_with(z, None, None, None);
+    let tr = border.copy_with(None, z, None, None);
+    let bl = border.copy_with(None, None, None, z);
+    let br = border.copy_with(None, None, z, None);
+    assert_eq!(tl.top_left, Radius::ZERO);
+    assert_eq!(tr.top_right, Radius::ZERO);
+    assert_eq!(bl.bottom_left, Radius::ZERO);
+    assert_eq!(br.bottom_right, Radius::ZERO);
+    assert_eq!(tl.copy_with(old, None, None, None), border);
+    assert_eq!(tr.copy_with(None, old, None, None), border);
+    assert_eq!(bl.copy_with(None, None, None, old), border);
+    assert_eq!(br.copy_with(None, None, old, None), border);
 }

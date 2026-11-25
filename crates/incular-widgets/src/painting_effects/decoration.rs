@@ -7,7 +7,7 @@ use incular_rendering::{BlendMode, Brush, FilterQuality, GradientStops, LinearGr
 use smart_default::SmartDefault;
 use typed_builder::TypedBuilder;
 
-use super::geometry::{BorderRadius, BorderRadiusDirectional, Radius};
+use super::geometry::{BorderRadius, BorderRadiusDirectional};
 use crate::{
     AlignmentGeometry,
     tree::{ImageFit, ImageRepeat},
@@ -829,13 +829,7 @@ impl BoxDecoration {
         let Some(physical) = self.border_radius else {
             return Some(logical);
         };
-        let sum = |a: Radius, b: Radius| Radius::elliptical(a.x + b.x, a.y + b.y);
-        Some(BorderRadius::only(
-            sum(physical.top_left, logical.top_left),
-            sum(physical.top_right, logical.top_right),
-            sum(physical.bottom_right, logical.bottom_right),
-            sum(physical.bottom_left, logical.bottom_left),
-        ))
+        Some(physical + logical)
     }
 
     #[must_use]
@@ -937,20 +931,13 @@ impl incular_core::Lerp for BoxDecoration {
                 other.image.clone()
             },
             border: Border::lerp_optional(self.border, other.border, t),
-            border_radius: match (self.border_radius, other.border_radius) {
-                (None, None) => None,
-                (a, b) => Some(a.unwrap_or_default().lerp(&b.unwrap_or_default(), t)),
-            },
-            directional_border_radius: match (
-                self.directional_border_radius.as_deref(),
-                other.directional_border_radius.as_deref(),
-            ) {
-                (None, None) => None,
-                (a, b) => Some(Arc::new(
-                    a.unwrap_or(&BorderRadiusDirectional::ZERO)
-                        .lerp(b.unwrap_or(&BorderRadiusDirectional::ZERO), t),
-                )),
-            },
+            border_radius: BorderRadius::lerp_optional(self.border_radius, other.border_radius, t),
+            directional_border_radius: BorderRadiusDirectional::lerp_optional(
+                self.directional_border_radius.as_deref().copied(),
+                other.directional_border_radius.as_deref().copied(),
+                t,
+            )
+            .map(Arc::new),
             box_shadow: BoxShadow::lerp_list(&self.box_shadow, &other.box_shadow, t),
             gradient: if t < 0.5 {
                 self.gradient.clone()

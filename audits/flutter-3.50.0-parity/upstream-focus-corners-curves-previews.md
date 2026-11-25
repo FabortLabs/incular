@@ -102,3 +102,22 @@ already-supported Flutter default: it owns a focus target without
 autofocusing. Forty-nine focused Rust checks passed. The existing
 partial audit row remains historical because Flutter's separate
 manual attach/reparent API is not reproduced here.
+
+## Rounded-corner value parity follow-up
+
+Both pinned interpolation-invariant registrations (:146 and :398) now
+have full comparisons, not only a non-null midpoint. The physical and
+directional variants each verify scaling, addition, subtraction, two
+absent endpoints, and either endpoint absent. Their existing asymmetric
+elliptical midpoint cases (:165 and :423) remain green. The pinned
+copy-with registration (:669) compares independently replacing and
+restoring each physical corner. The tests themselves check all corner
+values, not API names.
+
+The paired authored extrapolation probe now passes. It compares mixed
+positive and negative output from raw, physical, and directional radius
+interpolation, and signed results when one endpoint is absent. Previously
+Incular clamped -2 to zero as an animation value. Painting retains its
+existing radius normalization; this is not a new GPU pixel comparison.
+Six focused Rust targets passed (38 tests). Object identity, diagnostics,
+and Dart's mixed border radius geometry API are not claimed here.

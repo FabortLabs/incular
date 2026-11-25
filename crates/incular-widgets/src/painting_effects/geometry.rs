@@ -1,5 +1,8 @@
 //! Corner-radius geometry shared by painting and decoration descriptors.
 
+use std::ops::{Add, Mul, Sub};
+
+use incular_core::Lerp;
 use incular_rendering::CornerRadii;
 use typed_builder::TypedBuilder;
 
@@ -32,14 +35,58 @@ impl Radius {
     pub const fn zero() -> Self {
         Self::ZERO
     }
+
+    /// Interpolates absent endpoints from zero, returning `None` only if
+    /// both endpoints are absent. Values may extrapolate past zero.
+    #[must_use]
+    pub fn lerp_optional(begin: Option<Self>, end: Option<Self>, t: f32) -> Option<Self> {
+        lerp_optional(begin, end, t)
+    }
 }
 
-impl incular_core::Lerp for Radius {
+impl Lerp for Radius {
     fn lerp(&self, other: &Self, t: f32) -> Self {
-        Self {
-            x: self.x.lerp(&other.x, t).max(0.0),
-            y: self.y.lerp(&other.y, t).max(0.0),
-        }
+        // Match Flutter's Radius.lerp value semantics. Rounded-rectangle
+        // geometry normalizes at paint time, not in the animation value.
+        let from = 1.0 - t;
+        Self::elliptical(self.x * from + other.x * t, self.y * from + other.y * t)
+    }
+}
+
+impl Add for Radius {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self {
+        Self::elliptical(self.x + rhs.x, self.y + rhs.y)
+    }
+}
+
+impl Sub for Radius {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self {
+        Self::elliptical(self.x - rhs.x, self.y - rhs.y)
+    }
+}
+
+impl Mul<f32> for Radius {
+    type Output = Self;
+
+    fn mul(self, rhs: f32) -> Self {
+        Self::elliptical(self.x * rhs, self.y * rhs)
+    }
+}
+
+fn lerp_optional<T: Lerp + Mul<f32, Output = T>>(
+    begin: Option<T>,
+    end: Option<T>,
+    t: f32,
+) -> Option<T> {
+    match (begin, end) {
+        (None, None) => None,
+        (Some(a), None) => Some(a * (1.0 - t)),
+        (None, Some(b)) => Some(b * t),
+        (Some(a), Some(b)) => Some(a.lerp(&b, t)),
     }
 }
 
@@ -124,6 +171,23 @@ impl BorderRadius {
         self
     }
 
+    /// Replaces requested corners and retains all omitted ones.
+    #[must_use]
+    pub fn copy_with(
+        self,
+        top_left: Option<Radius>,
+        top_right: Option<Radius>,
+        bottom_right: Option<Radius>,
+        bottom_left: Option<Radius>,
+    ) -> Self {
+        Self::only(
+            top_left.unwrap_or(self.top_left),
+            top_right.unwrap_or(self.top_right),
+            bottom_right.unwrap_or(self.bottom_right),
+            bottom_left.unwrap_or(self.bottom_left),
+        )
+    }
+
     #[must_use]
     pub fn to_corner_radii(self) -> CornerRadii {
         CornerRadii {
@@ -131,17 +195,6 @@ impl BorderRadius {
             top_right: self.top_right.x,
             bottom_right: self.bottom_right.x,
             bottom_left: self.bottom_left.x,
-        }
-    }
-}
-
-impl incular_core::Lerp for BorderRadius {
-    fn lerp(&self, other: &Self, t: f32) -> Self {
-        Self {
-            top_left: self.top_left.lerp(&other.top_left, t),
-            top_right: self.top_right.lerp(&other.top_right, t),
-            bottom_right: self.bottom_right.lerp(&other.bottom_right, t),
-            bottom_left: self.bottom_left.lerp(&other.bottom_left, t),
         }
     }
 }
@@ -247,13 +300,57 @@ impl BorderRadiusDirectional {
     }
 }
 
-impl incular_core::Lerp for BorderRadiusDirectional {
-    fn lerp(&self, other: &Self, t: f32) -> Self {
-        Self {
-            top_start: self.top_start.lerp(&other.top_start, t),
-            top_end: self.top_end.lerp(&other.top_end, t),
-            bottom_end: self.bottom_end.lerp(&other.bottom_end, t),
-            bottom_start: self.bottom_start.lerp(&other.bottom_start, t),
+macro_rules! impl_corner_arithmetic {
+    ($type:ty, $($corner:ident),+ $(,)?) => {
+        impl $type {
+            /// Interpolates absent endpoints from zero, returning `None` only
+            /// if both endpoints are absent.
+            #[must_use]
+            pub fn lerp_optional(begin: Option<Self>, end: Option<Self>, t: f32) -> Option<Self> {
+                lerp_optional(begin, end, t)
+            }
         }
-    }
+
+        impl Lerp for $type {
+            fn lerp(&self, other: &Self, t: f32) -> Self {
+                if std::ptr::eq(self, other) {
+                    return *self;
+                }
+                Self { $($corner: self.$corner.lerp(&other.$corner, t)),+ }
+            }
+        }
+
+        impl Add for $type {
+            type Output = Self;
+
+            fn add(self, rhs: Self) -> Self {
+                Self { $($corner: self.$corner + rhs.$corner),+ }
+            }
+        }
+
+        impl Sub for $type {
+            type Output = Self;
+
+            fn sub(self, rhs: Self) -> Self {
+                Self { $($corner: self.$corner - rhs.$corner),+ }
+            }
+        }
+
+        impl Mul<f32> for $type {
+            type Output = Self;
+
+            fn mul(self, rhs: f32) -> Self {
+                Self { $($corner: self.$corner * rhs),+ }
+            }
+        }
+    };
 }
+
+impl_corner_arithmetic!(BorderRadius, top_left, top_right, bottom_right, bottom_left);
+impl_corner_arithmetic!(
+    BorderRadiusDirectional,
+    top_start,
+    top_end,
+    bottom_end,
+    bottom_start
+);

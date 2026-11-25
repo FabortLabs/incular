@@ -42,6 +42,11 @@ Box decorations interpolate as Flutter's `BoxDecoration.lerp` does: a part
 present on only one side (a shadow, a border, a gradient) scales in or out,
 and shadow lists interpolate pairwise.
 
+Corner radii interpolate horizontally and vertically. If only one decoration
+specifies a radius, the other contributes square corners. Overshooting curves
+can produce negative components in the intermediate radius; the painter
+normalizes the radius when drawing the shape.
+
 ## Props
 
 <TypeTable

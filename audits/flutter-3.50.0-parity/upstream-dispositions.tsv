@@ -123,9 +123,9 @@ packages/flutter/test/widgets/focus_manager_test.dart	633	Requesting focus befor
 packages/flutter/test/widgets/focus_manager_test.dart	1752	works when the previous focused node is detached	paired-mismatch	upstream-focus-corners-curves-previews.md
 packages/flutter/test/widgets/focus_manager_test.dart	1801	autofocus the first candidate	paired-match	upstream-focus-corners-curves-previews.md
 packages/flutter/test/widgets/focus_scope_test.dart	1233	Focus is ignored when set to not focusable.	paired-match	upstream-focus-policy-tween-dtd.md#mounted-focus-callbacks-and-permissions
-packages/flutter/test/painting/border_radius_test.dart	146	BorderRadius.lerp() invariants	partial-match	upstream-focus-corners-curves-previews.md
+packages/flutter/test/painting/border_radius_test.dart	146	BorderRadius.lerp() invariants	paired-match	upstream-focus-corners-curves-previews.md#rounded-corner-value-parity-follow-up
 packages/flutter/test/painting/border_radius_test.dart	165	BorderRadius.lerp() crazy	paired-match	upstream-focus-corners-curves-previews.md
-packages/flutter/test/painting/border_radius_test.dart	398	BorderRadiusDirectional.lerp() invariants	partial-match	upstream-focus-corners-curves-previews.md
+packages/flutter/test/painting/border_radius_test.dart	398	BorderRadiusDirectional.lerp() invariants	paired-match	upstream-focus-corners-curves-previews.md#rounded-corner-value-parity-follow-up
 packages/flutter/test/painting/border_radius_test.dart	423	BorderRadiusDirectional.lerp() crazy	paired-match	upstream-focus-corners-curves-previews.md
 packages/flutter/test/painting/box_fit_test.dart	9	applyBoxFit	partial-mismatch	upstream-focus-corners-curves-previews.md
 packages/flutter/test/animation/curves_test.dart	28	Threshold has a threshold	paired-match	upstream-focus-corners-curves-previews.md
@@ -1105,3 +1105,4 @@ packages/flutter/test/widgets/spell_check_test.dart	324	buildTextSpanWithSpellCh
 packages/flutter/test/widgets/spell_check_test.dart	361	buildTextSpanWithSpellCheckSuggestions discards result when additions are made to misspelled word example	paired-match	upstream-spell-check.md#retained-widget-span-comparisons
 packages/flutter/test/widgets/spell_check_test.dart	389	buildTextSpanWithSpellCheckSuggestions does not throw when text contains regex reserved characters	paired-match	upstream-spell-check.md#retained-widget-span-comparisons
 packages/flutter/test/widgets/spell_check_test.dart	419	buildTextSpanWithSpellCheckSuggestions does not throw when text is being deleted	paired-match	upstream-spell-check.md#retained-widget-span-comparisons
+packages/flutter/test/painting/border_radius_test.dart	669	BorderRadius copyWith parameters	paired-match	upstream-focus-corners-curves-previews.md#rounded-corner-value-parity-follow-up
