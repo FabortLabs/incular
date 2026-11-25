@@ -1432,6 +1432,31 @@ impl RouteOutlet {
         let Some(pending) = self.pending.take() else {
             return false;
         };
+        if let Some(returning) = active
+            .filter(|active| Some(*active) == pending.previous && self.presented == Some(*active))
+        {
+            // The entire push unwound before a transition committed.
+            // A stale frame may still cover the returning route. Keep
+            // the original snapshot until that route is actually mounted
+            // as current, then restore only onto a vacant focus slot.
+            if self
+                .consumed
+                .as_ref()
+                .is_some_and(|attempt| attempt.active == active && attempt.covers(&self.navigator))
+            {
+                if let Some(saved) = pending.saved {
+                    self.focus.restore_capture_if_vacant(
+                        runtime,
+                        &self.navigator,
+                        returning,
+                        saved,
+                    );
+                }
+            } else {
+                self.pending = Some(pending);
+            }
+            return false;
+        }
         if active != pending.incoming
             || pending
                 .incoming

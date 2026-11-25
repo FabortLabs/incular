@@ -185,6 +185,25 @@ impl RouteFocusState {
         }
     }
 
+    /// The previous route became current again before any transition
+    /// committed. Its captured focus belongs to this return, not to the
+    /// persistent per-route history. Do not displace valid newer focus.
+    pub(crate) fn restore_capture_if_vacant(
+        &self,
+        runtime: &mut Runtime,
+        navigator: &Navigator,
+        route: RouteId,
+        captured: ElementId,
+    ) {
+        if runtime
+            .focused_element()
+            .is_none_or(|current| Self::orphaned(runtime, navigator, &self.owner_of, current))
+            && Self::eligible(runtime, &self.owner_of, route, captured)
+        {
+            runtime.set_focus(Some(captured));
+        }
+    }
+
     /// Drops `route`'s record on permanent removal. A removed route never
     /// restores: without this call a stale record would outlive its route.
     pub fn forget(&mut self, route: RouteId) {

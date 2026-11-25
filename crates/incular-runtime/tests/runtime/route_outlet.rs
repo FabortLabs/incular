@@ -284,8 +284,7 @@ fn flutter_350_page_update_keeps_mounted_pageless_focus() {
     assert!(dialog_node.has_focus());
 }
 
-#[test]
-fn outlet_restores_focus_after_superseded_navigation_attempt() {
+fn assert_focus_restored_after_superseded_navigation(settle_destination: bool) {
     let navigator = Navigator::new();
     let mut harness = harness(&navigator);
     let original_node = FocusNode::new();
@@ -308,7 +307,9 @@ fn outlet_restores_focus_after_superseded_navigation_attempt() {
     present(&mut harness);
     assert_eq!(navigator.current().unwrap().name, "actual destination");
     assert!(harness.outlet.borrow().needs_frame());
-    present(&mut harness);
+    if settle_destination {
+        present(&mut harness);
+    }
     assert!(!original_node.has_focus(), "covered page is not focused");
 
     navigator.pop();
@@ -318,6 +319,16 @@ fn outlet_restores_focus_after_superseded_navigation_attempt() {
     assert!(harness.runtime.tree().element_exists(original_focus));
     assert_eq!(harness.runtime.focused_element(), Some(original_focus));
     assert!(original_node.has_focus());
+}
+
+#[test]
+fn outlet_restores_focus_after_superseded_navigation_attempt() {
+    assert_focus_restored_after_superseded_navigation(true);
+}
+
+#[test]
+fn outlet_restores_focus_after_superseded_navigation_unwinds_before_commit() {
+    assert_focus_restored_after_superseded_navigation(false);
 }
 
 #[test]

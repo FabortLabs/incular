@@ -68,6 +68,14 @@ does not keep keyboard focus on a covered page or transfer a save to
 a different route. Mid-build navigation is an Incular-specific
 integration case, not a new fully paired Flutter registration.
 
+The rapid-unwind variant returns before the destination ever commits.
+It likewise reproduced lost focus, despite reaching the right mounted
+element. The snapshot now survives until the rebuilt tree actually
+presents the returning route. It restores only into a vacant focus slot
+and never saves a history record for the uncommitted deactivation.
+Both variants pass; the broad RouteOutlet filter has 87 passing and the
+same 12 unrelated preexisting assertions.
+
 ## Reproduction
 
 Use the pinned Flutter scratch package from [paired comparisons](focused-comparisons.md)
