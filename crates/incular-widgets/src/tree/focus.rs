@@ -669,7 +669,7 @@ impl WidgetTree {
         let Some(focused) = focused else {
             return false;
         };
-        let Some((_, controller, axis, reverse, _)) =
+        let Some((_, controller, axis, reverse, physics)) =
             self.scrollable_viewport_chain(focused).into_iter().next()
         else {
             return false;
@@ -694,7 +694,13 @@ impl WidgetTree {
                     | incular_gestures::TraversalDirection::Right
             )
         );
-        if !on_axis {
+        if !on_axis
+            || !physics.should_accept_user_offset(
+                controller.offset(),
+                controller.min_offset(),
+                controller.max_offset(),
+            )
+        {
             return true;
         }
         let increment = if page {

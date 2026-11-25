@@ -338,6 +338,17 @@ impl ScrollPhysics {
         self.page_geometry_fraction.unwrap_or(1.)
     }
 
+    /// Flutter `ScrollPhysics.shouldAcceptUserOffset`: whether user
+    /// input can move this position, independently of controller commands.
+    #[must_use]
+    pub fn should_accept_user_offset(self, pixels: f32, min: f32, max: f32) -> bool {
+        match self.scrollability {
+            Scrollability::Never => false,
+            Scrollability::Always => true,
+            Scrollability::WhenScrollable => pixels != 0. || min != max,
+        }
+    }
+
     /// Whether a reveal request from a descendant may move this viewport.
     /// It does not constrain explicit scroll commands.
     #[must_use]

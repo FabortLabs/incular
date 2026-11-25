@@ -45,3 +45,37 @@ a local RTL view in an RTL environment, and an explicit reversal could
 all stay at zero when Flutter moved by 50. Keyboard actions now use the
 mounted viewport's physical axis. The original Linux key paths and
 additional mismatched ambient/global controls pass.
+
+## Keyboard physics and a centered viewport
+
+The selected originals :101, :166 and :475 passed both pinned Flutter
+key transit variants. The same line/page shortcut sequence leaves a
+never-scrollable viewport at offset zero and places its first 50px row
+unchanged. The normal viewport moves by a 50px line, returns to zero,
+clamps a 480px page request to its 400px scroll range, and returns
+again. The authored `scroll_keyboard_physics_reference_test.dart` also
+mounts actual WidgetsApp default shortcuts (not just Directionality)
+and confirms a direct controller jump to 80px remains allowed under
+never-scrollable physics.
+
+A keyboard action previously bypassed the mounted scroll physics even
+when pointer input was disabled. The keyboard action now checks the
+same user-input eligibility encoded by its resolved physics before
+animating. The focused viewport still claims the shortcut. Across a
+centered viewport, the configured center item's signed offset matches
+through 0 → 400 → −100 after ten downward and ten upward line actions;
+its retained rectangles match at each checkpoint.
+
+The direct intent original :546 passed in Flutter but remains open:
+there is no equivalent first-class public ScrollIntent/ScrollAction
+invocation in Incular. The keyboard fallback and controller animation
+are not substitutes for that API.
+
+The wider Runtime binary showed 200 passing and 15 failing checks
+both immediately before and after the keyboard direction change,
+with identical failing test names. The existing failures in editing,
+focus invalidation, fractional placement and routing do not change
+the targeted keyboard results.
+
+Thirty-two targeted Rust tests passed across the keyboard, focus
+routing, traversal and scroll-physics binaries.
