@@ -1264,3 +1264,4 @@ packages/flutter/test/foundation/memory_allocations_test.dart	131	dispatchObject
 packages/flutter/test/foundation/memory_allocations_test.dart	172	kFlutterMemoryAllocationsEnabled is true in debug mode.	paired-match	upstream-allocation-events.md
 packages/flutter/test/foundation/memory_allocations_test.dart	155	last removeListener unsubscribes from Flutter SDK events	reference-ran-incular-open	upstream-allocation-events.md#notifier-publishers
 packages/flutter/test/foundation/memory_allocations_test.dart	176	publishers in Flutter dispatch events in debug mode	partial-match	upstream-allocation-events.md#notifier-publishers
+packages/flutter/test/rendering/memory_allocations_test.dart	23	Publishers dispatch events in debug mode	paired-match	upstream-allocation-events.md#render-object-and-layer-publishers

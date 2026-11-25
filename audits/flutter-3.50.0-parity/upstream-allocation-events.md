@@ -27,3 +27,11 @@ adding later listeners, or disposing a never-observed notifier
 does not add events. The original stays partial because its
 additional Dart UI Image/Picture publishers are not paired. The
 separate :155 SDK hook unsubscription case ran on Flutter only.
+
+## Render-object and layer publishers
+
+Pinned `rendering/memory_allocations_test.dart:23` pairs a real render
+object and a compositor layer, each with one creation and one disposal
+for its own stable identity. The Rust fixture further verifies that a
+retained render object recolored during an update produces neither an
+extra creation nor a disposal. The instrumentation is debug-only.

@@ -336,6 +336,8 @@ pub(crate) struct RenderObjectPayload {
     kind: Rc<RenderKind>,
     pub(crate) feature: RenderFeatureState,
     pub(crate) layers: RenderLayers,
+    #[cfg(debug_assertions)]
+    _allocation: incular_core::memory::allocations::ObjectLifetime,
 }
 
 impl RenderObjectPayload {
@@ -345,6 +347,11 @@ impl RenderObjectPayload {
             kind: Rc::new(kind),
             feature,
             layers,
+            #[cfg(debug_assertions)]
+            _allocation: incular_core::memory::allocations::ObjectLifetime::new(
+                "rendering",
+                "RenderObject",
+            ),
         }
     }
 

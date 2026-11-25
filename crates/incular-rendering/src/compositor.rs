@@ -451,7 +451,7 @@ pub struct FollowerLayer {
     pub size: Size,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct Layer {
     kind: LayerKind,
     children: Vec<LayerId>,
@@ -467,6 +467,8 @@ struct Layer {
     /// Memoized local bounds of every picture in this subtree, used to cull
     /// whole subtrees during flattening.
     cull: CullBounds,
+    #[cfg(debug_assertions)]
+    _allocation: incular_core::memory::allocations::ObjectLifetime,
 }
 
 /// Local-space bounds of the pictures under one layer. A layer with
@@ -873,6 +875,11 @@ impl LayerTree {
             clip_cache: None,
             parent: None,
             cull: CullBounds::Unknown,
+            #[cfg(debug_assertions)]
+            _allocation: incular_core::memory::allocations::ObjectLifetime::new(
+                "rendering",
+                "Layer",
+            ),
         }));
         self.diagnostics.layers += 1;
         id
