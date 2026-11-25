@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-widgets`: attributed accessibility label, value, and hint setters
+  preserve UTF-16 pronunciation spans in retained and mobile projection data.
+
 - `incular-widgets`: Stack and IndexedStack accept directional alignment and
   an explicit text direction. Positioned can be constructed from a physical
   or relative rectangle or from fixed-direction insets.
@@ -204,8 +207,9 @@ a version and date when publishing.
 ### Changed
 
 - **Breaking (`incular-semantics`):** exhaustive `SemanticState` literals need
-  `text_direction: None` unless the accessible label needs an explicit
-  direction. Literals using `..SemanticState::default()` are unchanged.
+  `text_direction: None` and `text_attributes: None` unless explicitly supplying
+  accessibility reading direction or pronunciation spans. Literals using
+  `..SemanticState::default()` are unchanged.
 - **Breaking (`incular-widgets`):** `RelativeRect::to_rect` returns container-local
   coordinates, matching Flutter. Use `to_global_rect` if you need the container
   origin applied as in previous releases.

@@ -1,11 +1,11 @@
 //! Accessible semantic annotation widgets.
 
 use incular_semantics::{
-    AccessibilityFocusBlockType, CustomSemanticsAction, SemanticAction, SemanticActionKind,
-    SemanticRole, SemanticState,
+    AccessibilityFocusBlockType, AttributedString, CustomSemanticsAction, SemanticAction,
+    SemanticActionKind, SemanticRole, SemanticState, SemanticTextAttributes,
 };
 use smart_default::SmartDefault;
-use std::rc::Rc;
+use std::{rc::Rc, sync::Arc};
 use typed_builder::TypedBuilder;
 
 use crate::Widget;
@@ -41,11 +41,11 @@ pub struct Semantics {
     #[builder(default, setter(strip_option))]
     role: Option<SemanticRole>,
     #[builder(default, setter(strip_option, into))]
-    label: Option<String>,
+    label: Option<AttributedString>,
     #[builder(default, setter(strip_option, into))]
-    value: Option<String>,
+    value: Option<AttributedString>,
     #[builder(default, setter(strip_option, into))]
-    description: Option<String>,
+    description: Option<AttributedString>,
     #[builder(default)]
     actions: Vec<SemanticAction>,
     #[builder(default, setter(skip))]
@@ -118,7 +118,7 @@ impl Semantics {
     /// Sets the accessible label.
     #[must_use]
     pub fn label(mut self, label: impl Into<String>) -> Self {
-        self.label = Some(label.into());
+        self.label = Some(AttributedString::new(label));
         self
     }
 
@@ -133,14 +133,35 @@ impl Semantics {
     /// Sets the accessible current value.
     #[must_use]
     pub fn value(mut self, value: impl Into<String>) -> Self {
-        self.value = Some(value.into());
+        self.value = Some(AttributedString::new(value));
         self
     }
 
     /// Sets the accessible extended description.
     #[must_use]
     pub fn description(mut self, description: impl Into<String>) -> Self {
-        self.description = Some(description.into());
+        self.description = Some(AttributedString::new(description));
+        self
+    }
+
+    /// Sets the accessible label with pronunciation attributes.
+    #[must_use]
+    pub fn attributed_label(mut self, label: AttributedString) -> Self {
+        self.label = Some(label);
+        self
+    }
+
+    /// Sets the accessible value with pronunciation attributes.
+    #[must_use]
+    pub fn attributed_value(mut self, value: AttributedString) -> Self {
+        self.value = Some(value);
+        self
+    }
+
+    /// Sets the accessible description with pronunciation attributes.
+    #[must_use]
+    pub fn attributed_hint(mut self, hint: AttributedString) -> Self {
+        self.description = Some(hint);
         self
     }
 
@@ -217,9 +238,8 @@ impl Semantics {
     /// Flutter's `hint`. Incular's node has a single description field that
     /// carries the hint, so a hint and a description set together share it.
     #[must_use]
-    pub fn hint(mut self, hint: impl Into<String>) -> Self {
-        self.description = Some(hint.into());
-        self
+    pub fn hint(self, hint: impl Into<String>) -> Self {
+        self.description(hint)
     }
 
     /// Flutter's `tooltip`. It is kept apart from the hint and description:
@@ -542,17 +562,28 @@ impl Semantics {
             return None;
         }
         let role = self.role.unwrap_or(SemanticRole::GenericContainer);
+        let attributes = |item: &Option<AttributedString>| {
+            item.as_ref()
+                .map_or_else(Vec::new, |item| item.attributes().to_vec())
+        };
+        let attributes = SemanticTextAttributes {
+            label: attributes(&self.label),
+            value: attributes(&self.value),
+            hint: attributes(&self.description),
+        };
+        let mut state = self.state.clone();
+        state.text_attributes = (!attributes.is_empty()).then(|| Arc::new(attributes));
         let mut explicit = crate::ExplicitSemantics::new(role)
-            .state(self.state.clone())
+            .state(state)
             .actions(self.actions.iter().map(SemanticAction::kind));
         if let Some(label) = &self.label {
-            explicit = explicit.label(label.clone());
+            explicit = explicit.label(label.as_str());
         }
         if let Some(value) = &self.value {
-            explicit = explicit.value(value.clone());
+            explicit = explicit.value(value.as_str());
         }
         if let Some(description) = &self.description {
-            explicit = explicit.description(description.clone());
+            explicit = explicit.description(description.as_str());
         }
         Some(explicit)
     }

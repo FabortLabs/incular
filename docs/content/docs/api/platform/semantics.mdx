@@ -60,6 +60,12 @@ independently of visual layout. When labels merge, a phrase in the
 opposing direction keeps its direction. For labels assembled directly
 from multiple strings, use `incular::semantics::SemanticsLabelBuilder`.
 
+For pronunciation metadata, pass an `AttributedString` to
+`attributed_label`, `attributed_value`, or `attributed_hint`. Ranges use
+UTF-16 code units. Replacing a field with its plain setter clears its spans.
+The mobile bridge receives the metadata; native speech support is separate.
+
+
 
 [`CheckedState`](/docs/api/platform/semantics): `Unchecked` (default) / `Checked` / `Indeterminate`;
 `is_checked()`, `From<bool>`, displays `"false"` / `"true"` / `"mixed"`.

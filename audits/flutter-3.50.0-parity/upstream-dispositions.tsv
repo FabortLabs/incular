@@ -1070,10 +1070,11 @@ packages/flutter/test/semantics/semantics_test.dart	1334	special characters in s
 packages/flutter/test/semantics/semantics_test.dart	1345	Unicode characters in content	paired-match	upstream-semantics-label-builder.md
 packages/flutter/test/semantics/semantics_test.dart	466	updateWith marks node as dirty when customSemanticsActions changes	paired-match	upstream-semantic-native-updates.md
 packages/flutter/test/semantics/semantics_update_test.dart	29	Semantics update does not send update for merged nodes.	paired-match	upstream-semantic-native-updates.md
-packages/flutter/test/semantics/semantics_update_test.dart	95	Semantics update receives attributed text	reference-ran-incular-open	upstream-semantic-native-updates.md
+packages/flutter/test/semantics/semantics_update_test.dart	95	Semantics update receives attributed text	partial-match	upstream-attributed-semantics.md#retained-speech-span-metadata
 packages/flutter/test/semantics/semantics_update_test.dart	194	Semantics update receives correct traversal transform with nested OverlayPortals	reference-ran-incular-open	upstream-semantic-native-updates.md
 packages/flutter/test/semantics/semantics_update_test.dart	271	Semantics update does not leak nodes to hit-test order when traversal parent is missing	reference-ran-incular-open	upstream-semantic-native-updates.md
 packages/flutter/test/semantics/semantics_update_test.dart	308	Semantics update removes detached OverlayPortal traversal child	paired-match	upstream-semantic-native-updates.md
 packages/flutter/test/semantics/semantics_service_test.dart	12	Semantic announcement	reference-ran-incular-open	upstream-attributed-semantics.md
-packages/flutter/test/semantics/semantics_test.dart	70	SemanticsConfiguration can set both string label/value/hint and attributed version	reference-ran-incular-open	upstream-attributed-semantics.md
+packages/flutter/test/semantics/semantics_test.dart	70	SemanticsConfiguration can set both string label/value/hint and attributed version	partial-match	upstream-attributed-semantics.md#retained-speech-span-metadata
 packages/flutter/test/semantics/semantics_test.dart	901	Attributed String can concat	paired-match	upstream-attributed-semantics.md
+packages/flutter/test/semantics/semantics_node_send_event_test.dart	17	SemanticsNode.sendEvent reports error to FlutterError	reference-ran-incular-open	upstream-attributed-semantics.md

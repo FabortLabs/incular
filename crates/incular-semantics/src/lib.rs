@@ -11,7 +11,9 @@ use std::cmp::Ordering;
 mod attributed_string;
 mod custom_action;
 mod label_builder;
-pub use attributed_string::{AttributedString, InvalidStringAttribute, StringAttribute};
+pub use attributed_string::{
+    AttributedString, InvalidStringAttribute, SemanticTextAttributes, StringAttribute,
+};
 pub use custom_action::{CustomSemanticsAction, CustomSemanticsActionId};
 pub use incular_core::TextDirection;
 pub use label_builder::SemanticsLabelBuilder;
@@ -291,6 +293,8 @@ pub struct SemanticState {
     pub live_region: bool,
     /// Base direction of the node’s accessible label.
     pub text_direction: Option<TextDirection>,
+    /// Optional pronunciation spans for the node’s semantic strings.
+    pub text_attributes: Option<std::sync::Arc<SemanticTextAttributes>>,
     /// Flutter's `tooltip`.
     pub tooltip: Option<String>,
     /// Flutter's `linkUrl`: where a link node navigates.
@@ -347,6 +351,7 @@ impl Default for SemanticState {
             hidden: false,
             live_region: false,
             text_direction: None,
+            text_attributes: None,
             tooltip: None,
             link_url: None,
             identifier: None,

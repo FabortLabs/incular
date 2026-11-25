@@ -38,6 +38,15 @@ impl StringAttribute {
         }
     }
 
+    /// Copies this annotation with a different UTF-16 range.
+    #[must_use]
+    pub fn with_range(&self, range: Range<usize>) -> Self {
+        match self {
+            Self::SpellOut { .. } => Self::spell_out(range),
+            Self::Locale { locale, .. } => Self::locale(range, locale.clone()),
+        }
+    }
+
     fn shift(&mut self, offset: usize) {
         let range = match self {
             Self::SpellOut { range } | Self::Locale { range, .. } => range,
@@ -161,6 +170,55 @@ impl AttributedString {
         }
         self.string.push_str(&other.string);
         self
+    }
+}
+
+impl From<String> for AttributedString {
+    fn from(text: String) -> Self {
+        Self::new(text)
+    }
+}
+
+impl From<&str> for AttributedString {
+    fn from(text: &str) -> Self {
+        Self::new(text)
+    }
+}
+
+impl From<&String> for AttributedString {
+    fn from(text: &String) -> Self {
+        Self::new(text)
+    }
+}
+
+impl From<Box<str>> for AttributedString {
+    fn from(text: Box<str>) -> Self {
+        Self::new(text)
+    }
+}
+
+impl From<std::borrow::Cow<'_, str>> for AttributedString {
+    fn from(text: std::borrow::Cow<'_, str>) -> Self {
+        Self::new(text)
+    }
+}
+
+/// Speech attributes for the three text fields of a semantic node.
+/// All ranges are relative to the corresponding plain text in UTF-16 units.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SemanticTextAttributes {
+    /// Attributes of the accessible label.
+    pub label: Vec<StringAttribute>,
+    /// Attributes of the accessible value.
+    pub value: Vec<StringAttribute>,
+    /// Attributes of the description or hint.
+    pub hint: Vec<StringAttribute>,
+}
+
+impl SemanticTextAttributes {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.label.is_empty() && self.value.is_empty() && self.hint.is_empty()
     }
 }
 

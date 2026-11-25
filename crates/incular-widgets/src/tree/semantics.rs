@@ -12,6 +12,7 @@
 use super::*;
 use incular_semantics::{
     AccessibilityFocusBlockType, CustomSemanticsAction, CustomSemanticsActionId, SemanticAction,
+    StringAttribute,
 };
 use std::borrow::Cow;
 
@@ -27,6 +28,7 @@ pub(super) struct SemanticCollectionContext {
 #[derive(Default)]
 struct MergedSemanticSummary {
     label: String,
+    label_attributes: Vec<StringAttribute>,
     direction: Option<TextDirection>,
     heading: Option<u8>,
     focus_block: AccessibilityFocusBlockType,
@@ -35,7 +37,12 @@ struct MergedSemanticSummary {
 }
 
 impl MergedSemanticSummary {
-    fn add_label(&mut self, label: &str, direction: Option<TextDirection>) {
+    fn add_label(
+        &mut self,
+        label: &str,
+        direction: Option<TextDirection>,
+        attributes: &[StringAttribute],
+    ) {
         if self.direction.is_none() {
             self.direction = direction;
         }
@@ -45,17 +52,26 @@ impl MergedSemanticSummary {
         if !self.label.is_empty() {
             self.label.push('\n');
         }
-        if let Some(direction) = direction
-            && Some(direction) != self.direction
-        {
+        let embedded = direction.filter(|direction| Some(*direction) != self.direction);
+        if let Some(direction) = embedded {
             self.label.push(match direction {
                 TextDirection::Ltr => '\u{202a}',
                 TextDirection::Rtl => '\u{202b}',
             });
-            self.label.push_str(label);
+        }
+        // The source range follows any separator and opening direction mark.
+        // Plain labels don't need to scan previously concatenated text.
+        if !attributes.is_empty() {
+            let offset = self.label.encode_utf16().count();
+            self.label_attributes
+                .extend(attributes.iter().map(|attribute| {
+                    let range = attribute.range();
+                    attribute.with_range((offset + range.start)..(offset + range.end))
+                }));
+        }
+        self.label.push_str(label);
+        if embedded.is_some() {
             self.label.push('\u{202c}');
-        } else {
-            self.label.push_str(label);
         }
     }
 
@@ -927,7 +943,11 @@ impl WidgetTree {
         merged.add_custom_actions(&properties.callbacks);
         if absorbs_descendant_semantics(entry) {
             if let Some(own) = element_own_label(entry) {
-                merged.add_label(&own, self.semantic_label_direction(element, entry));
+                merged.add_label(
+                    &own,
+                    self.semantic_label_direction(element, entry),
+                    element_label_attributes(entry),
+                );
             } else {
                 merged.direction = entry
                     .widget
@@ -960,6 +980,15 @@ impl WidgetTree {
                 value = explicit.value.clone().or(value);
                 state = explicit.state.clone();
                 actions = actions_with_room(&explicit.actions);
+            }
+        }
+        if merged_label.is_some()
+            && (!merged.label_attributes.is_empty() || state.text_attributes.is_some())
+        {
+            let attributes = Arc::make_mut(state.text_attributes.get_or_insert_with(Arc::default));
+            attributes.label = merged.label_attributes;
+            if attributes.is_empty() {
+                state.text_attributes = None;
             }
         }
         state.text_direction = state.text_direction.or(merged.direction).or_else(|| {
@@ -1388,7 +1417,11 @@ impl WidgetTree {
             return;
         }
         if let Some(label) = element_own_label(entry) {
-            merged.add_label(&label, self.semantic_label_direction(element, entry));
+            merged.add_label(
+                &label,
+                self.semantic_label_direction(element, entry),
+                element_label_attributes(entry),
+            );
         } else if merged.direction.is_none() {
             merged.direction = entry
                 .widget
@@ -1634,6 +1667,17 @@ fn element_own_label(entry: &Element) -> Option<Cow<'_, str>> {
         })
 }
 
+fn element_label_attributes(entry: &Element) -> &[StringAttribute] {
+    entry
+        .widget
+        .semantic_properties()
+        .explicit
+        .as_ref()
+        .filter(|explicit| explicit.label.is_some())
+        .and_then(|explicit| explicit.state.text_attributes.as_ref())
+        .map_or(&[], |attributes| attributes.label.as_slice())
+}
+
 struct DragSemanticPhases<'a> {
     down: &'a Option<Rc<dyn Fn(incular_gestures::DragDownDetails)>>,
     start: &'a Option<Rc<dyn Fn(DragStartDetails)>>,
@@ -1851,6 +1895,7 @@ fn overlay_semantic_state(base: &mut SemanticState, overlay: &SemanticState) {
         hidden,
         live_region,
         text_direction,
+        text_attributes,
         tooltip,
         link_url,
         identifier,
