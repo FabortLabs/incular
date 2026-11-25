@@ -3,6 +3,7 @@
 mod arena;
 mod caching_iterable;
 mod change_notifier;
+pub mod collections;
 mod context;
 mod fast_hash;
 mod geometry;

@@ -1366,3 +1366,10 @@ packages/flutter/test/widgets/animated_cross_fade_test.dart	424	AnimatedCrossFad
 packages/flutter/test/widgets/animated_cross_fade_test.dart	471	AnimatedCrossFade onEnd callback is called when animation completes reverse	paired-match	upstream-cross-fade-focus-and-input.md#current-completion-and-clipping
 packages/flutter/test/widgets/animated_cross_fade_test.dart	557	AnimatedCrossFade clipBehavior defaults to hardEdge	paired-match	upstream-cross-fade-focus-and-input.md#current-completion-and-clipping
 packages/flutter/test/widgets/animated_cross_fade_test.dart	579	AnimatedCrossFade clipBehavior is forwarded to ClipRect and AnimatedSize	paired-match	upstream-cross-fade-focus-and-input.md#current-completion-and-clipping
+packages/flutter/test/foundation/collections_test.dart	11	listEquals	paired-match	upstream-foundation-collections.md
+packages/flutter/test/foundation/collections_test.dart	25	setEquals	paired-match	upstream-foundation-collections.md
+packages/flutter/test/foundation/collections_test.dart	39	mapEquals	paired-match	upstream-foundation-collections.md
+packages/flutter/test/foundation/collections_test.dart	55	binarySearch	paired-match	upstream-foundation-collections.md
+packages/flutter/test/foundation/collections_test.dart	63	MergeSortRandom	paired-match	upstream-foundation-collections.md
+packages/flutter/test/foundation/collections_test.dart	74	MergeSortPreservesOrder	paired-match	upstream-foundation-collections.md
+packages/flutter/test/foundation/collections_test.dart	123	MergeSortSpecialCases	paired-match	upstream-foundation-collections.md
