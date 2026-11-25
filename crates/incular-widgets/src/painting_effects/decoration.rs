@@ -717,6 +717,35 @@ impl BoxLinearGradient {
         }
     }
 
+    /// Scales opacity, leaving geometry, colors' RGB and tile mode intact.
+    #[must_use]
+    pub fn scale(&self, factor: f32) -> Self {
+        Self {
+            stops: self.stops.scale_opacity(factor),
+            ..self.clone()
+        }
+    }
+
+    /// Uses a single color at every existing stop.
+    #[must_use]
+    pub fn from_color(&self, color: Color) -> Self {
+        Self {
+            stops: self.stops.with_color(color),
+            ..self.clone()
+        }
+    }
+
+    /// Interpolates two gradients, fading from or to transparent when absent.
+    #[must_use]
+    pub fn lerp_optional(a: Option<&Self>, b: Option<&Self>, t: f32) -> Option<Self> {
+        match (a, b) {
+            (None, None) => None,
+            (Some(a), None) => Some(a.scale(1. - t)),
+            (None, Some(b)) => Some(b.scale(t)),
+            (Some(a), Some(b)) => Some(a.lerp(b, t)),
+        }
+    }
+
     /// Resolves the shader in the coordinate space of the supplied box.
     #[must_use]
     pub fn resolve(&self, rect: Rect, direction: TextDirection) -> LinearGradient {
@@ -732,6 +761,24 @@ impl BoxLinearGradient {
             end: endpoint(self.end),
             stops: self.stops.clone(),
             tile_mode: self.tile_mode,
+        }
+    }
+}
+
+impl Lerp for BoxLinearGradient {
+    fn lerp(&self, other: &Self, t: f32) -> Self {
+        if self == other {
+            return self.clone();
+        }
+        Self {
+            begin: self.begin.lerp(&other.begin, t),
+            end: self.end.lerp(&other.end, t),
+            stops: self.stops.interpolate(&other.stops, t),
+            tile_mode: if t < 0.5 {
+                self.tile_mode
+            } else {
+                other.tile_mode
+            },
         }
     }
 }
@@ -933,7 +980,7 @@ impl BoxDecoration {
 impl incular_core::Lerp for BoxDecoration {
     /// Flutter `BoxDecoration.lerp`: a part present on one side only
     /// scales in or out (`Color.lerp(null, c, t)`, `BoxBorder.lerp`,
-    /// `BoxShadow.lerpList`). The gradient and image switch at the midpoint,
+    /// `BoxShadow.lerpList`). Raw brushes and images switch at the midpoint,
     /// and, as in Flutter, a blend mode is kept only at the ends or when
     /// interpolating a decoration with itself.
     fn lerp(&self, other: &Self, t: f32) -> Self {
@@ -964,7 +1011,14 @@ impl incular_core::Lerp for BoxDecoration {
             } else {
                 other.gradient.clone()
             },
-            aligned_gradient: if t < 0.5 {
+            aligned_gradient: if self.gradient.is_none() && other.gradient.is_none() {
+                BoxLinearGradient::lerp_optional(
+                    self.aligned_gradient.as_deref(),
+                    other.aligned_gradient.as_deref(),
+                    t,
+                )
+                .map(Arc::new)
+            } else if t < 0.5 {
                 self.aligned_gradient.clone()
             } else {
                 other.aligned_gradient.clone()

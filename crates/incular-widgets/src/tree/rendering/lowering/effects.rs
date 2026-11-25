@@ -57,7 +57,7 @@ pub(super) fn lower_effects(widget: &Widget, context: &DependencyContext) -> Ren
             fit: *fit,
             alignment: match alignment {
                 crate::AlignmentGeometry::Physical(value) => *value,
-                crate::AlignmentGeometry::Directional(value) => value.resolve(
+                value => value.resolve(
                     context
                         .depend::<TextDirection>()
                         .unwrap_or(TextDirection::Ltr),

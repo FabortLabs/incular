@@ -1985,7 +1985,8 @@ impl Transform {
 impl From<Transform> for Widget {
     fn from(value: Transform) -> Self {
         let alignment = match value.alignment {
-            Some(crate::AlignmentGeometry::Directional(pivot)) => {
+            Some(crate::AlignmentGeometry::Physical(pivot)) => Some(pivot),
+            Some(pivot) => {
                 return crate::Builder::new(move |context| {
                     let direction = context
                         .text_direction()
@@ -1994,7 +1995,6 @@ impl From<Transform> for Widget {
                 })
                 .into();
             }
-            Some(crate::AlignmentGeometry::Physical(pivot)) => Some(pivot),
             None => None,
         };
         match value.origin {

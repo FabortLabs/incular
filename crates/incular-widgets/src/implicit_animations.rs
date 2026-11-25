@@ -55,6 +55,7 @@ impl<T: Lerp + Clone> PropertyTween<T> {
 pub enum AlignmentGeometry {
     Physical(Alignment),
     Directional(AlignmentDirectional),
+    Mixed { x: f32, start: f32, y: f32 },
 }
 
 impl AlignmentGeometry {
@@ -64,6 +65,41 @@ impl AlignmentGeometry {
         match self {
             Self::Physical(alignment) => alignment,
             Self::Directional(alignment) => alignment.resolve(direction),
+            Self::Mixed { x, start, y } => Alignment::new(
+                x + if direction == TextDirection::Rtl {
+                    -start
+                } else {
+                    start
+                },
+                y,
+            ),
+        }
+    }
+}
+
+impl Lerp for AlignmentGeometry {
+    fn lerp(&self, other: &Self, t: f32) -> Self {
+        let mix = |a, b| a + (b - a) * t;
+        match (*self, *other) {
+            (Self::Physical(a), Self::Physical(b)) => {
+                Self::Physical(Alignment::new(mix(a.x, b.x), mix(a.y, b.y)))
+            }
+            (Self::Directional(a), Self::Directional(b)) => Self::Directional(
+                AlignmentDirectional::new(mix(a.start, b.start), mix(a.y, b.y)),
+            ),
+            (a, b) => {
+                let sum = |geometry| match geometry {
+                    Self::Physical(a) => (a.x, 0., a.y),
+                    Self::Directional(a) => (0., a.start, a.y),
+                    Self::Mixed { x, start, y } => (x, start, y),
+                };
+                let (a, b) = (sum(a), sum(b));
+                Self::Mixed {
+                    x: mix(a.0, b.0),
+                    start: mix(a.1, b.1),
+                    y: mix(a.2, b.2),
+                }
+            }
         }
     }
 }

@@ -116,7 +116,6 @@ packages/flutter/test/widgets/mouse_region_test.dart	1971	No new frames are sche
 packages/flutter/test/widgets/list_wheel_scroll_view_test.dart	1170	no onSelectedItemChanged callback on first build	paired-match	upstream-pointer-wheel-gradients.md
 packages/flutter/test/widgets/list_wheel_scroll_view_test.dart	1415	onSelectedItemChanged and controller are in sync	paired-match	upstream-wheel-drag-and-position.md
 packages/flutter/test/widgets/list_wheel_scroll_view_test.dart	1540	controller can be reused	paired-match	upstream-wheel-drag-and-position.md#fixed-initial-position-after-detachment
-packages/flutter/test/painting/gradient_test.dart	229	LinearGradient lerp test with stops and unequal number of colors	reference-ran-incular-open	upstream-pointer-wheel-gradients.md
 packages/flutter/test/painting/gradient_test.dart	736	RadialGradient.scale preserves transform	reference-ran-incular-open	upstream-pointer-wheel-gradients.md
 packages/flutter/test/painting/gradient_test.dart	800	SweepGradient lerp test with stops	reference-ran-incular-open	upstream-pointer-wheel-gradients.md
 packages/flutter/test/widgets/focus_manager_test.dart	633	Requesting focus before adding to tree results in a request after adding	partial-match	upstream-focus-corners-curves-previews.md
@@ -1272,3 +1271,8 @@ packages/flutter/test/scheduler/performance_mode_test.dart	30	PerformanceModeHan
 packages/flutter/test/scheduler/performance_mode_test.dart	47	PerformanceModeHandler revert only after last requestor disposed	paired-match	scheduler-callback-phases-comparisons.md#performance-preference-handles
 packages/flutter/test/scheduler/performance_mode_test.dart	67	PerformanceModeRequestHandle dispatches memory events	paired-match	scheduler-callback-phases-comparisons.md#performance-preference-handles
 packages/flutter/test/scheduler/benchmarks_test.dart	43	test pumpBenchmark() only runs one frame	paired-match	scheduler-callback-phases-comparisons.md#one-frame-benchmark-step
+packages/flutter/test/painting/gradient_test.dart	131	LinearGradient scale test	paired-match	upstream-linear-gradients.md
+packages/flutter/test/painting/gradient_test.dart	151	LinearGradient lerp test	paired-match	upstream-linear-gradients.md
+packages/flutter/test/painting/gradient_test.dart	183	LinearGradient lerp test with stops	paired-match	upstream-linear-gradients.md
+packages/flutter/test/painting/gradient_test.dart	211	LinearGradient lerp test with unequal number of colors	paired-match	upstream-linear-gradients.md
+packages/flutter/test/painting/gradient_test.dart	229	LinearGradient lerp test with stops and unequal number of colors	paired-match	upstream-linear-gradients.md

@@ -223,6 +223,7 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
                         crate::AlignmentGeometry::Directional(alignment) => {
                             format!("{alignment:?}")
                         }
+                        mixed => format!("{mixed:?}"),
                     },
                 )),
             ));

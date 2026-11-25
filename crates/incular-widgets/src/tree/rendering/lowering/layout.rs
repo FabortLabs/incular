@@ -24,9 +24,7 @@ fn resolve_stack_alignment(
 ) -> Alignment {
     match alignment.unwrap_or_else(|| incular_config::AlignmentDirectional::TOP_START.into()) {
         crate::AlignmentGeometry::Physical(alignment) => alignment,
-        crate::AlignmentGeometry::Directional(alignment) => {
-            alignment.resolve(resolve_layout_direction(direction, context))
-        }
+        alignment => alignment.resolve(resolve_layout_direction(direction, context)),
     }
 }
 
@@ -66,7 +64,7 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
             size: *size,
             alignment: match alignment {
                 crate::AlignmentGeometry::Physical(value) => *value,
-                crate::AlignmentGeometry::Directional(value) => value.resolve(
+                value => value.resolve(
                     context
                         .depend::<TextDirection>()
                         .unwrap_or(TextDirection::Ltr),

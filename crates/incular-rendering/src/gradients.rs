@@ -117,6 +117,99 @@ impl GradientStops {
             stops: stops.into(),
         }
     }
+    /// Builds implied stops spaced evenly across the unit interval.
+    #[must_use]
+    pub fn even(colors: &[Color]) -> Self {
+        let denominator = colors.len().saturating_sub(1).max(1) as f32;
+        Self::new(
+            colors
+                .iter()
+                .enumerate()
+                .map(|(i, &color)| GradientStop {
+                    offset: i as f32 / denominator,
+                    color,
+                })
+                .collect(),
+        )
+    }
+
+    /// Fades opacity without changing stop positions or RGB.
+    #[must_use]
+    pub fn scale_opacity(&self, factor: f32) -> Self {
+        if factor == 1.0 {
+            return self.clone();
+        }
+        self.with_colors(|color| Color {
+            alpha: quantize(f64::from(color.alpha) * f64::from(factor)),
+            ..color
+        })
+    }
+
+    /// Replaces all colors while preserving stop geometry.
+    #[must_use]
+    pub fn with_color(&self, color: Color) -> Self {
+        self.with_colors(|_| color)
+    }
+
+    fn with_colors(&self, mut map: impl FnMut(Color) -> Color) -> Self {
+        Self {
+            id: next_gradient_id(),
+            stops: self
+                .stops
+                .iter()
+                .map(|stop| GradientStop {
+                    offset: stop.offset,
+                    color: map(stop.color),
+                })
+                .collect(),
+        }
+    }
+
+    /// Interpolates on the sorted union of stop offsets. Color samples
+    /// are straight encoded-sRGB here; premultiplication belongs to
+    /// the renderer's later spatial sampling step.
+    #[must_use]
+    pub fn interpolate(&self, other: &Self, t: f32) -> Self {
+        if self == other
+            && self
+                .stops
+                .windows(2)
+                .all(|pair| pair[0].offset != pair[1].offset)
+        {
+            return self.clone();
+        }
+        let (a, b) = (self.as_slice(), other.as_slice());
+        let mut indices = (0, 0);
+        let mut cursors = (0, 0);
+        let mut output = Vec::with_capacity(a.len() + b.len());
+        while indices.0 < a.len() || indices.1 < b.len() {
+            let u = a.get(indices.0).map_or(f32::INFINITY, |stop| stop.offset);
+            let v = b.get(indices.1).map_or(f32::INFINITY, |stop| stop.offset);
+            let offset = u.min(v);
+            while a.get(indices.0).is_some_and(|stop| stop.offset == offset) {
+                indices.0 += 1;
+            }
+            while b.get(indices.1).is_some_and(|stop| stop.offset == offset) {
+                indices.1 += 1;
+            }
+            let a = straight_sample(a, offset, &mut cursors.0);
+            let b = straight_sample(b, offset, &mut cursors.1);
+            let channels = mix_channels(a, b, f64::from(t)).map(quantize);
+            output.push(GradientStop {
+                offset,
+                color: Color::rgba(channels[0], channels[1], channels[2], channels[3]),
+            });
+        }
+        // All stops of a hard transition can share a single offset.
+        if output.len() == 1 {
+            output.push(output[0]);
+        }
+        Self {
+            id: next_gradient_id(),
+            stops: output.into(),
+        }
+    }
+
     #[must_use]
     pub fn as_slice(&self) -> &[GradientStop] {
         &self.stops
@@ -128,6 +221,39 @@ impl GradientStops {
         self.id
     }
 }
+fn quantize(channel: f64) -> u8 {
+    channel.round().clamp(0., 255.) as u8
+}
+
+fn mix_channels(a: [f64; 4], b: [f64; 4], t: f64) -> [f64; 4] {
+    std::array::from_fn(|i| a[i] + (b[i] - a[i]) * t)
+}
+
+fn straight_sample(stops: &[GradientStop], t: f32, cursor: &mut usize) -> [f64; 4] {
+    let channels = |stop: GradientStop| {
+        let Color {
+            red,
+            green,
+            blue,
+            alpha,
+        } = stop.color;
+        [red, green, blue, alpha].map(f64::from)
+    };
+    if t <= stops[0].offset {
+        return channels(stops[0]);
+    }
+    while stops.get(*cursor + 1).is_some_and(|stop| stop.offset <= t) {
+        *cursor += 1;
+    }
+    let a = stops[*cursor];
+    let Some(&b) = stops.get(*cursor + 1) else {
+        return channels(a);
+    };
+    let fraction =
+        (f64::from(t) - f64::from(a.offset)) / (f64::from(b.offset) - f64::from(a.offset));
+    mix_channels(channels(a), channels(b), fraction)
+}
+
 impl GradientId {
     #[must_use]
     pub const fn get(self) -> u64 {
