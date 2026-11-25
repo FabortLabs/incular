@@ -32,6 +32,15 @@ pub trait RuntimeWake: Send + Sync + 'static {
     fn wake(&self);
 }
 
+pub(crate) fn install_scheduled_task_wake(wake: &Arc<dyn RuntimeWake>) {
+    let wake = Arc::downgrade(wake);
+    incular_animation::scheduler::set_scheduled_task_wake(move || {
+        if let Some(wake) = wake.upgrade() {
+            wake.wake();
+        }
+    });
+}
+
 /// Failure of Tokio-backed work as observed by the UI owner.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TaskFailure {

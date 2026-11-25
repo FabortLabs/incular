@@ -989,3 +989,4 @@ packages/flutter/test/rendering/shifted_box_test.dart	71	computeDryBaseline work
 packages/flutter/test/rendering/shifted_box_test.dart	84	computeDryBaseline works with bottom-right alignment	partial-match	upstream-shifted-box-baselines.md
 packages/flutter/test/rendering/shifted_box_test.dart	183	RenderFractionallySizedOverflowBox computeDryBaseline	partial-match	upstream-shifted-box-baselines.md
 packages/flutter/test/rendering/shifted_box_test.dart	200	RenderPadding computeDryBaseline	partial-match	upstream-shifted-box-baselines.md
+packages/flutter/test/scheduler/scheduler_test.dart	317	Can schedule futures to completion	paired-match	scheduler-callback-phases-comparisons.md#future-returning-ui-tasks

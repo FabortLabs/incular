@@ -24,7 +24,8 @@ use std::{
 
 pub use crate::ui_tasks::{
     ScheduledTaskError, has_ready_scheduled_task, reset_scheduling_strategy,
-    run_one_scheduled_task, schedule_task, set_scheduling_strategy,
+    run_one_scheduled_task, schedule_async_task, schedule_task, set_scheduled_task_wake,
+    set_scheduling_strategy,
 };
 
 type FrameCallback = Box<dyn FnOnce(Instant)>;

@@ -137,3 +137,30 @@ The pinned `scheduler/time_dilation_test.dart:11` and its Rust counterpart
 start at 1.0, set and read 2.0 successfully, and create no runtime or frame.
 The neighboring slow/fast ticker tests still pass. This is independent of
 the host's vsync or window state.
+
+## Future-returning UI tasks
+
+Pinned `scheduler/scheduler_test.dart:317` yields twice inside
+an idle-priority task and awaits termination. Flutter's result
+does not resolve until the task has completed its side effect.
+Before the repair, Incular's synchronous scheduler resolved an
+outer result containing an unpolled Rust future. The two yields
+and the body never executed unless the caller polled that second
+result independently.
+
+Use `schedule_async_task` for a callback returning a Rust future.
+Its result stays pending across both yields and resolves to 1
+after the side effect. The initial callback enters the same
+priority queue as synchronous UI work; once it starts, future
+wakeups do not go back through the initial priority filter.
+Dropping the observation handle does not cancel the task and a
+panic during polling becomes an error without preventing the
+next task from running.
+
+A retained Runtime control parks a local, non-Send future,
+checks that the resting host has no redraw pending, and wakes
+it from a worker thread. Duplicate signals coalesce to one
+host wake. The work resumes on its owning UI thread, not the
+worker, and a stale waker after completion schedules nothing.
+This is an in-process event-loop boundary check, not an OS
+presentation or Dart microtask scheduling claim.

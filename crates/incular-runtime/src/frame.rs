@@ -452,6 +452,7 @@ impl Runtime {
         self.scheduler.borrow().tokio_handle()
     }
     pub fn set_wake_handler(&mut self, wake: std::sync::Arc<dyn RuntimeWake>) {
+        crate::tasks::install_scheduled_task_wake(&wake);
         self.scheduler.borrow_mut().set_wake(wake);
     }
 

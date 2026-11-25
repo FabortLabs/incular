@@ -1194,6 +1194,7 @@ impl Application {
     }
 
     pub fn set_wake_handler(&mut self, wake: Arc<dyn RuntimeWake>) {
+        crate::tasks::install_scheduled_task_wake(&wake);
         self.scheduler.borrow_mut().set_wake(wake.clone());
         self.manager.bridge.set_wake(wake.clone());
         self.file_dialog_bridge.set_wake(wake.clone());
