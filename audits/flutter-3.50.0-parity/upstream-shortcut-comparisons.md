@@ -88,3 +88,12 @@ typed command shortcuts are resolved in focus-ancestor order. The
 command test uses Incular's logical bindings for Flutter's single-key
 LogicalKeySets. Thirteen focused Rust tests passed, including prior
 registry case and callback Num Lock controls.
+
+## Default WidgetsApp registrar
+
+The exact `shortcuts_test.dart:1814` registration passed. The Incular
+home route finds the app-owned registry through its build context,
+registers two distinct bindings and holds their tokens while mounted.
+The autofocus target routes A and B independently, with no extra
+callback on release. All five focused registrar tests passed. The
+subsequent text-editor intent and dynamic dependency cases are separate.

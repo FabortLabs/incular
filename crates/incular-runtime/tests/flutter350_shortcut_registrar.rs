@@ -1,11 +1,14 @@
-use std::{cell::Cell, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
 
 use incular_config::Constraints;
 use incular_core::{Code, KeyboardEvent, KeyboardKey, Modifiers, NamedKey, Size};
 use incular_runtime::Runtime;
 use incular_widgets::{
-    CharacterActivator, Focus, LockState, ShortcutRegistrar, ShortcutRegistry, SingleActivator,
-    SizedBox, Widget,
+    Builder, CharacterActivator, Focus, LockState, ShortcutRegistrar, ShortcutRegistry,
+    SingleActivator, SizedBox, Widget, WidgetsApp,
 };
 
 fn mount(child: Widget) -> Runtime {
@@ -58,6 +61,39 @@ fn registered_shortcuts_fire_for_their_own_key_down_only() {
     let _a = registry.add(activator("a"), increment(&a));
     let _b = registry.add(activator("b"), increment(&b));
     let mut runtime = mount(ShortcutRegistrar::with_registry(registry, child()).into());
+
+    assert!(letter(&mut runtime, "a", Code::KeyA, true));
+    assert_eq!((a.get(), b.get()), (1, 0));
+    assert!(!letter(&mut runtime, "a", Code::KeyA, false));
+    assert_eq!((a.get(), b.get()), (1, 0));
+    a.set(0);
+    assert!(letter(&mut runtime, "b", Code::KeyB, true));
+    assert_eq!((a.get(), b.get()), (0, 1));
+    assert!(!letter(&mut runtime, "b", Code::KeyB, false));
+    assert_eq!((a.get(), b.get()), (0, 1));
+}
+
+#[test]
+fn widgets_app_provides_a_live_registrar_to_its_home_route() {
+    let a = Rc::new(Cell::new(0));
+    let b = Rc::new(Cell::new(0));
+    let registrations = Rc::new(RefCell::new(None));
+    let home = Builder::new({
+        let (a, b, registrations) = (a.clone(), b.clone(), registrations.clone());
+        move |context| {
+            let registry = ShortcutRegistry::maybe_of(context).expect("WidgetsApp owns a registry");
+            let mut registrations = registrations.borrow_mut();
+            if registrations.is_none() {
+                *registrations = Some([
+                    registry.add(activator("a"), increment(&a)),
+                    registry.add(activator("b"), increment(&b)),
+                ]);
+            }
+            child().into()
+        }
+    });
+    let mut runtime = mount(WidgetsApp::new(home).into());
+    assert!(registrations.borrow().is_some());
 
     assert!(letter(&mut runtime, "a", Code::KeyA, true));
     assert_eq!((a.get(), b.get()), (1, 0));
