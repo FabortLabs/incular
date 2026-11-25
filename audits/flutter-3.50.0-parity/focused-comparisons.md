@@ -251,3 +251,15 @@ also first ticks in the next batch. The scheduler snapshots runs before
 dispatch and ignores stale run generations. Both lifecycle originals
 and the adjacent scheduler phase controls remain green. This does not
 claim general ordering of ordinary callbacks relative to tickers.
+
+### C06 current recheck
+
+C06 now passes on both frameworks. At exactly either scroll bound
+`atEdge` is true; overscroll is out of range but is not an edge. A
+100-pixel viewport loses 20 pixels of inside extent on either side
+and reaches zero for overscroll at least as large as the viewport.
+A zero scroll range still has a full viewport at rest. The portable
+snapshots use explicit DPR 2 and do not test live host DPR propagation.
+
+Run the Dart `scroll_metrics_geometry_test.dart` reference probe and
+`cargo test --locked -p incular-scroll --test flutter_scroll_metrics`.

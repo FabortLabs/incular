@@ -25,3 +25,38 @@ fn overscroll_is_not_at_edge_and_reduces_extent_inside() {
         (false, 80.0),
     );
 }
+
+#[test]
+fn both_edges_and_overscroll_limits_match_flutter() {
+    let actual = [-120., -20., 0., 35., 200., 220., 320.].map(|pixels| {
+        let metrics = metrics_at(pixels);
+        (
+            metrics.at_edge(),
+            metrics.out_of_range(),
+            metrics.extent_inside(),
+        )
+    });
+    assert_eq!(
+        actual,
+        [
+            (false, true, 0.),
+            (false, true, 80.),
+            (true, false, 100.),
+            (false, false, 100.),
+            (true, false, 100.),
+            (false, true, 80.),
+            (false, true, 0.),
+        ]
+    );
+
+    let short = ScrollMetrics {
+        max_scroll_extent: 0.,
+        ..metrics_at(0.)
+    };
+    assert_eq!((short.at_edge(), short.extent_inside()), (true, 100.));
+    let beyond = ScrollMetrics {
+        pixels: 20.,
+        ..short
+    };
+    assert_eq!((beyond.at_edge(), beyond.extent_inside()), (false, 80.));
+}

@@ -16,9 +16,13 @@ impl ScrollMetrics {
         (self.pixels - self.min_scroll_extent).max(0.0)
     }
 
+    /// Viewport extent minus any portion beyond either scroll bound.
     #[must_use]
     pub fn extent_inside(&self) -> f32 {
-        self.viewport_dimension
+        let viewport = self.viewport_dimension.max(0.);
+        let before = (self.min_scroll_extent - self.pixels).clamp(0., viewport);
+        let after = (self.pixels - self.max_scroll_extent).clamp(0., viewport);
+        viewport - before - after
     }
 
     #[must_use]
@@ -31,9 +35,10 @@ impl ScrollMetrics {
         self.max_scroll_extent - self.min_scroll_extent + self.viewport_dimension
     }
 
+    /// Whether the position is exactly on a bound, not beyond it.
     #[must_use]
     pub fn at_edge(&self) -> bool {
-        self.pixels <= self.min_scroll_extent || self.pixels >= self.max_scroll_extent
+        self.pixels == self.min_scroll_extent || self.pixels == self.max_scroll_extent
     }
 
     #[must_use]

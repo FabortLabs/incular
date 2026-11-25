@@ -266,6 +266,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- Scroll metrics distinguish exact edges from overscroll and report how
+  much of the viewport still lies inside the content range.
+
 - PageView preserves the selected page when its controller changes while
   collapsed, and applies the new centering origin to oversized pages when
   resized, whether or not snapping is enabled.
