@@ -138,3 +138,12 @@ The pinned :1907 and :2007 `ExcludeFocus` originals passed by exact
 name. Native tests verify both an outer and an inner request are
 denied without a focus-change callback, and that the wrapper adds
 no accessibility node versus the same child alone.
+
+## A focused sibling survives a neighboring rebuild
+
+The pinned authored Flutter comparison and the native pointer/focus
+target pass. Focus owns the semantic node and takes its label from its
+child by default; a stale native fixture was looking for a separate
+Text node. The corrected check still requires both semantic IDs and
+element identities to survive, the left node to preserve primary
+focus and its label, and the right node to publish only its new label.

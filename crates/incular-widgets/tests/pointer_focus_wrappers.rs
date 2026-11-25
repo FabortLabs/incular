@@ -771,17 +771,19 @@ fn sibling_focus_and_semantics_survive_neighbor_rebuild() {
     layout_loose(&mut tree);
     tree.update_semantics();
     left_node.request_focus();
+    tree.update_semantics();
     let focused = tree.focused_keyboard_element().expect("left focused");
     let siblings: Vec<_> = tree.children(root).expect("stack children").to_vec();
     assert_eq!(siblings.len(), 2);
-    // The Focus wrapper itself owns no semantic node; its labeled child does.
+    // Focus includes semantics by default. Its label is supplied by the
+    // child text, but the merged semantic node belongs to the focus wrapper.
     let left_text = tree.children(siblings[0]).expect("left text")[0];
     let right_text = tree.children(siblings[1]).expect("right text")[0];
     let left_semantic = tree
-        .semantic_node_for_element(left_text)
+        .semantic_node_for_element(siblings[0])
         .expect("left semantics");
     let right_semantic = tree
-        .semantic_node_for_element(right_text)
+        .semantic_node_for_element(siblings[1])
         .expect("right semantics");
     assert_eq!(
         tree.semantics()
@@ -791,6 +793,11 @@ fn sibling_focus_and_semantics_survive_neighbor_rebuild() {
             .as_deref(),
         Some("right v1")
     );
+
+    let left_initial = tree.semantics().node(left_semantic).expect("left node");
+    assert_eq!(left_initial.label.as_deref(), Some("left"));
+    assert!(left_initial.state.focused);
+    assert!(!tree.semantics().node(right_semantic).unwrap().state.focused);
 
     tree.update(
         root,
@@ -814,7 +821,7 @@ fn sibling_focus_and_semantics_survive_neighbor_rebuild() {
         "rebuilding the right subtree must not move left focus"
     );
     assert_eq!(
-        tree.semantic_node_for_element(left_text),
+        tree.semantic_node_for_element(siblings[0]),
         Some(left_semantic),
         "left semantics must stay stable"
     );
@@ -827,14 +834,19 @@ fn sibling_focus_and_semantics_survive_neighbor_rebuild() {
     let siblings_after: Vec<_> = tree.children(root).expect("stack children").to_vec();
     assert_eq!(siblings_after[0], siblings[0]);
     assert_eq!(siblings_after[1], siblings[1]);
+    assert_eq!(tree.children(siblings_after[0]).unwrap()[0], left_text);
+    assert_eq!(
+        tree.semantic_node_for_element(siblings_after[1]),
+        Some(right_semantic)
+    );
+    let left_after = tree.semantics().node(left_semantic).expect("left node");
+    assert_eq!(left_after.label.as_deref(), Some("left"));
+    assert!(left_after.state.focused);
     let right_text_after = tree.children(siblings_after[1]).expect("right text")[0];
     assert_eq!(right_text_after, right_text);
     assert_eq!(
         tree.semantics()
-            .node(
-                tree.semantic_node_for_element(right_text_after)
-                    .expect("right semantics")
-            )
+            .node(right_semantic)
             .expect("right node")
             .label
             .as_deref(),
