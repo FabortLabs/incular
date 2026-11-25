@@ -8,7 +8,7 @@ The old 3.41.7 audit, fixture names, and lexical matches cannot close a row.
 | --- | --- | --- |
 | Flutter framework API | [flutter-public-api.jsonl](flutter-public-api.jsonl) | 15,791 declarations/members from the 11 public entrypoints; explicit members only, with owner, line and signature. |
 | Flutter source and test files | [coverage-queue.tsv](coverage-queue.tsv) | 441 in-scope framework source files, 776 Flutter test/helper files, 47 existing harness source files. Includes files without parsed declarations or test registrations. |
-| Flutter upstream scenario registrations | [upstream-scenarios.jsonl](upstream-scenarios.jsonl) | 8,965 registration sites, not assertions reviewed or total dynamic cases. A row records the upstream file/line, scenario description, group and options. |
+| Flutter upstream scenario registrations | [upstream-scenarios.jsonl](upstream-scenarios.jsonl) | 8,896 registration sites, not assertions reviewed or total dynamic cases. A row records the upstream file/line, scenario description, group and options. |
 | Existing harness | [existing-harness-scenarios.jsonl](existing-harness-scenarios.jsonl) | 261 Dart registration sites (frame and scalar tests); Rust harness sources accounted for separately. Not assumed to use the current baseline. |
 | Exceptions and counts | [scenario notes](scenario-notes.json), [summary](coverage-queue-summary.json), [external re-exports](external-reexports.md) | Explicit scan boundaries and external contracts; no row passes automatically. |
 
@@ -51,19 +51,41 @@ platform/DPR variants where applicable. Test unconfigured, explicitly
 configured, and disabled forms. Include positive controls so a fix does not
 remove behavior that already matches.
 
+
+### Registration inventory correction
+
+The earlier count of 8,965 included 69 non-registration calls: 50 in
+preview tooling, 14 in widgets, and five in gestures. For example,
+`Cache.test(processManager: ...)` constructs a fixture and
+`test(Offset.zero)` calls a local assertion helper inside a registered
+test. The parser now accepts unqualified runner calls with at least two
+positional arguments in this checkout. All 69 removed sites were checked
+against the pinned source; all other rows and comparison evidence stayed
+the same. This changes the denominator, not the number of behavior
+comparisons. Runtime variants, unrecognized registration helpers, and
+conditionally skipped paths still need separate accounting.
+
 ## Validation and regeneration
 
 The file ledger explicitly reconciles all catalog rows to paths in the
 pinned source/test trees. Unmapped external/dynamic scenarios are described
 above and in the notes; no Flutter tests were executed by the catalog.
 
-With the scratch analyzer environment from [README](README.md), run:
+Use the analyzer configured by the initialized pinned Flutter Tools
+package (14.3 at this revision). Keep the separately captured original
+harness inventory because its ledger refers to the source locations at
+that harness snapshot, not subsequent edits to the fixtures.
 
-```powershell
-Push-Location .tmp/flutter350-audit-tools
-dart --disable-dart-dev --packages=.dart_tool/package_config.json ../../audits/flutter-3.50.0-parity/scenarios.dart ../flutter ../.. ../../audits/flutter-3.50.0-parity
-Pop-Location
-python audits/flutter-3.50.0-parity/coverage-queue.py audits/flutter-3.50.0-parity .tmp/flutter
+```bash
+AUDIT="$PWD/audits/flutter-3.50.0-parity"
+FLUTTER="$PWD/.tmp/flutter"
+SCRATCH="$PWD/.tmp/inventory-recheck"
+mkdir -p "$SCRATCH"
+"$FLUTTER/bin/cache/dart-sdk/bin/dart" \
+  --packages="$FLUTTER/packages/flutter_tools/.dart_tool/package_config.json" \
+  "$AUDIT/scenarios.dart" "$FLUTTER" "$PWD" "$SCRATCH"
+cp "$SCRATCH/upstream-scenarios.jsonl" "$SCRATCH/scenario-notes.json" "$AUDIT/"
+python3 "$AUDIT/coverage-queue.py" "$AUDIT" "$FLUTTER"
 ```
 
 ## Verified progress counters

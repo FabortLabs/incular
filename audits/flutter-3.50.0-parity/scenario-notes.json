@@ -16,18 +16,18 @@
   "rowsByLibrary": {
     "animation": 135,
     "foundation": 227,
-    "gestures": 349,
+    "gestures": 344,
     "painting": 655,
     "physics": 30,
     "rendering": 846,
     "scheduler": 31,
     "semantics": 70,
     "services": 485,
-    "widgets": 5974,
-    "widget_previews": 163,
+    "widgets": 5960,
+    "widget_previews": 113,
     "incular_harness": 261
   },
-  "dynamicDescriptions": 179,
+  "dynamicDescriptions": 110,
   "diagnostics": [],
   "registrations": [
     "frameScenario",

@@ -13,7 +13,7 @@ This closes the authored wrapper/theme API gap recorded in
 This is only runtime composition. Locale/delegate integration, annotation
 discovery, generator, scaffold, host/rendering, file watching/reload,
 and DTD/IDE integration remain outside this slice. These authored cases
-do not count as any of the 163 upstream tooling registrations.
+do not count as any of the 113 upstream tooling registrations.
 
 ## Preview scaffold manifest
 

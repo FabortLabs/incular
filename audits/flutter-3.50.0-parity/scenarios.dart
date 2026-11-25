@@ -51,10 +51,15 @@ class ScenarioVisitor extends RecursiveAstVisitor<void> {
       groupLabels.removeLast();
       return;
     }
-    if (registrations.contains(method)) {
+    // Reject constructors like Cache.test and helpers such as test(Offset.zero).
+    // None of the pinned registrations use an import prefix. If one does in
+    // a future revision, verify and allow that specific test-library prefix.
+    if (registrations.contains(method) &&
+        node.realTarget == null &&
+        args.where((argument) => argument is! NamedArgument).length >= 2) {
       final options = <String, String>{
-        for (final a in args.whereType<NamedExpression>())
-          a.name.label.name: a.expression.toSource(),
+        for (final a in args.whereType<NamedArgument>())
+          a.name.lexeme: a.argumentExpression2.toSource(),
       };
       if (label == null) dynamicNames++;
       rows.add({
