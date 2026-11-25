@@ -124,6 +124,13 @@ impl HeroController {
             _ if popped => Some(HeroFlightDirection::Pop),
             (AnimationStatus::Reverse, _) => Some(HeroFlightDirection::Pop),
             (_, AnimationStatus::Forward) => Some(HeroFlightDirection::Push),
+            // Incular's outlet starts a PageRouteBuilder animation on
+            // its first frame, after this navigation event. The post-frame
+            // flight callback checks that it actually began, so an initial,
+            // added, or zero-duration route still does not fly.
+            (_, AnimationStatus::Dismissed) if to.transition.route_animation().is_some() => {
+                Some(HeroFlightDirection::Push)
+            }
             _ => None,
         };
         match direction {

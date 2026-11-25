@@ -96,3 +96,66 @@ fn interrupted_push_retraces_its_original_tween_with_the_same_shuttle() {
     frame(&mut runtime, 257);
     assert!(runtime.tree().element_with_key(&shuttle_key).is_none());
 }
+
+#[test]
+fn popping_a_page_on_its_first_frame_removes_it_without_a_hero_shuttle() {
+    use incular_navigation::PageRouteBuilder;
+
+    let navigator = Navigator::new();
+    let controller = HeroController::new();
+    controller.attach(&navigator);
+    let hero_page = |name: &'static str| {
+        let child = Widget::from(SizedBox::from_dimensions(
+            Some(24.),
+            Some(24.),
+            None::<Widget>,
+        ))
+        .with_key(Key::from(name));
+        Hero::new("same-hero", child).flight_shuttle_builder(|_, _| {
+            Widget::from(SizedBox::shrink()).with_key(Key::from("first-frame-shuttle"))
+        })
+    };
+    navigator.push(PageRouteBuilder::new("/home", hero_page("home-endpoint")).build());
+
+    let mut runtime = Runtime::new(Stack::new(Vec::<Widget>::new()).into()).unwrap();
+    let outlet = Rc::new(RefCell::new(RouteOutlet::new(
+        &navigator,
+        &runtime.spawner().scope(),
+    )));
+    runtime
+        .register_builder(runtime.tree().root().unwrap(), {
+            let outlet = Rc::clone(&outlet);
+            move || Stack::new([outlet.borrow().widget(), controller.overlay()]).into()
+        })
+        .unwrap();
+    let constraints = Constraints::tight(Size::new(800., 600.));
+    let now = Instant::now();
+    runtime.run_frame_at(constraints, now).unwrap();
+    RouteOutlet::attach(&outlet, &mut runtime).unwrap();
+    let frame = |runtime: &mut Runtime, ms| {
+        RouteOutlet::present_frame_at(
+            &outlet,
+            runtime,
+            constraints,
+            now + Duration::from_millis(ms),
+        )
+        .unwrap();
+    };
+    let mounted =
+        |runtime: &Runtime, name: &str| runtime.tree().element_with_key(&Key::from(name)).is_some();
+    frame(&mut runtime, 0);
+    assert!(mounted(&runtime, "home-endpoint"));
+    assert!(!mounted(&runtime, "soon-popped"));
+    let pushed = PageRouteBuilder::new("/details", hero_page("soon-popped")).build();
+    let animation = pushed.transition.animation().unwrap();
+    navigator.push(pushed);
+    frame(&mut runtime, 16);
+    assert_eq!(animation.value(), 0.);
+    assert!(mounted(&runtime, "soon-popped"));
+    navigator.pop().unwrap();
+    frame(&mut runtime, 16);
+    assert!(animation.is_dismissed());
+    assert!(!mounted(&runtime, "first-frame-shuttle"));
+    assert!(!mounted(&runtime, "soon-popped"));
+    assert!(mounted(&runtime, "home-endpoint"));
+}

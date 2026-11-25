@@ -5,7 +5,7 @@ use std::{cell::RefCell, rc::Rc, time::Duration};
 
 use incular_config::Constraints;
 use incular_core::{Color, Size, time::Instant};
-use incular_navigation::{HeroController, Navigator, Route, RouteTransition};
+use incular_navigation::{HeroController, Navigator, PageRouteBuilder, Route, RouteTransition};
 use incular_rendering::{Brush, DisplayList, PaintCommand};
 use incular_runtime::{RouteOutlet, Runtime};
 use incular_widgets::{
@@ -122,6 +122,7 @@ fn flutter_350_hero_paints_a_return_shuttle_during_route_pop() {
 /// Flutter default curve tests use centered squares sized 100 and 200.
 fn assert_curve_flight(
     pop: bool,
+    outlet_starts_animation: bool,
     curve: incular_widgets::Curve,
     reverse_curve: Option<incular_widgets::Curve>,
     expected: impl Fn(f32) -> f32,
@@ -187,13 +188,16 @@ fn assert_curve_flight(
     };
     assert_eq!(geometry(&runtime, &home_key).1, Size::new(100., 100.));
 
-    navigator.push(
-        Route::new(
-            "/details",
-            page(details_size, curve, reverse_curve, details_key.clone()),
-        )
-        .transition(RouteTransition::fade_in(Duration::from_millis(300), at(16))),
-    );
+    let details = page(details_size, curve, reverse_curve, details_key.clone());
+    let details = if outlet_starts_animation {
+        let route = PageRouteBuilder::new("/details", details).build();
+        assert!(route.transition.animation().unwrap().is_dismissed());
+        route
+    } else {
+        Route::new("/details", details)
+            .transition(RouteTransition::fade_in(Duration::from_millis(300), at(16)))
+    };
+    navigator.push(details);
     present(&mut runtime, 16);
     assert_eq!(
         geometry(&runtime, &details_key).1,
@@ -265,20 +269,28 @@ fn assert_curve_flight(
 #[test]
 fn flutter_350_hero_push_uses_the_destination_curve() {
     use incular_widgets::Curve;
-    assert_curve_flight(false, Curve::FastOutSlowIn, None, |t| {
+    assert_curve_flight(false, false, Curve::FastOutSlowIn, None, |t| {
         Curve::FastOutSlowIn.apply(t)
     });
-    assert_curve_flight(false, Curve::Linear, None, |t| t);
+    assert_curve_flight(false, false, Curve::Linear, None, |t| t);
 }
 
 #[test]
 fn flutter_350_hero_pop_uses_flipped_default_or_explicit_reverse_curve() {
     use incular_widgets::Curve;
-    assert_curve_flight(true, Curve::FastOutSlowIn, None, |t| {
+    assert_curve_flight(true, false, Curve::FastOutSlowIn, None, |t| {
         Curve::FastOutSlowIn.apply(t)
     });
-    assert_curve_flight(true, Curve::EaseIn, None, |t| Curve::EaseIn.apply(t));
-    assert_curve_flight(true, Curve::EaseIn, Some(Curve::EaseOut), |t| {
+    assert_curve_flight(true, false, Curve::EaseIn, None, |t| Curve::EaseIn.apply(t));
+    assert_curve_flight(true, false, Curve::EaseIn, Some(Curve::EaseOut), |t| {
         1. - Curve::EaseOut.apply(1. - t)
     });
+}
+
+#[test]
+fn a_page_route_builder_starts_and_reverses_a_hero_flight() {
+    use incular_widgets::Curve;
+    for pop in [false, true] {
+        assert_curve_flight(pop, true, Curve::Linear, None, |t| t);
+    }
 }

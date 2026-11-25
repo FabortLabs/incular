@@ -49,3 +49,16 @@ separate settled push. Flutter invokes its builder once per shuttle;
 Incular's existing per-frame scalar builder API still invokes it on
 updates, but keeps the original builder and widget identity over this
 reversal.
+
+## Outlet-started page routes
+
+The exact Flutter `Popping on first frame does not cause hero observer to
+crash` (`:945`) passes. The Rust twin uses the public
+`PageRouteBuilder`, pumps the new route at controller value zero, then
+pops immediately and asserts the original route is restored without a
+lingering leaving route or shuttle. The overlay now observes terminal
+status even when reversing at zero sends no value update. Another native
+case checks push and normal reverse geometry with a controller that
+starts in the outlet, rather than starting manually before navigation.
+The strict Hero and fade fixtures match both timelines (25 push frames
+and 47 pop frames each) using `PageRouteBuilder` in both frameworks.

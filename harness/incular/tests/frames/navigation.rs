@@ -4,10 +4,8 @@ use std::rc::Rc;
 use crate::host;
 use incular_animation::{AnimationController, AnimationSource, AnimationStatus, DoubleAnimation};
 use incular_core::{Color, Offset, reactivity::DependencySource};
-use incular_navigation::{
-    HeroController, NavigationEvent, Navigator, PageRouteBuilder, Route, RouteTransition,
-};
-use incular_parity_harness::{FrameHarness, INTERVAL, Scenario, probe};
+use incular_navigation::{HeroController, NavigationEvent, Navigator, PageRouteBuilder, Route};
+use incular_parity_harness::{FrameHarness, Scenario, probe};
 use incular_widgets::{
     Align, Alignment, BasicRouterDelegate, ClipRect, ColoredBox, FadeTransition, GestureDetector,
     Hero, HeroRectTween, MemoryRouteInformationProvider, NavigationBackButtonDispatcher,
@@ -378,11 +376,15 @@ fn hero_flight(h: &mut FrameHarness, pop: bool) {
         Stack::new([outlet, overlay.overlay()]).into()
     });
     h.frames(2);
-    // Flutter's push ticker starts at zero on the next pumped frame.
-    let push_start = h.clock().get() + INTERVAL;
+    // Use the outlet-started PageRouteBuilder, as the Flutter twin does.
     navigator.push(
-        Route::new("/details", hero_stack(100., 150., 80., 60., ORANGE))
-            .transition(RouteTransition::fade_in(FADE, push_start)),
+        PageRouteBuilder::new("/details", hero_stack(100., 150., 80., 60., ORANGE))
+            .transition_duration(FADE)
+            .reverse_transition_duration(FADE)
+            .transitions_builder(|primary, _, child| {
+                FadeTransition::from_animation(primary.clone(), child).into()
+            })
+            .build(),
     );
     h.frames(8);
     let _ = h.center(HERO_SHUTTLE_PROBE); // An absent shuttle is not a parity match.

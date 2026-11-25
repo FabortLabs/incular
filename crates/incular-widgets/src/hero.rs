@@ -723,10 +723,21 @@ struct PendingTransition {
     animation: AnimationController,
 }
 
+struct FlightDriver {
+    animation: AnimationController,
+    status_listener: usize,
+}
+
+impl Drop for FlightDriver {
+    fn drop(&mut self) {
+        self.animation.remove_status_listener(self.status_listener);
+    }
+}
+
 struct FlightsInner {
     create_rect_tween: Option<CreateRectTween>,
     flights: RefCell<HashMap<HeroTag, Flight>>,
-    driver: RefCell<Option<AnimationController>>,
+    driver: RefCell<Option<FlightDriver>>,
     revision: RefCell<Rc<Cell<u64>>>,
 }
 
@@ -772,7 +783,7 @@ impl HeroFlights {
             self.start(&pending);
             self.invalidate_overlay();
         } else {
-            *self.0.driver.borrow_mut() = Some(animation);
+            self.set_driver(animation);
             self.invalidate_overlay();
             let flights = Rc::downgrade(&self.0);
             // A controller may call its listeners several times in a
@@ -789,6 +800,32 @@ impl HeroFlights {
                 }
             });
         }
+    }
+
+    fn set_driver(&self, animation: AnimationController) {
+        let mut driver = self.0.driver.borrow_mut();
+        if driver
+            .as_ref()
+            .is_some_and(|driver| driver.animation == animation)
+        {
+            return;
+        }
+        let flights = Rc::downgrade(&self.0);
+        let status_listener = animation.add_status_listener(move |status| {
+            // Reversing at zero (or stopping at an already-reached
+            // endpoint) can move status without emitting a value change.
+            if !status.is_animating()
+                && let Some(inner) = flights.upgrade()
+            {
+                let flights = Self(inner);
+                flights.advance();
+                flights.invalidate_overlay();
+            }
+        });
+        *driver = Some(FlightDriver {
+            animation,
+            status_listener,
+        });
     }
 
     fn invalidate_overlay(&self) {
@@ -912,7 +949,12 @@ impl HeroFlights {
             move |state, context, _| {
                 *flights.0.revision.borrow_mut() = state.0.revision();
                 let content = flights.build(context);
-                let driver = flights.0.driver.borrow().clone();
+                let driver = flights
+                    .0
+                    .driver
+                    .borrow()
+                    .as_ref()
+                    .map(|driver| driver.animation.clone());
                 match driver {
                     Some(driver) => {
                         let weak = Rc::downgrade(&flights.0);
