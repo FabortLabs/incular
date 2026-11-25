@@ -9,6 +9,7 @@ use crate::environment::{
     BuildScope, BuildScopeGuard, EnvironmentFields, InitialBuildDependencies, ReactiveQueue,
     environment_change_mask, install_focus_scope_watch,
 };
+use crate::focus_keys::{FocusKeyHandlers, FocusKeySubscription};
 use crate::profiling;
 use crate::profiling::FrameTimings;
 #[cfg(not(target_arch = "wasm32"))]
@@ -174,6 +175,8 @@ pub struct Runtime {
     pub(crate) keyboard_modifiers: incular_core::Modifiers,
     hardware_keyboard: incular_core::HardwareKeyboardState,
     hardware_key_handlers: incular_core::HardwareKeyHandlers,
+    early_focus_key_handlers: FocusKeyHandlers,
+    late_focus_key_handlers: FocusKeyHandlers,
     keyboard_event_debug_listener: Option<Box<dyn Fn(&str)>>,
     /// The focused field, content revision and selection whose caret was
     /// last shown on screen (Flutter's `_scheduleShowCaretOnScreen`).
@@ -386,6 +389,8 @@ impl Runtime {
             keyboard_modifiers: incular_core::Modifiers::empty(),
             hardware_keyboard: incular_core::HardwareKeyboardState::default(),
             hardware_key_handlers: incular_core::HardwareKeyHandlers::default(),
+            early_focus_key_handlers: FocusKeyHandlers::default(),
+            late_focus_key_handlers: FocusKeyHandlers::default(),
             keyboard_event_debug_listener: None,
             caret_reveal_key: None,
             ime_composition: None,
@@ -2568,6 +2573,24 @@ impl Runtime {
         self.hardware_key_handlers.add(handler)
     }
 
+    /// Adds a window-local focus-key handler before the focused node and
+    /// its ancestors. A handled result prevents the focus route from running.
+    pub fn add_early_focus_key_handler(
+        &self,
+        handler: impl Fn(&KeyboardEvent) -> KeyEventResult + 'static,
+    ) -> FocusKeySubscription {
+        self.early_focus_key_handlers.add(handler)
+    }
+
+    /// Adds a window-local focus-key handler after the focused route,
+    /// when the route did not handle the key. Keep the returned subscription.
+    pub fn add_late_focus_key_handler(
+        &self,
+        handler: impl Fn(&KeyboardEvent) -> KeyEventResult + 'static,
+    ) -> FocusKeySubscription {
+        self.late_focus_key_handlers.add(handler)
+    }
+
     /// Enables key and pressed-state diagnostics for this window. Normal
     /// event handling produces no such messages unless a listener is set.
     pub fn set_keyboard_event_debug_listener(&mut self, listener: impl Fn(&str) + 'static) {
@@ -2636,15 +2659,31 @@ impl Runtime {
         }
         // A window-wide handler cannot suppress notification of the focused
         // keyboard scope. Both results gate fallback editing and traversal.
+        if self.focused.is_some()
+            && self.early_focus_key_handlers.dispatch(&event) == KeyEventResult::Handled
+        {
+            self.frame_requested = true;
+            return true;
+        }
         let lock_modes = event.modifiers | self.hardware_keyboard.lock_modes_enabled();
         let focus_result =
             self.tree
                 .route_keyboard_with_lock_modes(self.focused, event.clone(), lock_modes);
-        if hardware.handled || focus_result == KeyEventResult::Handled {
+        let late_result = if self.focused.is_some() && focus_result != KeyEventResult::Handled {
+            self.late_focus_key_handlers.dispatch(&event)
+        } else {
+            KeyEventResult::Ignored
+        };
+        if hardware.handled
+            || focus_result == KeyEventResult::Handled
+            || late_result == KeyEventResult::Handled
+        {
             self.frame_requested = true;
             return true;
         }
-        if focus_result == KeyEventResult::SkipRemainingHandlers {
+        if focus_result == KeyEventResult::SkipRemainingHandlers
+            || late_result == KeyEventResult::SkipRemainingHandlers
+        {
             self.frame_requested = true;
             return false;
         }

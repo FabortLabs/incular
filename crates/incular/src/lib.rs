@@ -177,6 +177,7 @@ pub mod prelude {
     /// `localStorage` persistence, the browser default for restoration.
     #[cfg(target_arch = "wasm32")]
     pub use incular_runtime::BrowserRestorationStore;
+    pub use incular_runtime::FocusKeySubscription;
     /// Browser targets have no Tokio runtime.
     #[cfg(not(target_arch = "wasm32"))]
     pub use incular_runtime::TokioHandle;

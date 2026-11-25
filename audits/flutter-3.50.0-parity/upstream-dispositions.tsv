@@ -1307,3 +1307,5 @@ packages/flutter/test/painting/gradient_test.dart	934	SweepGradient withOpacity(
 packages/flutter/test/painting/gradient_test.dart	954	SweepGradient.scale preserves transform	paired-match	upstream-sweep-gradients.md#box-relative-descriptor
 packages/flutter/test/painting/gradient_test.dart	982	Gradient lerp test (with RadialGradient)	paired-match	upstream-radial-gradients.md#generic-interpolation-and-stop-validation
 packages/flutter/test/painting/gradient_test.dart	1026	Gradients can handle missing stops and report mismatched stops	paired-match	upstream-radial-gradients.md#generic-interpolation-and-stop-validation
+packages/flutter/test/widgets/focus_manager_test.dart	2107	FocusManager.addEarlyKeyEventHandler works	partial-match	upstream-focus-key-stages.md
+packages/flutter/test/widgets/focus_manager_test.dart	2186	FocusManager.addLateKeyEventHandler works	partial-match	upstream-focus-key-stages.md
