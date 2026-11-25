@@ -190,6 +190,8 @@ impl MobileEngine {
             && window.surface.take().is_some()
         {
             self.application
+                .invalidate_applied_window_system_ui_overlay_style(window.id);
+            self.application
                 .handle_window_event(WindowEvent::lifecycle(window.id, WindowLifecycle::Hidden));
         }
     }
@@ -445,6 +447,8 @@ impl MobileEngine {
         let metrics = WindowMetrics::new(size, scale);
         window.surface = Some(HostSurface::new(window.id, renderer, metrics));
         let id = window.id;
+        self.application
+            .invalidate_applied_window_system_ui_overlay_style(id);
         self.application
             .handle_window_event(WindowEvent::lifecycle(id, WindowLifecycle::Visible));
         self.metrics = metrics;

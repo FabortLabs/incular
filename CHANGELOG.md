@@ -162,6 +162,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-mobile`: invalidate the system bar style delivery cache when
+  the host surface detaches or is replaced, so equal styles can be resent.
+
 - `incular-core`: a failing dependency observer no longer prevents other
   live observers from being notified. Callers can collect the original
   panic payloads instead of resuming the first failure after delivery.

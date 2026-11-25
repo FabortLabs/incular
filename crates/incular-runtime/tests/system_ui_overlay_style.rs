@@ -74,3 +74,38 @@ fn the_imperative_setter_is_drained_once_and_an_annotation_overrides_it() {
         Some(SystemUiOverlayStyle::LIGHT)
     );
 }
+
+#[test]
+fn detached_host_can_receive_the_same_style_again() {
+    use incular_runtime::Application;
+    let mut app = Application::new(|_| SizedBox::expand().into()).expect("application");
+    let id = app.primary_window();
+    let style = SystemUiOverlayStyle::default();
+
+    app.set_window_system_ui_overlay_style(id, style);
+    assert_eq!(app.take_window_system_ui_overlay_style(id), Some(style));
+    app.set_window_system_ui_overlay_style(id, style);
+    assert_eq!(app.take_window_system_ui_overlay_style(id), None);
+
+    app.invalidate_applied_window_system_ui_overlay_style(id);
+    assert_eq!(app.take_window_system_ui_overlay_style(id), None);
+    app.set_window_system_ui_overlay_style(id, style);
+    assert_eq!(app.take_window_system_ui_overlay_style(id), Some(style));
+    assert_eq!(app.take_window_system_ui_overlay_style(id), None);
+}
+
+#[test]
+fn invalidating_the_host_preserves_the_latest_pending_request() {
+    use incular_runtime::Application;
+    let mut app = Application::new(|_| SizedBox::expand().into()).expect("application");
+    let id = app.primary_window();
+    let light = SystemUiOverlayStyle::LIGHT;
+    app.set_window_system_ui_overlay_style(id, light);
+    assert_eq!(app.take_window_system_ui_overlay_style(id), Some(light));
+
+    app.set_window_system_ui_overlay_style(id, SystemUiOverlayStyle::DARK);
+    app.set_window_system_ui_overlay_style(id, light);
+    app.invalidate_applied_window_system_ui_overlay_style(id);
+    assert_eq!(app.take_window_system_ui_overlay_style(id), Some(light));
+    assert_eq!(app.take_window_system_ui_overlay_style(id), None);
+}

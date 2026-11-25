@@ -1558,6 +1558,15 @@ impl Application {
         .flatten()
     }
 
+    /// Forgets the style delivered to a detached or replaced native host.
+    /// The next matching request is delivered again, without discarding a
+    /// style that is already pending.
+    pub fn invalidate_applied_window_system_ui_overlay_style(&mut self, window_id: WindowId) {
+        let _ = self.with_window_mut(window_id, |record| {
+            record.runtime.system_ui_overlay_style_applied = None;
+        });
+    }
+
     /// Drains the platform view commands of one native window.
     pub fn take_window_platform_view_commands(
         &mut self,
