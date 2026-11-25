@@ -1369,6 +1369,24 @@ impl Runtime {
         }
     }
 
+    /// Handles a wheel sample from a host that can perform a default scroll
+    /// when none of the retained listeners or viewports claims the event.
+    pub fn handle_wheel_with_platform_response(
+        &mut self,
+        position: Offset,
+        delta: Offset,
+        respond: impl FnOnce(bool),
+    ) -> bool {
+        let activity = self.tree.scroll_at_with_platform_response(
+            position,
+            delta,
+            self.keyboard_modifiers.shift(),
+            respond,
+        );
+        self.frame_requested |= activity;
+        activity
+    }
+
     fn handle_input_inner(&mut self, event: InputEvent) -> Option<EventTarget> {
         let (pointer, device, kind, buttons, button, sample, phase, position, metadata_rich) =
             match event {

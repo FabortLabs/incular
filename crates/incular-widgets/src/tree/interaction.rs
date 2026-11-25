@@ -3612,6 +3612,33 @@ impl WidgetTree {
         delta: Offset,
         flip_axes: bool,
     ) -> bool {
+        let (claimed, observed) = self.route_pointer_scroll(point, delta, flip_axes);
+        claimed || observed
+    }
+
+    /// Dispatches a wheel event and allows the host's default action if
+    /// neither a listener nor a scroll view claims it. A listener observing
+    /// the event without registering does not suppress the host fallback.
+    pub fn scroll_at_with_platform_response(
+        &mut self,
+        point: Offset,
+        delta: Offset,
+        flip_axes: bool,
+        respond: impl FnOnce(bool),
+    ) -> bool {
+        let (claimed, observed) = self.route_pointer_scroll(point, delta, flip_axes);
+        if !claimed {
+            respond(true);
+        }
+        claimed || observed
+    }
+
+    fn route_pointer_scroll(
+        &mut self,
+        point: Offset,
+        delta: Offset,
+        flip_axes: bool,
+    ) -> (bool, bool) {
         // Flutter dispatches the `PointerScrollEvent` to every listener on
         // the hit path; scrollables then claim it through the resolver.
         crate::raw_input::PointerSignalResolver::begin();
@@ -3635,10 +3662,10 @@ impl WidgetTree {
             };
             if listener_wins {
                 callback();
-                return true;
+                return (true, signaled);
             }
         }
-        self.scroll_viewports_at(point, delta) || signaled
+        (self.scroll_viewports_at(point, delta), signaled)
     }
 
     /// Whether `ancestor` is a strict ancestor of `element`.

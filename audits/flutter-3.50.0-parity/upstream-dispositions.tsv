@@ -884,3 +884,8 @@ packages/flutter/test/gestures/velocity_tracker_test.dart	196	Assume zero veloci
 packages/flutter/test/gestures/velocity_tracker_test.dart	38	Velocity tracker gives expected results	paired-match	upstream-geometry-input-gestures.md#recorded-drag-velocity-and-scratch-allocation
 packages/flutter/test/gestures/drag_test.dart	1519	Synthesized pointer events are ignored for velocity tracking	paired-match	gesture-comparisons.md#synthesized-horizontal-drag-and-quick-flicks
 packages/flutter/test/gestures/drag_test.dart	1567	Quick flicks have velocity	paired-match	gesture-comparisons.md#synthesized-horizontal-drag-and-quick-flicks
+packages/flutter/test/gestures/pointer_signal_resolver_test.dart	40	Resolving with no entries should be a no-op	paired-match	upstream-pointer-signal-resolution.md
+packages/flutter/test/gestures/pointer_signal_resolver_test.dart	45	Resolving with no entries should notify engine of no-op	paired-match	upstream-pointer-signal-resolution.md
+packages/flutter/test/gestures/pointer_signal_resolver_test.dart	61	First entry should always win	paired-match	upstream-pointer-signal-resolution.md
+packages/flutter/test/gestures/pointer_signal_resolver_test.dart	70	Re-use after resolve should work	paired-match	upstream-pointer-signal-resolution.md
+packages/flutter/test/gestures/pointer_signal_resolver_test.dart	86	works with transformed events	partial-match	upstream-pointer-signal-resolution.md

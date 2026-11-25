@@ -102,3 +102,100 @@ fn register_outside_a_dispatch_runs_right_away() {
     PointerSignalResolver::register(&event, move |_| flag.set(true));
     assert!(ran.get());
 }
+
+#[test]
+fn no_registration_is_a_noop_and_allows_platform_default() {
+    let mut tree = mount(content());
+    let mut responses = Vec::new();
+    assert!(!tree.scroll_at(Offset::new(50., 50.), Offset::new(0., 40.)));
+    assert!(!tree.scroll_at_with_platform_response(
+        Offset::new(50., 50.),
+        Offset::new(0., 40.),
+        false,
+        |allowed| responses.push(allowed),
+    ));
+    assert_eq!(responses, [true]);
+}
+
+#[test]
+fn observation_alone_does_not_suppress_platform_default() {
+    let observed = Rc::new(Cell::new(0));
+    let mut tree = mount(
+        Listener::new(content())
+            .on_pointer_signal({
+                let observed = observed.clone();
+                move |_| observed.set(observed.get() + 1)
+            })
+            .into(),
+    );
+    let mut responded = false;
+    assert!(tree.scroll_at_with_platform_response(
+        Offset::new(50., 50.),
+        Offset::new(0., 40.),
+        false,
+        |allowed| {
+            assert_eq!(observed.get(), 1);
+            responded = allowed;
+        },
+    ));
+    assert!(responded);
+}
+
+#[test]
+fn first_registration_receives_its_event_once_and_resolver_can_be_reused() {
+    let received = Rc::new(std::cell::RefCell::new(Vec::new()));
+    let inner = Listener::new(content()).on_pointer_signal({
+        let received = received.clone();
+        move |event| {
+            let received = received.clone();
+            PointerSignalResolver::register(&event, move |winning| {
+                assert_eq!(winning, event);
+                received.borrow_mut().push(winning.scroll_delta);
+            });
+        }
+    });
+    let outer = Listener::new(inner).on_pointer_signal(|event| {
+        PointerSignalResolver::register(&event, |_| panic!("second registration won"));
+    });
+    let mut tree = mount(outer.into());
+    for dy in [40., -20.] {
+        assert!(tree.scroll_at_with_platform_response(
+            Offset::new(50., 50.),
+            Offset::new(0., dy),
+            false,
+            |_| panic!("claimed event notified platform default"),
+        ));
+    }
+    assert_eq!(
+        *received.borrow(),
+        [Offset::new(0., 40.), Offset::new(0., -20.)]
+    );
+}
+
+#[test]
+fn first_transformed_listener_keeps_its_own_local_coordinates() {
+    let received = Rc::new(Cell::new(None));
+    let inner = Listener::new(content()).on_pointer_signal({
+        let received = received.clone();
+        move |event| {
+            let received = received.clone();
+            PointerSignalResolver::register(&event, move |winning| {
+                received.set(Some((winning.position, winning.local_position)));
+            });
+        }
+    });
+    let outer = Listener::new(incular_widgets::Transform::new(
+        incular_core::Transform::translation(Offset::new(10., 20.)),
+        inner,
+    ))
+    .on_pointer_signal(|event| {
+        assert_eq!(event.local_position, Offset::new(50., 50.));
+        PointerSignalResolver::register(&event, |_| panic!("outer transformed event won"));
+    });
+    let mut tree = mount(outer.into());
+    assert!(tree.scroll_at(Offset::new(50., 50.), Offset::new(0., 40.)));
+    assert_eq!(
+        received.get(),
+        Some((Offset::new(50., 50.), Offset::new(40., 30.)))
+    );
+}

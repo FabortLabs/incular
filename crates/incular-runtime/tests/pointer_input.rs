@@ -716,3 +716,41 @@ fn button_hover_follows_content_scrolled_under_a_still_pointer() {
     frame(&mut application, &mut now);
     assert_eq!(*log.borrow(), [("enter", 0), ("exit", 0), ("enter", 1)]);
 }
+
+#[test]
+fn an_unclaimed_host_wheel_signals_platform_fallback() {
+    use incular_runtime::Runtime;
+    use incular_widgets::PointerSignalResolver;
+
+    let point = Offset::new(20.0, 20.0);
+    let delta = Offset::new(0.0, 15.0);
+    let leaf = || Widget::box_(Size::new(60.0, 40.0), Color::WHITE);
+    let mut runtime = Runtime::new(leaf()).unwrap();
+    runtime
+        .run_frame(Constraints::tight(Size::new(60.0, 40.0)))
+        .unwrap();
+    let mut replies = Vec::new();
+    assert!(
+        !runtime.handle_wheel_with_platform_response(point, delta, |allowed| replies.push(allowed))
+    );
+    assert_eq!(replies, [true]);
+
+    let winner = Rc::new(Cell::new(false));
+    let root = Listener::new(leaf()).on_pointer_signal({
+        let winner = winner.clone();
+        move |event| {
+            let winner = winner.clone();
+            PointerSignalResolver::register(&event, move |_| winner.set(true));
+        }
+    });
+    let mut runtime = Runtime::new(root.into()).unwrap();
+    runtime
+        .run_frame(Constraints::tight(Size::new(60.0, 40.0)))
+        .unwrap();
+    assert!(
+        runtime.handle_wheel_with_platform_response(point, delta, |_| panic!(
+            "claimed event used platform fallback"
+        ))
+    );
+    assert!(winner.get());
+}

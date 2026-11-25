@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-runtime`: wheel hosts can be notified when no retained
+  listener or viewport claims a pointer signal.
+
 - `incular-runtime`: dispatch timestamped raw pointer samples without
   dropping synthesized motion metadata before scale recognition.
 
