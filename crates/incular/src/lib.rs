@@ -170,9 +170,9 @@ pub mod prelude {
     pub use incular_rendering::{
         BackdropKey, BlendMode, Border as RenderBorder, Brush, Canvas, ColorFilter, ColorMatrix,
         CornerRadii, Decoration, DisplayList, DropShadowEffect, Effect, EffectChain, FillRule,
-        FilterQuality, GaussianBlur, GradientId, GradientStop, GradientStops, ImageSampling,
-        LineCap, LineJoin, LinearGradient, Paint, PaintStyle, Path, PathBuilder, PathId, RRect,
-        RadialGradient, Shader, Shadow, Stroke, SweepGradient, blend_premultiplied,
+        FilterQuality, GaussianBlur, GradientId, GradientStop, GradientStops, GradientStopsError,
+        ImageSampling, LineCap, LineJoin, LinearGradient, Paint, PaintStyle, Path, PathBuilder,
+        PathId, RRect, RadialGradient, Shader, Shadow, Stroke, SweepGradient, blend_premultiplied,
     };
     /// `localStorage` persistence, the browser default for restoration.
     #[cfg(target_arch = "wasm32")]

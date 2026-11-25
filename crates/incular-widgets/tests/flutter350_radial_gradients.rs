@@ -1,6 +1,8 @@
 use incular_config::{Alignment, AlignmentDirectional, Constraints, TextDirection};
 use incular_core::{Color, Lerp, Offset, Rect, Size};
-use incular_rendering::{Brush, GradientStop, GradientStops, PaintCommand, TileMode};
+use incular_rendering::{
+    Brush, GradientStop, GradientStops, GradientStopsError, PaintCommand, TileMode,
+};
 use incular_widgets::{
     BoxDecoration, BoxLinearGradient, BoxRadialGradient, DecoratedBox, SizedBox,
     internal::{TreeError, WidgetTree},
@@ -259,4 +261,84 @@ fn crossing_gradient_kinds_fades_to_transparent_and_paints_radial_geometry() {
     tree.layout(Constraints::tight(frame)).unwrap();
     let paint = tree.paint();
     assert!(paint.commands().iter().any(|c| matches!(c, PaintCommand::RRect {brush:Brush::RadialGradient(shader),..} if shader.center==Offset::new(50.,30.) && shader.radius==1200. && shader.stops.as_slice()[0].color.alpha==0)));
+}
+
+#[test]
+fn generic_radial_lerp_keeps_each_endpoint_and_the_same_midpoint_in_reverse() {
+    let a = BoxDecoration::new().aligned_radial_gradient(
+        BoxRadialGradient::new(stops(&[(0., 0x33), (1., 0x66)]))
+            .center(Alignment::TOP_LEFT)
+            .radius(20.),
+    );
+    let b = BoxDecoration::new().aligned_radial_gradient(
+        BoxRadialGradient::new(stops(&[(0., 0x44), (1., 0x88)]))
+            .center(Alignment::TOP_RIGHT)
+            .radius(10.),
+    );
+    for (start, end) in [(&a, &b), (&b, &a)] {
+        assert_eq!(&start.lerp(end, 0.), start);
+        assert_eq!(&start.lerp(end, 1.), end);
+        let midpoint = start.lerp(end, 0.5);
+        let radial = midpoint.aligned_radial_gradient.as_ref().unwrap();
+        assert_eq!(radial.center, Alignment::TOP_CENTER.into());
+        assert_eq!(radial.radius, 15.);
+        validate(radial, &[0., 1.], &[0x3b, 0x77]);
+    }
+}
+
+#[test]
+fn mismatched_positions_are_rejected_and_implied_positions_reach_each_shader() {
+    let colors = [gray(0x11), gray(0x22), gray(0x33)];
+    assert_eq!(
+        GradientStops::from_colors(&colors, Some(&[0., 1.])),
+        Err(GradientStopsError::LengthMismatch {
+            colors: 3,
+            stops: 2
+        })
+    );
+    let implied = GradientStops::from_colors(&colors, None).unwrap();
+    let rect = Rect::from_origin_size(Offset::new(1., 2.), Size::new(3., 4.));
+    let linear = BoxLinearGradient::new(
+        Alignment::CENTER_LEFT,
+        Alignment::CENTER_RIGHT,
+        implied.clone(),
+    )
+    .create_shader(rect, None)
+    .unwrap();
+    let radial = BoxRadialGradient::new(implied)
+        .create_shader(rect, None)
+        .unwrap();
+    let expected = [
+        GradientStop {
+            offset: 0.,
+            color: colors[0],
+        },
+        GradientStop {
+            offset: 0.5,
+            color: colors[1],
+        },
+        GradientStop {
+            offset: 1.,
+            color: colors[2],
+        },
+    ];
+    assert_eq!(linear.stops.as_slice(), expected);
+    assert_eq!(radial.stops.as_slice(), expected);
+    assert_eq!(linear.start, Offset::new(1., 4.));
+    assert_eq!(linear.end, Offset::new(4., 4.));
+    assert_eq!(radial.center, Offset::new(2.5, 4.));
+    assert_eq!(radial.radius, 1.5);
+    assert_eq!(
+        GradientStops::from_colors(&colors[..1], None),
+        Err(GradientStopsError::TooFewColors { colors: 1 })
+    );
+    let custom = GradientStops::from_colors(&colors, Some(&[0.05, 0.7, 0.95])).unwrap();
+    assert_eq!(
+        custom
+            .as_slice()
+            .iter()
+            .map(|stop| stop.offset)
+            .collect::<Vec<_>>(),
+        [0.05, 0.7, 0.95]
+    );
 }

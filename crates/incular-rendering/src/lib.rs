@@ -35,9 +35,9 @@ pub use effects::{
 pub use geometry::{CornerRadii, RRect};
 pub use glyphs::{GlyphPosition, GlyphRun};
 pub use gradients::{
-    Brush, FilterQuality, GradientId, GradientStop, GradientStops, LinearGradient, RadialGradient,
-    Shader, SweepGradient, TileMode, linear_gradient_t, radial_gradient_t, sample_gradient_stops,
-    sweep_gradient_t, two_point_conical_gradient_t,
+    Brush, FilterQuality, GradientId, GradientStop, GradientStops, GradientStopsError, LinearGradient,
+    RadialGradient, Shader, SweepGradient, TileMode, linear_gradient_t, radial_gradient_t,
+    sample_gradient_stops, sweep_gradient_t, two_point_conical_gradient_t,
 };
 pub use paint::{
     Border, Decoration, FillRule, LineCap, LineJoin, Paint, PaintStyle, Shadow, Stroke,

@@ -1305,3 +1305,5 @@ packages/flutter/test/painting/gradient_test.dart	895	SweepGradient scale test)	
 packages/flutter/test/painting/gradient_test.dart	916	SweepGradient withOpacity test	paired-match	upstream-sweep-gradients.md#box-relative-descriptor
 packages/flutter/test/painting/gradient_test.dart	934	SweepGradient withOpacity() preserves transform	paired-match	upstream-sweep-gradients.md#box-relative-descriptor
 packages/flutter/test/painting/gradient_test.dart	954	SweepGradient.scale preserves transform	paired-match	upstream-sweep-gradients.md#box-relative-descriptor
+packages/flutter/test/painting/gradient_test.dart	982	Gradient lerp test (with RadialGradient)	paired-match	upstream-radial-gradients.md#generic-interpolation-and-stop-validation
+packages/flutter/test/painting/gradient_test.dart	1026	Gradients can handle missing stops and report mismatched stops	paired-match	upstream-radial-gradients.md#generic-interpolation-and-stop-validation

@@ -23,3 +23,15 @@ on a 100×60 box. No renderer change is required for this tranche.
 The pinned radial identity registration :536 is partial: the Rust
 value retains the same GPU stop identity and missing/missing stays
 absent, rather than guaranteeing Dart heap-object identity.
+
+## Generic interpolation and stop validation
+
+Pinned :982 and :1026 passed by exact name. The native radial tests
+verify that generic decoration interpolation returns each exact endpoint
+and produces the same center, radius, and stop values in reverse at
+the midpoint. For linear and radial shaders at the original non-origin
+rectangle, three colors imply the positions 0, 0.5, and 1. A two-stop
+list for three colors is rejected up front by the typed Rust
+`GradientStops::from_colors` entry point before producing a shader,
+rather than during shader creation as in Dart. The lower-level,
+permissive Rust constructors still accept already-paired stops.

@@ -29,6 +29,36 @@ impl PartialEq for GradientStops {
     }
 }
 
+/// Invalid colors and stop positions supplied separately for a gradient.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GradientStopsError {
+    /// Computing implied stops requires at least two colors.
+    TooFewColors { colors: usize },
+    /// An explicit stop must be supplied for each color.
+    LengthMismatch { colors: usize, stops: usize },
+}
+
+impl std::fmt::Display for GradientStopsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            Self::TooFewColors { colors } => {
+                write!(
+                    f,
+                    "implied gradient stops need at least two colors (got {colors})"
+                )
+            }
+            Self::LengthMismatch { colors, stops } => {
+                write!(
+                    f,
+                    "gradient colors and stops must have equal length (got {colors} colors and {stops} stops)"
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for GradientStopsError {}
+
 /// Samples normalized stops using pad spread and premultiplied interpolation
 /// in the encoded-sRGB working space (see [`crate::working_rgba`]). At a duplicate offset the last duplicate wins, allowing a
 /// hard transition without division by zero.
@@ -117,6 +147,35 @@ impl GradientStops {
             stops: stops.into(),
         }
     }
+    /// Pairs colors with optional stop positions, rejecting a mismatched list.
+    /// If the positions are absent, colors are distributed evenly over the unit interval.
+    pub fn from_colors(
+        colors: &[Color],
+        positions: Option<&[f32]>,
+    ) -> Result<Self, GradientStopsError> {
+        if let Some(positions) = positions {
+            if colors.len() != positions.len() {
+                return Err(GradientStopsError::LengthMismatch {
+                    colors: colors.len(),
+                    stops: positions.len(),
+                });
+            }
+            Ok(Self::new(
+                colors
+                    .iter()
+                    .zip(positions)
+                    .map(|(&color, &offset)| GradientStop { offset, color })
+                    .collect(),
+            ))
+        } else if colors.len() < 2 {
+            Err(GradientStopsError::TooFewColors {
+                colors: colors.len(),
+            })
+        } else {
+            Ok(Self::even(colors))
+        }
+    }
+
     /// Builds implied stops spaced evenly across the unit interval.
     #[must_use]
     pub fn even(colors: &[Color]) -> Self {
