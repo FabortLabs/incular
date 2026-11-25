@@ -25,6 +25,12 @@ struct TapRegistration<'a> {
     consume_outside_taps: bool,
 }
 
+#[derive(Default)]
+struct TapRegionDelivery {
+    consumed_by: Option<ElementId>,
+    notified: bool,
+}
+
 impl WidgetTree {
     pub(super) fn dispatch_raw_trackpad_gesture(&self, position: Offset, event: TrackpadGesture) {
         for callback in self
@@ -682,10 +688,11 @@ impl WidgetTree {
     }
 
     fn tap_region_registrations(&self, surface: ElementId) -> Vec<TapRegistration<'_>> {
-        self.elements
+        self.tracked
+            .tap_regions
             .iter()
-            .filter_map(|(raw, element)| {
-                let id = ElementId(raw);
+            .filter_map(|&id| {
+                let element = self.elements.get(id.0)?;
                 let WidgetKind::RawInput { kind, .. } = element.widget.kind() else {
                     return None;
                 };
@@ -742,11 +749,9 @@ impl WidgetTree {
     }
 
     fn dispatch_tap_regions(&self, event: RawPointerEvent, hit: &[ElementId]) -> Option<ElementId> {
-        let down = match event.phase {
-            PointerPhase::Down => true,
-            PointerPhase::Up => false,
-            _ => return None,
-        };
+        if !matches!(event.phase, PointerPhase::Down | PointerPhase::Up) {
+            return None;
+        }
         // TapRegion is an ordinary primary-tap boundary, not a raw all-button
         // listener. Secondary/middle/extra transitions stay available through
         // Listener/RawGestureDetector and context-menu APIs without becoming a
@@ -762,48 +767,102 @@ impl WidgetTree {
                 Some(RawInputKind::TapRegionSurface)
             )
         }) {
-            let registrations = self.tap_region_registrations(surface);
-            if registrations.is_empty() {
-                continue;
-            }
-            let hit_groups = registrations
-                .iter()
-                .filter(|registration| hit.contains(&registration.id))
-                .filter_map(|registration| registration.group_id)
-                .collect::<Vec<_>>();
-            // Match the surface's callback order for each phase: outside
-            // listeners run first, then inside listeners (including groups),
-            // and only a down can claim the gesture arena afterward.
-            for registration in registrations.iter().filter(|registration| {
-                registration.report_outside && !is_inside_tap_region(registration, hit, &hit_groups)
-            }) {
-                let callback = if down {
-                    &registration.callbacks.on_tap_outside
-                } else {
-                    &registration.callbacks.on_tap_up_outside
-                };
-                if let Some(callback) = callback {
-                    callback(event);
-                }
-                if down && consumed.is_none() && registration.consume_outside_taps {
-                    consumed = Some(registration.id);
-                }
-            }
-            for registration in registrations
-                .iter()
-                .filter(|registration| is_inside_tap_region(registration, hit, &hit_groups))
-            {
-                let callback = if down {
-                    &registration.callbacks.on_tap_inside
-                } else {
-                    &registration.callbacks.on_tap_up_inside
-                };
-                if let Some(callback) = callback {
-                    callback(event);
-                }
-            }
+            let delivery = self.notify_tap_region_surface(surface, hit, event, true);
+            consumed = consumed.or(delivery.consumed_by);
         }
         consumed
+    }
+
+    /// Mirrors the surface's accessibility listener. The notification is
+    /// not an input stream: it cannot start gestures, reach pointer listeners,
+    /// or consume the actual semantic action.
+    #[doc(hidden)]
+    pub fn notify_tap_regions_of_semantic_action(&self, bounds: Rect, time: Instant) -> bool {
+        if self.tracked.tap_regions.is_empty() {
+            return false;
+        }
+        let position = Offset::new(
+            bounds.origin.x + bounds.size.width * 0.5,
+            bounds.origin.y + bounds.size.height * 0.5,
+        );
+        let event = RawPointerEvent::new(
+            0,
+            0,
+            PointerDeviceKind::Touch,
+            incular_core::PRIMARY_POINTER_BUTTON,
+            position,
+            PointerPhase::Down,
+            time,
+        )
+        .with_button(Some(incular_core::PRIMARY_POINTER_BUTTON));
+        let mut notified = false;
+        for &surface in &self.tracked.tap_region_surfaces {
+            // Each surface listens independently. Start at that subtree,
+            // not at the window hit route (an overlapping sibling may
+            // otherwise drop the surface).
+            if let Some(hit) = self.raw_hit_elements_within(surface, position)
+                && hit.contains(&surface)
+            {
+                notified |= self
+                    .notify_tap_region_surface(surface, &hit, event, false)
+                    .notified;
+            }
+        }
+        notified
+    }
+
+    fn notify_tap_region_surface(
+        &self,
+        surface: ElementId,
+        hit: &[ElementId],
+        event: RawPointerEvent,
+        can_consume: bool,
+    ) -> TapRegionDelivery {
+        let down = event.phase == PointerPhase::Down;
+        let registrations = self.tap_region_registrations(surface);
+        let hit_groups = registrations
+            .iter()
+            .filter(|registration| hit.contains(&registration.id))
+            .filter_map(|registration| registration.group_id)
+            .collect::<Vec<_>>();
+        let mut delivery = TapRegionDelivery::default();
+        // Flutter reports outside before inside in each phase, including
+        // when a point's hit counts as inside for an entire group.
+        for registration in registrations.iter().filter(|registration| {
+            registration.report_outside && !is_inside_tap_region(registration, hit, &hit_groups)
+        }) {
+            let callback = if down {
+                &registration.callbacks.on_tap_outside
+            } else {
+                &registration.callbacks.on_tap_up_outside
+            };
+            if let Some(callback) = callback {
+                callback(event);
+                delivery.notified = true;
+            }
+            if down
+                && can_consume
+                && delivery.consumed_by.is_none()
+                && registration.consume_outside_taps
+            {
+                delivery.consumed_by = Some(registration.id);
+            }
+        }
+        for registration in registrations
+            .iter()
+            .filter(|registration| is_inside_tap_region(registration, hit, &hit_groups))
+        {
+            let callback = if down {
+                &registration.callbacks.on_tap_inside
+            } else {
+                &registration.callbacks.on_tap_up_inside
+            };
+            if let Some(callback) = callback {
+                callback(event);
+                delivery.notified = true;
+            }
+        }
+        delivery
     }
 
     fn raw_gesture_elements(&self, hit: &[ElementId]) -> Vec<ElementId> {

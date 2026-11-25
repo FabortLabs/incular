@@ -366,6 +366,36 @@ impl WidgetTree {
             .elements
     }
 
+    /// Hit-tests a single render subtree in its own coordinates. Unlike a
+    /// window-wide hit test, an overlapping sibling cannot drop this root.
+    pub(super) fn raw_hit_elements_within(
+        &self,
+        root: ElementId,
+        point: Offset,
+    ) -> Option<Vec<ElementId>> {
+        let render = self.render_id(root)?;
+        let node = self.renders.get(render.0)?;
+        let local = self
+            .render_world_transform(render)
+            .inverse_transform_point(point)?;
+        if !Rect::from_origin_size(Offset::ZERO, node.size).contains(local) {
+            return None;
+        }
+        // The point is already relative to this node's origin, so
+        // cancel the layout offset the subtree traversal would add.
+        Some(
+            self.collect_pointer_hit_render(
+                render,
+                local,
+                Offset::ZERO - node.offset,
+                false,
+                false,
+            )
+            .0
+            .elements,
+        )
+    }
+
     /// Collects the raw annotations under `point` and, while `want_target`
     /// holds, the retained target in the same visit. The target is exactly
     /// what [`Self::hit_test_render`] returns for this subtree: where the raw

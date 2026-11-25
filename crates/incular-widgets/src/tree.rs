@@ -1573,6 +1573,10 @@ struct TrackedElements {
     platform_views: BTreeSet<ElementId>,
     /// Buttons with bound actions, visited when the runtime prunes callbacks.
     action_owners: BTreeSet<ElementId>,
+    /// Tap surfaces observe semantic actions in their own render subtree.
+    tap_region_surfaces: BTreeSet<ElementId>,
+    /// Enabled tap regions, shared by the raw and semantic dispatch paths.
+    tap_regions: BTreeSet<ElementId>,
     /// Elements currently holding scroll-notification subscriptions.
     notification_subscribers: BTreeSet<ElementId>,
     /// Listener callbacks, source controllers or retained ancestry changed
@@ -1701,6 +1705,19 @@ impl TrackedElements {
                 matches!(kind, WidgetKind::Button(spec) if spec.action.0 != 0
                     || spec.hover_action.0 != 0 || spec.exit_action.0 != 0),
             ),
+            (
+                &mut self.tap_region_surfaces,
+                matches!(kind, WidgetKind::RawInput { kind, .. }
+                    if matches!(&**kind, RawInputKind::TapRegionSurface)),
+            ),
+            (
+                &mut self.tap_regions,
+                matches!(kind, WidgetKind::RawInput { kind, .. } if matches!(
+                    &**kind,
+                    RawInputKind::TapRegion { enabled: true, .. }
+                        | RawInputKind::TextFieldTapRegion { enabled: true, .. }
+                )),
+            ),
         ];
         let mut tracked = 0_u16;
         for (bit, (set, member)) in membership.into_iter().enumerate() {
@@ -1749,6 +1766,8 @@ impl TrackedElements {
                 &mut self.sibling_blockers,
                 &mut self.platform_views,
                 &mut self.action_owners,
+                &mut self.tap_region_surfaces,
+                &mut self.tap_regions,
             ] {
                 set.remove(&id);
             }

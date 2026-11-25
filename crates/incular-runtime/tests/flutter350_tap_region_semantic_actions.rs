@@ -1,13 +1,16 @@
 //! Accessibility actions must notify outside TapRegions, independently of real pointer input.
 use incular_config::Constraints;
-use incular_core::{Color, Size};
+use incular_core::{Color, Offset, PointerPhase, Size};
 use incular_runtime::Runtime;
 use incular_semantics::SemanticAction;
 use incular_widgets::{
-    Directionality, Row, Semantics, SizedBox, TapRegion, TapRegionSurface, Text, TextDirection,
-    Widget,
+    Directionality, HitTestBehavior, Listener, Row, Semantics, SizedBox, TapRegion,
+    TapRegionSurface, Text, TextDirection, Widget,
 };
-use std::{cell::Cell, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
 
 const OUTSIDE: &str = "Outside";
 const INSIDE: &str = "Inside";
@@ -79,4 +82,74 @@ fn actionable_control_still_invokes_target_and_outside_region() {
     let actual = [SemanticAction::Activate, SemanticAction::LongPress]
         .map(|action| perform(action, false, true));
     assert_eq!(actual, [(1, 1), (1, 1)]);
+}
+
+#[test]
+fn semantic_notifications_are_down_only_ordered_and_cannot_consume_the_target_action() {
+    for action in [SemanticAction::Activate, SemanticAction::LongPress] {
+        let trace = Rc::new(RefCell::new(Vec::new()));
+        let point = Rc::new(Cell::new(None));
+        let entry = |name| {
+            let trace = Rc::clone(&trace);
+            move || trace.borrow_mut().push(name)
+        };
+        let box_widget = || Widget::box_(Size::new(100., 50.), Color::WHITE);
+        let target = Semantics::new(box_widget()).label("action target");
+        let target = match action {
+            SemanticAction::Activate => target.on_tap(entry("target")),
+            SemanticAction::LongPress => target.on_long_press(entry("target")),
+            _ => unreachable!(),
+        };
+        let a = TapRegion::new(box_widget())
+            .consume_outside_taps(true)
+            .on_tap_outside({
+                let point = Rc::clone(&point);
+                let mark = entry("A.outside");
+                move |event| {
+                    assert_eq!(event.phase, PointerPhase::Down);
+                    point.set(Some(event.position));
+                    mark();
+                }
+            })
+            .on_tap_up_outside({
+                let mark = entry("unexpected up");
+                move |_| mark()
+            });
+        let b = TapRegion::new(target)
+            .behavior(HitTestBehavior::Opaque)
+            .on_tap_inside({
+                let mark = entry("B.inside");
+                move |_| mark()
+            });
+        let listener = Listener::new(TapRegionSurface::new(Row::new([
+            Widget::from(a),
+            Widget::from(b),
+        ])))
+        .on_pointer_down({
+            let mark = entry("unexpected raw down");
+            move |_| mark()
+        });
+        let scene = Directionality::new(TextDirection::Ltr, listener);
+        let mut runtime = Runtime::new(scene.into()).unwrap();
+        runtime
+            .run_frame(Constraints::tight(Size::new(800., 600.)))
+            .unwrap();
+        let (id, bounds) = runtime
+            .tree()
+            .semantics()
+            .iter()
+            .find_map(|(id, node)| {
+                (node.label.as_deref() == Some("action target")).then_some((id, node.bounds))
+            })
+            .expect("real mounted target");
+        assert!(runtime.dispatch_semantic_action(id, action));
+        assert_eq!(&*trace.borrow(), &["A.outside", "B.inside", "target"]);
+        assert_eq!(
+            point.get(),
+            Some(Offset::new(
+                bounds.origin.x + bounds.size.width * 0.5,
+                bounds.origin.y + bounds.size.height * 0.5,
+            ))
+        );
+    }
 }

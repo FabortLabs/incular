@@ -919,6 +919,14 @@ impl Runtime {
         node: SemanticNodeId,
         action: SemanticAction,
     ) -> bool {
+        if matches!(action, SemanticAction::Activate | SemanticAction::LongPress)
+            && let Some(bounds) = self.tree.semantics().node(node).map(|node| node.bounds)
+        {
+            let notified = self
+                .tree
+                .notify_tap_regions_of_semantic_action(bounds, self.input_now());
+            self.frame_requested |= notified;
+        }
         let Some(element) = self.tree.element_for_semantic_node(node) else {
             return false;
         };
