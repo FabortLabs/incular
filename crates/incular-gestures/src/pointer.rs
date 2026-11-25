@@ -302,6 +302,34 @@ impl PointerGestureRecognizer {
         let action = self.sole_drag_axis()?;
         Some(self.begin_drag(down, action, &down, DragStartBehavior::Down))
     }
+    /// Resolves the sole local axis drag after its sibling tap lost the
+    /// press. The host must call this only when there is no competing
+    /// member outside this combined recognizer.
+    #[doc(hidden)]
+    pub fn accept_remaining_axis_after_tap_loss(
+        &mut self,
+        event: &PointerEvent,
+    ) -> Option<GestureAction> {
+        if event.phase != PointerPhase::Move
+            || self.pan_started
+            || self.delayed_drag.is_some()
+            || !self.has_tap_callbacks()
+            || !self.tap_moved_beyond_slop
+            || self.has_long_press_callbacks()
+            || self.callbacks.on_double_tap.is_some()
+            || self.callbacks.on_double_tap_down.is_some()
+            || self.callbacks.on_double_tap_cancel.is_some()
+        {
+            return None;
+        }
+        let down = self.down.filter(|down| down.pointer == event.pointer)?;
+        let action = self.sole_drag_axis()?;
+        if matches!(action, PanAction::Pan) {
+            return None;
+        }
+        Some(self.begin_drag(down, action, event, self.callbacks.drag_start_behavior))
+    }
+
     /// Makes pans accept as Flutter's `ImmediateMultiDragGestureRecognizer`
     /// does, once the displacement from the press exceeds the hit slop
     /// (`kTouchSlop`, or `kPrecisePointerHitSlop` for mice), rather than when

@@ -1246,6 +1246,15 @@ impl WidgetTree {
             return None;
         }
         let dispositions = self.input.gesture_arena.entries(key);
+        // Flutter installs tap and monodrag as separate members. For a
+        // single detector that stores both locally, a losing tap can leave
+        // its axis drag as the default winner without passing axis slop.
+        // Don't bypass slop when a different detector or scroll chain
+        // still participates.
+        let can_resolve_local_default = event.phase == incular_core::PointerPhase::Move
+            && dispositions.len() == 1
+            && !self.input.scroll_brackets.contains_key(&key)
+            && !self.input.raw_gesture_streams.contains_key(&key);
         let mut accepts = Vec::new();
         let mut rejects = Vec::new();
         let mut callbacks = Vec::new();
@@ -1270,7 +1279,20 @@ impl WidgetTree {
                                 event.time,
                             )
                         };
-                        match recognizer.observe_raw(raw) {
+                        let mut decision = recognizer.observe_raw(raw);
+                        if can_resolve_local_default
+                            && !active.yields_taps
+                            && disposition == GestureDisposition::Pending
+                            && matches!(
+                                decision,
+                                GestureDecision::Pending | GestureDecision::Reject
+                            )
+                            && let Some(action) =
+                                recognizer.accept_remaining_axis_after_tap_loss(&event)
+                        {
+                            decision = GestureDecision::Accept(action);
+                        }
+                        match decision {
                             GestureDecision::Accept(action) => match disposition {
                                 GestureDisposition::Accepted => {
                                     callbacks.push((candidate.member, action))

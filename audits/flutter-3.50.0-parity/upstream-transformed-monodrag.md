@@ -7,7 +7,7 @@ rotated by 90° did not start its local horizontal drag on a 20px
 vertical movement. The unchanged C09 retained test now passes:
 20px starts the rotated and unrotated drags, while 17px does not.
 
-The pinned transformed-monodrag originals pair seven registrations:
+The pinned transformed-monodrag originals pair eight registrations:
 :15 and :380 check exact local/global coordinates and accumulated
 movement without a transform; :71, :177, :436 and :542 cover both
 axes under 2× and 0.5× scales; :283 covers a 45° horizontal drag.
@@ -27,6 +27,12 @@ that vector transforms remain independent of even large translations.
 Unit lengths for each transformed local axis are cached at pointer
 routing, avoiding two norms or inversions on every move.
 
-The pinned vertical 45° original at :648 also ran but is still
-open: it depends on winning by default when the competing tap
-rejects, not merely on applying the correct scale to its local axis.
+The pinned vertical 45° original at :648 also passes. The first
+diagonal move is nearly perpendicular to the local drag axis, but
+it rejects the sibling tap and leaves a sole axis recognizer. The
+retained Rust fixture proves the resulting start/end and the
+following local-axis update, alongside the below-slop cancel.
+An outer-detector control still awards its explicit claim on
+horizontal movement and does not let the inner fallback steal it.
+This default applies to a single combined detector with one axis
+recognizer, not to arbitrary multirecognizer or scroll chains.

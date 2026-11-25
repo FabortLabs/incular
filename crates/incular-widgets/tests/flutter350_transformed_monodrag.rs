@@ -222,3 +222,69 @@ fn rotated_horizontal_uses_global_length_of_the_local_axis() {
     assert!((two.update[0].primary_delta.unwrap() - 5.).abs() < 0.1);
     assert_eq!(inside.cancelled, 1, "the losing drag reports one cancel");
 }
+
+#[test]
+fn rotated_vertical_can_win_by_default_after_its_sibling_tap_loses() {
+    let affine = Affine::rotation(std::f32::consts::FRAC_PI_4);
+    let inside = drag(Axis::Vertical, affine, true, &[Offset::new(9., 9.)]);
+    check_down(&inside);
+    assert_eq!(inside.cancelled, 1);
+    assert!(inside.start.is_empty() && inside.update.is_empty() && inside.end.is_empty());
+
+    let two = drag(
+        Axis::Vertical,
+        affine,
+        true,
+        &[Offset::new(18., 18.), Offset::new(-4., 3.)],
+    );
+    check_down(&two);
+    assert_eq!(two.cancelled, 0);
+    assert_eq!(two.start.len(), 1);
+    assert_eq!(two.update.len(), 1);
+    assert_eq!(two.end.len(), 1);
+    close(
+        two.update[0].global_position,
+        Offset::new(414., 321.),
+        0.0001,
+    );
+    close(two.update[0].delta, Offset::new(0., 5.), 0.1);
+    assert!((two.update[0].primary_delta.unwrap() - 5.).abs() < 0.1);
+}
+
+#[test]
+fn a_lost_inner_tap_does_not_steal_the_outer_axis_drag() {
+    use std::cell::Cell;
+
+    let inner = Rc::new(Cell::new(0));
+    let outer = Rc::new(Cell::new(0));
+    let detector = GestureDetector::new(Widget::box_(Size::new(100., 150.), Color::WHITE))
+        .on_tap(|| {})
+        .on_vertical_drag_start({
+            let inner = inner.clone();
+            move |_| inner.set(inner.get() + 1)
+        });
+    let rotated = Transform::rotation(std::f32::consts::FRAC_PI_4, detector);
+    let outer_detector = GestureDetector::new(rotated).on_horizontal_drag_start({
+        let outer = outer.clone();
+        move |_| outer.set(outer.get() + 1)
+    });
+    let mut tree = WidgetTree::new();
+    tree.mount(Center::new(outer_detector).into()).unwrap();
+    tree.layout(Constraints::tight(Size::new(800., 600.)))
+        .unwrap();
+    let base = Instant::now();
+    let moved = ORIGIN + Offset::new(19., 19.);
+    for (phase, position, millis) in [
+        (PointerPhase::Down, ORIGIN, 0),
+        (PointerPhase::Move, moved, 10),
+        (PointerPhase::Up, moved, 20),
+    ] {
+        let _ = tree.dispatch_gesture(PointerEvent {
+            pointer: 1,
+            position,
+            phase,
+            time: base + Duration::from_millis(millis),
+        });
+    }
+    assert_eq!((inner.get(), outer.get()), (0, 1));
+}

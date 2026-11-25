@@ -1006,4 +1006,4 @@ packages/flutter/test/gestures/transformed_monodrag_test.dart	283	kTouchSlop is 
 packages/flutter/test/gestures/transformed_monodrag_test.dart	380	gets local coordinates	paired-match	upstream-transformed-monodrag.md
 packages/flutter/test/gestures/transformed_monodrag_test.dart	436	kTouchSlop is evaluated in the global coordinate space when scaled up	paired-match	upstream-transformed-monodrag.md
 packages/flutter/test/gestures/transformed_monodrag_test.dart	542	kTouchSlop is evaluated in the global coordinate space when scaled down	paired-match	upstream-transformed-monodrag.md
-packages/flutter/test/gestures/transformed_monodrag_test.dart	648	kTouchSlop is evaluated in the global coordinate space when rotated 45 degrees	reference-ran-incular-open	upstream-transformed-monodrag.md
+packages/flutter/test/gestures/transformed_monodrag_test.dart	648	kTouchSlop is evaluated in the global coordinate space when rotated 45 degrees	paired-match	upstream-transformed-monodrag.md
