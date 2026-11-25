@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- Accessibility role values include Table, Row, Cell and ColumnHeader,
+  with native AccessKit and web mappings.
+
 - Table paints opt-in TableBorder strokes over its cells. Border defaults
   and removed borders leave no paint commands or foreground picture.
 
@@ -231,6 +234,9 @@ a version and date when publishing.
   `dispatch_pop_route`, Flutter's `didPopRoute`. `Navigator` pops on it.
 
 ### Changed
+
+- **Breaking (`incular-semantics`):** Exhaustive matches on Role must
+  handle the four table roles.
 
 - **Breaking (`incular-layout`):** Table layout struct literals must supply
   `text_direction` or use `..Table::new(columns)` for the LTR default.

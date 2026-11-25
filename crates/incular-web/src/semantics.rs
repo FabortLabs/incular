@@ -624,6 +624,10 @@ fn element_kind(role: Role, labelled: bool) -> (&'static str, Option<&'static st
         Role::SearchField => ("div", Some("searchbox")),
         Role::List => ("div", Some("list")),
         Role::ListItem => ("div", Some("listitem")),
+        Role::Table => ("div", Some("table")),
+        Role::Row => ("div", Some("row")),
+        Role::Cell => ("div", Some("cell")),
+        Role::ColumnHeader => ("div", Some("columnheader")),
         Role::ScrollView | Role::Group => ("div", Some("group")),
         // A label on an anonymous container is only announced on a group.
         Role::GenericContainer => ("div", labelled.then_some("group")),

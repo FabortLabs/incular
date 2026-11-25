@@ -254,3 +254,45 @@ fn mobile_updates_list_every_root() {
     assert_eq!(snapshot.roots, [second, first]);
     assert_eq!(snapshot.root, Some(second));
 }
+
+#[test]
+fn native_projection_keeps_table_rows_cells_and_headers() {
+    let mut semantics = SemanticsTree::new();
+    let mut add = |role, label, children| {
+        semantics.insert(SemanticNode {
+            id: SemanticNodeId(ArenaId::from_parts(0, 0)),
+            role,
+            label,
+            value: None,
+            description: None,
+            bounds: rect(0., 0., 20., 10.),
+            state: SemanticState::default(),
+            actions: Vec::new(),
+            children,
+        })
+    };
+    let header = add(Role::ColumnHeader, Some("Name".into()), Vec::new());
+    let cell = add(Role::Cell, Some("Ada".into()), Vec::new());
+    let row = add(Role::Row, None, vec![header, cell]);
+    let table = add(Role::Table, None, vec![row]);
+    semantics.set_root(Some(table));
+
+    let mut projection = AccessKitProjection::new();
+    let native = Tree::new(update(&mut projection, &semantics), true);
+    assert_connected(&native, &semantics);
+    let table = native.state().root().children().next().unwrap();
+    assert_eq!(table.role(), accesskit::Role::Table);
+    let row = table.children().next().unwrap();
+    assert_eq!(row.role(), accesskit::Role::Row);
+    let roles: Vec<_> = row
+        .children()
+        .map(|node| (node.role(), node.label()))
+        .collect();
+    assert_eq!(
+        roles,
+        [
+            (accesskit::Role::ColumnHeader, Some("Name".into())),
+            (accesskit::Role::Cell, Some("Ada".into()))
+        ]
+    );
+}

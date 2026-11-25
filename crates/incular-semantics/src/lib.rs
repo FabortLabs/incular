@@ -29,6 +29,14 @@ pub enum Role {
     TextArea,
     List,
     ListItem,
+    /// A tabular collection of semantic rows.
+    Table,
+    /// One row of a table.
+    Row,
+    /// One data cell inside a row.
+    Cell,
+    /// A header cell that labels a column.
+    ColumnHeader,
     ScrollView,
     GenericContainer,
     Checkbox,
