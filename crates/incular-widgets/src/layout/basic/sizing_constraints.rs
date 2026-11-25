@@ -228,19 +228,38 @@ pub struct LimitedBox {
         setter(transform = |limit: f32| limit.max(0.0))
     )]
     max_height: f32,
-    #[builder(setter(into))]
-    child: Widget,
+    #[builder(default, setter(strip_option, into))]
+    child: Option<Widget>,
 }
 
-impl LimitedBox {
-    /// Creates a LimitedBox.
-    #[must_use]
-    pub fn new(child: impl Into<Widget>) -> Self {
+impl Default for LimitedBox {
+    fn default() -> Self {
         Self {
             max_width: f32::INFINITY,
             max_height: f32::INFINITY,
-            child: child.into(),
+            child: None,
         }
+    }
+}
+
+impl LimitedBox {
+    /// Creates a LimitedBox with a child.
+    #[must_use]
+    pub fn new(child: impl Into<Widget>) -> Self {
+        Self::default().child(child)
+    }
+
+    /// Creates a LimitedBox without a child. It takes the parent's minimum size.
+    #[must_use]
+    pub fn empty() -> Self {
+        Self::default()
+    }
+
+    /// Sets the child to constrain.
+    #[must_use]
+    pub fn child(mut self, child: impl Into<Widget>) -> Self {
+        self.child = Some(child.into());
+        self
     }
 
     /// Sets the limit for unbounded width.

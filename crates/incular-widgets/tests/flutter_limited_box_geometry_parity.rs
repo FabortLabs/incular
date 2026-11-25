@@ -70,11 +70,82 @@ fn limited_box_caps_only_height_when_parent_already_sets_width() {
     assert_eq!(child.size, Size::new(500., 200.));
 }
 
-// rendering/limited_box_test.dart:92, "LimitedBox: no child".
-// Incular requires a child, so an inert SizedBox::shrink represents absence
-// for geometry only. The Dart diagnostic formatting is not asserted.
+fn empty_box_under(parent: impl Fn(Widget) -> OverflowBox) -> WidgetTree {
+    let child = LimitedBox::builder()
+        .max_width(100.)
+        .max_height(200.)
+        .build();
+    let mut tree = WidgetTree::new();
+    tree.mount(parent(Widget::from(child).with_key(LIMITED)).into())
+        .unwrap();
+    tree.layout(Constraints::tight(Size::new(800., 600.)))
+        .unwrap();
+    tree
+}
+
+fn check_empty(tree: &WidgetTree, expected: Rect) {
+    let limited = tree.element_with_key(&Key::from(LIMITED)).unwrap();
+    assert_eq!(tree.children(limited).unwrap(), &[]);
+    assert_eq!(tree.element_bounds(limited), Some(expected));
+}
+
+// rendering/limited_box_test.dart:92. Dart diagnostic formatting is separate.
 #[test]
-fn limited_box_with_inert_child_retains_the_parent_minimum() {
-    let (limited, _) = inspect(10., 500., 0., INFINITE, SizedBox::shrink());
-    assert_eq!(limited, rect(395., 300., 10., 0.));
+fn childless_limited_box_keeps_parent_minimum_under_an_unbounded_axis() {
+    let tree = empty_box_under(|child| {
+        OverflowBox::new(child)
+            .min_width(10.)
+            .max_width(500.)
+            .min_height(0.)
+            .max_height(INFINITE)
+    });
+    check_empty(&tree, rect(395., 300., 10., 0.));
+}
+
+// rendering/limited_box_test.dart:129. Also recheck a retained child insertion/removal.
+#[test]
+fn childless_limited_box_uses_inherited_tight_height() {
+    let parent = |child| OverflowBox::new(child).min_width(10.);
+    let mut tree = empty_box_under(parent);
+    let root = tree.root().unwrap();
+    let limited = tree.element_with_key(&Key::from(LIMITED)).unwrap();
+    check_empty(&tree, rect(395., 0., 10., 600.));
+    let make = |with_child| {
+        let mut box_ = LimitedBox::empty().max_width(100.).max_height(200.);
+        if with_child {
+            box_ = box_.child(fixed_child());
+        }
+        parent(Widget::from(box_).with_key(LIMITED)).into()
+    };
+    let constraints = Constraints::tight(Size::new(800., 600.));
+    tree.update(root, make(true)).unwrap();
+    tree.layout(constraints).unwrap();
+    assert_eq!(tree.children(limited).unwrap().len(), 1);
+    assert_eq!(
+        tree.element_bounds(limited),
+        Some(rect(250., 0., 300., 600.))
+    );
+    tree.update(root, make(false)).unwrap();
+    tree.layout(constraints).unwrap();
+    assert_eq!(tree.element_with_key(&Key::from(LIMITED)), Some(limited));
+    check_empty(&tree, rect(395., 0., 10., 600.));
+}
+
+// Flutter limits the incoming maximum without constructing inverted constraints.
+#[test]
+fn limited_box_caps_cannot_undercut_the_parent_minimum() {
+    let expected = rect(325., 175., 150., 250.);
+    assert_eq!(
+        inspect(150., INFINITE, 250., INFINITE, fixed_child()),
+        (expected, expected)
+    );
+
+    let tree = empty_box_under(|child| {
+        OverflowBox::new(child)
+            .min_width(150.)
+            .max_width(INFINITE)
+            .min_height(250.)
+            .max_height(INFINITE)
+    });
+    check_empty(&tree, expected);
 }

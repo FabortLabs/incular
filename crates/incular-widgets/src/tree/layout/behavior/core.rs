@@ -185,13 +185,13 @@ impl WidgetTree {
                 let child_constraints = Constraints::new(
                     constraints.min_width(),
                     if constraints.max_width().is_infinite() {
-                        max_width
+                        max_width.max(constraints.min_width())
                     } else {
                         constraints.max_width()
                     },
                     constraints.min_height(),
                     if constraints.max_height().is_infinite() {
-                        max_height
+                        max_height.max(constraints.min_height())
                     } else {
                         constraints.max_height()
                     },
@@ -203,7 +203,7 @@ impl WidgetTree {
                         .size;
                     (constraints.constrain(size), ChildOffsets::One(Offset::ZERO))
                 } else {
-                    (constraints.constrain(Size::ZERO), ChildOffsets::default())
+                    (child_constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }
             RenderKind::Overflow {

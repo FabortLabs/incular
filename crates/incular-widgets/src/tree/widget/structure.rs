@@ -2320,8 +2320,8 @@ impl WidgetKind {
             WidgetKind::Limited { child, .. } => (
                 WidgetType::Limited,
                 Layout,
-                Single,
-                WidgetChildren::Single(child),
+                Optional,
+                WidgetChildren::Optional(child.as_ref()),
             ),
             WidgetKind::Overflow { child, .. } => (
                 WidgetType::Overflow,

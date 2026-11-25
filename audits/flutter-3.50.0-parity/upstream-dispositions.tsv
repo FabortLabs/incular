@@ -348,7 +348,7 @@ packages/flutter/test/painting/box_painter_test.dart	138	BoxShadow BlurStyle tes
 packages/flutter/test/rendering/limited_box_test.dart	13	LimitedBox: parent max size is unconstrained	partial-match	upstream-limited-box-and-decoration-contracts.md
 packages/flutter/test/rendering/limited_box_test.dart	59	LimitedBox: parent maxWidth is unconstrained	paired-match	upstream-limited-box-and-decoration-contracts.md
 packages/flutter/test/rendering/limited_box_test.dart	75	LimitedBox: parent maxHeight is unconstrained	paired-match	upstream-limited-box-and-decoration-contracts.md
-packages/flutter/test/rendering/limited_box_test.dart	92	LimitedBox: no child	partial-match	upstream-limited-box-and-decoration-contracts.md
+packages/flutter/test/rendering/limited_box_test.dart	92	LimitedBox: no child	partial-match	upstream-limited-box-and-decoration-contracts.md#optional-limitedbox-child-and-parent-minimums
 packages/flutter/test/painting/box_decoration_test.dart	63	BoxDecoration.lerp identical a,b	partial-match	upstream-limited-box-and-decoration-contracts.md#boxdecoration-blend-equality-and-validation-repair
 packages/flutter/test/painting/box_decoration_test.dart	187	BoxDecorations with different blendModes are not equal	paired-match	upstream-limited-box-and-decoration-contracts.md#boxdecoration-blend-equality-and-validation-repair
 packages/flutter/test/widgets/animated_size_test.dart	20	animates forwards then backwards with stable-sized children	paired-match	upstream-animated-size-overflow-controller-and-navigation.md#current-animatedsize-clipping
@@ -1468,3 +1468,8 @@ packages/flutter/test/semantics/semantics_test.dart	1078	SemanticsConfiguration.
 packages/flutter/test/semantics/semantics_test.dart	1093	SemanticsConfiguration.copy() preserves all hitTestBehavior values	paired-match	upstream-semantics-hit-test.md
 packages/flutter/test/rendering/sliver_persistent_header_test.dart	14	RenderSliverFloatingPersistentHeader maxScrollObstructionExtent is 0	paired-match	upstream-sliver-obstruction.md
 packages/flutter/test/rendering/sliver_persistent_header_test.dart	29	RenderSliverFloatingPinnedPersistentHeader maxScrollObstructionExtent is minExtent	paired-match	upstream-sliver-obstruction.md
+packages/flutter/test/rendering/limited_box_test.dart	129	LimitedBox: no child use parent	partial-match	upstream-limited-box-and-decoration-contracts.md#optional-limitedbox-child-and-parent-minimums
+packages/flutter/test/rendering/constraints_test.dart	13	RenderFractionallySizedBox constraints	paired-match	upstream-render-box-edges.md
+packages/flutter/test/rendering/constraints_test.dart	34	BoxConstraints with NaN	partial-match	upstream-render-box-edges.md
+packages/flutter/test/rendering/offstage_test.dart	13	offstage	partial-match	upstream-render-box-edges.md
+packages/flutter/test/rendering/relayout_boundary_test.dart	9	relayout boundary change does not trigger relayout	paired-match	upstream-render-box-edges.md

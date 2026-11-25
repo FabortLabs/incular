@@ -35,3 +35,22 @@ fn preserving_aspect_ratio_constrains_each_empty_dimension_without_dividing() {
         Size::new(10., 15.)
     );
 }
+
+// rendering/constraints_test.dart:34. The validation timing and messages differ:
+// Flutter constructs the invalid value then debug-checks it; Rust rejects it up front.
+#[test]
+fn layout_constraint_construction_rejects_the_three_nan_combinations() {
+    use incular_config::ConstraintError;
+
+    let nan = f32::NAN;
+    for (min_width, max_width, min_height, max_height) in [
+        (nan, nan, 2., nan),
+        (0., f32::INFINITY, nan, f32::INFINITY),
+        (0., nan, nan, f32::INFINITY),
+    ] {
+        assert_eq!(
+            Constraints::try_new(min_width, max_width, min_height, max_height),
+            Err(ConstraintError::Invalid),
+        );
+    }
+}

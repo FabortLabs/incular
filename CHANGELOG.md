@@ -7,6 +7,8 @@ a version and date when publishing.
 
 ### Added
 
+- LimitedBox supports an optional child. Its caps never undercut a parent minimum.
+
 - Table supports per-cell vertical alignment, Fill, and IntrinsicHeight.
   Each row measures independently; Fill never makes its row taller.
 

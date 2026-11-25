@@ -6,6 +6,8 @@ icon: ArrowDownNarrowWide
 
 [`LimitedBox`](/docs/api/layout-widgets/limited-box) caps sizes that would otherwise be infinite (e.g. inside
 scrollables). Defaults are infinity (no-op); setters clamp to `max(0.0)`.
+An incoming minimum takes precedence over the cap. An empty box takes the
+parent’s minimum size; use `LimitedBox::empty()` or omit the builder’s child.
 
 ## Props
 
@@ -22,9 +24,9 @@ scrollables). Defaults are infinity (no-op); setters clamp to `max(0.0)`.
       default: '∞',
     },
     child: {
-      description: 'Content measured under the caps',
+      description: 'Optional content measured under the caps',
       type: <a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>,
-      default: 'required',
+      default: 'None',
     },
   }}
 />

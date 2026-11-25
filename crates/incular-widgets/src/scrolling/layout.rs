@@ -3856,9 +3856,12 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
             } else {
                 *max_width
             };
-            widget_main_extent_hint(child, axis)
-                .map(|extent| extent.min(max))
-                .or_else(|| finite(max))
+            match child {
+                Some(child) => widget_main_extent_hint(child, axis)
+                    .map(|extent| extent.min(max))
+                    .or_else(|| finite(max)),
+                None => Some(0.),
+            }
         }
         WidgetKind::SizedOverflow { size, .. } => finite(axis.main_extent(*size)),
         WidgetKind::Overflow {

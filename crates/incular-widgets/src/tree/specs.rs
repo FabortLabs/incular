@@ -634,7 +634,7 @@ pub(crate) enum WidgetKind {
     Limited {
         max_width: f32,
         max_height: f32,
-        child: Widget,
+        child: Option<Widget>,
     },
     Overflow {
         min_width: Option<f32>,

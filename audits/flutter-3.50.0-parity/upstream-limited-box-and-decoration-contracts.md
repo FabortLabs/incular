@@ -167,3 +167,19 @@ BoxBorder is a concrete alias of Border. Built-in border arithmetic,
 ShapeBorder paths, or a separately painted custom outline cannot
 preserve a user-defined BoxBorder value through BoxDecoration.
 These cases are reference-only.
+
+## Optional LimitedBox child and parent minimums
+
+The original childless cases at `rendering/limited_box_test.dart:92,129` now
+run with a real absent child, including through the typed builder. The
+retained box is 10×0 at (395,300) with an unbounded height and 10×600
+at (395,0) when it inherits a tight height. Adding and removing a child
+updates the geometry without replacing the keyed box. These cases remain
+partial because the Flutter render-tree diagnostics are not reproduced.
+
+The extra pinned `limited_box_parent_minimum_test.dart` probe compares a
+parent minimum (150×250) that exceeds both configured caps (100×200).
+Flutter preserves the minimum on both unbounded axes, with or without a
+child. Incular originally attempted to build inverted constraints and
+panicked; now the minimum takes precedence and both variants lay out
+at (325,175) with size 150×250.

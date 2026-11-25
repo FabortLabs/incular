@@ -510,23 +510,32 @@ fn constraint_transform_box_routes_clip_behavior() {
             .collect()
     };
 
-    let build = |clip| {
+    let build = |clip, width_factor: f32| {
         ConstraintsTransformBox::new(
-            |incoming| Constraints::tight(Size::new(incoming.max_width() / 2., 40.)),
+            move |incoming| Constraints::tight(Size::new(incoming.max_width() * width_factor, 40.)),
             white_box(10., 10.),
         )
         .clip_behavior(clip)
     };
     // Clip::None adds no layer.
     let mut tree = WidgetTree::new();
-    tree.mount(build(Clip::None).into()).expect("mount");
+    tree.mount(build(Clip::None, 1.25).into()).expect("mount");
     layout_tight(&mut tree, 200., 200.);
     assert!(clip_rects(&mut tree).is_empty(), "Clip::None adds no layer");
 
-    // A clipping behavior attaches one clip layer over the transformed
-    // child, not a second paint-time clip.
+    tree.mount(build(Clip::HardEdge, 0.5).into())
+        .expect("mount");
+    layout_tight(&mut tree, 200., 200.);
+    assert!(
+        clip_rects(&mut tree).is_empty(),
+        "a contained child needs no clip"
+    );
+
+    // Only actual overflow with clipping enabled attaches one clip layer,
+    // not a second paint-time clip.
     let mut tree = WidgetTree::new();
-    tree.mount(build(Clip::HardEdge).into()).expect("mount");
+    tree.mount(build(Clip::HardEdge, 1.25).into())
+        .expect("mount");
     layout_tight(&mut tree, 200., 200.);
     let clips = clip_rects(&mut tree);
     assert_eq!(clips.len(), 1, "one clip layer, got {clips:?}");

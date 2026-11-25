@@ -348,7 +348,8 @@ row.
 
 ## Retained layout closure
 
-`LimitedBox` supplies maxima only when its incoming axis is unbounded, while
+`LimitedBox` supplies maxima only when its incoming axis is unbounded, never
+undercuts the parent minimum, and accepts no child via `LimitedBox::empty()`.
 `OverflowBox` gives its child independent optional min/max constraints but
 continues reporting the parent-constrained size. `Flexible`, `Expanded`, and
 `Spacer` allocate proportional shares of a bounded `Row`/`Column` main axis;
