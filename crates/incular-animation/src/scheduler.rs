@@ -18,14 +18,21 @@ use std::{
 
 type FrameCallback = Box<dyn FnOnce(Instant)>;
 
+enum Transient {
+    Callback(FrameCallback),
+    Ticker(Weak<TickerState>),
+}
+
+type TransientBatch = VecDeque<(FrameCallbackId, Transient)>;
+
 struct Scheduler {
-    tickers: Vec<Weak<TickerState>>,
-    /// Scratch buffer for [`begin_frame`], kept to reuse its allocation.
-    ticking: Vec<(Rc<TickerState>, u64)>,
-    frame_callbacks: Vec<(u64, FrameCallback)>,
-    /// Pending callbacks in each dispatch snapshot. The UI thread drops
-    /// borrows while running callbacks, so they can cancel other members.
-    active_frame_callbacks: Vec<VecDeque<(u64, FrameCallback)>>,
+    frame_callbacks: TransientBatch,
+    /// Reuse the previous dispatch buffer. Running tickers enqueue one
+    /// lightweight weak reference each, not a heap-allocated closure.
+    spare_callbacks: TransientBatch,
+    /// Each dispatch owns a snapshot. Drop the scheduler borrow while
+    /// invoking members so new callbacks can be registered or canceled.
+    active_frame_callbacks: Vec<TransientBatch>,
     post_frame_callbacks: Vec<FrameCallback>,
     persistent_callbacks: Vec<Rc<dyn Fn(Instant)>>,
     /// The timestamp remains valid through the last post-frame callback.
@@ -54,9 +61,8 @@ struct Epoch {
 impl Default for Scheduler {
     fn default() -> Self {
         Self {
-            tickers: Vec::new(),
-            ticking: Vec::new(),
-            frame_callbacks: Vec::new(),
+            frame_callbacks: VecDeque::new(),
+            spare_callbacks: VecDeque::new(),
             active_frame_callbacks: Vec::new(),
             post_frame_callbacks: Vec::new(),
             persistent_callbacks: Vec::new(),
@@ -72,15 +78,17 @@ impl Default for Scheduler {
 }
 
 impl Scheduler {
-    fn remove_frame_callback(&mut self, id: u64) -> Option<FrameCallback> {
-        if let Some(index) = self
-            .frame_callbacks
-            .iter()
-            .position(|(candidate, _)| *candidate == id)
+    fn enqueue(&mut self, callback: Transient) -> FrameCallbackId {
+        let id = FrameCallbackId(self.next_callback);
+        self.next_callback += 1;
+        self.frame_callbacks.push_back((id, callback));
+        id
+    }
+
+    fn remove_frame_callback(&mut self, id: FrameCallbackId) -> Option<Transient> {
+        for batch in core::iter::once(&mut self.frame_callbacks)
+            .chain(self.active_frame_callbacks.iter_mut().rev())
         {
-            return Some(self.frame_callbacks.remove(index).1);
-        }
-        for batch in self.active_frame_callbacks.iter_mut().rev() {
             if let Some(index) = batch.iter().position(|(candidate, _)| *candidate == id) {
                 return batch.remove(index).map(|(_, callback)| callback);
             }
@@ -261,11 +269,9 @@ pub struct FrameCallbackId(u64);
 /// asks for that frame.
 pub fn schedule_frame_callback(callback: impl FnOnce(Instant) + 'static) -> FrameCallbackId {
     SCHEDULER.with(|scheduler| {
-        let mut scheduler = scheduler.borrow_mut();
-        let id = scheduler.next_callback;
-        scheduler.next_callback += 1;
-        scheduler.frame_callbacks.push((id, Box::new(callback)));
-        FrameCallbackId(id)
+        scheduler
+            .borrow_mut()
+            .enqueue(Transient::Callback(Box::new(callback)))
     })
 }
 
@@ -273,7 +279,7 @@ pub fn schedule_frame_callback(callback: impl FnOnce(Instant) + 'static) -> Fram
 /// callback was still waiting.
 pub fn cancel_frame_callback(id: FrameCallbackId) -> bool {
     // Release the scheduler borrow before a captured value is dropped.
-    let removed = SCHEDULER.with(|scheduler| scheduler.borrow_mut().remove_frame_callback(id.0));
+    let removed = SCHEDULER.with(|scheduler| scheduler.borrow_mut().remove_frame_callback(id));
     removed.is_some()
 }
 
@@ -322,18 +328,12 @@ pub fn has_scheduled_frame() -> bool {
     }
     SCHEDULER.with(|scheduler| {
         let scheduler = scheduler.borrow();
-        scheduler.frame_requested
-            || !scheduler.frame_callbacks.is_empty()
-            || scheduler
-                .tickers
-                .iter()
-                .filter_map(Weak::upgrade)
-                .any(|ticker| ticker.is_ticking())
+        scheduler.frame_requested || !scheduler.frame_callbacks.is_empty()
     })
 }
 
-/// Flutter `handleBeginFrame`: runs the frame callbacks registered before
-/// this frame, then every running ticker, with the frame's timestamp.
+/// Flutter `handleBeginFrame`: runs the transient callbacks and ticker
+/// callbacks queued before this frame, in registration order.
 /// Runtime-internal; application code never calls it.
 #[doc(hidden)]
 pub fn begin_frame(raw: Instant) {
@@ -351,53 +351,46 @@ pub fn begin_frame(raw: Instant) {
             return (now, false);
         }
         scheduler.frame_requested = false;
-        let pending = std::mem::take(&mut scheduler.frame_callbacks);
-        let has_batch = !pending.is_empty();
+        let has_batch = !scheduler.frame_callbacks.is_empty();
         if has_batch {
-            scheduler.active_frame_callbacks.push(pending.into());
+            let spare = std::mem::take(&mut scheduler.spare_callbacks);
+            let pending = std::mem::replace(&mut scheduler.frame_callbacks, spare);
+            scheduler.active_frame_callbacks.push(pending);
         }
         (now, has_batch)
     });
-    if !enabled {
+    if !has_batch {
         return;
     }
-    // A ticker started by this frame's callback belongs to the next batch,
-    // just like a new transient callback. Snapshot before invoking either.
-    let mut tickers = SCHEDULER.with(|scheduler| {
-        let mut scheduler = scheduler.borrow_mut();
-        let mut tickers = std::mem::take(&mut scheduler.ticking);
-        scheduler.tickers.retain(|ticker| ticker.strong_count() > 0);
-        tickers.extend(
-            scheduler
-                .tickers
-                .iter()
-                .filter_map(Weak::upgrade)
-                .filter(|ticker| ticker.active.get())
-                .map(|ticker| {
-                    let run = ticker.run.get();
-                    (ticker, run)
-                }),
-        );
-        tickers
-    });
-    if has_batch {
-        let _batch = ActiveFrameCallbackBatch;
-        while let Some((_, callback)) = SCHEDULER.with(|scheduler| {
-            scheduler
-                .borrow_mut()
-                .active_frame_callbacks
-                .last_mut()?
-                .pop_front()
-        }) {
-            callback(now);
+    let _batch = ActiveFrameCallbackBatch;
+    while let Some((id, callback)) = SCHEDULER.with(|scheduler| {
+        scheduler
+            .borrow_mut()
+            .active_frame_callbacks
+            .last_mut()?
+            .pop_front()
+    }) {
+        match callback {
+            Transient::Callback(callback) => callback(now),
+            Transient::Ticker(ticker) => {
+                if let Some(ticker) = ticker.upgrade()
+                    && ticker.scheduled.get() == Some(id)
+                {
+                    ticker.scheduled.set(None);
+                    let reschedule = RescheduleTicker(ticker);
+                    reschedule.0.tick(now);
+                }
+            }
         }
     }
-    for (ticker, run) in tickers.drain(..) {
-        if ticker.active.get() && ticker.run.get() == run {
-            ticker.tick(now);
-        }
+}
+
+struct RescheduleTicker(Rc<TickerState>);
+
+impl Drop for RescheduleTicker {
+    fn drop(&mut self) {
+        self.0.schedule();
     }
-    SCHEDULER.with(|scheduler| scheduler.borrow_mut().ticking = tickers);
 }
 
 struct ActiveFrameCallbackBatch;
@@ -406,7 +399,26 @@ impl Drop for ActiveFrameCallbackBatch {
     fn drop(&mut self) {
         let retired =
             SCHEDULER.with(|scheduler| scheduler.borrow_mut().active_frame_callbacks.pop());
-        drop(retired);
+        if let Some(mut retired) = retired {
+            // If a callback panics, drop interrupted one-shot callbacks
+            // outside the scheduler borrow. Recurring tickers keep their
+            // next tick, just as they do after a successful dispatch.
+            while let Some((id, callback)) = retired.pop_front() {
+                if let Transient::Ticker(ticker) = callback
+                    && let Some(ticker) = ticker.upgrade()
+                    && ticker.scheduled.get() == Some(id)
+                {
+                    ticker.scheduled.set(None);
+                    ticker.schedule();
+                }
+            }
+            SCHEDULER.with(|scheduler| {
+                let mut scheduler = scheduler.borrow_mut();
+                if retired.capacity() > scheduler.spare_callbacks.capacity() {
+                    scheduler.spare_callbacks = retired;
+                }
+            });
+        }
     }
 }
 
@@ -461,7 +473,7 @@ pub fn end_frame(raw: Instant) {
 struct TickerState {
     on_tick: RefCell<Box<dyn FnMut(Instant, Duration)>>,
     active: Cell<bool>,
-    run: Cell<u64>,
+    scheduled: Cell<Option<FrameCallbackId>>,
     muted: Cell<bool>,
     /// The frame the current run started on; unset until its first frame.
     started: Cell<Option<Instant>>,
@@ -474,7 +486,29 @@ impl TickerState {
         self.active.get() && !self.muted.get()
     }
 
+    fn schedule(self: &Rc<Self>) {
+        if self.is_ticking() && self.scheduled.get().is_none() {
+            let id = SCHEDULER.with(|scheduler| {
+                scheduler
+                    .borrow_mut()
+                    .enqueue(Transient::Ticker(Rc::downgrade(self)))
+            });
+            self.scheduled.set(Some(id));
+        }
+    }
+
+    fn unschedule(&self) {
+        if let Some(id) = self.scheduled.take() {
+            // A captured Ticker can drop during teardown of the scheduler.
+            let _ =
+                SCHEDULER.try_with(|scheduler| scheduler.borrow_mut().remove_frame_callback(id));
+        }
+    }
+
     fn tick(&self, now: Instant) {
+        if !self.is_ticking() {
+            return;
+        }
         let started = match self.started.get() {
             Some(started) => started,
             None => {
@@ -482,9 +516,6 @@ impl TickerState {
                 now
             }
         };
-        if self.muted.get() {
-            return;
-        }
         let elapsed = now.saturating_duration_since(started);
         // A callback that restarts or stops its own ticker sees the new
         // state on the next frame; a re-entrant tick is skipped.
@@ -527,13 +558,10 @@ impl Ticker {
         let state = Rc::new(TickerState {
             on_tick: RefCell::new(Box::new(on_tick)),
             active: Cell::new(false),
-            run: Cell::new(0),
+            scheduled: Cell::new(None),
             muted: Cell::new(false),
             started: Cell::new(None),
             future: RefCell::new(None),
-        });
-        SCHEDULER.with(|scheduler| {
-            scheduler.borrow_mut().tickers.push(Rc::downgrade(&state));
         });
         Self { state }
     }
@@ -545,7 +573,6 @@ impl Ticker {
     /// the clock. Returns the run's [`TickerFuture`].
     pub fn start(&self) -> TickerFuture {
         if !self.state.active.replace(true) {
-            self.state.run.set(self.state.run.get().wrapping_add(1));
             self.state.started.set(SCHEDULER.with(|scheduler| {
                 let scheduler = scheduler.borrow();
                 if scheduler.post_frame_active {
@@ -555,6 +582,7 @@ impl Ticker {
                 }
             }));
             *self.state.future.borrow_mut() = Some(TickerFuture::pending());
+            self.state.schedule();
         }
         self.state
             .future
@@ -578,6 +606,7 @@ impl Ticker {
     fn stop_with(&self, completed: bool) {
         self.state.active.set(false);
         self.state.started.set(None);
+        self.state.unschedule();
         let future = self.state.future.borrow_mut().take();
         if let Some(future) = future {
             future.resolve(completed);
@@ -604,18 +633,27 @@ impl Ticker {
     /// Flutter `Ticker.muted`: a muted ticker keeps time but skips its
     /// callback.
     pub fn set_muted(&self, muted: bool) {
-        self.state.muted.set(muted);
+        if self.state.muted.replace(muted) == muted {
+            return;
+        }
+        if muted {
+            self.state.unschedule();
+        } else {
+            self.state.schedule();
+        }
     }
 
     /// Flutter `Ticker.absorbTicker`: takes over `other`'s run, keeping its
     /// start time, and stops `other`.
     pub fn absorb_ticker(&self, other: &Ticker) {
         if other.is_active() {
+            self.state.unschedule();
             self.state.active.set(true);
             self.state.started.set(other.state.started.get());
             *self.state.future.borrow_mut() = other.state.future.borrow_mut().take();
         }
         other.stop();
+        self.state.schedule();
     }
 }
 

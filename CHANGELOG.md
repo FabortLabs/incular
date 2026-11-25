@@ -130,6 +130,10 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-animation`: ticker callbacks run in scheduling order with
+  other frame callbacks. Unmuting during dispatch waits for the next
+  frame, and a ticker started muted begins elapsed time with its first tick.
+
 - `incular-widgets`: a childless Container with only one fixed dimension
   fills the other bounded axis. Alignment is ignored for childless
   Containers unless their explicit constraints are tight.

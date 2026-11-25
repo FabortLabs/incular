@@ -71,3 +71,127 @@ fn restarting_a_ticker_during_the_batch_cancels_its_old_tick() {
         .unwrap();
     assert_eq!(ticks.borrow().as_slice(), &[Duration::from_millis(16)]);
 }
+
+#[test]
+fn ticker_callbacks_share_registration_order_with_other_transients() {
+    let size = Size::new(100.0, 100.0);
+    let bounds = Constraints::tight(size);
+    let mut runtime = Runtime::new(Widget::box_(size, Color::WHITE)).unwrap();
+    let base = Instant::now();
+    runtime.run_frame_at(bounds, base).unwrap();
+    let log = Rc::new(RefCell::new(Vec::new()));
+    schedule_frame_callback({
+        let log = log.clone();
+        move |_| log.borrow_mut().push("first")
+    });
+    let ticker = Ticker::new({
+        let log = log.clone();
+        move |_| log.borrow_mut().push("ticker")
+    });
+    ticker.start();
+    schedule_frame_callback({
+        let log = log.clone();
+        move |_| log.borrow_mut().push("last")
+    });
+    runtime
+        .run_frame_at(bounds, base + Duration::from_millis(16))
+        .unwrap();
+    assert_eq!(&*log.borrow(), &["first", "ticker", "last"]);
+
+    log.borrow_mut().clear();
+    schedule_frame_callback({
+        let log = log.clone();
+        move |_| log.borrow_mut().push("later registration")
+    });
+    runtime
+        .run_frame_at(bounds, base + Duration::from_millis(32))
+        .unwrap();
+    assert_eq!(&*log.borrow(), &["ticker", "later registration"]);
+}
+
+#[test]
+fn unmuting_in_a_transient_waits_for_the_next_frame_and_starts_at_zero() {
+    let size = Size::new(100.0, 100.0);
+    let bounds = Constraints::tight(size);
+    let mut runtime = Runtime::new(Widget::box_(size, Color::WHITE)).unwrap();
+    let base = Instant::now();
+    runtime.run_frame_at(bounds, base).unwrap();
+    let ticks = Rc::new(RefCell::new(Vec::new()));
+    let ticker = Rc::new(Ticker::new({
+        let ticks = ticks.clone();
+        move |elapsed| ticks.borrow_mut().push(elapsed)
+    }));
+    ticker.set_muted(true);
+    ticker.start();
+    runtime
+        .run_frame_at(bounds, base + Duration::from_millis(10))
+        .unwrap();
+    assert!(ticks.borrow().is_empty());
+    schedule_frame_callback({
+        let ticker = ticker.clone();
+        move |_| ticker.set_muted(false)
+    });
+    runtime
+        .run_frame_at(bounds, base + Duration::from_millis(20))
+        .unwrap();
+    assert!(ticks.borrow().is_empty());
+    assert!(runtime.frame_requested());
+    runtime
+        .run_frame_at(bounds, base + Duration::from_millis(36))
+        .unwrap();
+    assert_eq!(&*ticks.borrow(), &[Duration::ZERO]);
+}
+
+// scheduler/ticker_test.dart:21, excluding Dart's duplicate-start diagnostic.
+#[test]
+fn muting_preserves_an_active_run_and_does_not_restart_a_stopped_one() {
+    let size = Size::new(100.0, 100.0);
+    let bounds = Constraints::tight(size);
+    let mut runtime = Runtime::new(Widget::box_(size, Color::WHITE)).unwrap();
+    let base = Instant::now();
+    runtime.run_frame_at(bounds, base).unwrap();
+    let ticks = Rc::new(RefCell::new(Vec::new()));
+    let ticker = Ticker::new({
+        let ticks = ticks.clone();
+        move |elapsed| ticks.borrow_mut().push(elapsed)
+    });
+    assert!(!ticker.is_ticking() && !ticker.is_active());
+    ticker.start();
+    assert!(ticker.is_ticking() && ticker.is_active());
+    assert!(ticks.borrow().is_empty());
+
+    runtime
+        .run_frame_at(bounds, base + Duration::from_millis(10))
+        .unwrap();
+    assert_eq!(&*ticks.borrow(), &[Duration::ZERO]);
+    ticker.set_muted(true);
+    runtime
+        .run_frame_at(bounds, base + Duration::from_millis(20))
+        .unwrap();
+    assert!(!ticker.is_ticking() && ticker.is_active());
+    assert_eq!(ticks.borrow().len(), 1);
+    ticker.set_muted(false);
+    runtime
+        .run_frame_at(bounds, base + Duration::from_millis(30))
+        .unwrap();
+    assert!(ticker.is_ticking() && ticker.is_active());
+    assert_eq!(
+        &*ticks.borrow(),
+        &[Duration::ZERO, Duration::from_millis(20)]
+    );
+
+    ticker.set_muted(true);
+    runtime
+        .run_frame_at(bounds, base + Duration::from_millis(40))
+        .unwrap();
+    assert!(!ticker.is_ticking() && ticker.is_active());
+    assert_eq!(ticks.borrow().len(), 2);
+    ticker.stop();
+    assert!(!ticker.is_ticking() && !ticker.is_active());
+    ticker.set_muted(false);
+    runtime
+        .run_frame_at(bounds, base + Duration::from_millis(50))
+        .unwrap();
+    assert!(!ticker.is_ticking() && !ticker.is_active());
+    assert_eq!(ticks.borrow().len(), 2);
+}
