@@ -150,10 +150,10 @@ packages/flutter_tools/test/commands.shard/hermetic/widget_preview/dtd_services_
 packages/flutter_tools/test/commands.shard/hermetic/widget_preview/dtd_services_test.dart	230	waits for Lsp initialized event when only a subset of required Lsp methods are registered	reference-ran-incular-open	upstream-focus-policy-tween-dtd.md
 packages/flutter_tools/test/commands.shard/hermetic/widget_preview/dtd_services_test.dart	271	proceeds without waiting for event when all required Lsp methods are already registered	reference-ran-incular-open	upstream-focus-policy-tween-dtd.md
 packages/flutter_tools/test/commands.shard/hermetic/widget_preview/dtd_services_test.dart	296	cancels the Lsp event subscription when streamListen fails	reference-ran-incular-open	upstream-focus-policy-tween-dtd.md
-packages/flutter/test/widgets/clip_test.dart	155	ClipPath	paired-mismatch	upstream-clip-visibility-focus.md
-packages/flutter/test/widgets/clip_test.dart	178	ClipOval	paired-mismatch	upstream-clip-visibility-focus.md
-packages/flutter/test/widgets/clip_test.dart	200	Transparent ClipOval hit test	paired-mismatch	upstream-clip-visibility-focus.md
-packages/flutter/test/widgets/clip_test.dart	225	ClipRect	paired-mismatch	upstream-clip-visibility-focus.md
+packages/flutter/test/widgets/clip_test.dart	155	ClipPath	paired-match	upstream-pointer-current-dispositions.md
+packages/flutter/test/widgets/clip_test.dart	178	ClipOval	paired-match	upstream-pointer-current-dispositions.md
+packages/flutter/test/widgets/clip_test.dart	200	Transparent ClipOval hit test	paired-match	upstream-pointer-current-dispositions.md
+packages/flutter/test/widgets/clip_test.dart	225	ClipRect	paired-match	upstream-pointer-current-dispositions.md
 packages/flutter/test/widgets/visibility_test.dart	406	Visibility with maintain* false excludes focus of child when not visible	partial-mismatch	upstream-clip-visibility-focus.md
 packages/flutter/test/widgets/visibility_test.dart	434	Visibility with maintain* true does not exclude focus of child when not visible	partial-match	upstream-clip-visibility-focus.md
 packages/flutter/test/widgets/visibility_test.dart	461	Visibility with maintain* true except maintainFocusability which is false excludes focus of child when not visible	partial-mismatch	upstream-clip-visibility-focus.md
@@ -163,14 +163,14 @@ packages/flutter/test/widgets/tap_region_test.dart	113	TapRegionSurface detects 
 packages/flutter/test/widgets/tap_region_test.dart	179	TapRegionSurface consumes outside taps when asked	paired-match	upstream-tap-absorber-delta-and-raw-image.md
 packages/flutter/test/widgets/tap_region_test.dart	265	TapRegionSurface detects inside tap down events	paired-match	upstream-tap-absorber-delta-and-raw-image.md#primary-down-cancel-and-empty-hit-regions
 packages/flutter/test/widgets/tap_region_test.dart	339	TapRegionSurface detects inside tap up events	paired-match	upstream-tap-absorber-delta-and-raw-image.md
-packages/flutter/test/widgets/tap_region_test.dart	405	TapRegionSurface detects inside taps correctly with behavior	paired-mismatch	upstream-tap-absorber-delta-and-raw-image.md#primary-down-cancel-and-empty-hit-regions
+packages/flutter/test/widgets/tap_region_test.dart	405	TapRegionSurface detects inside taps correctly with behavior	paired-match	upstream-pointer-current-dispositions.md
 packages/flutter/test/widgets/tap_region_test.dart	487	Setting the group updates the registration	paired-match	upstream-tap-absorber-delta-and-raw-image.md
-packages/flutter/test/widgets/tap_region_test.dart	578	TapRegionSurface detects outside right click	paired-mismatch	upstream-tap-absorber-delta-and-raw-image.md
-packages/flutter/test/widgets/tap_region_test.dart	652	TapRegionSurface detects outside middle click	paired-mismatch	upstream-tap-absorber-delta-and-raw-image.md
-packages/flutter/test/widgets/tap_region_test.dart	726	TapRegionSurface consumes outside right click when asked	paired-mismatch	upstream-tap-absorber-delta-and-raw-image.md#right-and-middle-mouse-buttons
-packages/flutter/test/widgets/tap_region_test.dart	815	TapRegionSurface consumes outside middle click when asked	paired-mismatch	upstream-tap-absorber-delta-and-raw-image.md#right-and-middle-mouse-buttons
-packages/flutter/test/widgets/tap_region_test.dart	904	TapRegionSurface detects inside right click	paired-mismatch	upstream-tap-absorber-delta-and-raw-image.md
-packages/flutter/test/widgets/tap_region_test.dart	978	TapRegionSurface detects inside middle click	paired-mismatch	upstream-tap-absorber-delta-and-raw-image.md
+packages/flutter/test/widgets/tap_region_test.dart	578	TapRegionSurface detects outside right click	paired-match	upstream-pointer-current-dispositions.md
+packages/flutter/test/widgets/tap_region_test.dart	652	TapRegionSurface detects outside middle click	paired-match	upstream-pointer-current-dispositions.md
+packages/flutter/test/widgets/tap_region_test.dart	726	TapRegionSurface consumes outside right click when asked	paired-match	upstream-pointer-current-dispositions.md
+packages/flutter/test/widgets/tap_region_test.dart	815	TapRegionSurface consumes outside middle click when asked	paired-match	upstream-pointer-current-dispositions.md
+packages/flutter/test/widgets/tap_region_test.dart	904	TapRegionSurface detects inside right click	paired-match	upstream-pointer-current-dispositions.md
+packages/flutter/test/widgets/tap_region_test.dart	978	TapRegionSurface detects inside middle click	paired-match	upstream-pointer-current-dispositions.md
 packages/flutter/test/widgets/absorb_pointer_test.dart	11	AbsorbPointers do not block siblings	paired-match	upstream-tap-absorber-delta-and-raw-image.md
 packages/flutter/test/widgets/absorb_pointer_test.dart	26	does not change semantics when not absorbing	partial-match	upstream-tap-absorber-delta-and-raw-image.md
 packages/flutter/test/widgets/absorb_pointer_test.dart	50	ignores user interactions	partial-mismatch	upstream-tap-absorber-delta-and-raw-image.md
@@ -179,8 +179,8 @@ packages/flutter/test/services/text_editing_delta_test.dart	138	Verify creation 
 packages/flutter/test/services/text_editing_delta_test.dart	235	Verify creation of replacement delta when replacing with shorter.	partial-match	upstream-tap-absorber-delta-and-raw-image.md
 packages/flutter/test/services/text_editing_delta_test.dart	336	Verify non text update delta created.	partial-match	upstream-tap-absorber-delta-and-raw-image.md
 packages/flutter/test/widgets/tap_region_test.dart	1053	TapRegion onTapOutside should only trigger on the current route during navigation	paired-match	upstream-current-route-aspect-and-long-press.md
-packages/flutter/test/widgets/tap_region_test.dart	1133	TapRegion on non-current routes should not respond to onTapOutside events	paired-mismatch	upstream-current-route-aspect-and-long-press.md
-packages/flutter/test/widgets/tap_region_test.dart	1191	TapRegion with consumeOutsideTaps should not consume taps after navigation	paired-mismatch	upstream-current-route-aspect-and-long-press.md
+packages/flutter/test/widgets/tap_region_test.dart	1133	TapRegion on non-current routes should not respond to onTapOutside events	paired-match	upstream-pointer-current-dispositions.md
+packages/flutter/test/widgets/tap_region_test.dart	1191	TapRegion with consumeOutsideTaps should not consume taps after navigation	paired-match	upstream-pointer-current-dispositions.md
 packages/flutter/test/widgets/aspect_ratio_test.dart	26	Aspect ratio control test	paired-match	upstream-current-route-aspect-and-long-press.md
 packages/flutter/test/widgets/aspect_ratio_test.dart	37	Aspect ratio infinite width	paired-match	upstream-current-route-aspect-and-long-press.md
 packages/flutter/test/widgets/aspect_ratio_test.dart	54	AspectRatio does not crash at zero area	paired-match	upstream-current-route-aspect-and-long-press.md#aspectratio-physical-view-recheck
@@ -226,7 +226,7 @@ packages/flutter/test/scheduler/ticker_test.dart	136	Ticker can be slowed down w
 packages/flutter/test/widgets/fitted_box_test.dart	41	Can contain child	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
 packages/flutter/test/widgets/fitted_box_test.dart	71	Child can cover	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
 packages/flutter/test/widgets/fitted_box_test.dart	396	Big child into small fitted box - hit testing	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
-packages/flutter/test/widgets/fitted_box_test.dart	487	Switching to and from BoxFit.scaleDown causes relayout	paired-mismatch	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/fitted_box_test.dart	487	Switching to and from BoxFit.scaleDown causes relayout	paired-match	upstream-pointer-current-dispositions.md
 packages/flutter/test/widgets/fitted_box_test.dart	10	Can size according to aspect ratio	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md#fittedbox-layout-aspect-ratio
 packages/flutter/test/widgets/fitted_box_test.dart	434	BoxFit.scaleDown matches size of child	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md#fittedbox-layout-aspect-ratio
 packages/flutter/test/widgets/fitted_box_test.dart	102	FittedBox with no child	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md#childless-fittedbox-and-zero-area
@@ -540,9 +540,9 @@ packages/flutter/test/animation/animation_style_test.dart	57	AnimationStyle.lerp
 packages/flutter/test/animation/animation_style_test.dart	104	AnimationStyle.lerp with null property	paired-mismatch	upstream-animation-style.md
 packages/flutter/test/animation/animation_style_test.dart	113	default AnimationStyle debugFillProperties	reference-ran-incular-open	upstream-animation-style.md
 packages/flutter/test/animation/animation_style_test.dart	126	AnimationStyle implements debugFillProperties	reference-ran-incular-open	upstream-animation-style.md
-packages/flutter/test/widgets/tap_region_test.dart	1262	TapRegionSurface calls onTapOutside for semantics tap outside region	paired-mismatch	upstream-tap-region-semantic-actions.md
+packages/flutter/test/widgets/tap_region_test.dart	1262	TapRegionSurface calls onTapOutside for semantics tap outside region	paired-match	upstream-pointer-current-dispositions.md
 packages/flutter/test/widgets/tap_region_test.dart	1313	TapRegionSurface does not call onTapOutside for semantics tap inside region	paired-match	upstream-tap-region-semantic-actions.md
-packages/flutter/test/widgets/tap_region_test.dart	1358	TapRegionSurface calls onTapOutside for semantics longPress outside region	paired-mismatch	upstream-tap-region-semantic-actions.md
+packages/flutter/test/widgets/tap_region_test.dart	1358	TapRegionSurface calls onTapOutside for semantics longPress outside region	paired-match	upstream-pointer-current-dispositions.md
 packages/flutter/test/widgets/custom_paint_test.dart	43	Control test for custom painting	paired-match	upstream-custom-paint.md
 packages/flutter/test/widgets/custom_paint_test.dart	58	Throws FlutterError on custom painter incorrect restore/save calls	reference-ran-incular-open	upstream-custom-paint.md
 packages/flutter/test/widgets/custom_paint_test.dart	124	CustomPaint sizing	paired-match	upstream-custom-paint.md
