@@ -928,7 +928,16 @@ impl WidgetTree {
                         SemanticRole::TextField
                     }),
                     None,
-                    Some(value.text),
+                    Some(if spec.obscure_text {
+                        super::text::with_text_field_display(
+                            &spec.controller,
+                            "",
+                            true,
+                            str::to_owned,
+                        )
+                    } else {
+                        value.text
+                    }),
                     SemanticState {
                         enabled: spec.enabled,
                         focused,
@@ -937,6 +946,10 @@ impl WidgetTree {
                         multiline: spec.multiline,
                         obscured: spec.obscure_text,
                         read_only: spec.read_only,
+                        text_direction: match render.object.kind() {
+                            RenderKind::TextField(field) => Some(field.text_direction),
+                            _ => None,
+                        },
                         selection: Some(SemanticTextSelection {
                             base: value.selection.base,
                             extent: value.selection.extent,

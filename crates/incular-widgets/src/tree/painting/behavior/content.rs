@@ -222,6 +222,10 @@ impl WidgetTree {
                     }
                     let selection = value_selection.range();
                     if focused && !selection.is_empty() {
+                        let selection = TextRange::new(
+                            text_field_display_offset(controller, selection.start, obscure_text),
+                            text_field_display_offset(controller, selection.end, obscure_text),
+                        );
                         for rect in selection_rects(
                             &layout,
                             selection,

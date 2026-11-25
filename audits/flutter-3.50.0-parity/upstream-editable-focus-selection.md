@@ -58,3 +58,29 @@ With an explicitly collapsed caret, the unobscured editor instead
 removes only the emoji grapheme. The older Rust repeat test now
 sets that caret before checking its grapheme expectation.
 The two focused Rust comparisons and the corrected repeat test passed.
+
+## Default mask geometry and accessibility
+
+Flutter's default mask displays one bullet per UTF-16 code unit.
+Before the repair the portable editor shaped 13 asterisks for
+`é👩‍💻`, because its model uses UTF-8 bytes. It now shapes six
+bullets, projects caret and selection positions between the two
+coordinate spaces, and maps pointer hits back to valid source
+boundaries. The equivalent plaintext bullet run matches the
+obscured run's glyphs and caret rectangles in each framework.
+A partially composed value also stays masked without replacing the
+committed source text. An attempt to hit inside a surrogate pair
+still resolves to a valid scalar boundary in Rust.
+
+The retained accessibility value is now masked too, including
+when toggling obscuring on an existing field. Native accessibility
+projections still suppress password values; the editor controller
+and input client keep their unchanged source value. Two pinned
+originals (:5423,:5482) ran, and the Rust checks match the obscured
+value and its retained toggle. Those originals remain partial:
+their whole semantic trees include input-type and cursor-movement
+actions not yet compared. The authored pinned probe adds password
+glyph and caret evidence without counting a new original.
+
+Forty focused Rust tests passed, including the retained toggle,
+platform text input, spell checking, and keyboard deletion.

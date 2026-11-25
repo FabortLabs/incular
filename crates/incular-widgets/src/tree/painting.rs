@@ -7,7 +7,8 @@ mod behavior;
 
 use super::rendering::{image_fit_rects_scaled, image_repeat_destinations};
 use super::text::{
-    selection_rects, text_field_caret_geometry, text_field_content_top, with_text_field_display,
+    selection_rects, text_field_caret_geometry, text_field_content_top, text_field_display_offset,
+    with_text_field_display,
 };
 
 /// The paintable subset; unselected IndexedStack children remain laid out

@@ -214,7 +214,11 @@ impl WidgetTree {
         if !multiline {
             return false;
         }
-        let current = controller.selection().extent;
+        let current = text_field_display_offset(
+            controller,
+            controller.selection().extent,
+            field.obscure_text,
+        );
         let line = line_for_byte(&layout, current);
         let last = layout.line_count().saturating_sub(1);
         let target_line = if down {
@@ -229,6 +233,7 @@ impl WidgetTree {
             line_caret_x_for_affinity(&layout, line, current, controller.caret_affinity())
         });
         let (target, affinity) = caret_for_line_position(&layout, target_line, x);
+        let target = text_field_source_offset(controller, target, affinity, field.obscure_text);
         controller.move_cursor_with_affinity(target, affinity, extend);
         controller.set_preferred_caret_x(x);
         self.mark_render_paint(render);
@@ -574,7 +579,7 @@ impl WidgetTree {
         point: Offset,
     ) -> Option<(usize, incular_text::TextAffinity)> {
         let render = self.render_id(id)?;
-        let (layout, scroll_x, scroll_y, multiline, padding, controller) =
+        let (layout, scroll_x, scroll_y, multiline, padding, controller, obscured) =
             match self.renders.get(render.0).map(|node| {
                 let state = self.text_field_state_live(render);
                 (
@@ -591,6 +596,7 @@ impl WidgetTree {
                     field.multiline,
                     field.content_padding,
                     field.controller.clone(),
+                    field.obscure_text,
                 ),
                 _ => return None,
             };
@@ -600,7 +606,6 @@ impl WidgetTree {
             .unwrap_or(point);
         let x = local.x - padding.left + scroll_x;
         let y = local.y - if multiline { padding.top } else { 0. } + scroll_y;
-        let text_len = controller.with_value(|value| value.text.len());
         let (index, affinity) =
             layout
                 .as_ref()
@@ -613,7 +618,10 @@ impl WidgetTree {
                             caret_for_line_position(layout, line_index, x)
                         })
                 });
-        Some((index.min(text_len), affinity))
+        Some((
+            text_field_source_offset(&controller, index, affinity, obscured),
+            affinity,
+        ))
     }
 
     /// Replaces a field's selection as a pointer gesture would: the caret
@@ -1641,8 +1649,101 @@ impl WidgetTree {
     }
 }
 
-const OBSCURE_MASK: &str =
-    "********************************************************************************";
+const OBSCURING_GLYPH: &str = "•";
+const OBSCURE_MASK: &str = concat!(
+    "••••••••••••••••",
+    "••••••••••••••••",
+    "••••••••••••••••",
+    "••••••••••••••••",
+);
+
+fn utf16_units(text: &str) -> usize {
+    if text.is_ascii() {
+        text.len()
+    } else {
+        text.encode_utf16().count()
+    }
+}
+
+/// Translates a committed model byte offset to the displayed bullet byte
+/// offset. Flutter shows one default bullet per UTF-16 code unit; the
+/// portable editor and its shaping engine keep UTF-8 byte positions.
+pub(super) fn text_field_display_offset(
+    controller: &TextEditingController,
+    byte: usize,
+    obscure_text: bool,
+) -> usize {
+    if !obscure_text {
+        return byte;
+    }
+    let preedit = controller.preedit();
+    let units = controller.with_value(|value| {
+        let text = value.text.as_str();
+        let byte = text.floor_char_boundary(byte.min(text.len()));
+        if let Some(preedit) = preedit.as_deref() {
+            let selected = value.selection.range();
+            if byte > selected.start {
+                let prefix = utf16_units(&text[..selected.start]);
+                if byte < selected.end {
+                    return prefix;
+                }
+                return prefix + utf16_units(preedit) + utf16_units(&text[selected.end..byte]);
+            }
+        }
+        utf16_units(&text[..byte])
+    });
+    units * OBSCURING_GLYPH.len()
+}
+
+fn source_byte_at_utf16(text: &str, unit: usize, affinity: incular_text::TextAffinity) -> usize {
+    if text.is_ascii() {
+        return unit.min(text.len());
+    }
+    let mut prefix = 0;
+    for (byte, ch) in text.char_indices() {
+        if prefix == unit {
+            return byte;
+        }
+        prefix += ch.len_utf16();
+        if unit < prefix {
+            // Dart can put a caret inside a surrogate pair, but a Rust
+            // String cannot. Resolve that hit to a valid scalar boundary.
+            return match affinity {
+                incular_text::TextAffinity::Upstream => byte,
+                incular_text::TextAffinity::Downstream => byte + ch.len_utf8(),
+            };
+        }
+    }
+    text.len()
+}
+
+fn text_field_source_offset(
+    controller: &TextEditingController,
+    byte: usize,
+    affinity: incular_text::TextAffinity,
+    obscure_text: bool,
+) -> usize {
+    let preedit = obscure_text.then(|| controller.preedit()).flatten();
+    controller.with_value(|value| {
+        let text = value.text.as_str();
+        if !obscure_text {
+            return byte.min(text.len());
+        }
+        let mut unit = byte / OBSCURING_GLYPH.len();
+        if let Some(preedit) = preedit.as_deref() {
+            let selected = value.selection.range();
+            let prefix = utf16_units(&text[..selected.start]);
+            if unit > prefix {
+                let replacement = utf16_units(preedit);
+                if unit < prefix + replacement {
+                    return selected.start;
+                }
+                unit = unit - replacement + utf16_units(&text[selected.start..selected.end]);
+            }
+        }
+        source_byte_at_utf16(text, unit, affinity)
+    })
+}
 
 /// Runs `f` with the text a field displays. The common case (no preedit, not
 /// obscured) borrows the controller's text or the placeholder without copying.
@@ -1652,12 +1753,9 @@ pub(super) fn with_text_field_display<R>(
     obscure_text: bool,
     f: impl FnOnce(&str) -> R,
 ) -> R {
-    // Keep one ASCII glyph per source byte.  Editing selections are
-    // byte-indexed throughout the retained core, so this preserves
-    // caret/selection geometry while still ensuring that the source
-    // value never reaches the paint list.  For ordinary passwords
-    // (the overwhelmingly common case) this is one mask glyph per
-    // character; non-ASCII input remains safely obscured as well.
+    // Only the mask reaches shaping or paint. Position projection is
+    // separate from text replacement, so native editing retains UTF-8
+    // offsets even for supplementary characters.
     let preedit = controller.preedit();
     controller.with_value(|value| {
         if let Some(preedit) = preedit {
@@ -1665,18 +1763,18 @@ pub(super) fn with_text_field_display<R>(
             let mut text = value.text.clone();
             text.replace_range(range.as_range(), &preedit);
             if obscure_text {
-                text = "*".repeat(text.len());
+                text = OBSCURING_GLYPH.repeat(utf16_units(&text));
             }
             f(&text)
         } else if value.text.is_empty() {
             f(placeholder)
         } else if obscure_text {
-            let len = value.text.len();
-            // Mask glyphs are ASCII, so a slice of the static mask is exact.
+            let units = utf16_units(&value.text);
+            let len = units * OBSCURING_GLYPH.len();
             if len <= OBSCURE_MASK.len() {
                 f(&OBSCURE_MASK[..len])
             } else {
-                f(&"*".repeat(len))
+                f(&OBSCURING_GLYPH.repeat(units))
             }
         } else {
             f(&value.text)
@@ -1899,6 +1997,7 @@ pub(super) fn text_field_caret_geometry(
     text_is_empty: bool,
     field: &TextFieldRender,
 ) -> (f32, f32, f32) {
+    let byte = text_field_display_offset(&field.controller, byte, field.obscure_text);
     let (mut x, y, height) = caret_geometry(layout, byte, affinity);
     if text_is_empty
         && field.controller.preedit().is_none()

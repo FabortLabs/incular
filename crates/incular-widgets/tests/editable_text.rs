@@ -393,8 +393,8 @@ fn obscure_masks_paint_keeps_semantics() {
     });
     tree.layout(Constraints::tight(Size::new(180., 32.)))
         .expect("layout");
-    // One mask glyph per source byte: two bytes in, two glyphs out.
-    assert_eq!(glyph_count(&tree.paint()), 2);
+    // Flutter uses one bullet per UTF-16 code unit, not UTF-8 byte.
+    assert_eq!(glyph_count(&tree.paint()), 1);
 
     let (mut plain, _) = mount_field(controller.clone(), |field| field.size(Size::new(180., 32.)));
     plain
@@ -404,7 +404,7 @@ fn obscure_masks_paint_keeps_semantics() {
 
     let sid = semantic_id(&mut tree, root);
     let node = tree.semantics().node(sid).expect("node");
-    assert_eq!(node.value.as_deref(), Some("é"));
+    assert_eq!(node.value.as_deref(), Some("•"));
     assert!(node.state.obscured);
 }
 
