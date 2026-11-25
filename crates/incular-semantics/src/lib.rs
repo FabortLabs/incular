@@ -8,6 +8,9 @@
 use incular_core::{Arena, ArenaId, Rect};
 use std::cmp::Ordering;
 
+mod custom_action;
+pub use custom_action::{CustomSemanticsAction, CustomSemanticsActionId};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct SemanticNodeId(pub ArenaId);
 

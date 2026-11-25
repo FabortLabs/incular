@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-semantics`: named and overriding custom action descriptions
+  now have canonical identifiers and reverse lookup.
+
 - `incular-animation`: transient callbacks can wait for the next frame
   without requesting a new one.
 
