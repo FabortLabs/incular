@@ -246,3 +246,128 @@ fn preview_locale_resolution_prefers_an_explicit_locale_and_ordered_callbacks() 
         Some(locale("en-US"))
     );
 }
+
+#[test]
+fn composed_preview_simulates_size_brightness_and_scale_for_wrappers_and_theme() {
+    use incular_config::{EdgeInsets, Locale, RuntimeEnvironment};
+    use incular_widgets::{
+        Localizations, internal::Key, widget_previews::PreviewLocalizationsData,
+    };
+
+    let key = Key::from("preview geometry");
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let theme_seen = seen.clone();
+    let wrapper_seen = seen.clone();
+    let snapshot = |context: &BuildContext<'_>| {
+        (
+            context.media_query_size().unwrap(),
+            context.media_query_text_scale().unwrap(),
+            context.media_query_platform_brightness().unwrap(),
+            context.media_query_padding().unwrap().top,
+            Localizations::locale_of(context).to_string(),
+        )
+    };
+    let mut builder = PreviewBuilder::new();
+    builder.size = Some(Size {
+        width: f32::INFINITY,
+        height: 60.,
+    });
+    builder.brightness = Some(Brightness::Dark);
+    builder.text_scale_factor = Some(1.75);
+    builder.localizations = Some(Rc::new(|| PreviewLocalizationsData {
+        locale: Some("es".parse::<Locale>().unwrap()),
+        supported_locales: vec!["es".parse().unwrap()],
+        ..Default::default()
+    }));
+    builder.theme = Some(Rc::new(move || {
+        let seen = theme_seen.clone();
+        Rc::new(move |context: &BuildContext<'_>, child: Widget| {
+            seen.borrow_mut().push(("theme", snapshot(context)));
+            child
+        })
+    }));
+    builder.add_wrapper(move |child| {
+        let seen = wrapper_seen.clone();
+        Builder::new(move |context| {
+            seen.borrow_mut().push(("wrapper", snapshot(context)));
+            child.clone()
+        })
+        .into()
+    });
+    let mut tree = WidgetTree::new();
+    let environment = RuntimeEnvironment {
+        viewport: Size::new(500., 300.),
+        safe_insets: EdgeInsets::only(0., 12., 0., 0.),
+        ..Default::default()
+    };
+    tree.set_environment(environment.clone());
+    tree.mount(builder.build().compose(leaf().with_key(key.clone())))
+        .unwrap();
+    let constraints = Constraints::loose(Size::new(500., 300.));
+    tree.layout(constraints).unwrap();
+    let leaf_id = tree.element_with_key(&key).unwrap();
+    assert_eq!(
+        tree.element_geometry(leaf_id).unwrap().1,
+        Size::new(40., 60.)
+    );
+
+    let expected = |top| {
+        (
+            builder.size.unwrap(),
+            1.75,
+            Brightness::Dark,
+            top,
+            "es".to_owned(),
+        )
+    };
+    assert_eq!(
+        *seen.borrow(),
+        [("theme", expected(12.)), ("wrapper", expected(12.))]
+    );
+    tree.set_environment(RuntimeEnvironment {
+        safe_insets: EdgeInsets::only(0., 20., 0., 0.),
+        ..environment
+    });
+    tree.layout(constraints).unwrap();
+    assert_eq!(tree.element_with_key(&key), Some(leaf_id));
+    let seen = seen.borrow();
+    assert!(seen[2..].contains(&("theme", expected(20.))));
+    assert!(seen[2..].contains(&("wrapper", expected(20.))));
+}
+
+#[test]
+fn composed_preview_keeps_outer_media_query_for_unspecified_aspects() {
+    use incular_config::{Brightness, EdgeInsets, RuntimeEnvironment};
+    use incular_widgets::MediaQuery;
+
+    let mut config = PreviewBuilder::new();
+    config.text_scale_factor = Some(2.);
+    let child = Builder::new(|context| {
+        assert_eq!(context.media_query_size(), Some(Size::new(320., 240.)));
+        assert_eq!(context.media_query_device_pixel_ratio(), Some(2.));
+        assert_eq!(
+            context.media_query_platform_brightness(),
+            Some(Brightness::Dark)
+        );
+        assert_eq!(context.media_query_view_padding().unwrap().bottom, 8.);
+        assert_eq!(context.media_query_text_scale(), Some(2.));
+        leaf()
+    });
+    let mut tree = WidgetTree::new();
+    tree.mount(
+        MediaQuery::new(
+            RuntimeEnvironment {
+                viewport: Size::new(320., 240.),
+                scale_factor: 2.,
+                brightness: Brightness::Dark,
+                view_padding: EdgeInsets::only(0., 0., 0., 8.),
+                ..Default::default()
+            },
+            config.build().compose(child),
+        )
+        .into(),
+    )
+    .unwrap();
+    tree.layout(Constraints::loose(Size::new(500., 300.)))
+        .unwrap();
+}

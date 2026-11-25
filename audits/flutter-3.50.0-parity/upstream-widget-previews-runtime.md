@@ -65,3 +65,20 @@ than ICU's resource fallback. The app test checks the locale reaches
 the generated title. ICU remains the source of text direction,
 formatting, and catalog message fallback. BCP-47 extensions remain
 available to Rust consumers but do not alter the three-component match.
+
+### Simulated media and actual layout
+
+`Preview::compose` applies the wrapper, theme, optional size, scoped
+MediaQuery and localizations in the scaffold's inner-to-outer order.
+The scope starts with the nearest MediaQuery, or the retained native
+snapshot when the preview is mounted directly. It only replaces the
+requested fields. A positive-infinite axis leaves layout sizing to
+the child without replacing the simulated MediaQuery extent.
+
+The pinned neutral `preview_media_reference_test.dart` and retained Rust
+`flutter350_preview_composition` verify that an unconstrained-width,
+60-high preview renders a 40-by-60 leaf, both theme and wrapper observe
+the simulated brightness/scale/size, padding changes are inherited
+without remounting, and an outer MediaQuery's independent fields are
+still visible. The authored probe does not exercise scaffold controls,
+including the user-selected brightness override, zoom, or restart.

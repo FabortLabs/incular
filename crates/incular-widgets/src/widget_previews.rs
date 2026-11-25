@@ -8,7 +8,7 @@ use std::rc::Rc;
 use incular_config::{Brightness, Locale, LocaleResolver, LocalizationCatalog};
 use incular_core::Size;
 
-use crate::{BuildContext, Builder, Localizations, Widget};
+use crate::{BuildContext, Builder, Localizations, MediaQuery, SizedBox, Widget};
 
 /// Wraps an existing preview widget in additional scaffolding.
 pub type WidgetWrapper = Rc<dyn Fn(Widget) -> Widget>;
@@ -232,6 +232,49 @@ impl Preview {
             Some(theme) => theme().apply(context, child),
             None => child,
         }
+    }
+
+    /// Composes a standalone preview from its wrappers, optional theme,
+    /// simulated MediaQuery, and retained localization scope.
+    ///
+    /// A finite size bounds the corresponding layout axis. Positive infinity
+    /// leaves that axis unconstrained by the preview, while the simulated
+    /// MediaQuery still receives the requested size, as in Flutter's host.
+    #[must_use]
+    pub fn compose(&self, child: impl Into<Widget>) -> Widget {
+        let mut child = self.wrap(child);
+        if let Some(factory) = &self.0.theme {
+            let theme = factory();
+            child = Builder::new(move |context| theme.apply(context, child.clone())).into();
+        }
+        let size = self.0.size;
+        if let Some(size) = size {
+            child = SizedBox::from_dimensions(
+                size.width.is_finite().then_some(size.width),
+                size.height.is_finite().then_some(size.height),
+                Some(child),
+            )
+            .into();
+        }
+        let text_scale = self.0.text_scale_factor;
+        let brightness = self.0.brightness;
+        if size.is_some() || text_scale.is_some() || brightness.is_some() {
+            child = Builder::new(move |context| {
+                let mut data = context.effective_media_query();
+                if let Some(size) = size {
+                    data.viewport = size;
+                }
+                if let Some(text_scale) = text_scale {
+                    data.text_scale = text_scale;
+                }
+                if let Some(brightness) = brightness {
+                    data.brightness = brightness;
+                }
+                MediaQuery::new(data, child.clone()).into()
+            })
+            .into();
+        }
+        self.apply_localizations(child)
     }
 
     /// Installs a retained localization scope for the preview subtree.

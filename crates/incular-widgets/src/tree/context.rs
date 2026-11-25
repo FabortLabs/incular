@@ -8,6 +8,9 @@ use incular_config::{
     TextDirection,
 };
 
+#[derive(Clone)]
+struct RuntimeEnvironmentSnapshot(RuntimeEnvironment);
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct RuntimeViewport(Size);
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -401,6 +404,16 @@ impl<'a> BuildContext<'a> {
         self.reduced_motion()
     }
 
+    /// Reads a complete snapshot for hosts that override only a subset of
+    /// the inherited MediaQuery data.
+    pub(crate) fn effective_media_query(&self) -> RuntimeEnvironment {
+        self.depend_on::<RuntimeEnvironment>().unwrap_or_else(|| {
+            self.depend_on::<RuntimeEnvironmentSnapshot>()
+                .map(|snapshot| snapshot.0)
+                .unwrap_or_default()
+        })
+    }
+
     /// Flutter's `MediaQuery.sizeOf`: the size of the nearest
     /// [`MediaQuery`](crate::MediaQuery) (or application view) scope. Depends
     /// only on the size aspect, so other environment changes do not rebuild
@@ -491,6 +504,10 @@ pub(super) fn install_runtime_environment(
     // Flutter reads `disableAnimations` from the platform's accessibility
     // features; here it follows the window's reduced-motion preference.
     incular_animation::set_disable_animations(environment.reduced_motion);
+    context.set_erased(
+        TypeId::of::<RuntimeEnvironmentSnapshot>(),
+        Rc::new(RuntimeEnvironmentSnapshot(environment.clone())),
+    );
     context.set_erased(
         TypeId::of::<RuntimeViewport>(),
         Rc::new(RuntimeViewport(environment.viewport)),
@@ -629,6 +646,12 @@ pub(super) fn update_runtime_environment(
         };
     }
 
+    if previous != next {
+        context.set_erased(
+            TypeId::of::<RuntimeEnvironmentSnapshot>(),
+            Rc::new(RuntimeEnvironmentSnapshot(next.clone())),
+        );
+    }
     replace_if_changed!(viewport, RuntimeViewport);
     replace_if_changed!(scale_factor, RuntimeScaleFactor);
     replace_if_changed!(brightness, RuntimeBrightness);
