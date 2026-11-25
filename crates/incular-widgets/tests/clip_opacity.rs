@@ -536,6 +536,36 @@ fn clip_rect_records_world_clip() {
 }
 
 #[test]
+fn adding_a_first_child_reactivates_the_retained_clip_without_replacing_it() {
+    for shape in 0..3 {
+        let scene = |with_child| match (shape, with_child) {
+            (0, false) => Widget::from(ClipRect::builder().build()),
+            (0, true) => Widget::from(ClipRect::new(labeled_action("in clip"))),
+            (1, false) => Widget::from(ClipRRect::builder().build()),
+            (1, true) => Widget::from(ClipRRect::new(0., labeled_action("in clip"))),
+            (2, false) => Widget::from(ClipPath::builder().build()),
+            (2, true) => Widget::from(ClipPath::builder().child(labeled_action("in clip")).build()),
+            _ => unreachable!(),
+        };
+        let mut tree = WidgetTree::new();
+        let root = tree.mount(scene(false)).unwrap();
+        let retained_render = tree.render_id(root).unwrap();
+        for with_child in [false, true, false, true] {
+            tree.update(root, scene(with_child)).unwrap();
+            tree.layout(Constraints::tight(Size::new(40., 40.)))
+                .unwrap();
+            assert_eq!(tree.render_id(root), Some(retained_render));
+            assert_eq!(tree.children(root).unwrap().len(), usize::from(with_child));
+            assert_eq!(
+                world_clips(&tree.paint()).len(),
+                usize::from(with_child),
+                "shape={shape}, has_child={with_child}"
+            );
+        }
+    }
+}
+
+#[test]
 fn clip_behavior_toggle_needs_neither_layout_nor_paint() {
     // The clip lives in a compositor layer, not in any picture: toggling
     // the behavior rebuilds the layer binding and rewrites the shape, but

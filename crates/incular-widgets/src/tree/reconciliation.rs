@@ -701,7 +701,15 @@ impl WidgetTree {
         #[cfg(feature = "devtools")]
         let mut work_reasons: (Option<String>, Option<String>, Option<String>) = (None, None, None);
         let mut layer_structure_changed = false;
-        if *old_kind != new_kind {
+        // A first or last child can change the required compositor
+        // attachment without changing the render object's properties.
+        if *old_kind != new_kind
+            || !self
+                .render_live(render, "updated render must remain live")
+                .object
+                .layers
+                .structure_matches(widget.kind())
+        {
             let mut layers = self
                 .render_live(render, "updated render must remain live")
                 .object

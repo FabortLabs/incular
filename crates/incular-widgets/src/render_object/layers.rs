@@ -476,6 +476,10 @@ impl RenderLayers {
         }
     }
 
+    pub(crate) fn structure_matches(&self, widget: &WidgetKind) -> bool {
+        self.spec() == LayerSpec::for_widget(widget)
+    }
+
     pub(crate) fn owned_ids(&self) -> [Option<LayerId>; 5] {
         let (attachment_a, attachment_b) = match self.attachment {
             LayerAttachment::Direct => (None, None),
@@ -499,7 +503,7 @@ impl RenderLayers {
         compositor: &mut LayerTree,
         widget: &WidgetKind,
     ) -> bool {
-        if self.spec() == LayerSpec::for_widget(widget) {
+        if self.structure_matches(widget) {
             return false;
         }
 

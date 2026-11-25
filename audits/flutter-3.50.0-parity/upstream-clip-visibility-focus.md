@@ -147,3 +147,15 @@ affine mask for a rotated or sheared hard rectangle and keeps the
 simple scissor path for axis-aligned clips. Both renderer probes now
 agree at all three samples, including the white center and the black
 exterior. This authored probe does not add to the original count.
+
+## Clip child attachment transitions
+
+An authored Flutter frame sequence inserts, removes, and reinserts a
+child for ClipRect, ClipRRect, and ClipPath without replacing the
+render object. On the first native retained Rust port, the child was
+present but a previously childless ClipRect never installed a clip
+stage. Reconciliation now compares the required layer structure even
+when the render properties have not changed. All three shapes emit a
+clip only with a child and retain their original render IDs through
+the full sequence. Both pinned authored and 52 focused Rust tests
+pass; the original comparison count is unchanged.
