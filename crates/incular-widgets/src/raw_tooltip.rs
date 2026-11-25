@@ -2,9 +2,9 @@
 //!
 //! The controller owns the tooltip state machine while the widget descriptor
 //! only describes how the child, semantics, and anchored overlay are composed.
-//! Timing is deliberately driven by [`RawTooltipController::poll`] (or
-//! [`RawTooltipController::tick`]); this crate does not create timer threads or
-//! depend on an application runtime.
+//! A mounted tooltip advances its deadlines on the runtime's frame clock.
+//! Standalone hosts can drive the same state with [`RawTooltipController::poll`]
+//! or [`RawTooltipController::tick`]. No timer threads are created here.
 //!
 //! # Platform-neutral limits
 //!
@@ -35,10 +35,7 @@ use std::time::Duration;
 
 use incular_config::Alignment;
 use incular_core::Offset;
-use incular_gestures::{
-    GestureCallbacks, GestureRecognizerFactoryWithHandlers, PointerDeviceKind,
-    PointerGestureRecognizer, TapDownDetails,
-};
+use incular_gestures::PointerDeviceKind;
 use incular_rendering::LayerLink;
 use incular_semantics::SemanticRole;
 use incular_text::RichText;
@@ -46,7 +43,7 @@ use smart_default::SmartDefault;
 
 use crate::{
     CompositedTransformFollower, CompositedTransformTarget, FocusNode, FocusableActionDetector,
-    HitTestBehavior, IgnorePointer, Listener, MouseRegion, OverlayPortal, RawGestureDetector,
+    GestureDetector, HitTestBehavior, IgnorePointer, Listener, MouseRegion, OverlayPortal,
     Semantics, TapRegion, Text, Widget,
 };
 
@@ -153,6 +150,7 @@ struct ControllerState {
     hovering: HashSet<u64>,
     focused: bool,
     manual: bool,
+    held: bool,
     pending: Option<PendingTransition>,
     durations: RawTooltipDurations,
     on_triggered: Option<Rc<dyn Fn()>>,
@@ -204,6 +202,7 @@ impl RawTooltipController {
                 hovering: HashSet::new(),
                 focused: false,
                 manual: false,
+                held: false,
                 pending: None,
                 durations: RawTooltipDurations::default(),
                 on_triggered: None,
@@ -270,6 +269,7 @@ impl RawTooltipController {
         let mut state = self.state.borrow_mut();
         state.pending = None;
         state.manual = false;
+        state.held = false;
         set_visible(&mut state, false)
     }
 
@@ -317,7 +317,7 @@ impl RawTooltipController {
     }
 
     pub fn trigger_tap_at(&self, now: Instant) -> bool {
-        self.trigger_touch_at(now)
+        self.trigger_touch_at(now, false)
     }
 
     /// Shows from a touch or pen long press and schedules the touch visibility
@@ -327,16 +327,17 @@ impl RawTooltipController {
     }
 
     pub fn trigger_long_press_at(&self, now: Instant) -> bool {
-        self.trigger_touch_at(now)
+        self.trigger_touch_at(now, false)
     }
 
-    fn trigger_touch_at(&self, now: Instant) -> bool {
+    fn trigger_touch_at(&self, now: Instant, held: bool) -> bool {
         let (changed, callback) = {
             let mut state = self.state.borrow_mut();
             state.manual = false;
+            state.held = held;
             state.pending = None;
             let changed = set_visible(&mut state, true);
-            if state.hovering.is_empty() && !state.focused {
+            if !held && state.hovering.is_empty() && !state.focused {
                 state.pending = Some(PendingTransition::Hide {
                     at: deadline(now, state.durations.show_duration),
                     force: false,
@@ -463,6 +464,7 @@ impl RawTooltipController {
         state.hovering.clear();
         state.pending = None;
         state.manual = false;
+        state.held = false;
         let _ = now;
         set_visible(&mut state, false)
     }
@@ -482,6 +484,9 @@ impl RawTooltipController {
     /// Schedules the touch deadline after a long-press recognizer releases.
     pub fn release_touch_at(&self, now: Instant) {
         let mut state = self.state.borrow_mut();
+        if !std::mem::take(&mut state.held) {
+            return;
+        }
         if state.hovering.is_empty() && !state.focused && !state.manual && state.visible {
             let show_duration = state.durations.show_duration;
             schedule_hide(&mut state, deadline(now, show_duration), false);
@@ -491,7 +496,7 @@ impl RawTooltipController {
     /// Applies one scheduled state transition. Returns whether the visible
     /// flag changed and therefore whether a retained rebuild is needed.
     pub fn tick(&self, now: Instant) -> bool {
-        {
+        let changed = {
             let mut state = self.state.borrow_mut();
             let Some(pending) = state.pending else {
                 return false;
@@ -517,7 +522,11 @@ impl RawTooltipController {
                 }
                 _ => false,
             }
+        };
+        if changed && self.is_visible() {
+            self.register_open();
         }
+        changed
     }
 
     /// Convenience form for hosts whose frame clock is the system clock.
@@ -797,6 +806,7 @@ pub struct RawTooltip {
     follower_anchor: Option<Alignment>,
     offset: Option<Offset>,
     layer_link: LayerLink,
+    last_pointer_time: Rc<Cell<Instant>>,
 }
 
 impl fmt::Debug for RawTooltip {
@@ -850,6 +860,7 @@ impl RawTooltip {
             follower_anchor: None,
             offset: None,
             layer_link: LayerLink::default(),
+            last_pointer_time: Rc::new(Cell::new(Instant::now())),
         }
     }
 
@@ -1249,17 +1260,14 @@ impl RawTooltip {
             TooltipTriggerMode::Tap | TooltipTriggerMode::LongPress
         );
         if uses_touch_gesture || self.enable_tap_to_dismiss {
-            let last_event_time = Rc::new(Cell::new(Instant::now()));
-            let last_kind = Rc::new(Cell::new(PointerDeviceKind::Mouse));
+            let last_event_time = self.last_pointer_time.clone();
             let down_controller = controller.clone();
             let mode = self.trigger_mode;
             let dismissible = self.enable_tap_to_dismiss;
             let down_time = last_event_time.clone();
-            let down_kind = last_kind.clone();
             let mut listener = Listener::new(anchor).behavior(HitTestBehavior::Opaque);
             listener = listener.on_pointer_down(move |event| {
                 down_time.set(event.time);
-                down_kind.set(event.kind);
                 if dismissible && !is_trigger_pointer(mode, event.kind) {
                     let _ = down_controller.dismiss_by_pointer_at(event.time);
                 }
@@ -1269,63 +1277,50 @@ impl RawTooltip {
                 .on_pointer_up(move |event| up_time.set(event.time))
                 .on_pointer_cancel({
                     let cancel_time = last_event_time.clone();
-                    move |event| cancel_time.set(event.time)
+                    let release = controller.clone();
+                    move |event| {
+                        cancel_time.set(event.time);
+                        release.release_touch_at(event.time);
+                    }
                 });
             anchor = listener.into();
 
             if uses_touch_gesture {
-                let tap_controller = controller.clone();
-                let tap_time = last_event_time.clone();
-                let tap_kind = last_kind.clone();
-                let tap_down_kind = last_kind.clone();
-                let long_controller = controller.clone();
-                let long_time = last_event_time.clone();
-                let long_kind = last_kind.clone();
-                let cancel_controller = controller.clone();
-                let callbacks = GestureCallbacks {
-                    on_tap_down: Some(Rc::new(move |details: TapDownDetails| {
-                        tap_down_kind.set(details.kind);
-                    })),
-                    on_tap: (self.trigger_mode == TooltipTriggerMode::Tap).then(|| {
-                        Rc::new(move || {
-                            if is_touch_trigger_kind(tap_kind.get()) {
-                                let _ = tap_controller.trigger_tap_at(tap_time.get());
-                            }
-                        }) as Rc<dyn Fn()>
-                    }),
-                    on_long_press: (self.trigger_mode == TooltipTriggerMode::LongPress).then(
-                        || {
-                            Rc::new(move || {
-                                if is_touch_trigger_kind(long_kind.get()) {
-                                    let _ = long_controller.trigger_long_press_at(long_time.get());
-                                }
-                            }) as Rc<dyn Fn()>
-                        },
-                    ),
-                    on_long_press_up: (self.trigger_mode == TooltipTriggerMode::LongPress).then(
-                        || {
-                            let release_controller = controller.clone();
-                            let release_time = last_event_time.clone();
-                            Rc::new(move || release_controller.release_touch_at(release_time.get()))
-                                as Rc<dyn Fn()>
-                        },
-                    ),
-                    on_cancel: self.enable_tap_to_dismiss.then(|| {
-                        let cancel_time = last_event_time.clone();
-                        Rc::new(move || {
-                            let _ = cancel_controller.cancel_trigger_at(cancel_time.get());
-                        }) as Rc<dyn Fn()>
-                    }),
-                    ..GestureCallbacks::default()
+                let mut gestures = GestureDetector::new(anchor)
+                    .supported_devices([
+                        PointerDeviceKind::Touch,
+                        PointerDeviceKind::Stylus,
+                        PointerDeviceKind::InvertedStylus,
+                        PointerDeviceKind::Trackpad,
+                        PointerDeviceKind::Unknown,
+                    ])
+                    .exclude_from_semantics(true)
+                    .behavior(HitTestBehavior::DeferToChild);
+                let trigger = controller.clone();
+                let trigger_time = last_event_time.clone();
+                let cancel = controller.clone();
+                let cancel_time = last_event_time.clone();
+                let dismiss_canceled = move || {
+                    if dismissible {
+                        let _ = cancel.cancel_trigger_at(cancel_time.get());
+                    }
                 };
-                let factory = GestureRecognizerFactoryWithHandlers::new(
-                    move || PointerGestureRecognizer::new(callbacks.clone()),
-                    |_recognizer| {},
-                );
-                anchor = RawGestureDetector::new(anchor)
-                    .gesture(factory)
-                    .behavior(HitTestBehavior::DeferToChild)
-                    .into();
+                if self.trigger_mode == TooltipTriggerMode::Tap {
+                    gestures = gestures
+                        .on_tap(move || {
+                            let _ = trigger.trigger_tap_at(trigger_time.get());
+                        })
+                        .on_tap_cancel(dismiss_canceled);
+                } else {
+                    let release = controller.clone();
+                    gestures = gestures
+                        .on_long_press(move || {
+                            let _ = trigger.trigger_touch_at(trigger_time.get(), true);
+                        })
+                        .on_long_press_up(move || release.release_touch_at(last_event_time.get()))
+                        .on_long_press_cancel(dismiss_canceled);
+                }
+                anchor = gestures.into();
             }
         }
 
@@ -1410,6 +1405,7 @@ impl RawTooltip {
                 ..crate::TransientDismissPolicy::tooltip()
             })
             .on_dismiss(move |_| dismiss_controller.hide())
+            .tooltip_timer(controller.clone())
             .show(controller.is_visible())
             .into()
     }

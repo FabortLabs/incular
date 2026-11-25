@@ -299,7 +299,7 @@ packages/flutter/test/rendering/flex_test.dart	1256	Negative RenderFlex.spacing 
 packages/flutter/test/widgets/baseline_test.dart	115	Baseline does not crash at zero area	partial-match	upstream-repeat-focus-restoration-flex-and-image-filter.md
 packages/flutter/test/widgets/image_filter_test.dart	104	Image filter - matrix	partial-mismatch	upstream-repeat-focus-restoration-flex-and-image-filter.md
 packages/flutter/test/widgets/image_filter_test.dart	158	Image filter - enabled and disabled	partial-match	upstream-repeat-focus-restoration-flex-and-image-filter.md
-packages/flutter/test/widgets/raw_tooltip_test.dart	573	RawTooltip dismiss countdown begins on long press release	paired-mismatch	upstream-raw-tooltip-trigger-and-hold.md
+packages/flutter/test/widgets/raw_tooltip_test.dart	573	RawTooltip dismiss countdown begins on long press release	paired-match	upstream-raw-tooltip-trigger-and-hold.md#current-mounted-deadline-behavior
 packages/flutter/test/widgets/raw_tooltip_test.dart	1757	Tooltip triggers on tap when trigger mode is tap	paired-match	upstream-raw-tooltip-trigger-and-hold.md
 packages/flutter/test/widgets/raw_tooltip_test.dart	1767	Tooltip triggers on long press when mode is long press	paired-match	upstream-raw-tooltip-trigger-and-hold.md
 packages/flutter/test/widgets/raw_tooltip_test.dart	1794	Tooltip does not trigger when trigger mode is manual	paired-match	upstream-raw-tooltip-trigger-and-hold.md
@@ -1359,3 +1359,6 @@ packages/flutter/test/rendering/box_test.dart	882	addWithPaintTransform	paired-m
 packages/flutter/test/rendering/box_test.dart	966	addWithPaintOffset	paired-match	upstream-hit-transforms.md
 packages/flutter/test/rendering/box_test.dart	1037	addWithRawTransform	paired-match	upstream-hit-transforms.md
 packages/flutter/test/rendering/box_test.dart	1108	addWithOutOfBandPosition	paired-match	upstream-hit-transforms.md
+packages/flutter/test/widgets/raw_tooltip_test.dart	601	RawTooltip is dismissed after a long press and touchDelay expired	paired-match	upstream-raw-tooltip-trigger-and-hold.md#current-mounted-deadline-behavior
+packages/flutter/test/widgets/raw_tooltip_test.dart	622	RawTooltip is dismissed after a tap and touchDelay expired	paired-match	upstream-raw-tooltip-trigger-and-hold.md#current-mounted-deadline-behavior
+packages/flutter/test/widgets/raw_tooltip_test.dart	829	Tooltip shows/hides when hovered	partial-match	upstream-raw-tooltip-trigger-and-hold.md#current-mounted-deadline-behavior

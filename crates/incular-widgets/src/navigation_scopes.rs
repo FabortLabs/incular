@@ -25,6 +25,7 @@ pub struct OverlayPortal {
     dismiss_policy: Option<TransientDismissPolicy>,
     on_dismiss: Option<Rc<dyn Fn(TransientDismissReason) + 'static>>,
     root_overlay: bool,
+    tooltip_timer: Option<crate::RawTooltipController>,
     layout_slot: Option<crate::transient::OverlayLayoutSlot>,
     child: Widget,
 }
@@ -43,6 +44,7 @@ impl OverlayPortal {
             dismiss_policy: None,
             on_dismiss: None,
             root_overlay: false,
+            tooltip_timer: None,
             layout_slot: None,
             child: child.into(),
         }
@@ -132,6 +134,11 @@ impl OverlayPortal {
         self
     }
 
+    pub(crate) fn tooltip_timer(mut self, controller: crate::RawTooltipController) -> Self {
+        self.tooltip_timer = Some(controller);
+        self
+    }
+
     /// Forces this transient to ignore any enclosing transient portal when
     /// determining its retained overlay parent. This is the neutral owner for
     /// Material's `use_root_overlay` policy.
@@ -209,6 +216,7 @@ impl From<OverlayPortal> for Widget {
                 dismiss_policy,
                 on_dismiss: on_dismiss.clone(),
                 root_overlay: value.root_overlay,
+                tooltip_timer: value.tooltip_timer,
                 show: true,
                 anchor_child_index,
                 popup_child_index,
@@ -230,6 +238,7 @@ impl From<OverlayPortal> for Widget {
                 dismiss_policy,
                 on_dismiss,
                 root_overlay: value.root_overlay,
+                tooltip_timer: value.tooltip_timer,
                 show: false,
                 anchor_child_index: 0,
                 popup_child_index: 0,

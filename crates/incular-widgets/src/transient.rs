@@ -622,6 +622,7 @@ pub(crate) struct TransientPortalMarker {
     pub dismiss_policy: TransientDismissPolicy,
     pub on_dismiss: Option<Rc<dyn Fn(TransientDismissReason) + 'static>>,
     pub root_overlay: bool,
+    pub tooltip_timer: Option<crate::RawTooltipController>,
     pub show: bool,
     pub anchor_child_index: usize,
     pub popup_child_index: usize,

@@ -23,3 +23,25 @@ routes via a RawGestureDetector, where observation is tied to raw
 pointer events; its long-press controller path also installs a hide
 deadline when triggered. This comparison does not isolate exit
 animation timing independently of the failed held activation.
+
+## Current mounted deadline behavior
+
+The pinned originals at :573, :601 and :622 pass, and the corresponding
+mounted native tests now pass. An accepted stationary long press reveals
+the tooltip on the 500ms frame. It stays up without a dismissal deadline
+while held, including the 9,999-day injected-clock case. Releasing the
+captured touch starts the specified delay, including when release occurs
+outside the anchor. A tap starts its own delay at release.
+
+The authored hover probe compares a 100ms reveal and 60ms dismissal delay.
+No extra pointer movement is needed to reveal or hide the tooltip, and it
+stays visible throughout a day of injected time while hovered. Original
+:829 passed on Flutter but uses a zero hover delay, so its native comparison
+remains partial. The controller also registers delayed reveals for explicit
+dismiss-all. The mounted event-clock checks do not claim reverse animation
+pixel timing equivalence. While a deadline is pending the runtime uses
+its existing frame-demand scheduler and stops scheduling when it clears.
+
+Validation: 24 focused native tests passed across the controller, tooltip
+trigger/Escape, and upstream long-press targets. All pinned originals listed
+here and the authored hover probe passed.

@@ -156,3 +156,18 @@ fn rich_and_custom_builder_content_are_supported() {
     let custom = RawTooltip::with_builder(SizedBox::shrink(), builder);
     assert!(custom.tooltip_builder().is_some());
 }
+
+#[test]
+fn an_expired_hover_reveal_registers_for_dismiss_all() {
+    let controller = RawTooltipController::with_durations(RawTooltipDurations {
+        wait_duration: Duration::from_millis(100),
+        ..RawTooltipDurations::default()
+    });
+    let start = Instant::now();
+    assert!(!controller.mouse_enter_at(1, start));
+    assert!(controller.tick(start + Duration::from_millis(100)));
+    assert!(RawTooltipController::dismiss_all_at(
+        start + Duration::from_millis(101)
+    ));
+    assert!(!controller.is_visible());
+}

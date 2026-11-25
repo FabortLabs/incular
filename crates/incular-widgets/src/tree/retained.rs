@@ -381,6 +381,25 @@ impl WidgetTree {
         self.dismiss_transients_matching(reason, |_| true)
     }
 
+    /// Advance deadlines on the frame's event clock, not the animation clock.
+    #[doc(hidden)]
+    pub fn pump_tooltip_timers(&self, now: Instant) -> bool {
+        let mut pending = false;
+        for id in &self.tracked.transient_portals {
+            let timer = self
+                .elements
+                .get(id.0)
+                .and_then(|node| node.environment_override.as_ref())
+                .and_then(|scope| scope.value.downcast_ref::<TransientPortalMarker>())
+                .and_then(|marker| marker.tooltip_timer.as_ref());
+            if let Some(timer) = timer {
+                timer.tick(now);
+                pending |= timer.pending_deadline().is_some();
+            }
+        }
+        pending
+    }
+
     /// Tooltips get the first Escape before a focused dismiss shortcut or
     /// another transient. Return zero so ordinary routing continues when
     /// there is no open, dismissible tooltip.

@@ -3262,6 +3262,10 @@ impl Runtime {
         // The controllers that builds read tick here too, so their new values
         // build in this frame rather than the next.
         self.tree.tick_animations(now);
+        // Deadline callbacks can invalidate widgets. Deliver them before
+        // rebuilding so a stationary press shows a tooltip on the due frame.
+        let gesture_timers_live = self.tree.pump_gesture_timers(now);
+        let tooltip_timers_live = self.tree.pump_tooltip_timers(now);
         let runtime_messages = message_span.elapsed_us();
         drop(message_guard);
         let before = self.tree.diagnostics();
@@ -3327,9 +3331,6 @@ impl Runtime {
         // The overlay scrollbar's reveal/fade-out follows scrolling and hover,
         // so it steps after flings and before paint.
         let scrollbar_live = self.tree.pump_scrollbar_fades(now);
-        // Press and long-press deadlines (`kPressTimeout`, `kLongPressTimeout`)
-        // fire on the frame clock while a pointer is held without moving.
-        let gesture_timers_live = self.tree.pump_gesture_timers(now);
         let text_long_press_live = self.pump_text_long_press(now);
         let _layout_guard = tracing::info_span!("incular.layout").entered();
         let layout_span = profiling::PhaseSpan::start();
@@ -3418,6 +3419,7 @@ impl Runtime {
         self.frame_requested = fling_live
             || caret_revealed
             || gesture_timers_live
+            || tooltip_timers_live
             || text_long_press_live
             || scrollbar_live
             || !self.pending.is_empty()

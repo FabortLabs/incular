@@ -19,6 +19,15 @@ struct Fixture {
 
 impl Fixture {
     fn new(mode: TooltipTriggerMode, delay: Duration) -> Self {
+        Self::with_hover_delays(mode, delay, Duration::ZERO, Duration::ZERO)
+    }
+
+    fn with_hover_delays(
+        mode: TooltipTriggerMode,
+        delay: Duration,
+        enter: Duration,
+        exit: Duration,
+    ) -> Self {
         let controller = RawTooltipController::new();
         let triggers = Rc::new(Cell::new(0));
         let capture = triggers.clone();
@@ -31,6 +40,8 @@ impl Fixture {
         .trigger_mode(mode)
         .vertical_offset(24.)
         .touch_delay(delay)
+        .hover_delay(enter)
+        .dismiss_delay(exit)
         .on_triggered(move || capture.set(capture.get() + 1));
         let mut fixture = Self {
             runtime: Runtime::new(Center::new(tooltip).into()).unwrap(),
@@ -53,6 +64,17 @@ impl Fixture {
     }
 
     fn pointer(&mut self, pointer: u64, kind: PointerDeviceKind, phase: PointerPhase, at: u64) {
+        self.pointer_at(pointer, kind, phase, at, Offset::new(400., 300.));
+    }
+
+    fn pointer_at(
+        &mut self,
+        pointer: u64,
+        kind: PointerDeviceKind,
+        phase: PointerPhase,
+        at: u64,
+        position: Offset,
+    ) {
         self.runtime.handle_input_at(
             InputEvent::PointerWithMetadata {
                 pointer,
@@ -66,7 +88,7 @@ impl Fixture {
                 button: Some(PRIMARY_POINTER_BUTTON),
                 sample: PointerSampleMetadata::EMPTY,
                 phase,
-                position: Offset::new(400., 300.),
+                position,
             },
             self.start + Duration::from_millis(at),
         );
@@ -123,10 +145,11 @@ fn long_press_overlay_stays_visible_until_delay_measured_from_release() {
     let mut probe = Fixture::new(TooltipTriggerMode::LongPress, Duration::from_secs(1));
     let far_at = 600 + Duration::from_secs(9999 * 24 * 60 * 60).as_millis() as u64;
     probe.pointer(1, PointerDeviceKind::Touch, PointerPhase::Down, 10);
-    probe.frame(510);
-    let accepted = probe.frame(520);
+    assert!(!probe.frame(509));
+    let accepted = probe.frame(510);
     let held = probe.frame(far_at);
     let held_again = probe.frame(far_at + 1);
+    assert_eq!(probe.controller.pending_deadline(), None);
     probe.pointer(1, PointerDeviceKind::Touch, PointerPhase::Up, far_at + 2);
     let released = probe.frame(far_at + 2);
     probe.frame(far_at + 1002);
@@ -147,4 +170,60 @@ fn mouse_hold_is_not_a_touch_tooltip_trigger() {
     let (_, touch) = probe.long_press(2, 650);
     assert!(touch, "same live tooltip accepts a touch hold");
     assert_eq!(mouse, (false, 0), "mouse press without hover-move");
+}
+
+#[test]
+fn released_long_press_expires_on_its_own_touch_deadline() {
+    let mut probe = Fixture::new(TooltipTriggerMode::LongPress, Duration::from_secs(3));
+    probe.pointer(1, PointerDeviceKind::Touch, PointerPhase::Down, 10);
+    assert!(probe.frame(510));
+    // Release outside the anchor; the captured gesture owns this release.
+    probe.pointer_at(
+        1,
+        PointerDeviceKind::Touch,
+        PointerPhase::Up,
+        520,
+        Offset::new(30., 30.),
+    );
+    assert!(probe.frame(3519));
+    assert!(!probe.frame(3520));
+    assert_eq!(probe.triggers.get(), 1);
+}
+
+#[test]
+fn tap_starts_its_deadline_when_released() {
+    let mut probe = Fixture::new(TooltipTriggerMode::Tap, Duration::from_secs(3));
+    assert!(probe.tap(1, 10));
+    assert!(probe.frame(3019));
+    assert!(!probe.frame(3020));
+}
+
+#[test]
+fn hover_stays_visible_until_exit_and_respects_both_scheduled_delays() {
+    let mut probe = Fixture::with_hover_delays(
+        TooltipTriggerMode::LongPress,
+        NORMAL_DELAY,
+        Duration::from_millis(100),
+        Duration::from_millis(60),
+    );
+    probe.pointer_at(
+        1,
+        PointerDeviceKind::Mouse,
+        PointerPhase::Move,
+        0,
+        Offset::ZERO,
+    );
+    probe.pointer(1, PointerDeviceKind::Mouse, PointerPhase::Move, 10);
+    assert!(!probe.frame(109));
+    assert!(probe.frame(110));
+    assert!(probe.frame(86_400_110));
+    probe.pointer_at(
+        1,
+        PointerDeviceKind::Mouse,
+        PointerPhase::Move,
+        86_400_120,
+        Offset::ZERO,
+    );
+    assert!(probe.frame(86_400_179));
+    assert!(!probe.frame(86_400_180));
 }
