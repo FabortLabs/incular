@@ -70,6 +70,10 @@ runs keep test logs and any comparison reports/JSON, but discard compiled
 Dart build products. Set `INCULAR_AUDIT_KEEP_DART_BUILD=1` for a run that
 needs to keep those products. Failed runs retain their isolated package.
 
+Use `python3 audits/flutter-3.50.0-parity/coverage-progress.py --by-library`
+for paired, partial, and unreviewed registration counts per library.
+These are ledger counts; the linked test evidence establishes behavior.
+
 ## Inventory by public entrypoint
 
 Counts include cross-library re-exports. Do not add the rows to get unique
