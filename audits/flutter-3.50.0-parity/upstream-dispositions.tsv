@@ -960,3 +960,12 @@ packages/flutter/test/painting/circle_border_test.dart	17	CircleBorder getInnerP
 packages/flutter/test/painting/oval_border_test.dart	21	OvalBorder	paired-match	upstream-border-constraints-formatters.md#circle-and-oval-paths
 packages/flutter/test/rendering/box_constraints_test.dart	35	BoxConstraints operators	paired-match	upstream-border-constraints-formatters.md#layout-bound-arithmetic-and-view-conversion
 packages/flutter/test/rendering/box_constraints_test.dart	200	BoxConstraints.fromViewConstraints	paired-match	upstream-border-constraints-formatters.md#layout-bound-arithmetic-and-view-conversion
+packages/flutter/test/rendering/flex_test.dart	194	Defaults	partial-match	upstream-flex-retained-placement.md
+packages/flutter/test/rendering/flex_test.dart	216	Parent data	paired-match	upstream-flex-retained-placement.md
+packages/flutter/test/rendering/flex_test.dart	236	Stretch	paired-match	upstream-flex-retained-placement.md
+packages/flutter/test/rendering/flex_test.dart	265	Space evenly	paired-match	upstream-flex-retained-placement.md
+packages/flutter/test/rendering/flex_test.dart	303	MainAxisAlignment.start with RenderFlex.spacing	paired-match	upstream-flex-retained-placement.md
+packages/flutter/test/rendering/flex_test.dart	338	MainAxisAlignment.end with RenderFlex.spacing	paired-match	upstream-flex-retained-placement.md
+packages/flutter/test/rendering/flex_test.dart	377	MainAxisAlignment.center with RenderFlex.spacing	paired-match	upstream-flex-retained-placement.md
+packages/flutter/test/rendering/flex_test.dart	416	MainAxisAlignment.spaceEvenly with RenderFlex.spacing	paired-match	upstream-flex-retained-placement.md
+packages/flutter/test/rendering/flex_test.dart	455	MainAxisAlignment.spaceAround with RenderFlex.spacing	paired-match	upstream-flex-retained-placement.md
