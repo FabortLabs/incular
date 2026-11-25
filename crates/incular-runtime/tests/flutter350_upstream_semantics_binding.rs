@@ -229,3 +229,226 @@ fn merged_semantics_keeps_the_strongest_accessibility_focus_block() {
         BlockSubtree
     );
 }
+
+fn app_at_fixture_size(child: impl Into<Widget>) -> Runtime {
+    let mut runtime = Runtime::new(scene(child)).unwrap();
+    runtime
+        .run_frame(Constraints::tight(Size::new(800., 600.)))
+        .unwrap();
+    runtime
+}
+
+fn check_custom_actions_in_focus_block_scope(
+    mode: AccessibilityFocusBlockType,
+    expected_child_blocked: bool,
+) {
+    use incular_semantics::CustomSemanticsAction;
+
+    let actions = [
+        CustomSemanticsAction::new("action1"),
+        CustomSemanticsAction::new("action2"),
+    ];
+    let calls = Rc::new(Cell::new(0));
+    let children = std::array::from_fn::<_, 2, _>(|index| {
+        let call_count = calls.clone();
+        let mut child = Semantics::new(SizedBox::square(10.)).container(true);
+        if index == 0 {
+            child = child.accessibility_focus_block_type(AccessibilityFocusBlockType::None);
+        }
+        child.custom_action(actions[index].clone(), move || {
+            call_count.set(call_count.get() + 1)
+        })
+    });
+    let mut runtime = app_at_fixture_size(
+        Semantics::new(Column::new(children))
+            .container(true)
+            .accessibility_focus_block_type(mode),
+    );
+    let tree = runtime.tree().semantics();
+    let [parent] = tree.roots() else {
+        panic!("one scene semantic root");
+    };
+    let parent = tree.node(*parent).unwrap();
+    assert!(parent.state.accessibility_focus_block_type.blocks_focus());
+    assert!(parent.actions.is_empty());
+    let children: [SemanticNodeId; 2] = parent.children.as_slice().try_into().unwrap();
+    for (child, action) in children.into_iter().zip(actions) {
+        let node = runtime.tree().semantics().node(child).unwrap();
+        assert_eq!(
+            node.state.accessibility_focus_block_type.blocks_focus(),
+            expected_child_blocked
+        );
+        assert_eq!(node.actions.as_slice(), &[SemanticActionKind::Custom]);
+        assert_eq!(
+            node.state.custom_actions.as_ref(),
+            &[action.get_identifier()]
+        );
+        assert!(node.children.is_empty());
+        assert!(
+            runtime
+                .dispatch_semantic_action(child, SemanticAction::Custom(action.get_identifier()))
+        );
+    }
+    assert_eq!(calls.get(), 2);
+}
+
+// widgets/semantics_test.dart:875
+#[test]
+fn subtree_focus_block_retains_both_custom_actions_and_blocks_both_children() {
+    check_custom_actions_in_focus_block_scope(AccessibilityFocusBlockType::BlockSubtree, true);
+}
+
+// widgets/semantics_test.dart:940
+#[test]
+fn node_focus_block_retains_both_custom_actions_without_blocking_children() {
+    check_custom_actions_in_focus_block_scope(AccessibilityFocusBlockType::BlockNode, false);
+}
+
+// widgets/semantics_test.dart:995
+#[test]
+fn explicit_merge_absorbs_a_block_node_flag_and_both_labels() {
+    let child = |label| {
+        Semantics::new(SizedBox::square(10.))
+            .container(true)
+            .label(label)
+    };
+    let runtime = app_at_fixture_size(MergeSemantics::new(Column::new([
+        child("node1").accessibility_focus_block_type(AccessibilityFocusBlockType::BlockNode),
+        child("node2"),
+    ])));
+    let tree = runtime.tree().semantics();
+    let merged = semantic_id(&runtime, "node1\nnode2");
+    assert_eq!(tree.roots(), &[merged]);
+    let node = tree.node(merged).unwrap();
+    assert!(node.children.is_empty());
+    assert!(node.state.accessibility_focus_block_type.blocks_focus());
+}
+
+fn implicit_focus_block_scene(mode: AccessibilityFocusBlockType) -> Widget {
+    let child = |label| Semantics::new(SizedBox::square(10.)).label(label);
+    Semantics::new(
+        Semantics::new(Column::new([
+            child("semantics label 1"),
+            child("semantics label 2"),
+        ]))
+        .label("semantics label 0")
+        .accessibility_focus_block_type(mode),
+    )
+    .label("root")
+    .into()
+}
+
+// widgets/semantics_test.dart:1043
+#[test]
+fn implicit_node_block_does_not_absorb_unblocked_parent_or_children() {
+    let runtime = app_at_fixture_size(implicit_focus_block_scene(
+        AccessibilityFocusBlockType::BlockNode,
+    ));
+    let tree = runtime.tree().semantics();
+    let root = semantic_id(&runtime, "root");
+    let blocked = semantic_id(&runtime, "semantics label 0");
+    let children = [
+        semantic_id(&runtime, "semantics label 1"),
+        semantic_id(&runtime, "semantics label 2"),
+    ];
+    assert_eq!(tree.roots(), &[root]);
+    assert_eq!(tree.node(root).unwrap().children.as_slice(), &[blocked]);
+    assert_eq!(tree.node(blocked).unwrap().children.as_slice(), &children);
+    assert!(
+        tree.node(blocked)
+            .unwrap()
+            .state
+            .accessibility_focus_block_type
+            .blocks_focus()
+    );
+    for id in [root, children[0], children[1]] {
+        assert!(
+            !tree
+                .node(id)
+                .unwrap()
+                .state
+                .accessibility_focus_block_type
+                .blocks_focus()
+        );
+    }
+}
+
+// widgets/semantics_test.dart:1098
+#[test]
+fn implicit_subtree_block_absorbs_compatible_inherited_blocked_labels_but_not_parent() {
+    let runtime = app_at_fixture_size(implicit_focus_block_scene(
+        AccessibilityFocusBlockType::BlockSubtree,
+    ));
+    let tree = runtime.tree().semantics();
+    let root = semantic_id(&runtime, "root");
+    assert_eq!(tree.roots(), &[root]);
+    assert!(
+        !tree
+            .node(root)
+            .unwrap()
+            .state
+            .accessibility_focus_block_type
+            .blocks_focus()
+    );
+    let [blocked] = tree.node(root).unwrap().children.as_slice() else {
+        panic!("one blocked branch");
+    };
+    let blocked = tree.node(*blocked).unwrap();
+    assert_eq!(
+        blocked.label.as_deref(),
+        Some("semantics label 0\nsemantics label 1\nsemantics label 2")
+    );
+    assert!(blocked.children.is_empty());
+    assert!(blocked.state.accessibility_focus_block_type.blocks_focus());
+}
+
+#[test]
+fn blocked_label_merge_refreshes_after_edits_and_preserves_explicit_children() {
+    let mode = AccessibilityFocusBlockType::BlockSubtree;
+    let build = |label: &'static str, explicit| {
+        let first = Semantics::new(SizedBox::square(10.))
+            .label(label)
+            .container(explicit);
+        let boundary = Semantics::new(SizedBox::square(10.))
+            .label("boundary")
+            .container(true);
+        let last = Semantics::new(SizedBox::square(10.)).label("last");
+        Semantics::new(Column::new([first, boundary, last]))
+            .label("blocked")
+            .accessibility_focus_block_type(mode)
+    };
+    let mut runtime = app_at_fixture_size(build("first", false));
+    let id = semantic_id(&runtime, "blocked\nfirst\nlast");
+    let boundary = semantic_id(&runtime, "boundary");
+    let root = runtime.tree().root().unwrap();
+    for (label, explicit, merged) in [
+        ("first", false, "blocked\nfirst\nlast"),
+        ("updated", false, "blocked\nupdated\nlast"),
+        ("updated", true, "blocked\nlast"),
+        ("again", false, "blocked\nagain\nlast"),
+    ] {
+        runtime
+            .tree_mut()
+            .update(root, scene(build(label, explicit)))
+            .unwrap();
+        runtime
+            .run_frame(Constraints::tight(Size::new(800., 600.)))
+            .unwrap();
+        assert_eq!(semantic_id(&runtime, merged), id);
+        assert_eq!(semantic_id(&runtime, "boundary"), boundary);
+        let tree = runtime.tree().semantics();
+        let children = &tree.node(id).unwrap().children;
+        if explicit {
+            assert_eq!(children, &[semantic_id(&runtime, label), boundary]);
+        } else {
+            assert_eq!(children, &[boundary]);
+        }
+        assert!(
+            tree.node(boundary)
+                .unwrap()
+                .state
+                .accessibility_focus_block_type
+                .blocks_focus()
+        );
+    }
+}

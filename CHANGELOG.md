@@ -323,6 +323,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- A blocked accessibility subtree combines compatible labels without dropping
+  explicit child nodes or their actions.
+
 - Changing text direction during AnimatedAlign or AnimatedFractionallySizedBox
   repositions the child without restarting the animation.
 

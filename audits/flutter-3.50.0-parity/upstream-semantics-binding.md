@@ -83,3 +83,27 @@ delivers keys across all three modes. The mounted Rust control likewise
 retains the node IDs, focus and activation callbacks. Merging retains
 the strongest block. All 33 focused Rust tests and four named Flutter
 originals passed. No native assistive-technology run is claimed.
+
+## Label absorption in blocked subtrees
+
+Five exact originals at `widgets/semantics_test.dart:875,940,995,1043,1098`
+pass on both sides. The first two now use two real custom action
+descriptors. A subtree block marks the parent and both children;
+a node block marks only the parent. Both modes retain and can dispatch
+the same actions, including when the child explicitly supplies None.
+
+An explicit MergeSemantics still joins both labels and the node-block
+flag. Without explicit merge, a node block keeps the unblocked parent
+and children separate. A subtree block now absorbs compatible inherited
+label fragments, so the subtree has one blocked label and does not
+merge upward into the unblocked parent. Before this change, its two
+plain labels remained as separate children.
+
+The authored `blocked_semantic_label_merge_test.dart` checks changing
+a merged label, promoting it to an explicit child, and absorbing it
+again. The owner and an unrelated explicit boundary keep their IDs
+throughout, and the unrelated child remains blocked. The implementation
+limits this implicit merge to compatible labels and preserves richer
+annotations, actions, explicit nodes and their child geometry. This
+is not a general port of Flutter's semantic conflict reducer or a
+native assistive-technology check. All 37 focused Rust tests passed.
