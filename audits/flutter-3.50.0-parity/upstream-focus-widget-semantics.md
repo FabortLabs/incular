@@ -24,3 +24,14 @@ a panic. It passes.
 includeSemantics builder, and its FocusScope cannot be supplied the
 external FocusScopeNode the original uses. An absent annotation by default
 or a different no-crash widget would not cover those behaviors.
+
+## Authored annotation-boundary controls
+
+The pinned Linux/iOS reference probe
+`focus_semantics_annotation_reference_test.dart` establishes the shape
+of the fix. Two ordinary descendant labels are joined with a newline in
+one Focus node. A nested Focus retains its own label and focus action;
+an explicitly separate semantic control also stays independent. In
+particular iOS still exposes the focusable and focused state, but its
+Focus widget omits the input-focus action that Linux exposes.
+These authored cases do not add original registration credit.
