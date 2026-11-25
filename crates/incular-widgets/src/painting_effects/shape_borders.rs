@@ -8,6 +8,7 @@ use std::{f64::consts::PI, rc::Rc, sync::Arc};
 use incular_config::{EdgeInsets, TextDirection};
 use incular_core::{Offset, Rect, Size};
 use incular_rendering::{Canvas, CornerRadii, Paint, Path, Stroke};
+use smart_default::SmartDefault;
 
 use super::decoration::{BorderSide, BorderStyle};
 use super::geometry::BorderRadius;
@@ -211,8 +212,9 @@ fn stroke(canvas: &mut Canvas, side: &BorderSide, path: Path) {
 }
 
 /// Flutter's `StadiumBorder`: semicircular ends on the shorter sides.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct StadiumBorder {
+    #[default(BorderSide::NONE)]
     pub side: BorderSide,
 }
 
@@ -272,8 +274,9 @@ impl incular_core::Lerp for StadiumBorder {
 }
 
 /// Flutter's `RoundedRectangleBorder`: a rectangle with rounded corners.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct RoundedRectangleBorder {
+    #[default(BorderSide::NONE)]
     pub side: BorderSide,
     /// Circular corner radii; each corner uses its horizontal radius.
     pub border_radius: BorderRadius,
@@ -331,8 +334,9 @@ impl incular_core::Lerp for RoundedRectangleBorder {
 
 /// Flutter's `RoundedSuperellipseBorder`: a rectangle whose corners are
 /// rounded superellipses, the continuous corners of iOS.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct RoundedSuperellipseBorder {
+    #[default(BorderSide::NONE)]
     pub side: BorderSide,
     /// Circular corner radii; Incular's corner geometry has no elliptical
     /// radii, so each corner uses its horizontal radius.
@@ -408,8 +412,9 @@ impl incular_core::Lerp for RoundedSuperellipseBorder {
 /// Flutter's `CircleBorder` with zero eccentricity: a circle inscribed in the
 /// shortest side. Flutter's `eccentricity` parameter is not modelled, so the
 /// shape is always a circle.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct CircleBorder {
+    #[default(BorderSide::NONE)]
     pub side: BorderSide,
 }
 
@@ -471,8 +476,9 @@ impl incular_core::Lerp for CircleBorder {
 }
 
 /// Flutter's `OvalBorder`: an ellipse inscribed in the rectangle.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct OvalBorder {
+    #[default(BorderSide::NONE)]
     pub side: BorderSide,
 }
 
@@ -520,8 +526,9 @@ impl incular_core::Lerp for OvalBorder {
 /// straight segments between each corner radius's two endpoints. Only the
 /// horizontal radius of each corner sets the bevel's extent, as Incular's
 /// corner geometry is circular.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct BeveledRectangleBorder {
+    #[default(BorderSide::NONE)]
     pub side: BorderSide,
     pub border_radius: BorderRadius,
 }
@@ -1212,8 +1219,9 @@ fn get_angle(a: Point, b: Point, c: Point) -> f64 {
 /// (`painting/continuous_rectangle_border.dart`): a rectangle whose corners
 /// blend into the sides along cubic curves with both controls at the
 /// corner, for a smoother transition than a circular arc.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct ContinuousRectangleBorder {
+    #[default(BorderSide::NONE)]
     pub side: BorderSide,
     pub border_radius: BorderRadius,
 }
@@ -1346,8 +1354,9 @@ impl LinearBorderEdge {
 /// whose outline is drawn only along the chosen edges, each possibly
 /// shortened and aligned. Painted for a left-to-right direction (`start` is
 /// the left edge), as [`ShapeBorder::paint`] carries no text direction.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct LinearBorder {
+    #[default(BorderSide::NONE)]
     pub side: BorderSide,
     pub start: Option<LinearBorderEdge>,
     pub end: Option<LinearBorderEdge>,

@@ -207,3 +207,21 @@ an outside directional start stroke moves from x=0 to x=38 under RTL.
 This does not claim equivalence for the general Dart border-addition
 operator or specialization for every built-in shape. The existing
 separate superellipse precision assertion remains open.
+
+## Outlined shapes default to no stroke
+
+The pinned default checks for StadiumBorder, RoundedRectangleBorder,
+RoundedSuperellipseBorder, OvalBorder, BeveledRectangleBorder and
+ContinuousRectangleBorder all require an absent side. The four
+rectangular shapes also use zero corner radii. Before the repair, the
+Rust types inherited the standalone BorderSide default, causing seven
+shapes (including CircleBorder) to draw a solid black 1px outline
+without requesting one. LinearBorder held that side too, but did not
+draw while all edges were absent.
+
+A focused recording now verifies zero stroke commands and zero
+dimension insets for all nine outlined shapes, including StarBorder,
+which already had the correct default. Bare BorderSide still defaults
+to a 1px solid stroke. CircleBorder's eccentricity property and the
+optional-argument shape of the Dart LinearBorder factories are separate
+unpaired portions of those originals.
