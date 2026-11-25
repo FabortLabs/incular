@@ -867,7 +867,7 @@ impl WidgetTree {
                         event.pointer,
                         device,
                         kind,
-                        0,
+                        buttons,
                         event.position,
                         event.phase,
                         event.time,
@@ -1209,7 +1209,16 @@ impl WidgetTree {
                         let Some(recognizer) = candidate.recognizer.as_mut() else {
                             continue;
                         };
-                        match recognizer.observe(event) {
+                        let raw = crate::raw_input::RawPointerEvent::new(
+                            event.pointer,
+                            device,
+                            kind,
+                            buttons,
+                            event.position,
+                            event.phase,
+                            event.time,
+                        );
+                        match recognizer.observe_raw(raw) {
                             GestureDecision::Accept(action) => match disposition {
                                 GestureDisposition::Accepted => {
                                     callbacks.push((candidate.member, action))

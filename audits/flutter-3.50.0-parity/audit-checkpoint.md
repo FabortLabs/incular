@@ -917,3 +917,8 @@ and 96 historical mismatches. All FittedBox originals are classified.
 The [AspectRatio physical view recheck](upstream-current-route-aspect-and-long-press.md#aspectratio-physical-view-recheck)
 completes one partial: 472 / 8,965 (5.26%), with 376 matches
 and 96 historical mismatches.
+
+The [long press mask recheck](upstream-current-route-aspect-and-long-press.md#long-press-button-mask-remediation)
+repairs a historical mismatch: changing buttons before the hold
+deadline cancels the pending long press without affecting the next
+press or an already accepted hold.

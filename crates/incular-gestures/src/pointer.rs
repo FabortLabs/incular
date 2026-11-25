@@ -65,6 +65,7 @@ pub struct PointerGestureRecognizer {
     callbacks: GestureCallbacks,
     kind: PointerDeviceKind,
     down: Option<PointerEvent>,
+    down_buttons: Option<u32>,
     last_tap: Option<Instant>,
     /// Flutter `_firstTap`: where and when the first tap of a possible double
     /// tap went down.
@@ -205,6 +206,7 @@ impl PointerGestureRecognizer {
             callbacks,
             kind: PointerDeviceKind::Unknown,
             down: None,
+            down_buttons: None,
             last_tap: None,
             last_tap_down: None,
             double_tap_second: false,
@@ -690,6 +692,33 @@ impl PointerGestureRecognizer {
     /// retained arena delay observable behavior until it has accepted this
     /// recognizer. Direct users should normally keep using [`Self::handle`].
     pub fn observe(&mut self, event: PointerEvent) -> GestureDecision {
+        self.observe_with_buttons(event, None)
+    }
+
+    fn observe_with_buttons(
+        &mut self,
+        event: PointerEvent,
+        buttons: Option<u32>,
+    ) -> GestureDecision {
+        if self.down.is_none_or(|down| down.pointer == event.pointer) {
+            if event.phase == PointerPhase::Down {
+                self.down_buttons = buttons.filter(|&mask| mask != 0);
+            } else if event.phase == PointerPhase::Move
+                && self.down.is_some()
+                && !self.long_press_started
+                && !self.long_press_rejected
+                && self.has_long_press_callbacks()
+                && self
+                    .down_buttons
+                    .zip(buttons)
+                    .is_some_and(|(down, now)| down != now)
+            {
+                // Flutter rejects a long press whose buttons changed before
+                // its deadline; an accepted long press keeps tracking.
+                self.long_press_rejected = true;
+                self.long_press_cancel();
+            }
+        }
         let decision = self.observe_phase(event);
         if let Some(memory) = &self.tap_memory {
             memory.set(TapMemory {
@@ -1184,7 +1213,7 @@ impl GestureRecognizer for PointerGestureRecognizer {
 
     fn observe_raw(&mut self, event: crate::details::RawPointerEvent) -> GestureDecision {
         self.kind = event.kind;
-        Self::observe(self, event.legacy())
+        self.observe_with_buttons(event.legacy(), Some(event.buttons))
     }
 
     fn cancel(&mut self) {

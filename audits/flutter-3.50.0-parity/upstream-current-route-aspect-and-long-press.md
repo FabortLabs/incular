@@ -38,3 +38,13 @@ physical viewport is zero. Its original nonzero size returns on the
 next nonzero viewport, including scale-factor conversion. All three
 AspectRatio originals are fully compared; the Runtime fixture does not
 claim native window-manager behavior.
+
+## Long press button-mask remediation
+
+Pinned :427 and :455 pass along with all five focused Rust Runtime
+cases. The button mask now reaches the ordinary recognizer on both
+down and move. A mask change before acceptance emits exactly one
+cancel and can no longer start or end a long press later in that
+stream. A subsequent primary press on the same widget still works.
+A mask change after acceptance does not cancel. These rechecks do not
+add new originals; the earlier mismatch remains historical evidence.

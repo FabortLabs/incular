@@ -199,6 +199,7 @@ fn buttons_changed_before_acceptance_cancel_but_next_press_still_works() {
         [Down, Cancel],
         "first press after release: {first_after_release:?}",
     );
+    assert_eq!(first_after_release, [Down, Cancel]);
 }
 
 #[test]
