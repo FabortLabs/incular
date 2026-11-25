@@ -53,3 +53,48 @@ fn stationary_overscroll_finishes_and_snaps_by_240_ms() {
     // The scroll spring snaps position, but dx still samples its derivative.
     close_to(motion.dx(0.240), -9.196_634_393_526_46);
 }
+
+#[test]
+fn rubber_band_switches_only_for_stationary_out_of_range_releases() {
+    use incular_scroll::ScrollDecelerationRate;
+    for (rate, extra_deceleration) in [
+        (ScrollDecelerationRate::Normal, 0.),
+        (ScrollDecelerationRate::Fast, 1400.),
+    ] {
+        let physics = ScrollPhysics::clamping()
+            .bouncing_with(rate)
+            .with_device_pixel_ratio(2.);
+        let tolerance = physics.tolerance();
+        assert_eq!(tolerance.velocity, 10.);
+        for initial in [-10., 110.] {
+            for (velocity, spring) in [
+                (-10., physics.spring()),
+                (-9.99, ScrollPhysics::rubber_band_spring()),
+                (0., ScrollPhysics::rubber_band_spring()),
+                (9.99, ScrollPhysics::rubber_band_spring()),
+                (10., physics.spring()),
+            ] {
+                let result = physics
+                    .ballistic_simulation(initial, velocity, 0., 100.)
+                    .unwrap();
+                let expected = FlingSimulation::bouncing(
+                    spring,
+                    initial,
+                    velocity,
+                    0.,
+                    100.,
+                    extra_deceleration,
+                    tolerance,
+                );
+                for t in [0., 0.016, 0.070, 0.240] {
+                    assert_eq!(
+                        (result.x(t), result.dx(t), result.is_done(t)),
+                        (expected.x(t), expected.dx(t), expected.is_done(t))
+                    );
+                }
+            }
+        }
+        assert!(physics.ballistic_simulation(50., 9.99, 0., 100.).is_none());
+        assert!(physics.ballistic_simulation(50., 10., 0., 100.).is_some());
+    }
+}

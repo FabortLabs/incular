@@ -294,6 +294,19 @@ impl ScrollPhysics {
         }
     }
 
+    /// Flutter's rubber-band spring for a stationary release outside the
+    /// scroll extents. Its visible decay has a 70 ms half-life; a second
+    /// much faster root makes the system continuous at the release instant.
+    #[must_use]
+    pub const fn rubber_band_spring() -> ScrollSpring {
+        const LAMBDA: f64 = std::f64::consts::LN_2 / 0.07;
+        ScrollSpring {
+            mass: 1.,
+            stiffness: (100_000. * LAMBDA * LAMBDA) as f32,
+            damping: (100_001. * LAMBDA) as f32,
+        }
+    }
+
     #[must_use]
     pub const fn page_snapping(mut self, extent: f32) -> Self {
         self.snap = SnapPhysics::Page { extent };
@@ -698,9 +711,15 @@ impl ScrollPhysics {
         match self.boundary {
             BoundaryPhysics::Bouncing { deceleration_rate } => {
                 let out_of_range = position < leading || position > trailing;
-                (velocity.abs() >= tolerance.velocity || out_of_range).then(|| {
+                let stationary = velocity.abs() < tolerance.velocity;
+                (!stationary || out_of_range).then(|| {
+                    let spring = if stationary && out_of_range {
+                        Self::rubber_band_spring()
+                    } else {
+                        self.spring()
+                    };
                     FlingSimulation::bouncing(
-                        self.spring(),
+                        spring,
                         position,
                         velocity,
                         leading,

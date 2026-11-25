@@ -32,3 +32,19 @@ This is not the earlier finite scroll f32 narrowing case.
 
 Scratch: `20261124-163621-795`,
 `editing-selection-offsets-20261124-163647-164`, `20261124-163522-965`.
+
+## Stationary rubber-band return
+
+Pinned Flutter selects a separate overdamped spring only when an
+out-of-range bouncing release is slower than the tolerance velocity.
+The visible root has a 70ms half-life. Incular now uses those exact
+parameters for that case, independently of the fast/normal moving
+fling spring. Both extents and the exact velocity threshold are
+covered at device ratio 2; the existing 16ms position/velocity and
+240ms snap checks remain at ratio 1.
+
+The strict fresh stationary trace matches all 91 frames, including
+the earlier snap and the derivative after snapping. Both touch
+overscroll variants still match their 37-frame references and the
+ListWheel fling matches its 66-frame trace. All 17 focused ballistic
+and 11 neighboring native touch/fill checks passed.
