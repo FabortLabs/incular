@@ -2,6 +2,15 @@
 
 use crate::{Offset, Size};
 
+/// Whether a logical key label is exactly one C0 or C1 control character,
+/// matching Flutter's `LogicalKeyboardKey.isControlCharacter`.
+/// Empty labels, key names, and multi-character labels do not qualify.
+#[must_use]
+pub fn is_control_key_label(label: &str) -> bool {
+    let mut chars = label.chars();
+    matches!(chars.next(), Some('\0'..='\x1f' | '\x7f'..='\u{9f}')) && chars.next().is_none()
+}
+
 /// Pressure normalized to the closed interval `[0, 1]`.
 ///
 /// Native adapters normalize once at their boundary. Values outside a native

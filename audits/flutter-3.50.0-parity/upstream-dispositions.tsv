@@ -835,3 +835,4 @@ packages/flutter/test/services/system_chrome_test.dart	289	==, hashCode basics	p
 packages/flutter/test/services/system_chrome_test.dart	312	copyWith can override properties	paired-match	upstream-system-chrome-comparisons.md#system-ui-overlay-style-values
 packages/flutter/test/services/system_chrome_test.dart	331	SystemUiOverlayStyle implements debugFillProperties	paired-match	upstream-system-chrome-comparisons.md#system-ui-overlay-style-values
 packages/flutter/test/services/system_chrome_test.dart	363	SystemChrome handles detached lifecycle state	paired-match	upstream-system-chrome-comparisons.md#detach-resets-the-delivery-cache
+packages/flutter/test/services/keyboard_key_test.dart	50	Control characters are recognized as such	paired-match	upstream-keyboard-services.md#control-key-label-classification

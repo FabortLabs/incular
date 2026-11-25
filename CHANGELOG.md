@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-core`: added Flutter-compatible C0/C1 control classification
+  for single logical keyboard labels.
+
 - `incular-platform`: added Flutter-style overlay copies, value hashing,
   and ordered diagnostics for status and navigation bar styles.
 
