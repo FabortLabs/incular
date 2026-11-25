@@ -76,3 +76,14 @@ No corresponding Incular preview manifest/scaffold APIs exist;
 the normal CLI build/run path and manual hot patch example are
 not substitutes. No full Flutter tool suite, preview rendering,
 or live DTD connection was run. Keep separate reference-only results.
+
+## Autofocus after replacing a detached control
+
+The previously paired mismatch at `focus_manager_test.dart:1752` now
+passes. After the old Focus element is unmounted, its node loses
+primary focus and the newly mounted eligible autofocus child gets it
+after layout. Surviving, already-considered autofocus nodes do not
+replay a request, and the runtime still honors explicit clearing
+before first layout. Twelve focused Rust tests passed. The historical
+paired row remains in the audit; pre-first-attachment focus visibility
+at :633 is a separate open failure and was excluded from this run.

@@ -83,6 +83,7 @@ fn replacement_autofocus_works_after_focused_child_is_detached() {
         .expect("replace original");
     frame(&mut runtime);
     assert!(!runtime.tree().element_exists(old_target));
+    assert!(!original.has_primary_focus());
     let target = runtime
         .tree()
         .element_with_key(&key)
@@ -96,6 +97,51 @@ fn replacement_autofocus_works_after_focused_child_is_detached() {
         (true, true),
         "newly mounted autofocus target takes focus after the old target is removed"
     );
+}
+
+#[test]
+fn surviving_autofocus_is_not_replayed_when_a_different_node_detaches() {
+    let first = FocusNode::new();
+    let other = FocusNode::new();
+    let nodes = |show_first| {
+        let mut children = Vec::new();
+        if show_first {
+            children.push(
+                Widget::from(
+                    Focus::new(SizedBox::shrink())
+                        .node(first.clone())
+                        .autofocus(true),
+                )
+                .with_key(Key::from("first")),
+            );
+        }
+        children.push(
+            Widget::from(
+                Focus::new(SizedBox::shrink())
+                    .node(other.clone())
+                    .autofocus(true),
+            )
+            .with_key(Key::from("other")),
+        );
+        scoped_slot(Column::new(children))
+    };
+    let mut runtime = Runtime::new(nodes(true)).unwrap();
+    frame(&mut runtime);
+    assert!(first.has_primary_focus());
+    assert!(!other.has_primary_focus());
+    let other_id = runtime
+        .tree()
+        .element_with_key(&Key::from("other"))
+        .unwrap();
+    let root = runtime.tree().root().unwrap();
+    runtime.schedule_update(root, nodes(false)).unwrap();
+    frame(&mut runtime);
+    assert_eq!(
+        runtime.tree().element_with_key(&Key::from("other")),
+        Some(other_id)
+    );
+    assert!(!other.has_primary_focus());
+    assert_eq!(runtime.focused_element(), None);
 }
 
 #[test]

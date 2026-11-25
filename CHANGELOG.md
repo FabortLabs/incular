@@ -204,6 +204,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-runtime`: a newly mounted autofocus control can take focus
+  after the previously focused control is removed.
+
 - `incular-gestures`: a late rejection can no longer revoke an already
   accepted arena member.
 

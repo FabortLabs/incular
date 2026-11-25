@@ -648,6 +648,51 @@ impl WidgetTree {
             })
     }
 
+    pub(super) fn note_mounted_autofocus(&mut self, id: ElementId, widget: &Widget) {
+        if self.hosted_focus_nodes.is_some()
+            && (widget.semantic_properties().focus_scope_autofocus
+                || match widget.kind() {
+                    WidgetKind::Gesture { callbacks, .. } => callbacks.autofocus,
+                    WidgetKind::TextField(spec) => spec.autofocus,
+                    _ => false,
+                })
+        {
+            self.mounted_autofocus.push(id);
+        }
+    }
+
+    /// Drains mount-time autofocus requests; detached, hidden or otherwise
+    /// ineligible requests do not survive to a later frame.
+    #[doc(hidden)]
+    pub fn finish_mounted_autofocus(&mut self, use_requests: bool) -> Option<ElementId> {
+        if !use_requests {
+            self.mounted_autofocus.clear();
+            return None;
+        }
+        let requests = std::mem::take(&mut self.mounted_autofocus);
+        requests.into_iter().find_map(|id| {
+            let element = self.elements.get(id.0)?;
+            if match element.widget.kind() {
+                WidgetKind::Gesture { callbacks, .. } => callbacks.autofocus,
+                WidgetKind::TextField(spec) => spec.autofocus,
+                _ => false,
+            } && self.can_request_focus(id)
+            {
+                return Some(id);
+            }
+            element
+                .widget
+                .semantic_properties()
+                .focus_scope_autofocus
+                .then(|| {
+                    self.focusable_elements()
+                        .into_iter()
+                        .find(|candidate| self.is_descendant_or_self(*candidate, id))
+                })
+                .flatten()
+        })
+    }
+
     /// Notifies focus-within callbacks and mirrors standalone tree focus
     /// onto the listener's node. Runtime trees synchronize their full path.
     pub fn set_keyboard_focus(&self, id: ElementId, focused: bool) {

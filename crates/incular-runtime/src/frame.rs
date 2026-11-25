@@ -2805,6 +2805,7 @@ impl Runtime {
             tracing::info_span!("incular.build", elements_updated = tracing::field::Empty,)
                 .entered();
         let build_span = profiling::PhaseSpan::start();
+        let focused_at_start = self.focused;
         let mut updated = 0;
         while let Some(id) = self.order.pop_front() {
             if let Some(widget) = self.pending.remove(&id)
@@ -2895,6 +2896,11 @@ impl Runtime {
         // reclaiming focus on later frames or after an explicit input decision.
         if self.initial_focus == InitialFocus::AwaitingLayout {
             self.set_focus(self.tree.autofocus_element());
+        }
+        let replaces_detached_focus = self.focused.is_none()
+            && focused_at_start.is_some_and(|focused| !self.tree.element_exists(focused));
+        if let Some(next) = self.tree.finish_mounted_autofocus(replaces_detached_focus) {
+            self.set_focus(Some(next));
         }
         let _composite_guard = tracing::info_span!("incular.composite").entered();
         let composite_span = profiling::PhaseSpan::start();

@@ -1417,6 +1417,9 @@ pub struct WidgetTree {
     /// Runtime-only focus attachments; a standalone WidgetTree keeps its
     /// direct FocusNode behavior.
     hosted_focus_nodes: Option<BTreeMap<ElementId, incular_gestures::FocusNodeAttachment>>,
+    /// Autofocus requests from newly mounted elements, consumed by the host
+    /// after reconciliation and layout.
+    mounted_autofocus: Vec<ElementId>,
     hosted_focus_chain: HostedFocusChain,
     #[cfg(feature = "devtools")]
     deep_trace: Option<DeepTraceCapture>,

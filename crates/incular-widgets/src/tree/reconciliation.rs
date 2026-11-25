@@ -424,6 +424,7 @@ impl WidgetTree {
             #[cfg(feature = "devtools")]
             dev: ElementDevData::default(),
         }));
+        self.note_mounted_autofocus(id, &widget);
         let previous = self.render_elements.insert(RenderObjectId(render), id);
         debug_assert!(previous.is_none(), "a render belongs to only one element");
         self.register_global_key(id, &widget);
