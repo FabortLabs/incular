@@ -2159,14 +2159,8 @@ fn semantics_hidden(entry: &Element) -> bool {
             entry.widget.kind(),
             WidgetKind::Opacity { alpha, controller, .. }
                 if !entry.widget.semantic_properties().always_include_semantics
-                    && opacity_is_transparent(controller.as_ref().map_or(*alpha, OpacityController::opacity))
+                    && incular_rendering::opacity_is_transparent(controller.as_ref().map_or(*alpha, OpacityController::opacity))
         )
-}
-
-/// Flutter's `RenderOpacity` considers alpha transparent when it
-/// rounds to zero on the 0..=255 scale.
-pub(super) fn opacity_is_transparent(alpha: f32) -> bool {
-    (alpha * 255.0).round() == 0.0
 }
 
 /// The sort key a widget's explicit semantics declares, if any.

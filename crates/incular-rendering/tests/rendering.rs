@@ -2114,3 +2114,44 @@ fn flutter_matrix_translations_are_unnormalized_0_to_255() {
     ]);
     assert_eq!(normalized, invert);
 }
+
+#[test]
+fn transparent_opacity_culls_retained_draws_and_visual_bounds_at_the_rounding_threshold() {
+    let mut tree = LayerTree::new();
+    let bounds = Rect::from_origin_size(Offset::new(10., 20.), Size::new(30., 40.));
+    let mut picture = DisplayList::new();
+    picture.push(PaintCommand::Rect {
+        rect: bounds,
+        color: Color::WHITE,
+    });
+    let content = tree.create_picture(picture, bounds);
+    let opacity = tree.create_opacity(1.0);
+    tree.set_children(opacity, vec![content]);
+    tree.set_root(opacity);
+
+    let first_visible = (0.5_f64 / 255.0) as f32;
+    let below = f32::from_bits(first_visible.to_bits() - 1);
+    for (alpha, visible) in [
+        (0.0, false),
+        (0.001, false),
+        (below, false),
+        (first_visible, true),
+        (1., true),
+    ] {
+        let _ = tree.update_opacity(opacity, alpha);
+        let flattened = tree.flatten();
+        assert_eq!(tree.scene_bounds(), visible.then_some(bounds));
+        assert_eq!(
+            flattened
+                .commands()
+                .iter()
+                .any(|cmd| matches!(cmd, PaintCommand::Rect { .. })),
+            visible
+        );
+        assert!(matches!(
+            flattened.commands().first(),
+            Some(PaintCommand::PushOpacity {layer, alpha: actual, ..})
+                if *layer == opacity && *actual == if visible {alpha} else {0.}
+        ));
+    }
+}

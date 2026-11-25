@@ -660,7 +660,7 @@ impl WidgetTree {
         matches!(kind, RenderKind::Visibility { visible: false, .. })
             || flow_child_hidden(kind)
             || matches!(kind, RenderKind::Opacity { alpha, controller }
-                if super::semantics::opacity_is_transparent(
+                if incular_rendering::opacity_is_transparent(
                     controller.as_ref().map_or(*alpha, OpacityController::opacity)
                 ))
             || (matches!(kind, RenderKind::FittedBox { .. }) && !self.fitted_content_is_visible(id))

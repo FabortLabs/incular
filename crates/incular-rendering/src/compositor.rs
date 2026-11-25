@@ -47,6 +47,12 @@ pub fn normalize_opacity(alpha: f32) -> f32 {
     }
 }
 
+/// Whether opacity becomes zero at Flutter's 8-bit paint threshold.
+#[must_use]
+pub fn opacity_is_transparent(alpha: f32) -> bool {
+    f64::from(normalize_opacity(alpha)) * 255.0 < 0.5
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct CompositorDiagnostics {
     pub layers: u64,
@@ -1992,18 +1998,23 @@ impl LayerTree {
                 out.push(PaintCommand::PopClip);
             }
             LayerKind::Opacity { alpha } => {
+                let invisible = opacity_is_transparent(alpha);
                 let bounds = self
                     .subtree_bounds(id, world_transform)
                     .unwrap_or_else(|| Rect::from_origin_size(Offset::ZERO, Size::ZERO));
+                // Keep the command marker and layer identity for retained
+                // diagnostics, but send no source draw work for zero alpha.
                 out.push(PaintCommand::PushOpacity {
                     layer: id,
-                    alpha,
-                    generation: self.subtree_generation(id),
+                    alpha: if invisible { 0.0 } else { alpha },
+                    generation: if invisible { 0 } else { self.subtree_generation(id) },
                     bounds,
                 });
-                self.visit_children(id, false, |tree, child| {
-                    tree.flatten_layer(child, world_transform, clip, out)
-                });
+                if !invisible {
+                    self.visit_children(id, false, |tree, child| {
+                        tree.flatten_layer(child, world_transform, clip, out)
+                    });
+                }
                 out.push(PaintCommand::PopOpacity);
             }
             LayerKind::Blur { blur } => {
@@ -2622,6 +2633,7 @@ impl LayerTree {
                     .reduce(union_rect)
                     .and_then(|bounds| bounds.intersection(world))
             }
+            LayerKind::Opacity { alpha } if opacity_is_transparent(*alpha) => None,
             LayerKind::Opacity { .. } => layer
                 .children
                 .iter()
@@ -2680,6 +2692,7 @@ impl LayerTree {
                 let world = clip_world_bounds(&layer.kind, world_transform)?;
                 child_bounds(self, world_transform).and_then(|bounds| bounds.intersection(world))
             }
+            LayerKind::Opacity { alpha } if opacity_is_transparent(*alpha) => None,
             LayerKind::Opacity { .. }
             | LayerKind::ColorFilter { .. }
             | LayerKind::Blend { .. }

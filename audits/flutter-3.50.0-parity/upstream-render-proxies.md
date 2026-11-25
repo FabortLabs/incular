@@ -44,3 +44,15 @@ live sliver opacity report false for their child at the tested states.
 A zero or rounded-to-zero alpha no longer calls the child painter.
 `always_include_semantics` can still retain the label and its bounds.
 The original first-painter counter now passes at 0, .001, .003, .1 and 1.
+
+### Half-byte threshold in retained scenes
+
+The pinned authored `opacity_paint_threshold_test.dart` verifies
+both neighboring representable Rust inputs around half an alpha byte.
+The renderer now applies the same threshold when flattening existing
+cached pictures, not just when generating a new picture. It keeps the
+opacity layer marker and ID, but omits its source commands and visual
+bounds when the effective alpha is zero. The adjacent visible value
+restores the same retained geometry. Targeted compositor, widget
+opacity and hit/semantics checks passed. This is not a GPU screenshot
+comparison.
