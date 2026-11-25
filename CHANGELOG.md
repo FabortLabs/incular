@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-animation`: added a debug assertion and a recoverable check
+  for a time-dilation scale that has not been reset to 1.
+
 - `incular-animation`: `Priority` provides Flutter's idle, animation, and
   touch bands with clamped relative offsets.
 

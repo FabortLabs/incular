@@ -181,6 +181,50 @@ pub fn try_set_time_dilation(dilation: f64) -> Result<(), InvalidTimeDilation> {
     Ok(())
 }
 
+/// An assertion that failed because animation time is still dilated.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ActiveTimeDilation<'a> {
+    /// Why the caller expected the time scale to be reset.
+    pub reason: &'a str,
+    /// The current scale (1.0 means real time).
+    pub dilation: f64,
+}
+
+impl std::fmt::Display for ActiveTimeDilation<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.reason)
+    }
+}
+
+impl std::error::Error for ActiveTimeDilation<'_> {}
+
+/// Returns the supplied rationale as an error if the real-time scale has
+/// not been restored. Unlike [`debug_assert_no_time_dilation`], this checks
+/// in release builds too.
+///
+/// # Errors
+/// Returns [`ActiveTimeDilation`] if the time scale is not 1.0.
+pub fn try_assert_no_time_dilation(reason: &str) -> Result<(), ActiveTimeDilation<'_>> {
+    let dilation = time_dilation();
+    if dilation == 1.0 {
+        Ok(())
+    } else {
+        Err(ActiveTimeDilation { reason, dilation })
+    }
+}
+
+/// Flutter `debugAssertNoTimeDilation`: sanity-checks that animation is
+/// back to real time, returning true after a successful or release check.
+///
+/// # Panics
+/// Panics in debug builds with `reason` if time is still dilated. Use
+/// [`try_assert_no_time_dilation`] for a recoverable check.
+#[must_use]
+pub fn debug_assert_no_time_dilation(reason: &str) -> bool {
+    debug_assert!(try_assert_no_time_dilation(reason).is_ok(), "{reason}");
+    true
+}
+
 /// The dilated frame timestamp of the raw frame timestamp `raw` (Flutter
 /// `_adjustForEpoch`). It is `raw` itself until [`set_time_dilation`] first
 /// changes the dilation. Runtime-internal: the widget tree reads its

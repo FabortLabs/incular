@@ -80,3 +80,11 @@ gives 90,000. The bound limits each offset, not the accumulated value.
 Rust also verifies negative offsets and machine integer edges without
 overflow. Four focused Rust tests and the original Flutter case passed.
 This is the public value API; prioritized UI task dispatch is separate.
+
+## Time-dilation assertions
+
+The originals at `scheduler/binding_test.dart:29,35` pair the
+debug behavior: after setting the scale back to 1 there is no error;
+at 3, the call fails with the caller's exact reason. Rust's companion
+fallible API additionally exposes the active scale in a typed error.
+Six focused Rust checks and both named Flutter originals passed.

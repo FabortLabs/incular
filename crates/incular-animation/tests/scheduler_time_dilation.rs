@@ -85,3 +85,37 @@ fn the_system_frame_clock_keeps_raw_timestamps_across_epoch_changes() {
     }
     set_time_dilation(1.0);
 }
+
+#[test]
+fn time_dilation_assertion_accepts_a_reset_scale() {
+    use incular_animation::{debug_assert_no_time_dilation, try_assert_no_time_dilation};
+    set_time_dilation(2.0);
+    set_time_dilation(1.0);
+
+    assert!(debug_assert_no_time_dilation("reason"));
+    assert_eq!(try_assert_no_time_dilation("reason"), Ok(()));
+}
+
+#[test]
+fn time_dilation_assertion_reports_the_supplied_reason() {
+    use incular_animation::{debug_assert_no_time_dilation, try_assert_no_time_dilation};
+    set_time_dilation(3.0);
+    let error = try_assert_no_time_dilation("reason").unwrap_err();
+    assert_eq!(error.to_string(), "reason");
+    assert_eq!(error.dilation, 3.0);
+
+    let debug_result = std::panic::catch_unwind(|| debug_assert_no_time_dilation("reason"));
+    set_time_dilation(1.0);
+    if cfg!(debug_assertions) {
+        let message = debug_result.unwrap_err();
+        assert_eq!(
+            message
+                .downcast_ref::<String>()
+                .map(String::as_str)
+                .or_else(|| message.downcast_ref::<&str>().copied()),
+            Some("reason")
+        );
+    } else {
+        assert!(debug_result.unwrap());
+    }
+}
