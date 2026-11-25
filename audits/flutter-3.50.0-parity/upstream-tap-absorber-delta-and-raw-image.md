@@ -39,6 +39,23 @@ focused primary and navigation Runtime cases pass. This is an authored
 ordering check, not a new original registration or a claim about order
 between multiple callbacks in the same classification.
 
+## Right and middle mouse buttons
+
+All six pinned right/middle registrations (:578, :652, :726, :815,
+:904, :978) and their mounted Runtime counterparts pass after removing
+the primary-only filter. Before the fix, Incular reported none of the
+right/middle classifications even though the raw pointer events arrived.
+The four earlier mismatches and two newly reproduced consumptive
+registrations are preserved in the evidence ledger.
+
+The authored paired control verifies that, with consumption off, a
+matching secondary or tertiary recognizer fires exactly once. With
+consumption on it does not fire, and neither button becomes a primary
+tap. A release with no buttons held clears the consumed raw stream;
+the next contact on the same pointer can reach a recognizer again.
+This slice does not compare native OS context-menu routing or button
+chords.
+
 ## Editing and raster defaults
 
 - Three original TextEditingDelta checks match the observable

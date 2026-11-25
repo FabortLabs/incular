@@ -8,11 +8,11 @@ use incular_core::{
 };
 use incular_runtime::Runtime;
 use incular_widgets::{
-    Column, Directionality, Listener, Row, TapRegion, TapRegionSurface, TextDirection, Widget,
-    internal::Key,
+    Column, Directionality, GestureDetector, Listener, Row, TapRegion, TapRegionSurface,
+    TextDirection, Widget, internal::Key,
 };
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     rc::Rc,
     time::{Duration, Instant},
 };
@@ -48,13 +48,14 @@ enum Callback {
     Outside,
 }
 
-fn assert_mouse_button_classification(callback: Callback, button: u32) {
+fn assert_mouse_button_classification(callback: Callback, button: u32, consume: bool) {
     use Spot::{A, B, Outside, OutsideSurface, Solo};
 
     let reported = Rc::new(RefCell::new(Vec::new()));
     let raw = Rc::new(RefCell::new(Vec::new()));
     let region = |spot, grouped| {
-        let mut region = TapRegion::new(Spot::widget(spot));
+        let mut region =
+            TapRegion::new(Spot::widget(spot)).consume_outside_taps(consume && spot != A);
         if grouped {
             region = region.group_id(1_u64);
         }
@@ -65,8 +66,24 @@ fn assert_mouse_button_classification(callback: Callback, button: u32) {
             Callback::Outside => region.on_tap_outside(record),
         })
     };
+    let propagated = Rc::new(Cell::new(0));
+    let propagated_nonprimary = Rc::new(Cell::new(0));
+    let primary_tap = {
+        let propagated = Rc::clone(&propagated);
+        move || propagated.set(propagated.get() + 1)
+    };
+    let outside = GestureDetector::new(Outside.widget())
+        .on_tap(primary_tap)
+        .on_secondary_tap({
+            let counter = Rc::clone(&propagated_nonprimary);
+            move || counter.set(counter.get() + 1)
+        })
+        .on_tertiary_tap_up({
+            let counter = Rc::clone(&propagated_nonprimary);
+            move |_| counter.set(counter.get() + 1)
+        });
     let surface = TapRegionSurface::new(Row::new([
-        Outside.widget(),
+        Widget::from(outside),
         region(Solo, false),
         region(A, true),
         region(B, true),
@@ -139,29 +156,51 @@ fn assert_mouse_button_classification(callback: Callback, button: u32) {
 
     let primary = spots.map(|spot| click(spot, PRIMARY_POINTER_BUTTON));
     assert_eq!(primary, expected, "primary click control");
+    let reaches_underlying_gesture = usize::from(!consume);
+    assert_eq!(propagated.get(), reaches_underlying_gesture);
     let nonprimary = spots.map(|spot| click(spot, button));
     assert_eq!(
         nonprimary, expected,
         "the region classifies mouse button {button}"
     );
+    assert_eq!(
+        propagated.get(),
+        reaches_underlying_gesture,
+        "non-primary must not become a primary tap"
+    );
+    assert_eq!(
+        propagated_nonprimary.get(),
+        reaches_underlying_gesture,
+        "matched button only reaches the recognizer when not consumed"
+    );
 }
 
 #[test]
 fn tap_surface_reports_outside_on_secondary_button() {
-    assert_mouse_button_classification(Callback::Outside, SECONDARY_POINTER_BUTTON);
+    assert_mouse_button_classification(Callback::Outside, SECONDARY_POINTER_BUTTON, false);
 }
 
 #[test]
 fn tap_surface_reports_outside_on_middle_button() {
-    assert_mouse_button_classification(Callback::Outside, TERTIARY_POINTER_BUTTON);
+    assert_mouse_button_classification(Callback::Outside, TERTIARY_POINTER_BUTTON, false);
 }
 
 #[test]
 fn tap_surface_reports_inside_on_secondary_button() {
-    assert_mouse_button_classification(Callback::Inside, SECONDARY_POINTER_BUTTON);
+    assert_mouse_button_classification(Callback::Inside, SECONDARY_POINTER_BUTTON, false);
 }
 
 #[test]
 fn tap_surface_reports_inside_on_middle_button() {
-    assert_mouse_button_classification(Callback::Inside, TERTIARY_POINTER_BUTTON);
+    assert_mouse_button_classification(Callback::Inside, TERTIARY_POINTER_BUTTON, false);
+}
+
+#[test]
+fn tap_surface_consumes_outside_secondary_button_when_enabled() {
+    assert_mouse_button_classification(Callback::Outside, SECONDARY_POINTER_BUTTON, true);
+}
+
+#[test]
+fn tap_surface_consumes_outside_middle_button_when_enabled() {
+    assert_mouse_button_classification(Callback::Outside, TERTIARY_POINTER_BUTTON, true);
 }

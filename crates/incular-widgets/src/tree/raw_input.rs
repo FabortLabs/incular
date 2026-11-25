@@ -107,10 +107,8 @@ impl WidgetTree {
             return Some(target);
         }
         if self.input.consumed_tap_pointers.contains(&key) {
-            let primary_up = event.phase == PointerPhase::Up
-                && (event.button.is_none()
-                    || event.button == Some(incular_core::PRIMARY_POINTER_BUTTON));
-            if event.phase == PointerPhase::Cancel || primary_up {
+            let last_button_up = event.phase == PointerPhase::Up && event.buttons == 0;
+            if event.phase == PointerPhase::Cancel || last_button_up {
                 self.input.consumed_tap_pointers.remove(&key);
             }
             return None;
@@ -752,14 +750,8 @@ impl WidgetTree {
         if !matches!(event.phase, PointerPhase::Down | PointerPhase::Up) {
             return None;
         }
-        // TapRegion is an ordinary primary-tap boundary, not a raw all-button
-        // listener. Secondary/middle/extra transitions stay available through
-        // Listener/RawGestureDetector and context-menu APIs without becoming a
-        // synthetic primary tap. Legacy adapters without changed-button
-        // metadata retain their historical primary semantics.
-        if event.button.is_some() && event.button != Some(incular_core::PRIMARY_POINTER_BUTTON) {
-            return None;
-        }
+        // A surface classifies pointer down/up, not a primary-only tap
+        // gesture. Keep the original button metadata for each callback.
         let mut consumed = None;
         for surface in hit.iter().copied().filter(|id| {
             matches!(

@@ -3,7 +3,11 @@ use incular_gestures::{MouseCursor, PointerDeviceKind, RawPointerEvent};
 use incular_layout::Constraints;
 use incular_widgets::internal::WidgetTree;
 use incular_widgets::{Color, MouseRegion, TapRegion, TapRegionSurface, Widget};
-use std::{cell::Cell, rc::Rc, time::Instant};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+    time::Instant,
+};
 
 fn event(phase: PointerPhase, position: Offset) -> RawPointerEvent {
     RawPointerEvent::new(
@@ -138,17 +142,22 @@ fn deferred_mouse_cursor_falls_through_to_ancestor_without_changing_hit_testing(
 }
 
 #[test]
-fn tap_region_is_primary_only_while_raw_secondary_input_remains_distinct() {
-    let taps = Rc::new(Cell::new(0));
+fn tap_region_reports_distinct_primary_and_secondary_buttons() {
+    let taps = Rc::new(RefCell::new(Vec::new()));
     let region = TapRegion::new(Widget::box_(Size::new(100., 100.), Color::WHITE)).on_tap_inside({
         let taps = taps.clone();
-        move |_| taps.set(taps.get() + 1)
+        move |event| taps.borrow_mut().push((event.button, event.buttons))
     });
     let mut tree = WidgetTree::new();
     layout(&mut tree, TapRegionSurface::new(region));
 
     let _ = tree.dispatch_raw_pointer_in_window(7, button_event(SECONDARY_POINTER_BUTTON));
-    assert_eq!(taps.get(), 0);
     let _ = tree.dispatch_raw_pointer_in_window(7, button_event(PRIMARY_POINTER_BUTTON));
-    assert_eq!(taps.get(), 1);
+    assert_eq!(
+        &*taps.borrow(),
+        &[
+            (Some(SECONDARY_POINTER_BUTTON), SECONDARY_POINTER_BUTTON),
+            (Some(PRIMARY_POINTER_BUTTON), PRIMARY_POINTER_BUTTON),
+        ]
+    );
 }

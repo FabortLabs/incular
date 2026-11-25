@@ -4,13 +4,18 @@
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
 use incular_config::Constraints;
-use incular_core::{Color, Offset, PointerPhase, Size, time::Instant};
+use incular_core::{
+    Color, Offset, PRIMARY_POINTER_BUTTON, PointerPhase, SECONDARY_POINTER_BUTTON, Size,
+    TERTIARY_POINTER_BUTTON, time::Instant,
+};
 use incular_gestures::{
     ArenaGestureRecognizer, GestureRecognizerFactoryWithHandlers, MultiTapGestureRecognizer,
     PointerDeviceKind, RawPointerEvent, TapAndDragGestureRecognizer,
 };
 use incular_widgets::internal::WidgetTree;
-use incular_widgets::{RawGestureDetector, Widget};
+use incular_widgets::{
+    Directionality, RawGestureDetector, Row, TapRegion, TapRegionSurface, TextDirection, Widget,
+};
 
 type Log = Rc<RefCell<Vec<String>>>;
 
@@ -80,6 +85,59 @@ fn a_multi_tap_wins_the_sweep_on_release() {
         log.borrow().as_slice(),
         ["down 1 (10, 10)", "up 1", "tap 1"]
     );
+}
+
+#[test]
+fn consumed_nonprimary_contacts_release_the_raw_arena_for_the_next_contact() {
+    for button in [SECONDARY_POINTER_BUTTON, TERTIARY_POINTER_BUTTON] {
+        let log = Log::default();
+        let observed = log.clone();
+        let detector = RawGestureDetector::new(Widget::box_(Size::new(100., 100.), Color::WHITE))
+            .gesture(GestureRecognizerFactoryWithHandlers::new(
+                move || ArenaGestureRecognizer::new(multi_tap(&observed)),
+                |_| {},
+            ));
+        let region = TapRegion::new(detector).consume_outside_taps(true);
+        let surface = TapRegionSurface::new(Row::new([
+            Widget::from(region),
+            Widget::box_(Size::new(100., 100.), Color::BLACK),
+        ]));
+        let mut tree = WidgetTree::new();
+        tree.mount(Directionality::new(TextDirection::Ltr, surface).into())
+            .expect("mount");
+        tree.layout(Constraints::tight(Size::new(200., 100.)))
+            .expect("layout");
+        let base = Instant::now();
+        for (ms, phase, changed, buttons, x) in [
+            (0, PointerPhase::Down, button, button, 150.),
+            (10, PointerPhase::Up, button, 0, 150.),
+            (
+                100,
+                PointerPhase::Down,
+                PRIMARY_POINTER_BUTTON,
+                PRIMARY_POINTER_BUTTON,
+                50.,
+            ),
+            (120, PointerPhase::Up, PRIMARY_POINTER_BUTTON, 0, 50.),
+        ] {
+            let target = tree.dispatch_raw_pointer(
+                RawPointerEvent::new(
+                    1,
+                    0,
+                    PointerDeviceKind::Mouse,
+                    buttons,
+                    Offset::new(x, 50.),
+                    phase,
+                    base + Duration::from_millis(ms),
+                )
+                .with_button(Some(changed)),
+            );
+            if ms == 0 {
+                assert!(target.is_some(), "the outside contact was consumed");
+            }
+        }
+        assert_eq!(&*log.borrow(), &["down 1 (50, 50)", "up 1", "tap 1"]);
+    }
 }
 
 #[test]

@@ -156,6 +156,8 @@ packages/flutter/test/widgets/tap_region_test.dart	339	TapRegionSurface detects 
 packages/flutter/test/widgets/tap_region_test.dart	487	Setting the group updates the registration	paired-match	upstream-tap-absorber-delta-and-raw-image.md
 packages/flutter/test/widgets/tap_region_test.dart	578	TapRegionSurface detects outside right click	paired-mismatch	upstream-tap-absorber-delta-and-raw-image.md
 packages/flutter/test/widgets/tap_region_test.dart	652	TapRegionSurface detects outside middle click	paired-mismatch	upstream-tap-absorber-delta-and-raw-image.md
+packages/flutter/test/widgets/tap_region_test.dart	726	TapRegionSurface consumes outside right click when asked	paired-mismatch	upstream-tap-absorber-delta-and-raw-image.md#right-and-middle-mouse-buttons
+packages/flutter/test/widgets/tap_region_test.dart	815	TapRegionSurface consumes outside middle click when asked	paired-mismatch	upstream-tap-absorber-delta-and-raw-image.md#right-and-middle-mouse-buttons
 packages/flutter/test/widgets/tap_region_test.dart	904	TapRegionSurface detects inside right click	paired-mismatch	upstream-tap-absorber-delta-and-raw-image.md
 packages/flutter/test/widgets/tap_region_test.dart	978	TapRegionSurface detects inside middle click	paired-mismatch	upstream-tap-absorber-delta-and-raw-image.md
 packages/flutter/test/widgets/absorb_pointer_test.dart	11	AbsorbPointers do not block siblings	paired-match	upstream-tap-absorber-delta-and-raw-image.md
