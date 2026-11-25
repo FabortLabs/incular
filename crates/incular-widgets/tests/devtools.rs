@@ -325,3 +325,49 @@ fn auxiliary_overlays_read_retained_subsystems_and_stay_bounded() {
     assert!(tree.devtools_hit_regions(1).len() <= 1);
     assert_eq!(tree.diagnostics(), before);
 }
+
+#[test]
+fn fitted_box_inspection_reports_the_rendered_directional_alignment() {
+    use incular_config::AlignmentDirectional;
+    use incular_widgets::{BoxFit, Directionality, FittedBox, TextDirection, internal::Key};
+
+    let key = Key::Value(910);
+    let build = |direction| {
+        let fitted = FittedBox::new(Widget::box_(Size::new(20., 10.), Color::WHITE))
+            .fit(BoxFit::None)
+            .alignment(AlignmentDirectional::TOP_START);
+        Directionality::new(direction, Widget::from(fitted).with_key(key.clone())).into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(build(TextDirection::Ltr)).unwrap();
+    let constraints = Constraints::tight(Size::new(100., 100.));
+    tree.layout(constraints).unwrap();
+    let fitted = tree.element_with_key(&key).unwrap();
+    let id = dev_id(&tree, fitted);
+    let details = |tree: &WidgetTree| {
+        let layout = tree
+            .devtools_node_details(fitted, id, DevWindowId::new(1, 0))
+            .unwrap()
+            .layout
+            .unwrap();
+        let LayoutDetails::Fitted {
+            alignment,
+            matrix,
+            source_size,
+            destination_size,
+            ..
+        } = layout.details
+        else {
+            panic!("expected a fitted layout inspection");
+        };
+        assert_eq!(source_size, Some([20., 10.]));
+        assert_eq!(destination_size, [100., 100.]);
+        (alignment, matrix[4])
+    };
+    assert_eq!(details(&tree), ([-1., -1.], 0.));
+
+    tree.update(root, build(TextDirection::Rtl)).unwrap();
+    tree.layout(constraints).unwrap();
+    assert_eq!(dev_id(&tree, tree.element_with_key(&key).unwrap()), id);
+    assert_eq!(details(&tree), ([1., -1.], 80.));
+}

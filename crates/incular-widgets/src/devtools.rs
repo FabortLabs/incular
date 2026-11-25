@@ -517,7 +517,14 @@ impl WidgetTree {
                     matrix,
                 }
             }
-            WidgetKind::FittedBox { fit, alignment, .. } => {
+            WidgetKind::FittedBox { .. } => {
+                let Some(RenderKind::FittedBox { fit, alignment, .. }) = self
+                    .dev_renders()
+                    .get(element.render.0)
+                    .map(|render| render.object.kind())
+                else {
+                    return LayoutDetails::Box;
+                };
                 let matrix = transform_array(content_transform);
                 let source_size = element.children.first().and_then(|child| {
                     let child = self.dev_elements().get(child.0)?;
