@@ -282,3 +282,65 @@ fn descendants_inherit_scope_permission_without_losing_their_local_setting() {
     assert!(!child.has_focus());
     assert!(!local_opt_out.can_request_focus());
 }
+
+#[test]
+fn ordinary_parent_focus_and_traversal_gates_have_different_descendant_effects() {
+    use incular_config::Alignment;
+    use incular_widgets::{Align, Column};
+    let scope = FocusScopeNode::new();
+    let left = FocusNode::new();
+    let right = FocusNode::new();
+    let a = FocusNode::new();
+    let b = FocusNode::new();
+    let branch = |parent: &FocusNode, child: &FocusNode| {
+        Focus::new(Align::new(
+            Alignment::CENTER,
+            Focus::new(SizedBox::new().width(20.).height(20.)).node(child.clone()),
+        ))
+        .node(parent.clone())
+    };
+    let scene =
+        FocusScope::new(Column::new([branch(&left, &a), branch(&right, &b)])).node(scope.clone());
+    let mut runtime = Runtime::new(scene.into()).unwrap();
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    runtime.run_frame(bounds).unwrap();
+    let traversable = |runtime: &Runtime, node: &FocusNode| {
+        runtime
+            .tree()
+            .focusable_elements()
+            .into_iter()
+            .any(|id| runtime.tree().focus_node_at(id).as_ref() == Some(node))
+    };
+    assert!(scope.request_focus(&a));
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(scope.focused_child(), Some(a.clone()));
+    assert!(traversable(&runtime, &a) && traversable(&runtime, &b));
+
+    right.set_descendants_are_traversable(false);
+    assert!(!traversable(&runtime, &b));
+    assert!(traversable(&runtime, &right));
+    assert!(scope.request_focus(&b));
+    runtime.run_frame(bounds).unwrap();
+    assert!(b.has_primary_focus());
+
+    right.set_descendants_are_traversable(true);
+    right.set_can_request_focus(false);
+    assert!(traversable(&runtime, &b));
+    assert!(!traversable(&runtime, &right));
+    runtime.run_frame(bounds).unwrap();
+    assert!(b.has_primary_focus());
+    right.set_can_request_focus(true);
+    right.set_descendants_are_focusable(false);
+    right.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    assert!(right.has_primary_focus());
+    b.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    assert!(right.has_primary_focus());
+    assert_eq!(scope.focused_child(), Some(right));
+    assert!(traversable(&runtime, &a) && !traversable(&runtime, &b));
+
+    left.set_descendants_are_focusable(false);
+    runtime.run_frame(bounds).unwrap();
+    assert!(!traversable(&runtime, &a) && !traversable(&runtime, &b));
+}

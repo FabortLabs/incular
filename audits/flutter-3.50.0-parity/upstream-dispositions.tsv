@@ -1322,3 +1322,6 @@ packages/flutter/test/widgets/focus_manager_test.dart	739	Can move node with foc
 packages/flutter/test/widgets/focus_scope_test.dart	1907	Descendants of ExcludeFocus aren't focusable.	paired-match	upstream-focus-widget-semantics.md#idle-focus-requests-and-excludefocus
 packages/flutter/test/widgets/focus_scope_test.dart	2007	ExcludeFocus doesn't introduce a Semantics node	paired-match	upstream-focus-widget-semantics.md#idle-focus-requests-and-excludefocus
 packages/flutter/test/widgets/focus_scope_test.dart	2016	Setting parent FocusScope.canRequestFocus to false, does not set descendant Focus._internalNode._canRequestFocus to false	paired-match	upstream-mounted-focus-scope-nodes.md#inherited-eligibility-without-overwriting-child-configuration
+packages/flutter/test/widgets/focus_manager_test.dart	115	descendantsAreFocusable disables focus for descendants.	paired-match	upstream-mounted-focus-scope-nodes.md#ordinary-focus-descendant-flags
+packages/flutter/test/widgets/focus_manager_test.dart	170	descendantsAreTraversable disables traversal for descendants.	partial-match	upstream-mounted-focus-scope-nodes.md#ordinary-focus-descendant-flags
+packages/flutter/test/widgets/focus_manager_test.dart	210	canRequestFocus doesn't affect traversalChildren	partial-match	upstream-mounted-focus-scope-nodes.md#ordinary-focus-descendant-flags

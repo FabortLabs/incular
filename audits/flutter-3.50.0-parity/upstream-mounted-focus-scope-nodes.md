@@ -70,3 +70,17 @@ rewriting their own flag. Requests denied during the disallowed interval
 do not reappear. This check is specific to focus scopes; the runtime
 separately enforces actual focus requests and traversal eligibility for
 ordinary non-scope Focus ancestors.
+
+## Ordinary Focus descendant flags
+
+The pinned :115, :170, and :210 registrations passed by exact name.
+The native mounted two-branch test checks actual routing, focus
+history, and traversal membership. An ordinary Focus node remains
+focusable when it disallows descendant focus. A blocked child's
+explicit request cannot steal primary focus and both branches can
+be blocked independently. A traversal-only restriction skips a
+descendant on Tab but permits a direct request. An ordinary parent's
+own can-request flag does not exclude its children. :170 and :210
+remain partial: the test checks membership through the mounted
+traversal route, not Flutter's separately enumerable, ordered raw
+focus-tree children/descendants.
