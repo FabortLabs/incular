@@ -9,6 +9,16 @@ use incular_widgets::{
 const LEAF: u64 = 1;
 const HOST: u64 = 2;
 
+fn text_with_baseline(target: f32) -> Widget {
+    Baseline::new(
+        target,
+        Text::new("X")
+            .text_direction(TextDirection::Ltr)
+            .style(TextStyle::default().font_size(4.)),
+    )
+    .into()
+}
+
 fn frame(leaf: Widget, generated: bool) -> (f32, Option<f32>) {
     let leaf = leaf.with_key(Key::Value(LEAF));
     let child = if generated {
@@ -54,8 +64,7 @@ fn a_box_without_baseline_keeps_the_ordinary_bottom_edge_fallback() {
 #[test]
 fn original_twenty_pixel_baseline_places_the_generated_child_at_160() {
     // Like Flutter's detector, this leaf reports an actual baseline at 20.
-    let probe = Baseline::new(20., SizedBox::new().width(10.).height(20.));
-    assert_eq!(frame(probe.into(), true), (160., Some(20.)));
+    assert_eq!(frame(text_with_baseline(20.), true), (160., Some(20.)));
 }
 
 #[test]
@@ -65,7 +74,7 @@ fn regenerated_child_replaces_or_clears_the_cached_actual_baseline() {
         let generated = LayoutBuilder::new(move |_, _| {
             let box_ = SizedBox::new().width(10.).height(100.);
             let child = match actual {
-                Some(value) => Widget::from(Baseline::new(value, box_)),
+                Some(value) => text_with_baseline(value),
                 None => Widget::from(box_),
             };
             child.with_key(Key::Value(LEAF))

@@ -60,10 +60,10 @@ impl FractionallySizedBox {
 
 widget_from_kind!(FractionallySizedBox => Fractional { width_factor, height_factor, alignment, child });
 
-/// Positions child baseline at an explicit vertical offset.
+/// Positions the child baseline at an explicit, signed vertical offset.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct Baseline {
-    #[builder(setter(transform = |baseline: f32| baseline.max(0.0)))]
+    #[builder(setter(transform = |baseline: f32| incular_core::finite_or_zero(baseline)))]
     baseline: f32,
     #[builder(setter(into))]
     child: Widget,
@@ -74,7 +74,7 @@ impl Baseline {
     #[must_use]
     pub fn new(baseline: f32, child: impl Into<Widget>) -> Self {
         Self {
-            baseline: baseline.max(0.0),
+            baseline: incular_core::finite_or_zero(baseline),
             child: child.into(),
         }
     }

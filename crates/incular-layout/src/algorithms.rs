@@ -10,7 +10,7 @@ use crate::{
     TextDirection, VerticalDirection, Wrap, WrapAlignment, WrapCrossAlignment,
 };
 use crate::{ChildLayout, LayoutResult, Offset, Size};
-use incular_core::finite_non_negative;
+use incular_core::{finite_non_negative, finite_or_zero};
 use std::borrow::Borrow;
 
 /// Measured child input for [`layout_flex`].
@@ -588,10 +588,15 @@ pub fn layout_baseline(
     child: BaselineChild,
     baseline: f32,
 ) -> LayoutResult {
-    let target = finite_non_negative(baseline);
-    let child_baseline = child.baseline.unwrap_or(child.size.height).max(0.0);
-    let offset_y = (target - child_baseline).max(0.0);
-    let desired = Size::new(child.size.width, safe_add(child.size.height, offset_y));
+    let target = finite_or_zero(baseline);
+    let child_baseline = child.baseline.unwrap_or(child.size.height);
+    // Baseline may place a child above the box. Only the resulting box
+    // extent is constrained; clamping the offset changes the baseline.
+    let offset_y = (target - child_baseline).clamp(-f32::MAX, f32::MAX);
+    let desired = Size::new(
+        child.size.width,
+        safe_add(child.size.height, offset_y).max(0.0),
+    );
     let size = constraints.constrain(desired);
     LayoutResult::new(
         size,

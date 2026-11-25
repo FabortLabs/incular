@@ -264,10 +264,16 @@ impl WidgetTree {
                         },
                         baseline,
                     );
-                    self.render_live_mut(id, "retained render must remain live")
-                        .baseline = Some(baseline);
-                    (result.size, ChildOffsets::One(result.children[0].offset))
+                    let offset = result.children[0].offset;
+                    // The bottom-edge fallback positions a child without
+                    // inventing an actual baseline for its ancestors.
+                    let actual_baseline = child.baseline.map(|local| local + offset.y);
+                    self.render_live_mut(id, "baseline render must remain live")
+                        .baseline = actual_baseline;
+                    (result.size, ChildOffsets::One(offset))
                 } else {
+                    self.render_live_mut(id, "baseline render must remain live")
+                        .baseline = None;
                     (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }

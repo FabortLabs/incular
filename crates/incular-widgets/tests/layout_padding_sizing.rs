@@ -230,8 +230,8 @@ fn baseline_offsets_follow_target_deltas() {
                 }),
         )
     };
-    // Targets above the child baseline push it down one-to-one;
-    // targets below clamp at zero instead of shifting upward.
+    // A change in the target moves the child by the same amount, including
+    // across zero and when the child moves above its parent's top edge.
     let build = |baseline: f32| Widget::from(Baseline::new(baseline, text(16.)));
     let mut tree = WidgetTree::new();
     let first = tree.mount(build(30.)).expect("mount");
@@ -243,11 +243,14 @@ fn baseline_offsets_follow_target_deltas() {
     let second_y = bounds_of(&tree, only_child(&tree, second)).1;
     // Raising the target by 20 pushes the child down by exactly 20.
     assert_eq!(second_y - first_y, 20.);
-    // Negative baselines clamp to zero like a zero baseline.
-    assert_eq!(
-        Widget::from(Baseline::new(-5., text(16.))),
-        Widget::from(Baseline::new(0., text(16.)))
-    );
+    tree.update(second, build(0.)).unwrap();
+    layout_tight(&mut tree, 200., 100.);
+    let zero_y = bounds_of(&tree, only_child(&tree, second)).1;
+    tree.update(second, build(-5.)).unwrap();
+    layout_tight(&mut tree, 200., 100.);
+    let negative_y = bounds_of(&tree, only_child(&tree, second)).1;
+    assert!(zero_y < 0.);
+    assert_eq!(negative_y - zero_y, -5.);
 }
 
 #[test]
