@@ -1189,7 +1189,7 @@ impl Runtime {
     pub const fn editing_diagnostics(&self) -> EditingDiagnostics {
         self.editing_diagnostics
     }
-    /// Chooses which platform's text-editing shortcut table text fields use
+    /// Chooses the platform for native text-editing and focus shortcuts
     /// (Flutter's `defaultTargetPlatform`): Option for words and Command for
     /// lines on macOS and iOS, Control for words elsewhere. Defaults to the
     /// platform this build targets.
@@ -2497,24 +2497,36 @@ impl Runtime {
         };
         self.set_focus(Some(next));
     }
-    /// Flutter's non-web `WidgetsApp` defaults (`_defaultShortcuts`): plain
-    /// arrows move directional focus, Ctrl+arrows scroll by a line, and
-    /// PageUp/PageDown scroll by a page. Chords with Shift, Alt or Meta match
-    /// nothing. Returns whether the key was consumed.
+    /// Flutter's native `WidgetsApp` defaults: unmodified arrows traverse
+    /// focus, the platform's modifier with an arrow scrolls by a line, and
+    /// unmodified PageUp/PageDown scroll by a page.
     fn run_default_focus_key(&mut self, event: &KeyboardEvent) -> bool {
-        if event.modifiers.shift() || event.modifiers.alt() || event.modifiers.meta() {
+        if event.modifiers.shift() || event.modifiers.alt() {
             return false;
         }
         let ctrl = event.modifiers.ctrl();
+        let meta = event.modifiers.meta();
+        let unmodified = !ctrl && !meta;
+        let line_modifier = if matches!(
+            self.text_shortcut_platform,
+            TextShortcutPlatform::MacOs | TextShortcutPlatform::Ios
+        ) {
+            meta && !ctrl
+        } else {
+            ctrl && !meta
+        };
         match event.code {
-            Code::PageUp | Code::PageDown if !ctrl => {
+            Code::PageUp | Code::PageDown if unmodified => {
                 self.tree
                     .scroll_nearest_viewport(self.focused, event.code, true)
             }
-            Code::ArrowUp | Code::ArrowDown | Code::ArrowLeft | Code::ArrowRight if ctrl => self
-                .tree
-                .scroll_nearest_viewport(self.focused, event.code, false),
-            Code::ArrowUp | Code::ArrowDown | Code::ArrowLeft | Code::ArrowRight => {
+            Code::ArrowUp | Code::ArrowDown | Code::ArrowLeft | Code::ArrowRight
+                if line_modifier =>
+            {
+                self.tree
+                    .scroll_nearest_viewport(self.focused, event.code, false)
+            }
+            Code::ArrowUp | Code::ArrowDown | Code::ArrowLeft | Code::ArrowRight if unmodified => {
                 let Some(next) = self.tree.directional_focus_target(self.focused, event.code)
                 else {
                     return false;

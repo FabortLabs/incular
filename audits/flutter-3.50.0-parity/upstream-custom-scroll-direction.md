@@ -79,3 +79,15 @@ the targeted keyboard results.
 
 Thirty-two targeted Rust tests passed across the keyboard, focus
 routing, traversal and scroll-physics binaries.
+
+## Native keyboard modifiers on Apple and Linux
+
+The authored `scroll_keyboard_platform_reference_test.dart` runs
+the native default shortcuts with the pinned platform override for
+iOS, macOS, and Linux. An arrow with the other platform's modifier
+does nothing; Command+arrow on Apple or Control+arrow on Linux moves
+a 50px line. Unmodified page keys still clamp to 400px and return to
+zero. The original Rust iOS comparison moved 50px for Control; the
+Runtime now chooses the native shortcut table's modifier. All three
+Flutter variants and 22 targeted Rust tests passed. This doesn't
+count as an additional original registration or verify web defaults.
