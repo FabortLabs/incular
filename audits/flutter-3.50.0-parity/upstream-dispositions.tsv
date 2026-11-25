@@ -1276,3 +1276,9 @@ packages/flutter/test/painting/gradient_test.dart	151	LinearGradient lerp test	p
 packages/flutter/test/painting/gradient_test.dart	183	LinearGradient lerp test with stops	paired-match	upstream-linear-gradients.md
 packages/flutter/test/painting/gradient_test.dart	211	LinearGradient lerp test with unequal number of colors	paired-match	upstream-linear-gradients.md
 packages/flutter/test/painting/gradient_test.dart	229	LinearGradient lerp test with stops and unequal number of colors	paired-match	upstream-linear-gradients.md
+packages/flutter/test/painting/gradient_test.dart	256	LinearGradient lerp test with transforms	paired-match	upstream-linear-gradients.md#shader-rotation-opacity-and-recoloring
+packages/flutter/test/painting/gradient_test.dart	290	LinearGradient with different transforms	paired-match	upstream-linear-gradients.md#shader-rotation-opacity-and-recoloring
+packages/flutter/test/painting/gradient_test.dart	335	LinearGradient withOpacity test	paired-match	upstream-linear-gradients.md#shader-rotation-opacity-and-recoloring
+packages/flutter/test/painting/gradient_test.dart	358	LinearGradient withOpacity() preserves transform	paired-match	upstream-linear-gradients.md#shader-rotation-opacity-and-recoloring
+packages/flutter/test/painting/gradient_test.dart	382	LinearGradient.fromColor replaces all colors and preserves geometry	paired-match	upstream-linear-gradients.md#shader-rotation-opacity-and-recoloring
+packages/flutter/test/painting/gradient_test.dart	456	LinearGradient.scale preserves transform	paired-match	upstream-linear-gradients.md#shader-rotation-opacity-and-recoloring

@@ -176,3 +176,121 @@ fn actual_box_decoration_paints_interpolated_shader_in_both_directions() {
         );
     }
 }
+
+#[test]
+fn a_linear_rotation_switches_at_half_and_participates_in_equality() {
+    use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
+    let a = base(even(&[0x33, 0x66])).rotated(FRAC_PI_4);
+    let a_copy = base(even(&[0x33, 0x66])).rotated(FRAC_PI_4);
+    let b = base(even(&[0x33, 0x66])).rotated(FRAC_PI_2);
+    assert_eq!(a, a_copy);
+    assert_ne!(a, b);
+    assert_eq!(a.lerp(&b, 0.), a);
+    assert_eq!(a.lerp(&b, 0.499).rotation, a.rotation);
+    assert_eq!(a.lerp(&b, 0.5), b);
+    assert_eq!(a.lerp(&b, 1.), b);
+    let local = Rect::from_origin_size(Offset::new(10., 20.), Size::new(100., 60.));
+    let shader = a.lerp(&b, 0.5).resolve(local, TextDirection::Ltr);
+    assert!((shader.start.x - 60.).abs() < 1e-4);
+    assert!(shader.start.y.abs() < 1e-4);
+    assert!((shader.end.x - 60.).abs() < 1e-4);
+    assert!((shader.end.y - 100.).abs() < 1e-4);
+}
+
+#[test]
+fn opacity_replacement_and_recolor_keep_alignment_stops_tile_and_rotation() {
+    let colors = [Color::WHITE, Color::rgba(119, 119, 119, 175), gray(0x44)];
+    for rotation in [None, Some(1.)] {
+        let mut original = BoxLinearGradient::new(
+            Alignment::BOTTOM_RIGHT,
+            Alignment::TOP_CENTER,
+            GradientStops::even(&colors),
+        );
+        original.rotation = rotation;
+        let changed = original.with_opacity(0.5);
+        assert_eq!(changed.begin, original.begin);
+        assert_eq!(changed.end, original.end);
+        assert_eq!(changed.rotation, rotation);
+        assert_eq!(changed.tile_mode, TileMode::Clamp);
+        for (changed, original) in changed
+            .stops
+            .as_slice()
+            .iter()
+            .zip(original.stops.as_slice())
+        {
+            assert_eq!(changed.offset, original.offset);
+            assert_eq!(
+                changed.color,
+                Color {
+                    alpha: 128,
+                    ..original.color
+                }
+            );
+        }
+    }
+    let mut original = BoxLinearGradient::new(
+        Alignment::BOTTOM_RIGHT,
+        Alignment::TOP_CENTER,
+        GradientStops::new(
+            [0., 0.3, 1.]
+                .into_iter()
+                .zip(colors)
+                .map(|(offset, color)| GradientStop { offset, color })
+                .collect(),
+        ),
+    )
+    .rotated(1.);
+    original.tile_mode = TileMode::Mirror;
+    let green = Color::rgba(0, 255, 0, 255);
+    let recolored = original.from_color(green);
+    assert_eq!(
+        (
+            recolored.begin,
+            recolored.end,
+            recolored.rotation,
+            recolored.tile_mode
+        ),
+        (original.begin, original.end, Some(1.), TileMode::Mirror)
+    );
+    for (changed, original) in recolored
+        .stops
+        .as_slice()
+        .iter()
+        .zip(original.stops.as_slice())
+    {
+        assert_eq!(changed.offset, original.offset);
+        assert_eq!(changed.color, green);
+    }
+}
+
+#[test]
+fn opacity_scale_keeps_rotation_and_decal_spread() {
+    use std::f32::consts::FRAC_PI_4;
+    let colors = [
+        Color::rgba(255, 0, 0, 255),
+        Color::rgba(0, 255, 0, 255),
+        Color::rgba(0, 0, 255, 255),
+    ];
+    let mut first = BoxLinearGradient::new(
+        Alignment::BOTTOM_RIGHT,
+        Alignment::TOP_LEFT,
+        GradientStops::even(&colors),
+    )
+    .rotated(FRAC_PI_4);
+    first.tile_mode = TileMode::Decal;
+    let faded = first.scale(0.5);
+    assert_eq!(
+        (faded.begin, faded.end, faded.rotation, faded.tile_mode),
+        (first.begin, first.end, Some(FRAC_PI_4), TileMode::Decal)
+    );
+    for (changed, original) in faded.stops.as_slice().iter().zip(first.stops.as_slice()) {
+        assert_eq!(changed.offset, original.offset);
+        assert_eq!(
+            changed.color,
+            Color {
+                alpha: 128,
+                ..original.color
+            }
+        );
+    }
+}

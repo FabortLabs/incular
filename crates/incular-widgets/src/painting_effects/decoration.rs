@@ -700,6 +700,8 @@ pub struct BoxLinearGradient {
     pub end: AlignmentGeometry,
     pub stops: GradientStops,
     pub tile_mode: TileMode,
+    /// A clockwise shader rotation about the paint bounds.
+    pub rotation: Option<f32>,
 }
 
 impl BoxLinearGradient {
@@ -714,6 +716,7 @@ impl BoxLinearGradient {
             end: end.into(),
             stops,
             tile_mode: TileMode::Clamp,
+            rotation: None,
         }
     }
 
@@ -733,6 +736,22 @@ impl BoxLinearGradient {
             stops: self.stops.with_color(color),
             ..self.clone()
         }
+    }
+
+    /// Replaces every color's opacity without scaling the old alpha.
+    #[must_use]
+    pub fn with_opacity(&self, opacity: f32) -> Self {
+        Self {
+            stops: self.stops.with_opacity(opacity),
+            ..self.clone()
+        }
+    }
+
+    /// Sets a shader rotation in radians.
+    #[must_use]
+    pub fn rotated(mut self, radians: f32) -> Self {
+        self.rotation = Some(radians);
+        self
     }
 
     /// Interpolates two gradients, fading from or to transparent when absent.
@@ -756,11 +775,21 @@ impl BoxLinearGradient {
                 rect.origin.y + (alignment.y + 1.0) * 0.5 * rect.size.height,
             )
         };
-        LinearGradient {
+        let gradient = LinearGradient {
             start: endpoint(self.begin),
             end: endpoint(self.end),
             stops: self.stops.clone(),
             tile_mode: self.tile_mode,
+        };
+        if let Some(rotation) = self.rotation {
+            let Brush::LinearGradient(rotated) =
+                Brush::LinearGradient(gradient).rotated(rotation, rect)
+            else {
+                unreachable!("rotation preserves the gradient kind")
+            };
+            rotated
+        } else {
+            gradient
         }
     }
 }
@@ -774,6 +803,11 @@ impl Lerp for BoxLinearGradient {
             begin: self.begin.lerp(&other.begin, t),
             end: self.end.lerp(&other.end, t),
             stops: self.stops.interpolate(&other.stops, t),
+            rotation: if t < 0.5 {
+                self.rotation
+            } else {
+                other.rotation
+            },
             tile_mode: if t < 0.5 {
                 self.tile_mode
             } else {

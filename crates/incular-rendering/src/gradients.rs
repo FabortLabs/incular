@@ -145,6 +145,13 @@ impl GradientStops {
         })
     }
 
+    /// Replaces opacity rather than multiplying the existing alpha.
+    #[must_use]
+    pub fn with_opacity(&self, opacity: f32) -> Self {
+        let alpha = quantize(f64::from(opacity) * 255.);
+        self.with_colors(|color| Color { alpha, ..color })
+    }
+
     /// Replaces all colors while preserving stop geometry.
     #[must_use]
     pub fn with_color(&self, color: Color) -> Self {

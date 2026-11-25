@@ -20,3 +20,15 @@ for the three-stop example.
 Raw arbitrary brushes, gradient transforms and the radial/sweep
 descriptor matrices are separate work. The Rust widget devtools
 feature also compiles with mixed alignments.
+
+## Shader rotation, opacity and recoloring
+
+Pinned :256, :290, :335, :358, :382 and :456 passed. A shader
+rotation is compared by value and selected discretely at half.
+Retained brush resolution rotates the interpolated endpoints about
+the actual paint bounds, including their translated origin. Opacity
+replacement assigns the same alpha to every stop; scale multiplies
+the old alpha. Recoloring replaces RGB and alpha while retaining the
+explicit stop offsets, geometry, tile mode, and rotation. The six
+focused Rust cases passed. Arbitrary non-rotation transform matrices
+are not represented by this descriptor.
