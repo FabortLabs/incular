@@ -2124,7 +2124,7 @@ impl RenderSliver for EmptyRenderSliver {
 
 pub(super) struct PaddingRenderSliver {
     pub(super) inner: RefCell<Box<dyn RenderSliver>>,
-    pub(super) padding: EdgeInsets,
+    pub(super) padding: crate::EdgeInsetsGeometry,
 }
 
 impl RenderSliver for PaddingRenderSliver {
@@ -2137,19 +2137,22 @@ impl RenderSliver for PaddingRenderSliver {
     }
 
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout {
+        let padding = match self.padding {
+            crate::EdgeInsetsGeometry::Physical(padding) => padding,
+            crate::EdgeInsetsGeometry::Directional(padding) => padding.resolve(
+                constraints
+                    .text_direction
+                    .expect("directional SliverPadding requires Directionality"),
+            ),
+        };
         debug_assert!(
-            [
-                self.padding.left,
-                self.padding.top,
-                self.padding.right,
-                self.padding.bottom
-            ]
-            .into_iter()
-            .all(|inset| inset >= 0.),
+            [padding.left, padding.top, padding.right, padding.bottom]
+                .into_iter()
+                .all(|inset| inset >= 0.),
             "SliverPadding requires nonnegative padding",
         );
-        let physical_start = main_before(constraints.axis, self.padding);
-        let physical_end = main_after(constraints.axis, self.padding);
+        let physical_start = main_before(constraints.axis, padding);
+        let physical_end = main_after(constraints.axis, padding);
         let (before, after) = if constraints.reverse {
             (physical_end, physical_start)
         } else {
@@ -2168,13 +2171,13 @@ impl RenderSliver for PaddingRenderSliver {
             (end - start).max(0.)
         };
         let reduced_cross = (constraints.cross_axis_extent
-            - cross_before(constraints.axis, self.padding)
-            - cross_after(constraints.axis, self.padding))
+            - cross_before(constraints.axis, padding)
+            - cross_after(constraints.axis, padding))
         .max(0.);
         let before_paint_extent = paint_offset(0., before);
         let before_cache_extent = cache_offset(0., before);
         let inner_scroll = (constraints.scroll_offset - before).max(0.);
-        let inner_constraints = SliverConstraints::new(
+        let mut inner_constraints = SliverConstraints::new(
             constraints.axis,
             constraints.reverse,
             inner_scroll,
@@ -2190,6 +2193,7 @@ impl RenderSliver for PaddingRenderSliver {
             (constraints.remaining_cache_extent - before_cache_extent).max(0.),
             (constraints.cache_origin + before).min(0.),
         );
+        inner_constraints.text_direction = constraints.text_direction;
         let mut layout = self.inner.borrow_mut().perform_layout(inner_constraints);
         let inner_geometry = layout.geometry.normalized();
         if let Some(correction) = inner_geometry.scroll_offset_correction {
@@ -2199,7 +2203,7 @@ impl RenderSliver for PaddingRenderSliver {
         }
         for child in &mut layout.children {
             child.offset += before;
-            child.cross_offset += cross_before(constraints.axis, self.padding);
+            child.cross_offset += cross_before(constraints.axis, padding);
         }
         let scroll_extent = total_padding + inner_geometry.scroll_extent;
         let after_paint_extent = paint_offset(
@@ -2507,7 +2511,7 @@ impl SequenceRenderSliver {
             // partially scrolled into a preceding sliver.
             let corrected_cache_origin = cache_origin.max(-sliver_scroll_offset);
             let cache_extent_correction = cache_origin - corrected_cache_origin;
-            let sliver_constraints = SliverConstraints::new(
+            let mut sliver_constraints = SliverConstraints::new(
                 constraints.axis,
                 constraints.reverse,
                 sliver_scroll_offset,
@@ -2520,6 +2524,7 @@ impl SequenceRenderSliver {
                 (remaining_cache_extent + cache_extent_correction).max(0.),
                 corrected_cache_origin,
             );
+            sliver_constraints.text_direction = constraints.text_direction;
             let layout = sliver.borrow_mut().perform_layout(sliver_constraints);
             let geometry = layout.geometry.normalized();
             if total_correction.is_none() {
@@ -3075,7 +3080,7 @@ impl SequenceViewportDelegate {
         // reverse side starts at the trailing edge and grows toward the
         // leading one.
         let side = |scroll: f32, overlap: f32| {
-            SliverConstraints::new(
+            let mut side = SliverConstraints::new(
                 constraints.axis,
                 constraints.reverse,
                 scroll.max(0.),
@@ -3086,7 +3091,9 @@ impl SequenceViewportDelegate {
                 extent,
                 (extent + cache + scroll).clamp(0., extent + 2. * cache),
                 (-scroll).clamp(-cache, 0.),
-            )
+            );
+            side.text_direction = constraints.text_direction;
+            side
         };
 
         let mut children = Vec::new();

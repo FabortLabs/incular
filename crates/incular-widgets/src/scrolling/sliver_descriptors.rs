@@ -199,7 +199,7 @@ impl Sliver for SliverGrid {
 #[derive(TypedBuilder)]
 pub struct SliverPadding {
     #[builder(setter(into))]
-    padding: EdgeInsets,
+    padding: crate::EdgeInsetsGeometry,
     #[builder(default, setter(transform = |sliver: impl Sliver + 'static| {
         Some(Box::new(sliver) as Box<dyn Sliver>)
     }))]
@@ -208,9 +208,12 @@ pub struct SliverPadding {
 
 impl SliverPadding {
     #[must_use]
-    pub fn new(padding: EdgeInsets, sliver: impl Sliver + 'static) -> Self {
+    pub fn new(
+        padding: impl Into<crate::EdgeInsetsGeometry>,
+        sliver: impl Sliver + 'static,
+    ) -> Self {
         Self {
-            padding,
+            padding: padding.into(),
             sliver: Some(Box::new(sliver)),
         }
     }
@@ -219,7 +222,7 @@ impl SliverPadding {
     #[must_use]
     pub const fn empty(padding: EdgeInsets) -> Self {
         Self {
-            padding,
+            padding: crate::EdgeInsetsGeometry::Physical(padding),
             sliver: None,
         }
     }
@@ -240,7 +243,24 @@ impl Sliver for SliverPadding {
             || SizedBox::shrink().into(),
             |sliver| sliver.build_with_config(controller, axis, reverse),
         );
-        Padding::new(self.padding, child).into()
+        match self.padding {
+            crate::EdgeInsetsGeometry::Physical(padding) => Padding::new(padding, child).into(),
+            crate::EdgeInsetsGeometry::Directional(padding) => {
+                crate::Builder::new(move |context| {
+                    Padding::new(
+                        padding
+                            .resolve(context.text_direction().expect("validated Directionality")),
+                        child.clone(),
+                    )
+                    .into()
+                })
+                .require_directionality(&crate::tree::DirectionRequirement {
+                    widget: "SliverPadding",
+                    reason: "resolving directional padding",
+                })
+                .into()
+            }
+        }
     }
 
     fn create_render_sliver(
@@ -1553,7 +1573,7 @@ impl RenderSliver for CrossAxisGroupRenderSliver {
         let mut children = Vec::with_capacity(self.children.len());
         for (lane, (sliver, flex)) in self.children.iter_mut().enumerate() {
             let lane_extent = constraints.cross_axis_extent * (*flex as f32 / total_flex);
-            let lane_constraints = SliverConstraints::new(
+            let mut lane_constraints = SliverConstraints::new(
                 constraints.axis,
                 constraints.reverse,
                 constraints.scroll_offset,
@@ -1565,6 +1585,7 @@ impl RenderSliver for CrossAxisGroupRenderSliver {
                 constraints.remaining_cache_extent,
                 constraints.cache_origin,
             );
+            lane_constraints.text_direction = constraints.text_direction;
             let layout = sliver.perform_layout(lane_constraints);
             let geometry = layout.geometry.normalized();
             scroll_extent = scroll_extent.max(geometry.scroll_extent);

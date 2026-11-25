@@ -2,12 +2,13 @@
 
 use std::{cell::Cell, rc::Rc};
 
-use incular_config::{Axis, Constraints, EdgeInsets};
+use incular_config::{Axis, Constraints, EdgeInsets, EdgeInsetsDirectional, TextDirection};
 use incular_core::{Color, Offset, Rect, Size};
 use incular_scroll::{ScrollController, SliverConstraints, SliverGeometry};
 use incular_widgets::internal::{Key, RenderSliver, SliverLayout, WidgetTree};
 use incular_widgets::{
-    CustomScrollView, SizedBox, Sliver, SliverFillRemaining, SliverPadding, Widget,
+    CustomScrollView, Directionality, EdgeInsetsGeometry, SizedBox, Sliver, SliverFillRemaining,
+    SliverPadding, SliverToBoxAdapter, Viewport, Widget,
 };
 
 struct Probe {
@@ -353,9 +354,11 @@ fn padding_trailing_extent_tracks_direction_even_far_outside_the_viewport() {
     }
 }
 
-fn compare_three_box_padding_offsets(padding: EdgeInsets, expected_left: f32) {
-    use incular_widgets::{SliverToBoxAdapter, Viewport};
-
+fn compare_three_box_padding_offsets(
+    padding: impl Into<EdgeInsetsGeometry>,
+    direction: Option<TextDirection>,
+    expected_left: f32,
+) {
     let row = |index: u64| {
         SliverToBoxAdapter::new(
             Widget::box_(Size::new(400., 400.), Color::WHITE).with_key(Key::from(index)),
@@ -368,8 +371,12 @@ fn compare_three_box_padding_offsets(padding: EdgeInsets, expected_left: f32) {
     ];
     let controller = ScrollController::new();
     let mut tree = WidgetTree::new();
+    let viewport: Widget = Viewport::new(slivers).controller(controller.clone()).into();
     let root = tree
-        .mount(Viewport::new(slivers).controller(controller.clone()).into())
+        .mount(match direction {
+            Some(direction) => Directionality::new(direction, viewport).into(),
+            None => viewport,
+        })
         .unwrap();
     let view = Constraints::tight(Size::new(800., 600.));
     tree.layout(view).unwrap();
@@ -405,17 +412,50 @@ fn compare_three_box_padding_offsets(padding: EdgeInsets, expected_left: f32) {
 
 #[test]
 fn physical_sliver_padding_preserves_all_three_boxes_at_five_scroll_offsets() {
-    compare_three_box_padding_offsets(EdgeInsets::only(25., 20., 15., 35.), 25.);
+    compare_three_box_padding_offsets(EdgeInsets::only(25., 20., 15., 35.), None, 25.);
 }
 
 #[test]
-fn resolved_directional_padding_places_the_center_box_against_the_correct_edge() {
-    use incular_config::{EdgeInsetsDirectional, TextDirection};
-
+fn ambient_directional_padding_places_the_center_box_against_the_correct_edge() {
     let insets = EdgeInsetsDirectional::only(25., 20., 15., 35.);
     for (direction, left) in [(TextDirection::Ltr, 25.), (TextDirection::Rtl, 15.)] {
-        // SliverPadding currently takes physical edges; this compares the
-        // geometry after caller-side resolution, not ambient resolution.
-        compare_three_box_padding_offsets(insets.resolve(direction), left);
+        compare_three_box_padding_offsets(insets, Some(direction), left);
+    }
+}
+
+#[test]
+fn retained_nested_padding_reacts_to_ambient_direction_changes() {
+    let controller = ScrollController::new();
+    let child_key = Key::from(42_u64);
+    let viewport: Widget = Viewport::new([Box::new(SliverPadding::new(
+        EdgeInsetsDirectional::only(11., 8., 7., 2.),
+        SliverPadding::new(
+            EdgeInsetsDirectional::only(13., 3., 3., 9.),
+            SliverToBoxAdapter::new(
+                Widget::box_(Size::new(100., 50.), Color::WHITE).with_key(child_key.clone()),
+            ),
+        ),
+    )) as Box<dyn Sliver>])
+    .controller(controller.clone())
+    .into();
+    let scene = |direction| Directionality::new(direction, viewport.clone()).into();
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scene(TextDirection::Ltr)).unwrap();
+    let view = Constraints::tight(Size::new(100., 80.));
+    tree.layout(view).unwrap();
+    let child = tree.element_with_key(&child_key).unwrap();
+    for (direction, left) in [
+        (TextDirection::Ltr, 24.),
+        (TextDirection::Rtl, 10.),
+        (TextDirection::Ltr, 24.),
+    ] {
+        tree.update(root, scene(direction)).unwrap();
+        tree.layout(view).unwrap();
+        assert_eq!(tree.element_with_key(&child_key), Some(child));
+        assert_eq!(
+            tree.element_bounds(child).unwrap(),
+            Rect::from_origin_size(Offset::new(left, 11.), Size::new(66., 50.))
+        );
+        assert_eq!(controller.offset(), 0.);
     }
 }

@@ -1,4 +1,5 @@
 use super::*;
+use incular_config::TextDirection;
 use std::any::Any;
 
 /// Amount of offscreen content a scroll viewport caches on each side.
@@ -281,6 +282,7 @@ pub struct SliverViewportConfig {
     pub(crate) preserve_implicit_scroll_position: bool,
     pub(crate) axis: Axis,
     pub(crate) reverse: bool,
+    pub(crate) text_direction: Option<TextDirection>,
     pub(crate) physics: ScrollPhysics,
     pub(crate) cache_extent: ScrollCacheExtent,
     pub(crate) shrink_wrap: bool,
@@ -320,6 +322,7 @@ impl PartialEq for SliverViewportConfig {
             && self.preserve_implicit_scroll_position == other.preserve_implicit_scroll_position
             && self.axis == other.axis
             && self.reverse == other.reverse
+            && self.text_direction == other.text_direction
             && self.physics == other.physics
             && self.cache_extent == other.cache_extent
             && self.shrink_wrap == other.shrink_wrap

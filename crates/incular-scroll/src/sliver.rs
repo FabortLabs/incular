@@ -5,7 +5,7 @@
 //! Flutter's `RenderViewport` and `RenderSliver` without making the scroll
 //! crate depend on widget or renderer types.
 
-use incular_config::Axis;
+use incular_config::{Axis, TextDirection};
 use incular_core::{finite_non_negative, finite_or_zero};
 
 /// The constraints supplied by a viewport to one sliver.
@@ -13,6 +13,8 @@ use incular_core::{finite_non_negative, finite_or_zero};
 pub struct SliverConstraints {
     pub axis: Axis,
     pub reverse: bool,
+    /// Ambient direction for slivers with logical edges, independent of the physical axis.
+    pub text_direction: Option<TextDirection>,
     pub scroll_offset: f32,
     pub preceding_scroll_extent: f32,
     pub overlap: f32,
@@ -42,6 +44,7 @@ impl SliverConstraints {
         Self {
             axis,
             reverse,
+            text_direction: None,
             scroll_offset: finite_non_negative(scroll_offset),
             preceding_scroll_extent: finite_non_negative(preceding_scroll_extent),
             overlap: finite_or_zero(overlap),

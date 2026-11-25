@@ -81,12 +81,17 @@ pub(super) fn lower_scrolling(widget: &Widget, context: &DependencyContext) -> R
                     })
             });
             let resolved = behavior.resolve();
-            let config = if physics == config.physics && resolved == config.behavior {
+            let text_direction = context.depend::<TextDirection>();
+            let config = if physics == config.physics
+                && resolved == config.behavior
+                && text_direction == config.text_direction
+            {
                 config.clone()
             } else {
                 let mut config = (**config).clone();
                 config.physics = physics;
                 config.behavior = resolved;
+                config.text_direction = text_direction;
                 Rc::new(config)
             };
             RenderKind::SliverViewport { config }

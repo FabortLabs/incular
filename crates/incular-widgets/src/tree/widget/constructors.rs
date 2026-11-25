@@ -1433,6 +1433,7 @@ impl Widget {
                     preserve_implicit_scroll_position: false,
                     axis,
                     reverse,
+                    text_direction: None,
                     physics,
                     cache_extent: crate::ScrollCacheExtent::pixels(cache_extent.max(0.)),
                     shrink_wrap,

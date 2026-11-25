@@ -178,7 +178,7 @@ impl WidgetTree {
                     // Slivers always lay out in scroll space; a reversed
                     // axis is mirrored when the children are positioned.
                     let overlap = scroll_offset.min(0.);
-                    SliverConstraints::new(
+                    let mut sliver = SliverConstraints::new(
                         config.axis,
                         config.reverse,
                         scroll_offset.max(0.),
@@ -189,7 +189,9 @@ impl WidgetTree {
                         viewport,
                         viewport + cache_extent * 2.,
                         -cache_extent,
-                    )
+                    );
+                    sliver.text_direction = config.text_direction;
+                    sliver
                 };
                 let explicit_corrections = std::cell::Cell::new(0u64);
                 let perform_layout = |offset, viewport| {

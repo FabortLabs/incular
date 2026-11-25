@@ -684,7 +684,7 @@ fn list_view_widget(value: ListView) -> Widget {
     if let Some(padding) = value.padding {
         sliver = Box::new(PaddingRenderSliver {
             inner: RefCell::new(sliver),
-            padding,
+            padding: padding.into(),
         });
     }
     single_sliver_viewport_with_options(
@@ -1021,7 +1021,7 @@ fn grid_view_widget(value: GridView) -> Widget {
     if let Some(padding) = value.padding {
         sliver = Box::new(PaddingRenderSliver {
             inner: RefCell::new(sliver),
-            padding,
+            padding: padding.into(),
         });
     }
     single_sliver_viewport_with_options(

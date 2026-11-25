@@ -98,11 +98,14 @@ observe the requested out-of-range frame before settling. Every
 rectangle matches, including the middle box's 760-pixel cross extent
 and the offscreen positions.
 
-The LTR and RTL registrations (:107, :149) also match all placements
-when the same direction-relative padding is resolved by the Rust
-caller. These are partial because the current typed SliverPadding
-accepts physical edges, not an ambient-direction-resolving value.
-Three pinned originals and 13 focused Rust tests passed.
+The LTR and RTL registrations (:107, :149) now also pair all 15
+rectangles with the typed directional padding resolved from the
+nearest Directionality, not by the caller. An authored probe changes
+LTR → RTL → LTR above an unchanged raw viewport with two nested
+directional paddings. The same child is retained, its x coordinate
+moves 24 → 10 → 24, and its size, top edge, and scroll offset stay
+fixed. The two pinned originals and the authored probe passed, as
+did 61 tests across four targeted Rust binaries.
 
 ## Hit boundaries in all four scroll directions
 
@@ -117,4 +120,4 @@ CustomScrollView still exposes its opaque scrolling surface.
 left, and right. :191 is partial: descending geometry and hits match,
 but the Rust layout-only SliverPadding does not add a retained
 ancillary entry analogous to Flutter's RenderSliverPadding hit-path
-entry. Four focused Rust targets passed (61 tests).
+entry. Four focused Rust targets passed (59 tests).
