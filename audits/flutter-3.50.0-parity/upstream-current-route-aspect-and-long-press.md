@@ -58,6 +58,12 @@ The broader targeted `runtime route_outlet` filter had the same
 after publishing route currentness. Those focus and retained-editor
 failures remain open; the TapRegion checks do not certify route focus.
 
+Pinned original :1053 and the third Rust route fixture pass. Pressing
+the bottom-right navigation button counts as outside for the outgoing
+route before the push. The next outside tap only reaches the new route,
+and returning restores the first region's notifications. The
+per-route down totals match at each checkpoint: (1,0), (2,1), (3,1).
+
 ## Long press button-mask remediation
 
 Pinned :427 and :455 pass along with all five focused Rust Runtime

@@ -165,6 +165,7 @@ packages/flutter/test/services/text_editing_delta_test.dart	68	Verify invalid Te
 packages/flutter/test/services/text_editing_delta_test.dart	138	Verify creation of deletion delta when deleting at end of composing region.	partial-match	upstream-tap-absorber-delta-and-raw-image.md
 packages/flutter/test/services/text_editing_delta_test.dart	235	Verify creation of replacement delta when replacing with shorter.	partial-match	upstream-tap-absorber-delta-and-raw-image.md
 packages/flutter/test/services/text_editing_delta_test.dart	336	Verify non text update delta created.	partial-match	upstream-tap-absorber-delta-and-raw-image.md
+packages/flutter/test/widgets/tap_region_test.dart	1053	TapRegion onTapOutside should only trigger on the current route during navigation	paired-match	upstream-current-route-aspect-and-long-press.md
 packages/flutter/test/widgets/tap_region_test.dart	1133	TapRegion on non-current routes should not respond to onTapOutside events	paired-mismatch	upstream-current-route-aspect-and-long-press.md
 packages/flutter/test/widgets/tap_region_test.dart	1191	TapRegion with consumeOutsideTaps should not consume taps after navigation	paired-mismatch	upstream-current-route-aspect-and-long-press.md
 packages/flutter/test/widgets/aspect_ratio_test.dart	26	Aspect ratio control test	paired-match	upstream-current-route-aspect-and-long-press.md

@@ -9,16 +9,19 @@ use incular_core::{
 use incular_navigation::{Navigator, Page};
 use incular_runtime::{RouteOutlet, Runtime};
 use incular_widgets::{
-    Align, Alignment, GestureDetector, HitTestBehavior, Listener, SizedBox, TapRegion,
-    TapRegionSurface, Widget, internal::Key,
+    Align, Alignment, GestureDetector, HitTestBehavior, Listener, Positioned, SizedBox, Stack,
+    TapRegion, TapRegionSurface, Widget, internal::Key,
 };
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
 };
 
+const VIEWPORT_WIDTH: f32 = 800.;
+const VIEWPORT_HEIGHT: f32 = 600.;
+
 fn bounds() -> Constraints {
-    Constraints::tight(Size::new(200., 200.))
+    Constraints::tight(Size::new(VIEWPORT_WIDTH, VIEWPORT_HEIGHT))
 }
 
 fn page(name: &'static str, key: &Key, count: &Rc<Cell<(u32, u32)>>) -> Page {
@@ -61,7 +64,8 @@ fn tap(runtime: &mut Runtime, key: &Key, inside: bool) {
             rect.origin.y + rect.size.height + 1.,
         )
     };
-    assert!((0. ..200.).contains(&position.x) && (0. ..200.).contains(&position.y));
+    assert!((0. ..VIEWPORT_WIDTH).contains(&position.x));
+    assert!((0. ..VIEWPORT_HEIGHT).contains(&position.y));
     for (phase, buttons) in [
         (PointerPhase::Down, PRIMARY_POINTER_BUTTON),
         (PointerPhase::Up, 0),
@@ -92,8 +96,8 @@ fn host() -> (Navigator, Runtime, Rc<RefCell<RouteOutlet>>) {
     runtime
         .register_builder(root, move || {
             TapRegionSurface::new(SizedBox::from_dimensions(
-                Some(200.),
-                Some(200.),
+                Some(VIEWPORT_WIDTH),
+                Some(VIEWPORT_HEIGHT),
                 Some(mounted.borrow().widget()),
             ))
             .into()
@@ -142,6 +146,51 @@ fn tap_region_outside_callbacks_follow_current_route_across_push_and_pop() {
         [on_second, on_first_again],
         [((0, 0), (1, 1)), ((1, 1), (1, 1))]
     );
+}
+
+#[test]
+fn navigation_button_tap_is_outside_only_for_the_route_it_leaves() {
+    let (navigator, mut runtime, outlet) = host();
+    let present = |runtime: &mut Runtime| {
+        RouteOutlet::present_frame(&outlet, runtime, bounds()).expect("present settled route");
+    };
+    let first_key = Key::from("first region with navigation");
+    let second_key = Key::from("second region after navigation");
+    let button_key = Key::from("outside navigation button");
+    let first_count = Rc::new(Cell::new((0, 0)));
+    let second_count = Rc::new(Cell::new((0, 0)));
+    let second_page = page("second", &second_key, &second_count);
+    let button = Widget::from(
+        GestureDetector::new(Widget::box_(Size::new(56., 56.), Color::WHITE))
+            .behavior(HitTestBehavior::Opaque)
+            .on_tap({
+                let navigator = navigator.clone();
+                move || {
+                    navigator.push_page(second_page.clone());
+                }
+            }),
+    )
+    .with_key(button_key.clone());
+    let mut first_page = page("first", &first_key, &first_count);
+    first_page.child = Stack::new([
+        first_page.child,
+        Widget::from(Positioned::new(button).right(16.).bottom(16.)),
+    ])
+    .into();
+    navigator.push_page(first_page);
+    present(&mut runtime);
+    let down = || (first_count.get().0, second_count.get().0);
+
+    tap(&mut runtime, &first_key, false);
+    assert_eq!(down(), (1, 0));
+    tap(&mut runtime, &button_key, true);
+    present(&mut runtime);
+    tap(&mut runtime, &second_key, false);
+    assert_eq!(down(), (2, 1));
+    navigator.pop();
+    present(&mut runtime);
+    tap(&mut runtime, &first_key, false);
+    assert_eq!(down(), (3, 1));
 }
 
 #[test]
