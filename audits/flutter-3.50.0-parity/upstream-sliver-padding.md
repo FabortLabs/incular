@@ -88,3 +88,18 @@ at a scroll offset of 99,999.9. It is partial because Incular derives
 the result from live geometry and child constraints rather than
 exposing the original Flutter RenderSliver getter. Three originals
 and four focused Rust targets (23 tests) passed.
+
+## Three-sliver placements across the full scroll sample
+
+The physical padding registration (:65) compares the whole viewport
+size and all three full rectangles at offsets 0, 200, 390, 490, and
+10,000. Rust uses an attached controller's immediate jump so it can
+observe the requested out-of-range frame before settling. Every
+rectangle matches, including the middle box's 760-pixel cross extent
+and the offscreen positions.
+
+The LTR and RTL registrations (:107, :149) also match all placements
+when the same direction-relative padding is resolved by the Rust
+caller. These are partial because the current typed SliverPadding
+accepts physical edges, not an ambient-direction-resolving value.
+Three pinned originals and 13 focused Rust tests passed.

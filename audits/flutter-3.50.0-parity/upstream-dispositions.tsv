@@ -1171,3 +1171,6 @@ packages/flutter/test/widgets/slivers_padding_test.dart	505	SliverPadding propag
 packages/flutter/test/widgets/slivers_padding_test.dart	348	Viewport+SliverPadding changing padding	paired-match	upstream-sliver-padding.md#replacing-padding-and-changing-direction
 packages/flutter/test/widgets/slivers_padding_test.dart	394	Viewport+SliverPadding changing padding to negative asserts	paired-match	upstream-sliver-padding.md#replacing-padding-and-changing-direction
 packages/flutter/test/widgets/slivers_padding_test.dart	419	Viewport+SliverPadding changing direction	partial-match	upstream-sliver-padding.md#replacing-padding-and-changing-direction
+packages/flutter/test/widgets/slivers_padding_test.dart	65	Viewport+SliverPadding basic test (VISUAL)	paired-match	upstream-sliver-padding.md#three-sliver-placements-across-the-full-scroll-sample
+packages/flutter/test/widgets/slivers_padding_test.dart	107	Viewport+SliverPadding basic test (LTR)	partial-match	upstream-sliver-padding.md#three-sliver-placements-across-the-full-scroll-sample
+packages/flutter/test/widgets/slivers_padding_test.dart	149	Viewport+SliverPadding basic test (RTL)	partial-match	upstream-sliver-padding.md#three-sliver-placements-across-the-full-scroll-sample

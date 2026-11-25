@@ -352,3 +352,70 @@ fn padding_trailing_extent_tracks_direction_even_far_outside_the_viewport() {
         assert_eq!(layout.geometry.scroll_extent - before, expected_after);
     }
 }
+
+fn compare_three_box_padding_offsets(padding: EdgeInsets, expected_left: f32) {
+    use incular_widgets::{SliverToBoxAdapter, Viewport};
+
+    let row = |index: u64| {
+        SliverToBoxAdapter::new(
+            Widget::box_(Size::new(400., 400.), Color::WHITE).with_key(Key::from(index)),
+        )
+    };
+    let slivers: Vec<Box<dyn Sliver>> = vec![
+        Box::new(row(1)),
+        Box::new(SliverPadding::new(padding, row(2))),
+        Box::new(row(3)),
+    ];
+    let controller = ScrollController::new();
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(Viewport::new(slivers).controller(controller.clone()).into())
+        .unwrap();
+    let view = Constraints::tight(Size::new(800., 600.));
+    tree.layout(view).unwrap();
+    assert_eq!(
+        tree.element_bounds(root).unwrap().size,
+        Size::new(800., 600.)
+    );
+
+    for offset in [0., 200., 390., 490., 10000.] {
+        controller.jump_to(offset);
+        tree.layout(view).unwrap();
+        tree.update_compositor(incular_core::time::Instant::now())
+            .unwrap();
+        let mut rects = Vec::new();
+        for index in 1..=3 {
+            let id = tree
+                .element_with_key(&Key::from(index as u64))
+                .expect("box adapter is retained");
+            rects.push(tree.element_bounds(id).unwrap());
+        }
+        let rect = |x, y, width| Rect::from_origin_size(Offset::new(x, y), Size::new(width, 400.));
+        assert_eq!(
+            rects,
+            [
+                rect(0., -offset, 800.),
+                rect(expected_left, 420. - offset, 760.),
+                rect(0., 855. - offset, 800.),
+            ],
+            "at offset {offset}"
+        );
+    }
+}
+
+#[test]
+fn physical_sliver_padding_preserves_all_three_boxes_at_five_scroll_offsets() {
+    compare_three_box_padding_offsets(EdgeInsets::only(25., 20., 15., 35.), 25.);
+}
+
+#[test]
+fn resolved_directional_padding_places_the_center_box_against_the_correct_edge() {
+    use incular_config::{EdgeInsetsDirectional, TextDirection};
+
+    let insets = EdgeInsetsDirectional::only(25., 20., 15., 35.);
+    for (direction, left) in [(TextDirection::Ltr, 25.), (TextDirection::Rtl, 15.)] {
+        // SliverPadding currently takes physical edges; this compares the
+        // geometry after caller-side resolution, not ambient resolution.
+        compare_three_box_padding_offsets(insets.resolve(direction), left);
+    }
+}
