@@ -111,3 +111,64 @@ fn indexed_changes_and_focus_match_arena_order_after_reuse() {
     }
     assert_eq!(tree.focused_node(), None);
 }
+
+#[test]
+fn framework_tags_do_not_cross_the_mobile_projection_boundary() {
+    let mut tree = SemanticsTree::new();
+    let tag = SemanticsTag::new("framework route marker");
+    let mut subject = node("tagged target", vec![]);
+    subject.state.add_tag(tag.clone());
+    let id = tree.insert(subject);
+    tree.set_root(Some(id));
+    let mut project = MobileAccessibilityProjection::new();
+    let update = project.sync(&tree).unwrap();
+    assert!(tree.node(id).unwrap().is_tagged(&tag));
+    assert!(update.nodes[0].semantic.tags().is_empty());
+    assert!(SemanticsSnapshot::from(&tree).nodes[0].tags().is_empty());
+}
+
+#[test]
+fn changing_only_tags_does_not_publish_a_mobile_state_event_or_accesskit_patch() {
+    let mut tree = SemanticsTree::new();
+    let id = tree.insert(node("retained target", vec![]));
+    tree.set_root(Some(id));
+    let mut mobile = MobileAccessibilityProjection::new();
+    let mut desktop = AccessKitProjection::new();
+    let _ = mobile.sync(&tree).unwrap();
+    let _ = desktop.sync(&tree, 1.).unwrap();
+    let mobile_id = mobile.native_node_id(id).unwrap();
+    let desktop_id = desktop.native_node_id(id).unwrap();
+    let tag = SemanticsTag::new("new framework tag");
+    let mut changed = tree.node(id).unwrap().clone();
+    changed.state.add_tag(tag.clone());
+    assert!(tree.update(id, changed));
+    assert!(tree.node(id).unwrap().is_tagged(&tag));
+    let mobile_update = mobile.sync(&tree);
+    let desktop_update = desktop.sync(&tree, 1.);
+    assert_eq!(
+        (
+            mobile_update.as_ref().map(|update| update.events.len()),
+            desktop_update.map(published)
+        ),
+        (None, None),
+        "tag-only changes must not produce native events or patches",
+    );
+
+    let mut changed = tree.node(id).unwrap().clone();
+    changed.state.set_enabled_state(Some(false));
+    assert!(tree.update(id, changed));
+    let update = mobile.sync(&tree).expect("real accessibility change");
+    assert_eq!(update.nodes[0].native_id, mobile_id);
+    assert!(!update.nodes[0].semantic.state.enabled);
+    assert!(update.nodes[0].semantic.tags().is_empty());
+    assert!(update.events.iter().any(|event| {
+        event.native_id == mobile_id && event.kind == MobileAccessibilityEventKind::StateChanged
+    }));
+    let update = desktop
+        .sync(&tree, 1.)
+        .expect("real accessibility change")
+        .into_accesskit();
+    assert_eq!(update.nodes.len(), 1);
+    assert_eq!(update.nodes[0].0.0, desktop_id);
+    assert!(update.nodes[0].1.is_disabled());
+}

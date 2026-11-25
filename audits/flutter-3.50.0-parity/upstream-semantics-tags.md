@@ -29,3 +29,16 @@ also verifies that an outside point is ignored. This retains the
 framework's coordinate dispatch, distinct from platform pointer
 routing. The runtime controls were run next to strict enabled-state
 and action-dispatch frame fixtures.
+
+## Adapter boundary
+
+Flutter's engine semantics update does not carry framework tags.
+A retained Rust tag-only update previously yielded a mobile state
+event and an unchanged AccessKit node patch, and the mobile snapshot
+still carried the tag. Both incremental projections now compare
+tag-free node snapshots. The generic bridge snapshot also omits
+tags. The retained node still answers tag queries; a subsequent
+real enabled-state change still reaches the same native IDs.
+Two regression cases failed before the fix and passed afterwards,
+alongside 14 focused projection cases. These are adapter-output
+checks, not measurements of physical screen-reader timing.

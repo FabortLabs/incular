@@ -11,7 +11,10 @@ use accesskit::{
     TextSelection as AccessKitSelection, Toggled, Tree, TreeId, TreeUpdate,
 };
 use incular_core::{Offset, Rect, Size};
-use std::collections::{HashMap, hash_map::Entry};
+use std::{
+    borrow::Cow,
+    collections::{HashMap, hash_map::Entry},
+};
 
 pub use incular_semantics::*;
 
@@ -32,7 +35,10 @@ impl From<&SemanticsTree> for SemanticsSnapshot {
         Self {
             root: tree.root(),
             roots: tree.roots().to_vec(),
-            nodes: tree.iter().map(|(_, node)| node.clone()).collect(),
+            nodes: tree
+                .iter()
+                .map(|(_, node)| platform_semantic_node(node).into_owned())
+                .collect(),
         }
     }
 }
@@ -191,11 +197,12 @@ impl MobileAccessibilityProjection {
                 self.force_full_update = true;
                 return None;
             }
-            if full || self.previous.get(&id) != Some(node) {
-                changed.push(id);
+            let semantic = platform_semantic_node(node);
+            if full || self.previous.get(&id) != Some(semantic.as_ref()) {
+                changed.push((id, semantic));
             }
         }
-        changed.sort_by_key(|id| self.semantic_to_native[id]);
+        changed.sort_by_key(|(id, _)| self.semantic_to_native[id]);
         let removed = if !regressed && self.synced_removals == tree.diagnostics().nodes_removed {
             Vec::new()
         } else {
@@ -214,11 +221,8 @@ impl MobileAccessibilityProjection {
 
         let mut nodes = Vec::with_capacity(changed.len());
         let mut events = Vec::new();
-        for &id in &changed {
-            let Some(semantic) = tree.node(id) else {
-                continue;
-            };
-            let native_id = self.semantic_to_native[&id];
+        for (id, semantic) in &changed {
+            let native_id = self.semantic_to_native[id];
             let children = semantic
                 .children
                 .iter()
@@ -229,12 +233,12 @@ impl MobileAccessibilityProjection {
                 semantic: mobile_semantic_node(semantic),
                 children,
             });
-            if full || !self.previous.contains_key(&id) {
+            if full || !self.previous.contains_key(id) {
                 events.push(MobileAccessibilityEvent {
                     native_id,
                     kind: MobileAccessibilityEventKind::ContentChanged,
                 });
-            } else if let Some(old) = self.previous.get(&id) {
+            } else if let Some(old) = self.previous.get(id) {
                 if old.state.focused != semantic.state.focused {
                     events.push(MobileAccessibilityEvent {
                         native_id,
@@ -286,10 +290,8 @@ impl MobileAccessibilityProjection {
         if full {
             self.previous.clear();
         }
-        for id in changed {
-            if let Some(semantic) = tree.node(id) {
-                self.previous.insert(id, semantic.clone());
-            }
+        for (id, semantic) in changed {
+            self.previous.insert(id, semantic.into_owned());
         }
         if roots_changed {
             self.previous_roots.clear();
@@ -431,6 +433,18 @@ impl MobileAccessibilityProjection {
         self.native_to_semantic.insert(native_id, node);
         true
     }
+}
+
+/// Flutter tags inform framework tree assembly but are not transmitted to
+/// accessibility adapters. Compare the projected form as well as exporting
+/// it, so a tag-only tree revision produces no native update.
+fn platform_semantic_node(node: &SemanticNode) -> Cow<'_, SemanticNode> {
+    if node.tags().is_empty() {
+        return Cow::Borrowed(node);
+    }
+    let mut node = node.clone();
+    node.state.tags = Box::default();
+    Cow::Owned(node)
 }
 
 /// Keeps clear-text password values inside the retained runtime while making
@@ -638,7 +652,10 @@ impl AccessKitProjection {
                 || self
                     .previous
                     .get(&id)
-                    .is_none_or(|old| old.scale_factor != scale_factor || old.semantic != *semantic)
+                    .is_none_or(|old| {
+                        old.scale_factor != scale_factor
+                            || &old.semantic != platform_semantic_node(semantic).as_ref()
+                    })
             {
                 changed.push(id);
             }
@@ -743,7 +760,8 @@ impl AccessKitProjection {
             self.previous.clear();
         }
         for id in changed {
-            let semantic = tree.node(id).expect("changed node is current").clone();
+            let semantic =
+                platform_semantic_node(tree.node(id).expect("changed node is current")).into_owned();
             self.previous.insert(
                 id,
                 ProjectedNode {
