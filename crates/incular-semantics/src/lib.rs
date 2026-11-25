@@ -318,6 +318,18 @@ pub struct SemanticScrollMetrics {
     pub maximum: f64,
 }
 
+/// Platform semantic hit testing, independent of ordinary widget pointers.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum SemanticsHitTestBehavior {
+    /// Let the platform infer a policy.
+    #[default]
+    Defer,
+    /// Receive pointer events and block other nodes behind this one.
+    Opaque,
+    /// Pass pointer events through this node.
+    Transparent,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct SemanticState {
     /// Whether the node accepts input. Flutter's default is "unspecified",
@@ -331,6 +343,8 @@ pub struct SemanticState {
     pub focusable: bool,
     /// Effective Flutter accessibility focus scope for this semantic node.
     pub accessibility_focus_block_type: AccessibilityFocusBlockType,
+    /// Preferred hit policy for platforms supporting semantic overlays.
+    pub hit_test_behavior: SemanticsHitTestBehavior,
     pub selected: bool,
     pub checked: Option<CheckedState>,
     pub expanded: Option<bool>,
@@ -445,6 +459,7 @@ impl Default for SemanticState {
             focused: false,
             focusable: false,
             accessibility_focus_block_type: AccessibilityFocusBlockType::None,
+            hit_test_behavior: SemanticsHitTestBehavior::Defer,
             selected: false,
             checked: None,
             expanded: None,

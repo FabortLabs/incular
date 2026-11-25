@@ -349,6 +349,13 @@ impl Semantics {
         self
     }
 
+    /// Flutter's platform hit-test override for this semantic node.
+    #[must_use]
+    pub fn hit_test_behavior(mut self, behavior: incular_semantics::SemanticsHitTestBehavior) -> Self {
+        self.state.hit_test_behavior = behavior;
+        self
+    }
+
     /// Flutter's `hidden`: in the tree but not currently visible.
     #[must_use]
     pub fn hidden(mut self, hidden: bool) -> Self {

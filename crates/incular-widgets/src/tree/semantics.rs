@@ -12,7 +12,7 @@
 use super::*;
 use incular_semantics::{
     AccessibilityFocusBlockType, CustomSemanticsAction, CustomSemanticsActionId, SemanticAction,
-    StringAttribute,
+    SemanticsHitTestBehavior, StringAttribute,
 };
 use std::{borrow::Cow, rc::Rc};
 
@@ -36,6 +36,7 @@ struct MergedSemanticSummary {
     custom_actions: Vec<CustomSemanticsActionId>,
     has_custom_callback: bool,
     enabled: Option<bool>,
+    hit_test: SemanticsHitTestBehavior,
     tags: Vec<incular_semantics::SemanticsTag>,
 }
 
@@ -1246,6 +1247,9 @@ impl WidgetTree {
         // Flutter absorption preserves the parent's level if present.
         // Otherwise the first descendant with a heading supplies it.
         state.set_enabled_state(merge_enabled_state(state.enabled_state(), merged.enabled));
+        if state.hit_test_behavior == SemanticsHitTestBehavior::Defer {
+            state.hit_test_behavior = merged.hit_test;
+        }
         if !merged.tags.is_empty() {
             let mut tags = std::mem::take(&mut state.tags).into_vec();
             for tag in merged.tags {
@@ -1791,6 +1795,9 @@ impl WidgetTree {
         }
         if let Some(explicit) = &entry.widget.semantic_properties().explicit {
             merged.add_tags(&explicit.state.tags);
+            if merged.hit_test == SemanticsHitTestBehavior::Defer {
+                merged.hit_test = explicit.state.hit_test_behavior;
+            }
         }
         let enabled = entry
             .widget
@@ -2375,6 +2382,7 @@ fn overlay_semantic_state(base: &mut SemanticState, overlay: &SemanticState) {
     take!(
         focused,
         focusable,
+        hit_test_behavior,
         selected,
         checked,
         expanded,

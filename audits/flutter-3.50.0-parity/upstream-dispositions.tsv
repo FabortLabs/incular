@@ -1464,3 +1464,5 @@ packages/flutter/test/painting/continuous_rectangle_border_test.dart	116	Continu
 packages/flutter/test/semantics/semantics_test.dart	28	tagging	paired-match	upstream-semantics-tags.md
 packages/flutter/test/semantics/semantics_test.dart	43	getSemanticsData includes tags	paired-match	upstream-semantics-tags.md
 packages/flutter/test/semantics/semantics_test.dart	946	performActionAt can hit test on merged semantics node	paired-match	upstream-semantics-tags.md#tags-for-children-and-merged-point-dispatch
+packages/flutter/test/semantics/semantics_test.dart	1078	SemanticsConfiguration.copy() preserves hitTestBehavior	paired-match	upstream-semantics-hit-test.md
+packages/flutter/test/semantics/semantics_test.dart	1093	SemanticsConfiguration.copy() preserves all hitTestBehavior values	paired-match	upstream-semantics-hit-test.md
