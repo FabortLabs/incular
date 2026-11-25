@@ -10,7 +10,7 @@ use icu_properties::{CodePointMapData, props::GeneralCategory};
 use icu_segmenter::options::WordBreakInvariantOptions;
 use icu_segmenter::{GraphemeClusterSegmenter, WordSegmenter};
 
-use crate::{TextGeometry, TextRange};
+use crate::{TextGeometry, TextLineRef, TextRange};
 
 type WordBreaks = Rc<dyn Fn(&str) -> Option<Vec<usize>>>;
 
@@ -155,7 +155,20 @@ impl<'a> LineBoundary<'a> {
     /// Returns the containing line, clamping negative input to the start.
     #[must_use]
     pub fn at(&self, position: isize) -> Option<TextRange> {
+        let line = self.line_at(position)?;
+        Some(TextRange::new(line.start(), line.caret_end()))
+    }
+
+    /// Returns the measured line corresponding to the logical boundary.
+    #[must_use]
+    pub fn line_at(&self, position: isize) -> Option<TextLineRef<'a>> {
         let position = position.max(0) as usize;
+        let shaped = self
+            .layout
+            .get_line(self.layout.line_for_offset(position))?;
+        if shaped.start() <= position && position <= shaped.caret_end() {
+            return Some(shaped);
+        }
         // line_for_offset uses half-open shaped ranges. A hard break can
         // start at caret_end even though it has no glyph in that range.
         let mut low = 0;
@@ -169,7 +182,7 @@ impl<'a> LineBoundary<'a> {
             }
         }
         let line = self.layout.get_line(low.checked_sub(1)?)?;
-        (position <= line.caret_end()).then_some(TextRange::new(line.start(), line.caret_end()))
+        (position <= line.caret_end()).then_some(line)
     }
 
     /// Returns no leading boundary before the start of the text.

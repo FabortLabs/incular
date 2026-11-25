@@ -4,7 +4,7 @@ use super::*;
 use crate::selection::{
     SelectedContentRange, SelectionGeometry, SelectionHandleType, SelectionPoint, SelectionStatus,
 };
-use incular_text::TextGeometry;
+use incular_text::{LineBoundary, TextGeometry};
 
 impl WidgetTree {
     #[must_use]
@@ -1806,18 +1806,37 @@ fn line_boundary(
     if layout.line_count() == 0 {
         return None;
     }
-    // `Paragraph.getLineBoundary`: the line whose `[start, end)` holds the
-    // offset, the last line past the end.
-    let line_containing = |position: usize| layout.line(layout.line_for_offset(position));
+    let boundary = LineBoundary::new(layout);
+    let bytes = text.as_bytes();
+    let line_containing = |position: usize| {
+        // Flutter's logical range excludes LF. A CRLF caret at the LF is
+        // still on the previous logical line even if shaping excludes CR.
+        let position = if position > 0 && bytes.get(position - 1..=position) == Some(b"\r\n") {
+            position - 1
+        } else {
+            position
+        };
+        boundary
+            .line_at(position as isize)
+            .unwrap_or_else(|| layout.line(layout.line_for_offset(position)))
+    };
+    let logical_line_end = |line: incular_text::TextLineRef<'_>| {
+        let end = line.caret_end();
+        end + usize::from(
+            bytes
+                .get(end..)
+                .is_some_and(|suffix| suffix.starts_with(b"\r\n")),
+        )
+    };
     let mut affinity = affinity;
     if continues_at_wrap {
         let line = line_containing(offset);
         let byte = |at: usize| text.as_bytes().get(at).copied();
         if forward {
             if affinity == Upstream
-                && offset == line.caret_end()
+                && offset == logical_line_end(line)
                 && offset != text.len()
-                && byte(offset) != Some(b'\n')
+                && !matches!(byte(offset), Some(b'\n' | b'\r'))
             {
                 affinity = Downstream;
             }
@@ -1844,7 +1863,7 @@ fn line_boundary(
     };
     let line = line_containing(caret_offset);
     Some(if forward {
-        (line.caret_end(), Upstream)
+        (logical_line_end(line), Upstream)
     } else {
         (line.start(), Downstream)
     })

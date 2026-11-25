@@ -19,3 +19,16 @@ in the returned range or using the shaped glyph range's gap fallback.
 Focused boundary, editor-state, and paragraph-document layout tests
 passed. These are logical boundary queries, not a claim that every
 platform keyboard binding already uses the same policy.
+
+## Keyboard use of hard line boundaries
+
+The authored `editor_hard_line_shortcuts_test.dart` and Runtime test
+send Home, End, Shift+Home and Shift+End to a focused multiline editor
+under both Linux and Windows shortcut policies. Before the repair, Home
+at the first LF could jump to the last line (byte 12 rather than 0).
+The editor now consults the logical boundary before falling back to
+shaped-line lookup. End and Shift+End stop just before LF, including
+after CR for CRLF as the pinned Flutter fixture actually does.
+Both editors keep the drawn caret on the first line. The ordinary
+single-line, wrapped, selectable-text and editor-scroll shortcut suites
+still pass. These authored tests do not add upstream registrations.

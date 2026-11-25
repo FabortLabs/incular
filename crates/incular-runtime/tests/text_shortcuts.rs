@@ -368,3 +368,52 @@ fn paragraph_boundaries_via_shift_control_arrows() {
     // The next paragraph boundary is after the line terminator.
     assert_eq!(caret(&controller), (1, 4));
 }
+
+#[test]
+fn home_and_end_preserve_the_line_at_hard_breaks() {
+    for platform in [TextShortcutPlatform::Linux, TextShortcutPlatform::Windows] {
+        for text in ["abcd\nmiddle\nlast", "aébc\r\nmiddle\nlast"] {
+            let break_start = text.find(['\r', '\n']).unwrap();
+            let end = text.find('\n').unwrap();
+            let (mut runtime, controller) =
+                mount(platform, text, TextSelection::collapsed(break_start), true);
+            press(&mut runtime, Code::Home, PLAIN);
+            assert_eq!(caret(&controller), (0, 0), "{platform:?}: {text:?}");
+
+            let field = runtime.focused_element().unwrap();
+            let first_line_y = runtime
+                .tree()
+                .text_field_offset_rect(field, 0, controller.caret_affinity())
+                .unwrap()
+                .origin
+                .y;
+
+            controller.set_selection(TextSelection::collapsed(break_start));
+            press(&mut runtime, Code::End, PLAIN);
+            assert_eq!(caret(&controller), (end, end), "{platform:?}: {text:?}");
+
+            assert_eq!(
+                runtime
+                    .tree()
+                    .text_field_offset_rect(field, end, controller.caret_affinity())
+                    .unwrap()
+                    .origin
+                    .y,
+                first_line_y,
+                "End keeps the caret on the first drawn line for {platform:?}: {text:?}",
+            );
+
+            controller.set_selection(TextSelection::collapsed(break_start));
+            press(&mut runtime, Code::Home, Modifiers::SHIFT);
+            assert_eq!(
+                caret(&controller),
+                (break_start, 0),
+                "{platform:?}: {text:?}"
+            );
+
+            controller.set_selection(TextSelection::collapsed(1));
+            press(&mut runtime, Code::End, Modifiers::SHIFT);
+            assert_eq!(caret(&controller), (1, end), "{platform:?}: {text:?}");
+        }
+    }
+}
