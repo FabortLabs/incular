@@ -18,9 +18,8 @@ impl WidgetTree {
             } => {
                 if let Some(&child) = children.first() {
                     self.layout_render(child, constraints.loosen())?;
-                    let child_size = self
-                        .render_live(child, "retained render must remain live")
-                        .size;
+                    let child = self.render_live(child, "aligned child must remain live");
+                    let (child_size, child_baseline) = (child.size, child.baseline);
                     let (size, offset) = incular_layout::align_child(
                         constraints,
                         child_size,
@@ -30,8 +29,12 @@ impl WidgetTree {
                             height_factor,
                         },
                     );
+                    self.render_live_mut(id, "align render must remain live")
+                        .baseline = child_baseline.map(|local| local + offset.y);
                     (size, ChildOffsets::One(offset))
                 } else {
+                    self.render_live_mut(id, "align render must remain live")
+                        .baseline = None;
                     (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }

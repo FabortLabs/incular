@@ -108,3 +108,25 @@ fn align_relayout_shrink_wraps_just_the_axes_with_explicit_factors() {
         assert_eq!(size(&runtime), expected);
     }
 }
+
+// rendering/positioned_box_test.dart:50, actual-layout assertions only.
+#[test]
+fn align_factor_transition_includes_a_zero_axis_and_restores_fill() {
+    let frame = Constraints::at_most(200., 200.);
+    let mut runtime = Runtime::new(aligned(Some(1.), Some(0.))).unwrap();
+    runtime.run_frame(frame).unwrap();
+    let root = runtime.tree().root().unwrap();
+    let render = runtime.tree().render_id(root).unwrap();
+    assert_eq!(size(&runtime), Size::new(100., 0.));
+    for (width, height, expected) in [
+        (Some(0.5), Some(0.5), Size::new(50., 50.)),
+        (None, None, Size::new(200., 200.)),
+    ] {
+        runtime
+            .schedule_update(root, aligned(width, height))
+            .unwrap();
+        runtime.run_frame(frame).unwrap();
+        assert_eq!(runtime.tree().render_id(root), Some(render));
+        assert_eq!(size(&runtime), expected);
+    }
+}

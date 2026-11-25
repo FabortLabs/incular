@@ -276,8 +276,8 @@ packages/flutter/test/animation/curves_test.dart	231	Curve transform method shou
 packages/flutter/test/animation/curves_test.dart	471	CatmullRomCurve interpolates given points correctly	paired-match	upstream-curves-intrinsic-layout-and-system-overlay.md
 packages/flutter/test/widgets/intrinsic_width_test.dart	9	Intrinsic stepWidth, stepHeight	partial-mismatch	upstream-curves-intrinsic-layout-and-system-overlay.md
 packages/flutter/test/widgets/intrinsic_width_test.dart	35	IntrinsicWidth does not crash at zero area	partial-match	upstream-curves-intrinsic-layout-and-system-overlay.md
-packages/flutter/test/rendering/positioned_box_test.dart	13	RenderPositionedBox expands	partial-match	upstream-curves-intrinsic-layout-and-system-overlay.md
-packages/flutter/test/rendering/positioned_box_test.dart	25	RenderPositionedBox shrink wraps	partial-match	upstream-curves-intrinsic-layout-and-system-overlay.md
+packages/flutter/test/rendering/positioned_box_test.dart	13	RenderPositionedBox expands	paired-match	upstream-shifted-box-baselines.md
+packages/flutter/test/rendering/positioned_box_test.dart	25	RenderPositionedBox shrink wraps	paired-match	upstream-shifted-box-baselines.md
 packages/flutter/test/rendering/view_chrome_style_test.dart	68	statusBarColor isn't set when view covers less than half of the system status bar	partial-match	upstream-curves-intrinsic-layout-and-system-overlay.md
 packages/flutter/test/rendering/view_chrome_style_test.dart	89	statusBarColor is set when view covers more than half of tye system status bar	partial-match	upstream-curves-intrinsic-layout-and-system-overlay.md
 packages/flutter/test/rendering/view_chrome_style_test.dart	194	Top AnnotatedRegion provides status bar overlay style and bottom AnnotatedRegion provides navigation bar overlay style	partial-match	upstream-curves-intrinsic-layout-and-system-overlay.md
@@ -983,3 +983,9 @@ packages/flutter/test/rendering/baseline_test.dart	56	RenderBaseline different b
 packages/flutter/test/widgets/overflow_box_test.dart	37	'contentSuperLong=$contentSuperLong'	paired-match	upstream-overflow-box-fit.md
 packages/flutter/test/widgets/overflow_box_test.dart	68	no child	paired-match	upstream-overflow-box-fit.md
 packages/flutter/test/widgets/overflow_box_test.dart	93	OverflowBox implements debugFillProperties	partial-match	upstream-overflow-box-fit.md
+packages/flutter/test/rendering/positioned_box_test.dart	50	RenderPositionedBox width and height factors	partial-match	upstream-shifted-box-baselines.md
+packages/flutter/test/rendering/shifted_box_test.dart	57	computeDryBaseline works with center alignment	partial-match	upstream-shifted-box-baselines.md
+packages/flutter/test/rendering/shifted_box_test.dart	71	computeDryBaseline works with top-left alignment	partial-match	upstream-shifted-box-baselines.md
+packages/flutter/test/rendering/shifted_box_test.dart	84	computeDryBaseline works with bottom-right alignment	partial-match	upstream-shifted-box-baselines.md
+packages/flutter/test/rendering/shifted_box_test.dart	183	RenderFractionallySizedOverflowBox computeDryBaseline	partial-match	upstream-shifted-box-baselines.md
+packages/flutter/test/rendering/shifted_box_test.dart	200	RenderPadding computeDryBaseline	partial-match	upstream-shifted-box-baselines.md
