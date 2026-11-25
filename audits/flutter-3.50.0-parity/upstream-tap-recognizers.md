@@ -48,3 +48,23 @@ single active contact. Both overlapping release orders now pass, together
 with an additional wrong-pointer move/cancel control. The focused gesture
 targets pass 84 tests total. The separate partial outside-slop comparison
 still fails in the direct handler without Flutter's arena-close step.
+
+## Single and double tap on the same detector
+
+An ordinary tap now waits 300 ms from release when the same detector can
+also recognize a double tap. A matching second press followed by release
+emits only the double, even if it remains down across the old expiry.
+Without a second press, the single fires at expiry, not one millisecond
+early. Flutter's actual routed trace also showed that a new ordinary
+press supersedes the older candidate: a rejected second does not restore
+the first; a distant second can emit its own single immediately; a
+too-early second starts a new deadline. All seven authored Flutter
+scenarios match the six Rust tests (one Rust test covers both rejection
+paths). The remaining low-level same-frame onTapDown/Up/Cancel timing
+and cross-detector competition are separate coverage gaps.
+
+The two pinned `gestures/transformed_double_tap_test.dart` originals
+(lines 12 and 53) also pair. At both 2× and 0.5×, a 99 px global
+separation delivers a double tap; 101 px does not. Both targeted Rust
+cases pass. The pre-existing direct tap-diagonal cancellation mismatch
+is unchanged.

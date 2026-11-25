@@ -728,3 +728,5 @@ packages/flutter/test/widgets/listener_test.dart	207	scaled and offset for touch
 packages/flutter/test/widgets/listener_test.dart	280	rotated for touch/signal	partial-match	upstream-listener.md
 packages/flutter/test/widgets/listener_test.dart	353	RenderPointerListener's debugFillProperties when default	reference-ran-incular-open	upstream-listener.md
 packages/flutter/test/widgets/listener_test.dart	376	RenderPointerListener's debugFillProperties when full	reference-ran-incular-open	upstream-listener.md
+packages/flutter/test/gestures/transformed_double_tap_test.dart	12	kTouchSlop is evaluated in the global coordinate space when scaled up	paired-match	upstream-tap-recognizers.md#single-and-double-tap-on-the-same-detector
+packages/flutter/test/gestures/transformed_double_tap_test.dart	53	kTouchSlop is evaluated in the global coordinate space when scaled down	paired-match	upstream-tap-recognizers.md#single-and-double-tap-on-the-same-detector

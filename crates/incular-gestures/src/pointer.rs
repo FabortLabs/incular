@@ -699,6 +699,23 @@ impl PointerGestureRecognizer {
         }
         decision
     }
+
+    /// When an accepted ordinary tap still has to wait for a possible
+    /// double tap in a retained host.
+    #[must_use]
+    pub fn deferred_single_tap_deadline(&self) -> Option<Instant> {
+        if self.callbacks.on_tap.is_some()
+            && self.callbacks.on_double_tap.is_some()
+            && !self.double_tap_ignored
+            && !self.double_tap_second
+            && !self.double_tap_moved
+        {
+            self.last_tap?.checked_add(Self::DOUBLE_TAP_TIMEOUT)
+        } else {
+            None
+        }
+    }
+
     fn observe_phase(&mut self, event: PointerEvent) -> GestureDecision {
         // This recognizer has a single contact. A second pointer must not
         // replace that contact or complete/cancel its gesture on release.
@@ -718,7 +735,7 @@ impl PointerGestureRecognizer {
                 self.double_tap_ignored = false;
                 self.double_tap_moved = false;
                 if let Some(tap) = self.last_tap {
-                    if event.time.saturating_duration_since(tap) > Self::DOUBLE_TAP_TIMEOUT {
+                    if event.time.saturating_duration_since(tap) >= Self::DOUBLE_TAP_TIMEOUT {
                         self.last_tap = None;
                         self.last_tap_down = None;
                     } else if let Some((first_down, first_position)) = self.last_tap_down {

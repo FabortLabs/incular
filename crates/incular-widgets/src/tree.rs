@@ -1280,6 +1280,11 @@ struct RawPointerRouteEntry {
     world_to_local: Option<CoreTransform>,
 }
 
+struct DeferredSingleTap {
+    owner: ElementId,
+    deadline: Instant,
+}
+
 /// Per-pointer and per-gesture interaction state, kept apart from the
 /// element and render arenas it refers to by id.
 #[derive(Default)]
@@ -1300,6 +1305,7 @@ struct InputState {
     scale_gestures: HashMap<ElementId, ScaleGestureDetector>,
     /// First-tap records per widget, carried across presses for double taps.
     tap_memories: HashMap<ElementId, Rc<Cell<incular_gestures::TapMemory>>>,
+    deferred_single_taps: Vec<DeferredSingleTap>,
     /// In-flight overlay thumb drag, if any. No manual `Drop` needed: the
     /// drag's activity token aborts silently when still current, matching
     /// the silent teardown policy for torn-down context.

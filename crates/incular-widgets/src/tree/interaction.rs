@@ -766,6 +766,7 @@ impl WidgetTree {
         use incular_core::PointerPhase;
 
         let key = GestureArenaKey::pointer_device(window, device, event.pointer);
+        self.flush_single_tap_deadlines(event.time);
         if matches!(event.phase, PointerPhase::Down) {
             self.cancel_gesture_stream(key, true);
             let hit = target.and_then(|render| self.element_for_render(render))?;
@@ -813,6 +814,14 @@ impl WidgetTree {
                     callbacks.on_tap_move = None;
                     callbacks.on_long_press_down = None;
                     callbacks.on_long_press_cancel = None;
+                }
+                if callbacks.on_tap.is_some() {
+                    // A new press on this detector replaces its ordinary
+                    // tap candidate, even if its double recognizer ignores
+                    // the new position or later rejects the second press.
+                    self.input
+                        .deferred_single_taps
+                        .retain(|tap| tap.owner != candidate);
                 }
                 if callbacks.has_pointer_recognizer() {
                     let member = self.input.gesture_arena.add(key, false);
@@ -1748,12 +1757,14 @@ impl WidgetTree {
 
     /// Fires the deadline-driven gesture callbacks of presses held without
     /// further events: `onTapDown` after `kPressTimeout` and the long-press
-    /// start after `kLongPressTimeout`. Returns whether any recognizer still
+    /// start after `kLongPressTimeout`, and unpaired single taps once their
+    /// double-tap window expires. Returns whether any recognizer still
     /// waits on a deadline, so the runtime keeps requesting frames until
     /// the press ends or the deadline fires.
     pub fn pump_gesture_timers(&mut self, now: Instant) -> bool {
+        self.flush_single_tap_deadlines(now);
         let keys: Vec<GestureArenaKey> = self.input.active_gestures.keys().copied().collect();
-        let mut pending = false;
+        let mut pending = !self.input.deferred_single_taps.is_empty();
         for key in keys {
             let dispositions = self.input.gesture_arena.entries(key);
             let mut accepts = Vec::new();
@@ -1785,6 +1796,34 @@ impl WidgetTree {
             }
         }
         pending
+    }
+
+    fn flush_single_tap_deadlines(&mut self, now: Instant) {
+        self.release_deferred_taps(|tap| now >= tap.deadline);
+    }
+
+    fn release_deferred_taps(&mut self, matches: impl Fn(&DeferredSingleTap) -> bool) {
+        let mut index = 0;
+        while let Some(tap) = self.input.deferred_single_taps.get(index) {
+            if matches(tap) {
+                self.deliver_deferred_tap(index);
+            } else {
+                index += 1;
+            }
+        }
+    }
+
+    fn deliver_deferred_tap(&mut self, index: usize) {
+        let tap = self.input.deferred_single_taps.remove(index);
+        if let Some(memory) = self.input.tap_memories.get(&tap.owner) {
+            memory.set(incular_gestures::TapMemory::default());
+        }
+        if let Some(callback) = self
+            .gesture_callbacks(tap.owner)
+            .and_then(|callbacks| callbacks.on_tap)
+        {
+            callback();
+        }
     }
 
     pub(super) fn gesture_callbacks(&self, element: ElementId) -> Option<GestureCallbacks> {
@@ -2078,14 +2117,31 @@ impl WidgetTree {
             self.open_scroll_bracket(key, member);
         }
         let mut start_update = None;
-        if let Some(recognizer) = self.input.active_gestures.get_mut(&key).and_then(|active| {
+        if let Some(candidate) = self.input.active_gestures.get_mut(&key).and_then(|active| {
             active
                 .members
                 .iter_mut()
                 .find(|candidate| candidate.member == member)
-                .and_then(|candidate| candidate.recognizer.as_mut())
-        }) {
-            recognizer.dispatch(action);
+        }) && let Some(recognizer) = candidate.recognizer.as_mut()
+        {
+            let owner = candidate.element;
+            if matches!(action, GestureAction::Tap)
+                && let Some(deadline) = recognizer.deferred_single_tap_deadline()
+            {
+                self.input
+                    .deferred_single_taps
+                    .retain(|tap| tap.owner != owner);
+                self.input
+                    .deferred_single_taps
+                    .push(DeferredSingleTap { owner, deadline });
+            } else {
+                if matches!(action, GestureAction::DoubleTap) {
+                    self.input
+                        .deferred_single_taps
+                        .retain(|tap| tap.owner != owner);
+                }
+                recognizer.dispatch(action);
+            }
             start_update = recognizer.take_start_update();
         }
         if let GestureAction::ArenaAccepted { .. } = action
@@ -2433,6 +2489,8 @@ impl WidgetTree {
     /// Cancels all gesture and pointer state for window teardown. Notifies
     /// recognizers so no `on_cancel` owner strands across close/dispose.
     pub fn cancel_all_gesture_streams(&mut self) {
+        self.input.deferred_single_taps.clear();
+        self.input.tap_memories.clear();
         let ordinary: Vec<GestureArenaKey> = self.input.active_gestures.keys().copied().collect();
         for key in ordinary {
             self.cancel_gesture_stream(key, true);
