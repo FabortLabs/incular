@@ -1,6 +1,9 @@
 //! Corner-radius geometry shared by painting and decoration descriptors.
 
-use std::ops::{Add, Mul, Sub};
+use std::{
+    hash::{Hash, Hasher},
+    ops::{Add, Mul, Sub},
+};
 
 use incular_core::Lerp;
 use incular_rendering::CornerRadii;
@@ -41,6 +44,13 @@ impl Radius {
     #[must_use]
     pub fn lerp_optional(begin: Option<Self>, end: Option<Self>, t: f32) -> Option<Self> {
         lerp_optional(begin, end, t)
+    }
+}
+
+impl Hash for Radius {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        super::hash_paint_float(self.x, state);
+        super::hash_paint_float(self.y, state);
     }
 }
 
@@ -91,7 +101,7 @@ fn lerp_optional<T: Lerp + Mul<f32, Output = T>>(
 }
 
 /// An immutable set of radii for each of the four corners of a box.
-#[derive(Clone, Copy, Debug, Default, PartialEq, TypedBuilder)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Hash, TypedBuilder)]
 pub struct BorderRadius {
     #[builder(default = Radius::ZERO)]
     pub top_left: Radius,
@@ -206,7 +216,7 @@ impl From<BorderRadius> for CornerRadii {
 }
 
 /// An immutable set of directional radii for the four corners of a box.
-#[derive(Clone, Copy, Debug, Default, PartialEq, TypedBuilder)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Hash, TypedBuilder)]
 pub struct BorderRadiusDirectional {
     #[builder(default = Radius::ZERO)]
     pub top_start: Radius,
@@ -357,7 +367,7 @@ impl_corner_arithmetic!(
 
 /// Flutter's direction-aware corner geometry. Mixed values keep physical and
 /// logical corners separate until a text direction is known.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash)]
 pub enum BorderRadiusGeometry {
     /// All corners are physical.
     Physical(BorderRadius),

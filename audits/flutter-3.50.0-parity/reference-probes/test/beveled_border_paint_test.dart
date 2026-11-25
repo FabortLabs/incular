@@ -35,4 +35,17 @@ void main() {
     border.paint(canvas, const Rect.fromLTWH(0, 0, 2, 3));
     expect(canvas.invocations.single.invocation.memberName, #drawPath);
   });
+
+  test('beveled corners keep different horizontal and vertical radii', () {
+    const border = BeveledRectangleBorder(
+      borderRadius: BorderRadius.only(topLeft: Radius.elliptical(10, 3)),
+    );
+    expect(
+      border.getOuterPath(const Rect.fromLTWH(0, 0, 100, 80)),
+      isPathThat(
+        includes: const [Offset(10, 0), Offset(0, 3), Offset(2, 4)],
+        excludes: const [Offset(9, 0), Offset(0, 2)],
+      ),
+    );
+  });
 }

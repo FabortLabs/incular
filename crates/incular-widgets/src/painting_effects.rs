@@ -30,3 +30,10 @@ pub use shape_borders::{
     RoundedSuperellipseBorder, ShapeBorder, StadiumBorder, StarBorder, StarBorderError,
 };
 pub use shape_decoration::{DecoratedShapeBox, ShapeBorderClipper, ShapeDecoration};
+
+
+// IEEE positive and negative zero compare equal in painting value types.
+fn hash_paint_float(value: f32, state: &mut impl std::hash::Hasher) {
+    let bits = if value == 0.0 { 0 } else { value.to_bits() };
+    std::hash::Hash::hash(&bits, state);
+}

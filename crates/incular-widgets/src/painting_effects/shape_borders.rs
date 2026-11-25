@@ -16,7 +16,7 @@ use incular_rendering::{Brush, Canvas, CornerRadii, FillRule, Paint, PaintStyle,
 use smart_default::SmartDefault;
 
 use super::decoration::{Border, BorderSide, BorderStyle, BoxShape};
-use super::geometry::BorderRadius;
+use super::geometry::{BorderRadius, BorderRadiusGeometry, Radius};
 
 /// Flutter's `ShapeBorder` for the outlined shapes Incular paints itself:
 /// the shape's outline and the area inside its stroke, and the stroke.
@@ -710,29 +710,54 @@ impl incular_core::Lerp for OvalBorder {
 }
 
 /// Flutter's `BeveledRectangleBorder`: a rectangle whose corners are cut as
-/// straight segments between each corner radius's two endpoints. Only the
-/// horizontal radius of each corner sets the bevel's extent, as Incular's
-/// corner geometry is circular.
-#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
-pub struct BeveledRectangleBorder {
-    #[default(BorderSide::NONE)]
+/// straight segments. The default parameter keeps existing physical-radius
+/// callers unchanged; directional or mixed geometry resolves at paint time.
+#[derive(Clone, Copy, Debug, PartialEq, Hash)]
+pub struct BeveledRectangleBorder<R = BorderRadius> {
     pub side: BorderSide,
-    pub border_radius: BorderRadius,
+    pub border_radius: R,
 }
 
-impl BeveledRectangleBorder {
+impl Default for BeveledRectangleBorder {
+    fn default() -> Self {
+        Self::new(BorderSide::NONE, BorderRadius::ZERO)
+    }
+}
+
+impl<R> BeveledRectangleBorder<R> {
     #[must_use]
-    pub const fn new(side: BorderSide, border_radius: BorderRadius) -> Self {
+    pub const fn new(side: BorderSide, border_radius: R) -> Self {
         Self {
             side,
             border_radius,
         }
     }
 
-    fn path(&self, rect: Rect, delta: f32) -> Path {
+    /// Retains properties whose replacement is omitted.
+    #[must_use]
+    pub fn copy_with(self, side: Option<BorderSide>, border_radius: Option<R>) -> Self {
+        Self::new(
+            side.unwrap_or(self.side),
+            border_radius.unwrap_or(self.border_radius),
+        )
+    }
+}
+
+impl<R: Copy + std::ops::Mul<f32, Output = R>> BeveledRectangleBorder<R> {
+    #[must_use]
+    pub fn scale(&self, t: f32) -> Self {
+        Self::new(self.side.scale(t), self.border_radius * t)
+    }
+}
+
+impl<R: Copy + Into<BorderRadiusGeometry>> BeveledRectangleBorder<R> {
+    fn path(&self, rect: Rect, delta: f32, direction: Option<TextDirection>) -> Path {
         // The inner rectangle may invert for a thick border. Keep its
-        // edge coordinates until the polygon is built, rather than
-        // constructing a negative Incular Size.
+        // signed edge coordinates rather than constructing a negative Size.
+        let radius = self
+            .border_radius
+            .into()
+            .resolve(direction.unwrap_or(TextDirection::Ltr));
         bevel_path(
             [
                 rect.origin.x - delta,
@@ -740,36 +765,54 @@ impl BeveledRectangleBorder {
                 rect.origin.x + rect.size.width + delta,
                 rect.origin.y + rect.size.height + delta,
             ],
-            inflate_radii(self.border_radius.to_corner_radii(), delta),
+            radius,
+            delta,
         )
     }
 }
 
-impl ShapeBorder for BeveledRectangleBorder {
+impl<R: Copy + Into<BorderRadiusGeometry>> ShapeBorder for BeveledRectangleBorder<R> {
     fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
         EdgeInsets::all(self.side.stroke_inset().max(0.))
     }
 
     fn outer_path(&self, rect: Rect) -> Path {
-        self.path(rect, 0.0)
+        self.outer_path_with_direction(rect, None)
+    }
+
+    fn outer_path_with_direction(&self, rect: Rect, direction: Option<TextDirection>) -> Path {
+        self.path(rect, 0.0, direction)
     }
 
     fn inner_path(&self, rect: Rect) -> Path {
-        self.path(rect, -self.side.stroke_inset())
+        self.inner_path_with_direction(rect, None)
+    }
+
+    fn inner_path_with_direction(&self, rect: Rect, direction: Option<TextDirection>) -> Path {
+        self.path(rect, -self.side.stroke_inset(), direction)
     }
 
     fn paint(&self, canvas: &mut Canvas, rect: Rect) {
+        self.paint_with_direction(canvas, rect, None);
+    }
+
+    fn paint_with_direction(
+        &self,
+        canvas: &mut Canvas,
+        rect: Rect,
+        direction: Option<TextDirection>,
+    ) {
         if self.side.style == BorderStyle::None || rect.size.width == 0. || rect.size.height == 0. {
             return;
         }
         let mut path = Path::builder();
-        path.append(&self.path(rect, self.side.stroke_outset()));
-        path.append(&self.inner_path(rect));
+        path.append(&self.path(rect, self.side.stroke_outset(), direction));
+        path.append(&self.inner_path_with_direction(rect, direction));
         stroke(canvas, &self.side, path.build());
     }
 }
 
-impl incular_core::Lerp for BeveledRectangleBorder {
+impl<R: incular_core::Lerp> incular_core::Lerp for BeveledRectangleBorder<R> {
     fn lerp(&self, other: &Self, t: f32) -> Self {
         Self::new(
             self.side.lerp(&other.side, t),
@@ -797,7 +840,7 @@ fn ellipse_path(rect: Rect) -> Path {
 /// Flutter `BeveledRectangleBorder._getPath`: the eight vertices where each
 /// corner's radii meet the sides, closed as a polygon. Radii are clamped to
 /// zero and not scaled to fit, matching the vertex formulas.
-fn bevel_path([left, top, right, bottom]: [f32; 4], radii: CornerRadii) -> Path {
+fn bevel_path([left, top, right, bottom]: [f32; 4], radii: BorderRadius, delta: f32) -> Path {
     let (cx, cy) = (left + (right - left) / 2.0, top + (bottom - top) / 2.0);
     let [tl, tr, br, bl] = [
         radii.top_left,
@@ -805,16 +848,16 @@ fn bevel_path([left, top, right, bottom]: [f32; 4], radii: CornerRadii) -> Path 
         radii.bottom_right,
         radii.bottom_left,
     ]
-    .map(|radius| radius.max(0.0));
+    .map(|radius| Radius::elliptical((radius.x + delta).max(0.0), (radius.y + delta).max(0.0)));
     let vertices = [
-        Offset::new(left, cy.min(top + tl)),
-        Offset::new(cx.min(left + tl), top),
-        Offset::new(cx.max(right - tr), top),
-        Offset::new(right, cy.min(top + tr)),
-        Offset::new(right, cy.max(bottom - br)),
-        Offset::new(cx.max(right - br), bottom),
-        Offset::new(cx.min(left + bl), bottom),
-        Offset::new(left, cy.max(bottom - bl)),
+        Offset::new(left, cy.min(top + tl.y)),
+        Offset::new(cx.min(left + tl.x), top),
+        Offset::new(cx.max(right - tr.x), top),
+        Offset::new(right, cy.min(top + tr.y)),
+        Offset::new(right, cy.max(bottom - br.y)),
+        Offset::new(cx.max(right - br.x), bottom),
+        Offset::new(cx.min(left + bl.x), bottom),
+        Offset::new(left, cy.max(bottom - bl.y)),
     ];
     let mut builder = Path::builder();
     builder.move_to(vertices[0]);
@@ -1557,15 +1600,10 @@ impl LinearBorderEdge {
     }
 }
 
-// Both positive and negative zero compare equal in these value types.
-fn hash_border_float(value: f32, state: &mut impl Hasher) {
-    (if value == 0.0 { 0 } else { value.to_bits() }).hash(state);
-}
-
 impl Hash for LinearBorderEdge {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        hash_border_float(self.size, state);
-        hash_border_float(self.alignment, state);
+        super::hash_paint_float(self.size, state);
+        super::hash_paint_float(self.alignment, state);
     }
 }
 
@@ -1687,10 +1725,7 @@ impl LinearBorder {
 
 impl Hash for LinearBorder {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.side.color.hash(state);
-        self.side.style.hash(state);
-        hash_border_float(self.side.width, state);
-        hash_border_float(self.side.stroke_align, state);
+        self.side.hash(state);
         self.start.hash(state);
         self.end.hash(state);
         self.top.hash(state);

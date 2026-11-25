@@ -15,7 +15,10 @@ use crate::{
     AlignmentGeometry,
     tree::{ImageFit, ImageRepeat},
 };
-use std::sync::Arc;
+use std::{
+    hash::{Hash, Hasher},
+    sync::Arc,
+};
 
 /// The style of a border stroke.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -42,6 +45,15 @@ pub struct BorderSide {
     #[builder(default = -1.0)]
     #[default(-1.0)]
     pub stroke_align: f32,
+}
+
+impl Hash for BorderSide {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.color.hash(state);
+        self.style.hash(state);
+        super::hash_paint_float(self.width, state);
+        super::hash_paint_float(self.stroke_align, state);
+    }
 }
 
 const fn checked_border_width(width: f32) -> f32 {
