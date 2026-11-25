@@ -130,6 +130,13 @@ impl WidgetTree {
         self.dispatch_mouse_regions(window, event, hit, false);
     }
 
+    /// Changes when hit-test properties change without moving a pointer.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn hover_hit_revision(&self) -> u64 {
+        self.input.hover_hit_revision
+    }
+
     /// Re-evaluates mouse-region and focus-behavior hover for a pointer that
     /// has not moved, after layout or scrolling moved content under it
     /// (Flutter's `MouseTracker.updateAllDevices`). Only enter and exit
@@ -582,6 +589,28 @@ impl WidgetTree {
                 | PointerDeviceKind::Stylus
                 | PointerDeviceKind::InvertedStylus
         ) {
+            // Flutter's MouseTracker ignores non-hover devices, but the
+            // region itself still receives a buttonless PointerHoverEvent
+            // (for example a synthetic touch hover outside active contact).
+            let stream = GestureArenaKey::pointer_device(window, event.device, event.pointer);
+            if send_hover
+                && event.phase == PointerPhase::Move
+                && !event.down
+                && event.buttons == 0
+                && !self.input.raw_pointer_routes.contains_key(&stream)
+            {
+                for &element in hit.raw() {
+                    if let Some(callback) = self
+                        .mouse_region_config(element)
+                        .and_then(|(callbacks, ..)| callbacks.on_hover)
+                    {
+                        let transform = self
+                            .render_id(element)
+                            .and_then(|id| self.pointer_world_to_local(id));
+                        callback(localize_with_transform(transform, event));
+                    }
+                }
+            }
             return;
         }
         let (device, pointer) = event.hover_device_identity();
@@ -1149,10 +1178,11 @@ impl WidgetTree {
             .retain(|tap| tap.owner != element && tap.double_tap_owner != element);
         self.input.tap_memories.remove(&element);
         self.cancel_raw_streams_for_element(element);
-        self.input.raw_pointer_routes.retain(|_, route| {
+        // An empty captured route still marks a pressed contact. A later
+        // buttonless move on that stream is not an independent hover.
+        for route in self.input.raw_pointer_routes.values_mut() {
             route.retain(|candidate| candidate.element != element);
-            !route.is_empty()
-        });
+        }
         self.input.mouse_hover.retain(|_, hover| {
             hover.retain(|candidate| candidate.element != element);
             !hover.is_empty()

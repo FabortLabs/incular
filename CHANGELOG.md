@@ -235,6 +235,10 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-widgets`: MouseRegion opacity defaults and stationary hit-test
+  changes now match Flutter; synthetic touch hover stays separate from
+  contact movement.
+
 - `incular-runtime`: touch input no longer changes the mouse cursor or
   hover position. Relayout refreshes every pointing device independently.
 

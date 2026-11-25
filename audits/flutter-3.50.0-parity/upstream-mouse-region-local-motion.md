@@ -55,3 +55,20 @@ falls back to the most recent remaining sample.
 The existing two list-wheel regressions reproduced with and without
 this patch and remain tracked separately. No OS plug/unplug, cursor
 selection across different windows, or cross-sequence delta is claimed.
+
+## Hit policy and touch hover
+
+Five more pinned originals pass at :70, :96, :136, :473 and :505.
+A childless deferred region is not targeted, but switching it to
+default opacity now enters under the same stationary pointer.
+A non-opaque deferred region over a hit child and an empty translucent
+region both let the lower mouse region participate. The Rust Default
+implementation now matches the public no-child constructor.
+
+A buttonless touch-hover sample invokes onHover in local coordinates
+without changing mouse tracking. Active touch motion, including a
+normalized contact move without button bits, is not such a hover.
+Nested motion enters both regions and only exits the child when moving
+into the parent's padding. Two authored probes also verify active touch
+motion and toggling opacity without re-entering the top region.
+Thirty-five focused Rust checks passed.

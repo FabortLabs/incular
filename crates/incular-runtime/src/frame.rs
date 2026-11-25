@@ -147,6 +147,7 @@ pub struct Runtime {
     pub(crate) legacy_pointer: Option<(u64, u64)>,
     pub(crate) last_pointer: Offset,
     hover_devices: hover_devices::HoverDevices,
+    hover_hit_revision: u64,
     pub(crate) focused: Option<ElementId>,
     parked_focus: Option<ParkedFocus>,
     focused_selection_lease: Option<incular_text::FocusedSelectionLease>,
@@ -353,6 +354,7 @@ impl Runtime {
             legacy_pointer: None,
             last_pointer: Offset::ZERO,
             hover_devices: hover_devices::HoverDevices::default(),
+            hover_hit_revision: 0,
             focused: None,
             parked_focus: None,
             focused_selection_lease: None,
@@ -3129,9 +3131,12 @@ impl Runtime {
         // so hover catches up with content that moved under the pointer
         // and its paint lands in this frame.
         let geometry = self.tree.diagnostics();
+        let hit_revision = self.tree.hover_hit_revision();
         if geometry.layouts != before.layouts
             || geometry.scroll_offset_updates != before.scroll_offset_updates
+            || self.hover_hit_revision != hit_revision
         {
+            self.hover_hit_revision = hit_revision;
             self.refresh_hover_after_layout();
         }
         self.sync_text_selection_handles();

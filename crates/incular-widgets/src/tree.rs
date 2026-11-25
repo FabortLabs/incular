@@ -1304,6 +1304,7 @@ struct InputState {
     /// The most recent hit-transform for each hovered annotation. Exits
     /// are delivered in its previous local coordinates, even after layout.
     mouse_hover: HashMap<GestureArenaKey, Vec<RawPointerRouteEntry>>,
+    hover_hit_revision: u64,
     consumed_tap_pointers: HashSet<GestureArenaKey>,
     pointer_captures: HashMap<GestureArenaKey, ElementId>,
     active_drags: HashMap<GestureArenaKey, ActiveDrag>,

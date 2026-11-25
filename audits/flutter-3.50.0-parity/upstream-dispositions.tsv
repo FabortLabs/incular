@@ -929,3 +929,8 @@ packages/flutter/test/widgets/mouse_region_test.dart	299	triggers pointer exit w
 packages/flutter/test/widgets/mouse_region_test.dart	336	triggers pointer enter when widget appears	paired-match	upstream-mouse-region-local-motion.md#positioned-device-presence
 packages/flutter/test/rendering/mouse_tracker_test.dart	168	should not crash if the first event is a Removed event	paired-match	upstream-mouse-region-local-motion.md#independent-device-positions
 packages/flutter/test/rendering/mouse_tracker_test.dart	177	should correctly handle multiple devices	paired-match	upstream-mouse-region-local-motion.md#independent-device-positions
+packages/flutter/test/widgets/mouse_region_test.dart	70	hitTestBehavior test - HitTestBehavior.deferToChild/opaque	paired-match	upstream-mouse-region-local-motion.md#hit-policy-and-touch-hover
+packages/flutter/test/widgets/mouse_region_test.dart	96	hitTestBehavior test - HitTestBehavior.deferToChild and non-opaque	paired-match	upstream-mouse-region-local-motion.md#hit-policy-and-touch-hover
+packages/flutter/test/widgets/mouse_region_test.dart	136	hitTestBehavior test - HitTestBehavior.translucent	paired-match	upstream-mouse-region-local-motion.md#hit-policy-and-touch-hover
+packages/flutter/test/widgets/mouse_region_test.dart	473	detects hover from touch devices	paired-match	upstream-mouse-region-local-motion.md#hit-policy-and-touch-hover
+packages/flutter/test/widgets/mouse_region_test.dart	505	Hover works with nested listeners	paired-match	upstream-mouse-region-local-motion.md#hit-policy-and-touch-hover

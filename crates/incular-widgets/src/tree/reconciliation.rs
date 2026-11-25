@@ -676,6 +676,15 @@ impl WidgetTree {
             widget.type_(),
             "only compatible elements may update"
         );
+        let mouse_hit_policy = |kind: &WidgetKind| match kind {
+            WidgetKind::RawInput { kind, .. } => kind
+                .mouse_region_opaque()
+                .map(|opaque| (opaque, kind.hit_test_behavior())),
+            _ => None,
+        };
+        if mouse_hit_policy(old.kind()) != mouse_hit_policy(widget.kind()) {
+            self.input.hover_hit_revision = self.input.hover_hit_revision.wrapping_add(1);
+        }
         self.check_keys_borrowed(Some(id), widget.children_refs())?;
         let render = self
             .element_live(id, "retained element must remain live")
@@ -725,6 +734,9 @@ impl WidgetTree {
                 .render_live_mut(render, "updated render must remain live")
                 .object
                 .update_kind(new_kind.clone());
+            if invalidation.contains(Invalidation::HIT_TEST) {
+                self.input.hover_hit_revision = self.input.hover_hit_revision.wrapping_add(1);
+            }
             let (layers, size) = {
                 let node = self.render_live(render, "updated render must remain live");
                 (node.object.layers.clone(), node.size)

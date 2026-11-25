@@ -645,7 +645,7 @@ impl From<RawGestureDetector> for Widget {
 
 /// Tracks pointer entry, hover, exit, cursor preference, and opaque hit-test
 /// behavior for a retained region.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct MouseRegion {
     callbacks: MouseRegionCallbacks,
     cursor: MouseCursor,
@@ -654,22 +654,30 @@ pub struct MouseRegion {
     child: Option<Widget>,
 }
 
+impl Default for MouseRegion {
+    fn default() -> Self {
+        Self {
+            callbacks: MouseRegionCallbacks::default(),
+            cursor: MouseCursor::default(),
+            opaque: true,
+            behavior: None,
+            child: None,
+        }
+    }
+}
+
 impl MouseRegion {
     #[must_use]
     pub fn new(child: impl Into<Widget>) -> Self {
         Self {
             child: Some(child.into()),
-            opaque: true,
             ..Self::default()
         }
     }
 
     #[must_use]
     pub fn without_child() -> Self {
-        Self {
-            opaque: true,
-            ..Self::default()
-        }
+        Self::default()
     }
 
     #[must_use]
