@@ -96,3 +96,16 @@ user callback was installed; rejection consumes it once.
 
 All 26 focused deadline and cancellation tests passed after the fix.
 This is an authored case, not an additional original registration.
+
+## Chord at contact start
+
+Pinned :204 rejects a combined secondary/tertiary button mask before
+reporting any long-press callbacks. Incular previously reported
+`onLongPressDown` immediately. The recognizer now admits long press
+only for an exact primary, secondary, or tertiary contact; another
+gesture on the same combined recognizer remains independent. The
+conformance test checks no Down, no acceptance after one second, no
+release callback, and that the next valid contact starts normally.
+
+All 21 focused tests passed. The original is partial because Incular's
+raw contact entry does not expose Flutter's independent add/close phase.

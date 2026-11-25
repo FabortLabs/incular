@@ -3,7 +3,10 @@ use std::cell::Cell;
 use std::rc::Rc;
 use std::time::Duration;
 
-use incular_core::{DragStartBehavior, Offset, PointerPhase};
+use incular_core::{
+    DragStartBehavior, Offset, PRIMARY_POINTER_BUTTON, PointerPhase, SECONDARY_POINTER_BUTTON,
+    TERTIARY_POINTER_BUTTON,
+};
 
 use crate::details::{
     DragCallbacks, DragDownDetails, DragEndDetails, DragStartDetails, DragUpdateDetails,
@@ -800,9 +803,20 @@ impl PointerGestureRecognizer {
                 self.drag = DragProgress::at(event.position);
                 self.long_press_started = false;
                 self.drag_rejected = false;
-                self.long_press_rejected = false;
-                self.long_press_pending = self.has_long_press_callbacks();
-                if let Some(callback) = &self.callbacks.on_long_press_down {
+                // Flutter admits a long press only for an exact supported
+                // single-button mask; a chord cannot emit Down or Cancel.
+                // The combined recognizer can still consider other gestures.
+                self.long_press_rejected = self.down_buttons.is_some_and(|buttons| {
+                    !matches!(
+                        buttons,
+                        PRIMARY_POINTER_BUTTON | SECONDARY_POINTER_BUTTON | TERTIARY_POINTER_BUTTON
+                    )
+                });
+                self.long_press_pending =
+                    !self.long_press_rejected && self.has_long_press_callbacks();
+                if !self.long_press_rejected
+                    && let Some(callback) = &self.callbacks.on_long_press_down
+                {
                     callback(LongPressDownDetails {
                         global_position: event.position,
                         local_position: self.local(event.position),

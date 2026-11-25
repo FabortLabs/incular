@@ -5,7 +5,9 @@
 //! deadline (Flutter `_checkLongPressStart`), and a double tap completes across
 //! two presses that share a first-tap record.
 
-use incular_core::{Offset, PointerPhase};
+use incular_core::{
+    Offset, PRIMARY_POINTER_BUTTON, PointerPhase, SECONDARY_POINTER_BUTTON, TERTIARY_POINTER_BUTTON,
+};
 use incular_gestures::constants::*;
 use incular_gestures::*;
 use std::{
@@ -87,6 +89,53 @@ fn cancel_only_long_press_reports_one_cancel_for_each_rejected_contact() {
         3,
         "an accepted press is not cancelled on release"
     );
+}
+
+/// gestures/long_press_test.dart:204, via the normalized raw event boundary.
+#[test]
+fn long_press_ignores_a_chord_at_contact_start_and_arms_the_next_contact() {
+    let (mut recognizer, log) = long_press_recorder();
+    let now = Instant::now();
+    let position = Offset::new(10., 10.);
+    let chord = SECONDARY_POINTER_BUTTON | TERTIARY_POINTER_BUTTON;
+    let raw = |phase, buttons, time| {
+        RawPointerEvent::new(
+            5,
+            1,
+            PointerDeviceKind::Mouse,
+            buttons,
+            position,
+            phase,
+            time,
+        )
+    };
+
+    let _ = recognizer.observe_raw(raw(PointerPhase::Down, chord, now));
+    assert!(
+        log.borrow().is_empty(),
+        "an inadmissible start cannot report Down"
+    );
+    assert!(!matches!(
+        recognizer.poll(now + Duration::from_millis(1000)),
+        GestureDecision::Accept(_)
+    ));
+    assert!(!matches!(
+        recognizer.observe_raw(raw(PointerPhase::Up, 0, now + Duration::from_millis(1001))),
+        GestureDecision::Accept(_)
+    ));
+    assert!(
+        log.borrow().is_empty(),
+        "no callbacks for the rejected chord"
+    );
+
+    let single = now + Duration::from_millis(1200);
+    let _ = recognizer.observe_raw(raw(PointerPhase::Down, PRIMARY_POINTER_BUTTON, single));
+    assert_eq!(&*log.borrow(), &["down"]);
+    let GestureDecision::Accept(action) = recognizer.poll(single + LONG_PRESS_TIMEOUT) else {
+        panic!("the rejected chord must not suppress the next valid down");
+    };
+    recognizer.dispatch(action);
+    assert_eq!(&*log.borrow(), &["down", "start"]);
 }
 
 /// gestures/long_press_test.dart:75, after registration.
