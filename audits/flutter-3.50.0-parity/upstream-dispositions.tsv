@@ -1208,3 +1208,4 @@ packages/flutter/test/widgets/editable_text_test.dart	17872	when manually placin
 packages/flutter/test/widgets/editable_text_test.dart	5423	password fields have correct semantics	partial-match	upstream-editable-focus-selection.md#default-mask-geometry-and-accessibility
 packages/flutter/test/widgets/editable_text_test.dart	5482	password fields become obscured with the right semantics when set	partial-match	upstream-editable-focus-selection.md#default-mask-geometry-and-accessibility
 packages/flutter/test/widgets/editable_text_test.dart	5607	password fields can have their obscuring character customized	paired-match	upstream-editable-focus-selection.md#configurable-obscuring-character
+packages/flutter/test/widgets/app_test.dart	708	basicLocaleListResolution	paired-match	upstream-widget-previews-runtime.md#default-locale-selection

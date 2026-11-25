@@ -66,7 +66,7 @@ impl PreviewLocalizationsData {
                     .as_ref()
                     .and_then(|resolve| resolve(preferred.first(), supported))
             })
-            .or_else(|| LocaleResolver::resolve(preferred, supported))
+            .or_else(|| LocaleResolver::resolve_basic(preferred, supported))
     }
 }
 

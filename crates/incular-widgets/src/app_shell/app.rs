@@ -1007,7 +1007,7 @@ fn resolve_app_locale(environment: &RuntimeEnvironment, supported: &[Locale]) ->
     if supported.is_empty() {
         return environment.primary_locale().cloned();
     }
-    LocaleResolver::resolve(&environment.locales, supported)
+    LocaleResolver::resolve_basic(&environment.locales, supported)
 }
 
 struct SharedCatalog(Rc<dyn LocalizationCatalog>);

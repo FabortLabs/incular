@@ -177,3 +177,32 @@ fn media_query_aspect_readers_rebuild_only_for_their_aspect() {
     layout(&mut tree);
     assert_eq!(counts_now(), [2, 2, 2, 4]);
 }
+
+#[test]
+fn widgets_app_title_uses_basic_locale_precedence() {
+    use incular_core::Color;
+    use incular_widgets::{TitleController, WidgetsApp};
+
+    let title = TitleController::new("fallback", Color::BLACK);
+    let locales = |tags: &[&str]| {
+        tags.iter()
+            .map(|tag| tag.parse::<Locale>().unwrap())
+            .collect::<Vec<_>>()
+    };
+    let app = WidgetsApp::empty()
+        .supported_locales(locales(&["en-US", "fr-TN", "zh-CN", "zh-Hant-TW"]))
+        .title_controller(title.clone())
+        .on_generate_title(Locale::to_string);
+    for (preferred, expected) in [
+        (&["zh", "zh-Hant-TW"][..], "zh-Hant-TW"),
+        (&["zh", "en-US"][..], "zh-CN"),
+        (&["de", "ar-TN"][..], "fr-TN"),
+        (&[][..], "en-US"),
+    ] {
+        let _ = app.build_with_environment(RuntimeEnvironment {
+            locales: locales(preferred),
+            ..Default::default()
+        });
+        assert_eq!(title.title(), expected);
+    }
+}

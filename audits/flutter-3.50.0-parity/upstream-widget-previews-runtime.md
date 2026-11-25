@@ -50,3 +50,18 @@ bash audits/flutter-3.50.0-parity/run-reference-linux.sh \
   'PreviewManifest identifies widget preview scaffold project needs to be generated' \
   'PreviewManifest identifies root project pubspec has changed'
 ```
+
+### Default locale selection
+
+Pinned `packages/flutter/test/widgets/app_test.dart:708` passed its six
+original preference cases. The paired Rust helper compares the same
+inputs and results; `preview_localizations_reference_test.dart` and Rust
+also check seven adversarial preferences, including first-supported
+ties, promotion of a later same-language exact match, and a region-only
+match that actually outranks an unrelated first-supported locale.
+
+Previews and `WidgetsApp` now use the Flutter selection order, rather
+than ICU's resource fallback. The app test checks the locale reaches
+the generated title. ICU remains the source of text direction,
+formatting, and catalog message fallback. BCP-47 extensions remain
+available to Rust consumers but do not alter the three-component match.

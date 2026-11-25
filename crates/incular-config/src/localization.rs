@@ -11,7 +11,10 @@ use icu_locale::{Direction, LocaleDirectionality, fallback::LocaleFallbacker};
 pub use icu_plurals::PluralCategory;
 use icu_plurals::PluralRules;
 use icu_provider::DataLocale;
-use std::fmt;
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+};
 
 /// Failure while constructing an ICU4X formatter or validating an ISO date.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
@@ -111,6 +114,77 @@ impl LocaleResolver {
             }
         }
         supported.first().cloned()
+    }
+
+    /// Matches the language, script, and region preference order of Flutter's
+    /// basic locale list resolution. Use Self::resolve for ICU4X parent
+    /// fallback when Flutter's widget resolution rules are not required.
+    ///
+    /// Returns None if no supported locale was supplied. Rust locale
+    /// variants and Unicode extensions are preserved on exact matches but
+    /// do not participate in Flutter's three-component comparison.
+    #[must_use]
+    pub fn resolve_basic(preferred: &[Locale], supported: &[Locale]) -> Option<Locale> {
+        let first = supported.first()?;
+        if preferred.is_empty() {
+            return Some(first.clone());
+        }
+
+        let mut exact = HashSet::new();
+        let mut by_script = HashMap::new();
+        let mut by_region = HashMap::new();
+        let mut by_language = HashMap::new();
+        let mut region_only = HashMap::new();
+        for locale in supported {
+            let id = &locale.id;
+            exact.insert((id.language, id.script, id.region));
+            if let Some(script) = id.script {
+                by_script.entry((id.language, script)).or_insert(locale);
+            }
+            if let Some(region) = id.region {
+                by_region.entry((id.language, region)).or_insert(locale);
+                region_only.entry(region).or_insert(locale);
+            }
+            by_language.entry(id.language).or_insert(locale);
+        }
+
+        let mut pending_language = None;
+        let mut pending_region = None;
+        for (index, locale) in preferred.iter().enumerate() {
+            let id = &locale.id;
+            if exact.contains(&(id.language, id.script, id.region)) {
+                return Some(locale.clone());
+            }
+            let strong = id
+                .script
+                .and_then(|script| by_script.get(&(id.language, script)))
+                .or_else(|| {
+                    id.region
+                        .and_then(|region| by_region.get(&(id.language, region)))
+                });
+            if let Some(strong) = strong {
+                return Some((*strong).clone());
+            }
+            if pending_language.is_some() {
+                break;
+            }
+            pending_language = by_language.get(&id.language).copied();
+            if index == 0
+                && pending_language.is_some()
+                && preferred
+                    .get(1)
+                    .is_none_or(|next| next.id.language != id.language)
+            {
+                break;
+            }
+            if pending_region.is_none() {
+                pending_region = id
+                    .region
+                    .and_then(|region| region_only.get(&region))
+                    .copied();
+            }
+        }
+        Some(pending_language.or(pending_region).unwrap_or(first).clone())
     }
 
     /// Resolves a message through an application catalog after selecting its

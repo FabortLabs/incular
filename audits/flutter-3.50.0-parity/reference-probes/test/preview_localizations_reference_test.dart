@@ -66,6 +66,41 @@ LocalizationsResolver _makeResolver(PreviewLocalizationsData data) =>
     );
 
 void main() {
+  test('basic fallback distinguishes deferred language and region matches', () {
+    const enUs = Locale('en', 'US');
+    const zh = Locale('zh');
+    const zhCn = Locale('zh', 'CN');
+    const zhTw = Locale.fromSubtags(
+      languageCode: 'zh',
+      scriptCode: 'Hant',
+      countryCode: 'TW',
+    );
+    const zhHk = Locale.fromSubtags(
+      languageCode: 'zh',
+      scriptCode: 'Hant',
+      countryCode: 'HK',
+    );
+    const zhMo = Locale.fromSubtags(
+      languageCode: 'zh',
+      scriptCode: 'Hant',
+      countryCode: 'MO',
+    );
+    const de = Locale('de');
+    const frTn = Locale('fr', 'TN');
+    final cases = <(List<Locale>, List<Locale>, Locale)>[
+      ([zh, zhTw], [zhCn, zhTw], zhTw),
+      ([zh, enUs], [zhCn, enUs], zhCn),
+      ([de, zh, enUs], [zhCn, enUs], enUs),
+      ([de, zh, Locale('it'), enUs], [enUs, zhCn], zhCn),
+      ([de, Locale('ar', 'TN')], [enUs, frTn], frTn),
+      ([zhHk], [zhTw, zhMo], zhTw),
+      ([], [Locale('fr', 'CA'), enUs], Locale('fr', 'CA')),
+    ];
+    for (final (preferred, supported, expected) in cases) {
+      expect(basicLocaleListResolution(preferred, supported), expected);
+    }
+  });
+
   testWidgets('preview locale and resources update below a retained child', (
     tester,
   ) async {
