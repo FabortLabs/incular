@@ -60,6 +60,9 @@ pub(super) struct SemanticVisit {
     /// The parent's world transform followed by its child content
     /// transform; this element's own offset is not applied yet.
     parent_world: CoreTransform,
+    /// Clip used only for visibility of cached accessibility pages. It
+    /// never clips away the semantic node's measured bounds or actions.
+    page_clip: Option<Rect>,
 }
 
 /// What the pass collected for one element.
@@ -72,7 +75,11 @@ pub(super) enum Collected {
     Full(SemanticBuild),
     /// A retained node whose properties are unchanged; only its bounds and
     /// child list are rewritten.
-    Bounds { element: ElementId, bounds: Rect },
+    Bounds {
+        element: ElementId,
+        bounds: Rect,
+        hidden: Option<bool>,
+    },
 }
 
 impl Collected {
@@ -237,6 +244,7 @@ impl WidgetTree {
             force_bounds: full,
             subtree_focus_blocked: false,
             parent_world: CoreTransform::IDENTITY,
+            page_clip: None,
         });
         // Set when a node below a retained child list turns out to have
         // appeared or disappeared. Marks never announce that (see
@@ -538,8 +546,10 @@ impl WidgetTree {
                         },
                     );
                 }
-                Collected::Bounds { bounds, .. } => {
-                    let _ = self.semantics.update_geometry(id, bounds, child_ids);
+                Collected::Bounds { bounds, hidden, .. } => {
+                    let _ = self
+                        .semantics
+                        .update_geometry_and_visibility(id, bounds, child_ids, hidden);
                 }
             }
             #[cfg(feature = "devtools")]
@@ -610,6 +620,7 @@ impl WidgetTree {
             collection,
             parent_world,
             subtree_focus_blocked,
+            page_clip,
             ..
         } = visit;
         let _node_guard = self.guard_element(FramePhase::Semantics, element);
@@ -636,6 +647,19 @@ impl WidgetTree {
         // walk over the ancestors per node.
         let world = parent_world.then(CoreTransform::translation(render.offset));
         let child_world = world.then(self.child_content_transform(render_id));
+        let child_page_clip = match render.object.kind() {
+            RenderKind::SliverViewport { config }
+                if config.physics.page_geometry_fraction().is_some()
+                    && config.physics.allows_implicit_scrolling() =>
+            {
+                let viewport =
+                    world.transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, render.size));
+                Some(page_clip.map_or(viewport, |ancestor| {
+                    ancestor.intersection(viewport).unwrap_or_default()
+                }))
+            }
+            _ => page_clip,
+        };
         let retained = self.semantic_ids.contains_key(&element);
         if !scope.content && retained {
             // Nothing but geometry changed here or below, so the retained
@@ -670,6 +694,7 @@ impl WidgetTree {
                             force_content: false,
                             force_bounds: false,
                             subtree_focus_blocked: child_focus_blocked,
+                            page_clip: child_page_clip,
                             parent_world: if index < entry.children.len() {
                                 child_world
                             } else {
@@ -680,9 +705,19 @@ impl WidgetTree {
                 return;
             }
             // Its bounds and child list are written.
+            let bounds = self.semantic_bounds(render_id, world, child_world);
             out.push(Collected::Bounds {
                 element,
-                bounds: self.semantic_bounds(render_id, world, child_world),
+                bounds,
+                hidden: page_clip.map(|clip| {
+                    entry
+                        .widget
+                        .semantic_properties()
+                        .explicit
+                        .as_ref()
+                        .is_some_and(|explicit| explicit.state.hidden)
+                        || !semantic_clip_overlaps(clip, bounds)
+                }),
             });
             let this_parent = (out.len() - 1) as u32;
             work.extend(
@@ -697,6 +732,7 @@ impl WidgetTree {
                         force_content: regroups,
                         force_bounds: scope.bounds_below || regroups,
                         subtree_focus_blocked: child_focus_blocked,
+                        page_clip: child_page_clip,
                         parent_world: if index < entry.children.len() {
                             child_world
                         } else {
@@ -988,6 +1024,8 @@ impl WidgetTree {
             if semantic_parent != RETAINED_LIST {
                 edges.push((semantic_parent, edges.len() as u32, element));
             }
+            let bounds = self.semantic_bounds(render_id, world, child_world);
+            state.hidden |= page_clip.is_some_and(|clip| !semantic_clip_overlaps(clip, bounds));
             out.push(Collected::Full(SemanticBuild {
                 element,
                 role,
@@ -1015,7 +1053,7 @@ impl WidgetTree {
                             .as_ref()
                             .and_then(|semantics| semantics.description.clone())
                     }),
-                bounds: self.semantic_bounds(render_id, world, child_world),
+                bounds,
                 state,
                 actions,
             }));
@@ -1045,6 +1083,7 @@ impl WidgetTree {
                     force_content: scope.subtree_content || regroups,
                     force_bounds: scope.bounds_below || regroups,
                     subtree_focus_blocked: child_focus_blocked,
+                    page_clip: child_page_clip,
                     // A sliver anchor's own children come first; the
                     // grouped ones after them sit in the viewport's space,
                     // beside the anchor.
@@ -1472,6 +1511,10 @@ impl WidgetTree {
             world
         }
     }
+}
+
+fn semantic_clip_overlaps(clip: Rect, bounds: Rect) -> bool {
+    clip.size.width > 0. && clip.size.height > 0. && clip.intersects(bounds)
 }
 
 /// How much of a visited element's semantics to rebuild.

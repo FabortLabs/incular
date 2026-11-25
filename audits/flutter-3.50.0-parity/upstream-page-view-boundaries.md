@@ -80,3 +80,13 @@ opt-in comparison: immediate movement to 100px, then a spring back to
 switch at `:1884` is covered, but Dart object's pointer identity is not.
 These checks compare portable semantics and do not verify native
 screen-reader focus behavior.
+
+### Visibility of a retained semantic page
+
+An authored paired check verifies the distinction between being cached
+and being visible: offscreen page 1 is still present in the semantics
+tree, but hidden. A reveal makes it visible and marks the now-offscreen
+page 0 hidden. Incular retains both semantic identities while modifying
+their bounds and visibility; an explicit hidden flag is not cleared
+by geometry updates. Portable and AccessKit projection fixtures pass.
+This does not reproduce a native screen reader session.

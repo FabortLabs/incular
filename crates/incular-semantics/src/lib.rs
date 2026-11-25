@@ -518,19 +518,37 @@ impl SemanticsTree {
         bounds: Rect,
         children: &[SemanticNodeId],
     ) -> bool {
+        self.update_geometry_and_visibility(id, bounds, children, None)
+    }
+
+    /// Updates geometry and the visibility flag when it derives from a
+    /// retained clipping boundary. Other semantic properties stay untouched.
+    pub fn update_geometry_and_visibility(
+        &mut self,
+        id: SemanticNodeId,
+        bounds: Rect,
+        children: &[SemanticNodeId],
+        hidden: Option<bool>,
+    ) -> bool {
         let Some(retained) = self.nodes.get_mut(id.0) else {
             return false;
         };
         let old = &mut retained.node;
         let children_changed = old.children != children;
         let geometry_changed = old.bounds != bounds;
-        if !children_changed && !geometry_changed {
+        let visibility_changed = hidden.is_some_and(|hidden| old.state.hidden != hidden);
+        if !children_changed && !geometry_changed && !visibility_changed {
             return true;
         }
         old.bounds = bounds;
         if children_changed {
             old.children.clear();
             old.children.extend_from_slice(children);
+        }
+        if let Some(hidden) = hidden {
+            old.state.hidden = hidden;
+        }
+        if children_changed || visibility_changed {
             self.diagnostics.property_updates += 1;
         }
         if geometry_changed {

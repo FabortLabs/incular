@@ -221,3 +221,26 @@ fn a_pixel_cache_does_not_scale_with_the_viewport() {
         assert_eq!(controller.page(), Some(0.));
     }
 }
+
+#[test]
+fn cached_semantics_cease_to_be_hidden_when_the_page_is_revealed() {
+    let controller = PageController::new();
+    let mut host = Host::new(build(&controller, true, None));
+    let exposed = |host: &Host, page: usize| {
+        host.runtime
+            .tree()
+            .semantics()
+            .iter()
+            .find(|(_, node)| node.label.as_deref() == Some(LABELS[page]))
+            .map(|(id, node)| (id, !node.state.hidden))
+            .expect("cached semantic label")
+    };
+
+    let (first, first_visible) = exposed(&host, 0);
+    let (second, second_visible) = exposed(&host, 1);
+    assert!((first_visible && !second_visible));
+    assert!(host.reveal(1));
+    host.frame();
+    assert_eq!(exposed(&host, 0), (first, false));
+    assert_eq!(exposed(&host, 1), (second, true));
+}
