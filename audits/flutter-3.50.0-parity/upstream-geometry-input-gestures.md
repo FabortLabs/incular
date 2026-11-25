@@ -115,3 +115,13 @@ vectors held before and after replacing the three heap scratch buffers
 with bounded stack arrays. Ten focused tracker and pan tests passed;
 the separate, already documented synthesized scale-move mismatch
 still reproduced in a broader run and is not addressed here.
+
+## Terminal arena resolution
+
+The authored late-rejection probe now matches Flutter. A winner's late
+rejection previously rewrote both entries to rejected; it now leaves
+the original winner and loser unchanged. A still-pending simultaneous
+member can reject separately, and canceling the live stream still
+clears it. Eight focused Rust checks and the pinned authored probe
+passed. Flutter's separate close/sweep/hold lifecycle remains outside
+this authored repair, so this does not change the upstream case count.

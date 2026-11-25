@@ -204,6 +204,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-gestures`: a late rejection can no longer revoke an already
+  accepted arena member.
+
 - `incular-gestures`: synthesized pointer samples no longer distort
   release velocity for retained drags.
 

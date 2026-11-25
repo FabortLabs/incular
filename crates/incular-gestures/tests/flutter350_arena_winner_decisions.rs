@@ -81,3 +81,26 @@ fn late_rejection_does_not_rewrite_the_resolved_winner() {
     assert_eq!(after_loser_retries, after_reject);
     assert_winner(&after_reject, winner, loser);
 }
+
+#[test]
+fn pending_simultaneous_members_can_still_reject_and_full_streams_can_cancel() {
+    let mut arena = GestureArena::new();
+    let winner = arena.add(KEY, true);
+    let undecided = arena.add(KEY, true);
+    let after_win = arena.accept(KEY, winner);
+    assert_eq!(after_win[0].disposition, Accepted);
+    assert_eq!(after_win[1].disposition, Pending);
+    arena.reject(KEY, winner);
+    assert_eq!(arena.entries(KEY), after_win);
+
+    arena.reject(KEY, undecided);
+    assert_winner(&arena.entries(KEY), winner, undecided);
+    let canceled = arena.cancel(KEY);
+    assert_eq!(canceled.len(), 2);
+    assert!(
+        canceled
+            .iter()
+            .all(|entry| entry.disposition == incular_gestures::GestureDisposition::Cancelled)
+    );
+    assert!(arena.entries(KEY).is_empty());
+}

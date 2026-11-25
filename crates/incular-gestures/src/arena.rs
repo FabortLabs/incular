@@ -144,9 +144,13 @@ impl GestureArena {
             })
             .collect()
     }
+    /// Rejects a pending member. Later resolutions do not rewrite a winner;
+    /// ending a live stream is a separate cancellation.
     pub fn reject(&mut self, key: GestureArenaKey, member: GestureArenaMember) {
         if let Some(entries) = self.streams.get_mut(&key)
-            && let Some(entry) = entries.iter_mut().find(|e| e.member == member)
+            && let Some(entry) = entries
+                .iter_mut()
+                .find(|e| e.member == member && e.disposition == GestureDisposition::Pending)
         {
             entry.disposition = GestureDisposition::Rejected;
         }
