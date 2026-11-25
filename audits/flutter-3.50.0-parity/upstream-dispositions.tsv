@@ -173,6 +173,8 @@ packages/flutter/test/gestures/long_press_test.dart	61	Should recognize long pre
 packages/flutter/test/gestures/long_press_test.dart	106	Moving before accept cancels	partial-match	upstream-current-route-aspect-and-long-press.md
 packages/flutter/test/gestures/long_press_test.dart	365	Moving after accept does not cancel	partial-match	upstream-current-route-aspect-and-long-press.md
 packages/flutter/test/gestures/long_press_test.dart	427	Buttons change before acceptance should not prevent the next long press	paired-mismatch	upstream-current-route-aspect-and-long-press.md
+packages/flutter/test/gestures/long_press_test.dart	75	Should recognize long press with altered duration	partial-match	upstream-current-route-aspect-and-long-press.md#custom-long-press-duration
+packages/flutter/test/gestures/long_press_test.dart	91	Up cancels long press	partial-match	upstream-current-route-aspect-and-long-press.md#custom-long-press-duration
 packages/flutter/test/gestures/long_press_test.dart	455	Should not cancel long press when buttons change after acceptance	paired-match	upstream-current-route-aspect-and-long-press.md
 packages/flutter/test/widgets/opacity_test.dart	19	Opacity	partial-match	upstream-opacity-hover-flex-notifier-futures.md
 packages/flutter/test/widgets/opacity_test.dart	152	offset is correctly handled in Opacity	partial-match	upstream-opacity-hover-flex-notifier-futures.md

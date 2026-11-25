@@ -89,6 +89,7 @@ pub struct PointerGestureRecognizer {
     pan_started: bool,
     pan_action: Option<PanAction>,
     long_press_started: bool,
+    long_press_duration: Duration,
     velocity: VelocityTracker,
     tap_moved_beyond_slop: bool,
     drag: DragProgress,
@@ -218,6 +219,7 @@ impl PointerGestureRecognizer {
             pan_started: false,
             pan_action: None,
             long_press_started: false,
+            long_press_duration: Self::LONG_PRESS_TIMEOUT,
             velocity: VelocityTracker::default(),
             tap_moved_beyond_slop: false,
             drag: DragProgress::at(Offset::ZERO),
@@ -243,6 +245,13 @@ impl PointerGestureRecognizer {
     #[must_use]
     pub fn gesture_settings(&self) -> DeviceGestureSettings {
         self.gesture_settings
+    }
+
+    /// Sets the long-press deadline for this recognizer before routing a press.
+    #[must_use]
+    pub fn with_long_press_duration(mut self, duration: Duration) -> Self {
+        self.long_press_duration = duration;
+        self
     }
     /// Makes the drag start only after the press has lasted `delay`, as
     /// Flutter's `DelayedMultiDragGestureRecognizer` does (a long-press
@@ -376,7 +385,7 @@ impl PointerGestureRecognizer {
         {
             return GestureDecision::Accept(action);
         }
-        if held >= Self::LONG_PRESS_TIMEOUT
+        if held >= self.long_press_duration
             && !self.pan_started
             && !self.long_press_started
             && !self.long_press_rejected
@@ -908,7 +917,7 @@ impl PointerGestureRecognizer {
                     && !self.long_press_started
                     && !self.long_press_rejected
                     && self.has_long_press_callbacks()
-                    && event.time.saturating_duration_since(down.time) >= Self::LONG_PRESS_TIMEOUT
+                    && event.time.saturating_duration_since(down.time) >= self.long_press_duration
                 {
                     self.long_press_started = true;
                     self.tap_cancel();
@@ -975,7 +984,7 @@ impl PointerGestureRecognizer {
                 if elapsed >= PRESS_TIMEOUT {
                     self.flush_tap_down();
                 }
-                let long_press_taken = elapsed >= Self::LONG_PRESS_TIMEOUT
+                let long_press_taken = elapsed >= self.long_press_duration
                     && self.has_long_press_callbacks()
                     && !self.long_press_rejected;
                 if !long_press_taken {

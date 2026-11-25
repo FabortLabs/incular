@@ -23,6 +23,71 @@ fn event(position: Offset, phase: PointerPhase, base: Instant, millis: u64) -> P
     }
 }
 
+fn long_press_recorder() -> (PointerGestureRecognizer, Rc<RefCell<Vec<&'static str>>>) {
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let recognizer = PointerGestureRecognizer::new(GestureCallbacks {
+        on_long_press_down: Some(Rc::new({
+            let log = log.clone();
+            move |_| log.borrow_mut().push("down")
+        })),
+        on_long_press_cancel: Some(Rc::new({
+            let log = log.clone();
+            move || log.borrow_mut().push("cancel")
+        })),
+        on_long_press: Some(Rc::new({
+            let log = log.clone();
+            move || log.borrow_mut().push("start")
+        })),
+        ..GestureCallbacks::default()
+    });
+    (recognizer, log)
+}
+
+/// gestures/long_press_test.dart:75, after registration.
+#[test]
+fn long_press_uses_the_requested_short_deadline() {
+    let (recognizer, log) = long_press_recorder();
+    let mut recognizer = recognizer.with_long_press_duration(Duration::from_millis(100));
+    let now = Instant::now();
+    assert!(log.borrow().is_empty());
+    recognizer.observe(event(Offset::ZERO, PointerPhase::Down, now, 0));
+    assert_eq!(*log.borrow(), ["down"]);
+    for pending in [50, 99] {
+        assert_eq!(
+            recognizer.poll(now + Duration::from_millis(pending)),
+            GestureDecision::Pending
+        );
+        assert_eq!(*log.borrow(), ["down"]);
+    }
+    let GestureDecision::Accept(action) = recognizer.poll(now + Duration::from_millis(100)) else {
+        panic!("the custom deadline should accept");
+    };
+    recognizer.dispatch(action);
+    drop(recognizer);
+    assert_eq!(*log.borrow(), ["down", "start"]);
+}
+
+/// gestures/long_press_test.dart:91, after registration.
+#[test]
+fn a_release_before_the_deadline_cancels_and_cannot_restart_the_hold() {
+    let (mut recognizer, log) = long_press_recorder();
+    let now = Instant::now();
+    recognizer.observe(event(Offset::ZERO, PointerPhase::Down, now, 0));
+    assert_eq!(
+        recognizer.poll(now + Duration::from_millis(300)),
+        GestureDecision::Pending
+    );
+    assert_eq!(*log.borrow(), ["down"]);
+    recognizer.observe(event(Offset::ZERO, PointerPhase::Up, now, 300));
+    assert_eq!(*log.borrow(), ["down", "cancel"]);
+    assert_eq!(
+        recognizer.poll(now + Duration::from_millis(1300)),
+        GestureDecision::Pending
+    );
+    drop(recognizer);
+    assert_eq!(*log.borrow(), ["down", "cancel"]);
+}
+
 /// gestures-001: a sole drag member wins at the press, so the first movement
 /// reports in full instead of being consumed by the slop test.
 #[test]

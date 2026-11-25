@@ -48,3 +48,13 @@ cancel and can no longer start or end a long press later in that
 stream. A subsequent primary press on the same widget still works.
 A mask change after acceptance does not cancel. These rechecks do not
 add new originals; the earlier mismatch remains historical evidence.
+
+## Custom long press duration
+
+Pinned :75 and :91 pass. The Rust recognizer now supports a supplied
+duration, defaulting to 500 ms. The 100 ms sequence stays pending
+through 99 ms and then starts; release before the ordinary deadline
+cancels once and does not start later. The direct Rust recognizer
+tests cover callback and timer behavior but do not claim an independent
+Flutter addPointer/closeArena lifecycle. These are two partial matches;
+all 25 targeted timing, deadline, and tap-cancel checks pass.
