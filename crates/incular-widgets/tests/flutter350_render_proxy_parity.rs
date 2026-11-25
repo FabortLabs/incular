@@ -262,3 +262,73 @@ fn fitted_child_becoming_visible_receives_a_previously_deferred_paint() {
         assert_eq!(calls.get(), count);
     }
 }
+
+#[test]
+fn offstage_and_both_box_opacity_paths_report_when_a_child_is_painted() {
+    use incular_widgets::{FadeTransition, Offstage, Opacity, OpacityController};
+    let child = || SizedBox::new().width(20.);
+    let mut tree = WidgetTree::new();
+    let scene = |visible: bool| Offstage::new(child()).offstage(!visible).into();
+    let root = tree.mount(scene(true)).unwrap();
+    let can_paint = |tree: &WidgetTree, root| {
+        let [child] = tree.children(root).unwrap() else {
+            panic!("one proxy child")
+        };
+        tree.paints_child(
+            tree.render_id(root).unwrap(),
+            tree.render_id(*child).unwrap(),
+        )
+    };
+    assert!(can_paint(&tree, root));
+    tree.update(root, scene(false)).unwrap();
+    assert!(!can_paint(&tree, root));
+
+    let root = tree.mount(Opacity::new(1., child()).into()).unwrap();
+    assert!(can_paint(&tree, root));
+    tree.update(root, Opacity::new(0., child()).into()).unwrap();
+    assert!(!can_paint(&tree, root));
+
+    let controller = OpacityController::new();
+    let root = tree
+        .mount(FadeTransition::new(controller.clone(), child()).into())
+        .unwrap();
+    assert!(can_paint(&tree, root));
+    assert!(controller.set_opacity(0.));
+    assert!(!can_paint(&tree, root));
+}
+
+#[test]
+fn sliver_fade_uses_the_same_live_paints_child_gate() {
+    use incular_widgets::{
+        CustomScrollView, OpacityController, Sliver, SliverFadeTransition, SliverToBoxAdapter,
+        internal::RenderKind,
+    };
+    let controller = OpacityController::new();
+    let sliver: Box<dyn Sliver> = Box::new(SliverFadeTransition::new(
+        controller.clone(),
+        SliverToBoxAdapter::new(SizedBox::new().width(20.).height(20.)),
+    ));
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(CustomScrollView::new([sliver]).into()).unwrap();
+    tree.layout(Constraints::tight(Size::new(100., 100.)))
+        .unwrap();
+    let mut queue = vec![root];
+    let (parent, child) = loop {
+        let element = queue.pop().expect("rendered sliver opacity");
+        let render = tree.render_id(element).unwrap();
+        let children = tree.children(element).unwrap();
+        if matches!(
+            tree.render_object_kind(render),
+            Some(RenderKind::Opacity { .. })
+        ) {
+            let [child] = children else {
+                panic!("one opacity child")
+            };
+            break (render, tree.render_id(*child).unwrap());
+        }
+        queue.extend_from_slice(children);
+    };
+    assert!(tree.paints_child(parent, child));
+    assert!(controller.set_opacity(0.));
+    assert!(!tree.paints_child(parent, child));
+}

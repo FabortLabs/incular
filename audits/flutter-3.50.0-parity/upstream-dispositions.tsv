@@ -1339,3 +1339,7 @@ packages/flutter/test/rendering/proxy_box_test.dart	425	RenderAnimatedOpacity re
 packages/flutter/test/rendering/proxy_box_test.dart	566	RenderFittedBox reuses ClipRectLayer	paired-match	upstream-render-proxies.md#layer-identity-during-a-real-repaint
 packages/flutter/test/rendering/proxy_box_test.dart	570	RenderFittedBox reuses TransformLayer	paired-match	upstream-render-proxies.md#layer-identity-during-a-real-repaint
 packages/flutter/test/rendering/proxy_box_test.dart	574	RenderFittedBox switches between ClipRectLayer and TransformLayer, and reuses them	paired-match	upstream-render-proxies.md#layer-identity-during-a-real-repaint
+packages/flutter/test/rendering/proxy_box_test.dart	853	Offstage implements paintsChild correctly	paired-match	upstream-render-proxies.md#offstage-and-opacity-child-paint-eligibility
+packages/flutter/test/rendering/proxy_box_test.dart	870	Opacity implements paintsChild correctly	paired-match	upstream-render-proxies.md#offstage-and-opacity-child-paint-eligibility
+packages/flutter/test/rendering/proxy_box_test.dart	883	AnimatedOpacity sets paint matrix to zero when alpha == 0	paired-match	upstream-render-proxies.md#offstage-and-opacity-child-paint-eligibility
+packages/flutter/test/rendering/proxy_box_test.dart	900	AnimatedOpacity sets paint matrix to zero when alpha == 0 (sliver)	paired-match	upstream-render-proxies.md#offstage-and-opacity-child-paint-eligibility

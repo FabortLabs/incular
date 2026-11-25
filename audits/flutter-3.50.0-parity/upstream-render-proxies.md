@@ -34,3 +34,13 @@ The native test asserts that painting actually ran and compares retained
 layer IDs, not log lines or equivalent pixels. A separate retained control
 starts with an empty FittedBox and confirms the pending custom paint
 runs exactly once after the parent first gets nonzero geometry.
+
+## Offstage and opacity child paint eligibility
+
+Pinned :853, :870, :883 and :900 passed by exact name. The retained
+public `paints_child` query and the real paint traversal share one
+eligibility predicate. Offstage, static opacity, live box opacity and
+live sliver opacity report false for their child at the tested states.
+A zero or rounded-to-zero alpha no longer calls the child painter.
+`always_include_semantics` can still retain the label and its bounds.
+The original first-painter counter now passes at 0, .001, .003, .1 and 1.

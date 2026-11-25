@@ -656,6 +656,27 @@ impl WidgetTree {
         });
     }
 
+    fn hides_render_paint(&self, id: RenderObjectId, kind: &RenderKind) -> bool {
+        matches!(kind, RenderKind::Visibility { visible: false, .. })
+            || flow_child_hidden(kind)
+            || matches!(kind, RenderKind::Opacity { alpha, controller }
+                if super::semantics::opacity_is_transparent(
+                    controller.as_ref().map_or(*alpha, OpacityController::opacity)
+                ))
+            || (matches!(kind, RenderKind::FittedBox { .. }) && !self.fitted_content_is_visible(id))
+    }
+
+    /// Whether a render object paints the given direct child at its
+    /// current state. This uses the same gates as the retained paint pass.
+    #[must_use]
+    pub fn paints_child(&self, parent: RenderObjectId, child: RenderObjectId) -> bool {
+        self.renders.get(parent.0).is_some_and(|node| {
+            !node.parked
+                && !self.hides_render_paint(parent, node.object.kind())
+                && visible_paint_children(node).contains(&child)
+        })
+    }
+
     /// Repaints dirty pictures into their retained compositor layers.
     /// Placement and clipping live in the compositor, so this pass assembles
     /// no display list of its own, and a subtree without a pending paint is
@@ -670,12 +691,7 @@ impl WidgetTree {
         let _node_guard = self.guard_render(FramePhase::Paint, id, constraints);
         self.diagnostics.paint_visits += 1;
         let node = self.render_live(id, "retained render must remain live");
-        if matches!(
-            node.object.kind(),
-            RenderKind::Visibility { visible: false, .. }
-        ) || flow_child_hidden(node.object.kind())
-            || (matches!(node.object.kind(), RenderKind::FittedBox { .. })
-                && !self.fitted_content_is_visible(id))
+        if self.hides_render_paint(id, node.object.kind())
         {
             // Hidden or singular content keeps its pending paint until it is shown.
             return;

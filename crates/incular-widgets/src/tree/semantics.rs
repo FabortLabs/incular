@@ -2163,9 +2163,9 @@ fn semantics_hidden(entry: &Element) -> bool {
         )
 }
 
-/// Flutter's `RenderOpacity` drops the child's semantics only when its alpha
+/// Flutter's `RenderOpacity` considers alpha transparent when it
 /// rounds to zero on the 0..=255 scale.
-fn opacity_is_transparent(alpha: f32) -> bool {
+pub(super) fn opacity_is_transparent(alpha: f32) -> bool {
     (alpha * 255.0).round() == 0.0
 }
 
