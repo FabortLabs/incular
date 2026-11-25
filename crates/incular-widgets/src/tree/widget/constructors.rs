@@ -410,6 +410,17 @@ impl Widget {
         radius: CornerRadii,
         child: Widget,
     ) -> Self {
+        Self::decorated_with_hit(size, background, border, radius, child, None)
+    }
+
+    pub(crate) fn decorated_with_hit(
+        size: Option<Size>,
+        background: Option<Brush>,
+        border: Option<Border>,
+        radius: CornerRadii,
+        child: Widget,
+        hit_decoration: Option<Rc<crate::BoxDecoration>>,
+    ) -> Self {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::Decorated {
@@ -417,6 +428,7 @@ impl Widget {
                 background,
                 border,
                 radius,
+                hit_decoration,
                 child,
             },
             semantics: None,

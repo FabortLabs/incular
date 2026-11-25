@@ -649,11 +649,10 @@ impl DecoratedBox {
 }
 impl From<DecoratedBox> for Widget {
     fn from(value: DecoratedBox) -> Self {
-        let full = value.decoration.filter(|decoration| {
-            value.position == crate::DecorationPosition::Foreground
-                || decoration.needs_full_painter()
-        });
-        if let Some(decoration) = full {
+        if let Some(decoration) = &value.decoration
+            && (value.position == crate::DecorationPosition::Foreground
+                || decoration.needs_full_painter())
+        {
             let child = match value.size {
                 Some(size) => crate::SizedBox::new()
                     .width(size.width)
@@ -662,14 +661,21 @@ impl From<DecoratedBox> for Widget {
                     .into(),
                 None => value.child,
             };
-            return crate::painting_effects::decorated(decoration, value.position, child);
+            return crate::painting_effects::decorated(
+                value
+                    .decoration
+                    .expect("description of the full decoration"),
+                value.position,
+                child,
+            );
         }
-        Widget::decorated(
+        Widget::decorated_with_hit(
             value.size,
             value.background,
             value.border,
             value.radius,
             value.child,
+            value.decoration.map(Rc::new),
         )
     }
 }

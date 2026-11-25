@@ -415,6 +415,7 @@ pub(crate) enum WidgetKind {
         background: Option<Brush>,
         border: Option<Border>,
         radius: CornerRadii,
+        hit_decoration: Option<Rc<crate::BoxDecoration>>,
         child: Widget,
     },
     Banner {

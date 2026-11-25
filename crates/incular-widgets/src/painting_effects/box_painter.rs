@@ -396,6 +396,7 @@ pub(crate) fn decorated(
     child: Widget,
 ) -> Widget {
     let decoration = Rc::new(decoration);
+    let hit_decoration = decoration.clone();
     // Filling the stack, which takes the child's size, the builder sees
     // tight constraints of exactly that size.
     let painted = LayoutBuilder::new(move |context, constraints| {
@@ -459,10 +460,17 @@ pub(crate) fn decorated(
         DecorationPosition::Background => [layer, child],
         DecorationPosition::Foreground => [child, layer],
     };
-    Stack::new(children)
+    let stack = Stack::new(children)
         .fit(StackFit::Passthrough)
-        .clip_behavior(Clip::None)
-        .into()
+        .clip_behavior(Clip::None);
+    Widget::decorated_with_hit(
+        None,
+        None,
+        None,
+        CornerRadii::ZERO,
+        stack.into(),
+        Some(hit_decoration),
+    )
 }
 
 /// Flutter `paintBorder`: each solid side as a trapezoid meeting its

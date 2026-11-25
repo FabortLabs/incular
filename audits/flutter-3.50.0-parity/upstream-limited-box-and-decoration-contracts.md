@@ -73,3 +73,19 @@ value-returning API preserves the full value on self-interpolation but
 does not provide Flutter's nullable inputs or return the identical object.
 All 18 focused Rust tests, two exact pinned originals, and four authored
 Flutter value/validation cases passed. No raster claim.
+
+## Container decoration hit testing
+
+All four tap results from pinned `widgets/container_test.dart:666` now
+match: a background decoration, a foreground decoration, and a color
+each activate an enclosing default gesture detector; a padded, centered,
+rotated layout-only Container does not. Prior Rust failed to activate a
+foreground decoration and a shape-only circle at its center.
+
+Decoration hit testing now checks local geometry after children get the
+first chance to accept a hit. The separate circle probes hit the center
+but not the side of the box for an empty decoration. A painted child can
+still take a side tap unless child clipping is explicitly enabled. The
+rounded corner control rejects the top-left point. The exact Flutter
+registration, three authored Flutter probes, and 33 focused Rust tests
+passed. The new behavior is not a raster comparison.

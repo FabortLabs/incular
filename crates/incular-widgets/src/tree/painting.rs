@@ -142,7 +142,16 @@ fn paints_own_hit_surface(kind: Option<&WidgetKind>) -> bool {
 /// or it paints its own surface. A childless layout (an empty `Column`,
 /// `Stack` or sized placeholder) is not hit, like Flutter's render boxes
 /// whose `hitTestSelf` is false.
-fn self_hit_after_children(kind: Option<&WidgetKind>) -> bool {
+fn self_hit_after_children(kind: Option<&WidgetKind>, size: Size, local: Offset) -> bool {
+    if let Some(WidgetKind::Decorated {
+        hit_decoration: Some(decoration),
+        ..
+    }) = kind
+    {
+        // RenderDecoratedBox.hitTestSelf is geometry, not a content clip.
+        // A child can still accept a point outside the painted shape.
+        return decoration.hit_test(size, local);
+    }
     retained_self_hit(kind) && (claims_own_bounds(kind) || paints_own_hit_surface(kind))
 }
 
@@ -542,7 +551,7 @@ impl WidgetTree {
             precise,
             &mut result,
         );
-        let self_hit = self_hit_after_children(kind);
+        let self_hit = self_hit_after_children(kind, node.size, point - current);
         if want_target && target.is_none() {
             target = self_hit.then_some(id);
         }
@@ -1006,7 +1015,7 @@ impl WidgetTree {
                 return Some(hit);
             }
         }
-        self_hit_after_children(kind).then_some(id)
+        self_hit_after_children(kind, node.size, point - current).then_some(id)
     }
     /// Whether `point` lies outside `node`'s box and that alone rules out a
     /// hit anywhere in its subtree. Most children of a long list are rejected

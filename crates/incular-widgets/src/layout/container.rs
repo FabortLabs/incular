@@ -5,6 +5,8 @@
 //! ergonomic descriptor. It lowers to existing primitive widgets without introducing
 //! a duplicate layout or rendering engine.
 
+use std::rc::Rc;
+
 use incular_config::{Alignment, Clip, Constraints, EdgeInsets};
 use incular_core::{Color, Transform as CoreTransform};
 use incular_rendering::{Border, Brush, CornerRadii};
@@ -12,7 +14,7 @@ use smart_default::SmartDefault;
 use typed_builder::TypedBuilder;
 
 use crate::layout::basic::{Align, ClipRRect, ClipRect, ConstrainedBox, Padding, SizedBox};
-use crate::{DecoratedBox, Transform, Widget};
+use crate::{Transform, Widget};
 
 /// A convenience composition widget combining sizing, constraints, margin,
 /// padding, background color/decoration, alignment, transforms, and clipping.
@@ -261,24 +263,30 @@ impl From<Container> for Widget {
                         .or_else(|| decoration.color.map(Brush::Solid))
                 })
             });
-        if let Some(decoration) = value
-            .decoration
-            .filter(crate::BoxDecoration::needs_full_painter)
-        {
-            current = crate::painting_effects::decorated(
-                decoration,
-                crate::DecorationPosition::Background,
-                current,
-            );
-        } else if background.is_some() || border.is_some() || !radius.is_zero() {
-            let mut decorated = DecoratedBox::new(current).corner_radii(radius);
-            if let Some(background) = background {
-                decorated = decorated.background(background);
+        match value.decoration {
+            Some(decoration) if decoration.needs_full_painter() => {
+                current = crate::painting_effects::decorated(
+                    decoration,
+                    crate::DecorationPosition::Background,
+                    current,
+                );
             }
-            if let Some(border) = border {
-                decorated = decorated.border(border);
+            decoration
+                if decoration.is_some()
+                    || background.is_some()
+                    || border.is_some()
+                    || !radius.is_zero() =>
+            {
+                current = Widget::decorated_with_hit(
+                    None,
+                    background,
+                    border,
+                    radius,
+                    current,
+                    decoration.map(Rc::new),
+                );
             }
-            current = decorated.into();
+            _ => {}
         }
         if let Some(foreground) = value.foreground_decoration {
             current = crate::painting_effects::decorated(

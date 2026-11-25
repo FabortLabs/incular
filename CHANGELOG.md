@@ -127,6 +127,10 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-widgets`: containers accept taps on background or foreground
+  decoration geometry without implicitly clipping the child. Layout-only
+  containers remain non-interactive.
+
 - `incular-widgets`: interpolating a `BoxDecoration` with itself retains
   its blend mode. Its validity check now requires a color or a gradient
   for background blending; a decoration image alone does not qualify.

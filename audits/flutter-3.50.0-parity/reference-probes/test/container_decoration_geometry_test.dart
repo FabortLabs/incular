@@ -80,4 +80,39 @@ void main() {
       }
     },
   );
+  testWidgets('decoration can hit without clipping the child', (tester) async {
+    for (final withChild in [false, true]) {
+      for (final foreground in [false, true]) {
+        for (final mode in [Clip.none, Clip.hardEdge]) {
+          if (foreground && mode != Clip.none) {
+            continue; // Container only clips to its background decoration.
+          }
+          const circle = BoxDecoration(shape: BoxShape.circle);
+          var taps = 0;
+          await tester.pumpWidget(
+            Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 100,
+                height: 60,
+                child: GestureDetector(
+                  onTap: () => taps++,
+                  child: Container(
+                    decoration: foreground ? null : circle,
+                    foregroundDecoration: foreground ? circle : null,
+                    clipBehavior: mode,
+                    child: withChild ? const ColoredBox(color: _green) : null,
+                  ),
+                ),
+              ),
+            ),
+          );
+          await tester.tapAt(const Offset(50, 30));
+          expect(taps, 1);
+          await tester.tapAt(const Offset(10, 30));
+          expect(taps, withChild && mode == Clip.none ? 2 : 1);
+        }
+      }
+    }
+  });
 }

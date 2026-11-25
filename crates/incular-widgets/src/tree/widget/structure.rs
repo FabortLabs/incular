@@ -972,6 +972,7 @@ impl PartialEq for WidgetKind {
                     border: c,
                     radius: d,
                     child: e,
+                    hit_decoration: source_hit,
                 },
                 Self::Decorated {
                     size: f,
@@ -979,8 +980,9 @@ impl PartialEq for WidgetKind {
                     border: h,
                     radius: i,
                     child: j,
+                    hit_decoration: target_hit,
                 },
-            ) => a == f && b == g && c == h && d == i && e == j,
+            ) => a == f && b == g && c == h && d == i && e == j && source_hit == target_hit,
             (
                 Self::Banner {
                     message: a,
