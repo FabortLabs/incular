@@ -100,6 +100,24 @@ impl Localizations {
         &self.locale
     }
 
+    /// Reads and subscribes to the nearest localization scope.
+    #[must_use]
+    pub fn maybe_locale_of(context: &BuildContext<'_>) -> Option<Locale> {
+        context
+            .depend_on::<(Locale, Rc<dyn LocalizationCatalog>)>()
+            .map(|(locale, _)| locale)
+    }
+
+    /// Reads and subscribes to the nearest localization scope.
+    ///
+    /// Panics when the context has no Localizations ancestor.
+    #[must_use]
+    #[track_caller]
+    pub fn locale_of(context: &BuildContext<'_>) -> Locale {
+        Self::maybe_locale_of(context)
+            .expect("Localizations::locale_of requires a Localizations ancestor")
+    }
+
     #[must_use]
     pub fn catalog(&self) -> &Rc<dyn LocalizationCatalog> {
         &self.catalog
@@ -138,7 +156,11 @@ impl Localizations {
 
 impl From<Localizations> for Widget {
     fn from(value: Localizations) -> Self {
-        Widget::environment_scope((value.locale, value.catalog), value.child)
+        let direction = value.text_direction();
+        Widget::environment_scope(
+            (value.locale, value.catalog),
+            Directionality::new(direction, value.child).into(),
+        )
     }
 }
 

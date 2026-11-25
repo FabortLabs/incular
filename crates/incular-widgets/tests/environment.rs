@@ -206,3 +206,63 @@ fn widgets_app_title_uses_basic_locale_precedence() {
         assert_eq!(title.title(), expected);
     }
 }
+
+#[test]
+fn missing_localizations_lookups_follow_strict_and_optional_contracts() {
+    use incular_config::Constraints;
+    use incular_core::Size;
+    use incular_widgets::{Builder, SizedBox, internal::WidgetTree};
+
+    let mut tree = WidgetTree::new();
+    let root = Builder::new(|context| {
+        assert_eq!(Localizations::maybe_locale_of(context), None);
+        let strict = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            Localizations::locale_of(context)
+        }))
+        .expect_err("strict lookup requires an ancestor");
+        let message = strict
+            .downcast_ref::<String>()
+            .map(String::as_str)
+            .or_else(|| strict.downcast_ref::<&str>().copied());
+        assert!(
+            message
+                .unwrap()
+                .contains("requires a Localizations ancestor")
+        );
+        SizedBox::shrink().into()
+    });
+    tree.mount(root.into()).unwrap();
+    tree.layout(Constraints::tight(Size::new(100., 100.)))
+        .unwrap();
+}
+
+#[test]
+fn localization_scope_at_zero_area_is_still_inherited() {
+    use incular_config::Constraints;
+    use incular_core::Size;
+    use incular_widgets::{
+        Builder, Center, SizedBox, Text,
+        internal::{Key, WidgetTree},
+    };
+
+    let locale: Locale = "fo".parse().unwrap();
+    let leaf: Widget = Builder::new({
+        let locale = locale.clone();
+        move |context| {
+            assert_eq!(Localizations::locale_of(context), locale);
+            assert_eq!(context.text_direction(), Some(TextDirection::Ltr));
+            Text::new("X").into()
+        }
+    })
+    .into();
+    let key = Key::from("Localizations");
+    let localized = Widget::from(Localizations::new(locale, Catalog, leaf)).with_key(key.clone());
+    let mut tree = WidgetTree::new();
+    tree.mount(Center::new(SizedBox::shrink().child(localized)).into())
+        .unwrap();
+    tree.layout(Constraints::tight(Size::new(100., 100.)))
+        .unwrap();
+    let element = tree.element_with_key(&key).unwrap();
+    assert_eq!(tree.element_geometry(element).unwrap().1, Size::ZERO);
+    let _ = tree.paint();
+}

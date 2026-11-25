@@ -1209,3 +1209,6 @@ packages/flutter/test/widgets/editable_text_test.dart	5423	password fields have 
 packages/flutter/test/widgets/editable_text_test.dart	5482	password fields become obscured with the right semantics when set	partial-match	upstream-editable-focus-selection.md#default-mask-geometry-and-accessibility
 packages/flutter/test/widgets/editable_text_test.dart	5607	password fields can have their obscuring character customized	paired-match	upstream-editable-focus-selection.md#configurable-obscuring-character
 packages/flutter/test/widgets/app_test.dart	708	basicLocaleListResolution	paired-match	upstream-widget-previews-runtime.md#default-locale-selection
+packages/flutter/test/widgets/localizations_test.dart	82	Localizations.localeOf throws when no localizations exist	paired-match	upstream-localizations.md#ancestor-lookup-and-zero-size-layout
+packages/flutter/test/widgets/localizations_test.dart	100	Localizations.maybeLocaleOf returns null when no localizations exist	paired-match	upstream-localizations.md#ancestor-lookup-and-zero-size-layout
+packages/flutter/test/widgets/localizations_test.dart	214	Localizations does not crash at zero area	paired-match	upstream-localizations.md#ancestor-lookup-and-zero-size-layout
