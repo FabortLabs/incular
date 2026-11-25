@@ -6,6 +6,8 @@ use incular_core::{
 };
 use incular_rendering::DisplayList;
 use incular_runtime::Runtime;
+#[cfg(debug_assertions)]
+use incular_widgets::internal::TreeError;
 use incular_widgets::{
     Center, CustomPaint, CustomPainter, Directionality, FocusNode, GestureDetector, IndexedStack,
     KeyboardListener, LayoutBuilder, Positioned, SizedBox, Text, TextDirection, Widget,
@@ -314,16 +316,14 @@ fn positioned_child_keeps_its_explicit_origin_and_extent() {
         (Offset::new(10., 20.), Size::new(30., 40.))
     );
 }
+#[cfg(debug_assertions)]
 #[test]
 fn positive_index_equal_to_child_count_is_rejected() {
-    let attempt = std::panic::catch_unwind(|| {
-        let mut r = Runtime::new(scene(stack([SizedBox::new(), SizedBox::new()], 2)))?;
-        r.run_frame(Constraints::tight(VIEW)).map(|_| ())
-    });
-    assert!(
-        !matches!(attempt, Ok(Ok(()))),
-        "an out-of-range selection reached layout successfully"
-    );
+    assert!(matches!(
+        Runtime::new(scene(stack([SizedBox::new(), SizedBox::new()], 2))),
+        Err(TreeError::InvalidWidgetConfiguration { widget: "IndexedStack", reason })
+            if reason.contains("index 2") && reason.contains("2 children")
+    ));
 }
 #[test]
 fn each_fit_passes_its_distinct_constraints_to_the_child() {

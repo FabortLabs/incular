@@ -79,3 +79,24 @@ baseline), then passed after the fix, along with all 23 existing stack layout
 checks. The independent LayoutBuilder forwarding test is still red and is
 tracked in the [LayoutBuilder audit](upstream-table-retention-and-layoutbuilder-baseline.md).
 These authored controls do not add original registrations to the coverage count.
+
+## Current focus, positioning and selection validation
+
+The exact Flutter originals at :27, :196, :264 and :400 passed again. Before
+this change, the current Incular runtime target already passed selected-only
+painting, selected-only programmatic focus (including requests on externally
+held hidden FocusNodes), and Positioned geometry. It still silently accepted
+a positive index equal to the child count.
+
+In debug builds, Incular now rejects a positive out-of-range index with a
+typed configuration error. The supported way to deliberately hide every
+child is `index(None)`. The default index zero on an empty stack remains
+valid. A native retained-update control confirms a rejected update leaves the
+previous children and hit target unchanged.
+
+The focus and positive invalid index originals are full behavior matches.
+Construction and Positioned are still partial comparisons: the existing
+native controls assert paint and geometry rather than Flutter's
+`skipOffstage` query and inherited `Visibility.of` observations.
+
+Both native targets passed after validation was added (40 focused tests).

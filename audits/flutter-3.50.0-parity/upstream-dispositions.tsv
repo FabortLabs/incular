@@ -500,20 +500,20 @@ packages/flutter/test/widgets/list_body_test.dart	107	Limited space along main a
 packages/flutter/test/widgets/list_body_test.dart	139	Nested ListBody unbounded cross axis error	partial-match	upstream-list-body.md#current-retained-implementation
 packages/flutter/test/widgets/indexed_stack_test.dart	12	Can construct an empty IndexedStack	paired-match	upstream-indexed-stack.md
 packages/flutter/test/widgets/indexed_stack_test.dart	18	Can construct an empty Centered IndexedStack	paired-match	upstream-indexed-stack.md
-packages/flutter/test/widgets/indexed_stack_test.dart	27	Can construct an IndexedStack	partial-mismatch	upstream-indexed-stack.md
+packages/flutter/test/widgets/indexed_stack_test.dart	27	Can construct an IndexedStack	partial-match	upstream-indexed-stack.md#current-focus-positioning-and-selection-validation
 packages/flutter/test/widgets/indexed_stack_test.dart	73	Can hit test an IndexedStack	paired-match	upstream-indexed-stack.md
 packages/flutter/test/widgets/indexed_stack_test.dart	104	IndexedStack sets non-selected indexes to visible=false	reference-ran-incular-open	upstream-indexed-stack.md
 packages/flutter/test/widgets/indexed_stack_test.dart	138	IndexedStack with null index	paired-match	upstream-indexed-stack.md#explicit-no-selection
 packages/flutter/test/widgets/indexed_stack_test.dart	167	IndexedStack reports hidden children as offstage	partial-match	upstream-indexed-stack.md#explicit-no-selection
-packages/flutter/test/widgets/indexed_stack_test.dart	196	IndexedStack excludes focus for hidden children	paired-mismatch	upstream-indexed-stack.md
+packages/flutter/test/widgets/indexed_stack_test.dart	196	IndexedStack excludes focus for hidden children	paired-match	upstream-indexed-stack.md#current-focus-positioning-and-selection-validation
 packages/flutter/test/widgets/indexed_stack_test.dart	242	IndexedStack: hidden children can not receive tap events	paired-match	upstream-indexed-stack.md
-packages/flutter/test/widgets/indexed_stack_test.dart	264	IndexedStack supports Positioned children	partial-mismatch	upstream-indexed-stack.md
+packages/flutter/test/widgets/indexed_stack_test.dart	264	IndexedStack supports Positioned children	partial-match	upstream-indexed-stack.md#current-focus-positioning-and-selection-validation
 packages/flutter/test/widgets/indexed_stack_test.dart	307	Can update clipBehavior of IndexedStack	paired-match	upstream-indexed-stack.md
 packages/flutter/test/widgets/indexed_stack_test.dart	325	IndexedStack sizing: explicit	paired-match	upstream-indexed-stack.md
 packages/flutter/test/widgets/indexed_stack_test.dart	368	IndexedStack does not assert with the default parameters	paired-match	upstream-indexed-stack.md
 packages/flutter/test/widgets/indexed_stack_test.dart	378	IndexedStack does not assert when index is null	paired-match	upstream-indexed-stack.md#explicit-no-selection
 packages/flutter/test/widgets/indexed_stack_test.dart	389	IndexedStack asserts when index is negative	reference-ran-incular-open	upstream-indexed-stack.md
-packages/flutter/test/widgets/indexed_stack_test.dart	400	IndexedStack asserts when index is not in children range	paired-mismatch	upstream-indexed-stack.md
+packages/flutter/test/widgets/indexed_stack_test.dart	400	IndexedStack asserts when index is not in children range	paired-match	upstream-indexed-stack.md#current-focus-positioning-and-selection-validation
 packages/flutter/test/widgets/stack_test.dart	20	Can construct an empty Stack	paired-match	upstream-stack.md
 packages/flutter/test/widgets/stack_test.dart	24	Can construct an empty Centered Stack	paired-match	upstream-stack.md
 packages/flutter/test/widgets/stack_test.dart	33	Can change position data	partial-match	upstream-stack.md

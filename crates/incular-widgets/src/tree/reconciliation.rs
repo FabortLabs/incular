@@ -2511,6 +2511,20 @@ impl WidgetTree {
                     reason: need.reason,
                 });
             }
+            if cfg!(debug_assertions)
+                && let WidgetKind::IndexedStack {
+                    index: Some(index),
+                    children,
+                    ..
+                } = current.kind()
+                && !(*index == 0 && children.is_empty())
+                && *index >= children.len()
+            {
+                return Err(TreeError::InvalidWidgetConfiguration {
+                    widget: "IndexedStack",
+                    reason: format!("index {index} is outside the range of {} children; pass None to hide all children", children.len()),
+                });
+            }
             self.check_keys_borrowed(owner, current.children_refs())?;
             // A leaf has no later validation work to wait for. Complete it
             // here instead of pushing and dispatching a Finish entry; fresh

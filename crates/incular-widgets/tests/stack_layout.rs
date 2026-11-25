@@ -10,6 +10,8 @@
 
 use incular_config::{Alignment, Constraints, StackFit};
 use incular_core::{Color, Offset, Size};
+#[cfg(debug_assertions)]
+use incular_widgets::internal::TreeError;
 use incular_widgets::{
     Focus, FocusNode, IndexedStack, Positioned, Stack, Text, UnconstrainedBox, Widget,
     internal::{ActionId, ElementId, WidgetTree, action},
@@ -509,20 +511,19 @@ fn indexed_stack_active_child_overflow_hits_within_parent() {
 }
 
 #[test]
-fn indexed_stack_out_of_range_hides_gracefully() {
+fn indexed_stack_no_selection_hides_gracefully() {
     let mut tree = WidgetTree::new();
     let root = tree
         .mount(
             IndexedStack::new([white_box(60., 40.), white_box(30., 20.)])
-                .index(9)
+                .index(None)
                 .into(),
         )
         .expect("mount");
     tree.layout(Constraints::loose(Size::new(200., 200.)))
         .expect("layout");
     // Layout still measures every child; paint, traversal, and
-    // semantics see none. Hit testing finds nothing, as Flutter's
-    // `RenderIndexedStack` with no child at its index hits nothing.
+    // semantics see none. A null selection has no hit target.
     assert_eq!(bounds_of(&tree, root).2, 60.);
     assert_eq!(tree.hit_test(Offset::new(10., 10.)), None);
     assert!(tree.focusable_elements().is_empty());
@@ -665,12 +666,12 @@ fn indexed_stack_active_child_removal_and_keyed_reorder() {
     assert_eq!(reordered, vec![before[1], before[0]]);
     assert_eq!(hit_action(&tree), Some(ActionId(2)));
 
-    // Removing the active child: delivery follows the index to the
-    // survivor and the removed identity is gone.
+    // Removing the active child with no replacement selection still keeps
+    // the surviving keyed child mounted.
     tree.update(
         root,
         IndexedStack::new([action(Size::new(60., 40.), Color::WHITE, ActionId(1)).with_key(1u64)])
-            .index(1)
+            .index(None)
             .into(),
     )
     .expect("remove active child");
@@ -678,12 +679,12 @@ fn indexed_stack_active_child_removal_and_keyed_reorder() {
         .expect("layout");
     let survivors = stack_kids(&tree, root);
     assert_eq!(survivors, vec![before[0]]);
-    // Index 1 names nothing now: nothing is hit.
+    // Nothing is selected, so nothing is hit.
     assert_eq!(tree.hit_test(Offset::new(10., 10.)), None);
 }
 
 #[test]
-fn indexed_stack_out_of_range_then_valid_restores_delivery() {
+fn indexed_stack_no_selection_then_valid_restores_delivery() {
     let mut tree = WidgetTree::new();
     let root = tree
         .mount(
@@ -704,17 +705,17 @@ fn indexed_stack_out_of_range_then_valid_restores_delivery() {
     };
     assert_eq!(hit_action(&tree), Some(ActionId(1)));
 
-    // Out of range hides every child but measures them and keeps identity.
+    // No selection hides every child but measures them and keeps identity.
     tree.update(
         root,
         IndexedStack::new([
             action(Size::new(60., 40.), Color::WHITE, ActionId(1)),
             action(Size::new(30., 20.), Color::WHITE, ActionId(2)),
         ])
-        .index(9)
+        .index(None)
         .into(),
     )
-    .expect("index out of range");
+    .expect("clear selected index");
     tree.layout(Constraints::loose(Size::new(200., 200.)))
         .expect("layout");
     assert_eq!(stack_kids(&tree, root), kids);
@@ -722,7 +723,7 @@ fn indexed_stack_out_of_range_then_valid_restores_delivery() {
     tree.update_semantics();
     assert!(tree.semantics_debug_dump().is_empty());
 
-    // Back in range: the same retained child delivers again.
+    // Select the same retained child again.
     tree.update(
         root,
         IndexedStack::new([
@@ -732,7 +733,7 @@ fn indexed_stack_out_of_range_then_valid_restores_delivery() {
         .index(1)
         .into(),
     )
-    .expect("index back in range");
+    .expect("select retained child");
     tree.layout(Constraints::loose(Size::new(200., 200.)))
         .expect("layout");
     assert_eq!(stack_kids(&tree, root), kids);
@@ -972,4 +973,43 @@ fn stack_identical_reapplication_bails_out() {
     assert_eq!(after.layouts, before.layouts);
     assert_eq!(after.paints, before.paints);
     assert_eq!(after.composites, before.composites);
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn invalid_index_update_keeps_the_current_retained_selection() {
+    let mut tree = WidgetTree::new();
+    let descriptor = |index| {
+        IndexedStack::new([
+            action(Size::new(60., 40.), Color::WHITE, ActionId(1)).with_key(1u64),
+            action(Size::new(30., 20.), Color::WHITE, ActionId(2)).with_key(2u64),
+        ])
+        .index(index)
+    };
+    let root = tree.mount(descriptor(0).into()).unwrap();
+    let constraints = Constraints::loose(Size::new(200., 200.));
+    tree.layout(constraints).unwrap();
+    let original = stack_kids(&tree, root);
+
+    assert!(matches!(
+        tree.update(root, descriptor(2).into()),
+        Err(TreeError::InvalidWidgetConfiguration {
+            widget: "IndexedStack",
+            ..
+        })
+    ));
+    tree.layout(constraints).unwrap();
+    assert_eq!(stack_kids(&tree, root), original);
+    let hit = tree.hit_test(Offset::new(10., 10.)).unwrap();
+    assert_eq!(
+        tree.action_for_element(tree.element_for_render(hit).unwrap()),
+        Some(ActionId(1)),
+    );
+    assert!(matches!(
+        WidgetTree::new().mount(IndexedStack::default().index(1).into()),
+        Err(TreeError::InvalidWidgetConfiguration {
+            widget: "IndexedStack",
+            ..
+        })
+    ));
 }

@@ -275,6 +275,8 @@ impl IndexedStack {
     }
 
     /// Sets the active index. Pass `None` to hide every child without unmounting them.
+    /// In debug builds, an index outside the children is rejected, except
+    /// for the default index zero on an empty stack.
     #[must_use]
     pub fn index(mut self, index: impl Into<Option<usize>>) -> Self {
         self.index = index.into();
