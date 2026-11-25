@@ -1122,3 +1122,8 @@ packages/flutter/test/widgets/focus_scope_test.dart	1358	Focus widgets set Seman
 packages/flutter/test/widgets/focus_scope_test.dart	1633	Focus doesn't introduce a Semantics node when includeSemantics is false	reference-ran-incular-open	upstream-focus-widget-semantics.md#pinning-the-initial-behavior
 packages/flutter/test/widgets/focus_scope_test.dart	1846	Focus widget gains input focus when it gains accessibility focus	paired-mismatch	upstream-focus-widget-semantics.md#pinning-the-initial-behavior
 packages/flutter/test/widgets/focus_scope_test.dart	1886	Focus does not crash at zero area	paired-match	upstream-focus-widget-semantics.md#pinning-the-initial-behavior
+packages/flutter/test/painting/paint_image_test.dart	55	debugInvertOversizedImages	reference-ran-incular-open	upstream-decoration-image-paint.md#flutter-specific-paint-diagnostics
+packages/flutter/test/painting/paint_image_test.dart	135	debugInvertOversizedImages smaller than overhead allowance	reference-ran-incular-open	upstream-decoration-image-paint.md#flutter-specific-paint-diagnostics
+packages/flutter/test/painting/paint_image_test.dart	230	Reports Image painting	reference-ran-incular-open	upstream-decoration-image-paint.md#flutter-specific-paint-diagnostics
+packages/flutter/test/painting/paint_image_test.dart	269	Reports Image painting - change per frame	reference-ran-incular-open	upstream-decoration-image-paint.md#flutter-specific-paint-diagnostics
+packages/flutter/test/painting/paint_image_test.dart	312	Reports Image painting - no debug label	reference-ran-incular-open	upstream-decoration-image-paint.md#flutter-specific-paint-diagnostics

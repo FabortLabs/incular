@@ -38,3 +38,15 @@ skip the clip and emit just one draw. The first Rust run failed because
 ordinary retained images emitted partial edge tiles with no clip.
 The three focused Rust targets passed (25 tests), and both authored
 reference cases passed. This adds no original registration credit.
+
+## Flutter-specific paint diagnostics
+
+The remaining five originals passed in the focused reference run.
+:55 and :135 check oversized-decode warnings against the view DPR,
+the specific debug color inversion, and the smaller-image threshold.
+:230, :269, and :312 check the paint-image report hook and its
+cross-frame deduplication, changed sizes, and unnamed source behavior.
+Incular exposes decoded handles and renderer diagnostics, but does not
+expose these oversize-inversion or per-frame image-size callbacks.
+These are reference-only; paint draw count is not a substitute for
+a reported event or warning.
