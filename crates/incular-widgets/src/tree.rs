@@ -671,8 +671,6 @@ pub enum RenderKind {
     },
     Unconstrained {
         constrained_axis: Option<Axis>,
-        step_width: Option<f32>,
-        step_height: Option<f32>,
         alignment: Alignment,
     },
     ProxyLayout {

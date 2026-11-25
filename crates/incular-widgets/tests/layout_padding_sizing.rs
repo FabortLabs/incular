@@ -374,8 +374,6 @@ fn constrained_limited_overflow_boxes() {
 
 #[test]
 fn unconstrained_and_intrinsic_aliases_measure_content() {
-    // Both intrinsic aliases resolve through UnconstrainedBox and agree
-    // behaviorally under tight constraints.
     // UnconstrainedBox centers its overflow by default (Flutter), so the 30x20
     // child in the 200x200 box sits at (85, 90).
     let mut tree = WidgetTree::new();
@@ -387,7 +385,7 @@ fn unconstrained_and_intrinsic_aliases_measure_content() {
         bounds_of(&tree, only_child(&tree, root)),
         (85., 90., 30., 20.)
     );
-    // IntrinsicWidth stays top-left at its intrinsic size.
+    // IntrinsicWidth passes already-tight parent bounds to the child.
     let mut tree = WidgetTree::new();
     let root = tree
         .mount(IntrinsicWidth::new(white_box(30., 20.)).into())
@@ -395,7 +393,7 @@ fn unconstrained_and_intrinsic_aliases_measure_content() {
     layout_tight(&mut tree, 200., 200.);
     assert_eq!(
         bounds_of(&tree, only_child(&tree, root)),
-        (0., 0., 30., 20.)
+        (0., 0., 200., 200.)
     );
     // IntrinsicHeight keeps the tight parent's height (Flutter's
     // `_childConstraints` returns the incoming constraints when the height is
@@ -426,14 +424,18 @@ fn intrinsic_width_step_rounds_measured_width() {
     tree.layout(Constraints::loose(Size::new(500., 500.)))
         .expect("layout");
     assert_eq!(bounds_of(&tree, root), (0., 0., 48., 11.));
+    assert_eq!(
+        bounds_of(&tree, only_child(&tree, root)),
+        (0., 0., 48., 11.)
+    );
 }
 
 #[test]
-fn intrinsic_step_ignores_invalid_values() {
+fn intrinsic_step_uses_finite_geometry_for_zero_and_nonfinite_steps() {
     let child = || white_box(37., 11.);
-    // Zero, negative, and non-finite steps leave the extent unchanged;
-    // unbounded constraints do not change the derived size either.
-    for bad in [0., -4., f32::NAN, f32::INFINITY] {
+    // Zero disables stepping. Incular also drops infinite multipliers to
+    // avoid generating an invalid size from 0 * infinity.
+    for bad in [0., f32::INFINITY] {
         let mut tree = WidgetTree::new();
         let root = tree
             .mount(

@@ -175,15 +175,11 @@ impl std::fmt::Debug for WidgetKind {
                 .finish(),
             Self::Unconstrained {
                 constrained_axis,
-                step_width,
-                step_height,
                 alignment,
                 child,
             } => f
                 .debug_struct("UnconstrainedBox")
                 .field("constrained_axis", constrained_axis)
-                .field("step_width", step_width)
-                .field("step_height", step_height)
                 .field("alignment", alignment)
                 .field("child", child)
                 .finish(),
@@ -1188,19 +1184,15 @@ impl PartialEq for WidgetKind {
             (
                 Self::Unconstrained {
                     constrained_axis: a,
-                    step_width: sw,
-                    step_height: sh,
                     alignment: ka,
                     child: b,
                 },
                 Self::Unconstrained {
                     constrained_axis: c,
-                    step_width: tw,
-                    step_height: th,
                     alignment: kb,
                     child: d,
                 },
-            ) => a == c && sw == tw && sh == th && ka == kb && b == d,
+            ) => a == c && ka == kb && b == d,
             (
                 Self::Scroll {
                     controller: a,
@@ -1882,6 +1874,7 @@ pub(crate) enum WidgetType {
     Overflow,
     SizedOverflow,
     Unconstrained,
+    IntrinsicWidth,
     IntrinsicHeight,
     RotatedBox,
     Fractional,
@@ -1971,6 +1964,7 @@ impl WidgetType {
             Self::Overflow => "OverflowBox",
             Self::SizedOverflow => "SizedOverflowBox",
             Self::Unconstrained => "UnconstrainedBox",
+            Self::IntrinsicWidth => "IntrinsicWidth",
             Self::IntrinsicHeight => "IntrinsicHeight",
             Self::RotatedBox => "RotatedBox",
             Self::Fractional => "FractionallySizedBox",
@@ -2260,6 +2254,7 @@ impl WidgetKind {
             ),
             WidgetKind::ProxyLayout { mode, child } => (
                 match mode {
+                    ChildLayoutMode::IntrinsicWidth { .. } => WidgetType::IntrinsicWidth,
                     ChildLayoutMode::IntrinsicHeight => WidgetType::IntrinsicHeight,
                     ChildLayoutMode::QuarterTurns(_) => WidgetType::RotatedBox,
                 },

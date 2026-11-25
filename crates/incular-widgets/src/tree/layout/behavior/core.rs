@@ -239,8 +239,6 @@ impl WidgetTree {
             }
             RenderKind::Unconstrained {
                 constrained_axis,
-                step_width,
-                step_height,
                 alignment,
             } => {
                 let child_constraints = unconstrained_constraints(constraints, constrained_axis);
@@ -249,16 +247,8 @@ impl WidgetTree {
                     let measured = self
                         .render_live(child, "retained render must remain live")
                         .size;
-                    // Intrinsic step rounding applies to the measured extent
-                    // before the parent constrains it, so a stepped box never
-                    // shrinks below the child's intrinsic size.
-                    let stepped = Size::new(
-                        incular_layout::round_intrinsic_step(measured.width, step_width),
-                        incular_layout::round_intrinsic_step(measured.height, step_height),
-                    );
-                    // `RenderConstraintsTransformBox` aligns the child using its
-                    // own measured size, not the stepped extent.
-                    let size = constraints.constrain(stepped);
+                    // The wrapper aligns the child using its measured size.
+                    let size = constraints.constrain(measured);
                     (
                         size,
                         ChildOffsets::One(aligned_child_offset(alignment, size, measured)),
@@ -338,6 +328,46 @@ impl WidgetTree {
                     return Ok((constraints.constrain(Size::ZERO), ChildOffsets::default()));
                 };
                 match mode {
+                    ChildLayoutMode::IntrinsicWidth {
+                        step_width,
+                        step_height,
+                    } => {
+                        // Derive each stepped extent from its own probe: the
+                        // orthogonal axis keeps the incoming upper bound. Then
+                        // issue the final constraints to the child itself.
+                        let width = if constraints.min_width() == constraints.max_width() {
+                            None
+                        } else {
+                            let probe =
+                                Constraints::at_most(f32::INFINITY, constraints.max_height());
+                            self.layout_render(child, probe)?;
+                            let natural = self
+                                .render_live(child, "intrinsic child must remain live")
+                                .size
+                                .width;
+                            Some(incular_layout::round_intrinsic_step(natural, step_width))
+                        };
+                        let height = if step_height.is_some()
+                            && constraints.min_height() != constraints.max_height()
+                        {
+                            let probe =
+                                Constraints::at_most(constraints.max_width(), f32::INFINITY);
+                            self.layout_render(child, probe)?;
+                            let natural = self
+                                .render_live(child, "intrinsic child must remain live")
+                                .size
+                                .height;
+                            Some(incular_layout::round_intrinsic_step(natural, step_height))
+                        } else {
+                            None
+                        };
+                        self.layout_render(child, constraints.tighten(width, height))?;
+                        let child = self.render_live(child, "intrinsic child must remain live");
+                        let (size, baseline) = (child.size, child.baseline);
+                        self.render_live_mut(id, "intrinsic render must remain live")
+                            .baseline = baseline;
+                        (size, ChildOffsets::One(Offset::ZERO))
+                    }
                     ChildLayoutMode::IntrinsicHeight => {
                         // `RenderIntrinsicHeight`: the child keeps the incoming
                         // width constraints and is tightened to its intrinsic

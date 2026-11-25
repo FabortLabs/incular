@@ -361,19 +361,12 @@ impl OverflowBox {
 widget_from_kind!(OverflowBox => Overflow { min_width, max_width, min_height, max_height, alignment, fit, child });
 
 /// Allows its child to size naturally without parent constraints.
-///
-/// `step_width`/`step_height` are not part of the public surface; the
-/// intrinsic wrappers set them so measured extents round up to a step.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct UnconstrainedBox {
     #[builder(default, setter(strip_option))]
     constrained_axis: Option<Axis>,
-    #[builder(default, setter(skip))]
-    step_width: Option<f32>,
     #[builder(default = Alignment::CENTER)]
     alignment: Alignment,
-    #[builder(default, setter(skip))]
-    step_height: Option<f32>,
     #[builder(setter(into))]
     child: Widget,
 }
@@ -384,8 +377,6 @@ impl UnconstrainedBox {
     pub fn new(child: impl Into<Widget>) -> Self {
         Self {
             constrained_axis: None,
-            step_width: None,
-            step_height: None,
             alignment: Alignment::CENTER,
             child: child.into(),
         }
@@ -405,18 +396,9 @@ impl UnconstrainedBox {
         self.constrained_axis = Some(axis);
         self
     }
-
-    /// Sets intrinsic step rounding on the measured child extent. Used by
-    /// the intrinsic wrappers; not part of the public UnconstrainedBox API.
-    #[must_use]
-    pub(super) fn steps(mut self, step_width: Option<f32>, step_height: Option<f32>) -> Self {
-        self.step_width = step_width;
-        self.step_height = step_height;
-        self
-    }
 }
 
-widget_from_kind!(UnconstrainedBox => Unconstrained { constrained_axis, step_width, step_height, alignment, child });
+widget_from_kind!(UnconstrainedBox => Unconstrained { constrained_axis, alignment, child });
 
 /// Rebuilds a subtree when incoming layout constraints change.
 #[derive(Clone)]
@@ -527,13 +509,14 @@ impl IntrinsicWidth {
 
 impl From<IntrinsicWidth> for Widget {
     fn from(value: IntrinsicWidth) -> Self {
-        // `RenderIntrinsicWidth` is a proxy: the child stays at the box origin,
-        // so the unconstrained wrapper uses top-left alignment rather than the
-        // centered default of `UnconstrainedBox`.
-        UnconstrainedBox::new(value.child)
-            .steps(value.step_width, value.step_height)
-            .alignment(Alignment::TOP_LEFT)
-            .into()
+        let positive_step = |step: Option<f32>| step.filter(|s| *s > 0. && s.is_finite());
+        Widget::from_kind(WidgetKind::ProxyLayout {
+            mode: ChildLayoutMode::IntrinsicWidth {
+                step_width: positive_step(value.step_width),
+                step_height: positive_step(value.step_height),
+            },
+            child: value.child,
+        })
     }
 }
 

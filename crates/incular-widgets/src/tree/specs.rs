@@ -381,6 +381,11 @@ pub struct TextFieldSpec {
 /// placing it. Each mode maps to one Flutter proxy render object.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ChildLayoutMode {
+    /// Tightens a child's width and any separately requested height step.
+    IntrinsicWidth {
+        step_width: Option<f32>,
+        step_height: Option<f32>,
+    },
     /// `RenderIntrinsicHeight`: tightens the child height to its intrinsic height.
     IntrinsicHeight,
     /// `RenderRotatedBox`: lays out the child with swapped axes on odd quarter turns.
@@ -529,8 +534,6 @@ pub(crate) enum WidgetKind {
     },
     Unconstrained {
         constrained_axis: Option<Axis>,
-        step_width: Option<f32>,
-        step_height: Option<f32>,
         alignment: Alignment,
         child: Widget,
     },

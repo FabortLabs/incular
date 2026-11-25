@@ -69,14 +69,10 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
         },
         WidgetKind::Unconstrained {
             constrained_axis,
-            step_width,
-            step_height,
             alignment,
             ..
         } => RenderKind::Unconstrained {
             constrained_axis: *constrained_axis,
-            step_width: *step_width,
-            step_height: *step_height,
             alignment: *alignment,
         },
         WidgetKind::ProxyLayout { mode, .. } => RenderKind::ProxyLayout { mode: *mode },
