@@ -71,3 +71,12 @@ callback delivery, not Flutter's native dispatcher callback registration.
 Eighteen focused Rust checks, two named Flutter originals, and two
 authored Flutter cases passed. The behavior is verified at the runtime
 boundary; a physically suspended OS host still has to supply a frame.
+
+## Scheduler priority values
+
+The exact `scheduler/priority_test.dart:9` case now pairs both bounds:
+adding 10,100 to Idle gives 10,000; subtracting 10,100 from Animation
+gives 90,000. The bound limits each offset, not the accumulated value.
+Rust also verifies negative offsets and machine integer edges without
+overflow. Four focused Rust tests and the original Flutter case passed.
+This is the public value API; prioritized UI task dispatch is separate.

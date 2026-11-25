@@ -156,3 +156,8 @@ frames after the first one.
 is paused. `Ticker::set_force_frames(true)` does the same for each new
 tick request. Use these sparingly: an otherwise idle host may keep
 producing frames, and a fully suspended OS may not respond.
+
+`Priority` values describe the idle, animation, and touch bands. The
+priority offset in each addition or subtraction is limited to
+`Priority::MAX_OFFSET`; successive offsets can accumulate. This is an
+ordering value, not a task executor.

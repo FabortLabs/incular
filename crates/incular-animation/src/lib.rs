@@ -39,8 +39,8 @@ pub use physics::{
     ScrollSpringSimulation, Simulation, SpringDescription, SpringSimulation, SpringType, Tolerance,
 };
 pub use scheduler::{
-    FrameCallbackId, InvalidTimeDilation, Ticker, TickerCanceled, TickerFuture, TickerOrCancel,
-    add_persistent_frame_callback, add_post_frame_callback, cancel_frame_callback,
+    FrameCallbackId, InvalidTimeDilation, Priority, Ticker, TickerCanceled, TickerFuture,
+    TickerOrCancel, add_persistent_frame_callback, add_post_frame_callback, cancel_frame_callback,
     current_frame_time, current_system_frame_time, schedule_forced_frame, schedule_frame,
     schedule_frame_callback, set_time_dilation, time_dilation, try_set_time_dilation,
 };

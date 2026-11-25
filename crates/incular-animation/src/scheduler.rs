@@ -261,6 +261,47 @@ impl Drop for FrameAvailability {
     }
 }
 
+/// Flutter `Priority`: an ordering value for UI-thread scheduled work.
+/// Higher values have higher priority. Each addition or subtraction is
+/// clamped to [`Self::MAX_OFFSET`], not the final priority value.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Priority(i64);
+
+impl Priority {
+    /// Run only when the UI is otherwise idle.
+    pub const IDLE: Self = Self(0);
+    /// May run during animation.
+    pub const ANIMATION: Self = Self(100_000);
+    /// May run while the user is interacting.
+    pub const TOUCH: Self = Self(200_000);
+    /// Largest magnitude of a single relative offset.
+    pub const MAX_OFFSET: i64 = 10_000;
+
+    /// Numeric representation used for priority ordering.
+    #[must_use]
+    pub const fn value(self) -> i64 {
+        self.0
+    }
+}
+
+impl std::ops::Add<i64> for Priority {
+    type Output = Self;
+
+    fn add(self, offset: i64) -> Self {
+        let offset = offset.clamp(-Self::MAX_OFFSET, Self::MAX_OFFSET);
+        Self(self.0.saturating_add(offset))
+    }
+}
+
+impl std::ops::Sub<i64> for Priority {
+    type Output = Self;
+
+    fn sub(self, offset: i64) -> Self {
+        let offset = offset.clamp(-Self::MAX_OFFSET, Self::MAX_OFFSET);
+        Self(self.0.saturating_sub(offset))
+    }
+}
+
 /// Identifies a callback registered with [`schedule_frame_callback`], for
 /// [`cancel_frame_callback`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
