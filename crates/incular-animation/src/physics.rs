@@ -5,7 +5,21 @@
 //! `f64`, as Dart does, and narrowed to `f32` at the [`Simulation`] boundary.
 
 use std::f64::consts::PI;
+use std::fmt;
 use std::time::Duration;
+
+struct Fixed<T>(T);
+
+impl<T: Copy + Into<f64>> fmt::Display for Fixed<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let value = self.0.into();
+        match value {
+            f64::INFINITY => f.write_str("Infinity"),
+            f64::NEG_INFINITY => f.write_str("-Infinity"),
+            _ => write!(f, "{value:.1}"),
+        }
+    }
+}
 
 /// Tolerances used to decide when a physical simulation has settled.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -113,6 +127,18 @@ pub struct SpringDescription {
     pub mass: f32,
     pub stiffness: f32,
     pub damping: f32,
+}
+
+impl fmt::Display for SpringDescription {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "SpringDescription(mass: {}, stiffness: {}, damping: {})",
+            Fixed(self.mass),
+            Fixed(self.stiffness),
+            Fixed(self.damping),
+        )
+    }
 }
 
 impl SpringDescription {
@@ -224,6 +250,13 @@ impl SpringDescription {
 
 /// Abstract time-based scalar simulation.
 pub trait Simulation {
+    /// A compact diagnostic. Wrappers display the diagnostic of their child.
+    fn fmt_diagnostic(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = std::any::type_name::<Self>();
+        let base = name.split('<').next().unwrap_or(name);
+        f.write_str(base.rsplit("::").next().unwrap_or(base))
+    }
+
     /// Computes position at elapsed time `t`.
     fn position(&self, t: Duration) -> f32;
     /// Computes velocity at elapsed time `t`.
@@ -241,6 +274,30 @@ pub trait Simulation {
         Tolerance::DEFAULT
     }
 }
+
+impl fmt::Display for dyn Simulation + '_ {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.fmt_diagnostic(f)
+    }
+}
+
+macro_rules! display_simulations {
+    ($($ty:ty),+ $(,)?) => { $(
+        impl fmt::Display for $ty {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                self.fmt_diagnostic(f)
+            }
+        }
+    )+ };
+}
+
+display_simulations!(
+    SpringSimulation,
+    ScrollSpringSimulation,
+    FrictionSimulation,
+    BoundedFrictionSimulation,
+    GravitySimulation,
+);
 
 /// Position and derivative of the harmonic solution, evaluated in `f64`.
 ///
@@ -305,6 +362,19 @@ pub struct SpringSimulation {
 }
 
 impl SpringSimulation {
+    fn write_diagnostic(&self, f: &mut fmt::Formatter<'_>, kind: &str) -> fmt::Result {
+        let spring_type = match self.spring.spring_type() {
+            SpringType::CriticallyDamped => "criticallyDamped",
+            SpringType::UnderDamped => "underDamped",
+            SpringType::OverDamped => "overDamped",
+        };
+        write!(
+            f,
+            "{kind}(end: {}, SpringType.{spring_type})",
+            Fixed(self.end)
+        )
+    }
+
     #[must_use]
     pub fn new(
         spring: SpringDescription,
@@ -350,6 +420,10 @@ impl SpringSimulation {
 }
 
 impl Simulation for SpringSimulation {
+    fn fmt_diagnostic(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.write_diagnostic(f, "SpringSimulation")
+    }
+
     fn position(&self, t: Duration) -> f32 {
         if self.snap_to_end && self.is_done(t) {
             return self.end;
@@ -405,6 +479,10 @@ impl ScrollSpringSimulation {
 }
 
 impl Simulation for ScrollSpringSimulation {
+    fn fmt_diagnostic(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.inner.write_diagnostic(f, "ScrollSpringSimulation")
+    }
+
     fn position(&self, t: Duration) -> f32 {
         if self.inner.is_done(t) {
             self.inner.end
@@ -642,6 +720,16 @@ impl FrictionSimulation {
 }
 
 impl Simulation for FrictionSimulation {
+    fn fmt_diagnostic(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "FrictionSimulation(cₓ: {}, x₀: {}, dx₀: {})",
+            Fixed(self.drag),
+            Fixed(self.start),
+            Fixed(self.initial_velocity)
+        )
+    }
+
     fn position(&self, t: Duration) -> f32 {
         self.x_at(t.as_secs_f64()) as f32
     }
@@ -707,6 +795,18 @@ impl BoundedFrictionSimulation {
 }
 
 impl Simulation for BoundedFrictionSimulation {
+    fn fmt_diagnostic(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "BoundedFrictionSimulation(cₓ: {}, x₀: {}, dx₀: {}, x: {}..{})",
+            Fixed(self.friction.drag),
+            Fixed(self.friction.start),
+            Fixed(self.friction.initial_velocity),
+            Fixed(self.min),
+            Fixed(self.max)
+        )
+    }
+
     fn position(&self, t: Duration) -> f32 {
         self.clamped_position(t) as f32
     }
@@ -767,6 +867,17 @@ impl GravitySimulation {
 }
 
 impl Simulation for GravitySimulation {
+    fn fmt_diagnostic(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "GravitySimulation(g: {}, x₀: {}, dx₀: {}, xₘₐₓ: ±{})",
+            Fixed(self.acceleration),
+            Fixed(self.start),
+            Fixed(self.initial_velocity),
+            Fixed(self.end)
+        )
+    }
+
     fn position(&self, t: Duration) -> f32 {
         self.position_f64(t.as_secs_f64()) as f32
     }
@@ -825,7 +936,25 @@ impl<S: Simulation> ClampedSimulation<S> {
     }
 }
 
+impl<S: Simulation> fmt::Display for ClampedSimulation<S> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.fmt_diagnostic(f)
+    }
+}
+
 impl<S: Simulation> Simulation for ClampedSimulation<S> {
+    fn fmt_diagnostic(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let simulation: &dyn Simulation = &self.inner;
+        write!(
+            f,
+            "ClampedSimulation(simulation: {simulation}, x: {}..{}, dx: {}..{})",
+            Fixed(self.min),
+            Fixed(self.max),
+            Fixed(self.dx_min),
+            Fixed(self.dx_max)
+        )
+    }
+
     fn position(&self, t: Duration) -> f32 {
         clamp_value(self.inner.position(t), self.min, self.max)
     }

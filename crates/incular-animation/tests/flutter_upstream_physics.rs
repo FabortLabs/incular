@@ -163,7 +163,7 @@ fn flutter_gravity_reports_position_velocity_and_completion() {
 #[test]
 fn flutter_gravity_dedicated_description_and_decimal_acceleration() {
     let gravity = GravitySimulation::new(9.81, 10., 0., 0.);
-    let description = format!("{gravity:?}");
+    let description = gravity.to_string();
     assert!(description.starts_with("GravitySimulation") && !description.contains('\n'));
     assert!((f64::from(gravity.position(ds(10.))) - (50. * 9.81 + 10.)).abs() <= 1e-10);
 }
@@ -182,6 +182,79 @@ fn flutter_gravity_dedicated_turnaround_and_absolute_completion() {
         assert_eq!(gravity.velocity(ds(t)), dx);
         assert_eq!(gravity.is_done(ds(done_t)), done);
     }
+}
+
+/// physics/spring_simulation_test.dart:114.
+#[test]
+#[cfg(debug_assertions)]
+fn flutter_spring_duration_requires_at_least_one_whole_millisecond() {
+    for invalid in [Duration::ZERO, Duration::from_micros(999)] {
+        assert!(
+            std::panic::catch_unwind(|| SpringDescription::with_duration_and_bounce(invalid, 0.3))
+                .is_err()
+        );
+    }
+    let minimum = Duration::from_millis(1);
+    assert_eq!(
+        SpringDescription::with_duration_and_bounce(minimum, 0.3).duration(),
+        minimum
+    );
+}
+
+/// physics/to_string_test.dart:20.
+#[test]
+fn flutter_simulation_diagnostics_name_parameters_and_underlying_types() {
+    struct TestSimulation;
+    impl Simulation for TestSimulation {
+        fn position(&self, _: Duration) -> f32 {
+            0.
+        }
+        fn velocity(&self, _: Duration) -> f32 {
+            0.
+        }
+        fn is_done(&self, _: Duration) -> bool {
+            true
+        }
+    }
+    let simulation: &dyn Simulation = &TestSimulation;
+    assert_eq!(simulation.to_string(), "TestSimulation");
+    assert_eq!(
+        ClampedSimulation::new(TestSimulation, -1., 2.)
+            .with_velocity_bounds(-3., 4.)
+            .to_string(),
+        "ClampedSimulation(simulation: TestSimulation, x: -1.0..2.0, dx: -3.0..4.0)"
+    );
+    assert_eq!(
+        GravitySimulation::new(1., -2., 3., -4.).to_string(),
+        "GravitySimulation(g: 1.0, x₀: -2.0, dx₀: -4.0, xₘₐₓ: ±3.0)"
+    );
+    assert_eq!(
+        FrictionSimulation::new(1., -2., 3., Tolerance::DEFAULT).to_string(),
+        "FrictionSimulation(cₓ: 1.0, x₀: -2.0, dx₀: 3.0)"
+    );
+    assert_eq!(
+        BoundedFrictionSimulation::new(1., -2., 3., -4., 5.).to_string(),
+        "BoundedFrictionSimulation(cₓ: 1.0, x₀: -2.0, dx₀: 3.0, x: -4.0..5.0)"
+    );
+    assert_eq!(
+        SpringDescription::new(1., -2., 3.).to_string(),
+        "SpringDescription(mass: 1.0, stiffness: -2.0, damping: 3.0)"
+    );
+    assert_eq!(
+        SpringDescription::with_damping_ratio(1., 9., 1.).to_string(),
+        "SpringDescription(mass: 1.0, stiffness: 9.0, damping: 6.0)"
+    );
+    assert_eq!(
+        SpringSimulation::new(
+            SpringDescription::new(1., 2., 3.),
+            0.,
+            1.,
+            2.,
+            Tolerance::DEFAULT,
+        )
+        .to_string(),
+        "SpringSimulation(end: 1.0, SpringType.overDamped)"
+    );
 }
 #[test]
 fn flutter_spring_description_classifies_damping() {

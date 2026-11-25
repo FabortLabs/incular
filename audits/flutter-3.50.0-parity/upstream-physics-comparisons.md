@@ -193,3 +193,18 @@ at 1 second plus 0.1 nanoseconds. Existing f32 layout callers keep their
 constructor and strict tolerance behavior. All 50 focused animation
 and physics checks pass with no exclusions. These are remediations of
 existing pairs, not five additional original registrations.
+
+## Simulation diagnostics and invalid spring duration
+
+Pinned `to_string_test.dart:20` and the Rust port agree on all eight
+strings, including the concrete name of a custom simulation in a
+clamped wrapper and the tested spring damping classification. Built-in
+simulations and trait objects use Display for compact diagnostics;
+Rust Debug remains available. This adds one original pair.
+
+Pinned `spring_simulation_test.dart:114` also passes its invalid
+duration assertions. Rust now has a permanent check that its existing
+debug guard rejects zero and sub-millisecond durations while a whole
+millisecond works. Rust Duration cannot represent a negative input;
+the release-mode fallback remains intentionally documented. This is a
+recheck of an existing pair. All 52 selected Rust tests pass.

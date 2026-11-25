@@ -750,3 +750,4 @@ packages/flutter/test/widgets/clip_test.dart	917	ClipRect does not crash at zero
 packages/flutter/test/widgets/clip_test.dart	826	ClipRRect supports BorderRadiusDirectional	paired-match	upstream-clip-visibility-focus.md#directional-rounded-clips
 packages/flutter/test/widgets/clip_test.dart	862	ClipRRect is direction-aware	paired-match	upstream-clip-visibility-focus.md#directional-rounded-clips
 packages/flutter/test/widgets/clip_test.dart	788	CustomClipper reclips when notified	paired-match	upstream-clip-visibility-focus.md#custom-clipper-notifications
+packages/flutter/test/physics/to_string_test.dart	20	Simulation.toString	paired-match	upstream-physics-comparisons.md#simulation-diagnostics-and-invalid-spring-duration

@@ -859,3 +859,8 @@ remediates five existing pairs (three dedicated friction and two Newton
 cases). The full focused animation/physics selection passes, including
 both previously red strict friction tests. The original count stays
 at 459 / 8,965.
+
+[Simulation diagnostics](upstream-physics-comparisons.md#simulation-diagnostics-and-invalid-spring-duration)
+add one original match: 460 / 8,965 fully compared (5.13%), with
+364 matches and 96 historical mismatches. The same focused batch
+backfills the debug guard for invalid spring durations.
