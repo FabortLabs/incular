@@ -182,3 +182,50 @@ fn clip_none_paints_while_the_larger_child_overflows() {
     assert_eq!(probe.frame(1100), Size::new(150., 150.));
     assert!(!probe.has_clip());
 }
+
+#[test]
+fn animated_size_baseline_includes_its_childs_animated_vertical_offset() {
+    use incular_config::Alignment;
+    use incular_widgets::internal::Key;
+    let child = Key::Value(91);
+    let build = |large| -> Widget {
+        let content = if large {
+            Widget::from(
+                SizedBox::new()
+                    .width(100.)
+                    .height(80.)
+                    .child(Text::new("X").text_direction(TextDirection::Ltr)),
+            )
+        } else {
+            Widget::from(SizedBox::new().width(100.).height(20.))
+        }
+        .with_key(child.clone());
+        AnimatedSize::new(Duration::from_millis(200), content)
+            .alignment(Alignment::BOTTOM_LEFT)
+            .into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(build(false)).unwrap();
+    let mut probe = Fixture {
+        tree,
+        root,
+        epoch: Instant::now(),
+        constraints: Constraints::loose(LARGE),
+        end_calls: Rc::new(Cell::new(0)),
+    };
+    probe.frame(0);
+    let baseline = |t: &WidgetTree, element| t.baseline(t.render_id(element).unwrap());
+    assert_eq!(baseline(&probe.tree, probe.root), None);
+    probe.tree.update(probe.root, build(true)).unwrap();
+    probe.frame(1000);
+    probe.frame(1000);
+    assert_eq!(probe.frame(1100), Size::new(100., 50.));
+    let element = probe.tree.element_with_key(&child).unwrap();
+    let own_y = probe.tree.element_bounds(probe.root).unwrap().origin.y;
+    let child_y = probe.tree.element_bounds(element).unwrap().origin.y;
+    assert_eq!(child_y - own_y, -30.);
+    assert_eq!(
+        baseline(&probe.tree, probe.root),
+        Some(baseline(&probe.tree, element).unwrap() + child_y - own_y),
+    );
+}

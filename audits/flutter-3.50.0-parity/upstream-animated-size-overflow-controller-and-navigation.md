@@ -53,3 +53,13 @@ The authored `animated_size_clip_none_test.dart` also passes on both
 runtimes: the deliberately overflowing child is painted without a clip.
 Seventeen targeted AnimatedSize and adjacent AnimatedCrossFade tests passed.
 These are clip-command comparisons, not native GPU captures.
+
+### Animated child baseline
+
+The authored pinned and retained native probes now agree that a
+bottom-aligned text child contributes its actual baseline plus its
+animated Y offset. At the 100×50 growth midpoint the 80-high child starts
+at -30px; the reported baseline shifts by exactly that amount. The
+baseline-free initial child still produces no actual baseline. The
+transparent ticker also forwards the value rather than hiding it.
+Fourteen focused native tests passed; this adds no upstream registration.

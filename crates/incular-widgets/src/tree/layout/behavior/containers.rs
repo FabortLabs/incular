@@ -857,6 +857,8 @@ impl WidgetTree {
             CustomLayoutDelegate::ChildSized(layout) => {
                 let Some(&child) = children.first() else {
                     self.set_layout_overflow(id, false);
+                    self.render_live_mut(id, "child-sized layout remains live")
+                        .baseline = None;
                     let (size, _) = layout.layout(constraints, Size::ZERO);
                     return Ok((constraints.constrain(size), ChildOffsets::default()));
                 };
@@ -876,6 +878,12 @@ impl WidgetTree {
                             && (child_size.width > size.width || child_size.height > size.height),
                     );
                 }
+                let baseline = self
+                    .render_live(child, "laid-out child remains live")
+                    .baseline
+                    .map(|local| local + offset.y);
+                self.render_live_mut(id, "child-sized layout remains live")
+                    .baseline = baseline;
                 Ok((size, ChildOffsets::One(offset)))
             }
             CustomLayoutDelegate::Multi(delegate) => {

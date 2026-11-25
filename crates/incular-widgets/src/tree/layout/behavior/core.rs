@@ -382,12 +382,14 @@ impl WidgetTree {
             RenderKind::AnimationTicker { .. } => {
                 if let Some(&child) = children.first() {
                     self.layout_render(child, constraints)?;
-                    let size = constraints.constrain(
-                        self.render_live(child, "retained render must remain live")
-                            .size,
-                    );
+                    let child = self.render_live(child, "ticker child remains live");
+                    let (size, baseline) = (constraints.constrain(child.size), child.baseline);
+                    self.render_live_mut(id, "animation ticker remains live")
+                        .baseline = baseline;
                     (size, ChildOffsets::One(Offset::ZERO))
                 } else {
+                    self.render_live_mut(id, "animation ticker remains live")
+                        .baseline = None;
                     (constraints.smallest(), ChildOffsets::default())
                 }
             }
