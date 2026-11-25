@@ -41,6 +41,69 @@ impl MediaQuery {
         }
     }
 
+    /// Subscribes to all data in the nearest MediaQuery, if present.
+    #[must_use]
+    pub fn maybe_of(context: &BuildContext<'_>) -> Option<MediaQueryData> {
+        context.depend_on()
+    }
+
+    /// Subscribes to all data in the nearest MediaQuery.
+    ///
+    /// Panics if the context has no MediaQuery ancestor.
+    #[must_use]
+    #[track_caller]
+    pub fn of(context: &BuildContext<'_>) -> MediaQueryData {
+        Self::maybe_of(context).expect("No MediaQuery widget ancestor found")
+    }
+
+    /// Reads and subscribes to the nearest media size only.
+    #[must_use]
+    pub fn maybe_size_of(context: &BuildContext<'_>) -> Option<incular_core::Size> {
+        context.media_query_size()
+    }
+
+    #[must_use]
+    #[track_caller]
+    pub fn size_of(context: &BuildContext<'_>) -> incular_core::Size {
+        Self::maybe_size_of(context).expect("No MediaQuery widget ancestor found")
+    }
+
+    /// Reads and subscribes to the nearest media width only.
+    #[must_use]
+    pub fn maybe_width_of(context: &BuildContext<'_>) -> Option<f32> {
+        context.media_query_width()
+    }
+
+    #[must_use]
+    #[track_caller]
+    pub fn width_of(context: &BuildContext<'_>) -> f32 {
+        Self::maybe_width_of(context).expect("No MediaQuery widget ancestor found")
+    }
+
+    /// Reads and subscribes to the nearest media height only.
+    #[must_use]
+    pub fn maybe_height_of(context: &BuildContext<'_>) -> Option<f32> {
+        context.media_query_height()
+    }
+
+    #[must_use]
+    #[track_caller]
+    pub fn height_of(context: &BuildContext<'_>) -> f32 {
+        Self::maybe_height_of(context).expect("No MediaQuery widget ancestor found")
+    }
+
+    /// Reads the nearest media orientation, only subscribing when it changes.
+    #[must_use]
+    pub fn maybe_orientation_of(context: &BuildContext<'_>) -> Option<Orientation> {
+        context.media_query_orientation()
+    }
+
+    #[must_use]
+    #[track_caller]
+    pub fn orientation_of(context: &BuildContext<'_>) -> Orientation {
+        Self::maybe_orientation_of(context).expect("No MediaQuery widget ancestor found")
+    }
+
     /// Removes selected safe padding from the nearest media scope.
     #[must_use]
     pub fn remove_padding(child: impl Into<Widget>, edges: MediaQueryEdges) -> Widget {

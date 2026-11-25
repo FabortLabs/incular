@@ -1251,3 +1251,7 @@ packages/flutter/test/widgets/display_feature_sub_screen_test.dart	196	with size
 packages/flutter/test/widgets/display_feature_sub_screen_test.dart	227	DisplayFeatureSubScreen does not crash at zero area	paired-match	upstream-display-features.md
 packages/flutter/test/widgets/media_query_test.dart	1518	MediaQuery.removeDisplayFeatures removes specified display features and padding	paired-match	upstream-display-features.md
 packages/flutter/test/widgets/media_query_test.dart	1598	MediaQuery.removePadding only removes specified display features and padding	paired-match	upstream-display-features.md
+packages/flutter/test/widgets/media_query_test.dart	48	MediaQuery does not have a default	partial-match	upstream-media-query-scale.md#ancestor-lookup-and-individual-dimensions
+packages/flutter/test/widgets/media_query_test.dart	89	MediaQuery.of finds a MediaQueryData when there is one	paired-match	upstream-media-query-scale.md#ancestor-lookup-and-individual-dimensions
+packages/flutter/test/widgets/media_query_test.dart	111	MediaQuery.maybeOf defaults to null	paired-match	upstream-media-query-scale.md#ancestor-lookup-and-individual-dimensions
+packages/flutter/test/widgets/media_query_test.dart	129	MediaQuery.maybeOf finds a MediaQueryData when there is one	paired-match	upstream-media-query-scale.md#ancestor-lookup-and-individual-dimensions

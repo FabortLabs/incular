@@ -33,3 +33,19 @@ bold, line-height, letter spacing and word spacing, and returns to its
 original style when the overrides clear. Paragraph spacing remains an
 inherited value for clients to apply, not an implicit paragraph layout
 rule for the neutral Text widget.
+
+## Ancestor lookup and individual dimensions
+
+Pinned :48, :89, :111, and :129 passed. Rust checks that both lookups
+read the closest real scope, that the optional form returns no value
+when unscoped, and that the strict form fails with the intended
+diagnostic instead of inventing media data. :48 is partial because
+Rust has a panic with the diagnostic rather than FlutterError's
+full ownership chain and View hint.
+
+The authored pinned `media_query_dimensions_reference_test.dart`
+and paired Rust target verify eight strict/optional subscribers.
+Width-only and height-only changes do not invalidate the other axis.
+Square is portrait, orientation only invalidates on that transition,
+and brightness alone does not invalidate any dimension reader.
+The original full aspect variant remains separate.

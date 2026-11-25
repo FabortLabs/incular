@@ -74,6 +74,21 @@ struct RuntimeParagraphSpacingOverride(Option<f32>);
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct MediaQuerySize(Size);
 #[derive(Clone, Copy, Debug, PartialEq)]
+struct MediaQueryWidth(f32);
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct MediaQueryHeight(f32);
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct MediaQueryOrientation(crate::Orientation);
+
+fn orientation(size: Size) -> crate::Orientation {
+    if size.width > size.height {
+        crate::Orientation::Landscape
+    } else {
+        crate::Orientation::Portrait
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 struct MediaQueryDevicePixelRatio(f64);
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct MediaQueryTextScale(pub(super) f32);
@@ -91,6 +106,9 @@ macro_rules! media_query_aspects {
         /// Installs every aspect of `environment` into `context`, which must
         /// be the fresh environment of a `RuntimeEnvironment` scope.
         fn install_media_query_aspects(context: &DependencyContext, environment: &RuntimeEnvironment) {
+            context.set_erased(TypeId::of::<MediaQueryWidth>(), Rc::new(MediaQueryWidth(environment.viewport.width)));
+            context.set_erased(TypeId::of::<MediaQueryHeight>(), Rc::new(MediaQueryHeight(environment.viewport.height)));
+            context.set_erased(TypeId::of::<MediaQueryOrientation>(), Rc::new(MediaQueryOrientation(orientation(environment.viewport))));
             $(
                 context.set_erased(
                     TypeId::of::<$wrapper>(),
@@ -105,6 +123,15 @@ macro_rules! media_query_aspects {
             previous: &RuntimeEnvironment,
             next: &RuntimeEnvironment,
         ) {
+            if previous.viewport.width != next.viewport.width {
+                context.set_erased(TypeId::of::<MediaQueryWidth>(), Rc::new(MediaQueryWidth(next.viewport.width)));
+            }
+            if previous.viewport.height != next.viewport.height {
+                context.set_erased(TypeId::of::<MediaQueryHeight>(), Rc::new(MediaQueryHeight(next.viewport.height)));
+            }
+            if orientation(previous.viewport) != orientation(next.viewport) {
+                context.set_erased(TypeId::of::<MediaQueryOrientation>(), Rc::new(MediaQueryOrientation(orientation(next.viewport))));
+            }
             $(
                 if previous.$field != next.$field {
                     context.set_erased(
@@ -448,6 +475,23 @@ impl<'a> BuildContext<'a> {
     #[must_use]
     pub fn media_query_size(&self) -> Option<Size> {
         self.inner.depend::<MediaQuerySize>().map(|value| value.0)
+    }
+
+    #[must_use]
+    pub fn media_query_width(&self) -> Option<f32> {
+        self.inner.depend::<MediaQueryWidth>().map(|value| value.0)
+    }
+
+    #[must_use]
+    pub fn media_query_height(&self) -> Option<f32> {
+        self.inner.depend::<MediaQueryHeight>().map(|value| value.0)
+    }
+
+    #[must_use]
+    pub fn media_query_orientation(&self) -> Option<crate::Orientation> {
+        self.inner
+            .depend::<MediaQueryOrientation>()
+            .map(|value| value.0)
     }
 
     /// Flutter's `MediaQuery.devicePixelRatioOf`, aspect-scoped like
