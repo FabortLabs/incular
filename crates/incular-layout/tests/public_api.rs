@@ -164,3 +164,33 @@ fn rtl_table_offsets_include_spacing_and_minimum_width_growth() {
     config.text_direction = TextDirection::Rtl;
     assert_eq!(offsets(&config), [283., 149., 0.]);
 }
+
+#[test]
+fn fractional_wrap_fits_rounding_but_not_a_full_step_of_overflow_on_either_axis() {
+    use incular_layout::Axis;
+    for axis in [Axis::Horizontal, Axis::Vertical] {
+        for (spacing, second) in [(0., 10.3), (0.1, 10.2)] {
+            let children = [
+                WrapChild::new(axis.size(10.1, 8.)),
+                WrapChild::new(axis.size(second, 8.)),
+            ];
+            let cross_offset = |available: f32| {
+                let size = axis.size(available, 80.);
+                let config = Wrap {
+                    direction: axis,
+                    spacing,
+                    ..Wrap::default()
+                };
+                let position =
+                    layout_wrap(Constraints::loose(size), &children, config).children[1].offset;
+                if axis.is_vertical() {
+                    position.x
+                } else {
+                    position.y
+                }
+            };
+            assert_eq!(cross_offset(20.4), 0.);
+            assert_eq!(cross_offset(20.4_f32.next_down()), 8.);
+        }
+    }
+}

@@ -279,6 +279,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- Wrap keeps fractional children together when they fit within coordinate
+  rounding, while still breaking the run at a genuine overflow.
+
 - Table flex columns use their share of the width budget even when cells
   prefer more space. Tables without flex columns grow to a tight minimum
   width. Layout skips the preliminary cell measurement when width does

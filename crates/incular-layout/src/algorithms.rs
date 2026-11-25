@@ -716,21 +716,32 @@ where
     let spacing = finite_non_negative(config.spacing);
     let run_spacing = finite_non_negative(config.run_spacing);
     let available_main = main_max(constraints, direction);
+    // RenderWrap compares double-precision extents with a small tolerance.
+    // Our input coordinates are f32, so avoid accumulating them in f32
+    // and allow half a representable step at the limit. A full step of
+    // genuine overflow must still start a new run.
+    let limit = f64::from(available_main);
+    let half_step = if available_main < f32::MAX {
+        (f64::from(available_main.next_up()) - limit) * 0.5
+    } else if available_main.is_finite() {
+        (limit - f64::from(available_main.next_down())) * 0.5
+    } else {
+        0.
+    };
+    let fit_limit = limit + half_step.max(1.0e-10);
     let mut runs: Vec<WrapRun> = Vec::new();
     let mut current = WrapRun::default();
     for (index, child) in children.iter().enumerate() {
-        let extent = direction.main_extent(child.size);
-        if !current.children.is_empty()
-            && available_main.is_finite()
-            && current.main + spacing + extent > available_main
-        {
+        let extent = f64::from(direction.main_extent(child.size));
+        let next_extent = current.main + f64::from(spacing) + extent;
+        if !current.children.is_empty() && next_extent > fit_limit {
             runs.push(std::mem::take(&mut current));
             current.children = index..index;
         }
         current.main = if current.children.is_empty() {
             extent
         } else {
-            current.main + spacing + extent
+            next_extent
         };
         current.cross = current.cross.max(direction.cross_extent(child.size));
         current.children.end = index + 1;
@@ -739,7 +750,7 @@ where
         runs.push(current);
     }
 
-    let natural_main = runs.iter().map(|run| run.main).fold(0.0, f32::max);
+    let natural_main = runs.iter().map(|run| run.main).fold(0.0, f64::max) as f32;
     let natural_cross = runs.iter().map(|run| run.cross).sum::<f32>()
         + run_spacing * runs.len().saturating_sub(1) as f32;
     let line_main = if main_min(constraints, direction) == main_max(constraints, direction) {
@@ -777,7 +788,7 @@ where
             run_index
         };
         let run = &runs[visual_run];
-        let remaining = (line_main - run.main).max(0.0);
+        let remaining = (f64::from(line_main) - run.main).max(0.) as f32;
         let (leading, extra) = wrap_distribution(
             config.alignment,
             remaining,
@@ -966,7 +977,7 @@ pub fn table_column_widths(
 #[derive(Clone, Debug, Default)]
 struct WrapRun {
     children: std::ops::Range<usize>,
-    main: f32,
+    main: f64,
     cross: f32,
 }
 

@@ -277,3 +277,12 @@ measurement is still a separate gap.
 
 Run the Dart `table_column_budget_test.dart` reference probe and
 `cargo test --locked -p incular-widgets --test layout_table`.
+
+### C05 current recheck
+
+The 10.1- and 10.3-pixel children now stay in one run at width 20.4.
+Both frameworks also match horizontal and vertical controls with a
+fractional 0.1 gap and a slightly narrower bound that really exceeds
+the available width. Incular sums f32 measurements in f64 and allows
+half a representable step at the line limit, rather than using a wide
+fixed epsilon. Both named Flutter exact/slight-overflow regressions pass.
