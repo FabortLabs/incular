@@ -95,3 +95,7 @@ Low-level dependency observers do not cut short the rest of a notification
 batch when a listener panics. On unwinding builds, `DependencySource::notify`
 resumes the first panic after delivery, or callers can use
 `notify_collecting_panics` to handle the original payloads themselves.
+
+For passive observer lists rather than reactive signals, see
+`incular::core::ObserverList` (all registrations) and
+`incular::core::HashedObserverList` (distinct values with registration counts).

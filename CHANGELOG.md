@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-core`: added ordered observer lists with Flutter's two duplicate
+  policies and a `clamp_double` helper that maps NaN to the upper bound.
+
 - `incular-animation` and `incular-runtime`: the UI scheduler can run
   short, prioritized tasks separately from background jobs. The default
   policy waits for animations before running idle-priority tasks.

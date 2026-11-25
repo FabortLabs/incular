@@ -28,3 +28,18 @@ writes, a removed subscription, tracked reads, and real retained
 ListenableBuilder output changing width only on unequal values.
 All 23 selected core and widget tests pass. Rust listeners are
 owned subscriptions; dropping a subscription unregisters it.
+
+## Observer collections and numeric clamp
+
+Both original `foundation/observer_list_test.dart` registrations (:9, :26)
+pair insertion order, reverse removal, and the hashed list's reference
+counts: ten adds of one value yield one distinct item that survives nine
+removals. Additional Rust controls cover removal and reinsertion order
+and slot reuse across 700 registrations. The hashed list uses the existing
+Arena and a standard map; no benchmark is claimed.
+
+The exact `foundation/math_test.dart:9` `clampDouble` registration pairs
+all five results, including both infinities and NaN mapping to the upper
+bound. Additional checks preserve signed zero and reject unordered/NaN
+bounds with a Rust typed error. Three selected Flutter originals and
+ten focused Rust checks pass; existing physics clamping is unchanged.

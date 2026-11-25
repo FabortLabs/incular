@@ -12,7 +12,9 @@ mod id;
 /// retained widget-key trait.
 pub mod input;
 mod key;
+mod math;
 pub mod memory;
+mod observer_list;
 pub mod reactivity;
 mod restoration;
 pub mod time;
@@ -35,6 +37,8 @@ pub use input::{
     WindowResizeDirection, additional_pointer_button_mask,
 };
 pub use key::{Key, KeyHandle, KeyId, KeyObject, LocalKey, StringKey, UniqueKey, ValueKey};
+pub use math::{InvalidClampBounds, clamp_double, try_clamp_double};
+pub use observer_list::{HashedObserverList, ObserverList};
 pub use restoration::{RestorationBackend, RestorationKey, RestorationKeyError, RestorationScope};
 pub use value_notifier::ValueNotifier;
 pub use widget::{BuildableWidget, Widget};

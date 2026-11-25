@@ -809,3 +809,6 @@ packages/flutter/test/scheduler/priority_test.dart	9	Priority operators control 
 packages/flutter/test/scheduler/binding_test.dart	29	debugAssertNoTimeDilation does not throw if time dilate already reset	paired-match	scheduler-callback-phases-comparisons.md#time-dilation-assertions
 packages/flutter/test/scheduler/binding_test.dart	35	debugAssertNoTimeDilation throw if time dilate not reset	paired-match	scheduler-callback-phases-comparisons.md#time-dilation-assertions
 packages/flutter/test/scheduler/scheduler_test.dart	74	Tasks are executed in the right order	paired-match	scheduler-callback-phases-comparisons.md#prioritized-ui-thread-work
+packages/flutter/test/foundation/observer_list_test.dart	9	ObserverList	paired-match	upstream-foundation-scroll-comparisons.md#observer-collections-and-numeric-clamp
+packages/flutter/test/foundation/observer_list_test.dart	26	HashedObserverList	paired-match	upstream-foundation-scroll-comparisons.md#observer-collections-and-numeric-clamp
+packages/flutter/test/foundation/math_test.dart	9	clampDouble	paired-match	upstream-foundation-scroll-comparisons.md#observer-collections-and-numeric-clamp

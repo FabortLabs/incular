@@ -36,3 +36,14 @@ In an unwinding build, `DependencySource::notify` calls remaining live
 observers before resuming the first panic. With
 `notify_collecting_panics`, callers receive all original payloads in
 listener order and decide how to report them.
+
+### Foundation values
+
+`ObserverList` iterates every registration in order. `HashedObserverList`
+iterates distinct values in first-registration order while counting
+duplicates until each registration has been removed. Both are passive
+collections, separate from reactive dependency tracking.
+
+`clamp_double(value, lower, upper)` matches Flutter's inclusive numeric
+clamp, including mapping NaN to the upper bound. Use `try_clamp_double`
+when the interval might have unordered or NaN bounds.
