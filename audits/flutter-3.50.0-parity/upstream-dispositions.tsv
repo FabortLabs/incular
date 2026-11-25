@@ -1392,3 +1392,7 @@ packages/flutter/test/services/message_codecs_test.dart	182	should encode sizes 
 packages/flutter/test/services/message_codecs_test.dart	208	should encode and decode simple messages	paired-match	upstream-standard-message-codecs.md#standard-message-values
 packages/flutter/test/services/message_codecs_test.dart	223	should encode and decode composite message	paired-match	upstream-standard-message-codecs.md#standard-message-values
 packages/flutter/test/services/message_codecs_test.dart	265	should align doubles to 8 bytes	paired-match	upstream-standard-message-codecs.md#standard-message-values
+packages/flutter/test/services/message_codecs_test.dart	50	Should encode and decode objects produced from codec	paired-match	upstream-standard-message-codecs.md#standard-method-calls-and-envelopes
+packages/flutter/test/services/message_codecs_test.dart	56	should decode error envelope without native stacktrace	paired-match	upstream-standard-message-codecs.md#standard-method-calls-and-envelopes
+packages/flutter/test/services/message_codecs_test.dart	73	should decode error envelope with native stacktrace.	paired-match	upstream-standard-message-codecs.md#standard-method-calls-and-envelopes
+packages/flutter/test/services/message_codecs_test.dart	87	should allow null error message,	paired-match	upstream-standard-message-codecs.md#standard-method-calls-and-envelopes

@@ -18,3 +18,13 @@ Rust keeps ordered map entries instead of normalizing arbitrary Dart
 key equality, bounds nesting, and checks requested lengths before
 allocating. Dart subclass extension tags and web number coercions are
 not claimed.
+
+## Standard method calls and envelopes
+
+The four exact `Standard method codec` registrations passed on pinned
+Flutter, and both focused Rust codec targets passed (12 tests total).
+The tests preserve mixed string/integer map keys, error code/message/details,
+no message, and an optional native stack trace read directly from bytes.
+The native target separately tests aligned arguments, a null success reply,
+and malformed call/envelope fields. This is a codec API only; it does not
+add a service transport or Dart's codec subclassing mechanism.

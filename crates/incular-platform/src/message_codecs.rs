@@ -111,10 +111,7 @@ impl StandardMessageCodec {
                 buffer.put_uint8(FLOAT64)?;
                 buffer.put_float64(*value)?;
             }
-            MessageValue::String(value) => {
-                write_prefix(buffer, STRING, value.len())?;
-                buffer.put_uint8_list(value.as_bytes())?;
-            }
+            MessageValue::String(value) => write_string(buffer, value)?,
             MessageValue::Bytes(value) => {
                 write_prefix(buffer, BYTES, value.len())?;
                 buffer.put_uint8_list(value)?;
@@ -253,4 +250,132 @@ fn checked_slots(
         return Err(MessageCodecError::InvalidLength);
     }
     Ok(length)
+}
+
+/// A callable platform method and its argument, which may be null.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MethodCall {
+    pub method: String,
+    pub arguments: MessageValue,
+}
+
+/// An error replied to a method call by the platform.
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+#[error("platform method failed with code {code}: {message:?}")]
+pub struct PlatformException {
+    pub code: String,
+    pub message: Option<String>,
+    pub details: MessageValue,
+    pub stacktrace: Option<String>,
+}
+
+#[derive(Debug, PartialEq, thiserror::Error)]
+pub enum MethodCodecError {
+    #[error(transparent)]
+    Message(#[from] MessageCodecError),
+    #[error("the encoded method call is malformed")]
+    InvalidMethodCall,
+    #[error("the encoded reply envelope is malformed")]
+    InvalidEnvelope,
+    #[error(transparent)]
+    Platform(Box<PlatformException>),
+}
+
+impl From<BufferError> for MethodCodecError {
+    fn from(error: BufferError) -> Self {
+        MessageCodecError::from(error).into()
+    }
+}
+
+/// Flutter's standard layout for platform method calls and reply envelopes.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct StandardMethodCodec;
+
+impl StandardMethodCodec {
+    pub fn encode_method_call(call: &MethodCall) -> Result<Vec<u8>, MethodCodecError> {
+        let mut buffer = WriteBuffer::new();
+        write_string(&mut buffer, &call.method)?;
+        StandardMessageCodec::write_value(&mut buffer, &call.arguments, 0)?;
+        Ok(buffer.done()?)
+    }
+
+    pub fn decode_method_call(data: &[u8]) -> Result<MethodCall, MethodCodecError> {
+        let mut buffer = ReadBuffer::new(data);
+        let method = StandardMessageCodec::read_value(&mut buffer, 0)?;
+        let arguments = StandardMessageCodec::read_value(&mut buffer, 0)?;
+        let MessageValue::String(method) = method else {
+            return Err(MethodCodecError::InvalidMethodCall);
+        };
+        if buffer.has_remaining() {
+            return Err(MethodCodecError::InvalidMethodCall);
+        }
+        Ok(MethodCall { method, arguments })
+    }
+
+    pub fn encode_success_envelope(value: &MessageValue) -> Result<Vec<u8>, MethodCodecError> {
+        let mut buffer = WriteBuffer::new();
+        buffer.put_uint8(0)?;
+        StandardMessageCodec::write_value(&mut buffer, value, 0)?;
+        Ok(buffer.done()?)
+    }
+
+    pub fn encode_error_envelope(error: &PlatformException) -> Result<Vec<u8>, MethodCodecError> {
+        let mut buffer = WriteBuffer::new();
+        buffer.put_uint8(1)?;
+        write_string(&mut buffer, &error.code)?;
+        if let Some(message) = &error.message {
+            write_string(&mut buffer, message)?;
+        } else {
+            buffer.put_uint8(NULL)?;
+        }
+        StandardMessageCodec::write_value(&mut buffer, &error.details, 0)?;
+        if let Some(stacktrace) = &error.stacktrace {
+            write_string(&mut buffer, stacktrace)?;
+        }
+        Ok(buffer.done()?)
+    }
+
+    pub fn decode_envelope(data: &[u8]) -> Result<MessageValue, MethodCodecError> {
+        if data.is_empty() {
+            return Err(MethodCodecError::InvalidEnvelope);
+        }
+        let mut buffer = ReadBuffer::new(data);
+        if buffer.get_uint8()? == 0 {
+            // Flutter permits additional bytes after the successful value.
+            return Ok(StandardMessageCodec::read_value(&mut buffer, 0)?);
+        }
+        let MessageValue::String(code) = StandardMessageCodec::read_value(&mut buffer, 0)? else {
+            return Err(MethodCodecError::InvalidEnvelope);
+        };
+        let message = read_optional_string(&mut buffer)?;
+        let details = StandardMessageCodec::read_value(&mut buffer, 0)?;
+        let stacktrace = if buffer.has_remaining() {
+            read_optional_string(&mut buffer)?
+        } else {
+            None
+        };
+        if buffer.has_remaining() {
+            return Err(MethodCodecError::InvalidEnvelope);
+        }
+        Err(MethodCodecError::Platform(Box::new(PlatformException {
+            code,
+            message,
+            details,
+            stacktrace,
+        })))
+    }
+}
+
+fn write_string(buffer: &mut WriteBuffer, value: &str) -> Result<(), MessageCodecError> {
+    write_prefix(buffer, STRING, value.len())?;
+    buffer.put_uint8_list(value.as_bytes())?;
+    Ok(())
+}
+
+fn read_optional_string(buffer: &mut ReadBuffer<'_>) -> Result<Option<String>, MethodCodecError> {
+    match StandardMessageCodec::read_value(buffer, 0)? {
+        MessageValue::String(value) => Ok(Some(value)),
+        MessageValue::Null => Ok(None),
+        _ => Err(MethodCodecError::InvalidEnvelope),
+    }
 }
