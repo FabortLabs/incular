@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{cell::Cell, rc::Rc};
 
 use crate::{
     controller::ScrollController,
@@ -136,6 +136,7 @@ pub struct MetricAttachment {
     controller: ScrollController,
     id: u64,
     tree: u64,
+    announced: Cell<bool>,
 }
 
 impl Drop for MetricAttachment {
@@ -164,6 +165,7 @@ impl MetricAttachment {
             controller,
             id,
             tree,
+            announced: Cell::new(false),
         }
     }
 
@@ -210,6 +212,14 @@ impl MetricAttachment {
         Ok(())
     }
 
+    /// Notifies the controller only after the widget tree owns this lease.
+    #[doc(hidden)]
+    pub fn announce_attached(&self) {
+        if self.controller.attachment_id() == Some(self.id) && !self.announced.replace(true) {
+            self.controller.notify_viewport_lifecycle(true);
+        }
+    }
+
     /// Makes page reads available after this viewport successfully laid out its content.
     #[doc(hidden)]
     pub fn finish_initial_page_layout(&self) {
@@ -247,6 +257,9 @@ impl MetricAttachment {
     /// close another owner's activity. Framework-internal.
     #[doc(hidden)]
     pub fn detach(&self) {
+        if self.announced.replace(false) && self.controller.attachment_id() == Some(self.id) {
+            self.controller.notify_viewport_lifecycle(false);
+        }
         if self.release() {
             self.controller.end_activity();
         }

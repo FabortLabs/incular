@@ -94,11 +94,20 @@ pub struct ScrollAnimation {
     pub curve: incular_animation::Curve,
 }
 
+type ViewportLifecycleCallback = Rc<dyn Fn(&ScrollController)>;
+
+#[derive(Clone, Default)]
+struct ViewportLifecycle {
+    on_attach: Option<ViewportLifecycleCallback>,
+    on_detach: Option<ViewportLifecycleCallback>,
+}
+
 /// Cloneable state for a logical vertical scroll position.
 #[derive(Clone)]
 pub struct ScrollController {
     pub(crate) changes: incular_core::reactivity::DependencySource,
     pub(crate) state: Rc<RefCell<ScrollState>>,
+    lifecycle: Option<Rc<ViewportLifecycle>>,
 }
 impl std::fmt::Debug for ScrollController {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -124,10 +133,10 @@ impl Default for ScrollController {
             keep_scroll_offset: true,
             ..ScrollState::default()
         };
-        Self {
-            state: Rc::new(RefCell::new(state)),
-            changes: incular_core::reactivity::DependencySource::default(),
-        }
+        Self::from_shared_position(
+            Rc::new(RefCell::new(state)),
+            incular_core::reactivity::DependencySource::default(),
+        )
     }
 }
 
@@ -508,6 +517,58 @@ impl ScrollController {
             true
         } else {
             false
+        }
+    }
+
+    /// Creates a position-only coordination handle, without mount callbacks.
+    pub(crate) fn from_shared_position(
+        state: Rc<RefCell<ScrollState>>,
+        changes: incular_core::reactivity::DependencySource,
+    ) -> Self {
+        Self {
+            state,
+            changes,
+            lifecycle: None,
+        }
+    }
+
+    /// Registers the callback invoked when a viewport attaches to this handle.
+    /// Configure before mounting the view. Content extents for a fresh
+    /// position may not be available yet.
+    #[must_use]
+    pub fn with_on_attach(mut self, callback: impl Fn(&Self) + 'static) -> Self {
+        Rc::make_mut(self.lifecycle.get_or_insert_with(Rc::default)).on_attach =
+            Some(Rc::new(callback));
+        self
+    }
+
+    /// Registers the callback invoked just before a mounted viewport
+    /// detaches, while its controller still exposes the position.
+    /// Configure before mounting the view. Silent destruction of a widget
+    /// tree does not invoke application callbacks.
+    #[must_use]
+    pub fn with_on_detach(mut self, callback: impl Fn(&Self) + 'static) -> Self {
+        Rc::make_mut(self.lifecycle.get_or_insert_with(Rc::default)).on_detach =
+            Some(Rc::new(callback));
+        self
+    }
+
+    /// Whether a live viewport currently uses this controller.
+    #[must_use]
+    pub fn has_clients(&self) -> bool {
+        self.state.borrow().metric_attachment.is_some()
+    }
+
+    pub(crate) fn notify_viewport_lifecycle(&self, attached: bool) {
+        if let Some(lifecycle) = &self.lifecycle {
+            let callback = if attached {
+                &lifecycle.on_attach
+            } else {
+                &lifecycle.on_detach
+            };
+            if let Some(callback) = callback {
+                callback(self);
+            }
         }
     }
 

@@ -2002,6 +2002,7 @@ impl WidgetTree {
                     detached.detach();
                 }
             }
+            self.announce_viewport_attachments(element);
             return Ok(());
         }
         // Fresh attach: this element held no lease.
@@ -2010,6 +2011,7 @@ impl WidgetTree {
         {
             Ok(attachment) => {
                 self.scroll_attachments.insert(element, vec![attachment]);
+                self.announce_viewport_attachments(element);
                 Ok(())
             }
             Err(conflict) => Err(self.attachment_conflict(conflict, element)),
@@ -2109,7 +2111,16 @@ impl WidgetTree {
         for stale in stored {
             stale.detach();
         }
+        self.announce_viewport_attachments(element);
         Ok(())
+    }
+
+    fn announce_viewport_attachments(&self, element: ElementId) {
+        if let Some(leases) = self.scroll_attachments.get(&element) {
+            for lease in leases {
+                lease.announce_attached();
+            }
+        }
     }
 
     /// Finds an unconsumed stored lease driving `controller`, if any.

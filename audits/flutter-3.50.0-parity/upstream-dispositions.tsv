@@ -627,7 +627,7 @@ packages/flutter/test/widgets/page_view_test.dart	1104	PageView can participate 
 packages/flutter/test/widgets/page_view_test.dart	1173	PageView respects clipBehavior	partial-match	upstream-page-view-boundaries.md
 packages/flutter/test/widgets/page_view_test.dart	1207	PageView.padEnds tests	partial-match	upstream-page-view-boundaries.md
 packages/flutter/test/widgets/page_view_test.dart	1223	PageView - precision error inside RenderSliverFixedExtentBoxAdaptor	partial-match	upstream-page-view-boundaries.md
-packages/flutter/test/widgets/page_view_test.dart	1304	PageController onAttach, onDetach	reference-ran-incular-open	upstream-page-view-boundaries.md
+packages/flutter/test/widgets/page_view_test.dart	1304	PageController onAttach, onDetach	paired-match	upstream-page-view-boundaries.md
 packages/flutter/test/widgets/page_view_test.dart	1384	null to value	paired-match	upstream-page-view-boundaries.md
 packages/flutter/test/widgets/page_view_test.dart	1392	value to value	partial-match	upstream-page-view-boundaries.md
 packages/flutter/test/widgets/page_view_test.dart	1404	value to null	partial-match	upstream-page-view-boundaries.md

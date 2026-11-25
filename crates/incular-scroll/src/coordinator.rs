@@ -136,10 +136,10 @@ impl WeakController {
     }
 
     fn upgrade(&self) -> Option<ScrollController> {
-        Some(ScrollController {
-            state: self.state.upgrade()?,
-            changes: self.changes.clone(),
-        })
+        Some(ScrollController::from_shared_position(
+            self.state.upgrade()?,
+            self.changes.clone(),
+        ))
     }
 
     fn is(&self, controller: &ScrollController) -> bool {

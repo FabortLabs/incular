@@ -1128,6 +1128,22 @@ impl PageController {
         self.scroll.clone()
     }
 
+    /// Invokes the callback when this controller first attaches to a
+    /// mounted PageView, before the fresh position has content dimensions.
+    #[must_use]
+    pub fn with_on_attach(mut self, callback: impl Fn(&ScrollController) + 'static) -> Self {
+        self.scroll = self.scroll.with_on_attach(callback);
+        self
+    }
+
+    /// Invokes the callback before a mounted PageView releases this
+    /// controller. It can still inspect the position during the callback.
+    #[must_use]
+    pub fn with_on_detach(mut self, callback: impl Fn(&ScrollController) + 'static) -> Self {
+        self.scroll = self.scroll.with_on_detach(callback);
+        self
+    }
+
     /// Flutter `PageController.initialPage`: the page the view starts on.
     #[must_use]
     pub fn with_initial_page(mut self, page: usize) -> Self {

@@ -7,7 +7,7 @@ All eleven pinned originals selected here pass. Rust boundary target passes 3/3;
 - :1173 partial: the same retained viewport reports default HardEdge and updated AntiAlias, and its recorded rectangular clip disappears when disabled. Rust diagnostics plus display list recording do not reproduce the reference painting-context mode callback or certify rectangular antialiasing pixels.
 - :1207 partial: the default half-fraction page starts at x=200 with end insets, then x=0 when padEnds(false) is repumped. This is actual geometry corresponding to Dart's inspected SliverFillViewport property.
 - :1223 partial: the nearest f32 width to 392.72727272727275 allows initial page 152 and a jump to final page 365 of 366 without exceptions. This does not certify the exact f64 arithmetic path.
-- :1304 reference only. Flutter's controller exposes explicit onAttach/onDetach hooks; no corresponding public Incular hook was found.
+- :1304 matches. Controller attach and detach callbacks fire exactly once on mount and explicit removal, respectively.
 
 ## Retained controllers
 
@@ -100,3 +100,14 @@ Tapping the rendered trigger rebuilds the same view and shows the
 non-null branch. The existing zero-extent, controller-handoff, gesture,
 cache, and lifecycle fixtures still pass. A separate lease test verifies
 a stale attachment cannot expose a new viewport's provisional page.
+
+## PageController attachment callbacks
+
+The pinned `:1304` original and authored replacement test both pass.
+Rebuilding with the same controller produces no extra callbacks. A
+swap detaches the outgoing controller before announcing the incoming
+one and retains the selected page. Removing the view detaches the
+replacement, and remounting starts from the controller's initial page.
+The native lease test covers duplicate claims, stale detach, and
+intentional silent tree teardown. The Rust callback receives its
+ScrollController handle; it does not expose a Dart ScrollPosition.

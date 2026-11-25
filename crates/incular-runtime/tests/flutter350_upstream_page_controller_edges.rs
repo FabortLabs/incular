@@ -302,3 +302,62 @@ fn cold_default_page_view_does_not_materialize_or_report_full_offscreen_pages() 
     });
     assert_eq!(actual, [(true, true), (false, false), (false, false)]);
 }
+
+#[test]
+fn controller_attachment_hooks_follow_the_live_position_across_rebuild_swap_and_remount() {
+    let observed = Rc::new(RefCell::new(Vec::new()));
+    let create = |name| {
+        PageController::new()
+            .with_on_attach({
+                let observed = observed.clone();
+                move |position| {
+                    assert!(position.has_clients());
+                    observed.borrow_mut().push((true, name));
+                }
+            })
+            .with_on_detach({
+                let observed = observed.clone();
+                move |position| {
+                    assert!(position.has_clients());
+                    observed.borrow_mut().push((false, name));
+                }
+            })
+    };
+    let first = create("a");
+    let second = create("b");
+    let mut runtime = mounted(Some(&first));
+    assert_eq!(&*observed.borrow(), &[(true, "a")]);
+    replace(&mut runtime, show(Some(&first)));
+    assert!(first.jump_to_page(1));
+    frame(&mut runtime);
+    assert_eq!(&*observed.borrow(), &[(true, "a")]);
+
+    replace(&mut runtime, show(Some(&second)));
+    assert!(!first.has_clients());
+    assert_eq!(second.page(), Some(1.));
+    assert_eq!(
+        &*observed.borrow(),
+        &[(true, "a"), (false, "a"), (true, "b")]
+    );
+    replace(
+        &mut runtime,
+        Directionality::new(TextDirection::Ltr, incular_widgets::SizedBox::shrink()).into(),
+    );
+    assert!(!second.has_clients());
+    assert_eq!(
+        &*observed.borrow(),
+        &[(true, "a"), (false, "a"), (true, "b"), (false, "b")]
+    );
+    replace(&mut runtime, show(Some(&first)));
+    assert_eq!(first.page(), Some(0.));
+    assert_eq!(
+        &*observed.borrow(),
+        &[
+            (true, "a"),
+            (false, "a"),
+            (true, "b"),
+            (false, "b"),
+            (true, "a")
+        ]
+    );
+}

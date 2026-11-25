@@ -690,3 +690,40 @@ fn fresh_page_geometry_is_private_until_the_live_attachment_finishes_layout() {
     next.finish_initial_page_layout();
     assert_eq!(controller.page_for_controller(1.), Some(0.));
 }
+
+#[test]
+fn viewport_callbacks_are_lease_scoped_and_silent_during_teardown() {
+    let attaches = Rc::new(Cell::new(0));
+    let detaches = Rc::new(Cell::new(0));
+    let controller = ScrollController::new()
+        .with_on_attach({
+            let attaches = attaches.clone();
+            move |position| {
+                assert!(position.has_clients());
+                attaches.set(attaches.get() + 1);
+            }
+        })
+        .with_on_detach({
+            let detaches = detaches.clone();
+            move |position| {
+                assert!(position.has_clients());
+                detaches.set(detaches.get() + 1);
+            }
+        });
+
+    let first = controller.try_attach(owner(1)).unwrap();
+    first.announce_attached();
+    first.announce_attached();
+    assert!(controller.try_attach(owner(2)).is_err());
+    assert_eq!((attaches.get(), detaches.get()), (1, 0));
+
+    first.detach();
+    let second = controller.try_attach(owner(2)).unwrap();
+    second.announce_attached();
+    first.detach();
+    assert!(controller.has_clients());
+    assert_eq!((attaches.get(), detaches.get()), (2, 1));
+    drop(second);
+    assert!(!controller.has_clients());
+    assert_eq!((attaches.get(), detaches.get()), (2, 1));
+}

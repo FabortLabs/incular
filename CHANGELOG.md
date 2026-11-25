@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- ScrollController and PageController expose viewport attachment and
+  detachment callbacks and a live-client check.
+
 - PageView scroll notifications expose immutable page metrics and
   support copying a snapshot with changed fields.
 
