@@ -17,7 +17,7 @@ pub use alignment::{
     FractionalOffset, MainAxisAlignment, MainAxisSize, StackFit, TextDirection, VerticalDirection,
     WrapAlignment, WrapCrossAlignment,
 };
-pub use constraints::{ConstraintError, Constraints};
+pub use constraints::{ConstraintError, Constraints, ViewConstraints};
 pub use defaults::{ApplicationDefaults, TransparencyMode, WidgetDefaults, WindowSizePolicy};
 pub use environment::{
     Brightness, ContentSensitivity, DeviceGestureSettings, DisplayFeature, DisplayFeatureState,

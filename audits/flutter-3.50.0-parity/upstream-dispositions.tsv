@@ -67,7 +67,7 @@ packages/flutter/test/painting/border_side_test.dart	79	BorderSide - scale	paire
 packages/flutter/test/painting/border_side_test.dart	109	BorderSide - won't lerp into negative widths	paired-mismatch	upstream-border-constraints-formatters.md
 packages/flutter/test/painting/border_side_test.dart	126	BorderSide - lerp with strokeAlign	paired-match	upstream-border-constraints-formatters.md
 packages/flutter/test/painting/border_test.dart	27	Border.symmetric constructor	partial-mismatch	upstream-border-constraints-formatters.md
-packages/flutter/test/rendering/box_constraints_test.dart	17	BoxConstraints copyWith	partial-match	upstream-border-constraints-formatters.md
+packages/flutter/test/rendering/box_constraints_test.dart	17	BoxConstraints copyWith	partial-match	upstream-border-constraints-formatters.md#layout-bound-arithmetic-and-view-conversion
 packages/flutter/test/rendering/box_constraints_test.dart	60	BoxConstraints lerp	paired-match	upstream-border-constraints-formatters.md#constraint-interpolation-repair
 packages/flutter/test/rendering/box_constraints_test.dart	134	BoxConstraints lerp with overshooting t is normalized	paired-match	upstream-border-constraints-formatters.md#constraint-interpolation-repair
 packages/flutter/test/rendering/box_test.dart	755	UnconstrainedBox honors constrainedAxis=Axis.horizontal	paired-match	upstream-border-constraints-formatters.md
@@ -145,9 +145,9 @@ packages/flutter/test/widgets/focus_scope_test.dart	1562	descendantsAreFocusable
 packages/flutter/test/animation/animations_test.dart	414	TweenSequence	paired-match	upstream-focus-policy-tween-dtd.md
 packages/flutter/test/animation/animations_test.dart	441	TweenSequence with curves	paired-match	upstream-focus-policy-tween-dtd.md
 packages/flutter/test/animation/animations_test.dart	484	TweenSequence, one tween	paired-match	upstream-focus-policy-tween-dtd.md
-packages/flutter/test/rendering/box_constraints_test.dart	95	BoxConstraints lerp with unbounded width	reference-ran-incular-open	upstream-focus-policy-tween-dtd.md
-packages/flutter/test/rendering/box_constraints_test.dart	114	BoxConstraints lerp with unbounded height	reference-ran-incular-open	upstream-focus-policy-tween-dtd.md
-packages/flutter/test/rendering/box_constraints_test.dart	121	BoxConstraints lerp from bounded to unbounded	reference-ran-incular-open	upstream-focus-policy-tween-dtd.md
+packages/flutter/test/rendering/box_constraints_test.dart	95	BoxConstraints lerp with unbounded width	partial-match	upstream-border-constraints-formatters.md#layout-bound-arithmetic-and-view-conversion
+packages/flutter/test/rendering/box_constraints_test.dart	114	BoxConstraints lerp with unbounded height	partial-match	upstream-border-constraints-formatters.md#layout-bound-arithmetic-and-view-conversion
+packages/flutter/test/rendering/box_constraints_test.dart	121	BoxConstraints lerp from bounded to unbounded	partial-match	upstream-border-constraints-formatters.md#layout-bound-arithmetic-and-view-conversion
 packages/flutter_tools/test/commands.shard/hermetic/widget_preview/dtd_services_test.dart	147	concurrent calls to getFlutterWidgetPreviews do not throw stream already subscribed	reference-ran-incular-open	upstream-focus-policy-tween-dtd.md
 packages/flutter_tools/test/commands.shard/hermetic/widget_preview/dtd_services_test.dart	230	waits for Lsp initialized event when only a subset of required Lsp methods are registered	reference-ran-incular-open	upstream-focus-policy-tween-dtd.md
 packages/flutter_tools/test/commands.shard/hermetic/widget_preview/dtd_services_test.dart	271	proceeds without waiting for event when all required Lsp methods are already registered	reference-ran-incular-open	upstream-focus-policy-tween-dtd.md
@@ -958,3 +958,5 @@ packages/flutter/test/painting/rounded_superellipse_border_test.dart	198	Rounded
 packages/flutter/test/painting/border_test.dart	61	Border.add	paired-match	upstream-border-constraints-formatters.md#physical-border-addition
 packages/flutter/test/painting/circle_border_test.dart	17	CircleBorder getInnerPath and getOuterPath	paired-match	upstream-border-constraints-formatters.md#circle-and-oval-paths
 packages/flutter/test/painting/oval_border_test.dart	21	OvalBorder	paired-match	upstream-border-constraints-formatters.md#circle-and-oval-paths
+packages/flutter/test/rendering/box_constraints_test.dart	35	BoxConstraints operators	paired-match	upstream-border-constraints-formatters.md#layout-bound-arithmetic-and-view-conversion
+packages/flutter/test/rendering/box_constraints_test.dart	200	BoxConstraints.fromViewConstraints	paired-match	upstream-border-constraints-formatters.md#layout-bound-arithmetic-and-view-conversion

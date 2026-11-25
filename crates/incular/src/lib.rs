@@ -102,7 +102,8 @@ pub mod prelude {
         InputCapabilities, Locale, LocaleResolver, LocalizationCatalog, LocalizationError,
         LocalizedMessage, MainAxisAlignment, MainAxisSize, PluralCategory, PluralForms,
         RuntimeEnvironment, TextDirection, TransientPresentation, TransientRole, TransparencyMode,
-        VerticalDirection, WidgetDefaults, WindowSizePolicy, WrapAlignment, WrapCrossAlignment,
+        VerticalDirection, ViewConstraints, WidgetDefaults, WindowSizePolicy, WrapAlignment,
+        WrapCrossAlignment,
     };
     pub use incular_core::{
         BACK_POINTER_BUTTON, ChangeImpact, ChangeNotifier, ChangeNotifierSubscription, Code, Color,

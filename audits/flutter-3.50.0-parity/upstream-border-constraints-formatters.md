@@ -277,3 +277,26 @@ exact top-center vertex of the oval's inner path was excluded by
 the winding test. The fallback includes existing extremal joins of a
 single closed filled contour; it does not extend the shape to nearby
 points or turn cancelling even-odd contours into a fill.
+
+## Layout-bound arithmetic and view conversion
+
+Pinned `rendering/box_constraints_test.dart:35` matches all four
+finite arithmetic operations (including division truncated toward
+zero and Euclidean remainder) on all four bounds. Rust rejects
+arithmetic that would create invalid layout bounds; it does not
+admit an uninvertible range just to store the Dart intermediate.
+
+Pinned `:200` matches default-unbounded and finite host-view
+conversion. The authored paired retained check actually sizes a
+child to (2,3), then to (5,6), without replacing the child when
+the view bounds change. Copy-with values at `:17` now match; no
+Dart hash value or hash inequality is claimed.
+
+For `:95` and `:114`, the unbounded maximum and interpolation in
+the other axis match, but the original uses a tight infinite
+minimum. Rust deliberately excludes that value from layout
+constraints. For `:121`, the new checked interpolation rejects
+finite/infinite changes in either direction; the infallible
+animation trait keeps its existing nearer-endpoint fallback.
+The exact Dart assertion and its tight-infinite endpoints
+therefore remain unpaired.

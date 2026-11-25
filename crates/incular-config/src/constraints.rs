@@ -1,6 +1,66 @@
 //! Box constraints shared by all pure layout algorithms.
 
 use incular_core::{Lerp, Size};
+use std::ops::{Div, Mul, Rem};
+
+/// Raw host-view size bounds, before they are admitted to the finite-minimum
+/// layout model. Unspecified width and height are unconstrained.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ViewConstraints {
+    pub min_width: f32,
+    pub max_width: f32,
+    pub min_height: f32,
+    pub max_height: f32,
+}
+
+impl ViewConstraints {
+    #[must_use]
+    pub const fn new(min_width: f32, max_width: f32, min_height: f32, max_height: f32) -> Self {
+        Self {
+            min_width,
+            max_width,
+            min_height,
+            max_height,
+        }
+    }
+
+    #[must_use]
+    pub const fn tight(size: Size) -> Self {
+        Self::new(size.width, size.width, size.height, size.height)
+    }
+
+    #[must_use]
+    pub const fn is_tight(self) -> bool {
+        self.min_width >= self.max_width && self.min_height >= self.max_height
+    }
+
+    #[must_use]
+    pub fn is_satisfied_by(self, size: Size) -> bool {
+        self.min_width <= size.width
+            && size.width <= self.max_width
+            && self.min_height <= size.height
+            && size.height <= self.max_height
+    }
+}
+
+impl Default for ViewConstraints {
+    fn default() -> Self {
+        Self::new(0., f32::INFINITY, 0., f32::INFINITY)
+    }
+}
+
+impl Div<f32> for ViewConstraints {
+    type Output = Self;
+
+    fn div(self, factor: f32) -> Self {
+        Self::new(
+            self.min_width / factor,
+            self.max_width / factor,
+            self.min_height / factor,
+            self.max_height / factor,
+        )
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ConstraintError {
@@ -14,7 +74,47 @@ pub struct Constraints {
     min_height: f32,
     max_height: f32,
 }
+impl Default for Constraints {
+    fn default() -> Self {
+        Self::at_most(f32::INFINITY, f32::INFINITY)
+    }
+}
+
+impl TryFrom<ViewConstraints> for Constraints {
+    type Error = ConstraintError;
+
+    fn try_from(view: ViewConstraints) -> Result<Self, Self::Error> {
+        Self::try_new(
+            view.min_width,
+            view.max_width,
+            view.min_height,
+            view.max_height,
+        )
+    }
+}
+
+impl From<Constraints> for ViewConstraints {
+    fn from(value: Constraints) -> Self {
+        Self::new(
+            value.min_width,
+            value.max_width,
+            value.min_height,
+            value.max_height,
+        )
+    }
+}
+
 impl Constraints {
+    /// Flutter's BoxConstraints.fromViewConstraints, with layout-bound
+    /// validation. Use the fallible conversion for untrusted host values.
+    ///
+    /// # Panics
+    /// Panics if the host bounds cannot be used for layout.
+    #[must_use]
+    pub fn from_view_constraints(view: ViewConstraints) -> Self {
+        Self::try_from(view).expect("invalid view constraints")
+    }
+
     /// Constructs validated bounds.
     ///
     /// # Panics
@@ -95,6 +195,26 @@ impl Constraints {
     pub fn at_most(max_width: f32, max_height: f32) -> Self {
         Self::new(0., max_width, 0., max_height)
     }
+    /// Copies the provided bounds, leaving unspecified fields unchanged.
+    ///
+    /// # Panics
+    /// Panics if the resulting measures are not valid layout bounds.
+    #[must_use]
+    pub fn copy_with(
+        self,
+        min_width: Option<f32>,
+        max_width: Option<f32>,
+        min_height: Option<f32>,
+        max_height: Option<f32>,
+    ) -> Self {
+        Self::new(
+            min_width.unwrap_or(self.min_width),
+            max_width.unwrap_or(self.max_width),
+            min_height.unwrap_or(self.min_height),
+            max_height.unwrap_or(self.max_height),
+        )
+    }
+
     /// These bounds with a new maximum width (Flutter's
     /// `copyWith(maxWidth:)`); the minimum shrinks to fit under it.
     #[must_use]
@@ -267,6 +387,58 @@ impl Constraints {
         }
     }
 
+    /// Divides each bound and truncates toward zero, Flutter's BoxConstraints
+    /// truncating division.
+    ///
+    /// # Panics
+    /// Panics if the result is not valid finite-minimum layout bounds.
+    #[must_use]
+    pub fn truncating_div(self, factor: f32) -> Self {
+        self.map_bounds(|value| {
+            let divided = value / factor;
+            assert!(
+                divided.is_finite(),
+                "truncating division requires finite results"
+            );
+            divided.trunc()
+        })
+    }
+
+    fn map_bounds(self, map: impl Fn(f32) -> f32) -> Self {
+        Self::new(
+            map(self.min_width),
+            map(self.max_width),
+            map(self.min_height),
+            map(self.max_height),
+        )
+    }
+
+    /// Checked interpolation rejects mixed finite/infinite maxima before
+    /// a tween can enter layout. Use trait Lerp for an animation that must
+    /// continue with a valid endpoint instead of reporting an error.
+    pub fn try_lerp(self, other: Self, t: f32) -> Result<Self, ConstraintError> {
+        if !t.is_finite()
+            || self.max_width.is_finite() != other.max_width.is_finite()
+            || self.max_height.is_finite() != other.max_height.is_finite()
+        {
+            return Err(ConstraintError::Invalid);
+        }
+        let t = f64::from(t);
+        let mix = |a: f32, b: f32| {
+            if a == b {
+                a
+            } else {
+                (f64::from(a) * (1. - t) + f64::from(b) * t) as f32
+            }
+        };
+        Self::try_normalized(
+            mix(self.min_width, other.min_width),
+            mix(self.max_width, other.max_width),
+            mix(self.min_height, other.min_height),
+            mix(self.max_height, other.max_height),
+        )
+    }
+
     /// An absent endpoint starts or ends at zero bounds. If both are absent,
     /// the result is absent. Overshoot still produces a normalized box.
     #[must_use]
@@ -322,7 +494,37 @@ impl Constraints {
     }
 }
 
-/// Interpolates and normalizes bounds like Flutter's `BoxConstraints.lerp`.
+/// Scales every bound. Arithmetic is checked at the layout boundary:
+/// NaN, infinite minima, inverted results, and other invalid constraints
+/// panic rather than entering the renderer.
+impl Mul<f32> for Constraints {
+    type Output = Self;
+
+    fn mul(self, factor: f32) -> Self {
+        self.map_bounds(|value| value * factor)
+    }
+}
+
+/// Divides every bound, rejecting a result that cannot be laid out.
+impl Div<f32> for Constraints {
+    type Output = Self;
+
+    fn div(self, factor: f32) -> Self {
+        self.map_bounds(|value| value / factor)
+    }
+}
+
+/// Applies Dart's Euclidean remainder to every bound; an inverted result
+/// remains invalid for Incular layout.
+impl Rem<f32> for Constraints {
+    type Output = Self;
+
+    fn rem(self, rhs: f32) -> Self {
+        self.map_bounds(|value| value.rem_euclid(rhs))
+    }
+}
+
+/// Interpolates and normalizes bounds like Flutter's BoxConstraints.lerp.
 /// Mixing bounded and unbounded maxima uses the nearer endpoint instead of
 /// asserting, so an inconsistent animation cannot feed invalid bounds to layout.
 impl Lerp for Constraints {
@@ -333,27 +535,7 @@ impl Lerp for Constraints {
         if t == 1. {
             return *other;
         }
-        let fallback = if t < 0.5 { *self } else { *other };
-        if !t.is_finite()
-            || self.max_width.is_finite() != other.max_width.is_finite()
-            || self.max_height.is_finite() != other.max_height.is_finite()
-        {
-            return fallback;
-        }
-        let t = f64::from(t);
-        let mix = |a: f32, b: f32| {
-            if a == b {
-                a
-            } else {
-                (f64::from(a) * (1. - t) + f64::from(b) * t) as f32
-            }
-        };
-        Self::try_normalized(
-            mix(self.min_width, other.min_width),
-            mix(self.max_width, other.max_width),
-            mix(self.min_height, other.min_height),
-            mix(self.max_height, other.max_height),
-        )
-        .unwrap_or(fallback)
+        self.try_lerp(*other, t)
+            .unwrap_or_else(|_| if t < 0.5 { *self } else { *other })
     }
 }
