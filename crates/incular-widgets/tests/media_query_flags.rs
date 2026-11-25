@@ -125,3 +125,147 @@ fn build_context_reads_the_flags() {
         ))
     );
 }
+
+#[test]
+fn media_query_scopes_accessibility_flags_and_selectively_rebuilds_consumers() {
+    use incular_widgets::{Builder, Column, MediaQuery, SizedBox};
+    use std::cell::RefCell;
+
+    let seen = Rc::new(RefCell::new([
+        Vec::<bool>::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+    ]));
+    let child = Widget::from(Column::new(
+        (0..4)
+            .map(|slot| {
+                let seen = seen.clone();
+                Builder::new(move |context| {
+                    seen.borrow_mut()[slot].push(match slot {
+                        0 => context.high_contrast(),
+                        1 => context.on_off_switch_labels(),
+                        2 => context.supports_announce(),
+                        _ => context.bold_text(),
+                    });
+                    SizedBox::shrink().into()
+                })
+                .into()
+            })
+            .collect::<Vec<Widget>>(),
+    ));
+    let outer = Builder::new({
+        let child = child.clone();
+        move |context| {
+            assert!(!context.high_contrast());
+            assert!(!context.on_off_switch_labels());
+            assert!(!context.supports_announce());
+            assert!(!context.bold_text());
+            child.clone()
+        }
+    });
+    let mut outside_tree = WidgetTree::new();
+    outside_tree.mount(outer.into()).unwrap();
+    let constraints = Constraints::loose(Size::new(300., 200.));
+    outside_tree.layout(constraints).unwrap();
+    assert!(seen.borrow().iter().all(|values| values == &[false]));
+
+    let scoped = |high_contrast| {
+        MediaQuery::new(
+            RuntimeEnvironment {
+                high_contrast,
+                on_off_switch_labels: true,
+                supports_announce: true,
+                bold_text: true,
+                ..Default::default()
+            },
+            child.clone(),
+        )
+        .into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scoped(true)).unwrap();
+    tree.layout(constraints).unwrap();
+    assert!(seen.borrow().iter().all(|values| values == &[false, true]));
+
+    tree.update(root, scoped(false)).unwrap();
+    tree.layout(constraints).unwrap();
+    assert_eq!(seen.borrow()[0], [false, true, false]);
+    assert!(
+        seen.borrow()[1..]
+            .iter()
+            .all(|values| values == &[false, true])
+    );
+}
+
+#[test]
+fn nested_text_overrides_replace_and_clear_outer_values_in_actual_render_style() {
+    use incular_widgets::{Builder, MediaQuery};
+
+    let key = Key::from("override text");
+    let seen = Rc::new(Cell::new(None));
+    let child: Widget = Builder::new({
+        let key = key.clone();
+        let seen = seen.clone();
+        move |context| {
+            seen.set(Some([
+                context.line_height_scale_factor_override(),
+                context.letter_spacing_override(),
+                context.word_spacing_override(),
+                context.paragraph_spacing_override(),
+            ]));
+            text().with_key(key.clone())
+        }
+    })
+    .into();
+    let scoped = |value, bold_text| {
+        MediaQuery::new(
+            RuntimeEnvironment {
+                bold_text,
+                line_height_scale_factor_override: Some(9.),
+                letter_spacing_override: Some(9.),
+                word_spacing_override: Some(9.),
+                paragraph_spacing_override: Some(9.),
+                ..Default::default()
+            },
+            MediaQuery::apply_text_style_overrides(child.clone(), value, value, value, value),
+        )
+        .into()
+    };
+    let mut tree = WidgetTree::new();
+    let constraints = Constraints::loose(Size::new(300., 200.));
+    let root = tree.mount(scoped(Some(2.), true)).unwrap();
+    tree.layout(constraints).unwrap();
+    let element = tree.element_with_key(&key).unwrap();
+
+    let style = |tree: &WidgetTree| {
+        let RenderKind::Text { style, .. } = tree
+            .render_object_kind(tree.render_id(element).unwrap())
+            .unwrap()
+        else {
+            panic!("expected text render object")
+        };
+        (
+            style.weight,
+            style.line_height,
+            style.letter_spacing,
+            style.word_spacing,
+        )
+    };
+    assert_eq!(seen.get(), Some([Some(2.); 4]));
+    assert_eq!(
+        style(&tree),
+        (
+            FontWeight::BOLD,
+            Some(LineHeight::Multiplier(2.)),
+            2.,
+            Some(2.)
+        )
+    );
+
+    tree.update(root, scoped(None, false)).unwrap();
+    tree.layout(constraints).unwrap();
+    assert_eq!(tree.element_with_key(&key), Some(element));
+    assert_eq!(seen.get(), Some([None; 4]));
+    assert_eq!(style(&tree), (FontWeight::NORMAL, None, 1., None));
+}

@@ -1217,3 +1217,8 @@ packages/flutter/test/widgets/localizations_test.dart	189	application level does
 packages/flutter/test/widgets/media_query_test.dart	1295	MediaQuery.textScalerOf	paired-match	upstream-media-query-scale.md
 packages/flutter/test/widgets/media_query_test.dart	1320	MediaQuery.platformBrightnessOf	paired-match	upstream-media-query-scale.md
 packages/flutter/test/widgets/media_query_test.dart	1700	MediaQuery can be partially depended-on	paired-match	upstream-media-query-scale.md
+packages/flutter/test/widgets/media_query_test.dart	1233	MediaQuery.applyTextStyleOverrides applies the specified text style overrides	paired-match	upstream-media-query-scale.md#scoped-accessibility-and-text-overrides
+packages/flutter/test/widgets/media_query_test.dart	1345	MediaQuery.highContrastOf	paired-match	upstream-media-query-scale.md#scoped-accessibility-and-text-overrides
+packages/flutter/test/widgets/media_query_test.dart	1370	MediaQuery.onOffSwitchLabelsOf	paired-match	upstream-media-query-scale.md#scoped-accessibility-and-text-overrides
+packages/flutter/test/widgets/media_query_test.dart	1395	MediaQuery.supportsAnnounce	paired-match	upstream-media-query-scale.md#scoped-accessibility-and-text-overrides
+packages/flutter/test/widgets/media_query_test.dart	1421	MediaQuery.boldTextOf	paired-match	upstream-media-query-scale.md#scoped-accessibility-and-text-overrides

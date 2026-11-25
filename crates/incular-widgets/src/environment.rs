@@ -10,7 +10,7 @@ use incular_text::{TextAlign, TextHeightBehavior, TextOverflow, TextStyle};
 use std::{any::Any, rc::Rc};
 use typed_builder::TypedBuilder;
 
-use crate::{BuildContext, LayoutBuilder, Widget};
+use crate::{BuildContext, Builder, LayoutBuilder, Widget};
 
 pub use incular_config::ContentSensitivity;
 
@@ -39,6 +39,28 @@ impl MediaQuery {
             data: normalize_media_query(data),
             child: child.into(),
         }
+    }
+
+    /// Creates a local copy of the nearest media data with all four text
+    /// style overrides replaced. Passing None clears that inherited override.
+    #[must_use]
+    pub fn apply_text_style_overrides(
+        child: impl Into<Widget>,
+        line_height_scale_factor: Option<f32>,
+        letter_spacing: Option<f32>,
+        word_spacing: Option<f32>,
+        paragraph_spacing: Option<f32>,
+    ) -> Widget {
+        let child = child.into();
+        Builder::new(move |context| {
+            let mut data = context.effective_media_query();
+            data.line_height_scale_factor_override = line_height_scale_factor;
+            data.letter_spacing_override = letter_spacing;
+            data.word_spacing_override = word_spacing;
+            data.paragraph_spacing_override = paragraph_spacing;
+            Self::new(data, child.clone()).into()
+        })
+        .into()
     }
 
     #[must_use]

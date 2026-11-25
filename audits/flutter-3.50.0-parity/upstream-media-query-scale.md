@@ -15,3 +15,21 @@ scaler is still authoritative. Both the authored pinned
 check measured text width/height at factors 1 and 2, zero width at
 factor 0, and unchanged explicit text size without remounting. Flutter's
 nonlinear system scaler and the full aspect matrix are not covered here.
+
+## Scoped accessibility and text overrides
+
+Pinned :1345, :1370, :1395, and :1421 establish false defaults
+outside the scope and true values inside for high contrast, switch
+labels, announcement support, and bold text. Rust checks all four
+through retained builders, then changes one and verifies only that
+reader is called again. Related supported fields now use the same
+nearest-scope aspect mechanism; the full Flutter aspect variant is
+still open.
+
+Pinned :1233 and Rust verify that applying text-style overrides replaces
+four inherited values of 9 with 2, then clears all four when passed
+null/None. Rust also verifies the retained paragraph really receives
+bold, line-height, letter spacing and word spacing, and returns to its
+original style when the overrides clear. Paragraph spacing remains an
+inherited value for clients to apply, not an implicit paragraph layout
+rule for the neutral Text widget.

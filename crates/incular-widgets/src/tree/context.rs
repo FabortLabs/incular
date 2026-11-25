@@ -123,6 +123,21 @@ media_query_aspects! {
     MediaQueryPadding from safe_insets,
     MediaQueryViewPadding from view_padding,
     MediaQueryViewInsets from view_insets,
+    RuntimeHighContrast from high_contrast,
+    RuntimeSystemGestureInsets from system_gesture_insets,
+    RuntimeDisplayFeatures from display_features,
+    RuntimeAlwaysUse24HourFormat from always_use_24_hour_format,
+    RuntimeAccessibleNavigation from accessible_navigation,
+    RuntimeInvertColors from invert_colors,
+    RuntimeOnOffSwitchLabels from on_off_switch_labels,
+    RuntimeBoldText from bold_text,
+    RuntimeSupportsAnnounce from supports_announce,
+    RuntimeNavigationMode from navigation_mode,
+    RuntimeSupportsShowingSystemContextMenu from supports_showing_system_context_menu,
+    RuntimeLineHeightScaleFactorOverride from line_height_scale_factor_override,
+    RuntimeLetterSpacingOverride from letter_spacing_override,
+    RuntimeWordSpacingOverride from word_spacing_override,
+    RuntimeParagraphSpacingOverride from paragraph_spacing_override,
 }
 
 /// Installs the aspects of a scope value when it carries a
