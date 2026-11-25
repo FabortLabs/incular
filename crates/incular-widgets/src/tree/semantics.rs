@@ -812,13 +812,13 @@ impl WidgetTree {
         if merging && role.is_none() {
             role = Some(SemanticRole::GenericContainer);
         }
-        // Explicit child nodes keep their labels out of the merged node.
-        let merged_label = (merging && !keeps_explicit_child_nodes(entry))
+        // Explicit child nodes keep their metadata out of the merged node.
+        let (merged_label, merged_heading) = (merging && !keeps_explicit_child_nodes(entry))
             .then(|| {
                 let own = element_own_label(entry);
-                self.merged_semantic_label(element, own)
+                self.merged_semantic_summary(element, own)
             })
-            .flatten();
+            .unwrap_or_default();
         if let Some(explicit) = &entry.widget.semantic_properties().explicit {
             if explicit.role == SemanticRole::GenericContainer && role.is_some() {
                 // A role-less Semantics wrapper over a widget that has its
@@ -839,6 +839,12 @@ impl WidgetTree {
                 state = explicit.state.clone();
                 actions = actions_with_room(&explicit.actions);
             }
+        }
+        // Flutter absorption preserves the parent's level if present.
+        // Otherwise the first descendant with a heading supplies it.
+        state.heading_level = state.heading_level.or(merged_heading);
+        if state.heading_level.is_some() && role == Some(SemanticRole::GenericContainer) {
+            role = Some(SemanticRole::Heading);
         }
         // A native adapter must never advertise an action that the retained
         // runtime cannot route to an existing controller/handler. Explicit
@@ -1115,26 +1121,31 @@ impl WidgetTree {
             .is_some_and(|render| render.subtree_needs_semantics)
     }
 
-    /// Label of a MergeSemantics node: its own label, then every descendant's
-    /// label in tree order, joined by newlines (Flutter's merged label).
-    fn merged_semantic_label(
+    /// Merged labels in tree order and the first descendant heading level.
+    fn merged_semantic_summary(
         &self,
         element: ElementId,
         own: Option<Cow<'_, str>>,
-    ) -> Option<String> {
+    ) -> (Option<String>, Option<u8>) {
         let mut merged = String::new();
+        let mut heading = None;
         if let Some(own) = own {
             push_merged_label(&mut merged, &own);
         }
         if let Some(entry) = self.elements.get(element.0) {
             for &child in &entry.children {
-                self.push_merged_labels(child, &mut merged);
+                self.push_merged_semantics(child, &mut merged, &mut heading);
             }
         }
-        (!merged.is_empty()).then_some(merged)
+        ((!merged.is_empty()).then_some(merged), heading)
     }
 
-    fn push_merged_labels(&self, element: ElementId, merged: &mut String) {
+    fn push_merged_semantics(
+        &self,
+        element: ElementId,
+        merged: &mut String,
+        heading: &mut Option<u8>,
+    ) {
         let Some(entry) = self.elements.get(element.0) else {
             return;
         };
@@ -1144,12 +1155,20 @@ impl WidgetTree {
         if let Some(label) = element_own_label(entry) {
             push_merged_label(merged, &label);
         }
+        if heading.is_none() {
+            *heading = entry
+                .widget
+                .semantic_properties()
+                .explicit
+                .as_ref()
+                .and_then(|properties| properties.state.heading_level);
+        }
         // A button's label already gathers its whole subtree.
         if matches!(entry.widget.kind(), WidgetKind::Button(_)) {
             return;
         }
         for &child in &entry.children {
-            self.push_merged_labels(child, merged);
+            self.push_merged_semantics(child, merged, heading);
         }
     }
 

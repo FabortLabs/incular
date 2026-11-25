@@ -884,3 +884,9 @@ moves the previous partial into the matched column: 462 / 8,965
 original cases fully compared (5.15%), 366 matches and 96
 historical mismatches. The same focused run verifies a dropped last
 animation controller cancels its awaiting future instead of hanging.
+
+[Heading levels](upstream-semantic-headings-clamping-and-dilation.md#heading-level-remediation)
+complete one prior partial, for 463 / 8,965 original cases (5.16%),
+367 matches and 96 historical mismatches. Invalid levels no longer
+advertise a heading, and retained merged nodes inherit the child's
+level only when the parent has none.

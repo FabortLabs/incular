@@ -286,9 +286,16 @@ impl Semantics {
     }
 
     #[must_use]
-    pub fn heading_level(mut self, level: u8) -> Self {
-        self.state.heading_level = (1..=6).contains(&level).then_some(level);
-        self.role = Some(SemanticRole::Heading);
+    pub fn heading_level(mut self, level: impl TryInto<u8>) -> Self {
+        let level = level
+            .try_into()
+            .ok()
+            .filter(|level| (1..=6).contains(level));
+        debug_assert!(level.is_some(), "heading level must be between 1 and 6");
+        if let Some(level) = level {
+            self.state.heading_level = Some(level);
+            self.role = Some(SemanticRole::Heading);
+        }
         self
     }
 

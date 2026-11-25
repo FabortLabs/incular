@@ -53,3 +53,21 @@ snapshot, and neither executes on the next frame. The Rust API
 exposes an absolute Instant, so the port checks it equals the
 first raw timestamp that defines the epoch. This completes the
 earlier partial comparison.
+
+## Heading level remediation
+
+Pinned `semantics_test.dart:2020` and its Rust ports agree on
+the absent default, all six valid values and all five signed invalid
+values from the original. The public setter now rejects invalid
+headings in debug, and does not advertise them in release. This
+completes the earlier partial comparison.
+
+The separately adapted :2039 checks all nine parent/child combinations
+in the retained semantics tree. The previous repair kept explicit
+parent levels but lost levels from children when the parent had no
+level. The merged node now takes the first descendant's level in
+tree order only when a parent level is absent. A separate test updates
+and clears these fields without replacing the node. Both authored
+Flutter controls and all five targeted heading regressions pass.
+The direct Flutter SemanticsConfiguration.absorb API is still distinct
+from the retained Rust wrapper and is not counted as another full pair.

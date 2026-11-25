@@ -139,6 +139,19 @@ fn out_of_range_heading_cannot_claim_heading_role() {
     );
 }
 
+/// widgets/semantics_test.dart:2020, including invalid signed values.
+#[test]
+#[cfg(debug_assertions)]
+fn invalid_heading_levels_are_rejected_at_construction() {
+    for bad in [-1, 0, 7, 8, 9] {
+        assert!(
+            std::panic::catch_unwind(|| Semantics::new(SizedBox::shrink()).heading_level(bad))
+                .is_err(),
+            "level {bad} was not rejected"
+        );
+    }
+}
+
 #[test]
 fn merged_heading_uses_parent_then_first_non_null_descendant() {
     let cases = [
@@ -169,4 +182,37 @@ fn merged_heading_uses_parent_then_first_non_null_descendant() {
         })
         .collect();
     assert_eq!(actual, cases.map(|(_, _, expected)| expected));
+}
+
+#[test]
+fn merged_heading_updates_without_replacing_the_retained_node() {
+    let scene = |parent, first, second| {
+        let children = Column::new([
+            annotation(first, "first", SizedBox::new().width(40.).height(20.)),
+            annotation(second, "second", SizedBox::new().width(40.).height(20.)),
+        ]);
+        MergeSemantics::new(annotation(parent, "parent", children)).into()
+    };
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scene(None, Some(2), Some(4))).unwrap();
+    let mut retained = None;
+    for (parent, first, second, expected) in [
+        (None, Some(2), Some(4), Some(2)),
+        (None, None, Some(4), Some(4)),
+        (Some(1), Some(2), Some(4), Some(1)),
+        (None, None, None, None),
+    ] {
+        tree.update(root, scene(parent, first, second)).unwrap();
+        tree.layout(bounds).unwrap();
+        tree.update_semantics();
+        let (id, node) = tree
+            .semantics()
+            .iter()
+            .find(|(_, node)| node.label.as_deref() == Some("parent\nfirst\nsecond"))
+            .unwrap();
+        assert_eq!(node.state.heading_level, expected);
+        assert_eq!(node.role == SemanticRole::Heading, expected.is_some());
+        assert_eq!(id, *retained.get_or_insert(id));
+    }
 }
