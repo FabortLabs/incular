@@ -18,6 +18,7 @@ pub use editing::{
     ComposingRange, EditableText, FocusedSelectionLease, InvalidTextDeltaRange,
     SelectionChangedCause, TextAffinity, TextEditingController, TextEditingDelta,
     TextEditingSubscription, TextEditingValue, TextField, TextRange, TextSelection,
+    byte_offset_at_utf16_boundary,
 };
 pub use spans::{
     InlineSpan, RichText, StyledTextRun, Text, TextSpan, TextSpanVisitor, WidgetSpan,

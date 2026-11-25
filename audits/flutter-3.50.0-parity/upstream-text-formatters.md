@@ -53,3 +53,31 @@ Focused Rust targets: `flutter350_services_text_formatter_parity`,
 `flutter350_upstream_formatter_filter_edges`, `flutter350_upstream_text_formatters`,
 `flutter_text_formatters`, `length_formatter`, and
 `editable_text_interaction::input_formatters_apply_in_order_to_user_edits_only`.
+
+## Literal and regex patterns in retained edits
+
+The pinned :29, :62, :618, :642, :674, :757 and :808 originals passed
+by exact name. The public callback formatter forwards both original
+values. Literal and regex filtering now replace each deny match, or
+each nonempty gap between allow matches, without rescanning generated
+replacement text. Deny and allow tests verify all original selection
+and composing ranges, including an equal-length replacement that
+preserves an interior point, unequal lengths that move the point to
+the replacement end, overlapping literal candidates, and full removal
+of a composing span. The retained editor uses the formatter for user
+edits and leaves direct controller writes untouched.
+
+:62 matches literal and regular-expression output and all explicit
+selection offsets; it remains partial because Flutter also compares an
+unselected -1 sentinel, while the Rust editing value has valid UTF-8
+offsets. The paired authored Unicode probe verifies equal UTF-16
+replacement lengths on both sides. An unrepresentable offset inside a
+surrogate is snapped down to a scalar boundary in Incular. The regex
+API uses Rust regex syntax rather than claiming support for every Dart
+RegExp expression. The char-predicate deletion path remains separate.
+
+The nine historical scalar filter and length-limiter mismatches
+(:148, :164, :180, :195, :210, :225, :240, :257 and :445) also passed
+against the permanent native targets and exact pinned reruns. The
+deprecated aliases exercise the same filtering behavior; no obsolete
+Rust alias was introduced.

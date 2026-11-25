@@ -247,7 +247,10 @@ impl TextEditingValue {
     }
 }
 
-fn byte_offset_at_utf16_boundary(text: &str, units: usize) -> usize {
+/// Converts a UTF-16 offset to bytes, snapping an interior surrogate down.
+#[doc(hidden)]
+#[must_use]
+pub fn byte_offset_at_utf16_boundary(text: &str, units: usize) -> usize {
     let mut consumed = 0;
     for (byte, scalar) in text.char_indices() {
         consumed += scalar.len_utf16();

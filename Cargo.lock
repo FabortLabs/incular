@@ -2584,6 +2584,7 @@ dependencies = [
  "incular-semantics",
  "incular-text",
  "proptest",
+ "regex",
  "serde_json",
  "smart-default",
  "stacker",

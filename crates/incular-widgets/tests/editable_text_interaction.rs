@@ -337,3 +337,22 @@ fn submit_without_editing_complete_reports_no_completion_callback() {
     let (tree, root) = mount_field(TextEditingController::new(), |field| field);
     assert!(!tree.text_field_has_editing_complete(root));
 }
+
+#[test]
+fn literal_pattern_formatter_filters_retained_user_edits_but_not_programmatic_writes() {
+    use incular_widgets::FilteringTextInputFormatter;
+
+    let controller = TextEditingController::new();
+    let (mut tree, _) = mount_field(controller.clone(), |field| {
+        field.input_formatter(
+            FilteringTextInputFormatter::deny_literal("abc").replacement_string("*"),
+        )
+    });
+    layout_tight(&mut tree);
+    controller.replace_selection("abcabcabc!");
+    assert_eq!(controller.text(), "***!");
+    assert_eq!(controller.selection(), TextSelection::collapsed(4));
+
+    controller.set_text("abc");
+    assert_eq!(controller.text(), "abc");
+}

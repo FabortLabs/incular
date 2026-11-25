@@ -65,3 +65,11 @@ across a supplementary scalar. The controller allocation fixtures now
 use the same pre-edit selection when constructing the expected value
 instead of conflating these two operations. These authored probes add
 no original registration to the coverage ledger.
+
+## Current text replacement disposition
+
+The seven original historical mismatches at :78, :94, :110, :126,
+:142, :158, and :174 were rerun by exact name on the pinned SDK.
+The repaired `flutter350_services_text_state_parity` and
+`flutter350_text_replacement_boundaries` tests passed without
+exclusions. Their ledger rows now describe the current results.

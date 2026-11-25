@@ -106,6 +106,7 @@ mod shortcut_registry;
 mod size_changed;
 mod spell_check;
 mod transient;
+mod text_formatters;
 mod tree;
 mod tweens;
 mod util;
@@ -220,6 +221,7 @@ pub use focus_keyboard::{
 pub use forms::{
     AutocompleteFieldViewBuilder, AutocompleteHighlightedOption, AutocompleteOnSelected,
     AutocompleteOptionsBuilder, AutocompleteOptionsViewBuilder, AutofillGroup, AutovalidateMode,
+    CallbackTextInputFormatter,
     FilteringTextInputFormatter, Form, FormController, FormField, FormFieldState, FormState,
     GenericFormField, LengthLimitingTextInputFormatter, MaxLengthEnforcement, RawAutocomplete,
     TextInputFormatter, UndoHistory,
