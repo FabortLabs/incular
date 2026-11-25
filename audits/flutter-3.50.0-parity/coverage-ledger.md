@@ -8,7 +8,7 @@ The old 3.41.7 audit, fixture names, and lexical matches cannot close a row.
 | --- | --- | --- |
 | Flutter framework API | [flutter-public-api.jsonl](flutter-public-api.jsonl) | 15,791 declarations/members from the 11 public entrypoints; explicit members only, with owner, line and signature. |
 | Flutter source and test files | [coverage-queue.tsv](coverage-queue.tsv) | 441 in-scope framework source files, 776 Flutter test/helper files, 47 existing harness source files. Includes files without parsed declarations or test registrations. |
-| Flutter upstream scenario registrations | [upstream-scenarios.jsonl](upstream-scenarios.jsonl) | 8,896 registration sites, not assertions reviewed or total dynamic cases. A row records the upstream file/line, scenario description, group and options. |
+| Flutter upstream scenario registrations | [upstream-scenarios.jsonl](upstream-scenarios.jsonl) | 8,856 registration sites, not assertions reviewed or total dynamic cases. A row records the upstream file/line, scenario description, group and options. |
 | Existing harness | [existing-harness-scenarios.jsonl](existing-harness-scenarios.jsonl) | 261 Dart registration sites (frame and scalar tests); Rust harness sources accounted for separately. Not assumed to use the current baseline. |
 | Exceptions and counts | [scenario notes](scenario-notes.json), [summary](coverage-queue-summary.json), [external re-exports](external-reexports.md) | Explicit scan boundaries and external contracts; no row passes automatically. |
 
@@ -64,6 +64,15 @@ against the pinned source; all other rows and comparison evidence stayed
 the same. This changes the denominator, not the number of behavior
 comparisons. Runtime variants, unrecognized registration helpers, and
 conditionally skipped paths still need separate accounting.
+
+A second pass removed 40 awaited fixture calls from the widgets count,
+bringing 8,896 sites to 8,856. Each removed call invokes a declared local
+`Future<void> test(...)` helper, not a test registration. This covers one
+Container golden fixture call and 39 sliver fixture calls across four
+files. Their parent registrations remain, along with the requirement to
+check every exercised fixture before marking those registrations paired.
+All removed sites were checked against the pinned source, and none had
+comparison evidence. No other scenario rows changed.
 
 ## Validation and regeneration
 

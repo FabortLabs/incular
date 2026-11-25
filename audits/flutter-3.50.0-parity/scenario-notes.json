@@ -23,11 +23,11 @@
     "scheduler": 31,
     "semantics": 70,
     "services": 485,
-    "widgets": 5960,
+    "widgets": 5920,
     "widget_previews": 113,
     "incular_harness": 261
   },
-  "dynamicDescriptions": 110,
+  "dynamicDescriptions": 70,
   "diagnostics": [],
   "registrations": [
     "frameScenario",

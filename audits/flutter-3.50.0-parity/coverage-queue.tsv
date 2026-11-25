@@ -822,7 +822,7 @@ flutter-test	widgets	packages/flutter/test/widgets/color_filter_test.dart	5	comp
 flutter-test	widgets	packages/flutter/test/widgets/column_test.dart	20	compare-registered-cases
 flutter-test	widgets	packages/flutter/test/widgets/composited_transform_test.dart	15	compare-registered-cases
 flutter-test	widgets	packages/flutter/test/widgets/constrained_box_test.dart	10	compare-registered-cases
-flutter-test	widgets	packages/flutter/test/widgets/container_test.dart	19	compare-registered-cases
+flutter-test	widgets	packages/flutter/test/widgets/container_test.dart	18	compare-registered-cases
 flutter-test	widgets	packages/flutter/test/widgets/context_menu_button_item_test.dart	7	compare-registered-cases
 flutter-test	widgets	packages/flutter/test/widgets/context_menu_controller_test.dart	6	compare-registered-cases
 flutter-test	widgets	packages/flutter/test/widgets/coordinates_test.dart	1	compare-registered-cases
@@ -1125,13 +1125,13 @@ flutter-test	widgets	packages/flutter/test/widgets/sliver_test_utils.dart	0	help
 flutter-test	widgets	packages/flutter/test/widgets/sliver_tree_test.dart	22	compare-registered-cases
 flutter-test	widgets	packages/flutter/test/widgets/sliver_utils.dart	0	helper-or-indirect-cases-review-needed
 flutter-test	widgets	packages/flutter/test/widgets/sliver_visibility_test.dart	1	compare-registered-cases
-flutter-test	widgets	packages/flutter/test/widgets/slivers_block_global_key_test.dart	8	compare-registered-cases
-flutter-test	widgets	packages/flutter/test/widgets/slivers_block_test.dart	10	compare-registered-cases
+flutter-test	widgets	packages/flutter/test/widgets/slivers_block_global_key_test.dart	1	compare-registered-cases
+flutter-test	widgets	packages/flutter/test/widgets/slivers_block_test.dart	5	compare-registered-cases
 flutter-test	widgets	packages/flutter/test/widgets/slivers_evil_test.dart	2	compare-registered-cases
 flutter-test	widgets	packages/flutter/test/widgets/slivers_keepalive_test.dart	12	compare-registered-cases
-flutter-test	widgets	packages/flutter/test/widgets/slivers_padding_test.dart	36	compare-registered-cases
+flutter-test	widgets	packages/flutter/test/widgets/slivers_padding_test.dart	17	compare-registered-cases
 flutter-test	widgets	packages/flutter/test/widgets/slivers_protocol_test.dart	1	compare-registered-cases
-flutter-test	widgets	packages/flutter/test/widgets/slivers_test.dart	44	compare-registered-cases
+flutter-test	widgets	packages/flutter/test/widgets/slivers_test.dart	36	compare-registered-cases
 flutter-test	widgets	packages/flutter/test/widgets/slotted_render_object_widget_test.dart	5	compare-registered-cases
 flutter-test	widgets	packages/flutter/test/widgets/snapshot_widget_test.dart	11	compare-registered-cases
 flutter-test	widgets	packages/flutter/test/widgets/spacer_test.dart	3	compare-registered-cases
