@@ -761,6 +761,7 @@ pub(crate) enum WidgetKind {
         column_widths: Vec<(usize, incular_layout::TableColumnWidth)>,
         default_column_width: incular_layout::TableColumnWidth,
         default_vertical_alignment: incular_layout::TableCellVerticalAlignment,
+        text_direction: Option<TextDirection>,
         children: Vec<Widget>,
     },
     Stack {

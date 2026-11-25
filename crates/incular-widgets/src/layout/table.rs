@@ -5,7 +5,7 @@ use typed_builder::TypedBuilder;
 
 pub use incular_layout::{TableCellVerticalAlignment, TableColumnWidth};
 
-use crate::{Widget, WidgetKind, macros::widget_from_kind};
+use crate::{TextDirection, Widget, WidgetKind, macros::widget_from_kind};
 
 /// A row-major table with Flutter's column-width and cell-alignment rules.
 ///
@@ -28,6 +28,8 @@ pub struct Table {
     default_column_width: TableColumnWidth,
     #[builder(default)]
     default_vertical_alignment: TableCellVerticalAlignment,
+    #[builder(default, setter(strip_option))]
+    text_direction: Option<TextDirection>,
     #[builder(default, setter(into))]
     children: Vec<Widget>,
 }
@@ -71,6 +73,14 @@ impl Table {
         self
     }
 
+    /// Overrides the nearest Directionality for column ordering.
+    /// With no override or ambient direction, Incular uses left-to-right.
+    #[must_use]
+    pub fn text_direction(mut self, direction: TextDirection) -> Self {
+        self.text_direction = Some(direction);
+        self
+    }
+
     /// Sets how cells are placed vertically within their row. Defaults to top.
     #[must_use]
     pub fn default_vertical_alignment(mut self, alignment: TableCellVerticalAlignment) -> Self {
@@ -86,5 +96,6 @@ widget_from_kind!(Table => Table {
     column_widths,
     default_column_width,
     default_vertical_alignment,
+    text_direction,
     children
 });

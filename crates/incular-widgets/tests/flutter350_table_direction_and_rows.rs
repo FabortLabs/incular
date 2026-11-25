@@ -77,3 +77,48 @@ fn a_partly_filled_final_row_is_not_silently_accepted() {
         "table accepted row lengths 2 and 1"
     );
 }
+
+#[test]
+fn retained_columns_follow_ambient_direction_until_explicitly_overridden() {
+    let make_table = || {
+        Table::new(
+            2,
+            (0..2).map(|i| Widget::from(SizedBox::square(20.)).with_key(Key::Value(i))),
+        )
+        .column_width(0, TableColumnWidth::Fixed(56.))
+        .column_width(1, TableColumnWidth::Fixed(33.))
+    };
+    let original = Widget::from(make_table()).with_key(Key::Value(90));
+    let host = |direction, table| Directionality::new(direction, Center::new(table)).into();
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(host(TextDirection::Ltr, original.clone()))
+        .unwrap();
+    let lefts = |tree: &WidgetTree| {
+        let rect = |key| {
+            tree.element_bounds(tree.element_with_key(&Key::Value(key)).unwrap())
+                .unwrap()
+        };
+        [
+            rect(0).origin.x - rect(90).origin.x,
+            rect(1).origin.x - rect(90).origin.x,
+        ]
+    };
+    tree.layout(Constraints::tight(HOST)).unwrap();
+    let first = tree.element_with_key(&Key::Value(0));
+    assert_eq!(lefts(&tree), [0., 56.]);
+
+    tree.update(root, host(TextDirection::Rtl, original))
+        .unwrap();
+    tree.layout(Constraints::tight(HOST)).unwrap();
+    assert_eq!(lefts(&tree), [33., 0.]);
+    assert_eq!(tree.element_with_key(&Key::Value(0)), first);
+
+    let explicit =
+        Widget::from(make_table().text_direction(TextDirection::Ltr)).with_key(Key::Value(90));
+    tree.update(root, host(TextDirection::Rtl, explicit))
+        .unwrap();
+    tree.layout(Constraints::tight(HOST)).unwrap();
+    assert_eq!(lefts(&tree), [0., 56.]);
+    assert_eq!(tree.element_with_key(&Key::Value(0)), first);
+}

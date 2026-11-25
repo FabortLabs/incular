@@ -131,3 +131,33 @@ fn wrap_ranges_match_explicit_index_runs_in_both_reading_directions() {
         }
     }
 }
+
+#[test]
+fn rtl_table_offsets_are_relative_to_the_natural_grid_in_a_wider_box() {
+    use incular_layout::TableColumnWidth;
+    let cells = [
+        TableChild::new(Size::new(100., 10.)),
+        TableChild::new(Size::new(110., 10.)),
+        TableChild::new(Size::new(125., 10.)),
+    ];
+    let mut config = Table::new(3);
+    config.column_widths = vec![
+        (0, TableColumnWidth::Fixed(100.)),
+        (1, TableColumnWidth::Fixed(110.)),
+        (2, TableColumnWidth::Fixed(125.)),
+    ];
+    config.column_spacing = 7.;
+    let constraints = Constraints::tight(Size::new(400., 20.));
+    let offsets = |config: &Table| {
+        let layout = layout_table(constraints, &cells, config);
+        assert_eq!(layout.size.width, 400.);
+        layout
+            .children
+            .into_iter()
+            .map(|child| child.offset.x)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(offsets(&config), [0., 107., 224.]);
+    config.text_direction = TextDirection::Rtl;
+    assert_eq!(offsets(&config), [249., 132., 0.]);
+}

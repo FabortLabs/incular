@@ -30,3 +30,14 @@ intrinsic (:391,:415,:452) match the original relative size
 and equal-height checks. This is not a claim about identical
 glyph widths between engines. See
 `flutter350_table_intrinsics_parity`.
+
+## Retained RTL column ordering
+
+The pinned RTL case at `:194` now matches all three rows and their
+fixed widths. Both frameworks also retain the same first cell on
+an ambient LTR → RTL change, then honor an explicit LTR override.
+Only horizontal positions change: the logical cell order and render
+identities stay intact. An Incular layout control verifies spacing
+and fixed columns under a wider tight parent. Context-free Incular
+tables default to LTR; this does not match Flutter's separate debug
+assertion when there is no ambient Directionality.

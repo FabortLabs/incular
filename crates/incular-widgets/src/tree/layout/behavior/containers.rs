@@ -454,6 +454,7 @@ impl WidgetTree {
                 ref column_widths,
                 default_column_width,
                 default_vertical_alignment,
+                text_direction,
             } => {
                 for child in children {
                     self.layout_render(*child, constraints.loosen())?;
@@ -465,6 +466,7 @@ impl WidgetTree {
                     column_widths: column_widths.clone(),
                     default_column_width,
                     default_vertical_alignment,
+                    text_direction,
                 };
                 let measured = children
                     .iter()

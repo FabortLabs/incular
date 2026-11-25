@@ -298,6 +298,8 @@ pub struct Table {
     /// Width for columns without an override (Flutter default: flex 1.0).
     pub default_column_width: TableColumnWidth,
     pub default_vertical_alignment: TableCellVerticalAlignment,
+    /// Logical direction of the row-major columns.
+    pub text_direction: TextDirection,
 }
 
 impl Table {
@@ -328,6 +330,7 @@ impl Table {
             column_widths: Vec::new(),
             default_column_width: TableColumnWidth::Flex(1.0),
             default_vertical_alignment: TableCellVerticalAlignment::Top,
+            text_direction: TextDirection::Ltr,
         }
     }
 }

@@ -223,6 +223,9 @@ a version and date when publishing.
 
 ### Changed
 
+- **Breaking (`incular-layout`):** Table layout struct literals must supply
+  `text_direction` or use `..Table::new(columns)` for the LTR default.
+
 - **Breaking (`incular-scroll`):** ScrollMetrics struct literals must set
   `page_viewport_fraction` to `None` for ordinary scrolling or use
   `..Default::default()`. PageView notifications set the fraction for you.
@@ -275,6 +278,9 @@ a version and date when publishing.
   `EditableText` does there. Mouse and stylus presses still unfocus it.
 
 ### Fixed
+
+- Table lays columns out right to left when requested by Directionality
+  or an explicit setting, without remounting the cells.
 
 - Scroll metrics distinguish exact edges from overscroll and report how
   much of the viewport still lies inside the content range.

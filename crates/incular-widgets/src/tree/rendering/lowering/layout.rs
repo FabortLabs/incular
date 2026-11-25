@@ -3,11 +3,8 @@ use super::super::super::*;
 /// Resolves a widget's optional explicit text direction against the nearest
 /// ambient `Directionality`.
 ///
-/// Flutter lays a `Flex`/`Wrap` out as left-to-right when no direction exists
-/// *and* assertions are disabled (a release build); with assertions enabled the
-/// missing direction is reported earlier, during build validation
-/// (`TreeError::MissingDirectionality`). This fallback is therefore only
-/// reachable in release builds.
+/// Flex and Wrap validate required directionality during build in debug.
+/// Table also supports an LTR fallback for context-free Incular layouts.
 fn resolve_layout_direction(
     explicit: Option<TextDirection>,
     context: &DependencyContext,
@@ -223,6 +220,7 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
             column_widths,
             default_column_width,
             default_vertical_alignment,
+            text_direction,
             ..
         } => RenderKind::Table {
             columns: *columns,
@@ -231,6 +229,7 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
             column_widths: column_widths.clone(),
             default_column_width: *default_column_width,
             default_vertical_alignment: *default_vertical_alignment,
+            text_direction: resolve_layout_direction(*text_direction, context),
         },
         WidgetKind::Stack {
             alignment,

@@ -841,6 +841,16 @@ where
     let natural_height =
         heights.iter().sum::<f32>() + row_spacing * row_count.saturating_sub(1) as f32;
     let size = constraints.constrain(Size::new(natural_width, natural_height));
+    // RTL lays out logical column zero last in physical space. Build the
+    // same suffix offsets as RenderTable, rooted at the natural grid's
+    // left edge even when a tight parent makes the overall box wider.
+    let rtl_positions = (config.text_direction == TextDirection::Rtl).then(|| {
+        let mut positions = vec![0.; columns];
+        for column in (0..columns - 1).rev() {
+            positions[column] = positions[column + 1] + widths[column + 1] + column_spacing;
+        }
+        positions
+    });
     let mut output = Vec::with_capacity(children.len());
     let mut y = 0.0;
     for (row, row_height) in heights.iter().enumerate() {
@@ -852,8 +862,11 @@ where
             };
             let slack = (*row_height - child.size.height).max(0.0);
             let dy = slack * config.default_vertical_alignment.factor();
+            let left = rtl_positions
+                .as_ref()
+                .map_or(x, |positions| positions[column]);
             output.push(
-                ChildLayout::new(Offset::new(x, y + dy), child.size)
+                ChildLayout::new(Offset::new(left, y + dy), child.size)
                     .with_optional_baseline(child.baseline),
             );
             x += *column_width + column_spacing;

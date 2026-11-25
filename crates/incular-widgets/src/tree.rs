@@ -737,6 +737,7 @@ pub enum RenderKind {
         column_widths: Vec<(usize, incular_layout::TableColumnWidth)>,
         default_column_width: incular_layout::TableColumnWidth,
         default_vertical_alignment: incular_layout::TableCellVerticalAlignment,
+        text_direction: TextDirection,
     },
     Stack {
         stack: incular_layout::Stack,

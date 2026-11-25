@@ -353,6 +353,7 @@ impl std::fmt::Debug for WidgetKind {
                 column_widths,
                 default_column_width,
                 default_vertical_alignment,
+                text_direction,
                 children,
             } => f
                 .debug_struct("Table")
@@ -362,6 +363,7 @@ impl std::fmt::Debug for WidgetKind {
                 .field("default_column_width", default_column_width)
                 .field("default_vertical_alignment", default_vertical_alignment)
                 .field("row_spacing", row_spacing)
+                .field("text_direction", text_direction)
                 .field("children", children)
                 .finish(),
             Self::CustomLayout { delegate, children } => f
@@ -1004,6 +1006,7 @@ impl PartialEq for WidgetKind {
                     column_widths: cw,
                     default_column_width: dcw,
                     default_vertical_alignment: dva,
+                    text_direction: tda,
                     children: d,
                 },
                 Self::Table {
@@ -1013,9 +1016,12 @@ impl PartialEq for WidgetKind {
                     column_widths: cx,
                     default_column_width: dcx,
                     default_vertical_alignment: dvb,
+                    text_direction: tdb,
                     children: h,
                 },
-            ) => a == e && b == f && c == g && cw == cx && dcw == dcx && dva == dvb && d == h,
+            ) => {
+                a == e && b == f && c == g && cw == cx && dcw == dcx && dva == dvb && tda == tdb && d == h
+            }
             (
                 Self::Decorated {
                     size: a,
