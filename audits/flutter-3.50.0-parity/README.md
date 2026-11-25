@@ -51,6 +51,21 @@ device coverage. Run a named original with the [pinned upstream
 runner](run-upstream-reference.ps1), for example:
 `./audits/flutter-3.50.0-parity/run-upstream-reference.ps1 -Test painting/alignment_test.dart -FullName 'AlignmentGeometry.resolve()'`.
 
+On Linux, use the [pinned reference runner](run-reference-linux.sh):
+
+```sh
+bash audits/flutter-3.50.0-parity/run-reference-linux.sh probe tap_region_actionable_semantics_test.dart
+bash audits/flutter-3.50.0-parity/run-reference-linux.sh upstream painting/alignment_test.dart 'AlignmentGeometry.resolve()'
+```
+
+Keep the official `3.50.0` tag in the pinned checkout, even when fetching it
+shallowly. Flutter uses the tag for SDK version resolution; a commit-only
+checkout may report an unknown SDK to Pub. On the first run with an empty
+Pub cache, set `INCULAR_BOOTSTRAP_PUB=1` to populate dependencies for the
+selected scratch package. Subsequent runs resolve dependencies offline.
+The Linux runner checks the revision, runs one file with test concurrency
+one, and verifies that upstream runs actually executed the named tests.
+
 ## Inventory by public entrypoint
 
 Counts include cross-library re-exports. Do not add the rows to get unique
