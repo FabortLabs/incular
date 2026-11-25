@@ -28,6 +28,17 @@ Pinned Flutter 3.50.0 `ab2912035e`; Incular production `c647cb85`.
   not a native screen reader or keyboard-focus claim. See
   `flutter350_absorb_pointer_upstream_parity`.
 
+## TapRegion callback order
+
+The separate painted-mouse callback-order probe
+`tap_region_callback_order_test.dart` confirms outside callbacks run
+before inside callbacks, on both down and up. Incular initially sent
+inside first in both phases. The retained dispatch now matches
+`A.outsideDown, B.insideDown, A.outsideUp, B.insideUp`. All eight
+focused primary and navigation Runtime cases pass. This is an authored
+ordering check, not a new original registration or a claim about order
+between multiple callbacks in the same classification.
+
 ## Editing and raster defaults
 
 - Three original TextEditingDelta checks match the observable

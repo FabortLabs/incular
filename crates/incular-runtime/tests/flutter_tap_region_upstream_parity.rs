@@ -108,6 +108,28 @@ impl Scene {
     }
 }
 
+#[test]
+fn tap_surface_notifies_outside_before_inside_on_down_and_up() {
+    let trace = Rc::new(RefCell::new(Vec::new()));
+    let record = |entry| {
+        let trace = Rc::clone(&trace);
+        move |_| trace.borrow_mut().push(entry)
+    };
+    let outside = TapRegion::new(Spot::A.widget())
+        .on_tap_outside(record("A.outsideDown"))
+        .on_tap_up_outside(record("A.outsideUp"));
+    let inside = TapRegion::new(Spot::B.widget())
+        .on_tap_inside(record("B.insideDown"))
+        .on_tap_up_inside(record("B.insideUp"));
+    let root = TapRegionSurface::new(Row::new([Widget::from(outside), Widget::from(inside)]));
+    let mut host = Host::mount(root.into());
+    host.click(Spot::B, &Scene::default());
+    assert_eq!(
+        trace.take(),
+        ["A.outsideDown", "B.insideDown", "A.outsideUp", "B.insideUp"]
+    );
+}
+
 struct Host {
     runtime: Runtime,
     now: Instant,

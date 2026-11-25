@@ -742,9 +742,11 @@ impl WidgetTree {
     }
 
     fn dispatch_tap_regions(&self, event: RawPointerEvent, hit: &[ElementId]) -> Option<ElementId> {
-        if !matches!(event.phase, PointerPhase::Down | PointerPhase::Up) {
-            return None;
-        }
+        let down = match event.phase {
+            PointerPhase::Down => true,
+            PointerPhase::Up => false,
+            _ => return None,
+        };
         // TapRegion is an ordinary primary-tap boundary, not a raw all-button
         // listener. Secondary/middle/extra transitions stay available through
         // Listener/RawGestureDetector and context-menu APIs without becoming a
@@ -769,42 +771,35 @@ impl WidgetTree {
                 .filter(|registration| hit.contains(&registration.id))
                 .filter_map(|registration| registration.group_id)
                 .collect::<Vec<_>>();
-            if event.phase == PointerPhase::Down {
-                for registration in registrations
-                    .iter()
-                    .filter(|registration| is_inside_tap_region(registration, hit, &hit_groups))
-                {
-                    if let Some(callback) = &registration.callbacks.on_tap_inside {
-                        callback(event);
-                    }
+            // Match the surface's callback order for each phase: outside
+            // listeners run first, then inside listeners (including groups),
+            // and only a down can claim the gesture arena afterward.
+            for registration in registrations.iter().filter(|registration| {
+                registration.report_outside && !is_inside_tap_region(registration, hit, &hit_groups)
+            }) {
+                let callback = if down {
+                    &registration.callbacks.on_tap_outside
+                } else {
+                    &registration.callbacks.on_tap_up_outside
+                };
+                if let Some(callback) = callback {
+                    callback(event);
                 }
-                for registration in registrations.iter().filter(|registration| {
-                    registration.report_outside
-                        && !is_inside_tap_region(registration, hit, &hit_groups)
-                }) {
-                    if let Some(callback) = &registration.callbacks.on_tap_outside {
-                        callback(event);
-                    }
-                    if consumed.is_none() && registration.consume_outside_taps {
-                        consumed = Some(registration.id);
-                    }
+                if down && consumed.is_none() && registration.consume_outside_taps {
+                    consumed = Some(registration.id);
                 }
-            } else {
-                for registration in registrations
-                    .iter()
-                    .filter(|registration| is_inside_tap_region(registration, hit, &hit_groups))
-                {
-                    if let Some(callback) = &registration.callbacks.on_tap_up_inside {
-                        callback(event);
-                    }
-                }
-                for registration in registrations.iter().filter(|registration| {
-                    registration.report_outside
-                        && !is_inside_tap_region(registration, hit, &hit_groups)
-                }) {
-                    if let Some(callback) = &registration.callbacks.on_tap_up_outside {
-                        callback(event);
-                    }
+            }
+            for registration in registrations
+                .iter()
+                .filter(|registration| is_inside_tap_region(registration, hit, &hit_groups))
+            {
+                let callback = if down {
+                    &registration.callbacks.on_tap_inside
+                } else {
+                    &registration.callbacks.on_tap_up_inside
+                };
+                if let Some(callback) = callback {
+                    callback(event);
                 }
             }
         }
