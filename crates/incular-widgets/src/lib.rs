@@ -264,6 +264,7 @@ pub use incular_scroll::{
     ScrollNotificationSubscription, ScrollNotificationType, ScrollPhysics,
     ScrollViewKeyboardDismissBehavior, SliverConstraints,
 };
+pub use incular_semantics::AccessibilityFocusBlockType;
 pub use incular_text::{
     FontFeature, FontVariation, FontWeight, IconData, RichText, StrutStyle, TextAlign,
     TextBaseline, TextEditingController, TextEditingValue, TextHeightBehavior, TextOverflow,

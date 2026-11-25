@@ -43,6 +43,33 @@ pub enum Role {
 
 pub type SemanticRole = Role;
 
+/// What this annotation blocks from accessibility focus, independently
+/// of the widget's real input focus.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum AccessibilityFocusBlockType {
+    #[default]
+    None,
+    BlockNode,
+    BlockSubtree,
+}
+
+impl AccessibilityFocusBlockType {
+    #[must_use]
+    pub const fn blocks_focus(self) -> bool {
+        !matches!(self, Self::None)
+    }
+
+    /// A merged node receives the strongest block of its contributors.
+    #[must_use]
+    pub const fn merge(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::BlockSubtree, _) | (_, Self::BlockSubtree) => Self::BlockSubtree,
+            (Self::BlockNode, _) | (_, Self::BlockNode) => Self::BlockNode,
+            _ => Self::None,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum SemanticActionKind {
     Focus,
@@ -189,6 +216,8 @@ pub struct SemanticState {
     pub enabled: bool,
     pub focused: bool,
     pub focusable: bool,
+    /// Effective Flutter accessibility focus scope for this semantic node.
+    pub accessibility_focus_block_type: AccessibilityFocusBlockType,
     pub selected: bool,
     pub checked: Option<CheckedState>,
     pub expanded: Option<bool>,
@@ -256,6 +285,7 @@ impl Default for SemanticState {
             enabled: true,
             focused: false,
             focusable: false,
+            accessibility_focus_block_type: AccessibilityFocusBlockType::None,
             selected: false,
             checked: None,
             expanded: None,

@@ -208,8 +208,8 @@ pub mod prelude {
         RestorableIntN, RestorableString, RestorableStringN,
     };
     pub use incular_semantics::{
-        Role as SemanticRole, SemanticAction, SemanticActionKind, SemanticNodeId, SemanticState,
-        SemanticsDiagnostics, SemanticsTree,
+        AccessibilityFocusBlockType, Role as SemanticRole, SemanticAction, SemanticActionKind,
+        SemanticNodeId, SemanticState, SemanticsDiagnostics, SemanticsTree,
     };
     pub use incular_text::{
         EditableText as TextEditingModel, FontFamily, FontFeature, FontStyle, FontVariation,

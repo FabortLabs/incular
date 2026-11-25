@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-widgets`: `Semantics::accessibility_focus_block_type` blocks
+  accessibility focus for a node or subtree without changing keyboard
+  focus or removing the node's other actions.
 - `incular-android`: mouse and stylus hover reach widgets, and mouse wheels and
   trackpads scroll the viewport under the pointer. Mouse buttons and stylus
   orientation and barrel buttons reach raw pointer listeners.
@@ -75,6 +78,10 @@ a version and date when publishing.
 
 ### Changed
 
+- **Breaking (`incular-semantics`):** exhaustive `SemanticState` literals
+  need `accessibility_focus_block_type: AccessibilityFocusBlockType::None`
+  unless the annotation blocks accessibility focus. Struct literals using
+  `..SemanticState::default()` keep the previous behavior.
 - **Breaking (`incular-gestures`):** match `GestureAction::LongPress { .. }`
   instead of the unit variant. A release that catches up a missed deadline
   carries start and end details so the arena can dispatch both phases in

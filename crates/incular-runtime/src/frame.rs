@@ -933,7 +933,11 @@ impl Runtime {
         self.tree.note_semantic_action();
         let handled = match action {
             SemanticAction::Focus => {
-                if self.tree.can_request_focus(element) {
+                let blocked =
+                    self.tree.semantics().node(node).is_some_and(|node| {
+                        node.state.accessibility_focus_block_type.blocks_focus()
+                    });
+                if !blocked && self.tree.can_request_focus(element) {
                     self.set_focus(Some(element));
                     true
                 } else {

@@ -58,3 +58,28 @@ order. The corresponding Flutter transform keeps the same ID as well.
 All 27 targeted Rust semantics tests and three authored Flutter cases
 passed. These checks do not certify every rotated, degenerate, or
 portal-grafted arrangement, nor the native screen-reader traversal.
+
+## Accessibility focus blocking
+
+Pinned Flutter distinguishes a blocked node from a blocked subtree.
+An explicit None on a child does not override its parent's subtree
+block. The retained Rust scope publishes the effective blockade
+without removing either node or child's other actions. The direct
+semantic Focus action is refused for blocked nodes, but actual
+keyboard focus and keyboard dispatch stay independent.
+
+- `widgets/semantics_test.dart:1167` matches the retained parent's
+  unblocked-to-subtree update; both parent and child receive the flag.
+- `:875` and `:940` match node/subtree propagation with both explicit
+  and default child settings. They are partial because Rust does not
+  expose the originals' custom semantic action descriptors.
+- `:1149` matches clearing explicit focused metadata on a blocked
+  node. Rust uses its effective block type and false boolean in
+  place of Flutter's separate flag and nullable focused value;
+  its independent action control uses Activate, not a custom action.
+
+The authored Flutter control keeps an actual FocusNode focused and
+delivers keys across all three modes. The mounted Rust control likewise
+retains the node IDs, focus and activation callbacks. Merging retains
+the strongest block. All 33 focused Rust tests and four named Flutter
+originals passed. No native assistive-technology run is claimed.

@@ -1,6 +1,6 @@
 //! Accessible semantic annotation widgets.
 
-use incular_semantics::{SemanticAction, SemanticRole, SemanticState};
+use incular_semantics::{AccessibilityFocusBlockType, SemanticAction, SemanticRole, SemanticState};
 use smart_default::SmartDefault;
 use std::rc::Rc;
 use typed_builder::TypedBuilder;
@@ -115,6 +115,14 @@ impl Semantics {
     #[must_use]
     pub fn state(mut self, state: SemanticState) -> Self {
         self.state = state;
+        self
+    }
+
+    /// Blocks focus through accessibility for this node or its subtree,
+    /// without removing semantics or changing actual keyboard focus.
+    #[must_use]
+    pub fn accessibility_focus_block_type(mut self, block: AccessibilityFocusBlockType) -> Self {
+        self.state.accessibility_focus_block_type = block;
         self
     }
 
