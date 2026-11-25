@@ -85,3 +85,7 @@ separate, long-standing static-box adapter failures were reproduced
 with the same values listed in
 [the offscreen-sliver comparison](offscreen-sliver-semantics-comparisons.md).
 This authored probe does not count as an extra original registration.
+
+The pinned `scroll__page_view__fling_page_changed` recheck now matches
+all 68 frames, including the settled page and the callback count,
+with no scenario or tolerance changes.

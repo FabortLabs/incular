@@ -138,3 +138,44 @@ fn single_backspace_after_initial_history_sample_can_undo_and_redo() {
     editor.redo();
     assert_eq!(editor.controller.text(), "ab");
 }
+
+#[test]
+fn keyboard_undo_cancels_pending_edit_without_creating_a_redo() {
+    let mut editor = Editor::focused();
+    editor.advance(600);
+    editor.backspace();
+    assert_eq!(editor.controller.text(), "ab");
+    editor.undo();
+    assert_eq!(editor.controller.text(), "abc");
+    assert_eq!(editor.controller.selection(), TextSelection::collapsed(3));
+    editor.advance(600);
+    editor.redo();
+    assert_eq!(editor.controller.text(), "abc");
+}
+
+#[test]
+fn an_unfocused_editor_reports_exactly_one_group_deadline() {
+    let controller = TextEditingController::with_text("abc");
+    controller.set_selection(TextSelection::collapsed(3));
+    let field = EditableText::new(controller).text_direction(TextDirection::Ltr);
+    let mut runtime = Runtime::new(field.into()).unwrap();
+    let bounds = Constraints::tight(Size::new(180., 40.));
+    let start = Instant::now();
+    runtime.run_frame_at(bounds, start).unwrap();
+    assert!(runtime.focused_element().is_none());
+    assert_eq!(
+        runtime.next_frame_deadline(),
+        Some(start + Duration::from_millis(500))
+    );
+    runtime
+        .run_frame_at(bounds, start + Duration::from_millis(499))
+        .unwrap();
+    assert_eq!(
+        runtime.next_frame_deadline(),
+        Some(start + Duration::from_millis(500))
+    );
+    runtime
+        .run_frame_at(bounds, start + Duration::from_millis(500))
+        .unwrap();
+    assert_eq!(runtime.next_frame_deadline(), None);
+}

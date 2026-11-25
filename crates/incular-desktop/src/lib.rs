@@ -2469,6 +2469,13 @@ impl ApplicationHandler<RuntimeWakeEvent> for DesktopHost {
         }
         for id in self.application.active_window_ids() {
             self.request_frame_if_needed(id);
+            if self.native_ids.get(&id).and_then(|native_id| self.windows.get(native_id)).is_some_and(|state| {
+                !state.surface.metrics().physical_size.is_zero()
+                    && !state.environment.is_occluded()
+                    && state.window.is_minimized().is_none_or(|minimized| !minimized)
+            }) {
+                take_wake(self.application.frame_deadline(id).filter(|deadline| *deadline > now));
+            }
         }
         self.reclaim_stale_shared_images();
         self.fulfill_gpu_resource_queries();

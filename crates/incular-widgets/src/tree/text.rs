@@ -90,6 +90,21 @@ impl WidgetTree {
         }
         Ok(())
     }
+    /// Mounted editors, including unfocused retained fields.
+    #[doc(hidden)]
+    pub fn text_field_elements(&self) -> impl Iterator<Item = ElementId> + '_ {
+        self.tracked.text_fields.iter().copied()
+    }
+
+    /// The retained editor set or its attached controller can change
+    /// only when mounting or rebuilding. Offset-only frames need not
+    /// visit every editor.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn text_field_history_epoch(&self) -> (u64, u64) {
+        (self.diagnostics.mounts, self.diagnostics.rebuilds)
+    }
+
     #[must_use]
     pub fn is_text_field(&self, id: ElementId) -> bool {
         self.elements

@@ -185,6 +185,8 @@ pub struct Runtime {
     pub(crate) caret_reveal_key: Option<(ElementId, u64, TextSelection)>,
     ime_composition: Option<ImeCompositionOwner>,
     pub(crate) text_histories: HashMap<ElementId, UndoHistoryController>,
+    text_history_time: Option<Instant>,
+    text_history_epoch: Option<(u64, u64)>,
     pub(crate) text_input_commands: VecDeque<TextInputCommand>,
     /// The style the app or an annotation asked for; `None` until one does.
     pub(crate) system_ui_overlay_style: Option<SystemUiOverlayStyle>,
@@ -399,6 +401,8 @@ impl Runtime {
             caret_reveal_key: None,
             ime_composition: None,
             text_histories: HashMap::new(),
+            text_history_time: None,
+            text_history_epoch: None,
             text_input_commands: VecDeque::new(),
             system_ui_overlay_style: None,
             system_ui_overlay_style_applied: None,
@@ -869,6 +873,7 @@ impl Runtime {
         self.pressed_button = None;
         self.legacy_pointer = None;
         self.text_histories.clear();
+        self.text_history_epoch = None;
         self.tree.release_edit_subscriptions();
         let _ = self.transition_lifecycle(ApplicationLifecycle::Stopping);
         for (_, scope) in self.owner_scopes.drain() {
@@ -902,6 +907,7 @@ impl Runtime {
         self.handlers.clear();
         self.legacy_action_handler = None;
         self.text_histories.clear();
+        self.text_history_epoch = None;
         self.text_input_commands.clear();
         self.undo_manager_commands.clear();
         for record in self.platform_views.values() {
@@ -1424,10 +1430,18 @@ impl Runtime {
             || self.tree.has_dirty_dependencies()
             || self.tree.has_pending_application_fonts()
             || self.tree.has_pending_scroll_animations()
+            || self.next_frame_deadline().is_some_and(|deadline| deadline <= Instant::now())
             || incular_animation::scheduler::has_scheduled_frame()
             || (self.lifecycle != ApplicationLifecycle::Suspended
                 && incular_animation::scheduler::has_ready_scheduled_task())
     }
+    /// Earliest deadline that needs a frame but does not need continuous
+    /// redraws while waiting. Hosts can sleep until this instant.
+    #[must_use]
+    pub fn next_frame_deadline(&self) -> Option<Instant> {
+        self.text_histories.values().filter_map(UndoHistoryController::next_deadline).min()
+    }
+
     #[must_use]
     pub fn handle_input(&mut self, event: InputEvent) -> Option<EventTarget> {
         self.tree
@@ -1489,6 +1503,7 @@ impl Runtime {
 
     pub(crate) fn handle_input_timed(&mut self, event: InputEvent) -> Option<EventTarget> {
         let started = incular_core::time::Instant::now();
+        self.advance_text_history_clock(self.input_now());
         let target = self.handle_input_inner(event);
         self.pending_event_processing_us = self
             .pending_event_processing_us
@@ -2386,18 +2401,47 @@ impl Runtime {
         }
     }
 
-    fn ensure_text_history(&mut self, field: ElementId) -> Option<UndoHistoryController> {
-        let editor = self.tree.text_controller(field)?;
-        let replace = self
-            .text_histories
-            .get(&field)
-            .is_none_or(|history| history.editor() != editor);
-        if replace {
-            self.text_histories
-                .insert(field, UndoHistoryController::new(editor));
+    fn advance_text_history_clock(&mut self, now: Instant) {
+        let now = self.text_history_time.map_or(now, |last| last.max(now));
+        self.text_history_time = Some(now);
+        for history in self.text_histories.values() {
+            history.advance_to(now);
         }
-        let history = self.text_histories.get(&field).cloned()?;
-        if let Some(max_entries) = self.tree.text_field_history_max_entries(field)
+    }
+
+    fn sync_mounted_text_histories(&mut self) {
+        let epoch = self.tree.text_field_history_epoch();
+        if self.text_history_epoch == Some(epoch) {
+            return;
+        }
+        self.text_history_epoch = Some(epoch);
+        let clock = self.text_history_time.unwrap_or_else(|| self.input_now());
+        let android = self.text_shortcut_platform == TextShortcutPlatform::Android;
+        for field in self.tree.text_field_elements() {
+            Self::mounted_text_history(&self.tree, &mut self.text_histories, field, clock, android);
+        }
+    }
+
+    fn ensure_text_history(&mut self, field: ElementId) -> Option<UndoHistoryController> {
+        let clock = self.text_history_time.unwrap_or_else(|| self.input_now());
+        let android = self.text_shortcut_platform == TextShortcutPlatform::Android;
+        Self::mounted_text_history(&self.tree, &mut self.text_histories, field, clock, android).cloned()
+    }
+
+    fn mounted_text_history<'histories>(
+        tree: &WidgetTree,
+        histories: &'histories mut HashMap<ElementId, UndoHistoryController>,
+        field: ElementId,
+        clock: Instant,
+        android: bool,
+    ) -> Option<&'histories UndoHistoryController> {
+        let editor = tree.text_controller(field)?;
+        let replace = histories.get(&field).is_none_or(|history| history.editor() != editor);
+        if replace {
+            histories.insert(field, UndoHistoryController::new_flutter(editor, clock, android));
+        }
+        let history = histories.get(&field)?;
+        if let Some(max_entries) = tree.text_field_history_max_entries(field)
             && history.max_entries() != max_entries
         {
             history.set_max_entries(max_entries);
@@ -2833,6 +2877,7 @@ impl Runtime {
     /// Returns whether the history moved; without a focused text field
     /// nothing happens.
     pub fn handle_platform_undo(&mut self, direction: UndoDirection) -> bool {
+        self.advance_text_history_clock(self.input_now());
         let Some(field) = self.focused.filter(|id| self.tree.is_text_field(*id)) else {
             return false;
         };
@@ -3261,6 +3306,8 @@ impl Runtime {
         // Writes made during the previous build invalidate their dependents
         // now, so they rebuild in this frame.
         crate::environment::flush_deferred_invalidations();
+        self.advance_text_history_clock(now);
+        self.sync_mounted_text_histories();
         if !warm_up {
             self.process_runtime_work_at(now);
             if self.lifecycle != ApplicationLifecycle::Suspended {
@@ -3417,6 +3464,7 @@ impl Runtime {
         // compositor, so its annotations describe this frame.
         self.update_system_ui_overlay_style_from_annotations();
         self.sync_text_input_client();
+        self.sync_mounted_text_histories();
         self.sync_undo_manager_state();
         self.sync_platform_views();
         // A focused field whose value or selection changed scrolls its

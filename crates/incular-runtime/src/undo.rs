@@ -5,9 +5,12 @@
 //! text deltas with the selection of each prior value, and exposes availability through the
 //! runtime's `Signal` type so only consumers that read history state rebuild.
 //!
-//! History policy — what enters the stacks:
-//! Undoable: observed committed text transitions, including typing,
-//! deletion, cut/paste, programmatic sets and committed IME composition.
+//! The standalone controller records committed text changes immediately.
+//! Retained EditableText uses Flutter's 500 ms grouping and defers the
+//! first valid selection's baseline to the end of that first group.
+//! Both modes can record typing, deletion, cut/paste, and committed IME
+//! values; the grouped mode filters invalid selections and compositions
+//! according to the target platform.
 //! Historical notification arguments are not authoritative current state;
 //! reentrant edits before this observer runs can coalesce intermediate values.
 //! Transient, never a step: preedit set/clear, selection and caret moves,
@@ -27,11 +30,13 @@
 //! creating steps, so current always tracks the editor.
 
 use crate::Signal;
+use incular_core::time::Instant;
 use incular_text::{ComposingRange, TextEditingController, TextEditingValue, TextSelection};
 use std::{
     cell::{Cell, RefCell},
     collections::VecDeque,
     rc::{Rc, Weak},
+    time::Duration,
 };
 
 /// Observable availability state for an [`UndoHistoryController`].
@@ -105,9 +110,94 @@ struct History {
     undo: VecDeque<Step>,
     redo: VecDeque<Step>,
     max_entries: usize,
+    grouped: Option<Box<GroupedHistory>>,
+}
+
+struct GroupedHistory {
+    clock: Instant,
+    pending: Option<(Instant, TextEditingValue)>,
+    seeded: bool,
+    android: bool,
 }
 
 impl History {
+    fn schedule_group(&mut self, value: &TextEditingValue, has_selection: bool) {
+        let group = self.grouped.as_mut().expect("grouped history");
+        if !has_selection {
+            return;
+        }
+        let previous = group
+            .pending
+            .as_ref()
+            .map(|(_, value)| value)
+            .or_else(|| group.seeded.then_some(&self.current));
+        if previous.is_some()
+            && !group.android
+            && value
+                .composing
+                .is_some_and(|range| range.start != range.end)
+        {
+            return;
+        }
+        let composing = if group.android { None } else { value.composing };
+        if previous
+            .is_some_and(|previous| previous.text == value.text && previous.composing == composing)
+        {
+            return;
+        }
+        let mut accepted = value.clone();
+        accepted.composing = composing;
+        if let Some((_, pending)) = group.pending.as_mut() {
+            *pending = accepted;
+        } else {
+            group.pending = Some((group.clock + Duration::from_millis(500), accepted));
+        }
+    }
+
+    fn advance_group(&mut self, now: Instant) -> bool {
+        let Some(group) = self.grouped.as_mut() else {
+            return false;
+        };
+        group.clock = group.clock.max(now);
+        if group
+            .pending
+            .as_ref()
+            .is_none_or(|(due, _)| *due > group.clock)
+        {
+            return false;
+        }
+        let (_, next) = group.pending.take().expect("due group");
+        if !group.seeded {
+            group.seeded = true;
+            self.current = next;
+            return false;
+        }
+        if self.current == next {
+            return false;
+        }
+        self.push_value(next);
+        true
+    }
+
+    fn push_value(&mut self, next: TextEditingValue) {
+        let previous = std::mem::replace(&mut self.current, next);
+        if self.max_entries > 0 {
+            self.undo.push_back(Step::between(&previous, &self.current));
+            trim_history(&mut self.undo, self.max_entries);
+        }
+        self.redo.clear();
+    }
+
+    fn reset(&mut self, value: TextEditingValue) {
+        self.current = value;
+        self.undo.clear();
+        self.redo.clear();
+        if let Some(group) = self.grouped.as_mut() {
+            group.pending = None;
+            group.seeded = true;
+        }
+    }
+
     /// Adopts `value` as current without creating a step. Only the top undo
     /// and redo steps are expressed relative to current, so when the text
     /// changes they are rebased onto the new text.
@@ -162,10 +252,7 @@ impl Inner {
         let generation = self.editor.restoration_generation();
         if generation != self.restoration_generation.get() {
             self.restoration_generation.set(generation);
-            let mut history = self.history.borrow_mut();
-            history.current = value.clone();
-            history.undo.clear();
-            history.redo.clear();
+            self.history.borrow_mut().reset(value.clone());
             return true;
         }
         if self.applying.get() {
@@ -174,6 +261,10 @@ impl Inner {
         }
 
         let mut history = self.history.borrow_mut();
+        if history.grouped.is_some() {
+            history.schedule_group(value, self.editor.selection_if_set().is_some());
+            return false;
+        }
         if history.current == *value {
             false
         } else if history.current.text == value.text {
@@ -183,14 +274,7 @@ impl Inner {
             history.current.composing = value.composing;
             false
         } else {
-            let previous = std::mem::replace(&mut history.current, value.clone());
-            if history.max_entries > 0 {
-                let step = Step::between(&previous, &history.current);
-                history.undo.push_back(step);
-                let max_entries = history.max_entries;
-                trim_history(&mut history.undo, max_entries);
-            }
-            history.redo.clear();
+            history.push_value(value.clone());
             true
         }
     }
@@ -251,6 +335,22 @@ impl UndoHistoryController {
     /// history.
     #[must_use]
     pub fn new(editor: TextEditingController) -> Self {
+        Self::with_grouping(editor, None)
+    }
+
+    pub(crate) fn new_flutter(editor: TextEditingController, now: Instant, android: bool) -> Self {
+        Self::with_grouping(
+            editor,
+            Some(Box::new(GroupedHistory {
+                clock: now,
+                pending: None,
+                seeded: false,
+                android,
+            })),
+        )
+    }
+
+    fn with_grouping(editor: TextEditingController, grouped: Option<Box<GroupedHistory>>) -> Self {
         let initial = editor.value();
         let inner = Rc::new_cyclic(|weak: &Weak<Inner>| {
             let listener = {
@@ -272,6 +372,7 @@ impl UndoHistoryController {
                     undo: VecDeque::new(),
                     redo: VecDeque::new(),
                     max_entries: DEFAULT_MAX_ENTRIES,
+                    grouped,
                 }),
                 applying: Cell::new(false),
                 restoration_generation: Cell::new(editor.restoration_generation()),
@@ -279,7 +380,25 @@ impl UndoHistoryController {
                 listener,
             }
         });
+        editor.with_value(|value| inner.record(value));
         Self { inner }
+    }
+
+    pub(crate) fn next_deadline(&self) -> Option<Instant> {
+        let history = self.inner.history.borrow();
+        history
+            .grouped
+            .as_ref()?
+            .pending
+            .as_ref()
+            .map(|(due, _)| *due)
+    }
+
+    pub(crate) fn advance_to(&self, now: Instant) {
+        let changed = self.inner.history.borrow_mut().advance_group(now);
+        if changed {
+            self.inner.sync_state();
+        }
     }
 
     #[must_use]
@@ -336,6 +455,17 @@ impl UndoHistoryController {
     pub fn undo(&self) -> bool {
         let target = {
             let mut history = self.inner.history.borrow_mut();
+            if let Some(group) = history.grouped.as_mut() {
+                if !group.seeded {
+                    return false;
+                }
+                if group.pending.take().is_some() {
+                    let target = history.current.clone();
+                    drop(history);
+                    self.inner.apply_history_value(target);
+                    return true;
+                }
+            }
             let Some(step) = history.undo.pop_back() else {
                 return false;
             };
@@ -375,11 +505,10 @@ impl UndoHistoryController {
 
     /// Discards undo and redo entries while retaining the current editor text.
     pub fn clear(&self) {
-        let mut history = self.inner.history.borrow_mut();
-        history.current = self.inner.editor.value();
-        history.undo.clear();
-        history.redo.clear();
-        drop(history);
+        self.inner
+            .history
+            .borrow_mut()
+            .reset(self.inner.editor.value());
         self.inner.sync_state();
     }
 }

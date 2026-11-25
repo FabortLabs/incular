@@ -1601,6 +1601,18 @@ impl Application {
             .is_some_and(|record| record.runtime.frame_requested())
     }
 
+    /// Earliest non-animating wake a native window needs.
+    #[must_use]
+    pub fn frame_deadline(&self, window_id: WindowId) -> Option<Instant> {
+        self.registry
+            .borrow()
+            .slots
+            .get(window_id.index() as usize)
+            .filter(|slot| slot.generation == window_id.generation())
+            .and_then(|slot| slot.record.as_ref())
+            .and_then(|record| record.runtime.next_frame_deadline())
+    }
+
     /// Requests one warm-up for this window. The reservation begins only
     /// when this window can draw, so a hidden or zero-size window does not
     /// block other windows on the same UI thread.

@@ -118,3 +118,21 @@ fn run(name:&str, deletes:usize, expected:[&str;3]) {
 #[test] fn seeded_single_edit(){run("seeded single edit",1,["ab","abc","ab"]);}
 #[test] fn seeded_rapid_pair(){run("seeded rapid pair",2,["a","abc","a"]);}
 ```
+
+## Retained 500ms history
+
+Mounted EditableText now coalesces accepted values within a fixed 500ms
+window, including its first valid selection. An early deletion can
+therefore become the first recorded state rather than an undoable edit.
+A seeded pair of quick deletions undoes to the previous committed value
+and caret in one step. Keyboard undo cancels an uncommitted group
+without creating a redo entry. The retained history still stores
+compact deltas; the standalone immediate controller remains available.
+
+A fixed wake deadline, not a continuous redraw request, commits the
+group even when the editor is unfocused. Desktop windows feed that
+deadline into the existing event-loop wait; the platform-undo controls
+check availability only after accepted values with valid selection
+commit. Both pinned authored and native timing tests pass. Fresh
+strict traces match all eight original undo/redo frames and all nine
+physical-End frames.
