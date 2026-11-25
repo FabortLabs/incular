@@ -36,4 +36,4 @@ pub use physics::{
 pub use scrollbar::{
     ScrollbarGeometry, ScrollbarStyle, scrollbar_geometry, scrollbar_geometry_for_axis,
 };
-pub use sliver::{SliverConstraints, SliverGeometry};
+pub use sliver::{SliverConstraints, SliverGeometry, SliverGrowthDirection};

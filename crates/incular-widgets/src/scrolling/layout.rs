@@ -658,6 +658,22 @@ impl RenderSliver for VariableExtentRenderSliver {
         } else {
             self.leading_anchor = None;
         }
+        let scroll_extent = if constraints.growth_direction == SliverGrowthDirection::Reverse
+            && !self.tight_main_extent
+            && !range.is_empty()
+            && range.end < count
+        {
+            // Flutter's reverse-growth SliverList publishes the estimate
+            // from the current contiguous sample, not a previously cached
+            // extent for a row outside this layout window. Keep those
+            // measurements in the index for positioning/reconciliation.
+            let leading = f64::from(offsets[0]);
+            let trailing = f64::from(offsets[range.len()]);
+            (trailing + (trailing - leading) / range.len() as f64 * (count - range.end) as f64)
+                as f32
+        } else {
+            self.index.total_extent()
+        };
         for (index, edges) in range.zip(offsets.windows(2)) {
             children.push(self.variable_child_layout(index, edges[0], edges[1], constraints));
         }
@@ -669,7 +685,7 @@ impl RenderSliver for VariableExtentRenderSliver {
         }
         self.kept = kept;
         SliverLayout {
-            geometry: SliverGeometry::from_scroll_extent(constraints, self.index.total_extent()),
+            geometry: SliverGeometry::from_scroll_extent(constraints, scroll_extent),
             children,
             absorbed_overlap: 0.,
         }
@@ -2407,6 +2423,7 @@ impl RenderSliver for PaddingRenderSliver {
             (constraints.cache_origin + before).min(0.),
         );
         inner_constraints.text_direction = constraints.text_direction;
+        inner_constraints.growth_direction = constraints.growth_direction;
         let safe = constraints.safe_insets;
         inner_constraints.safe_insets = match self.safe_padding {
             Some((_, edges)) => EdgeInsets::only(
@@ -2774,6 +2791,7 @@ impl SequenceRenderSliver {
                 corrected_cache_origin,
             );
             sliver_constraints.text_direction = constraints.text_direction;
+            sliver_constraints.growth_direction = constraints.growth_direction;
             sliver_constraints.safe_insets = constraints.safe_insets;
             let layout = sliver.borrow_mut().perform_layout(sliver_constraints);
             let geometry = layout.geometry.normalized();
@@ -3471,8 +3489,10 @@ impl SequenceViewportDelegate {
         let mut correction = None;
         let mut reverse_overflow = false;
         if has_reverse {
+            let mut reverse_constraints = side(center_offset - extent, 0.);
+            reverse_constraints.growth_direction = SliverGrowthDirection::Reverse;
             let reverse = sequence.layout_run(
-                side(center_offset - extent, 0.),
+                reverse_constraints,
                 (0..self.center.index).rev(),
                 // Flutter starts the reverse run at the viewport's leading
                 // edge while the center line is above it.

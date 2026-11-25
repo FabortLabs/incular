@@ -1624,6 +1624,7 @@ impl RenderSliver for CrossAxisGroupRenderSliver {
                 constraints.cache_origin,
             );
             lane_constraints.text_direction = constraints.text_direction;
+            lane_constraints.growth_direction = constraints.growth_direction;
             lane_constraints.safe_insets = constraints.safe_insets;
             let layout = sliver.perform_layout(lane_constraints);
             let geometry = layout.geometry.normalized();

@@ -340,6 +340,7 @@ pub mod prelude {
         SliverChildListDelegate, SliverConstrainedCrossAxis, SliverConstraints,
         SliverCrossAxisExpanded, SliverCrossAxisGroup, SliverEnsureSemantics, SliverFadeTransition,
         SliverFillRemaining, SliverFillViewport, SliverFixedExtentList, SliverFloatingHeader,
+        SliverGrowthDirection,
         SliverGrid, SliverGridDelegate, SliverLayout, SliverLayoutBuilder, SliverList,
         SliverMainAxisGroup, SliverOffstage, SliverOpacity, SliverOverlapAbsorber,
         SliverOverlapHandle, SliverOverlapInjector, SliverPadding, SliverPersistentHeader,

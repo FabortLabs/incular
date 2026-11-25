@@ -8,11 +8,21 @@
 use incular_config::{Axis, EdgeInsets, TextDirection};
 use incular_core::{finite_non_negative, finite_or_zero};
 
+/// Direction in which a sliver grows from its viewport center, independent
+/// of the viewport's physical axis direction.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SliverGrowthDirection {
+    #[default]
+    Forward,
+    Reverse,
+}
+
 /// The constraints supplied by a viewport to one sliver.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SliverConstraints {
     pub axis: Axis,
     pub reverse: bool,
+    pub growth_direction: SliverGrowthDirection,
     /// Ambient direction for slivers with logical edges, independent of the physical axis.
     pub text_direction: Option<TextDirection>,
     /// Ambient safe padding after consumption by ancestor safe-area slivers.
@@ -46,6 +56,7 @@ impl SliverConstraints {
         Self {
             axis,
             reverse,
+            growth_direction: SliverGrowthDirection::Forward,
             text_direction: None,
             safe_insets: EdgeInsets::ZERO,
             scroll_offset: finite_non_negative(scroll_offset),

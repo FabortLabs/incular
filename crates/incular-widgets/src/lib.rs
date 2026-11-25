@@ -270,7 +270,7 @@ pub use incular_scroll::{
     ClampingScrollPhysics, PageMetrics, PageMetricsUpdate, ScrollAnimation, ScrollController,
     ScrollMetrics, ScrollNotification,
     ScrollNotificationSubscription, ScrollNotificationType, ScrollPhysics,
-    ScrollViewKeyboardDismissBehavior, SliverConstraints,
+    ScrollViewKeyboardDismissBehavior, SliverConstraints, SliverGrowthDirection,
 };
 pub use incular_semantics::AccessibilityFocusBlockType;
 pub use incular_text::{

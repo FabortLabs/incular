@@ -11,7 +11,7 @@ use incular_config::{Axis, Clip, Constraints, EdgeInsets, WidgetDefaults};
 use incular_core::{DragStartBehavior, Size};
 use incular_scroll::{
     MeasuredExtentIndex, ScrollController, ScrollNotification, ScrollNotificationSubscription,
-    ScrollNotificationType, ScrollPhysics, SliverConstraints, SliverGeometry,
+    ScrollNotificationType, ScrollPhysics, SliverConstraints, SliverGeometry, SliverGrowthDirection,
 };
 use typed_builder::TypedBuilder;
 
