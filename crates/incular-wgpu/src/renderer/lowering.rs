@@ -761,7 +761,9 @@ impl WgpuRenderer {
                         }
                         continue;
                     }
-                    let next = ClipRect::hard(translated_rect(rrect.rect, translation));
+                    // The stencil uses the full affine, so the scissor must
+                    // conservatively enclose that same transformed shape.
+                    let next = ClipRect::hard(transform.transform_rect_bbox(rrect.rect));
                     let parent = *clips.last().expect("clip stack");
                     let scissor = intersect_clip_with_rect(parent, next);
                     let depth = stencil_depth(parent);
@@ -840,7 +842,7 @@ impl WgpuRenderer {
                     };
                     let scissor = intersect_clip_with_rect(
                         parent,
-                        ClipRect::hard(translated_rect(bounds, translation)),
+                        ClipRect::hard(transform.transform_rect_bbox(bounds)),
                     );
                     let key = PathMeshKey {
                         path: path.id(),

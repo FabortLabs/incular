@@ -7,6 +7,50 @@ import 'package:flutter_test/flutter_test.dart';
 const _black = [0, 0, 0, 255];
 const _white = [255, 255, 255, 255];
 
+Future<List<List<int>>> _rawClip(double factor, {bool? pathClip}) async {
+  final recorder = ui.PictureRecorder();
+  final canvas = ui.Canvas(recorder);
+  canvas.drawColor(const Color(0xff000000), ui.BlendMode.src);
+  canvas.translate(4, 4);
+  canvas.scale(factor);
+  final size = 40.0 / factor;
+  final rect = ui.Rect.fromLTWH(0, 0, size, size);
+  if (pathClip == true) {
+    final edge = 12.0 / factor;
+    final path = ui.Path()
+      ..moveTo(edge, 0)
+      ..lineTo(size, 0)
+      ..lineTo(size, size)
+      ..lineTo(0, size)
+      ..lineTo(0, edge)
+      ..close();
+    canvas.clipPath(path, doAntiAlias: false);
+  } else if (pathClip == false) {
+    canvas.clipRRect(
+      ui.RRect.fromRectAndRadius(rect, ui.Radius.circular(12 / factor)),
+      doAntiAlias: false,
+    );
+  }
+  canvas.drawRect(rect, ui.Paint()..color = const Color(0xffffffff));
+  final picture = recorder.endRecording();
+  try {
+    final image = await picture.toImage(48, 48);
+    try {
+      final bytes = (await image.toByteData(
+        format: ui.ImageByteFormat.rawRgba,
+      ))!;
+      return [(4, 4), (16, 16), (34, 16), (45, 16)].map((point) {
+        final index = (point.$2 * 48 + point.$1) * 4;
+        return List.generate(4, (channel) => bytes.getUint8(index + channel));
+      }).toList();
+    } finally {
+      image.dispose();
+    }
+  } finally {
+    picture.dispose();
+  }
+}
+
 Future<({List<int> corner, List<int> center, int partial, int redFringe})>
 _capture(
   WidgetTester tester,
@@ -78,6 +122,19 @@ _capture(
 }
 
 void main() {
+  test('Hard Canvas clips follow paint transforms', () async {
+    for (final pathClip in [false, true]) {
+      for (final factor in [1.0, 2.0]) {
+        expect(await _rawClip(factor, pathClip: pathClip), [
+          _black,
+          _white,
+          _white,
+          _black,
+        ], reason: 'pathClip=$pathClip, factor=$factor');
+      }
+    }
+    expect(await _rawClip(2), [_white, _white, _white, _black]);
+  });
   testWidgets('ClipRRect default smooths an edge that hardEdge does not', (
     tester,
   ) async {

@@ -108,3 +108,15 @@ This is the analytic axis-aligned rounded-rectangle path. General-path
 fallbacks and passes with destination-reading effects still use binary
 containment. The fixture compares coverage and compositing behavior rather
 than requiring identical sample colors across renderers.
+
+### Transformed hard Canvas clips
+
+The raw Canvas probe translates by (4,4), scales by 2, and clips to
+either a rounded rectangle or a polygon. Before the fix Windows wgpu
+lost the white interior at (34,16) in both scaled cases because the
+scissor only reflected translation. Now the scissor encloses the same
+affine-transformed shape as the stencil. All four sampled positions
+match the pinned Flutter result with and without scaling, including
+the cut corner, the exterior, and the no-clip control. The rounded
+save-layer and native path-fidelity checks also pass. Transformed
+antialiased path coverage is a separate limitation.
