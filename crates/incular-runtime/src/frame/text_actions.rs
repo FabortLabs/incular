@@ -8,7 +8,7 @@
 
 use super::*;
 use crate::text_shortcuts::{TextIntent, resolve};
-use incular_text::{TextAffinity, TextBoundaryKind};
+use incular_text::{SelectionChangedCause, TextAffinity, TextBoundaryKind};
 
 /// `TextSelection.expandTo`.
 fn expand_to(selection: TextSelection, position: usize, extent_at_index: bool) -> TextSelection {
@@ -56,6 +56,48 @@ fn code_point_after(text: &str, offset: usize) -> usize {
 }
 
 impl Runtime {
+    /// Explicitly selects all text in a mounted editable field, like
+    /// EditableTextState.selectAll. This is distinct from enabling a
+    /// keyboard shortcut or showing the selection command in a toolbar.
+    /// A read-only obscured field does not select or acquire focus.
+    #[must_use]
+    pub fn select_all_text(&mut self, field: ElementId, cause: SelectionChangedCause) -> bool {
+        let Some(snapshot) = self.tree.text_field_input_geometry(field) else {
+            return false;
+        };
+        if snapshot.read_only && snapshot.obscure_text {
+            return false;
+        }
+        let Some(controller) = self.tree.text_controller(field) else {
+            return false;
+        };
+        controller.select_all();
+        if self.focused != Some(field) {
+            self.set_focus(Some(field));
+        }
+        controller.reset_caret(self.input_now());
+        if cause == SelectionChangedCause::Toolbar {
+            if matches!(
+                self.text_shortcut_platform,
+                TextShortcutPlatform::Linux
+                    | TextShortcutPlatform::MacOs
+                    | TextShortcutPlatform::Windows
+            ) {
+                self.hide_text_field_overlays(field);
+            }
+            if matches!(
+                self.text_shortcut_platform,
+                TextShortcutPlatform::Android
+                    | TextShortcutPlatform::Linux
+                    | TextShortcutPlatform::Windows
+            ) {
+                self.caret_reveal_key = None;
+            }
+        }
+        self.frame_requested = true;
+        true
+    }
+
     /// Runs the text-editing intent that `event` is bound to on the focused
     /// field. Returns whether anything happened, in which case the caller
     /// resets the caret blink and requests a frame.

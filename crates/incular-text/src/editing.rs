@@ -387,6 +387,8 @@ pub enum SelectionChangedCause {
     DoubleTap,
     LongPress,
     Drag,
+    /// A command invoked through the editor selection toolbar.
+    Toolbar,
     Accessibility,
     Programmatic,
 }

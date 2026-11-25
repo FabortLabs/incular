@@ -218,7 +218,8 @@ pub mod prelude {
     };
     pub use incular_text::{
         EditableText as TextEditingModel, FontFamily, FontFeature, FontStyle, FontVariation,
-        FontWeight, IconData, LineHeight, RichText, StrutStyle, TextAffinity, TextAlign,
+        FontWeight, IconData, LineHeight, RichText, SelectionChangedCause, StrutStyle, TextAffinity,
+        TextAlign,
         TextBaseline, TextCaretPosition, TextDecoration, TextDecorationStyle,
         TextEditingController, TextEditingValue, TextHeightBehavior, TextLayoutOptions,
         TextLeadingDistribution, TextOverflow, TextRange, TextScaler, TextSelection, TextShadow,

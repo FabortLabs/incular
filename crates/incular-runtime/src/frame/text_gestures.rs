@@ -372,6 +372,10 @@ impl Runtime {
     /// Runs a context menu button's intent on its field, which may have
     /// been rebuilt or removed since the menu opened.
     fn run_text_menu_intent(&mut self, field: ElementId, intent: TextIntent) {
+        if matches!(intent, TextIntent::SelectAll) {
+            let _ = self.select_all_text(field, incular_text::SelectionChangedCause::Toolbar);
+            return;
+        }
         let Some(controller) = self.tree.text_controller(field) else {
             return;
         };

@@ -183,3 +183,18 @@ corners and the raw layout size. The wrapper keeps its render identity.
 All 41 focused Rust checks passed. Every registration in
 `widgets/fitted_box_test.dart` now has a disposition, including the
 four partial engine-layer comparisons above.
+
+## Explicit selection
+
+Pinned original :3235 and the direct retained EditableText port now
+match. The explicit Select All command does not move a read-only
+obscured editor's caret or acquire focus, even when keyboard selection
+has explicitly been enabled. For an ordinary read-only or editable
+obscured field the explicit command selects the full text and focuses
+the field even when its interactive shortcut is disabled. The toolbar
+button uses this direct path; keyboard availability remains separate.
+
+All four pinned authored cases, both native direct selection checks,
+six keyboard/menu regressions, and five editor-focus controls passed.
+The Unicode control selects the same logical string with Incular's
+UTF-8 offsets without changing the committed text.
