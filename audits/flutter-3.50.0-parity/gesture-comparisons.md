@@ -151,3 +151,15 @@ feeds the release velocity. The reproducer was still failing at
 both Flutter probes. This checks raw touch recognizer inputs, not native
 trackpad pan/zoom or resampling at the runtime boundary. C10 is an
 authored behavior probe and does not increase the upstream case count.
+
+## Mixed real and synthesized retained scale
+
+A pinned mounted Flutter probe and an Incular Runtime test deliver
+three real and two non-linear synthesized moves. Both listeners receive
+the five provenance flags, both scale detectors report every geometric
+position, and both end at (200,100) with a velocity of (2000,0) px/s
+within 0.01. Runtime now forwards the raw samples with their supplied
+timestamp, including the provenance bit, to retained scale. Twenty
+focused Rust tests passed, including pressure, buttons and the input
+allocation check. Native platform adapters are not assumed to
+synthesize motion. This authored case is outside the upstream count.

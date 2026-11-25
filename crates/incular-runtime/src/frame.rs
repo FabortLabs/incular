@@ -42,8 +42,8 @@ use incular_semantics::{SemanticAction, SemanticNodeId};
 use incular_widgets::internal::InvalidationCause;
 use incular_widgets::internal::{
     ActionId, ButtonInk, Diagnostics, ElementId, MouseCursor, PlatformMenuBinding,
-    PointerDeviceKind, PointerEvent, PointerHitTest, RawPointerEvent, TextEditingController,
-    TextRange, TextSelection, TreeError, WidgetTree, WindowInteraction,
+    PointerDeviceKind, PointerHitTest, RawPointerEvent, TextEditingController, TextRange,
+    TextSelection, TreeError, WidgetTree, WindowInteraction,
 };
 use incular_widgets::{TextInputActionHint, TextInputTypeHint, Widget};
 use std::{
@@ -1257,6 +1257,20 @@ impl Runtime {
         target
     }
 
+    /// Dispatches a complete pointer sample, preserving synthesized motion
+    /// and the supplied timestamp through listeners and retained gestures.
+    pub fn handle_raw_pointer_event(&mut self, event: RawPointerEvent) -> Option<EventTarget> {
+        let traced_at = incular_core::time::Instant::now();
+        self.tree.set_diagnostic_trigger("raw pointer event");
+        let previous_clock = self.input_clock.replace(event.time);
+        let result = self.handle_pointer_input(event, true);
+        self.input_clock = previous_clock;
+        self.pending_event_processing_us = self
+            .pending_event_processing_us
+            .saturating_add(us_since_instant(traced_at));
+        result
+    }
+
     fn input_now(&self) -> Instant {
         self.input_clock.unwrap_or_else(Instant::now)
     }
@@ -1342,7 +1356,6 @@ impl Runtime {
     }
 
     fn handle_input_inner(&mut self, event: InputEvent) -> Option<EventTarget> {
-        let gesture_window = self.gesture_window();
         let (pointer, device, kind, buttons, button, sample, phase, position, metadata_rich) =
             match event {
                 InputEvent::Pointer { phase, position } => (
@@ -1385,6 +1398,35 @@ impl Runtime {
                 ),
                 other => return self.handle_non_pointer_input(other),
             };
+        let raw_event = RawPointerEvent::new(
+            pointer,
+            device,
+            kind,
+            buttons,
+            position,
+            phase,
+            self.input_now(),
+        )
+        .with_button(button)
+        .with_sample(sample);
+        self.handle_pointer_input(raw_event, metadata_rich)
+    }
+
+    fn handle_pointer_input(
+        &mut self,
+        raw_event: RawPointerEvent,
+        metadata_rich: bool,
+    ) -> Option<EventTarget> {
+        let gesture_window = self.gesture_window();
+        let RawPointerEvent {
+            pointer,
+            device,
+            kind,
+            button,
+            phase,
+            position,
+            ..
+        } = raw_event;
         let hover_capable = matches!(
             kind,
             PointerDeviceKind::Mouse
@@ -1420,17 +1462,6 @@ impl Runtime {
         {
             self.frame_requested = true;
         }
-        let raw_event = RawPointerEvent::new(
-            pointer,
-            device,
-            kind,
-            buttons,
-            position,
-            phase,
-            self.input_now(),
-        )
-        .with_button(button)
-        .with_sample(sample);
         if hover_capable {
             self.last_hover_sample =
                 (!matches!(phase, PointerPhase::Enter | PointerPhase::Exit)).then_some(raw_event);
@@ -1505,20 +1536,9 @@ impl Runtime {
         let ordinary_gesture_allowed =
             legacy_pointer || !metadata_rich || !hover_capable || other_button_event;
         if ordinary_gesture_allowed
-            && let Some(element) = self.tree.dispatch_pointer_gesture_with_hit_sample(
-                gesture_window,
-                device,
-                kind,
-                buttons,
-                sample,
-                PointerEvent {
-                    pointer,
-                    position,
-                    phase,
-                    time: self.input_now(),
-                },
-                &hit,
-            )
+            && let Some(element) =
+                self.tree
+                    .dispatch_pointer_gesture_raw_with_hit(gesture_window, raw_event, &hit)
         {
             self.frame_requested = true;
             if active_primary && phase != PointerPhase::Down {

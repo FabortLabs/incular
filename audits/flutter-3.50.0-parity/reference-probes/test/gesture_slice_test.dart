@@ -93,4 +93,69 @@ void main() {
     expect(ordinaryVelocity, greaterThan(1000));
     expect(syntheticVelocity, 0);
   });
+
+  testWidgets(
+    'mixed scale samples keep geometry but ignore synthesized velocity',
+    (tester) async {
+      final rawFlags = <bool>[];
+      final focalPoints = <Offset>[];
+      final releases = <Offset>[];
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Listener(
+            onPointerMove: (event) => rawFlags.add(event.synthesized),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onScaleStart: (_) {},
+              onScaleUpdate: (details) => focalPoints.add(details.focalPoint),
+              onScaleEnd: (details) =>
+                  releases.add(details.velocity.pixelsPerSecond),
+              child: const SizedBox.expand(),
+            ),
+          ),
+        ),
+      );
+      const origin = Offset(100, 100);
+      const motion = [
+        (20.0, false),
+        (145.0, true),
+        (60.0, false),
+        (-20.0, true),
+        (100.0, false),
+      ];
+      tester.binding.handlePointerEvent(
+        const PointerDownEvent(pointer: 1, position: origin),
+      );
+      var previous = origin;
+      for (final (index, (relativeX, synthetic)) in motion.indexed) {
+        final position = origin + Offset(relativeX, 0);
+        tester.binding.handlePointerEvent(
+          PointerMoveEvent(
+            pointer: 1,
+            position: position,
+            delta: position - previous,
+            timeStamp: Duration(milliseconds: (index + 1) * 10),
+            synthesized: synthetic,
+          ),
+        );
+        previous = position;
+      }
+      tester.binding.handlePointerEvent(
+        PointerUpEvent(
+          pointer: 1,
+          position: previous,
+          timeStamp: const Duration(milliseconds: 55),
+        ),
+      );
+      expect(rawFlags, [false, true, false, true, false]);
+      expect(
+        focalPoints,
+        containsAll([const Offset(245, 100), const Offset(80, 100)]),
+      );
+      expect(focalPoints.last, const Offset(200, 100));
+      expect(releases.single.dx, closeTo(2000, 0.01));
+      expect(releases.single.dy, closeTo(0, 0.01));
+    },
+  );
 }

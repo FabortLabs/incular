@@ -680,6 +680,7 @@ impl WidgetTree {
             0,
             incular_core::PointerSampleMetadata::EMPTY,
             event,
+            false,
             target,
         )
     }
@@ -700,6 +701,7 @@ impl WidgetTree {
             0,
             incular_core::PointerSampleMetadata::EMPTY,
             event,
+            false,
             hit.target(),
         )
     }
@@ -723,6 +725,7 @@ impl WidgetTree {
             buttons,
             incular_core::PointerSampleMetadata::EMPTY,
             event,
+            false,
             hit.target(),
         )
     }
@@ -749,9 +752,30 @@ impl WidgetTree {
             buttons,
             sample,
             event,
+            false,
             hit.target(),
         )
     }
+    /// Routes a complete pointer sample to the retained detector arena.
+    /// The sample's synthesized flag reaches scale velocity tracking.
+    pub fn dispatch_pointer_gesture_raw_with_hit(
+        &mut self,
+        window: u64,
+        raw: crate::raw_input::RawPointerEvent,
+        hit: &PointerHitTest,
+    ) -> Option<ElementId> {
+        self.dispatch_pointer_gesture_with_target(
+            window,
+            raw.device,
+            raw.kind,
+            raw.buttons,
+            raw.sample,
+            raw.legacy(),
+            raw.synthesized,
+            hit.target(),
+        )
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn dispatch_pointer_gesture_with_target(
         &mut self,
@@ -761,6 +785,7 @@ impl WidgetTree {
         buttons: u32,
         sample: incular_core::PointerSampleMetadata,
         event: PointerEvent,
+        synthesized: bool,
         target: Option<RenderObjectId>,
     ) -> Option<ElementId> {
         use incular_core::PointerPhase;
@@ -1279,15 +1304,18 @@ impl WidgetTree {
                             scale.reject_pointer(event.pointer);
                             continue;
                         }
-                        let details = scale.observe_raw(crate::raw_input::RawPointerEvent::new(
-                            event.pointer,
-                            device,
-                            kind,
-                            0,
-                            event.position,
-                            event.phase,
-                            event.time,
-                        ));
+                        let details = scale.observe_raw(crate::raw_input::RawPointerEvent {
+                            synthesized,
+                            ..crate::raw_input::RawPointerEvent::new(
+                                event.pointer,
+                                device,
+                                kind,
+                                0,
+                                event.position,
+                                event.phase,
+                                event.time,
+                            )
+                        });
                         if scale.wants_acceptance() {
                             accepts.push(PendingAccept::Scale(candidate.element));
                         } else if let Some(details) = details

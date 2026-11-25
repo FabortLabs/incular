@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-runtime`: dispatch timestamped raw pointer samples without
+  dropping synthesized motion metadata before scale recognition.
+
 - `incular-widgets`: box-relative linear gradients resolve logical
   endpoints with text direction and reuse shaders across retained paints.
 
