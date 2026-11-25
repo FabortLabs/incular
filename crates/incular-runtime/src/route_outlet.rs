@@ -58,7 +58,7 @@ use incular_rendering::DisplayList;
 use incular_widgets::{
     AnimatedModalBarrier, DoubleAnimation, ExcludeFocusTraversal, IgnorePointer, LayoutBuilder,
     SizedBox, Stack, Visibility, Widget, always_dismissed,
-    internal::{ElementId, Key, TreeError, WidgetTree},
+    internal::{ElementId, Key, TapRegionRouteCurrent, TreeError, WidgetTree},
 };
 
 use super::{
@@ -981,7 +981,7 @@ impl RouteOutlet {
             if visible && let Some(barrier) = barrier {
                 children.push(self.veil_widget(route.id, &barrier));
             }
-            children.push(self.content_widget(route, visible));
+            children.push(self.content_widget(route, visible, attempt.active == Some(route.id)));
             // Routes leaving above this one: replaced routes stay under
             // their replacement until it settles.
             for leaving in exiting
@@ -1022,12 +1022,15 @@ impl RouteOutlet {
     /// outlet-owned wrapper — never on the presented child — so caller
     /// keys on route content survive navigation untouched, and the tag
     /// element stays stable across visibility flips.
-    fn content_widget(&self, route: &Route, visible: bool) -> Widget {
+    fn content_widget(&self, route: &Route, visible: bool, is_current: bool) -> Widget {
         // `ModalRoute.of` for everything the route presents, when enabled.
         let content = if self.modal_route_scopes {
             Widget::environment_scope(
                 ModalRoute::new(route.clone(), self.navigator.clone()),
-                self.route_body(route),
+                Widget::environment_scope(
+                    TapRegionRouteCurrent(is_current),
+                    self.route_body(route),
+                ),
             )
         } else {
             self.route_body(route)
@@ -1068,7 +1071,13 @@ impl RouteOutlet {
     /// A popped or replaced route still animating: its content under its
     /// old tag, so it keeps its state, without input or focus.
     fn exiting_widget(&self, route: &Route) -> Widget {
-        let content: Widget = IgnorePointer::new(self.route_body(route)).into();
+        let content = self.route_body(route);
+        let content = if self.modal_route_scopes {
+            Widget::environment_scope(TapRegionRouteCurrent(false), content)
+        } else {
+            content
+        };
+        let content: Widget = IgnorePointer::new(content).into();
         Widget::from(ExcludeFocusTraversal::new(content)).with_key(self.tag_for(route.id))
     }
 

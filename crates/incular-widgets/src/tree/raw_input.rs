@@ -11,7 +11,7 @@ use incular_gestures::{
 
 use crate::raw_input::{
     ListenerCallbacks, MouseRegionCallbacks, RawInputKind, TapRegionCallbacks, TapRegionGroupId,
-    WindowInteraction,
+    TapRegionRouteCurrent, WindowInteraction,
 };
 
 use super::*;
@@ -21,6 +21,7 @@ struct TapRegistration<'a> {
     id: ElementId,
     group_id: Option<&'a TapRegionGroupId>,
     callbacks: &'a TapRegionCallbacks,
+    report_outside: bool,
     consume_outside_taps: bool,
 }
 
@@ -685,9 +686,6 @@ impl WidgetTree {
             .iter()
             .filter_map(|(raw, element)| {
                 let id = ElementId(raw);
-                if self.nearest_tap_surface(id) != Some(surface) {
-                    return None;
-                }
                 let WidgetKind::RawInput { kind, .. } = element.widget.kind() else {
                     return None;
                 };
@@ -708,10 +706,21 @@ impl WidgetTree {
                     } => (callbacks, Some(group_id), *consume_outside_taps),
                     _ => return None,
                 };
+                if self.nearest_tap_surface(id) != Some(surface) {
+                    return None;
+                }
+                // Like Flutter, a covered route is still in the registry
+                // for hit groups and inside callbacks. Only outside phases
+                // and their arena consumption depend on route currency.
+                let report_outside = element
+                    .build_context
+                    .read::<TapRegionRouteCurrent>()
+                    .is_none_or(|status| status.0);
                 Some(TapRegistration {
                     id,
                     group_id,
                     callbacks,
+                    report_outside,
                     consume_outside_taps,
                 })
             })
@@ -769,10 +778,10 @@ impl WidgetTree {
                         callback(event);
                     }
                 }
-                for registration in registrations
-                    .iter()
-                    .filter(|registration| !is_inside_tap_region(registration, hit, &hit_groups))
-                {
+                for registration in registrations.iter().filter(|registration| {
+                    registration.report_outside
+                        && !is_inside_tap_region(registration, hit, &hit_groups)
+                }) {
                     if let Some(callback) = &registration.callbacks.on_tap_outside {
                         callback(event);
                     }
@@ -789,10 +798,10 @@ impl WidgetTree {
                         callback(event);
                     }
                 }
-                for registration in registrations
-                    .iter()
-                    .filter(|registration| !is_inside_tap_region(registration, hit, &hit_groups))
-                {
+                for registration in registrations.iter().filter(|registration| {
+                    registration.report_outside
+                        && !is_inside_tap_region(registration, hit, &hit_groups)
+                }) {
                     if let Some(callback) = &registration.callbacks.on_tap_up_outside {
                         callback(event);
                     }

@@ -39,6 +39,25 @@ next nonzero viewport, including scale-factor conversion. All three
 AspectRatio originals are fully compared; the Runtime fixture does not
 claim native window-manager behavior.
 
+## TapRegion route-current remediation
+
+The expanded Rust fixture reproduced outside-down and outside-up on
+both pages after a push, and a separate port of :1191 reproduced the
+covered region swallowing a tap on the new page's button. Both exact
+Flutter originals passed. RouteOutlet now publishes currentness separately
+from visibility. A non-current region stays registered, preserving group
+membership and inside callbacks, but cannot receive outside-down/up or
+consume the outside press. Popped pages still mounted for an exit
+animation are also marked non-current. The focused Runtime fixtures now
+pass both cases, including restored callbacks after pop and the existing
+primary consumption and group controls. The exit-animation branch and
+semantic actions are not counted as new comparisons.
+
+The broader targeted `runtime route_outlet` filter had the same
+83 passing and 13 failing cases, at the same assertions, before and
+after publishing route currentness. Those focus and retained-editor
+failures remain open; the TapRegion checks do not certify route focus.
+
 ## Long press button-mask remediation
 
 Pinned :427 and :455 pass along with all five focused Rust Runtime

@@ -57,6 +57,12 @@ pub struct TapRegionCallbacks {
     pub on_tap_up_outside: Option<Rc<dyn Fn(RawPointerEvent)>>,
 }
 
+/// The current-route aspect published by the navigation host without a
+/// dependency from Widgets back to Navigation.
+#[doc(hidden)]
+#[derive(Clone, Copy)]
+pub struct TapRegionRouteCurrent(pub bool);
+
 /// Identity used to group tap regions. Flutter accepts arbitrary object
 /// identity; Rust callers get explicit, hashable identities that can be
 /// shared by value across rebuilt widget descriptions.

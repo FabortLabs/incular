@@ -166,6 +166,7 @@ packages/flutter/test/services/text_editing_delta_test.dart	138	Verify creation 
 packages/flutter/test/services/text_editing_delta_test.dart	235	Verify creation of replacement delta when replacing with shorter.	partial-match	upstream-tap-absorber-delta-and-raw-image.md
 packages/flutter/test/services/text_editing_delta_test.dart	336	Verify non text update delta created.	partial-match	upstream-tap-absorber-delta-and-raw-image.md
 packages/flutter/test/widgets/tap_region_test.dart	1133	TapRegion on non-current routes should not respond to onTapOutside events	paired-mismatch	upstream-current-route-aspect-and-long-press.md
+packages/flutter/test/widgets/tap_region_test.dart	1191	TapRegion with consumeOutsideTaps should not consume taps after navigation	paired-mismatch	upstream-current-route-aspect-and-long-press.md
 packages/flutter/test/widgets/aspect_ratio_test.dart	26	Aspect ratio control test	paired-match	upstream-current-route-aspect-and-long-press.md
 packages/flutter/test/widgets/aspect_ratio_test.dart	37	Aspect ratio infinite width	paired-match	upstream-current-route-aspect-and-long-press.md
 packages/flutter/test/widgets/aspect_ratio_test.dart	54	AspectRatio does not crash at zero area	paired-match	upstream-current-route-aspect-and-long-press.md#aspectratio-physical-view-recheck
