@@ -196,12 +196,34 @@ impl Shadow {
             },
         }
     }
+    /// Scales offset and blur, but not color (Flutter `Shadow.scale`).
+    #[must_use]
+    pub fn scale(self, factor: f32) -> Self {
+        Self::new(
+            self.color,
+            Offset::new(self.offset.x * factor, self.offset.y * factor),
+            self.blur_radius * factor,
+        )
+    }
+
+    /// Interpolate paired shadows and scale unmatched geometry toward zero
+    /// without fading its color (Flutter `Shadow.lerpList`).
+    #[must_use]
+    pub fn lerp_list(a: &[Self], b: &[Self], t: f32) -> Vec<Self> {
+        let common = a.len().min(b.len());
+        a.iter()
+            .zip(b)
+            .map(|(left, right)| left.lerp(right, t))
+            .chain(a[common..].iter().map(|shadow| shadow.scale(1.0 - t)))
+            .chain(b[common..].iter().map(|shadow| shadow.scale(t)))
+            .collect()
+    }
 }
 
 impl Lerp for Shadow {
     fn lerp(&self, other: &Self, t: f32) -> Self {
         Self::new(
-            self.color.lerp(&other.color, t),
+            self.color.lerp_unclamped(other.color, t),
             self.offset.lerp(&other.offset, t),
             self.blur_radius.lerp(&other.blur_radius, t),
         )

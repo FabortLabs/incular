@@ -16,6 +16,10 @@ pub struct TextStyle {
     pub has_explicit_weight: bool,
     pub has_explicit_style: bool,
     pub has_explicit_family: bool,
+    /// Distinguishes an empty override from unspecified inherited fallbacks.
+    pub has_explicit_fallback_families: bool,
+    /// Distinguishes an explicit zero from unspecified inherited spacing.
+    pub has_explicit_letter_spacing: bool,
     pub family: FontFamily,
     pub fallback_families: Arc<[FontFamily]>,
     pub size: f32,
@@ -75,6 +79,7 @@ impl TextStyle {
         S: Into<String>,
     {
         self.fallback_families = families.into_iter().map(FontFamily::named).collect();
+        self.has_explicit_fallback_families = true;
         self
     }
 
@@ -83,6 +88,7 @@ impl TextStyle {
         let mut families = self.fallback_families.to_vec();
         families.push(family);
         self.fallback_families = families.into();
+        self.has_explicit_fallback_families = true;
         self
     }
 
@@ -140,6 +146,7 @@ impl TextStyle {
     #[must_use]
     pub fn line_height(mut self, line_height: Option<f32>) -> Self {
         self.line_height = line_height.map(|value| {
+            debug_assert!(!value.is_nan(), "TextStyle.height must not be NaN.");
             if value <= 4.0 {
                 LineHeight::Multiplier(value.max(0.0))
             } else {
@@ -175,6 +182,7 @@ impl TextStyle {
     #[must_use]
     pub fn letter_spacing(mut self, letter_spacing: f32) -> Self {
         self.letter_spacing = letter_spacing;
+        self.has_explicit_letter_spacing = true;
         self
     }
 
@@ -327,22 +335,12 @@ impl TextStyle {
 
     #[must_use]
     pub fn with_letter_spacing(&self, letter_spacing: f32) -> Self {
-        let mut s = self.clone();
-        s.letter_spacing = letter_spacing;
-        s
+        self.clone().letter_spacing(letter_spacing)
     }
 
     #[must_use]
     pub fn with_line_height(&self, line_height: Option<f32>) -> Self {
-        let mut s = self.clone();
-        s.line_height = line_height.map(|v| {
-            if v <= 4.0 {
-                LineHeight::Multiplier(v.max(0.0))
-            } else {
-                LineHeight::Absolute(v.max(0.0))
-            }
-        });
-        s
+        self.clone().line_height(line_height)
     }
 
     #[must_use]
@@ -362,8 +360,9 @@ impl TextStyle {
             merged.family = other.family.clone();
             merged.has_explicit_family = true;
         }
-        if !other.fallback_families.is_empty() {
+        if other.has_explicit_fallback_families || !other.fallback_families.is_empty() {
             merged.fallback_families = other.fallback_families.clone();
+            merged.has_explicit_fallback_families = true;
         }
         if other.has_explicit_size {
             merged.size = other.size;
@@ -387,8 +386,9 @@ impl TextStyle {
         if other.line_height.is_some() {
             merged.line_height = other.line_height;
         }
-        if other.letter_spacing != 0.0 {
+        if other.has_explicit_letter_spacing || other.letter_spacing != 0.0 {
             merged.letter_spacing = other.letter_spacing;
+            merged.has_explicit_letter_spacing = true;
         }
         if other.word_spacing.is_some() {
             merged.word_spacing = other.word_spacing;
@@ -536,6 +536,15 @@ impl Lerp for TextStyle {
             has_explicit_weight: self.has_explicit_weight || other.has_explicit_weight,
             has_explicit_style: self.has_explicit_style || other.has_explicit_style,
             has_explicit_family: self.has_explicit_family || other.has_explicit_family,
+            has_explicit_fallback_families: if t < 0.5 {
+                self.has_explicit_fallback_families || !self.fallback_families.is_empty()
+            } else {
+                other.has_explicit_fallback_families || !other.fallback_families.is_empty()
+            },
+            has_explicit_letter_spacing: self.has_explicit_letter_spacing
+                || other.has_explicit_letter_spacing
+                || self.letter_spacing != 0.0
+                || other.letter_spacing != 0.0,
             family: if t < 0.5 {
                 self.family.clone()
             } else {
@@ -656,10 +665,10 @@ impl Lerp for TextStyle {
                 }
                 (None, None) => None,
             },
-            shadows: if t < 0.5 {
+            shadows: if self.shadows == other.shadows {
                 self.shadows.clone()
             } else {
-                other.shadows.clone()
+                TextShadow::lerp_list(&self.shadows, &other.shadows, t).into()
             },
             font_variations: if t < 0.5 {
                 self.font_variations.clone()
@@ -732,6 +741,8 @@ impl Default for TextStyle {
             has_explicit_weight: false,
             has_explicit_style: false,
             has_explicit_family: false,
+            has_explicit_fallback_families: false,
+            has_explicit_letter_spacing: false,
             family: FontFamily::SystemUi,
             fallback_families: EMPTY_FALLBACK_FAMILIES.clone(),
             size: WidgetDefaults::DEFAULT.text_size,

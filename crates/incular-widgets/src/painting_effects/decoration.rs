@@ -623,7 +623,7 @@ impl incular_core::Lerp for BoxShadow {
     /// one.
     fn lerp(&self, other: &Self, t: f32) -> Self {
         Self {
-            color: self.color.lerp(&other.color, t),
+            color: self.color.lerp_unclamped(other.color, t),
             offset: self.offset.lerp(&other.offset, t),
             blur_radius: self.blur_radius.lerp(&other.blur_radius, t),
             spread_radius: self.spread_radius.lerp(&other.spread_radius, t),

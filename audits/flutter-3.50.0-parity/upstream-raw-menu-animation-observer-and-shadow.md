@@ -34,3 +34,10 @@ Pinned Flutter 3.50.0 `ab2912035e`; unchanged Incular production `c647cb85`.
   Flutter color [32,32,160,255] vs Rust endpoint [64,64,128,255]
   at -0.5; a symmetric divergence occurs at 1.5. Midpoint
   matches. See `flutter350_box_shadow_interpolation`.
+
+### Current shadow color extrapolation
+
+The authored pinned Flutter and native BoxShadow samples now agree at
+-0.5, 0.5 and 1.5 for color, offset, blur and spread. The shared color
+helper accepts an unclamped factor for shadows and saturates only the
+output channels. Generic bounded color interpolation stays unchanged.

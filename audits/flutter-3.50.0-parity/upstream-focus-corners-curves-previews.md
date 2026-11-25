@@ -171,3 +171,18 @@ observes the focus and position changes independently. The original
 :633 remains partial for manual attach/reparent API shape, but its
 previous behavioral mismatch no longer applies. Eleven targeted Rust
 tests passed.
+
+### Current text-style shadows and merge
+
+The pinned :480 original now matches the native midpoint for every shadow
+offset, blur radius and color. A separate pinned/native case verifies that
+unpaired entries scale displacement and blur toward zero without fading
+their color. Identical native lists keep the retained shared slice.
+
+Explicit zero spacing and an explicit empty fallback list now override an
+inherited value, while unspecified values still inherit. Both authored
+Flutter checks and their native counterparts pass. The builder validation
+in :317 now also rejects NaN height in debug, but that original remains
+partial because the engine-facing ParagraphStyle override is not paired.
+
+Eleven focused native text-style, text-paint and box-shadow tests passed.

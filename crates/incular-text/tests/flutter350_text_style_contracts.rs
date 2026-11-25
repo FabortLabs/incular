@@ -58,3 +58,27 @@ fn explicitly_empty_fallback_families_clear_inherited_fallbacks() {
             .is_empty()
     );
 }
+
+#[test]
+fn unpaired_text_shadows_scale_geometry_but_not_their_color() {
+    let color = Color::rgba(10, 20, 30, 128);
+    let only = TextShadow::new(color, Offset::new(-8., 12.), 4.);
+    let a = TextStyle::new().shadow(only);
+    let b = TextStyle::new();
+    assert_eq!(
+        a.lerp(&b, 0.25).shadows.as_ref(),
+        &[TextShadow::new(color, Offset::new(-6., 9.), 3.)],
+    );
+    assert_eq!(
+        b.lerp(&a, 0.25).shadows.as_ref(),
+        &[TextShadow::new(color, Offset::new(-2., 3.), 1.)],
+    );
+    assert_eq!(
+        a.lerp(&b, 1.).shadows.as_ref(),
+        &[TextShadow::new(color, Offset::ZERO, 0.)],
+    );
+    assert!(std::sync::Arc::ptr_eq(
+        &a.shadows,
+        &a.lerp(&a, 0.125).shadows
+    ));
+}

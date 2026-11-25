@@ -719,9 +719,11 @@ impl Lerp for Rect {
     }
 }
 
-impl Lerp for Color {
-    fn lerp(&self, other: &Self, t: f32) -> Self {
-        let t = t.clamp(0.0, 1.0);
+impl Color {
+    /// Interpolates encoded sRGBA channels without clamping the factor.
+    /// Output channels still saturate to the representable byte range.
+    #[must_use]
+    pub fn lerp_unclamped(self, other: Self, t: f32) -> Self {
         let mix = |a: u8, b: u8| -> u8 {
             (f32::from(a) + (f32::from(b) - f32::from(a)) * t)
                 .round()
@@ -733,6 +735,12 @@ impl Lerp for Color {
             mix(self.blue, other.blue),
             mix(self.alpha, other.alpha),
         )
+    }
+}
+
+impl Lerp for Color {
+    fn lerp(&self, other: &Self, t: f32) -> Self {
+        self.lerp_unclamped(*other, t.clamp(0.0, 1.0))
     }
 }
 

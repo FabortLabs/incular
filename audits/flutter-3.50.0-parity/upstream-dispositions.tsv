@@ -131,8 +131,8 @@ packages/flutter/test/animation/curves_test.dart	278	Split interpolates values p
 packages/flutter/test/animation/curves_test.dart	291	CatmullRomSpline interpolates values properly	paired-match	upstream-focus-corners-curves-previews.md
 packages/flutter/test/animation/curves_test.dart	511	CatmullRomCurve enforces contract	paired-match	upstream-focus-corners-curves-previews.md
 packages/flutter/test/animation/curves_test.dart	318	CatmullRomSpline enforces contract	partial-mismatch	upstream-focus-corners-curves-previews.md
-packages/flutter/test/painting/text_style_test.dart	317	TextStyle rejects NaN height	partial-mismatch	upstream-focus-corners-curves-previews.md
-packages/flutter/test/painting/text_style_test.dart	480	TextStyle shadows	paired-mismatch	upstream-focus-corners-curves-previews.md
+packages/flutter/test/painting/text_style_test.dart	317	TextStyle rejects NaN height	partial-match	upstream-focus-corners-curves-previews.md#current-text-style-shadows-and-merge
+packages/flutter/test/painting/text_style_test.dart	480	TextStyle shadows	paired-match	upstream-focus-corners-curves-previews.md#current-text-style-shadows-and-merge
 packages/flutter_tools/test/commands.shard/hermetic/widget_preview/preview_manifest/preview_manifest_test.dart	48	generates a valid manifest	reference-ran-incular-open	upstream-focus-corners-curves-previews.md
 packages/flutter_tools/test/commands.shard/hermetic/widget_preview/preview_manifest/preview_manifest_test.dart	61	identifies widget preview scaffold project needs to be generated	reference-ran-incular-open	upstream-focus-corners-curves-previews.md
 packages/flutter_tools/test/commands.shard/hermetic/widget_preview/preview_manifest/preview_manifest_test.dart	91	identifies root project pubspec has changed	reference-ran-incular-open	upstream-focus-corners-curves-previews.md
