@@ -240,20 +240,49 @@ impl WidgetTree {
             RenderKind::Unconstrained {
                 constrained_axis,
                 alignment,
+                ref transform,
+                clip_behavior,
             } => {
-                let child_constraints = unconstrained_constraints(constraints, constrained_axis);
-                if let Some(&child) = children.first() {
-                    self.layout_render(child, child_constraints)?;
-                    let measured = self
-                        .render_live(child, "retained render must remain live")
-                        .size;
-                    // The wrapper aligns the child using its measured size.
-                    let size = constraints.constrain(measured);
-                    (
-                        size,
-                        ChildOffsets::One(aligned_child_offset(alignment, size, measured)),
-                    )
+                let child_constraints = if let Some(transform) = transform {
+                    (transform.0)(constraints).map_err(|error| {
+                        TreeError::InvalidWidgetConfiguration {
+                            widget: "ConstraintsTransformBox",
+                            reason: format!(
+                                "transformed constraints are not normalized: {error:?}"
+                            ),
+                        }
+                    })?
                 } else {
+                    unconstrained_constraints(constraints, constrained_axis)
+                };
+                let measured = if let Some(&child) = children.first() {
+                    self.layout_render(child, child_constraints)?;
+                    let child = self.render_live(child, "retained render must remain live");
+                    Some((child.size, child.baseline))
+                } else {
+                    None
+                };
+                let node = self.render_live_mut(id, "overflow proxy must remain live");
+                if let Some((child_size, baseline)) = measured {
+                    let size = constraints.constrain(child_size);
+                    let offset = aligned_child_offset(alignment, size, child_size);
+                    let overflows = offset.x < 0.
+                        || offset.y < 0.
+                        || offset.x + child_size.width > size.width
+                        || offset.y + child_size.height > size.height;
+                    node.baseline = baseline.map(|baseline| baseline + offset.y);
+                    node.object.layers.set_layout_overflow(overflows);
+                    if overflows
+                        && clip_behavior == Clip::None
+                        && transform.is_some()
+                        && cfg!(debug_assertions)
+                    {
+                        self.diagnostics.unclipped_constraint_overflows += 1;
+                    }
+                    (size, ChildOffsets::One(offset))
+                } else {
+                    node.baseline = None;
+                    node.object.layers.set_layout_overflow(false);
                     (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }

@@ -159,6 +159,8 @@ pub struct Diagnostics {
     pub unmounts: u64,
     pub rebuilds: u64,
     pub layouts: u64,
+    /// Debug layouts with overflow in an unclipped ConstraintsTransformBox.
+    pub unclipped_constraint_overflows: u64,
     pub paints: u64,
     pub composites: u64,
     pub scroll_events: u64,
@@ -677,6 +679,8 @@ pub enum RenderKind {
     Unconstrained {
         constrained_axis: Option<Axis>,
         alignment: Alignment,
+        transform: Option<ConstraintMapper>,
+        clip_behavior: Clip,
     },
     ProxyLayout {
         mode: ChildLayoutMode,

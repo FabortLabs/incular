@@ -176,9 +176,12 @@ impl std::fmt::Debug for WidgetKind {
             Self::Unconstrained {
                 constrained_axis,
                 alignment,
+                transform,
+                clip_behavior,
                 child,
             } => f
-                .debug_struct("UnconstrainedBox")
+                .debug_struct(if transform.is_some() { "ConstraintsTransformBox" } else { "UnconstrainedBox" })
+                .field("clip_behavior", clip_behavior)
                 .field("constrained_axis", constrained_axis)
                 .field("alignment", alignment)
                 .field("child", child)
@@ -1172,14 +1175,18 @@ impl PartialEq for WidgetKind {
                 Self::Unconstrained {
                     constrained_axis: a,
                     alignment: ka,
+                    transform: ta,
+                    clip_behavior: ca,
                     child: b,
                 },
                 Self::Unconstrained {
                     constrained_axis: c,
                     alignment: kb,
+                    transform: tb,
+                    clip_behavior: cb,
                     child: d,
                 },
-            ) => a == c && ka == kb && b == d,
+            ) => a == c && ka == kb && ta == tb && ca == cb && b == d,
             (
                 Self::Scroll {
                     controller: a,

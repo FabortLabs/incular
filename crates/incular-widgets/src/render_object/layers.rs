@@ -41,6 +41,7 @@ fn widget_clips(widget: &WidgetKind) -> bool {
             ..
         } => child.is_some() && *clip_behavior != Clip::None,
         WidgetKind::Flex { clip_behavior, .. }
+        | WidgetKind::Unconstrained { clip_behavior, .. }
         | WidgetKind::Stack { clip_behavior, .. }
         | WidgetKind::IndexedStack { clip_behavior, .. }
         | WidgetKind::Scroll { clip_behavior, .. } => *clip_behavior != Clip::None,
@@ -92,6 +93,7 @@ impl LayerSpec {
             | WidgetKind::ClipOval { .. }
             | WidgetKind::ClipPath { .. }
             | WidgetKind::FittedBox { .. }
+            | WidgetKind::Unconstrained { .. }
             | WidgetKind::Flex { .. }
             | WidgetKind::Stack { .. }
             | WidgetKind::IndexedStack { .. }
@@ -259,6 +261,7 @@ impl RenderLayers {
             // and the update path fill the retained shape from the node
             // size before any flatten can observe it.
             WidgetKind::ClipRect { clip_behavior, .. }
+            | WidgetKind::Unconstrained { clip_behavior, .. }
             | WidgetKind::Flex { clip_behavior, .. }
             | WidgetKind::FittedBox { clip_behavior, .. }
                 if widget_clips(widget) =>
@@ -1140,7 +1143,9 @@ impl RenderLayers {
     /// and the current delegate does not reclip against the one that produced it
     /// (`CustomClipper::should_reclip`), as Flutter's `_RenderCustomClip` does.
     fn apply_clip(&self, compositor: &mut LayerTree, kind: &RenderKind, size: Size) {
-        if let RenderKind::Flex { clip_behavior, .. } = *kind {
+        if let RenderKind::Flex { clip_behavior, .. }
+            | RenderKind::Unconstrained { clip_behavior, .. } = *kind
+        {
             self.apply_fitted_clip(compositor, size, clip_behavior, self.layout_overflow.get());
             return;
         }

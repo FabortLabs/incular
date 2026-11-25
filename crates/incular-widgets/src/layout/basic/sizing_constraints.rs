@@ -2,12 +2,12 @@
 
 use std::rc::Rc;
 
-use incular_config::{Alignment, Axis, Clip, Constraints};
+use incular_config::{Alignment, Axis, Clip, ConstraintError, Constraints};
 use incular_core::{Color, Size};
 use typed_builder::TypedBuilder;
 
 use super::Align;
-use crate::tree::ChildLayoutMode;
+use crate::tree::{ChildLayoutMode, ConstraintMapper};
 use crate::{Widget, WidgetKind, macros::widget_from_kind};
 
 /// A box with a specified size.
@@ -367,6 +367,8 @@ pub struct UnconstrainedBox {
     constrained_axis: Option<Axis>,
     #[builder(default = Alignment::CENTER)]
     alignment: Alignment,
+    #[builder(default = Clip::None)]
+    clip_behavior: Clip,
     #[builder(setter(into))]
     child: Widget,
 }
@@ -378,6 +380,7 @@ impl UnconstrainedBox {
         Self {
             constrained_axis: None,
             alignment: Alignment::CENTER,
+            clip_behavior: Clip::None,
             child: child.into(),
         }
     }
@@ -396,9 +399,25 @@ impl UnconstrainedBox {
         self.constrained_axis = Some(axis);
         self
     }
+    /// Clips only when the unconstrained child overflows this box.
+    #[must_use]
+    pub fn clip_behavior(mut self, behavior: Clip) -> Self {
+        self.clip_behavior = behavior;
+        self
+    }
 }
 
-widget_from_kind!(UnconstrainedBox => Unconstrained { constrained_axis, alignment, child });
+impl From<UnconstrainedBox> for Widget {
+    fn from(value: UnconstrainedBox) -> Self {
+        Widget::from_kind(WidgetKind::Unconstrained {
+            constrained_axis: value.constrained_axis,
+            alignment: value.alignment,
+            transform: None,
+            clip_behavior: value.clip_behavior,
+            child: value.child,
+        })
+    }
+}
 
 /// Rebuilds a subtree when incoming layout constraints change.
 #[derive(Clone)]
@@ -601,7 +620,7 @@ widget_from_kind!(SizedOverflowBox => SizedOverflow { size, alignment, child });
 /// Transforms incoming layout constraints before passing them to its child.
 #[derive(Clone)]
 pub struct ConstraintsTransformBox {
-    transform: Rc<dyn Fn(Constraints) -> Constraints>,
+    transform: ConstraintMapper,
     alignment: Alignment,
     clip_behavior: Clip,
     child: Widget,
@@ -613,12 +632,82 @@ impl ConstraintsTransformBox {
         transform: impl Fn(Constraints) -> Constraints + 'static,
         child: impl Into<Widget>,
     ) -> Self {
+        Self::try_new(move |constraints| Ok(transform(constraints)), child)
+    }
+
+    /// Transforms constraints through a fallible callback. Invalid output
+    /// is reported by the retained layout pass, before laying out the child.
+    #[must_use]
+    pub fn try_new(
+        transform: impl Fn(Constraints) -> Result<Constraints, ConstraintError> + 'static,
+        child: impl Into<Widget>,
+    ) -> Self {
         Self {
-            transform: Rc::new(transform),
+            transform: ConstraintMapper(Rc::new(transform)),
             alignment: Alignment::CENTER,
             clip_behavior: Clip::None,
             child: child.into(),
         }
+    }
+
+    #[must_use]
+    pub const fn unmodified(constraints: Constraints) -> Constraints {
+        constraints
+    }
+
+    #[must_use]
+    pub fn unconstrained(_: Constraints) -> Constraints {
+        Constraints::default()
+    }
+
+    #[must_use]
+    pub fn width_unconstrained(constraints: Constraints) -> Constraints {
+        Constraints::new(
+            0.,
+            f32::INFINITY,
+            constraints.min_height(),
+            constraints.max_height(),
+        )
+    }
+
+    #[must_use]
+    pub fn height_unconstrained(constraints: Constraints) -> Constraints {
+        Constraints::new(
+            constraints.min_width(),
+            constraints.max_width(),
+            0.,
+            f32::INFINITY,
+        )
+    }
+
+    #[must_use]
+    pub fn max_width_unconstrained(constraints: Constraints) -> Constraints {
+        Constraints::new(
+            constraints.min_width(),
+            f32::INFINITY,
+            constraints.min_height(),
+            constraints.max_height(),
+        )
+    }
+
+    #[must_use]
+    pub fn max_height_unconstrained(constraints: Constraints) -> Constraints {
+        Constraints::new(
+            constraints.min_width(),
+            constraints.max_width(),
+            constraints.min_height(),
+            f32::INFINITY,
+        )
+    }
+
+    #[must_use]
+    pub fn max_unconstrained(constraints: Constraints) -> Constraints {
+        Constraints::new(
+            constraints.min_width(),
+            f32::INFINITY,
+            constraints.min_height(),
+            f32::INFINITY,
+        )
     }
 
     #[must_use]
@@ -636,25 +725,13 @@ impl ConstraintsTransformBox {
 
 impl From<ConstraintsTransformBox> for Widget {
     fn from(value: ConstraintsTransformBox) -> Self {
-        let transform = value.transform;
-        let child = value.child;
-        let alignment = value.alignment;
-        let clip_behavior = value.clip_behavior;
-        let layout: Widget = LayoutBuilder::new(move |_, incoming| {
-            let child_constraints = transform(incoming);
-            let inner: Widget =
-                ConstrainedBox::new(child_constraints, Align::new(alignment, child.clone())).into();
-            // Clip through the existing ClipRect attachment when requested;
-            // Clip::None stays unwrapped, so no redundant layer is added.
-            match clip_behavior {
-                Clip::None => inner,
-                behavior => crate::layout::ClipRect::new(inner)
-                    .clip_behavior(behavior)
-                    .into(),
-            }
+        Widget::from_kind(WidgetKind::Unconstrained {
+            constrained_axis: None,
+            alignment: value.alignment,
+            transform: Some(value.transform),
+            clip_behavior: value.clip_behavior,
+            child: value.child,
         })
-        .into();
-        layout
     }
 }
 

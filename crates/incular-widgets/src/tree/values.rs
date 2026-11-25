@@ -9,6 +9,23 @@ use incular_core::{IdGenerator, finite_or_zero};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ElementId(pub(crate) ArenaId);
 
+/// Shared layout constraint callback used by a retained overflow proxy.
+#[doc(hidden)]
+#[derive(Clone)]
+pub struct ConstraintMapper(
+    pub(crate) Rc<dyn Fn(Constraints) -> Result<Constraints, incular_config::ConstraintError>>,
+);
+impl std::fmt::Debug for ConstraintMapper {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ConstraintMapper").finish_non_exhaustive()
+    }
+}
+impl PartialEq for ConstraintMapper {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
 /// A retained element qualified by the tree that owns its arena.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ElementAddress {

@@ -646,6 +646,8 @@ pub(crate) enum WidgetKind {
     Unconstrained {
         constrained_axis: Option<Axis>,
         alignment: Alignment,
+        transform: Option<ConstraintMapper>,
+        clip_behavior: Clip,
         child: Widget,
     },
     ProxyLayout {

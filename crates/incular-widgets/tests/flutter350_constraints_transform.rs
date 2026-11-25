@@ -1,0 +1,157 @@
+use incular_config::{Clip, Constraints, TextDirection};
+use incular_core::{Color, Offset, Rect, Size};
+use incular_rendering::{ClipCoverage, DisplayList, PaintCommand};
+use incular_widgets::{
+    ConstraintsTransformBox as TransformBox, CustomPaint, CustomPainter, SizedBox, Text, Widget,
+    internal::{TreeError, WidgetTree},
+};
+use std::{cell::Cell, rc::Rc};
+
+fn size(tree: &WidgetTree, element: incular_widgets::internal::ElementId) -> Size {
+    tree.render_size(tree.render_id(element).unwrap()).unwrap()
+}
+
+#[test]
+fn replacing_width_unconstrained_with_fully_unconstrained_preserves_a_tight_parent() {
+    let scene = |transform: fn(Constraints) -> Constraints| {
+        TransformBox::new(transform, SizedBox::square(200.)).into()
+    };
+    let constraint = Constraints::tight(Size::new(200., 200.));
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(scene(TransformBox::width_unconstrained))
+        .unwrap();
+    let render = tree.render_id(root).unwrap();
+    for transform in [
+        TransformBox::width_unconstrained,
+        TransformBox::unconstrained,
+    ] {
+        tree.update(root, scene(transform)).unwrap();
+        tree.layout(constraint).unwrap();
+        assert_eq!(tree.render_id(root), Some(render));
+        assert_eq!(size(&tree, root), Size::new(200., 200.));
+        assert_eq!(
+            size(&tree, tree.children(root).unwrap()[0]),
+            Size::new(200., 200.)
+        );
+    }
+}
+
+#[test]
+fn invalid_transformed_constraints_return_the_layout_error_before_measuring_the_child() {
+    let invalid = |_: Constraints| Constraints::try_new(0., f32::INFINITY, 200., -1.);
+    let mut tree = WidgetTree::new();
+    tree.mount(TransformBox::try_new(invalid, SizedBox::new().height(0.)).into())
+        .unwrap();
+    let err = tree.layout(Constraints::default()).unwrap_err();
+    assert!(matches!(
+        &err,
+        TreeError::InvalidWidgetConfiguration {
+            widget: "ConstraintsTransformBox",
+            ..
+        }
+    ));
+    assert!(
+        err.to_string().contains("is not normalized")
+            || err.to_string().contains("are not normalized")
+    );
+}
+
+#[test]
+fn transformed_child_can_overflow_and_every_clip_mode_is_observed() {
+    let scene = |clip| -> Widget {
+        let wrapper = TransformBox::new(
+            TransformBox::max_width_unconstrained,
+            Widget::box_(Size::new(200., 200.), Color::WHITE),
+        );
+        if let Some(clip) = clip {
+            wrapper.clip_behavior(clip).into()
+        } else {
+            wrapper.into()
+        }
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scene(None)).unwrap();
+    let viewport = Size::new(100., 100.);
+    for (setting, coverage) in [
+        (None, None),
+        (Some(Clip::None), None),
+        (Some(Clip::HardEdge), Some(ClipCoverage::HardEdge)),
+        (Some(Clip::AntiAlias), Some(ClipCoverage::AntiAlias)),
+        (
+            Some(Clip::AntiAliasWithSaveLayer),
+            Some(ClipCoverage::AntiAliasWithSaveLayer),
+        ),
+    ] {
+        let before = tree.diagnostics().unclipped_constraint_overflows;
+        tree.update(root, scene(setting)).unwrap();
+        tree.layout(Constraints::loose(viewport)).unwrap();
+        assert_eq!(size(&tree, root), viewport);
+        let child = tree.children(root).unwrap()[0];
+        assert_eq!(size(&tree, child), Size::new(200., 100.));
+        assert_eq!(
+            tree.element_bounds(child).unwrap().origin,
+            Offset::new(-50., 0.)
+        );
+        assert_eq!(
+            tree.diagnostics().unclipped_constraint_overflows - before,
+            u64::from(coverage.is_none() && cfg!(debug_assertions))
+        );
+        let list = tree.paint();
+        let clip = list.commands().iter().find_map(|command| match command {
+            PaintCommand::PushClip { rect } => Some((*rect, ClipCoverage::HardEdge)),
+            PaintCommand::PushClipRRect {
+                rrect, coverage, ..
+            } => Some((rrect.rect, *coverage)),
+            _ => None,
+        });
+        assert_eq!(
+            clip,
+            coverage.map(|mode| (Rect::from_origin_size(Offset::ZERO, viewport), mode))
+        );
+    }
+}
+
+#[test]
+fn width_transform_keeps_a_paragraph_single_line_even_in_a_narrow_parent() {
+    let text = || Text::new("a".repeat(100)).text_direction(TextDirection::Ltr);
+    let constraints = Constraints::at_most(30., 1000.);
+    let mut normal = WidgetTree::new();
+    let plain = normal.mount(text().into()).unwrap();
+    normal.layout(constraints).unwrap();
+
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(TransformBox::new(TransformBox::max_width_unconstrained, text()).into())
+        .unwrap();
+    tree.layout(constraints).unwrap();
+    let box_size = size(&tree, root);
+    assert_eq!(box_size.width, 30.);
+    assert!(size(&normal, plain).height >= 2. * box_size.height);
+    assert!(size(&tree, tree.children(root).unwrap()[0]).width > 30.);
+}
+
+struct Trace(Rc<Cell<usize>>);
+impl CustomPainter for Trace {
+    fn paint(&self, _: Size) -> DisplayList {
+        self.0.set(self.0.get() + 1);
+        DisplayList::default()
+    }
+    fn should_repaint(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+#[test]
+fn a_zero_size_constraints_transform_still_calls_its_painter() {
+    let calls = Rc::new(Cell::new(0));
+    let child = CustomPaint::from_painter(Size::ZERO, Trace(calls.clone()));
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(TransformBox::new(TransformBox::max_width_unconstrained, child).into())
+        .unwrap();
+    tree.layout(Constraints::tight(Size::ZERO)).unwrap();
+    assert_eq!(size(&tree, root), Size::ZERO);
+    let _ = tree.paint();
+    assert_eq!(calls.get(), 1);
+}

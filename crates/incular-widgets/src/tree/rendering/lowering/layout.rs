@@ -74,10 +74,14 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
         WidgetKind::Unconstrained {
             constrained_axis,
             alignment,
+            transform,
+            clip_behavior,
             ..
         } => RenderKind::Unconstrained {
             constrained_axis: *constrained_axis,
             alignment: *alignment,
+            transform: transform.clone(),
+            clip_behavior: *clip_behavior,
         },
         WidgetKind::ProxyLayout { mode, .. } => RenderKind::ProxyLayout { mode: *mode },
         WidgetKind::Fractional {

@@ -1347,3 +1347,8 @@ packages/flutter/test/rendering/object_test.dart	188	RenderObject.getTransformTo
 packages/flutter/test/rendering/object_test.dart	197	RenderObject.getTransformTo works for siblings and descendants	paired-match	upstream-render-coordinates.md
 packages/flutter/test/rendering/object_test.dart	217	RenderObject.getTransformTo gets the correct paint transform	partial-match	upstream-render-coordinates.md
 packages/flutter/test/rendering/box_test.dart	1281	localToGlobal with ancestor	paired-match	upstream-render-coordinates.md
+packages/flutter/test/rendering/box_test.dart	407	UnconstrainedBox expands to fit children	paired-match	upstream-constraints-transform.md
+packages/flutter/test/rendering/box_test.dart	482	throws if the resulting constraints are not normalized	paired-match	upstream-constraints-transform.md
+packages/flutter/test/rendering/box_test.dart	499	overflow is reported when insufficient size is given and clipBehavior is Clip.none	partial-match	upstream-constraints-transform.md
+packages/flutter/test/rendering/box_test.dart	563	handles flow layout	partial-match	upstream-constraints-transform.md
+packages/flutter/test/rendering/box_test.dart	584	paints even when its size is empty	partial-match	upstream-constraints-transform.md
