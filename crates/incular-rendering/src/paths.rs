@@ -172,11 +172,12 @@ impl Path {
     pub const fn id(&self) -> PathId {
         self.id
     }
-    /// Renderer-neutral filled-path containment. A single rectangle includes
-    /// its boundary as Flutter does; other paths use Kurbo segment winding.
-    /// Neither case depends on GPU tessellation.
+    /// Renderer-neutral filled-path containment. Single rectangular edges
+    /// and extremal joins of a lone filled contour are inclusive as in
+    /// Flutter; all other points use the segment winding calculation.
     #[must_use]
     pub fn contains(&self, point: Offset, rule: FillRule) -> bool {
+        let offset = point;
         let point = Point::new(f64::from(point.x), f64::from(point.y));
         if let [
             PathEl::MoveTo(a),
@@ -198,10 +199,40 @@ impl Path {
                 && point.y <= a.y.max(c.y);
         }
         let winding = self.bez_path().winding(point);
-        match rule {
+        let inside = match rule {
             FillRule::NonZero => winding != 0,
             FillRule::EvenOdd => winding.unsigned_abs() % 2 == 1,
+        };
+        if inside {
+            return true;
         }
+
+        // Winding deliberately skips tangent joins. Preserve Flutter's
+        // inclusive cardinal boundary on an oval (and equivalent single
+        // closed contours) without filling a degenerate path or turning
+        // matching edges of two cancelling contours into solid pixels.
+        let Some(bounds) = self.tight_bounds() else {
+            return false;
+        };
+        if bounds.size.width == 0.
+            || bounds.size.height == 0.
+            || !bounds.contains(offset)
+            || !(offset.x == bounds.origin.x
+                || offset.x == bounds.origin.x + bounds.size.width
+                || offset.y == bounds.origin.y
+                || offset.y == bounds.origin.y + bounds.size.height)
+        {
+            return false;
+        }
+        let elements = self.bez_path().elements();
+        matches!(elements, [PathEl::MoveTo(_), _, .., PathEl::ClosePath])
+            && elements
+                .iter()
+                .any(|segment| segment.end_point() == Some(point))
+            && !elements[1..]
+                .iter()
+                .any(|segment| matches!(segment, PathEl::MoveTo(_)))
+            && self.bez_path().area().abs() > 0.
     }
 
     /// Wraps an already-built Bézier path. Geometry some live path already

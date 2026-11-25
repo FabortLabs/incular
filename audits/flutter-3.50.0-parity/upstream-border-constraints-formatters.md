@@ -261,3 +261,19 @@ side and a magenta 3px left side. Flutter and Incular both put yellow
 at x=1 and magenta at x=3 and start the inner path at x=5. The Rust
 typed result composes with ShapeDecoration. Cross-type border
 addition is not claimed by this physical Border + Border overload.
+
+## Circle and oval paths
+
+Pinned CircleBorder defaults and inner/outer path cases now match.
+Eccentricity defaults to zero, preserves a centered circle at that
+value, and reaches the full rectangular ellipse at one. The authored
+comparison checks 0.5 on wide and tall rectangles, copying/scaling,
+and clamped interpolation. Rust additionally records the 10px stroke
+at its correctly inset centerline.
+
+The pinned OvalBorder case now passes all scaling and interpolation
+assertions and its inner/outer containment samples. Previously the
+exact top-center vertex of the oval's inner path was excluded by
+the winding test. The fallback includes existing extremal joins of a
+single closed filled contour; it does not extend the shape to nearby
+points or turn cancelling even-odd contours into a fill.

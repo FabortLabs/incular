@@ -80,3 +80,27 @@ fn rounded_superellipse_with_square_corners_is_the_rectangle() {
     assert_bounds(&path, rect(10., 20., 30., 40.));
     assert!(path.contains(Offset::new(10.5, 20.5), FillRule::NonZero));
 }
+
+#[test]
+fn closed_contour_extrema_are_inclusive_without_filling_cancelled_contours() {
+    let tip = Offset::new(5., 0.);
+    let triangle = |builder: &mut incular_rendering::PathBuilder| {
+        builder
+            .move_to(tip)
+            .line_to(Offset::new(10., 10.))
+            .line_to(Offset::new(0., 10.))
+            .close();
+    };
+    let mut single = Path::builder();
+    triangle(&mut single);
+    let single = single.build();
+    assert!(single.contains(tip, FillRule::NonZero));
+    assert!(!single.contains(Offset::new(5., -0.001), FillRule::NonZero));
+
+    let mut cancelled = Path::builder();
+    triangle(&mut cancelled);
+    triangle(&mut cancelled);
+    let cancelled = cancelled.build();
+    assert!(!cancelled.contains(tip, FillRule::EvenOdd));
+    assert!(!cancelled.contains(Offset::new(5., 5.), FillRule::EvenOdd));
+}

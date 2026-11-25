@@ -948,7 +948,7 @@ packages/flutter/test/painting/border_test.dart	465	Compound borders with differ
 packages/flutter/test/painting/stadium_border_test.dart	11	StadiumBorder defaults	paired-match	upstream-border-constraints-formatters.md#outlined-shapes-default-to-no-stroke
 packages/flutter/test/painting/rounded_rectangle_border_test.dart	11	RoundedRectangleBorder defaults	paired-match	upstream-border-constraints-formatters.md#outlined-shapes-default-to-no-stroke
 packages/flutter/test/painting/rounded_superellipse_border_test.dart	14	RoundedSuperellipseBorder defaults	paired-match	upstream-border-constraints-formatters.md#outlined-shapes-default-to-no-stroke
-packages/flutter/test/painting/circle_border_test.dart	11	CircleBorder defaults	partial-match	upstream-border-constraints-formatters.md#outlined-shapes-default-to-no-stroke
+packages/flutter/test/painting/circle_border_test.dart	11	CircleBorder defaults	paired-match	upstream-border-constraints-formatters.md#circle-and-oval-paths
 packages/flutter/test/painting/oval_border_test.dart	9	OvalBorder defaults	paired-match	upstream-border-constraints-formatters.md#outlined-shapes-default-to-no-stroke
 packages/flutter/test/painting/beveled_rectangle_border_test.dart	9	BeveledRectangleBorder defaults	paired-match	upstream-border-constraints-formatters.md#outlined-shapes-default-to-no-stroke
 packages/flutter/test/painting/continuous_rectangle_border_test.dart	34	ContinuousRectangleBorder defaults	paired-match	upstream-border-constraints-formatters.md#outlined-shapes-default-to-no-stroke
@@ -956,3 +956,5 @@ packages/flutter/test/painting/linear_border_test.dart	28	LinearBorder defaults	
 packages/flutter/test/painting/rounded_superellipse_border_test.dart	170	RoundedSuperellipseBorder.dimensions and CircleBorder.dimensions	paired-match	upstream-border-constraints-formatters.md#native-superellipse-edge-fitting
 packages/flutter/test/painting/rounded_superellipse_border_test.dart	198	RoundedSuperellipseBorder.lerp with different StrokeAlign	paired-match	upstream-border-constraints-formatters.md#native-superellipse-edge-fitting
 packages/flutter/test/painting/border_test.dart	61	Border.add	paired-match	upstream-border-constraints-formatters.md#physical-border-addition
+packages/flutter/test/painting/circle_border_test.dart	17	CircleBorder getInnerPath and getOuterPath	paired-match	upstream-border-constraints-formatters.md#circle-and-oval-paths
+packages/flutter/test/painting/oval_border_test.dart	21	OvalBorder	paired-match	upstream-border-constraints-formatters.md#circle-and-oval-paths

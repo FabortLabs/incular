@@ -539,37 +539,74 @@ impl incular_core::Lerp for RoundedSuperellipseBorder {
     }
 }
 
-/// Flutter's `CircleBorder` with zero eccentricity: a circle inscribed in the
-/// shortest side. Flutter's `eccentricity` parameter is not modelled, so the
-/// shape is always a circle.
+/// Flutter's CircleBorder, a circle at eccentricity zero and an oval
+/// filling the whole rectangle at eccentricity one.
 #[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct CircleBorder {
     #[default(BorderSide::NONE)]
     pub side: BorderSide,
+    eccentricity: f32,
 }
 
 impl CircleBorder {
     #[must_use]
     pub const fn new(side: BorderSide) -> Self {
-        Self { side }
+        Self {
+            side,
+            eccentricity: 0.,
+        }
+    }
+
+    /// # Panics
+    /// In debug builds, panics unless the eccentricity is in `0..=1`.
+    #[must_use]
+    pub fn with_eccentricity(mut self, value: f32) -> Self {
+        debug_assert!(
+            (0.0..=1.0).contains(&value),
+            "eccentricity must be in 0..=1"
+        );
+        self.eccentricity = if value.is_nan() {
+            0.
+        } else {
+            value.clamp(0., 1.)
+        };
+        self
+    }
+
+    #[must_use]
+    pub const fn eccentricity(self) -> f32 {
+        self.eccentricity
+    }
+
+    #[must_use]
+    pub fn copy_with(self, side: Option<BorderSide>, eccentricity: Option<f32>) -> Self {
+        Self::new(side.unwrap_or(self.side))
+            .with_eccentricity(eccentricity.unwrap_or(self.eccentricity))
     }
 
     #[must_use]
     pub fn scale(&self, t: f32) -> Self {
-        Self::new(self.side.scale(t))
+        Self {
+            side: self.side.scale(t),
+            ..*self
+        }
     }
 
-    /// Flutter `Rect.fromCircle(center: rect.center, radius: shortestSide / 2)`.
-    fn circle_rect(rect: Rect) -> Rect {
-        let side = shortest_side(rect);
-        let center = Offset::new(
-            rect.origin.x + rect.size.width / 2.0,
-            rect.origin.y + rect.size.height / 2.0,
-        );
-        Rect::from_origin_size(
-            Offset::new(center.x - side / 2.0, center.y - side / 2.0),
-            Size::new(side, side),
-        )
+    fn fitted_rect(self, rect: Rect) -> Rect {
+        let width = rect.size.width;
+        let height = rect.size.height;
+        let margin = (1. - self.eccentricity) * (width - height).abs() / 2.;
+        if width < height {
+            Rect::from_origin_size(
+                Offset::new(rect.origin.x, rect.origin.y + margin),
+                Size::new(width, height - 2. * margin),
+            )
+        } else {
+            Rect::from_origin_size(
+                Offset::new(rect.origin.x + margin, rect.origin.y),
+                Size::new(width - 2. * margin, height),
+            )
+        }
     }
 }
 
@@ -579,11 +616,25 @@ impl ShapeBorder for CircleBorder {
     }
 
     fn outer_path(&self, rect: Rect) -> Path {
-        ellipse_path(Self::circle_rect(rect))
+        ellipse_path(self.fitted_rect(rect))
     }
 
     fn inner_path(&self, rect: Rect) -> Path {
-        ellipse_path(inflate(Self::circle_rect(rect), -self.side.stroke_inset()))
+        ellipse_path(inflate(self.fitted_rect(rect), -self.side.stroke_inset()))
+    }
+
+    fn prefer_paint_interior(&self) -> bool {
+        true
+    }
+
+    fn paint_interior(
+        &self,
+        canvas: &mut Canvas,
+        rect: Rect,
+        paint: &Paint,
+        _: Option<TextDirection>,
+    ) {
+        canvas.draw_path(Arc::new(self.outer_path(rect)), paint, FillRule::NonZero);
     }
 
     fn paint(&self, canvas: &mut Canvas, rect: Rect) {
@@ -594,7 +645,7 @@ impl ShapeBorder for CircleBorder {
         stroke(
             canvas,
             &self.side,
-            ellipse_path(inflate(Self::circle_rect(rect), delta)),
+            ellipse_path(inflate(self.fitted_rect(rect), delta)),
         );
     }
 }
@@ -602,6 +653,7 @@ impl ShapeBorder for CircleBorder {
 impl incular_core::Lerp for CircleBorder {
     fn lerp(&self, other: &Self, t: f32) -> Self {
         Self::new(self.side.lerp(&other.side, t))
+            .with_eccentricity(self.eccentricity.lerp(&other.eccentricity, t).clamp(0., 1.))
     }
 }
 

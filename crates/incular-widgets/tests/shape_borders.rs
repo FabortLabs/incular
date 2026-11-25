@@ -394,3 +394,100 @@ fn superellipse_interpolation_moves_width_and_stroke_alignment_together() {
     };
     assert_eq!(make(10., -1.).lerp(&make(20., 1.), 0.5), make(15., 0.));
 }
+
+#[test]
+fn circle_eccentricity_adjusts_the_long_axis_for_paths_and_strokes() {
+    use incular_widgets::CircleBorder;
+
+    let circle = CircleBorder::default();
+    let wide = rect(0., 0., 200., 100.);
+    assert_eq!(circle.eccentricity(), 0.);
+    assert_eq!(circle.side, BorderSide::NONE);
+    assert_bounds(&circle.outer_path(wide), rect(50., 0., 100., 100.));
+    assert_bounds(&circle.inner_path(wide), rect(50., 0., 100., 100.));
+
+    let oval = circle.with_eccentricity(1.);
+    assert_bounds(&oval.outer_path(wide), wide);
+    assert_bounds(&oval.inner_path(wide), wide);
+    let stroke = BorderSide::solid(Color::BLACK, 10.);
+    let edged = oval.copy_with(Some(stroke), None);
+    assert_bounds(&edged.outer_path(wide), wide);
+    assert_bounds(&edged.inner_path(wide), rect(10., 10., 180., 80.));
+
+    let medium = edged.copy_with(None, Some(0.5));
+    assert_bounds(&medium.outer_path(wide), rect(25., 0., 150., 100.));
+    assert_bounds(
+        &medium.outer_path(rect(10., 20., 100., 200.)),
+        rect(10., 45., 100., 150.),
+    );
+    let mut canvas = Canvas::default();
+    medium.paint(&mut canvas, wide);
+    let paint = canvas.finish();
+    let [
+        PaintCommand::StrokePath {
+            path,
+            stroke: drawn,
+            ..
+        },
+    ] = paint.commands()
+    else {
+        panic!("expected one oval stroke");
+    };
+    assert_eq!(drawn.width, 10.);
+    assert_bounds(path, rect(30., 5., 140., 90.));
+}
+
+#[test]
+fn circle_eccentricity_survives_scaling_and_clamps_on_extrapolation() {
+    use incular_core::Lerp;
+    use incular_widgets::CircleBorder;
+
+    let start = CircleBorder::new(BorderSide::solid(Color::BLACK, 10.));
+    let finish = CircleBorder::new(BorderSide::solid(Color::BLACK, 20.)).with_eccentricity(1.);
+    assert_eq!(finish.scale(0.5), start.with_eccentricity(1.));
+    assert_eq!(start.lerp(&finish, 0.5).eccentricity(), 0.5);
+    assert_eq!(start.lerp(&finish, -1.).eccentricity(), 0.);
+    assert_eq!(start.lerp(&finish, 2.).eccentricity(), 1.);
+    assert_eq!(finish.copy_with(None, None), finish);
+}
+
+#[test]
+fn oval_border_scale_interpolation_and_edge_samples_match_the_reference() {
+    use incular_config::EdgeInsets;
+    use incular_core::Lerp;
+    use incular_widgets::OvalBorder;
+
+    let clean = |width| OvalBorder::new(BorderSide::solid(Color::BLACK, width));
+    let (thin, middle, thick) = (clean(10.), clean(15.), clean(20.));
+    assert_eq!(thin.dimensions(None), EdgeInsets::all(10.));
+    assert_eq!(thin.scale(2.), thick);
+    assert_eq!(thick.scale(0.5), thin);
+    assert_eq!(thin.lerp(&thick, 0.), thin);
+    assert_eq!(thin.lerp(&thick, 0.5), middle);
+    assert_eq!(thin.lerp(&thick, 1.), thick);
+    for (path, included, excluded) in [
+        (
+            thin.inner_path(rect(0., 0., 100., 40.)),
+            [(12., 19.), (50., 10.), (88., 19.), (50., 29.)],
+            [(17., 26.), (15., 15.), (74., 10.), (76., 28.)],
+        ),
+        (
+            thin.outer_path(rect(0., 0., 100., 20.)),
+            [(2., 9.), (50., 0.), (98., 9.), (50., 19.)],
+            [(7., 16.), (10., 2.), (84., 1.), (86., 18.)],
+        ),
+    ] {
+        for (x, y) in included {
+            assert!(
+                path.contains(Offset::new(x, y), FillRule::NonZero),
+                "inside ({x}, {y})"
+            );
+        }
+        for (x, y) in excluded {
+            assert!(
+                !path.contains(Offset::new(x, y), FillRule::NonZero),
+                "outside ({x}, {y})"
+            );
+        }
+    }
+}
