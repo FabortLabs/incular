@@ -41,3 +41,13 @@ rejection of a later detached-node request, uninterrupted editing with the
 same controller, and eligible/ineligible initial autofocus. The six focused
 Rust targets pass 23 tests. This does not claim dynamic autofocus changes
 or every platform's soft-keyboard connection behavior.
+
+## Focus requests for nodes first attached in layout
+
+A pinned neutral probe requests focus before mounting the editor in a
+LayoutBuilder. The request becomes primary after the first layout, ahead
+of a competing autofocus, and applies desktop select-all on entry. The
+Incular regression previously lost the first frame to autofocus. Layout
+now has a second focus settlement boundary only if a queued request
+became visible through a new attachment. The authored probe is not an
+additional upstream registration.

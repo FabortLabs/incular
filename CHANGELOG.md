@@ -207,6 +207,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-runtime`: focus requests made before attachment now settle during
+  the first layout that mounts their target, before competing autofocus.
+
 - `incular-runtime`: replacing text programmatically repairs the selection
   immediately in a focused editor, but leaves it unset when unfocused.
 

@@ -110,6 +110,10 @@ impl WidgetTree {
                     .is_some_and(|binding| binding.node() == node)
                 {
                     hosted.insert(id, node.attach_to_focus_host());
+                    if node.has_pending_focus_request() {
+                        self.pending_focus_attachment_revision =
+                            self.pending_focus_attachment_revision.wrapping_add(1);
+                    }
                     self.hosted_focus_chain.dirty = true;
                 }
             } else if hosted.remove(&id).is_some() {
@@ -125,6 +129,13 @@ impl WidgetTree {
         {
             node.bind_standalone_tree();
         }
+    }
+
+    /// Changes only when a hosted attachment makes a queued request visible.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn pending_focus_attachment_revision(&self) -> u64 {
+        self.pending_focus_attachment_revision
     }
 
     /// Applies all hosted focus roles before any node observer is notified.

@@ -84,3 +84,40 @@ fn eager_autofocus_remains_selected_when_layout_creates_another_request() {
     frame(&mut runtime);
     assert_eq!(runtime.focused_element(), Some(original));
 }
+
+#[test]
+fn preattachment_request_reaches_a_field_created_during_layout() {
+    use incular_config::TextDirection;
+    use incular_runtime::TextShortcutPlatform;
+    use incular_text::{TextEditingController, TextSelection};
+    use incular_widgets::{Directionality, EditableText, FocusNode};
+
+    let node = FocusNode::new();
+    let controller = TextEditingController::with_text("Text");
+    node.request_focus();
+    assert!(!node.has_focus());
+    let root = Column::new([
+        deferred_autofocus(),
+        LayoutBuilder::new({
+            let node = node.clone();
+            let controller = controller.clone();
+            move |_, _| {
+                EditableText::new(controller.clone())
+                    .focus_node(node.clone())
+                    .into()
+            }
+        })
+        .into(),
+    ]);
+    let mut runtime =
+        Runtime::new(Directionality::new(TextDirection::Ltr, root).into()).expect("mount");
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Linux);
+    frame(&mut runtime);
+    assert!(node.has_primary_focus());
+    assert_eq!(
+        controller.selection_if_set(),
+        Some(TextSelection::new(0, 4))
+    );
+    frame(&mut runtime);
+    assert!(node.has_primary_focus());
+}

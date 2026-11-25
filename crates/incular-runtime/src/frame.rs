@@ -2909,6 +2909,7 @@ impl Runtime {
         let text_long_press_live = self.pump_text_long_press(now);
         let _layout_guard = tracing::info_span!("incular.layout").entered();
         let layout_span = profiling::PhaseSpan::start();
+        let focus_attachments_before_layout = self.tree.pending_focus_attachment_revision();
         self.tree.layout(constraints)?;
         let layout = layout_span.elapsed_us();
         drop(_layout_guard);
@@ -2931,6 +2932,12 @@ impl Runtime {
         self.reconcile_focus_and_selection_captures();
         self.validate_ime_composition();
         self.prune_handlers();
+        // A request on a node first attached during layout is now actionable.
+        // Honor it before autofocus, without scanning on every clean frame.
+        if self.tree.pending_focus_attachment_revision() != focus_attachments_before_layout {
+            self.adopted_focus_epoch = None;
+            self.adopt_external_focus_change();
+        }
         // Layout builders create their retained controls during the first
         // layout. Resolve initial autofocus once those controls exist, without
         // reclaiming focus on later frames or after an explicit input decision.
