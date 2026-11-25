@@ -1002,35 +1002,26 @@ impl PointerGestureRecognizer {
                 }
                 if long_press_taken {
                     self.tap_cancel();
-                    // The deadline already reported the long press (with
-                    // `onLongPress`) when it fired while the pointer was held.
-                    let reported_at_deadline = self.long_press_started;
-                    if !self.long_press_started {
-                        self.long_press_started = true;
-                        if let Some(callback) = &self.callbacks.on_long_press_start {
-                            callback(LongPressStartDetails {
-                                global_position: down.position,
-                                local_position: self.local(down.position),
-                            });
-                        }
-                    }
-                    if let Some(callback) = &self.callbacks.on_long_press_up {
-                        callback();
-                    }
-                    if let Some(callback) = &self.callbacks.on_long_press_end {
-                        callback(LongPressEndDetails {
-                            global_position: event.position,
-                            local_position: self.local(event.position),
-                            velocity: Velocity::new(
-                                self.velocity.estimate_at(event.time).pixels_per_second,
-                            ),
-                        });
-                    }
-                    self.long_press_started = false;
-                    if reported_at_deadline {
+                    let end = LongPressEndDetails {
+                        global_position: event.position,
+                        local_position: self.local(event.position),
+                        velocity: Velocity::new(
+                            self.velocity.estimate_at(event.time).pixels_per_second,
+                        ),
+                    };
+                    self.long_press_pending = false;
+                    if std::mem::take(&mut self.long_press_started) {
+                        // Already accepted at the deadline or on a move.
+                        self.dispatch_long_press_end(end);
                         GestureDecision::Pending
                     } else {
-                        GestureDecision::Accept(GestureAction::LongPress)
+                        // A late release catches up both phases, but neither
+                        // phase may report until this member wins the arena.
+                        let start = LongPressStartDetails {
+                            global_position: down.position,
+                            local_position: self.local(down.position),
+                        };
+                        GestureDecision::Accept(GestureAction::LongPress { start, end })
                     }
                 } else if self.double_tap_second
                     && !self.double_tap_moved
@@ -1109,6 +1100,25 @@ impl PointerGestureRecognizer {
             }
         }
     }
+
+    fn dispatch_long_press_start(&self, details: LongPressStartDetails) {
+        if let Some(callback) = &self.callbacks.on_long_press_start {
+            callback(details);
+        }
+        if let Some(callback) = &self.callbacks.on_long_press {
+            callback();
+        }
+    }
+
+    fn dispatch_long_press_end(&self, details: LongPressEndDetails) {
+        if let Some(callback) = &self.callbacks.on_long_press_end {
+            callback(details);
+        }
+        if let Some(callback) = &self.callbacks.on_long_press_up {
+            callback();
+        }
+    }
+
     /// Invokes a callback selected by [`Self::observe`] after the caller has
     /// accepted this recognizer.
     pub fn dispatch(&self, action: GestureAction) {
@@ -1119,21 +1129,16 @@ impl PointerGestureRecognizer {
                 .on_double_tap
                 .as_ref()
                 .map(|callback| callback()),
-            GestureAction::LongPress => self
-                .callbacks
-                .on_long_press
-                .as_ref()
-                .map(|callback| callback()),
+            GestureAction::LongPress { start, end } => {
+                self.dispatch_long_press_start(start);
+                self.dispatch_long_press_end(end);
+                None
+            }
             GestureAction::LongPressStart(details) => {
                 // Flutter `_checkLongPressStart`: `onLongPressStart`, then
                 // `onLongPress`, when the deadline fires.
-                if let Some(callback) = &self.callbacks.on_long_press_start {
-                    callback(details);
-                }
-                self.callbacks
-                    .on_long_press
-                    .as_ref()
-                    .map(|callback| callback())
+                self.dispatch_long_press_start(details);
+                None
             }
             GestureAction::PanStart(details) => self
                 .callbacks

@@ -150,7 +150,7 @@ fn long_press_starts_at_its_timeout_without_any_movement() {
     let end = recognizer.observe(event(Offset::ZERO, PointerPhase::Up, base, 700));
     assert!(!matches!(
         end,
-        GestureDecision::Accept(GestureAction::LongPress)
+        GestureDecision::Accept(GestureAction::LongPress { .. })
     ));
     assert_eq!(started.get(), 1);
     assert_eq!(ended.get(), 1);

@@ -75,6 +75,10 @@ a version and date when publishing.
 
 ### Changed
 
+- **Breaking (`incular-gestures`):** match `GestureAction::LongPress { .. }`
+  instead of the unit variant. A release that catches up a missed deadline
+  carries start and end details so the arena can dispatch both phases in
+  order after accepting the recognizer. Existing widget callbacks are unchanged.
 - **Breaking (`incular-mobile`):** `TouchSample` now requires `device`, `buttons`,
   `button`, `stylus`, and `age`. Custom embedders should pass the native device
   ID (or `0`), pressed-button mask, changed button and stylus metadata when
@@ -109,6 +113,8 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-gestures`: long-press callbacks run in Flutter order: start,
+  long press, end, then up.
 - `incular-mobile`: Android and iOS gesture timing uses native touch timestamps.
   Batched Android samples keep their original spacing for fling velocity.
 - `incular-widgets`: the Android overscroll indicator is now selected from the ambient `ScrollBehavior` and the Material theme (the stretch under Material 3, the glow otherwise) as Flutter does, and scroll views (`ListView`, `SingleChildScrollView` and other viewports) now paint it: dragging past an edge on Android stretches the content under Material 3 or draws the glow, which recedes on release.

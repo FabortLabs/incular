@@ -520,7 +520,12 @@ impl GestureCallbacks {
 pub enum GestureAction {
     Tap,
     DoubleTap,
-    LongPress,
+    /// A release arrived after the deadline before the host polled it.
+    /// Dispatch the start and end together after the recognizer wins.
+    LongPress {
+        start: LongPressStartDetails,
+        end: LongPressEndDetails,
+    },
     /// The long-press deadline (`kLongPressTimeout`) elapsed with the pointer
     /// still down: the recognizer won the arena and `onLongPressStart` fires.
     LongPressStart(LongPressStartDetails),

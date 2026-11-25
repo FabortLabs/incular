@@ -138,6 +138,58 @@ fn long_press_ignores_a_chord_at_contact_start_and_arms_the_next_contact() {
     assert_eq!(&*log.borrow(), &["down", "start"]);
 }
 
+fn check_long_press_callback_order(poll_at_deadline: bool) {
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let record = |marker| {
+        let log = Rc::clone(&log);
+        move || log.borrow_mut().push(marker)
+    };
+    let mut recognizer = PointerGestureRecognizer::new(GestureCallbacks {
+        on_long_press_start: Some(Rc::new({
+            let record = record("start");
+            move |_| record()
+        })),
+        on_long_press: Some(Rc::new(record("long"))),
+        on_long_press_end: Some(Rc::new({
+            let record = record("end");
+            move |_| record()
+        })),
+        on_long_press_up: Some(Rc::new(record("up"))),
+        ..GestureCallbacks::default()
+    });
+    let now = Instant::now();
+    let _ = recognizer.observe(event(Offset::ZERO, PointerPhase::Down, now, 0));
+    if poll_at_deadline {
+        let GestureDecision::Accept(action) = recognizer.poll(now + LONG_PRESS_TIMEOUT) else {
+            panic!("deadline should accept");
+        };
+        recognizer.dispatch(action);
+        assert_eq!(&*log.borrow(), &["start", "long"]);
+    }
+    let release = recognizer.observe(event(Offset::new(2., 3.), PointerPhase::Up, now, 550));
+    let before_release_dispatch = log.borrow().clone();
+    if let GestureDecision::Accept(action) = release {
+        recognizer.dispatch(action);
+    }
+    assert_eq!(&*log.borrow(), &["start", "long", "end", "up"]);
+    if !poll_at_deadline {
+        assert!(
+            before_release_dispatch.is_empty(),
+            "late recognition must not send callbacks before arena acceptance"
+        );
+    }
+}
+
+#[test]
+fn a_deadline_accepted_long_press_ends_before_reporting_up() {
+    check_long_press_callback_order(true);
+}
+
+#[test]
+fn a_late_release_dispatches_the_whole_long_press_only_after_acceptance() {
+    check_long_press_callback_order(false);
+}
+
 /// gestures/long_press_test.dart:75, after registration.
 #[test]
 fn long_press_uses_the_requested_short_deadline() {
@@ -314,7 +366,7 @@ fn long_press_fires_at_deadline_not_release() {
     ));
     assert!(!matches!(
         released,
-        GestureDecision::Accept(GestureAction::LongPress)
+        GestureDecision::Accept(GestureAction::LongPress { .. })
     ));
     assert_eq!(*fired.borrow(), vec!["start", "long_press", "end"]);
 }

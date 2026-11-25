@@ -7,7 +7,7 @@ use std::{cell::RefCell, rc::Rc, time::Duration};
 use incular_config::Constraints;
 use incular_core::{
     Color, InputEvent, Offset, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase,
-    PointerSampleMetadata, SECONDARY_POINTER_BUTTON, Size, time::Instant,
+    PointerSampleMetadata, SECONDARY_POINTER_BUTTON, Size, TERTIARY_POINTER_BUTTON, time::Instant,
 };
 use incular_runtime::Runtime;
 use incular_widgets::{GestureDetector, Widget};
@@ -117,6 +117,87 @@ impl Fixture {
     fn dispose(self) -> Vec<Seen> {
         drop(self.runtime);
         self.seen.borrow().clone()
+    }
+}
+
+#[test]
+fn long_press_button_families_report_end_before_up_in_the_mounted_runtime() {
+    for button in [
+        PRIMARY_POINTER_BUTTON,
+        SECONDARY_POINTER_BUTTON,
+        TERTIARY_POINTER_BUTTON,
+    ] {
+        for poll_at_deadline in [true, false] {
+            let trace = Rc::new(RefCell::new(Vec::new()));
+            let mark = |button, phase| {
+                let trace = Rc::clone(&trace);
+                move || trace.borrow_mut().push((button, phase))
+            };
+            let mut detector = GestureDetector::new(Widget::box_(SURFACE, Color::WHITE));
+            let p = PRIMARY_POINTER_BUTTON;
+            let s = SECONDARY_POINTER_BUTTON;
+            let t = TERTIARY_POINTER_BUTTON;
+            detector = detector
+                .on_long_press_start({
+                    let f = mark(p, "start");
+                    move |_| f()
+                })
+                .on_long_press(mark(p, "long"))
+                .on_long_press_end({
+                    let f = mark(p, "end");
+                    move |_| f()
+                })
+                .on_long_press_up(mark(p, "up"))
+                .on_secondary_long_press_start({
+                    let f = mark(s, "start");
+                    move |_| f()
+                })
+                .on_secondary_long_press(mark(s, "long"))
+                .on_secondary_long_press_end({
+                    let f = mark(s, "end");
+                    move |_| f()
+                })
+                .on_secondary_long_press_up(mark(s, "up"))
+                .on_tertiary_long_press_start({
+                    let f = mark(t, "start");
+                    move |_| f()
+                })
+                .on_tertiary_long_press(mark(t, "long"))
+                .on_tertiary_long_press_end({
+                    let f = mark(t, "end");
+                    move |_| f()
+                })
+                .on_tertiary_long_press_up(mark(t, "up"));
+            let mut runtime = Runtime::new(detector.into()).unwrap();
+            let bounds = Constraints::tight(SURFACE);
+            let down = Instant::now();
+            let deadline = down + Duration::from_millis(500);
+            let input = |phase, buttons, position| InputEvent::PointerWithMetadata {
+                pointer: 5,
+                device: 0,
+                kind: PointerDeviceKind::Mouse,
+                buttons,
+                button: Some(button),
+                sample: PointerSampleMetadata::EMPTY,
+                phase,
+                position,
+            };
+            runtime.run_frame_at(bounds, down).unwrap();
+            runtime.handle_input_at(input(PointerPhase::Down, button, PRESS), down);
+            if poll_at_deadline {
+                runtime.run_frame_at(bounds, deadline).unwrap();
+                assert_eq!(&*trace.borrow(), &[(button, "start"), (button, "long")]);
+            }
+            runtime.handle_input_at(
+                input(PointerPhase::Up, 0, RELEASE),
+                deadline + Duration::from_millis(50),
+            );
+            assert_eq!(
+                &*trace.borrow(),
+                &["start", "long", "end", "up"].map(|phase| (button, phase)),
+                "button={button}, poll_at_deadline={poll_at_deadline}",
+            );
+        }
     }
 }
 

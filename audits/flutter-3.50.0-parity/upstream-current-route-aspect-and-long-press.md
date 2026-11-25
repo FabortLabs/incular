@@ -109,3 +109,16 @@ release callback, and that the next valid contact starts normally.
 
 All 21 focused tests passed. The original is partial because Incular's
 raw contact entry does not expose Flutter's independent add/close phase.
+
+## Long-press release callback order
+
+The pinned authored probe reports start, long, end, up for primary,
+secondary, and tertiary mouse contacts. Incular initially reported up
+before end; a late release with no intervening deadline poll also sent
+start and release callbacks before arena dispatch, then reported long.
+Already accepted releases now emit End before Up. A late release carries
+both phases as a single arena action and sends no long-press callbacks
+until accepted. The mounted Runtime tests pass for all three buttons
+with and without the deadline frame, and the direct recognizer proves
+the late action is silent before dispatch. All 35 focused tests passed.
+This is a custom comparison, not an original registration.
