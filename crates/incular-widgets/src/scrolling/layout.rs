@@ -2137,6 +2137,17 @@ impl RenderSliver for PaddingRenderSliver {
     }
 
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout {
+        debug_assert!(
+            [
+                self.padding.left,
+                self.padding.top,
+                self.padding.right,
+                self.padding.bottom
+            ]
+            .into_iter()
+            .all(|inset| inset >= 0.),
+            "SliverPadding requires nonnegative padding",
+        );
         let physical_start = main_before(constraints.axis, self.padding);
         let physical_end = main_after(constraints.axis, self.padding);
         let (before, after) = if constraints.reverse {

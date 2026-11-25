@@ -257,3 +257,98 @@ fn padding_forwards_an_actual_child_scroll_correction_without_extra_geometry() {
         },
     );
 }
+
+#[test]
+fn replacing_childless_padding_in_a_leftward_viewport_moves_the_following_box() {
+    use incular_widgets::{SliverToBoxAdapter, Viewport};
+
+    let key = Key::from("horizontally padded");
+    let scene = |insets| {
+        let slivers: Vec<Box<dyn Sliver>> = vec![
+            Box::new(SliverPadding::empty(insets)),
+            Box::new(SliverToBoxAdapter::new(
+                Widget::box_(Size::new(201., 20.), Color::WHITE).with_key(key.clone()),
+            )),
+        ];
+        Viewport::new(slivers)
+            .axis_direction(Axis::Horizontal)
+            .reverse(true)
+            .controller(ScrollController::new())
+            .into()
+    };
+    let mut tree = WidgetTree::new();
+    let view = Constraints::tight(Size::new(800., 600.));
+    let root = tree
+        .mount(scene(EdgeInsets::only(90., 1., 110., 2.)))
+        .unwrap();
+    tree.layout(view).unwrap();
+    let child = tree.element_with_key(&key).unwrap();
+    assert_eq!(
+        tree.element_bounds(child).unwrap().origin,
+        Offset::new(399., 0.)
+    );
+
+    tree.update(root, scene(EdgeInsets::only(110., 1., 80., 2.)))
+        .unwrap();
+    tree.layout(view).unwrap();
+    assert_eq!(
+        tree.element_bounds(child).unwrap().origin,
+        Offset::new(409., 0.)
+    );
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn replacing_padding_with_negative_edges_trips_the_debug_contract() {
+    use incular_widgets::Viewport;
+
+    let controller = ScrollController::new();
+    let scene = |insets| {
+        let slivers: Vec<Box<dyn Sliver>> = vec![Box::new(SliverPadding::empty(insets))];
+        Viewport::new(slivers).controller(controller.clone()).into()
+    };
+    let mut tree = WidgetTree::new();
+    let view = Constraints::tight(Size::new(800., 600.));
+    let root = tree.mount(scene(EdgeInsets::ZERO)).unwrap();
+    tree.layout(view).unwrap();
+
+    let failure = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        tree.update(root, scene(EdgeInsets::all(-1.))).unwrap();
+        tree.layout(view).unwrap();
+    }))
+    .expect_err("negative padding must be rejected by the debug layout");
+    assert!(
+        failure
+            .downcast_ref::<&str>()
+            .is_some_and(|message| message.contains("SliverPadding requires nonnegative padding"))
+            || failure.downcast_ref::<String>().is_some_and(
+                |message| message.contains("SliverPadding requires nonnegative padding")
+            )
+    );
+}
+
+#[test]
+fn padding_trailing_extent_tracks_direction_even_far_outside_the_viewport() {
+    let recorded = Rc::new(Cell::new(None));
+    let sliver = SliverPadding::new(
+        EdgeInsets::only(1., 2., 4., 8.),
+        Probe {
+            constraints: recorded.clone(),
+            geometry: SliverGeometry::ZERO,
+        },
+    );
+    let mut render = sliver.create_render_sliver(&ScrollController::new(), Axis::Vertical, false);
+    for (axis, reverse, scroll, expected_after) in [
+        (Axis::Vertical, true, 0., 2.),
+        (Axis::Vertical, false, 0., 8.),
+        (Axis::Horizontal, false, 0., 4.),
+        (Axis::Horizontal, true, 0., 1.),
+        (Axis::Horizontal, true, 99999.9, 1.),
+    ] {
+        let mut input = constraints(axis, reverse, 0.);
+        input.scroll_offset = scroll;
+        let layout = render.perform_layout(input);
+        let before = recorded.get().unwrap().preceding_scroll_extent;
+        assert_eq!(layout.geometry.scroll_extent - before, expected_after);
+    }
+}

@@ -778,6 +778,8 @@ pub struct Viewport {
     controller: Option<ScrollController>,
     #[builder(default = WidgetDefaults::DEFAULT.scroll_direction)]
     axis_direction: Axis,
+    #[builder(default)]
+    reverse: bool,
     /// Flutter `Viewport.paintOrder`; defaults to `firstIsTop`.
     #[builder(default)]
     paint_order: SliverPaintOrder,
@@ -802,6 +804,7 @@ impl Viewport {
             slivers: slivers.into_iter().collect(),
             controller: None,
             axis_direction: WidgetDefaults::DEFAULT.scroll_direction,
+            reverse: false,
             paint_order: SliverPaintOrder::FirstIsTop,
             center: 0,
             anchor: 0.,
@@ -817,6 +820,14 @@ impl Viewport {
     #[must_use]
     pub fn axis_direction(mut self, axis: Axis) -> Self {
         self.axis_direction = axis;
+        self
+    }
+
+    /// Lays slivers from the trailing edge: left for a horizontal
+    /// viewport or up for a vertical viewport.
+    #[must_use]
+    pub fn reverse(mut self, reverse: bool) -> Self {
+        self.reverse = reverse;
         self
     }
 
@@ -853,6 +864,7 @@ impl From<Viewport> for Widget {
     fn from(value: Viewport) -> Self {
         CustomScrollView::new(value.slivers)
             .scroll_direction(value.axis_direction)
+            .reverse(value.reverse)
             .controller(value.controller.unwrap_or_default())
             .paint_order(value.paint_order)
             .center(value.center)

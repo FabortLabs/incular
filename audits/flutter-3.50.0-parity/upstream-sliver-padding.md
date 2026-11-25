@@ -72,3 +72,19 @@ unchanged preceding sizes and a later resize after the rewind has
 settled. These never issue the growth correction. The explicit
 replacement keeps its own initial position. Eight focused Rust
 targets passed (160 tests); all three authored Flutter cases passed.
+
+## Replacing padding and changing direction
+
+The leftward Viewport comparison (:348) now exercises the public
+`reverse(true)` option. Replacing the empty sliver's left/right
+padding moves the following 201-pixel child from x=399 to x=409.
+The debug comparison at :394 first lays out zero padding, then
+verifies that replacing it with negative edges triggers the specific
+SliverPadding assertion rather than silently clamping.
+
+The direct padding render control for :419 compares the trailing
+extent after switching through all four directions, then again
+at a scroll offset of 99,999.9. It is partial because Incular derives
+the result from live geometry and child constraints rather than
+exposing the original Flutter RenderSliver getter. Three originals
+and four focused Rust targets (23 tests) passed.

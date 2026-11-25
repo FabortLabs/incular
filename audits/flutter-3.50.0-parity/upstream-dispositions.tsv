@@ -1168,3 +1168,6 @@ packages/flutter/test/widgets/slivers_padding_test.dart	589	SliverPadding consum
 packages/flutter/test/widgets/slivers_padding_test.dart	618	SliverPadding passes the overlap to the child if it's negative	paired-match	upstream-sliver-padding.md#padding-only-signed-overlap-and-leading-edges
 packages/flutter/test/widgets/slivers_padding_test.dart	646	SliverPadding passes the paintOrigin of the child on	paired-match	upstream-sliver-padding.md#padding-only-signed-overlap-and-leading-edges
 packages/flutter/test/widgets/slivers_padding_test.dart	505	SliverPadding propagates geometry offset corrections	paired-match	upstream-sliver-padding.md#retained-anchor-repair-and-touch-input-comparison
+packages/flutter/test/widgets/slivers_padding_test.dart	348	Viewport+SliverPadding changing padding	paired-match	upstream-sliver-padding.md#replacing-padding-and-changing-direction
+packages/flutter/test/widgets/slivers_padding_test.dart	394	Viewport+SliverPadding changing padding to negative asserts	paired-match	upstream-sliver-padding.md#replacing-padding-and-changing-direction
+packages/flutter/test/widgets/slivers_padding_test.dart	419	Viewport+SliverPadding changing direction	partial-match	upstream-sliver-padding.md#replacing-padding-and-changing-direction
