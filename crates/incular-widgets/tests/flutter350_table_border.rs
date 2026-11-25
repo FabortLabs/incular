@@ -141,3 +141,103 @@ fn same_color_nonuniform_outer_sides_can_paint_a_rounded_ring() {
         }]
     ));
 }
+
+#[test]
+fn retained_table_adds_only_explicit_strokes_over_cells_and_clears_them_on_removal() {
+    use incular_config::{Constraints, TextDirection};
+    use incular_widgets::{Table, TableColumnWidth, Widget, internal::WidgetTree};
+
+    const CELL: Color = Color::rgba(40, 40, 40, 255);
+    let scene = |direction, border| {
+        let mut table = Table::new(
+            2,
+            (0..4).map(|i| Widget::box_(Size::new(20., if i < 2 { 20. } else { 10. }), CELL)),
+        )
+        .column_width(0, TableColumnWidth::Fixed(60.))
+        .column_width(1, TableColumnWidth::Fixed(40.))
+        .text_direction(direction);
+        if let Some(border) = border {
+            table = table.border(border);
+        }
+        Widget::from(table)
+    };
+    let explicit = TableBorder {
+        vertical_inside: BorderSide::solid(BLUE, 2.),
+        horizontal_inside: BorderSide::solid(RED, 3.),
+        top: BorderSide::solid(GREEN, 4.),
+        ..TableBorder::default()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scene(TextDirection::Ltr, None)).unwrap();
+    let original = tree.render_id(root);
+    let child = tree.children(root).unwrap()[0];
+    let paint = |tree: &mut WidgetTree| {
+        tree.layout(Constraints::tight(Size::new(100., 80.)))
+            .unwrap();
+        tree.paint()
+    };
+    let default = paint(&mut tree);
+    assert!(default.commands().iter().all(|command| {
+        !matches!(
+            command,
+            PaintCommand::StrokePath { .. } | PaintCommand::FillPath { .. }
+        )
+    }));
+
+    for (direction, divider) in [(TextDirection::Ltr, 60.), (TextDirection::Rtl, 40.)] {
+        tree.update(root, scene(direction, Some(explicit))).unwrap();
+        let list = paint(&mut tree);
+        let last_cell = list
+            .commands()
+            .iter()
+            .rposition(|op| matches!(op, PaintCommand::Rect { color: CELL, .. }))
+            .unwrap();
+        let first_line = list
+            .commands()
+            .iter()
+            .position(|op| matches!(op, PaintCommand::StrokePath { .. }))
+            .unwrap();
+        assert!(
+            last_cell < first_line,
+            "table border must overlay cell paint"
+        );
+        let lines: Vec<_> = list
+            .commands()
+            .iter()
+            .filter_map(|op| match op {
+                PaintCommand::StrokePath {
+                    brush: Brush::Solid(color),
+                    path,
+                    ..
+                } => Some((*color, path.bounds().unwrap())),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            lines,
+            [
+                (
+                    BLUE,
+                    Rect::from_origin_size(Offset::new(divider, 0.), Size::new(0., 30.))
+                ),
+                (
+                    RED,
+                    Rect::from_origin_size(Offset::new(0., 20.), Size::new(100., 0.))
+                ),
+            ]
+        );
+        assert_eq!(tree.render_id(root), original);
+        assert_eq!(tree.children(root).unwrap()[0], child);
+    }
+
+    tree.update(
+        root,
+        scene(TextDirection::Rtl, Some(TableBorder::default())),
+    )
+    .unwrap();
+    let list = paint(&mut tree);
+    assert!(list.commands().iter().all(|op| !matches!(
+        op,
+        PaintCommand::StrokePath { .. } | PaintCommand::FillPath { .. }
+    )));
+}

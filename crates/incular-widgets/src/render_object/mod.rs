@@ -185,6 +185,14 @@ pub(crate) struct RenderTwoDimensionalState {
     pub(crate) layout: Option<TwoDimensionalViewportLayout<Widget>>,
 }
 
+/// Retained divider positions for tables that paint a visible border.
+#[derive(Default)]
+pub(crate) struct RenderTableBorderState {
+    pub(crate) size: Size,
+    pub(crate) rows: Vec<f32>,
+    pub(crate) columns: Vec<f32>,
+}
+
 /// Closed set of feature-local mutable state. This is deliberately not an
 /// `Any` property bag; the payload constructor derives the state from kind.
 pub(crate) enum RenderFeatureState {
@@ -200,6 +208,7 @@ pub(crate) enum RenderFeatureState {
     Wheel(Box<RenderWheelState>),
     DraggableSheet(RenderDraggableSheetState),
     TwoDimensional(Box<RenderTwoDimensionalState>),
+    TableBorder(Box<RenderTableBorderState>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -214,6 +223,7 @@ enum FeatureClass {
     Wheel,
     DraggableSheet,
     TwoDimensional,
+    TableBorder,
 }
 
 impl RenderFeatureState {
@@ -229,6 +239,10 @@ impl RenderFeatureState {
                 FeatureClass::Wheel
             }
             RenderKind::DraggableScrollableSheet { .. } => FeatureClass::DraggableSheet,
+            RenderKind::Table {
+                border: Some(border),
+                ..
+            } if border.has_paint() => FeatureClass::TableBorder,
             RenderKind::TwoDimensionalScrollView { .. }
             | RenderKind::TwoDimensionalViewport { .. } => FeatureClass::TwoDimensional,
             _ => FeatureClass::None,
@@ -247,6 +261,7 @@ impl RenderFeatureState {
             Self::Wheel(_) => FeatureClass::Wheel,
             Self::DraggableSheet(_) => FeatureClass::DraggableSheet,
             Self::TwoDimensional(_) => FeatureClass::TwoDimensional,
+            Self::TableBorder(_) => FeatureClass::TableBorder,
         }
     }
 
@@ -280,6 +295,7 @@ impl RenderFeatureState {
                     Self::DraggableSheet(RenderDraggableSheetState::default())
                 }
                 FeatureClass::TwoDimensional => Self::TwoDimensional(Box::default()),
+                FeatureClass::TableBorder => Self::TableBorder(Box::default()),
             },
         }
     }
@@ -325,6 +341,7 @@ impl FeatureClass {
             Self::Wheel => "wheel",
             Self::DraggableSheet => "draggable-sheet",
             Self::TwoDimensional => "two-dimensional",
+            Self::TableBorder => "table-border",
         }
     }
 }

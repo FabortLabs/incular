@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- Table paints opt-in TableBorder strokes over its cells. Border defaults
+  and removed borders leave no paint commands or foreground picture.
+
 - TableBorder describes and paints physical outside edges and inside row
   and column dividers, with no stroke unless a side is supplied.
 

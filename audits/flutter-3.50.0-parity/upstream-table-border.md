@@ -16,3 +16,14 @@ checks, not comparisons of anti-aliasing pixels. The widget wiring is
 covered separately.
 
 Run `cargo test --locked -p incular-widgets --test flutter350_table_border`.
+
+## Retained widget border
+
+The pinned Table smoke case at `widgets/table_test.dart:252` passes on
+both frameworks. The authored control verifies no default stroke, draws
+the requested inside and outside strokes after cell paint, and removes
+them after a retained update to an empty border. The independent Rust
+test checks that the vertical stroke follows the 60/40 column boundary
+from x=60 LTR to x=40 RTL. Divider height follows the 30-pixel row extent,
+not the 80-pixel outer box. It checks the command geometry, not raster
+pixels or empty-table stroke degeneracies.

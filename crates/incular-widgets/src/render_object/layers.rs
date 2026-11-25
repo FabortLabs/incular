@@ -78,16 +78,16 @@ enum AttachmentSpec {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct LayerSpec {
     picture: bool,
-    focus_picture: bool,
+    foreground_picture: bool,
     attachment: AttachmentSpec,
 }
 
 impl LayerSpec {
     fn for_widget(widget: &WidgetKind) -> Self {
-        let focus_picture = matches!(
+        let foreground_picture = matches!(
             widget,
             WidgetKind::Button(spec) if spec.color.alpha == 0 && spec.focused_color.is_some()
-        );
+        ) || matches!(widget, WidgetKind::Table { border: Some(border), .. } if border.has_paint());
         let attachment = match widget {
             WidgetKind::Scroll { .. } | WidgetKind::SliverViewport { .. } => {
                 if widget_clips(widget) {
@@ -137,7 +137,7 @@ impl LayerSpec {
         };
         Self {
             picture: needs_picture(widget),
-            focus_picture,
+            foreground_picture,
             attachment,
         }
     }
@@ -210,7 +210,7 @@ impl LayerAttachment {
 pub(crate) struct RenderLayers {
     pub(crate) root: LayerId,
     pub(crate) picture: Option<LayerId>,
-    pub(crate) focus_picture: Option<LayerId>,
+    pub(crate) foreground_picture: Option<LayerId>,
     pub(crate) attachment: LayerAttachment,
     /// Retained even through Clip::None so clipping-only updates do not
     /// need to remeasure the positioned children.
@@ -238,7 +238,7 @@ impl RenderLayers {
                 Rect::from_origin_size(Offset::ZERO, Size::ZERO),
             )
         });
-        let focus_picture = spec.focus_picture.then(|| {
+        let foreground_picture = spec.foreground_picture.then(|| {
             compositor.create_picture(
                 DisplayList::new(),
                 Rect::from_origin_size(Offset::ZERO, Size::ZERO),
@@ -455,14 +455,17 @@ impl RenderLayers {
                 LayerAttachment::Follower { layer }
             }
             _ => {
-                compositor.set_children(root, picture.into_iter().chain(focus_picture).collect());
+                compositor.set_children(
+                    root,
+                    picture.into_iter().chain(foreground_picture).collect(),
+                );
                 LayerAttachment::Direct
             }
         };
         Self {
             root,
             picture,
-            focus_picture,
+            foreground_picture,
             attachment,
             layout_overflow: Cell::new(false),
             clip_geometry: caches_clip_geometry.then(|| Rc::new(RefCell::new(None))),
@@ -505,7 +508,7 @@ impl RenderLayers {
         };
         LayerSpec {
             picture: self.picture.is_some(),
-            focus_picture: self.focus_picture.is_some(),
+            foreground_picture: self.foreground_picture.is_some(),
             attachment,
         }
     }
@@ -523,7 +526,7 @@ impl RenderLayers {
         [
             Some(self.root),
             self.picture,
-            self.focus_picture,
+            self.foreground_picture,
             attachment_a,
             attachment_b,
         ]
@@ -545,7 +548,7 @@ impl RenderLayers {
         let fresh = Self::create(compositor, widget);
         compositor.remove(fresh.root);
         self.picture = fresh.picture;
-        self.focus_picture = fresh.focus_picture;
+        self.foreground_picture = fresh.foreground_picture;
         self.attachment = fresh.attachment;
         if let LayerAttachment::Clip { clip, .. } | LayerAttachment::Transform { layer: clip } =
             self.attachment
@@ -565,7 +568,7 @@ impl RenderLayers {
         if let Some(picture) = self.picture.take() {
             compositor.remove(picture);
         }
-        if let Some(picture) = self.focus_picture.take() {
+        if let Some(picture) = self.foreground_picture.take() {
             compositor.remove(picture);
         }
         match std::mem::replace(&mut self.attachment, LayerAttachment::Direct) {
@@ -857,11 +860,11 @@ impl RenderLayers {
         match self.attachment {
             LayerAttachment::Direct => {
                 let mut layers = Vec::with_capacity(
-                    child_layers.len() + 1 + usize::from(self.focus_picture.is_some()),
+                    child_layers.len() + 1 + usize::from(self.foreground_picture.is_some()),
                 );
                 layers.extend(self.picture);
                 layers.append(&mut child_layers);
-                layers.extend(self.focus_picture);
+                layers.extend(self.foreground_picture);
                 compositor.set_children(self.root, layers);
             }
             LayerAttachment::Clip { content, .. }

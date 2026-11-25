@@ -457,6 +457,7 @@ impl WidgetTree {
                 default_column_width,
                 default_vertical_alignment,
                 text_direction,
+                ..
             } => {
                 let config = incular_layout::Table {
                     columns,
@@ -501,6 +502,45 @@ impl WidgetTree {
                     .collect::<Vec<_>>();
                 let result =
                     incular_layout::place_table_columns(constraints, &cells, &config, &widths);
+                if let crate::render_object::RenderFeatureState::TableBorder(geometry) = &mut self
+                    .render_live_mut(id, "bordered table remains live")
+                    .object
+                    .feature
+                {
+                    geometry.rows.clear();
+                    geometry.columns.clear();
+                    if cells.is_empty() {
+                        geometry.size = Size::ZERO;
+                    } else {
+                        let horizontal_spacing = column_spacing.max(0.);
+                        let vertical_spacing = row_spacing.max(0.);
+                        let mut x = 0.;
+                        for visual in 0..widths.len() {
+                            let column = if text_direction == TextDirection::Rtl {
+                                widths.len() - 1 - visual
+                            } else {
+                                visual
+                            };
+                            if visual != 0 {
+                                geometry.columns.push(x + horizontal_spacing / 2.);
+                                x += horizontal_spacing;
+                            }
+                            x += widths[column];
+                        }
+                        let mut y = 0.;
+                        for (row, cells) in cells.chunks(columns_count).enumerate() {
+                            if row != 0 {
+                                geometry.rows.push(y + vertical_spacing / 2.);
+                                y += vertical_spacing;
+                            }
+                            y += cells.iter().map(|cell| cell.size.height).fold(0., f32::max);
+                        }
+                        geometry.size = Size::new(x, y);
+                    }
+                    // Even with an unchanged outer box, a child resize can
+                    // move a row divider.
+                    self.mark_render_dirty(id, DirtyFlags::PAINT, false);
+                }
                 (
                     result.size,
                     result

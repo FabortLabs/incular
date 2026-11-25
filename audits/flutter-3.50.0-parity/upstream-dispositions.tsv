@@ -446,7 +446,7 @@ packages/flutter/test/widgets/wrap_test.dart	878	Wrap baseline control test	part
 packages/flutter/test/widgets/wrap_test.dart	962	Wrap can set and update clipBehavior	paired-match	upstream-wrap-baseline-and-final-references.md
 packages/flutter/test/widgets/table_test.dart	136	Table widget - column offset (LTR)	paired-match	upstream-table-direction-rows-and-intrinsics.md
 packages/flutter/test/widgets/table_test.dart	194	Table widget - column offset (RTL)	paired-match	upstream-table-direction-rows-and-intrinsics.md
-packages/flutter/test/widgets/table_test.dart	252	Table border - smoke test	reference-ran-incular-open	upstream-table-direction-rows-and-intrinsics.md
+packages/flutter/test/widgets/table_test.dart	252	Table border - smoke test	paired-match	upstream-table-direction-rows-and-intrinsics.md
 packages/flutter/test/widgets/table_test.dart	310	Really small deficit double precision error	paired-match	upstream-table-direction-rows-and-intrinsics.md
 packages/flutter/test/widgets/table_test.dart	327	Calculating flex columns with small width deficit	paired-match	upstream-table-direction-rows-and-intrinsics.md
 packages/flutter/test/widgets/table_test.dart	391	Table widget - intrinsic sizing test	paired-match	upstream-table-direction-rows-and-intrinsics.md

@@ -5,7 +5,9 @@ use typed_builder::TypedBuilder;
 
 pub use incular_layout::{TableCellVerticalAlignment, TableColumnWidth};
 
-use crate::{TextDirection, Widget, WidgetKind, macros::widget_from_kind};
+use std::rc::Rc;
+
+use crate::{TableBorder, TextDirection, Widget, WidgetKind, macros::widget_from_kind};
 
 /// A row-major table with Flutter's column-width and cell-alignment rules.
 ///
@@ -30,6 +32,8 @@ pub struct Table {
     default_vertical_alignment: TableCellVerticalAlignment,
     #[builder(default, setter(strip_option))]
     text_direction: Option<TextDirection>,
+    #[builder(default, setter(transform = |border: TableBorder| Some(Rc::new(border))))]
+    border: Option<Rc<TableBorder>>,
     #[builder(default, setter(into))]
     children: Vec<Widget>,
 }
@@ -81,6 +85,13 @@ impl Table {
         self
     }
 
+    /// Paints explicit grid strokes after the cells. The default is no border.
+    #[must_use]
+    pub fn border(mut self, border: TableBorder) -> Self {
+        self.border = Some(Rc::new(border));
+        self
+    }
+
     /// Sets how cells are placed vertically within their row. Defaults to top.
     #[must_use]
     pub fn default_vertical_alignment(mut self, alignment: TableCellVerticalAlignment) -> Self {
@@ -97,5 +108,6 @@ widget_from_kind!(Table => Table {
     default_column_width,
     default_vertical_alignment,
     text_direction,
+    border,
     children
 });

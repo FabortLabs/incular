@@ -732,8 +732,10 @@ impl WidgetTree {
     fn repaint_pictures(&mut self, id: RenderObjectId) {
         let node = self.render_live(id, "retained render must remain live");
         let (kind, size) = (node.object.shared_kind(), node.size);
-        let (picture_layer, focus_layer) =
-            (node.object.layers.picture, node.object.layers.focus_picture);
+        let (picture_layer, foreground_layer) = (
+            node.object.layers.picture,
+            node.object.layers.foreground_picture,
+        );
         // Taken rather than borrowed: paint callbacks may repaint another
         // node, which then records into a fresh buffer.
         let mut picture = std::mem::take(&mut self.paint_scratch);
@@ -750,9 +752,26 @@ impl WidgetTree {
             self.compositor
                 .update_picture_if_changed(layer, &picture, bounds);
         }
-        if let Some(layer) = focus_layer {
+        if let Some(layer) = foreground_layer {
             picture.clear();
-            if let Some(focus_ring) = focus_ring.filter(|color| color.alpha > 0) {
+            let mut foreground_bounds = bounds;
+            if let RenderKind::Table {
+                border: Some(border),
+                ..
+            } = &*kind
+                && let crate::render_object::RenderFeatureState::TableBorder(geometry) = &self
+                    .render_live(id, "bordered table remains live")
+                    .object
+                    .feature
+                && geometry.size.width > 0.
+                && geometry.size.height > 0.
+            {
+                let mut canvas = incular_rendering::Canvas::default();
+                let rect = Rect::from_origin_size(Offset::ZERO, geometry.size);
+                border.paint(&mut canvas, rect, &geometry.rows, &geometry.columns);
+                picture.extend_from(&canvas.finish());
+                foreground_bounds = painted_bounds(picture.commands(), size);
+            } else if let Some(focus_ring) = focus_ring.filter(|color| color.alpha > 0) {
                 let inset = 1.0;
                 let ring_size = Size::new(
                     (size.width - 2. * inset).max(0.),
@@ -767,7 +786,7 @@ impl WidgetTree {
                 });
             }
             self.compositor
-                .update_picture_if_changed(layer, &picture, bounds);
+                .update_picture_if_changed(layer, &picture, foreground_bounds);
         }
         self.paint_scratch = picture;
         self.diagnostics.paints += 1;

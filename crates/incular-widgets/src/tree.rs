@@ -737,6 +737,7 @@ pub enum RenderKind {
         row_spacing: f32,
         column_widths: Vec<(usize, incular_layout::TableColumnWidth)>,
         default_column_width: incular_layout::TableColumnWidth,
+        border: Option<Rc<crate::TableBorder>>,
         default_vertical_alignment: incular_layout::TableCellVerticalAlignment,
         text_direction: TextDirection,
     },
