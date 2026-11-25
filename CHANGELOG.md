@@ -204,6 +204,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-gestures`: a focus request made before attachment stays
+  pending without publishing a primary-focus grant.
+
 - `incular-runtime`: a newly mounted autofocus control can take focus
   after the previously focused control is removed.
 

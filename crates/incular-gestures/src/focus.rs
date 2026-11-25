@@ -43,11 +43,18 @@ impl std::fmt::Debug for FocusNode {
             .finish()
     }
 }
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FocusAuthority {
+    Unattached,
+    Standalone,
+    Hosted,
+}
+
 struct FocusState {
     focused: Cell<bool>,
     descendant_focused: Cell<bool>,
     requested: Cell<Option<u64>>,
-    managed_by_host: Cell<bool>,
+    authority: Cell<FocusAuthority>,
     host_attachment_count: Cell<usize>,
     enabled: Cell<bool>,
     can_request_focus: Cell<bool>,
@@ -126,7 +133,7 @@ impl Default for FocusNode {
                 focused: Cell::new(false),
                 descendant_focused: Cell::new(false),
                 requested: Cell::new(None),
-                managed_by_host: Cell::new(false),
+                authority: Cell::new(FocusAuthority::Unattached),
                 host_attachment_count: Cell::new(0),
                 enabled: Cell::new(true),
                 can_request_focus: Cell::new(true),
@@ -161,12 +168,13 @@ impl FocusNode {
         self.state.revision.get()
     }
 
+    /// Requests focus without granting it to a node that has not been attached.
     pub fn request_focus(&self) {
         if self.can_request_focus() {
             let request = FOCUS_EPOCH.get().wrapping_add(1);
             self.state.requested.set(Some(request));
             FOCUS_EPOCH.set(request);
-            if !self.state.managed_by_host.get() {
+            if self.state.authority.get() == FocusAuthority::Standalone {
                 self.state.set_focused(true);
             }
         }
@@ -192,13 +200,27 @@ impl FocusNode {
         let count = self.state.host_attachment_count.get();
         self.state.host_attachment_count.set(count + 1);
         if count == 0 {
-            self.state.managed_by_host.set(true);
+            self.state.authority.set(FocusAuthority::Hosted);
             self.state.set_focused(false);
             if self.has_pending_focus_request() {
                 FOCUS_EPOCH.set(FOCUS_EPOCH.get().wrapping_add(1));
             }
         }
         FocusNodeAttachment { node: self.clone() }
+    }
+
+    /// Enables the synchronous focus behavior of a standalone widget tree.
+    /// A runtime with a live attachment remains authoritative.
+    #[doc(hidden)]
+    pub fn bind_standalone_tree(&self) {
+        if self.state.host_attachment_count.get() == 0
+            && self.state.authority.replace(FocusAuthority::Standalone)
+                != FocusAuthority::Standalone
+            && self.has_pending_focus_request()
+            && self.can_request_focus()
+        {
+            self.state.set_focused(true);
+        }
     }
 
     #[doc(hidden)]

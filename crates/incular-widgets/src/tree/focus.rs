@@ -49,14 +49,17 @@ impl WidgetTree {
         self.hosted_focus_nodes.get_or_insert_with(BTreeMap::new);
     }
 
-    pub(super) fn sync_hosted_focus_node(&mut self, id: ElementId) {
-        let Some(hosted) = self.hosted_focus_nodes.as_mut() else {
-            return;
-        };
+    pub(super) fn sync_focus_node_binding(&mut self, id: ElementId) {
         let node = self
             .elements
             .get(id.0)
             .and_then(|element| external_node(element.widget.kind()));
+        let Some(hosted) = self.hosted_focus_nodes.as_mut() else {
+            if let Some(node) = node {
+                node.bind_standalone_tree();
+            }
+            return;
+        };
         if let Some(node) = node {
             if !hosted
                 .get(&id)

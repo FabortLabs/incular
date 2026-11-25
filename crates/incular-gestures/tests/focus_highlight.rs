@@ -156,7 +156,7 @@ fn a_listener_can_unsubscribe_itself_before_a_nested_change() {
 fn application_highlight_callback_can_query_the_modality_owner() {
     let manager = manager();
     let focus = FocusNode::new();
-    focus.request_focus();
+    assert!(incular_gestures::FocusManager::new().request_focus(&focus));
     let observed = Rc::new(RefCell::new(Vec::new()));
     let _behavior = FocusBehavior::new(
         focus,

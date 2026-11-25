@@ -1443,7 +1443,7 @@ impl WidgetTree {
                 element.tracked = tracked;
             }
         }
-        self.sync_hosted_focus_node(id);
+        self.sync_focus_node_binding(id);
     }
 
     /// Stable identity of this tree for scroll-attachment ownership:

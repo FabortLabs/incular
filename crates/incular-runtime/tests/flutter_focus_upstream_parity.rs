@@ -22,6 +22,16 @@ fn scoped_slot(child: impl Into<Widget>) -> Widget {
 #[test]
 fn unattached_focus_request_waits_for_host_attachment() {
     let child = FocusNode::new();
+    let grants = Rc::new(Cell::new(0));
+    let _watch = child.observe({
+        let node = child.clone();
+        let grants = grants.clone();
+        move || {
+            if node.has_primary_focus() {
+                grants.set(grants.get() + 1);
+            }
+        }
+    });
     child.request_focus();
     let primary_before_scope = child.has_primary_focus();
 
@@ -29,6 +39,7 @@ fn unattached_focus_request_waits_for_host_attachment() {
     frame(&mut runtime);
     let primary_before_child_mount = child.has_primary_focus();
     assert_eq!(runtime.focused_element(), None);
+    assert_eq!(grants.get(), 0);
 
     let root = runtime.tree().root().expect("stable scope slot");
     let key = Key::from("pending focus");
@@ -54,6 +65,7 @@ fn unattached_focus_request_waits_for_host_attachment() {
         (false, false, true, true),
         "only a mounted focus target can become primary"
     );
+    assert_eq!(grants.get(), 1);
 }
 
 #[test]

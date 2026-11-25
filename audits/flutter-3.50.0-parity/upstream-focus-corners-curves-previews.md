@@ -87,3 +87,18 @@ replay a request, and the runtime still honors explicit clearing
 before first layout. Twelve focused Rust tests passed. The historical
 paired row remains in the audit; pre-first-attachment focus visibility
 at :633 is a separate open failure and was excluded from this run.
+
+## Focus requested before attachment
+
+The pinned `focus_manager_test.dart:633` original and Incular's
+retained lifecycle now agree on observable focus: the node is not
+primary before any owner attaches it, and becomes primary only after
+the mounted runtime grants the pending request. An observer sees no
+early grant and one final grant. Explicit FocusManager requests and
+mounted standalone WidgetTree focus behavior still work; standalone
+trees do not confer ownership on never-mounted nodes. An old test that
+expected an implicit Focus widget to have no node now verifies the
+already-supported Flutter default: it owns a focus target without
+autofocusing. Forty-nine focused Rust checks passed. The existing
+partial audit row remains historical because Flutter's separate
+manual attach/reparent API is not reproduced here.

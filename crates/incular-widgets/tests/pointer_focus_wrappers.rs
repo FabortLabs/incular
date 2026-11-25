@@ -181,22 +181,26 @@ fn pointer_wrappers_keep_subtree_semantics() {
 }
 
 #[test]
-fn focus_without_node_or_autofocus_adds_no_focus_target() {
+fn focus_without_supplied_node_owns_a_target_but_does_not_autofocus() {
     let mut tree = WidgetTree::new();
     tree.mount(Widget::box_(Size::new(40., 40.), Color::WHITE))
         .expect("mount plain box");
     let plain_targets = tree.focusable_elements().len();
 
     let mut tree = WidgetTree::new();
-    tree.mount(Widget::from(Focus::new(Widget::box_(
-        Size::new(40., 40.),
-        Color::WHITE,
-    ))))
-    .expect("mount focus wrapper");
+    let wrapper = tree
+        .mount(Widget::from(Focus::new(Widget::box_(
+            Size::new(40., 40.),
+            Color::WHITE,
+        ))))
+        .expect("mount focus wrapper");
     layout_loose(&mut tree);
-    // A default Focus passes its child through: no node, no target, and the
-    // child itself stays hittable.
-    assert_eq!(tree.focusable_elements().len(), plain_targets);
+    // Flutter creates a node when no external one is supplied, but the
+    // default wrapper does not request focus or block hits to its child.
+    assert_eq!(tree.focusable_elements().len(), plain_targets + 1);
+    assert!(tree.focusable_elements().contains(&wrapper));
+    assert_eq!(tree.focused_keyboard_element(), None);
+    assert_eq!(tree.autofocus_element(), None);
     assert!(tree.hit_test(Offset::new(20., 20.)).is_some());
 }
 
