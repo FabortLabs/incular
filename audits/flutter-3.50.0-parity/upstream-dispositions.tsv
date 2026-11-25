@@ -1434,3 +1434,8 @@ packages/flutter/test/services/text_editing_delta_test.dart	307	Verify TextEditi
 packages/flutter/test/services/text_editing_delta_test.dart	336	Verify non text update delta created.	paired-match	upstream-text-editing-delta-wire.md
 packages/flutter/test/services/text_editing_delta_test.dart	361	Verify invalid TextEditingDeltaNonTextUpdate fails to apply	paired-match	upstream-text-editing-delta-wire.md
 packages/flutter/test/services/text_editing_delta_test.dart	373	Verify TextEditingDeltaNonTextUpdate debugFillProperties	reference-ran-incular-open	upstream-text-editing-delta-wire.md
+packages/flutter/test/services/delta_text_input_test.dart	29	DeltaTextInputClient send the correct configuration to the platform and responds to updateEditingValueWithDeltas method correctly	paired-match	upstream-delta-text-input-channel.md
+packages/flutter/test/services/delta_text_input_test.dart	65	Invalid TextRange fails loudly when being converted to JSON - NonTextUpdate	partial-match	upstream-delta-text-input-channel.md
+packages/flutter/test/services/delta_text_input_test.dart	115	Invalid TextRange fails loudly when being converted to JSON - Faulty deltaStart and deltaEnd	partial-match	upstream-delta-text-input-channel.md
+packages/flutter/test/services/delta_text_input_test.dart	161	Invalid TextRange fails loudly when being converted to JSON - Faulty Selection	partial-match	upstream-delta-text-input-channel.md
+packages/flutter/test/services/delta_text_input_test.dart	214	Invalid TextRange fails loudly when being converted to JSON - Faulty Composing Region	partial-match	upstream-delta-text-input-channel.md

@@ -12,6 +12,7 @@ mod environment;
 mod executor;
 pub use executor::sleep;
 mod file_dialogs;
+mod flutter_text_input;
 mod focus_keys;
 mod frame;
 mod global_shortcuts;
@@ -61,6 +62,7 @@ pub use file_dialogs::{
     FileDialogCompletionStatus, FileDialogRequest, FileDialogService, MemoryFileDialogAdapter,
     NativeFileDialogCompletion, NativeFileDialogRequest,
 };
+pub use flutter_text_input::{FlutterDeltaTextInputConnection, FlutterDeltaTextInputError};
 pub use focus_keys::FocusKeySubscription;
 pub use frame::{EditingDiagnostics, EventTarget, FocusDiagnostics, FrameStats, Runtime};
 pub use global_shortcuts::{
