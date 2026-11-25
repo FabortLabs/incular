@@ -1212,3 +1212,5 @@ packages/flutter/test/widgets/app_test.dart	708	basicLocaleListResolution	paired
 packages/flutter/test/widgets/localizations_test.dart	82	Localizations.localeOf throws when no localizations exist	paired-match	upstream-localizations.md#ancestor-lookup-and-zero-size-layout
 packages/flutter/test/widgets/localizations_test.dart	100	Localizations.maybeLocaleOf returns null when no localizations exist	paired-match	upstream-localizations.md#ancestor-lookup-and-zero-size-layout
 packages/flutter/test/widgets/localizations_test.dart	214	Localizations does not crash at zero area	paired-match	upstream-localizations.md#ancestor-lookup-and-zero-size-layout
+packages/flutter/test/widgets/localizations_test.dart	157	set locale semantics	paired-match	upstream-localizations.md#local-pronunciation-scopes
+packages/flutter/test/widgets/localizations_test.dart	189	application level does not set semantics	paired-match	upstream-localizations.md#local-pronunciation-scopes

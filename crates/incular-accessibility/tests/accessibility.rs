@@ -475,3 +475,34 @@ fn adjusting_a_node_shows_its_adjusted_value_before_the_next_sync() {
     mobile.translate_action(native, SemanticAction::Decrement);
     assert!(mobile.take_optimistic_update().is_none());
 }
+
+#[test]
+fn scoped_pronunciation_locale_updates_and_clears_on_same_native_node() {
+    let mut tree = SemanticsTree::new();
+    let mut label = node(Role::Text);
+    label.state.locale = Some("zh-Hant-TW".into());
+    let id = tree.insert(label);
+    tree.set_root(Some(id));
+    let mut projection = AccessKitProjection::new();
+    let initial = full(&mut projection, &tree);
+    let native = projection.native_node_id(id).unwrap();
+    let language = |update: TreeUpdate| {
+        update
+            .nodes
+            .into_iter()
+            .find(|(node_id, _)| node_id.0 == native)
+            .unwrap()
+            .1
+            .language()
+            .map(str::to_owned)
+    };
+    assert_eq!(language(initial).as_deref(), Some("zh-Hant-TW"));
+    for locale in [Some("es"), None] {
+        let mut changed = tree.node(id).unwrap().clone();
+        changed.state.locale = locale.map(Into::into);
+        tree.update(id, changed);
+        let update = projection.sync(&tree, 2.0).unwrap();
+        assert_eq!(update.kind(), AccessKitUpdateKind::Incremental);
+        assert_eq!(language(update.into_accesskit()).as_deref(), locale);
+    }
+}

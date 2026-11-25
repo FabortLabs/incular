@@ -234,6 +234,11 @@ impl Widget {
         }
     }
 
+    pub(crate) fn with_semantic_locale(mut self, locale: std::sync::Arc<str>) -> Self {
+        self.semantic_properties_mut().locale_for_subtree = Some(locale);
+        self
+    }
+
     pub(crate) fn set_key(&mut self, key: Option<Key>) {
         self.node_mut().key = key;
     }

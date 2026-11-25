@@ -98,6 +98,8 @@ pub(super) struct SemanticVisit {
     /// `TOP_LEVEL`.
     parent: u32,
     collection: Option<SemanticCollectionContext>,
+    /// Most recent locale annotation on the traversal path.
+    locale_scope: Option<ElementId>,
     /// Collect the full content of every element below, whatever its marks
     /// say.
     force_content: bool,
@@ -294,6 +296,7 @@ impl WidgetTree {
             element: root,
             parent: TOP_LEVEL,
             collection: None,
+            locale_scope: None,
             force_content: full,
             force_bounds: full,
             subtree_focus_blocked: false,
@@ -677,6 +680,7 @@ impl WidgetTree {
             element,
             parent: semantic_parent,
             collection,
+            locale_scope,
             parent_world,
             subtree_focus_blocked,
             merges_focus_labels,
@@ -689,6 +693,13 @@ impl WidgetTree {
         if self.semantics_hidden(entry) {
             return;
         }
+        let locale_scope = entry
+            .widget
+            .semantic_properties()
+            .locale_for_subtree
+            .as_ref()
+            .map(|_| element)
+            .or(locale_scope);
         let own_focus_block = if subtree_focus_blocked {
             AccessibilityFocusBlockType::BlockSubtree
         } else {
@@ -772,6 +783,7 @@ impl WidgetTree {
                             element: child,
                             parent: RETAINED_LIST,
                             collection: None,
+                            locale_scope,
                             force_content: false,
                             force_bounds: false,
                             subtree_focus_blocked: child_focus_blocked,
@@ -816,6 +828,7 @@ impl WidgetTree {
                         element: child,
                         parent: this_parent,
                         collection: None,
+                        locale_scope,
                         force_content: regroups,
                         force_bounds: scope.bounds_below || regroups,
                         subtree_focus_blocked: child_focus_blocked,
@@ -1156,6 +1169,15 @@ impl WidgetTree {
         }
         let this_parent = if let Some(role) = role {
             let mut state = state;
+            if let Some(scope) = locale_scope {
+                state.locale.clone_from(
+                    &self
+                        .element_live(scope, "semantic locale ancestor must remain live")
+                        .widget
+                        .semantic_properties()
+                        .locale_for_subtree,
+                );
+            }
             if let Some(collection) = collection {
                 if collection.item_index.is_some() {
                     state.item_index = collection.item_index;
@@ -1223,6 +1245,7 @@ impl WidgetTree {
                     element: child,
                     parent: this_parent,
                     collection: child_collection,
+                    locale_scope,
                     force_content: scope.subtree_content || regroups,
                     force_bounds: scope.bounds_below || regroups,
                     subtree_focus_blocked: child_focus_blocked,

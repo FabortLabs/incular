@@ -1014,6 +1014,9 @@ impl AccessKitProjection {
         if semantic.state.live_region {
             node.set_live(Live::Polite);
         }
+        if let Some(locale) = &semantic.state.locale {
+            node.set_language(locale.as_ref());
+        }
         if let Some(direction) = semantic.state.text_direction {
             node.set_text_direction(match direction {
                 TextDirection::Ltr => accesskit::TextDirection::LeftToRight,

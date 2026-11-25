@@ -8,7 +8,7 @@ use std::rc::Rc;
 use incular_config::{Brightness, Locale, LocaleResolver, LocalizationCatalog};
 use incular_core::Size;
 
-use crate::{BuildContext, Builder, Directionality, Widget};
+use crate::{BuildContext, Builder, Localizations, Widget};
 
 /// Wraps an existing preview widget in additional scaffolding.
 pub type WidgetWrapper = Rc<dyn Fn(Widget) -> Widget>;
@@ -257,11 +257,7 @@ impl Preview {
             let Some(locale) = data.resolve(&platform) else {
                 return child.clone();
             };
-            let direction = LocaleResolver::text_direction(&locale);
-            Widget::environment_scope(
-                (locale, catalog.clone()),
-                Directionality::new(direction, child.clone()).into(),
-            )
+            Localizations::with_shared_catalog(locale, catalog.clone(), child.clone()).into()
         })
         .into()
     }

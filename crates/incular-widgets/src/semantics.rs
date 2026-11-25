@@ -72,11 +72,20 @@ pub struct Semantics {
     on_long_press: Option<Rc<dyn Fn() + 'static>>,
     #[builder(default)]
     state: SemanticState,
+    #[builder(default, setter(strip_option))]
+    locale_for_subtree: Option<incular_config::Locale>,
     #[builder(default, setter(strip_option, into))]
     child: Option<Widget>,
 }
 
 impl Semantics {
+    /// Sets the pronunciation locale for this annotation and its descendants.
+    #[must_use]
+    pub fn locale_for_subtree(mut self, locale: incular_config::Locale) -> Self {
+        self.locale_for_subtree = Some(locale);
+        self
+    }
+
     /// Replaces the annotated child.
     pub(crate) fn with_child(mut self, child: impl Into<Widget>) -> Self {
         self.child = Some(child.into());
@@ -104,6 +113,7 @@ impl Semantics {
             on_scroll_down: None,
             on_long_press: None,
             state: SemanticState::default(),
+            locale_for_subtree: None,
             child: Some(child.into()),
         }
     }
@@ -603,6 +613,9 @@ impl From<Semantics> for Widget {
             .unwrap_or_else(|| crate::SizedBox::shrink().into());
         if let Some(explicit) = explicit {
             widget = widget.semantics(explicit);
+        }
+        if let Some(locale) = value.locale_for_subtree {
+            widget = widget.with_semantic_locale(Arc::from(locale.to_string()));
         }
         if let Some(callback) = on_tap {
             widget = widget

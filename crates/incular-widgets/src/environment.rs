@@ -77,6 +77,8 @@ pub struct Localizations {
         }
     ))]
     catalog: Rc<dyn LocalizationCatalog>,
+    #[builder(default)]
+    application_level: bool,
     #[builder(setter(into))]
     child: Widget,
 }
@@ -91,6 +93,7 @@ impl Localizations {
         Self {
             locale,
             catalog: Rc::new(catalog),
+            application_level: false,
             child: child.into(),
         }
     }
@@ -116,6 +119,27 @@ impl Localizations {
     pub fn locale_of(context: &BuildContext<'_>) -> Locale {
         Self::maybe_locale_of(context)
             .expect("Localizations::locale_of requires a Localizations ancestor")
+    }
+
+    pub(crate) fn with_shared_catalog(
+        locale: Locale,
+        catalog: Rc<dyn LocalizationCatalog>,
+        child: Widget,
+    ) -> Self {
+        Self {
+            locale,
+            catalog,
+            application_level: false,
+            child,
+        }
+    }
+
+    /// Leaves semantic pronunciation to the application instead of marking
+    /// this locale as an override on every descendant accessibility node.
+    #[must_use]
+    pub fn application_level(mut self, value: bool) -> Self {
+        self.application_level = value;
+        self
     }
 
     #[must_use]
@@ -157,10 +181,19 @@ impl Localizations {
 impl From<Localizations> for Widget {
     fn from(value: Localizations) -> Self {
         let direction = value.text_direction();
-        Widget::environment_scope(
+        let locale = (!value.application_level).then(|| value.locale.clone());
+        let scope = Widget::environment_scope(
             (value.locale, value.catalog),
             Directionality::new(direction, value.child).into(),
-        )
+        );
+        if let Some(locale) = locale {
+            crate::Semantics::new(scope)
+                .container(true)
+                .locale_for_subtree(locale)
+                .into()
+        } else {
+            scope
+        }
     }
 }
 

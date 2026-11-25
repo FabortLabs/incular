@@ -904,7 +904,9 @@ impl WidgetsApp {
         if let Some(catalog) = self.catalog.as_ref()
             && let Some(locale) = locale.clone()
         {
-            child = Localizations::new(locale, SharedCatalog(catalog.clone()), child).into();
+            child = Localizations::with_shared_catalog(locale, catalog.clone(), child)
+                .application_level(true)
+                .into();
         }
         let direction = locale
             .as_ref()
@@ -1008,16 +1010,4 @@ fn resolve_app_locale(environment: &RuntimeEnvironment, supported: &[Locale]) ->
         return environment.primary_locale().cloned();
     }
     LocaleResolver::resolve_basic(&environment.locales, supported)
-}
-
-struct SharedCatalog(Rc<dyn LocalizationCatalog>);
-
-impl LocalizationCatalog for SharedCatalog {
-    fn supported_locales(&self) -> &[Locale] {
-        self.0.supported_locales()
-    }
-
-    fn message(&self, locale: &Locale, key: &str) -> Option<&str> {
-        self.0.message(locale, key)
-    }
 }

@@ -266,3 +266,85 @@ fn localization_scope_at_zero_area_is_still_inherited() {
     assert_eq!(tree.element_geometry(element).unwrap().1, Size::ZERO);
     let _ = tree.paint();
 }
+
+#[test]
+fn nested_localization_scopes_set_semantic_locale_without_replacing_label_nodes() {
+    use incular_config::Constraints;
+    use incular_core::Size;
+    use incular_widgets::{Column, Semantics, Text, internal::WidgetTree};
+
+    let child = Semantics::new(Column::new([
+        Widget::from(Text::new("2")),
+        Localizations::new("zh".parse().unwrap(), Catalog, Text::new("3")).into(),
+    ]))
+    .container(true)
+    .explicit_child_nodes(true)
+    .label("1");
+    let scope = Localizations::new("fo".parse().unwrap(), Catalog, child);
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scope.clone().into()).unwrap();
+    let layout = Constraints::tight(Size::new(100., 100.));
+    tree.layout(layout).unwrap();
+    tree.update_semantics();
+    let read = |tree: &WidgetTree, label: &str| {
+        let (id, node) = tree
+            .semantics()
+            .iter()
+            .find(|(_, node)| node.label.as_deref() == Some(label))
+            .unwrap();
+        (id, node.state.locale.as_deref().map(str::to_owned))
+    };
+    let prior = ["1", "2", "3"].map(|label| read(&tree, label));
+    assert_eq!(prior[0].1.as_deref(), Some("fo"));
+    assert_eq!(prior[1].1.as_deref(), Some("fo"));
+    assert_eq!(prior[2].1.as_deref(), Some("zh"));
+
+    tree.update(root, scope.with_locale("es".parse().unwrap()).into())
+        .unwrap();
+    tree.layout(layout).unwrap();
+    tree.update_semantics();
+    for ((label, previous), locale) in ["1", "2", "3"]
+        .into_iter()
+        .zip(prior)
+        .zip(["es", "es", "zh"])
+    {
+        assert_eq!(read(&tree, label), (previous.0, Some(locale.to_owned())));
+    }
+}
+
+#[test]
+fn application_level_localizations_does_not_override_node_pronunciation() {
+    use incular_config::Constraints;
+    use incular_core::Size;
+    use incular_widgets::{Builder, Column, Semantics, Text, internal::WidgetTree};
+
+    let child = Semantics::new(Column::new([
+        Widget::from(Text::new("2")),
+        Builder::new(|context| {
+            assert_eq!(Localizations::locale_of(context).to_string(), "fo");
+            Text::new("3").into()
+        })
+        .into(),
+    ]))
+    .container(true)
+    .explicit_child_nodes(true)
+    .label("1");
+    let mut tree = WidgetTree::new();
+    tree.mount(
+        Localizations::new("fo".parse().unwrap(), Catalog, child)
+            .application_level(true)
+            .into(),
+    )
+    .unwrap();
+    tree.layout(Constraints::tight(Size::new(100., 100.)))
+        .unwrap();
+    tree.update_semantics();
+    for label in ["1", "2", "3"] {
+        let (_, node) = tree
+            .semantics()
+            .iter()
+            .find(|(_, node)| node.label.as_deref() == Some(label))
+            .unwrap();
+        assert_eq!(node.state.locale, None);
+    }
+}

@@ -221,6 +221,7 @@ pub(crate) struct SemanticProperties {
     /// semantic metadata set only a label or a flag.
     pub(super) explicit: Option<Box<ExplicitSemantics>>,
     pub(super) merge_descendants: bool,
+    pub(super) locale_for_subtree: Option<std::sync::Arc<str>>,
     /// Flutter `alwaysIncludeSemantics` on an opacity widget: keep the child's
     /// semantics even while the opacity is zero.
     pub(super) always_include_semantics: bool,

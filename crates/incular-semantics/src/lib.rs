@@ -325,6 +325,8 @@ pub struct SemanticState {
     pub live_region: bool,
     /// Base direction of the node’s accessible label.
     pub text_direction: Option<TextDirection>,
+    /// BCP-47 pronunciation locale inherited from the nearest semantic scope.
+    pub locale: Option<std::sync::Arc<str>>,
     /// Optional pronunciation spans for the node’s semantic strings.
     pub text_attributes: Option<std::sync::Arc<SemanticTextAttributes>>,
     /// Flutter's `tooltip`.
@@ -385,6 +387,7 @@ impl Default for SemanticState {
             scroll_metrics: None,
             live_region: false,
             text_direction: None,
+            locale: None,
             text_attributes: None,
             tooltip: None,
             link_url: None,
