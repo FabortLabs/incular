@@ -11,6 +11,7 @@ use incular_core::time::Instant;
 use std::{
     cell::{Cell, RefCell},
     collections::VecDeque,
+    marker::PhantomData,
     rc::{Rc, Weak},
     time::Duration,
 };
@@ -182,6 +183,72 @@ pub fn frame_timestamp(raw: Instant) -> Instant {
 
 thread_local! {
     static SCHEDULER: RefCell<Scheduler> = RefCell::new(Scheduler::default());
+    static FRAME_OWNERS: Cell<FrameOwners> = const { Cell::new(FrameOwners {
+        live: 0,
+        enabled: 0,
+    }) };
+}
+
+#[derive(Clone, Copy)]
+struct FrameOwners {
+    live: usize,
+    enabled: usize,
+}
+
+fn frames_enabled() -> bool {
+    FRAME_OWNERS.with(|owners| {
+        let owners = owners.get();
+        owners.live == 0 || owners.enabled != 0
+    })
+}
+
+/// A retained runtime's participation in the thread-wide animation scheduler.
+/// A suspended owner stops driving it without suppressing a different live
+/// window on the same UI thread. Dropping an owner removes its vote.
+#[doc(hidden)]
+pub struct FrameAvailability {
+    enabled: bool,
+    _ui_thread: PhantomData<Rc<()>>,
+}
+
+impl Default for FrameAvailability {
+    fn default() -> Self {
+        FRAME_OWNERS.with(|owners| {
+            let mut counts = owners.get();
+            counts.live += 1;
+            counts.enabled += 1;
+            owners.set(counts);
+        });
+        Self {
+            enabled: true,
+            _ui_thread: PhantomData,
+        }
+    }
+}
+
+impl FrameAvailability {
+    pub fn set_enabled(&mut self, enabled: bool) {
+        if self.enabled == enabled {
+            return;
+        }
+        FRAME_OWNERS.with(|owners| {
+            let mut counts = owners.get();
+            counts.enabled = counts.enabled - usize::from(self.enabled) + usize::from(enabled);
+            owners.set(counts);
+        });
+        self.enabled = enabled;
+    }
+}
+
+impl Drop for FrameAvailability {
+    fn drop(&mut self) {
+        let _ = FRAME_OWNERS.try_with(|owners| {
+            let mut counts = owners.get();
+            counts.live -= 1;
+            counts.enabled -= usize::from(self.enabled);
+            owners.set(counts);
+        });
+    }
 }
 
 /// Identifies a callback registered with [`schedule_frame_callback`], for
@@ -250,6 +317,9 @@ pub fn current_frame_time() -> Option<Instant> {
 /// an unmuted ticker runs. The runtime keeps producing frames while true.
 #[must_use]
 pub fn has_scheduled_frame() -> bool {
+    if !frames_enabled() {
+        return false;
+    }
     SCHEDULER.with(|scheduler| {
         let scheduler = scheduler.borrow();
         scheduler.frame_requested
@@ -267,14 +337,20 @@ pub fn has_scheduled_frame() -> bool {
 /// Runtime-internal; application code never calls it.
 #[doc(hidden)]
 pub fn begin_frame(raw: Instant) {
+    let enabled = frames_enabled();
     let (now, has_batch) = SCHEDULER.with(|scheduler| {
         let mut scheduler = scheduler.borrow_mut();
         // Flutter `handleBeginFrame`: the raw timestamp, dilated.
         scheduler.last_raw = Some(raw);
         let now = scheduler.adjust(raw);
-        scheduler.frame_requested = false;
         scheduler.frame_time = Some(now);
         scheduler.post_frame_active = false;
+        if !enabled {
+            // A forced host frame (such as a restoration barrier) may
+            // still run layout and post-frame work without ticking motion.
+            return (now, false);
+        }
+        scheduler.frame_requested = false;
         let pending = std::mem::take(&mut scheduler.frame_callbacks);
         let has_batch = !pending.is_empty();
         if has_batch {
@@ -282,6 +358,9 @@ pub fn begin_frame(raw: Instant) {
         }
         (now, has_batch)
     });
+    if !enabled {
+        return;
+    }
     if has_batch {
         let _batch = ActiveFrameCallbackBatch;
         while let Some((_, callback)) = SCHEDULER.with(|scheduler| {
@@ -500,10 +579,10 @@ impl Ticker {
         self.state.active.get()
     }
 
-    /// Flutter `Ticker.isTicking`: active and not muted.
+    /// Flutter `Ticker.isTicking`: active, unmuted, and eligible for frames.
     #[must_use]
     pub fn is_ticking(&self) -> bool {
-        self.state.is_ticking()
+        self.state.is_ticking() && (frames_enabled() || current_frame_time().is_some())
     }
 
     #[must_use]

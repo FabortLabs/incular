@@ -203,6 +203,7 @@ pub struct Runtime {
     pub(crate) scheduler: Rc<RefCell<tasks::TaskScheduler>>,
     pub(crate) environment: Rc<RefCell<RuntimeEnvironment>>,
     pub(crate) lifecycle: ApplicationLifecycle,
+    frame_availability: incular_animation::scheduler::FrameAvailability,
     pub(crate) lifecycle_observers: Vec<Rc<dyn Fn(LifecycleTransition)>>,
     pub(crate) error_observers: Vec<Rc<dyn Fn(RuntimeErrorReport)>>,
     pub(crate) environment_generation: u64,
@@ -369,6 +370,7 @@ impl Runtime {
             scheduler,
             environment: Rc::new(RefCell::new(RuntimeEnvironment::default())),
             lifecycle: ApplicationLifecycle::Starting,
+            frame_availability: incular_animation::scheduler::FrameAvailability::default(),
             lifecycle_observers: Vec::new(),
             error_observers: Vec::new(),
             environment_generation: 0,
@@ -716,6 +718,12 @@ impl Runtime {
             current: lifecycle,
         };
         self.lifecycle = lifecycle;
+        self.frame_availability.set_enabled(!matches!(
+            lifecycle,
+            ApplicationLifecycle::Suspended
+                | ApplicationLifecycle::Stopping
+                | ApplicationLifecycle::Terminated
+        ));
         for observer in &self.lifecycle_observers {
             observer(transition);
         }

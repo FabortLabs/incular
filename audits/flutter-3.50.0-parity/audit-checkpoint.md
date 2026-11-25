@@ -864,3 +864,9 @@ at 459 / 8,965.
 add one original match: 460 / 8,965 fully compared (5.13%), with
 364 matches and 96 historical mismatches. The same focused batch
 backfills the debug guard for invalid spring durations.
+
+[Ticker suspension](upstream-lifecycle-clipboard-comparisons.md#suspension-remediation)
+repairs two historical mismatches: a paused ticker remains active
+without asking for animation frames, and a ticker started while
+paused first ticks after resume. Forced restoration frames can still
+execute post-frame callbacks.

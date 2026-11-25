@@ -152,3 +152,59 @@ fn a_ticker_started_while_suspended_delivers_its_first_tick_after_resume() {
         [(false, 0), (false, 0), (true, 1)]
     );
 }
+
+#[test]
+fn a_forced_suspended_frame_allows_post_frame_work_without_advancing_tickers() {
+    use incular_animation::scheduler::{add_post_frame_callback, schedule_frame_callback};
+
+    let mut runtime = runtime();
+    let base = Instant::now();
+    let bounds = Constraints::tight(SIZE);
+    runtime.run_frame_at(bounds, base).unwrap();
+    set_lifecycle(&mut runtime, PlatformLifecycle::Suspended);
+    let ticks = Rc::new(Cell::new(0));
+    let transient = Rc::new(Cell::new(0));
+    let post = Rc::new(Cell::new(0));
+    let ticker = Ticker::new({
+        let ticks = ticks.clone();
+        move |_| ticks.set(ticks.get() + 1)
+    });
+    ticker.start();
+    let _ = schedule_frame_callback({
+        let transient = transient.clone();
+        move |_| transient.set(transient.get() + 1)
+    });
+    add_post_frame_callback({
+        let post = post.clone();
+        move |_| post.set(post.get() + 1)
+    });
+    assert!(!runtime.frame_requested());
+    runtime
+        .run_frame_at(bounds, base + Duration::from_millis(10))
+        .unwrap();
+    assert_eq!((ticks.get(), transient.get(), post.get()), (0, 0, 1));
+    assert!(!runtime.frame_requested());
+    set_lifecycle(&mut runtime, PlatformLifecycle::Inactive);
+    assert!(runtime.frame_requested());
+    pump_if_requested(&mut runtime, base + Duration::from_millis(20));
+    assert_eq!((ticks.get(), transient.get(), post.get()), (1, 1, 1));
+}
+
+#[test]
+fn suspended_runtime_does_not_disable_another_live_owner_on_the_same_thread() {
+    let mut first = runtime();
+    let mut second = runtime();
+    let ticker = Ticker::new(|_| {});
+    ticker.start();
+    set_lifecycle(&mut first, PlatformLifecycle::Suspended);
+    assert!(ticker.is_ticking(), "the other owner still produces frames");
+    set_lifecycle(&mut second, PlatformLifecycle::Suspended);
+    assert!(!ticker.is_ticking() && ticker.is_active());
+    drop(second);
+    assert!(!ticker.is_ticking(), "the suspended owner remains");
+    drop(first);
+    assert!(
+        ticker.is_ticking(),
+        "the standalone scheduler is not left paused"
+    );
+}
