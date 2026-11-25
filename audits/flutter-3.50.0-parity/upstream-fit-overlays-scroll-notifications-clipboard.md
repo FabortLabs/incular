@@ -150,3 +150,14 @@ Rust tests check the original world-space edge and both scaleDown
 offsets, and the 50→100→50 sequence on one retained render object.
 All 43 selected layout and semantics regressions pass. :487 is
 a historical pair; this adds only the two new full comparisons.
+
+## Childless FittedBox and zero area
+
+The four pinned originals :102, :524, :537 and :559 pass. A genuinely
+childless FittedBox can now be constructed. It shrinks in loose bounds
+and handles a down/up input sequence safely in a tight frame. A zero
+child completes both tight scaleDown and loose contain frames; a
+nonempty child completes a zero viewport without giving it area.
+A retained control inserts, removes, and reinserts a drawable child
+on the same wrapper and observes draw submission follow its presence.
+All 18 targeted Rust layout, baseline and semantics tests passed.

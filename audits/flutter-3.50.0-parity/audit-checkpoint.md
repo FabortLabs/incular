@@ -900,3 +900,7 @@ adds two exact originals: 465 / 8,965 fully compared (5.19%),
 369 matches and 96 historical mismatches. Independent constraints no
 longer distort the fitting box's aspect ratio, and switching from and
 back to scaleDown relayouts in place.
+
+[Childless FittedBox](upstream-fit-overlays-scroll-notifications-clipboard.md#childless-fittedbox-and-zero-area)
+adds four matched originals: 469 / 8,965 fully compared (5.23%),
+373 matches and 96 historical mismatches.

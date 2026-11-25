@@ -2472,8 +2472,8 @@ impl WidgetKind {
             WidgetKind::FittedBox { child, .. } => (
                 WidgetType::FittedBox,
                 Effects,
-                Single,
-                WidgetChildren::Single(child),
+                Optional,
+                WidgetChildren::Optional(child.as_ref()),
             ),
             WidgetKind::Opacity { child, .. } => (
                 WidgetType::Opacity,

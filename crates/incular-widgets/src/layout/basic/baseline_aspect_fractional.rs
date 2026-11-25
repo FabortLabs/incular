@@ -118,8 +118,8 @@ pub struct FittedBox {
     fit: BoxFit,
     #[builder(default = Alignment::CENTER)]
     alignment: Alignment,
-    #[builder(setter(into))]
-    child: Widget,
+    #[builder(default, setter(strip_option, into))]
+    child: Option<Widget>,
 }
 
 impl FittedBox {
@@ -129,7 +129,7 @@ impl FittedBox {
         Self {
             fit: BoxFit::Contain,
             alignment: Alignment::CENTER,
-            child: child.into(),
+            child: Some(child.into()),
         }
     }
 

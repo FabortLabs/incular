@@ -1385,7 +1385,7 @@ impl Widget {
         })
     }
     #[must_use]
-    pub(crate) fn fitted_box(fit: ImageFit, alignment: Alignment, child: Self) -> Self {
+    pub(crate) fn fitted_box(fit: ImageFit, alignment: Alignment, child: Option<Self>) -> Self {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::FittedBox {

@@ -118,6 +118,7 @@ pub(crate) fn install_listener(
         | WidgetKind::ColorFiltered { child, .. }
         | WidgetKind::ClipRect { child, .. }
         | WidgetKind::ClipRRect { child, .. }
+        | WidgetKind::FittedBox { child, .. }
         | WidgetKind::ClipPath { child, .. } => child
             .as_mut()
             .and_then(|child| install_listener(child, wrap)),
@@ -160,7 +161,6 @@ pub(crate) fn install_listener(
         | WidgetKind::Scale { child, .. }
         | WidgetKind::Affine { child, .. }
         | WidgetKind::Rotation { child, .. }
-        | WidgetKind::FittedBox { child, .. }
         | WidgetKind::Opacity { child, .. }
         | WidgetKind::Blur { child, .. }
         | WidgetKind::DropShadow { child, .. }

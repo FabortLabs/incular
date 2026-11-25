@@ -812,7 +812,7 @@ pub(crate) enum WidgetKind {
     FittedBox {
         fit: ImageFit,
         alignment: Alignment,
-        child: Widget,
+        child: Option<Widget>,
     },
     Opacity {
         alpha: f32,

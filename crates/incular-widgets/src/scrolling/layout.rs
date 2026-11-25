@@ -3285,7 +3285,6 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
         | WidgetKind::ProxyLayout { child, .. }
         | WidgetKind::RepaintBoundary { child }
         | WidgetKind::AnimationTicker { child, .. }
-        | WidgetKind::FittedBox { child, .. }
         | WidgetKind::Opacity { child, .. }
         | WidgetKind::Blur { child, .. }
         | WidgetKind::DropShadow { child, .. }
@@ -3308,6 +3307,7 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
         WidgetKind::ColorFiltered { child, .. }
         | WidgetKind::ClipRect { child, .. }
         | WidgetKind::ClipRRect { child, .. }
+        | WidgetKind::FittedBox { child, .. }
         | WidgetKind::ClipPath { child, .. } => child
             .as_ref()
             .map_or(Some(0.), |child| widget_main_extent_hint(child, axis)),
