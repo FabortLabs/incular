@@ -135,6 +135,25 @@ Future<void> _check(
 }
 
 void main() {
+  testWidgets('Saturation extrapolates before clamping channels', (
+    tester,
+  ) async {
+    for (final (saturation, pixel) in [
+      (-1.0, [119, 87, 55, 255]),
+      (0.0, [92, 92, 92, 255]),
+      (1.0, [64, 96, 128, 255]),
+      (2.0, [36, 100, 164, 255]),
+      (8.0, [0, 127, 255, 255]),
+    ]) {
+      await _check(
+        tester,
+        'saturation=$saturation',
+        _filter(_box(_opaque), ui.ColorFilter.saturation(saturation)),
+        pixel,
+      );
+    }
+  });
+
   testWidgets('Nonseparable modes blend whole RGB colors', (tester) async {
     const source = Color(0xa0c8285a);
     const cases = [

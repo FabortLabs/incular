@@ -188,3 +188,22 @@ fn nonseparable_modes_match_pinned_flutter_premultiplied_samples() {
         assert_eq!(blend_premultiplied(mode, source, [0.; 4]), source);
     }
 }
+
+#[test]
+fn saturation_extrapolates_and_preserves_alpha() {
+    let input = [64. / 255., 96. / 255., 128. / 255., 0.5];
+    for (saturation, rgb) in [
+        (-1., [119, 87, 55]),
+        (0., [92, 92, 92]),
+        (1., [64, 96, 128]),
+        (2., [36, 100, 164]),
+        (8., [0, 127, 255]),
+    ] {
+        let [r, g, b, a] = ColorFilter::saturation(saturation).apply(input);
+        assert_eq!([r, g, b].map(|v| (v * 255.).round() as u8), rgb);
+        assert_eq!(a, 0.5);
+        assert_eq!(ColorFilter::saturation(saturation).apply([0.; 4]), [0.; 4]);
+    }
+    assert!(ColorFilter::saturation(1.).is_identity());
+    assert_eq!(ColorFilter::saturation(0.), ColorFilter::grayscale(1.));
+}

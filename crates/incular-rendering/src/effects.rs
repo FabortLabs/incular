@@ -379,24 +379,39 @@ impl ColorFilter {
     #[must_use]
     pub fn grayscale(amount: f32) -> Self {
         let amount = finite_unit(amount);
-        let inv = 1. - amount;
-        let r = 0.2126 * amount;
-        let g = 0.7152 * amount;
-        let b = 0.0722 * amount;
+        Self::saturation_matrix(1. - amount, amount)
+    }
+
+    /// Flutter's `ColorFilter.saturation`. Zero removes saturation and
+    /// one preserves color; finite values outside this interval are not
+    /// clamped. Output channels are clamped after evaluating the matrix.
+    #[must_use]
+    pub fn saturation(saturation: f32) -> Self {
+        if saturation.is_finite() {
+            Self::saturation_matrix(saturation, 1. - saturation)
+        } else {
+            Self::identity()
+        }
+    }
+
+    fn saturation_matrix(saturation: f32, grayscale: f32) -> Self {
+        let r = 0.2126 * grayscale;
+        let g = 0.7152 * grayscale;
+        let b = 0.0722 * grayscale;
         Self::matrix([
-            r + inv,
+            r + saturation,
             g,
             b,
             0.,
             0.,
             r,
-            g + inv,
+            g + saturation,
             b,
             0.,
             0.,
             r,
             g,
-            b + inv,
+            b + saturation,
             0.,
             0.,
             0.,

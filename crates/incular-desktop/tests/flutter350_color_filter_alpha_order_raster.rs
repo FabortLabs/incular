@@ -193,6 +193,18 @@ fn flutter_350_color_filtered_matrix_recovers_alpha_and_respects_opacity_order()
             first_mismatch(label, &rgba, source, backdrop, clip_padding)
         })
         .collect();
+    for (saturation, expected) in [
+        (-1., [119, 87, 55, 255]),
+        (0., [92, 92, 92, 255]),
+        (1., [64, 96, 128, 255]),
+        (2., [36, 100, 164, 255]),
+        (8., [0, 127, 255, 255]),
+    ] {
+        let filtered = ColorFiltered::new(ColorFilter::saturation(saturation), fill(OPAQUE));
+        let rgba = capture(&mut renderer, &mut runtime, filtered.into());
+        let label = format!("saturation={saturation}");
+        mismatches.extend(first_mismatch(&label, &rgba, expected, BLACK, 0));
+    }
     let pigment = Color::rgba(200, 40, 90, 160);
     for (mode, opaque, translucent) in [
         (BlendMode::Hue, [148, 94, 142, 255], [137, 60, 99, 255]),

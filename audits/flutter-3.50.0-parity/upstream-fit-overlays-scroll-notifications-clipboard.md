@@ -85,3 +85,12 @@ Placeholder and asserts that changing red to green keeps the same
 layer identity; it is fully paired. The original zero-area case
 remains partial because Flutter omits the filter child and Incular
 currently requires one. These tests are not the original red golden.
+
+### ColorFilter.saturation
+
+The pinned factory leaves alpha alone and uses its saturation argument
+unclamped in the matrix. The authored pinned and Windows wgpu tests
+agree for -1, 0, 1, 2 and 8, including negative extrapolation, identity,
+and channel clipping at strong saturation. CPU tests also check
+transparent input and preserved half alpha. This verifies the factory
+and raster values but not the original FlutterLogo golden (:85).

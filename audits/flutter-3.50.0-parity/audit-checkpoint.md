@@ -783,3 +783,16 @@ partial, 80 reference-only. The [Listener audit](upstream-listener.md)
 checks bubbling, touch hover and transform-dependent local event fields.
 The [behavior audit](behavior-audit.md) records the frozen pointer transform
 and the same-frame callback and scheduler timestamp repairs.
+
+### Rendering remediation and color effects
+
+Fully paired coverage is 443 / 8,965 (4.94%) at `8976ce51`: 347
+matches, 96 historical mismatches, 210 partial, and 80 reference-only.
+The native [rounded clip regressions](upstream-tween-transform-and-lifecycle.md)
+distinguish hard, ordinary antialiased, and isolated edges; the
+transformed hard-clip probes cover both raw rounded rectangles and
+paths. Default matrix ImageFiltered sampling now matches the pinned
+edge samples. [Color filter checks](upstream-fit-overlays-scroll-notifications-clipboard.md)
+cover matte bounds, nonseparable blends, saturation and the original
+retained-layer identity case without counting authored samples as
+extra original registrations.
