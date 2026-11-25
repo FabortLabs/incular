@@ -1078,3 +1078,15 @@ packages/flutter/test/semantics/semantics_service_test.dart	12	Semantic announce
 packages/flutter/test/semantics/semantics_test.dart	70	SemanticsConfiguration can set both string label/value/hint and attributed version	partial-match	upstream-attributed-semantics.md#retained-speech-span-metadata
 packages/flutter/test/semantics/semantics_test.dart	901	Attributed String can concat	paired-match	upstream-attributed-semantics.md
 packages/flutter/test/semantics/semantics_node_send_event_test.dart	17	SemanticsNode.sendEvent reports error to FlutterError	reference-ran-incular-open	upstream-attributed-semantics.md
+packages/flutter/test/services/text_boundary_test.dart	60	Character boundary works	paired-match	upstream-text-boundary-services.md
+packages/flutter/test/services/text_boundary_test.dart	83	Character boundary works with grapheme	paired-match	upstream-text-boundary-services.md
+packages/flutter/test/services/text_boundary_test.dart	108	wordBoundary.moveByWordBoundary	paired-match	upstream-text-boundary-services.md
+packages/flutter/test/services/text_boundary_test.dart	150	line boundary works	paired-match	upstream-text-boundary-services.md
+packages/flutter/test/services/text_boundary_test.dart	158	works for simple cases	paired-match	upstream-text-boundary-services.md
+packages/flutter/test/services/text_boundary_test.dart	186	works for consecutive line terminators involving CRLF	paired-match	upstream-text-boundary-services.md
+packages/flutter/test/services/text_boundary_test.dart	204	works for consecutive line terminators	paired-match	upstream-text-boundary-services.md
+packages/flutter/test/services/text_boundary_test.dart	222	leading boundary works for consecutive CRLF	paired-match	upstream-text-boundary-services.md
+packages/flutter/test/services/text_boundary_test.dart	231	trailing boundary works for consecutive CRLF	paired-match	upstream-text-boundary-services.md
+packages/flutter/test/services/text_boundary_test.dart	240	works when position is between two CRLF	paired-match	upstream-text-boundary-services.md
+packages/flutter/test/services/text_boundary_test.dart	249	works for multiple consecutive line terminators	paired-match	upstream-text-boundary-services.md
+packages/flutter/test/services/text_boundary_test.dart	267	document boundary works	paired-match	upstream-text-boundary-services.md

@@ -11,7 +11,9 @@ mod style;
 #[cfg(all(target_os = "windows", not(feature = "bundled-dictionaries")))]
 mod windows_segmentation;
 
-pub use boundary::{TextBoundaryKind, is_layout_whitespace, set_word_segmenter, word_boundary_at};
+pub use boundary::{
+    LineBoundary, TextBoundaryKind, is_layout_whitespace, set_word_segmenter, word_boundary_at,
+};
 pub use editing::{
     ComposingRange, EditableText, FocusedSelectionLease, InvalidTextDeltaRange,
     SelectionChangedCause, TextAffinity, TextEditingController, TextEditingDelta,

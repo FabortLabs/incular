@@ -1,16 +1,16 @@
 //! Text boundaries used by keyboard caret movement and deletion.
 //!
-//! These are ports of Flutter 3.41's `TextBoundary` family
-//! (`services/text_boundary.dart`) and of `WordBoundary.moveByWordBoundary`
-//! (`painting/text_painter.dart`), over UTF-8 byte offsets instead of UTF-16
-//! code units. Line boundaries depend on the laid-out text and live with the
-//! text layout; everything here is a pure function of the string.
+//! Character, word, paragraph, and document boundaries use the unchanged
+//! UTF-8 text. A line boundary additionally depends on the layout.
+//! This mirrors Flutter's logical boundaries without exposing UTF-16 indices.
 
 use std::{cell::RefCell, rc::Rc};
 
 use icu_properties::{CodePointMapData, props::GeneralCategory};
 use icu_segmenter::options::WordBreakInvariantOptions;
 use icu_segmenter::{GraphemeClusterSegmenter, WordSegmenter};
+
+use crate::{TextGeometry, TextRange};
 
 type WordBreaks = Rc<dyn Fn(&str) -> Option<Vec<usize>>>;
 
@@ -89,8 +89,37 @@ impl TextBoundaryKind {
             Self::Character => character_trailing(text, position),
             Self::Word => word_trailing(text, position),
             Self::Paragraph => paragraph_trailing(text, position),
-            Self::Document => ((position.max(0) as usize) < text.len()).then_some(text.len()),
+            Self::Document => {
+                (position < 0 || (position as usize) < text.len()).then_some(text.len())
+            }
         }
+    }
+
+    /// Returns both endpoints, using `None` for an unavailable side rather
+    /// than Flutter's negative sentinel. Offsets are UTF-8 byte positions.
+    #[must_use]
+    pub fn at(self, text: &str, position: isize) -> (Option<usize>, Option<usize>) {
+        if self == Self::Character {
+            if position < 0 {
+                return (None, Some(0));
+            }
+            let position = clamp_position(text, position);
+            if position >= text.len() {
+                return (Some(text.len()), None);
+            }
+            let mut leading = 0;
+            for boundary in grapheme_boundaries(text) {
+                if boundary > position {
+                    return (Some(leading), Some(boundary));
+                }
+                leading = boundary;
+            }
+            return (Some(leading), Some(text.len()));
+        }
+        (
+            self.leading_at(text, position),
+            self.trailing_at(text, position),
+        )
     }
 
     /// Flutter's `_moveBeyondTextBoundary`: the closest boundary to `extent`
@@ -107,6 +136,55 @@ impl TextBoundaryKind {
             self.leading_at(text, previous_unit(text, extent))
                 .unwrap_or(0)
         }
+    }
+}
+
+/// Logical boundaries of already laid-out lines. A hard line terminator
+/// belongs to the preceding line for selection, but is excluded from the
+/// returned text range.
+pub struct LineBoundary<'a> {
+    layout: &'a dyn TextGeometry,
+}
+
+impl<'a> LineBoundary<'a> {
+    #[must_use]
+    pub fn new(layout: &'a dyn TextGeometry) -> Self {
+        Self { layout }
+    }
+
+    /// Returns the containing line, clamping negative input to the start.
+    #[must_use]
+    pub fn at(&self, position: isize) -> Option<TextRange> {
+        let position = position.max(0) as usize;
+        // line_for_offset uses half-open shaped ranges. A hard break can
+        // start at caret_end even though it has no glyph in that range.
+        let mut low = 0;
+        let mut high = self.layout.line_count();
+        while low < high {
+            let middle = low + (high - low) / 2;
+            if self.layout.get_line(middle)?.start() <= position {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        let line = self.layout.get_line(low.checked_sub(1)?)?;
+        (position <= line.caret_end()).then_some(TextRange::new(line.start(), line.caret_end()))
+    }
+
+    /// Returns no leading boundary before the start of the text.
+    #[must_use]
+    pub fn leading_at(&self, position: isize) -> Option<usize> {
+        if position < 0 {
+            return None;
+        }
+        self.at(position).map(|range| range.start)
+    }
+
+    /// Returns the last text position on the containing line.
+    #[must_use]
+    pub fn trailing_at(&self, position: isize) -> Option<usize> {
+        self.at(position).map(|range| range.end)
     }
 }
 
@@ -148,6 +226,9 @@ fn character_leading(text: &str, position: isize) -> Option<usize> {
 }
 
 fn character_trailing(text: &str, position: isize) -> Option<usize> {
+    if position < 0 {
+        return Some(0);
+    }
     let position = clamp_position(text, position);
     if position >= text.len() {
         return None;
@@ -268,7 +349,7 @@ fn paragraph_leading(text: &str, position: isize) -> Option<usize> {
     let char_before = |index: usize| text[..index].chars().next_back();
     // A CRLF pair counts as one terminator: step back over both.
     if index > 1 && char_at(index) == Some('\n') && char_before(index) == Some('\r') {
-        index -= 2;
+        index = previous_unit(text, index - 1).max(0) as usize;
     } else if char_at(index).is_some_and(is_line_terminator) {
         index = previous_unit(text, index).max(0) as usize;
     }
