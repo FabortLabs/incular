@@ -188,7 +188,7 @@ pub use context_menu::{
 };
 pub use custom_layout::{
     CustomMultiChildLayout, CustomSingleChildLayout, Flow, FlowDelegate, FlowPaintError,
-    FlowPaintingContext, IgnoreBaseline, LayoutChildError, LayoutChildId, LayoutId, MissingLayoutChild,
+    FlowPaintingContext, IgnoreBaseline, LayoutChildError, LayoutChildId, LayoutId, LayoutRelayout, MissingLayoutChild,
     MultiChildLayoutContext, MultiChildLayoutDelegate, PositionedDirectional,
     SingleChildLayoutDelegate,
 };

@@ -59,3 +59,13 @@ the affected slots, in child order, rather than placing zero-sized children.
 These compare invalid-operation behavior and reason, not Dart's formatted
 diagnostic tree. Eighteen focused native tests passed; the separate live
 relayout case was not part of this batch.
+
+## Current live relayout
+
+The delegate can now supply a `LayoutRelayout` signal. On :257 the same
+retained delegate changes its size from 100×200 to 150×240 after a signal,
+without a descriptor replacement. Both the pinned original and the native
+counterpart pass. An authored Flutter/native single-child probe also verifies
+that replacing a delegate can keep the current geometry while unsubscribing
+from the prior source; only the new source triggers the later layout.
+The three focused custom-layout targets passed all 24 native tests.

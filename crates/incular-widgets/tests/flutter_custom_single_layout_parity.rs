@@ -187,3 +187,53 @@ fn custom_layout_constrains_delegate_size_to_zero_area() {
         .expect("zero-area layout");
     assert_eq!(bounds(&tree, LAYOUT).size, Size::ZERO);
 }
+
+struct NotifiedSingle {
+    size: Rc<std::cell::Cell<Size>>,
+    signal: incular_widgets::LayoutRelayout,
+}
+
+impl SingleChildLayoutDelegate for NotifiedSingle {
+    fn get_size(&self, _: Constraints) -> Size {
+        self.size.get()
+    }
+
+    fn relayout(&self) -> Option<incular_widgets::LayoutRelayout> {
+        Some(self.signal.clone())
+    }
+
+    fn should_relayout(&self, _: &Self) -> bool {
+        false
+    }
+}
+
+#[test]
+fn a_replacement_can_keep_geometry_but_switch_relayout_sources() {
+    use incular_widgets::LayoutRelayout;
+    use std::cell::Cell;
+    let first = Rc::new(Cell::new(Size::new(100., 100.)));
+    let second = Rc::new(Cell::new(Size::new(180., 140.)));
+    let first_signal = LayoutRelayout::default();
+    let second_signal = LayoutRelayout::default();
+    let frame = |size, signal| centered(NotifiedSingle { size, signal });
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(frame(first.clone(), first_signal.clone()))
+        .unwrap();
+    let constraints = Constraints::tight(VIEWPORT);
+    tree.layout(constraints).unwrap();
+    let initial = bounds(&tree, LAYOUT);
+    assert_eq!(initial.size, Size::new(100., 100.));
+    tree.update(root, frame(second.clone(), second_signal.clone()))
+        .unwrap();
+    tree.layout(constraints).unwrap();
+    assert_eq!(bounds(&tree, LAYOUT), initial);
+    first.set(Size::new(50., 50.));
+    first_signal.notify();
+    tree.layout(constraints).unwrap();
+    assert_eq!(bounds(&tree, LAYOUT), initial);
+    second.set(Size::new(200., 160.));
+    second_signal.notify();
+    tree.layout(constraints).unwrap();
+    assert_eq!(bounds(&tree, LAYOUT).size, second.get());
+}

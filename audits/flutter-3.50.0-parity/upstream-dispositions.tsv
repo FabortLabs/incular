@@ -418,7 +418,7 @@ packages/flutter/test/widgets/custom_multi_child_layout_test.dart	164	Control te
 packages/flutter/test/widgets/custom_multi_child_layout_test.dart	182	Test MultiChildDelegate shouldRelayout method	paired-match	upstream-multi-child-layout-contract.md#current-replacement-delegate-direction
 packages/flutter/test/widgets/custom_multi_child_layout_test.dart	205	Nested CustomMultiChildLayouts	partial-match	upstream-multi-child-layout-contract.md
 packages/flutter/test/widgets/custom_multi_child_layout_test.dart	229	Loose constraints	paired-match	upstream-multi-child-layout-contract.md
-packages/flutter/test/widgets/custom_multi_child_layout_test.dart	257	Can use listener for relayout	partial-mismatch	upstream-multi-child-layout-contract.md
+packages/flutter/test/widgets/custom_multi_child_layout_test.dart	257	Can use listener for relayout	paired-match	upstream-multi-child-layout-contract.md#current-live-relayout
 packages/flutter/test/widgets/custom_multi_child_layout_test.dart	320	layoutChild more than once	paired-match	upstream-multi-child-layout-contract.md#current-child-slot-validation
 packages/flutter/test/widgets/custom_multi_child_layout_test.dart	388	performLayout did not layout a child	paired-match	upstream-multi-child-layout-contract.md#current-child-slot-validation
 packages/flutter/test/widgets/custom_multi_child_layout_test.dart	410	performLayout did not layout multiple child	paired-match	upstream-multi-child-layout-contract.md#current-child-slot-validation

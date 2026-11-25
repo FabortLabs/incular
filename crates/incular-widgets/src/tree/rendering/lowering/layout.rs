@@ -292,7 +292,7 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
             clipper: clipper.as_ref().map(crate::layout::ClipDelegate::tracked),
         },
         WidgetKind::CustomLayout { delegate, .. } => RenderKind::CustomLayout {
-            delegate: delegate.clone(),
+            delegate: delegate.tracked(),
         },
         WidgetKind::LayoutId { id, .. } => RenderKind::LayoutId { id: id.clone() },
         WidgetKind::Positioned {

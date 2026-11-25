@@ -2,8 +2,8 @@
 use incular_config::Constraints;
 use incular_core::Size;
 use incular_widgets::{
-    Center, CustomMultiChildLayout, LayoutChildError, LayoutId, MultiChildLayoutContext,
-    MultiChildLayoutDelegate, SizedBox, Widget,
+    Center, CustomMultiChildLayout, LayoutChildError, LayoutId, LayoutRelayout,
+    MultiChildLayoutContext, MultiChildLayoutDelegate, SizedBox, Widget,
     internal::{Key, TreeError, WidgetTree},
 };
 use std::{cell::RefCell, panic::AssertUnwindSafe, rc::Rc};
@@ -199,8 +199,11 @@ fn rejected_second_measurement_preserves_the_first_size() {
     assert_eq!(tree.element_bounds(key).unwrap().size, Size::new(70., 40.));
 }
 
-struct Pref(Rc<std::cell::Cell<Size>>);
+struct Pref(Rc<std::cell::Cell<Size>>, Option<LayoutRelayout>);
 impl MultiChildLayoutDelegate for Pref {
+    fn relayout(&self) -> Option<LayoutRelayout> {
+        self.1.clone()
+    }
     fn get_size(&self, _: Constraints) -> Size {
         self.0.get()
     }
@@ -210,9 +213,16 @@ impl MultiChildLayoutDelegate for Pref {
     }
 }
 fn preferred(size: Rc<std::cell::Cell<Size>>) -> Widget {
+    preferred_with_signal(size, None)
+}
+
+fn preferred_with_signal(
+    size: Rc<std::cell::Cell<Size>>,
+    signal: Option<LayoutRelayout>,
+) -> Widget {
     Center::new(
         Widget::from(CustomMultiChildLayout::new(
-            Pref(size),
+            Pref(size, signal),
             Vec::<Widget>::new(),
         ))
         .with_key(Key::Value(50)),
@@ -244,10 +254,14 @@ fn existing_delegate_can_trigger_relayout_without_replacement() {
     use std::cell::Cell;
     let mut tree = WidgetTree::new();
     let state = Rc::new(Cell::new(Size::new(100., 200.)));
-    let root = tree.mount(preferred(state.clone())).unwrap();
+    let signal = LayoutRelayout::default();
+    let root = tree
+        .mount(preferred_with_signal(state.clone(), Some(signal.clone())))
+        .unwrap();
     tree.layout(Constraints::tight(VIEW)).unwrap();
     assert_eq!(preferred_size(&tree), Size::new(100., 200.));
     state.set(Size::new(150., 240.));
+    signal.notify();
     tree.layout(Constraints::tight(VIEW)).unwrap();
     let observed = preferred_size(&tree);
     // Preserve the state-before-change observation for the replacement's
@@ -400,7 +414,7 @@ fn negative_child_maximum_is_not_silently_accepted() {
 fn a_child_without_any_layout_id_is_rejected() {
     let mut tree = WidgetTree::new();
     let child = Widget::from(SizedBox::new().width(100.)).with_key(Key::Value(90));
-    let pref = Pref(Rc::new(std::cell::Cell::new(Size::new(10., 10.))));
+    let pref = Pref(Rc::new(std::cell::Cell::new(Size::new(10., 10.))), None);
     tree.mount(Center::new(CustomMultiChildLayout::new(pref, [child])).into())
         .unwrap();
     assert!(matches!(

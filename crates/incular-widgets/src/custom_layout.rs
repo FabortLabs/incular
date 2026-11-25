@@ -13,14 +13,46 @@ use std::{
 };
 
 use incular_config::{Constraints, TextDirection};
+use incular_core::reactivity::ReactiveCell;
 use incular_core::{Offset, Size, Transform as CoreTransform};
 
 use crate::tree::{ChildLayoutMode, OpacityController, RetainedState, WidgetKind};
 use crate::{Builder, Opacity, Positioned, Widget};
 
+/// A retained notification source for changes in a custom layout delegate's inputs.
+#[derive(Clone)]
+pub struct LayoutRelayout(Rc<ReactiveCell<u64>>);
+
+impl Default for LayoutRelayout {
+    fn default() -> Self {
+        Self(Rc::new(ReactiveCell::new(0)))
+    }
+}
+
+impl LayoutRelayout {
+    /// Invalidates subscribed layout without rebuilding or replacing the delegate.
+    pub fn notify(&self) {
+        {
+            let mut revision = self.0.borrow_mut();
+            *revision = revision.wrapping_add(1);
+        }
+        self.0.source().notify();
+    }
+
+    fn track(&self) -> u64 {
+        self.0.source().track();
+        *self.0.borrow()
+    }
+}
+
 /// Flutter's `SingleChildLayoutDelegate`: sizes the box, constrains the
 /// child and places it.
 pub trait SingleChildLayoutDelegate: 'static {
+    /// An optional signal for relayout without replacing this delegate.
+    fn relayout(&self) -> Option<LayoutRelayout> {
+        None
+    }
+
     /// The box's size, then constrained to `constraints`. Defaults to the
     /// biggest size the constraints allow.
     fn get_size(&self, constraints: Constraints) -> Size {
@@ -47,6 +79,11 @@ pub trait SingleChildLayoutDelegate: 'static {
 /// Flutter's `MultiChildLayoutDelegate`: lays out and places the
 /// [`LayoutId`] children of a [`CustomMultiChildLayout`].
 pub trait MultiChildLayoutDelegate: 'static {
+    /// An optional signal for relayout without replacing this delegate.
+    fn relayout(&self) -> Option<LayoutRelayout> {
+        None
+    }
+
     /// The box's size, then constrained to `constraints`. Defaults to the
     /// biggest size the constraints allow.
     fn get_size(&self, constraints: Constraints) -> Size {
@@ -105,6 +142,8 @@ pub struct DelegateCell<D: ?Sized> {
     delegate: Rc<D>,
     concrete: Rc<dyn Any>,
     changed: fn(&dyn Any, &dyn Any) -> bool,
+    relayout: Option<LayoutRelayout>,
+    relayout_revision: u64,
 }
 
 impl<D: ?Sized> Clone for DelegateCell<D> {
@@ -113,6 +152,8 @@ impl<D: ?Sized> Clone for DelegateCell<D> {
             delegate: self.delegate.clone(),
             concrete: self.concrete.clone(),
             changed: self.changed,
+            relayout: self.relayout.clone(),
+            relayout_revision: self.relayout_revision,
         }
     }
 }
@@ -122,13 +163,30 @@ impl<D: ?Sized> DelegateCell<D> {
         &self.delegate
     }
 
+    fn tracked(&self) -> Self {
+        let mut next = self.clone();
+        if let Some(relayout) = &self.relayout {
+            next.relayout_revision = relayout.track();
+        }
+        next
+    }
+
     fn changes_from(&self, old: &Self) -> bool {
-        self != old && (self.changed)(&*self.concrete, &*old.concrete)
+        let replaced = !Rc::ptr_eq(&self.concrete, &old.concrete);
+        let needs_layout = replaced && (self.changed)(&*self.concrete, &*old.concrete);
+        let notified = self
+            .relayout
+            .as_ref()
+            .zip(old.relayout.as_ref())
+            .is_some_and(|(new, old)| Rc::ptr_eq(&new.0, &old.0))
+            && self.relayout_revision != old.relayout_revision;
+        needs_layout || notified
     }
 }
 impl<D: ?Sized> PartialEq for DelegateCell<D> {
     fn eq(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.concrete, &other.concrete)
+            && self.relayout_revision == other.relayout_revision
     }
 }
 
@@ -213,6 +271,14 @@ impl fmt::Debug for CustomLayoutDelegate {
 }
 
 impl CustomLayoutDelegate {
+    pub(crate) fn tracked(&self) -> Self {
+        match self {
+            Self::Single(delegate) => Self::Single(delegate.tracked()),
+            Self::Multi(delegate) => Self::Multi(delegate.tracked()),
+            _ => self.clone(),
+        }
+    }
+
     /// Called on the new delegate, not as an equality side effect. A false
     /// result keeps this layout but still installs the new delegate.
     pub(crate) fn changes_from(&self, old: &Self) -> bool {
@@ -564,8 +630,10 @@ impl CustomSingleChildLayout {
         Self {
             delegate: DelegateCell {
                 delegate: delegate.clone(),
+                relayout: delegate.relayout(),
                 concrete: delegate,
                 changed: single_changed::<D>,
+                relayout_revision: 0,
             },
             child: child.into(),
         }
@@ -597,8 +665,10 @@ impl CustomMultiChildLayout {
         Self {
             delegate: DelegateCell {
                 delegate: delegate.clone(),
+                relayout: delegate.relayout(),
                 concrete: delegate,
                 changed: multi_changed::<D>,
+                relayout_revision: 0,
             },
             children: children.into_iter().map(Into::into).collect(),
         }
@@ -660,8 +730,10 @@ impl Flow {
         Self {
             delegate: DelegateCell {
                 delegate: delegate.clone(),
+                relayout: None,
                 concrete: delegate,
                 changed: flow_changed::<D>,
+                relayout_revision: 0,
             },
             children: children.into_iter().map(Into::into).collect(),
         }
