@@ -30,6 +30,7 @@ fn normalization_prevents_invalid_geometry() {
         paint_extent: 100.,
         layout_extent: 90.,
         max_paint_extent: 20.,
+        max_scroll_obstruction_extent: 50.,
         hit_test_extent: -3.,
         paint_origin: f32::NAN,
         cache_extent: f32::INFINITY,
@@ -42,6 +43,7 @@ fn normalization_prevents_invalid_geometry() {
     assert_eq!(geometry.paint_extent, 0.);
     assert_eq!(geometry.layout_extent, 0.);
     assert_eq!(geometry.max_paint_extent, 0.);
+    assert_eq!(geometry.max_scroll_obstruction_extent, 0.);
     assert_eq!(geometry.hit_test_extent, 0.);
     assert_eq!(geometry.scroll_offset_correction, None);
 }

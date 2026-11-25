@@ -87,6 +87,9 @@ pub struct SliverGeometry {
     pub paint_extent: f32,
     pub layout_extent: f32,
     pub max_paint_extent: f32,
+    /// Main-axis space a pinned sliver can permanently cover at the
+    /// viewport's leading edge. A merely floating sliver reports zero.
+    pub max_scroll_obstruction_extent: f32,
     pub hit_test_extent: f32,
     pub paint_origin: f32,
     pub cache_extent: f32,
@@ -104,6 +107,7 @@ impl SliverGeometry {
         paint_extent: 0.,
         layout_extent: 0.,
         max_paint_extent: 0.,
+        max_scroll_obstruction_extent: 0.,
         hit_test_extent: 0.,
         paint_origin: 0.,
         cache_extent: 0.,
@@ -130,6 +134,7 @@ impl SliverGeometry {
             paint_extent,
             layout_extent,
             max_paint_extent: scroll_extent,
+            max_scroll_obstruction_extent: 0.,
             hit_test_extent: paint_extent,
             paint_origin: 0.,
             cache_extent,
@@ -164,6 +169,7 @@ impl SliverGeometry {
             paint_extent,
             layout_extent,
             max_paint_extent,
+            max_scroll_obstruction_extent: finite_non_negative(self.max_scroll_obstruction_extent),
             hit_test_extent: finite_non_negative(self.hit_test_extent),
             paint_origin: finite_or_zero(self.paint_origin),
             cache_extent: finite_non_negative(self.cache_extent),

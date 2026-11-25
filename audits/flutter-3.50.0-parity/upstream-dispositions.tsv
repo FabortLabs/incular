@@ -1466,3 +1466,5 @@ packages/flutter/test/semantics/semantics_test.dart	43	getSemanticsData includes
 packages/flutter/test/semantics/semantics_test.dart	946	performActionAt can hit test on merged semantics node	paired-match	upstream-semantics-tags.md#tags-for-children-and-merged-point-dispatch
 packages/flutter/test/semantics/semantics_test.dart	1078	SemanticsConfiguration.copy() preserves hitTestBehavior	paired-match	upstream-semantics-hit-test.md
 packages/flutter/test/semantics/semantics_test.dart	1093	SemanticsConfiguration.copy() preserves all hitTestBehavior values	paired-match	upstream-semantics-hit-test.md
+packages/flutter/test/rendering/sliver_persistent_header_test.dart	14	RenderSliverFloatingPersistentHeader maxScrollObstructionExtent is 0	paired-match	upstream-sliver-obstruction.md
+packages/flutter/test/rendering/sliver_persistent_header_test.dart	29	RenderSliverFloatingPinnedPersistentHeader maxScrollObstructionExtent is minExtent	paired-match	upstream-sliver-obstruction.md

@@ -20,6 +20,7 @@ fn pinned_geometry(
     constraints: SliverConstraints,
     scroll_extent: f32,
     child_extent: f32,
+    min_extent: f32,
 ) -> SliverGeometry {
     let scroll_extent = scroll_extent.max(0.);
     let child_extent = child_extent.max(0.);
@@ -38,6 +39,7 @@ fn pinned_geometry(
         paint_extent,
         layout_extent,
         max_paint_extent: scroll_extent,
+        max_scroll_obstruction_extent: finite_non_negative(min_extent),
         hit_test_extent: paint_extent,
         paint_origin: constraints.overlap,
         cache_extent,
@@ -81,7 +83,7 @@ impl RenderSliver for BoxRenderSliver {
         let geometry = if self.pinned {
             // Flutter's PinnedHeaderSliver reports cacheExtent from the
             // child extent, not from the pinned persistent-header formula.
-            let mut geometry = pinned_geometry(constraints, extent, extent);
+            let mut geometry = pinned_geometry(constraints, extent, extent, extent);
             geometry.cache_extent = calculate_cache_offset(constraints, 0., extent);
             geometry
         } else {
@@ -1378,6 +1380,7 @@ fn floating_geometry(
         paint_extent,
         layout_extent,
         max_paint_extent: extent,
+        max_scroll_obstruction_extent: 0.,
         hit_test_extent: paint_extent,
         paint_origin: constraints.overlap.min(0.),
         cache_extent: if layout_extent > 0. {
@@ -1468,7 +1471,7 @@ impl RenderSliver for FloatingHeaderRenderSliver {
 impl RenderSliver for HeaderRenderSliver {
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout {
         let geometry = if self.pinned {
-            pinned_geometry(constraints, self.extent, self.extent)
+            pinned_geometry(constraints, self.extent, self.extent, self.extent)
         } else {
             // Flutter's scrolling persistent header always reports visual
             // overflow ("conservatively say we do have overflow").
@@ -1962,7 +1965,7 @@ impl RenderSliver for ResizingHeaderRenderSliver {
                 // persistent-header formula.
                 SliverGeometry {
                     cache_extent: calculate_cache_offset(constraints, 0., current),
-                    ..pinned_geometry(constraints, self.max_extent, current)
+                    ..pinned_geometry(constraints, self.max_extent, current, self.min_extent)
                 },
                 0.,
                 SliverChildPlacement::Pinned,
@@ -2142,7 +2145,7 @@ impl RenderSliver for NaturalHeaderRenderSliver {
         let current = (natural + stretch).min(f32::MAX);
         let (mut geometry, offset, mut placement) = match self.scroll_behavior {
             SliverHeaderScrollBehavior::Pinned | SliverHeaderScrollBehavior::FloatingPinned => (
-                pinned_geometry(constraints, natural, current),
+                pinned_geometry(constraints, natural, current, natural),
                 0.,
                 SliverChildPlacement::Pinned,
             ),
@@ -2476,6 +2479,9 @@ impl RenderSliver for PaddingRenderSliver {
                 .min(constraints.remaining_cache_extent)
                 .max(0.),
             max_paint_extent: total_padding + inner_geometry.max_paint_extent,
+            // Flutter's SliverPadding reports padding/layout of the child,
+            // not the child's pinned obstruction as its own.
+            max_scroll_obstruction_extent: 0.,
             hit_test_extent: (before_paint_extent
                 + after_paint_extent
                 + inner_geometry.paint_extent)
