@@ -300,3 +300,12 @@ finite/infinite changes in either direction; the infallible
 animation trait keeps its existing nearer-endpoint fallback.
 The exact Dart assertion and its tight-infinite endpoints
 therefore remain unpaired.
+
+## Reverified negative extrapolation
+
+The historical comparison above predates the repair. The exact pinned
+:109 and both focused Rust border targets were re-run after the fix.
+All five original extrapolation cases now match: negative widths are
+absent, a genuine zero remains a solid hairline, and positive overshoot
+retains its expanded width. The disposition is updated from mismatch
+to match; this does not add a second registration.
