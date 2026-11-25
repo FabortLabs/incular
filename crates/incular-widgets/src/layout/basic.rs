@@ -28,7 +28,7 @@ pub use baseline_aspect_fractional::{
 };
 pub use clipping::{
     ClipDelegate, ClipOval, ClipOvalBuilder, ClipPath, ClipPathBuilder, ClipRRect,
-    ClipRRectBuilder, ClipRect, ClipRectBuilder, ClipShape, CustomClipper,
+    ClipRRectBuilder, ClipReclip, ClipRect, ClipRectBuilder, ClipShape, CustomClipper,
 };
 pub use padding_alignment::{Align, AlignBuilder, Center, CenterBuilder, Padding, PaddingBuilder};
 pub use painting::{

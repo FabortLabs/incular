@@ -276,8 +276,8 @@ pub use inherited_data::{
 };
 pub use interactive_viewer::{InteractiveViewer, PanAxis, TransformationController};
 pub use layout::{
-    Align, AspectRatio, Baseline, Builder, Center, ClipOval, ClipPath, ClipRRect, ClipRect,
-    ClipShape, ColoredBox, Column, ConstrainedBox, ConstraintsTransformBox, Container,
+    Align, AspectRatio, Baseline, Builder, Center, ClipOval, ClipPath, ClipRRect, ClipReclip,
+    ClipRect, ClipShape, ColoredBox, Column, ConstrainedBox, ConstraintsTransformBox, Container,
     CustomClipper, CustomPaint, Expanded, FittedBox, Flex, Flexible, FractionalTranslation,
     FractionallySizedBox, IndexedStack, IntrinsicHeight, IntrinsicWidth, KeyedSubtree,
     LayoutBuilder, LimitedBox, NavigationToolbar, Offstage, OverflowBar, OverflowBox, Padding,

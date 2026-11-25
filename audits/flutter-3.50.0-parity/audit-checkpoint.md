@@ -843,3 +843,8 @@ when inherited values update retained compositor geometry.
 The [rotated Canvas recheck](upstream-clip-visibility-focus.md#rotated-canvas-hard-rectangle)
 verifies that the hard rectangle no longer leaks in the corners of
 its axis-aligned bounding box on Windows wgpu.
+
+[Custom clipper notifications](upstream-clip-visibility-focus.md#custom-clipper-notifications)
+add one matched Flutter original, for 458 / 8,965 fully compared
+(5.11%): 362 matches and 96 historical mismatches. A geometry change
+can now reclip a mounted child without layout or picture recording.

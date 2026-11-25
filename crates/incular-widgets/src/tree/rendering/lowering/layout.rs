@@ -205,7 +205,7 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
             ..
         } => RenderKind::ClipRect {
             clip_behavior: *clip_behavior,
-            clipper: clipper.clone(),
+            clipper: clipper.as_ref().map(crate::layout::ClipDelegate::tracked),
         },
         WidgetKind::ClipRRect {
             radius,
@@ -224,7 +224,7 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
                 radius,
                 text_direction,
                 clip_behavior: *clip_behavior,
-                clipper: clipper.clone(),
+                clipper: clipper.as_ref().map(crate::layout::ClipDelegate::tracked),
             }
         }
         WidgetKind::ClipOval {
@@ -233,7 +233,7 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
             ..
         } => RenderKind::ClipOval {
             clip_behavior: *clip_behavior,
-            clipper: clipper.clone(),
+            clipper: clipper.as_ref().map(crate::layout::ClipDelegate::tracked),
         },
         WidgetKind::ClipPath {
             path,
@@ -243,7 +243,7 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
         } => RenderKind::ClipPath {
             path: path.clone(),
             clip_behavior: *clip_behavior,
-            clipper: clipper.clone(),
+            clipper: clipper.as_ref().map(crate::layout::ClipDelegate::tracked),
         },
         WidgetKind::CustomLayout { delegate, .. } => RenderKind::CustomLayout {
             delegate: delegate.clone(),

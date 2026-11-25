@@ -5,8 +5,9 @@ use incular_core::{Color, Offset, PointerPhase, Rect, Size};
 use incular_gestures::PointerEvent;
 use incular_rendering::{CornerRadii, PaintCommand, Path};
 use incular_widgets::{
-    Align, Alignment, BorderRadiusDirectional, ClipOval, ClipPath, ClipRRect, ClipRect, ClipShape,
-    CustomClipper, Directionality, GestureDetector, Opacity, Radius, SizedBox, Widget,
+    Align, Alignment, BorderRadiusDirectional, ClipOval, ClipPath, ClipRRect, ClipReclip, ClipRect,
+    ClipShape, CustomClipper, Directionality, GestureDetector, Opacity, Placeholder, Radius,
+    SizedBox, Widget,
     internal::{Key, RenderKind, WidgetTree},
 };
 use std::{
@@ -226,6 +227,106 @@ struct RectClipper {
     name: &'static str,
     rect: Rect,
     log: Log,
+}
+
+#[derive(Clone)]
+struct NotifiedRectClipper {
+    geometry: Rc<Cell<Rect>>,
+    changed: ClipReclip,
+}
+
+impl CustomClipper for NotifiedRectClipper {
+    fn get_clip(&self, _: Size) -> ClipShape {
+        ClipShape::Rect(self.geometry.get())
+    }
+    fn should_reclip(&self, old: &Self) -> bool {
+        !Rc::ptr_eq(&self.geometry, &old.geometry)
+    }
+    fn reclip(&self) -> Option<ClipReclip> {
+        Some(self.changed.clone())
+    }
+}
+
+fn observable_rect(left: f32, width: f32) -> NotifiedRectClipper {
+    NotifiedRectClipper {
+        geometry: Rc::new(Cell::new(Rect::from_origin_size(
+            Offset::new(left, 50.),
+            Size::new(width, 100.),
+        ))),
+        changed: ClipReclip::default(),
+    }
+}
+
+fn expect_current_rect(tree: &mut WidgetTree, expected: Rect) {
+    let paint = tree.paint();
+    assert!(
+        paint
+            .commands()
+            .iter()
+            .any(|command| matches!(command, PaintCommand::PushClip { rect } if *rect == expected)),
+        "expected clip {expected:?}, got {:?}",
+        paint.commands()
+    );
+}
+
+/// clip_test.dart:788. Notification invalidates the clip without replacing
+/// the descriptor; the next paint uses the widened geometry.
+#[test]
+fn custom_clipper_reclips_when_notified_without_child_layout() {
+    let clipper = observable_rect(50., 100.);
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(
+            ClipRect::new(Placeholder::new())
+                .custom_clipper(clipper.clone())
+                .into(),
+        )
+        .unwrap();
+    let render = tree.render_id(root).unwrap();
+    layout(&mut tree);
+    expect_current_rect(&mut tree, clipper.geometry.get());
+    assert!(!tree.has_dirty_dependencies());
+    let before = tree.diagnostics();
+    let next = Rect::from_origin_size(Offset::new(50., 50.), Size::new(150., 100.));
+    clipper.geometry.set(next);
+    clipper.changed.notify();
+    assert!(tree.has_dirty_dependencies());
+    layout(&mut tree);
+    expect_current_rect(&mut tree, next);
+    assert!(!tree.has_dirty_dependencies());
+    assert_eq!(tree.render_id(root), Some(render));
+    assert_eq!(tree.diagnostics().layouts, before.layouts);
+    assert_eq!(tree.diagnostics().paints, before.paints);
+}
+
+#[test]
+fn custom_clipper_replaces_its_notification_source_and_updates_hit_geometry() {
+    let previous = observable_rect(50., 100.);
+    let current = observable_rect(200., 100.);
+    let log = Log::default();
+    let scene = |clipper| {
+        ClipRect::new(tapping(Size::new(800., 600.), &log))
+            .custom_clipper(clipper)
+            .into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scene(previous.clone())).unwrap();
+    layout(&mut tree);
+    tree.update(root, scene(current.clone())).unwrap();
+    layout(&mut tree);
+    previous.changed.notify();
+    assert!(!tree.has_dirty_dependencies());
+    let start = Instant::now();
+    tap(&mut tree, Offset::new(100., 100.), start, 0);
+    assert!(log.borrow().is_empty());
+    current.geometry.set(Rect::from_origin_size(
+        Offset::new(50., 50.),
+        Size::new(100., 100.),
+    ));
+    current.changed.notify();
+    layout(&mut tree);
+    tap(&mut tree, Offset::new(100., 100.), start, 1);
+    assert_eq!(log.borrow().as_slice(), &["tap"]);
 }
 
 impl CustomClipper for RectClipper {

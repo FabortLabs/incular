@@ -159,3 +159,15 @@ when the render properties have not changed. All three shapes emit a
 clip only with a child and retain their original render IDs through
 the full sequence. Both pinned authored and 52 focused Rust tests
 pass; the original comparison count is unchanged.
+
+## Custom clipper notifications
+
+Pinned original :788 and the Rust port both start with the clip at
+(50, 50), width 100, then report pending paint work immediately after
+the delegate's notification. The next paint uses width 150 on the
+same render object. The Rust path consumes a tracked notification
+at the start of the frame without re-laying out the child or
+recording its picture again. A separate control replaces the source,
+checks that the old source no longer invalidates, and confirms hit
+testing sees the newly notified geometry after the frame.
+All 54 focused Rust cases pass.

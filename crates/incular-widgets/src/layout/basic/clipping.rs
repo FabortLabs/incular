@@ -5,6 +5,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use incular_config::Clip;
+use incular_core::reactivity::ReactiveCell;
 use incular_core::{Offset, Rect, Size};
 use incular_rendering::{CornerRadii, Path, RRect};
 use typed_builder::TypedBuilder;
@@ -37,11 +38,43 @@ impl ClipShape {
     }
 }
 
+/// Signals that a mounted custom clipper's geometry changed in place.
+#[derive(Clone)]
+pub struct ClipReclip(Rc<ReactiveCell<u64>>);
+
+impl Default for ClipReclip {
+    fn default() -> Self {
+        Self(Rc::new(ReactiveCell::new(0)))
+    }
+}
+
+impl ClipReclip {
+    /// Invalidate the clip after changing the geometry its delegate reads.
+    pub fn notify(&self) {
+        {
+            let mut revision = self.0.borrow_mut();
+            *revision = revision.wrapping_add(1);
+        }
+        self.0.source().notify();
+    }
+
+    fn track(&self) -> u64 {
+        self.0.source().track();
+        *self.0.borrow()
+    }
+}
+
 /// Flutter's `CustomClipper`: derives a clip from the laid-out size and
 /// decides whether an existing clip must be rebuilt when the delegate changes.
 pub trait CustomClipper: 'static {
     /// Returns the clip for a box of `size`.
     fn get_clip(&self, size: Size) -> ClipShape;
+
+    /// Optional reclip notification source for geometry that changes
+    /// without replacing the widget or its delegate.
+    fn reclip(&self) -> Option<ClipReclip> {
+        None
+    }
 
     /// Whether the clip must be recomputed when this delegate replaces `old`.
     /// Flutter's `shouldReclip`; a delegate that returns `false` keeps the
@@ -83,16 +116,21 @@ pub struct ClipDelegate {
     clipper: Rc<dyn Any>,
     get_clip: fn(&dyn Any, Size) -> ClipShape,
     should_reclip: fn(&dyn Any, &dyn Any) -> bool,
+    reclip: Option<ClipReclip>,
+    reclip_revision: u64,
 }
 
 impl ClipDelegate {
     /// Retains a clipper delegate.
     #[must_use]
     pub fn new<C: CustomClipper>(clipper: C) -> Self {
+        let reclip = clipper.reclip();
         Self {
             clipper: Rc::new(clipper),
             get_clip: get_clip_erased::<C>,
             should_reclip: should_reclip_erased::<C>,
+            reclip,
+            reclip_revision: 0,
         }
     }
 
@@ -108,10 +146,24 @@ impl ClipDelegate {
         (self.get_clip)(&*self.clipper, size)
     }
 
+    pub(crate) fn tracked(&self) -> Self {
+        let mut delegate = self.clone();
+        if let Some(reclip) = &delegate.reclip {
+            delegate.reclip_revision = reclip.track();
+        }
+        delegate
+    }
+
     /// Whether this delegate, replacing `old`, requires the clip to be rebuilt.
     #[must_use]
     pub(crate) fn reclips_from(&self, old: &Self) -> bool {
-        (self.should_reclip)(&*self.clipper, &*old.clipper)
+        let same_source = self
+            .reclip
+            .as_ref()
+            .zip(old.reclip.as_ref())
+            .is_some_and(|(new, old)| Rc::ptr_eq(&new.0, &old.0));
+        (same_source && self.reclip_revision != old.reclip_revision)
+            || (self.should_reclip)(&*self.clipper, &*old.clipper)
     }
 }
 
@@ -123,7 +175,7 @@ impl std::fmt::Debug for ClipDelegate {
 
 impl PartialEq for ClipDelegate {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.clipper, &other.clipper)
+        Rc::ptr_eq(&self.clipper, &other.clipper) && self.reclip_revision == other.reclip_revision
     }
 }
 
