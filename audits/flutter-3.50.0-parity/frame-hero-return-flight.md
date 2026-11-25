@@ -34,3 +34,18 @@ and quarter-step size progression; neutral route and widget hosts replace
 the design-system surfaces. Additional native controls check center
 alignment, actual paint, a linear push, a custom flipped pop, and an
 explicit reverse curve.
+
+## Interrupted push
+
+Flutter's original `Pop interrupts push, reverses flight` (`:2013`)
+passes. The neutral Dart probe and native
+`flutter350_hero_interruption` agree on the cubic asymmetric path and
+keep the in-flight shuttle mounted on the same element through the
+breakpoint. Before the fix Incular switched to the home shuttle at
+reversal. The native test now also ensures the overlay disappears
+after the last reverse sample. This is a partial translation of the
+original: the original also compares the different Material arc from a
+separate settled push. Flutter invokes its builder once per shuttle;
+Incular's existing per-frame scalar builder API still invokes it on
+updates, but keeps the original builder and widget identity over this
+reversal.

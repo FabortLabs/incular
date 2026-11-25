@@ -104,6 +104,15 @@ impl HeroRectTween {
         self.end
     }
 
+    /// Flutter's ReverseTween retains a custom path while swapping its
+    /// endpoints. Calling the creator with swapped boxes is not equivalent.
+    fn reversed(&self) -> Self {
+        let lerp = self.lerp.clone();
+        Self::custom(self.end, self.begin, move |begin, end, t| {
+            lerp(end, begin, 1. - t)
+        })
+    }
+
     /// The rectangle at `t`: exactly `begin` at 0 and `end` at 1, as
     /// Flutter's `Tween.transform`.
     #[must_use]
@@ -512,6 +521,7 @@ struct Manifest {
     animation: AnimationController,
     from_hero: Rc<HeroEntry>,
     to_hero: Rc<HeroEntry>,
+    from_route: RouteHeroes,
     to_route: RouteHeroes,
     create_rect_tween: Option<CreateRectTween>,
     curve: Curve,
@@ -574,6 +584,10 @@ impl Manifest {
 struct Flight {
     manifest: Manifest,
     tween: HeroRectTween,
+    // Flutter retains the overlay child on a reversal. Keep the original
+    // shuttle inputs (including its animation) so both the retained child
+    // key and its direction survive this change of flight manifest.
+    retained_shuttle: Option<Manifest>,
     /// The animation value where the destination hero went away, after
     /// which the shuttle fades out.
     fade_from: Option<f32>,
@@ -591,14 +605,38 @@ impl Flight {
         Self {
             manifest,
             tween,
+            retained_shuttle: None,
             fade_from: None,
             aborted: false,
         }
     }
 
-    /// `divert` for a flight redirected by a transition in the same
-    /// direction: it continues from where it is to the new destination.
+    /// A changed route redirects an existing flight. A pop that
+    /// interrupts its own push has to retrace the original path instead
+    /// of interpolating a new rectangle from the current position.
     fn divert(&mut self, manifest: Manifest, to: Rect) {
+        let retrace = self.manifest.direction == HeroFlightDirection::Push
+            && manifest.direction == HeroFlightDirection::Pop
+            && self.manifest.animation == manifest.animation
+            && Rc::ptr_eq(&self.manifest.from_route.0, &manifest.to_route.0)
+            && Rc::ptr_eq(&self.manifest.to_route.0, &manifest.from_route.0);
+        if retrace {
+            self.tween = self.tween.reversed();
+            self.retained_shuttle
+                .get_or_insert_with(|| self.manifest.clone());
+            // An outlet may replace its wrapper as a route leaves. Ensure
+            // both newly mounted hero entries are hidden, and preserve the
+            // destination child state that the original push retained.
+            manifest
+                .from_hero
+                .start_flight(self.manifest.to_hero.include_child.get());
+            manifest
+                .to_hero
+                .start_flight(self.manifest.from_hero.include_child.get());
+            self.manifest = manifest;
+            return;
+        }
+        self.retained_shuttle = None;
         let here = self.tween.transform(self.manifest.progress());
         self.tween = self.manifest.tween(here, to);
         self.manifest.from_hero.end_flight(true);
@@ -789,6 +827,7 @@ impl HeroFlights {
                         animation: pending.animation.clone(),
                         from_hero: from_hero.clone(),
                         to_hero: to_hero.clone(),
+                        from_route: pending.from.clone(),
                         to_route: pending.to.clone(),
                         create_rect_tween: self.0.create_rect_tween.clone(),
                         curve,
@@ -848,7 +887,11 @@ impl HeroFlights {
             shuttles.push(Widget::from(
                 Positioned::new(IgnorePointer::new(Opacity::new(
                     flight.opacity(),
-                    flight.manifest.shuttle(context),
+                    flight
+                        .retained_shuttle
+                        .as_ref()
+                        .unwrap_or(&flight.manifest)
+                        .shuttle(context),
                 )))
                 .left(rect.origin.x)
                 .top(rect.origin.y)

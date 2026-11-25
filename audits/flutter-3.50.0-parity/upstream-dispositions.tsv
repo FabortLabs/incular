@@ -1421,3 +1421,4 @@ packages/flutter/test/widgets/table_test.dart	923	Set defaultVerticalAlignment t
 packages/flutter/test/widgets/sliver_visibility_test.dart	35	SliverVisibility	partial-match	upstream-sliver-visibility.md
 packages/flutter/test/widgets/heroes_test.dart	732	Default Hero animation is fastOutSlowIn	paired-match	frame-hero-return-flight.md
 packages/flutter/test/widgets/heroes_test.dart	3400	Default popped hero uses fastOutSlowIn curve	paired-match	frame-hero-return-flight.md
+packages/flutter/test/widgets/heroes_test.dart	2013	Pop interrupts push, reverses flight	partial-match	frame-hero-return-flight.md#interrupted-push
