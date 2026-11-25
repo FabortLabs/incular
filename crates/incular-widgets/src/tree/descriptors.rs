@@ -1852,7 +1852,7 @@ pub struct Transform {
     /// the plain `Transform` constructor has no alignment and pivots about the
     /// top-left corner.
     centered: bool,
-    alignment: Option<Alignment>,
+    alignment: Option<crate::AlignmentGeometry>,
     transform_hit_tests: bool,
     filter_quality: Option<incular_rendering::FilterQuality>,
     child: Widget,
@@ -1903,10 +1903,11 @@ impl Transform {
         self
     }
     /// Flutter's `Transform.alignment`: the pivot as a point of the child's
-    /// box, added to any [`Transform::origin`].
+    /// box, added to any [`Transform::origin`]. Directional alignments
+    /// follow the nearest [`crate::Directionality`].
     #[must_use]
-    pub fn alignment(mut self, alignment: Alignment) -> Self {
-        self.alignment = Some(alignment);
+    pub fn alignment(mut self, alignment: impl Into<crate::AlignmentGeometry>) -> Self {
+        self.alignment = Some(alignment.into());
         self
     }
     /// Whether pointer hit testing follows the painted transform. Defaults
@@ -1929,13 +1930,26 @@ impl Transform {
 }
 impl From<Transform> for Widget {
     fn from(value: Transform) -> Self {
+        let alignment = match value.alignment {
+            Some(crate::AlignmentGeometry::Directional(pivot)) => {
+                return crate::Builder::new(move |context| {
+                    let direction = context
+                        .text_direction()
+                        .unwrap_or(incular_config::TextDirection::Ltr);
+                    value.clone().alignment(pivot.resolve(direction)).into()
+                })
+                .into();
+            }
+            Some(crate::AlignmentGeometry::Physical(pivot)) => Some(pivot),
+            None => None,
+        };
         match value.origin {
             Some(origin) => Widget::transform_around(value.transform, origin, value.child),
             None if value.centered => Widget::transform(value.transform, value.child),
             None => Widget::transform_around(value.transform, Offset::ZERO, value.child),
         }
         .with_transform_filter_quality(value.filter_quality)
-        .with_transform_hit_geometry(value.alignment, value.transform_hit_tests)
+        .with_transform_hit_geometry(alignment, value.transform_hit_tests)
     }
 }
 

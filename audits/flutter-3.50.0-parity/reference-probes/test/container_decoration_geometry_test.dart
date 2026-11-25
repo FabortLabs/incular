@@ -134,4 +134,43 @@ void main() {
     );
     expect(tester.getSize(find.byKey(key)), const Size(40, 60));
   });
+  testWidgets(
+    'Container pivot moves painted content without resizing the box',
+    (tester) async {
+      const container = ValueKey('transform-alignment container');
+      const child = ValueKey('transform-alignment cyan');
+      for (final (pivot, direction, x, y) in [
+        (Alignment.centerRight, TextDirection.ltr, 150.0, 125.0),
+        (AlignmentDirectional.centerEnd, TextDirection.rtl, 100.0, 125.0),
+        (null, TextDirection.ltr, 100.0, 100.0),
+      ]) {
+        await tester.pumpWidget(
+          Directionality(
+            textDirection: direction,
+            child: Stack(
+              children: [
+                Positioned(
+                  left: 100,
+                  top: 100,
+                  child: Container(
+                    key: container,
+                    width: 100,
+                    height: 100,
+                    transform: Matrix4.diagonal3Values(0.5, 0.5, 1),
+                    transformAlignment: pivot,
+                    child: const ColoredBox(key: child, color: _green),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+        expect(
+          tester.getRect(find.byKey(container)),
+          const Rect.fromLTWH(100, 100, 100, 100),
+        );
+        expect(tester.getRect(find.byKey(child)), Rect.fromLTWH(x, y, 50, 50));
+      }
+    },
+  );
 }

@@ -161,6 +161,12 @@ See [`Constraints`](/docs/api/values/constraints).
 
 Affine after layout; size unchanged, only painting/hit-test/semantics observe.
 
+### `transform_alignment(alignment: impl Into<AlignmentGeometry>)`
+
+Choose where the transform pivots. It defaults to the top-left corner
+of the outer box, including margin. Physical and direction-relative
+alignments both work; the pivot does not change layout size.
+
 ### `clip_behavior(clip: Clip)`
 
 `None` is the default and allows overflow. Choose `HardEdge` for a fast

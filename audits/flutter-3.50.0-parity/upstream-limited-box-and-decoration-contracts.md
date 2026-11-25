@@ -105,3 +105,13 @@ All four exact original Flutter cases at `widgets/container_test.dart:558,
 730,792,806`, all four authored Flutter samples, and 24 focused Rust tests
 passed. The original zero-area assertions only check size and successful
 layout, not rendered text in an empty area.
+
+## Container transform alignment
+
+The original `widgets/container_test.dart:567` pairs all four unchanged
+layout corners of the 100×100 Container placed at (100,100). Authored
+comparisons also measure the transformed child at scale 0.5: (150,125)
+for center-right, (100,125) for RTL center-end, and (100,100) with no pivot.
+The child stays laid out at 100×100 and paints in a 50×50 box. The retained
+Rust control changes Directionality while mounted. All 18 focused Rust
+tests, the exact Flutter original, and five authored Flutter probes passed.

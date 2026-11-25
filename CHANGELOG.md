@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-widgets`: `Container::transform_alignment` selects a physical
+  or direction-relative transform pivot without changing layout.
+
 - `incular-widgets`: `BoxDecoration::clip_path` and `hit_test` expose the
   outline and local hit geometry for rectangles, rounded boxes, and circles.
 

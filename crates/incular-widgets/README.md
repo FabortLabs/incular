@@ -370,6 +370,10 @@ through the inverse affine transform and semantics use transformed bounds.
 `ScaleTransition` and `RotationTransition` are controller-driven compositor
 updates, so animation keeps child layout and picture caches warm.
 
+`Container::transform_alignment` sets its transform's pivot without
+changing layout. An `AlignmentDirectional` follows the nearest
+`Directionality`.
+
 ## Group opacity
 
 `Opacity::new(0.5, child)` adds a retained isolation boundary. The child is

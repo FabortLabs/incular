@@ -800,3 +800,4 @@ packages/flutter/test/widgets/container_test.dart	558	Can be placed in an infini
 packages/flutter/test/widgets/container_test.dart	730	Container discards alignment when the child parameter is null and constraints is not Tight	paired-match	upstream-limited-box-and-decoration-contracts.md#childless-and-zero-area-container-layout
 packages/flutter/test/widgets/container_test.dart	792	Container does not crash at zero area	paired-match	upstream-limited-box-and-decoration-contracts.md#childless-and-zero-area-container-layout
 packages/flutter/test/widgets/container_test.dart	806	DecoratedBox does not crash at zero area	paired-match	upstream-limited-box-and-decoration-contracts.md#childless-and-zero-area-container-layout
+packages/flutter/test/widgets/container_test.dart	567	Container transformAlignment	paired-match	upstream-limited-box-and-decoration-contracts.md#container-transform-alignment

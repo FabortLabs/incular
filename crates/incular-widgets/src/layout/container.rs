@@ -16,7 +16,7 @@ use typed_builder::TypedBuilder;
 use crate::layout::basic::{
     Align, ClipRRect, ClipRect, ConstrainedBox, FractionallySizedBox, Padding, SizedBox,
 };
-use crate::{Transform, Widget};
+use crate::{AlignmentGeometry, Transform, Widget};
 
 /// A convenience composition widget combining sizing, constraints, margin,
 /// padding, background color/decoration, alignment, transforms, and clipping.
@@ -51,6 +51,10 @@ pub struct Container {
     pub height: Option<f32>,
     #[builder(default, setter(strip_option))]
     pub transform: Option<CoreTransform>,
+    /// Where the transform pivots within the outer box, including its margin.
+    /// The default pivot is the top-left corner.
+    #[builder(default, setter(strip_option, into))]
+    pub transform_alignment: Option<AlignmentGeometry>,
     /// Background decoration, resolved identically for the builder, fluent
     /// API, and struct literals.
     #[builder(default, setter(strip_option))]
@@ -182,6 +186,13 @@ impl Container {
     #[must_use]
     pub fn transform(mut self, transform: CoreTransform) -> Self {
         self.transform = Some(transform);
+        self
+    }
+
+    /// Sets the physical or direction-relative pivot of the transform.
+    #[must_use]
+    pub fn transform_alignment(mut self, alignment: impl Into<AlignmentGeometry>) -> Self {
+        self.transform_alignment = Some(alignment.into());
         self
     }
 
@@ -338,7 +349,11 @@ impl From<Container> for Widget {
 
         // 6. Transform
         if let Some(transform) = value.transform {
-            current = Transform::new(transform, current).into();
+            let transformed = Transform::new(transform, current);
+            current = match value.transform_alignment {
+                Some(alignment) => transformed.alignment(alignment).into(),
+                None => transformed.into(),
+            };
         }
 
         // The Incular-only shorthand without a BoxDecoration remains an
