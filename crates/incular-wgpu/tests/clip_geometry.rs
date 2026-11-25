@@ -91,3 +91,19 @@ fn rotated_oval_fallback_tessellates_to_ellipse_mesh() {
     });
     assert_mesh_follows_shape(&path);
 }
+
+#[test]
+fn rounded_superellipse_inset_stencil_stays_within_its_edges() {
+    use incular_rendering::CornerRadii;
+
+    let area = Rect::from_origin_size(Offset::new(2., 2.), Size::new(96., 96.));
+    let mut builder = Path::builder();
+    builder.rounded_superellipse(area, CornerRadii::uniform(18.));
+    let path = builder.build();
+    let mesh = tessellate_path(&path, FillRule::NonZero, None).expect("superellipse stencil");
+    assert!(!mesh.indices.is_empty());
+    assert!(mesh.vertices.iter().all(|&[x, y]| {
+        (2. - 0.001..=98. + 0.001).contains(&x) && (2. - 0.001..=98. + 0.001).contains(&y)
+    }));
+    assert!(mesh_area(&mesh.vertices, &mesh.indices) < 96. * 96.);
+}

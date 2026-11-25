@@ -297,37 +297,30 @@ impl PathBuilder {
         if !(weight.is_finite() && weight > 0.0) {
             return self.line_to(end);
         }
-        let mut pieces = vec![(start, point(control), point(end), weight)];
-        for _ in 0..2 {
-            pieces = pieces
-                .into_iter()
-                .flat_map(|(p0, p1, p2, w)| {
-                    let scale = 1.0 / (1.0 + w);
-                    let mid = ((p0.to_vec2() + p1.to_vec2() * (2.0 * w) + p2.to_vec2())
-                        * (0.5 * scale))
-                        .to_point();
-                    let half = ((1.0 + w) / 2.0).sqrt();
-                    [
-                        (
-                            p0,
-                            ((p0.to_vec2() + p1.to_vec2() * w) * scale).to_point(),
-                            mid,
-                            half,
-                        ),
-                        (
-                            mid,
-                            ((p1.to_vec2() * w + p2.to_vec2()) * scale).to_point(),
-                            p2,
-                            half,
-                        ),
-                    ]
-                })
-                .collect();
+        fn append_conic(
+            path: &mut BezPath,
+            p0: Point,
+            p1: Point,
+            p2: Point,
+            weight: f64,
+            depth: u8,
+        ) {
+            if depth == 0 {
+                let k = 4.0 * weight / (3.0 * (1.0 + weight));
+                path.curve_to(p0.lerp(p1, k), p2.lerp(p1, k), p2);
+                return;
+            }
+            let scale = 1.0 / (1.0 + weight);
+            let middle = ((p0.to_vec2() + p1.to_vec2() * (2.0 * weight) + p2.to_vec2())
+                * (0.5 * scale))
+                .to_point();
+            let half = ((1.0 + weight) / 2.0).sqrt();
+            let left_control = ((p0.to_vec2() + p1.to_vec2() * weight) * scale).to_point();
+            let right_control = ((p1.to_vec2() * weight + p2.to_vec2()) * scale).to_point();
+            append_conic(path, p0, left_control, middle, half, depth - 1);
+            append_conic(path, middle, right_control, p2, half, depth - 1);
         }
-        for (p0, p1, p2, w) in pieces {
-            let k = 4.0 * w / (3.0 * (1.0 + w));
-            self.path.curve_to(p0.lerp(p1, k), p2.lerp(p1, k), p2);
-        }
+        append_conic(&mut self.path, start, point(control), point(end), weight, 2);
         self
     }
 

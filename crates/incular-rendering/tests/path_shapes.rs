@@ -62,9 +62,10 @@ fn rounded_superellipse_meets_the_diagonal_where_the_rounded_rect_does() {
     let mut builder = Path::builder();
     builder.rounded_superellipse(rect(0., 0., 100., 100.), CornerRadii::uniform(20.));
     let path = builder.build();
-    // The superellipse arcs are Flutter's fitted cubics, which bulge past
-    // the edge by about 0.0024 px.
-    assert_bounds_within(&path, rect(0., 0., 100., 100.), 0.01);
+    // The native conic fit keeps both the control bounds and the tight
+    // geometry within the original rectangle.
+    assert_bounds(&path, rect(0., 0., 100., 100.));
+    assert_bounds_within(&path, rect(0., 0., 100., 100.), 0.001);
     assert!(path.contains(Offset::new(50., 50.), FillRule::NonZero));
     assert!(path.contains(Offset::new(5.9, 5.9), FillRule::NonZero));
     assert!(!path.contains(Offset::new(5.8, 5.8), FillRule::NonZero));

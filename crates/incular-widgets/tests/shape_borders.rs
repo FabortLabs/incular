@@ -108,8 +108,24 @@ fn rounded_superellipse_border() {
     let outer = rounded.outer_path(area);
     assert!(outer.contains(Offset::new(5.9, 5.9), FillRule::NonZero));
     assert!(!outer.contains(Offset::new(5.8, 5.8), FillRule::NonZero));
-    // Flutter's fitted superellipse cubics bulge past the edge by ~0.0024 px.
-    assert_bounds_within(&rounded.inner_path(area), rect(2., 2., 96., 96.), 0.01);
+    let inner = rounded.inner_path(area);
+    assert_bounds(&inner, rect(2., 2., 96., 96.));
+    let heights = [1.9, 1.95, 1.99, 2., 2.01, 2.05];
+    for (x, expected) in [
+        (20., [false, false, false, false, false, false]),
+        (25., [false, false, false, false, false, false]),
+        (30., [false, false, false, false, false, true]),
+        (35., [false, false, false, false, true, true]),
+        (40., [false, false, false, false, true, true]),
+        (45., [false, false, false, false, true, true]),
+        (50., [false, false, false, true, true, true]),
+    ] {
+        assert_eq!(
+            heights.map(|y| inner.contains(Offset::new(x, y), FillRule::NonZero)),
+            expected,
+            "edge at x={x}"
+        );
+    }
     let mut canvas = Canvas::default();
     rounded.paint(&mut canvas, area);
     let list = canvas.finish();
@@ -344,4 +360,37 @@ fn compound_border_passes_through_direction_for_stroke_and_inner_path() {
         };
         assert_bounds(path, rect(stroke_x, 0., 2., 30.));
     }
+}
+
+#[test]
+fn superellipse_and_circle_insets_follow_inside_center_and_outside_alignment() {
+    use incular_config::EdgeInsets;
+    use incular_widgets::CircleBorder;
+    for (alignment, inset) in [(-1., 10.), (0., 5.), (1., 0.)] {
+        let side = BorderSide {
+            stroke_align: alignment,
+            ..BorderSide::solid(Color::BLACK, 10.)
+        };
+        let border = RoundedSuperellipseBorder::new(side, BorderRadius::ZERO);
+        assert_eq!(border.dimensions(None), EdgeInsets::all(inset));
+        assert_eq!(
+            CircleBorder::new(side).dimensions(None),
+            EdgeInsets::all(inset)
+        );
+    }
+}
+
+#[test]
+fn superellipse_interpolation_moves_width_and_stroke_alignment_together() {
+    use incular_core::Lerp;
+    let make = |width, stroke_align| {
+        RoundedSuperellipseBorder::new(
+            BorderSide {
+                stroke_align,
+                ..BorderSide::solid(Color::BLACK, width)
+            },
+            BorderRadius::ZERO,
+        )
+    };
+    assert_eq!(make(10., -1.).lerp(&make(20., 1.), 0.5), make(15., 0.));
 }

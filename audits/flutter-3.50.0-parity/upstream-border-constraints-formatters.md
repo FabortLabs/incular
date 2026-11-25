@@ -225,3 +225,24 @@ which already had the correct default. Bare BorderSide still defaults
 to a 1px solid stroke. CircleBorder's eccentricity property and the
 optional-argument shape of the Dart LinearBorder factories are separate
 unpaired portions of those originals.
+
+## Native superellipse edge fitting
+
+The prior Rust path used the legacy web cubic fit. A 100×100
+rounded superellipse with radius 20 and an inside 2px stroke produced
+an inner control bound near 1.935px instead of the reference 2px.
+The pinned native engine uses a pair of tangent conics in each
+octant before the circular cubic. Incular now follows that geometry
+without changing render backends; the conic-to-cubic subdivision
+does not allocate temporary vectors.
+
+The authored pinned Flutter/Rust sample agrees on the outer and
+inset bounds and all 42 near-edge containment samples, including the
+top-center boundary itself. The WGPU stencil tessellator separately
+keeps all mesh vertices within the inset bounds. This is path and mesh
+evidence, not native GPU pixel equivalence or elliptical-corner parity.
+
+Pinned `painting/rounded_superellipse_border_test.dart:170` matches
+all six inside/center/outside inset cases for the superellipse and
+circle. `:198` matches the midpoint from a 10px inside stroke to
+a 20px outside stroke: 15px centered.

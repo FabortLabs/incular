@@ -1,7 +1,7 @@
-//! The rounded superellipse path of Flutter's engine
-//! (`lib/web_ui/lib/rsuperellipse_param.dart`, mirroring
-//! `round_superellipse_param.cc`): each corner is a superellipse arc joined
-//! to a circular arc, both drawn as cubic Béziers.
+//! The pinned Flutter native rounded superellipse geometry
+//! (`round_superellipse_param.cc`): two tangent conics lead into a circular
+//! cubic in each octant. The native fit avoids the older web cubic's
+//! protrusion over the straight edge at some radius-to-size ratios.
 
 use incular_core::{Offset, Rect};
 
@@ -112,6 +112,7 @@ impl Affine {
 }
 
 const GAP_FACTOR: f64 = 0.292_893_218_81;
+const NATIVE_GEOMETRY_TOLERANCE: f64 = 1e-3;
 
 /// `_RSuperellipseOctant`.
 #[derive(Clone, Copy, Debug)]
@@ -126,7 +127,7 @@ struct Octant {
 
 impl Octant {
     fn new(center: Point, a: f64, radius: f64) -> Self {
-        if radius <= 0.0 {
+        if radius <= NATIVE_GEOMETRY_TOLERANCE {
             return Self {
                 offset: center,
                 se_a: a,
@@ -164,36 +165,50 @@ impl Octant {
             transform = transform.then_after(Affine::FLIP);
         }
         let circle = self.circular_arc_points();
-        let se = self.superellipse_arc_points();
-        let mut cubic = |a: Point, b: Point, c: Point| {
-            path.cubic_to(
-                transform.apply(a).offset(),
-                transform.apply(b).offset(),
-                transform.apply(c).offset(),
-            );
-        };
+        let [from_edge, to_circle] = self.superellipse_conics();
+        let map = |p: Point| transform.apply(p).offset();
         if reverse {
-            cubic(circle[2], circle[1], circle[0]);
-            cubic(se[2], se[1], se[0]);
+            path.cubic_to(map(circle[2]), map(circle[1]), map(circle[0]));
+            path.conic_to(
+                map(to_circle.control),
+                map(to_circle.from),
+                to_circle.weight,
+            );
+            path.conic_to(
+                map(from_edge.control),
+                map(from_edge.from),
+                from_edge.weight,
+            );
         } else {
-            cubic(se[1], se[2], se[3]);
-            cubic(circle[1], circle[2], circle[3]);
+            path.conic_to(map(from_edge.control), map(from_edge.to), from_edge.weight);
+            path.conic_to(map(to_circle.control), map(to_circle.to), to_circle.weight);
+            path.cubic_to(map(circle[1]), map(circle[2]), map(circle[3]));
         }
     }
 
-    fn superellipse_arc_points(&self) -> [Point; 4] {
+    fn superellipse_conics(&self) -> [Conic; 2] {
         let start = Point::new(0.0, self.se_a);
-        let end = self.circle_start;
-        let start_tangent = Point::new(1.0, 0.0);
-        let circle_start_vector = self.circle_start.sub(self.circle_center);
-        let end_tangent = Point::new(-circle_start_vector.y, circle_start_vector.x)
-            .scale(1.0 / circle_start_vector.distance());
-        let (start_factor, end_factor) = superellipse_bezier_factors(self.se_n);
+        let joint = self.circle_start;
+        let (first, second, split_y) =
+            superellipse_conic_factors(self.se_n, joint.x / self.se_a, joint.y / self.se_a);
+        let split = Point::new(
+            (1.0 - split_y.powf(self.se_n)).powf(1.0 / self.se_n) * self.se_a,
+            split_y * self.se_a,
+        );
+        let slope = |p: Point| -(p.x / p.y).powf(self.se_n - 1.0);
         [
-            start,
-            start.add(start_tangent.scale(start_factor * self.se_a)),
-            end.add(end_tangent.scale(end_factor * self.se_a)),
-            end,
+            Conic {
+                from: start,
+                control: tangent_intersection(start, 0.0, split, slope(split)),
+                to: split,
+                weight: first as f32,
+            },
+            Conic {
+                from: split,
+                control: tangent_intersection(split, slope(split), joint, slope(joint)),
+                to: joint,
+                weight: second as f32,
+            },
         ]
     }
 
@@ -235,45 +250,55 @@ fn find_circle_center(a: Point, b: Point, r: f64) -> Point {
     m.sub(c_to_m.scale(distance_cm / c_to_m.distance()))
 }
 
+struct Conic {
+    from: Point,
+    control: Point,
+    to: Point,
+    weight: f32,
+}
+
+fn tangent_intersection(a: Point, slope_a: f64, b: Point, slope_b: f64) -> Point {
+    if (slope_a - slope_b).abs() < NATIVE_GEOMETRY_TOLERANCE {
+        return a.add(b).scale(0.5);
+    }
+    let x = (slope_a * a.x - slope_b * b.x + b.y - a.y) / (slope_a - slope_b);
+    Point::new(x, a.y + slope_a * (x - a.x))
+}
+
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
     clippy::cast_precision_loss,
-    reason = "Flutter superellipse tables are f64 and the table index is clamped"
+    reason = "the conic table index is clamped to the finite table"
 )]
-fn superellipse_bezier_factors(n: f64) -> (f64, f64) {
-    const PRECOMPUTED: [(f64, f64); 14] = [
-        (0.013_394_48, 0.059_949_73),
-        (0.136_641_15, 0.135_920_82),
-        (0.245_455_46, 0.140_995_16),
-        (0.323_531_51, 0.128_080_21),
-        (0.390_930_68, 0.117_262_64),
-        (0.448_478_00, 0.108_082_78),
-        (0.498_174_52, 0.100_261_75),
-        (0.541_055_83, 0.093_444_29),
-        (0.578_125_78, 0.087_489_84),
-        (0.610_509_61, 0.082_247_22),
-        (0.639_039_89, 0.077_596_39),
-        (0.664_163_38, 0.073_465_30),
-        (0.686_753_38, 0.069_749_96),
-        (0.706_780_34, 0.065_295_12),
+fn superellipse_conic_factors(n: f64, joint_x: f64, joint_y: f64) -> (f64, f64, f64) {
+    // Native control-weight fits for exponents 2 through 14.
+    const WEIGHTS: [(f64, f64); 13] = [
+        (0.7078, 8.3194),
+        (0.7895, 2.4523),
+        (0.8379, 1.8528),
+        (0.8701, 1.6891),
+        (0.8932, 1.5806),
+        (0.9107, 1.5043),
+        (0.9244, 1.4470),
+        (0.9355, 1.4037),
+        (0.9448, 1.3701),
+        (0.9526, 1.3431),
+        (0.9594, 1.3212),
+        (0.9653, 1.3032),
+        (0.9705, 1.2880),
     ];
-    const STEP: f64 = 1.0;
-    const MIN_N: f64 = 2.0;
-    let records = PRECOMPUTED.len();
-    let max_n = MIN_N + (records - 1) as f64 * STEP;
-    if n >= max_n {
-        return (
-            1.07 - 1.307_649_835_f64.exp() * n.powf(-0.856_851_673_1),
-            -0.01 + (-0.928_769_032_2_f64).exp() * n.powf(-0.612_090_139_8),
-        );
-    }
-    let steps = ((n - MIN_N) / STEP).clamp(0.0, (records - 1) as f64);
-    let left = (steps.floor() as usize).min(records - 2);
-    let frac = steps - left as f64;
+    let exponent = n.clamp(2.0, 14.0);
+    let steps = exponent - 2.0;
+    let lower = (steps.floor() as usize).min(WEIGHTS.len() - 2);
+    let mix = steps - lower as f64;
+    let root = exponent.sqrt();
+    let (lower_first, lower_second) = WEIGHTS[lower];
+    let (upper_first, upper_second) = WEIGHTS[lower + 1];
     (
-        (1.0 - frac) * PRECOMPUTED[left].0 + frac * PRECOMPUTED[left + 1].0,
-        (1.0 - frac) * PRECOMPUTED[left].1 + frac * PRECOMPUTED[left + 1].1,
+        (1.0 - mix) * lower_first + mix * upper_first * root,
+        (1.0 - mix) * lower_second + mix * upper_second * joint_x,
+        (root + joint_y) / (root + 1.0),
     )
 }
 
