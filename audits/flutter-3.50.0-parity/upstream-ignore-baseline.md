@@ -18,3 +18,18 @@ size, and zero placement offset without forwarding the baseline. The
 retained test removes and restores the wrapper; the two text baselines
 and sizes stay the same while the smaller child's vertical offset changes.
 The full focused custom-layout target and Stack direction controls passed.
+
+## IntrinsicHeight forwards baselines
+
+The authored `intrinsic_height_baseline_test.dart` shows that in a
+baseline-aligned Row, wrapping a child in IntrinsicHeight preserves real
+baseline alignment, while adding IgnoreBaseline inside it removes the
+influence and removing IgnoreBaseline restores it. Size is unchanged.
+Incular's direct retained counterpart reproduced the missing baseline
+before the fix and now checks both the actual baseline and its absence.
+Existing intrinsic sizing and LayoutBuilder baseline targets passed.
+
+Two separately paired pinned registrations in `widgets/basic_test.dart`
+(:1892 and :1908) both retain a zero-size host with a PositionedDirectional
+or IntrinsicHeight Placeholder child. The authored baseline probe does
+not increment that count.

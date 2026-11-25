@@ -1047,3 +1047,5 @@ packages/flutter/test/rendering/baseline_test.dart	114	RenderFlex and RenderIgno
 packages/flutter/test/widgets/basic_test.dart	1762	Row and IgnoreBaseline (control -- with baseline)	partial-match	upstream-ignore-baseline.md
 packages/flutter/test/widgets/basic_test.dart	1792	Row and IgnoreBaseline (with ignored baseline)	paired-match	upstream-ignore-baseline.md
 packages/flutter/test/widgets/basic_test.dart	1856	IgnoreBaseline does not crash at zero area	paired-match	upstream-ignore-baseline.md
+packages/flutter/test/widgets/basic_test.dart	1892	PositionedDirectional does not crash at zero area	paired-match	upstream-ignore-baseline.md#intrinsicheight-forwards-baselines
+packages/flutter/test/widgets/basic_test.dart	1908	IntrinsicHeight does not crash at zero area	paired-match	upstream-ignore-baseline.md#intrinsicheight-forwards-baselines

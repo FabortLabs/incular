@@ -392,9 +392,10 @@ impl WidgetTree {
                                 constraints.tighten(None, Some(natural))
                             };
                         self.layout_render(child, child_constraints)?;
-                        let size = self
-                            .render_live(child, "retained render must remain live")
-                            .size;
+                        let child = self.render_live(child, "intrinsic child must remain live");
+                        let (size, baseline) = (child.size, child.baseline);
+                        self.render_live_mut(id, "intrinsic render must remain live")
+                            .baseline = baseline;
                         (size, ChildOffsets::One(Offset::ZERO))
                     }
                     ChildLayoutMode::IgnoreBaseline => {
