@@ -181,3 +181,58 @@ fn outgoing_child_keeps_ticking_until_settled_but_loses_semantics_immediately() 
         ((true, true, true), (true, true, true))
     );
 }
+
+fn ending_scene(state: CrossFadeState, completions: &Rc<Cell<u32>>) -> Widget {
+    let calls = completions.clone();
+    Directionality::new(
+        TextDirection::Ltr,
+        AnimatedCrossFade::new(
+            Widget::box_(Size::new(100., 100.), Color::BLACK),
+            Widget::box_(Size::new(200., 200.), Color::WHITE),
+            state,
+            Duration::from_millis(200),
+        )
+        .on_end(move || calls.set(calls.get() + 1)),
+    )
+    .into()
+}
+
+#[test]
+fn mounted_cross_fade_completes_once_on_a_forward_transition() {
+    use CrossFadeState::{ShowFirst, ShowSecond};
+    let calls = Rc::new(Cell::new(0));
+    let mut p = Probe::new(ending_scene(ShowFirst, &calls));
+    assert_eq!(calls.get(), 0);
+    p.update(ending_scene(ShowSecond, &calls));
+    p.frame(100);
+    assert_eq!(calls.get(), 0);
+    p.frame(101);
+    assert_eq!(calls.get(), 1);
+    p.frame(500);
+    assert_eq!(calls.get(), 1);
+}
+
+#[test]
+fn initially_shown_second_child_does_not_call_end_until_reverse_completes() {
+    use CrossFadeState::{ShowFirst, ShowSecond};
+    let calls = Rc::new(Cell::new(0));
+    let mut p = Probe::new(ending_scene(ShowSecond, &calls));
+    assert_eq!(calls.get(), 0);
+    p.update(ending_scene(ShowFirst, &calls));
+    p.frame(100);
+    assert_eq!(calls.get(), 0);
+    p.frame(101);
+    assert_eq!(calls.get(), 1);
+}
+
+#[test]
+fn cross_fade_calls_end_on_every_completed_direction_change() {
+    use CrossFadeState::{ShowFirst, ShowSecond};
+    let calls = Rc::new(Cell::new(0));
+    let mut p = Probe::new(ending_scene(ShowFirst, &calls));
+    for (i, state) in [ShowSecond, ShowFirst, ShowSecond].into_iter().enumerate() {
+        p.update(ending_scene(state, &calls));
+        p.frame(201);
+        assert_eq!(calls.get(), i as u32 + 1);
+    }
+}

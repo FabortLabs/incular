@@ -129,3 +129,35 @@ fn each_child_has_its_own_curve() {
     assert!((opacities[0] - (1. - Curve::EaseOut.apply(0.5))).abs() < 1e-4);
     assert!((opacities[1] - Curve::EaseIn.apply(0.5)).abs() < 1e-4);
 }
+
+#[test]
+fn cross_fade_forwards_clip_to_both_layouts() {
+    use incular_config::Clip;
+    let clips = |h: &Harness| {
+        let mut result = Vec::new();
+        let mut elements = vec![h.root];
+        while let Some(id) = elements.pop() {
+            if let Some(RenderKind::ClipRect { clip_behavior, .. }) = h
+                .tree
+                .render_id(id)
+                .and_then(|render| h.tree.render_object_kind(render))
+            {
+                result.push(*clip_behavior);
+            }
+            elements.extend(h.tree.children(id).unwrap_or_default());
+        }
+        result
+    };
+    let mut h = Harness::new(fade(CrossFadeState::ShowFirst).into());
+    assert_eq!(clips(&h), [Clip::HardEdge, Clip::HardEdge]);
+    h.tree
+        .update(
+            h.root,
+            fade(CrossFadeState::ShowFirst)
+                .clip_behavior(Clip::None)
+                .into(),
+        )
+        .unwrap();
+    h.frame(32);
+    assert_eq!(clips(&h), [Clip::None, Clip::None]);
+}

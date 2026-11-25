@@ -382,10 +382,10 @@ packages/flutter/test/widgets/animated_switcher_test.dart	88	AnimatedSwitcher do
 packages/flutter/test/widgets/animated_switcher_test.dart	116	AnimatedSwitcher handles null children.	paired-match	upstream-animated-switcher-retained-lifetime.md
 packages/flutter/test/widgets/animated_switcher_test.dart	175	AnimatedSwitcher uses custom layout.	partial-match	upstream-animated-switcher-retained-lifetime.md
 packages/flutter/test/widgets/animated_cross_fade_test.dart	226	AnimatedCrossFade switches off TickerMode and semantics on faded out widget	partial-match	upstream-cross-fade-focus-and-input.md
-packages/flutter/test/widgets/animated_cross_fade_test.dart	304	AnimatedCrossFade test focus	paired-mismatch	upstream-cross-fade-focus-and-input.md
+packages/flutter/test/widgets/animated_cross_fade_test.dart	304	AnimatedCrossFade test focus	paired-match	upstream-cross-fade-focus-and-input.md#current-completion-and-clipping
 packages/flutter/test/widgets/animated_cross_fade_test.dart	328	AnimatedCrossFade bottom child can have focus	paired-match	upstream-cross-fade-focus-and-input.md
 packages/flutter/test/widgets/animated_cross_fade_test.dart	353	AnimatedCrossFade second child do not receive touch events	paired-match	upstream-cross-fade-focus-and-input.md
-packages/flutter/test/widgets/animated_cross_fade_test.dart	518	AnimatedCrossFade onEnd callback is called for each animation cycle	reference-ran-incular-open	upstream-cross-fade-focus-and-input.md
+packages/flutter/test/widgets/animated_cross_fade_test.dart	518	AnimatedCrossFade onEnd callback is called for each animation cycle	paired-match	upstream-cross-fade-focus-and-input.md#current-completion-and-clipping
 packages/flutter/test/widgets/animated_switcher_test.dart	319	AnimatedSwitcher updates previous child transitions if the transitionBuilder changes.	partial-match	upstream-animated-switcher-builder-and-key-reentry.md
 packages/flutter/test/widgets/animated_switcher_test.dart	400	AnimatedSwitcher does not duplicate animations if the same child is entered twice.	paired-mismatch	upstream-animated-switcher-builder-and-key-reentry.md
 packages/flutter/test/widgets/animated_switcher_test.dart	420	AnimatedSwitcher does not crash at zero area	paired-match	upstream-animated-switcher-builder-and-key-reentry.md
@@ -1362,3 +1362,7 @@ packages/flutter/test/rendering/box_test.dart	1108	addWithOutOfBandPosition	pair
 packages/flutter/test/widgets/raw_tooltip_test.dart	601	RawTooltip is dismissed after a long press and touchDelay expired	paired-match	upstream-raw-tooltip-trigger-and-hold.md#current-mounted-deadline-behavior
 packages/flutter/test/widgets/raw_tooltip_test.dart	622	RawTooltip is dismissed after a tap and touchDelay expired	paired-match	upstream-raw-tooltip-trigger-and-hold.md#current-mounted-deadline-behavior
 packages/flutter/test/widgets/raw_tooltip_test.dart	829	Tooltip shows/hides when hovered	partial-match	upstream-raw-tooltip-trigger-and-hold.md#current-mounted-deadline-behavior
+packages/flutter/test/widgets/animated_cross_fade_test.dart	424	AnimatedCrossFade onEnd callback is called when animation completes forward	paired-match	upstream-cross-fade-focus-and-input.md#current-completion-and-clipping
+packages/flutter/test/widgets/animated_cross_fade_test.dart	471	AnimatedCrossFade onEnd callback is called when animation completes reverse	paired-match	upstream-cross-fade-focus-and-input.md#current-completion-and-clipping
+packages/flutter/test/widgets/animated_cross_fade_test.dart	557	AnimatedCrossFade clipBehavior defaults to hardEdge	paired-match	upstream-cross-fade-focus-and-input.md#current-completion-and-clipping
+packages/flutter/test/widgets/animated_cross_fade_test.dart	579	AnimatedCrossFade clipBehavior is forwarded to ClipRect and AnimatedSize	paired-match	upstream-cross-fade-focus-and-input.md#current-completion-and-clipping

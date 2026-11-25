@@ -53,6 +53,8 @@ pub struct AnimatedCrossFade {
     alignment: Alignment,
     layout_builder: AnimatedCrossFadeBuilder,
     exclude_bottom_focus: bool,
+    clip_behavior: Clip,
+    on_end: Option<Rc<dyn Fn()>>,
 }
 
 impl AnimatedCrossFade {
@@ -75,6 +77,8 @@ impl AnimatedCrossFade {
             alignment: Alignment::TOP_CENTER,
             layout_builder: Rc::new(Self::default_layout_builder),
             exclude_bottom_focus: true,
+            clip_behavior: Clip::HardEdge,
+            on_end: None,
         }
     }
 
@@ -127,6 +131,20 @@ impl AnimatedCrossFade {
         self
     }
 
+    /// Sets clipping on both the outer box and its animated size.
+    #[must_use]
+    pub fn clip_behavior(mut self, clip_behavior: Clip) -> Self {
+        self.clip_behavior = clip_behavior;
+        self
+    }
+
+    /// Called whenever a forward or reverse cross-fade reaches its end.
+    #[must_use]
+    pub fn on_end(mut self, on_end: impl Fn() + 'static) -> Self {
+        self.on_end = Some(Rc::new(on_end));
+        self
+    }
+
     /// Flutter's `defaultLayoutBuilder`: the bottom child positioned over the
     /// top child's width, the top child sizing the stack.
     #[must_use]
@@ -168,16 +186,38 @@ impl CrossFadeStateData {
             return;
         };
         self.controller.set_duration(config.duration);
+        self.controller
+            .set_reverse_duration(config.reverse_duration);
         if previous.cross_fade_state != config.cross_fade_state {
             match config.cross_fade_state {
                 CrossFadeState::ShowFirst => {
-                    self.controller
-                        .set_duration(config.reverse_duration.unwrap_or(config.duration));
                     self.controller.reverse_on_next_tick();
                 }
                 CrossFadeState::ShowSecond => {
                     self.controller.forward_on_next_tick();
                 }
+            }
+        }
+    }
+
+    fn mark_changed(&self) {
+        let revision = self.revision.borrow().clone();
+        revision.set(revision.get().wrapping_add(1));
+    }
+
+    fn status_changed(&self, status: AnimationStatus) {
+        self.mark_changed();
+        if matches!(
+            status,
+            AnimationStatus::Completed | AnimationStatus::Dismissed
+        ) {
+            let callback = self
+                .config
+                .borrow()
+                .as_ref()
+                .and_then(|config| config.on_end.clone());
+            if let Some(callback) = callback {
+                callback();
             }
         }
     }
@@ -225,10 +265,14 @@ impl CrossFadeStateData {
         );
         let top = TickerMode::new(true, Opacity::new(top_opacity, top));
         let laid_out = (config.layout_builder)(top.into(), top_key, bottom.into(), bottom_key);
-        let sized = AnimatedSize::new(config.duration, laid_out)
+        let mut sized = AnimatedSize::new(config.duration, laid_out)
             .alignment(config.alignment)
-            .curve(config.size_curve);
-        let clipped = ClipRect::new(sized);
+            .curve(config.size_curve)
+            .clip_behavior(config.clip_behavior);
+        if let Some(reverse_duration) = config.reverse_duration {
+            sized = sized.reverse_duration(reverse_duration);
+        }
+        let clipped = ClipRect::new(sized).clip_behavior(config.clip_behavior);
         Widget::animation_ticker_with_revision(
             self.controller.clone(),
             false,
@@ -262,8 +306,13 @@ impl From<AnimatedCrossFade> for Widget {
                     let weak = Rc::downgrade(state);
                     state.controller.add_listener(move |_| {
                         if let Some(state) = weak.upgrade() {
-                            let revision = state.revision.borrow().clone();
-                            revision.set(revision.get().wrapping_add(1));
+                            state.mark_changed();
+                        }
+                    });
+                    let weak = Rc::downgrade(state);
+                    state.controller.add_status_listener(move |status| {
+                        if let Some(state) = weak.upgrade() {
+                            state.status_changed(status);
                         }
                     });
                 }

@@ -19,3 +19,18 @@ ExcludeSemantics descriptor. onEnd callback counting (:518)
 is Flutter-only: the current Rust AnimatedCrossFade has no
 public onEnd hook. No equivalent was simulated.
 See `flutter350_cross_fade_focus_input_parity`.
+
+## Current completion and clipping
+
+The three pinned completion registrations (:424, :471, :518) and their
+mounted counterparts agree: no callback on initial mount or halfway,
+one on the completed forward/reverse transition, and one for each finished
+cycle. Completion comes from the retained controller's status, not from
+size or a value callback that could be skipped at an unchanged value.
+
+Default hard-edge and explicit no-clip now propagate to both the outer
+clip and the AnimatedSize clip (:557, :579), including a retained update.
+This checks the installed clip policies rather than GPU snapshots.
+The prior :304 hidden-focus failure did not reproduce on the current runtime:
+an explicit request does not leave the inactive node falsely primary.
+All six named Flutter originals and all eleven focused native tests passed.
