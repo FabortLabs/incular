@@ -735,15 +735,25 @@ fn focus_and_scroll_reads_invalidate_runtime_builders() {
         let observed = observed.clone();
         move |_| {
             observed.set((focus.has_focus(), scroll.offset()));
-            Widget::box_(Size::new(1., 1.), Color::WHITE)
+            // An unattached node can queue a request, but cannot receive
+            // primary focus until its owning runtime mounts it.
+            incular_widgets::Focus::new(Widget::box_(Size::new(1., 1.), Color::WHITE))
+                .node(focus.clone())
+                .into()
         }
     })
     .unwrap()
     .into_runtime();
     let constraints = Constraints::tight(Size::new(20., 20.));
     runtime.run_frame(constraints).unwrap();
+    assert_eq!(observed.get(), (false, 0.0));
     focus.request_focus();
-    scroll.jump_to(12.0);
+    runtime.run_frame(constraints).unwrap();
+    assert!(focus.has_primary_focus());
+    runtime.run_frame(constraints).unwrap();
+    assert_eq!(observed.get(), (true, 0.0));
+
+    assert!(scroll.jump_to(12.0));
     runtime.run_frame(constraints).unwrap();
     assert_eq!(observed.get(), (true, 12.0));
 }

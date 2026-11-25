@@ -119,7 +119,7 @@ packages/flutter/test/widgets/list_wheel_scroll_view_test.dart	1540	controller c
 packages/flutter/test/painting/gradient_test.dart	229	LinearGradient lerp test with stops and unequal number of colors	reference-ran-incular-open	upstream-pointer-wheel-gradients.md
 packages/flutter/test/painting/gradient_test.dart	736	RadialGradient.scale preserves transform	reference-ran-incular-open	upstream-pointer-wheel-gradients.md
 packages/flutter/test/painting/gradient_test.dart	800	SweepGradient lerp test with stops	reference-ran-incular-open	upstream-pointer-wheel-gradients.md
-packages/flutter/test/widgets/focus_manager_test.dart	633	Requesting focus before adding to tree results in a request after adding	partial-mismatch	upstream-focus-corners-curves-previews.md
+packages/flutter/test/widgets/focus_manager_test.dart	633	Requesting focus before adding to tree results in a request after adding	partial-match	upstream-focus-corners-curves-previews.md
 packages/flutter/test/widgets/focus_manager_test.dart	1752	works when the previous focused node is detached	paired-match	upstream-focus-widget-semantics.md#retained-identity-across-focus-reparenting
 packages/flutter/test/widgets/focus_manager_test.dart	1801	autofocus the first candidate	paired-match	upstream-focus-corners-curves-previews.md
 packages/flutter/test/widgets/focus_scope_test.dart	1233	Focus is ignored when set to not focusable.	paired-match	upstream-focus-policy-tween-dtd.md#mounted-focus-callbacks-and-permissions

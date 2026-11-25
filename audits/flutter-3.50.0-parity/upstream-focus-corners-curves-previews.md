@@ -159,3 +159,15 @@ direction is resolved. Replacement with a physical value discards the
 previous logical part. Incular uses value types; Dart object identity and
 missing-direction diagnostics are not included in these seven. Four
 focused Rust targets passed (21 tests).
+
+### Mounted focus read invalidation
+
+The pinned :633 and the mounted host parity tests passed again.
+The Rust reactive-builder test used to expect primary focus for an
+unattached node, which contradicts that reference. It now gives the
+node an attached Focus widget, then checks focus invalidation on its
+own before changing the scroll offset in a later frame. The builder
+observes the focus and position changes independently. The original
+:633 remains partial for manual attach/reparent API shape, but its
+previous behavioral mismatch no longer applies. Eleven targeted Rust
+tests passed.
