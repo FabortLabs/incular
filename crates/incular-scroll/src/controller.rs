@@ -42,7 +42,18 @@ pub(crate) enum InitialOffset {
     /// Flutter `ScrollController.initialScrollOffset`.
     Pixels(f32),
     /// Flutter `PageController.initialPage`, resolved against the viewport.
-    Page { page: f32, viewport_fraction: f32 },
+    Page {
+        page: f32,
+        viewport_fraction: f32,
+        priority: PageStartPriority,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum PageStartPriority {
+    Configured,
+    Saved,
+    Explicit,
 }
 
 impl InitialOffset {
@@ -52,6 +63,7 @@ impl InitialOffset {
             Self::Page {
                 page,
                 viewport_fraction,
+                ..
             } => pixels_for_page(page, viewport, viewport_fraction),
         }
     }
@@ -278,22 +290,45 @@ impl ScrollController {
             .map(|start| start.item)
     }
 
-    /// Requests the page-based starting position, Flutter
-    /// `PageController.initialPage`. The pixel offset depends on the viewport
-    /// extent, so it is resolved on the first publication with a non-zero
-    /// viewport. Replaces any earlier starting position.
+    /// Defers an explicit page request until a non-zero viewport can
+    /// translate it to pixels. It takes precedence over the initial page
+    /// and a saved PageStorage position.
     pub fn defer_page(&self, page: f32, viewport_fraction: f32) -> bool {
+        self.set_starting_page(page, viewport_fraction, PageStartPriority::Explicit)
+    }
+
+    #[doc(hidden)]
+    pub fn configure_initial_page(&self, page: f32, viewport_fraction: f32) -> bool {
+        self.set_starting_page(page, viewport_fraction, PageStartPriority::Configured)
+    }
+
+    #[doc(hidden)]
+    pub fn restore_page_from_storage(&self, page: f32, viewport_fraction: f32) -> bool {
+        self.set_starting_page(page, viewport_fraction, PageStartPriority::Saved)
+    }
+
+    fn set_starting_page(
+        &self,
+        page: f32,
+        viewport_fraction: f32,
+        priority: PageStartPriority,
+    ) -> bool {
         if !(page.is_finite() && viewport_fraction.is_finite() && viewport_fraction > 0.) {
             return false;
         }
         {
             let mut state = self.state.borrow_mut();
+            if matches!(state.pending_initial_offset, Some(InitialOffset::Page { priority: current, .. }) if current > priority)
+            {
+                return false;
+            }
             if state.cached_zero_page.is_some() {
                 state.cached_zero_page = Some(page);
             }
             state.pending_initial_offset = Some(InitialOffset::Page {
                 page,
                 viewport_fraction,
+                priority,
             });
         }
         self.changes.notify();
@@ -356,34 +391,51 @@ impl ScrollController {
         self.state.borrow().viewport_extent
     }
 
-    /// The logical page of an attached zero-extent viewport. A controller
-    /// that has not established a viewport does not report a cached page.
+    /// Reads the actual mounted page geometry. A detached PageView has no
+    /// position, even though its generic ScrollController keeps raw metrics.
+    /// Headless metric publications still use the caller's configured
+    /// fraction.
     #[doc(hidden)]
     #[must_use]
-    pub fn cached_zero_page(&self) -> Option<f32> {
+    pub fn page_for_controller(&self, fallback_fraction: f32) -> Option<f32> {
         self.changes.track();
-        self.state.borrow().cached_zero_page
+        let state = self.state.borrow();
+        let fraction = match state
+            .last_physics
+            .and_then(ScrollPhysics::page_geometry_fraction)
+        {
+            Some(fraction) => {
+                state.metric_attachment?;
+                fraction
+            }
+            None => fallback_fraction,
+        };
+        logical_page(&state, fraction)
     }
 
     /// The current logical page of a mounted PageView position, even if its
-    /// snapping physics are disabled. Used only for transferring live
-    /// positions and not as a public page-controller query.
+    /// snapping physics are disabled.
     #[doc(hidden)]
     #[must_use]
     pub fn page_for_handoff(&self) -> Option<f32> {
         let state = self.state.borrow();
+        state.metric_attachment?;
         let fraction = state.last_physics?.page_geometry_fraction()?;
-        if state.viewport_extent == 0. {
-            return state.cached_zero_page;
-        }
-        (state.viewport_extent > 0.).then(|| {
-            page_for_pixels(
-                state.offset.clamp(state.min_offset, state.max_offset),
-                state.viewport_extent,
-                fraction,
-            )
-        })
+        logical_page(&state, fraction)
     }
+}
+
+fn logical_page(state: &ScrollState, fraction: f32) -> Option<f32> {
+    if state.viewport_extent == 0. {
+        return state.cached_zero_page;
+    }
+    (state.viewport_extent > 0.).then(|| {
+        page_for_pixels(
+            state.offset.clamp(state.min_offset, state.max_offset),
+            state.viewport_extent,
+            fraction,
+        )
+    })
 }
 
 impl ScrollController {

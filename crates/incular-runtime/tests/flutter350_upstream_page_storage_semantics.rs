@@ -161,3 +161,63 @@ fn controller_resolves_the_reference_rounding_input_to_page_one() {
     assert!(c.jump_to(input));
     assert_eq!(c.page(), Some(1.));
 }
+
+#[test]
+fn storage_restores_the_logical_page_after_width_and_fraction_change() {
+    use incular_widgets::{Center, SizedBox};
+
+    let bucket = PageStorageBucket::default();
+    let key = PageStorageKey::new("logical page");
+    let build = |controller: Option<&PageController>, width| {
+        let body = if let Some(controller) = controller {
+            Widget::from(
+                PageView::new((0..5).map(|_| Placeholder::new()))
+                    .controller(controller.clone())
+                    .page_storage_key(key.clone()),
+            )
+        } else {
+            Widget::from(Container::new())
+        };
+        Directionality::new(
+            TextDirection::Ltr,
+            PageStorage::with_bucket(
+                bucket.clone(),
+                Center::new(SizedBox::from_size(Size::new(width, 300.)).child(body)),
+            ),
+        )
+        .into()
+    };
+
+    let first = PageController::new().with_viewport_fraction(0.75);
+    let mut runtime = Runtime::new(build(Some(&first), 400.)).unwrap();
+    frame(&mut runtime);
+    assert!(first.jump_to_page(2));
+    frame(&mut runtime);
+    assert_eq!(first.offset(), 600.);
+    assert_eq!(bucket.read_state(&key).unwrap().as_f64(), Some(2.));
+
+    replace(&mut runtime, build(None, 400.));
+    assert_eq!(first.page(), None);
+    let restored = PageController::new()
+        .with_initial_page(1)
+        .with_viewport_fraction(0.5);
+    replace(&mut runtime, build(Some(&restored), 500.));
+    assert_eq!((restored.page(), restored.offset()), (Some(2.), 500.));
+
+    replace(&mut runtime, build(None, 500.));
+    let disabled = PageController::from(ScrollController::new().with_keep_scroll_offset(false))
+        .with_initial_page(1)
+        .with_viewport_fraction(0.5);
+    replace(&mut runtime, build(Some(&disabled), 500.));
+    assert_eq!((disabled.page(), disabled.offset()), (Some(1.), 250.));
+    assert!(disabled.jump_to_page(3));
+    frame(&mut runtime);
+    assert_eq!(bucket.read_state(&key).unwrap().as_f64(), Some(2.));
+
+    // Incular's explicit pre-layout command is an extension over Flutter.
+    replace(&mut runtime, build(None, 500.));
+    let queued = PageController::new().with_viewport_fraction(0.5);
+    assert!(queued.jump_to_page(3));
+    replace(&mut runtime, build(Some(&queued), 500.));
+    assert_eq!((queued.page(), queued.offset()), (Some(3.), 750.));
+}

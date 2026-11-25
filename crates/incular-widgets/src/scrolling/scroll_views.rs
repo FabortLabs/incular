@@ -1167,24 +1167,15 @@ impl PageController {
         // centres it by the same pad.
         if self.initial_page != 0 || self.viewport_fraction.is_some() {
             self.scroll
-                .defer_page(self.initial_page as f32, self.viewport_fraction());
+                .configure_initial_page(self.initial_page as f32, self.viewport_fraction());
         }
     }
 
-    /// Flutter `PageController.page`: the fractional page at the current
-    /// position, or `None` before the view has a viewport extent.
+    /// Flutter `PageController.page`: the fractional page of the live
+    /// position. A detached or not-yet-laid-out view returns `None`.
     #[must_use]
     pub fn page(&self) -> Option<f32> {
-        let viewport = self.scroll.viewport_extent();
-        if viewport.partial_cmp(&0.) != Some(std::cmp::Ordering::Greater) {
-            return self.scroll.cached_zero_page();
-        }
-        let pixels = self.scroll.offset().clamp(0., self.scroll.max_offset());
-        Some(incular_scroll::page_for_pixels(
-            pixels,
-            viewport,
-            self.viewport_fraction(),
-        ))
+        self.scroll.page_for_controller(self.viewport_fraction())
     }
 
     /// Flutter `jumpToPage`: moves to `page` without animation. Before the
@@ -1497,6 +1488,71 @@ impl PageView {
 struct MountedPageView {
     implicit_controller: RefCell<Option<PageController>>,
     last_reported_page: Cell<usize>,
+    storage: RefCell<Option<PageStorageBinding>>,
+}
+
+struct PageStorageBinding {
+    bucket: crate::PageStorageBucket,
+    key: crate::PageStorageKey,
+    controller: ScrollController,
+    _listener: ScrollNotificationSubscription,
+}
+
+impl MountedPageView {
+    fn sync_storage(
+        &self,
+        context: &crate::BuildContext<'_>,
+        key: Option<crate::PageStorageKey>,
+        controller: &PageController,
+        fraction: f32,
+    ) {
+        let scroll = controller.scroll_controller();
+        let new_position = scroll.metric_owner().is_none();
+        if new_position {
+            scroll.configure_initial_page(controller.initial_page() as f32, fraction);
+        }
+        let target = key
+            .filter(|_| scroll.keep_scroll_offset())
+            .and_then(|key| Some((crate::PageStorage::maybe_of(context)?, key)));
+        let previous = self.storage.borrow_mut().take();
+        let Some((bucket, key)) = target else {
+            return;
+        };
+        if previous.as_ref().is_some_and(|binding| {
+            binding.bucket == bucket && binding.key == key && binding.controller == scroll
+        }) {
+            *self.storage.borrow_mut() = previous;
+            return;
+        }
+        // Restoration initializes a fresh position, not a retained position
+        // during a descriptor rebuild or an ancestor update.
+        if new_position && let Some(page) = bucket.read_state(&key).and_then(|value| value.as_f64())
+        {
+            scroll.restore_page_from_storage(page as f32, fraction);
+        }
+        let listener = scroll.add_listener({
+            let bucket = bucket.clone();
+            let key = key.clone();
+            let scroll = scroll.clone();
+            move |notification| {
+                let settled = match notification.kind {
+                    ScrollNotificationType::End => true,
+                    ScrollNotificationType::Update => scroll.current_activity_id().is_none(),
+                    _ => false,
+                };
+                if settled && let Some(page) = scroll.page_for_handoff() {
+                    bucket.write_state(&key, f64::from(page));
+                }
+                false
+            }
+        });
+        *self.storage.borrow_mut() = Some(PageStorageBinding {
+            bucket,
+            key,
+            controller: scroll,
+            _listener: listener,
+        });
+    }
 }
 
 impl crate::tree::RetainedState for MountedPageView {
@@ -1509,17 +1565,28 @@ impl From<PageView> for Widget {
             .controller
             .as_ref()
             .map_or(0, PageController::initial_page);
-        Widget::mount_scoped_builder(
+        let key = value.page_storage_key.clone();
+        let widget = Widget::mount_scoped_builder(
             move |_| MountedPageView {
                 implicit_controller: RefCell::new(None),
                 last_reported_page: Cell::new(initial_page),
+                storage: RefCell::new(None),
             },
-            move |state, _| build_mounted_page_view(value.clone(), state),
-        )
+            move |state, context| build_mounted_page_view(value.clone(), state, context),
+        );
+        if let Some(key) = key {
+            widget.with_key(key)
+        } else {
+            widget
+        }
     }
 }
 
-fn build_mounted_page_view(mut value: PageView, state: &Rc<MountedPageView>) -> Widget {
+fn build_mounted_page_view(
+    mut value: PageView,
+    state: &Rc<MountedPageView>,
+    context: &crate::BuildContext<'_>,
+) -> Widget {
     let controller = {
         let mut implicit = state.implicit_controller.borrow_mut();
         if let Some(explicit) = value.controller.as_ref() {
@@ -1540,13 +1607,9 @@ fn build_mounted_page_view(mut value: PageView, state: &Rc<MountedPageView>) -> 
     } else {
         InheritedPhysics::Scroll
     });
-    let scroll = controller.scroll_controller();
+    state.sync_storage(context, key, &controller, fraction);
     value.controller = Some(controller);
-    let view = keep_scroll_offset(
-        inherit_physics(page_view_widget(value), inherit),
-        &scroll,
-        key,
-    );
+    let view = inherit_physics(page_view_widget(value), inherit);
     let listener = on_page_changed.map(|callback| {
         let state = state.clone();
         Rc::new(move |notification: ScrollNotification| {

@@ -136,6 +136,7 @@ pub enum ButtonState {
 pub enum Key {
     Value(u64),
     String(String),
+    PageStorage(crate::PageStorageKey),
     Global(GlobalKey),
 }
 
@@ -196,6 +197,10 @@ impl std::hash::Hash for Key {
                 state.write_u64(key.0);
                 state.write_u8(0x47);
             }
+            Key::PageStorage(key) => {
+                state.write_u8(0x50);
+                key.hash(state);
+            }
             Key::String(text) => {
                 // Strings cannot collide with values because their hashed
                 // length participates; hash str bytes plus a tagged length.
@@ -203,6 +208,11 @@ impl std::hash::Hash for Key {
                 state.write(text.as_bytes());
             }
         }
+    }
+}
+impl From<crate::PageStorageKey> for Key {
+    fn from(value: crate::PageStorageKey) -> Self {
+        Self::PageStorage(value)
     }
 }
 impl From<u64> for Key {
