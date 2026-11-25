@@ -25,3 +25,21 @@ replaying the rejected request. Changes to the scope or its descendant
 permission schedule the idle runtime to process the new state.
 The :801 original also asserts scoped focus history, which is not
 covered by this batch and leaves that registration partial.
+
+## Retained focused-child history
+
+The paired authored `mounted_focus_scope_history_test.dart` and
+`flutter350_focus_scope_nodes.rs` tests exercise mounted controls, not
+the standalone focus manager. Focusing a child records it in its nearest
+scope. Direct scope focus does not erase the selected child from history.
+Moving the focused GlobalKey keeps the same element and primary node,
+clears the old scope's child, updates the new scope's child, and sends the
+next key only through the new ancestor. Moving the node back while it
+is inactive does not resurrect discarded history. An outer scope
+remembers its immediate nested scope, not the nested leaf.
+
+Pinned `focus_manager_test.dart:739` also verifies focused-child history
+after moving a node within a scope. Its separate manual focus attachment
+and parent enumeration are not covered by the mounted Rust fixture, so
+it stays partial. The existing :812 widget reparent remains partial
+because its root-scope activation and label checks are distinct.

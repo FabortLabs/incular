@@ -51,7 +51,8 @@ enum FocusAuthority {
 }
 
 struct FocusState {
-    scope_anchor: bool,
+    scope_owner: Option<Weak<FocusScopeState>>,
+    host_enclosing_scope: RefCell<Option<Weak<FocusScopeState>>>,
     focused: Cell<bool>,
     descendant_focused: Cell<bool>,
     requested: Cell<Option<u64>>,
@@ -96,6 +97,7 @@ impl Drop for FocusNodeAttachment {
         let remaining = state.host_attachment_count.get() - 1;
         state.host_attachment_count.set(remaining);
         if remaining == 0 {
+            self.node.set_host_enclosing_scope(None);
             self.node.apply_host_focus(false);
         }
     }
@@ -129,15 +131,16 @@ impl FocusState {
 
 impl Default for FocusNode {
     fn default() -> Self {
-        Self::with_scope_role(false)
+        Self::with_scope_owner(None)
     }
 }
 
 impl FocusNode {
-    fn with_scope_role(scope_anchor: bool) -> Self {
+    fn with_scope_owner(scope_owner: Option<Weak<FocusScopeState>>) -> Self {
         Self {
             state: Rc::new(FocusState {
-                scope_anchor,
+                scope_owner,
+                host_enclosing_scope: RefCell::new(None),
                 focused: Cell::new(false),
                 descendant_focused: Cell::new(false),
                 requested: Cell::new(None),
@@ -215,6 +218,45 @@ impl FocusNode {
             }
         }
         FocusNodeAttachment { node: self.clone() }
+    }
+
+    #[doc(hidden)]
+    pub fn set_host_enclosing_scope(&self, scope: Option<&FocusScopeNode>) {
+        let previous = self.host_enclosing_scope();
+        if previous.as_ref() == scope {
+            return;
+        }
+        *self.state.host_enclosing_scope.borrow_mut() =
+            scope.map(|scope| Rc::downgrade(&scope.state));
+        if let Some(previous) = previous {
+            let child_state = Rc::downgrade(&self.state);
+            previous
+                .state
+                .hosted_history
+                .borrow_mut()
+                .retain(|known| !known.ptr_eq(&child_state));
+        }
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn host_enclosing_scope(&self) -> Option<FocusScopeNode> {
+        self.state
+            .host_enclosing_scope
+            .borrow()
+            .as_ref()
+            .and_then(Weak::upgrade)
+            .map(|state| FocusScopeNode { state })
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn scope_owner(&self) -> Option<FocusScopeNode> {
+        self.state
+            .scope_owner
+            .as_ref()
+            .and_then(Weak::upgrade)
+            .map(|state| FocusScopeNode { state })
     }
 
     /// Enables the synchronous focus behavior of a standalone widget tree.
@@ -327,7 +369,7 @@ impl FocusNode {
     #[must_use]
     pub fn descendants_are_focusable(&self) -> bool {
         self.state.descendants_are_focusable.get()
-            && (!self.state.scope_anchor || self.can_request_focus())
+            && (self.state.scope_owner.is_none() || self.can_request_focus())
     }
     pub fn set_descendants_are_traversable(&self, traversable: bool) {
         if self.state.descendants_are_traversable.replace(traversable) != traversable {
@@ -1513,6 +1555,14 @@ pub struct FocusScopeNode {
     state: Rc<FocusScopeState>,
 }
 
+impl PartialEq for FocusScopeNode {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.state, &other.state)
+    }
+}
+
+impl Eq for FocusScopeNode {}
+
 /// Owns one live subscription to a [`FocusScopeNode`] change stream.
 ///
 /// The token is intentionally lightweight and single-threaded, matching the
@@ -1529,6 +1579,7 @@ struct ScopeFocusAnchor {
 
 struct FocusScopeState {
     anchor: OnceCell<ScopeFocusAnchor>,
+    hosted_history: RefCell<Vec<Weak<FocusState>>>,
     manager: RefCell<FocusManager>,
     last_focused: RefCell<Option<FocusNode>>,
     parent: RefCell<Option<Weak<FocusScopeState>>>,
@@ -1572,6 +1623,7 @@ impl FocusScopeNode {
         Self {
             state: Rc::new(FocusScopeState {
                 anchor: OnceCell::new(),
+                hosted_history: RefCell::new(Vec::new()),
                 manager: RefCell::new(FocusManager::new()),
                 last_focused: RefCell::new(None),
                 parent: RefCell::new(None),
@@ -1589,7 +1641,7 @@ impl FocusScopeNode {
         self.state
             .anchor
             .get_or_init(|| {
-                let node = FocusNode::with_scope_role(true);
+                let node = FocusNode::with_scope_owner(Some(Rc::downgrade(&self.state)));
                 node.set_skip_traversal(true);
                 let state = Rc::downgrade(&self.state);
                 let subscription = node.observe(move || {
@@ -1797,9 +1849,56 @@ impl FocusScopeNode {
         self.clear_focus();
     }
 
-    /// Returns the currently focused node in this scope.
+    fn mounted_anchor(&self) -> Option<&FocusNode> {
+        self.state
+            .anchor
+            .get()
+            .map(|anchor| &anchor.node)
+            .filter(|node| node.state.host_attachment_count.get() != 0)
+    }
+
+    #[doc(hidden)]
+    pub fn record_host_focused_child(&self, child: &FocusNode) {
+        let child_state = Rc::downgrade(&child.state);
+        let mut history = self.state.hosted_history.borrow_mut();
+        if history.last().is_some_and(|last| last.ptr_eq(&child_state)) {
+            return;
+        }
+        history.retain(|known| {
+            !known.ptr_eq(&child_state)
+                && known.upgrade().is_some_and(|state| {
+                    FocusNode { state }.host_enclosing_scope().as_ref() == Some(self)
+                })
+        });
+        history.push(child_state);
+    }
+
+    /// The most recently focused live child, even when another scope owns
+    /// primary focus. Children that move to another scope no longer count.
+    #[must_use]
+    pub fn focused_child(&self) -> Option<FocusNode> {
+        if self.mounted_anchor().is_none() {
+            return self.state.manager.borrow_mut().focused();
+        }
+        self.state
+            .hosted_history
+            .borrow()
+            .iter()
+            .rev()
+            .filter_map(Weak::upgrade)
+            .map(|state| FocusNode { state })
+            .find(|child| child.host_enclosing_scope().as_ref() == Some(self))
+    }
+
+    /// Returns the currently active child of this scope, if any.
     #[must_use]
     pub fn focused(&self) -> Option<FocusNode> {
+        if let Some(anchor) = self.mounted_anchor() {
+            return (anchor.has_focus() && !anchor.has_primary_focus())
+                .then(|| self.focused_child())
+                .flatten()
+                .filter(FocusNode::has_focus);
+        }
         self.state.manager.borrow_mut().focused()
     }
 

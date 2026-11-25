@@ -1421,6 +1421,7 @@ pub struct WidgetTree {
     /// direct FocusNode behavior.
     hosted_focus_nodes: Option<BTreeMap<ElementId, incular_gestures::FocusNodeAttachment>>,
     pending_focus_attachment_revision: u64,
+    hosted_scope_membership_dirty: bool,
     focus_change_bindings: BTreeMap<ElementId, focus::FocusChangeBinding>,
     focus_semantics_bindings: Option<focus::FocusSemanticsBindings>,
     focus_semantic_actions_enabled: bool,

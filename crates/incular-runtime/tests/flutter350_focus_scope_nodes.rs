@@ -131,3 +131,103 @@ fn disabling_a_scope_revokes_current_child_focus_without_replaying_rejected_requ
     runtime.run_frame(bounds).unwrap();
     assert!(!child.has_focus());
 }
+
+#[test]
+fn focus_history_survives_direct_scope_focus_and_clears_after_global_key_scope_move() {
+    use incular_core::{Code, KeyboardEvent, KeyboardKey};
+    use incular_widgets::{Column, GlobalKey, KeyEventResult};
+    use std::{cell::RefCell, rc::Rc};
+
+    let left = FocusScopeNode::new();
+    let right = FocusScopeNode::new();
+    let child = FocusNode::new();
+    let key = GlobalKey::new();
+    let routes = Rc::new(RefCell::new(Vec::new()));
+    let scene = |on_left| {
+        let slot = |here, node: &FocusScopeNode, route| {
+            let contents: Widget = if here {
+                Widget::from(Focus::new(Text::new("a")).node(child.clone())).with_key(key)
+            } else {
+                SizedBox::shrink().into()
+            };
+            let routes = routes.clone();
+            FocusScope::new(Focus::new(contents).on_key_event(move |_, _| {
+                routes.borrow_mut().push(route);
+                KeyEventResult::Ignored
+            }))
+            .node(node.clone())
+        };
+        Directionality::new(
+            TextDirection::Ltr,
+            Column::new([slot(on_left, &left, 0), slot(!on_left, &right, 1)]),
+        )
+        .into()
+    };
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let mut runtime = Runtime::new(scene(true)).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    child.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    let original = runtime.tree().element_with_key(&key.into()).unwrap();
+    assert_eq!(left.focused(), Some(child.clone()));
+    assert_eq!(left.focused_child(), Some(child.clone()));
+    assert_eq!(right.focused_child(), None);
+
+    left.request_scope_focus();
+    runtime.run_frame(bounds).unwrap();
+    assert!(left.has_primary_focus());
+    assert_eq!(left.focused(), None);
+    assert_eq!(left.focused_child(), Some(child.clone()));
+    child.request_focus();
+    runtime.run_frame(bounds).unwrap();
+
+    runtime
+        .schedule_update(runtime.tree().root().unwrap(), scene(false))
+        .unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert!(child.has_primary_focus());
+    assert_eq!(runtime.focused_element(), Some(original));
+    assert_eq!(left.focused_child(), None);
+    assert_eq!(right.focused(), Some(child.clone()));
+    assert_eq!(right.focused_child(), Some(child.clone()));
+    assert!(!runtime.dispatch_keyboard_event(KeyboardEvent::key_down(
+        KeyboardKey::Character("1".into()),
+        Code::Digit1
+    )));
+    assert_eq!(routes.take(), [1]);
+
+    right.request_scope_focus();
+    runtime.run_frame(bounds).unwrap();
+    assert!(right.has_primary_focus());
+    runtime
+        .schedule_update(runtime.tree().root().unwrap(), scene(true))
+        .unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert!(!child.has_focus());
+    assert_eq!(left.focused_child(), None, "old history must not reappear");
+    assert_eq!(right.focused_child(), None);
+}
+
+#[test]
+fn a_parent_scope_remembers_its_nested_scope_and_not_the_nested_leaf() {
+    let outer = FocusScopeNode::new();
+    let nested = FocusScopeNode::new();
+    let leaf = FocusNode::new();
+    let scene = FocusScope::new(
+        FocusScope::new(Focus::new(SizedBox::shrink()).node(leaf.clone())).node(nested.clone()),
+    )
+    .node(outer.clone());
+    let mut runtime = Runtime::new(scene.into()).unwrap();
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    leaf.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    assert!(leaf.has_primary_focus());
+    assert_eq!(outer.focused_child(), Some(nested.scope_focus_node()));
+    assert_eq!(nested.focused_child(), Some(leaf.clone()));
+
+    nested.request_scope_focus();
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(outer.focused(), Some(nested.scope_focus_node()));
+    assert_eq!(nested.focused(), None);
+    assert_eq!(nested.focused_child(), Some(leaf));
+}

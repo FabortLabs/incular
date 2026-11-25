@@ -228,9 +228,11 @@ impl WidgetTree {
                             self.pending_focus_attachment_revision.wrapping_add(1);
                     }
                     self.hosted_focus_chain.dirty = true;
+                    self.hosted_scope_membership_dirty = true;
                 }
             } else if hosted.remove(&id).is_some() {
                 self.hosted_focus_chain.dirty = true;
+                self.hosted_scope_membership_dirty = true;
             }
         }
         if binding_changed && let Some((node, callback)) = binding {
@@ -251,10 +253,38 @@ impl WidgetTree {
         self.pending_focus_attachment_revision
     }
 
+    /// Rebinds nearest external scopes after a mount or retained reparent.
+    /// The focus hot path never scans the tree unless topology has changed.
+    #[doc(hidden)]
+    pub fn refresh_hosted_scope_membership(&mut self) {
+        if !std::mem::take(&mut self.hosted_scope_membership_dirty) {
+            return;
+        }
+        let Some(hosted) = &self.hosted_focus_nodes else {
+            return;
+        };
+        for (&id, binding) in hosted {
+            let own_scope = binding.node().scope_owner();
+            let mut ancestor = self.parent(id);
+            let mut scope = None;
+            while let Some(id) = ancestor {
+                if let Some(parent_scope) = hosted.get(&id).and_then(|node| node.node().scope_owner())
+                    && own_scope.as_ref() != Some(&parent_scope)
+                {
+                    scope = Some(parent_scope);
+                    break;
+                }
+                ancestor = self.parent(id);
+            }
+            binding.node().set_host_enclosing_scope(scope.as_ref());
+        }
+    }
+
     /// Applies all hosted focus roles before any node observer is notified.
     /// Rebuilds the chain only for a different target or retained ancestry.
     #[doc(hidden)]
     pub fn sync_hosted_focus_chain(&mut self, target: Option<ElementId>) {
+        self.refresh_hosted_scope_membership();
         let Some(hosted) = &self.hosted_focus_nodes else {
             return;
         };
@@ -270,6 +300,19 @@ impl WidgetTree {
                 next.push((binding.node().clone(), Some(id) == target));
             }
             current = self.parent(id);
+        }
+        // Each enclosing scope remembers the leaf or the nested scope
+        // directly below it, not a descendant inside that nested scope.
+        let mut focused_child = None;
+        for (node, primary) in &next {
+            if let Some(scope) = node.scope_owner() {
+                if let Some(child) = focused_child {
+                    scope.record_host_focused_child(child);
+                }
+                focused_child = Some(node);
+            } else if *primary {
+                focused_child = Some(node);
+            }
         }
         let mut changed = Vec::new();
         for (node, _) in &self.hosted_focus_chain.entries {

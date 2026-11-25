@@ -2279,6 +2279,7 @@ impl Runtime {
     /// node becomes the runtime's focus (releasing the previous one), and an
     /// unfocused current node clears it.
     fn adopt_external_focus_change(&mut self) {
+        self.tree.refresh_hosted_scope_membership();
         // Scanning focusable elements allocates, so only look when some
         // focus node changed since the last check.
         let epoch = self.tree.focus_epoch();

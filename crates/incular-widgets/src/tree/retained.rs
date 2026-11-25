@@ -62,6 +62,7 @@ impl WidgetTree {
             tracked: TrackedElements::default(),
             hosted_focus_nodes: None,
             pending_focus_attachment_revision: 0,
+            hosted_scope_membership_dirty: false,
             focus_change_bindings: BTreeMap::new(),
             focus_semantics_bindings: None,
             focus_semantic_actions_enabled: !cfg!(target_os = "ios"),

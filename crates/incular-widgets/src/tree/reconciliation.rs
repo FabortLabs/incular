@@ -2283,6 +2283,7 @@ impl WidgetTree {
                         && hosted.remove(&id).is_some()
                     {
                         self.hosted_focus_chain.dirty = true;
+                        self.hosted_scope_membership_dirty = true;
                     }
                     self.unregister_global_key(id, &element.widget);
                     let render = element.render;
@@ -2602,6 +2603,7 @@ impl WidgetTree {
                 .is_some_and(|nodes| !nodes.is_empty())
             {
                 self.hosted_focus_chain.dirty = true;
+                self.hosted_scope_membership_dirty = true;
             }
             // Every retained topology change passes through here, including
             // lazy materialization, global-key moves and finished exits.
