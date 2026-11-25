@@ -225,3 +225,18 @@ hot-reload-enabled focused Rust tests check the actual managed-window
 path and the callback epoch after reassembly. Asynchronous task wakes
 are coalesced until draw finishes. This does not claim a full desktop
 pointer-input event lock or Dart timer integration.
+
+## Performance preference handles
+
+All four pinned `scheduler/performance_mode_test.dart` registrations
+pair: a request sets the scheduler's reported mode; a conflicting
+request cannot replace it; two compatible handles keep it until the
+last release; and one handle emits balanced debug create/dispose
+events for the same identity. Rust uses thread-bound owned handles,
+so dropping the last handle also releases its preference. A
+debug leak assertion checks unreleased requests.
+
+This comparison is scoped request arbitration and lifetime, not
+Dart VM GC behavior or changes to wgpu device selection. The original
+registrations assert only the requested scheduler mode and handle
+events, not measured latency, throughput, or process memory.

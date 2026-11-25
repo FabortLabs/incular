@@ -28,7 +28,13 @@ pub use crate::ui_tasks::{
     set_scheduling_strategy,
 };
 
+mod performance_mode;
 mod warm_up;
+pub use performance_mode::{
+    PerformanceMode, PerformanceModeRequestHandle,
+    debug_assert_no_pending_performance_mode_requests, debug_requested_performance_mode,
+    request_performance_mode,
+};
 pub use warm_up::schedule_frame_microtask;
 #[doc(hidden)]
 pub use warm_up::{WarmUpFrame, flush_frame_microtasks, warm_up_frame_pending};

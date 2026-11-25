@@ -41,12 +41,15 @@ pub use physics::{
     ScrollSpringSimulation, Simulation, SpringDescription, SpringSimulation, SpringType, Tolerance,
 };
 pub use scheduler::{
-    ActiveTimeDilation, FrameCallbackId, InvalidTimeDilation, Priority, Ticker, TickerCanceled,
-    TickerFuture, TickerOrCancel, add_persistent_frame_callback, add_post_frame_callback,
-    cancel_frame_callback, current_frame_time, current_system_frame_time,
-    debug_assert_no_time_dilation, schedule_forced_frame, schedule_frame, schedule_frame_callback,
-    schedule_frame_callback_with_request, schedule_frame_microtask, set_time_dilation,
-    time_dilation, try_assert_no_time_dilation, try_set_time_dilation,
+    ActiveTimeDilation, FrameCallbackId, InvalidTimeDilation, PerformanceMode,
+    PerformanceModeRequestHandle, Priority, Ticker, TickerCanceled, TickerFuture, TickerOrCancel,
+    add_persistent_frame_callback, add_post_frame_callback, cancel_frame_callback,
+    current_frame_time, current_system_frame_time,
+    debug_assert_no_pending_performance_mode_requests, debug_assert_no_time_dilation,
+    debug_requested_performance_mode, request_performance_mode, schedule_forced_frame,
+    schedule_frame, schedule_frame_callback, schedule_frame_callback_with_request,
+    schedule_frame_microtask, set_time_dilation, time_dilation, try_assert_no_time_dilation,
+    try_set_time_dilation,
 };
 pub use style::AnimationStyle;
 pub use tween::{

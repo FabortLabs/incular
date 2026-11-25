@@ -1267,3 +1267,7 @@ packages/flutter/test/foundation/memory_allocations_test.dart	176	publishers in 
 packages/flutter/test/rendering/memory_allocations_test.dart	23	Publishers dispatch events in debug mode	paired-match	upstream-allocation-events.md#render-object-and-layer-publishers
 packages/flutter/test/widgets/memory_allocations_test.dart	20	Publishers dispatch events in debug mode	reference-ran-incular-open	upstream-allocation-events.md#mounted-state-lifetime
 packages/flutter/test/widgets/memory_allocations_test.dart	40	State dispatches events in debug mode	paired-match	upstream-allocation-events.md#mounted-state-lifetime
+packages/flutter/test/scheduler/performance_mode_test.dart	20	PerformanceModeHandler make one request	paired-match	scheduler-callback-phases-comparisons.md#performance-preference-handles
+packages/flutter/test/scheduler/performance_mode_test.dart	30	PerformanceModeHandler make conflicting requests	paired-match	scheduler-callback-phases-comparisons.md#performance-preference-handles
+packages/flutter/test/scheduler/performance_mode_test.dart	47	PerformanceModeHandler revert only after last requestor disposed	paired-match	scheduler-callback-phases-comparisons.md#performance-preference-handles
+packages/flutter/test/scheduler/performance_mode_test.dart	67	PerformanceModeRequestHandle dispatches memory events	paired-match	scheduler-callback-phases-comparisons.md#performance-preference-handles
