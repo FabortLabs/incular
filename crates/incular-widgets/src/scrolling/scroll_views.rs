@@ -1582,7 +1582,7 @@ fn page_view_widget(value: PageView) -> Widget {
         if value.page_snapping {
             physics.with_page_viewport_fraction(fraction)
         } else {
-            physics
+            physics.with_page_geometry(fraction)
         }
     };
     match value

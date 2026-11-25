@@ -194,7 +194,7 @@ pub struct ScrollPhysics {
     /// Device pixel ratio that scales the tolerances (Flutter reads it from
     /// `ScrollMetrics.devicePixelRatio`).
     device_pixel_ratio: f32,
-    page_viewport_fraction: f32,
+    page_geometry_fraction: Option<f32>,
 }
 
 impl Default for ScrollPhysics {
@@ -222,7 +222,7 @@ impl ScrollPhysics {
             snap: SnapPhysics::None,
             maintain_range: false,
             device_pixel_ratio: 1.,
-            page_viewport_fraction: 1.,
+            page_geometry_fraction: None,
         }
     }
 
@@ -302,25 +302,38 @@ impl ScrollPhysics {
     /// equivalent of Flutter's `PageScrollPhysics` when the page extent is
     /// supplied by the viewport rather than a fixed constructor argument.
     #[must_use]
-    pub const fn page(self) -> Self {
-        self.with_page_viewport_fraction(1.)
+    pub const fn page(mut self) -> Self {
+        self.snap = SnapPhysics::PageViewport;
+        self
     }
 
     /// Enables PageView snapping for pages occupying a fraction of the viewport.
     #[must_use]
     pub const fn with_page_viewport_fraction(mut self, fraction: f32) -> Self {
         self.snap = SnapPhysics::PageViewport;
-        self.page_viewport_fraction = if fraction.is_finite() && fraction > 0. {
+        self.with_page_geometry(fraction)
+    }
+
+    /// Geometry of a PageView position, independent of whether it snaps.
+    #[doc(hidden)]
+    #[must_use]
+    pub const fn with_page_geometry(mut self, fraction: f32) -> Self {
+        self.page_geometry_fraction = Some(if fraction.is_finite() && fraction > 0. {
             fraction
         } else {
             1.
-        };
+        });
         self
     }
 
+    #[doc(hidden)]
     #[must_use]
-    pub const fn page_viewport_fraction(self) -> f32 {
-        self.page_viewport_fraction
+    pub const fn page_geometry_fraction(self) -> Option<f32> {
+        self.page_geometry_fraction
+    }
+
+    fn page_viewport_fraction(self) -> f32 {
+        self.page_geometry_fraction.unwrap_or(1.)
     }
 
     #[must_use]
@@ -434,14 +447,14 @@ impl ScrollPhysics {
         let extent = match self.snap {
             SnapPhysics::None => return position.clamp(min.min(max), max.max(min)),
             SnapPhysics::Page { extent } | SnapPhysics::FixedExtent { extent } => extent,
-            SnapPhysics::PageViewport => viewport_extent * self.page_viewport_fraction,
+            SnapPhysics::PageViewport => viewport_extent * self.page_viewport_fraction(),
         };
         if !extent.is_finite() || extent <= 0. {
             return position.clamp(min.min(max), max.max(min));
         }
         let page_origin = match self.snap {
             SnapPhysics::PageViewport => {
-                crate::pixels_for_page(0., viewport_extent, self.page_viewport_fraction)
+                crate::pixels_for_page(0., viewport_extent, self.page_viewport_fraction())
             }
             _ => 0.,
         };
@@ -478,7 +491,7 @@ impl ScrollPhysics {
     pub fn snap_extent(self, viewport_extent: f32) -> Option<f32> {
         let extent = match self.snap {
             SnapPhysics::Page { extent } | SnapPhysics::FixedExtent { extent } => extent,
-            SnapPhysics::PageViewport => viewport_extent * self.page_viewport_fraction,
+            SnapPhysics::PageViewport => viewport_extent * self.page_viewport_fraction(),
             SnapPhysics::None => return None,
         };
         (extent.is_finite() && extent > 0.).then_some(extent)

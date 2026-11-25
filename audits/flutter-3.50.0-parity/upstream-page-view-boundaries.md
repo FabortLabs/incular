@@ -33,3 +33,10 @@ All thirteen selected originals passed on the pinned reference. The extended con
 The pinned Flutter source test at :1253 uses a pre-recorded text golden that is not present in the local SDK checkout. The original remains open. An independently authored Flutter probe uses the original logical viewport width of 411.42857142857144 and same 300ms ease animation to page 2, replacing the font-dependent text with a 60×22 solid marker on a black 512×192 frame. Its native Windows wgpu counterpart uses the nearest representable f32 width. Both pass; interior, inclusive near-inside edge, and immediately outside samples match at device ratio 1. This confirms representative geometry/paint at that width, not text or golden equivalence.
 
 Run Flutter with run-reference-probe.ps1 -Test page_view_fractional_width_raster_test.dart. Set INCULAR_DESKTOP_LIVE_TESTS=1 and run cargo test --locked -p incular-desktop --test flutter350_page_fractional_width_raster -- --nocapture.
+
+After the live PageView position handoff repair, a previously unattached
+controller's queued command no longer replaces the already visible page
+when it takes over a retained viewport. Incular still accepts the
+unattached request rather than raising Flutter's assertion, so the
+`:1515` and `:1548` dispositions remain partial mismatches. Fresh mounts
+still support Incular's pre-layout command API.

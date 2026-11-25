@@ -403,3 +403,35 @@ fn reenabling_snapping_aligns_fractional_page_without_a_duplicate_callback() {
     assert_eq!(&*log.borrow(), &[1, 2]);
     assert_eq!(host.bounds(2).unwrap().origin.x, 100.);
 }
+
+#[test]
+fn new_controller_continues_unsnapped_fractional_position_instead_of_its_initial_page() {
+    use incular_widgets::PageController;
+
+    let first = PageController::new().with_viewport_fraction(0.875);
+    let second = PageController::new()
+        .with_initial_page(4)
+        .with_viewport_fraction(0.75);
+    let build = |controller: &PageController| {
+        Directionality::new(
+            TextDirection::Ltr,
+            PageView::new((0..6).map(|i| Text::new(i.to_string())))
+                .controller(controller.clone())
+                .page_snapping(false),
+        )
+        .into()
+    };
+
+    let mut host = Host::new(build(&first));
+    assert!(first.jump_to(1260.));
+    host.frame();
+    assert_eq!(first.page(), Some(1.8));
+
+    host.update(build(&second));
+    assert!(first.metric_owner().is_none());
+    assert!(second.metric_owner().is_some());
+    assert_eq!(second.page(), Some(1.8));
+    assert_eq!(second.offset(), 1080.);
+    host.frame();
+    assert_eq!(second.offset(), 1080.);
+}

@@ -70,12 +70,11 @@ pub(super) fn lower_scrolling(widget: &Widget, context: &DependencyContext) -> R
         WidgetKind::SliverViewport { config } => {
             let behavior = ambient_scroll_behavior(context);
             let physics = config.inherit_physics.map_or(config.physics, |page| {
-                let physics = behavior.get_scroll_physics();
-                if page {
-                    physics.with_page_viewport_fraction(config.physics.page_viewport_fraction())
-                } else {
-                    physics
-                }
+                let physics = inherited_physics(&behavior, page);
+                config
+                    .physics
+                    .page_geometry_fraction()
+                    .map_or(physics, |fraction| physics.with_page_geometry(fraction))
             });
             let resolved = behavior.resolve();
             let config = if physics == config.physics && resolved == config.behavior {

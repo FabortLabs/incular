@@ -50,8 +50,8 @@ impl WidgetTree {
         viewport_element: Option<ElementId>,
         config: &crate::scrolling::SliverViewportConfig,
         last_published: &mut Option<PublishedViewportAttempt>,
-        size: Size,
-        viewport: f32,
+        (size, viewport): (Size, f32),
+        position_handoff: Option<f32>,
         layout: crate::scrolling::SliverViewportLayout,
     ) -> crate::scrolling::SliverViewportLayout {
         let content = layout.geometry.scroll_extent.max(0.);
@@ -65,7 +65,8 @@ impl WidgetTree {
                 config.reverse,
                 config.physics,
             )
-            .with_leading(layout.leading_extent),
+            .with_leading(layout.leading_extent)
+            .with_position_handoff(position_handoff),
         );
         if config.shrink_wrap {
             *last_published = Some(PublishedViewportAttempt {
@@ -201,6 +202,29 @@ impl WidgetTree {
                 // viewport's lease, including the bounded-fallback
                 // republish, which restates identical values.
                 let viewport_element = self.element_for_render(id);
+                // Flutter retains the PagePosition on controller replacement
+                // and reapplies the new controller's fraction to that page.
+                // Read the old lease before claiming; a failed claim must not
+                // change the incoming or outgoing controller's position.
+                let handoff = config
+                    .physics
+                    .page_geometry_fraction()
+                    .and_then(|fraction| {
+                        if viewport_extent <= 0. {
+                            return None;
+                        }
+                        let old = self
+                            .scroll_attachments
+                            .get(&viewport_element?)?
+                            .first()?
+                            .controller();
+                        (old != &config.controller)
+                            .then(|| old.page_for_handoff())
+                            .flatten()
+                            .map(|page| {
+                                incular_scroll::pixels_for_page(page, viewport_extent, fraction)
+                            })
+                    });
                 if let Some(viewport) = viewport_element {
                     self.claim_scroll_viewport(viewport, &config.controller)?;
                 }
@@ -209,8 +233,8 @@ impl WidgetTree {
                     viewport_element,
                     config,
                     &mut last_published,
-                    size,
-                    viewport_extent,
+                    (size, viewport_extent),
+                    handoff,
                     config.delegate.perform_layout(make_constraints(
                         config.controller.offset(),
                         viewport_extent,
@@ -238,8 +262,8 @@ impl WidgetTree {
                         viewport_element,
                         config,
                         &mut last_published,
-                        size,
-                        viewport_extent,
+                        (size, viewport_extent),
+                        None,
                         config.delegate.perform_layout(make_constraints(
                             config.controller.offset(),
                             viewport_extent,
@@ -255,8 +279,8 @@ impl WidgetTree {
                     viewport_element,
                     config,
                     &mut last_published,
-                    size,
-                    viewport_extent,
+                    (size, viewport_extent),
+                    None,
                     config.delegate.perform_layout(make_constraints(
                         config.controller.offset(),
                         viewport_extent,
@@ -272,8 +296,8 @@ impl WidgetTree {
                     viewport_element,
                     config,
                     &mut last_published,
-                    size,
-                    viewport_extent,
+                    (size, viewport_extent),
+                    None,
                     config.delegate.perform_layout(make_constraints(
                         config.controller.offset(),
                         viewport_extent,
@@ -317,8 +341,8 @@ impl WidgetTree {
                         viewport_element,
                         config,
                         &mut last_published,
-                        size,
-                        viewport_extent,
+                        (size, viewport_extent),
+                        None,
                         config
                             .delegate
                             .perform_layout(make_constraints(offset_before, viewport_extent)),
@@ -332,8 +356,8 @@ impl WidgetTree {
                             viewport_element,
                             config,
                             &mut last_published,
-                            size,
-                            viewport_extent,
+                            (size, viewport_extent),
+                            None,
                             config.delegate.perform_layout(make_constraints(
                                 offset_after_extent,
                                 viewport_extent,
@@ -363,8 +387,8 @@ impl WidgetTree {
                                     viewport_element,
                                     config,
                                     &mut last_published,
-                                    size,
-                                    viewport_extent,
+                                    (size, viewport_extent),
+                                    None,
                                     config.delegate.perform_layout(make_constraints(
                                         config.controller.offset(),
                                         viewport_extent,

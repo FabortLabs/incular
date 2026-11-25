@@ -346,6 +346,23 @@ impl ScrollController {
         self.changes.track();
         self.state.borrow().viewport_extent
     }
+
+    /// The current logical page of a mounted PageView position, even if its
+    /// snapping physics are disabled. Used only for transferring live
+    /// positions and not as a public page-controller query.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn page_for_handoff(&self) -> Option<f32> {
+        let state = self.state.borrow();
+        let fraction = state.last_physics?.page_geometry_fraction()?;
+        (state.viewport_extent > 0.).then(|| {
+            page_for_pixels(
+                state.offset.clamp(state.min_offset, state.max_offset),
+                state.viewport_extent,
+                fraction,
+            )
+        })
+    }
 }
 
 impl ScrollController {

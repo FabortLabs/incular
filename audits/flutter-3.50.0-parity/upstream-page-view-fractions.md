@@ -14,3 +14,19 @@ All eight associated pinned Flutter originals and seven of eight focused Rust te
 | :928 | An out-of-range jump past the final page emits no change callback, both immediately and after a frame. |
 
 Run cargo test --locked -p incular-runtime --test flutter350_upstream_page_fraction -- --nocapture.
+
+## Preserve the live page when changing controllers
+
+The pinned `:591` replacement now matches. At page 10 the incoming 39/40
+controller takes over the retained viewport at page 10; the neighboring
+pages start at x=-770, x=10 and x=790. Position transfer occurs on the
+first successful metrics publication, after acquiring the incoming
+controller's lease. It cannot overwrite the position of a controller
+whose live attachment rejected the claim.
+
+An authored comparison also switches controllers with snapping disabled.
+At viewport width 800, page 1.8 is 1260px at fraction 0.875 and 1080px
+at fraction 0.75. Both frameworks preserve that fractional page instead
+of applying the incoming controller's configured initial page 4. This
+does not cover a controller swap while the viewport is collapsed to zero
+or while a ballistic motion is active.
