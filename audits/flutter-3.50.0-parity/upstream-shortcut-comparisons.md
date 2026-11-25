@@ -75,3 +75,16 @@ failed in the Rust registrar because it ignored the hardware snapshot.
 The registrar now takes the same snapshot as CallbackShortcuts while
 leaving the registry's reported native modifiers unchanged. Fourteen
 focused Rust tests passed after the fix.
+
+## Mounted character callbacks
+
+`CallbackShortcuts` now accepts the same `CharacterActivator` used by
+registrars, while the existing widgets import path remains available.
+Three originals at :1467, :1667 and :1703 passed (four exact Flutter
+invocations). Incular matches the two modifier sides, requires Alt,
+Ctrl and Meta together, and does not fire when only Shift is held.
+Non-overlapping nested callbacks both work, and nested callbacks and
+typed command shortcuts are resolved in focus-ancestor order. The
+command test uses Incular's logical bindings for Flutter's single-key
+LogicalKeySets. Thirteen focused Rust tests passed, including prior
+registry case and callback Num Lock controls.

@@ -4,75 +4,13 @@
 
 use crate::{BuildContext, Widget, tree::WidgetKind};
 use incular_core::{KeyboardEvent, KeyboardKey, Modifiers};
+pub use incular_gestures::CharacterActivator;
 use incular_gestures::SingleActivator;
 use std::{
     cell::{Cell, RefCell},
     fmt,
     rc::{Rc, Weak},
 };
-
-/// Flutter's `CharacterActivator`: matches the character a key press
-/// produces, whatever key produced it, with the given modifiers held.
-/// Shift is not a field: it is part of the character, whose case matters.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct CharacterActivator {
-    pub character: String,
-    pub alt: bool,
-    pub control: bool,
-    pub meta: bool,
-    pub include_repeats: bool,
-}
-
-impl CharacterActivator {
-    #[must_use]
-    pub fn new(character: impl Into<String>) -> Self {
-        Self {
-            character: character.into(),
-            alt: false,
-            control: false,
-            meta: false,
-            include_repeats: true,
-        }
-    }
-
-    #[must_use]
-    pub fn alt(mut self, alt: bool) -> Self {
-        self.alt = alt;
-        self
-    }
-
-    #[must_use]
-    pub fn control(mut self, control: bool) -> Self {
-        self.control = control;
-        self
-    }
-
-    #[must_use]
-    pub fn meta(mut self, meta: bool) -> Self {
-        self.meta = meta;
-        self
-    }
-
-    #[must_use]
-    pub fn include_repeats(mut self, include_repeats: bool) -> Self {
-        self.include_repeats = include_repeats;
-        self
-    }
-
-    /// Flutter's `CharacterActivator.accepts`.
-    #[must_use]
-    pub fn accepts(&self, event: &KeyboardEvent) -> bool {
-        let KeyboardKey::Character(character) = &event.key else {
-            return false;
-        };
-        event.state.is_down()
-            && (self.include_repeats || !event.repeat)
-            && character == &self.character
-            && event.modifiers.alt() == self.alt
-            && event.modifiers.ctrl() == self.control
-            && event.modifiers.meta() == self.meta
-    }
-}
 
 /// An activator a [`ShortcutRegistry`] entry responds to.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

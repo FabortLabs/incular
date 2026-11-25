@@ -855,3 +855,6 @@ packages/flutter/test/widgets/shortcuts_test.dart	435	handles Shift-Ctrl-C	paire
 packages/flutter/test/widgets/shortcuts_test.dart	1774	trigger ShortcutRegistrar on key events	paired-match	upstream-shortcut-comparisons.md#registered-shortcut-routing-and-num-lock
 packages/flutter/test/widgets/shortcuts_test.dart	1884	nested ShortcutRegistrars stop propagation	paired-match	upstream-shortcut-comparisons.md#registered-shortcut-routing-and-num-lock
 packages/flutter/test/widgets/shortcuts_test.dart	1921	non-overlapping nested ShortcutRegistrars fire appropriately	paired-match	upstream-shortcut-comparisons.md#registered-shortcut-routing-and-num-lock
+packages/flutter/test/widgets/shortcuts_test.dart	1467	handles Alt, Ctrl and Meta	paired-match	upstream-shortcut-comparisons.md#mounted-character-callbacks
+packages/flutter/test/widgets/shortcuts_test.dart	1667	non-overlapping nested CallbackShortcuts fire appropriately	paired-match	upstream-shortcut-comparisons.md#mounted-character-callbacks
+packages/flutter/test/widgets/shortcuts_test.dart	1703	Works correctly with Shortcuts too	paired-match	upstream-shortcut-comparisons.md#mounted-character-callbacks

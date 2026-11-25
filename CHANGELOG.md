@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-widgets`: `CallbackShortcuts` accepts `CharacterActivator`
+  alongside logical and physical key bindings.
+
 - `incular-animation`: added opt-in debug frame banners and a check that
   their switches were reset.
 

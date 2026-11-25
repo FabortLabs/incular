@@ -794,10 +794,74 @@ impl SingleActivator {
     }
 }
 
+/// Flutter's `CharacterActivator`: matches the character a key press
+/// produces, whatever key produced it, with the given modifiers held.
+/// Shift is not a field: it is part of the character, whose case matters.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct CharacterActivator {
+    pub character: String,
+    pub alt: bool,
+    pub control: bool,
+    pub meta: bool,
+    pub include_repeats: bool,
+}
+
+impl CharacterActivator {
+    #[must_use]
+    pub fn new(character: impl Into<String>) -> Self {
+        Self {
+            character: character.into(),
+            alt: false,
+            control: false,
+            meta: false,
+            include_repeats: true,
+        }
+    }
+
+    #[must_use]
+    pub fn alt(mut self, alt: bool) -> Self {
+        self.alt = alt;
+        self
+    }
+
+    #[must_use]
+    pub fn control(mut self, control: bool) -> Self {
+        self.control = control;
+        self
+    }
+
+    #[must_use]
+    pub fn meta(mut self, meta: bool) -> Self {
+        self.meta = meta;
+        self
+    }
+
+    #[must_use]
+    pub fn include_repeats(mut self, include_repeats: bool) -> Self {
+        self.include_repeats = include_repeats;
+        self
+    }
+
+    /// Flutter's `CharacterActivator.accepts`.
+    #[must_use]
+    pub fn accepts(&self, event: &KeyboardEvent) -> bool {
+        let KeyboardKey::Character(character) = &event.key else {
+            return false;
+        };
+        event.state.is_down()
+            && (self.include_repeats || !event.repeat)
+            && character == &self.character
+            && event.modifiers.alt() == self.alt
+            && event.modifiers.ctrl() == self.control
+            && event.modifiers.meta() == self.meta
+    }
+}
+
 /// A key activator accepted by callback shortcut maps.
 ///
 /// Physical and logical activators are kept distinct, and a `Single` uses the
-/// logical key with Flutter-style modifier matching. The enum is intentionally
+/// logical key with Flutter-style modifier matching. `Character` instead
+/// compares the produced character. The enum is intentionally
 /// value-based so equivalent registrations replace one another while distinct
 /// activators may both fire for one event.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -811,6 +875,7 @@ pub enum ShortcutActivator {
         trigger: ShortcutTrigger,
     },
     Single(SingleActivator),
+    Character(CharacterActivator),
 }
 
 impl ShortcutActivator {
@@ -860,6 +925,7 @@ impl ShortcutActivator {
                 key.key == event.key && key.modifiers == event.modifiers && trigger.matches(event)
             }
             Self::Single(activator) => activator.accepts_with_lock_modes(event, lock_modes),
+            Self::Character(activator) => activator.accepts(event),
         }
     }
 }
@@ -879,6 +945,12 @@ impl From<LogicalShortcutKey> for ShortcutActivator {
 impl From<SingleActivator> for ShortcutActivator {
     fn from(value: SingleActivator) -> Self {
         Self::Single(value)
+    }
+}
+
+impl From<CharacterActivator> for ShortcutActivator {
+    fn from(value: CharacterActivator) -> Self {
+        Self::Character(value)
     }
 }
 

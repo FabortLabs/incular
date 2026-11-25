@@ -47,7 +47,7 @@ pub use force_press::{ForceInterpolation, ForcePressDetails, ForcePressGestureRe
 pub use incular_core::DeviceGestureSettings;
 pub use keyboard::{
     Action, ActionInvocationPhase, ActionInvocationSubscription, ActionListenerSubscription,
-    ActionResult, Actions, Command, CommandId, ErasedActionScope, ErasedIntent,
+    ActionResult, Actions, CharacterActivator, Command, CommandId, ErasedActionScope, ErasedIntent,
     ErasedShortcutScope, Intent, LockState, LogicalKeySet, LogicalShortcutKey, ShortcutActivator,
     ShortcutKey, ShortcutMatch, ShortcutTrigger, Shortcuts, SingleActivator,
 };
