@@ -1178,3 +1178,7 @@ packages/flutter/test/widgets/slivers_padding_test.dart	191	Viewport+SliverPaddi
 packages/flutter/test/widgets/slivers_padding_test.dart	217	Viewport+SliverPadding hit testing up	paired-match	upstream-sliver-padding.md#hit-boundaries-in-all-four-scroll-directions
 packages/flutter/test/widgets/slivers_padding_test.dart	242	Viewport+SliverPadding hit testing left	paired-match	upstream-sliver-padding.md#hit-boundaries-in-all-four-scroll-directions
 packages/flutter/test/widgets/slivers_padding_test.dart	267	Viewport+SliverPadding hit testing right	paired-match	upstream-sliver-padding.md#hit-boundaries-in-all-four-scroll-directions
+packages/flutter/test/widgets/scrollable_helpers_test.dart	233	Horizontal scrollables are scrolled when activated via keyboard.	paired-match	upstream-custom-scroll-direction.md#real-keyboard-scroll-actions
+packages/flutter/test/widgets/scrollable_helpers_test.dart	289	Horizontal scrollables are scrolled the correct direction in RTL locales.	paired-match	upstream-custom-scroll-direction.md#real-keyboard-scroll-actions
+packages/flutter/test/widgets/scrollable_helpers_test.dart	348	Reversed vertical scrollables are scrolled when activated via keyboard.	paired-match	upstream-custom-scroll-direction.md#real-keyboard-scroll-actions
+packages/flutter/test/widgets/scrollable_helpers_test.dart	419	Reversed horizontal scrollables are scrolled when activated via keyboard.	paired-match	upstream-custom-scroll-direction.md#real-keyboard-scroll-actions

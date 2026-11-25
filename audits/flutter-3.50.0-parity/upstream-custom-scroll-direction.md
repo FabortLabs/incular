@@ -24,3 +24,24 @@ explicit axes and vertical main axes are not mirrored by text direction.
 Both authored Flutter probes and 71 tests in six focused Rust
 binaries passed. Authored probes do not add original registrations to
 the audit's denominator or its behavior-compared count.
+
+## Real keyboard scroll actions
+
+The four pinned registrations in `widgets/scrollable_helpers_test.dart`
+(:233, :289, :348, :419) passed with both Flutter key transit variants.
+The Rust comparison sends modifier down, arrow down/up, and modifier
+up to the Runtime, then settles the scroll animation. It checks the
+same initial offset and complete box rectangles, horizontal 50px line
+moves in both directions, and vertical reversed PageUp clamped to the
+400px end and PageDown back to the beginning. Its focus target is in
+the same viewport; the reversed controls use the first autofocus
+wrapper rather than sharing a single FocusNode among all twenty rows.
+The portable Runtime receives normalized key events and does not try
+to reproduce Flutter's two deprecated transport APIs.
+
+Incular initially applied the global text direction again to an
+already-resolved physical axis. A local LTR view in an RTL environment,
+a local RTL view in an RTL environment, and an explicit reversal could
+all stay at zero when Flutter moved by 50. Keyboard actions now use the
+mounted viewport's physical axis. The original Linux key paths and
+additional mismatched ambient/global controls pass.

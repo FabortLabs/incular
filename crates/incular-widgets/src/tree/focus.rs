@@ -674,15 +674,13 @@ impl WidgetTree {
         else {
             return false;
         };
-        // Flutter `getAxisDirectionFromAxisReverseAndDirectionality`.
-        let rtl = self.environment.text_direction == TextDirection::Rtl;
-        let axis_direction = match (axis, reverse, rtl) {
-            (Axis::Vertical, false, _) => incular_gestures::TraversalDirection::Down,
-            (Axis::Vertical, true, _) => incular_gestures::TraversalDirection::Up,
-            (Axis::Horizontal, false, false) | (Axis::Horizontal, true, true) => {
-                incular_gestures::TraversalDirection::Right
-            }
-            (Axis::Horizontal, _, _) => incular_gestures::TraversalDirection::Left,
+        // The retained render viewport has already resolved text direction.
+        // ScrollAction uses that physical axis, not the application's locale.
+        let axis_direction = match (axis, reverse) {
+            (Axis::Vertical, false) => incular_gestures::TraversalDirection::Down,
+            (Axis::Vertical, true) => incular_gestures::TraversalDirection::Up,
+            (Axis::Horizontal, false) => incular_gestures::TraversalDirection::Right,
+            (Axis::Horizontal, true) => incular_gestures::TraversalDirection::Left,
         };
         let on_axis = matches!(
             (axis, direction),
