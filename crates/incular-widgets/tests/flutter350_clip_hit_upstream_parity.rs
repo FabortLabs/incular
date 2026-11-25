@@ -106,7 +106,9 @@ fn rect_path() -> Arc<Path> {
 #[test]
 fn custom_clip_path_excludes_outside_contact_and_reuses_cached_geometry() {
     let log = Log::default();
-    let scene = ClipPath::new(rect_path(), tapping(Size::new(800., 600.), &log))
+    let scene = ClipPath::builder()
+        .child(tapping(Size::new(800., 600.), &log))
+        .build()
         .custom_clipper(PathClipper(log.clone()));
     let mut tree = WidgetTree::new();
     tree.mount(scene.into()).unwrap();

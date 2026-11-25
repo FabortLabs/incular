@@ -173,6 +173,106 @@ fn oval_clip_coverage_survives_retained_mode_changes_and_world_path_fallback() {
     assert_curved_clip_coverage(true);
 }
 
+/// clip_test.dart:139. The original retains a childless render object.
+#[test]
+fn childless_path_clip_retains_render_object_when_coverage_changes() {
+    let scene = |mode: Option<Clip>| {
+        Widget::from(match mode {
+            Some(mode) => ClipPath::builder().clip_behavior(mode).build(),
+            None => ClipPath::builder().build(),
+        })
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scene(None)).unwrap();
+    let render = tree.render_id(root).unwrap();
+    for (mode, expected) in [
+        (None, Clip::AntiAlias),
+        (Some(Clip::HardEdge), Clip::HardEdge),
+        (Some(Clip::None), Clip::None),
+    ] {
+        if mode.is_some() {
+            tree.update(root, scene(mode)).unwrap();
+        }
+        tree.layout(Constraints::tight(Size::new(200., 200.)))
+            .unwrap();
+        assert_eq!(tree.render_id(root), Some(render));
+        assert!(tree.children(root).unwrap().is_empty());
+        assert!(matches!(
+            tree.render_object_kind(render),
+            Some(RenderKind::ClipPath { clip_behavior, .. }) if *clip_behavior == expected
+        ));
+        assert!(world_clips(&tree.paint()).is_empty());
+    }
+}
+
+/// clip_test.dart:976. The default path is the box once it has a child.
+#[test]
+fn default_path_clip_handles_zero_area_and_tracks_the_laid_out_box() {
+    let key = incular_widgets::internal::Key::from("default path clip");
+    let clip =
+        Widget::from(ClipPath::builder().child(Placeholder::new()).build()).with_key(key.clone());
+    let mut tree = WidgetTree::new();
+    tree.mount(Directionality::new(TextDirection::Ltr, Center::new(clip)).into())
+        .unwrap();
+    tree.layout(Constraints::tight(Size::ZERO)).unwrap();
+    let render = tree
+        .render_id(tree.element_with_key(&key).unwrap())
+        .unwrap();
+    assert_eq!(tree.render_size(render), Some(Size::ZERO));
+    let _ = tree.paint();
+
+    // Independently verify the geometry and edge mode emitted for a
+    // nonempty painted child. A placeholder is not a reliable raster probe.
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(
+            ClipPath::builder()
+                .child(labeled_action("path box"))
+                .build()
+                .into(),
+        )
+        .unwrap();
+    for (size, mode, expected) in [
+        (Size::new(40., 30.), None, Some(ClipCoverage::AntiAlias)),
+        (
+            Size::new(31., 19.),
+            Some(Clip::HardEdge),
+            Some(ClipCoverage::HardEdge),
+        ),
+        (
+            Size::new(31., 19.),
+            Some(Clip::AntiAliasWithSaveLayer),
+            Some(ClipCoverage::AntiAliasWithSaveLayer),
+        ),
+        (Size::new(31., 19.), Some(Clip::None), None),
+    ] {
+        if let Some(mode) = mode {
+            tree.update(
+                root,
+                ClipPath::builder()
+                    .child(labeled_action("path box"))
+                    .clip_behavior(mode)
+                    .build()
+                    .into(),
+            )
+            .unwrap();
+        }
+        tree.layout(Constraints::tight(size)).unwrap();
+        let list = tree.paint();
+        let actual = list.commands().iter().find_map(|op| match op {
+            PaintCommand::PushClipPath { path, coverage, .. } => {
+                assert_eq!(
+                    path.bounds(),
+                    Some(Rect::from_origin_size(Offset::ZERO, size))
+                );
+                Some(*coverage)
+            }
+            _ => None,
+        });
+        assert_eq!(actual, expected);
+    }
+}
+
 fn assert_curved_clip_coverage(oval: bool) {
     let key = incular_widgets::internal::Key::Value(4242);
     let bounds = Constraints::tight(Size::new(200., 200.));

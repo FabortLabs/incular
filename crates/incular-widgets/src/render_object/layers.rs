@@ -21,8 +21,12 @@ fn widget_clips(widget: &WidgetKind) -> bool {
     match widget {
         WidgetKind::ClipRect { clip_behavior, .. }
         | WidgetKind::ClipRRect { clip_behavior, .. }
-        | WidgetKind::ClipOval { clip_behavior, .. }
-        | WidgetKind::ClipPath { clip_behavior, .. } => *clip_behavior != Clip::None,
+        | WidgetKind::ClipOval { clip_behavior, .. } => *clip_behavior != Clip::None,
+        WidgetKind::ClipPath {
+            clip_behavior,
+            child,
+            ..
+        } => child.is_some() && *clip_behavior != Clip::None,
         WidgetKind::Stack { clip_behavior, .. }
         | WidgetKind::IndexedStack { clip_behavior, .. }
         | WidgetKind::Scroll { clip_behavior, .. } => *clip_behavior != Clip::None,
@@ -260,9 +264,12 @@ impl RenderLayers {
                 );
                 Self::create_clip_stage(compositor, root, picture, clip)
             }
-            WidgetKind::ClipPath { .. } if widget_clips(widget) => {
-                let clip = compositor
-                    .create_clip_path(Arc::new(Path::builder().build()), FillRule::NonZero);
+            WidgetKind::ClipPath { clip_behavior, .. } if widget_clips(widget) => {
+                let clip = compositor.create_clip_path_with_coverage(
+                    Arc::new(Path::builder().build()),
+                    FillRule::NonZero,
+                    shape_clip_coverage(*clip_behavior),
+                );
                 Self::create_clip_stage(compositor, root, picture, clip)
             }
             WidgetKind::Stack { .. } | WidgetKind::IndexedStack { .. } if widget_clips(widget) => {
@@ -921,7 +928,7 @@ fn clip_geometry(kind: &RenderKind, size: Size) -> Option<ClipGeometry> {
         ),
         RenderKind::ClipPath { path, clipper, .. } => {
             ClipGeometry::Path(match clipper.as_ref().map(|clipper| clipper.clip(size)) {
-                None => path.clone(),
+                None => path.clone().unwrap_or_else(|| rect_path(bounds)),
                 Some(ClipShape::Path(path)) => path,
                 Some(shape) => rect_path(shape.bounds()),
             })
@@ -1033,7 +1040,11 @@ impl RenderLayers {
                 clipper: Some(_),
                 ..
             } | RenderKind::ClipOval { .. }
-                | RenderKind::ClipPath { .. }
+                | RenderKind::ClipPath {
+                    clipper: Some(_),
+                    ..
+                }
+                | RenderKind::ClipPath { path: Some(_), .. }
         ) {
             return true;
         }
@@ -1108,6 +1119,9 @@ impl RenderLayers {
             }
             RenderKind::ClipOval { clip_behavior, .. } => {
                 compositor.update_clip_oval_coverage(*clip, shape_clip_coverage(*clip_behavior));
+            }
+            RenderKind::ClipPath { clip_behavior, .. } => {
+                compositor.update_clip_path_coverage(*clip, shape_clip_coverage(*clip_behavior));
             }
             _ => {}
         }

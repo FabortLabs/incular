@@ -57,3 +57,22 @@ excludes the right and bottom edges. Both pinned authored policy controls
 and all six targeted Rust clip-hit tests passed, including the delegate
 call counts. The clip/stack suites and both native Windows wgpu Stack
 controls also passed.
+
+## Default and childless ClipPath
+
+Pinned originals :139 and :976 pass. The Rust port now mounts the
+same childless ClipPath and updates the original render object from
+default AntiAlias to HardEdge to None. It has no child and creates no
+paint clip. When there is a child and no explicit path or clipper,
+the default outline is the actual laid-out box. A second regression
+completes the original zero-area centered Placeholder frame, then
+checks the emitted bounds and mode of a nonempty scene through resize
+and mode changes.
+
+The earlier :155 custom-path hit test was also rerun against Flutter
+and Incular without a redundant fallback path. Both report exactly
+one geometry lookup, no outside tap, and one inside tap. This is a
+recheck of the already registered mismatch, not another registration.
+All 33 focused clip and shape tests pass. Path coverage now reaches
+the display list; the general path renderer still uses a binary mask
+and needs separate coverage and save-layer verification.

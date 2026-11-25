@@ -263,19 +263,19 @@ widget_from_kind!(ClipOval => ClipOval { clip_behavior, clipper, child });
 
 /// Clips its child using an arbitrary [`Path`] boundary.
 ///
-/// Same raster-only contract as [`ClipRect`]: the path bounds pixels
-/// (non-zero fill rule), while hit testing and semantic bounds keep the
-/// node's full rectangular geometry.
+/// Without an explicit path or clipper, the clip follows the child's
+/// layout rectangle. Explicit paths and custom clippers also narrow hit
+/// testing. The paint path uses the non-zero fill rule.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct ClipPath {
-    #[builder(setter(into))]
-    path: Arc<Path>,
+    #[builder(default, setter(strip_option, into))]
+    path: Option<Arc<Path>>,
     #[builder(default = Clip::AntiAlias)]
     clip_behavior: Clip,
     #[builder(default, setter(strip_option))]
     clipper: Option<ClipDelegate>,
-    #[builder(setter(into))]
-    child: Widget,
+    #[builder(default, setter(strip_option, into))]
+    child: Option<Widget>,
 }
 
 impl ClipPath {
@@ -283,10 +283,10 @@ impl ClipPath {
     #[must_use]
     pub fn new(path: impl Into<Arc<Path>>, child: impl Into<Widget>) -> Self {
         Self {
-            path: path.into(),
+            path: Some(path.into()),
             clip_behavior: Clip::AntiAlias,
             clipper: None,
-            child: child.into(),
+            child: Some(child.into()),
         }
     }
 

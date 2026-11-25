@@ -741,3 +741,5 @@ packages/flutter/test/widgets/clip_test.dart	933	ClipRRect does not crash at zer
 packages/flutter/test/widgets/clip_test.dart	964	ClipOval does not crash at zero area	paired-match	upstream-tween-transform-and-lifecycle.md#default-canvas-rounded-coverage-and-widget-clip-originals
 packages/flutter/test/widgets/clip_test.dart	107	ClipRRect updates clipBehavior in updateRenderObject	paired-match	upstream-tween-transform-and-lifecycle.md#oval-coverage-and-retained-clip-mode-transitions
 packages/flutter/test/widgets/clip_test.dart	123	ClipOval updates clipBehavior in updateRenderObject	paired-match	upstream-tween-transform-and-lifecycle.md#oval-coverage-and-retained-clip-mode-transitions
+packages/flutter/test/widgets/clip_test.dart	139	ClipPath updates clipBehavior in updateRenderObject	paired-match	upstream-clip-visibility-focus.md#default-and-childless-clip-path
+packages/flutter/test/widgets/clip_test.dart	976	ClipPath does not crash at zero area	paired-match	upstream-clip-visibility-focus.md#default-and-childless-clip-path

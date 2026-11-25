@@ -389,6 +389,7 @@ pub enum LayerKind {
     ClipPath {
         path: Arc<Path>,
         fill_rule: FillRule,
+        coverage: ClipCoverage,
     },
     Opacity {
         alpha: f32,
@@ -657,7 +658,20 @@ impl LayerTree {
     /// Creates a path clip stage in local space; the world shape resolves
     /// at flatten time like [`Self::create_clip_rect`].
     pub fn create_clip_path(&mut self, path: Arc<Path>, fill_rule: FillRule) -> LayerId {
-        self.insert(LayerKind::ClipPath { path, fill_rule })
+        self.create_clip_path_with_coverage(path, fill_rule, ClipCoverage::HardEdge)
+    }
+    /// Creates a path clip and records the requested edge coverage.
+    pub fn create_clip_path_with_coverage(
+        &mut self,
+        path: Arc<Path>,
+        fill_rule: FillRule,
+        coverage: ClipCoverage,
+    ) -> LayerId {
+        self.insert(LayerKind::ClipPath {
+            path,
+            fill_rule,
+            coverage,
+        })
     }
     /// Creates an isolated compositor group. Alpha is normalized at the
     /// renderer-neutral boundary so every backend observes identical values.
@@ -1196,6 +1210,7 @@ impl LayerTree {
         let LayerKind::ClipPath {
             path: current_path,
             fill_rule: current_rule,
+            ..
         } = &mut layer.kind
         else {
             return false;
@@ -1206,6 +1221,26 @@ impl LayerTree {
         *current_path = path;
         *current_rule = fill_rule;
         layer.clip_cache = None;
+        layer.generation = next_generation(&mut self.next_generation);
+        self.scene_dirty = true;
+        self.diagnostics.clip_updates += 1;
+        true
+    }
+    /// Changes the path's coverage without discarding its resolved geometry.
+    pub fn update_clip_path_coverage(&mut self, id: LayerId, coverage: ClipCoverage) -> bool {
+        let Some(layer) = self.layers.get_mut(id.0) else {
+            return false;
+        };
+        let LayerKind::ClipPath {
+            coverage: current, ..
+        } = &mut layer.kind
+        else {
+            return false;
+        };
+        if *current == coverage {
+            return false;
+        }
+        *current = coverage;
         layer.generation = next_generation(&mut self.next_generation);
         self.scene_dirty = true;
         self.diagnostics.clip_updates += 1;
@@ -1626,11 +1661,13 @@ impl LayerTree {
                 }
             },
             LayerKind::ClipPath {
-                path, fill_rule, ..
+                path,
+                fill_rule,
+                coverage,
             } => PaintCommand::PushClipPath {
                 path: self.memoized_clip_path(id, path, world),
                 fill_rule: *fill_rule,
-                coverage: ClipCoverage::HardEdge,
+                coverage: *coverage,
             },
             _ => unreachable!("clip emitter received a non-clip layer"),
         }

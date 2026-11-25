@@ -814,3 +814,10 @@ antialiasing without changing hard-edge or pointer routing controls.
 The [elliptical save-layer recheck](upstream-tween-transform-and-lifecycle.md#elliptical-save-layer-compositing)
 verifies that Windows wgpu now applies coverage once after the children
 compose, keeping a smooth edge without leaking earlier paint.
+
+The [default ClipPath recheck](upstream-clip-visibility-focus.md#default-and-childless-clip-path)
+adds two original matches, for 451 / 8,965 fully compared (5.03%).
+There are 355 matches and 96 historical mismatches. The default
+outline tracks the laid-out child; childless modes retain the same
+render object without emitting a paint clip. Native general path
+coverage remains open.

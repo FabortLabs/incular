@@ -672,10 +672,10 @@ pub(crate) enum WidgetKind {
         child: Widget,
     },
     ClipPath {
-        path: Arc<Path>,
+        path: Option<Arc<Path>>,
         clip_behavior: Clip,
         clipper: Option<crate::layout::ClipDelegate>,
-        child: Widget,
+        child: Option<Widget>,
     },
     LayoutBuilder {
         builder: Rc<LayoutBuilderCallback>,

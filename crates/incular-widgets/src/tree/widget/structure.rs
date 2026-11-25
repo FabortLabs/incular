@@ -2343,8 +2343,8 @@ impl WidgetKind {
             WidgetKind::ClipPath { child, .. } => (
                 WidgetType::ClipPath,
                 Layout,
-                Single,
-                WidgetChildren::Single(child),
+                Optional,
+                WidgetChildren::Optional(child.as_ref()),
             ),
             WidgetKind::LayoutBuilder { .. } => {
                 (WidgetType::LayoutBuilder, Layout, Dynamic, DynamicChildren)

@@ -758,7 +758,7 @@ pub enum RenderKind {
         clipper: Option<crate::layout::ClipDelegate>,
     },
     ClipPath {
-        path: Arc<Path>,
+        path: Option<Arc<Path>>,
         clip_behavior: Clip,
         clipper: Option<crate::layout::ClipDelegate>,
     },
