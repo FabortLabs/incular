@@ -90,3 +90,8 @@ fn main() {
 Related: [`Memo`](/docs/api/state/memo), [`Effect`](/docs/api/state/effect),
 [`Action`](/docs/api/state/action), [`Tasks`](/docs/api/state/tasks),
 [`Restoration`](/docs/api/application/restoration).
+
+Low-level dependency observers do not cut short the rest of a notification
+batch when a listener panics. On unwinding builds, `DependencySource::notify`
+resumes the first panic after delivery, or callers can use
+`notify_collecting_panics` to handle the original payloads themselves.

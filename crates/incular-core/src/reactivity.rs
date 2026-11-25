@@ -9,6 +9,7 @@ use std::{
     cell::{Cell, Ref, RefCell, RefMut},
     collections::BTreeMap,
     marker::PhantomData,
+    panic::{AssertUnwindSafe, catch_unwind, resume_unwind},
     rc::{Rc, Weak},
 };
 
@@ -75,7 +76,22 @@ impl DependencySource {
 
     /// Calls live observers outside registry borrows. New observers wait for
     /// the next notification; observers removed during dispatch are skipped.
+    ///
+    /// # Panics
+    /// In an unwinding build, the first listener panic is resumed after
+    /// the other live listeners are called. Use
+    /// [`Self::notify_collecting_panics`] to recover and report them.
     pub fn notify(&self) {
+        if let Some(panic) = self.notify_collecting_panics().into_iter().next() {
+            resume_unwind(panic);
+        }
+    }
+
+    /// Notifies the same listeners as [`Self::notify`] and returns all
+    /// caught panic payloads in listener order without rethrowing them.
+    /// This cannot intercept a panic in a panic-abort build.
+    #[must_use]
+    pub fn notify_collecting_panics(&self) -> Vec<Box<dyn Any + Send + 'static>> {
         let observers: Vec<_> = self
             .0
             .observers
@@ -83,11 +99,15 @@ impl DependencySource {
             .values()
             .filter_map(Weak::upgrade)
             .collect();
+        let mut failures = Vec::new();
         for observer in observers {
-            if observer.active().get() {
-                observer.invalidate();
+            if observer.active().get()
+                && let Err(panic) = catch_unwind(AssertUnwindSafe(|| observer.invalidate()))
+            {
+                failures.push(panic);
             }
         }
+        failures
     }
 
     pub fn subscriber_count(&self) -> usize {

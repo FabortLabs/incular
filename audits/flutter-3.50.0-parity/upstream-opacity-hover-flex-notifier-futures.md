@@ -57,3 +57,18 @@ one of two handles does not cancel a non-vsync controller; dropping
 the last one does. The authored lifecycle and callback controls remain
 green. This recheck keeps the original's explicit Flutter dispose vs.
 Rust RAII distinction in the ledger.
+
+## Observer failure isolation
+
+The error-dispatch part of the original `foundation/change_notifier_test.dart:83`
+was reproduced: a failing first listener previously cut off all later
+listeners in that batch. Rust now reaches the same remaining callbacks,
+preserves typed panic payloads and their order, and keeps the existing
+snapshot behavior for adds/removes. `notify_collecting_panics` lets
+the caller report all failures without rethrowing them; plain `notify`
+resumes the first failure after completing delivery. The original stays
+partial because Flutter's normal path reports to its global error
+reporter rather than unwinding Rust application code.
+
+The exact :83, :168, and :457 originals and 21 focused Rust checks
+passed. Panic-abort builds cannot recover from an observer panic.

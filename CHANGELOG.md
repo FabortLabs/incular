@@ -147,6 +147,10 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-core`: a failing dependency observer no longer prevents other
+  live observers from being notified. Callers can collect the original
+  panic payloads instead of resuming the first failure after delivery.
+
 - `incular-animation`: ticker callbacks run in scheduling order with
   other frame callbacks. Unmuting during dispatch waits for the next
   frame, and a ticker started muted begins elapsed time with its first tick.

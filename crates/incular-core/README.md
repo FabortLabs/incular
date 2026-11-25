@@ -29,3 +29,10 @@ runtime or serializing framework objects.
 
 A key is one stable path segment. Paths remain structured key vectors, so
 arbitrary key text is never ambiguously concatenated into a storage path.
+
+### Dependency observer failures
+
+In an unwinding build, `DependencySource::notify` calls remaining live
+observers before resuming the first panic. With
+`notify_collecting_panics`, callers receive all original payloads in
+listener order and decide how to report them.

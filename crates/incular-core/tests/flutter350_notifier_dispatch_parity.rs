@@ -101,7 +101,8 @@ fn an_observer_failure_does_not_skip_later_observers() {
         }
     });
 
-    let _ = catch_unwind(AssertUnwindSafe(|| source.notify()));
+    let error = catch_unwind(AssertUnwindSafe(|| source.notify())).unwrap_err();
+    assert_eq!(error.downcast_ref::<&str>(), Some(&"badListener failed"));
     assert_eq!(
         log.take(),
         ["listener", "listener2", "listener1", "badListener"]
@@ -112,6 +113,25 @@ fn an_observer_failure_does_not_skip_later_observers() {
     drop(first);
     drop(second);
     let _second = source.subscribe((), append(&log, "listener2"));
-    let _ = catch_unwind(AssertUnwindSafe(|| source.notify()));
+    let errors = source.notify_collecting_panics();
+    assert_eq!(errors.len(), 1);
+    assert_eq!(
+        errors[0].downcast_ref::<&str>(),
+        Some(&"badListener failed")
+    );
     assert_eq!(log.take(), ["badListener", "listener1", "listener2"]);
+}
+
+#[test]
+fn listeners_after_multiple_failures_run_and_original_payloads_are_kept() {
+    let source = DependencySource::default();
+    let log = Log::default();
+    let _first = source.subscribe((), || std::panic::panic_any(41_u32));
+    let _second = source.subscribe((), || panic!("second"));
+    let _last = source.subscribe((), append(&log, "last"));
+    let failures = source.notify_collecting_panics();
+    assert_eq!(failures.len(), 2);
+    assert_eq!(failures[0].downcast_ref::<u32>(), Some(&41));
+    assert_eq!(failures[1].downcast_ref::<&str>(), Some(&"second"));
+    assert_eq!(log.take(), ["last"]);
 }
