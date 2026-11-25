@@ -354,3 +354,153 @@ impl_corner_arithmetic!(
     bottom_end,
     bottom_start
 );
+
+/// Flutter's direction-aware corner geometry. Mixed values keep physical and
+/// logical corners separate until a text direction is known.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum BorderRadiusGeometry {
+    /// All corners are physical.
+    Physical(BorderRadius),
+    /// All corners follow the text direction.
+    Directional(BorderRadiusDirectional),
+    /// The resolved radii are the sum of both parts.
+    Mixed {
+        physical: BorderRadius,
+        directional: BorderRadiusDirectional,
+    },
+}
+
+impl BorderRadiusGeometry {
+    pub const ZERO: Self = Self::Physical(BorderRadius::ZERO);
+
+    #[must_use]
+    pub const fn all(radius: Radius) -> Self {
+        Self::Physical(BorderRadius::all(radius))
+    }
+
+    #[must_use]
+    pub const fn circular(radius: f32) -> Self {
+        Self::all(Radius::circular(radius))
+    }
+
+    #[must_use]
+    pub fn resolve(self, direction: incular_config::TextDirection) -> BorderRadius {
+        match self {
+            Self::Physical(value) => value,
+            Self::Directional(value) => value.resolve(direction),
+            Self::Mixed {
+                physical,
+                directional,
+            } => physical + directional.resolve(direction),
+        }
+    }
+
+    /// Flutter's nullable interpolation, using physical zero when just one
+    /// endpoint is omitted.
+    #[must_use]
+    pub fn lerp_optional(begin: Option<Self>, end: Option<Self>, t: f32) -> Option<Self> {
+        match (begin, end) {
+            (None, None) => None,
+            (begin, end) => {
+                let begin = begin.unwrap_or(Self::ZERO);
+                let end = end.unwrap_or(Self::ZERO);
+                Some(begin.lerp(&end, t))
+            }
+        }
+    }
+
+    fn parts(self) -> (BorderRadius, BorderRadiusDirectional) {
+        match self {
+            Self::Physical(value) => (value, BorderRadiusDirectional::ZERO),
+            Self::Directional(value) => (BorderRadius::ZERO, value),
+            Self::Mixed {
+                physical,
+                directional,
+            } => (physical, directional),
+        }
+    }
+
+    fn combine(
+        self,
+        other: Self,
+        physical: impl FnOnce(BorderRadius, BorderRadius) -> BorderRadius,
+        directional: impl FnOnce(
+            BorderRadiusDirectional,
+            BorderRadiusDirectional,
+        ) -> BorderRadiusDirectional,
+    ) -> Self {
+        match (self, other) {
+            (Self::Physical(a), Self::Physical(b)) => Self::Physical(physical(a, b)),
+            (Self::Directional(a), Self::Directional(b)) => Self::Directional(directional(a, b)),
+            _ => {
+                let (ap, ad) = self.parts();
+                let (bp, bd) = other.parts();
+                Self::Mixed {
+                    physical: physical(ap, bp),
+                    directional: directional(ad, bd),
+                }
+            }
+        }
+    }
+}
+
+impl Default for BorderRadiusGeometry {
+    fn default() -> Self {
+        Self::ZERO
+    }
+}
+
+impl From<BorderRadius> for BorderRadiusGeometry {
+    fn from(value: BorderRadius) -> Self {
+        Self::Physical(value)
+    }
+}
+
+impl From<BorderRadiusDirectional> for BorderRadiusGeometry {
+    fn from(value: BorderRadiusDirectional) -> Self {
+        Self::Directional(value)
+    }
+}
+
+impl Add for BorderRadiusGeometry {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self {
+        self.combine(rhs, Add::add, Add::add)
+    }
+}
+
+impl Sub for BorderRadiusGeometry {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self {
+        self.combine(rhs, Sub::sub, Sub::sub)
+    }
+}
+
+impl Mul<f32> for BorderRadiusGeometry {
+    type Output = Self;
+
+    fn mul(self, rhs: f32) -> Self {
+        match self {
+            Self::Physical(value) => Self::Physical(value * rhs),
+            Self::Directional(value) => Self::Directional(value * rhs),
+            Self::Mixed {
+                physical,
+                directional,
+            } => Self::Mixed {
+                physical: physical * rhs,
+                directional: directional * rhs,
+            },
+        }
+    }
+}
+
+impl Lerp for BorderRadiusGeometry {
+    fn lerp(&self, other: &Self, t: f32) -> Self {
+        if std::ptr::eq(self, other) {
+            return *self;
+        }
+        *self + (*other - *self) * t
+    }
+}

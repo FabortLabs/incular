@@ -1110,3 +1110,10 @@ packages/flutter/test/painting/paint_image_test.dart	35	Cover and align	paired-m
 packages/flutter/test/painting/paint_image_test.dart	165	centerSlice with scale ≠ 1	reference-ran-incular-open	upstream-decoration-image-paint.md#original-drawing-and-nine-slice-comparisons
 packages/flutter/test/painting/paint_image_test.dart	185	centerSlice tolerates floating-point rounding when scale divides unevenly	paired-match	upstream-decoration-image-paint.md#original-drawing-and-nine-slice-comparisons
 packages/flutter/test/painting/paint_image_test.dart	206	centerSlice does not throw when the destination rect is smaller than the slice borders	paired-match	upstream-decoration-image-paint.md#original-drawing-and-nine-slice-comparisons
+packages/flutter/test/painting/border_radius_test.dart	443	BorderRadiusGeometry.lerp()	paired-match	upstream-focus-corners-curves-previews.md#mixed-physical-and-directional-corner-values
+packages/flutter/test/painting/border_radius_test.dart	481	BorderRadiusGeometry subtract	paired-match	upstream-focus-corners-curves-previews.md#mixed-physical-and-directional-corner-values
+packages/flutter/test/painting/border_radius_test.dart	512	BorderRadiusGeometry add	paired-match	upstream-focus-corners-curves-previews.md#mixed-physical-and-directional-corner-values
+packages/flutter/test/painting/border_radius_test.dart	543	BorderRadiusGeometry add and multiply	paired-match	upstream-focus-corners-curves-previews.md#mixed-physical-and-directional-corner-values
+packages/flutter/test/painting/border_radius_test.dart	578	BorderRadiusGeometry add and subtract	paired-match	upstream-focus-corners-curves-previews.md#mixed-physical-and-directional-corner-values
+packages/flutter/test/painting/border_radius_test.dart	596	BorderRadiusGeometry add and subtract, more	paired-match	upstream-focus-corners-curves-previews.md#mixed-physical-and-directional-corner-values
+packages/flutter/test/painting/border_radius_test.dart	632	BorderRadiusGeometry operators	paired-match	upstream-focus-corners-curves-previews.md#mixed-physical-and-directional-corner-values

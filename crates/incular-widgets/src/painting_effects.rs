@@ -18,7 +18,7 @@ pub use decoration::{
     BlurStyle, Border, BorderDirectional, BorderSide, BorderStyle, BoxBorder, BoxDecoration,
     BoxLinearGradient, BoxShadow, BoxShape, DecorationImage, TileMode,
 };
-pub use geometry::{BorderRadius, BorderRadiusDirectional, Radius};
+pub use geometry::{BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, Radius};
 pub use images::{ImageFiltered, ImageIcon, RawImage};
 pub use layers::{ClipRSuperellipse, GridPaper, PhysicalModel, PhysicalShape, SnapshotWidget};
 pub use shape_borders::{

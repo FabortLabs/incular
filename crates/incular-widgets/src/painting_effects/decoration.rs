@@ -7,7 +7,7 @@ use incular_rendering::{BlendMode, Brush, FilterQuality, GradientStops, LinearGr
 use smart_default::SmartDefault;
 use typed_builder::TypedBuilder;
 
-use super::geometry::{BorderRadius, BorderRadiusDirectional};
+use super::geometry::{BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry};
 use crate::{
     AlignmentGeometry,
     tree::{ImageFit, ImageRepeat},
@@ -808,6 +808,24 @@ impl BoxDecoration {
         self.border_radius = None;
         self.directional_border_radius = Some(Arc::new(radius));
         self
+    }
+
+    /// Sets physical, directional, or mixed corner radii. Mixed values
+    /// resolve against the text direction at paint and hit-test time.
+    #[must_use]
+    pub fn border_radius_geometry(mut self, radius: impl Into<BorderRadiusGeometry>) -> Self {
+        match radius.into() {
+            BorderRadiusGeometry::Physical(value) => self.border_radius(value),
+            BorderRadiusGeometry::Directional(value) => self.directional_border_radius(value),
+            BorderRadiusGeometry::Mixed {
+                physical,
+                directional,
+            } => {
+                self.border_radius = Some(physical);
+                self.directional_border_radius = Some(Arc::new(directional));
+                self
+            }
+        }
     }
 
     /// Resolves this decoration's logical corner radii for explicit painting

@@ -67,5 +67,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 See [`Path`](/docs/api/painting/path) for [`BoxDecoration`](/docs/api/painting/path), [`BoxShape`](/docs/api/painting/path), and
 shadow types.
 
+`BoxDecoration::border_radius_geometry` accepts physical radii, directional
+radii, or a combination of both. In a combination, leading and trailing
+corners follow the current text direction and are then added to the physical
+corners. For example:
+
+```rust
+use incular::prelude::*;
+
+let physical = BorderRadius::circular(6.0);
+let leading = BorderRadiusDirectional::horizontal(Radius::circular(4.0), Radius::ZERO);
+let decoration = BoxDecoration::new()
+    .border_radius_geometry(BorderRadiusGeometry::from(physical) + leading.into());
+```
+
 Related: [`Container`](/docs/api/layout-widgets/container),
 [`ClipRRect`](/docs/api/layout-widgets/clip-rrect).

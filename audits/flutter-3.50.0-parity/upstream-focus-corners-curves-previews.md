@@ -145,3 +145,17 @@ dimensions as logical units even though layout already honored scale.
 The pinned Flutter paint calls and Incular retained commands now agree.
 This probe adds no upstream registration credit. Four focused Rust targets
 passed (31 tests).
+
+## Mixed physical and directional corner values
+
+Seven more pinned `painting/border_radius_test.dart` registrations
+(:443, :481, :512, :543, :578, :596, :632) now have full typed
+comparisons in `flutter350_mixed_corner_radius`. They assert all four
+elliptical radius pairs after resolving each operation in LTR and RTL:
+mixed interpolation at its endpoints and midpoint, subtraction (including
+negative radii), addition, scalar multiplication, and nested operations.
+The same geometry is accepted by BoxDecoration and retained until the
+direction is resolved. Replacement with a physical value discards the
+previous logical part. Incular uses value types; Dart object identity and
+missing-direction diagnostics are not included in these seven. Four
+focused Rust targets passed (21 tests).

@@ -224,7 +224,7 @@ pub mod prelude {
     };
     pub use incular_widgets::extensions::ExternalDropTarget;
     pub use incular_widgets::OverflowBoxFit;
-    pub use incular_widgets::{FittedSizes, apply_box_fit};
+    pub use incular_widgets::{BorderRadiusGeometry, FittedSizes, apply_box_fit};
     pub use incular_widgets::{
         AlignmentDirectionalTween, AlignmentTween, BorderRadiusTween, BorderTween,
         BoxConstraintsTween, CapturedThemes, CharacterActivator, ContextMenuButtonItem,
