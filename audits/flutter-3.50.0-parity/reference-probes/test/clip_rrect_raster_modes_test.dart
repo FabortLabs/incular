@@ -17,6 +17,41 @@ class _FractionalBox extends CustomClipper<Rect> {
   bool shouldReclip(_FractionalBox oldClipper) => false;
 }
 
+Future<List<List<int>>> _rotatedHardClip({required bool usePath}) async {
+  final recorder = ui.PictureRecorder();
+  final canvas = ui.Canvas(recorder);
+  canvas.drawColor(const Color(0xff000000), ui.BlendMode.src);
+  canvas.translate(24, 24);
+  canvas.rotate(0.7853981633974483);
+  const square = Rect.fromLTWH(-10, -10, 20, 20);
+  if (usePath) {
+    canvas.clipPath(ui.Path()..addRect(square), doAntiAlias: false);
+  } else {
+    canvas.clipRect(square, doAntiAlias: false);
+  }
+  canvas.drawRect(
+    const Rect.fromLTWH(-40, -40, 80, 80),
+    ui.Paint()..color = const Color(0xffffffff),
+  );
+  final picture = recorder.endRecording();
+  try {
+    final image = await picture.toImage(48, 48);
+    try {
+      final rgba = (await image.toByteData(
+        format: ui.ImageByteFormat.rawRgba,
+      ))!;
+      return [
+        for (final (x, y) in [(12, 12), (24, 24), (5, 5)])
+          List.generate(4, (c) => rgba.getUint8((y * 48 + x) * 4 + c)),
+      ];
+    } finally {
+      image.dispose();
+    }
+  } finally {
+    picture.dispose();
+  }
+}
+
 Future<({List<List<int>> controls, int partial})> _rawClip(
   double factor, {
   bool? pathClip,
@@ -167,6 +202,18 @@ _capture(
 }
 
 void main() {
+  test(
+    'Rotated Canvas hard clip does not include the bounding-box corners',
+    () async {
+      for (final usePath in [false, true]) {
+        expect(await _rotatedHardClip(usePath: usePath), [
+          _black,
+          _white,
+          _black,
+        ]);
+      }
+    },
+  );
   testWidgets('ClipRect defaults to hard edges but honors both AA modes', (
     tester,
   ) async {

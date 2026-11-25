@@ -16,6 +16,49 @@ impl AnalyticClip {
 }
 
 impl WgpuRenderer {
+    fn push_hard_round_rect_mask(
+        &mut self,
+        parent: ClipState,
+        rrect: RRect,
+        transform: Transform,
+        scale: f32,
+        batches: &mut Vec<DrawBatch>,
+    ) -> Result<(ClipState, Option<ClipMask>), RendererError> {
+        if rrect.rect.size.width <= 0. || rrect.rect.size.height <= 0. {
+            return Ok((ClipState::Empty, None));
+        }
+        // The stencil uses the full affine, so its scissor only bounds it.
+        let scissor = intersect_clip_with_rect(
+            parent,
+            ClipRect::hard(transform.transform_rect_bbox(rrect.rect)),
+        );
+        if scissor == ClipState::Empty {
+            return Ok((ClipState::Empty, None));
+        }
+        let depth = stencil_depth(parent);
+        if depth == MAX_STENCIL_CLIP_DEPTH {
+            return Err(RendererError::StencilDepthOverflow);
+        }
+        let instance = rrect_instance(
+            rrect,
+            &Brush::Solid(Color::TRANSPARENT),
+            transform,
+            scale,
+            self.target_width as f32,
+            self.target_height as f32,
+        );
+        batches.push(DrawBatch::StencilRRect {
+            clip: parent,
+            instance,
+            increment: true,
+        });
+        self.counters.stencil_depth_max = self.counters.stencil_depth_max.max(u64::from(depth + 1));
+        Ok((
+            with_stencil_depth(scissor, depth + 1),
+            Some(ClipMask::RRect(instance)),
+        ))
+    }
+
     #[cfg(not(incular_d3d11))]
     fn push_analytic_clip(
         &mut self,
@@ -686,11 +729,23 @@ impl WgpuRenderer {
                     }
                 }
                 PaintCommand::PushClip { rect } => {
-                    let next = ClipRect::hard(transform.transform_rect_bbox(*rect));
-                    let combined =
-                        intersect_clip_with_rect(*clips.last().expect("clip stack"), next);
+                    let [_, b, c, _, _, _] = transform.to_kurbo().as_coeffs();
+                    let (combined, mask) = if b == 0. && c == 0. {
+                        let next = ClipRect::hard(transform.transform_rect_bbox(*rect));
+                        (intersect_clip_with_rect(clip, next), None)
+                    } else {
+                        // Rotation and shear turn the rectangle into a
+                        // parallelogram, not its axis-aligned bounding box.
+                        self.push_hard_round_rect_mask(
+                            clip,
+                            RRect::new(*rect, incular_rendering::CornerRadii::ZERO),
+                            transform,
+                            scale,
+                            batches,
+                        )?
+                    };
                     clips.push(combined);
-                    clip_masks.push(None);
+                    clip_masks.push(mask);
                     self.counters.clip_rect_pushes += 1;
                 }
                 PaintCommand::PushClipRRect {
@@ -773,37 +828,10 @@ impl WgpuRenderer {
                         )?);
                         continue;
                     }
-                    // The stencil uses the full affine, so the scissor must
-                    // conservatively enclose that same transformed shape.
-                    let next = ClipRect::hard(transform.transform_rect_bbox(rrect.rect));
-                    let parent = *clips.last().expect("clip stack");
-                    let scissor = intersect_clip_with_rect(parent, next);
-                    let depth = stencil_depth(parent);
-                    if depth == MAX_STENCIL_CLIP_DEPTH {
-                        return Err(RendererError::StencilDepthOverflow);
-                    }
-                    let instance = rrect_instance(
-                        *rrect,
-                        &Brush::Solid(Color::TRANSPARENT),
-                        transform,
-                        scale,
-                        self.target_width as f32,
-                        self.target_height as f32,
-                    );
-                    if scissor == ClipState::Empty {
-                        clips.push(ClipState::Empty);
-                        clip_masks.push(None);
-                    } else {
-                        batches.push(DrawBatch::StencilRRect {
-                            clip: parent,
-                            instance,
-                            increment: true,
-                        });
-                        clips.push(with_stencil_depth(scissor, depth + 1));
-                        clip_masks.push(Some(ClipMask::RRect(instance)));
-                        self.counters.stencil_depth_max =
-                            self.counters.stencil_depth_max.max(u64::from(depth + 1));
-                    }
+                    let (combined, mask) =
+                        self.push_hard_round_rect_mask(clip, *rrect, transform, scale, batches)?;
+                    clips.push(combined);
+                    clip_masks.push(mask);
                     self.counters.clip_rrect_pushes += 1;
                 }
                 PaintCommand::PushClipOval {

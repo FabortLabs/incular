@@ -136,3 +136,14 @@ delivers that invalidation to the retained layer and the regression
 now verifies the emitted RTL radii too. All 41 focused widget cases
 pass. Elliptical corner radii and direction-required validation
 without an ancestor are not covered by these two originals.
+
+## Rotated Canvas hard rectangle
+
+The pinned raw Canvas rect and equivalent path both leave a black
+pixel at (12, 12), inside the bounding box but outside the rotated
+rectangle. The old native Windows wgpu raw rect leaked white there,
+while its path control was already correct. The repair uses the full
+affine mask for a rotated or sheared hard rectangle and keeps the
+simple scissor path for axis-aligned clips. Both renderer probes now
+agree at all three samples, including the white center and the black
+exterior. This authored probe does not add to the original count.

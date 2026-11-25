@@ -840,3 +840,6 @@ a zero-size FittedBox with semantics enabled.
 adds two matched originals: 457 / 8,965 fully compared (5.10%),
 361 matches and 96 historical mismatches. It also fixes stale paint
 when inherited values update retained compositor geometry.
+The [rotated Canvas recheck](upstream-clip-visibility-focus.md#rotated-canvas-hard-rectangle)
+verifies that the hard rectangle no longer leaks in the corners of
+its axis-aligned bounding box on Windows wgpu.

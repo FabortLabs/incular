@@ -107,6 +107,48 @@ fn clip_samples(renderer: &mut WgpuRenderer, list: &DisplayList) -> ClipSamples 
     (controls, partial, fringe)
 }
 
+fn assert_rotated_canvas_hard_clip(renderer: &mut WgpuRenderer) {
+    for use_path in [true, false] {
+        let mut canvas = Canvas::default();
+        canvas.save_transform(Transform::translation(Offset::new(24., 24.)));
+        canvas.save_transform(Transform::rotation(std::f32::consts::FRAC_PI_4));
+        let rect = Rect::from_origin_size(Offset::new(-10., -10.), Size::new(20., 20.));
+        if use_path {
+            let mut path = PathBuilder::default();
+            path.move_to(Offset::new(-10., -10.))
+                .line_to(Offset::new(10., -10.))
+                .line_to(Offset::new(10., 10.))
+                .line_to(Offset::new(-10., 10.))
+                .close();
+            canvas.save_clip_path(Arc::new(path.build()), FillRule::NonZero);
+        } else {
+            canvas.save_clip(rect);
+        }
+        canvas.rect(
+            Rect::from_origin_size(Offset::new(-40., -40.), Size::new(80., 80.)),
+            Color::WHITE,
+        );
+        canvas.restore();
+        canvas.restore();
+        canvas.restore();
+        renderer.request_capture();
+        assert!(matches!(
+            renderer.render(&canvas.finish(), 1.).unwrap(),
+            FrameOutcome::Presented(_)
+        ));
+        let frame = renderer.take_capture().unwrap().unwrap();
+        let samples = [(12, 12), (24, 24), (5, 5)].map(|(x, y)| {
+            let index = ((y * frame.width + x) * 4) as usize;
+            <[u8; 4]>::try_from(&frame.rgba8[index..index + 4]).unwrap()
+        });
+        assert_eq!(
+            samples,
+            [BLACK, WHITE, BLACK],
+            "rotated Canvas clip, path={use_path}"
+        );
+    }
+}
+
 fn assert_fractional_clip_rect_modes(renderer: &mut WgpuRenderer) {
     struct FractionalBox;
 
@@ -220,5 +262,6 @@ fn flutter_350_clip_rrect_modes_distinguish_aa_and_saved_compositing() {
             "an isolated ellipse applies coverage once: {ordinary_oval:?}, {isolated_oval:?}"
         );
         assert_fractional_clip_rect_modes(renderer);
+        assert_rotated_canvas_hard_clip(renderer);
     });
 }
