@@ -276,7 +276,89 @@ impl Default for RuntimeEnvironment {
     }
 }
 
+/// Physical edges selected for an inherited media inset adjustment.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MediaQueryEdges {
+    pub left: bool,
+    pub top: bool,
+    pub right: bool,
+    pub bottom: bool,
+}
+
+impl MediaQueryEdges {
+    pub const NONE: Self = Self {
+        left: false,
+        top: false,
+        right: false,
+        bottom: false,
+    };
+    pub const ALL: Self = Self {
+        left: true,
+        top: true,
+        right: true,
+        bottom: true,
+    };
+
+    fn replace(self, original: EdgeInsets, replacement: EdgeInsets) -> EdgeInsets {
+        EdgeInsets::only(
+            if self.left {
+                replacement.left
+            } else {
+                original.left
+            },
+            if self.top {
+                replacement.top
+            } else {
+                original.top
+            },
+            if self.right {
+                replacement.right
+            } else {
+                original.right
+            },
+            if self.bottom {
+                replacement.bottom
+            } else {
+                original.bottom
+            },
+        )
+    }
+}
+
 impl RuntimeEnvironment {
+    /// Removes padding on the selected sides and subtracts the removed
+    /// values from the corresponding persistent view padding.
+    #[must_use]
+    pub fn remove_padding(mut self, edges: MediaQueryEdges) -> Self {
+        self.view_padding = edges.replace(
+            self.view_padding,
+            (self.view_padding - self.safe_insets).normalized(),
+        );
+        self.safe_insets = edges.replace(self.safe_insets, EdgeInsets::ZERO);
+        self
+    }
+
+    /// Removes transient view insets and subtracts the amount from the
+    /// corresponding view padding. The current safe padding is unchanged.
+    #[must_use]
+    pub fn remove_view_insets(mut self, edges: MediaQueryEdges) -> Self {
+        self.view_padding = edges.replace(
+            self.view_padding,
+            (self.view_padding - self.view_insets).normalized(),
+        );
+        self.view_insets = edges.replace(self.view_insets, EdgeInsets::ZERO);
+        self
+    }
+
+    /// Clears both safe padding and persistent view padding only on the
+    /// selected sides. Transient insets are unchanged.
+    #[must_use]
+    pub fn remove_view_padding(mut self, edges: MediaQueryEdges) -> Self {
+        self.safe_insets = edges.replace(self.safe_insets, EdgeInsets::ZERO);
+        self.view_padding = edges.replace(self.view_padding, EdgeInsets::ZERO);
+        self
+    }
+
     /// Normalizes externally supplied values without inventing platform policy.
     #[must_use]
     pub fn normalized(mut self) -> Self {

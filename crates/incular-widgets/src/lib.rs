@@ -201,7 +201,7 @@ pub use drag_drop::{
 pub use environment::{
     ContentSensitivity, DefaultSelectionStyle, DefaultTextHeightBehavior, DefaultTextStyle,
     Directionality, IconTheme, Localizations, LookupBoundary, MediaQuery, MediaQueryData,
-    Orientation, OrientationBuilder, PrimaryScrollController, ScrollConfiguration,
+    MediaQueryEdges, Orientation, OrientationBuilder, PrimaryScrollController, ScrollConfiguration,
     SensitiveContent, SensitiveContentHost, TickerMode,
 };
 pub use explicit_animations::{AnimatedBuilder, Listenable, ListenableBuilder, TransitionBuilder};

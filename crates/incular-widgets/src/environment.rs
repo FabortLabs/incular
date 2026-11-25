@@ -12,7 +12,7 @@ use typed_builder::TypedBuilder;
 
 use crate::{BuildContext, Builder, LayoutBuilder, Widget};
 
-pub use incular_config::ContentSensitivity;
+pub use incular_config::{ContentSensitivity, MediaQueryEdges};
 
 /// A typed, window-local environment snapshot for descendants that need
 /// viewport, scale, safe-area, brightness, or accessibility information.
@@ -41,6 +41,35 @@ impl MediaQuery {
         }
     }
 
+    /// Removes selected safe padding from the nearest media scope.
+    #[must_use]
+    pub fn remove_padding(child: impl Into<Widget>, edges: MediaQueryEdges) -> Widget {
+        Self::map_query(child, move |data| data.remove_padding(edges))
+    }
+
+    /// Removes selected transient insets from the nearest media scope.
+    #[must_use]
+    pub fn remove_view_insets(child: impl Into<Widget>, edges: MediaQueryEdges) -> Widget {
+        Self::map_query(child, move |data| data.remove_view_insets(edges))
+    }
+
+    /// Removes selected persistent view padding from the nearest media scope.
+    #[must_use]
+    pub fn remove_view_padding(child: impl Into<Widget>, edges: MediaQueryEdges) -> Widget {
+        Self::map_query(child, move |data| data.remove_view_padding(edges))
+    }
+
+    fn map_query(
+        child: impl Into<Widget>,
+        map: impl Fn(RuntimeEnvironment) -> RuntimeEnvironment + 'static,
+    ) -> Widget {
+        let child = child.into();
+        Builder::new(move |context| {
+            Self::new(map(context.effective_media_query()), child.clone()).into()
+        })
+        .into()
+    }
+
     /// Creates a local copy of the nearest media data with all four text
     /// style overrides replaced. Passing None clears that inherited override.
     #[must_use]
@@ -51,16 +80,13 @@ impl MediaQuery {
         word_spacing: Option<f32>,
         paragraph_spacing: Option<f32>,
     ) -> Widget {
-        let child = child.into();
-        Builder::new(move |context| {
-            let mut data = context.effective_media_query();
+        Self::map_query(child, move |mut data| {
             data.line_height_scale_factor_override = line_height_scale_factor;
             data.letter_spacing_override = letter_spacing;
             data.word_spacing_override = word_spacing;
             data.paragraph_spacing_override = paragraph_spacing;
-            Self::new(data, child.clone()).into()
+            data
         })
-        .into()
     }
 
     #[must_use]

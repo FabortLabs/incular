@@ -1222,3 +1222,9 @@ packages/flutter/test/widgets/media_query_test.dart	1345	MediaQuery.highContrast
 packages/flutter/test/widgets/media_query_test.dart	1370	MediaQuery.onOffSwitchLabelsOf	paired-match	upstream-media-query-scale.md#scoped-accessibility-and-text-overrides
 packages/flutter/test/widgets/media_query_test.dart	1395	MediaQuery.supportsAnnounce	paired-match	upstream-media-query-scale.md#scoped-accessibility-and-text-overrides
 packages/flutter/test/widgets/media_query_test.dart	1421	MediaQuery.boldTextOf	paired-match	upstream-media-query-scale.md#scoped-accessibility-and-text-overrides
+packages/flutter/test/widgets/media_query_test.dart	776	MediaQuery.removePadding removes specified padding	paired-match	upstream-media-query-insets.md
+packages/flutter/test/widgets/media_query_test.dart	852	MediaQuery.removePadding only removes specified padding	paired-match	upstream-media-query-insets.md
+packages/flutter/test/widgets/media_query_test.dart	927	MediaQuery.removeViewInsets removes specified viewInsets	paired-match	upstream-media-query-insets.md
+packages/flutter/test/widgets/media_query_test.dart	1005	MediaQuery.removeViewInsets removes only specified viewInsets	paired-match	upstream-media-query-insets.md
+packages/flutter/test/widgets/media_query_test.dart	1080	MediaQuery.removeViewPadding removes specified viewPadding	paired-match	upstream-media-query-insets.md
+packages/flutter/test/widgets/media_query_test.dart	1158	MediaQuery.removeViewPadding removes only specified viewPadding	paired-match	upstream-media-query-insets.md

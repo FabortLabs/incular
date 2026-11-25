@@ -222,6 +222,7 @@ pub mod prelude {
         TextLeadingDistribution, TextOverflow, TextRange, TextScaler, TextSelection, TextShadow,
         TextSpan, TextStyle, TextWidthBasis, WidgetSpan,
     };
+    pub use incular_config::MediaQueryEdges;
     pub use incular_widgets::extensions::ExternalDropTarget;
     pub use incular_widgets::OverflowBoxFit;
     pub use incular_widgets::{BorderRadiusGeometry, FittedSizes, apply_box_fit};

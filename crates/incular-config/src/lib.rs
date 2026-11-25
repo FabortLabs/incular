@@ -21,7 +21,8 @@ pub use constraints::{ConstraintError, Constraints, ViewConstraints};
 pub use defaults::{ApplicationDefaults, TransparencyMode, WidgetDefaults, WindowSizePolicy};
 pub use environment::{
     Brightness, ContentSensitivity, DeviceGestureSettings, DisplayFeature, DisplayFeatureState,
-    DisplayFeatureType, InputCapabilities, NavigationMode, RuntimeEnvironment, TargetPlatform,
+    DisplayFeatureType, InputCapabilities, MediaQueryEdges, NavigationMode, RuntimeEnvironment,
+    TargetPlatform,
 };
 pub use icu_locale::Locale;
 pub use incular_core::TextDirection;
