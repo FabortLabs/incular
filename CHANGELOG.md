@@ -207,6 +207,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-runtime`: windows opened while the app is suspended no longer
+  reenable animation ticks before the app resumes.
+
 - `incular-runtime`: app lifecycle observers now receive supported
   intermediate states when a native event skips directly across them.
 

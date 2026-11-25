@@ -213,7 +213,7 @@ pub struct Runtime {
     pub(crate) frame_requested: bool,
     pub(crate) scheduler: Rc<RefCell<tasks::TaskScheduler>>,
     pub(crate) environment: Rc<RefCell<RuntimeEnvironment>>,
-    pub(crate) lifecycle: ApplicationLifecycle,
+    lifecycle: ApplicationLifecycle,
     frame_availability: incular_animation::scheduler::FrameAvailability,
     pub(crate) lifecycle_observers: Vec<Rc<dyn Fn(LifecycleTransition)>>,
     pub(crate) error_observers: Vec<Rc<dyn Fn(RuntimeErrorReport)>>,
@@ -318,6 +318,14 @@ impl Runtime {
         window_manager: Option<WindowManager>,
         reactive: Rc<RefCell<ReactiveQueue>>,
     ) -> Result<Self, TreeError> {
+        let lifecycle = window_manager
+            .as_ref()
+            .map_or(ApplicationLifecycle::Starting, |manager| {
+                manager.application_lifecycle.get()
+            });
+        let mut frame_availability = incular_animation::scheduler::FrameAvailability::default();
+        frame_availability.set_enabled(lifecycle.allows_frames());
+
         let mut tree = WidgetTree::new();
         tree.enable_hosted_focus();
         let mut handlers = HashMap::new();
@@ -385,8 +393,8 @@ impl Runtime {
             frame_requested: true,
             scheduler,
             environment: Rc::new(RefCell::new(RuntimeEnvironment::default())),
-            lifecycle: ApplicationLifecycle::Starting,
-            frame_availability: incular_animation::scheduler::FrameAvailability::default(),
+            lifecycle,
+            frame_availability,
             lifecycle_observers: Vec::new(),
             error_observers: Vec::new(),
             environment_generation: 0,
@@ -736,12 +744,8 @@ impl Runtime {
             current: lifecycle,
         };
         self.lifecycle = lifecycle;
-        self.frame_availability.set_enabled(!matches!(
-            lifecycle,
-            ApplicationLifecycle::Suspended
-                | ApplicationLifecycle::Stopping
-                | ApplicationLifecycle::Terminated
-        ));
+        self.frame_availability
+            .set_enabled(lifecycle.allows_frames());
         self.update_focus_for_lifecycle(lifecycle);
         for observer in &self.lifecycle_observers {
             observer(transition);

@@ -51,8 +51,8 @@ packages/flutter/test/widgets/semantics_test.dart	875	AccessiblityFocusBlockType
 packages/flutter/test/widgets/semantics_test.dart	940	AccessiblityFocusBlockType.blockNode is not applied to the subtree,	partial-match	upstream-semantics-binding.md#accessibility-focus-blocking
 packages/flutter/test/widgets/semantics_test.dart	1149	accessibilityBlockType also blocks keyboard focus	partial-match	upstream-semantics-binding.md#accessibility-focus-blocking
 packages/flutter/test/widgets/semantics_test.dart	1167	Updating accessibilityFocusBlockType on parent updates children semantics	paired-match	upstream-semantics-binding.md#accessibility-focus-blocking
-packages/flutter/test/scheduler/ticker_test.dart	154	Ticker stops ticking when application is paused	paired-mismatch	upstream-lifecycle-clipboard-comparisons.md
-packages/flutter/test/scheduler/ticker_test.dart	178	Ticker can be created before application unpauses	paired-mismatch	upstream-lifecycle-clipboard-comparisons.md
+packages/flutter/test/scheduler/ticker_test.dart	154	Ticker stops ticking when application is paused	paired-match	upstream-lifecycle-clipboard-comparisons.md#suspension-remediation
+packages/flutter/test/scheduler/ticker_test.dart	178	Ticker can be created before application unpauses	paired-match	upstream-lifecycle-clipboard-comparisons.md#suspension-remediation
 packages/flutter/test/services/clipboard_test.dart	17	Clipboard.getData returns text	paired-match	upstream-lifecycle-clipboard-comparisons.md
 packages/flutter/test/services/clipboard_test.dart	26	Clipboard.getData returns null	paired-match	upstream-lifecycle-clipboard-comparisons.md
 packages/flutter/test/services/clipboard_test.dart	46	Clipboard.setData sets text	paired-match	upstream-lifecycle-clipboard-comparisons.md

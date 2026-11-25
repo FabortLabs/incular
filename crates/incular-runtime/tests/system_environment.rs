@@ -413,3 +413,60 @@ fn context_safe_area_nested_accumulates() {
         vec![Size::new(200., 160.)]
     );
 }
+
+#[test]
+fn a_window_opened_while_suspended_does_not_reenable_tickers() {
+    use incular_animation::scheduler::Ticker;
+
+    for from_builder in [false, true] {
+        let root = || Widget::box_(Size::new(1.0, 1.0), Color::WHITE);
+        let mut application = Application::new(move |_| root()).unwrap();
+        application.handle_application_lifecycle(PlatformLifecycle::Resumed);
+        let ticks = Rc::new(Cell::new(0));
+        let ticker = Ticker::new({
+            let ticks = ticks.clone();
+            move |_| ticks.set(ticks.get() + 1)
+        });
+        ticker.start();
+        application.handle_application_lifecycle(PlatformLifecycle::Suspended);
+        assert!(ticker.is_active() && !ticker.is_ticking());
+
+        let options = WindowOptions::new("Opened while suspended");
+        let opened = if from_builder {
+            application.open_window_with(options, move |_| root())
+        } else {
+            application.open_window(options, root())
+        }
+        .unwrap()
+        .id();
+        assert_eq!(
+            application
+                .window_diagnostics(opened)
+                .unwrap()
+                .application_lifecycle,
+            ApplicationLifecycle::Suspended,
+        );
+        assert!(
+            !ticker.is_ticking(),
+            "new window reenabled the suspended scheduler (from_builder={from_builder})",
+        );
+        let constraints = Constraints::tight(Size::new(100.0, 100.0));
+        let now = Instant::now();
+        application
+            .run_window_frame_at(opened, constraints, now)
+            .unwrap();
+        assert_eq!(ticks.get(), 0);
+
+        application.handle_application_lifecycle(PlatformLifecycle::Resumed);
+        assert!(ticker.is_ticking());
+        application
+            .run_window_frame_at(
+                opened,
+                constraints,
+                now + std::time::Duration::from_millis(16),
+            )
+            .unwrap();
+        assert_eq!(ticks.get(), 1);
+        ticker.stop();
+    }
+}

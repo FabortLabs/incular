@@ -34,3 +34,18 @@ The seven lifecycle/clipboard, seven restoration barrier, and three
 callback-phase tests pass. The pre-existing start-during-transient
 timing regression is tracked independently. No new original tests were
 counted for these remediations.
+
+## Opening another window during suspension
+
+The normal and builder-backed window constructors already inherited the
+suspended state for diagnostics, but both created an enabled scheduler
+owner before assigning it. A new retained window now initializes its
+scheduler participation from the actual application state. The test
+opens each kind of window while suspended, checks that an active ticker
+still reports no ticking, forces a frame with zero tick callbacks, and
+verifies that the first resumed frame delivers exactly one tick.
+
+The two pinned ticker originals and their current Rust counterparts
+were rerun and now have matching dispositions. These were already
+paired sites, and the multi-window regression is Incular-only.
+Fifty-three focused Rust checks passed. No OS-level suspend was invoked.

@@ -386,7 +386,6 @@ impl WindowManager {
             scope,
             Some(self.clone()),
         )?;
-        runtime.lifecycle = self.application_lifecycle.get();
         runtime.update_window_metrics(initial_metrics(&options));
         Ok(self.install_window(id, runtime, options, restoration, restoration_lease))
     }
@@ -498,10 +497,6 @@ impl WindowManager {
         })?;
         runtime.application_root = Some(root);
         runtime.owner_scopes.insert(root, root_scope);
-        // A native application adapter owns the transition out of `Starting`.
-        // Do not guess foreground/activity state while constructing a retained
-        // root before the OS event loop has attached.
-        runtime.lifecycle = self.application_lifecycle.get();
         Ok(self.install_window(id, runtime, options, restoration, restoration_lease))
     }
 

@@ -40,6 +40,12 @@ pub enum ApplicationLifecycle {
     Terminated,
 }
 
+impl ApplicationLifecycle {
+    pub(crate) fn allows_frames(self) -> bool {
+        !matches!(self, Self::Suspended | Self::Stopping | Self::Terminated)
+    }
+}
+
 impl From<PlatformLifecycle> for ApplicationLifecycle {
     fn from(value: PlatformLifecycle) -> Self {
         match value {
