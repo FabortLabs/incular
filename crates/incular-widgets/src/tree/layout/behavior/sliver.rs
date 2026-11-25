@@ -447,6 +447,7 @@ impl WidgetTree {
                 // measurement sweeps per viewport layout (nested viewports
                 // recurse under their own identical bound). No extra passes,
                 // frames, or loops are scheduled.
+                let mut overflow = sliver_layout.geometry.has_visual_overflow;
                 if config.shrink_wrap
                     && !converged
                     && let Some(snapshot) = last_published
@@ -465,7 +466,14 @@ impl WidgetTree {
                     );
                     let _ = self.measure_sliver_children(id, config, &snapshot.layout, false)?;
                     size = snapshot.size;
+                    overflow = snapshot.layout.geometry.has_visual_overflow;
                 }
+                self.render_live(id, "sliver viewport render must remain live")
+                    .object
+                    .layers
+                    .set_layout_overflow(
+                        overflow || (config.shrink_wrap && config.controller.offset() < 0.),
+                    );
                 self.diagnostics.lazy_layouts += 1;
                 (size, ChildOffsets::default())
             }

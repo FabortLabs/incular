@@ -346,8 +346,10 @@ impl RenderSliver for GridRenderSliver {
             })
             .collect();
 
+        let mut geometry = SliverGeometry::from_scroll_extent(constraints, total);
+        geometry.has_visual_overflow |= constraints.overlap != 0.;
         SliverLayout {
-            geometry: SliverGeometry::from_scroll_extent(constraints, total),
+            geometry,
             children,
             absorbed_overlap: 0.,
         }
@@ -2502,6 +2504,7 @@ impl SequenceRenderSliver {
         let mut preceding = 0.;
         let mut children = Vec::new();
         let mut total_correction = None;
+        let mut visual_overflow = false;
         for sliver_index in slivers {
             let sliver = &self.children[sliver_index];
             let sliver_scroll_offset = scroll_offset.max(0.);
@@ -2539,6 +2542,7 @@ impl SequenceRenderSliver {
                 break;
             }
 
+            visual_overflow |= geometry.has_visual_overflow;
             let effective_layout_offset = layout_offset + geometry.paint_origin;
             // Once a sliver is past the trailing edge its effective paint
             // offset is no longer meaningful. Its increasing scroll cursor is
@@ -2583,6 +2587,7 @@ impl SequenceRenderSliver {
             constraints.viewport_main_axis_extent,
         );
         let mut geometry = SliverGeometry::from_scroll_extent(constraints, preceding);
+        geometry.has_visual_overflow |= visual_overflow;
         geometry.scroll_offset_correction = total_correction;
         SliverLayout {
             geometry,
@@ -3099,6 +3104,7 @@ impl SequenceViewportDelegate {
         let mut children = Vec::new();
         let mut leading_extent = 0.;
         let mut correction = None;
+        let mut reverse_overflow = false;
         if has_reverse {
             let reverse = sequence.layout_run(
                 side(center_offset - extent, 0.),
@@ -3114,6 +3120,7 @@ impl SequenceViewportDelegate {
                 .geometry
                 .scroll_offset_correction
                 .map(|delta| -delta);
+            reverse_overflow = reverse.geometry.has_visual_overflow;
             leading_extent = (reverse.geometry.scroll_extent - zero).max(0.);
             children = reverse.children;
             // Mirror about the center line; the viewport keeps the
@@ -3145,6 +3152,7 @@ impl SequenceViewportDelegate {
         // the leading extent plus everything from offset zero to the end.
         let mut geometry =
             SliverGeometry::from_scroll_extent(constraints, forward.geometry.scroll_extent + zero);
+        geometry.has_visual_overflow |= reverse_overflow || forward.geometry.has_visual_overflow;
         geometry.scroll_offset_correction =
             correction.or(forward.geometry.scroll_offset_correction);
         SliverViewportLayout {

@@ -1189,4 +1189,6 @@ packages/flutter/test/widgets/scrollable_helpers_test.dart	546	Can scroll using 
 packages/flutter/test/widgets/grid_view_test.dart	564	GridView cross axis layout	paired-match	upstream-grid-direction-and-cache.md
 packages/flutter/test/widgets/grid_view_test.dart	585	GridView crossAxisSpacing	paired-match	upstream-grid-direction-and-cache.md
 packages/flutter/test/widgets/grid_view_test.dart	611	GridView does not cache itemBuilder calls	paired-match	upstream-grid-direction-and-cache.md
-packages/flutter/test/widgets/grid_view_test.dart	644	GridView does not report visual overflow unnecessarily	reference-ran-incular-open	upstream-grid-direction-and-cache.md
+packages/flutter/test/widgets/grid_view_test.dart	644	GridView does not report visual overflow unnecessarily	paired-match	upstream-grid-direction-and-cache.md#viewport-clip-policy
+packages/flutter/test/widgets/grid_view_test.dart	668	GridView respects clipBehavior	paired-match	upstream-grid-direction-and-cache.md#viewport-clip-policy
+packages/flutter/test/widgets/grid_view_test.dart	735	GridView.builder respects clipBehavior	paired-match	upstream-grid-direction-and-cache.md#viewport-clip-policy

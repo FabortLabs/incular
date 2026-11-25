@@ -1088,7 +1088,7 @@ impl RenderLayers {
     }
 
     /// Keep the child's content and clip stage available, but bypass the
-    /// stage when a stack or single-child viewport has no layout overflow.
+    /// stage when the layout reports no visual overflow.
     pub(crate) fn apply_overflow_rect_clip(
         &self,
         compositor: &mut LayerTree,
@@ -1142,6 +1142,15 @@ impl RenderLayers {
     fn apply_clip(&self, compositor: &mut LayerTree, kind: &RenderKind, size: Size) {
         if let RenderKind::Flex { clip_behavior, .. } = *kind {
             self.apply_fitted_clip(compositor, size, clip_behavior, self.layout_overflow.get());
+            return;
+        }
+        if let RenderKind::SliverViewport { config } = kind {
+            self.apply_fitted_clip(
+                compositor,
+                size,
+                config.clip_behavior,
+                self.layout_overflow.get(),
+            );
             return;
         }
         if matches!(

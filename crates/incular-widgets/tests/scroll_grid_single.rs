@@ -506,13 +506,12 @@ fn grid_view_padding_and_cache_lifetime() {
 }
 
 #[test]
-fn scroll_viewports_always_clip() {
-    // Viewport clipping is unconditional: with no per-view override left,
-    // both viewports still emit exactly one viewport clip.
+fn scroll_viewports_clip_when_their_content_overflows() {
+    // A grid with three rows and an oversized box each paint one clip.
     for widget in [
         incular_widgets::Directionality::new(
             incular_widgets::TextDirection::Ltr,
-            GridView::count(2, grid_boxes(4)),
+            GridView::count(2, grid_boxes(6)),
         )
         .into(),
         SingleChildScrollView::new(Widget::box_(Size::new(80., 300.), Color::WHITE)).into(),

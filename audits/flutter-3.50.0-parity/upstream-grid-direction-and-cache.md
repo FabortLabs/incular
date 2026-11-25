@@ -22,3 +22,25 @@ separate from the direction and eviction evidence.
 
 The grid lifecycle, grid layout, scroll keyboard and existing grid
 compatibility binaries passed, 31 targeted Rust tests total.
+
+## Viewport clip policy
+
+The :644 case now pairs: the grid retains the HardEdge default, but
+a single fitting row emits no clip. The focused Rust comparison had
+emitted one extra clip before this change. The :668 and :735 controls
+also verify default coverage on overflow and configured AntiAlias
+coverage, including a retained replacement and the builder path.
+Before the repair the replacement still painted a hard-edge clip.
+
+Sliver viewport layout now carries visual overflow from the actual
+sliver geometry to its existing retained clip stage. An overflowing
+viewport emits the configured coverage; a fitting one bypasses the
+stage without destroying it. Explicit None and AntiAliasWithSaveLayer
+are also checked, as is shrinking an overflowing grid to fit.
+The pinned authored overscroll case confirms that jumping a fitting
+grid to −12 switches overflow on and restoring zero switches it off.
+
+All three pinned originals and the authored probe passed. The seven
+widget targets passed, with 46 total distinct Rust tests after the
+two extra clip controls. These comparisons exercise the retained
+display list; they do not assert a new WGPU pixel fixture.

@@ -1649,10 +1649,16 @@ impl WidgetTree {
                     element.sliver_delegate_revision() != config.delegate.revision();
                 let scroll_changed =
                     element.sliver_scroll_revision() != config.controller.revision();
+                // A fitting viewport has no ordinary scroll range, but
+                // an allowed overscroll can change its sliver overflow
+                // without materializing a new child.
+                let may_change_fit_clip = config.clip_behavior != incular_config::Clip::None
+                    && config.controller.min_offset() == config.controller.max_offset();
                 (delegate_changed
                     || (scroll_changed
-                        && (config.delegate.scroll_layout_dependency()
-                            == crate::scrolling::SliverScrollDependency::ScrollOffset
+                        && (may_change_fit_clip
+                            || config.delegate.scroll_layout_dependency()
+                                == crate::scrolling::SliverScrollDependency::ScrollOffset
                             || !self.sliver_cache_window_is_covered(
                                 RenderObjectId(raw),
                                 element,
