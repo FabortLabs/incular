@@ -185,3 +185,17 @@ Dart VM timeline event or engine vsync/raster timestamps
 have been reproduced. The exact timeline event at :204 and
 two warm-up scheduling cases at :148/:167 ran on the reference
 and are still open on Incular.
+
+## Ticker diagnostics and invalid restart
+
+The pinned `ticker_test.dart:104` control now pairs the one-line
+description and creation-stack option. Rust checks a named constructor
+appears in that stack. Capture and storage are debug-only.
+
+The existing :21 comparison now rejects a duplicate start in debug,
+retains the original run, and reproduces active/ticking/count values
+through mute, resume and stop. The diagnostic carries the summary,
+reason and affected ticker with its stack. It remains partial because
+Rust's error is a panic with those parts, not Flutter's three structured
+DiagnosticsNode objects. Twelve focused Rust and the original Flutter
+tests passed.

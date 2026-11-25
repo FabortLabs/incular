@@ -679,6 +679,8 @@ impl TickerState {
 /// the ticker stops it.
 pub struct Ticker {
     state: Rc<TickerState>,
+    #[cfg(debug_assertions)]
+    creation_stack: std::backtrace::Backtrace,
 }
 
 impl std::fmt::Debug for Ticker {
@@ -710,15 +712,41 @@ impl Ticker {
             started: Cell::new(None),
             future: RefCell::new(None),
         });
-        Self { state }
+        Self {
+            state,
+            #[cfg(debug_assertions)]
+            creation_stack: std::backtrace::Backtrace::force_capture(),
+        }
     }
 
-    /// Starts ticking. Like Flutter's `Ticker.start`, a ticker started while
-    /// a frame is being produced (before its post-frame callbacks)
-    /// times itself from that frame; otherwise from the next frame. Starting a
-    /// running ticker does nothing; [`stop`](Self::stop) it first to restart
-    /// the clock. Returns the run's [`TickerFuture`].
+    /// Describes the ticker in one line, or includes the creation stack in a
+    /// debug build. Optimized builds do not capture or store a stack trace.
+    #[must_use]
+    pub fn debug_description(&self, include_creation_stack: bool) -> String {
+        #[cfg(debug_assertions)]
+        if include_creation_stack {
+            return format!(
+                "Ticker()\nThe stack trace when the Ticker was created:\n{}",
+                self.creation_stack
+            );
+        }
+        let _ = include_creation_stack;
+        String::from("Ticker()")
+    }
+
+    /// Starts ticking. A ticker started while a frame is being produced
+    /// (before post-frame callbacks) times itself from that frame; otherwise
+    /// from the next frame. Returns the run's ticker future.
+    ///
+    /// Panics in a debug build when called on an already active ticker.
+    /// Stop the previous run first to restart the clock.
+    #[track_caller]
     pub fn start(&self) -> TickerFuture {
+        debug_assert!(
+            !self.state.active.get(),
+            "A ticker was started twice.\nA ticker that is already active cannot be started again without first stopping it.\nThe affected ticker was:\n{}",
+            self.debug_description(true),
+        );
         if !self.state.active.replace(true) {
             self.state.started.set(SCHEDULER.with(|scheduler| {
                 let scheduler = scheduler.borrow();

@@ -1255,3 +1255,4 @@ packages/flutter/test/widgets/media_query_test.dart	48	MediaQuery does not have 
 packages/flutter/test/widgets/media_query_test.dart	89	MediaQuery.of finds a MediaQueryData when there is one	paired-match	upstream-media-query-scale.md#ancestor-lookup-and-individual-dimensions
 packages/flutter/test/widgets/media_query_test.dart	111	MediaQuery.maybeOf defaults to null	paired-match	upstream-media-query-scale.md#ancestor-lookup-and-individual-dimensions
 packages/flutter/test/widgets/media_query_test.dart	129	MediaQuery.maybeOf finds a MediaQueryData when there is one	paired-match	upstream-media-query-scale.md#ancestor-lookup-and-individual-dimensions
+packages/flutter/test/scheduler/ticker_test.dart	104	Ticker control test	paired-match	scheduler-callback-phases-comparisons.md#ticker-diagnostics-and-invalid-restart
