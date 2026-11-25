@@ -584,7 +584,8 @@ impl WidgetTree {
         ) {
             return;
         }
-        let key = GestureArenaKey::pointer_device(window, event.device, event.pointer);
+        let (device, pointer) = event.hover_device_identity();
+        let key = GestureArenaKey::pointer_device(window, device, pointer);
         if event.phase == PointerPhase::Enter {
             // Winit's CursorEntered carries no position. Waiting for the first
             // CursorMoved avoids firing an enter callback for stale coordinates

@@ -102,6 +102,18 @@ impl RawPointerEvent {
         }
     }
 
+    /// Hover follows a physical device across contact sequences. When a
+    /// host has no physical device ID, its pointer ID is the fallback.
+    #[doc(hidden)]
+    #[must_use]
+    pub const fn hover_device_identity(&self) -> (u64, u64) {
+        if self.device == 0 {
+            (0, self.pointer)
+        } else {
+            (self.device, 0)
+        }
+    }
+
     /// Records the button whose state changed for a Down/Up transition.
     #[must_use]
     pub const fn with_button(mut self, button: Option<u32>) -> Self {

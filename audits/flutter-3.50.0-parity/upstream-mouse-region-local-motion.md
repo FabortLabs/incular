@@ -35,3 +35,23 @@ The new portable event can be routed to a retained window or offset
 from a transient surface. Native CursorEntered/CursorLeft behavior is
 unchanged; no particular OS device plug/unplug notification is claimed.
 Twenty-two focused Rust tests and a serial desktop crate check passed.
+
+## Independent device positions
+
+Both pinned `rendering/mouse_tracker_test.dart:168,177` originals pass.
+Removing an unknown device first is inert. Two mice add, move, and
+leave independently, with hover still active until the last one leaves.
+
+The paired authored checks also demonstrate two baseline defects:
+a touch in a different region changed the active mouse cursor and
+subsequent layout synthesized an exit and enter at the touch position;
+remeasuring a scene with two stationary mice refreshed only the last one.
+Positioned hover samples now stay separate from contact input. Relayout
+uses each device's own last position in connection order, and a new
+pointer sequence on the same physical device does not re-enter. When
+the last active device is removed, the single native-window cursor
+falls back to the most recent remaining sample.
+
+The existing two list-wheel regressions reproduced with and without
+this patch and remain tracked separately. No OS plug/unplug, cursor
+selection across different windows, or cross-sequence delta is claimed.

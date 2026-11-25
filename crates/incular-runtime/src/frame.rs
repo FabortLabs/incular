@@ -52,6 +52,7 @@ use std::{
     rc::{Rc, Weak},
 };
 
+mod hover_devices;
 mod system_chrome;
 mod text_actions;
 mod text_gestures;
@@ -92,15 +93,6 @@ pub struct EditingDiagnostics {
     pub delete_commands: u64,
     pub text_commits: u64,
     pub ime_events: u64,
-}
-
-/// Where the pointer is, as last reported by a hover-capable device.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum PointerTracking {
-    Outside,
-    /// Entered the window; no position sample has arrived yet.
-    InsideUnknownPosition,
-    InsideAt,
 }
 
 /// Open IME composition. Native IME events carry no session identity,
@@ -154,10 +146,7 @@ pub struct Runtime {
     /// contacts still reach retained gesture regions for scale/pan input.
     pub(crate) legacy_pointer: Option<(u64, u64)>,
     pub(crate) last_pointer: Offset,
-    pointer_tracking: PointerTracking,
-    /// Latest positioned sample from a hover-capable device, replayed at
-    /// `last_pointer` when layout or scrolling moves content under it.
-    last_hover_sample: Option<RawPointerEvent>,
+    hover_devices: hover_devices::HoverDevices,
     pub(crate) focused: Option<ElementId>,
     parked_focus: Option<ParkedFocus>,
     focused_selection_lease: Option<incular_text::FocusedSelectionLease>,
@@ -363,8 +352,7 @@ impl Runtime {
             pressed_button: None,
             legacy_pointer: None,
             last_pointer: Offset::ZERO,
-            pointer_tracking: PointerTracking::Outside,
-            last_hover_sample: None,
+            hover_devices: hover_devices::HoverDevices::default(),
             focused: None,
             parked_focus: None,
             focused_selection_lease: None,
@@ -1430,7 +1418,13 @@ impl Runtime {
     /// Handles the events that carry no pointer sample.
     fn handle_non_pointer_input(&mut self, event: InputEvent) -> Option<EventTarget> {
         match event {
-            InputEvent::Scroll { delta } => self.handle_wheel(self.last_pointer, delta),
+            InputEvent::Scroll { delta } => {
+                let position = self
+                    .hover_devices
+                    .latest()
+                    .map_or(self.last_pointer, |event| event.position);
+                self.handle_wheel(position, delta);
+            }
             InputEvent::ScrollAt { position, delta } => self.handle_wheel(position, delta),
             InputEvent::Key(key) => {
                 self.dispatch_keyboard_event(key);
@@ -1442,10 +1436,10 @@ impl Runtime {
                 // Winit. Use only a genuine cursor position already
                 // observed for this window; never invent a touch point.
                 let gesture_window = self.gesture_window();
-                if self.pointer_tracking == PointerTracking::InsideAt
+                if let Some(sample) = self.hover_devices.latest()
                     && let Some(element) = self.tree.dispatch_trackpad_gesture_in_window(
                         gesture_window,
-                        self.last_pointer,
+                        sample.position,
                         gesture,
                     )
                 {
@@ -1576,8 +1570,7 @@ impl Runtime {
         match event.change {
             HoverDeviceChange::Added => {
                 self.last_pointer = event.position;
-                self.pointer_tracking = PointerTracking::InsideAt;
-                self.last_hover_sample = Some(raw);
+                self.hover_devices.record(raw);
                 let hit = self.tree.pointer_hit_test(event.position);
                 self.tree.add_positioned_hover_device(window, raw, &hit);
                 if self.legacy_pointer.is_none() {
@@ -1591,12 +1584,8 @@ impl Runtime {
                     raw,
                     &PointerHitTest::default(),
                 );
-                if self.last_hover_sample.is_some_and(|previous| {
-                    (previous.device, previous.pointer) == (event.device, event.pointer)
-                }) {
-                    self.last_hover_sample = None;
-                    self.pointer_tracking = PointerTracking::Outside;
-                    self.set_hover(None);
+                if self.hover_devices.remove(raw) {
+                    self.refresh_primary_button_hover();
                     self.frame_requested |= self
                         .tree
                         .scrollbar_pointer(PointerPhase::Exit, event.position);
@@ -1621,12 +1610,14 @@ impl Runtime {
             ..
         } = raw_event;
         let hover_capable = kind_supports_hover(kind);
+        let mut departed_primary_hover = false;
         if hover_capable {
-            self.pointer_tracking = match phase {
-                PointerPhase::Enter => PointerTracking::InsideUnknownPosition,
-                PointerPhase::Exit => PointerTracking::Outside,
-                _ => PointerTracking::InsideAt,
-            };
+            if matches!(phase, PointerPhase::Enter | PointerPhase::Exit) {
+                // A window boundary carries no new positioned hover sample.
+                departed_primary_hover = self.hover_devices.remove(raw_event);
+            } else {
+                self.hover_devices.record(raw_event);
+            }
         }
         if phase != PointerPhase::Enter {
             self.last_pointer = position;
@@ -1648,10 +1639,6 @@ impl Runtime {
             && self.tree.dismiss_transients_for_pointer(position) > 0
         {
             self.frame_requested = true;
-        }
-        if hover_capable {
-            self.last_hover_sample =
-                (!matches!(phase, PointerPhase::Enter | PointerPhase::Exit)).then_some(raw_event);
         }
         // One hit test serves the whole event: raw regions and listeners,
         // retained gestures, text editing and buttons.
@@ -1677,9 +1664,11 @@ impl Runtime {
             self.frame_requested = true;
         }
         if matches!(phase, PointerPhase::Enter | PointerPhase::Exit) {
-            if phase == PointerPhase::Exit {
-                self.set_hover(None);
-                if self.tree.scrollbar_pointer(PointerPhase::Exit, position) {
+            if departed_primary_hover {
+                self.refresh_primary_button_hover();
+                if phase == PointerPhase::Exit
+                    && self.tree.scrollbar_pointer(PointerPhase::Exit, position)
+                {
                     self.frame_requested = true;
                 }
             }
@@ -1802,7 +1791,9 @@ impl Runtime {
                         self.frame_requested = true;
                     }
                 }
-                self.set_hover(target.map(|(element, _)| element));
+                if hover_capable {
+                    self.set_hover(target.map(|(element, _)| element));
+                }
                 target.map(|(element, action)| EventTarget { element, action })
             }
             PointerPhase::Down => {
@@ -1939,7 +1930,9 @@ impl Runtime {
                         action: None,
                     });
                 }
-                self.set_hover(target.map(|(element, _)| element));
+                if hover_capable {
+                    self.set_hover(target.map(|(element, _)| element));
+                }
                 self.pressed_button = target.map(|(element, _)| element);
                 if let Some(element) = self.pressed_button {
                     let _ = self
@@ -2031,28 +2024,48 @@ impl Runtime {
     /// enter and exit callbacks, and button hover follows unless a press
     /// owns the single-contact controls.
     fn refresh_hover_after_layout(&mut self) {
-        if self.pointer_tracking != PointerTracking::InsideAt {
-            return;
-        }
-        let Some(sample) = self.last_hover_sample else {
+        let Some(primary) = self.hover_devices.latest() else {
             return;
         };
-        let event = RawPointerEvent {
-            position: self.last_pointer,
-            local_position: self.last_pointer,
-            delta: incular_core::Offset::ZERO,
-            local_delta: incular_core::Offset::ZERO,
-            time: self.input_now(),
-            ..sample
-        };
-        let hit = self.tree.pointer_hit_test(self.last_pointer);
         let window = self.gesture_window();
-        self.tree.refresh_mouse_hover_in_window(window, event, &hit);
+        let now = self.input_now();
+        let primary_key = primary.hover_device_identity();
+        let mut target = None;
+        for sample in self.hover_devices.iter() {
+            let event = RawPointerEvent {
+                local_position: sample.position,
+                delta: Offset::ZERO,
+                local_delta: Offset::ZERO,
+                time: now,
+                ..sample
+            };
+            let hit = self.tree.pointer_hit_test(sample.position);
+            self.tree.refresh_mouse_hover_in_window(window, event, &hit);
+            if self.legacy_pointer.is_none() && sample.hover_device_identity() == primary_key {
+                target = self.button_target(&hit).map(|(id, _)| id);
+            }
+        }
         if self.legacy_pointer.is_none() {
-            let target = self.button_target(&hit);
-            self.set_hover(target.map(|(element, _)| element));
+            self.set_hover(target);
         }
     }
+
+    fn refresh_primary_button_hover(&mut self) {
+        if self.legacy_pointer.is_none() {
+            let target = self.hover_devices.latest().and_then(|event| {
+                let hit = self.tree.pointer_hit_test(event.position);
+                self.button_target(&hit).map(|(id, _)| id)
+            });
+            self.set_hover(target);
+        }
+    }
+
+    /// Whether at least one hover-capable device has a known window position.
+    #[must_use]
+    pub fn has_hover_device(&self) -> bool {
+        !self.hover_devices.is_empty()
+    }
+
     fn release_legacy_pointer(
         &mut self,
         device: u64,
@@ -2072,10 +2085,10 @@ impl Runtime {
     /// to the ordinary platform cursor before crossing the native boundary.
     #[must_use]
     pub fn effective_mouse_cursor(&self) -> MouseCursor {
-        if self.pointer_tracking != PointerTracking::InsideAt {
+        let Some(event) = self.hover_devices.latest() else {
             return MouseCursor::Basic;
-        }
-        match self.tree.mouse_cursor_at(self.last_pointer) {
+        };
+        match self.tree.mouse_cursor_at(event.position) {
             MouseCursor::Defer => MouseCursor::Basic,
             cursor => cursor,
         }

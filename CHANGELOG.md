@@ -235,6 +235,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-runtime`: touch input no longer changes the mouse cursor or
+  hover position. Relayout refreshes every pointing device independently.
+
 - `incular-widgets`: MouseRegion callbacks report local positions and
   deltas, and exits keep the previous hit transform after layout moves.
 
