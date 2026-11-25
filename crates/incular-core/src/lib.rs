@@ -22,6 +22,7 @@ mod merged_listenable;
 mod observer_list;
 pub mod reactivity;
 mod restoration;
+pub mod serialization;
 pub mod time;
 mod value_notifier;
 mod widget;

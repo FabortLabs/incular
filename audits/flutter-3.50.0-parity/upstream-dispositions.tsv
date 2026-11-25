@@ -1373,3 +1373,18 @@ packages/flutter/test/foundation/collections_test.dart	55	binarySearch	paired-ma
 packages/flutter/test/foundation/collections_test.dart	63	MergeSortRandom	paired-match	upstream-foundation-collections.md
 packages/flutter/test/foundation/collections_test.dart	74	MergeSortPreservesOrder	paired-match	upstream-foundation-collections.md
 packages/flutter/test/foundation/collections_test.dart	123	MergeSortSpecialCases	paired-match	upstream-foundation-collections.md
+packages/flutter/test/foundation/serialization_test.dart	10	of empty buffer	paired-match	upstream-foundation-serialization.md
+packages/flutter/test/foundation/serialization_test.dart	16	of single byte	paired-match	upstream-foundation-serialization.md
+packages/flutter/test/foundation/serialization_test.dart	24	of 32-bit integer	paired-match	upstream-foundation-serialization.md
+packages/flutter/test/foundation/serialization_test.dart	32	of 32-bit integer in big endian	paired-match	upstream-foundation-serialization.md
+packages/flutter/test/foundation/serialization_test.dart	40	of 64-bit integer	paired-match	upstream-foundation-serialization.md
+packages/flutter/test/foundation/serialization_test.dart	48	of 64-bit integer in big endian	paired-match	upstream-foundation-serialization.md
+packages/flutter/test/foundation/serialization_test.dart	56	of double	paired-match	upstream-foundation-serialization.md
+packages/flutter/test/foundation/serialization_test.dart	64	of double in big endian	paired-match	upstream-foundation-serialization.md
+packages/flutter/test/foundation/serialization_test.dart	72	of 32-bit int list when unaligned	paired-match	upstream-foundation-serialization.md
+packages/flutter/test/foundation/serialization_test.dart	83	of 64-bit int list when unaligned	paired-match	upstream-foundation-serialization.md
+packages/flutter/test/foundation/serialization_test.dart	94	of float list when unaligned	paired-match	upstream-foundation-serialization.md
+packages/flutter/test/foundation/serialization_test.dart	107	of double list when unaligned	paired-match	upstream-foundation-serialization.md
+packages/flutter/test/foundation/serialization_test.dart	120	done twice	paired-match	upstream-foundation-serialization.md
+packages/flutter/test/foundation/serialization_test.dart	125	empty WriteBuffer	paired-match	upstream-foundation-serialization.md
+packages/flutter/test/foundation/serialization_test.dart	128	size 1	paired-match	upstream-foundation-serialization.md
