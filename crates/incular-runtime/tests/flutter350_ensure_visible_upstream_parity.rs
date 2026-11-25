@@ -141,10 +141,10 @@ fn reverse(axis: Axis, mut expected: Vec<f32>, before: [f32; 2], after: [f32; 2]
     out.extend([p.edge(outlier, vertical), p.edge(6, vertical)]);
     let leading =
         EnsureVisible::new().alignment_policy(ScrollPositionAlignmentPolicy::KeepVisibleAtStart);
-    p.reveal(6, leading);
-    p.reveal(5, leading);
+    p.reveal(6, leading.clone());
+    p.reveal(5, leading.clone());
     if !vertical {
-        p.reveal(4, leading);
+        p.reveal(4, leading.clone());
     }
     out.extend([p.edge(outlier, vertical), p.edge(6, vertical)]);
     p.reveal(outlier, leading);

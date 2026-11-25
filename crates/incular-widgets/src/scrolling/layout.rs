@@ -2731,12 +2731,15 @@ impl RenderSliver for WidgetWrapRenderSliver {
 /// real viewport and scopes child identity at each boundary.
 pub(super) struct SequenceRenderSliver {
     pub(super) children: Vec<RefCell<Box<dyn RenderSliver>>>,
+    reveal_geometry: RefCell<Vec<SliverRevealGeometry>>,
 }
 
 impl SequenceRenderSliver {
     pub(super) fn new(children: Vec<Box<dyn RenderSliver>>) -> Self {
+        let reveal_geometry = RefCell::new(vec![SliverRevealGeometry::default(); children.len()]);
         Self {
             children: children.into_iter().map(RefCell::new).collect(),
+            reveal_geometry,
         }
     }
 
@@ -2771,6 +2774,7 @@ impl SequenceRenderSliver {
         let mut scroll_offset = constraints.scroll_offset;
         let mut max_paint_offset = layout_offset + constraints.overlap;
         let mut preceding = 0.;
+        let mut preceding_obstruction = 0.;
         let mut children = Vec::new();
         let mut total_correction = None;
         let mut visual_overflow = false;
@@ -2813,6 +2817,12 @@ impl SequenceRenderSliver {
                 break;
             }
 
+            self.reveal_geometry.borrow_mut()[sliver_index] = SliverRevealGeometry {
+                obstruction_before: preceding_obstruction,
+                reverse_growth: constraints.growth_direction == SliverGrowthDirection::Reverse,
+            };
+            preceding_obstruction = (preceding_obstruction + geometry.max_scroll_obstruction_extent)
+                .min(f32::MAX);
             visual_overflow |= geometry.has_visual_overflow;
             let effective_layout_offset = layout_offset + geometry.paint_origin;
             // Once a sliver is past the trailing edge its effective paint
@@ -3592,6 +3602,16 @@ impl SliverViewportDelegate for SequenceViewportDelegate {
 
     fn set_child_extent(&self, child: SliverChildId, extent: f32) -> bool {
         self.sequence.borrow_mut().set_child_extent(child, extent)
+    }
+
+    fn reveal_geometry(&self, child: SliverChildId) -> SliverRevealGeometry {
+        self.sequence
+            .borrow()
+            .reveal_geometry
+            .borrow()
+            .get(child.scope())
+            .copied()
+            .unwrap_or_default()
     }
 
     fn revision(&self) -> u64 {

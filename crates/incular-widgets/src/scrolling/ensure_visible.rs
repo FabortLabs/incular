@@ -9,7 +9,7 @@ use incular_config::Axis;
 use incular_core::{Offset, Rect, Size};
 use incular_scroll::ScrollController;
 
-use super::Scrollable;
+use super::{Scrollable, SliverRevealGeometry};
 use crate::tree::{ElementId, RenderKind, WidgetTree};
 
 /// How [`Scrollable::ensure_visible`] chooses each viewport's target offset
@@ -150,6 +150,7 @@ fn offset_to_reveal(
     reverse: bool,
     pixels: f32,
     alignment: f32,
+    sliver: SliverRevealGeometry,
 ) -> f32 {
     let (start, extent, viewport_extent) = match axis {
         Axis::Vertical => (rect.origin.y, rect.size.height, viewport.height),
@@ -160,8 +161,13 @@ fn offset_to_reveal(
     } else {
         start
     };
-    let leading_scroll_offset = pixels + leading;
-    leading_scroll_offset - (viewport_extent - extent) * alignment
+    let leading_obstruction = if sliver.reverse_growth {
+        0.
+    } else {
+        sliver.obstruction_before
+    };
+    let leading_scroll_offset = pixels + leading - leading_obstruction;
+    leading_scroll_offset - (viewport_extent - sliver.obstruction_before - extent) * alignment
 }
 
 impl Scrollable {
@@ -181,10 +187,9 @@ impl Scrollable {
     /// duration) or animates with [`ScrollController::animate_to`]. Returns
     /// how many viewports were asked to move.
     ///
-    /// Call it after layout. Pinned slivers do not reduce the revealing
-    /// extent (Flutter subtracts `maxScrollObstructionExtentBefore`), wheel
-    /// and two-dimensional viewports are not walked, and the minimum scroll
-    /// extent is 0.
+    /// Call it after layout. A sequential sliver viewport accounts for
+    /// its preceding pinned slivers. Wheel and two-dimensional viewports
+    /// are not walked.
     pub fn ensure_visible(tree: &WidgetTree, element: ElementId, options: EnsureVisible) -> usize {
         let Some((_, target_size)) = tree.element_geometry(element) else {
             return 0;
@@ -225,6 +230,7 @@ impl Scrollable {
                 break;
             };
             let pixels = viewport.controller.offset();
+            let sliver = tree.sliver_reveal_geometry(viewport.element, object);
             let min = viewport.controller.min_offset().min(0.0);
             let max = viewport.controller.max_offset().max(0.0);
             let reveal = |alignment| {
@@ -235,6 +241,7 @@ impl Scrollable {
                     viewport.reverse,
                     pixels,
                     alignment,
+                    sliver,
                 )
                 .clamp(min, max)
             };

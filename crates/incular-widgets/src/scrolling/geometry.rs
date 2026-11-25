@@ -249,11 +249,21 @@ pub enum SliverScrollDependency {
     ScrollOffset,
 }
 
+/// Obstruction in the laid-out growth run before a viewport child.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct SliverRevealGeometry {
+    pub(crate) obstruction_before: f32,
+    pub(crate) reverse_growth: bool,
+}
+
 /// Private bridge for widget materialization and viewport-scoped child IDs.
 pub(crate) trait SliverViewportDelegate {
     fn scroll_layout_dependency(&self) -> SliverScrollDependency;
     fn perform_layout(&self, constraints: SliverConstraints) -> SliverViewportLayout;
     fn set_child_extent(&self, child: SliverChildId, extent: f32) -> bool;
+    fn reveal_geometry(&self, _child: SliverChildId) -> SliverRevealGeometry {
+        SliverRevealGeometry::default()
+    }
     fn revision(&self) -> u64;
     fn sliver_count(&self) -> usize;
     fn child_count(&self) -> Option<usize>;
