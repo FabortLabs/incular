@@ -2506,6 +2506,11 @@ impl WidgetTree {
             .expect("render verified live above")
             .object;
         match *object.kind() {
+            RenderKind::FittedBox { .. } if !self.fitted_content_is_visible(render) => {
+                // Retain the measured render child, but do not submit its
+                // painting or effects while the FittedBox draws nothing.
+                child_layers.clear();
+            }
             RenderKind::IndexedStack { index, .. } => {
                 let selected = index.and_then(|slot| child_layers.get(slot)).copied();
                 child_layers.clear();

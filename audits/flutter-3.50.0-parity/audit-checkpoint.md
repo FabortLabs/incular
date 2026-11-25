@@ -890,3 +890,7 @@ complete one prior partial, for 463 / 8,965 original cases (5.16%),
 367 matches and 96 historical mismatches. Invalid levels no longer
 advertise a heading, and retained merged nodes inherit the child's
 level only when the parent has none.
+
+The [empty FittedBox recheck](upstream-semantic-headings-clamping-and-dilation.md#empty-fitted-content)
+now removes both the child draw and its accessibility subtree when
+the fitted area is empty, and restores them when area returns.

@@ -258,7 +258,9 @@ pub(super) fn fitted_transform(
     alignment: Alignment,
 ) -> CoreTransform {
     if source.width <= 0. || source.height <= 0. || bounds.width <= 0. || bounds.height <= 0. {
-        return CoreTransform::IDENTITY;
+        // Flutter does not draw this child. Identity would expose its
+        // unfitted geometry to paint, hit testing, and accessibility.
+        return CoreTransform::scale(0.);
     }
     let sx = bounds.width / source.width;
     let sy = bounds.height / source.height;

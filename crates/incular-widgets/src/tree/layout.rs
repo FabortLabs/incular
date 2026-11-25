@@ -485,6 +485,12 @@ impl WidgetTree {
             _ => None,
         }
     }
+
+    pub(super) fn fitted_content_is_visible(&self, id: RenderObjectId) -> bool {
+        self.content_transform(id)
+            .and_then(CoreTransform::inverse)
+            .is_some()
+    }
     /// Measured child size for fraction resolution: the fraction is
     /// documented against the child's size, which differs from the
     /// transform node's own size under tight constraints. Shared by the
@@ -1108,7 +1114,17 @@ impl WidgetTree {
         // above, and whoever places this node marks it. A new size changes
         // this node's bounds alone; a new content transform moves everything
         // below it.
-        if transform != geometry_before.1 {
+        if matches!(kind.as_ref(), RenderKind::FittedBox { .. })
+            && geometry_before.1.and_then(CoreTransform::inverse).is_some()
+                != transform.and_then(CoreTransform::inverse).is_some()
+        {
+            // Becoming singular removes semantic descendants, not just
+            // their geometry. Restoring area must republish the subtree.
+            self.mark_render_semantics(id, SemanticsDirty::Subtree);
+            if let Some(element) = self.element_for_render(id) {
+                self.sync_render_children(element);
+            }
+        } else if transform != geometry_before.1 {
             self.mark_render_semantics(id, SemanticsDirty::Bounds);
         } else if size != geometry_before.0 {
             self.mark_render_semantics(id, SemanticsDirty::OwnBounds);

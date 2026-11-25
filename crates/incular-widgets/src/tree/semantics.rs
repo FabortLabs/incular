@@ -284,6 +284,7 @@ impl WidgetTree {
         entry: &'a Element,
     ) -> Cow<'a, [ElementId]> {
         if matches!(entry.widget.kind(), WidgetKind::Button(_))
+            || self.fitted_children_have_no_semantic_geometry(entry)
             || (entry.widget.semantic_properties().merge_descendants
                 && !keeps_explicit_child_nodes(entry))
         {
@@ -1164,12 +1165,19 @@ impl WidgetTree {
                 .and_then(|properties| properties.state.heading_level);
         }
         // A button's label already gathers its whole subtree.
-        if matches!(entry.widget.kind(), WidgetKind::Button(_)) {
+        if matches!(entry.widget.kind(), WidgetKind::Button(_))
+            || self.fitted_children_have_no_semantic_geometry(entry)
+        {
             return;
         }
         for &child in &entry.children {
             self.push_merged_semantics(child, merged, heading);
         }
+    }
+
+    fn fitted_children_have_no_semantic_geometry(&self, entry: &Element) -> bool {
+        matches!(entry.widget.kind(), WidgetKind::FittedBox { .. })
+            && !self.fitted_content_is_visible(entry.render)
     }
 
     /// World-space bounds of the semantic node of `render_id`.

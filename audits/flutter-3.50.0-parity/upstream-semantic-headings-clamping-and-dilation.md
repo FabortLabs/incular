@@ -71,3 +71,17 @@ and clears these fields without replacing the node. Both authored
 Flutter controls and all five targeted heading regressions pass.
 The direct Flutter SemanticsConfiguration.absorb API is still distinct
 from the retained Rust wrapper and is not counted as another full pair.
+
+## Empty fitted content
+
+The pinned :1876 test and the authored labeled control still pass.
+Incular previously substituted the identity transform when FittedBox
+had no area, exposing its 266 by 55 scroll node and a labeled control
+in the semantics tree. It now represents the fit as singular,
+removes the descendant semantics, and keeps the root unaffected.
+The retained test also checks a visible, empty, visible transition
+with and without merging. The draw command disappears while empty
+and returns when area is restored without replacing the render object.
+All 44 selected layout, semantics and custom-paint tests pass.
+The Flutter root's debug transform accessor remains a distinct surface,
+so this recheck does not add an original pair.

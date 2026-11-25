@@ -1,7 +1,8 @@
 //! Public tree observations from Flutter 3.50.0 widgets/semantics_test.dart.
 
 use incular_config::Constraints;
-use incular_core::Size;
+use incular_core::{Color, Size};
+use incular_rendering::PaintCommand;
 use incular_semantics::{SemanticNode, SemanticRole};
 use incular_widgets::{
     Column, ExcludeSemantics, FittedBox, MergeSemantics, Padding, Semantics, SingleChildScrollView,
@@ -92,6 +93,62 @@ fn singular_fitted_box_pose_removes_scroll_subtree_from_semantics() {
                 .any(|(_, label, _)| label.as_deref() == Some("inside")),
         "original empty scroll subtree: {original_nodes:?}; labeled scroll: {labeled_nodes:?}"
     );
+}
+
+#[test]
+fn fitted_box_republishes_visible_semantics_after_a_zero_size_frame() {
+    for merge in [false, true] {
+        let key = incular_widgets::internal::Key::from("retained fitted box");
+        let scene = |height| {
+            let child =
+                Semantics::new(Widget::box_(Size::new(80., 40.), Color::WHITE)).label("inside");
+            let fitted = Widget::from(FittedBox::new(child)).with_key(key.clone());
+            let frame = SizedBox::new().width(100.).height(height).child(fitted);
+            if merge {
+                MergeSemantics::new(Semantics::new(frame).label("outside")).into()
+            } else {
+                frame.into()
+            }
+        };
+        let mut tree = WidgetTree::new();
+        let root = tree.mount(scene(40.)).unwrap();
+        let bounds = Constraints::loose(Size::new(100., 80.));
+        let mut retained = None;
+        for (height, visible) in [(40., true), (0., false), (40., true)] {
+            tree.update(root, scene(height)).unwrap();
+            tree.layout(bounds).unwrap();
+            let list = tree.paint();
+            assert_eq!(
+                list.commands().iter().any(|op| matches!(
+                    op,
+                    PaintCommand::Rect {
+                        color: Color::WHITE,
+                        ..
+                    }
+                )),
+                visible,
+                "the empty fit must not submit its drawable child",
+            );
+            tree.update_semantics();
+            let element = tree.element_with_key(&key).unwrap();
+            let render = tree.render_id(element).unwrap();
+            assert_eq!(render, *retained.get_or_insert(render));
+            assert_eq!(
+                tree.content_transform(render)
+                    .and_then(incular_core::Transform::inverse)
+                    .is_some(),
+                visible,
+            );
+            assert_eq!(
+                nodes(&tree).iter().any(|node| node
+                    .label
+                    .as_deref()
+                    .is_some_and(|label| label.contains("inside"))),
+                visible,
+                "retained merge={merge}, height={height}",
+            );
+        }
+    }
 }
 
 fn annotation(level: Option<u8>, label: &str, child: impl Into<Widget>) -> Widget {
