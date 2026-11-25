@@ -2250,6 +2250,7 @@ impl RenderSliver for EmptyRenderSliver {
 pub(super) struct PaddingRenderSliver {
     pub(super) inner: RefCell<Box<dyn RenderSliver>>,
     pub(super) padding: crate::EdgeInsetsGeometry,
+    pub(super) safe_padding: Option<(EdgeInsets, incular_config::MediaQueryEdges)>,
 }
 
 impl RenderSliver for PaddingRenderSliver {
@@ -2273,13 +2274,23 @@ impl RenderSliver for PaddingRenderSliver {
     }
 
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout {
-        let padding = match self.padding {
-            crate::EdgeInsetsGeometry::Physical(padding) => padding,
-            crate::EdgeInsetsGeometry::Directional(padding) => padding.resolve(
-                constraints
-                    .text_direction
-                    .expect("directional SliverPadding requires Directionality"),
-            ),
+        let padding = if let Some((minimum, edges)) = self.safe_padding {
+            let safe = constraints.safe_insets.normalized();
+            EdgeInsets::only(
+                if edges.left { safe.left } else { 0. }.max(minimum.left),
+                if edges.top { safe.top } else { 0. }.max(minimum.top),
+                if edges.right { safe.right } else { 0. }.max(minimum.right),
+                if edges.bottom { safe.bottom } else { 0. }.max(minimum.bottom),
+            )
+        } else {
+            match self.padding {
+                crate::EdgeInsetsGeometry::Physical(padding) => padding,
+                crate::EdgeInsetsGeometry::Directional(padding) => padding.resolve(
+                    constraints
+                        .text_direction
+                        .expect("directional SliverPadding requires Directionality"),
+                ),
+            }
         };
         debug_assert!(
             [padding.left, padding.top, padding.right, padding.bottom]
@@ -2330,6 +2341,16 @@ impl RenderSliver for PaddingRenderSliver {
             (constraints.cache_origin + before).min(0.),
         );
         inner_constraints.text_direction = constraints.text_direction;
+        let safe = constraints.safe_insets;
+        inner_constraints.safe_insets = match self.safe_padding {
+            Some((_, edges)) => EdgeInsets::only(
+                if edges.left { 0. } else { safe.left },
+                if edges.top { 0. } else { safe.top },
+                if edges.right { 0. } else { safe.right },
+                if edges.bottom { 0. } else { safe.bottom },
+            ),
+            None => safe,
+        };
         let mut layout = self.inner.borrow_mut().perform_layout(inner_constraints);
         let inner_geometry = layout.geometry.normalized();
         if let Some(correction) = inner_geometry.scroll_offset_correction {
@@ -2340,6 +2361,9 @@ impl RenderSliver for PaddingRenderSliver {
         for child in &mut layout.children {
             child.offset += before;
             child.cross_offset += cross_before(constraints.axis, padding);
+            if let Some((_, edges)) = self.safe_padding {
+                child.widget = crate::MediaQuery::remove_padding(child.widget.clone(), edges);
+            }
         }
         let scroll_extent = total_padding + inner_geometry.scroll_extent;
         let after_paint_extent = paint_offset(
@@ -2684,6 +2708,7 @@ impl SequenceRenderSliver {
                 corrected_cache_origin,
             );
             sliver_constraints.text_direction = constraints.text_direction;
+            sliver_constraints.safe_insets = constraints.safe_insets;
             let layout = sliver.borrow_mut().perform_layout(sliver_constraints);
             let geometry = layout.geometry.normalized();
             if total_correction.is_none() {
@@ -3367,6 +3392,7 @@ impl SequenceViewportDelegate {
                 (-scroll).clamp(-cache, 0.),
             );
             side.text_direction = constraints.text_direction;
+            side.safe_insets = constraints.safe_insets;
             side
         };
 

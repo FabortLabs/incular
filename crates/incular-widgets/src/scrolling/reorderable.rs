@@ -555,6 +555,7 @@ impl From<ReorderableList> for Widget {
             render_sliver = Box::new(super::PaddingRenderSliver {
                 inner: RefCell::new(render_sliver),
                 padding: padding.into(),
+                safe_padding: None,
             });
         }
         let inherit = value

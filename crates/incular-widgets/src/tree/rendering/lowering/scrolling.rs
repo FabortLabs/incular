@@ -82,9 +82,13 @@ pub(super) fn lower_scrolling(widget: &Widget, context: &DependencyContext) -> R
             });
             let resolved = behavior.resolve();
             let text_direction = context.depend::<TextDirection>();
+            let safe_insets = context
+                .depend::<crate::tree::context::RuntimeSafeInsets>()
+                .map_or(EdgeInsets::ZERO, |padding| padding.0);
             let config = if physics == config.physics
                 && resolved == config.behavior
                 && text_direction == config.text_direction
+                && safe_insets == config.safe_insets
             {
                 config.clone()
             } else {
@@ -92,6 +96,7 @@ pub(super) fn lower_scrolling(widget: &Widget, context: &DependencyContext) -> R
                 config.physics = physics;
                 config.behavior = resolved;
                 config.text_direction = text_direction;
+                config.safe_insets = safe_insets;
                 if text_direction == Some(TextDirection::Rtl) {
                     use crate::scrolling::SliverAxisResolution;
                     match &config.axis_resolution {

@@ -685,6 +685,7 @@ fn list_view_widget(value: ListView) -> Widget {
         sliver = Box::new(PaddingRenderSliver {
             inner: RefCell::new(sliver),
             padding: padding.into(),
+            safe_padding: None,
         });
     }
     single_sliver_viewport_with_options(
@@ -1023,6 +1024,7 @@ fn grid_view_widget(value: GridView) -> Widget {
         sliver = Box::new(PaddingRenderSliver {
             inner: RefCell::new(sliver),
             padding: padding.into(),
+            safe_padding: None,
         });
     }
     single_sliver_viewport_with_options(

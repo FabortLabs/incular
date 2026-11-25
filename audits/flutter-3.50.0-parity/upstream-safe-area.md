@@ -20,3 +20,17 @@ forward the keyboard inset to descendant queries without using it to
 calculate padding. This removed the old all-render invalidation scan.
 
 The Flutter diagnostics/FlagProperty registration is separate.
+
+## Sliver geometry
+
+Pinned :295, :314, :334, and :356 passed. The Rust target verifies
+the exact rectangles of all three slivers in each case, including
+the following sliver's scroll offset, nested consumption, edge
+selection/minimums, and a retained child when ambient padding changes.
+Consumed padding is also absent from descendant MediaQuery scope.
+
+The old wrapper padded individual materialized boxes but did not
+change sliver geometry, so its siblings and scroll range disagreed.
+The new path uses the retained sliver padding protocol, forwards
+remaining insets through nested slivers, and uses box scopes only
+to expose the adjusted inheritable data.

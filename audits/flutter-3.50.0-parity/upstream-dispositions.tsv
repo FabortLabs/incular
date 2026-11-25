@@ -1237,3 +1237,7 @@ packages/flutter/test/widgets/safe_area_test.dart	144	SafeArea alone - partial V
 packages/flutter/test/widgets/safe_area_test.dart	175	SafeArea with nested fixed-size container	paired-match	upstream-safe-area.md
 packages/flutter/test/widgets/safe_area_test.dart	210	SafeArea with nested fixed-size container - partial ViewInsets consume Padding	paired-match	upstream-safe-area.md
 packages/flutter/test/widgets/safe_area_test.dart	245	SafeArea does not crash at zero area	paired-match	upstream-safe-area.md
+packages/flutter/test/widgets/safe_area_test.dart	295	SliverSafeArea - basic	paired-match	upstream-safe-area.md#sliver-geometry
+packages/flutter/test/widgets/safe_area_test.dart	314	SliverSafeArea - basic	paired-match	upstream-safe-area.md#sliver-geometry
+packages/flutter/test/widgets/safe_area_test.dart	334	SliverSafeArea - nested	paired-match	upstream-safe-area.md#sliver-geometry
+packages/flutter/test/widgets/safe_area_test.dart	356	SliverSafeArea - changing	paired-match	upstream-safe-area.md#sliver-geometry

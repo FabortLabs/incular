@@ -20,7 +20,7 @@ struct RuntimeBrightness(Brightness);
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct RuntimeTextScale(pub(super) f32);
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct RuntimeSafeInsets(EdgeInsets);
+pub(super) struct RuntimeSafeInsets(pub(super) EdgeInsets);
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct RuntimeViewPadding(EdgeInsets);
 #[derive(Clone, Copy, Debug, PartialEq)]

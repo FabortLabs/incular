@@ -1447,6 +1447,7 @@ impl Widget {
                     axis,
                     reverse,
                     text_direction: None,
+                    safe_insets: EdgeInsets::ZERO,
                     axis_resolution: Default::default(),
                     physics,
                     cache_extent: crate::ScrollCacheExtent::pixels(cache_extent.max(0.)),

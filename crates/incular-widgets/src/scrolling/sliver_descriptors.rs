@@ -275,6 +275,7 @@ impl Sliver for SliverPadding {
                 |sliver| sliver.create_render_sliver(controller, axis, reverse),
             )),
             padding: self.padding,
+            safe_padding: None,
         })
     }
 }
@@ -1600,6 +1601,7 @@ impl RenderSliver for CrossAxisGroupRenderSliver {
                 constraints.cache_origin,
             );
             lane_constraints.text_direction = constraints.text_direction;
+            lane_constraints.safe_insets = constraints.safe_insets;
             let layout = sliver.perform_layout(lane_constraints);
             let geometry = layout.geometry.normalized();
             scroll_extent = scroll_extent.max(geometry.scroll_extent);
@@ -1962,9 +1964,13 @@ impl Sliver for SliverIgnorePointer {
     }
 }
 
-/// Sliver safe area insets wrapper.
+/// A sliver that avoids the selected inherited safe-area insets.
 #[derive(TypedBuilder)]
 pub struct SliverSafeArea {
+    #[builder(default = incular_config::MediaQueryEdges::ALL)]
+    edges: incular_config::MediaQueryEdges,
+    #[builder(default = EdgeInsets::ZERO)]
+    minimum: EdgeInsets,
     #[builder(setter(transform = |sliver: impl Sliver + 'static| {
         Box::new(sliver) as Box<dyn Sliver>
     }))]
@@ -1975,14 +1981,63 @@ impl SliverSafeArea {
     #[must_use]
     pub fn new(sliver: impl Sliver + 'static) -> Self {
         Self {
+            edges: incular_config::MediaQueryEdges::ALL,
+            minimum: EdgeInsets::ZERO,
             sliver: Box::new(sliver),
         }
+    }
+
+    #[must_use]
+    pub fn left(mut self, enabled: bool) -> Self {
+        self.edges.left = enabled;
+        self
+    }
+
+    #[must_use]
+    pub fn top(mut self, enabled: bool) -> Self {
+        self.edges.top = enabled;
+        self
+    }
+
+    #[must_use]
+    pub fn right(mut self, enabled: bool) -> Self {
+        self.edges.right = enabled;
+        self
+    }
+
+    #[must_use]
+    pub fn bottom(mut self, enabled: bool) -> Self {
+        self.edges.bottom = enabled;
+        self
+    }
+
+    #[must_use]
+    pub fn minimum(mut self, minimum: EdgeInsets) -> Self {
+        self.minimum = minimum;
+        self
     }
 }
 
 impl Sliver for SliverSafeArea {
     fn build(&self, controller: &ScrollController) -> Widget {
-        crate::SafeArea::new(self.sliver.build(controller)).into()
+        self.build_with_config(controller, Axis::Vertical, false)
+    }
+
+    fn build_with_config(
+        &self,
+        controller: &ScrollController,
+        axis: Axis,
+        reverse: bool,
+    ) -> Widget {
+        crate::SafeArea::new(self.sliver.build_with_config(controller, axis, reverse))
+            .sides(
+                self.edges.left,
+                self.edges.top,
+                self.edges.right,
+                self.edges.bottom,
+            )
+            .minimum(self.minimum)
+            .into()
     }
 
     fn create_render_sliver(
@@ -1992,10 +2047,10 @@ impl Sliver for SliverSafeArea {
         reverse: bool,
     ) -> Box<dyn RenderSliver> {
         let inner = self.sliver.create_render_sliver(controller, axis, reverse);
-        Box::new(WidgetWrapRenderSliver {
+        Box::new(PaddingRenderSliver {
             inner: RefCell::new(inner),
-            hidden: false,
-            wrap: Rc::new(|widget| crate::SafeArea::new(widget).into()),
+            padding: crate::EdgeInsetsGeometry::Physical(EdgeInsets::ZERO),
+            safe_padding: Some((self.minimum, self.edges)),
         })
     }
 }

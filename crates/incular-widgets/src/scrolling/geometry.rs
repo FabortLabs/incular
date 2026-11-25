@@ -345,6 +345,7 @@ pub struct SliverViewportConfig {
     pub(crate) axis: Axis,
     pub(crate) reverse: bool,
     pub(crate) text_direction: Option<TextDirection>,
+    pub(crate) safe_insets: EdgeInsets,
     /// Raw viewports supply a physical axis; high-level scroll views
     /// resolve a horizontal axis against Directionality.
     pub(crate) axis_resolution: SliverAxisResolution,
@@ -390,6 +391,7 @@ impl PartialEq for SliverViewportConfig {
             && self.axis == other.axis
             && self.reverse == other.reverse
             && self.text_direction == other.text_direction
+            && self.safe_insets == other.safe_insets
             && self.physics == other.physics
             && self.cache_extent == other.cache_extent
             && self.evict_outside_cache == other.evict_outside_cache

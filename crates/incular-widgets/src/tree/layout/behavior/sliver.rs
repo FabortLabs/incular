@@ -201,6 +201,7 @@ impl WidgetTree {
                         -cache_extent,
                     );
                     sliver.text_direction = config.text_direction;
+                    sliver.safe_insets = config.safe_insets;
                     sliver
                 };
                 let explicit_corrections = std::cell::Cell::new(0u64);
