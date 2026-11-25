@@ -52,3 +52,20 @@ pan slop and did not start. The new default extends the same
 sole-member fallback used by the prior axis drag repair. It
 still does not override an explicit slop requirement or steal
 a claim from another detector in the same pointer arena.
+
+## Button changes terminate the current drag
+
+Four pinned `gestures/drag_test.dart` registrations (:1806,
+:1824, :1857, :1880) check a real button-mask change on a
+mouse move. Before winning, a changed press reports cancel
+immediately, even if that event would have crossed slop.
+After winning, it emits end without applying the changed
+move, and later moves of that pointer produce nothing.
+The reused recognizer still starts and ends the following
+unmodified pointer normally.
+
+The core routes the changed sample through the same terminal
+path as a cancelled drag; prior state decides cancel versus
+end. It keeps the prior drag position and Flutter's ordering
+of velocity sampling before the button check. Ordinary tap
+and long-press button controls remain green.

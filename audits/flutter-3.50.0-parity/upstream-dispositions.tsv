@@ -1018,3 +1018,7 @@ packages/flutter/test/gestures/drag_test.dart	460	Should report initial down poi
 packages/flutter/test/gestures/drag_test.dart	1603	Should recognize drag	paired-match	upstream-monodrag-arena-threshold.md#start-down-and-event-timestamps
 packages/flutter/test/gestures/drag_test.dart	1665	Should recognize drag	paired-match	upstream-monodrag-arena-threshold.md#start-down-and-event-timestamps
 packages/flutter/test/gestures/drag_test.dart	14	Should recognize pan	paired-match	upstream-monodrag-arena-threshold.md#a-pan-wins-after-its-only-sibling-tap-rejects
+packages/flutter/test/gestures/drag_test.dart	1806	Button change before acceptance should lead to immediate cancel	paired-match	upstream-monodrag-arena-threshold.md#button-changes-terminate-the-current-drag
+packages/flutter/test/gestures/drag_test.dart	1824	Button change before acceptance should not prevent the next drag	paired-match	upstream-monodrag-arena-threshold.md#button-changes-terminate-the-current-drag
+packages/flutter/test/gestures/drag_test.dart	1857	Button change after acceptance should lead to immediate end	paired-match	upstream-monodrag-arena-threshold.md#button-changes-terminate-the-current-drag
+packages/flutter/test/gestures/drag_test.dart	1880	Button change after acceptance should not prevent the next drag	paired-match	upstream-monodrag-arena-threshold.md#button-changes-terminate-the-current-drag

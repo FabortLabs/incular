@@ -802,26 +802,44 @@ impl PointerGestureRecognizer {
         buttons: Option<u32>,
         synthesized: bool,
     ) -> GestureDecision {
+        let mut routed = event;
         if self.down.is_none_or(|down| down.pointer == event.pointer) {
             if event.phase == PointerPhase::Down {
                 self.down_buttons = buttons.filter(|&mask| mask != 0);
             } else if event.phase == PointerPhase::Move
                 && self.down.is_some()
-                && !self.long_press_started
-                && !self.long_press_rejected
-                && self.has_long_press_callbacks()
                 && self
                     .down_buttons
                     .zip(buttons)
                     .is_some_and(|(down, now)| down != now)
             {
-                // Flutter rejects a long press whose buttons changed before
-                // its deadline; an accepted long press keeps tracking.
-                self.long_press_rejected = true;
-                self.long_press_cancel();
+                if !self.long_press_started
+                    && (self.pan_started
+                        || self.has_horizontal_drag_callbacks()
+                        || self.has_vertical_drag_callbacks()
+                        || self.has_pan_callbacks())
+                {
+                    // Flutter adds the sample to the velocity tracker, then
+                    // gives up the pointer before considering slop or updating
+                    // the drag position. The common Cancel path terminates a
+                    // started drag, cancels a pending one and clears the press.
+                    if !synthesized {
+                        self.velocity
+                            .add_position(event.time, self.local(event.position));
+                    }
+                    routed.phase = PointerPhase::Cancel;
+                } else if !self.long_press_started
+                    && !self.long_press_rejected
+                    && self.has_long_press_callbacks()
+                {
+                    // An accepted long press keeps tracking; only a pending
+                    // long press rejects the changed mask.
+                    self.long_press_rejected = true;
+                    self.long_press_cancel();
+                }
             }
         }
-        let decision = self.observe_phase(event, synthesized);
+        let decision = self.observe_phase(routed, synthesized);
         if let Some(memory) = &self.tap_memory {
             memory.set(TapMemory {
                 last_tap: self.last_tap,
