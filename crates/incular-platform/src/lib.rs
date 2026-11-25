@@ -20,6 +20,7 @@ pub mod message_codecs;
 mod operation;
 mod platform_view;
 mod pointer;
+mod semantics_messages;
 mod spell_check;
 mod system_environment;
 mod system_ui_overlay_style;
@@ -63,6 +64,10 @@ pub use file_dialog::{
     FileDialogCapabilities, FileDialogError, FileDialogFilter, FileDialogFilterId, FileDialogKind,
     FileDialogOption, FileDialogOptions, FileDialogOutcome, FileDialogRequest, FileDialogRequestId,
     FileDialogSelection, FileDialogValidationError, FileExtension,
+};
+pub use semantics_messages::{
+    AccessibilityMessenger, Assertiveness, SemanticsAnnouncement, SemanticsEvent,
+    SemanticsMessageError, SemanticsService,
 };
 pub use incular_config::{TransparencyMode, WindowSizePolicy};
 pub use operation::{

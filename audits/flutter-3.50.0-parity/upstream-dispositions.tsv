@@ -1070,10 +1070,10 @@ packages/flutter/test/semantics/semantics_update_test.dart	95	Semantics update r
 packages/flutter/test/semantics/semantics_update_test.dart	194	Semantics update receives correct traversal transform with nested OverlayPortals	reference-ran-incular-open	upstream-semantic-native-updates.md
 packages/flutter/test/semantics/semantics_update_test.dart	271	Semantics update does not leak nodes to hit-test order when traversal parent is missing	reference-ran-incular-open	upstream-semantic-native-updates.md
 packages/flutter/test/semantics/semantics_update_test.dart	308	Semantics update removes detached OverlayPortal traversal child	paired-match	upstream-semantic-native-updates.md
-packages/flutter/test/semantics/semantics_service_test.dart	12	Semantic announcement	reference-ran-incular-open	upstream-attributed-semantics.md
+packages/flutter/test/semantics/semantics_service_test.dart	12	Semantic announcement	paired-match	upstream-semantics-messages.md
 packages/flutter/test/semantics/semantics_test.dart	70	SemanticsConfiguration can set both string label/value/hint and attributed version	partial-match	upstream-attributed-semantics.md#retained-speech-span-metadata
 packages/flutter/test/semantics/semantics_test.dart	901	Attributed String can concat	paired-match	upstream-attributed-semantics.md
-packages/flutter/test/semantics/semantics_node_send_event_test.dart	17	SemanticsNode.sendEvent reports error to FlutterError	reference-ran-incular-open	upstream-attributed-semantics.md
+packages/flutter/test/semantics/semantics_node_send_event_test.dart	17	SemanticsNode.sendEvent reports error to FlutterError	partial-match	upstream-semantics-messages.md
 packages/flutter/test/services/text_boundary_test.dart	60	Character boundary works	paired-match	upstream-text-boundary-services.md
 packages/flutter/test/services/text_boundary_test.dart	83	Character boundary works with grapheme	paired-match	upstream-text-boundary-services.md
 packages/flutter/test/services/text_boundary_test.dart	108	wordBoundary.moveByWordBoundary	paired-match	upstream-text-boundary-services.md
