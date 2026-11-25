@@ -870,3 +870,6 @@ repairs two historical mismatches: a paused ticker remains active
 without asking for animation frames, and a ticker started while
 paused first ticks after resume. Forced restoration frames can still
 execute post-frame callbacks.
+The [C04 recheck](focused-comparisons.md#c04-retained-recheck)
+now defers start and restart from a transient callback until the
+next frame under both runners. The original audit count is unchanged.

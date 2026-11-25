@@ -240,3 +240,14 @@ fn flutter350_ticker_started_in_transient_waits_for_next_batch() {
     assert_eq!(*ticks.borrow(), [Duration::from_millis(16)]);
 }
 ```
+
+### C04 retained recheck
+
+Pinned Flutter and Incular both defer a ticker started from a transient
+callback. The next callback reports 16 ms since that frame, not zero.
+A second paired authored control restarts a previously queued run
+before its callback; the canceled run does not tick, and the new run
+also first ticks in the next batch. The scheduler snapshots runs before
+dispatch and ignores stale run generations. Both lifecycle originals
+and the adjacent scheduler phase controls remain green. This does not
+claim general ordering of ordinary callbacks relative to tickers.

@@ -21,7 +21,7 @@ type FrameCallback = Box<dyn FnOnce(Instant)>;
 struct Scheduler {
     tickers: Vec<Weak<TickerState>>,
     /// Scratch buffer for [`begin_frame`], kept to reuse its allocation.
-    ticking: Vec<Rc<TickerState>>,
+    ticking: Vec<(Rc<TickerState>, u64)>,
     frame_callbacks: Vec<(u64, FrameCallback)>,
     /// Pending callbacks in each dispatch snapshot. The UI thread drops
     /// borrows while running callbacks, so they can cancel other members.
@@ -361,6 +361,25 @@ pub fn begin_frame(raw: Instant) {
     if !enabled {
         return;
     }
+    // A ticker started by this frame's callback belongs to the next batch,
+    // just like a new transient callback. Snapshot before invoking either.
+    let mut tickers = SCHEDULER.with(|scheduler| {
+        let mut scheduler = scheduler.borrow_mut();
+        let mut tickers = std::mem::take(&mut scheduler.ticking);
+        scheduler.tickers.retain(|ticker| ticker.strong_count() > 0);
+        tickers.extend(
+            scheduler
+                .tickers
+                .iter()
+                .filter_map(Weak::upgrade)
+                .filter(|ticker| ticker.active.get())
+                .map(|ticker| {
+                    let run = ticker.run.get();
+                    (ticker, run)
+                }),
+        );
+        tickers
+    });
     if has_batch {
         let _batch = ActiveFrameCallbackBatch;
         while let Some((_, callback)) = SCHEDULER.with(|scheduler| {
@@ -373,21 +392,10 @@ pub fn begin_frame(raw: Instant) {
             callback(now);
         }
     }
-    let mut tickers =
-        SCHEDULER.with(|scheduler| std::mem::take(&mut scheduler.borrow_mut().ticking));
-    SCHEDULER.with(|scheduler| {
-        let mut scheduler = scheduler.borrow_mut();
-        scheduler.tickers.retain(|ticker| ticker.strong_count() > 0);
-        tickers.extend(
-            scheduler
-                .tickers
-                .iter()
-                .filter_map(Weak::upgrade)
-                .filter(|ticker| ticker.active.get()),
-        );
-    });
-    for ticker in tickers.drain(..) {
-        ticker.tick(now);
+    for (ticker, run) in tickers.drain(..) {
+        if ticker.active.get() && ticker.run.get() == run {
+            ticker.tick(now);
+        }
     }
     SCHEDULER.with(|scheduler| scheduler.borrow_mut().ticking = tickers);
 }
@@ -453,6 +461,7 @@ pub fn end_frame(raw: Instant) {
 struct TickerState {
     on_tick: RefCell<Box<dyn FnMut(Instant, Duration)>>,
     active: Cell<bool>,
+    run: Cell<u64>,
     muted: Cell<bool>,
     /// The frame the current run started on; unset until its first frame.
     started: Cell<Option<Instant>>,
@@ -518,6 +527,7 @@ impl Ticker {
         let state = Rc::new(TickerState {
             on_tick: RefCell::new(Box::new(on_tick)),
             active: Cell::new(false),
+            run: Cell::new(0),
             muted: Cell::new(false),
             started: Cell::new(None),
             future: RefCell::new(None),
@@ -535,6 +545,7 @@ impl Ticker {
     /// the clock. Returns the run's [`TickerFuture`].
     pub fn start(&self) -> TickerFuture {
         if !self.state.active.replace(true) {
+            self.state.run.set(self.state.run.get().wrapping_add(1));
             self.state.started.set(SCHEDULER.with(|scheduler| {
                 let scheduler = scheduler.borrow();
                 if scheduler.post_frame_active {
