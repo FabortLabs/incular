@@ -938,3 +938,4 @@ packages/flutter/test/widgets/list_wheel_scroll_view_test.dart	1453	controller h
 packages/flutter/test/widgets/list_wheel_scroll_view_test.dart	1190	onSelectedItemChanged when a new item is closest to center	paired-match	upstream-wheel-drag-and-position.md#selection-notification-timing
 packages/flutter/test/widgets/list_wheel_scroll_view_test.dart	1231	onSelectedItemChanged with new change reporting behavior	paired-match	upstream-wheel-drag-and-position.md#selection-notification-timing
 packages/flutter/test/widgets/list_wheel_scroll_view_test.dart	1277	onSelectedItemChanged reports only in valid range	paired-match	upstream-wheel-drag-and-position.md#selection-notification-timing
+packages/flutter/test/services/text_input_test.dart	1250	TextEditingValue.isComposingRangeValid	paired-match	upstream-text-replacement-boundaries.md#composition-range-validity

@@ -52,6 +52,12 @@ impl TextRange {
         self.start <= self.end
     }
 
+    /// Whether this range can describe a slice of the supplied UTF-8 text.
+    #[must_use]
+    pub fn is_valid_for(self, text: &str) -> bool {
+        self.is_valid() && text.is_char_boundary(self.start) && text.is_char_boundary(self.end)
+    }
+
     #[must_use]
     pub const fn len(self) -> usize {
         self.end.saturating_sub(self.start)
@@ -179,6 +185,15 @@ impl TextEditingValue {
             selection: TextSelection::collapsed(0),
             composing: None,
         }
+    }
+
+    /// Flutter's `isComposingRangeValid`, using Incular's byte offsets.
+    /// An absent range is not valid; a collapsed range at a character
+    /// boundary is valid, including at the end of the string.
+    #[must_use]
+    pub fn is_composing_range_valid(&self) -> bool {
+        self.composing
+            .is_some_and(|range| range.is_valid_for(&self.text))
     }
 
     #[must_use]
@@ -345,10 +360,7 @@ impl TextEditingDelta {
         &self,
         value: &TextEditingValue,
     ) -> Result<TextEditingValue, InvalidTextDeltaRange> {
-        if !self.range.is_valid()
-            || !value.text.is_char_boundary(self.range.start)
-            || !value.text.is_char_boundary(self.range.end)
-        {
+        if !self.range.is_valid_for(&value.text) {
             return Err(InvalidTextDeltaRange {
                 range: self.range,
                 text_byte_len: value.text.len(),

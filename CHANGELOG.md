@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-text`: editing values can check whether their composing range
+  is present and valid for the UTF-8 text.
+
 - `incular-platform`: hosts can report a hover device joining or leaving
   at a known position without manufacturing a pointer move.
 

@@ -42,3 +42,14 @@ length. The Rust API retains its UTF-8 byte representation. An interior
 UTF-16 position without a representable UTF-8 boundary snaps down.
 All 24 Rust checks in the three focused targets passed. The historical
 ledger classifications remain the findings before remediation.
+
+## Composition range validity
+
+Pinned `services/text_input_test.dart:1250` and its Rust port agree:
+absent, inverted, or out-of-bounds ranges are invalid; an ordered range
+ending exactly at the text boundary is valid. The authored comparison
+also verifies that a collapsed range differs from no composition and
+covers a supplementary-plane character. Incular's native offsets are
+UTF-8 bytes and reject positions inside a UTF-8 scalar. Flutter's
+negative sentinel is represented as absent in Rust. Checked text deltas
+reuse this boundary predicate without changing their existing behavior.
