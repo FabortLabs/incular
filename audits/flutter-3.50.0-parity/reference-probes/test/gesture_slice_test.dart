@@ -46,14 +46,16 @@ void main() {
     expect(await run(math.pi / 2, const Offset(0, 20)), 1);
   });
   testWidgets('synthesized moves do not feed scale velocity', (t) async {
-    Future<double> run(bool synthetic, int pointer) async {
+    Future<(Offset, double)> run(bool synthetic, int pointer) async {
       final ends = <double>[];
+      final updates = <Offset>[];
       await t.pumpWidget(
         Directionality(
           textDirection: TextDirection.ltr,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onScaleStart: (_) {},
+            onScaleUpdate: (d) => updates.add(d.focalPoint),
             onScaleEnd: (d) => ends.add(d.velocity.pixelsPerSecond.dx),
             child: const SizedBox.expand(),
           ),
@@ -81,10 +83,14 @@ void main() {
           timeStamp: const Duration(milliseconds: 45),
         ),
       );
-      return ends.single;
+      return (updates.last, ends.single);
     }
 
-    expect(await run(false, 1), greaterThan(1000));
-    expect(await run(true, 2), 0);
+    final (ordinaryFocal, ordinaryVelocity) = await run(false, 1);
+    final (syntheticFocal, syntheticVelocity) = await run(true, 2);
+    expect(ordinaryFocal, const Offset(180, 100));
+    expect(syntheticFocal, ordinaryFocal);
+    expect(ordinaryVelocity, greaterThan(1000));
+    expect(syntheticVelocity, 0);
   });
 }

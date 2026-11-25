@@ -311,7 +311,11 @@ impl ScaleGestureDetector {
                     .pointers
                     .iter_mut()
                     .find(|contact| contact.pointer == event.pointer)?;
-                contact.velocity.add_position(event.time, event.position);
+                // Synthesized motion updates the contact geometry but is
+                // not a physical velocity sample.
+                if !event.synthesized {
+                    contact.velocity.add_position(event.time, event.position);
+                }
                 contact.position = event.position;
                 (false, true)
             }

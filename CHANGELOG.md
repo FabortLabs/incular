@@ -198,6 +198,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-gestures`: synthesized scale moves update the focal point
+  without creating release velocity.
+
 - `incular-gestures`: release velocity estimation no longer allocates
   temporary buffers for its bounded history.
 

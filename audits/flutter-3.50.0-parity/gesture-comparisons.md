@@ -141,3 +141,13 @@ fn audit_gesture_synthesized_moves_do_not_feed_scale_velocity() {
     assert_eq!(run(true),0.);
 }
 ```
+
+## Synthesized scale velocity repair
+
+C10 now matches the pinned authored reference: regular and synthesized
+sequences finish with the same focal position, but only regular motion
+feeds the release velocity. The reproducer was still failing at
+2,000 px/s just before the repair. Ten focused Rust tests passed with
+both Flutter probes. This checks raw touch recognizer inputs, not native
+trackpad pan/zoom or resampling at the runtime boundary. C10 is an
+authored behavior probe and does not increase the upstream case count.
