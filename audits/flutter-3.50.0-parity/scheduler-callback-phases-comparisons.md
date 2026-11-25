@@ -88,3 +88,20 @@ debug behavior: after setting the scale back to 1 there is no error;
 at 3, the call fails with the caller's exact reason. Rust's companion
 fallible API additionally exposes the active scale in a typed error.
 Six focused Rust checks and both named Flutter originals passed.
+
+## Prioritized UI-thread work
+
+The exact `scheduler/scheduler_test.dart:74` passed on both sides.
+All seven threshold stages matched, including withholding work when
+blocked, running the highest priority one per turn, accepting new work
+between stages, and returning false after the last task. Rust also
+checks the default policy with real runtime frames: an animation-priority
+task runs before the ticker, then an idle task waits until the ticker
+stops. Tracked task results preserve the callback's value and report a
+panic as an error in unwinding builds. The UI queue is separate from
+the existing background task executor.
+
+Nineteen focused Rust checks passed. The named case exercises queue
+semantics, not Flutter's engine timer driver or asynchronous result
+flattening; the native Rust runtime services eligible work before its
+next delivered frame, one short task at a time.

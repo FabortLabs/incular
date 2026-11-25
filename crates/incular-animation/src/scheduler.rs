@@ -16,6 +16,11 @@ use std::{
     time::Duration,
 };
 
+pub use crate::ui_tasks::{
+    ScheduledTaskError, has_ready_scheduled_task, reset_scheduling_strategy,
+    run_one_scheduled_task, schedule_task, set_scheduling_strategy,
+};
+
 type FrameCallback = Box<dyn FnOnce(Instant)>;
 
 enum Transient {
@@ -360,6 +365,13 @@ pub fn schedule_frame_callback(callback: impl FnOnce(Instant) + 'static) -> Fram
             .borrow_mut()
             .enqueue(Transient::Callback(Box::new(callback)))
     })
+}
+
+/// Number of transient callbacks queued for the next frame, including
+/// tickers. Active callbacks already taken into a frame are not counted.
+#[must_use]
+pub fn transient_callback_count() -> usize {
+    SCHEDULER.with(|scheduler| scheduler.borrow().frame_callbacks.len())
 }
 
 /// Flutter `SchedulerBinding.cancelFrameCallbackWithId`. Returns whether the

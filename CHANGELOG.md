@@ -7,6 +7,10 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-animation` and `incular-runtime`: the UI scheduler can run
+  short, prioritized tasks separately from background jobs. The default
+  policy waits for animations before running idle-priority tasks.
+
 - `incular-animation`: added a debug assertion and a recoverable check
   for a time-dilation scale that has not been reset to 1.
 

@@ -1230,6 +1230,8 @@ impl Runtime {
             || self.tree.has_pending_application_fonts()
             || self.tree.has_pending_scroll_animations()
             || incular_animation::scheduler::has_scheduled_frame()
+            || (self.lifecycle != ApplicationLifecycle::Suspended
+                && incular_animation::scheduler::has_ready_scheduled_task())
     }
     #[must_use]
     pub fn handle_input(&mut self, event: InputEvent) -> Option<EventTarget> {
@@ -2670,6 +2672,11 @@ impl Runtime {
         // now, so they rebuild in this frame.
         crate::environment::flush_deferred_invalidations();
         self.process_runtime_work_at(now);
+        if self.lifecycle != ApplicationLifecycle::Suspended {
+            // Yield after one short UI task. Animation-priority work can
+            // run before a frame; idle work waits for its transient queue.
+            let _ = incular_animation::scheduler::run_one_scheduled_task();
+        }
         // Flutter `handleBeginFrame`: frame callbacks and tickers run with the
         // frame timestamp before the build, so what they change builds now.
         incular_animation::scheduler::begin_frame(now);

@@ -165,3 +165,9 @@ ordering value, not a task executor.
 Use `debug_assert_no_time_dilation(reason)` to catch time scales that
 were left altered during development. `try_assert_no_time_dilation(reason)`
 also checks release builds and returns a typed error instead of panicking.
+
+Use `incular::animation::scheduler::schedule_task` for short UI-thread
+callbacks, not blocking or background work. The runtime runs one eligible
+task before each frame. By default, tasks below `Priority::ANIMATION`
+wait until there are no pending transient callbacks. You can await the
+result, or drop the future to let the callback run without observing it.

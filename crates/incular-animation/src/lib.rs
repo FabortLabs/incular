@@ -13,6 +13,7 @@ pub mod physics;
 pub mod scheduler;
 mod style;
 mod tween;
+mod ui_tasks;
 mod value;
 
 pub use animations::{
