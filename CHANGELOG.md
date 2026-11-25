@@ -311,6 +311,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- A train hop publishes the new status and value before calling
+  onSwitchedTrain, regardless of observer registration order.
+
 - Derived animation observers notify only when their own value or status
   changes. Repeated train notifications and equal ProxyAnimation swaps
   no longer duplicate observer callbacks.

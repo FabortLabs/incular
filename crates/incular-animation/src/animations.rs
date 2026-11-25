@@ -29,6 +29,18 @@ pub trait AnimationSource {
     /// The source notified whenever this node's value or status changes.
     /// Derived nodes forward their parents' notifications through it.
     fn changes(&self) -> DependencySource;
+
+    /// Optional source for nodes with ordered value and status publication.
+    #[doc(hidden)]
+    fn value_observations(&self) -> DependencySource {
+        self.changes()
+    }
+
+    /// Optional source for nodes with ordered value and status publication.
+    #[doc(hidden)]
+    fn status_observations(&self) -> DependencySource {
+        self.changes()
+    }
 }
 
 impl AnimationSource for AnimationController {
@@ -118,19 +130,20 @@ impl DoubleAnimation {
     /// only when the value actually changes.
     #[must_use = "keep the subscription alive to observe changes"]
     pub fn observe(&self, listener: impl Fn(f32) + 'static) -> Subscription {
-        self.observe_distinct(Self::value, listener)
+        self.observe_distinct(Self::value, self.0.value_observations(), listener)
     }
 
     /// Flutter `Animation.addStatusListener` for a derived node. As with
     /// [`Self::observe`], it runs when the status changes.
     #[must_use = "keep the subscription alive to observe changes"]
     pub fn observe_status(&self, listener: impl Fn(AnimationStatus) + 'static) -> Subscription {
-        self.observe_distinct(Self::status, listener)
+        self.observe_distinct(Self::status, self.0.status_observations(), listener)
     }
 
     fn observe_distinct<T: Copy + PartialEq + 'static>(
         &self,
         read: fn(&Self) -> T,
+        source: DependencySource,
         listener: impl Fn(T) + 'static,
     ) -> Subscription {
         let node = self.clone();
@@ -140,7 +153,7 @@ impl DoubleAnimation {
             let _skip_build_tracking = TrackingGuard::enter(|_| {});
             Cell::new(read(&node))
         };
-        self.0.changes().subscribe((), move || {
+        source.subscribe((), move || {
             let now = read(&node);
             // Store before invoking user code; a reentrant mutation must
             // compare with the value already delivered to its observer.
@@ -187,6 +200,14 @@ impl AnimationSource for DoubleAnimation {
 
     fn changes(&self) -> DependencySource {
         self.0.changes()
+    }
+
+    fn value_observations(&self) -> DependencySource {
+        self.0.value_observations()
+    }
+
+    fn status_observations(&self) -> DependencySource {
+        self.0.status_observations()
     }
 }
 
@@ -709,6 +730,10 @@ struct TrainState {
     current_below: Option<bool>,
     on_switched_train: RefCell<Option<Rc<dyn Fn()>>>,
     changes: DependencySource,
+    value_observations: DependencySource,
+    status_observations: DependencySource,
+    last_value: Cell<f32>,
+    last_status: Cell<AnimationStatus>,
     /// Flutter's value listener on the current train.
     current_link: RefCell<Option<Subscription>>,
     /// Flutter's value listener on the next train; moves to `current_link`
@@ -721,8 +746,7 @@ struct TrainState {
 fn train_relay(state: Weak<TrainState>) -> impl Fn() {
     move || {
         if let Some(state) = state.upgrade() {
-            state.hop();
-            state.changes.notify();
+            state.publish_train_change();
         }
     }
 }
@@ -731,9 +755,9 @@ impl TrainState {
     /// Flutter `_valueChangeHandler`: hops once `next` has caught up with, or
     /// crossed, `current`, then runs `onSwitchedTrain`. Called from the
     /// change of either train, never from a read.
-    fn hop(&self) {
+    fn hop(&self) -> bool {
         let Some(next) = self.next.borrow().clone() else {
-            return;
+            return false;
         };
         let current = self.current.borrow().value();
         let next_value = next.value();
@@ -743,7 +767,7 @@ impl TrainState {
             None => true,
         };
         if !hop {
-            return;
+            return false;
         }
         *self.current.borrow_mut() = next;
         *self.next.borrow_mut() = None;
@@ -751,9 +775,37 @@ impl TrainState {
         // edge of the train that is now current takes its place.
         let link = self.next_link.borrow_mut().take();
         *self.current_link.borrow_mut() = link;
-        let callback = self.on_switched_train.borrow().clone();
-        if let Some(callback) = callback {
-            callback();
+        true
+    }
+
+    fn publish_train_change(&self) {
+        let hopped = self.hop();
+        let (value, status) = {
+            let current = self.current.borrow();
+            (current.value(), current.status())
+        };
+        let value_changed = self.last_value.replace(value) != value;
+        let status_changed = self.last_status.replace(status) != status;
+        // Flutter announces the new train's status before the new value,
+        // and only then runs the hop callback. For an ordinary update the
+        // current train's value notification comes first.
+        if hopped && status_changed {
+            self.status_observations.notify();
+        }
+        if value_changed {
+            self.value_observations.notify();
+        }
+        if !hopped && status_changed {
+            self.status_observations.notify();
+        }
+        if hopped || value_changed || status_changed {
+            self.changes.notify();
+        }
+        if hopped {
+            let callback = self.on_switched_train.borrow().clone();
+            if let Some(callback) = callback {
+                callback();
+            }
         }
     }
 }
@@ -771,12 +823,18 @@ impl TrainHoppingAnimation {
             (true, Some(next)) => (next, None),
             (_, next) => (current, next),
         };
+        let last_value = Cell::new(current.value());
+        let last_status = Cell::new(current.status());
         let state = Rc::new(TrainState {
             current: RefCell::new(current),
             next: RefCell::new(next),
             current_below,
             on_switched_train: RefCell::new(None),
             changes: DependencySource::default(),
+            value_observations: DependencySource::default(),
+            status_observations: DependencySource::default(),
+            last_value,
+            last_status,
             current_link: RefCell::new(None),
             next_link: RefCell::new(None),
         });
@@ -829,6 +887,14 @@ impl AnimationSource for TrainHoppingAnimation {
 
     fn changes(&self) -> DependencySource {
         self.state.changes.clone()
+    }
+
+    fn value_observations(&self) -> DependencySource {
+        self.state.value_observations.clone()
+    }
+
+    fn status_observations(&self) -> DependencySource {
+        self.state.status_observations.clone()
     }
 }
 

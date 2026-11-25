@@ -220,3 +220,49 @@ fn reentrant_value_observation_delivers_each_distinct_state_once() {
     parent.set_value(0.6);
     assert_eq!(&*values.borrow(), &[0.6, 0.7]);
 }
+
+#[test]
+fn a_hop_publishes_new_status_then_value_before_switch_callback() {
+    #[derive(Debug, PartialEq)]
+    enum Event {
+        Value(f32),
+        Status(AnimationStatus),
+        Hop,
+    }
+    let first = controller(0.5);
+    let next = controller(0.75);
+    let _ = next.reverse_on_next_tick();
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let train = TrainHoppingAnimation::new(&first, Some((&next).into())).on_switched_train({
+        let log = log.clone();
+        move || log.borrow_mut().push(Event::Hop)
+    });
+    let animation: DoubleAnimation = train.into();
+    // Deliberately register the value observer first. The hop itself must
+    // still deliver the status before that value notification.
+    let _values = animation.observe({
+        let log = log.clone();
+        move |value| log.borrow_mut().push(Event::Value(value))
+    });
+    let _status = animation.observe_status({
+        let log = log.clone();
+        move |status| log.borrow_mut().push(Event::Status(status))
+    });
+    first.set_value(0.55);
+    assert_eq!(log.take(), vec![Event::Value(0.55)]);
+    next.set_value(0.8);
+    assert!(log.borrow().is_empty());
+    next.set_value(0.25);
+    assert_eq!(
+        log.take(),
+        vec![
+            Event::Status(AnimationStatus::Reverse),
+            Event::Value(0.25),
+            Event::Hop
+        ]
+    );
+    first.set_value(0.6);
+    assert!(log.borrow().is_empty());
+    next.set_value(0.2);
+    assert_eq!(log.take(), vec![Event::Value(0.2)]);
+}

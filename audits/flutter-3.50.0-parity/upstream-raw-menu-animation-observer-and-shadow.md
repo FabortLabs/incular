@@ -51,4 +51,13 @@ swaps notify neither channel, a status-only swap reports only status,
 a value-only swap only value, and the detached parent cannot notify.
 Observing does not add a reactive build dependency; regular reads still
 track normally. Reentrant value changes report each distinct value once.
-This does not yet certify the exact relative order of a hop's callbacks.
+The following authored control separately pins the hop callback order.
+
+### Hopping to a new train
+
+Both frameworks deliver the new train's status first, then its value,
+then onSwitchedTrain, even when the value observer was registered
+first. The pending, uncrossed train does not replay an unchanged value;
+the departed train stops notifying immediately. The reference explicitly
+sets the initial controller value before registration to compare states
+without its first unrelated status report.
