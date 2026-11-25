@@ -111,4 +111,50 @@ void main() {
     await tester.pump();
     expect(FocusManager.instance.primaryFocus, same(nodes[0]));
   });
+
+  testWidgets('Focus owns a stable node when none is provided', (tester) async {
+    final before = FocusNode();
+    final after = FocusNode();
+    addTearDown(before.dispose);
+    addTearDown(after.dispose);
+    final identity = GlobalKey();
+    Widget scene(double height) => Directionality(
+      textDirection: TextDirection.ltr,
+      child: FocusTraversalGroup(
+        child: Column(
+          children: [
+            Focus(
+              focusNode: before,
+              autofocus: true,
+              child: const SizedBox.square(dimension: 10),
+            ),
+            Focus(
+              child: SizedBox(key: identity, width: 10, height: height),
+            ),
+            Focus(
+              focusNode: after,
+              child: const SizedBox.square(dimension: 10),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(scene(10));
+    await tester.pump();
+    expect(before.hasPrimaryFocus, isTrue);
+    final internal = Focus.of(identity.currentContext!);
+    expect(before.nextFocus(), isTrue);
+    await tester.pump();
+    expect(FocusManager.instance.primaryFocus, same(internal));
+    expect(before.hasFocus || after.hasFocus, isFalse);
+
+    await tester.pumpWidget(scene(14));
+    await tester.pump();
+    expect(Focus.of(identity.currentContext!), same(internal));
+    expect(internal.hasPrimaryFocus, isTrue);
+    expect(internal.nextFocus(), isTrue);
+    await tester.pump();
+    expect(after.hasPrimaryFocus, isTrue);
+  });
 }

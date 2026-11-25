@@ -87,3 +87,14 @@ focused sibling unchanged. All eight Rust tests in the traversal
 target pass. These are partial ports: Tab does not expose the
 original programmatic nextFocus return value, and the nested
 test checks node focus rather than Focus.of and onFocusChange.
+
+### Focus owns a node by default
+
+A plain Focus previously collapsed to its child when no node was
+supplied, so Tab skipped it altogether. Each mounted Focus now owns
+a node unless one is supplied, and the node survives compatible
+rebuilds. A pinned behavioral probe and the Rust counterpart verify
+entering the middle Focus, preserving it across a child height change,
+and then continuing to the following control. Initial autofocus and
+supplied-node behavior still pass. All 29 focused Rust checks passed;
+this authored verification does not add an original registration.

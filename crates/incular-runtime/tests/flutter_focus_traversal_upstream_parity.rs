@@ -279,3 +279,42 @@ fn an_empty_nested_rtl_group_keeps_the_only_focused_node() {
     assert_eq!(host.runtime.focused_element(), Some(initial));
     assert!(node.has_primary_focus());
 }
+
+#[test]
+fn focus_without_a_supplied_node_tabulates_and_keeps_focus_on_rebuild() {
+    let before = FocusNode::new();
+    let after = FocusNode::new();
+    let scene = |height| {
+        let own_node = Widget::from(Focus::new(SizedBox::new().width(10.).height(height)))
+            .with_key("own focus");
+        let group = FocusTraversalGroup::new(Column::new(vec![
+            Widget::from(focus_target(&before).autofocus(true)),
+            own_node,
+            Widget::from(focus_target(&after)),
+        ]));
+        Widget::from(Directionality::new(TextDirection::Ltr, group))
+    };
+    let mut host = Host::mount(scene(10.));
+    assert!(before.has_primary_focus());
+    let own = host
+        .runtime
+        .tree()
+        .element_with_key(&"own focus".into())
+        .expect("focus boundary with an internally owned node");
+    host.tab(false);
+    assert_eq!(host.runtime.focused_element(), Some(own));
+    assert!(!before.has_focus() && !after.has_focus());
+
+    let root = host.runtime.tree().root().unwrap();
+    host.runtime
+        .schedule_update(
+            root,
+            Directionality::new(TextDirection::Ltr, scene(14.)).into(),
+        )
+        .unwrap();
+    host.frame();
+    host.frame();
+    assert_eq!(host.runtime.focused_element(), Some(own));
+    host.tab(false);
+    assert!(after.has_primary_focus());
+}

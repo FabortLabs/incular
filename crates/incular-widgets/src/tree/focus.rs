@@ -17,6 +17,30 @@ fn external_node(kind: &WidgetKind) -> Option<&incular_gestures::FocusNode> {
     }
 }
 
+pub(super) fn owned_focus_permission(widget: &Widget) -> Option<bool> {
+    match widget.kind() {
+        WidgetKind::Gesture { callbacks, .. } => callbacks.owned_focus_permission,
+        _ => None,
+    }
+}
+
+/// The declarative descriptor has no node to allocate on rebuild. Resolve
+/// one for each actual mount, or keep the one from the compatible element.
+pub(super) fn instantiate_owned_focus_node(widget: &mut Widget, previous: Option<&Widget>) {
+    let Some(can_request) = owned_focus_permission(widget) else {
+        return;
+    };
+    let node = previous
+        .filter(|previous| owned_focus_permission(previous).is_some())
+        .and_then(|previous| external_node(previous.kind()))
+        .cloned()
+        .unwrap_or_default();
+    node.set_can_request_focus(can_request);
+    if let WidgetKind::Gesture { callbacks, .. } = widget.kind_mut() {
+        callbacks.focus_node = Some(node);
+    }
+}
+
 impl WidgetTree {
     /// Enables deferred FocusNode requests for a runtime-owned tree.
     #[doc(hidden)]

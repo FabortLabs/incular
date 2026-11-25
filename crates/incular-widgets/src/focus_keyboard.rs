@@ -14,7 +14,7 @@ pub use incular_gestures::{
 use crate::{Widget, WidgetKind};
 
 /// A widget that manages keyboard focus for a subtree.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Focus {
     node: Option<FocusNode>,
     autofocus: bool,
@@ -22,15 +22,24 @@ pub struct Focus {
     child: Option<Widget>,
 }
 
+impl Default for Focus {
+    fn default() -> Self {
+        Self {
+            node: None,
+            autofocus: false,
+            can_request_focus: true,
+            child: None,
+        }
+    }
+}
+
 impl Focus {
     /// Creates a Focus boundary wrapping a child widget.
     #[must_use]
     pub fn new(child: impl Into<Widget>) -> Self {
         Self {
-            node: None,
-            autofocus: false,
-            can_request_focus: true,
             child: Some(child.into()),
+            ..Self::default()
         }
     }
 
@@ -61,20 +70,15 @@ impl From<Focus> for Widget {
         let child = value
             .child
             .unwrap_or_else(|| crate::SizedBox::shrink().into());
-        // Focus is a retained runtime concern, not a paint-only wrapper. Keep
-        // the node on a gesture callback record so WidgetTree's existing
-        // focus traversal and keyboard dispatch can observe it.
-        let node = value
-            .node
-            .or_else(|| (value.autofocus || !value.can_request_focus).then(FocusNode::new));
-        let Some(node) = node else {
-            return child;
-        };
-        if !value.can_request_focus {
+        if let Some(node) = &value.node
+            && !value.can_request_focus
+        {
             node.set_can_request_focus(false);
         }
+        let owned_focus_permission = value.node.is_none().then_some(value.can_request_focus);
         let callbacks = incular_gestures::GestureCallbacks {
-            focus_node: Some(node),
+            focus_node: value.node,
+            owned_focus_permission,
             autofocus: value.autofocus,
             // Flutter's `Focus.includeSemantics` defaults to true.
             include_semantics: true,

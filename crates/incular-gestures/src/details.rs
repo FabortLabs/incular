@@ -455,6 +455,10 @@ pub struct GestureCallbacks {
     /// platform-neutral callback value lets the retained tree route keyboard
     /// input without introducing a runtime dependency into gestures.
     pub focus_node: Option<FocusNode>,
+    /// A retained Focus widget without a supplied node. The tree creates
+    /// one node for the mounted element and applies this focus permission.
+    #[doc(hidden)]
+    pub owned_focus_permission: Option<bool>,
     /// Combined retained focus, hover, and focus-highlight behavior.
     pub focus_behavior: Option<Rc<FocusBehavior>>,
     pub autofocus: bool,

@@ -1785,7 +1785,8 @@ fn gesture_callbacks_eq(left: &GestureCallbacks, right: &GestureCallbacks) -> bo
             &left.action_invocation_listener,
             &right.action_invocation_listener,
         )
-        && left.focus_node == right.focus_node
+        && left.owned_focus_permission == right.owned_focus_permission
+        && (left.owned_focus_permission.is_some() || left.focus_node == right.focus_node)
         && same_rc(&left.focus_behavior, &right.focus_behavior)
         && left.autofocus == right.autofocus
         && left.include_semantics == right.include_semantics

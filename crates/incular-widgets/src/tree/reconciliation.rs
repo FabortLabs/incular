@@ -2,6 +2,7 @@
 
 use super::*;
 
+use super::focus::{instantiate_owned_focus_node, owned_focus_permission};
 use super::rendering::{carry_replaced_transition, render_kind};
 use super::widget::WidgetChildren;
 use crate::overscroll_indicator::ScrollOverscrollIndicator;
@@ -363,6 +364,9 @@ impl WidgetTree {
         parent: Option<ElementId>,
         mut widget: Widget,
     ) -> Result<ElementId, TreeError> {
+        if owned_focus_permission(&widget).is_some() {
+            instantiate_owned_focus_node(&mut widget, None);
+        }
         let handlers = &mut self.pending_handlers;
         let next = &mut self.next_action;
         widget.bind_callbacks(&mut |callback| {
@@ -582,6 +586,12 @@ impl WidgetTree {
             .ok_or(TreeError::MissingElement(id))?
             .widget
             .clone();
+        let resolved_focus = owned_focus_permission(widget).map(|_| {
+            let mut mounted = widget.clone();
+            instantiate_owned_focus_node(&mut mounted, Some(&old));
+            mounted
+        });
+        let widget = resolved_focus.as_ref().unwrap_or(widget);
         // A retained builder's new descriptor takes over the element's state
         // (Flutter keeps `State` across `didUpdateWidget`).
         if let (
