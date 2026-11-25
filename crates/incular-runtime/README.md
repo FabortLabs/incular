@@ -263,3 +263,7 @@ factories safely; it does not restore arbitrary window position or DPI. A user
 closing an auxiliary restorable window removes it from the next session, while
 application shutdown preserves active descriptors. Restoration storage is not
 encrypted: never place passwords, tokens, or other secrets in it.
+
+`Runtime::hardware_keyboard()` reports physical positions, portable logical
+keys, and lock toggles observed so far. The runtime updates it before routing
+the event to the widget tree.

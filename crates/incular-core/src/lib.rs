@@ -5,6 +5,7 @@ mod caching_iterable;
 mod context;
 mod fast_hash;
 mod geometry;
+mod hardware_keyboard;
 pub mod hot_reload;
 mod id;
 /// Platform-neutral input event values and the standardized keyboard
@@ -30,6 +31,7 @@ pub use geometry::{
     ChangeImpact, Color, DirtyFlags, HslColor, HsvColor, Invalidation, Lerp, Offset, Rect, Size,
     Transform, finite_non_negative, finite_or_zero,
 };
+pub use hardware_keyboard::HardwareKeyboardState;
 pub use id::IdGenerator;
 pub use input::{
     BACK_POINTER_BUTTON, Code, DeviceGestureSettings, DragStartBehavior, FORWARD_POINTER_BUTTON,

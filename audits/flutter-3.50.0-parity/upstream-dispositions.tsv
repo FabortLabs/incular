@@ -836,3 +836,5 @@ packages/flutter/test/services/system_chrome_test.dart	312	copyWith can override
 packages/flutter/test/services/system_chrome_test.dart	331	SystemUiOverlayStyle implements debugFillProperties	paired-match	upstream-system-chrome-comparisons.md#system-ui-overlay-style-values
 packages/flutter/test/services/system_chrome_test.dart	363	SystemChrome handles detached lifecycle state	paired-match	upstream-system-chrome-comparisons.md#detach-resets-the-delivery-cache
 packages/flutter/test/services/keyboard_key_test.dart	50	Control characters are recognized as such	paired-match	upstream-keyboard-services.md#control-key-label-classification
+packages/flutter/test/services/hardware_keyboard_test.dart	18	HardwareKeyboard records pressed keys and enabled locks	paired-match	upstream-keyboard-services.md#pressed-keys-and-lock-state
+packages/flutter/test/services/hardware_keyboard_test.dart	105	KeyEvent can tell which keys are pressed	paired-match	upstream-keyboard-services.md#pressed-keys-and-lock-state

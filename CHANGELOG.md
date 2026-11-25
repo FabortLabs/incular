@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-runtime`: exposes pressed physical positions, portable logical
+  keys, and lock toggles observed from the delivered keyboard stream.
+
 - `incular-core`: added Flutter-compatible C0/C1 control classification
   for single logical keyboard labels.
 

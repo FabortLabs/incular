@@ -171,6 +171,7 @@ pub struct Runtime {
     pub(crate) text_handle_drag: Option<text_gestures::TextHandleDrag>,
     /// Modifier keys held, from the latest key event (`HardwareKeyboard`).
     pub(crate) keyboard_modifiers: incular_core::Modifiers,
+    hardware_keyboard: incular_core::HardwareKeyboardState,
     /// The focused field, content revision and selection whose caret was
     /// last shown on screen (Flutter's `_scheduleShowCaretOnScreen`).
     pub(crate) caret_reveal_key: Option<(ElementId, u64, TextSelection)>,
@@ -348,6 +349,7 @@ impl Runtime {
             text_long_press: None,
             text_handle_drag: None,
             keyboard_modifiers: incular_core::Modifiers::empty(),
+            hardware_keyboard: incular_core::HardwareKeyboardState::default(),
             caret_reveal_key: None,
             ime_composition: None,
             text_histories: HashMap::new(),
@@ -2190,7 +2192,14 @@ impl Runtime {
         }
     }
 
+    /// The portable pressed-key and lock state observed by this runtime.
+    #[must_use]
+    pub const fn hardware_keyboard(&self) -> &incular_core::HardwareKeyboardState {
+        &self.hardware_keyboard
+    }
+
     fn handle_key(&mut self, event: KeyboardEvent) {
+        self.hardware_keyboard.observe(&event);
         self.track_keyboard_modifiers(&event);
         // Widgets that show held modifiers (menu accelerator underlines)
         // rebuild when one is pressed or released.
