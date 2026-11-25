@@ -1248,7 +1248,7 @@ impl WidgetTree {
         let dispositions = self.input.gesture_arena.entries(key);
         // Flutter installs tap and monodrag as separate members. For a
         // single detector that stores both locally, a losing tap can leave
-        // its axis drag as the default winner without passing axis slop.
+        // its remaining drag as the default winner without passing that slop.
         // Don't bypass slop when a different detector or scroll chain
         // still participates.
         let can_resolve_local_default = event.phase == incular_core::PointerPhase::Move
@@ -1288,7 +1288,7 @@ impl WidgetTree {
                                 GestureDecision::Pending | GestureDecision::Reject
                             )
                             && let Some(action) =
-                                recognizer.accept_remaining_axis_after_tap_loss(&event)
+                                recognizer.accept_remaining_drag_after_tap_loss(&event)
                         {
                             decision = GestureDecision::Accept(action);
                         }

@@ -38,3 +38,17 @@ on release. Diagonal movement retains its true world position
 while each update drops the y component of its delta. :423
 anchors the monotonic test clock and observes the original
 100/200/300ms timestamps, including the stationary sample.
+
+## A pan wins after its only sibling tap rejects
+
+The pinned `gestures/drag_test.dart:14` keeps the pan pending
+through the press and 14px diagonal move. At 22px, the tap
+has rejected and the pan becomes the default winner, despite
+remaining below normal pan slop. A subsequent move produces
+(0,-5), and release sends exactly one end without a tap.
+
+Before the repair the combined Incular detector waited for
+pan slop and did not start. The new default extends the same
+sole-member fallback used by the prior axis drag repair. It
+still does not override an explicit slop requirement or steal
+a claim from another detector in the same pointer arena.

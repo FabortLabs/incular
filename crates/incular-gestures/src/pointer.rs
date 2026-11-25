@@ -322,11 +322,11 @@ impl PointerGestureRecognizer {
         self.drag.pending_time
     }
 
-    /// Resolves the sole local axis drag after its sibling tap lost the
+    /// Resolves the sole local drag after its sibling tap lost the
     /// press. The host must call this only when there is no competing
     /// member outside this combined recognizer.
     #[doc(hidden)]
-    pub fn accept_remaining_axis_after_tap_loss(
+    pub fn accept_remaining_drag_after_tap_loss(
         &mut self,
         event: &PointerEvent,
     ) -> Option<GestureAction> {
@@ -346,9 +346,6 @@ impl PointerGestureRecognizer {
         }
         let down = self.down.filter(|down| down.pointer == event.pointer)?;
         let action = self.sole_drag_axis()?;
-        if matches!(action, PanAction::Pan) {
-            return None;
-        }
         Some(self.begin_drag(down, action, event, self.callbacks.drag_start_behavior))
     }
 
