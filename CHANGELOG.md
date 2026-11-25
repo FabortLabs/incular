@@ -207,6 +207,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-runtime`: replacing text programmatically repairs the selection
+  immediately in a focused editor, but leaves it unset when unfocused.
+
 - `incular-runtime`: desktop text fields select all on external focus by
   default without overwriting pointer, autofocus, or resume caret placement.
 

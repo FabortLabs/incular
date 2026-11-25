@@ -4,7 +4,12 @@ use crate::{TextGeometry, TextStyle};
 use icu_segmenter::GraphemeClusterSegmenter;
 use incular_core::time::Instant;
 use incular_core::{RestorationKey, RestorationScope};
-use std::{cell::RefCell, fmt, ops::Range, rc::Rc};
+use std::{
+    cell::RefCell,
+    fmt,
+    ops::Range,
+    rc::{Rc, Weak},
+};
 
 /// Whether a caret is associated with the leading or trailing edge of a
 /// bidirectional run.
@@ -392,6 +397,8 @@ struct ControllerState {
     /// selection was set since the text was. `value.selection` then holds
     /// the collapsed end Incular has always reported.
     selection_unset: bool,
+    focused_selection_policies: Vec<(u64, bool)>,
+    next_focus_policy: u64,
 }
 
 #[derive(Clone)]
@@ -416,6 +423,32 @@ pub struct TextEditingController {
 #[must_use = "keep the subscription alive to observe changes"]
 pub struct TextEditingSubscription {
     _subscription: incular_core::reactivity::Subscription,
+}
+
+/// RAII ownership of a focused editor's invalid-selection repair policy.
+#[doc(hidden)]
+pub struct FocusedSelectionLease {
+    owner: Weak<RefCell<ControllerState>>,
+    id: u64,
+    select_all: bool,
+}
+
+impl FocusedSelectionLease {
+    #[must_use]
+    pub fn matches(&self, controller: &TextEditingController, select_all: bool) -> bool {
+        self.select_all == select_all && self.owner.as_ptr() == Rc::as_ptr(&controller.inner)
+    }
+}
+
+impl Drop for FocusedSelectionLease {
+    fn drop(&mut self) {
+        if let Some(owner) = self.owner.upgrade() {
+            owner
+                .borrow_mut()
+                .focused_selection_policies
+                .retain(|(id, _)| *id != self.id);
+        }
+    }
 }
 
 impl PartialEq for TextEditingController {
@@ -582,11 +615,24 @@ impl TextEditingController {
 
     /// Replaces the text programmatically (Flutter's `controller.text`). Like
     /// [`Self::set_value`], the text is stored as given: no input formatters run.
-    /// As in Flutter, the selection becomes unset ([`Self::selection_if_set`]).
+    /// The selection becomes unset unless a focused editor repairs it.
     pub fn set_text(&self, text: impl Into<String>) {
-        self.update(TextEditingValue::new(text), true);
-        self.inner.borrow_mut().caret_affinity = TextAffinity::Downstream;
-        self.inner.borrow_mut().selection_unset = true;
+        self.update_committed(TextEditingValue::new(text), true, false, false, true);
+    }
+
+    /// Marks the controller as the focused editor until the lease is dropped.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn bind_focused_selection(&self, select_all: bool) -> FocusedSelectionLease {
+        let mut state = self.inner.borrow_mut();
+        let id = state.next_focus_policy;
+        state.next_focus_policy = id.checked_add(1).expect("focus policy identity exhausted");
+        state.focused_selection_policies.push((id, select_all));
+        FocusedSelectionLease {
+            owner: Rc::downgrade(&self.inner),
+            id,
+            select_all,
+        }
     }
 
     pub fn clear(&self) {
@@ -811,7 +857,7 @@ impl TextEditingController {
 
     pub fn commit_preedit(&self, text: &str) {
         let next = self.replacing(|value| value.selection.range(), text);
-        self.update_committed(next, true, true, true);
+        self.update_committed(next, true, true, true, false);
     }
 
     pub fn clear_preedit(&self) {
@@ -1019,13 +1065,13 @@ impl TextEditingController {
 
     /// A programmatic update: stored as given, with no edit transforms.
     fn update(&self, value: TextEditingValue, content_changed: bool) {
-        self.update_committed(value, content_changed, false, false);
+        self.update_committed(value, content_changed, false, false, false);
     }
 
     /// A user edit: edit transforms (input formatters) run first, and
     /// user-edit observers hear about a resulting text change.
     fn update_user(&self, value: TextEditingValue) {
-        self.update_committed(value, true, false, true);
+        self.update_committed(value, true, false, true, false);
     }
 
     /// The current value with the range `range` picks replaced by
@@ -1112,9 +1158,10 @@ impl TextEditingController {
         content_changed: bool,
         end_preedit: bool,
         user: bool,
+        reset_selection: bool,
     ) {
         incular_core::reactivity::assert_mutation_allowed();
-        let value = {
+        let mut value = {
             let transforms = if user {
                 self.transforms.subscribers::<EditTransform>()
             } else {
@@ -1141,10 +1188,26 @@ impl TextEditingController {
         };
         let (listeners, text_changed) = {
             let mut state = self.inner.borrow_mut();
-            let was_unset = std::mem::take(&mut state.selection_unset);
-            if state.value == value && !(end_preedit && state.preedit.is_some()) && !was_unset {
+            let selection_unset = if reset_selection {
+                state.caret_affinity = TextAffinity::Downstream;
+                if state
+                    .focused_selection_policies
+                    .last()
+                    .is_some_and(|(_, all)| *all)
+                {
+                    value.selection = TextSelection::new(0, value.text.len());
+                }
+                state.focused_selection_policies.is_empty()
+            } else {
+                false
+            };
+            if state.value == value
+                && !(end_preedit && state.preedit.is_some())
+                && state.selection_unset == selection_unset
+            {
                 return;
             }
+            state.selection_unset = selection_unset;
             let text_changed = user && state.value.text != value.text;
             state.value = value;
             if content_changed {

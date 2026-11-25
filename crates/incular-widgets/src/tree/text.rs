@@ -130,18 +130,22 @@ impl WidgetTree {
         })
     }
 
-    /// Applies the external-focus selection policy before the field falls
-    /// back to initializing an unset caret at the end.
+    /// Returns the currently configured selection repair policy for an
+    /// editable field and the controller to which it applies.
     #[doc(hidden)]
-    pub fn select_all_on_editable_focus(&self, id: ElementId, platform_default: bool) {
-        if let Some(element) = self.elements.get(id.0)
-            && let WidgetKind::TextField(spec) = element.widget.kind()
-            && !spec.multiline
+    pub fn editable_focus_selection_policy(
+        &self,
+        id: ElementId,
+        platform_default: bool,
+    ) -> Option<(TextEditingController, bool)> {
+        let element = self.elements.get(id.0)?;
+        let WidgetKind::TextField(spec) = element.widget.kind() else {
+            return None;
+        };
+        let select_all = !spec.multiline
             && spec.keyboard_selection_enabled
-            && spec.select_all_on_focus.unwrap_or(platform_default)
-        {
-            spec.controller.select_all();
-        }
+            && spec.select_all_on_focus.unwrap_or(platform_default);
+        Some((spec.controller.clone(), select_all))
     }
 
     #[must_use]

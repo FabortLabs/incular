@@ -153,6 +153,7 @@ pub struct Runtime {
     /// `last_pointer` when layout or scrolling moves content under it.
     last_hover_sample: Option<RawPointerEvent>,
     pub(crate) focused: Option<ElementId>,
+    focused_selection_lease: Option<incular_text::FocusedSelectionLease>,
     adopted_focus_epoch: Option<u64>,
     initial_focus: InitialFocus,
     pub(crate) captured_text_field: Option<ElementId>,
@@ -340,6 +341,7 @@ impl Runtime {
             pointer_tracking: PointerTracking::Outside,
             last_hover_sample: None,
             focused: None,
+            focused_selection_lease: None,
             adopted_focus_epoch: None,
             initial_focus: InitialFocus::AwaitingLayout,
             captured_text_field: None,
@@ -1072,6 +1074,7 @@ impl Runtime {
     /// platform this build targets.
     pub fn set_text_shortcut_platform(&mut self, platform: TextShortcutPlatform) {
         self.text_shortcut_platform = platform;
+        self.sync_focused_selection_lease();
     }
 
     /// The platform whose text-editing shortcuts are active.
@@ -1958,17 +1961,11 @@ impl Runtime {
             self.hide_text_field_handles(previous);
         }
         self.focused = next;
+        let focus_policy = self.sync_focused_selection_lease();
         self.tree.sync_hosted_focus_chain(next);
         if let Some(current) = next {
-            if external {
-                let select_all = cfg!(target_arch = "wasm32")
-                    || matches!(
-                        self.text_shortcut_platform,
-                        TextShortcutPlatform::Linux
-                            | TextShortcutPlatform::MacOs
-                            | TextShortcutPlatform::Windows,
-                    );
-                self.tree.select_all_on_editable_focus(current, select_all);
+            if external && let Some((controller, true)) = focus_policy {
+                controller.select_all();
             }
             let _ = self.tree.set_focused(current, true, self.input_now());
             self.tree.set_keyboard_focus(current, true);
@@ -1978,6 +1975,31 @@ impl Runtime {
         }
         self.frame_requested = true;
         self.sync_text_input_client();
+    }
+
+    fn sync_focused_selection_lease(&mut self) -> Option<(TextEditingController, bool)> {
+        let policy = self.focused.and_then(|current| {
+            let desktop = cfg!(target_arch = "wasm32")
+                || matches!(
+                    self.text_shortcut_platform,
+                    TextShortcutPlatform::Linux
+                        | TextShortcutPlatform::MacOs
+                        | TextShortcutPlatform::Windows,
+                );
+            self.tree.editable_focus_selection_policy(current, desktop)
+        });
+        match (&self.focused_selection_lease, &policy) {
+            (None, None) => {}
+            (Some(current), Some((controller, select_all)))
+                if current.matches(controller, *select_all) => {}
+            _ => {
+                self.focused_selection_lease = None;
+                self.focused_selection_lease = policy
+                    .as_ref()
+                    .map(|(controller, select_all)| controller.bind_focused_selection(*select_all));
+            }
+        }
+        policy
     }
 
     /// Applies a focus change made directly on a [`FocusNode`]: the requested
@@ -2021,6 +2043,7 @@ impl Runtime {
             self.set_focus(None);
         }
         self.tree.sync_hosted_focus_chain(self.focused);
+        self.sync_focused_selection_lease();
         self.reconcile_button_tenure();
     }
 

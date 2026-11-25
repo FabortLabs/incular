@@ -23,5 +23,19 @@ No Fuchsia host or browser document-root traversal test ran. The
 reference uses the original app fixture, but only EditableText focus
 and selection are in scope. Forty-five focused Rust checks across
 editor, touch, keyboard, platform text input and initial-focus paths
-passed. The independent programmatic invalid-selection refresh case
-and OS window focus interception remain separate.
+passed. OS window focus interception remains separate.
+
+## Programmatic text replacement with an invalid selection
+
+Original `widgets/editable_text_test.dart:17439` passed: after focus was
+established, replacing the text synchronously moves an invalid mobile
+selection to the end. Incular previously left it unset. An authored
+neutral Flutter probe also checks desktop select-all and absence of
+repair after unmount. Rust additionally verifies that replacing the
+controller in a still-focused editor transfers the policy.
+
+Eighteen focused runtime checks, ten general controller checks, and
+seven value replacement-boundary checks passed. Two assertions in
+`editing_copies` still conflate caret collapse after a controller
+user edit with value-level range remapping; both failures were reproduced
+on the unchanged baseline. No browser or native host was required.

@@ -894,3 +894,4 @@ packages/flutter/test/widgets/editable_text_test.dart	17552	when selectAllOnFocu
 packages/flutter/test/widgets/editable_text_test.dart	17581	when selectAllOnFocus is turned on	paired-match	upstream-editable-focus-selection.md
 packages/flutter/test/widgets/editable_text_test.dart	17613	when having focus regained after the app resumed	paired-match	upstream-editable-focus-selection.md
 packages/flutter/test/widgets/editable_text_test.dart	17645	moving focus after the app resumed should select all the content on desktop	paired-match	upstream-editable-focus-selection.md
+packages/flutter/test/widgets/editable_text_test.dart	17439	Selection is updated when the field has focus and the new selection is invalid	paired-match	upstream-editable-focus-selection.md#programmatic-text-replacement-with-an-invalid-selection
