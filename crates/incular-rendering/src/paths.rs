@@ -4,7 +4,7 @@ use incular_core::{IdGenerator, Offset, Rect, Size, Transform};
 use kurbo::{BezPath, Ellipse, PathEl, Point, RoundedRect, RoundedRectRadii, Shape, Vec2};
 use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hasher};
-use std::sync::{Arc, LazyLock, Mutex, PoisonError, Weak};
+use std::sync::{Arc, LazyLock, Mutex, OnceLock, PoisonError, Weak};
 
 static NEXT_PATH_ID: IdGenerator = IdGenerator::new();
 
@@ -24,22 +24,21 @@ pub struct PathId(u64);
 #[derive(Clone, Debug)]
 pub struct Path {
     id: PathId,
-    path: Arc<BezPath>,
-    bounds: Option<Rect>,
+    geometry: Arc<PathGeometry>,
+}
+#[derive(Debug)]
+struct PathGeometry {
+    id: PathId,
+    path: BezPath,
+    tight_bounds: Option<Rect>,
+    control_bounds: OnceLock<Option<Rect>>,
 }
 /// One identity is one geometry, so comparing identities never walks a
 /// segment.
 impl PartialEq for Path {
     fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
+        self.id() == other.id()
     }
-}
-
-/// A live path's geometry, found again by the hash of its segments.
-struct InternedPath {
-    id: PathId,
-    path: Weak<BezPath>,
-    bounds: Option<Rect>,
 }
 
 /// Geometry hashes are already mixed; the table uses them as they are.
@@ -63,7 +62,7 @@ impl Hasher for PassThroughHasher {
 /// as some [`Path`] owns it, and dead entries are swept as the table grows.
 #[derive(Default)]
 struct InternTable {
-    paths: HashMap<u64, InternedPath, BuildHasherDefault<PassThroughHasher>>,
+    paths: HashMap<u64, Weak<PathGeometry>, BuildHasherDefault<PassThroughHasher>>,
     sweep_at: usize,
 }
 
@@ -75,38 +74,34 @@ impl InternTable {
     /// fresh identity.
     fn intern(&mut self, path: BezPath) -> Path {
         let hash = geometry_hash(path.elements());
-        if let Some(entry) = self.paths.get(&hash)
-            && let Some(shared) = entry.path.upgrade()
-            && shared.elements() == path.elements()
+        if let Some(geometry) = self.paths.get(&hash).and_then(Weak::upgrade)
+            && geometry.path.elements() == path.elements()
         {
             return Path {
-                id: entry.id,
-                path: shared,
-                bounds: entry.bounds,
+                id: geometry.id,
+                geometry,
             };
         }
         if self.paths.len() >= self.sweep_at.max(Self::MIN_SWEEP) {
             // Drop entries whose geometry no path owns any more. Sweeping
             // only once the table has doubled keeps inserts amortized O(1).
-            self.paths.retain(|_, entry| entry.path.strong_count() > 0);
-            self.sweep_at = self.paths.len() * 2;
+            self.paths
+                .retain(|_, geometry| geometry.strong_count() != 0);
+            self.sweep_at = self.paths.len().saturating_mul(2);
         }
-        let path = Path {
+        let geometry = Arc::new(PathGeometry {
             id: next_path_id(),
-            bounds: path_bounds(&path),
-            path: Arc::new(path),
-        };
+            tight_bounds: tight_path_bounds(&path),
+            control_bounds: OnceLock::new(),
+            path,
+        });
         // A dead entry is replaced. So is a live one whose geometry merely
-        // shares the hash: it keeps its identity and is no longer found.
-        self.paths.insert(
-            hash,
-            InternedPath {
-                id: path.id,
-                path: Arc::downgrade(&path.path),
-                bounds: path.bounds,
-            },
-        );
-        path
+        // shares the hash, without changing its existing identity.
+        self.paths.insert(hash, Arc::downgrade(&geometry));
+        Path {
+            id: geometry.id,
+            geometry,
+        }
     }
 }
 
@@ -136,17 +131,18 @@ fn geometry_hash(elements: &[PathEl]) -> u64 {
     hash ^ (hash >> 32)
 }
 
-fn path_bounds(path: &BezPath) -> Option<Rect> {
-    (!path.is_empty() && path.is_finite()).then(|| {
-        let bounds = path.bounding_box();
-        Rect::from_origin_size(
-            Offset::new(bounds.x0 as f32, bounds.y0 as f32),
-            Size::new(
-                (bounds.x1 - bounds.x0) as f32,
-                (bounds.y1 - bounds.y0) as f32,
-            ),
-        )
-    })
+fn as_rect(bounds: kurbo::Rect) -> Rect {
+    Rect::from_origin_size(
+        Offset::new(bounds.x0 as f32, bounds.y0 as f32),
+        Size::new(
+            (bounds.x1 - bounds.x0) as f32,
+            (bounds.y1 - bounds.y0) as f32,
+        ),
+    )
+}
+
+fn tight_path_bounds(path: &BezPath) -> Option<Rect> {
+    (!path.is_empty() && path.is_finite()).then(|| as_rect(path.bounding_box()))
 }
 
 impl Path {
@@ -156,11 +152,21 @@ impl Path {
     }
     #[must_use]
     pub fn bez_path(&self) -> &BezPath {
-        &self.path
+        &self.geometry.path
     }
+    /// Flutter's `Path.getBounds`: encloses the endpoints and Bézier control
+    /// points. Returns no rectangle for an empty or non-finite path.
     #[must_use]
     pub fn bounds(&self) -> Option<Rect> {
-        self.bounds
+        *self.geometry.control_bounds.get_or_init(|| {
+            let path = self.bez_path();
+            (!path.elements().is_empty() && path.is_finite()).then(|| as_rect(path.control_box()))
+        })
+    }
+    /// Tight bounds of the actual curve geometry, for culling and paint damage.
+    #[must_use]
+    pub fn tight_bounds(&self) -> Option<Rect> {
+        self.geometry.tight_bounds
     }
     #[must_use]
     pub const fn id(&self) -> PathId {
@@ -178,7 +184,7 @@ impl Path {
             PathEl::LineTo(c),
             PathEl::LineTo(d),
             PathEl::ClosePath,
-        ] = self.path.elements()
+        ] = self.bez_path().elements()
             && ((a.x == b.x && b.y == c.y && c.x == d.x && d.y == a.y)
                 || (a.y == b.y && b.x == c.x && c.y == d.y && d.x == a.x))
             && a.x != c.x
@@ -191,7 +197,7 @@ impl Path {
                 && point.y >= a.y.min(c.y)
                 && point.y <= a.y.max(c.y);
         }
-        let winding = self.path.winding(point);
+        let winding = self.bez_path().winding(point);
         match rule {
             FillRule::NonZero => winding != 0,
             FillRule::EvenOdd => winding.unsigned_abs() % 2 == 1,
@@ -226,7 +232,7 @@ impl Path {
         path.line_to((right, bottom));
         path.line_to((left, bottom));
         path.close_path();
-        let mut hole = (*inner.path).clone();
+        let mut hole = inner.bez_path().clone();
         if hole.area().signum() == path.area().signum() {
             hole = hole.reverse_subpaths();
         }
@@ -241,7 +247,7 @@ impl Path {
     /// requested logical size without changing pointer/layout coordinates.
     #[must_use]
     pub fn transformed(&self, transform: Transform) -> Self {
-        let mut path = (*self.path).clone();
+        let mut path = self.bez_path().clone();
         path.apply_affine(transform.to_kurbo());
         Self::from_bez_path(path)
     }

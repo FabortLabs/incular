@@ -300,7 +300,7 @@ pub(crate) fn path_visible(
     transform: Transform,
     clip: ClipState,
 ) -> bool {
-    let Some(bounds) = path.bounds() else {
+    let Some(bounds) = path.tight_bounds() else {
         return false;
     };
     let outset = mesh_bounds_outset(kind);

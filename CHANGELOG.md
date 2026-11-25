@@ -192,6 +192,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-rendering`: public path bounds enclose Bézier control points
+  like Flutter; layout, paint damage and wgpu culling retain tight bounds.
+
 - `incular-rendering`: rectangular paths now contain their exact edges
   and corners, including the right and bottom boundaries.
 

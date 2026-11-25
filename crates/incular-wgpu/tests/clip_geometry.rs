@@ -65,7 +65,7 @@ fn assert_mesh_follows_shape(path: &Path) {
         (area - expected).abs() / expected < 0.05,
         "mesh area {area} must match path area {expected}"
     );
-    let bounds = path.bounds().expect("nonempty clip path");
+    let bounds = path.tight_bounds().expect("nonempty clip path");
     let boxed = (bounds.size.width * bounds.size.height) as f64;
     assert!(
         area < boxed * 0.7,

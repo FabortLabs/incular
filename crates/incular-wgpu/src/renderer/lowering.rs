@@ -937,7 +937,7 @@ impl WgpuRenderer {
                     if depth == MAX_STENCIL_CLIP_DEPTH {
                         return Err(RendererError::StencilDepthOverflow);
                     }
-                    let Some(bounds) = path.bounds() else {
+                    let Some(bounds) = path.tight_bounds() else {
                         clips.push(ClipState::Empty);
                         clip_masks.push(None);
                         self.counters.clip_path_pushes += 1;

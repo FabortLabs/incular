@@ -13,7 +13,7 @@ fn assert_bounds(path: &Path, expected: Rect) {
 }
 
 fn assert_bounds_within(path: &Path, expected: Rect, tolerance: f32) {
-    let bounds = path.bounds().expect("non-empty path");
+    let bounds = path.tight_bounds().expect("non-empty path");
     for (actual, wanted) in [
         (bounds.origin.x, expected.origin.x),
         (bounds.origin.y, expected.origin.y),

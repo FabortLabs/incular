@@ -34,3 +34,16 @@ Pinned Flutter 3.50.0 `ab2912035e`; unchanged Incular production `c647cb85`.
   pixels and not necessarily wrong for internal culling.
   See `flutter350_path_curve_bounds` and
   `path_curve_bounds_test.dart`.
+
+## Public Bézier bounds repair
+
+The same pinned quadratic and cubic probes now agree on public heights
+40 and 60. Actual geometry bounds remain 20 and 45, and both containment
+samples still agree; the public bounds change does not expand the
+painted shape. The immutable geometry shares a lazily computed public
+control box, while shape sizing, culling and damage use its cached tight
+geometry box. A same-geometry path keeps its resource identity. Twelve
+focused rendering tests, 48 widget paint/layout tests, two wgpu
+tessellation tests (no GPU device required) and both Flutter probes
+passed. This closes an authored probe, not an additional upstream
+registration site.

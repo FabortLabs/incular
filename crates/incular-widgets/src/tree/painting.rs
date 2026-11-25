@@ -1455,8 +1455,8 @@ fn painted_bounds(commands: &[PaintCommand], size: Size) -> Rect {
             PaintCommand::RRect { rrect, .. } | PaintCommand::Border { rrect, .. } => {
                 Some(rrect.rect)
             }
-            PaintCommand::FillPath { path, .. } => path.bounds(),
-            PaintCommand::StrokePath { path, stroke, .. } => path.bounds().map(|rect| {
+            PaintCommand::FillPath { path, .. } => path.tight_bounds(),
+            PaintCommand::StrokePath { path, stroke, .. } => path.tight_bounds().map(|rect| {
                 let margin = stroke.width.max(0.) * 0.5 * stroke.miter_limit.max(1.);
                 Rect::from_origin_size(
                     Offset::new(rect.origin.x - margin, rect.origin.y - margin),

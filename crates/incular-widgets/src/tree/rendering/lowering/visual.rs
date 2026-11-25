@@ -19,7 +19,8 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             path: path.clone(),
             fill: fill.clone(),
             stroke: stroke.clone(),
-            desired: size.unwrap_or_else(|| path.bounds().map_or(Size::ZERO, |bounds| bounds.size)),
+            desired: size
+                .unwrap_or_else(|| path.tight_bounds().map_or(Size::ZERO, |bounds| bounds.size)),
         },
         WidgetKind::CustomPaint {
             size,

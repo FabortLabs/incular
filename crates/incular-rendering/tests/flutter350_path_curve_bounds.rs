@@ -53,4 +53,15 @@ fn flutter_350_path_bounds_include_bezier_control_points() {
         ],
         "Flutter reports control-point-enclosing bounds, not tight curve bounds"
     );
+    assert_eq!(
+        [quadratic.tight_bounds(), cubic.tight_bounds()],
+        [
+            Some(rect(10., 10., 40., 20.)),
+            Some(rect(10., 10., 40., 45.))
+        ],
+        "tight culling bounds retain the actual curve extrema"
+    );
+    let same_curve = quadratic.transformed(Transform::IDENTITY);
+    assert_eq!(same_curve.id(), quadratic.id());
+    assert_eq!(same_curve.bounds(), quadratic.bounds());
 }

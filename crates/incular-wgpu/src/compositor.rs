@@ -189,7 +189,7 @@ pub(crate) fn display_list_composition_bounds(commands: &[PaintCommand]) -> Opti
                 add_composition_bounds(&mut bounds, translated_rect(rrect.rect, translation));
             }
             PaintCommand::FillPath { path, .. } | PaintCommand::StrokePath { path, .. } => {
-                if let Some(path_bounds) = path.bounds() {
+                if let Some(path_bounds) = path.tight_bounds() {
                     let margin = match command {
                         PaintCommand::StrokePath { stroke, .. } => {
                             (stroke.width.max(0.) * 0.5 * stroke.miter_limit.max(1.)).max(0.)

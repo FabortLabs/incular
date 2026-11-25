@@ -129,7 +129,7 @@ fn layer_summary(kind: &LayerKind, world: Transform) -> (&'static str, String, O
         LayerKind::ClipPath { path, .. } => (
             "ClipPath",
             String::new(),
-            path.bounds().and_then(world_rect),
+            path.tight_bounds().and_then(world_rect),
         ),
         LayerKind::Opacity { alpha } => ("Opacity", format!("alpha {alpha:.2}"), None),
         LayerKind::Blur { blur } => (

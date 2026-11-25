@@ -156,7 +156,7 @@ fn clip_world_bounds(kind: &LayerKind, world_transform: Transform) -> Option<Rec
         LayerKind::ClipRRect { rrect, .. } => Some(world_transform.transform_rect_bbox(rrect.rect)),
         LayerKind::ClipOval { rect, .. } => Some(world_transform.transform_rect_bbox(*rect)),
         LayerKind::ClipPath { path, .. } => path
-            .bounds()
+            .tight_bounds()
             .map(|bounds| world_transform.transform_rect_bbox(bounds)),
         _ => None,
     }
@@ -2735,7 +2735,7 @@ impl LayerTree {
             ),
             LayerKind::ClipPath { path, .. } => format!(
                 "ClipPath(local_bounds={:?}, world={:?})",
-                path.bounds(),
+                path.tight_bounds(),
                 clip_world_bounds(&layer.kind, world_transform)
             ),
             LayerKind::Opacity { alpha } => format!(
