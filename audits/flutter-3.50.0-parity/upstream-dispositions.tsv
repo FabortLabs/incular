@@ -1456,3 +1456,8 @@ packages/flutter/test/painting/beveled_rectangle_border_test.dart	35	BeveledRect
 packages/flutter/test/painting/beveled_rectangle_border_test.dart	79	BeveledRectangleBorder non-zero BorderRadius	paired-match	upstream-beveled-border.md#radius-geometry-and-value-semantics
 packages/flutter/test/painting/beveled_rectangle_border_test.dart	90	BeveledRectangleBorder non-zero BorderRadiusDirectional	paired-match	upstream-beveled-border.md#radius-geometry-and-value-semantics
 packages/flutter/test/painting/beveled_rectangle_border_test.dart	117	BeveledRectangleBorder with StrokeAlign	paired-match	upstream-beveled-border.md#radius-geometry-and-value-semantics
+packages/flutter/test/painting/continuous_rectangle_border_test.dart	40	ContinuousRectangleBorder copyWith, ==, hashCode	paired-match	upstream-continuous-border.md
+packages/flutter/test/painting/continuous_rectangle_border_test.dart	61	ContinuousRectangleBorder scale and lerp	paired-match	upstream-continuous-border.md
+packages/flutter/test/painting/continuous_rectangle_border_test.dart	82	ContinuousRectangleBorder BorderRadius.zero	paired-match	upstream-continuous-border.md
+packages/flutter/test/painting/continuous_rectangle_border_test.dart	105	ContinuousRectangleBorder non-zero BorderRadius	paired-match	upstream-continuous-border.md
+packages/flutter/test/painting/continuous_rectangle_border_test.dart	116	ContinuousRectangleBorder non-zero BorderRadiusDirectional	paired-match	upstream-continuous-border.md

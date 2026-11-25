@@ -309,6 +309,17 @@ fn inflate(rect: Rect, delta: f32) -> Rect {
     )
 }
 
+/// Signed edge coordinates preserve inverted inner bounds. Flutter's
+/// deflated RRect can have these when a stroke is larger than its box.
+fn inflated_edges(rect: Rect, delta: f32) -> [f32; 4] {
+    [
+        rect.origin.x - delta,
+        rect.origin.y - delta,
+        rect.origin.x + rect.size.width + delta,
+        rect.origin.y + rect.size.height + delta,
+    ]
+}
+
 /// Flutter `RRect.inflate`: the radii grow with the rectangle and stop at
 /// zero.
 fn inflate_radii(radii: CornerRadii, delta: f32) -> CornerRadii {
@@ -758,16 +769,7 @@ impl<R: Copy + Into<BorderRadiusGeometry>> BeveledRectangleBorder<R> {
             .border_radius
             .into()
             .resolve(direction.unwrap_or(TextDirection::Ltr));
-        bevel_path(
-            [
-                rect.origin.x - delta,
-                rect.origin.y - delta,
-                rect.origin.x + rect.size.width + delta,
-                rect.origin.y + rect.size.height + delta,
-            ],
-            radius,
-            delta,
-        )
+        bevel_path(inflated_edges(rect, delta), radius, delta)
     }
 }
 
@@ -1457,37 +1459,60 @@ fn get_angle(a: Point, b: Point, c: Point) -> f64 {
     angle
 }
 
-/// Flutter's `ContinuousRectangleBorder`
-/// (`painting/continuous_rectangle_border.dart`): a rectangle whose corners
+/// Flutter's `ContinuousRectangleBorder`: a rectangle whose corners
 /// blend into the sides along cubic curves with both controls at the
-/// corner, for a smoother transition than a circular arc.
-#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
-pub struct ContinuousRectangleBorder {
-    #[default(BorderSide::NONE)]
+/// corner. Logical corner values resolve against the text direction.
+#[derive(Clone, Copy, Debug, PartialEq, Hash)]
+pub struct ContinuousRectangleBorder<R = BorderRadius> {
     pub side: BorderSide,
-    pub border_radius: BorderRadius,
+    pub border_radius: R,
 }
 
-impl ContinuousRectangleBorder {
+impl Default for ContinuousRectangleBorder {
+    fn default() -> Self {
+        Self::new(BorderSide::NONE, BorderRadius::ZERO)
+    }
+}
+
+impl<R> ContinuousRectangleBorder<R> {
     #[must_use]
-    pub const fn new(side: BorderSide, border_radius: BorderRadius) -> Self {
+    pub const fn new(side: BorderSide, border_radius: R) -> Self {
         Self {
             side,
             border_radius,
         }
     }
 
+    /// Copies the border while keeping unspecified properties.
+    #[must_use]
+    pub fn copy_with(self, side: Option<BorderSide>, border_radius: Option<R>) -> Self {
+        Self::new(
+            side.unwrap_or(self.side),
+            border_radius.unwrap_or(self.border_radius),
+        )
+    }
+}
+
+impl<R: Copy + std::ops::Mul<f32, Output = R>> ContinuousRectangleBorder<R> {
+    #[must_use]
+    pub fn scale(&self, t: f32) -> Self {
+        Self::new(self.side.scale(t), self.border_radius * t)
+    }
+}
+
+impl<R: Copy + Into<BorderRadiusGeometry>> ContinuousRectangleBorder<R> {
     /// `_getPath` over `rect` inflated by `delta` (`RRect.inflate`, radii
     /// clamped at zero). Radii clamp to the shortest side; as in Flutter,
     /// each corner's x radius sets its vertical extent and its y radius the
     /// horizontal one.
-    fn path(&self, rect: Rect, delta: f32) -> Path {
-        let rect = inflate(rect, delta);
-        let shortest = shortest_side(rect).max(0.0);
+    fn path(&self, rect: Rect, delta: f32, direction: Option<TextDirection>) -> Path {
+        let [left, top, right, bottom] = inflated_edges(rect, delta);
+        let shortest = (right - left).min(bottom - top).max(0.0);
         let r = |value: f32| (value + delta).max(0.0).min(shortest);
-        let radius = self.border_radius;
-        let (left, top) = (rect.origin.x, rect.origin.y);
-        let (right, bottom) = (left + rect.size.width, top + rect.size.height);
+        let radius = self
+            .border_radius
+            .into()
+            .resolve(direction.unwrap_or(TextDirection::Ltr));
         let (tl, tr, br, bl) = (
             radius.top_left,
             radius.top_right,
@@ -1517,31 +1542,48 @@ impl ContinuousRectangleBorder {
     }
 }
 
-impl ShapeBorder for ContinuousRectangleBorder {
+impl<R: Copy + Into<BorderRadiusGeometry>> ShapeBorder for ContinuousRectangleBorder<R> {
     fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
         EdgeInsets::all(self.side.width)
     }
 
     fn outer_path(&self, rect: Rect) -> Path {
-        self.path(rect, 0.0)
+        self.outer_path_with_direction(rect, None)
+    }
+
+    fn outer_path_with_direction(&self, rect: Rect, direction: Option<TextDirection>) -> Path {
+        self.path(rect, 0.0, direction)
     }
 
     /// Flutter deflates by the full side width, whatever the stroke align.
     fn inner_path(&self, rect: Rect) -> Path {
-        self.path(rect, -self.side.width)
+        self.inner_path_with_direction(rect, None)
+    }
+
+    fn inner_path_with_direction(&self, rect: Rect, direction: Option<TextDirection>) -> Path {
+        self.path(rect, -self.side.width, direction)
     }
 
     /// Flutter strokes the outer path with `side.toPaint()`.
     fn paint(&self, canvas: &mut Canvas, rect: Rect) {
+        self.paint_with_direction(canvas, rect, None);
+    }
+
+    fn paint_with_direction(
+        &self,
+        canvas: &mut Canvas,
+        rect: Rect,
+        direction: Option<TextDirection>,
+    ) {
         if self.side.style == BorderStyle::None || rect.size.width <= 0.0 || rect.size.height <= 0.0
         {
             return;
         }
-        stroke(canvas, &self.side, self.path(rect, 0.0));
+        stroke(canvas, &self.side, self.outer_path_with_direction(rect, direction));
     }
 }
 
-impl incular_core::Lerp for ContinuousRectangleBorder {
+impl<R: incular_core::Lerp> incular_core::Lerp for ContinuousRectangleBorder<R> {
     fn lerp(&self, other: &Self, t: f32) -> Self {
         Self::new(
             self.side.lerp(&other.side, t),
