@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-widgets`: box borders expose inner and outer paths, with
+  directional insets resolved before building the inner outline.
+
 - `incular-widgets`: physical and directional borders can paint directly
   to a canvas at a supplied rectangle.
 
@@ -188,6 +191,9 @@ a version and date when publishing.
   `EditableText` does there. Mouse and stylus presses still unfocus it.
 
 ### Fixed
+
+- `incular-rendering`: rectangular paths now contain their exact edges
+  and corners, including the right and bottom boundaries.
 
 - `incular-widgets`: debug painting rejects unsupported non-uniform
   border geometry instead of silently drawing a square inside border.

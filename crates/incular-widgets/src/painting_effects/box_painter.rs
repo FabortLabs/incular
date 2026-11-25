@@ -392,6 +392,18 @@ pub(crate) fn decorated(
 }
 
 impl Border {
+    /// The outside outline of a box border, independent of its paint shape.
+    #[must_use]
+    pub fn outer_path(self, rect: Rect) -> Path {
+        rect_path(rect)
+    }
+
+    /// The outline inside the stroke insets of each physical side.
+    #[must_use]
+    pub fn inner_path(self, rect: Rect) -> Path {
+        rect_path(deflate_sides(rect, self.dimensions()))
+    }
+
     /// Paints this border within `rect`, returning whether any stroke was drawn.
     #[must_use]
     pub fn paint(
@@ -406,6 +418,18 @@ impl Border {
 }
 
 impl BorderDirectional {
+    /// The outside outline is independent of text direction.
+    #[must_use]
+    pub fn outer_path(self, rect: Rect) -> Path {
+        rect_path(rect)
+    }
+
+    /// The outline inside the stroke insets resolved in the given direction.
+    #[must_use]
+    pub fn inner_path(self, rect: Rect, direction: TextDirection) -> Path {
+        self.resolve(direction).inner_path(rect)
+    }
+
     /// Paints this border using the logical leading and trailing edges.
     ///
     /// # Panics

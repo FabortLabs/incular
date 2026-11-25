@@ -875,3 +875,4 @@ packages/flutter/test/painting/border_side_test.dart	68	BorderSide - asserts whe
 packages/flutter/test/painting/border_side_test.dart	89	BorderSide - toPaint	paired-match	upstream-border-constraints-formatters.md#side-copy-and-stroke-paint
 packages/flutter/test/painting/border_rtl_test.dart	933	BorderDirectional.paint	paired-match	upstream-border-constraints-formatters.md#directional-canvas-painting
 packages/flutter/test/widgets/shortcuts_test.dart	1814	WidgetsApp has a ShortcutRegistrar listening	paired-match	upstream-shortcut-comparisons.md#default-widgetsapp-registrar
+packages/flutter/test/painting/border_rtl_test.dart	345	BoxBorder.getInnerPath / BoxBorder.getOuterPath	paired-match	upstream-border-constraints-formatters.md#border-outlines-and-rectangle-edge-containment

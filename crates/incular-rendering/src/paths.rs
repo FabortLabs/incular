@@ -166,14 +166,32 @@ impl Path {
     pub const fn id(&self) -> PathId {
         self.id
     }
-    /// Renderer-neutral filled-path containment delegated to Kurbo's exact
-    /// segment winding implementation. It is intentionally independent from
-    /// GPU tessellation so pointer targeting follows the retained geometry.
+    /// Renderer-neutral filled-path containment. A single rectangle includes
+    /// its boundary as Flutter does; other paths use Kurbo segment winding.
+    /// Neither case depends on GPU tessellation.
     #[must_use]
     pub fn contains(&self, point: Offset, rule: FillRule) -> bool {
-        let winding = self
-            .path
-            .winding(Point::new(f64::from(point.x), f64::from(point.y)));
+        let point = Point::new(f64::from(point.x), f64::from(point.y));
+        if let [
+            PathEl::MoveTo(a),
+            PathEl::LineTo(b),
+            PathEl::LineTo(c),
+            PathEl::LineTo(d),
+            PathEl::ClosePath,
+        ] = self.path.elements()
+            && ((a.x == b.x && b.y == c.y && c.x == d.x && d.y == a.y)
+                || (a.y == b.y && b.x == c.x && c.y == d.y && d.x == a.x))
+            && a.x != c.x
+            && a.y != c.y
+            && a.is_finite()
+            && c.is_finite()
+        {
+            return point.x >= a.x.min(c.x)
+                && point.x <= a.x.max(c.x)
+                && point.y >= a.y.min(c.y)
+                && point.y <= a.y.max(c.y);
+        }
+        let winding = self.path.winding(point);
         match rule {
             FillRule::NonZero => winding != 0,
             FillRule::EvenOdd => winding.unsigned_abs() % 2 == 1,
@@ -311,6 +329,17 @@ impl PathBuilder {
     /// logical pixels.
     pub fn rounded_rect(&mut self, rect: Rect, radii: CornerRadii) -> &mut Self {
         let radii = radii.normalized(rect.size);
+        if radii.is_zero() {
+            let shape = kurbo::Rect::new(
+                f64::from(rect.origin.x),
+                f64::from(rect.origin.y),
+                f64::from(rect.origin.x + rect.size.width),
+                f64::from(rect.origin.y + rect.size.height),
+            )
+            .abs();
+            self.path.extend(shape.path_elements(0.01));
+            return self;
+        }
         let shape = RoundedRect::new(
             f64::from(rect.origin.x),
             f64::from(rect.origin.y),

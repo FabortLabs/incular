@@ -157,3 +157,17 @@ borders and decorations share the same command construction, with
 no extra display list on direct canvas calls. Nineteen focused Rust
 checks passed. Inheriting a directional BoxDecoration at a widget boundary
 and cross-type interpolation are separate work.
+
+## Border outlines and rectangle edge containment
+
+The pinned `border_rtl_test.dart:345` registration and Incular port cover
+outer bounds and inner bounds after physical and logical stroke insets,
+including samples exactly on all four edges. Before the fix the retained
+path missed `(80,190)` on the lower rectangle edge. A single rectangular
+contour now includes its boundary. The authored
+`rectangle_path_boundary_test.dart` confirms both fill rules, clockwise
+and reversed geometry, and samples 0.001 logical pixels outside. Paths
+with holes and non-rectangular paths retain winding evaluation. Thirteen
+focused Rust tests and the two authored Flutter cases passed. The
+independent, previously recorded control-point bounds regression still
+reproduced; this change does not alter curved path bounds.
