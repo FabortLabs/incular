@@ -84,3 +84,18 @@ own can-request flag does not exclude its children. :170 and :210
 remain partial: the test checks membership through the mounted
 traversal route, not Flutter's separately enumerable, ordered raw
 focus-tree children/descendants.
+
+## Unfocus and fallback through scope history
+
+The pinned `focus_manager_test.dart` originals :1081, :1172, :1265,
+and :1341 passed by exact name. The mounted Rust fixture reproduces
+their two branch scopes, four children, and original focus order. It
+compares both unfocus dispositions, repeated refocus and unfocus,
+moving to a sibling scope via the parent, preserving an inactive
+scope's history, and skipping disabled remembered children. The
+default parks on the enclosing scope and clears that scope's history;
+the previous-child disposition instead removes only the current child
+and restores the most recent eligible one. Disabling the active scope
+restores a sibling's child without discarding the disabled scope's
+own history. The explicit outer Rust scope supplies the reference
+fixture's root focus target; implicit-root setup is independent.

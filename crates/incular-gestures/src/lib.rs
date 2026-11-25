@@ -39,6 +39,7 @@ pub use focus::{
     DirectionalFocusCandidate, FocusBehavior, FocusHighlightManager, FocusHighlightMode,
     FocusHighlightStrategy, FocusHighlightSubscription, FocusManager, FocusNode,
     FocusNodeAttachment, FocusNodeSubscription, FocusOrder, FocusScopeNode, FocusScopeSubscription,
+    UnfocusDisposition,
     FocusTraversalPolicy, FocusTraversalPolicyKind, OrderedTraversalPolicy,
     ReadingOrderTraversalPolicy, TraversalDirection, WidgetOrderTraversalPolicy,
     directional_focus_index, focus_epoch, reading_order_by,

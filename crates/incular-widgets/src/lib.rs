@@ -215,6 +215,7 @@ pub use focus_keyboard::{
     Intent, KeyEventResult, KeyboardListener, LockState, LogicalKeySet, LogicalShortcutKey,
     OrderedTraversalPolicy, ReadingOrderTraversalPolicy, ShortcutActivator, ShortcutKey,
     ShortcutTrigger, Shortcuts, SingleActivator, WidgetOrderTraversalPolicy,
+    UnfocusDisposition,
 };
 pub use forms::{
     AutocompleteFieldViewBuilder, AutocompleteHighlightedOption, AutocompleteOnSelected,

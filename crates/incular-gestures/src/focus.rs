@@ -20,6 +20,16 @@ pub fn focus_epoch() -> u64 {
     FOCUS_EPOCH.get()
 }
 
+/// Determines where a mounted focus request lands after unfocusing.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum UnfocusDisposition {
+    /// Clears the enclosing scope's history and focuses the scope directly.
+    #[default]
+    Scope,
+    /// Restores the most recent eligible child other than the one unfocused.
+    PreviouslyFocusedChild,
+}
+
 /// Shared focus handle usable by controls that are rebuilt often.
 ///
 /// For exclusive traversal use a [`FocusManager`]; calling
@@ -201,8 +211,51 @@ impl FocusNode {
         }
     }
     pub fn unfocus(&self) {
+        self.unfocus_with_disposition(UnfocusDisposition::Scope);
+    }
+
+    /// Clears a pending request or leaves the active focus path. In a
+    /// mounted scope, the fallback is queued for the next focus update.
+    pub fn unfocus_with_disposition(&self, disposition: UnfocusDisposition) {
         let request_was_pending = self.state.requested.take().is_some();
         let focus_was_held = self.state.focused.get();
+        if !request_was_pending && !focus_was_held && !self.state.descendant_focused.get() {
+            return;
+        }
+
+        if let Some(mut scope) = self.host_enclosing_scope() {
+            if scope.can_request_focus() {
+                match disposition {
+                    UnfocusDisposition::Scope => scope.state.hosted_history.borrow_mut().clear(),
+                    UnfocusDisposition::PreviouslyFocusedChild => scope.forget_hosted_child(self),
+                }
+            }
+            let mut visited = Vec::new();
+            loop {
+                if visited.contains(&scope) {
+                    break;
+                }
+                if scope.can_request_focus() {
+                    match disposition {
+                        UnfocusDisposition::Scope => scope.request_scope_focus(),
+                        UnfocusDisposition::PreviouslyFocusedChild => {
+                            let _ = scope.request_focus_in_scope();
+                        }
+                    }
+                    return;
+                }
+                let anchor = scope.scope_focus_node();
+                let Some(enclosing) = anchor.host_enclosing_scope() else {
+                    break;
+                };
+                if disposition == UnfocusDisposition::PreviouslyFocusedChild {
+                    enclosing.forget_hosted_child(&anchor);
+                }
+                visited.push(scope);
+                scope = enclosing;
+            }
+        }
+
         self.state.set_focused(false);
         if request_was_pending || focus_was_held {
             self.state.schedule_host_frame();
@@ -245,12 +298,7 @@ impl FocusNode {
         *self.state.host_enclosing_scope.borrow_mut() =
             scope.map(|scope| Rc::downgrade(&scope.state));
         if let Some(previous) = previous {
-            let child_state = Rc::downgrade(&self.state);
-            previous
-                .state
-                .hosted_history
-                .borrow_mut()
-                .retain(|known| !known.ptr_eq(&child_state));
+            previous.forget_hosted_child(self);
         }
     }
 
@@ -339,12 +387,10 @@ impl FocusNode {
     /// Excludes or includes this node in manager-driven traversal.
     pub fn set_can_request_focus(&self, can_request_focus: bool) {
         if self.state.can_request_focus.replace(can_request_focus) != can_request_focus {
-            if !self.can_request_focus() {
-                self.unfocus();
+            if !can_request_focus {
+                self.unfocus_with_disposition(UnfocusDisposition::PreviouslyFocusedChild);
             }
             self.state.notify();
-        } else if !can_request_focus {
-            self.unfocus();
         }
     }
     fn locally_can_request_focus(&self) -> bool {
@@ -1732,6 +1778,7 @@ impl FocusScopeNode {
     /// Requests primary focus for the scope itself, without forwarding
     /// the request to a previously focused descendant.
     pub fn request_scope_focus(&self) {
+        let _ = self.last_hosted_child(true);
         self.scope_focus_node().request_focus();
     }
 
@@ -1919,6 +1966,10 @@ impl FocusScopeNode {
 
     /// Clears the current focus while retaining it for [`Self::restore_focus`].
     pub fn clear_focus(&self) {
+        if let Some(anchor) = self.mounted_anchor() {
+            anchor.unfocus();
+            return;
+        }
         let mut manager = self.state.manager.borrow_mut();
         let previous = manager.focused();
         let transition = manager.clear_focus_silent();
@@ -1928,10 +1979,19 @@ impl FocusScopeNode {
         transition.notify();
     }
 
-    /// Clears this scope's focus. This is an alias matching common focus
-    /// controller terminology.
+    /// Clears this scope's focus.
     pub fn unfocus(&self) {
         self.clear_focus();
+    }
+
+    /// Moves focus away from this mounted scope, leaving its own child
+    /// history unchanged. For a standalone scope, clears local focus.
+    pub fn unfocus_with_disposition(&self, disposition: UnfocusDisposition) {
+        if let Some(anchor) = self.mounted_anchor() {
+            anchor.unfocus_with_disposition(disposition);
+        } else {
+            self.clear_focus();
+        }
     }
 
     fn mounted_anchor(&self) -> Option<&FocusNode> {
@@ -1958,21 +2018,34 @@ impl FocusScopeNode {
         history.push(child_state);
     }
 
-    fn last_hosted_child(&self, require_focusable: bool) -> Option<FocusNode> {
-        if require_focusable && !self.descendants_are_focusable() {
-            return None;
-        }
+    fn forget_hosted_child(&self, child: &FocusNode) {
+        let child_state = Rc::downgrade(&child.state);
         self.state
             .hosted_history
-            .borrow()
+            .borrow_mut()
+            .retain(|known| !known.ptr_eq(&child_state));
+    }
+
+    fn last_hosted_child(&self, require_focusable: bool) -> Option<FocusNode> {
+        let mut history = self.state.hosted_history.borrow_mut();
+        if require_focusable {
+            while let Some(last) = history.last() {
+                if last.upgrade().is_some_and(|state| {
+                    let child = FocusNode { state };
+                    child.can_request_focus()
+                        && child.host_enclosing_scope().as_ref() == Some(self)
+                }) {
+                    break;
+                }
+                history.pop();
+            }
+        }
+        history
             .iter()
             .rev()
             .filter_map(Weak::upgrade)
             .map(|state| FocusNode { state })
-            .find(|child| {
-                child.host_enclosing_scope().as_ref() == Some(self)
-                    && (!require_focusable || child.can_request_focus())
-            })
+            .find(|child| child.host_enclosing_scope().as_ref() == Some(self))
     }
 
     /// The most recently focused live child, even when another scope owns

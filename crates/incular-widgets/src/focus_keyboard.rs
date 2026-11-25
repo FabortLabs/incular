@@ -5,7 +5,7 @@ use std::rc::Rc;
 use incular_core::KeyboardEvent;
 pub use incular_gestures::{
     Action, ActionInvocationPhase, ActionResult, Actions, Command, CommandId, FocusBehavior,
-    FocusManager, FocusNode, FocusOrder, FocusScopeNode, FocusScopeSubscription,
+    FocusManager, FocusNode, FocusOrder, FocusScopeNode, FocusScopeSubscription, UnfocusDisposition,
     FocusTraversalPolicy, FocusTraversalPolicyKind, Intent, KeyEventResult, LockState,
     LogicalKeySet, LogicalShortcutKey, OrderedTraversalPolicy, ReadingOrderTraversalPolicy,
     ShortcutActivator, ShortcutKey, ShortcutTrigger, Shortcuts, SingleActivator,

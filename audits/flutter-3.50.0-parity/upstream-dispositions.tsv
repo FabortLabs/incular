@@ -1325,3 +1325,7 @@ packages/flutter/test/widgets/focus_scope_test.dart	2016	Setting parent FocusSco
 packages/flutter/test/widgets/focus_manager_test.dart	115	descendantsAreFocusable disables focus for descendants.	paired-match	upstream-mounted-focus-scope-nodes.md#ordinary-focus-descendant-flags
 packages/flutter/test/widgets/focus_manager_test.dart	170	descendantsAreTraversable disables traversal for descendants.	partial-match	upstream-mounted-focus-scope-nodes.md#ordinary-focus-descendant-flags
 packages/flutter/test/widgets/focus_manager_test.dart	210	canRequestFocus doesn't affect traversalChildren	partial-match	upstream-mounted-focus-scope-nodes.md#ordinary-focus-descendant-flags
+packages/flutter/test/widgets/focus_manager_test.dart	1081	Unfocus with disposition previouslyFocusedChild works properly	paired-match	upstream-mounted-focus-scope-nodes.md#unfocus-and-fallback-through-scope-history
+packages/flutter/test/widgets/focus_manager_test.dart	1172	Unfocus with disposition scope works properly	paired-match	upstream-mounted-focus-scope-nodes.md#unfocus-and-fallback-through-scope-history
+packages/flutter/test/widgets/focus_manager_test.dart	1265	Unfocus works properly when some nodes are unfocusable	paired-match	upstream-mounted-focus-scope-nodes.md#unfocus-and-fallback-through-scope-history
+packages/flutter/test/widgets/focus_manager_test.dart	1341	Requesting focus on a scope works properly when some focusedChild nodes are unfocusable	paired-match	upstream-mounted-focus-scope-nodes.md#unfocus-and-fallback-through-scope-history
