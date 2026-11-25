@@ -3292,7 +3292,6 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
         | WidgetKind::Opacity { child, .. }
         | WidgetKind::Blur { child, .. }
         | WidgetKind::DropShadow { child, .. }
-        | WidgetKind::ColorFiltered { child, .. }
         | WidgetKind::Blend { child, .. }
         | WidgetKind::Translate { child, .. }
         | WidgetKind::Transform { child, .. }
@@ -3309,6 +3308,9 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
         WidgetKind::RawInput { child, .. } => child
             .as_ref()
             .and_then(|child| widget_main_extent_hint(child, axis)),
+        WidgetKind::ColorFiltered { child, .. } => child
+            .as_ref()
+            .map_or(Some(0.), |child| widget_main_extent_hint(child, axis)),
         WidgetKind::Baseline { child, .. } => widget_main_extent_hint(child, axis),
         WidgetKind::Flexible { child, .. } => widget_main_extent_hint(child, axis),
         WidgetKind::Flex {

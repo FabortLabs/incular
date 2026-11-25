@@ -114,7 +114,7 @@ pub(crate) fn install_listener(
             .child
             .as_mut()
             .and_then(|child| install_listener(child, wrap)),
-        WidgetKind::RawInput { child, .. } => child
+        WidgetKind::RawInput { child, .. } | WidgetKind::ColorFiltered { child, .. } => child
             .as_mut()
             .and_then(|child| install_listener(child, wrap)),
         WidgetKind::SelectionArea { child, .. }
@@ -163,7 +163,6 @@ pub(crate) fn install_listener(
         | WidgetKind::Opacity { child, .. }
         | WidgetKind::Blur { child, .. }
         | WidgetKind::DropShadow { child, .. }
-        | WidgetKind::ColorFiltered { child, .. }
         | WidgetKind::Blend { child, .. }
         | WidgetKind::ShaderMask { child, .. }
         | WidgetKind::BackdropFilter { child, .. }

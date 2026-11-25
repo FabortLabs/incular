@@ -2490,8 +2490,8 @@ impl WidgetKind {
             WidgetKind::ColorFiltered { child, .. } => (
                 WidgetType::ColorFiltered,
                 Effects,
-                Single,
-                WidgetChildren::Single(child),
+                Optional,
+                WidgetChildren::Optional(child.as_ref()),
             ),
             WidgetKind::Blend { child, .. } => (
                 WidgetType::Blend,

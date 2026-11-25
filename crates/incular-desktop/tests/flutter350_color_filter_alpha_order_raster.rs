@@ -185,6 +185,13 @@ fn flutter_350_color_filtered_matrix_recovers_alpha_and_respects_opacity_order()
             4,
         ),
         ("empty filter", filter(SizedBox::shrink()), BLACK, BLACK, 0),
+        (
+            "filter without a child",
+            ColorFiltered::without_child(ColorFilter::flutter_matrix(MATRIX)).into(),
+            BLACK,
+            BLACK,
+            0,
+        ),
     ];
     let mut mismatches: Vec<_> = cases
         .into_iter()

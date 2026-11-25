@@ -463,13 +463,52 @@ fn flutter350_color_filtered_at_zero_area_keeps_zero_layout_size() {
 
     let filter = ColorFilter::blend(Color::rgba(0, 0, 255, 255), BlendMode::Color);
     let mut tree = WidgetTree::new();
-    tree.mount(ColorFiltered::new(filter, SizedBox::shrink()).into())
+    tree.mount(ColorFiltered::without_child(filter).into())
         .unwrap();
     tree.layout(Constraints::tight(Size::ZERO)).unwrap();
     assert_eq!(tree.root_layout_size(), Some(Size::ZERO));
     tree.update_compositor(incular_core::time::Instant::now())
         .unwrap();
     let _ = tree.paint();
+}
+
+#[test]
+fn childless_color_filter_uses_minimum_constraints_without_a_matte() {
+    use incular_widgets::ColorFiltered;
+
+    let filter = ColorFilter::blend(Color::WHITE, BlendMode::Src);
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(ColorFiltered::without_child(filter).into())
+        .unwrap();
+    let place = |tree: &mut WidgetTree, constraints| {
+        tree.layout(constraints).unwrap();
+        tree.update_compositor(incular_core::time::Instant::now())
+            .unwrap();
+        let list = tree.paint();
+        (
+            tree.root_layout_size(),
+            list.commands()
+                .iter()
+                .any(|command| matches!(command, PaintCommand::Rect { .. })),
+        )
+    };
+    let loose = Constraints::new(0., 40., 0., 20.);
+    assert_eq!(place(&mut tree, loose), (Some(Size::ZERO), false));
+    let size = Size::new(40., 20.);
+    let tight = Constraints::tight(size);
+    assert_eq!(place(&mut tree, tight), (Some(size), false));
+
+    tree.update(
+        root,
+        ColorFiltered::new(filter, Widget::box_(Size::new(12., 8.), Color::BLACK)).into(),
+    )
+    .unwrap();
+    assert_eq!(place(&mut tree, loose), (Some(Size::new(12., 8.)), true));
+
+    tree.update(root, ColorFiltered::without_child(filter).into())
+        .unwrap();
+    assert_eq!(place(&mut tree, loose), (Some(Size::ZERO), false));
 }
 
 fn pushes_filter(commands: &[PaintCommand], expected: ColorFilter) -> bool {

@@ -2210,7 +2210,7 @@ impl From<DropShadow> for Widget {
 pub struct ColorFiltered {
     filter: ColorFilter,
     controller: Option<ColorFilterController>,
-    child: Widget,
+    child: Option<Widget>,
 }
 impl ColorFiltered {
     #[must_use]
@@ -2218,7 +2218,17 @@ impl ColorFiltered {
         Self {
             filter,
             controller: None,
-            child: child.into(),
+            child: Some(child.into()),
+        }
+    }
+    /// Creates a filter with no child. It uses the smallest allowed size
+    /// and paints nothing, even if the filter changes transparent pixels.
+    #[must_use]
+    pub fn without_child(filter: ColorFilter) -> Self {
+        Self {
+            filter,
+            controller: None,
+            child: None,
         }
     }
     #[must_use]
@@ -2226,7 +2236,7 @@ impl ColorFiltered {
         Self {
             filter: controller.filter(),
             controller: Some(controller),
-            child: child.into(),
+            child: Some(child.into()),
         }
     }
     #[must_use]
@@ -2250,10 +2260,11 @@ impl ColorFiltered {
 }
 impl From<ColorFiltered> for Widget {
     fn from(value: ColorFiltered) -> Self {
-        match value.controller {
-            Some(controller) => Widget::controlled_color_filtered(controller, value.child),
-            None => Widget::color_filtered(value.filter, value.child),
-        }
+        let filter = value
+            .controller
+            .as_ref()
+            .map_or(value.filter, ColorFilterController::filter);
+        Widget::color_filtered_with_child(filter, value.controller, value.child)
     }
 }
 

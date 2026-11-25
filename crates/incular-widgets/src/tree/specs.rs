@@ -834,7 +834,7 @@ pub(crate) enum WidgetKind {
     ColorFiltered {
         filter: Box<ColorFilter>,
         controller: Option<ColorFilterController>,
-        child: Widget,
+        child: Option<Widget>,
     },
     Blend {
         mode: BlendMode,

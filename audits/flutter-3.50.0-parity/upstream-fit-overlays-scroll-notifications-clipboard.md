@@ -82,9 +82,9 @@ through these cases so layer IDs do not alias between independent trees.
 
 The original layer-reuse port now uses the same Color blend over a
 Placeholder and asserts that changing red to green keeps the same
-layer identity; it is fully paired. The original zero-area case
-remains partial because Flutter omits the filter child and Incular
-currently requires one. These tests are not the original red golden.
+layer identity; it is fully paired. The zero-area case was partial
+at this point because Flutter omitted the child. These tests are
+not the original red golden.
 
 ### ColorFilter.saturation
 
@@ -103,3 +103,13 @@ region; Dst keeps the original destination, including its alpha. They
 do not require a copied destination texture or renumber any existing
 blend code. The paired pixel checks cover both modes as isolated color
 filters and direct blends over opaque and translucent destinations.
+
+### Childless ColorFiltered
+
+An optional child now stays genuinely absent in the retained tree.
+The original zero-area case (:119) is fully paired using the same
+blue Color blend and no child. Rust also verifies the smallest size
+under zero, loose, and tight constraints, and reconciles a child in
+and out. Pinned Flutter and Windows wgpu both leave the background
+unchanged for an absent child even when the matrix would color
+transparent black in a populated filter.

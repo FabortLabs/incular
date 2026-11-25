@@ -273,6 +273,12 @@ void main() {
         _filter(const SizedBox.shrink()),
         _blackPixel,
       );
+      await _check(
+        tester,
+        'filter without a child',
+        const ColorFiltered(colorFilter: _matrix),
+        _blackPixel,
+      );
     },
   );
 }

@@ -1535,11 +1535,19 @@ impl Widget {
     }
     #[must_use]
     pub(crate) fn color_filtered(filter: ColorFilter, child: Self) -> Self {
+        Self::color_filtered_with_child(filter, None, Some(child))
+    }
+    #[must_use]
+    pub(crate) fn color_filtered_with_child(
+        filter: ColorFilter,
+        controller: Option<ColorFilterController>,
+        child: Option<Self>,
+    ) -> Self {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::ColorFiltered {
                 filter: Box::new(filter),
-                controller: None,
+                controller,
                 child,
             },
             semantics: None,
@@ -1551,15 +1559,7 @@ impl Widget {
     }
     #[must_use]
     pub fn controlled_color_filtered(controller: ColorFilterController, child: Self) -> Self {
-        Self::from_node(WidgetNode {
-            key: None,
-            kind: WidgetKind::ColorFiltered {
-                filter: Box::new(controller.filter()),
-                controller: Some(controller),
-                child,
-            },
-            semantics: None,
-        })
+        Self::color_filtered_with_child(controller.filter(), Some(controller), Some(child))
     }
     #[must_use]
     pub(crate) fn blend(mode: BlendMode, child: Self) -> Self {

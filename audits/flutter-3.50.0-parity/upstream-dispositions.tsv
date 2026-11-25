@@ -229,7 +229,7 @@ packages/flutter/test/widgets/editable_text_test.dart	3118	cut and paste are dis
 packages/flutter/test/widgets/editable_text_test.dart	3152	cut and copy are disabled in obscured mode even if explicitly set	partial-match	upstream-fit-overlays-scroll-notifications-clipboard.md
 packages/flutter/test/widgets/editable_text_test.dart	3235	select all does nothing if obscured and read-only, even if explicitly called	partial-mismatch	upstream-fit-overlays-scroll-notifications-clipboard.md
 packages/flutter/test/widgets/color_filter_test.dart	33	Color filter - sepia	partial-match	upstream-fit-overlays-scroll-notifications-clipboard.md
-packages/flutter/test/widgets/color_filter_test.dart	119	ColorFiltered does not crash at zero area	partial-match	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/color_filter_test.dart	119	ColorFiltered does not crash at zero area	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md#childless-colorfiltered
 packages/flutter/test/widgets/dismissible_test.dart	351	drag-left with DismissDirection.endToStart triggers dismiss (LTR)	partial-match	upstream-dismissible-direction-and-confirmation.md
 packages/flutter/test/widgets/dismissible_test.dart	383	drag-right with DismissDirection.endToStart triggers dismiss (RTL)	partial-match	upstream-dismissible-direction-and-confirmation.md
 packages/flutter/test/widgets/dismissible_test.dart	551	drag-left has no effect on dismissible with a high dismiss threshold	partial-match	upstream-dismissible-direction-and-confirmation.md
