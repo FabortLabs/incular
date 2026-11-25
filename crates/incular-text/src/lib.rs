@@ -6,6 +6,7 @@
 //! root for backwards compatibility.
 mod boundary;
 mod editing;
+mod flutter_editing_delta;
 mod spans;
 mod style;
 #[cfg(all(target_os = "windows", not(feature = "bundled-dictionaries")))]
@@ -20,6 +21,7 @@ pub use editing::{
     TextEditingSubscription, TextEditingValue, TextField, TextRange, TextSelection,
     byte_offset_at_utf16_boundary,
 };
+pub use flutter_editing_delta::{FlutterTextDeltaError, FlutterTextEdit, FlutterTextEditingDelta};
 pub use spans::{
     InlineSpan, RichText, StyledTextRun, Text, TextSpan, TextSpanVisitor, WidgetSpan,
     WidgetSpanAlignment,

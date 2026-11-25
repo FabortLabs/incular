@@ -95,7 +95,6 @@ packages/flutter/test/painting/edge_insets_test.dart	134	EdgeInsets.resolve()	pa
 packages/flutter/test/services/text_input_test.dart	55	reversed selection deletion	paired-match	upstream-geometry-input-gestures.md
 packages/flutter/test/services/text_input_test.dart	78	replace before selection	paired-match	upstream-text-replacement-boundaries.md#current-text-replacement-disposition
 packages/flutter/test/services/text_input_test.dart	94	replace after selection	paired-match	upstream-text-replacement-boundaries.md#current-text-replacement-disposition
-packages/flutter/test/services/text_editing_delta_test.dart	40	Verify creation of insertion delta when inserting at end of composing region.	partial-match	upstream-geometry-input-gestures.md
 packages/flutter/test/gestures/velocity_tracker_test.dart	64	Interrupted velocity estimation	paired-match	upstream-geometry-input-gestures.md#standalone-velocity-tracker-comparisons
 packages/flutter/test/gestures/velocity_tracker_test.dart	77	No data velocity estimation	paired-match	upstream-geometry-input-gestures.md#standalone-velocity-tracker-comparisons
 packages/flutter/test/gestures/velocity_tracker_test.dart	158	Assume zero velocity when there are no recent samples - base VelocityTracker	paired-match	upstream-geometry-input-gestures.md#standalone-velocity-tracker-comparisons
@@ -178,10 +177,6 @@ packages/flutter/test/widgets/tap_region_test.dart	978	TapRegionSurface detects 
 packages/flutter/test/widgets/absorb_pointer_test.dart	11	AbsorbPointers do not block siblings	paired-match	upstream-tap-absorber-delta-and-raw-image.md
 packages/flutter/test/widgets/absorb_pointer_test.dart	26	does not change semantics when not absorbing	paired-match	upstream-tap-absorber-delta-and-raw-image.md#blocking-user-actions-without-removing-focus
 packages/flutter/test/widgets/absorb_pointer_test.dart	50	ignores user interactions	paired-match	upstream-tap-absorber-delta-and-raw-image.md#blocking-user-actions-without-removing-focus
-packages/flutter/test/services/text_editing_delta_test.dart	68	Verify invalid TextEditingDeltaInsertion fails to apply	partial-match	upstream-tap-absorber-delta-and-raw-image.md#reject-malformed-replacement-ranges
-packages/flutter/test/services/text_editing_delta_test.dart	138	Verify creation of deletion delta when deleting at end of composing region.	partial-match	upstream-tap-absorber-delta-and-raw-image.md
-packages/flutter/test/services/text_editing_delta_test.dart	235	Verify creation of replacement delta when replacing with shorter.	partial-match	upstream-tap-absorber-delta-and-raw-image.md
-packages/flutter/test/services/text_editing_delta_test.dart	336	Verify non text update delta created.	partial-match	upstream-tap-absorber-delta-and-raw-image.md
 packages/flutter/test/widgets/tap_region_test.dart	1053	TapRegion onTapOutside should only trigger on the current route during navigation	paired-match	upstream-current-route-aspect-and-long-press.md
 packages/flutter/test/widgets/tap_region_test.dart	1133	TapRegion on non-current routes should not respond to onTapOutside events	paired-match	upstream-pointer-current-dispositions.md
 packages/flutter/test/widgets/tap_region_test.dart	1191	TapRegion with consumeOutsideTaps should not consume taps after navigation	paired-match	upstream-pointer-current-dispositions.md
@@ -1423,3 +1418,19 @@ packages/flutter/test/widgets/heroes_test.dart	732	Default Hero animation is fas
 packages/flutter/test/widgets/heroes_test.dart	3400	Default popped hero uses fastOutSlowIn curve	paired-match	frame-hero-return-flight.md
 packages/flutter/test/widgets/heroes_test.dart	2013	Pop interrupts push, reverses flight	partial-match	frame-hero-return-flight.md#interrupted-push
 packages/flutter/test/widgets/heroes_test.dart	945	Popping on first frame does not cause hero observer to crash	paired-match	frame-hero-return-flight.md#outlet-started-page-routes
+packages/flutter/test/services/text_editing_delta_test.dart	13	Verify creation of insertion delta when inserting at a collapsed selection.	paired-match	upstream-text-editing-delta-wire.md
+packages/flutter/test/services/text_editing_delta_test.dart	40	Verify creation of insertion delta when inserting at end of composing region.	paired-match	upstream-text-editing-delta-wire.md
+packages/flutter/test/services/text_editing_delta_test.dart	68	Verify invalid TextEditingDeltaInsertion fails to apply	paired-match	upstream-text-editing-delta-wire.md
+packages/flutter/test/services/text_editing_delta_test.dart	82	Verify TextEditingDeltaInsertion debugFillProperties	reference-ran-incular-open	upstream-text-editing-delta-wire.md
+packages/flutter/test/services/text_editing_delta_test.dart	110	Verify creation of deletion delta when deleting.	paired-match	upstream-text-editing-delta-wire.md
+packages/flutter/test/services/text_editing_delta_test.dart	138	Verify creation of deletion delta when deleting at end of composing region.	paired-match	upstream-text-editing-delta-wire.md
+packages/flutter/test/services/text_editing_delta_test.dart	166	Verify invalid TextEditingDeltaDeletion fails to apply	paired-match	upstream-text-editing-delta-wire.md
+packages/flutter/test/services/text_editing_delta_test.dart	179	Verify TextEditingDeltaDeletion debugFillProperties	reference-ran-incular-open	upstream-text-editing-delta-wire.md
+packages/flutter/test/services/text_editing_delta_test.dart	206	Verify creation of replacement delta when replacing with longer.	paired-match	upstream-text-editing-delta-wire.md
+packages/flutter/test/services/text_editing_delta_test.dart	235	Verify creation of replacement delta when replacing with shorter.	paired-match	upstream-text-editing-delta-wire.md
+packages/flutter/test/services/text_editing_delta_test.dart	264	Verify creation of replacement delta when replacing with same.	paired-match	upstream-text-editing-delta-wire.md
+packages/flutter/test/services/text_editing_delta_test.dart	293	Verify invalid TextEditingDeltaReplacement fails to apply	paired-match	upstream-text-editing-delta-wire.md
+packages/flutter/test/services/text_editing_delta_test.dart	307	Verify TextEditingDeltaReplacement debugFillProperties	reference-ran-incular-open	upstream-text-editing-delta-wire.md
+packages/flutter/test/services/text_editing_delta_test.dart	336	Verify non text update delta created.	paired-match	upstream-text-editing-delta-wire.md
+packages/flutter/test/services/text_editing_delta_test.dart	361	Verify invalid TextEditingDeltaNonTextUpdate fails to apply	paired-match	upstream-text-editing-delta-wire.md
+packages/flutter/test/services/text_editing_delta_test.dart	373	Verify TextEditingDeltaNonTextUpdate debugFillProperties	reference-ran-incular-open	upstream-text-editing-delta-wire.md
