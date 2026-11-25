@@ -170,3 +170,106 @@ fn a_microtask_registered_after_the_checkpoint_requests_a_following_frame() {
     runtime.run_frame(constraints()).unwrap();
     assert!(seen.get());
 }
+
+#[test]
+fn async_task_wake_is_deferred_until_warm_draw_completes() {
+    use incular_animation::scheduler::{schedule_async_task, set_scheduled_task_wake};
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let wakes = Arc::new(AtomicUsize::new(0));
+    set_scheduled_task_wake({
+        let wakes = wakes.clone();
+        move || {
+            wakes.fetch_add(1, Ordering::Relaxed);
+        }
+    });
+
+    let mut runtime = runtime();
+    assert!(runtime.schedule_warm_up_frame());
+    let ran = Rc::new(Cell::new(false));
+    let _task = schedule_async_task(
+        {
+            let ran = ran.clone();
+            move || async move {
+                ran.set(true);
+            }
+        },
+        Priority::TOUCH,
+    );
+    assert_eq!(wakes.load(Ordering::Relaxed), 0);
+    assert!(!run_one_scheduled_task());
+    assert!(runtime.begin_warm_up_frame_at(Instant::now()));
+    assert_eq!(wakes.load(Ordering::Relaxed), 0);
+    let _ = runtime.draw_warm_up_frame(constraints()).unwrap();
+    assert_eq!(wakes.load(Ordering::Relaxed), 1);
+    assert!(!ran.get());
+    let _ = run_one_scheduled_task();
+    assert!(ran.get());
+}
+
+#[test]
+fn application_warm_up_request_stays_with_the_requested_window() {
+    use incular_platform::WindowOptions;
+    use incular_runtime::Application;
+
+    let size = Size::new(100., 100.);
+    let mut application = Application::new(move |_| Widget::box_(size, Color::WHITE)).unwrap();
+    let primary = application.primary_window();
+    let other = application
+        .open_window(WindowOptions::default(), Widget::box_(size, Color::BLACK))
+        .unwrap()
+        .id();
+    let start = Instant::now();
+    application
+        .run_window_frame_at(primary, constraints(), start)
+        .unwrap()
+        .unwrap();
+    assert!(application.schedule_window_warm_up_frame(other));
+    assert!(!application.schedule_window_warm_up_frame(other));
+    let later = start + Duration::from_secs(1);
+    application
+        .run_window_frame_at(primary, constraints(), later)
+        .unwrap()
+        .unwrap();
+    assert_eq!(current_system_frame_time(), Some(later));
+    assert!(application.frame_requested(other));
+
+    let callback_time = Rc::new(Cell::new(None));
+    schedule_frame_callback({
+        let callback_time = callback_time.clone();
+        move |now| callback_time.set(Some(now))
+    });
+    application
+        .run_window_frame_at(other, constraints(), later + Duration::from_secs(3))
+        .unwrap()
+        .unwrap();
+    assert_eq!(callback_time.get(), Some(later));
+    assert_eq!(current_system_frame_time(), Some(later));
+    assert!(application.schedule_window_warm_up_frame(other));
+}
+
+#[cfg(feature = "hot-reload")]
+#[test]
+fn app_reassembly_queues_a_warm_up_instead_of_advancing_the_clock() {
+    use incular_runtime::Application;
+    let size = Size::new(100., 100.);
+    let mut app = Application::new(move |_| Widget::box_(size, Color::WHITE)).unwrap();
+    let window = app.primary_window();
+    let first = Instant::now();
+    app.run_window_frame_at(window, constraints(), first)
+        .unwrap()
+        .unwrap();
+    app.reassemble();
+    let seen = Rc::new(Cell::new(None));
+    schedule_frame_callback({
+        let seen = seen.clone();
+        move |now| seen.set(Some(now))
+    });
+    app.run_window_frame_at(window, constraints(), first + Duration::from_secs(5))
+        .unwrap()
+        .unwrap();
+    assert_eq!(seen.get(), Some(first));
+    assert_eq!(current_system_frame_time(), Some(first));
+}

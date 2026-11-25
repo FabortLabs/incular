@@ -25,6 +25,7 @@ type HostWake = Arc<dyn Fn() + Send + Sync>;
 struct AsyncInbox {
     ready: Mutex<VecDeque<u64>>,
     has_ready: AtomicBool,
+    warm_up_locked: AtomicBool,
     host_wake: Mutex<Option<HostWake>>,
 }
 
@@ -64,6 +65,9 @@ impl AsyncInbox {
     }
 
     fn notify_host(&self) {
+        if self.warm_up_locked.load(AtomicOrdering::Acquire) {
+            return;
+        }
         let wake = self.host_wake.lock().expect("UI task wake mutex").clone();
         if let Some(wake) = wake {
             wake();
@@ -287,6 +291,17 @@ pub fn schedule_async_task<T: 'static, F: Future<Output = T> + 'static>(
     });
     inbox.notify_host();
     result_future(completion)
+}
+
+/// Defer native task wakes while the warm-up reservation owns dispatch.
+pub(crate) fn set_warm_up_task_lock(locked: bool) {
+    let _ = ASYNC_INBOX.try_with(|inbox| {
+        let inbox = inbox.get_or_init(Arc::default);
+        inbox.warm_up_locked.store(locked, AtomicOrdering::Release);
+        if !locked && has_ready_scheduled_task() {
+            inbox.notify_host();
+        }
+    });
 }
 
 /// Install the native host wake hook for this scheduler thread.

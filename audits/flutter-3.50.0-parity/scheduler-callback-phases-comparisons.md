@@ -215,5 +215,13 @@ The same Rust tests check the epoch does not absorb warm-up wall time,
 the last native frame timestamp is unmodified, a previous normal frame
 request survives, late microtasks request the next frame, and abandoning
 a reservation does not block another runtime. The original :281 is
-skipped in the pinned SDK and is not credited. The separate desktop
-native event lock and startup/hot-reload triggering are not claimed.
+skipped in the pinned SDK and is not credited.
+
+Application windows can now queue a warm-up before their next draw.
+Queuing another window never locks the current window's normal frame,
+and a zero-size window does not reserve the scheduler before drawing.
+Hot reassembly queues the same warm-up path for each window. The
+hot-reload-enabled focused Rust tests check the actual managed-window
+path and the callback epoch after reassembly. Asynchronous task wakes
+are coalesced until draw finishes. This does not claim a full desktop
+pointer-input event lock or Dart timer integration.

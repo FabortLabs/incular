@@ -1601,6 +1601,21 @@ impl Application {
             .is_some_and(|record| record.runtime.frame_requested())
     }
 
+    /// Requests one warm-up for this window. The reservation begins only
+    /// when this window can draw, so a hidden or zero-size window does not
+    /// block other windows on the same UI thread.
+    pub fn schedule_window_warm_up_frame(&mut self, window_id: WindowId) -> bool {
+        self.with_window_mut(window_id, |record| {
+            if record.warm_up_requested {
+                return false;
+            }
+            record.warm_up_requested = true;
+            record.runtime.frame_requested = true;
+            true
+        })
+        .unwrap_or(false)
+    }
+
     pub fn note_frame_requested(&mut self, window_id: WindowId) {
         scheduler_counters::REDRAW_REQUESTS.fetch_add(1, Ordering::Relaxed);
         self.scheduler_counters.redraw_requests =
@@ -1636,6 +1651,15 @@ impl Application {
                     scheduler_counters::FRAMES_SKIPPED.fetch_add(1, Ordering::Relaxed);
                     Ok(None)
                 } else {
+                    if incular_animation::scheduler::warm_up_frame_pending() {
+                        // Another directly driven Runtime may have split its
+                        // turn. Keep pending work for the next host redraw.
+                        record.runtime.frame_requested = true;
+                        return Ok(None);
+                    }
+                    if record.warm_up_requested {
+                        record.warm_up_requested = !record.runtime.schedule_warm_up_frame();
+                    }
                     let frame_constraints =
                         ContentSizeCoordinator::layout_constraints(&record.options, constraints);
                     record
@@ -1814,7 +1838,10 @@ impl Application {
     #[cfg(feature = "hot-reload")]
     pub fn reassemble(&mut self) {
         for window in self.active_window_ids() {
-            let _ = self.with_window_mut(window, |record| record.runtime.reassemble());
+            let _ = self.with_window_mut(window, |record| {
+                record.runtime.reassemble();
+                record.warm_up_requested = true;
+            });
         }
     }
 

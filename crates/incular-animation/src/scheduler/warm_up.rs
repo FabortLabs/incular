@@ -50,7 +50,7 @@ pub struct WarmUpFrame {
 impl WarmUpFrame {
     #[must_use]
     pub fn reserve() -> Option<Self> {
-        SCHEDULER.with(|scheduler| {
+        let reservation = SCHEDULER.with(|scheduler| {
             let mut scheduler = scheduler.borrow_mut();
             if scheduler.warm_up_pending || scheduler.frame_time.is_some() {
                 return None;
@@ -63,7 +63,11 @@ impl WarmUpFrame {
                 forced: scheduler.forced_frame_requested,
                 _ui_thread: PhantomData,
             })
-        })
+        });
+        if reservation.is_some() {
+            crate::ui_tasks::set_warm_up_task_lock(true);
+        }
+        reservation
     }
 
     /// Starts the transient phase once, using the last real frame's raw
@@ -101,7 +105,7 @@ impl WarmUpFrame {
 impl Drop for WarmUpFrame {
     fn drop(&mut self) {
         // The UI-thread local may already be gone during thread shutdown.
-        let _ = SCHEDULER.try_with(|scheduler| {
+        let unlocked = SCHEDULER.try_with(|scheduler| {
             let mut scheduler = scheduler.borrow_mut();
             if self.began.is_some() {
                 scheduler.frame_time = None;
@@ -111,5 +115,8 @@ impl Drop for WarmUpFrame {
             scheduler.frame_requested |= self.requested;
             scheduler.forced_frame_requested |= self.forced;
         });
+        if unlocked.is_ok() {
+            crate::ui_tasks::set_warm_up_task_lock(false);
+        }
     }
 }
