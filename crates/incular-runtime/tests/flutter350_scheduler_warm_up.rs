@@ -273,3 +273,52 @@ fn app_reassembly_queues_a_warm_up_instead_of_advancing_the_clock() {
     assert_eq!(seen.get(), Some(first));
     assert_eq!(current_system_frame_time(), Some(first));
 }
+
+#[test]
+fn a_single_benchmark_step_draws_once_even_with_follow_up_work() {
+    use incular_animation::{Ticker, add_persistent_frame_callback};
+    use incular_widgets::internal::Key;
+
+    let phases = Rc::new(Cell::new((0, 0, false)));
+    let ticker = Ticker::new({
+        let phases = phases.clone();
+        move |_| {
+            let (begin, draw, _) = phases.get();
+            phases.set((begin + 1, draw, false));
+            let phases = phases.clone();
+            schedule_frame_microtask(move || {
+                let (begin, draw, _) = phases.get();
+                phases.set((begin, draw, true));
+            });
+        }
+    });
+    add_persistent_frame_callback({
+        let phases = phases.clone();
+        move |_| {
+            let (begin, draw, microtask) = phases.get();
+            assert!(microtask, "begin microtask must run before draw");
+            phases.set((begin, draw + 1, microtask));
+        }
+    });
+
+    let root_key = Key::from("root");
+    let make_root = |color| Widget::box_(Size::new(100., 100.), color).with_key(root_key.clone());
+    let mut runtime = Runtime::new(make_root(Color::WHITE)).unwrap();
+    ticker.start();
+    let clock = Instant::now();
+    runtime.run_frame_at(constraints(), clock).unwrap();
+    let (begin, draw, _) = phases.get();
+    assert_eq!((begin, draw), (1, 1));
+
+    let element = runtime.tree().element_with_key(&root_key).unwrap();
+    runtime
+        .schedule_update(element, make_root(Color::BLACK))
+        .unwrap();
+    runtime
+        .run_frame_at(constraints(), clock + Duration::from_millis(16))
+        .unwrap();
+    assert_eq!(phases.get(), (begin + 1, draw + 1, true));
+    assert!(runtime.frame_requested(), "a later tick stays queued");
+    assert_eq!(runtime.tree().element_with_key(&root_key), Some(element));
+    ticker.stop();
+}

@@ -253,3 +253,13 @@ renderer summaries still produce only the existing frame callbacks.
 This is partial: Incular's typed event is named Incular.Frame rather
 than a Dart VM service event, and native adapters without phase
 timestamps do not invent a sample or a GPU timing.
+
+## One-frame benchmark step
+
+Pinned `scheduler/benchmarks_test.dart:43` passed. The deterministic
+Rust frame driver pairs the 16 ms dirty-tree step: a real mounted
+root is marked for rebuild, a ticker supplies the begin phase, its
+microtask runs before persistent draw, and the single step increments
+both phase counters by exactly one even with a following tick queued.
+The retained root is not replaced. No workload timing benchmark is
+claimed from either behavioral fixture.

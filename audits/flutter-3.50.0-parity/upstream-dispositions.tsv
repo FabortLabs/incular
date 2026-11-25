@@ -1271,3 +1271,4 @@ packages/flutter/test/scheduler/performance_mode_test.dart	20	PerformanceModeHan
 packages/flutter/test/scheduler/performance_mode_test.dart	30	PerformanceModeHandler make conflicting requests	paired-match	scheduler-callback-phases-comparisons.md#performance-preference-handles
 packages/flutter/test/scheduler/performance_mode_test.dart	47	PerformanceModeHandler revert only after last requestor disposed	paired-match	scheduler-callback-phases-comparisons.md#performance-preference-handles
 packages/flutter/test/scheduler/performance_mode_test.dart	67	PerformanceModeRequestHandle dispatches memory events	paired-match	scheduler-callback-phases-comparisons.md#performance-preference-handles
+packages/flutter/test/scheduler/benchmarks_test.dart	43	test pumpBenchmark() only runs one frame	paired-match	scheduler-callback-phases-comparisons.md#one-frame-benchmark-step
