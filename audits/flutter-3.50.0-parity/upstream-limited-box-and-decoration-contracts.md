@@ -157,3 +157,13 @@ the decoration value also resets the retained shader. Ten focused
 Rust tests and the top-level no-default-features check passed. This
 does not compare Incular raster pixels or relative gradients other
 than linear gradients.
+
+## Application-defined box borders
+
+Pinned `painting/box_decoration_test.dart:69` and `:79` passed. Both
+check that BoxDecoration delegates to a custom BoxBorder subtype and
+preserves its type and interpolated or scaled numeric value. Incular's
+BoxBorder is a concrete alias of Border. Built-in border arithmetic,
+ShapeBorder paths, or a separately painted custom outline cannot
+preserve a user-defined BoxBorder value through BoxDecoration.
+These cases are reference-only.
