@@ -96,3 +96,33 @@ fn null_duration_interpolates_as_zero_between_endpoints() {
         ]
     );
 }
+
+#[test]
+fn durations_round_independently_and_preserve_nullable_style_endpoints() {
+    let first = AnimationStyle::new()
+        .duration(Duration::from_micros(1))
+        .reverse_duration(Duration::from_micros(3));
+    let second = AnimationStyle::new().duration(Duration::from_micros(4));
+    let midpoint = AnimationStyle::lerp(Some(first), Some(second), 0.5).unwrap();
+    assert_eq!(midpoint.duration, Some(Duration::from_micros(3)));
+    assert_eq!(midpoint.reverse_duration, Some(Duration::from_micros(2)));
+    assert_eq!(
+        AnimationStyle::lerp(None, Some(second), 0.),
+        Some(AnimationStyle::new())
+    );
+    assert_eq!(
+        AnimationStyle::lerp(Some(first), None, 1.),
+        Some(AnimationStyle::new())
+    );
+    assert_eq!(
+        AnimationStyle::lerp(Some(first), Some(second), 1.),
+        Some(second)
+    );
+    assert_eq!(
+        AnimationStyle::lerp(Some(first), None, 1.5)
+            .unwrap()
+            .duration,
+        Some(Duration::ZERO),
+        "negative extrapolation cannot wrap through unsigned Rust Duration"
+    );
+}

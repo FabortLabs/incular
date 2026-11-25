@@ -13,3 +13,15 @@ All eight originals in animation/animation_style_test.dart passed against pinned
 | :113, :126 | Reference only. Rust's Debug surface is not Dart's DiagnosticPropertiesBuilder. |
 
 Run: cargo test --locked -p incular-animation --test flutter350_animation_style_parity -- --nocapture.
+
+## Duration interpolation recheck
+
+The exact nullable duration original at `:104` now matches. A missing
+duration acts as zero while interpolating but stays absent at its
+endpoint. Both forward and reverse durations use weighted microseconds
+and round half-up for nonnegative values. The authored control checks
+the independent 3µs and 2µs midpoint rounding, and absent whole-style
+endpoints. With negative extrapolation, Dart preserves a negative
+duration and Rust deliberately saturates to zero. The duration
+assertions for `:57` now pass; its curve-blending assertions are still
+open and the registration remains a mismatch.

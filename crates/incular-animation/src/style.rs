@@ -68,14 +68,40 @@ impl AnimationStyle {
         }
     }
 
-    /// Flutter `AnimationStyle.lerp`: the fields switch from `a` to `b` at
-    /// the midpoint.
+    /// Interpolates durations in microseconds, treating a missing duration
+    /// as zero only between the endpoints. Curve overrides currently choose
+    /// their endpoint at the midpoint; their samples do not blend yet.
     #[must_use]
     pub fn lerp(a: Option<Self>, b: Option<Self>, t: f32) -> Option<Self> {
         if a == b {
             return a;
         }
-        let pick = if t < 0.5 { a } else { b };
-        Some(pick.unwrap_or_default())
+        let start = a.unwrap_or_default();
+        let end = b.unwrap_or_default();
+        let curves = if t < 0.5 { start } else { end };
+        Some(Self {
+            duration: lerp_duration(start.duration, end.duration, t),
+            reverse_duration: lerp_duration(start.reverse_duration, end.reverse_duration, t),
+            ..curves
+        })
     }
+}
+
+fn lerp_duration(a: Option<Duration>, b: Option<Duration>, t: f32) -> Option<Duration> {
+    if a == b || t == 0. {
+        return a;
+    }
+    if t == 1. {
+        return b;
+    }
+    let micros = |duration: Option<Duration>| duration.map_or(0, |value| value.as_micros()) as f64;
+    let t = f64::from(t);
+    let value = (micros(a) * (1. - t) + micros(b) * t).round();
+    // Flutter durations are signed; Rust's Duration saturates at zero if
+    // extrapolation crosses there. Use u128 so its seconds range survives
+    // conversion to microseconds.
+    let value = (value as u128).min(Duration::MAX.as_micros());
+    let seconds = (value / 1_000_000) as u64;
+    let nanos = (value % 1_000_000) as u32 * 1_000;
+    Some(Duration::new(seconds, nanos))
 }

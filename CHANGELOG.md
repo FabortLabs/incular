@@ -311,6 +311,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- AnimationStyle interpolates forward and reverse durations in
+  microseconds, while preserving an absent value at its endpoint.
+
 - A train hop publishes the new status and value before calling
   onSwitchedTrain, regardless of observer registration order.
 

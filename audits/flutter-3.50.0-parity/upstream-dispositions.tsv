@@ -537,7 +537,7 @@ packages/flutter/test/animation/animation_style_test.dart	17	AnimationStyle.copy
 packages/flutter/test/animation/animation_style_test.dart	36	AnimationStyle.merge() fills in null properties	paired-match	upstream-animation-style.md
 packages/flutter/test/animation/animation_style_test.dart	51	AnimationStyle.lerp identical a,b	partial-match	upstream-animation-style.md
 packages/flutter/test/animation/animation_style_test.dart	57	AnimationStyle.lerp smoothly transitions all values	paired-mismatch	upstream-animation-style.md
-packages/flutter/test/animation/animation_style_test.dart	104	AnimationStyle.lerp with null property	paired-mismatch	upstream-animation-style.md
+packages/flutter/test/animation/animation_style_test.dart	104	AnimationStyle.lerp with null property	paired-match	upstream-animation-style.md
 packages/flutter/test/animation/animation_style_test.dart	113	default AnimationStyle debugFillProperties	reference-ran-incular-open	upstream-animation-style.md
 packages/flutter/test/animation/animation_style_test.dart	126	AnimationStyle implements debugFillProperties	reference-ran-incular-open	upstream-animation-style.md
 packages/flutter/test/widgets/tap_region_test.dart	1262	TapRegionSurface calls onTapOutside for semantics tap outside region	paired-match	upstream-pointer-current-dispositions.md
