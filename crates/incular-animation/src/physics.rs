@@ -440,34 +440,44 @@ pub struct FrictionSimulation {
     constant_deceleration: f64,
     final_time: f64,
     tolerance: Tolerance,
+    velocity_threshold: f64,
 }
 
 impl FrictionSimulation {
     #[must_use]
     pub fn new(drag: f32, start: f32, initial_velocity: f32, tolerance: Tolerance) -> Self {
-        let drag = if drag > 0.0 { f64::from(drag) } else { 0.135 };
-        Self::build(
-            drag,
+        Self::new_precise(
+            f64::from(drag),
             f64::from(start),
             f64::from(initial_velocity),
-            0.0,
             tolerance,
         )
+    }
+
+    /// Creates a simulation without narrowing the input coefficients.
+    /// Use the precise sampling methods when the result must not become f32.
+    #[must_use]
+    pub fn new_precise(drag: f64, start: f64, initial_velocity: f64, tolerance: Tolerance) -> Self {
+        let drag = if drag > 0.0 { drag } else { 0.135 };
+        Self::build(drag, start, initial_velocity, 0.0, tolerance)
     }
 
     /// Flutter `FrictionSimulation(..., constantDeceleration:)`: a deceleration
     /// of constant magnitude opposing the motion, applied on top of the
     /// exponential drag (desktop friction).
     #[must_use]
-    pub fn with_constant_deceleration(self, deceleration: f32) -> Self {
-        let signed = f64::from(deceleration) * sign(self.initial_velocity);
-        Self::build(
-            self.drag,
-            self.start,
-            self.initial_velocity,
-            signed,
-            self.tolerance,
-        )
+    pub fn with_constant_deceleration(self, deceleration: impl Into<f64>) -> Self {
+        let signed = deceleration.into() * sign(self.initial_velocity);
+        Self {
+            velocity_threshold: self.velocity_threshold,
+            ..Self::build(
+                self.drag,
+                self.start,
+                self.initial_velocity,
+                signed,
+                self.tolerance,
+            )
+        }
     }
 
     /// Flutter `FrictionSimulation.through`: the drag that passes through the
@@ -479,25 +489,29 @@ impl FrictionSimulation {
     /// velocity's direction; those inputs are not checked here.
     #[must_use]
     pub fn through(
-        start_position: f32,
-        end_position: f32,
-        start_velocity: f32,
-        end_velocity: f32,
+        start_position: impl Into<f64>,
+        end_position: impl Into<f64>,
+        start_velocity: impl Into<f64>,
+        end_velocity: impl Into<f64>,
     ) -> Self {
-        let start_position = f64::from(start_position);
-        let end_position = f64::from(end_position);
-        let start_velocity = f64::from(start_velocity);
-        let end_velocity = f64::from(end_velocity);
+        let start_position = start_position.into();
+        let end_position = end_position.into();
+        let start_velocity = start_velocity.into();
+        let end_velocity = end_velocity.into();
         let drag = ((start_velocity - end_velocity) / (start_position - end_position)).exp();
         let tolerance = Tolerance {
             velocity: end_velocity.abs() as f32,
             ..Tolerance::DEFAULT
         };
-        Self::build(drag, start_position, start_velocity, 0.0, tolerance)
+        Self {
+            velocity_threshold: end_velocity.abs(),
+            ..Self::build(drag, start_position, start_velocity, 0.0, tolerance)
+        }
     }
 
     /// Replaces the completion tolerances.
     pub fn set_tolerance(&mut self, tolerance: Tolerance) {
+        self.velocity_threshold = f64::from(tolerance.velocity);
         self.tolerance = tolerance;
     }
 
@@ -507,13 +521,42 @@ impl FrictionSimulation {
         self.final_x_value() as f32
     }
 
+    /// Flutter's position at a time in seconds, without Duration or f32 rounding.
+    #[must_use]
+    pub fn x(&self, seconds: f64) -> f64 {
+        self.x_at(seconds)
+    }
+
+    /// Flutter's velocity at a time in seconds, without Duration or f32 rounding.
+    #[must_use]
+    pub fn dx(&self, seconds: f64) -> f64 {
+        self.dx_at(seconds)
+    }
+
+    /// Evaluates the strict completion threshold at a precise time.
+    #[must_use]
+    pub fn is_done_at_seconds(&self, seconds: f64) -> bool {
+        self.dx(seconds).abs() < self.velocity_threshold
+    }
+
+    /// The final position without narrowing to a layout coordinate.
+    #[must_use]
+    pub fn final_x_f64(&self) -> f64 {
+        self.final_x_value()
+    }
+
     /// Flutter `FrictionSimulation.timeAtX`: the time at which the motion reaches
     /// `x`, or `None` when it never does (Flutter returns infinity).
     #[must_use]
     pub fn time_at_x(&self, x: f32) -> Option<Duration> {
-        let x = f64::from(x);
+        Duration::try_from_secs_f64(self.time_at_x_seconds(f64::from(x))).ok()
+    }
+
+    /// The precise inverse of [`Self::x`]. An unreachable target returns infinity.
+    #[must_use]
+    pub fn time_at_x_seconds(&self, x: f64) -> f64 {
         if x == self.start {
-            return Some(Duration::ZERO);
+            return 0.0;
         }
         let final_x = self.final_x_value();
         let unreachable = self.initial_velocity == 0.0
@@ -523,14 +566,9 @@ impl FrictionSimulation {
                 x > self.start || x < final_x
             };
         if unreachable {
-            return None;
+            return f64::INFINITY;
         }
-        let time = newton(0.0, x, 10, |t| self.x_at(t), |t| self.dx_at(t));
-        if time.is_finite() && time >= 0.0 {
-            Some(Duration::from_secs_f64(time))
-        } else {
-            None
-        }
+        newton(0.0, x, 10, |t| self.x(t), |t| self.dx(t))
     }
 
     fn build(
@@ -548,6 +586,7 @@ impl FrictionSimulation {
             constant_deceleration,
             final_time: f64::INFINITY,
             tolerance,
+            velocity_threshold: f64::from(tolerance.velocity),
         };
         // Flutter solves for the time the velocity reaches zero, starting from
         // time 0 with ten Newton iterations. The cutoff is infinite during this
@@ -613,7 +652,7 @@ impl Simulation for FrictionSimulation {
 
     /// Flutter `FrictionSimulation.isDone`: the velocity is strictly below the tolerance.
     fn is_done(&self, t: Duration) -> bool {
-        self.dx_at(t.as_secs_f64()).abs() < f64::from(self.tolerance.velocity)
+        self.is_done_at_seconds(t.as_secs_f64())
     }
 
     fn tolerance(&self) -> Tolerance {

@@ -853,3 +853,9 @@ can now reclip a mounted child without layout or picture recording.
 add one original comparison: 459 / 8,965 (5.12%), 363 matches
 and 96 historical mismatches. The same batch repairs the known
 9.81 gravity drift without double-counting the earlier cases.
+
+[Friction precision](upstream-physics-comparisons.md#precision-remediation)
+remediates five existing pairs (three dedicated friction and two Newton
+cases). The full focused animation/physics selection passes, including
+both previously red strict friction tests. The original count stays
+at 459 / 8,965.

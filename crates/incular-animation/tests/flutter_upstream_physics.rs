@@ -1,7 +1,6 @@
 //! Observable checks from Flutter 3.50.0's newton, clamped simulation,
 //! near-equal, and tolerance tests. Keep Flutter's numeric bounds; the first
-//! two friction cases distinguish strict reference precision from f32 behavior.
-//! The closest positive Rust sampling step after 1 second is 1 nanosecond.
+//! two friction cases use exact seconds and preserve precision before layout.
 
 use incular_animation::{
     BoundedFrictionSimulation, ClampedSimulation, FrictionSimulation, GravitySimulation,
@@ -21,20 +20,23 @@ fn tol(d: f32, v: f32) -> Tolerance {
 fn near(a: f32, b: f32) -> bool {
     (f64::from(a) - f64::from(b)).abs() <= 1e-10
 }
+fn near64(a: f64, b: f64) -> bool {
+    (a - b).abs() <= 1e-10
+}
 #[test]
 fn flutter_friction_velocity_preserves_reference_precision() {
-    let f = FrictionSimulation::new(0.3, 100., 400., tol(0.001, 1.));
+    let f = FrictionSimulation::new_precise(0.3, 100., 400., tol(0.001, 1.));
     assert!(!f.is_done(ds(0.)));
     assert_eq!(f.position(ds(0.)), 100.);
     assert_eq!(f.velocity(ds(0.)), 400.);
     let x1 = f.position(ds(1.));
     assert!(x1 > 330. && x1 < 335.);
-    let v = [1., 2., 3., 4.].map(|t| f.velocity(ds(t)));
+    let v = [1., 2., 3., 4.].map(|t| f.dx(t));
     let x5 = f.position(ds(5.));
     assert!(
         v[0] == 120.
             && v[1] == 36.
-            && (f64::from(v[2]) - 10.8).abs() <= 1e-10
+            && near64(v[2], 10.8)
             && v[3] < 3.5
             && f.is_done(ds(5.))
             && x5 > 431.
@@ -47,8 +49,8 @@ fn flutter_friction_velocity_preserves_reference_precision() {
 fn flutter_friction_through_matches_endpoint_and_completion() {
     let mut results = Vec::new();
     for (start, velocity) in [(10., 600.), (1000., -500.)] {
-        let f = FrictionSimulation::new(0.025, start, velocity, Tolerance::DEFAULT);
-        let (end, vend) = (f.position(ds(1.)), f.velocity(ds(1.)));
+        let f = FrictionSimulation::new_precise(0.025, start, velocity, Tolerance::DEFAULT);
+        let (end, vend) = (f.x(1.), f.dx(1.));
         if velocity > 0. {
             assert!(end > start && vend < velocity);
         } else {
@@ -60,17 +62,71 @@ fn flutter_friction_through_matches_endpoint_and_completion() {
             assert_eq!(f.position(ds(0.)), 10.);
             assert_eq!(f.velocity(ds(0.)), 600.);
         }
-        // Flutter checks 1.0 + 1e-10 s, below Rust Duration resolution.
-        let done = f.is_done(Duration::new(1, 1));
-        let x = f.position(ds(1.));
-        let v = f.velocity(ds(1.));
+        let done = f.is_done_at_seconds(1. + 1e-10);
+        let x = f.x(1.);
+        let v = f.dx(1.);
         results.push((start, done, x, end, v, vend));
     }
     assert!(
         results
             .iter()
-            .all(|&(_, done, x, end, v, vend)| done && near(x, end) && near(v, vend)),
+            .all(|&(_, done, x, end, v, vend)| done && near64(x, end) && near64(v, vend)),
         "{results:?}"
+    );
+}
+
+fn check_friction_dedicated(
+    velocity: f64,
+    constant_deceleration: f64,
+    expected_positions: [f64; 3],
+    expected_final: f64,
+    inverse_times: [f64; 3],
+    unreachable: [f64; 2],
+) {
+    let simulation = FrictionSimulation::new_precise(0.135, 100., velocity, Tolerance::DEFAULT)
+        .with_constant_deceleration(constant_deceleration);
+    assert!(near64(simulation.x(0.), 100.));
+    assert!(near64(simulation.dx(0.), velocity));
+    for (seconds, expected) in [0.1, 0.5, 2.].into_iter().zip(expected_positions) {
+        assert!((simulation.x(seconds) - expected).abs() <= 1.);
+    }
+    assert!((simulation.final_x_f64() - expected_final).abs() <= 1.);
+    assert_eq!(simulation.time_at_x_seconds(100.), 0.);
+    for seconds in inverse_times {
+        let actual = simulation.time_at_x_seconds(simulation.x(seconds));
+        assert!(near64(actual, seconds), "inverse at {seconds}: {actual}");
+    }
+    for x in unreachable {
+        assert_eq!(simulation.time_at_x_seconds(x), f64::INFINITY);
+    }
+}
+
+#[test]
+fn flutter_friction_dedicated_positive_velocity() {
+    check_friction_dedicated(
+        100.,
+        0.,
+        [110., 131., 149.],
+        149.,
+        [0.1, 0.5, 2.],
+        [-1., 200.],
+    );
+}
+
+#[test]
+fn flutter_friction_dedicated_negative_velocity() {
+    check_friction_dedicated(-100., 0., [91., 68., 51.], 50., [0.1, 0.5, 2.], [101., 40.]);
+}
+
+#[test]
+fn flutter_friction_dedicated_constant_deceleration() {
+    check_friction_dedicated(
+        -100.,
+        100.,
+        [91., 80., 80.],
+        80.,
+        [0.1, 0.2, 0.3],
+        [101., 40.],
     );
 }
 #[test]

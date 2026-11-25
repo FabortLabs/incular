@@ -180,3 +180,16 @@ fn upstream_clamp_two(){
 ```
 
 Rust used `cargo test --locked -p incular-animation --test audit_upstream_clamped_tmp upstream_clamp -- --nocapture`; temporary target removed.
+## Precision remediation
+
+The pinned dedicated friction originals (:9, :30, :51) and Newton
+friction originals (:12, :32) were rerun. The Rust ports now pass on
+the production precision API. A precise constructor retains the
+original coefficient and trajectory inputs, and the readout keeps
+double seconds, position, and velocity. Positive/negative inverse time
+and constant-deceleration cutoffs meet the original tolerances, and
+FrictionSimulation.through preserves the exact end speed for completion
+at 1 second plus 0.1 nanoseconds. Existing f32 layout callers keep their
+constructor and strict tolerance behavior. All 50 focused animation
+and physics checks pass with no exclusions. These are remediations of
+existing pairs, not five additional original registrations.

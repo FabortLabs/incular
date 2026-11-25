@@ -20,3 +20,7 @@ are now committed.
   independently observable. Run
   `cargo test --locked -p incular-animation --test flutter_upstream_physics flutter_`.
   Three original escaping-bounds Newton tests remain open.
+
+The [precision remediation](upstream-physics-comparisons.md#precision-remediation)
+rechecks the two historical friction mismatches against the exact
+time and double-precision values using the production sampling API.
