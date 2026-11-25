@@ -1007,3 +1007,6 @@ packages/flutter/test/gestures/transformed_monodrag_test.dart	380	gets local coo
 packages/flutter/test/gestures/transformed_monodrag_test.dart	436	kTouchSlop is evaluated in the global coordinate space when scaled up	paired-match	upstream-transformed-monodrag.md
 packages/flutter/test/gestures/transformed_monodrag_test.dart	542	kTouchSlop is evaluated in the global coordinate space when scaled down	paired-match	upstream-transformed-monodrag.md
 packages/flutter/test/gestures/transformed_monodrag_test.dart	648	kTouchSlop is evaluated in the global coordinate space when rotated 45 degrees	paired-match	upstream-transformed-monodrag.md
+packages/flutter/test/gestures/monodrag_test.dart	16	acceptGesture tolerates a null lastPendingEventTimestamp	paired-match	upstream-monodrag-arena-threshold.md
+packages/flutter/test/gestures/monodrag_test.dart	71	DragGestureRecognizer should not dispatch drag callbacks when it wins the arena if onlyAcceptDragOnThreshold is true and the threshold has not been met	paired-match	upstream-monodrag-arena-threshold.md
+packages/flutter/test/gestures/monodrag_test.dart	102	DragGestureRecognizer should dispatch drag callbacks when it wins the arena if onlyAcceptDragOnThreshold is false and the threshold has not been met	paired-match	upstream-monodrag-arena-threshold.md

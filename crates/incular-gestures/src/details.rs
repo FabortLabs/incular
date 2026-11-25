@@ -485,6 +485,9 @@ pub struct GestureCallbacks {
     /// accepted position; [`DragStartBehavior::Down`] starts at the press and
     /// reports the movement that crossed the slop as the first update.
     pub drag_start_behavior: DragStartBehavior,
+    /// Wait for drag slop even when the arena has already been won
+    /// (Flutter `DragGestureRecognizer.onlyAcceptDragOnThreshold`).
+    pub only_accept_drag_on_threshold: bool,
     /// Called with `true` when keyboard focus enters this region's subtree
     /// (itself or a descendant) and `false` when it leaves. Purely
     /// observational: it never makes the region focusable.

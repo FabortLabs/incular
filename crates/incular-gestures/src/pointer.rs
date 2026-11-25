@@ -292,16 +292,36 @@ impl PointerGestureRecognizer {
             && self.callbacks.on_double_tap_cancel.is_none()
             && self.sole_drag_axis().is_some()
     }
+    /// Sets Flutter's `onlyAcceptDragOnThreshold`. It controls when
+    /// callbacks begin; it does not change arena eligibility.
+    pub fn set_only_accept_drag_on_threshold(&mut self, value: bool) {
+        self.callbacks.only_accept_drag_on_threshold = value;
+    }
+
     /// Accepts the press for the arena's sole drag member (see
-    /// [`Self::can_accept_on_press`]). A drag with one axis starts at the press
-    /// and reports every later movement, as Flutter's sole drag does. Mixed
-    /// axes wait for the first movement to choose one.
+    /// [`Self::can_accept_on_press`]). By default it starts at the press
+    /// and reports every later movement. An explicit threshold policy
+    /// records the same arena win but withholds callbacks until slop.
     pub fn accept_on_press(&mut self) -> Option<GestureAction> {
-        self.accepted_on_press = true;
         let down = self.down?;
         let action = self.sole_drag_axis()?;
+        if self.pan_started || self.drag_rejected {
+            return None;
+        }
+        self.accepted_on_press = true;
+        if self.callbacks.only_accept_drag_on_threshold {
+            return None;
+        }
         Some(self.begin_drag(down, action, &down, DragStartBehavior::Down))
     }
+
+    /// The timestamp of the last pending drag event, cleared on resolution.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn debug_last_pending_drag_timestamp(&self) -> Option<Instant> {
+        self.drag.pending_time
+    }
+
     /// Resolves the sole local axis drag after its sibling tap lost the
     /// press. The host must call this only when there is no competing
     /// member outside this combined recognizer.
@@ -312,7 +332,9 @@ impl PointerGestureRecognizer {
     ) -> Option<GestureAction> {
         if event.phase != PointerPhase::Move
             || self.pan_started
+            || self.drag_rejected
             || self.delayed_drag.is_some()
+            || self.callbacks.only_accept_drag_on_threshold
             || !self.has_tap_callbacks()
             || !self.tap_moved_beyond_slop
             || self.has_long_press_callbacks()
@@ -422,6 +444,8 @@ impl PointerGestureRecognizer {
         self.tap_cancel();
         self.long_press_cancel();
         self.cancel_pending_drag();
+        self.drag.pending_time = None;
+        self.drag_rejected = true;
     }
     /// Fires the deadline-driven callbacks of the press in progress at
     /// `now`: `onTapDown` after `kPressTimeout` and the long-press start after
@@ -579,7 +603,10 @@ impl PointerGestureRecognizer {
     /// their axis (accepted beyond computeHitSlop) and pans the path length
     /// (accepted beyond computePanSlop), all with a strict comparison.
     fn drag_candidate(&self) -> Option<PanAction> {
-        if self.accepted_on_press {
+        if self.drag_rejected {
+            return None;
+        }
+        if self.accepted_on_press && !self.callbacks.only_accept_drag_on_threshold {
             // The arena resolved this press before any movement, so the first
             // movement starts the drag without a slop test.
             return if self.drag.pending == Offset::ZERO {
@@ -872,7 +899,10 @@ impl PointerGestureRecognizer {
                 self.tap_moved_beyond_slop = false;
                 self.pan_started = false;
                 self.pan_action = None;
+                self.accepted_on_press = false;
+                self.start_update = None;
                 self.drag = DragProgress::at(event.position);
+                self.drag.pending_time = Some(event.time);
                 self.long_press_started = false;
                 self.drag_rejected = false;
                 // Flutter admits a long press only for an exact supported
@@ -1041,7 +1071,9 @@ impl PointerGestureRecognizer {
                     // accepted and the crossing movement is not an update.
                     // A press the arena resolved earlier starts at the press
                     // and reports this movement, like Flutter's accepted drag.
-                    let behavior = if self.accepted_on_press {
+                    let behavior = if self.accepted_on_press
+                        && !self.callbacks.only_accept_drag_on_threshold
+                    {
                         DragStartBehavior::Down
                     } else {
                         self.callbacks.drag_start_behavior
@@ -1068,6 +1100,7 @@ impl PointerGestureRecognizer {
                 let Some(down) = self.down.take() else {
                     return GestureDecision::Reject;
                 };
+                self.drag.pending_time = None;
                 if self.pan_started {
                     return self
                         .drag_end(event.time)
@@ -1165,6 +1198,7 @@ impl PointerGestureRecognizer {
                 }
             }
             PointerPhase::Cancel => {
+                self.drag.pending_time = None;
                 self.tap_cancel();
                 self.long_press_cancel();
                 if self.down.take().is_some() {
