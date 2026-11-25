@@ -38,6 +38,7 @@ mod app_shell;
 mod asset_bundle;
 mod async_builders;
 mod back_gesture;
+mod box_fit;
 mod compositing;
 mod context_menu;
 mod custom_layout;
@@ -172,6 +173,7 @@ pub use back_gesture::{
     BackGestureObserver, BackGestureObserverRegistration, add_back_gesture_observer,
     add_shared_back_gesture_observer, dispatch_back_gesture, dispatch_pop_route,
 };
+pub use box_fit::{FittedSizes, apply_box_fit};
 pub use compositing::{
     AnnotatedRegion, BackdropFilter, BackdropGroup, CompositedTransformFollower,
     CompositedTransformTarget, ShaderCallback, ShaderMask,

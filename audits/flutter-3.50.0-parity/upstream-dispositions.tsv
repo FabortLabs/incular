@@ -127,7 +127,7 @@ packages/flutter/test/painting/border_radius_test.dart	146	BorderRadius.lerp() i
 packages/flutter/test/painting/border_radius_test.dart	165	BorderRadius.lerp() crazy	paired-match	upstream-focus-corners-curves-previews.md
 packages/flutter/test/painting/border_radius_test.dart	398	BorderRadiusDirectional.lerp() invariants	paired-match	upstream-focus-corners-curves-previews.md#rounded-corner-value-parity-follow-up
 packages/flutter/test/painting/border_radius_test.dart	423	BorderRadiusDirectional.lerp() crazy	paired-match	upstream-focus-corners-curves-previews.md
-packages/flutter/test/painting/box_fit_test.dart	9	applyBoxFit	partial-mismatch	upstream-focus-corners-curves-previews.md
+packages/flutter/test/painting/box_fit_test.dart	9	applyBoxFit	paired-match	upstream-focus-corners-curves-previews.md#box-fit-source-and-destination-sizing-follow-up
 packages/flutter/test/animation/curves_test.dart	28	Threshold has a threshold	paired-match	upstream-focus-corners-curves-previews.md
 packages/flutter/test/animation/curves_test.dart	278	Split interpolates values properly	paired-match	upstream-focus-corners-curves-previews.md
 packages/flutter/test/animation/curves_test.dart	291	CatmullRomSpline interpolates values properly	paired-match	upstream-focus-corners-curves-previews.md

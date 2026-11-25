@@ -139,12 +139,12 @@ fn fit_modes_project_source_and_destination() {
             Rect::from_origin_size(Offset::ZERO, Size::new(40., 20.)),
             Rect::from_origin_size(Offset::new(0., 25.), Size::new(100., 50.)),
         ),
-        // FitHeight: scale 5 -> 200x100, centered horizontally (overflow).
+        // FitHeight: scale 5, cropping the centered 20x20 source.
         (
             ImageFit::FitHeight,
             (40, 20),
-            Rect::from_origin_size(Offset::ZERO, Size::new(40., 20.)),
-            Rect::from_origin_size(Offset::new(-50., 0.), Size::new(200., 100.)),
+            Rect::from_origin_size(Offset::new(10., 0.), Size::new(20., 20.)),
+            Rect::from_origin_size(Offset::ZERO, Size::new(100., 100.)),
         ),
         // None: 1:1 source, centered.
         (
@@ -152,6 +152,13 @@ fn fit_modes_project_source_and_destination() {
             (40, 20),
             Rect::from_origin_size(Offset::ZERO, Size::new(40., 20.)),
             Rect::from_origin_size(Offset::new(30., 40.), Size::new(40., 20.)),
+        ),
+        // Oversized None: crop and center at 1:1 instead of overflowing.
+        (
+            ImageFit::None,
+            (140, 20),
+            Rect::from_origin_size(Offset::new(20., 0.), Size::new(100., 20.)),
+            Rect::from_origin_size(Offset::new(0., 40.), Size::new(100., 20.)),
         ),
         // ScaleDown never upscales: a small source stays 1:1 and centers.
         (

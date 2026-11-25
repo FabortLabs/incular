@@ -5,7 +5,9 @@ use incular_config::Constraints;
 use incular_core::{Offset, Rect, Size};
 use incular_image::ImageHandle;
 use incular_rendering::PaintCommand;
-use incular_widgets::{BoxFit, Directionality, Image, TextDirection, internal::WidgetTree};
+use incular_widgets::{
+    BoxFit, Directionality, FittedSizes, Image, TextDirection, apply_box_fit, internal::WidgetTree,
+};
 
 #[derive(Clone, Copy, Debug)]
 struct Case {
@@ -134,4 +136,71 @@ fn rtl_mirrored_image_uses_flutter_source_and_destination_sizes_for_all_six_inpu
     // RTL with matchTextDirection selects the separate paintImage path
     // without changing the centered image's source or destination rect.
     check_cases(CASES, true);
+}
+
+#[test]
+fn apply_box_fit_matches_every_pinned_source_and_destination_size() {
+    for case in CASES {
+        assert_eq!(
+            apply_box_fit(
+                case.fit,
+                Size::new(case.input.0 as f32, case.input.1 as f32),
+                Size::new(case.output.0, case.output.1),
+            ),
+            FittedSizes::new(
+                rect(case.source_rect).size,
+                rect(case.destination_rect).size
+            ),
+            "{case:?}"
+        );
+    }
+
+    for fit in [
+        BoxFit::Fill,
+        BoxFit::Contain,
+        BoxFit::Cover,
+        BoxFit::FitWidth,
+        BoxFit::FitHeight,
+        BoxFit::None,
+        BoxFit::ScaleDown,
+    ] {
+        for invalid in [-1., 0.] {
+            for (input, output) in [
+                (
+                    Size {
+                        width: 400. * invalid,
+                        height: 2000.,
+                    },
+                    Size::new(100., 1000.),
+                ),
+                (
+                    Size {
+                        width: 400.,
+                        height: 2000. * invalid,
+                    },
+                    Size::new(100., 1000.),
+                ),
+                (
+                    Size::new(400., 2000.),
+                    Size {
+                        width: 100. * invalid,
+                        height: 1000.,
+                    },
+                ),
+                (
+                    Size::new(400., 2000.),
+                    Size {
+                        width: 100.,
+                        height: 1000. * invalid,
+                    },
+                ),
+            ] {
+                assert_eq!(
+                    apply_box_fit(fit, input, output),
+                    FittedSizes::default(),
+                    "{fit:?}, {input:?}, {output:?}"
+                );
+            }
+        }
+    }
 }

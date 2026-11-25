@@ -295,51 +295,11 @@ pub fn image_fit_rects(
     fit: ImageFit,
     alignment: Alignment,
 ) -> (Rect, Rect) {
-    if source.size.width == 0.
-        || source.size.height == 0.
-        || bounds.size.width == 0.
-        || bounds.size.height == 0.
-    {
-        return (source, Rect::from_origin_size(bounds.origin, Size::ZERO));
-    }
-    if fit == ImageFit::Fill {
-        return (source, bounds);
-    }
-    let sx = bounds.size.width / source.size.width;
-    let sy = bounds.size.height / source.size.height;
-    let (scale_x, scale_y) = match fit {
-        ImageFit::Cover => {
-            let s = sx.max(sy);
-            (s, s)
-        }
-        ImageFit::FitWidth => (sx, sx),
-        ImageFit::FitHeight => (sy, sy),
-        ImageFit::None => (1., 1.),
-        ImageFit::ScaleDown => {
-            let s = sx.min(sy).min(1.);
-            (s, s)
-        }
-        _ => {
-            let s = sx.min(sy);
-            (s, s)
-        }
-    };
-    let scale = scale_x.min(scale_y);
-    let rendered = Size::new(source.size.width * scale, source.size.height * scale);
-    if fit == ImageFit::Cover {
-        let crop = Size::new(
-            (bounds.size.width / scale).min(source.size.width),
-            (bounds.size.height / scale).min(source.size.height),
-        );
-        let x = source.origin.x + (source.size.width - crop.width) * (alignment.x + 1.) / 2.;
-        let y = source.origin.y + (source.size.height - crop.height) * (alignment.y + 1.) / 2.;
-        return (Rect::from_origin_size(Offset::new(x, y), crop), bounds);
-    }
-    let origin = Offset::new(
-        bounds.origin.x + (bounds.size.width - rendered.width) * (alignment.x + 1.) / 2.,
-        bounds.origin.y + (bounds.size.height - rendered.height) * (alignment.y + 1.) / 2.,
-    );
-    (source, Rect::from_origin_size(origin, rendered))
+    let fit = crate::apply_box_fit(fit, source.size, bounds.size);
+    (
+        alignment.inscribe(fit.source, source),
+        alignment.inscribe(fit.destination, bounds),
+    )
 }
 
 /// Returns all local destinations required to repeat one image tile within a

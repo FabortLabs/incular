@@ -121,3 +121,17 @@ Incular clamped -2 to zero as an animation value. Painting retains its
 existing radius normalization; this is not a new GPU pixel comparison.
 Six focused Rust targets passed (38 tests). Object identity, diagnostics,
 and Dart's mixed border radius geometry API are not claimed here.
+
+## Box fit source and destination sizing follow-up
+
+The single pinned `painting/box_fit_test.dart:9` registration now has a
+complete typed comparison: all six positive size pairs, and each of the
+eight zero/negative extent permutations for all seven fit modes. Both
+ordinary and RTL-mirrored `Image` also emit the expected crop and
+destination rectangles for the positive pairs. The old ordinary image
+path painted the whole source outside its box for `FitWidth` and
+`FitHeight`; its paint now uses the same fitting algorithm as decoration
+images. The ordinary image tests also verify an oversized `None` fit
+crops instead of scaling. `FittedBox` still transforms its child widget
+and uses its own clipping behavior, checked separately. These are
+public value and retained draw-command comparisons, not GPU pixels.

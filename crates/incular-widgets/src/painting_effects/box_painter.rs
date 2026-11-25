@@ -977,78 +977,6 @@ pub(crate) struct ImagePaint {
     pub(crate) sampling: incular_rendering::ImageSampling,
 }
 
-/// Flutter `applyBoxFit`: the source and destination sizes of a fit.
-pub(crate) fn apply_box_fit(fit: crate::tree::ImageFit, input: Size, output: Size) -> (Size, Size) {
-    use crate::tree::ImageFit;
-    if input.width <= 0.0 || input.height <= 0.0 || output.width <= 0.0 || output.height <= 0.0 {
-        return (Size::ZERO, Size::ZERO);
-    }
-    let wider = output.width / output.height > input.width / input.height;
-    match fit {
-        ImageFit::Fill => (input, output),
-        ImageFit::Contain => {
-            let destination = if wider {
-                Size::new(input.width * output.height / input.height, output.height)
-            } else {
-                Size::new(output.width, input.height * output.width / input.width)
-            };
-            (input, destination)
-        }
-        ImageFit::Cover => {
-            let source = if wider {
-                Size::new(input.width, input.width * output.height / output.width)
-            } else {
-                Size::new(input.height * output.width / output.height, input.height)
-            };
-            (source, output)
-        }
-        ImageFit::FitWidth => {
-            if wider {
-                (
-                    Size::new(input.width, input.width * output.height / output.width),
-                    output,
-                )
-            } else {
-                (
-                    input,
-                    Size::new(output.width, input.height * output.width / input.width),
-                )
-            }
-        }
-        ImageFit::FitHeight => {
-            if wider {
-                (
-                    input,
-                    Size::new(input.width * output.height / input.height, output.height),
-                )
-            } else {
-                (
-                    Size::new(input.height * output.width / output.height, input.height),
-                    output,
-                )
-            }
-        }
-        ImageFit::None => {
-            let source = Size::new(
-                input.width.min(output.width),
-                input.height.min(output.height),
-            );
-            (source, source)
-        }
-        ImageFit::ScaleDown => {
-            let aspect = input.width / input.height;
-            let mut destination = input;
-            if destination.height > output.height {
-                destination = Size::new(output.height * aspect, output.height);
-            }
-            if destination.width > output.width {
-                destination = Size::new(output.width, output.width / aspect);
-            }
-            (input, destination)
-        }
-    }
-}
-
 /// Flutter `_generateImageTileRects`.
 fn image_tile_rects(output: Rect, fundamental: Rect, repeat: crate::ImageRepeat) -> Vec<Rect> {
     use crate::ImageRepeat;
@@ -1181,7 +1109,10 @@ pub(crate) fn paint_image(paint: &ImagePaint, rect: Rect) -> DisplayList {
     } else {
         crate::tree::ImageFit::Fill
     });
-    let (source, destination) = apply_box_fit(
+    let crate::FittedSizes {
+        source,
+        destination,
+    } = crate::apply_box_fit(
         fit,
         Size::new(input.width / scale, input.height / scale),
         output,

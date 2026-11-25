@@ -28,13 +28,18 @@ fn main() {
 | `Fill` | Stretch, ignoring aspect |
 | `Contain` | Fit inside, full content visible (default) |
 | `Cover` | Fill bounds, cropping overflow |
-| `FitWidth` | Match width, height follows |
-| `FitHeight` | Match height, width follows |
-| `None` | Natural size, centered |
-| `ScaleDown` | Like `None`, but shrink if too big |
+| `FitWidth` | Match width; crop an image if its fitted height would overflow |
+| `FitHeight` | Match height; crop an image if its fitted width would overflow |
+| `None` | Keep the natural scale; crop an image if it is too big |
+| `ScaleDown` | Keep the whole image, shrinking only if it is too big |
 
 Used by [`FittedBox`](/docs/api/layout-widgets/fitted-box) (`fit`, default
 `Contain`) and [`Image`](/docs/api/content/image).
+
+`apply_box_fit(fit, input, output)` returns the source crop size and destination
+size before alignment. Image painting uses both sizes, so cropping does not
+require painting outside the box. `FittedBox` transforms a child widget instead:
+use its `clip_behavior` to control whether overflowing child content is visible.
 
 ```rust
 use incular::prelude::*;
