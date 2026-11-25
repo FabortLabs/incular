@@ -239,8 +239,59 @@ pub(crate) struct SemanticProperties {
     pub(super) keep_alive: bool,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct GestureSemanticPolicy {
+    allowed: u8,
+    pub(crate) included: bool,
+    pub(crate) scroll_factor: f32,
+}
+
+impl Default for GestureSemanticPolicy {
+    fn default() -> Self {
+        Self {
+            allowed: 0b11_1111,
+            included: true,
+            scroll_factor: 0.8,
+        }
+    }
+}
+
+impl GestureSemanticPolicy {
+    pub(crate) const ACTIONS: [SemanticActionKind; 6] = [
+        SemanticActionKind::Activate,
+        SemanticActionKind::LongPress,
+        SemanticActionKind::ScrollLeft,
+        SemanticActionKind::ScrollRight,
+        SemanticActionKind::ScrollUp,
+        SemanticActionKind::ScrollDown,
+    ];
+
+    const fn flag(action: SemanticActionKind) -> u8 {
+        match action {
+            SemanticActionKind::Activate => 1 << 0,
+            SemanticActionKind::LongPress => 1 << 1,
+            SemanticActionKind::ScrollLeft => 1 << 2,
+            SemanticActionKind::ScrollRight => 1 << 3,
+            SemanticActionKind::ScrollUp => 1 << 4,
+            SemanticActionKind::ScrollDown => 1 << 5,
+            _ => 0,
+        }
+    }
+
+    pub(crate) fn set_allowed(&mut self, actions: impl IntoIterator<Item = SemanticActionKind>) {
+        self.allowed = actions
+            .into_iter()
+            .fold(0, |mask, action| mask | Self::flag(action));
+    }
+
+    pub(super) fn allows(self, action: SemanticActionKind) -> bool {
+        self.included && self.allowed & Self::flag(action) != 0
+    }
+}
+
 #[derive(Clone, Default)]
 pub(super) struct SemanticCallbacks {
+    pub(super) gesture_policy: Option<GestureSemanticPolicy>,
     pub(super) custom: Vec<crate::semantics::CustomActionBinding>,
     pub(super) activate: Option<Rc<dyn Fn() + 'static>>,
     pub(super) increment: Option<Rc<dyn Fn() + 'static>>,
@@ -254,6 +305,7 @@ impl std::fmt::Debug for SemanticCallbacks {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("SemanticCallbacks")
+            .field("gesture_policy", &self.gesture_policy)
             .field("custom", &self.custom)
             .field("activate", &self.activate.is_some())
             .field("increment", &self.increment.is_some())
@@ -267,7 +319,8 @@ impl std::fmt::Debug for SemanticCallbacks {
 
 impl PartialEq for SemanticCallbacks {
     fn eq(&self, other: &Self) -> bool {
-        self.custom == other.custom
+        self.gesture_policy == other.gesture_policy
+            && self.custom == other.custom
             && same_rc(&self.activate, &other.activate)
             && same_rc(&self.increment, &other.increment)
             && same_rc(&self.decrement, &other.decrement)
@@ -290,6 +343,10 @@ impl SemanticCallbacks {
             | SemanticActionKind::SetText
             | SemanticActionKind::SetSelection
             | SemanticActionKind::ShowOnScreen
+            | SemanticActionKind::ScrollLeft
+            | SemanticActionKind::ScrollRight
+            | SemanticActionKind::ScrollUp
+            | SemanticActionKind::ScrollDown
             | SemanticActionKind::Custom => None,
         }
     }

@@ -83,6 +83,10 @@ pub enum SemanticActionKind {
     Decrement,
     ScrollForward,
     ScrollBackward,
+    ScrollLeft,
+    ScrollRight,
+    ScrollUp,
+    ScrollDown,
     /// Flutter's `SemanticsAction.longPress`: a press-and-hold activation.
     LongPress,
     /// Flutter's `SemanticsAction.showOnScreen`: reveal the node inside its
@@ -90,6 +94,17 @@ pub enum SemanticActionKind {
     ShowOnScreen,
     /// An application-defined action with a canonical identifier.
     Custom,
+}
+
+impl SemanticActionKind {
+    /// Whether this action requests a physical rather than logical scroll.
+    #[must_use]
+    pub const fn is_directional_scroll(self) -> bool {
+        matches!(
+            self,
+            Self::ScrollLeft | Self::ScrollRight | Self::ScrollUp | Self::ScrollDown
+        )
+    }
 }
 
 /// A request received from a native accessibility adapter. Text offsets use
@@ -104,6 +119,10 @@ pub enum SemanticAction {
     Decrement,
     ScrollForward,
     ScrollBackward,
+    ScrollLeft,
+    ScrollRight,
+    ScrollUp,
+    ScrollDown,
     LongPress,
     ShowOnScreen,
     Custom(CustomSemanticsActionId),
@@ -121,6 +140,10 @@ impl SemanticAction {
             Self::Decrement => SemanticActionKind::Decrement,
             Self::ScrollForward => SemanticActionKind::ScrollForward,
             Self::ScrollBackward => SemanticActionKind::ScrollBackward,
+            Self::ScrollLeft => SemanticActionKind::ScrollLeft,
+            Self::ScrollRight => SemanticActionKind::ScrollRight,
+            Self::ScrollUp => SemanticActionKind::ScrollUp,
+            Self::ScrollDown => SemanticActionKind::ScrollDown,
             Self::LongPress => SemanticActionKind::LongPress,
             Self::ShowOnScreen => SemanticActionKind::ShowOnScreen,
             Self::Custom(_) => SemanticActionKind::Custom,

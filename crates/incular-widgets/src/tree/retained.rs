@@ -1346,15 +1346,16 @@ impl WidgetTree {
         id: ElementId,
         action: SemanticActionKind,
     ) -> Option<Rc<dyn Fn() + 'static>> {
+        if action.is_directional_scroll() && self.pointer_actions_blocked(id) {
+            return None;
+        }
         self.elements.get(id.0).and_then(|element| {
             element
                 .widget
                 .semantic_properties()
                 .callbacks
                 .callback(action)
-                .or_else(|| {
-                    super::semantics::gesture_semantic_callback(element.widget.kind(), action)
-                })
+                .or_else(|| self.gesture_semantic_callback(element, action))
         })
     }
     #[must_use]

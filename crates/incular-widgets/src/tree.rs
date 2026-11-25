@@ -129,12 +129,12 @@ pub(super) fn with_recursive_tree_stack<R>(f: impl FnOnce() -> R) -> R {
 pub use context::{BuildContext, InheritedScopeValue};
 pub(crate) use context::{LayoutBuilderCallback, safe_insets_scope, sub_screen_scope};
 pub use descriptors::*;
-pub(crate) use specs::ChildLayoutMode;
 pub(crate) use specs::WidgetKind;
 pub use specs::{
     AnimationRetargetBridge, ButtonSpec, ExplicitSemantics, FrameDelegate, FrameGeometry,
     FrameTick, TextFieldSpec,
 };
+pub(crate) use specs::{ChildLayoutMode, GestureSemanticPolicy};
 use specs::{SemanticCallbacks, SemanticProperties};
 
 use semantics::widget_text;

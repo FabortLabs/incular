@@ -333,6 +333,13 @@ impl Widget {
         self
     }
 
+    pub(crate) fn with_gesture_semantic_policy(mut self, policy: GestureSemanticPolicy) -> Self {
+        if policy != GestureSemanticPolicy::default() {
+            self.semantic_properties_mut().callbacks.gesture_policy = Some(policy);
+        }
+        self
+    }
+
     #[doc(hidden)]
     pub(crate) fn with_semantic_callback(
         mut self,
@@ -351,6 +358,10 @@ impl Widget {
             | SemanticActionKind::SetText
             | SemanticActionKind::SetSelection
             | SemanticActionKind::ShowOnScreen
+            | SemanticActionKind::ScrollLeft
+            | SemanticActionKind::ScrollRight
+            | SemanticActionKind::ScrollUp
+            | SemanticActionKind::ScrollDown
             | SemanticActionKind::Custom => {}
         }
         self

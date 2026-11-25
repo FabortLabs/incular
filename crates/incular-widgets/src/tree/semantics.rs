@@ -875,21 +875,14 @@ impl WidgetTree {
                 SemanticState::default(),
                 scroll_edge_actions(&config.controller),
             ),
-            // A GestureDetector with a tap or long-press callback
-            // contributes those actions to a generic node, as Flutter's
-            // RenderSemanticsGestureHandler does.
-            WidgetKind::Gesture { callbacks, .. }
-                if callbacks.on_tap.is_some() || callbacks.on_long_press.is_some() =>
-            {
-                let mut actions = Vec::with_capacity(3);
-                if callbacks.on_tap.is_some() {
-                    actions.push(SemanticActionKind::Activate);
-                }
-                if callbacks.on_long_press.is_some() {
-                    actions.push(SemanticActionKind::LongPress);
-                }
+            WidgetKind::Gesture { callbacks, .. } => {
+                let policy = entry.widget.semantic_properties().callbacks.gesture_policy;
+                let actions: Vec<_> = GestureSemanticPolicy::ACTIONS
+                    .into_iter()
+                    .filter(|action| gesture_supports(callbacks, policy, *action))
+                    .collect();
                 (
-                    Some(SemanticRole::GenericContainer),
+                    (!actions.is_empty()).then_some(SemanticRole::GenericContainer),
                     None,
                     None,
                     SemanticState::default(),
@@ -990,7 +983,9 @@ impl WidgetTree {
             if *action == SemanticActionKind::Focus {
                 return focusable;
             }
-            if *action == SemanticActionKind::Activate && self.pointer_actions_blocked(element) {
+            if (*action == SemanticActionKind::Activate || action.is_directional_scroll())
+                && self.pointer_actions_blocked(element)
+            {
                 return false;
             }
             semantic_action_is_executable(
@@ -1584,18 +1579,106 @@ fn push_merged_label(merged: &mut String, label: &str) {
     merged.push_str(label);
 }
 
-/// The callback a GestureDetector registered for `action`, if any.
-pub(super) fn gesture_semantic_callback(
-    kind: &WidgetKind,
+fn gesture_supports(
+    callbacks: &GestureCallbacks,
+    policy: Option<GestureSemanticPolicy>,
     action: SemanticActionKind,
-) -> Option<std::rc::Rc<dyn Fn() + 'static>> {
-    let WidgetKind::Gesture { callbacks, .. } = kind else {
-        return None;
-    };
-    match action {
-        SemanticActionKind::Activate => callbacks.on_tap.clone(),
-        SemanticActionKind::LongPress => callbacks.on_long_press.clone(),
-        _ => None,
+) -> bool {
+    policy.unwrap_or_default().allows(action)
+        && match action {
+            SemanticActionKind::Activate => callbacks.on_tap.is_some(),
+            SemanticActionKind::LongPress => callbacks.on_long_press.is_some(),
+            SemanticActionKind::ScrollLeft | SemanticActionKind::ScrollRight => {
+                callbacks.on_horizontal_drag_update.is_some()
+            }
+            SemanticActionKind::ScrollUp | SemanticActionKind::ScrollDown => {
+                callbacks.on_vertical_drag_update.is_some()
+            }
+            _ => false,
+        }
+}
+
+fn gesture_can_execute(
+    kind: &WidgetKind,
+    policy: Option<GestureSemanticPolicy>,
+    action: SemanticActionKind,
+) -> bool {
+    matches!(kind, WidgetKind::Gesture { callbacks, .. } if gesture_supports(callbacks, policy, action))
+}
+
+/// Looks up a semantic gesture against the live descriptor, even if a stale
+/// accessibility projection is still showing a formerly available direction.
+impl WidgetTree {
+    pub(super) fn gesture_semantic_callback(
+        &self,
+        element: &Element,
+        action: SemanticActionKind,
+    ) -> Option<Rc<dyn Fn() + 'static>> {
+        let WidgetKind::Gesture { callbacks, .. } = element.widget.kind() else {
+            return None;
+        };
+        let policy = element
+            .widget
+            .semantic_properties()
+            .callbacks
+            .gesture_policy;
+        if !gesture_supports(callbacks, policy, action) {
+            return None;
+        }
+        match action {
+            SemanticActionKind::Activate => callbacks.on_tap.clone(),
+            SemanticActionKind::LongPress => callbacks.on_long_press.clone(),
+            _ => {
+                let size = self.renders.get(element.render.0)?.size;
+                let factor = policy.unwrap_or_default().scroll_factor;
+                let (callback, delta, primary_delta) = match action {
+                    SemanticActionKind::ScrollLeft | SemanticActionKind::ScrollRight => {
+                        let primary = size.width
+                            * factor
+                            * if action == SemanticActionKind::ScrollLeft {
+                                -1.
+                            } else {
+                                1.
+                            };
+                        (
+                            callbacks.on_horizontal_drag_update.clone()?,
+                            Offset::new(primary, 0.),
+                            primary,
+                        )
+                    }
+                    SemanticActionKind::ScrollUp | SemanticActionKind::ScrollDown => {
+                        let primary = size.height
+                            * factor
+                            * if action == SemanticActionKind::ScrollUp {
+                                -1.
+                            } else {
+                                1.
+                            };
+                        (
+                            callbacks.on_vertical_drag_update.clone()?,
+                            Offset::new(0., primary),
+                            primary,
+                        )
+                    }
+                    _ => return None,
+                };
+                let global_position = self
+                    .render_world_transform(element.render)
+                    .transform_point(Offset::new(size.width / 2., size.height / 2.));
+                Some(Rc::new(move || {
+                    callback(DragUpdateDetails {
+                        source_time: None,
+                        delta,
+                        primary_delta: Some(primary_delta),
+                        global_position,
+                        // Flutter supplies only globalPosition for these
+                        // synthetic updates; localPosition defaults to it.
+                        local_position: global_position,
+                        kind: incular_core::PointerDeviceKind::Unknown,
+                    });
+                }))
+            }
+        }
     }
 }
 
@@ -1732,15 +1815,15 @@ pub(super) fn semantic_action_is_executable(
                 kind,
                 WidgetKind::Button(spec)
                     if spec.enabled && (spec.has_callback || spec.action != ActionId(0))
-            ) || matches!(
-                kind,
-                WidgetKind::Gesture { callbacks, .. } if callbacks.on_tap.is_some()
-            )
+            ) || gesture_can_execute(kind, callbacks.gesture_policy, action)
         }
-        SemanticActionKind::LongPress => matches!(
-            kind,
-            WidgetKind::Gesture { callbacks, .. } if callbacks.on_long_press.is_some()
-        ),
+        SemanticActionKind::LongPress
+        | SemanticActionKind::ScrollLeft
+        | SemanticActionKind::ScrollRight
+        | SemanticActionKind::ScrollUp
+        | SemanticActionKind::ScrollDown => {
+            gesture_can_execute(kind, callbacks.gesture_policy, action)
+        }
         SemanticActionKind::SetText | SemanticActionKind::SetSelection => {
             matches!(kind, WidgetKind::TextField(_))
         }

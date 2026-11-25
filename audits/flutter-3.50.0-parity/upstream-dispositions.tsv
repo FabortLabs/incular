@@ -994,3 +994,4 @@ packages/flutter/test/scheduler/scheduler_test.dart	148	scheduleWarmUpFrame shou
 packages/flutter/test/scheduler/scheduler_test.dart	167	2 calls to scheduleWarmUpFrame just schedules it once	reference-ran-incular-open	scheduler-callback-phases-comparisons.md#frame-timing-observers
 packages/flutter/test/scheduler/scheduler_test.dart	204	Flutter.Frame event fired	reference-ran-incular-open	scheduler-callback-phases-comparisons.md#frame-timing-observers
 packages/flutter/test/scheduler/scheduler_test.dart	229	TimingsCallback exceptions are caught	paired-match	scheduler-callback-phases-comparisons.md#frame-timing-observers
+packages/flutter/test/rendering/proxy_box_test.dart	100	RenderSemanticsGestureHandler adds/removes correct semantic actions	paired-match	upstream-semantic-gesture-directions.md

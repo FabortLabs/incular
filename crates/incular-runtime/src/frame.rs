@@ -1103,6 +1103,16 @@ impl Runtime {
                     true
                 })
                 .unwrap_or_else(|| self.tree.semantic_scroll(element, false)),
+            direction @ (SemanticAction::ScrollLeft
+            | SemanticAction::ScrollRight
+            | SemanticAction::ScrollUp
+            | SemanticAction::ScrollDown) => self
+                .tree
+                .semantic_action_callback(element, direction.kind())
+                .is_some_and(|callback| {
+                    callback();
+                    true
+                }),
             SemanticAction::Increment => self
                 .tree
                 .semantic_action_callback(element, incular_semantics::SemanticActionKind::Increment)

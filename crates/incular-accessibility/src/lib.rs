@@ -817,6 +817,20 @@ impl AccessKitProjection {
             Action::Focus if supports(&projected.semantic, SemanticActionKind::Focus) => {
                 Some(SemanticAction::Focus)
             }
+            Action::ScrollLeft if supports(&projected.semantic, SemanticActionKind::ScrollLeft) => {
+                Some(SemanticAction::ScrollLeft)
+            }
+            Action::ScrollRight
+                if supports(&projected.semantic, SemanticActionKind::ScrollRight) =>
+            {
+                Some(SemanticAction::ScrollRight)
+            }
+            Action::ScrollUp if supports(&projected.semantic, SemanticActionKind::ScrollUp) => {
+                Some(SemanticAction::ScrollUp)
+            }
+            Action::ScrollDown if supports(&projected.semantic, SemanticActionKind::ScrollDown) => {
+                Some(SemanticAction::ScrollDown)
+            }
             Action::ScrollDown | Action::ScrollRight
                 if supports(&projected.semantic, SemanticActionKind::ScrollForward) =>
             {
@@ -1139,6 +1153,10 @@ fn map_action(action: SemanticActionKind) -> Option<Action> {
         SemanticActionKind::Decrement => Some(Action::Decrement),
         SemanticActionKind::ScrollForward => Some(Action::ScrollDown),
         SemanticActionKind::ScrollBackward => Some(Action::ScrollUp),
+        SemanticActionKind::ScrollLeft => Some(Action::ScrollLeft),
+        SemanticActionKind::ScrollRight => Some(Action::ScrollRight),
+        SemanticActionKind::ScrollUp => Some(Action::ScrollUp),
+        SemanticActionKind::ScrollDown => Some(Action::ScrollDown),
         SemanticActionKind::ShowOnScreen => Some(Action::ScrollIntoView),
         // AccessKit has no long-press action. The parameterized custom
         // action is advertised only once its native descriptions are known.

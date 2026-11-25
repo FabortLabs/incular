@@ -32,6 +32,7 @@ pub enum HitTestBehavior {
 #[derive(Clone, Default)]
 pub struct GestureDetector {
     callbacks: GestureCallbacks,
+    semantic_policy: crate::tree::GestureSemanticPolicy,
     behavior: Option<HitTestBehavior>,
     child: Option<Widget>,
 }
@@ -42,9 +43,36 @@ impl GestureDetector {
     pub fn new(child: impl Into<Widget>) -> Self {
         Self {
             callbacks: GestureCallbacks::default(),
+            semantic_policy: Default::default(),
             behavior: None,
             child: Some(child.into()),
         }
+    }
+
+    /// Excludes the detector's gestures from accessibility without disabling pointer handling.
+    #[must_use]
+    pub fn exclude_from_semantics(mut self, exclude: bool) -> Self {
+        self.semantic_policy.included = !exclude;
+        self
+    }
+
+    /// Restricts which of the installed gesture callbacks accessibility may invoke.
+    /// Omit this setting to expose every installed semantic gesture.
+    #[must_use]
+    pub fn valid_semantic_actions(
+        mut self,
+        actions: impl IntoIterator<Item = incular_semantics::SemanticActionKind>,
+    ) -> Self {
+        self.semantic_policy.set_allowed(actions);
+        self
+    }
+
+    /// Fraction of the detector's width or height used by a semantic drag.
+    /// Defaults to 0.8; a nonfinite factor restores the default.
+    #[must_use]
+    pub fn semantic_scroll_factor(mut self, factor: f32) -> Self {
+        self.semantic_policy.scroll_factor = if factor.is_finite() { factor } else { 0.8 };
+        self
     }
 
     /// Sets where drags and scales measure their start from (Flutter
@@ -585,6 +613,7 @@ impl From<GestureDetector> for Widget {
             callbacks: Box::new(value.callbacks),
             child,
         })
+        .with_gesture_semantic_policy(value.semantic_policy)
     }
 }
 
