@@ -24,3 +24,13 @@ native ports found three distinct issues.
 - The 200×200 FittedBox child in the 100×100 viewport emits the expected
   clipping coverage for default, none, hard-edge, antialias and
   antialias-with-save-layer modes.
+
+## Layer identity during a real repaint
+
+The pinned :375, :425 and :566–574 originals passed. At the original
+10×10 bounds, both opacity variants and both FittedBox clip/transform
+representations keep the same live layer after an explicit repaint.
+The native test asserts that painting actually ran and compares retained
+layer IDs, not log lines or equivalent pixels. A separate retained control
+starts with an empty FittedBox and confirms the pending custom paint
+runs exactly once after the parent first gets nonzero geometry.

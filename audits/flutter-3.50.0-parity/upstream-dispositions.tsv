@@ -1334,3 +1334,8 @@ packages/flutter/test/rendering/proxy_box_test.dart	30	RenderFittedBox does not 
 packages/flutter/test/rendering/proxy_box_test.dart	81	RenderPhysicalModel paints shadow only for non-zero elevation	paired-match	upstream-render-proxies.md
 packages/flutter/test/rendering/proxy_box_test.dart	122	shape change triggers repaint	paired-match	upstream-render-proxies.md
 packages/flutter/test/rendering/proxy_box_test.dart	583	RenderFittedBox respects clipBehavior	paired-match	upstream-render-proxies.md
+packages/flutter/test/rendering/proxy_box_test.dart	375	RenderOpacity reuses its layer	paired-match	upstream-render-proxies.md#layer-identity-during-a-real-repaint
+packages/flutter/test/rendering/proxy_box_test.dart	425	RenderAnimatedOpacity reuses its layer	paired-match	upstream-render-proxies.md#layer-identity-during-a-real-repaint
+packages/flutter/test/rendering/proxy_box_test.dart	566	RenderFittedBox reuses ClipRectLayer	paired-match	upstream-render-proxies.md#layer-identity-during-a-real-repaint
+packages/flutter/test/rendering/proxy_box_test.dart	570	RenderFittedBox reuses TransformLayer	paired-match	upstream-render-proxies.md#layer-identity-during-a-real-repaint
+packages/flutter/test/rendering/proxy_box_test.dart	574	RenderFittedBox switches between ClipRectLayer and TransformLayer, and reuses them	paired-match	upstream-render-proxies.md#layer-identity-during-a-real-repaint

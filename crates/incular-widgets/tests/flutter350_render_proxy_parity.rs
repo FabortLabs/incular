@@ -167,3 +167,98 @@ fn changing_physical_shape_repaints_but_equivalent_path_does_not() {
     assert_ne!(first, tree.paint());
     assert!(tree.diagnostics().paints > paints, "new shape must repaint");
 }
+
+fn retained_layers_matching(
+    tree: &WidgetTree,
+    matches: impl Fn(&LayerKind) -> bool,
+) -> Vec<incular_rendering::LayerId> {
+    let layers = tree.compositor_layers();
+    let mut queue: Vec<_> = layers.root().into_iter().collect();
+    let mut selected = Vec::new();
+    while let Some(id) = queue.pop() {
+        let (kind, children) = layers.layer(id).unwrap();
+        if matches(kind) {
+            selected.push(id);
+        }
+        queue.extend_from_slice(children);
+    }
+    selected
+}
+
+fn repaint_preserving_effect(scene: Widget, matches: impl Fn(&LayerKind) -> bool) {
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scene).unwrap();
+    tree.layout(Constraints::tight(Size::new(10., 10.)))
+        .unwrap();
+    let _ = tree.paint();
+    let before = retained_layers_matching(&tree, &matches);
+    assert_eq!(before.len(), 1);
+    let paints = tree.diagnostics().paints;
+    tree.mark_paint(root).unwrap();
+    let _ = tree.paint();
+    assert!(tree.diagnostics().paints > paints);
+    assert_eq!(retained_layers_matching(&tree, &matches), before);
+}
+
+#[test]
+fn fitted_box_retains_its_clip_or_transform_layer_after_a_real_repaint() {
+    use incular_widgets::RepaintBoundary;
+
+    for clip in [true, false, true] {
+        let child = RepaintBoundary::new(
+            SizedBox::new()
+                .width(if clip { 100. } else { 1. })
+                .height(if clip { 200. } else { 1. }),
+        );
+        let fit = FittedBox::new(child);
+        let scene = if clip {
+            fit.fit(BoxFit::Cover).clip_behavior(Clip::HardEdge)
+        } else {
+            fit.fit(BoxFit::Fill)
+        };
+        repaint_preserving_effect(scene.into(), |kind| {
+            if clip {
+                matches!(kind, LayerKind::ClipRect { .. })
+            } else {
+                matches!(kind, LayerKind::Transform {transform, ..} if *transform == Transform::scale(10.))
+            }
+        });
+    }
+}
+
+#[test]
+fn static_and_controller_opacity_layers_keep_their_ids_after_repaint() {
+    use incular_widgets::{FadeTransition, Opacity, OpacityController, RepaintBoundary};
+    let controller = OpacityController::new();
+    assert!(controller.set_opacity(0.5));
+    for scene in [
+        Widget::from(Opacity::new(
+            0.5,
+            RepaintBoundary::new(SizedBox::square(1.)),
+        )),
+        FadeTransition::new(controller, SizedBox::square(1.)).into(),
+    ] {
+        repaint_preserving_effect(
+            scene,
+            |kind| matches!(kind, LayerKind::Opacity { alpha } if (*alpha-0.5).abs() <= 1./255.),
+        );
+    }
+}
+
+#[test]
+fn fitted_child_becoming_visible_receives_a_previously_deferred_paint() {
+    let calls = Rc::new(Cell::new(0));
+    let child = CustomPaint::from_painter(Size::new(1., 1.), CountPaint(calls.clone()));
+    let mut tree = WidgetTree::new();
+    tree.mount(FittedBox::new(child).into()).unwrap();
+    for (bounds, count) in [
+        (Size::ZERO, 0),
+        (Size::new(10., 10.), 1),
+        (Size::ZERO, 1),
+        (Size::new(10., 10.), 1),
+    ] {
+        tree.layout(Constraints::tight(bounds)).unwrap();
+        let _ = tree.paint();
+        assert_eq!(calls.get(), count);
+    }
+}
