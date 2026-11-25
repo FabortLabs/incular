@@ -6,12 +6,12 @@ use std::{cell::RefCell, rc::Rc, sync::Arc, thread, time::Duration};
 use incular_animation::{add_post_frame_callback, schedule_frame};
 use incular_config::Constraints;
 use incular_core::{Color, RestorationKey, RestorationScope, Size, time::Instant};
-use incular_platform::WindowOptions;
+use incular_platform::{PhysicalSize, PlatformEvent, WindowEvent, WindowMetrics, WindowOptions};
 use incular_runtime::{
     Application, FRAMEWORK_RESTORATION_FORMAT_VERSION, InMemoryRestorationStore, RestorationConfig,
     RestorationHandle,
 };
-use incular_widgets::Widget;
+use incular_widgets::{LayoutBuilder, Widget};
 use serde_json::{Value, json};
 
 const APP_ID: &str = "org.incular.flutter350.restoration-dirty-flush";
@@ -245,4 +245,91 @@ fn pending_flush_captures_restoration_changes_made_by_the_frame() {
     fixture.drain_save();
     assert_eq!(fixture.handle.diagnostics().saves_started, starts + 1);
     assert_eq!(fixture.saved_state("application/foo"), Some(json!(11)));
+}
+
+#[test]
+fn unrelated_redraw_cannot_flush_a_pending_secondary_window() {
+    let mut fixture = Fixture::new();
+    fixture.frame();
+    let scope = fixture.root.clone();
+    let secondary = fixture
+        .app
+        .open_window(
+            WindowOptions::default(),
+            LayoutBuilder::new(move |_, _| {
+                scope.set_json(&key("foo"), json!(11));
+                Widget::box_(Size::new(1., 1.), Color::WHITE)
+            })
+            .into(),
+        )
+        .unwrap()
+        .id();
+    let starts = fixture.handle.diagnostics().saves_started;
+    fixture.root.set_json(&key("foo"), json!(1));
+    fixture.app.note_frame_requested(secondary);
+    assert!(fixture.app.flush_restoration());
+
+    fixture
+        .app
+        .note_frame_requested(fixture.app.primary_window());
+    fixture.frame();
+    assert_eq!(fixture.root.get_json(&key("foo")), Some(json!(1)));
+    assert_eq!(fixture.handle.diagnostics().saves_started, starts);
+
+    fixture
+        .app
+        .note_frame_requested(fixture.app.primary_window());
+    fixture
+        .app
+        .run_window_frame_at(
+            secondary,
+            Constraints::tight(Size::new(100., 100.)),
+            Instant::now(),
+        )
+        .unwrap()
+        .expect("secondary frame");
+    fixture.drain_save();
+    assert_eq!(fixture.handle.diagnostics().saves_started, starts + 1);
+    assert_eq!(fixture.saved_state("application/foo"), Some(json!(11)));
+}
+
+#[test]
+fn cancelling_the_awaited_redraw_releases_the_deferred_save() {
+    for reason in ["closed", "hidden", "zero-size"] {
+        let mut fixture = Fixture::new();
+        fixture.frame();
+        let secondary = fixture
+            .app
+            .open_window(
+                WindowOptions::default(),
+                Widget::box_(Size::new(1., 1.), Color::WHITE),
+            )
+            .unwrap();
+        let starts = fixture.handle.diagnostics().saves_started;
+        fixture.root.set_json(&key("foo"), json!(3));
+        fixture.app.note_frame_requested(secondary.id());
+        assert!(fixture.app.flush_restoration());
+        assert_eq!(fixture.handle.diagnostics().saves_started, starts);
+
+        match reason {
+            "closed" => assert!(fixture.app.close_window(secondary.id())),
+            "hidden" => secondary.set_visible(false).unwrap(),
+            "zero-size" => fixture.app.handle_window_event(WindowEvent::platform(
+                secondary.id(),
+                PlatformEvent::Metrics(WindowMetrics::new(PhysicalSize::new(0, 0), 1.)),
+            )),
+            _ => unreachable!(),
+        }
+        fixture.drain_save();
+        assert_eq!(
+            fixture.handle.diagnostics().saves_started,
+            starts + 1,
+            "{reason}"
+        );
+        assert_eq!(
+            fixture.saved_state("application/foo"),
+            Some(json!(3)),
+            "{reason}"
+        );
+    }
 }

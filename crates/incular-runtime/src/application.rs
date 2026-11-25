@@ -81,6 +81,11 @@ struct PendingFileDialogRequest {
     cancelled: Arc<std::sync::atomic::AtomicBool>,
 }
 
+struct RestorationFrameBarrier {
+    scheduler_frame: bool,
+    redraws: Vec<WindowId>,
+}
+
 /// Owns application services, one Tokio runtime, and multiple retained roots.
 /// A root's environment, input/focus, semantics, compositor, frame work, and
 /// cancellation scope are window-local; assets, Signals, and Tokio are shared.
@@ -120,6 +125,7 @@ pub struct Application {
     pub(crate) should_exit: bool,
     pub(crate) close_request: Option<Box<dyn FnMut(WindowId) -> bool>>,
     pub(crate) restoration: Option<restoration::RestorationManager>,
+    restoration_frame_barrier: Option<RestorationFrameBarrier>,
     pub(crate) restoration_window_factories:
         HashMap<String, (WindowOptions, RestorableWindowFactory)>,
     pub(crate) profiler: PerformanceProfiler,
@@ -296,6 +302,7 @@ impl Application {
             should_exit: false,
             close_request: None,
             restoration,
+            restoration_frame_barrier: None,
             restoration_window_factories: HashMap::new(),
             profiler: PerformanceProfiler::new(ProfilerMode::Normal),
             hub: PerformanceHub::new(),
@@ -1302,6 +1309,7 @@ impl Application {
         self.drain_file_dialog_cancellations();
         self.drain_global_shortcut_requests();
         self.process_simulation_requests();
+        self.settle_restoration_frames(None);
     }
 
     pub fn process_runtime_work(&mut self) {
@@ -1354,6 +1362,7 @@ impl Application {
                     }
                 });
                 self.manager.sync_restorable_windows(true);
+                self.settle_restoration_frames(None);
             }
             WindowEventKind::Platform(PlatformEvent::Environment(environment)) => {
                 let _ = self.with_window_mut(window_id, |record| {
@@ -1672,14 +1681,13 @@ impl Application {
         if matches!(outcome, Ok(None)) && self.contains_window(window_id) {
             self.scheduler_counters.frames_skipped =
                 self.scheduler_counters.frames_skipped.wrapping_add(1);
+            self.settle_restoration_frames(None);
         }
         if matches!(outcome, Ok(Some(_))) {
             scheduler_counters::FRAMES_STARTED.fetch_add(1, Ordering::Relaxed);
             self.scheduler_counters.frames_started =
                 self.scheduler_counters.frames_started.wrapping_add(1);
-            if let Some(restoration) = &self.restoration {
-                restoration.finish_frame();
-            }
+            self.settle_restoration_frames(Some(window_id));
         }
         outcome
     }
@@ -2076,6 +2084,7 @@ impl Application {
             ]);
         }
         self.manager.sync_restorable_windows(true);
+        self.settle_restoration_frames(None);
         if self.registry.borrow().visible_count() == 0
             && self.last_window_policy == LastWindowPolicy::ExitOnLastWindow
         {
@@ -2744,25 +2753,68 @@ impl Application {
         let Some(restoration) = &self.restoration else {
             return false;
         };
-        let scheduler_frame = incular_animation::scheduler::has_scheduled_frame();
-        let pending_frame = self.registry.borrow().slots.iter().any(|slot| {
-            slot.record.as_ref().is_some_and(|record| {
-                !record.metrics.physical_size.is_zero()
-                    && (scheduler_frame || record.frame_scheduled)
-            })
-        });
-        if pending_frame {
+        let registry = self.registry.borrow();
+        let mut has_drawable_window = false;
+        let mut redraws = Vec::new();
+        for id in registry.ids() {
+            if let Some(record) = registry.get(id)
+                && record.options.visible
+                && !record.metrics.physical_size.is_zero()
+            {
+                has_drawable_window = true;
+                if record.frame_scheduled {
+                    redraws.push(id);
+                }
+            }
+        }
+        drop(registry);
+        let scheduler_frame =
+            has_drawable_window && incular_animation::scheduler::has_scheduled_frame();
+        if scheduler_frame || !redraws.is_empty() {
+            self.restoration_frame_barrier = Some(RestorationFrameBarrier {
+                scheduler_frame,
+                redraws,
+            });
             restoration.defer_flush_until_frame();
         } else {
+            self.restoration_frame_barrier = None;
             restoration.flush();
         }
         true
+    }
+
+    fn settle_restoration_frames(&mut self, completed: Option<WindowId>) {
+        let Some(barrier) = self.restoration_frame_barrier.as_mut() else {
+            return;
+        };
+        let registry = self.registry.borrow();
+        let drawable = |id| {
+            registry.get(id).is_some_and(|record| {
+                record.options.visible && !record.metrics.physical_size.is_zero()
+            })
+        };
+        if completed.is_some()
+            || (barrier.scheduler_frame && !registry.ids().into_iter().any(drawable))
+        {
+            barrier.scheduler_frame = false;
+        }
+        barrier
+            .redraws
+            .retain(|&id| completed != Some(id) && drawable(id));
+        drop(registry);
+        if !barrier.scheduler_frame && barrier.redraws.is_empty() {
+            self.restoration_frame_barrier = None;
+            if let Some(restoration) = &self.restoration {
+                restoration.finish_frame();
+            }
+        }
     }
 
     /// Flushes restoration and bounded-waits for the blocking save to settle,
     /// mirroring the shutdown handoff. Used when the host may freeze or kill
     /// the process after the lifecycle event (for example mobile suspend).
     fn flush_restoration_and_wait(&mut self) {
+        self.restoration_frame_barrier = None;
         let Some(restoration) = self.restoration.clone() else {
             return;
         };

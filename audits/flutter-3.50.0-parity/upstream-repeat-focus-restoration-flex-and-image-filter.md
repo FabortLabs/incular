@@ -122,3 +122,14 @@ without deleting similarly prefixed siblings. The pinned originals
 23 restoration regressions pass. The separate same-turn handoff
 port still reports the existing strict duplicate-lease mismatch.
 The Flutter engine binary format is outside these behavioral matches.
+
+### Multi-window restoration redraw isolation
+
+A separately reproduced Incular integration bug let an unrelated
+primary-window frame satisfy a deferred save before the scheduled
+secondary window rendered. The save now waits for the redraw owners
+captured at the request, includes the secondary frame's updated value
+in the first snapshot, and does not wait for later unrelated redraws.
+Closing, hiding, or making the awaited window zero-size releases its
+wait; idle and headless retry still pass. This is an Incular host
+check, not an extra Flutter registration.
