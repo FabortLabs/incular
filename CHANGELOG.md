@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular::widget_previews`: compose programmatic previews with ordered
+  wrappers, themed scopes, and host metadata, without a design-system dependency.
+
 - `incular-text`: editing values can check whether their composing range
   is present and valid for the UTF-8 text.
 

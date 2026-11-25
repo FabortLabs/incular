@@ -441,3 +441,12 @@ matrix or blend mode changes that retained property without changing the
 source generation. A downstream stage observes its input generation, so a
 change before a blur invalidates that blur while a change after it does not.
 Visual filter bounds do not change hit testing, focus, or semantics geometry.
+
+## Standalone widget previews
+
+`incular::widget_previews` (also `incular_widgets::widget_previews`) composes
+widgets for a programmatic preview. `PreviewBuilder::add_wrapper` places each
+new wrapper outside the existing chain. `MultiPreviewThemeData` treats its
+first theme as the outermost one. The optional size, brightness, and text
+scale are metadata for the embedding host; they are not global application
+settings. This API does not discover preview annotations or launch a server.

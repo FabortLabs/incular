@@ -3,6 +3,9 @@
 Flutter 3.50.0 `ab2912035e` vs Incular framework `c647cb85`. Focused
 headless tests, not an exhaustive library verdict.
 
+Follow-up: [runtime preview composition](upstream-widget-previews-runtime.md)
+now covers this file’s authored wrapper and theme gaps.
+
 | ID | Case | Flutter | Incular |
 | --- | --- | --- | --- |
 | C21 | SizeTween with absent start and end (10,20), at t=0 | null | Some(Size(0,0)) |

@@ -21,6 +21,7 @@ pub use incular_runtime as runtime;
 pub use incular_semantics as semantics;
 pub use incular_text as text;
 pub use incular_widgets as widgets;
+pub use incular_widgets::widget_previews;
 
 /// Public scrolling policies and notifications.
 ///

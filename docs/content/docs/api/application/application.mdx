@@ -207,3 +207,24 @@ Publishing throttles to ~5 Hz in `Diagnostic`+ modes while observed.
 
 Related: [`WindowHandle`](/docs/api/application/window),
 [`Signal`](/docs/api/state/signal), [`Desktop`](/docs/api/platform/desktop).
+
+## Programmatic widget previews
+
+Use `incular::widget_previews::PreviewBuilder` when you already have the widget
+you want to preview. Wrappers run in the order you add them, so the most
+recent wrapper is outermost. `MultiPreviewThemeData` nests its first theme
+outermost. Size, brightness, and text scale are optional metadata for your
+preview host; the builder does not change the application's environment.
+
+```rust
+use incular::prelude::*;
+use incular::widget_previews::PreviewBuilder;
+
+let mut preview = PreviewBuilder::new();
+preview.name = Some("Heading".to_owned());
+preview.add_wrapper(|child| Padding::all(16.0, child).into());
+let card = preview.build().wrap(Text::new("A preview"));
+```
+
+This API composes a supplied widget. It does not discover source annotations
+or start a preview server.

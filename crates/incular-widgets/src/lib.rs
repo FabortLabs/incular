@@ -109,6 +109,7 @@ mod tree;
 mod tweens;
 mod util;
 mod utilities;
+pub mod widget_previews;
 
 // Re-export only the Flutter Widgets vocabulary.  Retained-tree IDs,
 // renderer diagnostics, and Incular-only helpers stay private to this crate;

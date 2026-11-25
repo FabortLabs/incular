@@ -226,3 +226,15 @@ fn route_and_overlay_lifecycle_stress_stays_bounded() {
         assert!(!overlay.blocks_background_input());
     }
 }
+
+#[test]
+fn standalone_preview_composition_is_available_without_a_design_system() {
+    let mut builder = incular::widget_previews::PreviewBuilder::new();
+    builder.add_wrapper(|child| Padding::all(4.0, child).into());
+    let preview = builder.build();
+    assert_eq!(preview.group(), "Default");
+    assert_eq!(
+        preview.wrap(SizedBox::shrink()).debug_type_name(),
+        "Padding"
+    );
+}
