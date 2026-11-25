@@ -1049,7 +1049,13 @@ impl Runtime {
             self.frame_requested |= notified;
         }
         let Some(element) = self.tree.element_for_semantic_node(node) else {
-            return false;
+            let handled = action == SemanticAction::ShowOnScreen
+                && self.tree.semantic_show_table_row_on_screen(node);
+            if handled {
+                self.tree.note_semantic_action();
+                self.frame_requested = true;
+            }
+            return handled;
         };
         self.tree.note_semantic_action();
         let handled = match action {

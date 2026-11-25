@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- Accessible table rows can be revealed in an enclosing scroll view,
+  using their latest layout bounds.
+
 - Table publishes retained accessibility rows and cells. Focus changes
   update an editor inside its existing cell instead of recreating the
   surrounding accessibility nodes.

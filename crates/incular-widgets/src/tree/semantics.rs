@@ -1567,6 +1567,10 @@ impl WidgetTree {
         else {
             return false;
         };
+        self.reveal_semantic_bounds(element, node.bounds)
+    }
+
+    fn reveal_semantic_bounds(&self, element: ElementId, bounds: Rect) -> bool {
         let Some((viewport, controller, axis, reverse, _)) = self
             .scrollable_viewport_chain(element)
             .into_iter()
@@ -1583,14 +1587,14 @@ impl WidgetTree {
         };
         let (start, end, view_start, view_end) = match axis {
             Axis::Vertical => (
-                node.bounds.origin.y,
-                node.bounds.origin.y + node.bounds.size.height,
+                bounds.origin.y,
+                bounds.origin.y + bounds.size.height,
                 view.bounds.origin.y,
                 view.bounds.origin.y + view.bounds.size.height,
             ),
             Axis::Horizontal => (
-                node.bounds.origin.x,
-                node.bounds.origin.x + node.bounds.size.width,
+                bounds.origin.x,
+                bounds.origin.x + bounds.size.width,
                 view.bounds.origin.x,
                 view.bounds.origin.x + view.bounds.size.width,
             ),

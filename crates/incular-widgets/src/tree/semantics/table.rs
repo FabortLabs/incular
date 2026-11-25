@@ -67,6 +67,10 @@ impl WidgetTree {
         let columns = columns.max(1);
         let table_width = render.size.width;
         let world = self.render_world_transform(entry.render);
+        let reveal_rows = self
+            .scrollable_viewport_chain(table)
+            .into_iter()
+            .any(|(_, _, _, _, physics)| physics.allows_implicit_scrolling());
         let mut slots = FastHashMap::default();
         let mut cells = Vec::with_capacity(entry.children.len());
         for &id in &entry.children {
@@ -151,6 +155,7 @@ impl WidgetTree {
                         &mut self.semantics,
                         wrappers.cells.get(&index).copied(),
                         SemanticRole::Cell,
+                        false,
                         bounds,
                         std::mem::take(&mut cell.raw_ids),
                         &mut changes.detached,
@@ -168,6 +173,7 @@ impl WidgetTree {
                         &mut self.semantics,
                         wrappers.rows.get(&row_index).copied(),
                         SemanticRole::Row,
+                        reveal_rows,
                         bounds,
                         columns,
                         &mut changes.detached,
@@ -187,34 +193,64 @@ impl WidgetTree {
             self.table_semantic_wrappers.insert(table, wrappers);
         }
     }
+
+    /// Reveals a synthetic row using the latest bounds of its retained ID.
+    /// Ordinary element-based semantic actions do not target synthetic rows.
+    #[doc(hidden)]
+    pub fn semantic_show_table_row_on_screen(&self, row: SemanticNodeId) -> bool {
+        let Some(node) = self.semantics.node(row).filter(|node| {
+            node.role == SemanticRole::Row
+                && node.actions.contains(&SemanticActionKind::ShowOnScreen)
+        }) else {
+            return false;
+        };
+        self.table_semantic_wrappers
+            .iter()
+            .find_map(|(&table, wrappers)| {
+                wrappers.rows.values().any(|id| *id == row).then_some(table)
+            })
+            .is_some_and(|table| self.reveal_semantic_bounds(table, node.bounds))
+    }
 }
 
 fn write_wrapper(
     tree: &mut SemanticsTree,
     old: Option<SemanticNodeId>,
     role: SemanticRole,
+    can_reveal: bool,
     bounds: Rect,
     children: Vec<SemanticNodeId>,
     detached: &mut Vec<SemanticNodeId>,
 ) -> SemanticNodeId {
-    if let Some(id) = old
-        && let Some(node) = tree.node(id)
-    {
+    let existing = old.and_then(|id| tree.node(id).map(|node| (id, node)));
+    if let Some((id, node)) = existing {
         if node.children != children {
             detached.extend_from_slice(&node.children);
         }
-        let _ = tree.update_geometry(id, bounds, &children);
-        return id;
+        if node.actions.contains(&SemanticActionKind::ShowOnScreen) == can_reveal {
+            let _ = tree.update_geometry(id, bounds, &children);
+            return id;
+        }
     }
-    tree.insert(SemanticNode {
-        id: SemanticNodeId(ArenaId::from_parts(0, 0)),
+    let node = SemanticNode {
+        id: old.unwrap_or_else(|| SemanticNodeId(ArenaId::from_parts(0, 0))),
         role,
         label: None,
         value: None,
         description: None,
         bounds,
         state: SemanticState::default(),
-        actions: Vec::new(),
+        actions: if can_reveal {
+            vec![SemanticActionKind::ShowOnScreen]
+        } else {
+            Vec::new()
+        },
         children,
-    })
+    };
+    if let Some((id, _)) = existing {
+        let _ = tree.update(id, node);
+        id
+    } else {
+        tree.insert(node)
+    }
 }
