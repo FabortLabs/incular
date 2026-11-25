@@ -103,6 +103,18 @@ impl Widget {
                 return Rc::ptr_eq(left, right)
                     && self.semantic_properties() == other.semantic_properties();
             }
+            (
+                WidgetKind::LayoutBuilder {
+                    retained: Some(left),
+                    ..
+                },
+                WidgetKind::LayoutBuilder {
+                    retained: Some(right),
+                    ..
+                },
+            ) if left.same_mount_template(right) => {
+                return self.semantic_properties() == other.semantic_properties();
+            }
             _ => {}
         }
 
@@ -1086,6 +1098,67 @@ impl Widget {
             },
             semantics: None,
         })
+    }
+
+    /// A retained builder whose descriptor may be cloned across independent
+    /// mounts. The attached state is created at the element, not shared by
+    /// the immutable descriptor. Its builder is not constraint dependent.
+    pub(crate) fn mount_scoped_builder<S: super::super::RetainedState>(
+        init: impl Fn(Rc<Cell<u64>>) -> S + 'static,
+        build: impl for<'a> Fn(&Rc<S>, &BuildContext<'a>) -> Self + 'static,
+    ) -> Self {
+        use super::super::{context::LayoutBuilderCallback, retained_state::RetainedSlot};
+        let init = Rc::new(init);
+        let build = Rc::new(build);
+        let factory = Rc::new(move |slot: Rc<RetainedSlot>| -> Rc<LayoutBuilderCallback> {
+            let init = init.clone();
+            let build = build.clone();
+            Rc::new(move |context, _| {
+                let state = slot.get_or_init(|revision| init(revision));
+                build(&state, context)
+            })
+        });
+        let revision = Rc::new(Cell::new(0));
+        let slot =
+            Rc::new(RetainedSlot::new::<S>(revision.clone()).with_mount_factory(factory.clone()));
+        Self::from_node(WidgetNode {
+            key: None,
+            kind: WidgetKind::LayoutBuilder {
+                builder: factory(slot.clone()),
+                environment: None,
+                environment_boundary: false,
+                revision: Some(revision),
+                constraint_dependent: false,
+                retained: Some(slot),
+                static_child: None,
+            },
+            semantics: None,
+        })
+    }
+
+    pub(in crate::tree) fn instantiate_mount_scoped_builder(&self) -> Option<Self> {
+        let WidgetKind::LayoutBuilder {
+            retained: Some(template),
+            ..
+        } = self.kind()
+        else {
+            return None;
+        };
+        let (slot, instance) = template.mount_instance()?;
+        let mut mounted = self.clone();
+        let WidgetKind::LayoutBuilder {
+            builder,
+            revision,
+            retained,
+            ..
+        } = mounted.kind_mut()
+        else {
+            unreachable!("mount-scoped state belongs to a builder");
+        };
+        *revision = Some(slot.revision());
+        *builder = instance;
+        *retained = Some(slot);
+        Some(mounted)
     }
 
     pub fn stateful_builder(

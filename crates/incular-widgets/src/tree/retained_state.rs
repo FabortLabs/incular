@@ -18,11 +18,14 @@ pub(crate) trait RetainedState: Any {
     fn rebind_revision(&self, revision: Rc<Cell<u64>>);
 }
 
+type BuilderFactory = dyn Fn(Rc<RetainedSlot>) -> Rc<super::context::LayoutBuilderCallback>;
+
 pub(crate) struct RetainedSlot {
     type_id: TypeId,
     value: RefCell<Option<Rc<dyn Any>>>,
     revision: Rc<Cell<u64>>,
     rebind: fn(&Rc<dyn Any>, Rc<Cell<u64>>),
+    factory: Option<Rc<BuilderFactory>>,
 }
 
 impl RetainedSlot {
@@ -31,12 +34,43 @@ impl RetainedSlot {
             type_id: TypeId::of::<S>(),
             value: RefCell::new(None),
             revision,
+            factory: None,
             rebind: |value, revision| {
                 if let Some(state) = value.downcast_ref::<S>() {
                     state.rebind_revision(revision);
                 }
             },
         }
+    }
+
+    pub(crate) fn with_mount_factory(mut self, factory: Rc<BuilderFactory>) -> Self {
+        self.factory = Some(factory);
+        self
+    }
+
+    /// Concrete builder state is allocated per mounted element, even when
+    /// multiple elements use clones of the same immutable descriptor.
+    pub(crate) fn mount_instance(
+        &self,
+    ) -> Option<(Rc<Self>, Rc<super::context::LayoutBuilderCallback>)> {
+        let factory = self.factory.as_ref()?;
+        let slot = Rc::new(Self {
+            type_id: self.type_id,
+            value: RefCell::new(None),
+            revision: Rc::new(Cell::new(0)),
+            rebind: self.rebind,
+            factory: Some(factory.clone()),
+        });
+        let builder = factory(slot.clone());
+        Some((slot, builder))
+    }
+
+    pub(crate) fn revision(&self) -> Rc<Cell<u64>> {
+        self.revision.clone()
+    }
+
+    pub(crate) fn same_mount_template(&self, other: &Self) -> bool {
+        matches!((&self.factory, &other.factory), (Some(a), Some(b)) if Rc::ptr_eq(a, b))
     }
 
     /// The slot's state, created by `init` on first use.

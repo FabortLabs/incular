@@ -340,3 +340,19 @@ fn bouncing_fling_past_first_page_settles_without_an_extra_callback_at_both_size
         ]
     );
 }
+
+#[test]
+fn reusing_one_page_descriptor_does_not_link_mounted_controllers() {
+    let widget = view(SURFACE, None, None, false, false);
+    let mut first = Host::new(widget.clone());
+    let mut second = Host::new(widget.clone());
+    first.drag(-420., false);
+    first.settle();
+    second.frame();
+    assert_eq!(first.visible(), [1]);
+    assert_eq!(second.visible(), [0]);
+
+    drop(first);
+    let remounted = Host::new(widget);
+    assert_eq!(remounted.visible(), [0]);
+}

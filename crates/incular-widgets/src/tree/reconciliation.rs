@@ -368,6 +368,9 @@ impl WidgetTree {
         if owned_focus_permission(&widget).is_some() {
             instantiate_owned_focus_node(&mut widget, None);
         }
+        if let Some(mounted) = widget.instantiate_mount_scoped_builder() {
+            widget = mounted;
+        }
         let handlers = &mut self.pending_handlers;
         let next = &mut self.next_action;
         widget.bind_callbacks(&mut |callback| {
@@ -623,6 +626,8 @@ impl WidgetTree {
             mounted
         });
         let widget = resolved_focus.as_ref().unwrap_or(widget);
+        let mounted_builder = widget.instantiate_mount_scoped_builder();
+        let widget = mounted_builder.as_ref().unwrap_or(widget);
         // A retained builder's new descriptor takes over the element's state
         // (Flutter keeps `State` across `didUpdateWidget`).
         if let (

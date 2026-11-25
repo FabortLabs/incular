@@ -1492,53 +1492,85 @@ impl PageView {
     }
 }
 
+/// The default controller belongs to the mounted view. Rebuilding a
+/// descriptor (including toggling page-snapping physics) is not a remount.
+struct MountedPageView {
+    implicit_controller: RefCell<Option<PageController>>,
+    last_reported_page: Cell<usize>,
+}
+
+impl crate::tree::RetainedState for MountedPageView {
+    fn rebind_revision(&self, _: Rc<Cell<u64>>) {}
+}
+
 impl From<PageView> for Widget {
-    fn from(mut value: PageView) -> Self {
-        let controller = value
+    fn from(value: PageView) -> Self {
+        let initial_page = value
             .controller
-            .get_or_insert_with(PageController::default)
-            .clone();
-        if let Some(fraction) = controller.configured_viewport_fraction() {
-            value.viewport_fraction = fraction.max(0.01);
-        }
-        let fraction = value.viewport_fraction;
-        let on_page_changed = value.on_page_changed.take();
-        let key = value.page_storage_key.take();
-        let inherit = value.physics.is_none().then_some(if value.page_snapping {
-            InheritedPhysics::Page
-        } else {
-            InheritedPhysics::Scroll
-        });
-        let scroll = controller.scroll_controller();
-        let view = keep_scroll_offset(
-            inherit_physics(page_view_widget(value), inherit),
-            &scroll,
-            key,
-        );
-        match on_page_changed {
-            None => view,
-            Some(callback) => NotificationListener::new(view)
-                .on_notification(move |notification: ScrollNotification| {
-                    if notification.depth == 0
-                        && matches!(
-                            notification.kind,
-                            incular_scroll::ScrollNotificationType::Update
-                        )
-                        && let Some(page) = controller.take_page_change(
-                            notification.metrics.pixels,
-                            notification.metrics.max_scroll_extent,
-                            notification.metrics.viewport_dimension,
-                            fraction,
-                        )
-                    {
-                        callback(page);
-                    }
-                    false
-                })
-                .into(),
-        }
+            .as_ref()
+            .map_or(0, PageController::initial_page);
+        Widget::mount_scoped_builder(
+            move |_| MountedPageView {
+                implicit_controller: RefCell::new(None),
+                last_reported_page: Cell::new(initial_page),
+            },
+            move |state, _| build_mounted_page_view(value.clone(), state),
+        )
     }
 }
+
+fn build_mounted_page_view(mut value: PageView, state: &Rc<MountedPageView>) -> Widget {
+    let controller = {
+        let mut implicit = state.implicit_controller.borrow_mut();
+        if let Some(explicit) = value.controller.as_ref() {
+            implicit.take();
+            explicit.clone()
+        } else {
+            implicit.get_or_insert_with(PageController::default).clone()
+        }
+    };
+    if let Some(fraction) = controller.configured_viewport_fraction() {
+        value.viewport_fraction = fraction.max(0.01);
+    }
+    let fraction = value.viewport_fraction;
+    let on_page_changed = value.on_page_changed.take();
+    let key = value.page_storage_key.take();
+    let inherit = value.physics.is_none().then_some(if value.page_snapping {
+        InheritedPhysics::Page
+    } else {
+        InheritedPhysics::Scroll
+    });
+    let scroll = controller.scroll_controller();
+    value.controller = Some(controller);
+    let view = keep_scroll_offset(
+        inherit_physics(page_view_widget(value), inherit),
+        &scroll,
+        key,
+    );
+    let listener = on_page_changed.map(|callback| {
+        let state = state.clone();
+        Rc::new(move |notification: ScrollNotification| {
+            if notification.depth == 0
+                && notification.kind == incular_scroll::ScrollNotificationType::Update
+            {
+                let metrics = notification.metrics;
+                let page = incular_scroll::page_for_pixels(
+                    metrics.pixels.clamp(0., metrics.max_scroll_extent),
+                    metrics.viewport_dimension,
+                    fraction,
+                )
+                .round()
+                .max(0.) as usize;
+                if state.last_reported_page.replace(page) != page {
+                    callback(page);
+                }
+            }
+            false
+        }) as Rc<dyn Fn(ScrollNotification) -> bool>
+    });
+    Widget::notification_listener(listener, view)
+}
+
 fn page_view_widget(value: PageView) -> Widget {
     let page = value.controller.unwrap_or_default();
     let controller = page.scroll_controller();

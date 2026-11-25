@@ -17,3 +17,20 @@ Two more pinned originals passed. The expanded Rust target has four matches and 
 
 - :536: a rightward 100px/800px-per-second fling from the first 0.9-fraction page settles back to page 0, emits no callback, and keeps pages 0 and 1 visible at both 800×600 and a 414×736 OverflowBox viewport. This matches.
 - :634: the first -420px swipe selects page 1 correctly. Turning snapping off then swiping reports page 1 again and exposes pages [0,1], instead of reporting 2 and exposing [1,2]. Reenabling snapping settles on 0 instead of 2, without an extra notification. The controllerless rebuild lost the active position.
+
+## Retain the controllerless position across rebuilds
+
+After the repair, the pinned `:361` geometry sequence passes on both
+sides: page 2 remains selected at 600×400, 250×100, and 450×400.
+The implicit controller belongs to the mounted view rather than a
+transient descriptor. Last-reported page is scoped to that same view,
+including if the caller replaces the callback. An authored comparison
+also verifies that reusing one immutable PageView description in two
+mounts leaves their positions independent and that a new mount starts
+on page 0. This authored comparison does not add a ledger registration.
+
+The first two stages of `:634` now agree: disabling snapping neither
+jumps to the beginning nor repeats the last reported page, and the
+second swipe selects page 2. Reenabling snapping still leaves pages 1
+and 2 partly visible instead of aligning page 2. That assertion remains
+red until the position starts the correct settling motion.
