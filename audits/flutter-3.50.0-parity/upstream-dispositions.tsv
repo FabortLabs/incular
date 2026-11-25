@@ -1167,3 +1167,4 @@ packages/flutter/test/widgets/slivers_padding_test.dart	557	SliverPadding includ
 packages/flutter/test/widgets/slivers_padding_test.dart	589	SliverPadding consumes only its padding from the overlap of its parent's constraints	paired-match	upstream-sliver-padding.md#padding-only-signed-overlap-and-leading-edges
 packages/flutter/test/widgets/slivers_padding_test.dart	618	SliverPadding passes the overlap to the child if it's negative	paired-match	upstream-sliver-padding.md#padding-only-signed-overlap-and-leading-edges
 packages/flutter/test/widgets/slivers_padding_test.dart	646	SliverPadding passes the paintOrigin of the child on	paired-match	upstream-sliver-padding.md#padding-only-signed-overlap-and-leading-edges
+packages/flutter/test/widgets/slivers_padding_test.dart	505	SliverPadding propagates geometry offset corrections	partial-mismatch	upstream-sliver-padding.md#retained-list-correction-under-a-growing-leading-row
