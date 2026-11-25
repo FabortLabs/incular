@@ -944,3 +944,4 @@ packages/flutter/test/services/text_input_test.dart	226	text input client handle
 packages/flutter/test/painting/border_test.dart	18	Border.fromBorderSide constructor	partial-match	upstream-border-constraints-formatters.md#boxborder-factories-and-width-construction
 packages/flutter/test/painting/border_test.dart	474	BoxBorder factories	paired-match	upstream-border-constraints-formatters.md#boxborder-factories-and-width-construction
 packages/flutter/test/painting/border_side_test.dart	9	BorderSide - asserts when constructed incorrectly	paired-match	upstream-border-constraints-formatters.md#boxborder-factories-and-width-construction
+packages/flutter/test/painting/border_test.dart	465	Compound borders with differing preferPaintInteriors	paired-match	upstream-border-constraints-formatters.md#compound-shape-border-interior-and-edge-order

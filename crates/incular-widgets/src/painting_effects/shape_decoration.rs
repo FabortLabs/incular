@@ -116,6 +116,19 @@ impl ShapeDecoration {
             .clone()
             .or_else(|| self.color.map(Brush::Solid));
         if let Some(brush) = brush {
+            self.paint_interior_or_path(canvas, rect, brush);
+        }
+    }
+
+    fn paint_interior_or_path(&self, canvas: &mut Canvas, rect: Rect, brush: Brush) {
+        if self.shape.prefer_paint_interior() {
+            self.shape.paint_interior(
+                canvas,
+                rect,
+                &incular_rendering::Paint::new().brush(brush),
+                None,
+            );
+        } else {
             canvas.fill_path(
                 Arc::new(self.shape.outer_path(rect)),
                 brush,
@@ -133,11 +146,7 @@ impl ShapeDecoration {
     fn paint_shadow(&self, size: Size, shadow: &BoxShadow) -> DisplayList {
         let rect = Self::shadow_rect(Rect::from_origin_size(Offset::ZERO, size), shadow);
         let mut canvas = Canvas::default();
-        canvas.fill_path(
-            Arc::new(self.shape.outer_path(rect)),
-            shadow.color,
-            FillRule::NonZero,
-        );
+        self.paint_interior_or_path(&mut canvas, rect, Brush::Solid(shadow.color));
         canvas.finish()
     }
 }

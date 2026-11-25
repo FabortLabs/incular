@@ -197,3 +197,151 @@ fn beveled_border_cuts_corners_between_radius_endpoints() {
         "a solid side strokes the outline"
     );
 }
+
+#[test]
+fn compound_border_only_uses_the_outer_interior_hook_when_all_layers_prefer_it() {
+    use incular_rendering::Paint;
+    use incular_widgets::{CompoundBorder, ShapeDecoration, TextDirection};
+    use std::{cell::Cell, rc::Rc, sync::Arc};
+
+    struct Shape {
+        preferred: bool,
+        interior_calls: Rc<Cell<u8>>,
+    }
+
+    impl ShapeBorder for Shape {
+        fn outer_path(&self, rect: Rect) -> Path {
+            let mut builder = Path::builder();
+            builder.rounded_rect(rect, incular_rendering::CornerRadii::ZERO);
+            builder.build()
+        }
+
+        fn inner_path(&self, rect: Rect) -> Path {
+            self.outer_path(rect)
+        }
+
+        fn prefer_paint_interior(&self) -> bool {
+            self.preferred
+        }
+
+        fn paint_interior(
+            &self,
+            canvas: &mut Canvas,
+            rect: Rect,
+            paint: &Paint,
+            _: Option<TextDirection>,
+        ) {
+            assert!(self.preferred);
+            self.interior_calls.set(self.interior_calls.get() + 1);
+            canvas.draw_path(Arc::new(self.outer_path(rect)), paint, FillRule::NonZero);
+        }
+
+        fn paint(&self, _: &mut Canvas, _: Rect) {}
+    }
+
+    for (outer_preferred, inner_preferred) in
+        [(true, true), (true, false), (false, true), (false, false)]
+    {
+        let outer = Rc::new(Cell::new(0));
+        let inner = Rc::new(Cell::new(0));
+        let compound = CompoundBorder::new(
+            Shape {
+                preferred: outer_preferred,
+                interior_calls: outer.clone(),
+            },
+            Shape {
+                preferred: inner_preferred,
+                interior_calls: inner.clone(),
+            },
+        );
+        assert_eq!(
+            compound.prefer_paint_interior(),
+            outer_preferred && inner_preferred
+        );
+        let fill = ShapeDecoration::new(compound)
+            .color(Color::WHITE)
+            .paint_fill(Size::new(40., 30.));
+        assert!(matches!(fill.commands(), [PaintCommand::FillPath { .. }]));
+        assert_eq!(outer.get(), u8::from(outer_preferred && inner_preferred));
+        assert_eq!(inner.get(), 0);
+    }
+}
+
+#[test]
+fn compound_border_paints_outside_to_inside_with_accumulated_insets() {
+    use incular_config::EdgeInsets;
+    use incular_widgets::{CompoundBorder, RoundedRectangleBorder};
+
+    let outside = Color::rgba(0, 40, 255, 255);
+    let inside = Color::rgba(255, 40, 0, 255);
+    let layer = |color, width| {
+        RoundedRectangleBorder::new(BorderSide::solid(color, width), BorderRadius::ZERO)
+    };
+    let compound = CompoundBorder::new(layer(outside, 2.), layer(inside, 3.));
+    let area = rect(0., 0., 40., 30.);
+    assert_eq!(compound.dimensions(None), EdgeInsets::all(5.));
+    assert_bounds(&compound.outer_path(area), area);
+    assert_bounds(&compound.inner_path(area), rect(5., 5., 30., 20.));
+
+    let mut canvas = Canvas::default();
+    compound.paint(&mut canvas, area);
+    let painted = canvas.finish();
+    let [
+        PaintCommand::StrokePath {
+            path: outer_path,
+            stroke: outer_stroke,
+            ..
+        },
+        PaintCommand::StrokePath {
+            path: inner_path,
+            stroke: inner_stroke,
+            ..
+        },
+    ] = painted.commands()
+    else {
+        panic!("expected exactly two successive strokes");
+    };
+    assert_eq!((outer_stroke.width, inner_stroke.width), (2., 3.));
+    assert_bounds(outer_path, rect(1., 1., 38., 28.));
+    assert_bounds(inner_path, rect(3.5, 3.5, 33., 23.));
+}
+
+#[test]
+fn compound_border_passes_through_direction_for_stroke_and_inner_path() {
+    use incular_rendering::Brush;
+    use incular_widgets::{
+        CompoundBorder, LinearBorder, LinearBorderEdge, RoundedRectangleBorder, TextDirection,
+    };
+
+    let area = rect(0., 0., 40., 30.);
+    let compound = CompoundBorder::new(
+        LinearBorder::start(
+            BorderSide::solid(Color::BLACK, 2.),
+            LinearBorderEdge::default(),
+        ),
+        RoundedRectangleBorder::new(BorderSide::solid(Color::WHITE, 3.), BorderRadius::ZERO),
+    );
+    for (direction, stroke_x, inner_x) in
+        [(TextDirection::Ltr, 0., 5.), (TextDirection::Rtl, 38., 3.)]
+    {
+        assert_bounds(
+            &compound.inner_path_with_direction(area, Some(direction)),
+            rect(inner_x, 3., 32., 24.),
+        );
+        let mut canvas = Canvas::default();
+        compound.paint_with_direction(&mut canvas, area, Some(direction));
+        let painting = canvas.finish();
+        let [
+            PaintCommand::FillPath {
+                path,
+                brush: Brush::Solid(Color::BLACK),
+                ..
+            },
+            PaintCommand::StrokePath { .. },
+        ] = painting.commands()
+        else {
+            panic!("expected the one directional outside side followed by the inner stroke");
+        };
+        assert_bounds(path, rect(stroke_x, 0., 2., 30.));
+    }
+}

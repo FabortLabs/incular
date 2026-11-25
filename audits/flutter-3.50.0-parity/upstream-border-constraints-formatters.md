@@ -190,3 +190,20 @@ applies the same debug validation as the direct constructor instead
 of quietly turning a negative width into a visible hairline. An
 additional Rust control rejects NaN. Release builds keep Incular's
 existing safe clamp for invalid widths.
+
+## Compound shape border interior and edge order
+
+Pinned `painting/border_test.dart:465` matches for all four combinations
+of specialized-interior support. A compound opts into the specialized
+fill only if every layer supports it, then dispatches the paint exactly
+once to the outer layer. Otherwise the decoration fills the outer path
+without calling a specialized hook.
+
+The authored Flutter/Rust geometry control uses a 40×30 rectangle and
+2px/3px inside strokes. Combined insets are 5px, the outer path is
+unchanged, and the innermost bounds are (5,5,30,20). A Rust recording
+also verifies the two paint commands run outside to inside, and that
+an outside directional start stroke moves from x=0 to x=38 under RTL.
+This does not claim equivalence for the general Dart border-addition
+operator or specialization for every built-in shape. The existing
+separate superellipse precision assertion remains open.

@@ -3,11 +3,11 @@
 //! (`painting/rounded_rectangle_border.dart`), and the circle, oval,
 //! beveled, continuous and linear borders.
 
-use std::{f64::consts::PI, sync::Arc};
+use std::{f64::consts::PI, rc::Rc, sync::Arc};
 
-use incular_config::TextDirection;
+use incular_config::{EdgeInsets, TextDirection};
 use incular_core::{Offset, Rect, Size};
-use incular_rendering::{Canvas, CornerRadii, Path, Stroke};
+use incular_rendering::{Canvas, CornerRadii, Paint, Path, Stroke};
 
 use super::decoration::{BorderSide, BorderStyle};
 use super::geometry::BorderRadius;
@@ -15,6 +15,11 @@ use super::geometry::BorderRadius;
 /// Flutter's `ShapeBorder` for the outlined shapes Incular paints itself:
 /// the shape's outline and the area inside its stroke, and the stroke.
 pub trait ShapeBorder {
+    /// The space consumed along each edge before a nested border is painted.
+    fn dimensions(&self, _direction: Option<TextDirection>) -> EdgeInsets {
+        EdgeInsets::ZERO
+    }
+
     /// Flutter `getOuterPath`: the shape's outline in `rect`.
     fn outer_path(&self, rect: Rect) -> Path;
 
@@ -28,8 +33,133 @@ pub trait ShapeBorder {
     /// width.
     fn inner_path(&self, rect: Rect) -> Path;
 
+    fn inner_path_with_direction(&self, rect: Rect, _direction: Option<TextDirection>) -> Path {
+        self.inner_path(rect)
+    }
+
+    /// Whether the interior has an equivalent specialized painting path.
+    fn prefer_paint_interior(&self) -> bool {
+        false
+    }
+
+    /// Specialized alternative to filling the outer path. Called only when
+    /// `prefer_paint_interior` is true.
+    fn paint_interior(
+        &self,
+        _canvas: &mut Canvas,
+        _rect: Rect,
+        _paint: &Paint,
+        _direction: Option<TextDirection>,
+    ) {
+        panic!("preferred ShapeBorder interior has no paint implementation");
+    }
+
     /// Flutter `paint`: strokes the side along the shape.
     fn paint(&self, canvas: &mut Canvas, rect: Rect);
+
+    fn paint_with_direction(
+        &self,
+        canvas: &mut Canvas,
+        rect: Rect,
+        _direction: Option<TextDirection>,
+    ) {
+        self.paint(canvas, rect);
+    }
+}
+
+/// Incompatible shape borders layered from outside to inside, like Flutter's
+/// compound shape border. Every inner border is inset by its outer neighbors.
+#[derive(Clone)]
+pub struct CompoundBorder {
+    borders: Vec<Rc<dyn ShapeBorder>>,
+}
+
+impl CompoundBorder {
+    #[must_use]
+    pub fn new(outside: impl ShapeBorder + 'static, inside: impl ShapeBorder + 'static) -> Self {
+        Self {
+            borders: vec![Rc::new(outside), Rc::new(inside)],
+        }
+    }
+}
+
+impl ShapeBorder for CompoundBorder {
+    fn dimensions(&self, direction: Option<TextDirection>) -> EdgeInsets {
+        self.borders.iter().fold(EdgeInsets::ZERO, |total, border| {
+            let next = border.dimensions(direction);
+            EdgeInsets::only(
+                total.left + next.left,
+                total.top + next.top,
+                total.right + next.right,
+                total.bottom + next.bottom,
+            )
+        })
+    }
+
+    fn outer_path(&self, rect: Rect) -> Path {
+        self.outer_path_with_direction(rect, None)
+    }
+
+    fn outer_path_with_direction(&self, rect: Rect, direction: Option<TextDirection>) -> Path {
+        self.borders[0].outer_path_with_direction(rect, direction)
+    }
+
+    fn inner_path(&self, rect: Rect) -> Path {
+        self.inner_path_with_direction(rect, None)
+    }
+
+    fn inner_path_with_direction(&self, mut rect: Rect, direction: Option<TextDirection>) -> Path {
+        let (inside, outside) = self
+            .borders
+            .split_last()
+            .expect("a compound border has layers");
+        for border in outside {
+            rect = deflate_border(rect, border.dimensions(direction));
+        }
+        inside.inner_path_with_direction(rect, direction)
+    }
+
+    fn prefer_paint_interior(&self) -> bool {
+        self.borders
+            .iter()
+            .all(|border| border.prefer_paint_interior())
+    }
+
+    fn paint_interior(
+        &self,
+        canvas: &mut Canvas,
+        rect: Rect,
+        paint: &Paint,
+        direction: Option<TextDirection>,
+    ) {
+        self.borders[0].paint_interior(canvas, rect, paint, direction);
+    }
+
+    fn paint(&self, canvas: &mut Canvas, rect: Rect) {
+        self.paint_with_direction(canvas, rect, None);
+    }
+
+    fn paint_with_direction(
+        &self,
+        canvas: &mut Canvas,
+        mut rect: Rect,
+        direction: Option<TextDirection>,
+    ) {
+        for border in &self.borders {
+            border.paint_with_direction(canvas, rect, direction);
+            rect = deflate_border(rect, border.dimensions(direction));
+        }
+    }
+}
+
+fn deflate_border(rect: Rect, insets: EdgeInsets) -> Rect {
+    Rect::from_origin_size(
+        Offset::new(rect.origin.x + insets.left, rect.origin.y + insets.top),
+        Size::new(
+            (rect.size.width - insets.left - insets.right).max(0.),
+            (rect.size.height - insets.top - insets.bottom).max(0.),
+        ),
+    )
 }
 
 /// Flutter `Rect.inflate`; a negative `delta` deflates.
@@ -103,6 +233,10 @@ impl StadiumBorder {
 }
 
 impl ShapeBorder for StadiumBorder {
+    fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
+        EdgeInsets::all(self.side.stroke_inset().max(0.))
+    }
+
     fn outer_path(&self, rect: Rect) -> Path {
         rounded_rect_path(rect, Self::radii(rect))
     }
@@ -163,6 +297,10 @@ impl RoundedRectangleBorder {
 }
 
 impl ShapeBorder for RoundedRectangleBorder {
+    fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
+        EdgeInsets::all(self.side.stroke_inset().max(0.))
+    }
+
     fn outer_path(&self, rect: Rect) -> Path {
         self.path(rect, 0.0)
     }
@@ -237,6 +375,10 @@ impl RoundedSuperellipseBorder {
 }
 
 impl ShapeBorder for RoundedSuperellipseBorder {
+    fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
+        EdgeInsets::all(self.side.stroke_inset().max(0.))
+    }
+
     fn outer_path(&self, rect: Rect) -> Path {
         self.path(rect, 0.0)
     }
@@ -297,6 +439,10 @@ impl CircleBorder {
 }
 
 impl ShapeBorder for CircleBorder {
+    fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
+        EdgeInsets::all(self.side.stroke_inset().max(0.))
+    }
+
     fn outer_path(&self, rect: Rect) -> Path {
         ellipse_path(Self::circle_rect(rect))
     }
@@ -343,6 +489,10 @@ impl OvalBorder {
 }
 
 impl ShapeBorder for OvalBorder {
+    fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
+        EdgeInsets::all(self.side.stroke_inset().max(0.))
+    }
+
     fn outer_path(&self, rect: Rect) -> Path {
         ellipse_path(rect)
     }
@@ -394,6 +544,10 @@ impl BeveledRectangleBorder {
 }
 
 impl ShapeBorder for BeveledRectangleBorder {
+    fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
+        EdgeInsets::all(self.side.stroke_inset().max(0.))
+    }
+
     fn outer_path(&self, rect: Rect) -> Path {
         self.path(rect, 0.0)
     }
@@ -735,6 +889,10 @@ impl StarBorder {
 }
 
 impl ShapeBorder for StarBorder {
+    fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
+        EdgeInsets::all(self.side.stroke_inset().max(0.))
+    }
+
     fn outer_path(&self, rect: Rect) -> Path {
         self.generate(rect)
     }
@@ -1110,6 +1268,10 @@ impl ContinuousRectangleBorder {
 }
 
 impl ShapeBorder for ContinuousRectangleBorder {
+    fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
+        EdgeInsets::all(self.side.width)
+    }
+
     fn outer_path(&self, rect: Rect) -> Path {
         self.path(rect, 0.0)
     }
@@ -1262,22 +1424,24 @@ fn hairline() -> Stroke {
 }
 
 impl ShapeBorder for LinearBorder {
+    fn dimensions(&self, direction: Option<TextDirection>) -> EdgeInsets {
+        let [start, top, end, bottom] = self.insets();
+        match direction.unwrap_or(TextDirection::Ltr) {
+            TextDirection::Ltr => EdgeInsets::only(start, top, end, bottom),
+            TextDirection::Rtl => EdgeInsets::only(end, top, start, bottom),
+        }
+    }
+
     fn outer_path(&self, rect: Rect) -> Path {
         rounded_rect_path(rect, CornerRadii::ZERO)
     }
 
     fn inner_path(&self, rect: Rect) -> Path {
-        let [left, top, right, bottom] = self.insets();
-        rounded_rect_path(
-            Rect::from_origin_size(
-                Offset::new(rect.origin.x + left, rect.origin.y + top),
-                Size::new(
-                    (rect.size.width - left - right).max(0.0),
-                    (rect.size.height - top - bottom).max(0.0),
-                ),
-            ),
-            CornerRadii::ZERO,
-        )
+        self.inner_path_with_direction(rect, None)
+    }
+
+    fn inner_path_with_direction(&self, rect: Rect, direction: Option<TextDirection>) -> Path {
+        rect_path(deflate_border(rect, self.dimensions(direction)))
     }
 
     /// Flutter `LinearBorder.paint` (left to right). As in Flutter, the
@@ -1285,10 +1449,25 @@ impl ShapeBorder for LinearBorder {
     /// rectangle's top, and the top and bottom edges from zero rather than
     /// its left; at the origin, where a shape decoration paints, they agree.
     fn paint(&self, canvas: &mut Canvas, rect: Rect) {
+        self.paint_with_direction(canvas, rect, None);
+    }
+
+    fn paint_with_direction(
+        &self,
+        canvas: &mut Canvas,
+        rect: Rect,
+        direction: Option<TextDirection>,
+    ) {
         if self.side.style == BorderStyle::None {
             return;
         }
-        let [left, top, right, bottom] = self.insets();
+        let rtl = direction == Some(TextDirection::Rtl);
+        let EdgeInsets {
+            left,
+            top,
+            right,
+            bottom,
+        } = self.dimensions(direction);
         let color = self.side.color;
         let mut draw_edge = |edge: Rect| {
             let mut builder = Path::builder();
@@ -1320,18 +1499,23 @@ impl ShapeBorder for LinearBorder {
         };
         let horizontal = |edge: LinearBorderEdge, y: f32, height: f32| {
             let width = rect.size.width * edge.size;
-            let x = (rect.size.width - width) * ((edge.alignment + 1.0) / 2.0);
+            let start_x = (rect.size.width - width) * ((edge.alignment + 1.0) / 2.0);
+            let x = if rtl {
+                rect.size.width - start_x - width
+            } else {
+                start_x
+            };
             Rect::from_origin_size(Offset::new(x, y), Size::new(width, height))
         };
+        let left_edge = (rect.origin.x, left);
+        let right_edge = (rect.origin.x + rect.size.width - right, right);
         if let Some(edge) = self.start.filter(|edge| edge.size != 0.0) {
-            draw_edge(vertical(edge, rect.origin.x, left));
+            let (x, width) = if rtl { right_edge } else { left_edge };
+            draw_edge(vertical(edge, x, width));
         }
         if let Some(edge) = self.end.filter(|edge| edge.size != 0.0) {
-            draw_edge(vertical(
-                edge,
-                rect.origin.x + rect.size.width - right,
-                right,
-            ));
+            let (x, width) = if rtl { left_edge } else { right_edge };
+            draw_edge(vertical(edge, x, width));
         }
         if let Some(edge) = self.top.filter(|edge| edge.size != 0.0) {
             draw_edge(horizontal(edge, rect.origin.y, top));

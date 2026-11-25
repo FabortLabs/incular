@@ -309,12 +309,13 @@ pub use overscroll_indicator::{
 pub use painting_effects::{
     BeveledRectangleBorder, BlurStyle, Border, BorderDirectional, BorderRadius,
     BorderRadiusDirectional, BorderSide, BorderStyle, BoxBorder, BoxDecoration, BoxLinearGradient,
-    BoxShadow, BoxShape, CircleBorder, ClipRSuperellipse, ContinuousRectangleBorder, CustomPainter,
-    CustomPainterSemantics, DecoratedShapeBox, DecorationImage, DecorationPosition, GridPaper,
-    ImageFiltered, ImageIcon, LinearBorder, LinearBorderEdge, OvalBorder, PhysicalModel,
-    PhysicalShape, Radius, RawImage, RoundedRectangleBorder, RoundedSuperellipseBorder,
-    SemanticsBuilder, ShapeBorder, ShapeBorderClipper, ShapeDecoration, SnapshotWidget,
-    StadiumBorder, StarBorder, StarBorderError, TileMode,
+    BoxShadow, BoxShape, CircleBorder, ClipRSuperellipse, CompoundBorder,
+    ContinuousRectangleBorder, CustomPainter, CustomPainterSemantics, DecoratedShapeBox,
+    DecorationImage, DecorationPosition, GridPaper, ImageFiltered, ImageIcon, LinearBorder,
+    LinearBorderEdge, OvalBorder, PhysicalModel, PhysicalShape, Radius, RawImage,
+    RoundedRectangleBorder, RoundedSuperellipseBorder, SemanticsBuilder, ShapeBorder,
+    ShapeBorderClipper, ShapeDecoration, SnapshotWidget, StadiumBorder, StarBorder,
+    StarBorderError, TileMode,
 };
 pub use platform_view::{
     PlatformViewController, PlatformViewHitTestBehavior, PlatformViewPlacement, PlatformViewSurface,
