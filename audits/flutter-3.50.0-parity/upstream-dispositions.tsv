@@ -96,9 +96,9 @@ packages/flutter/test/services/text_input_test.dart	55	reversed selection deleti
 packages/flutter/test/services/text_input_test.dart	78	replace before selection	paired-mismatch	upstream-geometry-input-gestures.md
 packages/flutter/test/services/text_input_test.dart	94	replace after selection	paired-mismatch	upstream-geometry-input-gestures.md
 packages/flutter/test/services/text_editing_delta_test.dart	40	Verify creation of insertion delta when inserting at end of composing region.	partial-match	upstream-geometry-input-gestures.md
-packages/flutter/test/gestures/velocity_tracker_test.dart	64	Interrupted velocity estimation	reference-ran-incular-open	upstream-geometry-input-gestures.md
-packages/flutter/test/gestures/velocity_tracker_test.dart	77	No data velocity estimation	reference-ran-incular-open	upstream-geometry-input-gestures.md
-packages/flutter/test/gestures/velocity_tracker_test.dart	158	Assume zero velocity when there are no recent samples - base VelocityTracker	reference-ran-incular-open	upstream-geometry-input-gestures.md
+packages/flutter/test/gestures/velocity_tracker_test.dart	64	Interrupted velocity estimation	paired-match	upstream-geometry-input-gestures.md#standalone-velocity-tracker-comparisons
+packages/flutter/test/gestures/velocity_tracker_test.dart	77	No data velocity estimation	paired-match	upstream-geometry-input-gestures.md#standalone-velocity-tracker-comparisons
+packages/flutter/test/gestures/velocity_tracker_test.dart	158	Assume zero velocity when there are no recent samples - base VelocityTracker	paired-match	upstream-geometry-input-gestures.md#standalone-velocity-tracker-comparisons
 packages/flutter/test/gestures/arena_test.dart	66	Should win by accepting	partial-match	upstream-geometry-input-gestures.md
 packages/flutter/test/gestures/arena_test.dart	114	Only first winner should win	partial-match	upstream-geometry-input-gestures.md
 packages/flutter/test/gestures/arena_test.dart	125	Only first winner should win, regardless of order	partial-match	upstream-geometry-input-gestures.md
@@ -878,3 +878,6 @@ packages/flutter/test/widgets/shortcuts_test.dart	1814	WidgetsApp has a Shortcut
 packages/flutter/test/painting/border_rtl_test.dart	345	BoxBorder.getInnerPath / BoxBorder.getOuterPath	paired-match	upstream-border-constraints-formatters.md#border-outlines-and-rectangle-edge-containment
 packages/flutter/test/painting/box_decoration_test.dart	85	BoxDecoration with BorderRadiusDirectional	paired-match	upstream-limited-box-and-decoration-contracts.md#directional-corner-painting-and-hits
 packages/flutter/test/painting/box_decoration_test.dart	134	BoxDecoration with LinearGradient using AlignmentDirectional	paired-match	upstream-limited-box-and-decoration-contracts.md#aligned-linear-gradients
+packages/flutter/test/gestures/velocity_tracker_test.dart	138	Makes consistent velocity estimates with consistent velocity	paired-match	upstream-geometry-input-gestures.md#standalone-velocity-tracker-comparisons
+packages/flutter/test/gestures/velocity_tracker_test.dart	177	Assume zero velocity when there are no recent samples - IOS	paired-match	upstream-geometry-input-gestures.md#standalone-velocity-tracker-comparisons
+packages/flutter/test/gestures/velocity_tracker_test.dart	196	Assume zero velocity when there are no recent samples - MacOS	paired-match	upstream-geometry-input-gestures.md#standalone-velocity-tracker-comparisons

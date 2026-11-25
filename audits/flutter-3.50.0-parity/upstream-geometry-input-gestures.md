@@ -89,3 +89,17 @@ the winning Rust entry to rejected. Flutter emits the original
 terminal callbacks and ignores later resolutions. This was not
 reproduced through routed widget input. See
 `flutter350_arena_winner_decisions` and its pinned reference.
+
+## Standalone velocity tracker comparisons
+
+Six exact Flutter registrations at
+`gestures/velocity_tracker_test.dart:64,77,138,158,177,196` passed.
+Rust in-crate tests exercise the actual estimators, not a copy: the
+pinned interrupted trace's 48 ms gap leaves only the later samples
+and matches (649.5,3890.3) within the original 0.1% tolerance. Empty
+base history is zero; after the original ten positions and an idle
+interval the base, iOS and macOS estimators all return zero. The iOS
+weighting also reports exactly (0,−1) once four samples of the
+constant trajectory exist. Explicit timestamps replace the Dart test
+clock. All four focused Rust tests passed. This is behavior coverage,
+not equivalence of public estimator types or host touch events.

@@ -234,3 +234,97 @@ fn solve_linear_slope(x: &[f64], y: &[f64]) -> Option<f64> {
 fn dot(left: &[f64], right: &[f64]) -> f64 {
     left.iter().zip(right).fold(0.0, |sum, (a, b)| sum + a * b)
 }
+
+#[cfg(test)]
+mod flutter350_velocity {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn interrupted_motion_uses_only_the_samples_after_the_gap() {
+        // Normalized timestamps from Flutter 3.50.0
+        // test/gestures/velocity_tracker_data.dart interruptedVelocityEventData.
+        let samples = [
+            (0, 250.0, 306.0),
+            (7, 250.0, 306.0),
+            (23, 249.14285278320312_f64, 314.0),
+            (30, 247.42857360839844, 319.4285583496094),
+            (38, 245.14285278320312, 326.8571472167969),
+            (45, 241.7142791748047, 339.4285583496094),
+            (93, 238.57142639160156, 355.71429443359375),
+            (101, 236.2857208251953, 374.28570556640625),
+            (109, 235.14285278320312, 396.5714416503906),
+            (117, 236.57142639160156, 421.4285583496094),
+            (125, 241.14285278320312, 451.4285583496094),
+        ];
+        let start = Instant::now();
+        let mut tracker = VelocityTracker::new(VelocityTrackerKind::LeastSquares);
+        for (time, x, y) in samples {
+            tracker.add_position(
+                start + Duration::from_millis(time),
+                Offset::new(x as f32, y as f32),
+            );
+        }
+        let estimate = tracker.estimate_at(start + Duration::from_millis(140));
+        for (actual, expected) in [
+            (estimate.pixels_per_second.x, 649.5),
+            (estimate.pixels_per_second.y, 3890.3),
+        ] {
+            assert!(
+                ((actual - expected) / expected).abs() < 0.001,
+                "{actual} vs {expected}"
+            );
+        }
+        assert_eq!(
+            estimate.offset,
+            Offset::new(
+                samples[10].1 as f32 - samples[6].1 as f32,
+                samples[10].2 as f32 - samples[6].2 as f32,
+            ),
+        );
+    }
+
+    #[test]
+    fn tracker_with_no_samples_has_zero_velocity() {
+        let tracker = VelocityTracker::new(VelocityTrackerKind::LeastSquares);
+        assert_eq!(
+            tracker.estimate_at(Instant::now()).pixels_per_second,
+            Offset::ZERO
+        );
+    }
+
+    #[test]
+    fn all_velocity_strategies_stop_after_samples_go_stale() {
+        let start = Instant::now();
+        for kind in [
+            VelocityTrackerKind::LeastSquares,
+            VelocityTrackerKind::IosScrollViewFling,
+            VelocityTrackerKind::MacOsScrollViewFling,
+        ] {
+            let mut tracker = VelocityTracker::new(kind);
+            for seconds in 1..=10 {
+                tracker.add_position(
+                    start + Duration::from_secs(seconds),
+                    Offset::new(0.0, -(seconds as f32)),
+                );
+            }
+            let estimate =
+                tracker.estimate_at(start + Duration::from_secs(10) + Duration::from_millis(100));
+            assert_eq!(estimate.pixels_per_second, Offset::ZERO, "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn ios_consistent_motion_gives_consistent_velocity() {
+        let start = Instant::now();
+        let mut tracker = VelocityTracker::new(VelocityTrackerKind::IosScrollViewFling);
+        for seconds in 1..=10 {
+            let time = start + Duration::from_secs(seconds);
+            tracker.add_position(time, Offset::new(0.0, -(seconds as f32)));
+            let velocity = tracker.estimate_at(time).pixels_per_second;
+            if seconds >= 4 {
+                assert_eq!(velocity, Offset::new(0.0, -1.0));
+            }
+        }
+    }
+}
