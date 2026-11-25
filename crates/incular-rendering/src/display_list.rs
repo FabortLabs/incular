@@ -43,6 +43,13 @@ pub enum ClipCoverage {
     AntiAliasWithSaveLayer,
 }
 
+/// Retained offscreen identity for a composited rounded clip.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ClipIsolation {
+    pub layer: LayerId,
+    pub generation: u64,
+}
+
 /// Renderer-neutral identity for a detachable composition subtree.
 ///
 /// The retained widget layer maps its generational transient-surface identity
@@ -120,6 +127,7 @@ pub enum PaintCommand {
     PushClipRRect {
         rrect: RRect,
         coverage: ClipCoverage,
+        isolation: Option<ClipIsolation>,
     },
     PushClipOval {
         rect: Rect,
@@ -684,8 +692,11 @@ impl Canvas {
     }
     pub fn save_clip_rrect_with_coverage(&mut self, rrect: RRect, coverage: ClipCoverage) {
         self.saves.push(SaveKind::Clip);
-        self.list
-            .push(PaintCommand::PushClipRRect { rrect, coverage });
+        self.list.push(PaintCommand::PushClipRRect {
+            rrect,
+            coverage,
+            isolation: None,
+        });
     }
     pub fn save_clip_oval(&mut self, rect: Rect) {
         self.saves.push(SaveKind::Clip);

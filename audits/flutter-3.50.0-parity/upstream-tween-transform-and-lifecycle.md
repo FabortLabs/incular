@@ -77,3 +77,20 @@ The focused renderer and widget suite passed all 23 selected checks.
 This is coverage state propagation, not a raster fix. The pinned Flutter
 pixel controls still pass and the Windows wgpu raster target independently
 reproduced the hard-edge fallback for both antialiased modes.
+
+## Native rounded save-layer clips
+
+Retained, axis-aligned rounded clips using AntiAliasWithSaveLayer now
+isolate the child draws in a clipped-size cached texture, then apply
+smooth edge coverage once during compositing. The native 40 px
+overlap fixture changed from no partially covered corner pixels to 19,
+with no red fringe from the preceding paint. Its exterior and interior
+control pixels are unchanged. Independent scene coverage tests still
+exercise no-clip, hard-edge and the ordinary AA mode.
+
+This covers the analytic retained rounded rectangle path. Ordinary
+non-isolated AntiAlias and smooth arbitrary-path fallback still require
+their own renderer implementation. The full three-mode target remains
+red for ordinary AntiAlias; the save-layer target checks its behavior
+separately. The comparison is against Flutter's edge/fringe assertions,
+not an exact per-pixel match of the two renderers.

@@ -650,7 +650,73 @@ impl WgpuRenderer {
                     clip_masks.push(None);
                     self.counters.clip_rect_pushes += 1;
                 }
-                PaintCommand::PushClipRRect { rrect, .. } => {
+                PaintCommand::PushClipRRect {
+                    rrect,
+                    coverage,
+                    isolation,
+                } => {
+                    let [a, b, c, d, _, _] = transform.to_kurbo().as_coeffs();
+                    if *coverage == incular_painting::ClipCoverage::AntiAliasWithSaveLayer
+                        && let Some(isolation) = isolation
+                        && (a, b, c, d) == (1., 0., 0., 1.)
+                    {
+                        let end = crate::compositor::find_clip_end(commands, command_index)?;
+                        let start = command_index + 1;
+                        command_index = end + 1;
+                        let local = transform.transform_point(rrect.rect.origin);
+                        let world_bounds =
+                            Rect::from_origin_size(self.target_origin + local, rrect.rect.size);
+                        let visible = Rect::from_origin_size(
+                            self.target_origin,
+                            Size::new(
+                                self.target_width as f32 / scale,
+                                self.target_height as f32 / scale,
+                            ),
+                        );
+                        if let Some(bounds) = world_bounds.intersection(visible)
+                            && let Some(DrawBatch::Offscreen {
+                                clip,
+                                layer,
+                                mut instance,
+                            }) = self.lower_opacity_group(
+                                LayerGroup {
+                                    commands: &commands[start..end],
+                                    scale,
+                                    layer: isolation.layer,
+                                    generation: isolation.generation,
+                                    bounds,
+                                    parent_clip: clip,
+                                    translation,
+                                },
+                                1.,
+                            )?
+                        {
+                            // Clip the composed source once, in parent
+                            // framebuffer pixels, rather than clipping each
+                            // child draw against a binary stencil.
+                            instance.clip_rect = [
+                                local.x * scale,
+                                local.y * scale,
+                                rrect.rect.size.width * scale,
+                                rrect.rect.size.height * scale,
+                            ];
+                            instance.clip_radii = rrect_instance(
+                                *rrect,
+                                &Brush::Solid(Color::TRANSPARENT),
+                                transform,
+                                scale,
+                                self.target_width as f32,
+                                self.target_height as f32,
+                            )
+                            .radii;
+                            batches.push(DrawBatch::Offscreen {
+                                clip,
+                                layer,
+                                instance,
+                            });
+                        }
+                        continue;
+                    }
                     let next = ClipRect {
                         rect: translated_rect(rrect.rect, translation),
                     };

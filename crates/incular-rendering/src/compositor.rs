@@ -1,5 +1,6 @@
 use crate::display_list::{
-    BackdropKey, ClipCoverage, DisplayList, ImageSampling, PaintCommand, SurfacePartitionId,
+    BackdropKey, ClipCoverage, ClipIsolation, DisplayList, ImageSampling, PaintCommand,
+    SurfacePartitionId,
 };
 use crate::effects::{
     BlendMode, ColorFilter, DropShadowEffect, GaussianBlur, ImageFilter, blur_bounds,
@@ -1561,6 +1562,7 @@ impl LayerTree {
                 ClipSpace::Translation => PaintCommand::PushClipRRect {
                     rrect: RRect::new(world.transform_rect_bbox(rrect.rect), rrect.radii),
                     coverage: *coverage,
+                    isolation: self.rounded_clip_isolation(id, *coverage),
                 },
                 // Positive uniform scales keep corners circular; anything
                 // else (mirrors, nonuniform scales) would move corner
@@ -1568,6 +1570,7 @@ impl LayerTree {
                 ClipSpace::Scale { x, y } if x > 0. && x == y => PaintCommand::PushClipRRect {
                     rrect: RRect::new(world.transform_rect_bbox(rrect.rect), rrect.radii.scaled(x)),
                     coverage: *coverage,
+                    isolation: self.rounded_clip_isolation(id, *coverage),
                 },
                 _ => {
                     let (rect, radii) = (rrect.rect, rrect.radii);
@@ -1609,6 +1612,12 @@ impl LayerTree {
             },
             _ => unreachable!("clip emitter received a non-clip layer"),
         }
+    }
+    fn rounded_clip_isolation(&self, id: LayerId, coverage: ClipCoverage) -> Option<ClipIsolation> {
+        (coverage == ClipCoverage::AntiAliasWithSaveLayer).then(|| ClipIsolation {
+            layer: id,
+            generation: self.subtree_generation(id),
+        })
     }
     /// World-resolved path for a ClipPath layer, reusing the memoized
     /// resolution while the world, path, and rule stand still. Identity

@@ -76,6 +76,9 @@ pub(crate) struct GpuCompositeInstance {
     /// using the sampled blurred alpha. Zero means ordinary offscreen draw.
     pub(crate) color: [f32; 4],
     pub(crate) options: [f32; 4],
+    /// Optional rounded clip in framebuffer pixels (x, y, width, height).
+    pub(crate) clip_rect: [f32; 4],
+    pub(crate) clip_radii: [f32; 4],
 }
 
 #[repr(C)]
@@ -1218,6 +1221,8 @@ pub(crate) fn composite_layout() -> wgpu::VertexBufferLayout<'static> {
             f32x4_attr!(GpuCompositeInstance, alpha, 3),
             f32x4_attr!(GpuCompositeInstance, color, 4),
             f32x4_attr!(GpuCompositeInstance, options, 5),
+            f32x4_attr!(GpuCompositeInstance, clip_rect, 6),
+            f32x4_attr!(GpuCompositeInstance, clip_radii, 7),
         ],
     }
 }

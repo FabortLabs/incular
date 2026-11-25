@@ -23,7 +23,7 @@ pub use compositor::{
     resolve_follower_target, resolve_linked_follower_world_transform,
 };
 pub use display_list::{
-    BackdropKey, Canvas, ClipCoverage, DisplayList, ImageSampling, PaintCommand,
+    BackdropKey, Canvas, ClipCoverage, ClipIsolation, DisplayList, ImageSampling, PaintCommand,
     SurfacePartitionId, UnbalancedCanvas,
 };
 pub use effects::{

@@ -21,6 +21,31 @@ pub(crate) fn find_opacity_end(
     Err(RendererError::UnbalancedClipStack)
 }
 
+pub(crate) fn find_clip_end(
+    commands: &[PaintCommand],
+    start: usize,
+) -> Result<usize, RendererError> {
+    let mut depth: usize = 0;
+    for (index, command) in commands.iter().enumerate().skip(start) {
+        match command {
+            PaintCommand::PushClip { .. }
+            | PaintCommand::PushClipRRect { .. }
+            | PaintCommand::PushClipOval { .. }
+            | PaintCommand::PushClipPath { .. } => depth += 1,
+            PaintCommand::PopClip => {
+                depth = depth
+                    .checked_sub(1)
+                    .ok_or(RendererError::UnbalancedClipStack)?;
+                if depth == 0 {
+                    return Ok(index);
+                }
+            }
+            _ => {}
+        }
+    }
+    Err(RendererError::UnbalancedClipStack)
+}
+
 /// Whether an opacity layer over `commands` can fade its content directly
 /// instead of isolating it in a texture: the content is exactly one image,
 /// under any transforms and clips and inside any further opacity layers. One

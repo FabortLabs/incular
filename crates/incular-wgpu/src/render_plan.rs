@@ -1147,6 +1147,8 @@ pub(crate) fn composite_instance_with_color(
         alpha: [normalize_opacity(alpha), 0., 0., 0.],
         color: incular_painting::working_rgba(color),
         options: [f32::from(shadow as u8), 0., 0., 0.],
+        clip_rect: [0.; 4],
+        clip_radii: [0.; 4],
     }
 }
 
@@ -1167,5 +1169,7 @@ pub(crate) fn blend_instance(
             parent.height as f32,
             0.,
         ],
+        clip_rect: [0.; 4],
+        clip_radii: [0.; 4],
     }
 }
