@@ -1,5 +1,6 @@
 //! Specialized utility widgets built from the basic layout primitives.
 
+use incular_config::{MainAxisAlignment, TextDirection, VerticalDirection};
 use typed_builder::TypedBuilder;
 
 use super::Center;
@@ -72,7 +73,13 @@ impl From<TableCell> for Widget {
     }
 }
 
-/// Lays out children in a row with spacing; wraps or flows when width is constrained.
+/// Horizontal alignment of children when an [`OverflowBar`] forms a column.
+///
+/// This is the same logical Start, End, and Center set as Wrap, preserving
+/// compatibility with callers that used `WrapCrossAlignment`.
+pub use incular_config::WrapCrossAlignment as OverflowBarAlignment;
+
+/// Lays out children in one centered row, or one column if the row would not fit.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct OverflowBar {
     #[builder(default = 0.0)]
@@ -80,7 +87,13 @@ pub struct OverflowBar {
     #[builder(default = 0.0)]
     overflow_spacing: f32,
     #[builder(default = incular_config::WrapCrossAlignment::Start)]
-    overflow_alignment: incular_config::WrapCrossAlignment,
+    overflow_alignment: OverflowBarAlignment,
+    #[builder(default, setter(strip_option))]
+    alignment: Option<MainAxisAlignment>,
+    #[builder(default)]
+    overflow_direction: VerticalDirection,
+    #[builder(default, setter(strip_option))]
+    text_direction: Option<TextDirection>,
     #[builder(
         default = Vec::new(),
         setter(transform = |children: impl IntoIterator<Item = impl Into<Widget>>| {
@@ -102,7 +115,10 @@ impl OverflowBar {
         Self {
             spacing: 0.0,
             overflow_spacing: 0.0,
-            overflow_alignment: incular_config::WrapCrossAlignment::Start,
+            overflow_alignment: OverflowBarAlignment::Start,
+            alignment: None,
+            overflow_direction: VerticalDirection::Down,
+            text_direction: None,
             children: children.into_iter().map(Into::into).collect(),
         }
     }
@@ -120,19 +136,42 @@ impl OverflowBar {
     }
 
     #[must_use]
-    pub fn overflow_alignment(mut self, alignment: incular_config::WrapCrossAlignment) -> Self {
+    pub fn overflow_alignment(mut self, alignment: OverflowBarAlignment) -> Self {
         self.overflow_alignment = alignment;
+        self
+    }
+
+    /// Expands the horizontal layout to the available width and distributes its children.
+    #[must_use]
+    pub fn alignment(mut self, alignment: MainAxisAlignment) -> Self {
+        self.alignment = Some(alignment);
+        self
+    }
+
+    #[must_use]
+    pub fn overflow_direction(mut self, direction: VerticalDirection) -> Self {
+        self.overflow_direction = direction;
+        self
+    }
+
+    #[must_use]
+    pub fn text_direction(mut self, direction: TextDirection) -> Self {
+        self.text_direction = Some(direction);
         self
     }
 }
 
 impl From<OverflowBar> for Widget {
     fn from(value: OverflowBar) -> Self {
-        crate::layout::Wrap::new(value.children)
-            .spacing(value.spacing)
-            .run_spacing(value.overflow_spacing)
-            .cross_axis_alignment(value.overflow_alignment)
-            .into()
+        Widget::from_kind(crate::tree::WidgetKind::OverflowBar {
+            spacing: value.spacing,
+            overflow_spacing: value.overflow_spacing,
+            overflow_alignment: value.overflow_alignment,
+            alignment: value.alignment,
+            overflow_direction: value.overflow_direction,
+            text_direction: value.text_direction,
+            children: value.children,
+        })
     }
 }
 

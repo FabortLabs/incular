@@ -158,6 +158,22 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
             flex: *flex,
             fit: *fit,
         },
+        WidgetKind::OverflowBar {
+            spacing,
+            overflow_spacing,
+            overflow_alignment,
+            alignment,
+            overflow_direction,
+            text_direction,
+            ..
+        } => RenderKind::OverflowBar {
+            spacing: *spacing,
+            overflow_spacing: *overflow_spacing,
+            overflow_alignment: *overflow_alignment,
+            alignment: *alignment,
+            overflow_direction: *overflow_direction,
+            text_direction: resolve_layout_direction(*text_direction, context),
+        },
         WidgetKind::Wrap {
             axis,
             alignment,

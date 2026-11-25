@@ -1,9 +1,9 @@
 //! Behavior probes for the pinned Flutter OverflowBar.
-use incular_config::{Alignment, Constraints, WrapCrossAlignment};
+use incular_config::{Alignment, Constraints, MainAxisAlignment, VerticalDirection};
 use incular_core::{Color, Rect, Size};
 use incular_widgets::{
-    Align, Directionality, IntrinsicHeight, IntrinsicWidth, OverflowBar, SizedBox, Text,
-    TextDirection, Widget,
+    Align, Directionality, IntrinsicHeight, IntrinsicWidth, OverflowBar, OverflowBarAlignment, Row,
+    SizedBox, Text, TextDirection, Widget,
     internal::{Key, WidgetTree},
 };
 
@@ -86,19 +86,27 @@ fn horizontal_fit_centers_children_vertically_and_honors_direction() {
 }
 #[test]
 fn overflow_is_one_column_with_directional_horizontal_alignment() {
-    use WrapCrossAlignment::{Center, End, Start};
+    use OverflowBarAlignment::{Center, End, Start};
+    use VerticalDirection::{Down, Up};
     let cases = [
-        (LTR, Start, 0.),
-        (RTL, End, 0.),
-        (LTR, Start, 10.),
-        (LTR, End, 0.),
-        (RTL, Start, 0.),
-        (LTR, Center, 0.),
+        (LTR, Start, 0., Down),
+        (RTL, End, 0., Down),
+        (LTR, Start, 10., Down),
+        (LTR, End, 0., Down),
+        (RTL, Start, 0., Down),
+        (LTR, Center, 0., Down),
+        (LTR, Start, 0., Up),
+        (LTR, Start, 10., Up),
     ];
-    let actual = cases.map(|(d, a, s)| {
+    let actual = cases.map(|(d, a, s, direction)| {
         geometry(&mount(
             d,
-            keyed(bar(&SHAPES).overflow_alignment(a).overflow_spacing(s)),
+            keyed(
+                bar(&SHAPES)
+                    .overflow_alignment(a)
+                    .overflow_spacing(s)
+                    .overflow_direction(direction),
+            ),
             Constraints::loose(Size::new(100., 600.)),
         ))
     });
@@ -109,15 +117,25 @@ fn overflow_is_one_column_with_directional_horizontal_alignment() {
         [52., 36., 68.],
         [52., 36., 68.],
         [26., 18., 34.],
+        [0., 0., 0.],
+        [0., 0., 0.],
     ];
     let expected = std::array::from_fn(|i| {
         let [x, y, z] = xs[i];
         let s = cases[i].2;
-        [
-            [x, 0., 48., 48.],
-            [y, 48. + s, 64., 64.],
-            [z, 112. + 2. * s, 32., 32.],
-        ]
+        if cases[i].3 == Up {
+            [
+                [x, 96. + 2. * s, 48., 48.],
+                [y, 32. + s, 64., 64.],
+                [z, 0., 32., 32.],
+            ]
+        } else {
+            [
+                [x, 0., 48., 48.],
+                [y, 48. + s, 64., 64.],
+                [z, 112. + 2. * s, 32., 32.],
+            ]
+        }
     });
     assert_eq!(actual, expected);
 }
@@ -191,4 +209,110 @@ fn text_children_at_zero_area_do_not_crash() {
         Constraints::tight(z),
     );
     assert_eq!(bounds(&t, BAR).size, z);
+}
+
+#[test]
+fn documented_defaults_pick_shrink_wrapped_row_and_directional_downward_column() {
+    assert_eq!(OverflowBar::default(), OverflowBar::builder().build());
+    assert_eq!(
+        OverflowBar::default(),
+        OverflowBar::new(Vec::<Widget>::new())
+            .spacing(0.)
+            .overflow_spacing(0.)
+            .overflow_alignment(OverflowBarAlignment::Start)
+            .overflow_direction(VerticalDirection::Down)
+    );
+    let row = mount(RTL, keyed(bar(&SHAPES)), Constraints::loose(HOST));
+    assert_eq!(bounds(&row, BAR).size, Size::new(144., 64.));
+    let col = mount(
+        RTL,
+        keyed(bar(&SHAPES)),
+        Constraints::at_most(100., HOST.height),
+    );
+    assert_eq!(
+        geometry(&col),
+        [
+            [52., 0., 48., 48.],
+            [36., 48., 64., 64.],
+            [68., 112., 32., 32.]
+        ]
+    );
+}
+
+#[test]
+fn explicit_alignment_matches_row_in_both_text_directions() {
+    use MainAxisAlignment::*;
+    for alignment in [Start, Center, End, SpaceBetween, SpaceAround, SpaceEvenly] {
+        for direction in [LTR, RTL] {
+            let sizes = [(50., 50.), (70., 50.), (80., 50.)];
+            let row = Row::new(sizes.into_iter().enumerate().map(|(i, (w, h))| {
+                Widget::box_(Size::new(w, h), Color::WHITE).with_key(Key::Value(i as u64))
+            }))
+            .main_axis_alignment(alignment);
+            let overflow = keyed(bar(&sizes).alignment(alignment));
+            let constraints = Constraints::loose(HOST);
+            let row = mount(direction, row, constraints);
+            let overflow = mount(direction, overflow, constraints);
+            assert_eq!(bounds(&overflow, BAR).size, Size::new(800., 50.));
+            for i in 0..3 {
+                let actual = bounds(&overflow, i);
+                let expected = bounds(&row, i);
+                assert_eq!(actual.size, expected.size);
+                assert!(
+                    (actual.origin.x - expected.origin.x).abs() < 0.001,
+                    "{alignment:?} {direction:?} child {i}: {actual:?} vs {expected:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn exact_fit_then_overflow_retains_keyed_children_and_honors_explicit_direction() {
+    let bar = keyed(
+        bar(&SHAPES)
+            .spacing(3.)
+            .text_direction(RTL)
+            .overflow_direction(VerticalDirection::Up),
+    );
+    let mut tree = mount(LTR, bar, Constraints::at_most(150., HOST.height));
+    let child = tree.element_with_key(&Key::Value(0)).unwrap();
+    assert_eq!(bounds(&tree, 0).origin.x, 102.);
+    assert_eq!(bounds(&tree, 0).origin.y, 8.);
+    tree.layout(Constraints::at_most(149., HOST.height))
+        .unwrap();
+    assert_eq!(tree.element_with_key(&Key::Value(0)), Some(child));
+    assert_eq!(bounds(&tree, 0).origin.x, 101.);
+    assert_eq!(bounds(&tree, 0).origin.y, 96.);
+}
+
+#[test]
+fn intrinsic_width_ignores_expanding_alignment_and_reapplies_finite_width() {
+    let t = mount(
+        LTR,
+        IntrinsicWidth::new(keyed(
+            bar(&SHAPES).spacing(3.).alignment(MainAxisAlignment::End),
+        )),
+        Constraints::loose(HOST),
+    );
+    assert_eq!(bounds(&t, BAR).size, Size::new(150., 64.));
+    assert_eq!(
+        geometry(&t),
+        [
+            [0., 8., 48., 48.],
+            [51., 0., 64., 64.],
+            [118., 16., 32., 32.]
+        ]
+    );
+}
+
+#[test]
+fn a_single_child_with_space_between_stays_at_logical_start() {
+    let t = mount(
+        RTL,
+        keyed(bar(&[(48., 30.)]).alignment(MainAxisAlignment::SpaceBetween)),
+        Constraints::at_most(100., HOST.height),
+    );
+    assert_eq!(bounds(&t, BAR).size, Size::new(100., 30.));
+    assert_eq!(bounds(&t, 0).origin.x, 52.);
 }

@@ -296,6 +296,24 @@ impl std::fmt::Debug for WidgetKind {
                 .field("fit", fit)
                 .field("child", child)
                 .finish(),
+            Self::OverflowBar {
+                spacing,
+                overflow_spacing,
+                overflow_alignment,
+                alignment,
+                overflow_direction,
+                text_direction,
+                children,
+            } => f
+                .debug_struct("OverflowBar")
+                .field("spacing", spacing)
+                .field("overflow_spacing", overflow_spacing)
+                .field("overflow_alignment", overflow_alignment)
+                .field("alignment", alignment)
+                .field("overflow_direction", overflow_direction)
+                .field("text_direction", text_direction)
+                .field("children", children)
+                .finish(),
             Self::Wrap {
                 axis,
                 alignment,
@@ -1130,6 +1148,26 @@ impl PartialEq for WidgetKind {
                 },
             ) => a == d && b == e && g == h && c == f,
             (
+                Self::OverflowBar {
+                    spacing: a,
+                    overflow_spacing: b,
+                    overflow_alignment: c,
+                    alignment: d,
+                    overflow_direction: e,
+                    text_direction: f,
+                    children: g,
+                },
+                Self::OverflowBar {
+                    spacing: h,
+                    overflow_spacing: i,
+                    overflow_alignment: j,
+                    alignment: k,
+                    overflow_direction: l,
+                    text_direction: m,
+                    children: n,
+                },
+            ) => a == h && b == i && c == j && d == k && e == l && f == m && g == n,
+            (
                 Self::Wrap {
                     axis: a,
                     alignment: b,
@@ -1896,6 +1934,7 @@ pub(crate) enum WidgetType {
     Flex,
     Flexible,
     Wrap,
+    OverflowBar,
     Table,
     Stack,
     Positioned,
@@ -1986,6 +2025,7 @@ impl WidgetType {
             Self::Flex => "Flex",
             Self::Flexible => "Flexible",
             Self::Wrap => "Wrap",
+            Self::OverflowBar => "OverflowBar",
             Self::Table => "Table",
             Self::Stack => "Stack",
             Self::CustomSingleChildLayout => "CustomSingleChildLayout",
@@ -2333,6 +2373,12 @@ impl WidgetKind {
                 Layout,
                 Single,
                 WidgetChildren::Single(child),
+            ),
+            WidgetKind::OverflowBar { children, .. } => (
+                WidgetType::OverflowBar,
+                Layout,
+                Many,
+                ManyChildren(children),
             ),
             WidgetKind::Wrap { children, .. } => {
                 (WidgetType::Wrap, Layout, Many, ManyChildren(children))

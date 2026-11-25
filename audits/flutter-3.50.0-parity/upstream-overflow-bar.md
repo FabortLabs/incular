@@ -15,3 +15,28 @@ All nine named originals in widgets/overflow_bar_test.dart passed with the pinne
 | :365 zero area | Matches with nonempty text children: no crash and 0x0. |
 
 Source trace: the Rust OverflowBar converts to a horizontal Wrap and maps overflow alignment to per-run cross-axis alignment. The Rust fixtures use only the OverflowBar API. Run "cargo test --locked -p incular-widgets --test flutter350_overflow_bar_parity -- --nocapture".
+
+## Current retained implementation
+
+The table above records the original Wrap substitution, not current behavior.
+All nine original Flutter registrations passed again in the pinned SDK.
+All twelve native cases passed in `flutter350_overflow_bar_parity`, including
+the original matrix and the three additional cases below.
+
+| Registration | Verified now on Incular |
+| --- | --- |
+| :9, :19 | The builder and constructor agree on defaults; absent alignment shrink-wraps, start honors ambient direction, downward order is the default, and the empty bar uses the smallest constraints. |
+| :46, :102 | A fitting row vertically centers the children in both directions. An overflowing row becomes a single column in all eight original start/end/center, LTR/RTL and up/down configurations. |
+| :205, :236 | The `IntrinsicWidth` and `IntrinsicHeight` compositions reproduce width 152/150 and height 75/166. This does not establish generic Dart dry-layout or intrinsic API parity. |
+| :267, :303 | A wider tight parent keeps the default attached to logical start; explicit alignment fills the width and matches the corresponding Row's child edges in both directions. |
+| :365 | Text children at zero width and height still lay out without error. |
+
+The additional pinned `overflow_bar_boundary_test.dart` passes three
+counterparts: at width 150 it is still a row, at 149 it becomes an upward
+column without replacing children; explicit RTL wins over inherited LTR;
+`IntrinsicWidth` ignores expanding row alignment during measurement; and a
+single space-between child stays at logical start. Those three custom cases
+do not add upstream registration counts.
+
+The adjacent existing Wrap baseline-registration failure (`wrap_test.dart:878`)
+reproduced unchanged. It is a separate audit item, not a failure of OverflowBar.

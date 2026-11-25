@@ -2758,6 +2758,14 @@ fn direction_need(kind: &WidgetKind) -> Option<DirectionNeed> {
                 always: false,
             })
         }
+        WidgetKind::OverflowBar {
+            text_direction: None,
+            ..
+        } => Some(DirectionNeed {
+            widget: "OverflowBar",
+            reason: "OverflowBar resolves its text direction with Directionality.of",
+            always: true,
+        }),
         WidgetKind::Wrap {
             axis,
             alignment,

@@ -725,6 +725,15 @@ pub(crate) enum WidgetKind {
         fit: incular_config::FlexFit,
         child: Widget,
     },
+    OverflowBar {
+        spacing: f32,
+        overflow_spacing: f32,
+        overflow_alignment: WrapCrossAlignment,
+        alignment: Option<MainAxisAlignment>,
+        overflow_direction: VerticalDirection,
+        text_direction: Option<TextDirection>,
+        children: Vec<Widget>,
+    },
     Wrap {
         axis: Axis,
         alignment: WrapAlignment,

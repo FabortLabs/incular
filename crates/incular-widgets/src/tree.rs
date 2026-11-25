@@ -716,6 +716,14 @@ pub enum RenderKind {
         flex: u32,
         fit: incular_config::FlexFit,
     },
+    OverflowBar {
+        spacing: f32,
+        overflow_spacing: f32,
+        overflow_alignment: WrapCrossAlignment,
+        alignment: Option<MainAxisAlignment>,
+        overflow_direction: VerticalDirection,
+        text_direction: TextDirection,
+    },
     Wrap {
         wrap: incular_layout::Wrap,
     },

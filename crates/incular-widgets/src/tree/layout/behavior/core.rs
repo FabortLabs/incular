@@ -2,6 +2,33 @@ use super::super::*;
 use crate::tree::widget::aligned_child_offset;
 
 impl WidgetTree {
+    fn probe_intrinsic_width(
+        &mut self,
+        child: RenderObjectId,
+        max_height: f32,
+    ) -> Result<f32, TreeError> {
+        let node = self.render_live(child, "intrinsic child remains live");
+        if let RenderKind::OverflowBar { spacing, .. } = node.object.kind() {
+            // OverflowBar's intrinsic width ignores the row alignment and
+            // sums child intrinsic widths at unbounded height. Do not lay out
+            // the bar itself at infinite width: explicit alignment expands.
+            let spacing = *spacing;
+            let children = node.children.clone();
+            let mut width = 0.0;
+            for &grandchild in &children {
+                width += with_recursive_tree_stack(|| {
+                    self.probe_intrinsic_width(grandchild, f32::INFINITY)
+                })?;
+            }
+            return Ok(width + spacing * children.len().saturating_sub(1) as f32);
+        }
+        self.layout_render(child, Constraints::at_most(f32::INFINITY, max_height))?;
+        Ok(self
+            .render_live(child, "intrinsic child remains live")
+            .size
+            .width)
+    }
+
     pub(super) fn layout_core_kind(
         &mut self,
         id: RenderObjectId,
@@ -367,13 +394,8 @@ impl WidgetTree {
                         let width = if constraints.min_width() == constraints.max_width() {
                             None
                         } else {
-                            let probe =
-                                Constraints::at_most(f32::INFINITY, constraints.max_height());
-                            self.layout_render(child, probe)?;
-                            let natural = self
-                                .render_live(child, "intrinsic child must remain live")
-                                .size
-                                .width;
+                            let natural =
+                                self.probe_intrinsic_width(child, constraints.max_height())?;
                             Some(incular_layout::round_intrinsic_step(natural, step_width))
                         };
                         let height = if step_height.is_some()

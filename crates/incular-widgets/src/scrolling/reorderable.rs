@@ -172,6 +172,7 @@ pub(crate) fn install_listener(
         | WidgetKind::CompositedTransformFollower { child, .. }
         | WidgetKind::LayoutId { child, .. } => install_listener(child, wrap),
         WidgetKind::Flex { children, .. }
+        | WidgetKind::OverflowBar { children, .. }
         | WidgetKind::Wrap { children, .. }
         | WidgetKind::Table { children, .. }
         | WidgetKind::Stack { children, .. }

@@ -49,6 +49,7 @@ impl LayoutFamily {
             RenderKind::Align { .. }
             | RenderKind::Flex { .. }
             | RenderKind::Flexible { .. }
+            | RenderKind::OverflowBar { .. }
             | RenderKind::Wrap { .. }
             | RenderKind::Table { .. }
             | RenderKind::Stack { .. }

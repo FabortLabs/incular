@@ -46,6 +46,6 @@ pub use split_view::{SplitPosition, SplitView, SplitViewBuilder};
 pub use transforms::{FractionalTranslation, FractionalTranslationBuilder, RotatedBox};
 pub use utility::{
     KeyedSubtree, KeyedSubtreeBuilder, NavigationToolbar, NavigationToolbarBuilder, OverflowBar,
-    OverflowBarBuilder, TableCell, TableCellBuilder,
+    OverflowBarAlignment, OverflowBarBuilder, TableCell, TableCellBuilder,
 };
 pub use visibility::{Offstage, OffstageBuilder, Visibility, VisibilityBuilder};

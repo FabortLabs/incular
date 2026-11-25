@@ -207,6 +207,146 @@ impl WidgetTree {
                     (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }
+            RenderKind::OverflowBar {
+                spacing,
+                overflow_spacing,
+                overflow_alignment,
+                alignment,
+                overflow_direction,
+                text_direction,
+            } => {
+                if children.is_empty() {
+                    self.render_live_mut(id, "overflow bar remains live")
+                        .baseline = None;
+                    return Ok((constraints.smallest(), ChildOffsets::default()));
+                }
+
+                let child_constraints = constraints.loosen();
+                let mut children_width = 0.0;
+                let mut children_height = 0.0;
+                let mut max_height: f32 = 0.0;
+                for child in children {
+                    self.layout_render(*child, child_constraints)?;
+                    let child = self.render_live(child, "overflow bar child remains live");
+                    children_width += child.size.width;
+                    children_height += child.size.height;
+                    max_height = max_height.max(child.size.height);
+                }
+
+                let count = children.len() as f32;
+                let row_width = children_width + spacing * (count - 1.0);
+                let max_width = constraints.max_width();
+                let rtl = text_direction == TextDirection::Rtl;
+                let mut baseline: Option<f32> = None;
+                let mut placement = |child: &RenderObjectId, position: Offset| {
+                    if let Some(value) = self
+                        .render_live(child, "overflow bar child remains live")
+                        .baseline
+                    {
+                        let value = value + position.y;
+                        baseline = Some(baseline.map_or(value, |other| other.min(value)));
+                    }
+                    position
+                };
+                let (size, offsets) = if row_width > max_width {
+                    let mut y = 0.0;
+                    let mut position = |child| {
+                        let size = self
+                            .render_live(child, "overflow bar child remains live")
+                            .size;
+                        let remaining = max_width - size.width;
+                        let x = match overflow_alignment {
+                            WrapCrossAlignment::Center => remaining / 2.0,
+                            WrapCrossAlignment::Start => {
+                                if rtl {
+                                    remaining
+                                } else {
+                                    0.0
+                                }
+                            }
+                            WrapCrossAlignment::End => {
+                                if rtl {
+                                    0.0
+                                } else {
+                                    remaining
+                                }
+                            }
+                        };
+                        let offset = placement(child, Offset::new(x, y));
+                        y += size.height + overflow_spacing;
+                        offset
+                    };
+                    let offsets = if overflow_direction == VerticalDirection::Up {
+                        // Reverse placement without changing the retained child, paint or hit order.
+                        let mut offsets = children.iter().rev().map(position).collect::<Vec<_>>();
+                        offsets.reverse();
+                        offsets.into()
+                    } else {
+                        children.iter().map(&mut position).collect()
+                    };
+                    (
+                        constraints.constrain(Size::new(
+                            max_width,
+                            children_height + overflow_spacing * (count - 1.0),
+                        )),
+                        offsets,
+                    )
+                } else {
+                    if alignment.is_some() && !max_width.is_finite() {
+                        return Err(TreeError::InvalidWidgetConfiguration {
+                            widget: "OverflowBar",
+                            reason: "explicit row alignment requires a bounded width".into(),
+                        });
+                    }
+                    let desired_width = alignment.map_or(row_width, |_| max_width);
+                    let size = constraints.constrain(Size::new(desired_width, max_height));
+                    let remaining = size.width - row_width;
+                    let distributed = size.width - children_width;
+                    let (mut x, gap) = match alignment {
+                        None | Some(MainAxisAlignment::Start) => (0.0, spacing),
+                        Some(MainAxisAlignment::End) => (remaining, spacing),
+                        Some(MainAxisAlignment::Center) => (remaining / 2.0, spacing),
+                        Some(MainAxisAlignment::SpaceBetween) => (
+                            0.0,
+                            if children.len() == 1 {
+                                0.0
+                            } else {
+                                distributed / (count - 1.0)
+                            },
+                        ),
+                        Some(MainAxisAlignment::SpaceAround) => {
+                            let gap = distributed / count;
+                            (gap / 2.0, gap)
+                        }
+                        Some(MainAxisAlignment::SpaceEvenly) => {
+                            let gap = distributed / (count + 1.0);
+                            (gap, gap)
+                        }
+                    };
+                    let offsets = children
+                        .iter()
+                        .map(|child| {
+                            let child_size = self
+                                .render_live(child, "overflow bar child remains live")
+                                .size;
+                            let left = if rtl {
+                                size.width - x - child_size.width
+                            } else {
+                                x
+                            };
+                            x += child_size.width + gap;
+                            placement(
+                                child,
+                                Offset::new(left, (max_height - child_size.height) / 2.0),
+                            )
+                        })
+                        .collect();
+                    (size, offsets)
+                };
+                self.render_live_mut(id, "overflow bar remains live")
+                    .baseline = baseline;
+                (size, offsets)
+            }
             RenderKind::Wrap { wrap } => {
                 // Flutter wrap.dart: children get only the main-axis maximum
                 // (BoxConstraints(maxWidth:) or BoxConstraints(maxHeight:)), so
