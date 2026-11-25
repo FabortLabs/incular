@@ -135,6 +135,8 @@ pub enum ButtonState {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Key {
     Value(u64),
+    #[doc(hidden)]
+    GridCell(usize),
     String(String),
     PageStorage(crate::PageStorageKey),
     Global(GlobalKey),
@@ -193,6 +195,10 @@ impl std::hash::Hash for Key {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
             Key::Value(value) => state.write_u64(*value),
+            Key::GridCell(index) => {
+                state.write_usize(*index);
+                state.write_u8(0x43);
+            }
             Key::Global(key) => {
                 state.write_u64(key.0);
                 state.write_u8(0x47);

@@ -955,6 +955,7 @@ fn element_is_internal(element: &crate::tree::Element) -> bool {
 fn key_display(key: &Key) -> String {
     match key {
         Key::Value(value) => format!("<{value}>"),
+        Key::GridCell(index) => format!("<grid cell {index}>"),
         Key::String(text) => text.clone(),
         Key::PageStorage(key) => format!("{key:?}"),
         Key::Global(key) => format!("[GlobalKey#{}]", key.id()),

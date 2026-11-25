@@ -305,6 +305,10 @@ impl RenderSliver for GridRenderSliver {
         Some(self.item_count)
     }
 
+    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        Some(self)
+    }
+
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout {
         let cross_extent = constraints.cross_axis_extent.max(0.);
         let columns = self.delegate.cross_axis_count(cross_extent).max(1);
@@ -335,8 +339,10 @@ impl RenderSliver for GridRenderSliver {
         let row_range = start_row.min(rows)..end_row.min(rows).max(start_row.min(rows));
         let first_item = row_range.start.saturating_mul(columns).min(self.item_count);
         let last_item = row_range.end.saturating_mul(columns).min(self.item_count);
-        self.widgets
-            .retain(|index, _| (*index >= first_item) && (*index < last_item));
+        let parked_tiles =
+            retain_fixed_cache(&mut self.widgets, &(first_item..last_item), self.item_count);
+        let mut parked_rows: Vec<_> = parked_tiles.iter().map(|index| index / columns).collect();
+        parked_rows.dedup();
 
         let cell_cross_extent = if columns == 0 {
             0.
@@ -345,33 +351,39 @@ impl RenderSliver for GridRenderSliver {
                 / columns as f32
         };
         let axis = self.axis;
-        let children = row_range
-            .map(|row| {
+        let children = fixed_cache_slots(row_range, &parked_rows)
+            .map(|(row, placement)| {
                 let start = row * columns;
                 let end = (start + columns).min(self.item_count);
-                let cells = (start..end).map(|index| -> Widget {
-                    let child = self.child_widget(index);
-                    if axis == Axis::Vertical {
-                        Widget::from(
-                            SizedBox::new()
-                                .width(cell_cross_extent)
-                                .height(main_extent)
-                                .child(child),
+                let mut keep_row = false;
+                let cells: Vec<_> = (start..end)
+                    .filter_map(|index| {
+                        if placement == SliverChildPlacement::Parked
+                            && !self.widgets.contains_key(&index)
+                        {
+                            return None;
+                        }
+                        let child = self.child_widget(index);
+                        keep_row |= child.keep_alive_request();
+                        let (width, height) = if axis == Axis::Vertical {
+                            (cell_cross_extent, main_extent)
+                        } else {
+                            (main_extent, cell_cross_extent)
+                        };
+                        // The selected tile keeps its child slot even when earlier
+                        // siblings leave the row while it is parked.
+                        Some(
+                            Widget::from(SizedBox::new().width(width).height(height).child(child))
+                                .with_key(crate::tree::Key::GridCell(index)),
                         )
-                    } else {
-                        Widget::from(
-                            SizedBox::new()
-                                .width(main_extent)
-                                .height(cell_cross_extent)
-                                .child(child),
-                        )
-                    }
-                });
+                    })
+                    .collect();
                 let widget = if axis == Axis::Vertical {
                     Widget::from(Row::new(cells).spacing(cross_spacing))
                 } else {
                     Widget::from(Column::new(cells).spacing(cross_spacing))
-                };
+                }
+                .with_keep_alive_request(keep_row);
                 SliverChildLayout {
                     id: SliverChildId::list_item(row),
                     widget,
@@ -384,7 +396,7 @@ impl RenderSliver for GridRenderSliver {
                         Some(main_extent),
                     ),
                     extent: main_extent,
-                    placement: SliverChildPlacement::Flow,
+                    placement,
                 }
             })
             .collect();
@@ -2745,7 +2757,7 @@ pub(crate) fn transfer_retained_sliver_state(
         );
         return;
     }
-    if adopt_fixed_keep_alives(fresh, retained, probes)
+    if adopt_indexed_keep_alives(fresh, retained, probes)
         || adopt_natural_header_state(fresh, retained)
         || adopt_box_extent(fresh, retained)
         || adopt_floating_header_state(fresh, retained)
@@ -2852,7 +2864,7 @@ fn transfer_keep_alives(
     }
 }
 
-fn adopt_fixed_keep_alives(
+fn adopt_indexed_keep_alives(
     fresh: &mut dyn RenderSliver,
     retained: &mut dyn RenderSliver,
     probes: &mut u64,
@@ -2895,6 +2907,23 @@ fn adopt_fixed_keep_alives(
                     .or_else(|| builder.map(|builder| builder(index)))
                     .unwrap_or_else(|| SizedBox::shrink().into())
             },
+            probes,
+        );
+        return true;
+    }
+    if let (Some(fresh), Some(retained)) = (
+        fresh
+            .as_any_mut()
+            .and_then(|any| any.downcast_mut::<GridRenderSliver>()),
+        retained
+            .as_any_mut()
+            .and_then(|any| any.downcast_mut::<GridRenderSliver>()),
+    ) {
+        transfer_keep_alives(
+            &retained.widgets,
+            &mut fresh.widgets,
+            fresh.item_count,
+            |index| (fresh.builder)(index),
             probes,
         );
         return true;
