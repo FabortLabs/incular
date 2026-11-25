@@ -274,8 +274,8 @@ packages/flutter/test/animation/curves_test.dart	102	Bounce stays in bounds	pair
 packages/flutter/test/animation/curves_test.dart	172	ThreePointCubic interpolates midpoint	paired-match	upstream-curves-intrinsic-layout-and-system-overlay.md
 packages/flutter/test/animation/curves_test.dart	231	Curve transform method should return 0.0 for t=0.0 and 1.0 for t=1.0	paired-match	upstream-curves-intrinsic-layout-and-system-overlay.md
 packages/flutter/test/animation/curves_test.dart	471	CatmullRomCurve interpolates given points correctly	paired-match	upstream-curves-intrinsic-layout-and-system-overlay.md
-packages/flutter/test/widgets/intrinsic_width_test.dart	9	Intrinsic stepWidth, stepHeight	partial-mismatch	upstream-curves-intrinsic-layout-and-system-overlay.md
-packages/flutter/test/widgets/intrinsic_width_test.dart	35	IntrinsicWidth does not crash at zero area	partial-match	upstream-curves-intrinsic-layout-and-system-overlay.md
+packages/flutter/test/widgets/intrinsic_width_test.dart	9	Intrinsic stepWidth, stepHeight	paired-match	upstream-intrinsic-width-validation.md
+packages/flutter/test/widgets/intrinsic_width_test.dart	35	IntrinsicWidth does not crash at zero area	paired-match	upstream-intrinsic-width-validation.md
 packages/flutter/test/rendering/positioned_box_test.dart	13	RenderPositionedBox expands	paired-match	upstream-shifted-box-baselines.md
 packages/flutter/test/rendering/positioned_box_test.dart	25	RenderPositionedBox shrink wraps	paired-match	upstream-shifted-box-baselines.md
 packages/flutter/test/rendering/view_chrome_style_test.dart	68	statusBarColor isn't set when view covers less than half of the system status bar	partial-match	upstream-curves-intrinsic-layout-and-system-overlay.md

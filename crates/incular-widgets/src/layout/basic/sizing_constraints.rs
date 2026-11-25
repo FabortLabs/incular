@@ -486,12 +486,17 @@ impl From<Builder> for Widget {
     }
 }
 
+fn intrinsic_step(step: f32) -> Option<f32> {
+    debug_assert!(step >= 0., "intrinsic step must be nonnegative");
+    Some(step)
+}
+
 /// Sizes its child to the child's intrinsic width.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct IntrinsicWidth {
-    #[builder(default, setter(strip_option))]
+    #[builder(default, setter(transform = |step: f32| intrinsic_step(step)))]
     step_width: Option<f32>,
-    #[builder(default, setter(strip_option))]
+    #[builder(default, setter(transform = |step: f32| intrinsic_step(step)))]
     step_height: Option<f32>,
     #[builder(setter(into))]
     child: Widget,
@@ -509,13 +514,13 @@ impl IntrinsicWidth {
 
     #[must_use]
     pub fn step_width(mut self, step: f32) -> Self {
-        self.step_width = Some(step);
+        self.step_width = intrinsic_step(step);
         self
     }
 
     #[must_use]
     pub fn step_height(mut self, step: f32) -> Self {
-        self.step_height = Some(step);
+        self.step_height = intrinsic_step(step);
         self
     }
 }

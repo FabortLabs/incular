@@ -2,6 +2,7 @@
 
 use incular_config::{Alignment, Constraints};
 use incular_core::Size;
+use incular_platform::{PhysicalSize, PlatformEvent, WindowMetrics};
 use incular_runtime::Runtime;
 use incular_widgets::{
     Align, Center, Directionality, IntrinsicWidth, Placeholder, SizedBox, TextDirection, Widget,
@@ -64,6 +65,17 @@ fn intrinsic_width_rejects_negative_width_or_height_steps() {
         std::panic::catch_unwind(|| intrinsic(Some(width), Some(height))).is_err()
     });
     assert_eq!(rejected, [true, true], "(width step, height step)");
+    let rejected_builder = [(-1., 0.), (0., -1.)].map(|(width, height)| {
+        std::panic::catch_unwind(|| {
+            IntrinsicWidth::builder()
+                .child(SizedBox::square(10.))
+                .step_width(width)
+                .step_height(height)
+                .build()
+        })
+        .is_err()
+    });
+    assert_eq!(rejected_builder, [true, true]);
 }
 
 // widgets/intrinsic_width_test.dart:35, "IntrinsicWidth does not crash at zero area".
@@ -72,8 +84,12 @@ fn intrinsic_width_placeholder_can_complete_a_zero_area_frame() {
     let width = Widget::from(IntrinsicWidth::new(Placeholder::new())).with_key(SUBJECT);
     let scene = Directionality::new(TextDirection::Ltr, Center::new(width));
     let mut runtime = Runtime::new(scene.into()).expect("mount");
+    let metrics = WindowMetrics::new(PhysicalSize::new(0, 0), 1.);
+    runtime.handle_platform_event(PlatformEvent::Metrics(metrics));
+    let view = runtime.environment();
+    assert_eq!((view.physical_width, view.physical_height), (0, 0));
     runtime
-        .run_frame(Constraints::tight(Size::ZERO))
+        .run_frame(Constraints::tight(view.viewport))
         .expect("zero-area frame");
     assert_eq!(size(&runtime), Size::ZERO);
 }
