@@ -111,3 +111,14 @@ at :335 and tests directional resolution on both sides. The specific
 error at :235 is partial because Flutter's diagnostic-node type and
 line wrapping are not reproduced. Thirteen focused Rust checks passed;
 release fallback and the renderer are unchanged.
+
+## Physical and directional border values
+
+Five exact Flutter registrations passed: `border_test.dart:37` and
+`border_rtl_test.dart:567,606,618,852`. Incular can merge corresponding
+sides of either border representation, preserving a solid side when paired
+with an omitted side and rejecting incompatible strokes. Directional
+dimensions keep start/top/end/bottom order, scaling preserves the logical
+edges and color, and uniformity compares width, color, style and alignment.
+Thirteen focused Rust checks passed. Mixed-representation composition and
+nullable interpolation are separate contracts.

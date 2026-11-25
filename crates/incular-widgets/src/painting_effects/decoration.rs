@@ -244,6 +244,21 @@ impl Border {
         Self::all(side)
     }
 
+    /// Combines corresponding sides without resolving incompatible strokes.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any pair of sides cannot be merged.
+    #[must_use]
+    pub fn merge(self, other: Self) -> Self {
+        Self::only(
+            self.top.merge(&other.top),
+            self.right.merge(&other.right),
+            self.bottom.merge(&other.bottom),
+            self.left.merge(&other.left),
+        )
+    }
+
     /// Flutter `Border.dimensions`: each side's `strokeInset`, the padding
     /// a decoration with this border adds.
     #[must_use]
@@ -345,6 +360,39 @@ impl BorderDirectional {
             self.end.stroke_inset(),
             self.bottom.stroke_inset(),
         )
+    }
+
+    /// Combines corresponding sides without collapsing start and end.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any pair of sides cannot be merged.
+    #[must_use]
+    pub fn merge(self, other: Self) -> Self {
+        Self::only(
+            self.top.merge(&other.top),
+            self.start.merge(&other.start),
+            self.end.merge(&other.end),
+            self.bottom.merge(&other.bottom),
+        )
+    }
+
+    /// Scales each side independently, preserving logical edge order.
+    #[must_use]
+    pub fn scale(self, t: f32) -> Self {
+        Self::only(
+            self.top.scale(t),
+            self.start.scale(t),
+            self.end.scale(t),
+            self.bottom.scale(t),
+        )
+    }
+
+    /// Whether color, width, style and stroke alignment agree on every side.
+    #[must_use]
+    pub fn is_uniform(&self) -> bool {
+        self.resolve(incular_config::TextDirection::Ltr)
+            .is_uniform()
     }
 
     #[must_use]

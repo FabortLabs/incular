@@ -155,3 +155,101 @@ fn uniformity_requires_equal_width_color_style_and_alignment() {
         assert_eq!(border.is_uniform(), expected, "{border:?}");
     }
 }
+
+#[test]
+fn merging_physical_and_directional_borders_combines_only_compatible_sides() {
+    let magenta_3 = BorderSide::solid(Color::rgba(255, 0, 255, 255), 3.0);
+    let magenta_6 = BorderSide {
+        width: 6.0,
+        ..magenta_3
+    };
+    let yellow_2 = BorderSide::solid(Color::rgba(255, 255, 0, 255), 2.0);
+    let yellow_absent = BorderSide {
+        width: 0.0,
+        style: BorderStyle::None,
+        ..yellow_2
+    };
+    let none = BorderSide::NONE;
+    let physical =
+        |[top, end, bottom, start]: [BorderSide; 4]| Border::only(top, end, bottom, start);
+    let directional = |[top, end, bottom, start]: [BorderSide; 4]| {
+        BorderDirectional::only(top, start, end, bottom)
+    };
+    for (a, b, expected) in [
+        (
+            [yellow_2, none, none, none],
+            [none, magenta_3, none, none],
+            Some([yellow_2, magenta_3, none, none]),
+        ),
+        (
+            [none, none, magenta_3, none],
+            [none, none, magenta_3, none],
+            Some([none, none, magenta_6, none]),
+        ),
+        (
+            [none, yellow_absent, none, magenta_3],
+            [none, yellow_2, none, none],
+            Some([none, yellow_2, none, magenta_3]),
+        ),
+        ([none; 4], [none; 4], Some([none; 4])),
+        (
+            [none, none, none, magenta_3],
+            [none, none, none, yellow_2],
+            None,
+        ),
+    ] {
+        let merged = std::panic::catch_unwind(|| physical(a).merge(physical(b)));
+        assert_eq!(merged.ok(), expected.map(physical));
+        let merged = std::panic::catch_unwind(|| directional(a).merge(directional(b)));
+        assert_eq!(merged.ok(), expected.map(directional));
+    }
+}
+
+#[test]
+fn directional_dimensions_and_scaling_preserve_logical_edge_order() {
+    let test_directional = BorderDirectional::only(side(3.0), side(2.0), side(7.0), side(5.0));
+    assert_eq!(
+        test_directional.dimensions(),
+        EdgeInsetsDirectional::only(2.0, 3.0, 7.0, 5.0)
+    );
+    let magenta = Color::rgba(255, 0, 255, 255);
+    let yellow = Color::rgba(255, 255, 0, 255);
+    let b3 = BorderDirectional::builder()
+        .start(BorderSide::solid(magenta, 3.0))
+        .build();
+    let b6 = BorderDirectional::builder()
+        .start(BorderSide::solid(magenta, 6.0))
+        .build();
+    let no_yellow = BorderDirectional::builder()
+        .top(BorderSide::new(yellow, 0.0, BorderStyle::None))
+        .build();
+    let yellow_2 = BorderDirectional::builder()
+        .top(BorderSide::solid(yellow, 2.0))
+        .build();
+    assert_eq!(b3.scale(2.0), b6);
+    assert_eq!(no_yellow.scale(3.0), no_yellow);
+    assert_eq!(yellow_2.scale(0.0), no_yellow);
+}
+
+#[test]
+fn directional_uniformity_requires_equal_values_on_every_side() {
+    let w = BorderSide::solid(Color::WHITE, 1.0);
+    let almost_w = BorderSide::solid(Color::rgba(255, 255, 254, 255), 1.0);
+    let none = BorderSide::new(Color::BLACK, 1.0, BorderStyle::None);
+    let absent = BorderSide::NONE;
+    for ([top, start, end, bottom], expected) in [
+        ([side(3.0), side(3.0), side(3.0), side(3.1)], false),
+        ([side(3.0); 4], true),
+        ([w, almost_w, w, w], false),
+        ([w; 4], true),
+        ([none, none, none, side(0.0)], false),
+        ([none, none, none, absent], false),
+        ([absent; 4], true),
+        ([side(1.0), side(1.0), aligned(1.0, 0.0), side(1.0)], false),
+    ] {
+        assert_eq!(
+            BorderDirectional::only(top, start, end, bottom).is_uniform(),
+            expected
+        );
+    }
+}
