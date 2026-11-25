@@ -853,6 +853,8 @@ pub(crate) enum WidgetKind {
         /// A replacement still lays out and paints, but reports hidden.
         /// Offstage reuses the renderer without providing this scope.
         reported_visible: Option<bool>,
+        /// Synthetic sliver wraps can publish a ticker gate without a box scope.
+        inherited_ticker: bool,
         hidden: super::HiddenVisibility,
         child: Widget,
     },

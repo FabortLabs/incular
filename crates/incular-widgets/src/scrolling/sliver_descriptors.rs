@@ -2208,11 +2208,14 @@ impl SliverVisibility {
         controller: &ScrollController,
     ) -> Result<Widget, SliverVisibilityFlagError> {
         self.check_flags()?;
-        if !self.visible
-            && !self.maintain_state
-            && let Some(replacement) = &self.replacement_sliver
-        {
-            return Ok(replacement.build(controller));
+        if !self.maintain_state {
+            return Ok(if self.visible {
+                self.sliver.build(controller)
+            } else if let Some(replacement) = &self.replacement_sliver {
+                replacement.build(controller)
+            } else {
+                SizedBox::shrink().into()
+            });
         }
         Ok(wrap_visibility(self.flags(), self.sliver.build(controller)))
     }
@@ -2231,11 +2234,16 @@ impl SliverVisibility {
         reverse: bool,
     ) -> Result<Box<dyn RenderSliver>, SliverVisibilityFlagError> {
         self.check_flags()?;
-        if !self.visible
-            && !self.maintain_state
-            && let Some(replacement) = &self.replacement_sliver
-        {
-            return Ok(replacement.create_render_sliver(controller, axis, reverse));
+        if !self.maintain_state {
+            return Ok(if self.visible {
+                self.sliver.create_render_sliver(controller, axis, reverse)
+            } else if let Some(replacement) = &self.replacement_sliver {
+                replacement.create_render_sliver(controller, axis, reverse)
+            } else {
+                // Nothing retained: do not lay out or run the concealed
+                // sliver's lazy builder merely to replace its children.
+                Box::new(EmptyRenderSliver)
+            });
         }
         let inner = self.sliver.create_render_sliver(controller, axis, reverse);
         Ok(Box::new(WidgetWrapRenderSliver {
@@ -2281,7 +2289,8 @@ fn wrap_visibility(flags: VisibilityFlags, widget: Widget) -> Widget {
         .maintain_size(flags.size)
         .maintain_semantics(flags.semantics)
         .maintain_interactivity(flags.interactivity)
-        .into()
+        .maintain_focusability(flags.state)
+        .into_sliver_widget()
 }
 
 impl Sliver for SliverVisibility {

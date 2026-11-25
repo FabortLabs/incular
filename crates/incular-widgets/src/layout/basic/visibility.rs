@@ -136,7 +136,14 @@ impl Visibility {
         context.visibility()
     }
 
-    fn into_widget(self, report_visibility: bool) -> Widget {
+    pub(crate) fn into_sliver_widget(self) -> Widget {
+        // A SliverVisibility publishes only the optional ticker gate. It is
+        // not an ancestor of type Visibility and does not insert ExcludeFocus.
+        let ticker_gate = self.maintain_state && !self.maintain_animation;
+        self.into_widget(false, ticker_gate)
+    }
+
+    fn into_widget(self, report_visibility: bool, inherited_ticker: bool) -> Widget {
         let replaces = !self.visible
             && !(self.maintain_state
                 || self.maintain_size
@@ -153,6 +160,7 @@ impl Visibility {
         Widget::from_kind(WidgetKind::Visibility {
             visible: self.visible || replaces,
             reported_visible: report_visibility.then_some(self.visible),
+            inherited_ticker,
             hidden: crate::tree::HiddenVisibility {
                 layout: if self.maintain_size || self.maintain_interactivity {
                     crate::tree::HiddenLayout::PreserveSpace
@@ -171,7 +179,7 @@ impl Visibility {
 
 impl From<Visibility> for Widget {
     fn from(value: Visibility) -> Self {
-        value.into_widget(true)
+        value.into_widget(true, false)
     }
 }
 
@@ -211,6 +219,6 @@ impl From<Offstage> for Widget {
             .maintain_state(true)
             .maintain_animation(true)
             .maintain_focusability(true)
-            .into_widget(false)
+            .into_widget(false, false)
     }
 }

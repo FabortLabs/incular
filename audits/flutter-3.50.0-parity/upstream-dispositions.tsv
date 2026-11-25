@@ -1418,3 +1418,4 @@ packages/flutter/test/widgets/table_test.dart	1026	Single-row Table does not cra
 packages/flutter/test/widgets/table_test.dart	1068	Table reuse the semantics nodes for cell wrappers	paired-match	upstream-table-retention-and-layoutbuilder-baseline.md#retained-table-accessibility
 packages/flutter/test/rendering/table_test.dart	379	TableRows with different constraints, but vertically with intrinsicHeight	paired-match	upstream-table-direction-rows-and-intrinsics.md#intrinsic-row-height-and-per-cell-alignment
 packages/flutter/test/widgets/table_test.dart	923	Set defaultVerticalAlignment to intrinsic height and check their heights	paired-match	upstream-table-direction-rows-and-intrinsics.md#intrinsic-row-height-and-per-cell-alignment
+packages/flutter/test/widgets/sliver_visibility_test.dart	35	SliverVisibility	partial-match	upstream-sliver-visibility.md

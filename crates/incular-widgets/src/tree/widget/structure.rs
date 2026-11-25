@@ -473,12 +473,14 @@ impl std::fmt::Debug for WidgetKind {
             Self::Visibility {
                 visible,
                 reported_visible,
+                inherited_ticker,
                 hidden,
                 child,
             } => f
                 .debug_struct("Visibility")
                 .field("visible", visible)
                 .field("reported_visible", reported_visible)
+                .field("inherited_ticker", inherited_ticker)
                 .field("hidden", hidden)
                 .field("child", child)
                 .finish(),
@@ -1800,15 +1802,17 @@ impl PartialEq for WidgetKind {
                     hidden: policy_a,
                     visible: a,
                     reported_visible: report_a,
+                    inherited_ticker: ticker_a,
                     child: b,
                 },
                 Self::Visibility {
                     hidden: policy_b,
                     visible: c,
                     reported_visible: report_b,
+                    inherited_ticker: ticker_b,
                     child: d,
                 },
-            ) => a == c && b == d && policy_a == policy_b && report_a == report_b,
+            ) => a == c && b == d && policy_a == policy_b && report_a == report_b && ticker_a == ticker_b,
             (
                 Self::AspectRatio { ratio: a, child: b },
                 Self::AspectRatio { ratio: c, child: d },

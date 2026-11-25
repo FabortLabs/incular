@@ -55,6 +55,22 @@ fn element_environment(
                 (Some(InheritedScopeValue::new(scope)), false)
             };
         }
+        WidgetKind::Visibility {
+            inherited_ticker: true,
+            visible,
+            hidden,
+            ..
+        } => {
+            use crate::environment::TickerModeScope;
+            let mode = TickerModeScope(*visible || hidden.animation);
+            return if let Some(previous) = previous
+                && previous.value.downcast_ref::<TickerModeScope>() == Some(&mode)
+            {
+                (Some(previous.clone()), false)
+            } else {
+                (Some(InheritedScopeValue::new(mode)), false)
+            };
+        }
         WidgetKind::Scroll { controller, .. } => controller,
         WidgetKind::SliverViewport { config } => &config.controller,
         _ => return (None, false),
