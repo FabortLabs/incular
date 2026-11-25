@@ -19,29 +19,48 @@ pub struct FractionallySizedBox {
         setter(transform = |factor: f32| Some(factor.max(0.0)))
     )]
     pub(crate) height_factor: Option<f32>,
-    #[builder(default = Alignment::CENTER)]
-    pub(crate) alignment: Alignment,
-    #[builder(setter(into))]
-    pub(crate) child: Widget,
+    #[builder(default = AlignmentGeometry::Physical(Alignment::CENTER), setter(into))]
+    pub(crate) alignment: AlignmentGeometry,
+    #[builder(default, setter(strip_option, into))]
+    pub(crate) child: Option<Widget>,
+}
+
+impl Default for FractionallySizedBox {
+    fn default() -> Self {
+        Self::empty()
+    }
 }
 
 impl FractionallySizedBox {
     /// Creates a FractionallySizedBox.
     #[must_use]
     pub fn new(child: impl Into<Widget>) -> Self {
+        Self::empty().child(child)
+    }
+
+    /// Creates a childless box that still reserves its fraction of each bounded axis.
+    #[must_use]
+    pub const fn empty() -> Self {
         Self {
             width_factor: None,
             height_factor: None,
-            alignment: Alignment::CENTER,
-            child: child.into(),
+            alignment: AlignmentGeometry::Physical(Alignment::CENTER),
+            child: None,
         }
+    }
+
+    /// Sets the child sized by the incoming constraints and configured factors.
+    #[must_use]
+    pub fn child(mut self, child: impl Into<Widget>) -> Self {
+        self.child = Some(child.into());
+        self
     }
 
     /// Where the child sits when it is smaller or larger than the box.
     /// Defaults to center, as in Flutter.
     #[must_use]
-    pub fn alignment(mut self, alignment: Alignment) -> Self {
-        self.alignment = alignment;
+    pub fn alignment(mut self, alignment: impl Into<AlignmentGeometry>) -> Self {
+        self.alignment = alignment.into();
         self
     }
 

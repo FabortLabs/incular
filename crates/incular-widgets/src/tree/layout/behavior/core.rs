@@ -339,17 +339,17 @@ impl WidgetTree {
                     // `RenderFractionallySizedOverflowBox`: the box takes the
                     // constrained child size and `alignChild` places the child.
                     let size = constraints.constrain(child_size);
-                    let offset = Offset::new(
-                        (size.width - child_size.width) * (alignment.x + 1.) / 2.,
-                        (size.height - child_size.height) * (alignment.y + 1.) / 2.,
-                    );
+                    let offset = aligned_child_offset(alignment, size, child_size);
                     self.render_live_mut(id, "fractional render must remain live")
                         .baseline = child_baseline.map(|local| local + offset.y);
                     (size, ChildOffsets::One(offset))
                 } else {
                     self.render_live_mut(id, "fractional render must remain live")
                         .baseline = None;
-                    (constraints.constrain(Size::ZERO), ChildOffsets::default())
+                    (
+                        constraints.constrain(child_constraints.smallest()),
+                        ChildOffsets::default(),
+                    )
                 }
             }
             RenderKind::Baseline { baseline } => {

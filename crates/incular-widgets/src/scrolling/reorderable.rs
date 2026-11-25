@@ -120,6 +120,7 @@ pub(crate) fn install_listener(
         | WidgetKind::ClipRRect { child, .. }
         | WidgetKind::FittedBox { child, .. }
         | WidgetKind::Limited { child, .. }
+        | WidgetKind::Fractional { child, .. }
         | WidgetKind::Overflow { child, .. }
         | WidgetKind::SizedOverflow { child, .. }
         | WidgetKind::Unconstrained { child, .. }
@@ -135,7 +136,6 @@ pub(crate) fn install_listener(
         | WidgetKind::Padding { child, .. }
         | WidgetKind::Constrained { child, .. }
         | WidgetKind::ProxyLayout { child, .. }
-        | WidgetKind::Fractional { child, .. }
         | WidgetKind::Baseline { child, .. }
         | WidgetKind::RepaintBoundary { child, .. }
         | WidgetKind::AnimationTicker { child, .. }

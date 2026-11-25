@@ -8,7 +8,7 @@
 use std::rc::Rc;
 
 use incular_config::{Alignment, Clip, Constraints, EdgeInsets};
-use incular_core::{Color, Size, Transform as CoreTransform};
+use incular_core::{Color, Transform as CoreTransform};
 use incular_rendering::{Border, Brush, CornerRadii};
 use smart_default::SmartDefault;
 use typed_builder::TypedBuilder;
@@ -252,10 +252,9 @@ impl Container {
         let mut current = match value.child {
             None if !tightly_sized => {
                 // Flutter uses LimitedBox(0, 0) around an expanding child.
-                // A one-to-one fill over a zero-size leaf has the same
-                // constraints: finite maxima, or the existing minima on
-                // unbounded axes. No Align is inserted for an absent child.
-                FractionallySizedBox::new(Widget::box_(Size::ZERO, Color::TRANSPARENT))
+                // A childless one-to-one fill takes the finite maxima or
+                // the incoming minima on unbounded axes without a dummy leaf.
+                FractionallySizedBox::empty()
                     .width_factor(1.0)
                     .height_factor(1.0)
                     .into()

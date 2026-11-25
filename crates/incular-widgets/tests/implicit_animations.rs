@@ -247,6 +247,23 @@ fn fractionally_sized_box_animates_its_factors() {
 }
 
 #[test]
+fn childless_fractionally_sized_box_animates_its_factors() {
+    let sized = |factor: f32| {
+        AnimatedFractionallySizedBox::empty(DURATION)
+            .width_factor(factor)
+            .height_factor(factor)
+    };
+    let mut harness = Harness::new(sized(0.5).into());
+    assert_eq!(harness.size(), Size::new(100., 100.));
+    harness.update(sized(1.).into(), 1_000);
+    harness.frame(1_100);
+    assert_eq!(harness.size(), Size::new(150., 150.));
+    harness.frame(1_200);
+    assert_eq!(harness.size(), Size::new(200., 200.));
+    assert!(harness.rects().is_empty());
+}
+
+#[test]
 fn positioned_animates_inside_a_stack() {
     let positioned = |left: f32| {
         Stack::new([Widget::from(

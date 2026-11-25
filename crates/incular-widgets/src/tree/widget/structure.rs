@@ -2358,8 +2358,8 @@ impl WidgetKind {
             WidgetKind::Fractional { child, .. } => (
                 WidgetType::Fractional,
                 Layout,
-                Single,
-                WidgetChildren::Single(child),
+                Optional,
+                WidgetChildren::Optional(child.as_ref()),
             ),
             WidgetKind::Baseline { child, .. } => (
                 WidgetType::Baseline,

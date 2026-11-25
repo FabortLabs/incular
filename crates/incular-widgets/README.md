@@ -354,6 +354,9 @@ undercuts the parent minimum, and accepts no child via `LimitedBox::empty()`.
 continues reporting the parent-constrained size. `Flexible`, `Expanded`, and
 `Spacer` allocate proportional shares of a bounded `Row`/`Column` main axis;
 the child layout records remain ordinary retained children.
+`OverflowBox` and `FractionallySizedBox` resolve logical alignment from
+the surrounding direction. A childless `FractionallySizedBox` still reserves
+its configured fraction on bounded axes.
 
 `Positioned` resolves edge pairs or explicit dimensions against a `Stack`.
 `IndexedStack` retains and lays out every child but attaches only the selected

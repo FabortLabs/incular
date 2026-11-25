@@ -6,6 +6,8 @@ icon: ArrowUpNarrowWide
 
 [`OverflowBox`](/docs/api/layout-widgets/overflow-box) gives the child independent min/max bounds while the parent keeps
 reporting the incoming size. All four bounds default `None` (passthrough).
+Child alignment defaults to the physical center and also accepts logical
+alignments that follow the nearest `Directionality`.
 
 ## Props
 
@@ -31,10 +33,15 @@ reporting the incoming size. All four bounds default `None` (passthrough).
       type: 'Option<f32>',
       default: 'None',
     },
+    alignment: {
+      description: 'Physical or logical child alignment',
+      type: 'AlignmentGeometry',
+      default: 'Alignment::CENTER',
+    },
     child: {
       description: 'Content allowed to overflow',
       type: <a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>,
-      default: 'required',
+      default: 'None',
     },
   }}
 />
@@ -69,6 +76,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```rust
 pub fn new(child: impl Into<Widget>) -> Self
+pub fn alignment(mut self, alignment: impl Into<AlignmentGeometry>) -> Self
 pub fn min_width(mut self, value: f32) -> Self
 pub fn max_width(mut self, value: f32) -> Self
 pub fn min_height(mut self, value: f32) -> Self

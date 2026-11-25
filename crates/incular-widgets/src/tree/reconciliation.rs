@@ -2944,6 +2944,20 @@ fn direction_need(kind: &WidgetKind) -> Option<DirectionNeed> {
             reason: requirement.reason,
             always: true,
         }),
+        WidgetKind::Fractional { alignment, child: Some(_), .. }
+        | WidgetKind::Overflow { alignment, child: Some(_), .. }
+            if !matches!(alignment, crate::AlignmentGeometry::Physical(_)) =>
+        {
+            Some(DirectionNeed {
+                widget: if matches!(kind, WidgetKind::Fractional { .. }) {
+                    "FractionallySizedBox"
+                } else {
+                    "OverflowBox"
+                },
+                reason: "a logical alignment requires an inherited text direction",
+                always: true,
+            })
+        }
         WidgetKind::Unconstrained {
             alignment, text_direction: None, transform, child: Some(_), ..
         } if !matches!(alignment, crate::AlignmentGeometry::Physical(_)) => Some(DirectionNeed {

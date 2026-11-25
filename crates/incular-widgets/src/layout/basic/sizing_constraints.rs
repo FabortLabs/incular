@@ -301,8 +301,8 @@ pub struct OverflowBox {
     min_height: Option<f32>,
     #[builder(default, setter(strip_option))]
     max_height: Option<f32>,
-    #[builder(default = Alignment::CENTER)]
-    alignment: Alignment,
+    #[builder(default = crate::AlignmentGeometry::Physical(Alignment::CENTER), setter(into))]
+    alignment: crate::AlignmentGeometry,
     #[builder(default)]
     fit: OverflowBoxFit,
     #[builder(default, setter(strip_option, into))]
@@ -324,7 +324,7 @@ impl OverflowBox {
             max_width: None,
             min_height: None,
             max_height: None,
-            alignment: Alignment::CENTER,
+            alignment: Alignment::CENTER.into(),
             fit: OverflowBoxFit::Max,
             child: None,
         }
@@ -347,8 +347,8 @@ impl OverflowBox {
     /// Aligns the child within the box. Defaults to centered, as in Flutter's
     /// `OverflowBox`; an overflowing child is shifted by half of its excess.
     #[must_use]
-    pub fn alignment(mut self, alignment: Alignment) -> Self {
-        self.alignment = alignment;
+    pub fn alignment(mut self, alignment: impl Into<crate::AlignmentGeometry>) -> Self {
+        self.alignment = alignment.into();
         self
     }
 

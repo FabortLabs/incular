@@ -897,7 +897,7 @@ pub struct AnimatedFractionallySizedBox {
     alignment: AlignmentGeometry,
     width_factor: Option<f32>,
     height_factor: Option<f32>,
-    child: Widget,
+    child: Option<Widget>,
     timing: ImplicitTiming,
 }
 
@@ -905,13 +905,26 @@ impl AnimatedFractionallySizedBox {
     /// Centered, with no factors.
     #[must_use]
     pub fn new(duration: Duration, child: impl Into<Widget>) -> Self {
+        Self::empty(duration).child(child)
+    }
+
+    /// Creates a childless box whose factors and alignment can be animated.
+    #[must_use]
+    pub fn empty(duration: Duration) -> Self {
         Self {
             alignment: Alignment::CENTER.into(),
             width_factor: None,
             height_factor: None,
-            child: child.into(),
+            child: None,
             timing: ImplicitTiming::new(duration),
         }
+    }
+
+    /// Sets the child of the animated box.
+    #[must_use]
+    pub fn child(mut self, child: impl Into<Widget>) -> Self {
+        self.child = Some(child.into());
+        self
     }
 
     /// Accepts an [`Alignment`] or an [`AlignmentDirectional`].
@@ -957,13 +970,16 @@ impl ImplicitlyAnimated for AnimatedFractionallySizedBox {
         let fallback = self
             .alignment
             .resolve(context.text_direction().unwrap_or(TextDirection::Ltr));
-        let mut sized = FractionallySizedBox::new(self.child.clone())
+        let mut sized = FractionallySizedBox::empty()
             .alignment(evaluate(&tweens.alignment, t).unwrap_or(fallback));
         if let Some(factor) = evaluate(&tweens.height_factor, t) {
             sized = sized.height_factor(factor);
         }
         if let Some(factor) = evaluate(&tweens.width_factor, t) {
             sized = sized.width_factor(factor);
+        }
+        if let Some(child) = &self.child {
+            sized = sized.child(child.clone());
         }
         sized.into()
     }
@@ -1800,7 +1816,7 @@ impl crate::dx::transition::Transitionable for Align {
 impl crate::dx::transition::Transitionable for FractionallySizedBox {
     fn into_transitioning(self, transition: Transition) -> Widget {
         AnimatedFractionallySizedBox {
-            alignment: self.alignment.into(),
+            alignment: self.alignment,
             width_factor: self.width_factor,
             height_factor: self.height_factor,
             child: self.child,

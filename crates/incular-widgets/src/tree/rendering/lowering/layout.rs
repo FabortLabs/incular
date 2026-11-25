@@ -14,6 +14,16 @@ fn resolve_layout_direction(
         .unwrap_or(TextDirection::Ltr)
 }
 
+fn resolve_box_alignment(
+    alignment: crate::AlignmentGeometry,
+    context: &DependencyContext,
+) -> Alignment {
+    match alignment {
+        crate::AlignmentGeometry::Physical(value) => value,
+        value => value.resolve(resolve_layout_direction(None, context)),
+    }
+}
+
 fn resolve_stack_alignment(
     alignment: Option<crate::AlignmentGeometry>,
     direction: Option<TextDirection>,
@@ -52,21 +62,14 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
             max_width: *max_width,
             min_height: *min_height,
             max_height: *max_height,
-            alignment: *alignment,
+            alignment: resolve_box_alignment(*alignment, context),
             fit: *fit,
         },
         WidgetKind::SizedOverflow {
             size, alignment, ..
         } => RenderKind::SizedOverflow {
             size: *size,
-            alignment: match alignment {
-                crate::AlignmentGeometry::Physical(value) => *value,
-                value => value.resolve(
-                    context
-                        .depend::<TextDirection>()
-                        .unwrap_or(TextDirection::Ltr),
-                ),
-            },
+            alignment: resolve_box_alignment(*alignment, context),
         },
         WidgetKind::Unconstrained {
             constrained_axis,
@@ -93,7 +96,7 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
         } => RenderKind::Fractional {
             width_factor: *width_factor,
             height_factor: *height_factor,
-            alignment: *alignment,
+            alignment: resolve_box_alignment(*alignment, context),
         },
         WidgetKind::Baseline { baseline, .. } => RenderKind::Baseline {
             baseline: *baseline,

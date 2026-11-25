@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- FractionallySizedBox and AnimatedFractionallySizedBox support childless layout.
+  FractionallySizedBox and OverflowBox accept logical start/end alignment.
+
 - LimitedBox supports an optional child. Its caps never undercut a parent minimum.
 
 - Table supports per-cell vertical alignment, Fill, and IntrinsicHeight.

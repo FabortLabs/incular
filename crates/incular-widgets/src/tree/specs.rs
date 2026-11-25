@@ -641,7 +641,7 @@ pub(crate) enum WidgetKind {
         max_width: Option<f32>,
         min_height: Option<f32>,
         max_height: Option<f32>,
-        alignment: Alignment,
+        alignment: crate::AlignmentGeometry,
         fit: OverflowBoxFit,
         child: Option<Widget>,
     },
@@ -665,8 +665,8 @@ pub(crate) enum WidgetKind {
     Fractional {
         width_factor: Option<f32>,
         height_factor: Option<f32>,
-        alignment: Alignment,
-        child: Widget,
+        alignment: crate::AlignmentGeometry,
+        child: Option<Widget>,
     },
     Baseline {
         baseline: f32,

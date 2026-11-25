@@ -240,7 +240,7 @@ packages/flutter/test/widgets/fitted_box_test.dart	423	Can set and update clipBe
 packages/flutter/test/widgets/fitted_box_test.dart	115	Child can be aligned multiple ways in a row	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md#fittedbox-directional-alignment
 packages/flutter/test/widgets/fractionally_sized_box_test.dart	9	FractionallySizedBox	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
 packages/flutter/test/widgets/fractionally_sized_box_test.dart	32	FractionallySizedBox alignment	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
-packages/flutter/test/widgets/fractionally_sized_box_test.dart	100	FractionallySizedBox does not crash at zero area	partial-match	upstream-fit-overlays-scroll-notifications-clipboard.md
+packages/flutter/test/widgets/fractionally_sized_box_test.dart	100	FractionallySizedBox does not crash at zero area	paired-match	upstream-fractional-sizing-and-direction.md
 packages/flutter/test/widgets/overflow_box_test.dart	10	OverflowBox control test	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
 packages/flutter/test/widgets/overlay_portal_test.dart	104	The overlay child sees the right inherited widgets	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
 packages/flutter/test/widgets/overlay_portal_test.dart	765	show/hide works	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md
@@ -1473,3 +1473,5 @@ packages/flutter/test/rendering/constraints_test.dart	13	RenderFractionallySized
 packages/flutter/test/rendering/constraints_test.dart	34	BoxConstraints with NaN	partial-match	upstream-render-box-edges.md
 packages/flutter/test/rendering/offstage_test.dart	13	offstage	partial-match	upstream-render-box-edges.md
 packages/flutter/test/rendering/relayout_boundary_test.dart	9	relayout boundary change does not trigger relayout	paired-match	upstream-render-box-edges.md
+packages/flutter/test/widgets/fractionally_sized_box_test.dart	53	FractionallySizedBox alignment (direction-sensitive)	paired-match	upstream-fractional-sizing-and-direction.md
+packages/flutter/test/widgets/fractionally_sized_box_test.dart	74	OverflowBox alignment with FractionallySizedBox	paired-match	upstream-fractional-sizing-and-direction.md
