@@ -2,6 +2,7 @@
 
 mod arena;
 mod caching_iterable;
+mod change_notifier;
 mod context;
 mod fast_hash;
 mod geometry;
@@ -26,6 +27,7 @@ mod widget;
 
 pub use arena::{Arena, ArenaId};
 pub use caching_iterable::{CachingCursor, CachingIndexError, CachingIterable};
+pub use change_notifier::{ChangeNotifier, ChangeNotifierSubscription};
 pub use context::{BuildContext, ConsumerId, ContextGuard, DependencySnapshot};
 pub use geometry::{
     ChangeImpact, Color, DirtyFlags, HslColor, HsvColor, Invalidation, Lerp, Offset, Rect, Size,

@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-core`: ChangeNotifier provides ordered synchronous notifications
+  and explicit disposal that releases retained callbacks.
+
 - `incular-runtime`: accessibility actions can target a logical window
   position, including custom actions on a merged or transformed node.
 

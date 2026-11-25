@@ -909,3 +909,8 @@ packages/flutter/test/semantics/semantics_owner_test.dart	108	routes to the corr
 packages/flutter/test/semantics/semantics_owner_test.dart	178	routes to the correct sibling descendant inside the merge group	paired-match	upstream-custom-semantics-actions.md#registration-and-merged-dispatch
 packages/flutter/test/widgets/semantics_test.dart	791	onTapHint and onLongPressHint create custom actions	paired-match	upstream-custom-semantics-actions.md#standard-action-hints
 packages/flutter/test/semantics/semantics_owner_test.dart	262	performActionAt routes custom actions through merged descendants	paired-match	upstream-custom-semantics-actions.md#point-addressed-actions
+packages/flutter/test/foundation/change_notifier_test.dart	369	Cannot use a disposed ChangeNotifier except for remove listener	paired-match	upstream-foundation-scroll-comparisons.md#disposable-change-notifier
+packages/flutter/test/foundation/change_notifier_test.dart	383	Can remove listener on a disposed ChangeNotifier	paired-match	upstream-foundation-scroll-comparisons.md#disposable-change-notifier
+packages/flutter/test/foundation/change_notifier_test.dart	389	Can check hasListener on a disposed ChangeNotifier	paired-match	upstream-foundation-scroll-comparisons.md#disposable-change-notifier
+packages/flutter/test/foundation/change_notifier_test.dart	494	Throws FlutterError when disposed and called	paired-match	upstream-foundation-scroll-comparisons.md#disposable-change-notifier
+packages/flutter/test/foundation/change_notifier_test.dart	516	Calling debugAssertNotDisposed works as intended	paired-match	upstream-foundation-scroll-comparisons.md#disposable-change-notifier

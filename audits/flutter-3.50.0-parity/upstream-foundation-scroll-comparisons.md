@@ -73,3 +73,20 @@ dropping the Rust subscription releases all edges. An extra control checks
 repeated sources without deduplicating their subscriptions. A mounted
 `ListenableBuilder` reruns for either selected source and ignores an unrelated
 source. Nineteen focused Rust tests and the five Flutter originals passed.
+
+## Disposable ChangeNotifier
+
+The pinned foundation originals at :369, :383, :389, :494 and :516
+passed. The Rust notifier releases callbacks immediately on disposal, can
+still be queried for listener presence (false), and permits an old
+subscription token to be dropped. Registration, notification and a
+second dispose reject a closed notifier. Rust errors use the notifier
+type name and a panic instead of a Dart FlutterError diagnostic tree.
+The explicit debug check has no release cost; the Rust lifecycle methods
+also guard disposal in release builds, to avoid reviving a closed owner.
+
+Paired authored checks cover rejecting disposal during notification and
+nested callback mutation: removal is immediate, additions run in a nested
+notification only, and the outer run resumes its original range. The
+Rust lifetime control proves disposal releases captures even if a stale
+subscription token is still held.
