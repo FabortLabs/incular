@@ -193,3 +193,17 @@ still paints normally, and Offstage does not supply a Visibility scope.
 the native renderer. This checks the compositing behavior but does not
 compare the total Flutter layer count with Incular's wgpu layer tree.
 The broad :33 matrix and :495 invalid-flag behavior remain separate.
+
+### Visibility and inherited ticker mode
+
+A retained hidden Visibility without maintainAnimation already muted
+physical animation ticks but formerly returned true from TickerMode.of
+when the surrounding mode was enabled. Two pinned authored controls
+and their native ports follow the same reader from visible to hidden
+to an externally disabled parent and back. The newly inherited local
+gate preserves its child without adding an offstage layout wrapper.
+A disabled parent still overrides maintainAnimation. The two gates
+can hand off while the combined value stays false, without an extra
+reader build. A core regression confirms watcher cleanup on detach.
+These focused controls cover the ticker-mode subcase, not the full :33
+matrix.

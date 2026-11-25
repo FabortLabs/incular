@@ -24,22 +24,35 @@ fn element_environment(
             environment,
             environment_boundary,
             ..
-        } => return (environment.clone(), *environment_boundary),
+        } => {
+            let scope = match (previous, environment) {
+                (Some(previous), Some(next))
+                    if previous.value.downcast_ref::<crate::environment::TickerModeScope>()
+                        .is_some_and(|mode| next.value.downcast_ref::<crate::environment::TickerModeScope>() == Some(mode)) =>
+                {
+                    Some(previous.clone())
+                }
+                _ => environment.clone(),
+            };
+            return (scope, *environment_boundary);
+        }
         WidgetKind::Visibility {
-            reported_visible: Some(visible),
+            reported_visible: Some(reported),
+            visible,
+            hidden,
             ..
         } => {
             use super::context::VisibilityScope;
+            let scope = VisibilityScope {
+                visible: *reported,
+                ticks_enabled: *visible || hidden.animation,
+            };
             return if let Some(previous) = previous
-                && previous.value.downcast_ref::<VisibilityScope>()
-                    == Some(&VisibilityScope(*visible))
+                && previous.value.downcast_ref::<VisibilityScope>() == Some(&scope)
             {
                 (Some(previous.clone()), false)
             } else {
-                (
-                    Some(InheritedScopeValue::new(VisibilityScope(*visible))),
-                    false,
-                )
+                (Some(InheritedScopeValue::new(scope)), false)
             };
         }
         WidgetKind::Scroll { controller, .. } => controller,

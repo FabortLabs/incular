@@ -38,6 +38,8 @@ struct ConsumerSubscriptions {
     sources: ObservedSources,
 }
 
+type Projections = smallvec::SmallVec<[(TypeId, ConsumerSubscriptions); 1]>;
+
 type SourceEntry = (u64, SourceRegistration);
 
 enum ObservedSources {
@@ -87,6 +89,7 @@ struct TrackerInner {
     // but are cleared on context rebind or unmount. Only opt-in readers pay
     // storage for these edges.
     retained_inherited: RefCell<FastHashMap<ConsumerId, smallvec::SmallVec<[DependencyKey; 1]>>>,
+    inherited_projections: RefCell<FastHashMap<ConsumerId, Projections>>,
     sources: RefCell<FastHashMap<DependencyKey, DependencySource>>,
     /// Environment source keys by source id, so clearing a consumer prunes
     /// only the sources it observed instead of scanning all of them.
@@ -108,9 +111,8 @@ impl TrackerInner {
         owner
     }
 
-    fn record(self: &Rc<Self>, consumer: ConsumerId, dependency: DependencyKey) {
-        let source = self
-            .sources
+    fn environment_source(&self, dependency: DependencyKey) -> DependencySource {
+        self.sources
             .borrow_mut()
             .entry(dependency)
             .or_insert_with(|| {
@@ -120,9 +122,51 @@ impl TrackerInner {
                     .insert(source.id(), dependency);
                 source
             })
-            .clone();
-        self.record_source(consumer, source);
+            .clone()
     }
+
+    fn record(self: &Rc<Self>, consumer: ConsumerId, dependency: DependencyKey) {
+        self.record_source(consumer, self.environment_source(dependency));
+    }
+
+    fn record_projection(
+        self: &Rc<Self>,
+        consumer: ConsumerId,
+        projection: TypeId,
+        keys: &[DependencyKey],
+        environment: &Rc<Environment>,
+        initial: bool,
+        project: impl Fn(&Environment) -> bool + 'static,
+    ) {
+        if keys.is_empty() {
+            return;
+        }
+        let mut groups = self.inherited_projections.borrow_mut();
+        let entries = groups.entry(consumer).or_default();
+        if entries.iter().any(|(id, _)| *id == projection) {
+            return;
+        }
+        let weak = Rc::downgrade(self);
+        let origin = Rc::downgrade(environment);
+        let current = Cell::new(initial);
+        let observer = SubscriptionObserver::new(consumer, move || {
+            let Some(environment) = origin.upgrade() else {
+                return;
+            };
+            let next = project(&environment);
+            if next != current.replace(next)
+                && let Some(tracker) = weak.upgrade()
+            {
+                tracker.dirty.borrow_mut().insert(consumer);
+            }
+        });
+        let mut sources = ObservedSources::Few(smallvec::SmallVec::new());
+        for &key in keys {
+            sources.record(&self.environment_source(key), &observer);
+        }
+        entries.push((projection, ConsumerSubscriptions { observer, sources }));
+    }
+
     fn record_source(self: &Rc<Self>, consumer: ConsumerId, source: DependencySource) {
         let mut dependencies = self.dependencies.borrow_mut();
         let subscriptions = dependencies.entry(consumer).or_insert_with(|| {
@@ -171,9 +215,17 @@ impl TrackerInner {
 
     fn clear_sources(&self, consumer: ConsumerId) {
         self.dirty.borrow_mut().remove(&consumer);
-        let Some(subscriptions) = self.dependencies.borrow_mut().remove(&consumer) else {
-            return;
-        };
+        if let Some(subscriptions) = self.dependencies.borrow_mut().remove(&consumer) {
+            self.release_sources(subscriptions);
+        }
+        if let Some(groups) = self.inherited_projections.borrow_mut().remove(&consumer) {
+            for (_, subscriptions) in groups {
+                self.release_sources(subscriptions);
+            }
+        }
+    }
+
+    fn release_sources(&self, subscriptions: ConsumerSubscriptions) {
         drop(subscriptions.observer);
         let mut sources = self.sources.borrow_mut();
         let mut keys = self.source_keys.borrow_mut();
@@ -196,10 +248,19 @@ impl TrackerInner {
         }
     }
     fn dependency_count(&self, consumer: ConsumerId) -> usize {
-        self.dependencies
+        let direct = self
+            .dependencies
             .borrow()
             .get(&consumer)
-            .map_or(0, |group| group.sources.len())
+            .map_or(0, |group| group.sources.len());
+        direct
+            + self
+                .inherited_projections
+                .borrow()
+                .get(&consumer)
+                .map_or(0, |groups| {
+                    groups.iter().map(|(_, group)| group.sources.len()).sum()
+                })
     }
     fn is_dirty(&self, consumer: ConsumerId) -> bool {
         self.dirty.borrow().contains(&consumer)
@@ -592,6 +653,65 @@ impl BuildContext {
             current = environment.parent.as_deref();
         }
         true
+    }
+
+    /// Observes the conjunction of all flags of this inherited type. Only a
+    /// change of the combined value invalidates the consumer; changing a
+    /// gate hidden by another false gate does not rebuild it.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn all_inherited_filtered<T: Any, P: Fn(&T) -> bool + Copy + 'static>(
+        &self,
+        enabled: P,
+    ) -> bool {
+        let type_id = TypeId::of::<T>();
+        let mut keys = smallvec::SmallVec::<[DependencyKey; 2]>::new();
+        let mut current = Some(self.environment.as_ref());
+        let mut initial = true;
+        while let Some(environment) = current {
+            if let Some(value) = environment
+                .values
+                .borrow()
+                .get(&type_id)
+                .and_then(|value| value.downcast_ref::<T>())
+            {
+                keys.push(DependencyKey::Environment {
+                    environment: environment.id,
+                    type_id,
+                });
+                initial &= enabled(value);
+            }
+            current = environment.parent.as_deref();
+        }
+
+        let project = move |origin: &Environment| {
+            let mut current = Some(origin);
+            while let Some(environment) = current {
+                let values = environment.values.borrow();
+                if values
+                    .get(&type_id)
+                    .and_then(|value| value.downcast_ref::<T>())
+                    .is_some_and(|value| !enabled(value))
+                {
+                    return false;
+                }
+                current = environment.parent.as_deref();
+            }
+            true
+        };
+        let observe = |tracker: &Rc<TrackerInner>, consumer| {
+            tracker.record_projection(
+                consumer,
+                TypeId::of::<(T, P)>(),
+                &keys,
+                &self.environment,
+                initial,
+                project,
+            )
+        };
+        with_active_scope(|scope| observe(&scope.tracker, scope.consumer))
+            .unwrap_or_else(|| observe(&self.tracker, self.consumer));
+        initial
     }
 
     /// Alias for [`BuildContext::depend`], matching reactive UI terminology.

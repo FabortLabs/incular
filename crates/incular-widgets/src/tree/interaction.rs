@@ -3026,8 +3026,8 @@ impl WidgetTree {
             {
                 return true;
             }
-            // `TickerMode(enabled: false)`: the scope already folds in every
-            // enclosing mode.
+            // Explicit TickerMode scopes carry their local gate. Visiting
+            // the ancestors folds the same gates as TickerMode::of.
             if let WidgetKind::LayoutBuilder {
                 environment: Some(scope),
                 ..

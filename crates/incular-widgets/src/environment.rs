@@ -725,24 +725,18 @@ impl TickerMode {
     /// `set_ticker_muted(!TickerMode::of(context))`.
     #[must_use]
     pub fn of(context: &BuildContext<'_>) -> bool {
-        context
-            .depend_on::<TickerModeScope>()
-            .is_none_or(|scope| scope.0)
+        context.ticker_mode_enabled()
     }
 }
 
-/// The effective ticker mode published to a subtree.
+/// The local ticker gate published by an explicit TickerMode or Visibility.
+/// A descendant can only tick when every gate is enabled.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct TickerModeScope(pub(crate) bool);
 
 impl From<TickerMode> for Widget {
     fn from(value: TickerMode) -> Self {
-        let TickerMode { enabled, child } = value;
-        crate::Builder::new(move |context| {
-            let enabled = enabled && TickerMode::of(context);
-            Widget::environment_scope(TickerModeScope(enabled), child.clone())
-        })
-        .into()
+        Widget::environment_scope(TickerModeScope(value.enabled), value.child)
     }
 }
 

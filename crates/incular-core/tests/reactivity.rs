@@ -118,3 +118,27 @@ fn inherited_chain_stops_at_first_rejection_but_retains_providers_already_seen()
     inner.insert(Visible(true));
     assert!(!reader.is_dirty(), "rebind or detach drops all old edges");
 }
+
+#[test]
+fn inherited_projection_ignores_gate_handoffs_and_clears_all_subscriptions() {
+    struct Enabled(bool);
+    let outer = BuildContext::new().provide(Enabled(true));
+    let inner = outer.provide(Enabled(false));
+    let reader = inner.for_related_consumer(incular_core::ConsumerId::new());
+    let read = || reader.build(|ctx| ctx.all_inherited_filtered::<Enabled, _>(|g| g.0));
+
+    assert!(!read());
+    assert_eq!(reader.dependency_count(), 2);
+    outer.insert(Enabled(false));
+    inner.insert(Enabled(true));
+    assert!(!reader.is_dirty(), "the combined state never changed");
+    outer.insert(Enabled(true));
+    assert!(reader.take_dirty());
+    assert!(read());
+    inner.insert(Enabled(false));
+    assert!(reader.take_dirty());
+    reader.clear_dependencies();
+    assert_eq!(reader.dependency_count(), 0);
+    inner.insert(Enabled(true));
+    assert!(!reader.is_dirty());
+}

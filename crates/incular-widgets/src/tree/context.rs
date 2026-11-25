@@ -172,15 +172,23 @@ media_query_aspects! {
     RuntimeParagraphSpacingOverride from paragraph_spacing_override,
 }
 
-/// Installs the aspects of a scope value when it carries a
-/// `RuntimeEnvironment`; other scope values have no aspects.
+/// Installs separately observed fields of a runtime or Visibility scope.
 pub(super) fn install_scope_aspects(context: &DependencyContext, scope: &InheritedScopeValue) {
     if let Some(environment) = scope.value.downcast_ref::<RuntimeEnvironment>() {
         install_media_query_aspects(context, environment);
+    } else if let Some(scope) = scope.value.downcast_ref::<VisibilityScope>() {
+        context.set_erased(
+            TypeId::of::<VisibilityObservation>(),
+            Rc::new(VisibilityObservation(scope.visible)),
+        );
+        context.set_erased(
+            TypeId::of::<crate::environment::TickerModeScope>(),
+            Rc::new(crate::environment::TickerModeScope(scope.ticks_enabled)),
+        );
     }
 }
 
-/// Updates the aspects of a scope value whose `RuntimeEnvironment` changed.
+/// Publishes only the observed fields whose values actually changed.
 pub(super) fn update_scope_aspects(
     context: &DependencyContext,
     previous: &InheritedScopeValue,
@@ -191,11 +199,33 @@ pub(super) fn update_scope_aspects(
         next.value.downcast_ref::<RuntimeEnvironment>(),
     ) {
         update_media_query_aspects(context, previous, next);
+    } else if let (Some(previous), Some(next)) = (
+        previous.value.downcast_ref::<VisibilityScope>(),
+        next.value.downcast_ref::<VisibilityScope>(),
+    ) {
+        if previous.visible != next.visible {
+            context.set_erased(
+                TypeId::of::<VisibilityObservation>(),
+                Rc::new(VisibilityObservation(next.visible)),
+            );
+        }
+        if previous.ticks_enabled != next.ticks_enabled {
+            context.set_erased(
+                TypeId::of::<crate::environment::TickerModeScope>(),
+                Rc::new(crate::environment::TickerModeScope(next.ticks_enabled)),
+            );
+        }
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) struct VisibilityScope(pub(super) bool);
+pub(super) struct VisibilityScope {
+    pub(super) visible: bool,
+    pub(super) ticks_enabled: bool,
+}
+
+#[derive(Clone, Copy)]
+struct VisibilityObservation(bool);
 
 /// A borrowed view of the retained inherited environment for one live build
 /// operation. The reference cannot escape the callback that receives it.
@@ -237,7 +267,12 @@ impl<'a> BuildContext<'a> {
 
     pub(crate) fn visibility(&self) -> bool {
         self.inner
-            .all_retained_inherited::<VisibilityScope>(|scope| scope.0)
+            .all_retained_inherited::<VisibilityObservation>(|scope| scope.0)
+    }
+
+    pub(crate) fn ticker_mode_enabled(&self) -> bool {
+        self.inner
+            .all_inherited_filtered::<crate::environment::TickerModeScope, _>(|scope| scope.0)
     }
 
     /// Current logical viewport from the native/runtime environment. This is
