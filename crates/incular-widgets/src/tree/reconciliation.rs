@@ -240,6 +240,7 @@ impl WidgetTree {
             } else if invalidation.contains(Invalidation::PAINT) {
                 self.mark_render_dirty(render, DirtyFlags::PAINT, false);
             }
+            self.apply_inherited_composite_update(render, invalidation);
             work.extend(children.into_iter().rev());
         }
     }
@@ -446,6 +447,34 @@ impl WidgetTree {
         Ok(id)
     }
 
+    /// A subscribed render object can change its compositor properties
+    /// without changing either its widget descriptor or its layout.
+    fn apply_inherited_composite_update(
+        &mut self,
+        render: RenderObjectId,
+        invalidation: Invalidation,
+    ) {
+        if !invalidation.contains(Invalidation::COMPOSITE) {
+            return;
+        }
+        let node = self.render_live(render, "inherited render must remain live");
+        let (layers, kind, size) = (
+            node.object.layers.clone(),
+            node.object.shared_kind(),
+            node.size,
+        );
+        let world_transform = self.render_world_transform(render);
+        let content_transform = self.content_transform(render);
+        layers.update_from_kind(
+            &mut self.compositor,
+            &kind,
+            size,
+            world_transform,
+            content_transform,
+        );
+        self.diagnostics.compositor_only_updates += 1;
+    }
+
     pub(super) fn apply_inherited_invalidations(&mut self) {
         let dirty = self.dependency_root.take_dirty_consumers();
         for consumer in dirty {
@@ -492,6 +521,7 @@ impl WidgetTree {
                     } else if invalidation.contains(Invalidation::PAINT) {
                         self.mark_render_dirty(render, DirtyFlags::PAINT, false);
                     }
+                    self.apply_inherited_composite_update(render, invalidation);
                 }
             }
         }

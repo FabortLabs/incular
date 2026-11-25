@@ -371,12 +371,14 @@ impl std::fmt::Debug for WidgetKind {
                 .finish(),
             Self::ClipRRect {
                 radius,
+                directional_radius,
                 clip_behavior,
                 child,
                 ..
             } => f
                 .debug_struct("ClipRRect")
                 .field("radius", radius)
+                .field("directional_radius", directional_radius)
                 .field("clip_behavior", clip_behavior)
                 .field("child", child)
                 .finish(),
@@ -1611,17 +1613,19 @@ impl PartialEq for WidgetKind {
             (
                 Self::ClipRRect {
                     radius: a,
+                    directional_radius: i,
                     clip_behavior: b,
                     clipper: g,
                     child: c,
                 },
                 Self::ClipRRect {
                     radius: d,
+                    directional_radius: j,
                     clip_behavior: e,
                     clipper: h,
                     child: f,
                 },
-            ) => a == d && b == e && g == h && c == f,
+            ) => a == d && i == j && b == e && g == h && c == f,
             (
                 Self::ClipOval {
                     clip_behavior: a,
@@ -2331,8 +2335,8 @@ impl WidgetKind {
             WidgetKind::ClipRRect { child, .. } => (
                 WidgetType::ClipRRect,
                 Layout,
-                Single,
-                WidgetChildren::Single(child),
+                Optional,
+                WidgetChildren::Optional(child.as_ref()),
             ),
             WidgetKind::ClipOval { child, .. } => (
                 WidgetType::ClipOval,

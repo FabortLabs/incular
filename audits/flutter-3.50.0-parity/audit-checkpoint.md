@@ -835,3 +835,8 @@ and isolated antialiasing now have distinct Windows wgpu edge behavior.
 add three matched originals, for 455 / 8,965 fully compared (5.08%):
 359 matches and 96 historical mismatches. This includes clipping
 a zero-size FittedBox with semantics enabled.
+
+[Directional ClipRRect](upstream-clip-visibility-focus.md#directional-rounded-clips)
+adds two matched originals: 457 / 8,965 fully compared (5.10%),
+361 matches and 96 historical mismatches. It also fixes stale paint
+when inherited values update retained compositor geometry.

@@ -1,15 +1,16 @@
 //! Public hit tests adapted from Flutter 3.50.0 widgets/clip_test.dart.
 
-use incular_config::{Clip, Constraints};
+use incular_config::{Clip, Constraints, TextDirection};
 use incular_core::{Color, Offset, PointerPhase, Rect, Size};
 use incular_gestures::PointerEvent;
-use incular_rendering::{PaintCommand, Path};
+use incular_rendering::{CornerRadii, PaintCommand, Path};
 use incular_widgets::{
-    Align, Alignment, ClipOval, ClipPath, ClipRect, ClipShape, CustomClipper, GestureDetector,
-    Opacity, SizedBox, Widget, internal::WidgetTree,
+    Align, Alignment, BorderRadiusDirectional, ClipOval, ClipPath, ClipRRect, ClipRect, ClipShape,
+    CustomClipper, Directionality, GestureDetector, Opacity, Radius, SizedBox, Widget,
+    internal::{Key, RenderKind, WidgetTree},
 };
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     rc::Rc,
     sync::Arc,
     time::{Duration, Instant},
@@ -39,6 +40,102 @@ fn tap(tree: &mut WidgetTree, position: Offset, start: Instant, index: u64) {
             time: start + Duration::from_millis(100 * index + offset),
         });
     }
+}
+
+fn directional_radii() -> BorderRadiusDirectional {
+    BorderRadiusDirectional::horizontal(Radius::circular(15.), Radius::circular(30.))
+}
+
+fn rounded_clip_state(tree: &WidgetTree, key: &Key) -> (CornerRadii, Option<TextDirection>) {
+    let render = tree.render_id(tree.element_with_key(key).unwrap()).unwrap();
+    match tree.render_object_kind(render) {
+        Some(RenderKind::ClipRRect {
+            radius,
+            text_direction,
+            ..
+        }) => (*radius, *text_direction),
+        other => panic!("expected rounded clip, got {other:?}"),
+    }
+}
+
+/// clip_test.dart:826. Check all four physical corners in both directions.
+#[test]
+fn childless_rounded_clip_resolves_start_and_end_radii() {
+    let key = Key::from("directional rounded clip");
+    let clip = Widget::from(
+        ClipRRect::builder()
+            .directional_radius(directional_radii())
+            .build(),
+    )
+    .with_key(key.clone());
+    let mut tree = WidgetTree::new();
+    let scene = |direction| Directionality::new(direction, clip.clone()).into();
+    let root = tree.mount(scene(TextDirection::Rtl)).unwrap();
+    for (direction, (left, right)) in [
+        (TextDirection::Rtl, (30., 15.)),
+        (TextDirection::Ltr, (15., 30.)),
+    ] {
+        tree.update(root, scene(direction)).unwrap();
+        layout(&mut tree);
+        assert_eq!(
+            rounded_clip_state(&tree, &key),
+            (
+                CornerRadii {
+                    top_left: left,
+                    top_right: right,
+                    bottom_left: left,
+                    bottom_right: right,
+                },
+                Some(direction)
+            )
+        );
+    }
+}
+
+/// clip_test.dart:862. A tap changes the state in the same mounted subtree.
+#[test]
+fn rounded_clip_direction_changes_on_the_same_render_object_after_tap() {
+    let key = Key::from("stateful directional clip");
+    let direction = Rc::new(Cell::new(TextDirection::Ltr));
+    let revision = Rc::new(Cell::new(0_u64));
+    let scene = Widget::stateful_builder(revision.clone(), {
+        let key = key.clone();
+        move |_| {
+            let touch = GestureDetector::new(Widget::box_(Size::new(100., 100.), Color::WHITE))
+                .on_tap({
+                    let direction = direction.clone();
+                    let revision = revision.clone();
+                    move || {
+                        direction.set(TextDirection::Rtl);
+                        revision.set(revision.get() + 1);
+                    }
+                });
+            let clip =
+                Widget::from(ClipRRect::new(0., touch).directional_radius(directional_radii()))
+                    .with_key(key.clone());
+            Directionality::new(direction.get(), SizedBox::square(100.).child(clip)).into()
+        }
+    });
+    let mut tree = WidgetTree::new();
+    tree.mount(scene).unwrap();
+    layout(&mut tree);
+    let render = tree
+        .render_id(tree.element_with_key(&key).unwrap())
+        .unwrap();
+    let (_, before) = rounded_clip_state(&tree, &key);
+    assert_eq!(before, Some(TextDirection::Ltr));
+    tap(&mut tree, Offset::ZERO, Instant::now(), 0);
+    layout(&mut tree);
+    assert_eq!(
+        tree.render_id(tree.element_with_key(&key).unwrap()),
+        Some(render)
+    );
+    let (corners, after) = rounded_clip_state(&tree, &key);
+    assert_eq!(after, Some(TextDirection::Rtl));
+    assert_eq!((corners.top_left, corners.top_right), (30., 15.));
+    assert!(tree.paint().commands().iter().any(|op| matches!(
+        op, PaintCommand::PushClipRRect { rrect, .. } if rrect.radii == corners
+    )));
 }
 
 fn check_oval(transparent: bool, clip: Clip) {

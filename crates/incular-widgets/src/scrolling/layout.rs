@@ -3275,7 +3275,6 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
         }
         WidgetKind::Align { child, .. }
         | WidgetKind::SafeArea { child, .. }
-        | WidgetKind::ClipRRect { child, .. }
         | WidgetKind::ClipOval { child, .. }
         | WidgetKind::Gesture { child, .. }
         | WidgetKind::Draggable { child, .. }
@@ -3308,6 +3307,7 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
             .and_then(|child| widget_main_extent_hint(child, axis)),
         WidgetKind::ColorFiltered { child, .. }
         | WidgetKind::ClipRect { child, .. }
+        | WidgetKind::ClipRRect { child, .. }
         | WidgetKind::ClipPath { child, .. } => child
             .as_ref()
             .map_or(Some(0.), |child| widget_main_extent_hint(child, axis)),

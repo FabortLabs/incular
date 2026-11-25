@@ -123,3 +123,16 @@ its delegate describes a non-empty rectangle. A FittedBox with
 zero-size image semantics survives layout, paint, and semantics
 under a ClipRect and remains in the retained tree. All 39 focused
 clip, input, and shape tests pass.
+
+## Directional rounded clips
+
+Both pinned originals (:826 and :862) and both Rust ports pass. All
+four physical corners mirror for the original 15/30 start/end radii.
+A tap at the origin changes the inherited direction on the same
+render object. The first Rust implementation updated the render
+property but still drew the old LTR corners: inherited render
+invalidation did not update compositor-only properties. The fix
+delivers that invalidation to the retained layer and the regression
+now verifies the emitted RTL radii too. All 41 focused widget cases
+pass. Elliptical corner radii and direction-required validation
+without an ancestor are not covered by these two originals.

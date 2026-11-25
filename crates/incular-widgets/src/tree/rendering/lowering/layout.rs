@@ -209,14 +209,24 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
         },
         WidgetKind::ClipRRect {
             radius,
+            directional_radius,
             clip_behavior,
             clipper,
             ..
-        } => RenderKind::ClipRRect {
-            radius: *radius,
-            clip_behavior: *clip_behavior,
-            clipper: clipper.clone(),
-        },
+        } => {
+            let text_direction = directional_radius.and_then(|_| context.depend::<TextDirection>());
+            let radius = directional_radius.map_or(*radius, |value| {
+                value
+                    .resolve(text_direction.unwrap_or(TextDirection::Ltr))
+                    .to_corner_radii()
+            });
+            RenderKind::ClipRRect {
+                radius,
+                text_direction,
+                clip_behavior: *clip_behavior,
+                clipper: clipper.clone(),
+            }
+        }
         WidgetKind::ClipOval {
             clip_behavior,
             clipper,

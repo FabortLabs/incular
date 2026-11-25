@@ -750,6 +750,7 @@ pub enum RenderKind {
     },
     ClipRRect {
         radius: CornerRadii,
+        text_direction: Option<TextDirection>,
         clip_behavior: Clip,
         clipper: Option<crate::layout::ClipDelegate>,
     },

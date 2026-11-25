@@ -258,16 +258,19 @@ fn delegate_keeps_output(old: &RenderKind, new: &RenderKind) -> bool {
         (
             RenderKind::ClipRRect {
                 radius: old_radius,
+                text_direction: old_direction,
                 clip_behavior: old_behavior,
                 clipper: Some(old_clipper),
             },
             RenderKind::ClipRRect {
                 radius: new_radius,
+                text_direction: new_direction,
                 clip_behavior: new_behavior,
                 clipper: Some(new_clipper),
             },
         ) => {
             old_radius == new_radius
+                && old_direction == new_direction
                 && old_behavior == new_behavior
                 && !new_clipper.reclips_from(old_clipper)
         }

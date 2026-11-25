@@ -747,3 +747,5 @@ packages/flutter/test/widgets/clip_test.dart	741	ClipPath.shape	paired-match	ups
 packages/flutter/test/widgets/clip_test.dart	66	ClipRect with a FittedBox child sized to zero works with semantics	paired-match	upstream-clip-visibility-focus.md#childless-rect-clips-and-zero-sized-fitted-semantics
 packages/flutter/test/widgets/clip_test.dart	85	ClipRect updates clipBehavior in updateRenderObject	paired-match	upstream-clip-visibility-focus.md#childless-rect-clips-and-zero-sized-fitted-semantics
 packages/flutter/test/widgets/clip_test.dart	917	ClipRect does not crash at zero area	paired-match	upstream-clip-visibility-focus.md#childless-rect-clips-and-zero-sized-fitted-semantics
+packages/flutter/test/widgets/clip_test.dart	826	ClipRRect supports BorderRadiusDirectional	paired-match	upstream-clip-visibility-focus.md#directional-rounded-clips
+packages/flutter/test/widgets/clip_test.dart	862	ClipRRect is direction-aware	paired-match	upstream-clip-visibility-focus.md#directional-rounded-clips

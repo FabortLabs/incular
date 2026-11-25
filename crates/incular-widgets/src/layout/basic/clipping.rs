@@ -180,12 +180,14 @@ widget_from_kind!(ClipRect => ClipRect { clip_behavior, clipper, child });
 pub struct ClipRRect {
     #[builder(default, setter(into))]
     radius: CornerRadii,
+    #[builder(default, setter(strip_option))]
+    directional_radius: Option<crate::BorderRadiusDirectional>,
     #[builder(default = Clip::AntiAlias)]
     clip_behavior: Clip,
     #[builder(default, setter(strip_option))]
     clipper: Option<ClipDelegate>,
-    #[builder(setter(into))]
-    child: Widget,
+    #[builder(default, setter(strip_option, into))]
+    child: Option<Widget>,
 }
 
 impl ClipRRect {
@@ -194,10 +196,19 @@ impl ClipRRect {
     pub fn new(radius: impl Into<CornerRadii>, child: impl Into<Widget>) -> Self {
         Self {
             radius: radius.into(),
+            directional_radius: None,
             clip_behavior: Clip::AntiAlias,
             clipper: None,
-            child: child.into(),
+            child: Some(child.into()),
         }
+    }
+
+    /// Resolves start and end radii against the nearest Directionality.
+    /// When set, this takes precedence over the physical corner radii.
+    #[must_use]
+    pub fn directional_radius(mut self, radius: crate::BorderRadiusDirectional) -> Self {
+        self.directional_radius = Some(radius);
+        self
     }
 
     #[must_use]
@@ -216,7 +227,7 @@ impl ClipRRect {
     }
 }
 
-widget_from_kind!(ClipRRect => ClipRRect { radius, clip_behavior, clipper, child });
+widget_from_kind!(ClipRRect => ClipRRect { radius, directional_radius, clip_behavior, clipper, child });
 
 /// Clips its child using an elliptical / oval boundary.
 ///
