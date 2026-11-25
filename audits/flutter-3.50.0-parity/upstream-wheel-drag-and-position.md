@@ -33,7 +33,7 @@ Replacing a controller on a still-mounted wheel is a separate case.
 
 ## Controller replacement on one position
 
-Pinned :1457 passed. The mounted wheel first scrolls to item 5. A new
+Pinned :1453 passed. The mounted wheel first scrolls to item 5. A new
 controller's initial item 30 does not take effect; it observes item 5
 on the existing position. Moving to item 50 and attaching a second
 controller with initial item 33 keeps item 50. The replaced controllers
