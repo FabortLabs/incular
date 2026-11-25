@@ -171,8 +171,8 @@ impl ColorFilter {
     /// Flutter's `ColorFilter.mode(color, mode)`: `color` is the blend
     /// source and each filtered pixel the destination. Returns the exact
     /// matrix form for the modes whose straight-alpha result is affine in
-    /// the destination: `src`, `srcIn`, `dstIn`, `srcOut`, `dstOut`,
-    /// `srcATop` and `modulate`. Every other mode (including
+    /// the destination: `clear`, `src`, `dst`, `srcIn`, `dstIn`, `srcOut`,
+    /// `dstOut`, `srcATop` and `modulate`. Every other mode (including
     /// `srcOver`, `dstATop` and the separable and non-separable artistic
     /// modes) divides by or multiplies with the destination alpha after
     /// premultiplication, which a 4x5 straight-RGBA matrix cannot
@@ -201,6 +201,8 @@ impl ColorFilter {
             [0., 0., 1., 0., 0.],
         ];
         Some(match mode {
+            BlendMode::Clear => Self::matrix([0.; 20]),
+            BlendMode::Dst => Self::identity(),
             BlendMode::Src => rows(source_rgb, [0., 0., 0., 0., a]),
             BlendMode::SrcIn => rows(source_rgb, [0., 0., 0., a, 0.]),
             BlendMode::DstIn => rows(destination_rgb, [0., 0., 0., a, 0.]),
@@ -627,6 +629,10 @@ pub enum BlendMode {
     Color,
     /// Source luminosity, destination hue and saturation.
     Luminosity,
+    /// Discard both the source and the destination.
+    Clear,
+    /// Leave the destination unchanged.
+    Dst,
 }
 impl BlendMode {
     #[must_use]
@@ -634,6 +640,8 @@ impl BlendMode {
         !matches!(
             self,
             Self::SrcOver
+                | Self::Clear
+                | Self::Dst
                 | Self::Src
                 | Self::DstOver
                 | Self::SrcIn
@@ -676,6 +684,8 @@ impl BlendMode {
             Self::Saturation => 24,
             Self::Color => 25,
             Self::Luminosity => 26,
+            Self::Clear => 27,
+            Self::Dst => 28,
         }
     }
 }
@@ -690,6 +700,8 @@ pub fn blend_premultiplied(mode: BlendMode, source: [f32; 4], destination: [f32;
     let ad = dst[3];
     let ao = (as_ + ad - as_ * ad).clamp(0., 1.);
     let result = match mode {
+        BlendMode::Clear => [0.; 4],
+        BlendMode::Dst => dst,
         BlendMode::SrcOver => [
             src[0] + dst[0] * (1. - as_),
             src[1] + dst[1] * (1. - as_),

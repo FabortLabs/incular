@@ -88,6 +88,13 @@ fn public_blend_contracts_are_unique_and_destination_reads_are_explicit() {
         BlendMode::SoftLight,
         BlendMode::Difference,
         BlendMode::Exclusion,
+        BlendMode::Modulate,
+        BlendMode::Hue,
+        BlendMode::Saturation,
+        BlendMode::Color,
+        BlendMode::Luminosity,
+        BlendMode::Clear,
+        BlendMode::Dst,
     ];
     let mut codes = modes.iter().map(|mode| mode.code()).collect::<Vec<_>>();
     codes.sort_unstable();
@@ -95,6 +102,8 @@ fn public_blend_contracts_are_unique_and_destination_reads_are_explicit() {
     assert_eq!(codes.len(), modes.len());
     assert!(!BlendMode::SrcOver.requires_destination_read());
     assert!(!BlendMode::Src.requires_destination_read());
+    assert!(!BlendMode::Clear.requires_destination_read());
+    assert!(!BlendMode::Dst.requires_destination_read());
     assert!(BlendMode::Multiply.requires_destination_read());
     assert!(BlendMode::Exclusion.requires_destination_read());
 }

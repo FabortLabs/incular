@@ -94,3 +94,12 @@ agree for -1, 0, 1, 2 and 8, including negative extrapolation, identity,
 and channel clipping at strong saturation. CPU tests also check
 transparent input and preserved half alpha. This verifies the factory
 and raster values but not the original FlutterLogo golden (:85).
+
+### Clear and destination-only blending
+
+Clear and Dst are available as matrices for ColorFiltered and as
+fixed-function wgpu blends. Clear discards both colors in the painted
+region; Dst keeps the original destination, including its alpha. They
+do not require a copied destination texture or renumber any existing
+blend code. The paired pixel checks cover both modes as isolated color
+filters and direct blends over opaque and translucent destinations.

@@ -154,13 +154,17 @@ void main() {
     }
   });
 
-  testWidgets('Nonseparable modes blend whole RGB colors', (tester) async {
+  testWidgets('Blend modes respect opaque and translucent destinations', (
+    tester,
+  ) async {
     const source = Color(0xa0c8285a);
     const cases = [
       (ui.BlendMode.hue, [148, 94, 142, 255], [137, 60, 99, 255]),
       (ui.BlendMode.saturation, [70, 121, 211, 255], [98, 73, 134, 255]),
       (ui.BlendMode.color, [169, 84, 141, 255], [147, 55, 99, 255]),
       (ui.BlendMode.luminosity, [66, 106, 176, 255], [96, 66, 117, 255]),
+      (ui.BlendMode.clear, _blackPixel, _blackPixel),
+      (ui.BlendMode.dst, [80, 120, 190, 255], [40, 60, 95, 255]),
     ];
     for (final (mode, opaque, translucent) in cases) {
       for (final (destination, expected) in [

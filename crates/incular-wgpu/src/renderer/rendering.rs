@@ -197,7 +197,9 @@ impl WgpuRenderer {
                     &self.blend_pipeline
                 }
                 DrawBatch::Blend { mode, .. } => {
-                    let Some(pipeline) = self.fixed_blend_pipelines.get(mode.code() as usize)
+                    let Some(pipeline) = self
+                        .fixed_blend_pipelines
+                        .get(porter_duff_pipeline_index(*mode))
                     else {
                         continue;
                     };
@@ -631,7 +633,9 @@ impl WgpuRenderer {
                         }
                     };
                     if !mode.requires_destination_read() {
-                        let Some(pipeline) = self.fixed_blend_pipelines.get(mode.code() as usize)
+                        let Some(pipeline) = self
+                            .fixed_blend_pipelines
+                            .get(porter_duff_pipeline_index(*mode))
                         else {
                             continue;
                         };

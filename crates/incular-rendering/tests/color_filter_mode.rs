@@ -27,6 +27,8 @@ fn matrix_modes_match_the_reference_blend() {
         [0., 0., 0., 1.],
     ];
     for mode in [
+        BlendMode::Clear,
+        BlendMode::Dst,
         BlendMode::Src,
         BlendMode::SrcIn,
         BlendMode::DstIn,

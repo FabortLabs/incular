@@ -219,6 +219,8 @@ fn flutter_350_color_filtered_matrix_recovers_alpha_and_respects_opacity_order()
             [66, 106, 176, 255],
             [96, 66, 117, 255],
         ),
+        (BlendMode::Clear, BLACK, BLACK),
+        (BlendMode::Dst, [80, 120, 190, 255], [40, 60, 95, 255]),
     ] {
         for (destination, expected) in [
             (Color::rgba(80, 120, 190, 255), opaque),

@@ -419,7 +419,7 @@ impl PipelineContract {
 
 /// Porter-Duff modes implemented by fixed-function blend pipelines; artistic
 /// modes route through `BLEND_SHADER` instead.
-pub(crate) const PORTER_DUFF_BLEND_MODES: [BlendMode; 11] = [
+pub(crate) const PORTER_DUFF_BLEND_MODES: [BlendMode; 13] = [
     BlendMode::SrcOver,
     BlendMode::Src,
     BlendMode::DstOver,
@@ -431,7 +431,19 @@ pub(crate) const PORTER_DUFF_BLEND_MODES: [BlendMode; 11] = [
     BlendMode::DstAtop,
     BlendMode::Xor,
     BlendMode::Plus,
+    BlendMode::Clear,
+    BlendMode::Dst,
 ];
+
+/// The compact pipeline array keeps the original codes for the first
+/// eleven Porter-Duff modes and appends the later Clear/Dst codes.
+pub(crate) fn porter_duff_pipeline_index(mode: BlendMode) -> usize {
+    match mode {
+        BlendMode::Clear => 11,
+        BlendMode::Dst => 12,
+        _ => mode.code() as usize,
+    }
+}
 
 pub(crate) const CLIP_STENCIL_DIRECTIONS: [ClipStencilDirection; 2] = [
     ClipStencilDirection::Increment,
@@ -811,6 +823,8 @@ pub(crate) fn porter_duff_factors(mode: BlendMode) -> (wgpu::BlendComponent, wgp
         )
     };
     match mode {
+        BlendMode::Clear => factors(wgpu::BlendFactor::Zero, wgpu::BlendFactor::Zero),
+        BlendMode::Dst => factors(wgpu::BlendFactor::Zero, wgpu::BlendFactor::One),
         BlendMode::SrcOver => factors(wgpu::BlendFactor::One, wgpu::BlendFactor::OneMinusSrcAlpha),
         BlendMode::Src => factors(wgpu::BlendFactor::One, wgpu::BlendFactor::Zero),
         BlendMode::DstOver => factors(wgpu::BlendFactor::OneMinusDstAlpha, wgpu::BlendFactor::One),
