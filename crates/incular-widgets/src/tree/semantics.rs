@@ -12,6 +12,9 @@
 use super::*;
 use std::borrow::Cow;
 
+mod traversal;
+use traversal::TraversalItem;
+
 #[derive(Clone, Copy, Debug, Default)]
 pub(super) struct SemanticCollectionContext {
     item_index: Option<usize>,
@@ -76,6 +79,7 @@ pub(super) struct SemanticsScratch {
     child_ids: Vec<SemanticNodeId>,
     /// Child edges in visit order: (parent build index, sequence, child).
     edges: Vec<(u32, u32, ElementId)>,
+    traversal_items: Vec<TraversalItem>,
     /// Elements still to search inside a clean subtree.
     retained: Vec<ElementId>,
     /// Every semantic node with a parent edge (or top-level slot) this pass,
@@ -236,6 +240,7 @@ impl WidgetTree {
                 subtree_content: visit.force_content || dirty.subtree_content(),
                 own_bounds: visit.force_bounds || dirty.own_bounds(),
                 bounds_below: visit.force_bounds || dirty.bounds_below(),
+                descendant_bounds: dirty.has_descendant_bounds(),
             };
             self.collect_semantics_inner(visit, scope, builds, edges, visits, &mut inconsistent);
         }
@@ -409,6 +414,7 @@ impl WidgetTree {
             builds,
             child_ids,
             edges,
+            traversal_items,
             attached,
             detached,
             ..
@@ -448,7 +454,7 @@ impl WidgetTree {
         // Edges were recorded in visit order, so sorting by parent keeps
         // each child list in logical order. Top-level edges sort last.
         edges.sort_unstable_by_key(|&(parent, sequence, _)| (parent, sequence));
-        self.sort_sibling_groups(edges);
+        self.sort_sibling_groups(edges, builds, traversal_items);
         attached.clear();
         attached.extend(
             edges
@@ -600,7 +606,14 @@ impl WidgetTree {
                 edges.push((semantic_parent, edges.len() as u32, element));
             }
             let regroups = self.regroups_sliver_semantics(entry);
-            if !scope.own_bounds && !regroups {
+            let reorder = scope.descendant_bounds
+                && self.semantic_reading_direction(element).is_some()
+                && self
+                    .semantic_ids
+                    .get(&element)
+                    .and_then(|id| self.semantics.node(*id))
+                    .is_some_and(|node| node.children.len() > 1);
+            if !scope.own_bounds && !regroups && !reorder {
                 // The node only lies on the path to a marked one: its bounds
                 // and its child list stand, and only its marked children
                 // are entered.
@@ -987,7 +1000,12 @@ impl WidgetTree {
     /// `SemanticsNode._childrenInTraversalOrder` does: siblings form runs of
     /// compatible sort keys, a keyed run is ordered by key (ties keep widget
     /// order), and an unkeyed run keeps its place.
-    fn sort_sibling_groups(&self, edges: &mut [(u32, u32, ElementId)]) {
+    fn sort_sibling_groups(
+        &self,
+        edges: &mut [(u32, u32, ElementId)],
+        builds: &[Collected],
+        traversal_items: &mut Vec<TraversalItem>,
+    ) {
         let mut start = 0;
         while start < edges.len() {
             let parent = edges[start].0;
@@ -997,10 +1015,95 @@ impl WidgetTree {
                     .take_while(|(group, _, _)| *group == parent)
                     .count();
             if end - start > 1 {
+                if let Some(parent) = builds.get(parent as usize).map(Collected::element)
+                    && let Some(direction) = self.semantic_reading_direction(parent)
+                {
+                    self.sort_by_reading_order(
+                        parent,
+                        direction,
+                        &mut edges[start..end],
+                        traversal_items,
+                    );
+                }
                 self.sort_sibling_group(&mut edges[start..end]);
             }
             start = end;
         }
+    }
+
+    fn semantic_reading_direction(&self, element: ElementId) -> Option<TextDirection> {
+        self.elements
+            .get(element.0)?
+            .render_context
+            .read::<TextDirection>()
+    }
+
+    fn sort_by_reading_order(
+        &self,
+        parent: ElementId,
+        direction: TextDirection,
+        edges: &mut [(u32, u32, ElementId)],
+        items: &mut Vec<TraversalItem>,
+    ) {
+        let Some(parent_render) = self.render_id(parent) else {
+            return;
+        };
+        items.clear();
+        for &edge in edges.iter() {
+            let Some(render) = self.render_id(edge.2) else {
+                return;
+            };
+            let Some(node) = self.renders.get(render.0) else {
+                return;
+            };
+            let Some(transform) = self.semantic_traversal_transform(render, parent_render) else {
+                return;
+            };
+            let Some(item) = TraversalItem::new(edge, transform, node.size) else {
+                return;
+            };
+            items.push(item);
+        }
+        traversal::order(items, direction);
+        for (edge, item) in edges.iter_mut().zip(items.iter()) {
+            *edge = item.edge;
+        }
+    }
+
+    /// Ordinary semantic ancestry follows render ancestry, so accumulate the
+    /// relative transform without allocating a world path per sibling.
+    fn semantic_traversal_transform(
+        &self,
+        child: RenderObjectId,
+        parent: RenderObjectId,
+    ) -> Option<CoreTransform> {
+        let node = self.renders.get(child.0)?;
+        let content = if self.content_transform(child).is_some()
+            || matches!(node.object.kind(), RenderKind::Follower { .. })
+        {
+            self.child_content_transform(child)
+        } else {
+            CoreTransform::IDENTITY
+        };
+        let mut relative = CoreTransform::translation(node.offset).then(content);
+        let mut cursor = node.parent;
+        while let Some(ancestor) = cursor {
+            let node = self.renders.get(ancestor.0)?;
+            relative = self.child_content_transform(ancestor).then(relative);
+            if ancestor == parent {
+                return Some(relative);
+            }
+            relative = CoreTransform::translation(node.offset).then(relative);
+            cursor = node.parent;
+        }
+        // Traversal-grafted nodes, e.g. an overlay portal, may not descend
+        // from their semantic parent in the render tree.
+        Some(
+            self.render_world_transform(parent)
+                .inverse()?
+                .then(self.render_world_transform(child))
+                .then(content),
+        )
     }
 
     /// The sort key the element's explicit semantics declares, if any.
@@ -1209,6 +1312,8 @@ struct VisitScope {
     own_bounds: bool,
     /// Every bound below may have changed.
     bounds_below: bool,
+    /// A retained child list may need new spatial traversal ordering.
+    descendant_bounds: bool,
 }
 
 /// Scroll actions for the current offset: forward only before the maximum,

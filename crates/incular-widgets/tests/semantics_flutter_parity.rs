@@ -6,12 +6,12 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use incular_config::Constraints;
-use incular_core::{Rect, Size};
+use incular_core::{Offset, Rect, Size, time::Instant};
 use incular_semantics::{OrdinalSortKey, SemanticActionKind, SemanticRole, SemanticState};
 use incular_widgets::{
-    Column, Directionality, GestureDetector, MergeSemantics, Opacity, Row, Semantics,
-    SingleChildScrollView, SizedBox, Text, TextDirection, Widget,
-    internal::{Key, WidgetTree},
+    Column, Directionality, GestureDetector, MergeSemantics, Opacity, Positioned, Row, Semantics,
+    SingleChildScrollView, SizedBox, Stack, Text, TextDirection, Widget,
+    internal::{Key, TranslationController, WidgetTree},
 };
 
 fn mounted(widget: impl Into<Widget>) -> WidgetTree {
@@ -309,6 +309,68 @@ fn traversal_order_keeps_a_grid_with_touching_elements_in_reading_order() {
         }
     }
     assert_eq!(child_labels(&tree, "touching grid"), expected);
+}
+
+#[test]
+fn positioned_semantic_siblings_use_geometry_before_paint_order() {
+    let cell = |label, left, top| Widget::from(Positioned::new(button(label)).left(left).top(top));
+    for (direction, expected) in [
+        (TextDirection::Ltr, ["left", "right", "below"]),
+        (TextDirection::Rtl, ["right", "left", "below"]),
+    ] {
+        for right in [130., 25.] {
+            let group = Semantics::new(Stack::new([
+                cell("below", 60., 80.),
+                cell("right", right, 5.),
+                cell("left", 5., 5.),
+            ]))
+            .label("reading group")
+            .container(true)
+            .explicit_child_nodes(true);
+            let tree = mounted(Directionality::new(direction, group));
+            assert_eq!(
+                child_labels(&tree, "reading group"),
+                expected,
+                "{direction:?}, right x={right}",
+            );
+        }
+    }
+}
+
+#[test]
+fn moving_a_semantic_child_reorders_its_retained_parent_without_layout() {
+    let translation = TranslationController::new();
+    let group = Semantics::new(Stack::new([
+        Widget::from(Positioned::new(button("stationary")).left(70.).top(5.)),
+        Widget::from(
+            Positioned::new(Widget::translate(
+                translation.clone(),
+                Widget::from(button("moving")),
+            ))
+            .left(130.)
+            .top(5.),
+        ),
+    ]))
+    .label("moving group")
+    .container(true)
+    .explicit_child_nodes(true);
+    let mut tree = mounted(Directionality::new(TextDirection::Ltr, group));
+    assert_eq!(
+        child_labels(&tree, "moving group"),
+        ["stationary", "moving"]
+    );
+    let before = labelled(&tree, "moving").unwrap().id;
+    let layouts = tree.diagnostics().layouts;
+
+    translation.set_offset(Offset::new(-120., 0.));
+    tree.update_compositor(Instant::now()).unwrap();
+    tree.update_semantics();
+    assert_eq!(tree.diagnostics().layouts, layouts);
+    assert_eq!(labelled(&tree, "moving").unwrap().id, before);
+    assert_eq!(
+        child_labels(&tree, "moving group"),
+        ["moving", "stationary"]
+    );
 }
 
 /// semantics-012: `widgets/basic.dart:7942`. `container(true)` makes a bare

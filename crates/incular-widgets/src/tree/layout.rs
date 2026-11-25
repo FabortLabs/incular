@@ -976,6 +976,7 @@ impl WidgetTree {
         // Ancestors learn whether content below them changed, so a node
         // that only has moved descendants can keep its own retained text.
         let content = scope.is_content_scope();
+        let geometry = scope.own_bounds();
         let mut current = node.parent;
         while let Some(render) = current {
             let Some(node) = self.renders.get_mut(render.0) else {
@@ -983,12 +984,16 @@ impl WidgetTree {
             };
             if node.subtree_needs_semantics
                 && (!content || node.semantics_dirty.has_descendant_content())
+                && (!geometry || node.semantics_dirty.has_descendant_bounds())
             {
                 break;
             }
             node.subtree_needs_semantics = true;
             if content {
                 node.semantics_dirty = node.semantics_dirty.with_descendant_content();
+            }
+            if geometry {
+                node.semantics_dirty = node.semantics_dirty.union(SemanticsDirty::DescendantBounds);
             }
             current = node.parent;
         }

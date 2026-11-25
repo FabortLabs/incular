@@ -42,3 +42,19 @@ fixture checks that each 50×50 cell really touches its neighbors
 before reading the published semantic child list. This is partial:
 the TestWidgetsApp shell's semantic grouping and raw numeric IDs
 are not ported to the generational Rust tree.
+
+## Positioned sibling traversal
+
+The authored pinned probe places "below", "right", and "left" in
+declaration order. Flutter traverses both upper siblings before the
+lower one, using LTR or RTL within the row, even when the upper boxes
+overlap. The Rust baseline instead returned declaration order.
+
+Semantic sibling lists now use parent-relative layout geometry before
+applying ordinal sort-key runs. Bounds changes mark the affected
+ancestor lists. The retained test moves one node in the compositor,
+preserves its ID and layout count, and observes the updated reading
+order. The corresponding Flutter transform keeps the same ID as well.
+All 27 targeted Rust semantics tests and three authored Flutter cases
+passed. These checks do not certify every rotated, degenerate, or
+portal-grafted arrangement, nor the native screen-reader traversal.

@@ -421,6 +421,8 @@ impl SemanticsDirty {
     /// Only the node's own bounds changed (it was laid out at a new size);
     /// nothing below it moved.
     pub(crate) const OwnBounds: Self = Self(16);
+    /// A descendant moved or resized; a traversal list may need reordering.
+    pub(crate) const DescendantBounds: Self = Self(32);
 
     #[must_use]
     pub(crate) const fn union(self, other: Self) -> Self {
@@ -469,6 +471,10 @@ impl SemanticsDirty {
 
     pub(crate) const fn has_descendant_content(self) -> bool {
         self.has(Self::DescendantContent)
+    }
+
+    pub(crate) const fn has_descendant_bounds(self) -> bool {
+        self.has(Self::DescendantBounds)
     }
 }
 
