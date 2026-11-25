@@ -199,6 +199,15 @@ fn piece(text: &str, range: Range<usize>, style: Option<&TextStyle>) -> Option<T
     Some(span)
 }
 
+/// Keep the rendering cursor monotonic and on character boundaries even if a
+/// user-provided checker returns malformed or overlapping byte ranges.
+fn suggestion_range(text: &str, range: &Range<usize>, pointer: usize) -> Option<Range<usize>> {
+    let start = range.start;
+    let end = range.end.min(text.len());
+    (pointer <= start && start < end && text.is_char_boundary(start) && text.is_char_boundary(end))
+        .then_some(start..end)
+}
+
 /// Flutter's `_buildSubtreesWithoutComposingRegion`.
 fn subtrees_without_composing_region(
     spans: &[SuggestionSpan],
@@ -212,22 +221,17 @@ fn subtrees_without_composing_region(
     // Each span adds at most a gap piece and its own piece, plus a tail.
     let mut children = Vec::with_capacity(spans.len() * 2 + 1);
     let mut pointer = 0;
-    let mut index = 0;
-    while pointer < text.len() && index < spans.len() {
-        let current = &spans[index];
-        if current.range.start > pointer {
-            let end = current.range.start.min(text.len());
-            children.extend(piece(text, pointer..end, style));
-            pointer = end;
-        } else {
-            let end = current.range.end.min(text.len());
-            let cursor_inside =
-                current.range.start <= cursor_index && current.range.end >= cursor_index;
-            let piece_style = if cursor_inside { style } else { Some(&joint) };
-            children.extend(piece(text, current.range.start..end, piece_style));
-            pointer = end;
-            index += 1;
+    for current in spans {
+        let Some(range) = suggestion_range(text, &current.range, pointer) else {
+            continue;
+        };
+        if range.start > pointer {
+            children.extend(piece(text, pointer..range.start, style));
         }
+        let cursor_inside = range.start <= cursor_index && current.range.end >= cursor_index;
+        let piece_style = if cursor_inside { style } else { Some(&joint) };
+        pointer = range.end;
+        children.extend(piece(text, range, piece_style));
     }
     if pointer < text.len() {
         children.extend(piece(text, pointer..text.len(), style));
@@ -262,11 +266,12 @@ fn subtrees_with_composing_region(
         children.extend(piece(text, composing.clone(), Some(&composing_style)));
     };
     let mut pointer = 0;
-    let mut index = 0;
-    while pointer < text.len() && index < spans.len() {
-        let current = &spans[index];
-        if current.range.start > pointer {
-            let end = current.range.start.min(text.len());
+    for current in spans {
+        let Some(region) = suggestion_range(text, &current.range, pointer) else {
+            continue;
+        };
+        if region.start > pointer {
+            let end = region.start;
             if let Some(composing) = &composing
                 && composing.start >= pointer
                 && composing.end <= end
@@ -276,21 +281,17 @@ fn subtrees_with_composing_region(
             } else {
                 children.extend(piece(text, pointer..end, style));
             }
-            pointer = end;
-        } else {
-            let end = current.range.end.min(text.len());
-            let is_composing = composing
-                .as_ref()
-                .is_some_and(|range| pointer >= range.start && end <= range.end);
-            let piece_style = if is_composing {
-                &composing_style
-            } else {
-                &joint
-            };
-            children.extend(piece(text, current.range.start..end, Some(piece_style)));
-            pointer = end;
-            index += 1;
         }
+        let is_composing = composing
+            .as_ref()
+            .is_some_and(|range| region.start >= range.start && region.end <= range.end);
+        let piece_style = if is_composing {
+            &composing_style
+        } else {
+            &joint
+        };
+        pointer = region.end;
+        children.extend(piece(text, region, Some(piece_style)));
     }
     if pointer < text.len() {
         if let Some(composing) = &composing

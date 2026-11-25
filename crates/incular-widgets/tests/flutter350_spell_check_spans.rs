@@ -264,3 +264,42 @@ fn deletion_keeps_three_previous_spans_and_the_trailing_space() {
         ],
     );
 }
+
+// Incular's service API accepts UTF-8 byte ranges. Bad ranges from a custom
+// checker must never drop or repeat characters in the editable field.
+#[test]
+fn malformed_service_ranges_leave_unicode_text_intact() {
+    let text = "é worng β end";
+    assert_spans(
+        MOBILE,
+        TextEditingValue::new(text),
+        false,
+        results(
+            text,
+            &[
+                (1, 2, &[]), // starts inside é
+                (2, 2, &[]), // empty
+                (3, 8, WRONG),
+                (6, 9, &[]),   // overlaps the accepted word
+                (9, 10, &[]),  // ends inside β
+                (12, 11, &[]), // reversed
+                (40, 41, &[]), // outside the text
+            ],
+        ),
+        &[("é ", P), ("worng", M), (" β end", P)],
+    );
+}
+
+#[test]
+fn service_range_with_an_oversized_end_is_still_clamped() {
+    let text = "é worng";
+    let mut value = TextEditingValue::new(text);
+    value.selection = TextSelection::collapsed(0);
+    assert_spans(
+        MOBILE,
+        value,
+        false,
+        results(text, &[(3, 80, WRONG)]),
+        &[("é ", P), ("worng", M)],
+    );
+}

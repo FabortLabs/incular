@@ -24,3 +24,9 @@ treated as a zero-length range at offset zero, adding empty children and a
 spurious composing marker. The same tests now pass on both platform policies.
 The existing focused spell-check tests also pass, including painted
 misspellings. This does not verify native dictionaries or OS pixel output.
+
+Two additional Incular regressions cover the UTF-8 service boundary. Invalid,
+empty, reversed, overlapping, and out-of-text ranges from a custom checker
+must not drop or repeat visible characters. An otherwise valid range with
+an oversized end still clamps to the text boundary. These checks are not
+additional Flutter registrations.
