@@ -461,7 +461,9 @@ impl WidgetTree {
                             .baseline = baseline;
                         (size, ChildOffsets::One(Offset::ZERO))
                     }
-                    ChildLayoutMode::SemanticAnnotation | ChildLayoutMode::SemanticBlocker => {
+                    ChildLayoutMode::SemanticAnnotation
+                    | ChildLayoutMode::SemanticBlocker
+                    | ChildLayoutMode::TableCell(_) => {
                         self.layout_render(child, constraints)?;
                         let child = self.render_live(child, "semantics child remains live");
                         let (size, baseline) = (child.size, child.baseline);

@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- Table supports per-cell vertical alignment, Fill, and IntrinsicHeight.
+  Each row measures independently; Fill never makes its row taller.
+
 - Accessible table rows can be revealed in an enclosing scroll view,
   using their latest layout bounds.
 
@@ -241,6 +244,13 @@ a version and date when publishing.
   `dispatch_pop_route`, Flutter's `didPopRoute`. `Navigator` pops on it.
 
 ### Changed
+
+- **Breaking (`incular-widgets`):** TableCell vertical alignment uses
+  TableCellVerticalAlignment rather than CrossAxisAlignment. Use Top,
+  Middle, Bottom or Fill in place of Start, Center, End or Stretch.
+- **Breaking (`incular-layout`):** TableChild literals must supply
+  `vertical_alignment` or use `TableChild::new(size)`. Exhaustive
+  TableCellVerticalAlignment matches must handle Fill and IntrinsicHeight.
 
 - **Breaking (`incular-semantics`):** Exhaustive matches on Role must
   handle the four table roles.

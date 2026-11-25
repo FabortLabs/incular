@@ -6,8 +6,9 @@
 
 use crate::{
     Align, Alignment, AspectRatio, Axis, Constraints, CrossAxisAlignment, EdgeInsets, Flex,
-    FlexFit, MainAxisAlignment, MainAxisSize, Positioned, Stack, StackFit, Table, TableColumnWidth,
-    TextDirection, VerticalDirection, Wrap, WrapAlignment, WrapCrossAlignment,
+    FlexFit, MainAxisAlignment, MainAxisSize, Positioned, Stack, StackFit, Table,
+    TableCellVerticalAlignment, TableColumnWidth, TextDirection, VerticalDirection, Wrap,
+    WrapAlignment, WrapCrossAlignment,
 };
 use crate::{ChildLayout, LayoutResult, Offset, Size};
 use incular_core::{finite_non_negative, finite_or_zero};
@@ -178,6 +179,7 @@ impl From<Size> for WrapChild {
 pub struct TableChild {
     pub size: Size,
     pub baseline: Option<f32>,
+    pub vertical_alignment: Option<TableCellVerticalAlignment>,
 }
 
 impl TableChild {
@@ -186,7 +188,14 @@ impl TableChild {
         Self {
             size,
             baseline: None,
+            vertical_alignment: None,
         }
+    }
+    /// Overrides that cell's table-wide default.
+    #[must_use]
+    pub const fn with_vertical_alignment(mut self, alignment: TableCellVerticalAlignment) -> Self {
+        self.vertical_alignment = Some(alignment);
+        self
     }
 }
 
@@ -881,7 +890,13 @@ pub fn place_table_columns(
     let row_count = children.len().div_ceil(columns);
     let mut heights: Vec<f32> = vec![0.0; row_count];
     for (index, child) in children.iter().enumerate() {
-        heights[index / columns] = heights[index / columns].max(child.size.height);
+        if child
+            .vertical_alignment
+            .unwrap_or(config.default_vertical_alignment)
+            != TableCellVerticalAlignment::Fill
+        {
+            heights[index / columns] = heights[index / columns].max(child.size.height);
+        }
     }
     let column_spacing = finite_non_negative(config.column_spacing);
     let row_spacing = finite_non_negative(config.row_spacing);
@@ -910,12 +925,20 @@ pub fn place_table_columns(
                 break;
             };
             let slack = (*row_height - child.size.height).max(0.0);
-            let dy = slack * config.default_vertical_alignment.factor();
+            let alignment = child
+                .vertical_alignment
+                .unwrap_or(config.default_vertical_alignment);
+            let dy = slack * alignment.factor();
+            let size = if alignment.stretches() {
+                Size::new(child.size.width, *row_height)
+            } else {
+                child.size
+            };
             let left = rtl_positions
                 .as_ref()
                 .map_or(x, |positions| positions[column]);
             output.push(
-                ChildLayout::new(Offset::new(left, y + dy), child.size)
+                ChildLayout::new(Offset::new(left, y + dy), size)
                     .with_optional_baseline(child.baseline),
             );
             x += *column_width + column_spacing;

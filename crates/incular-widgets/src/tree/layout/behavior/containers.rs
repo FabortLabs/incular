@@ -487,17 +487,59 @@ impl WidgetTree {
                     Vec::new()
                 };
                 let widths = incular_layout::table_column_widths(constraints, &measured, &config);
-                for (index, child) in children.iter().enumerate() {
+                use incular_layout::TableCellVerticalAlignment as CellAlignment;
+                let alignment = |tree: &Self, child: RenderObjectId| match tree
+                    .render_live(child, "table child remains live")
+                    .object
+                    .kind()
+                {
+                    RenderKind::ProxyLayout {
+                        mode: ChildLayoutMode::TableCell(Some(alignment)),
+                    } => *alignment,
+                    _ => default_vertical_alignment,
+                };
+                let stretch = children
+                    .iter()
+                    .any(|&child| alignment(self, child).stretches());
+                let mut heights = if stretch {
+                    vec![0.0_f32; children.len().div_ceil(columns_count)]
+                } else {
+                    Vec::new()
+                };
+                for (index, &child) in children.iter().enumerate() {
+                    if alignment(self, child) == CellAlignment::Fill {
+                        continue;
+                    }
                     let width = widths[index % columns_count];
-                    self.layout_render(*child, Constraints::new(width, width, 0., f32::INFINITY))?;
+                    self.layout_render(child, Constraints::new(width, width, 0., f32::INFINITY))?;
+                    if let Some(height) = heights.get_mut(index / columns_count) {
+                        *height = height.max(
+                            self.render_live(child, "table child remains live")
+                                .size
+                                .height,
+                        );
+                    }
+                }
+                if stretch {
+                    for (index, &child) in children.iter().enumerate() {
+                        if alignment(self, child).stretches() {
+                            self.layout_render(
+                                child,
+                                Constraints::tight(Size::new(
+                                    widths[index % columns_count],
+                                    heights[index / columns_count],
+                                )),
+                            )?;
+                        }
+                    }
                 }
                 let cells = children
                     .iter()
-                    .map(|child| {
+                    .map(|&child| {
                         incular_layout::TableChild::new(
-                            self.render_live(child, "retained render must remain live")
-                                .size,
+                            self.render_live(child, "table child remains live").size,
                         )
+                        .with_vertical_alignment(alignment(self, child))
                     })
                     .collect::<Vec<_>>();
                 let result =

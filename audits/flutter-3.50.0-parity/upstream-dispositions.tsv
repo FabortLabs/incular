@@ -1412,3 +1412,5 @@ packages/flutter/test/rendering/table_border_test.dart	67	TableBorder.lerp	paire
 packages/flutter/test/rendering/table_border_test.dart	120	TableBorder.lerp with nulls	paired-match	upstream-table-border.md
 packages/flutter/test/widgets/table_test.dart	1026	Single-row Table does not crash when a cell child paints below the row bottom	paired-match	upstream-table-retention-and-layoutbuilder-baseline.md#retained-table-accessibility
 packages/flutter/test/widgets/table_test.dart	1068	Table reuse the semantics nodes for cell wrappers	paired-match	upstream-table-retention-and-layoutbuilder-baseline.md#retained-table-accessibility
+packages/flutter/test/rendering/table_test.dart	379	TableRows with different constraints, but vertically with intrinsicHeight	paired-match	upstream-table-direction-rows-and-intrinsics.md#intrinsic-row-height-and-per-cell-alignment
+packages/flutter/test/widgets/table_test.dart	923	Set defaultVerticalAlignment to intrinsic height and check their heights	paired-match	upstream-table-direction-rows-and-intrinsics.md#intrinsic-row-height-and-per-cell-alignment

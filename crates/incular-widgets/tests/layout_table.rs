@@ -197,3 +197,89 @@ fn flex_cells_do_not_build_for_a_discarded_loose_measurement() {
     let observed = constraints_seen.borrow();
     assert_eq!(&*observed, &[Constraints::new(50., 50., 0., f32::INFINITY)]);
 }
+
+#[test]
+fn intrinsic_height_stretches_each_row_from_its_own_tallest_cell() {
+    use incular_config::Constraints;
+    use incular_core::Size;
+    use incular_widgets::{TableCellVerticalAlignment, internal::WidgetTree};
+
+    let table = Table::new(2, [100., 200., 200., 300.].map(|height| cell(16., height)))
+        .default_vertical_alignment(TableCellVerticalAlignment::IntrinsicHeight);
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(table.into()).unwrap();
+    tree.layout(Constraints::tight(Size::new(800., 600.)))
+        .unwrap();
+    let positions = [0, 1, 2, 3].map(|slot| {
+        let (_, y, _, height) = cell_bounds(&tree, root, slot);
+        (y, height)
+    });
+    assert_eq!(
+        positions,
+        [(0., 200.), (0., 200.), (200., 300.), (200., 300.)]
+    );
+}
+
+#[test]
+fn per_cell_alignment_overrides_default_and_fill_does_not_determine_row_height() {
+    use incular_config::{Constraints, TextDirection};
+    use incular_core::Size;
+    use incular_widgets::{TableCell, TableCellVerticalAlignment as Align, internal::WidgetTree};
+
+    let table = |alignment| {
+        Widget::from(
+            Table::new(
+                3,
+                [
+                    TableCell::new(cell(20., 100.)).vertical_alignment(alignment),
+                    TableCell::new(cell(20., 40.)).vertical_alignment(Align::Top),
+                    TableCell::new(cell(20., 10.)).vertical_alignment(Align::Bottom),
+                ],
+            )
+            .text_direction(TextDirection::Rtl)
+            .default_vertical_alignment(Align::Middle),
+        )
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(table(Align::Fill)).unwrap();
+    let extent = Constraints::loose(Size::new(300., 200.));
+    tree.layout(extent).unwrap();
+    let retained = tree.children(root).unwrap()[0];
+    assert_eq!(cell_bounds(&tree, root, 0), (200., 0., 100., 40.));
+    assert_eq!(cell_bounds(&tree, root, 1), (100., 0., 100., 40.));
+    assert_eq!(cell_bounds(&tree, root, 2), (0., 30., 100., 10.));
+
+    tree.update(root, table(Align::IntrinsicHeight)).unwrap();
+    tree.layout(extent).unwrap();
+    assert_eq!(tree.children(root).unwrap()[0], retained);
+    assert_eq!(cell_bounds(&tree, root, 0), (200., 0., 100., 100.));
+    assert_eq!(cell_bounds(&tree, root, 2), (0., 90., 100., 10.));
+
+    tree.update(
+        root,
+        Table::new(1, [cell(20., 100.)])
+            .default_vertical_alignment(Align::Fill)
+            .into(),
+    )
+    .unwrap();
+    tree.layout(extent).unwrap();
+    assert_eq!(cell_bounds(&tree, root, 0).3, 0.);
+}
+
+#[test]
+fn rtl_intrinsic_height_does_not_stretch_rows_to_the_outer_box() {
+    use incular_config::{Constraints, TextDirection};
+    use incular_core::Size;
+    use incular_widgets::{TableCellVerticalAlignment, internal::WidgetTree};
+
+    let table = Table::new(2, [cell(100., 100.), cell(200., 200.)])
+        .text_direction(TextDirection::Rtl)
+        .default_vertical_alignment(TableCellVerticalAlignment::IntrinsicHeight);
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(table.into()).unwrap();
+    let outer = Size::new(300., 300.);
+    tree.layout(Constraints::tight(outer)).unwrap();
+    assert_eq!(tree.element_bounds(root).unwrap().size, outer);
+    assert_eq!(cell_bounds(&tree, root, 0), (150., 0., 150., 200.));
+    assert_eq!(cell_bounds(&tree, root, 1), (0., 0., 150., 200.));
+}

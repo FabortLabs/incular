@@ -273,8 +273,7 @@ impl Default for TableColumnWidth {
 
 /// Vertical placement of a cell within its row (`TableCellVerticalAlignment`).
 ///
-/// `Fill`, `Baseline` and `IntrinsicHeight` are not supported yet; cells use
-/// one of the three positional values below.
+/// Baseline alignment (which needs an explicit text baseline) is separate.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum TableCellVerticalAlignment {
     /// Cells sit at the top of the row (Flutter's default).
@@ -284,12 +283,22 @@ pub enum TableCellVerticalAlignment {
     Middle,
     /// Cells sit at the bottom of the row.
     Bottom,
+    /// Fills the row, but does not contribute to its height.
+    Fill,
+    /// Contributes its natural height, then stretches to fill its row.
+    IntrinsicHeight,
 }
 
 impl TableCellVerticalAlignment {
+    /// Whether the cell is measured again at its row's tight height.
+    #[must_use]
+    pub const fn stretches(self) -> bool {
+        matches!(self, Self::Fill | Self::IntrinsicHeight)
+    }
+
     pub(crate) const fn factor(self) -> f32 {
         match self {
-            Self::Top => 0.0,
+            Self::Top | Self::Fill | Self::IntrinsicHeight => 0.0,
             Self::Middle => 0.5,
             Self::Bottom => 1.0,
         }

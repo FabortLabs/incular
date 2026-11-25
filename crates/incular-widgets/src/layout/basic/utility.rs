@@ -46,7 +46,7 @@ impl From<KeyedSubtree> for Widget {
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct TableCell {
     #[builder(default, setter(strip_option))]
-    vertical_alignment: Option<incular_config::CrossAxisAlignment>,
+    vertical_alignment: Option<incular_layout::TableCellVerticalAlignment>,
     #[builder(setter(into))]
     child: Widget,
 }
@@ -60,8 +60,12 @@ impl TableCell {
         }
     }
 
+    /// Replaces the table's vertical alignment for this cell.
     #[must_use]
-    pub fn vertical_alignment(mut self, alignment: incular_config::CrossAxisAlignment) -> Self {
+    pub fn vertical_alignment(
+        mut self,
+        alignment: incular_layout::TableCellVerticalAlignment,
+    ) -> Self {
         self.vertical_alignment = Some(alignment);
         self
     }
@@ -73,17 +77,20 @@ impl From<TableCell> for Widget {
 
         let explicit = crate::ExplicitSemantics::new(incular_semantics::Role::Cell);
         let child = value.child;
-        if matches!(child.kind(), WidgetKind::Text { .. }) && !child.has_explicit_semantics() {
-            // A plain text cell contributes its label to the cell node.
-            return child.semantics(explicit);
-        }
-        // Preserve a custom role or action underneath the cell rather than
-        // overwriting it (e.g. an editable field still needs its own node).
-        Widget::from_kind(WidgetKind::ProxyLayout {
-            mode: ChildLayoutMode::SemanticAnnotation,
+        let simple_text =
+            matches!(child.kind(), WidgetKind::Text { .. }) && !child.has_explicit_semantics();
+        let wrapper = Widget::from_kind(WidgetKind::ProxyLayout {
+            mode: ChildLayoutMode::TableCell(value.vertical_alignment),
             child,
         })
-        .semantics(explicit)
+        .semantics(explicit);
+        // A plain Text supplies the cell's label, while interactive
+        // content and explicit descendant roles retain their own nodes.
+        if simple_text {
+            wrapper.merge_semantics()
+        } else {
+            wrapper
+        }
     }
 }
 

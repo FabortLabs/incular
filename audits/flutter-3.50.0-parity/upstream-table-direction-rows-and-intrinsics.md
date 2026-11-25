@@ -41,3 +41,17 @@ identities stay intact. An Incular layout control verifies spacing
 and fixed columns under a wider tight parent. Context-free Incular
 tables default to LTR; this does not match Flutter's separate debug
 assertion when there is no ambient Directionality.
+
+## Intrinsic row height and per-cell alignment
+
+The pinned widget `:923` and rendering `:379` originals match. Cells
+with IntrinsicHeight contribute their natural heights and are then laid
+out to each row's tallest cell, not to the overall table height. The
+RTL 300×300 rendering case keeps 200px-high cells at x=150 and x=0.
+
+The authored RTL comparison switches a retained cell from Fill to
+IntrinsicHeight. Fill yields a 40px row from the other cells; with
+IntrinsicHeight its natural 100px height grows the row and moves the
+10px bottom-aligned neighbor from y=30 to y=90. An all-Fill row is zero
+height. Per-cell overrides work independently of the table default.
+Text-baseline alignment remains separate.

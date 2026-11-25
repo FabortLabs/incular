@@ -495,6 +495,8 @@ pub enum ChildLayoutMode {
     IgnoreBaseline,
     /// A pure semantics annotation wrapper that leaves layout unchanged.
     SemanticAnnotation,
+    /// A pass-through that owns a direct table cell's vertical alignment.
+    TableCell(Option<incular_layout::TableCellVerticalAlignment>),
     /// A retained wrapper for the previous-sibling semantics blocker.
     SemanticBlocker,
     /// `RenderRotatedBox`: lays out the child with swapped axes on odd quarter turns.
