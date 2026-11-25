@@ -5,8 +5,7 @@
 use incular_config::{DisplayFeature, DisplayFeatureState, EdgeInsets, TextDirection};
 use incular_core::{Offset, Rect, Size};
 
-use crate::tree::sub_screen_scope;
-use crate::{BuildContext, Builder, Padding, Widget};
+use crate::{BuildContext, Builder, MediaQuery, Padding, Widget};
 
 /// Flutter's `DisplayFeatureSubScreen`: lays its child out on the
 /// sub-screen closest to `anchor_point`, between the display features that
@@ -52,16 +51,16 @@ impl DisplayFeatureSubScreen {
     }
 
     fn build(context: &BuildContext<'_>, anchor: Option<Offset>, child: Widget) -> Widget {
-        let parent_size = context.viewport();
+        let data = context.effective_media_query();
+        let parent_size = data.viewport;
         let wanted_bounds = Rect::from_origin_size(Offset::ZERO, parent_size);
         let anchor = cap_offset(
             anchor.unwrap_or_else(|| fallback_anchor_point(context)),
             parent_size,
         );
-        let features = context.display_features();
         let sub_screens = split_sub_screens(
             wanted_bounds,
-            features
+            data.display_features
                 .iter()
                 .filter(|feature| divides_view(feature))
                 .map(|feature| feature.bounds),
@@ -70,26 +69,7 @@ impl DisplayFeatureSubScreen {
         let (left, top, right, bottom) = ltrb(closest);
         let remaining_right = parent_size.width - right;
         let remaining_bottom = parent_size.height - bottom;
-        // `MediaQueryData.removeDisplayFeatures`.
-        let remove = |insets: EdgeInsets| EdgeInsets {
-            left: (insets.left - left).max(0.),
-            top: (insets.top - top).max(0.),
-            right: (insets.right - remaining_right).max(0.),
-            bottom: (insets.bottom - remaining_bottom).max(0.),
-        };
-        let child = if closest == wanted_bounds {
-            child
-        } else {
-            sub_screen_scope(
-                features
-                    .into_iter()
-                    .filter(|feature| closest.intersects(feature.bounds))
-                    .collect(),
-                remove(context.safe_insets()),
-                remove(context.view_insets()),
-                child,
-            )
-        };
+        let child = MediaQuery::new(data.remove_display_features(closest), child);
         Padding::new(
             EdgeInsets {
                 left,
@@ -121,17 +101,22 @@ fn split_sub_screens(
             .flat_map(|screen| {
                 let (left, top, right, bottom) = ltrb(screen);
                 let mut parts = Vec::new();
-                if left < avoid_left {
-                    parts.push(from_ltrb(left, top, avoid_left, bottom));
-                }
-                if top < avoid_top {
-                    parts.push(from_ltrb(left, top, right, avoid_top));
-                }
-                if right > avoid_right {
-                    parts.push(from_ltrb(avoid_right, top, right, bottom));
-                }
-                if bottom > avoid_bottom {
-                    parts.push(from_ltrb(left, avoid_bottom, right, bottom));
+                if top >= avoid_top && bottom <= avoid_bottom {
+                    if left < avoid_left {
+                        parts.push(from_ltrb(left, top, avoid_left, bottom));
+                    }
+                    if right > avoid_right {
+                        parts.push(from_ltrb(avoid_right, top, right, bottom));
+                    }
+                } else if left >= avoid_left && right <= avoid_right {
+                    if top < avoid_top {
+                        parts.push(from_ltrb(left, top, right, avoid_top));
+                    }
+                    if bottom > avoid_bottom {
+                        parts.push(from_ltrb(left, avoid_bottom, right, bottom));
+                    }
+                } else {
+                    parts.push(screen);
                 }
                 parts
             })
@@ -144,8 +129,19 @@ impl From<DisplayFeatureSubScreen> for Widget {
     fn from(value: DisplayFeatureSubScreen) -> Self {
         let anchor = value.anchor_point;
         let child = value.child;
-        Builder::new(move |context| DisplayFeatureSubScreen::build(context, anchor, child.clone()))
-            .into()
+        let builder = Builder::new(move |context| {
+            DisplayFeatureSubScreen::build(context, anchor, child.clone())
+        });
+        if anchor.is_none() {
+            builder
+                .require_directionality(&crate::tree::DirectionRequirement {
+                    widget: "DisplayFeatureSubScreen",
+                    reason: "choosing a default sub-screen without an anchor",
+                })
+                .into()
+        } else {
+            builder.into()
+        }
     }
 }
 

@@ -500,23 +500,6 @@ impl<'a> BuildContext<'a> {
     }
 }
 
-/// Flutter's `MediaQueryData.removeDisplayFeatures`, for the subtree of a
-/// sub-screen: the given features and insets replace the window's.
-pub(crate) fn sub_screen_scope(
-    features: Vec<DisplayFeature>,
-    safe_insets: EdgeInsets,
-    view_insets: EdgeInsets,
-    child: Widget,
-) -> Widget {
-    Widget::environment_scope(
-        RuntimeDisplayFeatures(features),
-        Widget::environment_scope(
-            RuntimeSafeInsets(safe_insets),
-            Widget::environment_scope(RuntimeViewInsets(view_insets), child),
-        ),
-    )
-}
-
 pub(super) fn install_runtime_environment(
     context: &DependencyContext,
     environment: &RuntimeEnvironment,

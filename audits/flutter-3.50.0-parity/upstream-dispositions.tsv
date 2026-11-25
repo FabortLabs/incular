@@ -1241,3 +1241,13 @@ packages/flutter/test/widgets/safe_area_test.dart	295	SliverSafeArea - basic	pai
 packages/flutter/test/widgets/safe_area_test.dart	314	SliverSafeArea - basic	paired-match	upstream-safe-area.md#sliver-geometry
 packages/flutter/test/widgets/safe_area_test.dart	334	SliverSafeArea - nested	paired-match	upstream-safe-area.md#sliver-geometry
 packages/flutter/test/widgets/safe_area_test.dart	356	SliverSafeArea - changing	paired-match	upstream-safe-area.md#sliver-geometry
+packages/flutter/test/widgets/display_feature_sub_screen_test.dart	12	without Directionality or anchor	paired-match	upstream-display-features.md
+packages/flutter/test/widgets/display_feature_sub_screen_test.dart	36	with anchorPoint	paired-match	upstream-display-features.md
+packages/flutter/test/widgets/display_feature_sub_screen_test.dart	65	with infinity anchorpoint	paired-match	upstream-display-features.md
+packages/flutter/test/widgets/display_feature_sub_screen_test.dart	94	with horizontal hinge and anchorPoint	paired-match	upstream-display-features.md
+packages/flutter/test/widgets/display_feature_sub_screen_test.dart	122	with multiple display features and anchorPoint	paired-match	upstream-display-features.md
+packages/flutter/test/widgets/display_feature_sub_screen_test.dart	155	with non-splitting display features and anchorPoint	paired-match	upstream-display-features.md
+packages/flutter/test/widgets/display_feature_sub_screen_test.dart	196	with size 0 display feature in half-opened posture and anchorPoint	paired-match	upstream-display-features.md
+packages/flutter/test/widgets/display_feature_sub_screen_test.dart	227	DisplayFeatureSubScreen does not crash at zero area	paired-match	upstream-display-features.md
+packages/flutter/test/widgets/media_query_test.dart	1518	MediaQuery.removeDisplayFeatures removes specified display features and padding	paired-match	upstream-display-features.md
+packages/flutter/test/widgets/media_query_test.dart	1598	MediaQuery.removePadding only removes specified display features and padding	paired-match	upstream-display-features.md

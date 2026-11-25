@@ -359,6 +359,31 @@ impl RuntimeEnvironment {
         self
     }
 
+    /// Keeps display features overlapping a sub-screen and subtracts the
+    /// space outside that sub-screen from safe padding, persistent padding,
+    /// and transient view insets. Reported view size remains unchanged.
+    #[must_use]
+    pub fn remove_display_features(mut self, sub_screen: Rect) -> Self {
+        let left = sub_screen.origin.x;
+        let top = sub_screen.origin.y;
+        let right = self.viewport.width - (left + sub_screen.size.width);
+        let bottom = self.viewport.height - (top + sub_screen.size.height);
+        debug_assert!(
+            left >= 0. && top >= 0. && right >= 0. && bottom >= 0.,
+            "sub-screen must be within the view"
+        );
+        let outside = EdgeInsets::only(left, top, right, bottom);
+        if outside.is_zero() {
+            return self;
+        }
+        self.safe_insets = (self.safe_insets - outside).normalized();
+        self.view_padding = (self.view_padding - outside).normalized();
+        self.view_insets = (self.view_insets - outside).normalized();
+        self.display_features
+            .retain(|feature| sub_screen.intersects(feature.bounds));
+        self
+    }
+
     /// Normalizes externally supplied values without inventing platform policy.
     #[must_use]
     pub fn normalized(mut self) -> Self {
