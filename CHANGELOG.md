@@ -7,6 +7,10 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-animation`: `schedule_forced_frame()` and
+  `Ticker::set_force_frames` can explicitly request frames during a
+  lifecycle pause when the host still supplies them.
+
 - `incular-animation`: `current_system_frame_time()` reads the latest
   raw host timestamp without animation dilation or epoch adjustment.
 

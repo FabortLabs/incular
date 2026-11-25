@@ -40,6 +40,7 @@ struct Scheduler {
     post_frame_active: bool,
     next_callback: u64,
     frame_requested: bool,
+    forced_frame_requested: bool,
     /// Flutter `timeDilation`; 1 is real time.
     time_dilation: f64,
     /// The dilated time base since the dilation last changed. `None` until
@@ -70,6 +71,7 @@ impl Default for Scheduler {
             post_frame_active: false,
             next_callback: 0,
             frame_requested: false,
+            forced_frame_requested: false,
             time_dilation: 1.0,
             epoch: None,
             last_raw: None,
@@ -312,6 +314,13 @@ pub fn schedule_frame() {
     SCHEDULER.with(|scheduler| scheduler.borrow_mut().frame_requested = true);
 }
 
+/// Flutter `SchedulerBinding.scheduleForcedFrame`: requests a frame even
+/// while ordinary frame requests are suspended. The host must still be
+/// able to supply a frame. Prefer [`schedule_frame`] for normal animation.
+pub fn schedule_forced_frame() {
+    SCHEDULER.with(|scheduler| scheduler.borrow_mut().forced_frame_requested = true);
+}
+
 /// Flutter `SchedulerBinding.currentFrameTimeStamp`: the timestamp of the
 /// frame being produced, including its post-frame callbacks.
 #[must_use]
@@ -331,12 +340,11 @@ pub fn current_system_frame_time() -> Option<Instant> {
 /// an unmuted ticker runs. The runtime keeps producing frames while true.
 #[must_use]
 pub fn has_scheduled_frame() -> bool {
-    if !frames_enabled() {
-        return false;
-    }
+    let enabled = frames_enabled();
     SCHEDULER.with(|scheduler| {
         let scheduler = scheduler.borrow();
-        scheduler.frame_requested || !scheduler.frame_callbacks.is_empty()
+        scheduler.forced_frame_requested
+            || enabled && (scheduler.frame_requested || !scheduler.frame_callbacks.is_empty())
     })
 }
 
@@ -353,9 +361,10 @@ pub fn begin_frame(raw: Instant) {
         let now = scheduler.adjust(raw);
         scheduler.frame_time = Some(now);
         scheduler.post_frame_active = false;
-        if !enabled {
-            // A forced host frame (such as a restoration barrier) may
-            // still run layout and post-frame work without ticking motion.
+        let requested_forced_frame = std::mem::take(&mut scheduler.forced_frame_requested);
+        if !(enabled || requested_forced_frame) {
+            // A host may explicitly render for a restoration barrier
+            // without opening the paused scheduler's transient queue.
             return (now, false);
         }
         scheduler.frame_requested = false;
@@ -483,6 +492,7 @@ struct TickerState {
     active: Cell<bool>,
     scheduled: Cell<Option<FrameCallbackId>>,
     muted: Cell<bool>,
+    force_frames: Cell<bool>,
     /// The frame the current run started on; unset until its first frame.
     started: Cell<Option<Instant>>,
     /// The future of the current run.
@@ -497,9 +507,9 @@ impl TickerState {
     fn schedule(self: &Rc<Self>) {
         if self.is_ticking() && self.scheduled.get().is_none() {
             let id = SCHEDULER.with(|scheduler| {
-                scheduler
-                    .borrow_mut()
-                    .enqueue(Transient::Ticker(Rc::downgrade(self)))
+                let mut scheduler = scheduler.borrow_mut();
+                scheduler.forced_frame_requested |= self.force_frames.get();
+                scheduler.enqueue(Transient::Ticker(Rc::downgrade(self)))
             });
             self.scheduled.set(Some(id));
         }
@@ -568,6 +578,7 @@ impl Ticker {
             active: Cell::new(false),
             scheduled: Cell::new(None),
             muted: Cell::new(false),
+            force_frames: Cell::new(false),
             started: Cell::new(None),
             future: RefCell::new(None),
         });
@@ -649,6 +660,20 @@ impl Ticker {
         } else {
             self.state.schedule();
         }
+    }
+
+    /// Whether new tick requests bypass the scheduler's lifecycle pause.
+    /// Defaults to false.
+    #[must_use]
+    pub fn force_frames(&self) -> bool {
+        self.state.force_frames.get()
+    }
+
+    /// Flutter `Ticker.forceFrames`: use a forced frame for each new tick
+    /// request. A request already queued is not changed. Use sparingly:
+    /// eligible hosts can keep producing frames while otherwise paused.
+    pub fn set_force_frames(&self, force: bool) {
+        self.state.force_frames.set(force);
     }
 
     /// Flutter `Ticker.absorbTicker`: takes over `other`'s run, keeping its

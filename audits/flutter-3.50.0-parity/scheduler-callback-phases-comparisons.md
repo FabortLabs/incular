@@ -54,3 +54,20 @@ clock. Rust also verifies the raw timestamp is still accessible while
 idle after a frame. Thirteen focused Rust checks and the exact pinned
 Flutter case passed. The Linux runner now ignores only the reporter's
 suite setup/teardown markers when checking the exact selected names.
+
+## Forced frame requests during pause
+
+Pinned `scheduler/binding_test.dart:17` pairs the forced ticker's frame
+request and completion. An authored counterpart pauses the UI before
+starting it and verifies elapsed values 0 ms and 10 ms on two forced
+frames. Stopping it completes its run; a final already requested frame
+does not tick or request another. A one-shot forced frame coalesces
+duplicate requests and delivers the waiting ordinary callback once.
+Normal lifecycle suspension and host-driven restoration frames still
+retain the previous scheduling policy.
+
+The original at :12 is partial: Rust verifies the frame request and
+callback delivery, not Flutter's native dispatcher callback registration.
+Eighteen focused Rust checks, two named Flutter originals, and two
+authored Flutter cases passed. The behavior is verified at the runtime
+boundary; a physically suspended OS host still has to supply a frame.

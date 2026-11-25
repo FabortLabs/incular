@@ -208,3 +208,63 @@ fn suspended_runtime_does_not_disable_another_live_owner_on_the_same_thread() {
         "the standalone scheduler is not left paused"
     );
 }
+
+#[test]
+fn a_forced_frame_runs_waiting_transients_while_suspended() {
+    use incular_animation::{schedule_forced_frame, schedule_frame_callback};
+
+    let mut runtime = runtime();
+    let base = Instant::now();
+    let bounds = Constraints::tight(SIZE);
+    runtime.run_frame_at(bounds, base).unwrap();
+    set_lifecycle(&mut runtime, PlatformLifecycle::Suspended);
+    let calls = Rc::new(Cell::new(0));
+    schedule_frame_callback({
+        let calls = calls.clone();
+        move |_| calls.set(calls.get() + 1)
+    });
+    assert!(!runtime.frame_requested());
+    schedule_forced_frame();
+    schedule_forced_frame();
+    assert!(runtime.frame_requested());
+    pump_if_requested(&mut runtime, base + Duration::from_millis(10));
+    assert_eq!(calls.get(), 1);
+    assert!(!runtime.frame_requested());
+    assert_eq!(runtime.lifecycle(), ApplicationLifecycle::Suspended);
+}
+
+#[test]
+fn a_force_frames_ticker_drives_frames_while_the_runtime_is_suspended() {
+    let mut runtime = runtime();
+    let base = Instant::now();
+    runtime
+        .run_frame_at(Constraints::tight(SIZE), base)
+        .unwrap();
+    set_lifecycle(&mut runtime, PlatformLifecycle::Suspended);
+
+    let ticks = Rc::new(RefCell::new(Vec::new()));
+    let ticker = Ticker::new({
+        let ticks = ticks.clone();
+        move |elapsed| ticks.borrow_mut().push(elapsed)
+    });
+    assert!(!ticker.force_frames());
+    ticker.set_force_frames(true);
+    assert!(ticker.force_frames());
+    let completion = ticker.start();
+    assert!(ticker.is_active() && !ticker.is_ticking());
+    assert!(runtime.frame_requested());
+    pump_if_requested(&mut runtime, base + Duration::from_millis(10));
+    assert!(runtime.frame_requested());
+    pump_if_requested(&mut runtime, base + Duration::from_millis(20));
+    assert_eq!(
+        &*ticks.borrow(),
+        &[Duration::ZERO, Duration::from_millis(10)]
+    );
+
+    ticker.stop();
+    assert!(completion.is_complete());
+    // The last forced request was already sent before stop.
+    pump_if_requested(&mut runtime, base + Duration::from_millis(30));
+    assert_eq!(ticks.borrow().len(), 2);
+    assert!(!runtime.frame_requested());
+}

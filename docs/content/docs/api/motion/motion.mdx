@@ -151,3 +151,8 @@ Related: [`.transition()`](/docs/api/motion/transition),
 animation clock. `current_system_frame_time()` reports the latest raw
 host timestamp instead, without dilation, and is available between
 frames after the first one.
+
+`schedule_forced_frame()` requests a frame even while normal scheduling
+is paused. `Ticker::set_force_frames(true)` does the same for each new
+tick request. Use these sparingly: an otherwise idle host may keep
+producing frames, and a fully suspended OS may not respond.

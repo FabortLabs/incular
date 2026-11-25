@@ -21,3 +21,8 @@ for `f32` and `Offset`.
 `current_frame_time()` returns the active frame's time adjusted for
 animation dilation. Use `current_system_frame_time()` when you need
 the most recent raw host timestamp, even between frames.
+
+`schedule_forced_frame()` requests a frame even while normal scheduling
+is paused. `Ticker::set_force_frames(true)` does the same for each new
+tick request. Use these sparingly: an otherwise idle host may keep
+producing frames, and a fully suspended OS may not respond.
