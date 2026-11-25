@@ -212,3 +212,70 @@ fn skip_traversal_still_allows_a_direct_node_request() {
     host.tab(true);
     assert_eq!(primary(&nodes), [0]);
 }
+
+/// Behavior of focus_traversal_test.dart:3505 and :3539 through Tab.
+#[test]
+fn all_traversal_excluded_nodes_leave_the_direct_focus_unchanged() {
+    for group_exclusion in [true, false] {
+        let nodes: [FocusNode; 2] = std::array::from_fn(|_| FocusNode::new());
+        if !group_exclusion {
+            for node in &nodes {
+                node.set_skip_traversal(true);
+            }
+        }
+        let group = FocusTraversalGroup::new(Column::new(vec![
+            Widget::from(focus_target(&nodes[0])),
+            Widget::from(focus_target(&nodes[1])),
+        ]))
+        .descendants_are_traversable(!group_exclusion);
+        let mut host = Host::mount(group.into());
+        assert!(primary(&nodes).is_empty());
+        nodes[0].request_focus();
+        host.frame();
+        assert_eq!(primary(&nodes), [0]);
+        let focused = host.runtime.focused_element().expect("direct focus");
+        for reverse in [false, true] {
+            host.tab(reverse);
+            assert_eq!(host.runtime.focused_element(), Some(focused));
+            assert_eq!(primary(&nodes), [0], "excluded group: {group_exclusion}");
+        }
+    }
+}
+
+/// Behavior of focus_traversal_test.dart:3572 through retained nodes.
+#[test]
+fn nested_unfocusable_group_refuses_traversal_and_direct_requests() {
+    let nodes: [FocusNode; 3] = std::array::from_fn(|_| FocusNode::new());
+    let inner =
+        FocusTraversalGroup::new(Focus::new(focus_target(&nodes[2])).node(nodes[1].clone()))
+            .descendants_are_focusable(false);
+    let group = FocusTraversalGroup::new(Column::new(vec![
+        Widget::from(focus_target(&nodes[0]).autofocus(true)),
+        inner.into(),
+    ]));
+    let mut host = Host::mount(group.into());
+    host.tab(false);
+    assert_eq!(primary(&nodes), [0]);
+    nodes[2].request_focus();
+    host.frame();
+    assert_eq!(primary(&nodes), [0]);
+    assert!(!nodes[1].has_focus());
+    assert!(!nodes[2].has_focus());
+}
+
+/// Behavior of focus_traversal_test.dart:3622 through Tab.
+#[test]
+fn an_empty_nested_rtl_group_keeps_the_only_focused_node() {
+    let node = FocusNode::new();
+    let empty = FocusTraversalGroup::new(SizedBox::shrink());
+    let row = Column::new(vec![
+        empty.into(),
+        Widget::from(focus_target(&node).autofocus(true)),
+    ]);
+    let mut host =
+        Host::mount(FocusTraversalGroup::new(Directionality::new(TextDirection::Rtl, row)).into());
+    let initial = host.runtime.focused_element().expect("autofocus");
+    host.tab(false);
+    assert_eq!(host.runtime.focused_element(), Some(initial));
+    assert!(node.has_primary_focus());
+}

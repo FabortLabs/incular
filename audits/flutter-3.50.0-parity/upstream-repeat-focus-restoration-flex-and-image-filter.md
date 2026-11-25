@@ -75,3 +75,15 @@ Both pinned probes and all 18 focused Incular traversal, hosted
 focus and editor checks pass. The :3691 API comparison is still
 partial: Incular drives the equivalent Tab intent, not Flutter's
 attached FocusNode.nextFocus method.
+
+### Nested and all-skipped focus groups
+
+The pinned original group cases :3505, :3539, :3572, and :3622
+all pass. Incular's retained checks verify that Tab does not move
+an explicitly focused node when the group or all nodes are skipped,
+that a nested unfocusable group never takes focus through either Tab
+or a direct request, and that an empty RTL group leaves the only
+focused sibling unchanged. All eight Rust tests in the traversal
+target pass. These are partial ports: Tab does not expose the
+original programmatic nextFocus return value, and the nested
+test checks node focus rather than Focus.of and onFocusChange.
