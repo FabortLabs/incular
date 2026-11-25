@@ -6,9 +6,66 @@ use std::{
     rc::Rc,
 };
 
-use incular_core::reactivity::{DependencySource, Subscription};
+use incular_core::{
+    ValueNotifier,
+    reactivity::{DependencySource, Subscription},
+};
 
 type Log = Rc<RefCell<Vec<&'static str>>>;
+
+/// foundation/change_notifier_test.dart:397.
+#[test]
+fn value_notifier_notifies_new_values_but_not_equal_replacements() {
+    let notifier = ValueNotifier::new(2.0_f64);
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let listener = notifier.add_listener({
+        let notifier = notifier.clone();
+        let log = log.clone();
+        move || log.borrow_mut().push(notifier.value())
+    });
+    assert!(notifier.set_value(3.0));
+    assert_eq!(log.take(), vec![3.0]);
+    assert!(!notifier.set_value(3.0));
+    assert!(log.borrow().is_empty());
+    drop(listener);
+    assert!(notifier.set_value(4.0));
+    assert!(log.borrow().is_empty());
+}
+
+#[test]
+fn value_notifier_releases_the_value_borrow_before_notifying() {
+    let notifier = ValueNotifier::new(2);
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let _listener = notifier.add_listener({
+        let notifier = notifier.clone();
+        let log = log.clone();
+        move || {
+            let value = notifier.value();
+            log.borrow_mut().push(value);
+            if value == 3 {
+                notifier.set_value(4);
+            }
+        }
+    });
+    assert!(notifier.set_value(3));
+    assert_eq!(notifier.value(), 4);
+    assert_eq!(log.take(), vec![3, 4]);
+}
+
+#[test]
+fn value_notifier_only_invalidates_a_reading_context_for_changes() {
+    let value = ValueNotifier::new("initial");
+    let context = incular_core::BuildContext::new();
+    context.build(|_| assert_eq!(value.value(), "initial"));
+    assert_eq!(context.dependency_count(), 1);
+    assert!(!value.set_value("initial"));
+    assert!(!context.is_dirty());
+    assert!(value.set_value("changed"));
+    assert!(context.take_dirty());
+    context.clear_dependencies();
+    assert!(value.set_value("another"));
+    assert!(!context.is_dirty());
+}
 
 fn append(log: &Log, event: &'static str) -> impl Fn() + Clone + 'static {
     let log = log.clone();

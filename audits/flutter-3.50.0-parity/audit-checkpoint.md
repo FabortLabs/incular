@@ -873,3 +873,8 @@ execute post-frame callbacks.
 The [C04 recheck](focused-comparisons.md#c04-retained-recheck)
 now defers start and restart from a transient callback until the
 next frame under both runners. The original audit count is unchanged.
+
+[ValueNotifier](upstream-foundation-scroll-comparisons.md#typed-value-notifier)
+adds one matched foundation original: 461 / 8,965 fully compared (5.14%),
+365 matches and 96 historical mismatches. Equal assignments do not
+notify or rebuild a subscribed widget; unequal assignments do.

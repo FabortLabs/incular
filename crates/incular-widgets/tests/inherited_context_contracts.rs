@@ -12,6 +12,47 @@ fn constraints() -> Constraints {
 }
 
 #[test]
+fn value_notifier_rebuilds_a_listenable_builder_only_for_value_changes() {
+    use incular_core::ValueNotifier;
+    use incular_widgets::ListenableBuilder;
+
+    let value = ValueNotifier::new(20.0);
+    let builds = Rc::new(Cell::new(0));
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(
+            ListenableBuilder::new(value.clone(), {
+                let value = value.clone();
+                let builds = builds.clone();
+                move |_, _| {
+                    builds.set(builds.get() + 1);
+                    SizedBox::new().width(value.value()).height(20.).into()
+                }
+            })
+            .into(),
+        )
+        .unwrap();
+    let render = tree.render_id(root).unwrap();
+    let bounds = Constraints::loose(Size::new(80., 40.));
+    tree.layout(bounds).unwrap();
+    assert_eq!(
+        (builds.get(), tree.render_size(render)),
+        (1, Some(Size::new(20., 20.)))
+    );
+
+    assert!(!value.set_value(20.0));
+    tree.layout(bounds).unwrap();
+    assert_eq!(builds.get(), 1);
+    assert!(value.set_value(30.0));
+    tree.layout(bounds).unwrap();
+    assert_eq!(
+        (builds.get(), tree.render_size(render)),
+        (2, Some(Size::new(30., 20.)))
+    );
+    assert_eq!(tree.render_id(root), Some(render));
+}
+
+#[test]
 fn nearest_scope_shadows_outer_value_and_keeps_other_types_visible() {
     let seen = Rc::new(RefCell::new(None));
     let observed = seen.clone();

@@ -111,7 +111,7 @@ pub mod prelude {
         RestorationKey, RestorationKeyError, RestorationScope, SECONDARY_POINTER_BUTTON, Size,
         StylusMetadata, StylusOrientation, TERTIARY_POINTER_BUTTON, TrackpadGesture,
         TrackpadGestureKind, TrackpadGesturePhase, Transform as AffineTransform, UniqueKey,
-        ValueKey, WindowResizeDirection, additional_pointer_button_mask,
+        ValueKey, ValueNotifier, WindowResizeDirection, additional_pointer_button_mask,
     };
     pub use incular_image::{
         AnyImageProvider, AssetImage, DecodedImage, FileImage, ImageCache, ImageCacheDiagnostics,

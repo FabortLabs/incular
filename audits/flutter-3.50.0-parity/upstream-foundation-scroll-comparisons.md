@@ -19,3 +19,12 @@
   all the recorded position, velocity and completion assertions.
   Flutter's explicit custom spring constructor is not equivalent for
   trajectories that do reach a bound.
+## Typed value notifier
+
+Pinned `change_notifier_test.dart:397` and the Rust equivalent
+both notify once when replacing 2.0 with 3.0 and stay silent when
+writing 3.0 again. Additional Rust regressions exercise reentrant
+writes, a removed subscription, tracked reads, and real retained
+ListenableBuilder output changing width only on unequal values.
+All 23 selected core and widget tests pass. Rust listeners are
+owned subscriptions; dropping a subscription unregisters it.

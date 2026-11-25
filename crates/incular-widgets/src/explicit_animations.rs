@@ -211,6 +211,12 @@ impl Listenable for incular_core::reactivity::DependencySource {
     }
 }
 
+impl<T> Listenable for incular_core::ValueNotifier<T> {
+    fn track(&self) {
+        incular_core::ValueNotifier::track(self);
+    }
+}
+
 impl<T: Listenable> Listenable for Rc<T> {
     fn track(&self) {
         (**self).track();

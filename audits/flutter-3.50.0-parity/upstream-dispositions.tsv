@@ -35,7 +35,7 @@ packages/flutter/test/physics/newton_test.dart	219	underdamped_spring	paired-mat
 packages/flutter/test/foundation/change_notifier_test.dart	207	During notifyListeners, a listener was added and removed immediately	paired-match	upstream-foundation-scroll-comparisons.md
 packages/flutter/test/foundation/change_notifier_test.dart	233	If a listener in the middle of the list of listeners removes itself, notifyListeners still notifies all listeners	paired-match	upstream-foundation-scroll-comparisons.md
 packages/flutter/test/foundation/change_notifier_test.dart	256	If the first listener removes itself, notifyListeners still notify all listeners	paired-match	upstream-foundation-scroll-comparisons.md
-packages/flutter/test/foundation/change_notifier_test.dart	397	Value notifier	reference-ran-incular-open	upstream-foundation-scroll-comparisons.md
+packages/flutter/test/foundation/change_notifier_test.dart	397	Value notifier	paired-match	upstream-foundation-scroll-comparisons.md#typed-value-notifier
 packages/flutter/test/foundation/change_notifier_test.dart	539	notifyListener can be called recursively	paired-match	upstream-foundation-scroll-comparisons.md
 packages/flutter/test/foundation/change_notifier_test.dart	564	Remove Listeners while notifying on a list which will not resize	paired-match	upstream-foundation-scroll-comparisons.md
 packages/flutter/test/physics/newton_test.dart	270	scroll_with_inf_edge_ends	paired-match	upstream-foundation-scroll-comparisons.md

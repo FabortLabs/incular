@@ -16,6 +16,7 @@ pub mod memory;
 pub mod reactivity;
 mod restoration;
 pub mod time;
+mod value_notifier;
 mod widget;
 
 pub use arena::{Arena, ArenaId};
@@ -35,4 +36,5 @@ pub use input::{
 };
 pub use key::{Key, KeyHandle, KeyId, KeyObject, LocalKey, StringKey, UniqueKey, ValueKey};
 pub use restoration::{RestorationBackend, RestorationKey, RestorationKeyError, RestorationScope};
+pub use value_notifier::ValueNotifier;
 pub use widget::{BuildableWidget, Widget};
