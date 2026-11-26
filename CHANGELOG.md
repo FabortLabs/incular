@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- Scrollable can query an enclosing viewport's reveal offset and the
+  resulting rectangle without changing the scroll position.
+
 - A runtime window can bind a system sound host for click, tick and alert
   requests. Locked modal barriers request an alert on a completed tap.
   Unbound hosts ignore sound requests.

@@ -202,6 +202,11 @@ destination offset without materializing intermediate rows. The
 same viewport is used by `ListView`, `GridView`, `PageView`, and
 `CustomScrollView`; applications do not need a separate lazy-list primitive.
 
+For mounted children, `Scrollable::get_offset_to_reveal` reports an
+unclamped viewport offset and projected rectangle without moving the
+scroll position. Use `Scrollable::ensure_visible` to apply a clamped
+reveal instead.
+
 ## Lazy sliver viewports
 
 `SliverFloatingHeader` measures its child and starts returning as soon as

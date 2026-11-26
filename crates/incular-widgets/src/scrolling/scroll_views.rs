@@ -658,6 +658,16 @@ fn list_view_widget(value: ListView) -> Widget {
         .unwrap_or_else(|| ListViewStrategy::Children(value.children));
     let mut sliver: Box<dyn RenderSliver> = match strategy {
         ListViewStrategy::Children(children) => {
+            // The explicit children already exist. Their unanimous tight
+            // main-axis extent is exact, not a lazy measurement estimate.
+            // Preserve an explicitly supplied extent, prototype, or builder.
+            let item_extent = if item_extent_builder.is_none() && prototype_item.is_none() {
+                item_extent.or_else(|| {
+                    uniform_explicit_item_extent(&children, value.scroll_direction)
+                })
+            } else {
+                item_extent
+            };
             let children = Rc::new(children);
             build_list_render_sliver(
                 children.len(),
@@ -703,6 +713,31 @@ fn list_view_widget(value: ListView) -> Widget {
         sliver,
     )
     .with_ambient_sliver_axis()
+}
+
+fn uniform_explicit_item_extent(children: &[Widget], axis: Axis) -> Option<f32> {
+    let extent = |item: &Widget| {
+        let value = match item.kind() {
+            WidgetKind::Box { size, .. } => axis.main_extent(*size),
+            WidgetKind::Constrained { constraints, .. } => {
+                let (min, max) = match axis {
+                    Axis::Vertical => (constraints.min_height(), constraints.max_height()),
+                    Axis::Horizontal => (constraints.min_width(), constraints.max_width()),
+                };
+                if min != max {
+                    return None;
+                }
+                min
+            }
+            _ => return None,
+        };
+        (value.is_finite() && value > 0.).then_some(value)
+    };
+    let first = extent(children.first()?)?;
+    children[1..]
+        .iter()
+        .all(|item| extent(item) == Some(first))
+        .then_some(first)
 }
 
 fn build_list_render_sliver(

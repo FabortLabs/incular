@@ -75,3 +75,13 @@ Defaults: `scroll_direction` from `WidgetDefaults`, `reverse = false`,
 
 Related: [`GridView`](/docs/api/navigation/grid-view),
 [`ScrollController`](/docs/api/navigation/scroll-controller).
+
+
+## Revealing a mounted child
+
+Use `Scrollable::get_offset_to_reveal` after layout to calculate a logical
+scroll offset and the child's projected rectangle inside its nearest
+viewport without moving it. Pass a child-local rectangle to reveal only
+a part of the child, or pass `None` to use its layout bounds. The query
+does not clamp to the available scroll range; `ensure_visible` applies
+the corresponding clamped scroll operation.

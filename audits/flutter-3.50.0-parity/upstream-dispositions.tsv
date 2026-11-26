@@ -1823,3 +1823,7 @@ packages/flutter/test/rendering/proxy_box_test.dart	493	RenderClipPath reuses it
 packages/flutter/test/rendering/proxy_box_test.dart	504	RenderPhysicalModel reuses its layer	paired-match	upstream-hit-transforms.md#retained-proxy-layer-identity-on-repaint
 packages/flutter/test/rendering/proxy_box_test.dart	516	RenderPhysicalShape reuses its layer	paired-match	upstream-hit-transforms.md#retained-proxy-layer-identity-on-repaint
 packages/flutter/test/rendering/proxy_box_test.dart	529	RenderTransform reuses its layer	partial-match	upstream-hit-transforms.md#retained-proxy-layer-identity-on-repaint
+packages/flutter/test/rendering/viewport_test.dart	91	Viewport getOffsetToReveal - down	paired-match	upstream-viewport-reveal.md#leading-trailing-and-subrectangle-geometry
+packages/flutter/test/rendering/viewport_test.dart	145	Viewport getOffsetToReveal - right	paired-match	upstream-viewport-reveal.md#leading-trailing-and-subrectangle-geometry
+packages/flutter/test/rendering/viewport_test.dart	201	Viewport getOffsetToReveal - up	paired-match	upstream-viewport-reveal.md#leading-trailing-and-subrectangle-geometry
+packages/flutter/test/rendering/viewport_test.dart	257	Viewport getOffsetToReveal - left	paired-match	upstream-viewport-reveal.md#leading-trailing-and-subrectangle-geometry

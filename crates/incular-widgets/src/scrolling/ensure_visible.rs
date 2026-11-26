@@ -12,6 +12,15 @@ use incular_scroll::ScrollController;
 use super::{Scrollable, SliverRevealGeometry};
 use crate::tree::{ElementId, RenderKind, WidgetTree};
 
+/// A viewport reveal calculation (Flutter `RevealedOffset`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RevealedOffset {
+    /// The logical scroll offset that would reveal the requested rectangle.
+    pub offset: f32,
+    /// The rectangle's projected placement in viewport-local coordinates.
+    pub rect: Rect,
+}
+
 /// How [`Scrollable::ensure_visible`] chooses each viewport's target offset
 /// (Flutter `ScrollPositionAlignmentPolicy`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -171,6 +180,56 @@ fn offset_to_reveal(
 }
 
 impl Scrollable {
+    /// Calculates where the nearest enclosing viewport would reveal a target,
+    /// without scrolling it. Alignment 0 is the logical leading edge and
+    /// alignment 1 the trailing edge. `rect` is in target-local coordinates;
+    /// `None` uses the target's layout bounds.
+    ///
+    /// Use after layout. The offset is not clamped to the scroll range.
+    /// Wheel and two-dimensional viewports are outside this query.
+    #[must_use]
+    pub fn get_offset_to_reveal(
+        tree: &WidgetTree,
+        target: ElementId,
+        alignment: f32,
+        rect: Option<Rect>,
+    ) -> Option<RevealedOffset> {
+        if !alignment.is_finite() {
+            return None;
+        }
+        let viewport = tree.enclosing_viewport(target)?;
+        let (_, target_size) = tree.element_geometry(target)?;
+        let (_, viewport_size) = tree.element_geometry(viewport.element)?;
+        let rect = tree.rect_in_viewport(
+            target,
+            rect.unwrap_or_else(|| Rect::from_origin_size(Offset::ZERO, target_size)),
+            viewport.element,
+        )?;
+        let pixels = viewport.controller.offset();
+        let offset = offset_to_reveal(
+            rect,
+            viewport_size,
+            viewport.axis,
+            viewport.reverse,
+            pixels,
+            alignment,
+            tree.sliver_reveal_geometry(viewport.element, target),
+        );
+        if !offset.is_finite() || !rect.origin.x.is_finite() || !rect.origin.y.is_finite() {
+            return None;
+        }
+        let shift = pixels - offset;
+        let shift = if viewport.reverse { -shift } else { shift };
+        let translation = match viewport.axis {
+            Axis::Vertical => Offset::new(0., shift),
+            Axis::Horizontal => Offset::new(shift, 0.),
+        };
+        Some(RevealedOffset {
+            offset,
+            rect: Rect::from_origin_size(rect.origin + translation, rect.size),
+        })
+    }
+
     /// Scrolls every viewport enclosing `element` so it becomes visible
     /// (Flutter `Scrollable.ensureVisible`, `widgets/scrollable.dart:491-531`).
     ///
