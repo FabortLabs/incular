@@ -278,7 +278,7 @@ pub use incular_rendering::{
     LinearGradient, Paint, PaintStyle, Path, RRect, RadialGradient, Shader, Shadow, SweepGradient,
 };
 pub use incular_scroll::{
-    ClampingScrollPhysics, PageMetrics, PageMetricsUpdate, ScrollAnimation, ScrollController,
+    ClampingScrollPhysics, PageMetrics, PageMetricsUpdate, ScrollAnimation, ScrollAnimationCompletion, ScrollController,
     ScrollMetrics, ScrollNotification,
     ScrollNotificationSubscription, ScrollNotificationType, ScrollPhysics,
     ScrollViewKeyboardDismissBehavior, SliverConstraints, SliverGrowthDirection,

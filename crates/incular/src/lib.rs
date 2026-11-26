@@ -35,7 +35,7 @@ pub mod scroll {
     };
     pub use incular_scroll::{
         BoundaryPhysics, ClampingScrollPhysics, DragStartBehavior, PageMetrics, PageMetricsUpdate,
-        ScrollAnimation,
+        ScrollAnimation, ScrollAnimationCompletion,
         ScrollController, ScrollMetrics, ScrollNotification, ScrollNotificationSubscription,
         ScrollNotificationType, ScrollPhysics, ScrollViewKeyboardDismissBehavior, Scrollability,
         SnapPhysics,

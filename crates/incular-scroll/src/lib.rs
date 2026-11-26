@@ -1,6 +1,7 @@
 //! Widget-independent scroll state, physics, and scrollbar geometry.
 
 mod activity;
+mod animation_completion;
 mod attachment;
 mod ballistic;
 mod controller;
@@ -17,6 +18,7 @@ pub use activity::{
     ActivityId, ActivityOrigin, DragStartBehavior, OwnedActivity, OwnedDrive,
     ScrollViewKeyboardDismissBehavior,
 };
+pub use animation_completion::{ScrollAnimationCompletion, ScrollAnimationSignal};
 pub use attachment::{
     AttachmentConflict, MetricAttachment, MetricOwner, MetricWriteError, ViewportMetricsUpdate,
     ViewportPositionHandoff,

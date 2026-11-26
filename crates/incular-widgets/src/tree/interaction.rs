@@ -1635,6 +1635,7 @@ impl WidgetTree {
                 let from = controller.offset();
                 let expected_revision = controller.revision();
                 self.input.scroll_flings.push(ScrollFlingDriver {
+                    _completion: None,
                     overscroll: simulation.may_overscroll(),
                     simulation,
                     started: None,
@@ -1669,6 +1670,7 @@ impl WidgetTree {
             return;
         };
         self.input.scroll_flings.push(ScrollFlingDriver {
+            _completion: None,
             controller: bracket.controller,
             activity,
             simulation,
@@ -1869,6 +1871,7 @@ impl WidgetTree {
             let from = controller.offset();
             let activity = controller.start_owned_activity(ActivityOrigin::Drag);
             self.input.scroll_flings.push(ScrollFlingDriver {
+                _completion: None,
                 overscroll: simulation.may_overscroll(),
                 simulation,
                 started: Some(now),
@@ -1936,6 +1939,7 @@ impl WidgetTree {
                 let from = controller.offset();
                 let activity = controller.start_owned_activity(ActivityOrigin::Animation);
                 self.input.scroll_flings.push(ScrollFlingDriver {
+                    _completion: None,
                     simulation,
                     overscroll: true,
                     started: None,
@@ -1948,7 +1952,7 @@ impl WidgetTree {
                 });
                 continue;
             }
-            let Some(request) = controller.take_pending_animation() else {
+            let Some((request, completion)) = controller.take_tracked_animation() else {
                 continue;
             };
             self.hold_scroll_flings(&controller);
@@ -1960,6 +1964,7 @@ impl WidgetTree {
             let from = controller.offset();
             let activity = controller.start_owned_activity(ActivityOrigin::Animation);
             self.input.scroll_flings.push(ScrollFlingDriver {
+                _completion: completion,
                 simulation: FlingSimulation::curved(
                     from,
                     request.target,

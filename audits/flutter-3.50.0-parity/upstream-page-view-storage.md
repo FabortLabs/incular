@@ -2,7 +2,7 @@
 
 All six associated pinned Flutter originals passed. The focused Rust target now passes eight checks.
 
-- :413 is reference-only. The Rust next_page / previous_page surface returns a bool, not a future; use the separate controller control to verify actual transition results, not completion handles.
+- :413 now pairs via the awaitable variants described below.
 - :953 partially matches. Page 2 is restored, an independent keep-offset-disabled controller starts on 0, and a detached controller exposes no page. Flutter asserts where Incular returns None. A fresh controller reads page 2 from the same bucket.
 - :1030 fully matches. At selected pages 0, 1, 2 the genuine framework semantics tree exposes only the corresponding Page # label.
 - :1069 matches. A PageMetrics snapshot yields page 6; copying it with pixels reduced from 150 to 50 yields page 4 after clamping to [100,200]. The original stays unchanged.
@@ -34,3 +34,25 @@ update notification reports snapshot page 1.7. Copying the notification
 snapshot to offset 500 yields page 2 without mutating the original
 or the live position. These are distinct calculations in Flutter.
 The snapshot check does not verify native device pixel ratio propagation.
+
+## Awaiting a driven page animation
+
+The pinned :413 now pairs through Rust's existing
+`PageController` plus the additive `next_page_async`,
+`previous_page_async`, and `animate_to_page_async` methods. An
+attached controller returns an awaitable completion while the
+boolean methods remain available. Both forward and backward 150 ms
+motions remain unfinished after their first 200 ms frame and
+complete after their second. The native comparison polls real Rust
+futures and checks exactly one wake and the resulting page each time.
+
+An interrupted motion resolves its own completion without reporting
+that it reached the requested page. A zero-width viewport returns an
+already-completed future for a target that will be applied on resize.
+Both behaviors passed authored Flutter and native checks. Native
+additional controls cover a queued request replaced before its
+first frame, an active request replaced by another one, cancellation
+of queued motion by a same-position jump, and viewport teardown.
+Detached Rust controllers return `None`, rather than asserting.
+
+Forty-five focused native animation, controller, ownership, and attachment tests passed.

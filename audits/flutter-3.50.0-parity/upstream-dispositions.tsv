@@ -617,7 +617,7 @@ packages/flutter/test/widgets/page_view_test.dart	886	the current item remains c
 packages/flutter/test/widgets/page_view_test.dart	928	PageView does not report page changed on overscroll	paired-match	upstream-page-view-fractions.md
 packages/flutter/test/widgets/page_view_test.dart	536	Bouncing scroll physics ballistics does not overshoot	paired-match	upstream-page-view-gestures.md
 packages/flutter/test/widgets/page_view_test.dart	634	Page snapping disable and reenable	paired-match	upstream-page-view-gestures.md
-packages/flutter/test/widgets/page_view_test.dart	413	PageController nextPage and previousPage return Futures that resolve	reference-ran-incular-open	upstream-page-view-storage.md
+packages/flutter/test/widgets/page_view_test.dart	413	PageController nextPage and previousPage return Futures that resolve	paired-match	upstream-page-view-storage.md#awaiting-a-driven-page-animation
 packages/flutter/test/widgets/page_view_test.dart	953	PageView can restore page	partial-match	upstream-page-view-storage.md
 packages/flutter/test/widgets/page_view_test.dart	1030	PageView exposes semantics of children	paired-match	upstream-page-view-storage.md
 packages/flutter/test/widgets/page_view_test.dart	1069	PageMetrics	paired-match	upstream-page-view-storage.md

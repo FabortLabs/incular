@@ -3,6 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use incular_core::{RestorationKey, RestorationScope};
 
 use crate::{
+    animation_completion::{PendingScrollAnimation, ScrollAnimationCompletion, ScrollAnimationSignal},
     attachment::{AttachmentConflict, MetricAttachment, MetricOwner, StoredAttachment},
     ballistic::FlingSimulation,
     notifications::{ScrollNotificationListener, ScrollNotificationType},
@@ -164,7 +165,7 @@ impl FixedExtentStart {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Default)]
 pub(crate) struct ScrollState {
     pub(crate) offset: f32,
     /// The smallest in-range offset: zero, or negative for a viewport with
@@ -212,7 +213,7 @@ pub(crate) struct ScrollState {
     pub(crate) last_physics: Option<ScrollPhysics>,
     /// The latest [`ScrollController::animate_to`] not yet taken by the
     /// viewport that drives this controller.
-    pub(crate) pending_animation: Option<ScrollAnimation>,
+    pub(crate) pending_animation: Option<PendingScrollAnimation>,
     pub(crate) notification_listeners: Rc<RefCell<Vec<(u64, ScrollNotificationListener)>>>,
     /// The drag driving the current update, for notifications.
     pub(crate) drag_position: Option<incular_core::Offset>,
@@ -697,13 +698,13 @@ impl ScrollController {
             return false;
         }
         // A jump replaces animations and springs that have not started yet.
-        let bracket_open = {
+        let (bracket_open, replaced) = {
             let mut state = self.state.borrow_mut();
-            state.pending_animation = None;
+            let replaced = state.pending_animation.take();
             state.pending_settle = false;
             state.pending_page_snap = false;
             state.pending_ballistic = None;
-            state.activity_active
+            (state.activity_active, replaced)
         };
         let (moved, value, delta, persistence, spring_back) = {
             let mut state = self.state.borrow_mut();
@@ -744,6 +745,9 @@ impl ScrollController {
             // Wake the runtime so the attached viewport starts the spring.
             self.changes.notify();
         }
+        // A completion can wake an executor. Publish the new offset and
+        // release all controller borrows before alerting it.
+        drop(replaced);
         moved
     }
 
@@ -932,25 +936,53 @@ impl ScrollController {
         duration: std::time::Duration,
         curve: incular_animation::Curve,
     ) -> bool {
+        self.queue_animation(offset, duration, curve, None)
+    }
+
+    /// Starts a driven scroll like [`animate_to`](Self::animate_to), with a
+    /// future that ends when this particular request finishes or is replaced.
+    pub fn animate_to_completion(
+        &self,
+        offset: f32,
+        duration: std::time::Duration,
+        curve: incular_animation::Curve,
+    ) -> ScrollAnimationCompletion {
+        if !offset.is_finite() || duration.is_zero() {
+            self.animate_to(offset, duration, curve);
+            return ScrollAnimationCompletion::ready();
+        }
+        let (completion, signal) = ScrollAnimationCompletion::pending();
+        self.queue_animation(offset, duration, curve, Some(signal));
+        completion
+    }
+
+    fn queue_animation(
+        &self,
+        offset: f32,
+        duration: std::time::Duration,
+        curve: incular_animation::Curve,
+        completion: Option<ScrollAnimationSignal>,
+    ) -> bool {
         if !offset.is_finite() {
             return false;
         }
         if duration.is_zero() {
-            self.state.borrow_mut().pending_animation = None;
             return self.jump_to(offset);
         }
-        {
+        let replaced = {
             let mut state = self.state.borrow_mut();
             state.pending_page_snap = false;
-            state.pending_animation = Some(ScrollAnimation {
-                target: offset,
-                duration,
-                curve,
-            });
-        }
-        // Wake whatever reads this controller so the runtime schedules the
-        // frame that starts the motion.
+            state.pending_animation.replace(PendingScrollAnimation {
+                motion: ScrollAnimation {
+                    target: offset,
+                    duration,
+                    curve,
+                },
+                completion,
+            })
+        };
         self.changes.notify();
+        drop(replaced);
         true
     }
 
@@ -965,6 +997,15 @@ impl ScrollController {
     /// Framework-internal: the viewport that owns the controller starts it.
     #[doc(hidden)]
     pub fn take_pending_animation(&self) -> Option<ScrollAnimation> {
-        self.state.borrow_mut().pending_animation.take()
+        self.take_tracked_animation().map(|(motion, _)| motion)
+    }
+
+    /// Transfers the request's completion to the owning viewport's driver.
+    #[doc(hidden)]
+    pub fn take_tracked_animation(
+        &self,
+    ) -> Option<(ScrollAnimation, Option<ScrollAnimationSignal>)> {
+        let pending = self.state.borrow_mut().pending_animation.take()?;
+        Some((pending.motion, pending.completion))
     }
 }

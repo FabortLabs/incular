@@ -258,16 +258,25 @@ impl MetricAttachment {
     /// metrics. State commits before this returns, so callers can notify
     /// afterwards without racing a half-released owner.
     pub fn release(&self) -> bool {
-        let mut state = self.controller.state.borrow_mut();
-        match state.metric_attachment {
-            Some(live) if live.id == self.id => {
-                state.metric_attachment = None;
-                state.pending_page_snap = false;
-                state.cached_zero_page = None;
-                true
+        let canceled = {
+            let mut state = self.controller.state.borrow_mut();
+            match state.metric_attachment {
+                Some(live) if live.id == self.id => {
+                    state.metric_attachment = None;
+                    state.pending_page_snap = false;
+                    state.cached_zero_page = None;
+                    // Do not leave an awaitable request stranded in the
+                    // detached position. Legacy untracked requests keep
+                    // their existing pre-attach behavior.
+                    state
+                        .pending_animation
+                        .take_if(|request| request.completion.is_some())
+                }
+                _ => return false,
             }
-            _ => false,
-        }
+        };
+        drop(canceled);
+        true
     }
 
     /// Normal detach: releases ownership, then ends any open activity

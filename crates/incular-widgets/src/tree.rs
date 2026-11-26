@@ -1086,6 +1086,8 @@ struct FlingFrame {
 struct ScrollFlingDriver {
     controller: ScrollController,
     activity: OwnedActivity,
+    // Only a tracked programmatic scroll has a future to complete.
+    _completion: Option<incular_scroll::ScrollAnimationSignal>,
     /// The ballistic simulation (`createBallisticSimulation`), evaluated at
     /// the time elapsed since [`Self::started`].
     simulation: FlingSimulation,

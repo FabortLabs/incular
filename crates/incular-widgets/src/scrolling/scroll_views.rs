@@ -1371,6 +1371,51 @@ impl PageController {
         self.animate_to_page(current.saturating_sub(1), duration, curve)
     }
 
+    /// Starts a page animation and returns its completion. The future
+    /// resolves when the motion stops, even if it was interrupted. A
+    /// detached controller returns `None`; a target deferred for missing
+    /// dimensions completes immediately, as in Flutter.
+    pub fn animate_to_page_async(
+        &self,
+        page: usize,
+        duration: std::time::Duration,
+        curve: incular_animation::Curve,
+    ) -> Option<incular_scroll::ScrollAnimationCompletion> {
+        if !self.scroll.has_page_client() {
+            return None;
+        }
+        Some(if let Some(viewport) = self.scroll.live_page_viewport_extent() {
+            self.scroll.animate_to_completion(
+                incular_scroll::pixels_for_page(page as f32, viewport, self.viewport_fraction()),
+                duration,
+                curve,
+            )
+        } else {
+            self.queue_initial_page(page);
+            incular_scroll::ScrollAnimationCompletion::ready()
+        })
+    }
+
+    /// Animates to the next rounded page, returning its completion.
+    pub fn next_page_async(
+        &self,
+        duration: std::time::Duration,
+        curve: incular_animation::Curve,
+    ) -> Option<incular_scroll::ScrollAnimationCompletion> {
+        let current = self.page().unwrap_or(self.initial_page as f32).round() as usize;
+        self.animate_to_page_async(current.saturating_add(1), duration, curve)
+    }
+
+    /// Animates to the previous rounded page, returning its completion.
+    pub fn previous_page_async(
+        &self,
+        duration: std::time::Duration,
+        curve: incular_animation::Curve,
+    ) -> Option<incular_scroll::ScrollAnimationCompletion> {
+        let current = self.page().unwrap_or(self.initial_page as f32).round() as usize;
+        self.animate_to_page_async(current.saturating_sub(1), duration, curve)
+    }
+
     /// Reports `page` through `on_page_changed` if it differs from the page
     /// last reported. Returns the page when it changed. Framework-internal.
     #[doc(hidden)]
