@@ -272,3 +272,75 @@ fn an_exact_polygon_edge_is_a_hit_but_a_retraced_ray_does_not_become_fill() {
         assert!(!polygon.contains(Offset::new(1., 1.01), rule));
     }
 }
+
+fn coverage_tree(front_opaque: bool, empty: bool) -> LayerTree {
+    let mut tree = LayerTree::new();
+    let root = tree.create_transform(Transform::IDENTITY);
+    let foreground = tree.create_transform(Transform::IDENTITY);
+    let background = annotated(&mut tree, 1000, false);
+    let child = if empty {
+        tree.create_annotated_region(Annotation::new(2_i32), true, Size::ZERO)
+    } else {
+        annotated(&mut tree, 2, front_opaque)
+    };
+    tree.set_children(root, vec![background, foreground]);
+    tree.set_children(foreground, vec![child]);
+    tree.set_root(root);
+    let _ = tree.flatten();
+    tree
+}
+
+#[test]
+fn container_propagates_an_opaque_child_hit_across_its_own_siblings() {
+    assert_eq!(
+        coverage_tree(true, false).find_annotation_entries(Offset::ZERO),
+        [entry(2, Offset::ZERO)]
+    );
+}
+
+#[test]
+fn container_passes_through_when_its_child_is_transparent() {
+    assert_eq!(
+        coverage_tree(false, false).find_annotation_entries(Offset::ZERO),
+        [entry(2, Offset::ZERO), entry(1000, Offset::ZERO)]
+    );
+}
+
+#[test]
+fn container_does_not_absorb_when_its_child_misses() {
+    assert_eq!(
+        coverage_tree(false, true).find_annotation_entries(Offset::ZERO),
+        [entry(1000, Offset::ZERO)]
+    );
+}
+
+fn active_parent(opaque: bool) -> LayerTree {
+    let mut tree = LayerTree::new();
+    let root = tree.create_transform(Transform::IDENTITY);
+    let background = annotated(&mut tree, 1000, false);
+    let parent = annotated(&mut tree, 1, opaque);
+    let child = annotated(&mut tree, 2, false);
+    tree.set_children(root, vec![background, parent]);
+    tree.set_children(parent, vec![child]);
+    tree.set_root(root);
+    let _ = tree.flatten();
+    tree
+}
+
+#[test]
+fn transparent_annotated_parent_appends_its_value_then_continues_to_its_background() {
+    let point = Offset::new(5., 5.);
+    assert_eq!(
+        active_parent(false).find_annotation_entries(point),
+        [entry(2, point), entry(1, point), entry(1000, point)]
+    );
+}
+
+#[test]
+fn opaque_annotated_parent_appends_its_value_then_stops_at_its_background() {
+    let point = Offset::new(5., 5.);
+    assert_eq!(
+        active_parent(true).find_annotation_entries(point),
+        [entry(2, point), entry(1, point)]
+    );
+}

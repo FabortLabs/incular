@@ -35,3 +35,13 @@ that a retraced line does not become a filled edge. Further native
 controls cover rounded clips under rotation and half-open rectangular
 edges. Singular transforms do not participate, including for unsized
 annotations. Perspective transforms are not covered by this batch.
+
+### Absorption through nested layers
+
+Five pinned registrations (91, 105, 120, 444, 466) and the corresponding
+retained-layer tests passed. A transparent container forwards its child's
+opaque match across the container's own siblings; a transparent match
+or an empty sized child leaves the background eligible. An annotated
+parent adds its own match after its child, even when that parent is
+opaque. Its opacity then stops the background, not the already visited
+child. These cases assert the complete result order and local positions.
