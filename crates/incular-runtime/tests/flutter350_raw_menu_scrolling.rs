@@ -168,3 +168,146 @@ fn only_the_nearest_activity_start_and_end_request_a_deferred_hide() {
     frame(&mut runtime, now + Duration::from_millis(106));
     assert_eq!(callbacks.borrow().len(), 2);
 }
+
+#[test]
+fn mounting_replacing_and_disposing_the_nearest_position_manage_its_listener() {
+    let old = ScrollController::new();
+    let replacement = ScrollController::new();
+    let menu = MenuController::new();
+    let requests = Signal::new(0usize);
+    let scene = |position: &ScrollController, with_menu: bool| {
+        let anchor: Widget = if with_menu {
+            RawMenuAnchor::new(menu.clone(), |_, _| {
+                Widget::box_(Size::new(60., 40.), PANEL)
+            })
+            .child(Widget::box_(Size::new(30., 20.), Color::WHITE))
+            .on_close_requested({
+                let requests = requests.clone();
+                move |hide| {
+                    requests.set(requests.get() + 1);
+                    hide();
+                }
+            })
+            .into()
+        } else {
+            SizedBox::shrink().into()
+        };
+        Widget::from(
+            SingleChildScrollView::new(SizedBox::new().height(900.).child(anchor))
+                .controller(position.clone()),
+        )
+    };
+    let now = Instant::now();
+    let mut runtime = Runtime::new(scene(&old, true)).unwrap();
+    frame(&mut runtime, now);
+    assert!(old.has_scrolling_listeners());
+    assert!(!replacement.has_scrolling_listeners());
+
+    let root = runtime.tree().root().unwrap();
+    menu.open(None);
+    frame(&mut runtime, now + Duration::from_millis(1));
+    runtime
+        .schedule_update(root, scene(&replacement, true))
+        .unwrap();
+    frame(&mut runtime, now + Duration::from_millis(2));
+    assert!(
+        menu.is_open(),
+        "controller replacement retains the open menu"
+    );
+    assert!(!old.has_scrolling_listeners());
+    assert!(replacement.has_scrolling_listeners());
+    assert!(old.begin_activity() && old.end_activity());
+    assert_eq!(requests.get(), 0);
+    assert!(replacement.begin_activity() && replacement.end_activity());
+    assert_eq!(requests.get(), 1);
+
+    runtime
+        .schedule_update(root, scene(&replacement, false))
+        .unwrap();
+    frame(&mut runtime, now + Duration::from_millis(3));
+    assert!(!replacement.has_scrolling_listeners());
+}
+
+#[test]
+fn scrolling_the_overlay_keeps_both_menus_open_until_the_outer_position_scrolls() {
+    use incular_widgets::Column;
+    let outer = ScrollController::new();
+    let inner = ScrollController::new();
+    let root = MenuController::new();
+    let child = MenuController::new();
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let button_key = Key::from("inner-menu-button");
+    let submenu = RawMenuAnchor::new(child.clone(), |_, _| SizedBox::shrink().into())
+        .child(
+            Widget::from(
+                GestureDetector::new(Widget::box_(Size::new(200., 300.), PANEL)).on_tap({
+                    let child = child.clone();
+                    move || child.open(None)
+                }),
+            )
+            .with_key(button_key.clone()),
+        )
+        .on_close({
+            let log = log.clone();
+            move || log.borrow_mut().push("child")
+        });
+    let panel: Widget = SizedBox::new()
+        .width(200.)
+        .height(300.)
+        .child(
+            SingleChildScrollView::new(Column::new([
+                Widget::from(submenu),
+                Widget::box_(Size::new(200., 900.), Color::BLACK),
+            ]))
+            .controller(inner.clone()),
+        )
+        .into();
+    let anchor = RawMenuAnchor::new(root.clone(), move |_, _| {
+        Align::new(Alignment::TOP_LEFT, panel.clone()).into()
+    })
+    .child(Widget::box_(Size::new(30., 20.), Color::WHITE))
+    .on_close({
+        let log = log.clone();
+        move || log.borrow_mut().push("root")
+    });
+    let scene = SingleChildScrollView::new(
+        SizedBox::new()
+            .height(700.)
+            .child(Align::new(Alignment::TOP_LEFT, anchor)),
+    )
+    .controller(outer.clone());
+    let mut runtime = Runtime::new(scene.into()).unwrap();
+    let now = Instant::now();
+    frame(&mut runtime, now);
+    root.open(None);
+    frame(&mut runtime, now + Duration::from_millis(1));
+    let button = runtime.tree().element_with_key(&button_key).unwrap();
+    let bounds = runtime.tree().element_bounds(button).unwrap();
+    let point = bounds.origin + Offset::new(20., 20.);
+    for phase in [PointerPhase::Down, PointerPhase::Up, PointerPhase::Move] {
+        let _ = runtime.handle_input_at(
+            InputEvent::Pointer {
+                phase,
+                position: point,
+            },
+            now,
+        );
+    }
+    frame(&mut runtime, now + Duration::from_millis(2));
+    assert!(root.is_open() && child.is_open());
+    let _ = runtime.handle_input_at(
+        InputEvent::Scroll {
+            delta: Offset::new(0., 30.),
+        },
+        now,
+    );
+    frame(&mut runtime, now + Duration::from_millis(3));
+    assert_eq!((inner.offset(), outer.offset()), (30., 0.));
+    assert!(root.is_open() && child.is_open());
+    assert!(log.borrow().is_empty());
+
+    assert!(outer.jump_to(700.));
+    frame(&mut runtime, now + Duration::from_millis(4));
+    assert!(!root.is_open() && !child.is_open());
+    assert_eq!(*log.borrow(), ["child", "root"]);
+}

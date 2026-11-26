@@ -64,6 +64,14 @@ impl ScrollController {
         notifier.add_listener(listener)
     }
 
+    /// Whether the position has any live scrolling-state observers.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn has_scrolling_listeners(&self) -> bool {
+        let notifier = self.state.borrow().activity_changes.clone();
+        notifier.is_some_and(|notifier| notifier.has_listeners())
+    }
+
     fn notify_scrolling_changed(&self, expected: bool) {
         let notifier = {
             let state = self.state.borrow();

@@ -1706,3 +1706,5 @@ packages/flutter/test/widgets/raw_menu_anchor_test.dart	2602	Triggered by MenuCo
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	2705	hideOverlay does nothing when called after disposal	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#mediaquery-size-and-pending-hide
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	3027	View size change triggers onCloseRequested on open menu	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#mediaquery-size-and-pending-hide
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	3076	Ancestor scroll triggers onCloseRequested on open menu	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#nearest-ancestor-scroll-activity
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	2066	Menus do not close on root menu internal scroll	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#scrolling-the-panel-and-listener-teardown
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	2137	Ancestor scroll listener is removed on dispose	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#scrolling-the-panel-and-listener-teardown

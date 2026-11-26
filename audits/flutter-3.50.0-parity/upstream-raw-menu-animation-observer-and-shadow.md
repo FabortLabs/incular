@@ -123,3 +123,13 @@ if it is still open. The retained subscription does not consume
 bubbled notifications and is replaced on a nearest-position change.
 Mid-activity jump takeover and reduced-motion substitutions are not
 covered by these comparisons.
+
+### Scrolling the panel and listener teardown
+
+Pinned `:2066`: an actual wheel scroll over the menu panel moves its
+inner viewport but leaves both menus open, without firing a close
+callback. An out-of-range scroll of the anchor's enclosing viewport
+then closes both, reporting the submenu before the root. Pinned
+`:2137`: a mounted root registers on its scroll position, and removal
+unsubscribes. The native fixture also swaps positions while open,
+verifying that only the current scroll position can close the menu.
