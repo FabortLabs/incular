@@ -26,6 +26,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             size,
             display_list,
             painter,
+            ..
         } => RenderKind::CustomPaint {
             desired: *size,
             display_list: display_list.clone(),

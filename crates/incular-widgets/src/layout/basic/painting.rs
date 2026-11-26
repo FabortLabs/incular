@@ -88,8 +88,8 @@ widget_from_kind!(RepaintBoundary => RepaintBoundary { child });
 /// As Flutter's `CustomPaint`, the painter paints before the child and the
 /// foreground painter after it. Without a child the preferred size applies
 /// (or the constraints' biggest size after [`Self::fill_to_constraints`]);
-/// with a child the size is the child's. The painters ignore pointer input,
-/// so they never absorb hits meant for the child.
+/// with a child the size is the child's. Unless overridden by the painter,
+/// the foreground passes hits through and the background accepts them.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct CustomPaint {
     #[builder(default = Some(Size::ZERO))]
@@ -186,6 +186,7 @@ impl From<CustomPaint> for Widget {
                 size,
                 display_list,
                 painter,
+                foreground: false,
             });
         }
         // Stack siblings keep Flutter's order: painter, child, foreground.
@@ -193,25 +194,24 @@ impl From<CustomPaint> for Widget {
         // background regions, child, foreground regions
         // (`RenderCustomPaint.assembleSemanticsNode`).
         // The painter layers fill the stack, which takes the child's size.
-        let layer = |painter: Option<PainterDelegate>, display_list: DisplayList| -> Widget {
-            Positioned::fill(IgnorePointer::new(Widget::from_kind(
-                WidgetKind::CustomPaint {
-                    size: None,
-                    display_list,
-                    painter,
-                },
-            )))
+        let layer = |painter: Option<PainterDelegate>, display_list: DisplayList, foreground: bool| -> Widget {
+            Positioned::fill(Widget::from_kind(WidgetKind::CustomPaint {
+                size: None,
+                display_list,
+                painter,
+                foreground,
+            }))
             .into()
         };
         let has_child = child.is_some();
         let mut children: Vec<Widget> = Vec::new();
         if painter.is_some() || !display_list.is_empty() {
-            children.push(layer(painter, display_list));
+            children.push(layer(painter, display_list, false));
         }
         children.extend(background_semantics.map(semantics_layer));
         children.extend(child);
         if let Some(foreground) = foreground_painter {
-            children.push(layer(Some(foreground), DisplayList::default()));
+            children.push(layer(Some(foreground), DisplayList::default(), true));
         }
         children.extend(foreground_semantics.map(semantics_layer));
         let stack: Widget = Stack::new(children)

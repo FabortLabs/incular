@@ -155,7 +155,7 @@ fn absorb_pointer_hit(size: Size, local: Offset) -> bool {
 }
 
 fn hit_box_contains(kind: &RenderKind, size: Size, origin: Offset, point: Offset) -> bool {
-    if matches!(kind, RenderKind::Colored { .. }) {
+    if matches!(kind, RenderKind::Colored { .. } | RenderKind::CustomPaint { .. }) {
         // Like Flutter's RenderProxyBoxWithHitTestBehavior, the colored
         // surface claims only the half-open box, even with a transparent fill.
         absorb_pointer_hit(size, point - origin)
@@ -170,6 +170,11 @@ fn hit_box_contains(kind: &RenderKind, size: Size, origin: Offset, point: Offset
 /// `Stack` or sized placeholder) is not hit, like Flutter's render boxes
 /// whose `hitTestSelf` is false.
 fn self_hit_after_children(kind: Option<&WidgetKind>, size: Size, local: Offset) -> bool {
+    if let Some(WidgetKind::CustomPaint { painter, display_list, foreground, .. }) = kind {
+        return painter.as_ref().map_or(!display_list.is_empty(), |painter| {
+            painter.hit_test(local).unwrap_or(!foreground)
+        });
+    }
     if let Some(WidgetKind::Decorated {
         hit_decoration: Some(decoration),
         ..

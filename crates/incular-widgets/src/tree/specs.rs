@@ -646,6 +646,7 @@ pub(crate) enum WidgetKind {
         size: Option<Size>,
         display_list: DisplayList,
         painter: Option<crate::painting_effects::PainterDelegate>,
+        foreground: bool,
     },
     Colored {
         color: Color,

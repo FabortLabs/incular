@@ -1020,8 +1020,16 @@ impl WidgetTree {
             ) => before != after,
             _ => false,
         };
+        let painter_hit_changed = match (old.kind(), widget.kind()) {
+            (
+                WidgetKind::CustomPaint { painter: old, foreground: old_foreground, .. },
+                WidgetKind::CustomPaint { painter: new, foreground: new_foreground, .. },
+            ) => old != new || old_foreground != new_foreground,
+            _ => false,
+        };
         if before_mouse != after_mouse
             || decoration_hit_changed
+            || painter_hit_changed
             || control_cursor(old.kind()) != control_cursor(widget.kind())
             || resize_cursor(old.kind()) != resize_cursor(widget.kind())
         {

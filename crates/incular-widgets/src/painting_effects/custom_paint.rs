@@ -3,7 +3,7 @@
 use std::any::Any;
 use std::rc::Rc;
 
-use incular_core::{Rect, Size};
+use incular_core::{Offset, Rect, Size};
 use incular_rendering::DisplayList;
 
 use crate::Semantics;
@@ -73,6 +73,13 @@ pub trait CustomPainter {
     fn should_repaint(&self, old: &Self) -> bool
     where
         Self: Sized;
+    /// Tests a point in the painter's local coordinates. Returning `None`
+    /// uses Flutter's default: a background painter accepts it, while a
+    /// foreground painter leaves it to the child.
+    fn hit_test(&self, _position: Offset) -> Option<bool> {
+        None
+    }
+
     /// Flutter `semanticsBuilder`: the painting's semantic regions, or `None`
     /// (the default) when the painting has none. `CustomPaint` rebuilds the
     /// regions whenever it rebuilds or its size changes.
@@ -91,6 +98,7 @@ pub struct PainterDelegate {
     painter: Rc<dyn Any>,
     paint: fn(&dyn Any, incular_core::Size) -> DisplayList,
     should_repaint: fn(&dyn Any, &dyn Any) -> bool,
+    hit_test: fn(&dyn Any, Offset) -> Option<bool>,
     semantics: Option<SemanticsBuilder>,
 }
 
@@ -101,6 +109,10 @@ fn paint_erased<P: CustomPainter + 'static>(
     painter
         .downcast_ref::<P>()
         .map_or_else(DisplayList::default, |painter| painter.paint(size))
+}
+
+fn hit_test_erased<P: CustomPainter + 'static>(painter: &dyn Any, position: Offset) -> Option<bool> {
+    painter.downcast_ref::<P>()?.hit_test(position)
 }
 
 fn should_repaint_erased<P: CustomPainter + 'static>(new: &dyn Any, old: &dyn Any) -> bool {
@@ -120,6 +132,7 @@ impl PainterDelegate {
             painter: Rc::new(painter),
             paint: paint_erased::<P>,
             should_repaint: should_repaint_erased::<P>,
+            hit_test: hit_test_erased::<P>,
         }
     }
 
@@ -127,6 +140,10 @@ impl PainterDelegate {
     #[must_use]
     pub(crate) fn paint(&self, size: incular_core::Size) -> DisplayList {
         (self.paint)(&*self.painter, size)
+    }
+
+    pub(crate) fn hit_test(&self, position: Offset) -> Option<bool> {
+        (self.hit_test)(&*self.painter, position)
     }
 
     /// The painter's semantics builder, read once when it was retained.

@@ -9,3 +9,13 @@ All eight originals in widgets/custom_paint_test.dart passed against pinned Flut
 - :58, :166 and :193 remain reference-only. Incular painters return an independent display list, not Flutter's shared Canvas, and no equivalent public isComplex/willChange setter is present on this widget. Renderer performance or cache correspondence is not claimed.
 
 Run Rust with cargo test --locked -p incular-widgets --test flutter350_custom_paint_parity -- --nocapture.
+
+## Custom painter hit policy
+
+Two authored pinned Flutter probes and two retained native tests use
+actual touch taps. A background painter accepts hits by default even
+with an empty display list, or can decline to let a sibling receive the
+tap. A foreground painter defaults to leaving the child alone. Returning
+true claims the point before the child; returning false leaves it to
+the child. The delegate sees the local point. All 21 focused native
+painter, semantics, and decorated-sliver tests passed.

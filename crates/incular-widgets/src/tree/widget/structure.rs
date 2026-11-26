@@ -801,13 +801,15 @@ impl PartialEq for WidgetKind {
                     size: a,
                     display_list: b,
                     painter: p,
+                    foreground: left_foreground,
                 },
                 Self::CustomPaint {
                     size: c,
                     display_list: d,
                     painter: q,
+                    foreground: right_foreground,
                 },
-            ) => a == c && b == d && p == q,
+            ) => a == c && b == d && p == q && left_foreground == right_foreground,
             (
                 Self::Limited {
                     max_width: a,
