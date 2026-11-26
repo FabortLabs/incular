@@ -22,6 +22,9 @@ use incular_core::{RestorationBackend, RestorationKey, RestorationScope};
 
 use crate::{Signal, tasks};
 
+mod handoff;
+pub use handoff::{PendingRestorationScope, RestorationHandoffError};
+
 /// The Incular-owned snapshot format. It is intentionally independent from
 /// the application's own restoration schema version.
 pub const FRAMEWORK_RESTORATION_FORMAT_VERSION: u32 = 1;
@@ -486,6 +489,8 @@ struct ManagerState {
     retry_pending: bool,
     persist_migrated_snapshot: bool,
     active_scope_paths: HashSet<String>,
+    pending_scope_handoffs: BTreeMap<String, usize>,
+    handoff_epoch: u64,
 }
 
 struct RestorationManagerInner {
@@ -616,6 +621,8 @@ impl RestorationManager {
                     retry_pending: false,
                     persist_migrated_snapshot: migrated,
                     active_scope_paths: HashSet::new(),
+                    pending_scope_handoffs: BTreeMap::new(),
+                    handoff_epoch: 0,
                 }),
                 scheduler: std::cell::RefCell::new(None),
             }),
@@ -678,32 +685,12 @@ impl RestorationManager {
 
     pub(crate) fn remove_scope(&self, path: &[RestorationKey]) -> usize {
         let prefix = encode_path(path);
-        let prefix_with_separator = format!("{prefix}/");
-        let mut guard = self.inner.state.borrow_mut();
-        let state = &mut *guard;
-        let before = state.snapshot.state.len();
-        let scope_counts = &mut state.scope_counts;
-        state.snapshot.state.retain(|key, _| {
-            let keep = key != &prefix && !key.starts_with(&prefix_with_separator);
-            if !keep {
-                uncount_scope(scope_counts, key);
-            }
-            keep
-        });
-        let removed = before - state.snapshot.state.len();
-        let scopes_before = state.snapshot.claimed_scopes.len();
-        state.snapshot.claimed_scopes.retain(|scope| {
-            let keep = scope != &prefix && !scope.starts_with(&prefix_with_separator);
-            if !keep {
-                decrement_scope(scope_counts, scope);
-            }
-            keep
-        });
-        let changed = removed > 0 || scopes_before != state.snapshot.claimed_scopes.len();
+        let mut state = self.inner.state.borrow_mut();
+        let (removed, changed) = remove_snapshot_scope(&mut state, &prefix);
         if changed {
-            refresh_counts(state);
+            refresh_counts(&mut state);
         }
-        drop(guard);
+        drop(state);
         if changed {
             self.mark_dirty();
         }
@@ -712,6 +699,8 @@ impl RestorationManager {
 
     pub(crate) fn reset(&self) {
         let mut state = self.inner.state.borrow_mut();
+        state.handoff_epoch = state.handoff_epoch.wrapping_add(1);
+        state.pending_scope_handoffs.clear();
         state.snapshot.state.clear();
         state.snapshot.claimed_scopes.clear();
         state.snapshot.windows.clear();
@@ -799,7 +788,9 @@ impl RestorationManager {
     pub(crate) fn acquire_scope(&self, path: &[RestorationKey]) -> Result<ScopeLease, String> {
         let path = encode_path(path);
         let mut state = self.inner.state.borrow_mut();
-        if !state.active_scope_paths.insert(path.clone()) {
+        if state.pending_scope_handoffs.contains_key(&path)
+            || !state.active_scope_paths.insert(path.clone())
+        {
             return Err(format!("duplicate restoration sibling scope `{path}`"));
         }
         Ok(ScopeLease {
@@ -1166,6 +1157,35 @@ fn scope_counts_of(values: &BTreeMap<String, Value>) -> BTreeMap<String, usize> 
         count_scope(&mut counts, key);
     }
     counts
+}
+
+fn remove_snapshot_scope(state: &mut ManagerState, prefix: &str) -> (usize, bool) {
+    let descendants = format!("{prefix}/");
+    let before = state.snapshot.state.len();
+    let scope_counts = &mut state.scope_counts;
+    let belongs = |key: &str| key == prefix || key.starts_with(&descendants);
+    state.snapshot.state.retain(|key, _| {
+        if belongs(key) {
+            uncount_scope(scope_counts, key);
+            false
+        } else {
+            true
+        }
+    });
+    let removed = before - state.snapshot.state.len();
+    let scopes_before = state.snapshot.claimed_scopes.len();
+    state.snapshot.claimed_scopes.retain(|scope| {
+        if belongs(scope) {
+            decrement_scope(scope_counts, scope);
+            false
+        } else {
+            true
+        }
+    });
+    (
+        removed,
+        removed > 0 || scopes_before != state.snapshot.claimed_scopes.len(),
+    )
 }
 
 fn count_scope(counts: &mut BTreeMap<String, usize>, key: &str) {

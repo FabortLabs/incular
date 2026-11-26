@@ -8,6 +8,7 @@ use incular_core::{Color, RestorationKey, RestorationScope, Size};
 use incular_platform::WindowOptions;
 use incular_runtime::{
     Application, InMemoryRestorationStore, RestorationConfig, RestorationHandle,
+    RestorationHandoffError,
 };
 use incular_widgets::Widget;
 use serde_json::{Value, json};
@@ -71,21 +72,107 @@ fn root_scope_preserves_explicit_null_but_not_absence_across_restart() {
 // second claim attempt and dropping the first owner.
 #[test]
 fn second_scope_claim_can_be_made_before_previous_owner_releases_in_same_turn() {
-    let (_application, root, handle) = open(Arc::new(InMemoryRestorationStore::new()));
+    let store = Arc::new(InMemoryRestorationStore::new());
+    let (mut application, root, handle) = open(store.clone());
     let first_scope = root.child_unchecked(key("child1"));
-    let first = handle.claim_scope(&first_scope).unwrap();
     first_scope.set_json(&key("foo"), json!(22));
+    let first = handle.claim_scope(&first_scope).unwrap();
+    let sibling = root.child_unchecked(key("child10"));
+    sibling.set_json(&key("foo"), json!(99));
     assert_eq!(first_scope.get_json(&key("foo")), Some(json!(22)));
 
-    let second_scope = root.child_unchecked(key("child1"));
-    let second = handle.claim_scope(&second_scope);
+    let before = handle.diagnostics().save_requests;
+    let mut second = handle.prepare_scope_handoff(&first_scope).unwrap();
+    assert_eq!(second.scope().get_json(&key("foo")), None);
+    second.scope().set_json(&key("bar"), json!(55));
+    assert_eq!(first_scope.get_json(&key("bar")), None);
+    assert_eq!(handle.diagnostics().save_requests, before);
+    assert_eq!(
+        second.commit().err(),
+        Some(RestorationHandoffError::PreviousOwnerStillActive)
+    );
+    assert_eq!(first_scope.get_json(&key("foo")), Some(json!(22)));
     drop(first);
-    let _second =
-        second.expect("a same-turn handoff can resolve the duplicate before finalization");
+    let _claim = second
+        .commit()
+        .expect("the previous owner released the path");
+    assert_eq!(second.scope().get_json(&key("foo")), None);
+    assert_eq!(second.scope().get_json(&key("bar")), Some(json!(55)));
+    assert_eq!(handle.diagnostics().save_requests, before + 1);
+    assert_eq!(second.commit().err(), Some(RestorationHandoffError::Closed));
+    assert!(handle.claim_scope(&first_scope).is_err());
+    application.shutdown();
 
-    assert_eq!(second_scope.get_json(&key("foo")), None);
-    second_scope.set_json(&key("bar"), json!(55));
-    assert_eq!(second_scope.get_json(&key("bar")), Some(json!(55)));
+    let (_application, root, _) = open(store);
+    let restored = root.child_unchecked(key("child1"));
+    assert_eq!(restored.get_json(&key("foo")), None);
+    assert_eq!(restored.get_json(&key("bar")), Some(json!(55)));
+    assert_eq!(
+        root.child_unchecked(key("child10")).get_json(&key("foo")),
+        Some(json!(99))
+    );
+}
+
+#[test]
+fn repeated_pending_claims_do_not_publish_even_after_the_first_owner_releases() {
+    let (_application, root, handle) = open(Arc::new(InMemoryRestorationStore::new()));
+    let scope = root.child_unchecked(key("child1"));
+    let first = handle.claim_scope(&scope).unwrap();
+    scope.set_json(&key("committed"), json!(1));
+    let mut second = handle.prepare_scope_handoff(&scope).unwrap();
+    second.scope().set_json(&key("second"), json!(2));
+    drop(first);
+    assert!(
+        handle.claim_scope(&scope).is_err(),
+        "the pending owner reserves this path"
+    );
+    let mut third = handle.prepare_scope_handoff(&scope).unwrap();
+    third.scope().set_json(&key("third"), json!(3));
+    let before = handle.diagnostics().save_requests;
+    for pending in [&mut second, &mut third] {
+        assert_eq!(
+            pending.commit().err(),
+            Some(RestorationHandoffError::MultipleReplacementOwners)
+        );
+    }
+    assert_eq!(scope.get_json(&key("committed")), Some(json!(1)));
+    assert_eq!(scope.get_json(&key("second")), None);
+    assert_eq!(scope.get_json(&key("third")), None);
+    assert_eq!(handle.diagnostics().save_requests, before);
+
+    let abandoned = third.scope().clone();
+    drop(third);
+    assert_eq!(abandoned.get_json(&key("third")), None);
+    let _claim = second.commit().expect("one replacement remains");
+    assert_eq!(scope.get_json(&key("committed")), None);
+    assert_eq!(scope.get_json(&key("second")), Some(json!(2)));
+}
+
+#[test]
+fn handoff_respects_live_descendants_and_cannot_restore_after_reset() {
+    let (_application, root, handle) = open(Arc::new(InMemoryRestorationStore::new()));
+    let scope = root.child_unchecked(key("child1"));
+    let original = handle.claim_scope(&scope).unwrap();
+    let descendant = scope.child_unchecked(key("nested"));
+    let nested = handle.claim_scope(&descendant).unwrap();
+    descendant.set_json(&key("value"), json!(9));
+    let mut replacement = handle.prepare_scope_handoff(&scope).unwrap();
+    replacement.scope().set_json(&key("value"), json!(10));
+    drop(original);
+    assert_eq!(
+        replacement.commit().err(),
+        Some(RestorationHandoffError::ActiveDescendant)
+    );
+    assert_eq!(descendant.get_json(&key("value")), Some(json!(9)));
+    handle.reset();
+    drop(nested);
+    assert_eq!(
+        replacement.commit().err(),
+        Some(RestorationHandoffError::Closed)
+    );
+    assert_eq!(scope.get_json(&key("value")), None);
+    assert_eq!(descendant.get_json(&key("value")), None);
+    assert!(handle.claim_scope(&scope).is_ok());
 }
 
 // A Rust lease release is not the explicit bucket disposal operation in

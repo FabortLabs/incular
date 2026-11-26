@@ -154,5 +154,6 @@ with zero saves before a queued frame, exactly one at its end, and an
 immediate save while idle. The format and engine IPC are not compared.
 :172 matches the original empty-bucket dirty and value-save assertions;
 it stays partial because Incular does not expose Flutter's debug-owner
-metadata. The separate duplicate live-lease handoff still fails its
-retained test and is not included in either disposition.
+metadata. At the time of this check the separate live-lease handoff
+failed; [the later ownership audit](upstream-restoration-scope-ownership.md)
+records the explicit staged replacement that now passes.

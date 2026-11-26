@@ -2394,3 +2394,7 @@ packages/flutter/test/animation/iteration_patterns_test.dart	14	AnimationControl
 packages/flutter/test/animation/iteration_patterns_test.dart	56	AnimationController with mutating status listener	paired-match	upstream-curve-animation-lifecycle.md#controller-listener-mutation-and-error-isolation
 packages/flutter/test/animation/iteration_patterns_test.dart	100	AnimationController with throwing listener	paired-match	upstream-curve-animation-lifecycle.md#controller-listener-mutation-and-error-isolation
 packages/flutter/test/animation/iteration_patterns_test.dart	130	AnimationController with throwing status listener	paired-match	upstream-curve-animation-lifecycle.md#controller-listener-mutation-and-error-isolation
+packages/flutter/test/services/restoration_bucket_test.dart	13	root bucket values	partial-match	upstream-restoration-scope-ownership.md
+packages/flutter/test/services/restoration_bucket_test.dart	200	claim child that is already claimed throws if not given up	partial-match	upstream-restoration-scope-ownership.md
+packages/flutter/test/services/restoration_bucket_test.dart	237	claim child that is already claimed does not throw if given up	paired-match	upstream-restoration-scope-ownership.md
+packages/flutter/test/services/restoration_bucket_test.dart	275	claiming a claimed child twice and only giving it up once throws	paired-match	upstream-restoration-scope-ownership.md
