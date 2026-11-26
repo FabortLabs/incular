@@ -365,7 +365,9 @@ impl crate::tree::RetainedState for PainterRegionsState {
 }
 
 fn semantics_layer(painter: PainterDelegate, foreground: bool) -> Widget {
-    Positioned::fill(IgnorePointer::new(Widget::mount_scoped_layout_builder(
+    // These generated regions use empty boxes and cannot claim a pointer.
+    // IgnorePointer would also strip their real semantic callbacks.
+    Positioned::fill(Widget::mount_scoped_layout_builder(
         |_| PainterRegionsState::default(),
         move |state, _, constraints| {
             let size = constraints.biggest();
@@ -400,6 +402,6 @@ fn semantics_layer(painter: PainterDelegate, foreground: bool) -> Widget {
             regions
         },
         true,
-    )))
+    ))
     .into()
 }

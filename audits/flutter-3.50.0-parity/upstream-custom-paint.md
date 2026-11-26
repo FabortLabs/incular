@@ -71,3 +71,14 @@ builder. A source replacement detaches the old source, leaves the
 existing picture intact, and only the new source can repaint it green.
 Native layout and rebuild counts stay unchanged; unmount releases the
 last subscription. All 24 targeted native tests passed.
+
+## Dispatching a painted region's accessibility actions
+
+The pinned :425 registration pairs. The retained Runtime actually
+dispatches all 23 actions advertised by a painted semantic region,
+including the original selection base/extent, replacement text,
+cursor-extension booleans, directional scrolling, and accessibility
+focus notifications. The region requires no keyboard-focusable
+editor. Its empty geometry boxes already pass ordinary touch to the
+real child, so the accidental IgnorePointer action mask was removed.
+The full 12-case native region target and this Runtime case passed.
