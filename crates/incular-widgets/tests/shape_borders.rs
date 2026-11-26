@@ -303,23 +303,29 @@ fn compound_border_paints_outside_to_inside_with_accumulated_insets() {
     compound.paint(&mut canvas, area);
     let painted = canvas.finish();
     let [
-        PaintCommand::StrokePath {
+        PaintCommand::FillPath {
             path: outer_path,
-            stroke: outer_stroke,
+            brush: incular_rendering::Brush::Solid(outer_color),
+            fill_rule: FillRule::EvenOdd,
             ..
         },
-        PaintCommand::StrokePath {
+        PaintCommand::FillPath {
             path: inner_path,
-            stroke: inner_stroke,
+            brush: incular_rendering::Brush::Solid(inner_color),
+            fill_rule: FillRule::EvenOdd,
             ..
         },
     ] = painted.commands()
     else {
-        panic!("expected exactly two successive strokes");
+        panic!("expected exactly two successive filled stroke bands");
     };
-    assert_eq!((outer_stroke.width, inner_stroke.width), (2., 3.));
-    assert_bounds(outer_path, rect(1., 1., 38., 28.));
-    assert_bounds(inner_path, rect(3.5, 3.5, 33., 23.));
+    assert_eq!((*outer_color, *inner_color), (outside, inside));
+    assert_bounds(outer_path, area);
+    assert_bounds(inner_path, rect(2., 2., 36., 26.));
+    assert!(outer_path.contains(Offset::new(1., 15.), FillRule::EvenOdd));
+    assert!(!outer_path.contains(Offset::new(3., 15.), FillRule::EvenOdd));
+    assert!(inner_path.contains(Offset::new(3., 15.), FillRule::EvenOdd));
+    assert!(!inner_path.contains(Offset::new(6., 15.), FillRule::EvenOdd));
 }
 
 #[test]
@@ -353,7 +359,10 @@ fn compound_border_passes_through_direction_for_stroke_and_inner_path() {
                 brush: Brush::Solid(Color::BLACK),
                 ..
             },
-            PaintCommand::StrokePath { .. },
+            PaintCommand::FillPath {
+                fill_rule: FillRule::EvenOdd,
+                ..
+            },
         ] = painting.commands()
         else {
             panic!("expected the one directional outside side followed by the inner stroke");
@@ -490,4 +499,179 @@ fn oval_border_scale_interpolation_and_edge_samples_match_the_reference() {
             );
         }
     }
+}
+
+#[test]
+fn rounded_outline_value_methods_keep_physical_and_directional_radii() {
+    use incular_core::Lerp;
+    use incular_widgets::{BorderRadiusDirectional, Radius, RoundedRectangleBorder, TextDirection};
+    use std::hash::{DefaultHasher, Hash, Hasher};
+    fn hash(value: impl Hash) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        value.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    let default = RoundedRectangleBorder::<BorderRadius>::default();
+    assert_eq!(default.copy_with(None, None), default);
+    assert_eq!(hash(default.copy_with(None, None)), hash(default));
+    let side = BorderSide::solid(Color::rgba(0x12, 0x34, 0x56, 255), 10.);
+    let radius = BorderRadius::circular(16.);
+    assert_eq!(
+        default.copy_with(Some(side), Some(radius)),
+        RoundedRectangleBorder::new(side, radius)
+    );
+    let default = RoundedRectangleBorder::new(BorderSide::NONE, BorderRadiusDirectional::ZERO);
+    let radius = BorderRadiusDirectional::circular(16.);
+    assert_eq!(
+        default.copy_with(Some(side), Some(radius)),
+        RoundedRectangleBorder::new(side, radius)
+    );
+
+    let directional = RoundedRectangleBorder::new(
+        side,
+        BorderRadiusDirectional::only(
+            Radius::circular(20.),
+            Radius::ZERO,
+            Radius::ZERO,
+            Radius::ZERO,
+        ),
+    );
+    let area = rect(0., 0., 80., 70.);
+    let includes_top_left = |direction| {
+        directional
+            .outer_path_with_direction(area, Some(direction))
+            .contains(Offset::new(1., 1.), FillRule::NonZero)
+    };
+    assert!(!includes_top_left(TextDirection::Ltr));
+    assert!(includes_top_left(TextDirection::Rtl));
+
+    let physical = RoundedRectangleBorder::new(side, BorderRadius::circular(100.));
+    let directional = directional.into_radius_geometry();
+    let physical = physical.into_radius_geometry();
+    assert_eq!(
+        directional.lerp(&physical, 1.),
+        physical.lerp(&directional, 0.)
+    );
+    assert_eq!(directional.lerp(&physical, 0.), directional);
+}
+
+#[test]
+fn rounded_rectangle_and_circle_budget_only_the_inner_stroke() {
+    use incular_config::EdgeInsets;
+    use incular_core::Lerp;
+    use incular_widgets::{CircleBorder, RoundedRectangleBorder};
+    for (alignment, inset) in [(-1., 10.), (0., 5.), (1., 0.)] {
+        let side = BorderSide {
+            stroke_align: alignment,
+            ..BorderSide::solid(Color::BLACK, 10.)
+        };
+        let rectangle = RoundedRectangleBorder::new(side, BorderRadius::ZERO);
+        assert_eq!(rectangle.dimensions(None), EdgeInsets::all(inset));
+        assert_eq!(
+            CircleBorder::new(side).dimensions(None),
+            EdgeInsets::all(inset)
+        );
+    }
+
+    let make = |width, align| {
+        RoundedRectangleBorder::new(
+            BorderSide {
+                stroke_align: align,
+                ..BorderSide::solid(Color::BLACK, width)
+            },
+            BorderRadius::ZERO,
+        )
+    };
+    assert_eq!(make(10., -1.).lerp(&make(20., 1.), 0.5), make(15., 0.));
+}
+
+#[test]
+fn rounded_outline_uses_independent_contours_and_only_a_zero_width_hairline() {
+    use incular_config::EdgeInsets;
+    use incular_core::Lerp;
+    use incular_widgets::RoundedRectangleBorder;
+    let shape = |width, radius| {
+        RoundedRectangleBorder::new(
+            BorderSide::solid(Color::BLACK, width),
+            BorderRadius::circular(radius),
+        )
+    };
+    let [a, b, c] = [shape(10., 100.), shape(15., 150.), shape(20., 200.)];
+    assert_eq!(a.dimensions(None), EdgeInsets::all(10.));
+    assert_eq!(a.scale(2.), c);
+    assert_eq!(c.scale(0.5), a);
+    for (factor, result) in [(0., a), (0.5, b), (1., c)] {
+        assert_eq!(a.lerp(&c, factor), result);
+    }
+    for path in [
+        shape(1., 2.).inner_path(rect(-2., -2., 4., 4.)),
+        shape(1., 1.).outer_path(rect(-1., -1., 2., 2.)),
+    ] {
+        assert_bounds(&path, rect(-1., -1., 2., 2.));
+        assert!(path.contains(Offset::new(0.9, 0.), FillRule::NonZero));
+        assert!(path.contains(Offset::new(0., 0.9), FillRule::NonZero));
+        assert!(!path.contains(Offset::new(0.9, 0.9), FillRule::NonZero));
+    }
+    let asymmetric = RoundedRectangleBorder::new(
+        BorderSide::NONE,
+        BorderRadius::all(incular_widgets::Radius::elliptical(24., 8.)),
+    );
+    let square = rect(0., 0., 64., 64.);
+    assert!(
+        asymmetric
+            .outer_path(square)
+            .contains(Offset::new(1., 10.), FillRule::NonZero)
+    );
+    assert!(
+        !shape(0., 24.)
+            .outer_path(square)
+            .contains(Offset::new(1., 10.), FillRule::NonZero)
+    );
+
+    let area = rect(10., 20., 70., 170.);
+    let mut canvas = Canvas::default();
+    a.paint(&mut canvas, area);
+    let drawing = canvas.finish();
+    let [
+        PaintCommand::FillPath {
+            path,
+            fill_rule: FillRule::EvenOdd,
+            ..
+        },
+    ] = drawing.commands()
+    else {
+        panic!("positive-width rounded rectangle must fill a ring");
+    };
+    assert_bounds(path, area);
+    assert!(path.contains(Offset::new(45., 25.), FillRule::EvenOdd));
+    assert!(!path.contains(Offset::new(45., 40.), FillRule::EvenOdd));
+
+    for (width, height, hole) in [
+        (5., 4., true),
+        (6., 6., false),
+        (6., 7., false),
+        (7., 7., true),
+    ] {
+        let mut canvas = Canvas::default();
+        shape(3., 0.).paint(&mut canvas, rect(0., 0., width, height));
+        let drawing = canvas.finish();
+        let [
+            PaintCommand::FillPath {
+                path,
+                fill_rule: FillRule::EvenOdd,
+                ..
+            },
+        ] = drawing.commands()
+        else {
+            panic!("expected a ring")
+        };
+        assert!(!path.contains(Offset::new(width * 0.5, height * 0.5), FillRule::EvenOdd) == hole);
+        assert!(path.contains(Offset::new(0.5, 0.5), FillRule::EvenOdd));
+    }
+    let mut canvas = Canvas::default();
+    shape(0., 7.).paint(&mut canvas, area);
+    assert!(
+        matches!(canvas.finish().commands(), [PaintCommand::StrokePath { stroke, .. }] if stroke.width == 0.)
+    );
 }

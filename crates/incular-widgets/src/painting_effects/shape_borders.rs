@@ -420,57 +420,141 @@ impl incular_core::Lerp for StadiumBorder {
 }
 
 /// Flutter's `RoundedRectangleBorder`: a rectangle with rounded corners.
-#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
-pub struct RoundedRectangleBorder {
-    #[default(BorderSide::NONE)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash)]
+pub struct RoundedRectangleBorder<R = BorderRadius> {
     pub side: BorderSide,
-    /// Circular corner radii; each corner uses its horizontal radius.
-    pub border_radius: BorderRadius,
+    pub border_radius: R,
 }
 
-impl RoundedRectangleBorder {
+impl Default for RoundedRectangleBorder<BorderRadius> {
+    fn default() -> Self {
+        Self::new(BorderSide::NONE, BorderRadius::ZERO)
+    }
+}
+
+impl<R> RoundedRectangleBorder<R> {
     #[must_use]
-    pub const fn new(side: BorderSide, border_radius: BorderRadius) -> Self {
+    pub const fn new(side: BorderSide, border_radius: R) -> Self {
         Self {
             side,
             border_radius,
         }
     }
 
-    fn path(&self, rect: Rect, delta: f32) -> Path {
-        rounded_rect_path(
-            inflate(rect, delta),
-            inflate_radii(self.border_radius.to_corner_radii(), delta),
+    #[must_use]
+    pub fn copy_with(self, side: Option<BorderSide>, border_radius: Option<R>) -> Self {
+        Self::new(
+            side.unwrap_or(self.side),
+            border_radius.unwrap_or(self.border_radius),
         )
     }
 }
 
-impl ShapeBorder for RoundedRectangleBorder {
+impl<R: Copy + std::ops::Mul<f32, Output = R>> RoundedRectangleBorder<R> {
+    #[must_use]
+    pub fn scale(&self, t: f32) -> Self {
+        Self::new(self.side.scale(t), self.border_radius * t)
+    }
+}
+
+impl<R: Copy + Into<BorderRadiusGeometry>> RoundedRectangleBorder<R> {
+    /// Keeps physical and directional components until paint-time resolution.
+    #[must_use]
+    pub fn into_radius_geometry(self) -> RoundedRectangleBorder<BorderRadiusGeometry> {
+        RoundedRectangleBorder::new(self.side, self.border_radius.into())
+    }
+
+    fn path(&self, rect: Rect, delta: f32, direction: Option<TextDirection>) -> Path {
+        let radius = self
+            .border_radius
+            .into()
+            .resolve(direction.unwrap_or(TextDirection::Ltr));
+        radius
+            .to_rounded_rect(rect)
+            .inflated_paint_path(EdgeInsets::all(delta))
+    }
+}
+
+impl<R: Copy + Into<BorderRadiusGeometry>> ShapeBorder for RoundedRectangleBorder<R> {
     fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
         EdgeInsets::all(self.side.stroke_inset().max(0.))
     }
 
     fn outer_path(&self, rect: Rect) -> Path {
-        self.path(rect, 0.0)
+        self.outer_path_with_direction(rect, None)
+    }
+
+    fn outer_path_with_direction(&self, rect: Rect, direction: Option<TextDirection>) -> Path {
+        self.path(rect, 0., direction)
     }
 
     fn inner_path(&self, rect: Rect) -> Path {
-        self.path(rect, -self.side.stroke_inset())
+        self.inner_path_with_direction(rect, None)
     }
 
-    /// The stroke covers the band from `strokeInset` inside the outline to
-    /// `strokeOutset` outside it, as Flutter's `drawDRRect` does.
+    fn inner_path_with_direction(&self, rect: Rect, direction: Option<TextDirection>) -> Path {
+        self.path(rect, -self.side.stroke_inset(), direction)
+    }
+
+    fn prefer_paint_interior(&self) -> bool {
+        true
+    }
+
+    fn paint_interior(
+        &self,
+        canvas: &mut Canvas,
+        rect: Rect,
+        paint: &Paint,
+        direction: Option<TextDirection>,
+    ) {
+        canvas.draw_path(
+            Arc::new(self.outer_path_with_direction(rect, direction)),
+            paint,
+            FillRule::NonZero,
+        );
+    }
+
     fn paint(&self, canvas: &mut Canvas, rect: Rect) {
+        self.paint_with_direction(canvas, rect, None);
+    }
+
+    fn paint_with_direction(
+        &self,
+        canvas: &mut Canvas,
+        rect: Rect,
+        direction: Option<TextDirection>,
+    ) {
         if self.side.style == BorderStyle::None {
             return;
         }
-        let offset = (self.side.stroke_outset() - self.side.stroke_inset()) / 2.0;
-        stroke(canvas, &self.side, self.path(rect, offset));
+        if self.side.width == 0. {
+            stroke(
+                canvas,
+                &self.side,
+                self.outer_path_with_direction(rect, direction),
+            );
+            return;
+        }
+        // A positive-width Flutter DrawDRRect fills two independently
+        // normalized contours. Stroking one centerline is not equivalent
+        // when radii clamp or the inner rectangle becomes flat or inverted.
+        super::box_painter::fill_between(
+            canvas,
+            self.path(rect, self.side.stroke_outset(), direction),
+            self.inner_path_with_direction(rect, direction),
+            self.side.color,
+        );
     }
 }
 
-impl incular_core::Lerp for RoundedRectangleBorder {
+impl<R: Copy + incular_core::Lerp> incular_core::Lerp for RoundedRectangleBorder<R> {
     fn lerp(&self, other: &Self, t: f32) -> Self {
+        if t == 0. {
+            return *self;
+        }
+        if t == 1. {
+            return *other;
+        }
         Self::new(
             self.side.lerp(&other.side, t),
             self.border_radius.lerp(&other.border_radius, t),

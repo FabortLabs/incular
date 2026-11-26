@@ -75,3 +75,22 @@ AnimatedPadding clamps each unresolved component before combining it
 
 All four authored Flutter cases and 42 focused native implicit-animation
 tests passed. These authored cases do not create new upstream rows.
+
+## Rounded outline stroke, independently normalized contours
+
+Four pinned `rounded_rectangle_border_test.dart` registrations pair.
+RoundedRectangleBorder now keeps each ellipse axis and resolves logical
+corners before generating the path. Its value methods retain physical
+or directional geometry, including the endpoints of a mixed-radius
+interpolation. The 10 px inside, center and outside side consumes
+10 / 5 / 0 px in both rectangle and circle layouts, and the exact
+10→20 width with inside→outside lerps to 15 px centered.
+
+A positive-width outline now fills the region between its normalized
+outer and inner contours, rather than stroking one centerline. Flat
+inner bounds contribute no hole; inverted bounds are ordered by the
+same policy as BoxBorder. Pinned Flutter raster samples for 5×4, 6×6,
+6×7 and 7×7 boxes with a 3 px stroke agree with the native retained
+path's coverage. An explicit zero-width solid side is still a hairline;
+an absent side draws nothing. No Incular GPU readback is claimed.
+Four originals, one authored raster test, and 24 focused Rust cases passed.
