@@ -144,8 +144,27 @@ uses the recognizer's actual `accept` API for the sole arena member.
 Pinned :1506 verifies source timestamps on the first of one, two, and
 three contact segments, including repeat timestamps and continued
 one-finger panning. The native trace checks the same start, update, end,
-span and focal delta checkpoints, but this comparison is partial until
-the mounted tap competitor is included. Pinned :1832 is partial: native
+span and focal delta checkpoints. The mounted tap-competition check
+below verifies the same callback timing. Pinned :1832 is partial: native
 start details report touch, mouse, stylus, inverted stylus, and unknown.
 Flutter also uses a raw pan/zoom trackpad contact; Incular's aggregate
 trackpad route remains distinct from this scale recognizer.
+
+### Scale contact admission after the first win
+
+Pinned scale_test.dart :380 and the mounted nested scale/drag scene
+produce the same event trace: the 40 px vertical move wins scale;
+adding a second finger ends that segment; its 20 px horizontal move
+must restart and update scale, not start the competing horizontal drag.
+After both lift, the first-in-route scale again wins a fast 70 px
+horizontal move. Before this fix, the second move emitted scale-start
+followed by drag-start and silently dropped the scale update. Pending
+contacts now resolve in the existing scale's arena before dispatch, with
+no additional arena walk during updates that did not add a contact.
+
+Pinned :1506 also pairs with the mounted tap competitor: the first
+start reports the original 10 ms down stamp, the subsequent starts
+report their 40, 90, 130 and 150 ms restart motions, and repeated 140 ms
+updates keep their shared timestamp. There are no taps. The standalone
+test independently checks focal geometry, scales and deltas on the
+same path.

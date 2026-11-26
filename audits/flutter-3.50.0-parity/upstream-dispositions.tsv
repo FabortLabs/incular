@@ -1798,5 +1798,6 @@ packages/flutter/test/services/system_sound_test.dart	11	System sound control te
 packages/flutter/test/gestures/scale_test.dart	278	Rejects scale gestures from unallowed device kinds	paired-match	upstream-geometry-input-gestures.md#scale-contact-eligibility-and-callback-details
 packages/flutter/test/gestures/scale_test.dart	312	Scale gestures starting from allowed device kinds cannot be ended from unallowed devices	paired-match	upstream-geometry-input-gestures.md#scale-contact-eligibility-and-callback-details
 packages/flutter/test/gestures/scale_test.dart	722	Scale gestures pointer count test	paired-match	upstream-geometry-input-gestures.md#scale-contact-eligibility-and-callback-details
-packages/flutter/test/gestures/scale_test.dart	1506	ScaleStartDetails and ScaleUpdateDetails callbacks should contain their event.timestamp	partial-match	upstream-geometry-input-gestures.md#scale-contact-eligibility-and-callback-details
+packages/flutter/test/gestures/scale_test.dart	1506	ScaleStartDetails and ScaleUpdateDetails callbacks should contain their event.timestamp	paired-match	upstream-geometry-input-gestures.md#scale-contact-admission-after-the-first-win
 packages/flutter/test/gestures/scale_test.dart	1832	ScaleStartDetails should contain the correct PointerDeviceKind	partial-match	upstream-geometry-input-gestures.md#scale-contact-eligibility-and-callback-details
+packages/flutter/test/gestures/scale_test.dart	380	Scale gesture competes with drag	paired-match	upstream-geometry-input-gestures.md#scale-contact-admission-after-the-first-win

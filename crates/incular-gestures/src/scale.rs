@@ -134,6 +134,8 @@ pub struct ScaleGestureDetector {
     scale_velocity: Option<VelocityTracker>,
     /// The latest event asked the arena to accept this recognizer.
     wants_acceptance: bool,
+    /// At least one tracked contact joined after the last arena claim.
+    pending_contacts: bool,
     /// Maps global positions into the recognizing widget's coordinates
     /// (Flutter `PointerEvent.transform`).
     local_transform: Option<Transform>,
@@ -178,6 +180,7 @@ impl ScaleGestureDetector {
             last_event_time: None,
             scale_velocity: None,
             wants_acceptance: false,
+            pending_contacts: false,
             local_transform: None,
             // Flutter `ScaleGestureRecognizer.dragStartBehavior` default.
             drag_start_behavior: DragStartBehavior::Down,
@@ -278,7 +281,7 @@ impl ScaleGestureDetector {
         };
         let mut details = self.observe_raw(event);
         if self.wants_acceptance() {
-            details = self.accept();
+            details = self.accept().or(details);
         }
         if let Some(details) = details {
             self.dispatch(details);
@@ -327,12 +330,15 @@ impl ScaleGestureDetector {
                     .find(|contact| contact.pointer == event.pointer)
                 {
                     Some(contact) => contact.position = event.position,
-                    None => self.pointers.push(Contact {
-                        pointer: event.pointer,
-                        position: event.position,
-                        kind: event.kind,
-                        velocity: VelocityTracker::default(),
-                    }),
+                    None => {
+                        self.pending_contacts = true;
+                        self.pointers.push(Contact {
+                            pointer: event.pointer,
+                            position: event.position,
+                            kind: event.kind,
+                            velocity: VelocityTracker::default(),
+                        });
+                    }
                 }
                 (true, true)
             }
@@ -372,6 +378,7 @@ impl ScaleGestureDetector {
             self.initial_line = None;
             self.current_line = None;
             self.wants_acceptance = false;
+            self.pending_contacts = false;
         }
         details
     }
@@ -395,6 +402,7 @@ impl ScaleGestureDetector {
     /// contacts. Returns the update for the event that won the arena.
     pub fn accept(&mut self) -> Option<ScaleUpdateDetails> {
         self.wants_acceptance = false;
+        self.pending_contacts = false;
         match self.state {
             ScaleState::Possible => {
                 self.state = ScaleState::Started;
@@ -429,6 +437,7 @@ impl ScaleGestureDetector {
             self.state = ScaleState::Ready;
             self.current_focal_point = None;
             self.wants_acceptance = false;
+            self.pending_contacts = false;
         }
     }
 
@@ -577,8 +586,10 @@ impl ScaleGestureDetector {
                 self.wants_acceptance = true;
             }
         } else {
-            // `_state.index >= accepted`: the recognizer already owns the
-            // stream.
+            // Flutter resolves acceptance again when an accepted scale
+            // has enrolled another contact. Ordinary moves with no new
+            // contact need no additional arena walk.
+            self.wants_acceptance = self.pending_contacts;
             if self.state == ScaleState::Accepted && should_start_if_accepted {
                 self.initial_event_time = Some(time);
                 self.state = ScaleState::Started;

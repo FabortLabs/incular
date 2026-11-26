@@ -1411,7 +1411,7 @@ impl WidgetTree {
                             )
                         });
                         if scale.wants_acceptance() {
-                            accepts.push(PendingAccept::Scale(candidate.element));
+                            accepts.push(PendingAccept::Scale(candidate.element, details));
                         } else if let Some(details) = details
                             && disposition == GestureDisposition::Accepted
                         {
@@ -1438,8 +1438,8 @@ impl WidgetTree {
                         callbacks.push((member, action));
                     }
                 }
-                PendingAccept::Scale(scale_element) => {
-                    if let Some(details) = self.accept_scale(key.window, scale_element) {
+                PendingAccept::Scale(scale_element, observed) => {
+                    if let Some(details) = self.accept_scale(key.window, scale_element, observed) {
                         scale_updates.push((scale_element, details));
                     }
                 }
@@ -2040,10 +2040,11 @@ impl WidgetTree {
     /// every pointer it tracks in the window. Once one claim holds, the
     /// recognizer starts (`acceptGesture`) and returns the update for the
     /// winning event.
-    pub(super) fn accept_scale(
+    fn accept_scale(
         &mut self,
         window: u64,
         element: ElementId,
+        observed: Option<incular_gestures::ScaleUpdateDetails>,
     ) -> Option<incular_gestures::ScaleUpdateDetails> {
         if !self.elements.contains(element.0) {
             return None;
@@ -2074,7 +2075,10 @@ impl WidgetTree {
         if !accepted {
             return None;
         }
-        self.input.scale_gestures.get_mut(&element)?.accept()
+        // A newly accepted scale derives its update while entering
+        // Started. An already accepted scale had its update computed while
+        // observing this event; deliver it after resolving the new contacts.
+        self.input.scale_gestures.get_mut(&element)?.accept().or(observed)
     }
     /// Flutter closes the arena after the hit test, and a sole member wins by
     /// default. A drag-only or scale member that is alone in its stream
@@ -2130,7 +2134,7 @@ impl WidgetTree {
                 // Flutter `ScaleGestureRecognizer.acceptGesture` reports
                 // only `onStart` when the arena resolves at the press; the
                 // first update comes with the first movement.
-                let _ = self.accept_scale(key.window, element);
+                let _ = self.accept_scale(key.window, element, None);
             }
             RetainedGestureKind::ForcePress => {
                 let pointer = self
@@ -4356,8 +4360,8 @@ fn adjust_for_scroll_start_threshold(
 /// A recognizer claim gathered while routing one pointer event.
 enum PendingAccept {
     Pointer(GestureArenaMember, GestureAction),
-    /// A scale recognizer moved past slop on this event.
-    Scale(ElementId),
+    /// The scale passed slop or an accepted scale is claiming new contacts.
+    Scale(ElementId, Option<incular_gestures::ScaleUpdateDetails>),
 }
 
 /// Feeds one wheel sample to an innermost-first viewport chain. Each viewport
