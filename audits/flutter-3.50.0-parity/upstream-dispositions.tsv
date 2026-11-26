@@ -1905,3 +1905,8 @@ packages/flutter/test/rendering/sliver_fixed_extent_layout_test.dart	283	RenderS
 packages/flutter/test/rendering/sliver_fixed_extent_layout_test.dart	328	RenderSliverMultiBoxAdaptor has calculate leading and trailing garbage	reference-ran-incular-open	upstream-sliver-fixed-extent-edges.md
 packages/flutter/test/rendering/sliver_fixed_extent_layout_test.dart	349	RenderSliverFixedExtentBoxAdaptor assertion test	reference-ran-incular-open	upstream-sliver-fixed-extent-edges.md
 packages/flutter/test/rendering/sliver_fixed_extent_layout_test.dart	381	RenderSliverFixedExtentBoxAdaptor rounding tolerance test	reference-ran-incular-open	upstream-sliver-fixed-extent-edges.md
+packages/flutter/test/rendering/sliver_cache_test.dart	13	RenderViewport calculates correct constraints, RenderSliverToBoxAdapter calculates correct geometry	paired-match	upstream-sliver-cache-geometry.md
+packages/flutter/test/rendering/sliver_cache_test.dart	251	RenderSliverFixedExtentList calculates correct geometry	paired-match	upstream-sliver-cache-geometry.md
+packages/flutter/test/rendering/sliver_cache_test.dart	325	RenderSliverList calculates correct geometry	paired-match	upstream-sliver-cache-geometry.md
+packages/flutter/test/rendering/sliver_cache_test.dart	399	RenderSliverGrid calculates correct geometry	paired-match	upstream-sliver-cache-geometry.md
+packages/flutter/test/rendering/sliver_cache_test.dart	473	RenderSliverPadding calculates correct geometry	paired-match	upstream-sliver-cache-geometry.md
