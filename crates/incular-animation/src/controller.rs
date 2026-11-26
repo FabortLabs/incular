@@ -1082,7 +1082,20 @@ impl AnimationController {
     ) -> TickerFuture {
         let state = self.inner.borrow().state.clone();
         let scale = behavior_scale(state.animation_behavior);
-        let target = clamp_finite(target, &state);
+        // The public rendering value is narrower than the interpolation
+        // state. Round-tripping that current value is a no-op target, not
+        // a new tiny animation or a reason to snap the retained value.
+        // Bounds are exact endpoints, even when a near-bound value has
+        // already rounded to the endpoint in rendering coordinates.
+        let target = if target.is_finite()
+            && target > state.lower_bound
+            && target < state.upper_bound
+            && target == state.value as f32
+        {
+            state.value
+        } else {
+            clamp_finite(target, &state)
+        };
         let duration = match duration {
             Some(_) if target == state.value => Duration::ZERO,
             Some(duration) => duration,
