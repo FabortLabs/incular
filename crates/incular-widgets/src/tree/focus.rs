@@ -448,20 +448,37 @@ impl WidgetTree {
         let Some(hosted) = &self.hosted_focus_nodes else {
             return;
         };
+        let mut changed_parents = Vec::new();
         for (&id, binding) in hosted {
-            let own_scope = binding.node().scope_owner();
+            let node = binding.node();
+            let own_scope = node.scope_owner();
             let mut ancestor = self.mounted_focus_parent(id);
+            let mut nearest = None;
             let mut scope = None;
             while let Some(id) = ancestor {
-                if let Some(parent_scope) = hosted.get(&id).and_then(|node| node.node().scope_owner())
-                    && own_scope.as_ref() != Some(&parent_scope)
+                if let Some(parent) = hosted.get(&id).map(|attachment| attachment.node())
+                    && parent != node
                 {
-                    scope = Some(parent_scope);
-                    break;
+                    nearest.get_or_insert(parent);
+                    if let Some(parent_scope) = parent.scope_owner()
+                        && own_scope.as_ref() != Some(&parent_scope)
+                    {
+                        scope = Some(parent_scope);
+                        break;
+                    }
                 }
                 ancestor = self.mounted_focus_parent(id);
             }
-            binding.node().set_host_enclosing_scope(scope.as_ref());
+            if node.parent().as_ref() != nearest {
+                changed_parents.push((binding.mount_sequence(), node, nearest));
+            }
+            node.set_host_enclosing_scope(scope.as_ref());
+        }
+        // Arena slots are reused and are not necessarily in mount order.
+        // Keep already linked siblings in place; append only the changes.
+        changed_parents.sort_unstable_by_key(|(sequence, _, _)| *sequence);
+        for (_, node, parent) in changed_parents {
+            node.set_host_parent(parent);
         }
     }
 

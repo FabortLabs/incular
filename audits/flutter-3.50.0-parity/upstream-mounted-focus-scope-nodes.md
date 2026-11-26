@@ -132,3 +132,15 @@ valid reparenting followed by a true cycle, which falls back safely
 without disabling focus. All 43 targeted mounted-focus, key-routing
 and traversal tests passed. The authored probe and cycle checks do not
 increase upstream coverage.
+
+## Raw mounted descendants
+
+Pinned `focus_scope_test.dart:1151` passed. The mounted fixture
+locates two different enclosing focus nodes through keyed elements.
+It checks the whole seven-node postorder and separately verifies
+the two-node sub-branch. The raw enumeration still includes nodes
+that cannot receive focus, and removing a branch unlinks every
+held handle. The runtime updates the links only when topology
+changes, keeping existing siblings in their attachment order.
+All 32 focused scope and primary-observer tests passed. The
+Flutter build owner's synthetic root scope is a separate contract.

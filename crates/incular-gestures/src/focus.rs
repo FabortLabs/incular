@@ -13,6 +13,7 @@ struct ScopeAutofocusRequest {
 
 thread_local! {
     static FOCUS_EPOCH: Cell<u64> = const { Cell::new(0) };
+    static FOCUS_ATTACHMENT_SEQUENCE: Cell<u64> = const { Cell::new(0) };
     static SCOPED_AUTOFOCUS: RefCell<Vec<ScopeAutofocusRequest>> = const { RefCell::new(Vec::new()) };
 }
 
@@ -176,6 +177,8 @@ impl<E> NodeKeyEventHandler<E> {
 struct FocusState {
     scope_owner: Option<Weak<FocusScopeState>>,
     host_enclosing_scope: RefCell<Option<Weak<FocusScopeState>>>,
+    host_parent: RefCell<Option<Weak<FocusState>>>,
+    host_children: RefCell<Vec<Weak<FocusState>>>,
     focused: Cell<bool>,
     descendant_focused: Cell<bool>,
     requested: Cell<Option<u64>>,
@@ -208,12 +211,18 @@ pub struct FocusNodeSubscription {
 #[doc(hidden)]
 pub struct FocusNodeAttachment {
     node: FocusNode,
+    mount_sequence: u64,
 }
 
 impl FocusNodeAttachment {
     #[must_use]
     pub const fn node(&self) -> &FocusNode {
         &self.node
+    }
+
+    #[must_use]
+    pub const fn mount_sequence(&self) -> u64 {
+        self.mount_sequence
     }
 }
 
@@ -233,6 +242,14 @@ impl Drop for FocusNodeAttachment {
             }
             state.schedule_host_frame.set(None);
             self.node.set_host_enclosing_scope(None);
+            self.node.set_host_parent(None);
+            let children = std::mem::take(&mut *state.host_children.borrow_mut());
+            for child in children.into_iter().filter_map(|state| state.upgrade()) {
+                let child = FocusNode { state: child };
+                if child.parent().as_ref() == Some(&self.node) {
+                    child.set_host_parent(None);
+                }
+            }
             self.node.apply_host_focus(false);
         }
     }
@@ -282,6 +299,8 @@ impl FocusNode {
             state: Rc::new(FocusState {
                 scope_owner,
                 host_enclosing_scope: RefCell::new(None),
+                host_parent: RefCell::new(None),
+                host_children: RefCell::new(Vec::new()),
                 focused: Cell::new(false),
                 descendant_focused: Cell::new(false),
                 requested: Cell::new(None),
@@ -448,7 +467,88 @@ impl FocusNode {
                 FOCUS_EPOCH.set(FOCUS_EPOCH.get().wrapping_add(1));
             }
         }
-        FocusNodeAttachment { node: self.clone() }
+        let mount_sequence = FOCUS_ATTACHMENT_SEQUENCE.with(|sequence| {
+            let next = sequence.get().wrapping_add(1);
+            sequence.set(next);
+            next
+        });
+        FocusNodeAttachment { node: self.clone(), mount_sequence }
+    }
+
+    /// The parent of this node in its mounted focus tree, which may differ
+    /// from its widget ancestry. Detached nodes have no mounted parent.
+    #[must_use]
+    pub fn parent(&self) -> Option<Self> {
+        self.state
+            .host_parent
+            .borrow()
+            .as_ref()
+            .and_then(Weak::upgrade)
+            .map(|state| Self { state })
+    }
+
+    /// Immediate mounted focus children in attachment order, irrespective
+    /// of eligibility or traversal settings.
+    #[must_use]
+    pub fn children(&self) -> Vec<Self> {
+        self.state
+            .host_children
+            .borrow()
+            .iter()
+            .filter_map(Weak::upgrade)
+            .map(|state| Self { state })
+            .collect()
+    }
+
+    /// All mounted focus descendants in depth-first postorder. A child's
+    /// own descendants precede that child, and this node is not included.
+    #[must_use]
+    pub fn descendants(&self) -> Vec<Self> {
+        let mut result = Vec::new();
+        let mut pending = Vec::new();
+        self.push_children(&mut pending);
+        while let Some((node, visited)) = pending.pop() {
+            if visited {
+                result.push(node);
+            } else {
+                pending.push((node.clone(), true));
+                node.push_children(&mut pending);
+            }
+        }
+        result
+    }
+
+    fn push_children(&self, pending: &mut Vec<(Self, bool)>) {
+        pending.extend(
+            self.state
+                .host_children
+                .borrow()
+                .iter()
+                .rev()
+                .filter_map(Weak::upgrade)
+                .map(|state| (Self { state }, false)),
+        );
+    }
+
+    #[doc(hidden)]
+    pub fn set_host_parent(&self, parent: Option<&Self>) {
+        debug_assert_ne!(parent, Some(self), "a focus node cannot parent itself");
+        let previous = self.parent();
+        if previous.as_ref() == parent {
+            return;
+        }
+        let weak_self = Rc::downgrade(&self.state);
+        if let Some(previous) = previous {
+            previous
+                .state
+                .host_children
+                .borrow_mut()
+                .retain(|node| !node.ptr_eq(&weak_self));
+        }
+        *self.state.host_parent.borrow_mut() = parent.map(|node| Rc::downgrade(&node.state));
+        if let Some(parent) = parent {
+            parent.state.host_children.borrow_mut().push(weak_self);
+        }
     }
 
     #[doc(hidden)]

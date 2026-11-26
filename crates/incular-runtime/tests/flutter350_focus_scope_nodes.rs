@@ -1198,3 +1198,57 @@ fn traversal_queries_distinguish_skipping_a_parent_from_skipping_its_children() 
     assert_eq!(runtime.tree().focus_traversal_children(root), [p1]);
     assert!(c1.has_primary_focus());
 }
+
+#[test]
+fn mounted_focus_nodes_expose_depth_first_descendants_from_the_nearest_boundary() {
+    use incular_widgets::{Column, GlobalKey};
+
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let key: [GlobalKey; 8] = std::array::from_fn(|_| GlobalKey::new());
+    let keyed_focus = |index: usize, child: Widget| {
+        Widget::from(Focus::new(child)).with_key(key[index - 1])
+    };
+    let first = || keyed_focus(2, keyed_focus(3, SizedBox::shrink().into()));
+    let second = || keyed_focus(4, keyed_focus(5, SizedBox::shrink().into()));
+    let third = || {
+        keyed_focus(
+            6,
+            Column::new([
+                keyed_focus(7, SizedBox::shrink().into()),
+                keyed_focus(8, SizedBox::shrink().into()),
+            ])
+            .into(),
+        )
+    };
+    let scene = |include_third: bool| {
+        let mut branches = vec![first(), second()];
+        if include_third {
+            branches.push(third());
+        }
+        Widget::from(Focus::new(Widget::from(Column::new(branches)).with_key(key[0])))
+    };
+    let mut runtime = Runtime::new(scene(true)).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    let element = |runtime: &Runtime, index: usize| {
+        runtime.tree().element_with_key(&key[index - 1].into()).unwrap()
+    };
+    let focus = |index| runtime.tree().focus_node_at(element(&runtime, index)).unwrap();
+    let parent = Focus::of(runtime.tree(), element(&runtime, 1), false);
+    let third_parent = Focus::of(runtime.tree(), element(&runtime, 7), false);
+    assert_eq!(third_parent, focus(6));
+    assert_eq!(parent.children(), [focus(2), focus(4), focus(6)]);
+    let order = [focus(3), focus(2), focus(5), focus(4), focus(7), focus(8), focus(6)];
+    assert_eq!(parent.descendants(), order);
+    assert_eq!(third_parent.descendants(), [focus(7), focus(8)]);
+    assert_eq!(focus(7).parent(), Some(third_parent.clone()));
+
+    // Raw descendants include nodes excluded from ordinary traversal.
+    third_parent.set_descendants_are_focusable(false);
+    assert_eq!(parent.descendants(), order);
+
+    runtime.schedule_update(runtime.tree().root().unwrap(), scene(false)).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(parent.descendants(), order[..4]);
+    assert!(third_parent.parent().is_none() && third_parent.descendants().is_empty());
+    assert!(order[4].parent().is_none() && order[5].parent().is_none());
+}
