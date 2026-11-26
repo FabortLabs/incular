@@ -47,3 +47,18 @@ retained paint's grouping preserves that order rather than letting
 a geometric reading-order pass move both small regions ahead of the
 text. All 35 focused native tests passed, including neighboring
 sliver reading-order regressions that are intentionally unchanged.
+
+## Region metadata, enablement, and retained identities
+
+Paired `custom_painter_test.dart` :293, :336, :381, :725, and the
+dynamic registration at :828 (all eight list changes). The painter
+regions preserve the table role and the invalid editable-field
+annotation. The same mounted painter supports semantics off, on, off,
+and on. Duplicate region keys raise a structured generated-child error
+that names the duplicate key. Keyed nodes survive insertion, removal,
+and movement; unkeyed lists match the expected reading order.
+
+:765 is partial: resizing rebuilds the output regions and matches the
+laid-out sizes; Incular does not perform Flutter's repeated accesses
+to its painter's semanticsBuilder getter. All 12 focused native
+semantics tests passed against the selected pinned Flutter originals.

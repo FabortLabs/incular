@@ -2344,3 +2344,9 @@ packages/flutter/test/widgets/custom_painter_test.dart	27	builds no semantics by
 packages/flutter/test/widgets/custom_painter_test.dart	37	provides foreground semantics	paired-match	upstream-custom-paint.md#pinned-custom-painter-semantics-structure
 packages/flutter/test/widgets/custom_painter_test.dart	75	provides background semantics	paired-match	upstream-custom-paint.md#pinned-custom-painter-semantics-structure
 packages/flutter/test/widgets/custom_painter_test.dart	113	combines background, child and foreground semantics	paired-match	upstream-custom-paint.md#pinned-custom-painter-semantics-structure
+packages/flutter/test/widgets/custom_painter_test.dart	293	provides semantic role	paired-match	upstream-custom-paint.md#region-metadata-enablement-and-retained-identities
+packages/flutter/test/widgets/custom_painter_test.dart	336	provides semantic validation result	paired-match	upstream-custom-paint.md#region-metadata-enablement-and-retained-identities
+packages/flutter/test/widgets/custom_painter_test.dart	381	Can toggle semantics on, off, on without crash	paired-match	upstream-custom-paint.md#region-metadata-enablement-and-retained-identities
+packages/flutter/test/widgets/custom_painter_test.dart	725	complains about duplicate keys	paired-match	upstream-custom-paint.md#region-metadata-enablement-and-retained-identities
+packages/flutter/test/widgets/custom_painter_test.dart	765	rebuilds semantics upon resize	partial-match	upstream-custom-paint.md#region-metadata-enablement-and-retained-identities
+packages/flutter/test/widgets/custom_painter_test.dart	828	description	paired-match	upstream-custom-paint.md#region-metadata-enablement-and-retained-identities

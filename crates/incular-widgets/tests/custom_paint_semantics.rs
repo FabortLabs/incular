@@ -441,3 +441,205 @@ fn automatic_boundary_orders_background_child_foreground() {
     assert_eq!(child_labels, ["background", "Hello", "foreground"]);
     assert_eq!(tree.semantics().iter().count(), 4);
 }
+
+#[derive(Clone)]
+struct SuppliedRegion(Semantics);
+
+impl CustomPainter for SuppliedRegion {
+    fn paint(&self, _: Size) -> DisplayList {
+        DisplayList::default()
+    }
+
+    fn should_repaint(&self, _: &Self) -> bool {
+        true
+    }
+
+    fn semantics_builder(&self) -> Option<SemanticsBuilder> {
+        let semantics = self.0.clone();
+        Some(Rc::new(move |_| {
+            vec![
+                CustomPainterSemantics::new(
+                    Rect::from_origin_size(Offset::new(1., 1.), Size::new(1., 1.)),
+                    semantics.clone(),
+                )
+                .key(1_u64),
+            ]
+        }))
+    }
+}
+
+#[test]
+fn painter_region_preserves_role_and_validation_properties() {
+    use incular_semantics::{SemanticRole, SemanticValidationResult};
+    let table = Semantics::builder()
+        .label("this is a table")
+        .build()
+        .role(SemanticRole::Table)
+        .text_direction(incular_config::TextDirection::Rtl);
+    let tree = custom_paint_semantic_frame(
+        CustomPaint::new(Size::ZERO, DisplayList::default())
+            .foreground_painter(SuppliedRegion(table)),
+    );
+    let table = labelled(&tree, "this is a table").unwrap();
+    assert_eq!(table.role, SemanticRole::Table);
+    assert_eq!(
+        table.bounds,
+        Rect::from_origin_size(Offset::new(1., 1.), Size::new(1., 1.))
+    );
+    assert_eq!(
+        table.state.text_direction,
+        Some(incular_config::TextDirection::Rtl)
+    );
+
+    let input = Semantics::builder()
+        .label("email address")
+        .build()
+        .text_field(true)
+        .text_direction(incular_config::TextDirection::Ltr)
+        .validation_result(SemanticValidationResult::Invalid);
+    let tree = custom_paint_semantic_frame(
+        CustomPaint::new(Size::ZERO, DisplayList::default())
+            .foreground_painter(SuppliedRegion(input)),
+    );
+    let input = labelled(&tree, "email address").unwrap();
+    assert_eq!(
+        input
+            .state
+            .annotation_flags
+            .get(incular_semantics::SemanticAnnotationFlag::TextField),
+        Some(true)
+    );
+    assert_eq!(
+        input.state.effective_validation_result(),
+        SemanticValidationResult::Invalid
+    );
+    assert_eq!(
+        input.bounds,
+        Rect::from_origin_size(Offset::new(1., 1.), Size::new(1., 1.))
+    );
+}
+
+#[test]
+fn semantic_painter_regions_can_enable_disable_and_reenable() {
+    let painter = SuppliedRegion(
+        Semantics::builder()
+            .label("label-before")
+            .build()
+            .value("value-before")
+            .hint("hint-before")
+            .text_direction(incular_config::TextDirection::Rtl),
+    );
+    let mut tree = WidgetTree::new();
+    tree.set_semantics_enabled(false);
+    let painted = CustomPaint::from_painter(Size::new(100., 100.), painter);
+    tree.mount(painted.into()).unwrap();
+    tree.layout(Constraints::tight(Size::new(100., 100.)))
+        .unwrap();
+    assert_eq!(tree.semantics().iter().count(), 0);
+    for enabled in [true, false, true] {
+        tree.set_semantics_enabled(enabled);
+        tree.update_semantics();
+        assert_eq!(labelled(&tree, "label-before").is_some(), enabled);
+        if enabled {
+            let node = labelled(&tree, "label-before").unwrap();
+            assert_eq!(node.value.as_deref(), Some("value-before"));
+        } else {
+            assert!(tree.semantics().root().is_none());
+        }
+    }
+}
+
+#[derive(Clone)]
+struct RegionList(&'static [&'static str]);
+impl CustomPainter for RegionList {
+    fn paint(&self, _: Size) -> DisplayList {
+        DisplayList::default()
+    }
+    fn should_repaint(&self, _: &Self) -> bool {
+        true
+    }
+    fn semantics_builder(&self) -> Option<SemanticsBuilder> {
+        let labels = self.0;
+        Some(Rc::new(move |_| {
+            labels
+                .iter()
+                .map(|label| {
+                    let region = CustomPainterSemantics::new(
+                        Rect::from_origin_size(Offset::new(1., 1.), Size::new(1., 1.)),
+                        Semantics::builder().label(*label).build(),
+                    );
+                    if label.ends_with("-k") {
+                        region.key(incular_widgets::internal::Key::String((*label).into()))
+                    } else {
+                        region
+                    }
+                })
+                .collect()
+        }))
+    }
+}
+
+#[test]
+fn painter_regions_diff_all_the_upstream_keyed_and_unkeyed_shapes() {
+    let cases: [(&[&str], &[&str]); 7] = [
+        (&[], &["a"]),
+        (&["a"], &[]),
+        (&["a"], &["a", "b"]),
+        (&["b"], &["a", "b"]),
+        (&["a-k", "c-k"], &["a-k", "b-k", "c-k"]),
+        (&["a-k", "b-k", "c-k"], &["a-k", "c-k"]),
+        (&["a", "b"], &["b", "a"]),
+    ];
+    for (from, to) in cases
+        .into_iter()
+        .chain([(&["a-k", "b", "c"][..], &["b", "c", "a-k"][..])])
+    {
+        let make = |labels| {
+            Widget::from(CustomPaint::from_painter(
+                Size::new(100., 100.),
+                RegionList(labels),
+            ))
+        };
+        let mut tree = WidgetTree::new();
+        let root = tree.mount(make(from)).unwrap();
+        let frame = |tree: &mut WidgetTree| {
+            tree.layout(Constraints::tight(Size::new(100., 100.)))
+                .unwrap();
+            tree.update_semantics();
+        };
+        frame(&mut tree);
+        assert_eq!(labels(&tree), from);
+        let ids: Vec<_> = from
+            .iter()
+            .filter(|label| label.ends_with("-k"))
+            .map(|label| (*label, labelled(&tree, label).unwrap().id))
+            .collect();
+        tree.update(root, make(to)).unwrap();
+        frame(&mut tree);
+        assert_eq!(labels(&tree), to);
+        for (label, id) in ids {
+            if to.contains(&label) {
+                assert_eq!(labelled(&tree, label).unwrap().id, id);
+            }
+        }
+    }
+}
+
+#[test]
+fn painter_semantics_reject_duplicate_keys() {
+    let mut tree = WidgetTree::new();
+    tree.mount(
+        CustomPaint::from_painter(Size::new(100., 100.), RegionList(&["a-k", "a-k"])).into(),
+    )
+    .unwrap();
+    let error = tree
+        .layout(Constraints::tight(Size::new(100., 100.)))
+        .unwrap_err();
+    use incular_widgets::internal::{Key, TreeError};
+    assert!(
+        matches!(&error, TreeError::InvalidGeneratedChild { source, .. }
+            if matches!(source.as_ref(), TreeError::DuplicateKey { key: Key::String(value), .. }
+                if value == "a-k")),
+        "{error:?}"
+    );
+}
