@@ -74,3 +74,45 @@ fn autofocus_only_grants_an_eligible_editable_node() {
         assert_eq!(runtime.focused_element().is_some(), eligible);
     }
 }
+
+#[test]
+fn an_initially_focused_editor_paints_its_first_caret_and_blur_removes_it() {
+    use incular_core::Color;
+    use incular_rendering::{DisplayList, PaintCommand};
+
+    const CARET: Color = Color::rgba(220, 40, 48, 255);
+    let controller = TextEditingController::with_text("12345");
+    controller.set_selection(TextSelection::collapsed(5));
+    let focus = FocusNode::new();
+    let mut runtime = Runtime::new(
+        EditableText::new(controller.clone())
+            .text_direction(TextDirection::Ltr)
+            .focus_node(focus.clone())
+            .autofocus(true)
+            .cursor_color(CARET)
+            .show_cursor(true)
+            .into(),
+    )
+    .unwrap();
+    let root = runtime.tree().root().unwrap();
+    let retained = runtime.tree().render_id(root);
+    assert!(focus.has_primary_focus());
+    assert_eq!(runtime.focused_element(), Some(root));
+
+    let viewport = Constraints::tight(Size::new(180., 40.));
+    let paints_caret = |list: &DisplayList| {
+        list.commands().iter().any(|paint| {
+            matches!(paint, PaintCommand::Rect { color: CARET, .. })
+        })
+    };
+    let (first, _) = runtime.run_frame(viewport).unwrap();
+    assert!(paints_caret(&first));
+
+    focus.unfocus();
+    let (blurred, _) = runtime.run_frame(viewport).unwrap();
+    assert!(!paints_caret(&blurred));
+    assert!(!focus.has_focus());
+    assert_eq!(runtime.focused_element(), None);
+    assert_eq!(runtime.tree().render_id(root), retained);
+    assert_eq!(controller.text(), "12345");
+}

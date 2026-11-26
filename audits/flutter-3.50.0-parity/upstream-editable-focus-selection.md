@@ -118,3 +118,12 @@ Incular keeps its own focus action, and the tests do not reproduce
 the design-system route wrappers. AccessKit does not expose the four
 portable cursor actions directly. Five native editor cases, 23
 semantics controls and six accessibility-projection cases passed.
+
+## First-frame editor focus
+
+The pinned `rendering/editable_test.dart:815` verified that the editable
+starts focused and clears focus on update. The native runtime regression
+checks that autofocus is visible immediately after mounting, before layout.
+The first frame paints the configured caret. Unfocusing clears both the
+runtime and focus-node state and removes the caret without remounting or
+changing the text. All three focused runtime cases passed.

@@ -2571,6 +2571,7 @@ packages/flutter/test/widgets/editable_text_test.dart	12207	onSubmitted can thro
 packages/flutter/test/rendering/editable_test.dart	80	RenderEditable respects clipBehavior	paired-match	upstream-editable-paint-clip.md#default-and-live-clip-mode
 packages/flutter/test/widgets/editable_text_test.dart	11497	EditableText can set and update clipBehavior	paired-match	upstream-editable-paint-clip.md#default-and-live-clip-mode
 packages/flutter/test/rendering/editable_test.dart	334	Can change textAlign	paired-match	upstream-editable-defaults.md#retained-alignment-invalidation
+packages/flutter/test/rendering/editable_test.dart	815	editable hasFocus correctly initialized	paired-match	upstream-editable-focus-selection.md
 packages/flutter/test/widgets/focus_scope_test.dart	438	Setting parentNode determines focus tree hierarchy.	paired-match	upstream-mounted-focus-scope-nodes.md#explicit-focus-parents
 packages/flutter/test/widgets/focus_scope_test.dart	502	Setting parentNode determines focus scope tree hierarchy.	paired-match	upstream-mounted-focus-scope-nodes.md#explicit-focus-parents
 packages/flutter/test/widgets/focus_scope_test.dart	1151	Can traverse Focus children.	paired-match	upstream-mounted-focus-scope-nodes.md#raw-mounted-descendants
