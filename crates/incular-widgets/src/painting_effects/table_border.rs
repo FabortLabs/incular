@@ -158,12 +158,20 @@ impl TableBorder {
         if self.border_radius != BorderRadius::ZERO {
             if sides.iter().all(|side| sides_match(top, *side)) {
                 if top.width > 0. {
-                    fill_between(
-                        canvas,
-                        inflate_rrect(rect, self.border_radius, EdgeInsets::ZERO),
-                        deflate_rrect(rect, self.border_radius, EdgeInsets::all(top.width)),
-                        top.color,
-                    );
+                    let outer = inflate_rrect(rect, self.border_radius, EdgeInsets::ZERO);
+                    if rect.size.width == 0. || rect.size.height == 0. {
+                        // A degenerate outer RRect has no area to subtract
+                        // from. Ordering its inverted inner bounds would
+                        // otherwise fill an extra line instead of a hole.
+                        canvas.fill_path(Arc::new(outer), top.color, FillRule::EvenOdd);
+                    } else {
+                        fill_between(
+                            canvas,
+                            outer,
+                            deflate_rrect(rect, self.border_radius, EdgeInsets::all(top.width)),
+                            top.color,
+                        );
+                    }
                 }
                 return;
             }

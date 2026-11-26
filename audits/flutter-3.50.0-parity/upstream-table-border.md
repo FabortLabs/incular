@@ -51,3 +51,21 @@ out by Rust's type system. The default description includes all six
 inactive sides and `BorderRadius.zero`, matching the reference; shaped
 controls also verify circular and separately elliptical corner labels.
 All 16 focused table and box-border tests passed.
+
+## Explicit borders on a zero-height grid
+
+Pinned `rendering/table_test.dart:212,320` passed. A retained native
+table now produces the original 4/4/5/5/6/6 path sequence as rows and
+columns are added without gaining height. The originally suppressed
+square border reaches the first pixel row; removing the authored
+border leaves the same table without any stroke.
+
+Simply enabling the paint path exposed a second discrepancy:
+normalizing an inverted inner rounded rectangle created an extra
+filled line. A uniform outer rounded rectangle with zero area now
+paints no area, even though both divider commands still exist.
+Pinned `zero_height_table_border_pixels_test.dart` confirms the actual
+Flutter alpha for the absent, square, rounded and rounded-plus-divider
+cases. Incular checks retained path coverage and divider coordinates,
+not byte-identical Flutter draw commands or an Incular GPU readback.
+The authored probe does not add a registration. All 17 focused cases passed.

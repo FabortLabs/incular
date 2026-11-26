@@ -128,3 +128,85 @@ fn uneven_rtl_flex_columns_stay_finite_and_fill_the_tight_width() {
     }
     assert!(right.abs() < 0.001);
 }
+
+#[test]
+fn an_explicit_table_border_paints_even_with_no_row_height() {
+    use incular_core::{Color, Offset};
+    use incular_rendering::PaintCommand;
+    use incular_widgets::{BorderSide, TableBorder};
+
+    let scene = |columns, cells, border: Option<TableBorder>| {
+        let table = Table::new(columns, (0..cells).map(|_| SizedBox::shrink()))
+            .text_direction(TextDirection::Rtl);
+        Widget::from(if let Some(border) = border { table.border(border) } else { table })
+    };
+    let mut tree = WidgetTree::new();
+    let explicit = TableBorder::all(BorderSide::default());
+    let root = tree.mount(scene(1, 0, Some(explicit))).unwrap();
+    let render = tree.render_id(root);
+    for (columns, cells, paths) in [(1, 0, 4), (1, 1, 4), (1, 2, 5), (2, 2, 5), (2, 4, 6), (3, 6, 6)] {
+        tree.update(root, scene(columns, cells, Some(explicit))).unwrap();
+        tree.layout(Constraints::tight(HOST)).unwrap();
+        let list = tree.paint();
+        let produced = list
+            .commands()
+            .iter()
+            .filter(|op| matches!(op, PaintCommand::StrokePath { .. } | PaintCommand::FillPath { .. }))
+            .count();
+        assert_eq!(produced, paths, "{columns} columns and {cells} cells");
+        assert_eq!(tree.render_id(root), render);
+        if cells != 0 {
+            let black_at = |point| list.commands().iter().any(|op| match op {
+                PaintCommand::FillPath { path, fill_rule, brush: incular_rendering::Brush::Solid(Color::BLACK) } =>
+                    path.contains(point, *fill_rule),
+                _ => false,
+            });
+            assert!(black_at(Offset::new(400., 0.5)), "the authored stroke reaches the first row");
+            assert!(!black_at(Offset::new(400., 1.5)), "the table has no intrinsic row height");
+        }
+    }
+
+    tree.update(root, scene(3, 6, None)).unwrap();
+    tree.layout(Constraints::tight(HOST)).unwrap();
+    assert!(tree.paint().commands().iter().all(|op| {
+        !matches!(op, PaintCommand::StrokePath { .. } | PaintCommand::FillPath { .. })
+    }));
+}
+
+#[test]
+fn a_rounded_table_border_keeps_both_dividers_without_an_extra_outer_line_at_zero_height() {
+    use incular_core::{Color, Offset};
+    use incular_rendering::{Brush, FillRule, PaintCommand};
+    use incular_widgets::{BorderRadius, BorderSide, Radius, TableBorder};
+    let border = TableBorder::all(BorderSide::default())
+        .border_radius(BorderRadius::all(Radius::circular(8.)));
+    let scene = |cells| {
+        Table::new(2, (0..cells).map(|_| SizedBox::shrink()))
+            .text_direction(TextDirection::Ltr)
+            .border(border)
+            .into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scene(0)).unwrap();
+    tree.layout(Constraints::tight(HOST)).unwrap();
+    tree.update(root, scene(4)).unwrap();
+    tree.layout(Constraints::tight(HOST)).unwrap();
+    let list = tree.paint();
+    let paths: Vec<_> = list.commands().iter().filter(|op| {
+        matches!(op, PaintCommand::StrokePath { .. } | PaintCommand::FillPath { .. })
+    }).collect();
+    let [
+        PaintCommand::StrokePath { path: vertical, stroke: v, .. },
+        PaintCommand::StrokePath { path: horizontal, stroke: h, .. },
+        PaintCommand::FillPath { path: outer_ring, fill_rule: FillRule::EvenOdd, brush: Brush::Solid(Color::BLACK) },
+    ] = paths.as_slice() else {
+        panic!("expected two dividers and a degenerate rounded ring: {list:?}");
+    };
+    assert_eq!((v.width, h.width), (1., 1.));
+    assert_eq!(vertical.bounds().unwrap().origin, Offset::new(400., 0.));
+    assert_eq!(vertical.bounds().unwrap().size, Size::ZERO);
+    assert_eq!(horizontal.bounds().unwrap().size, Size::new(800., 0.));
+    for y in [-0.5, 0.5, 1.5] {
+        assert!(!outer_ring.contains(Offset::new(300., y), FillRule::EvenOdd));
+    }
+}

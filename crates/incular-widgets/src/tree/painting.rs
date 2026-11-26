@@ -899,9 +899,10 @@ impl WidgetTree {
                     .render_live(id, "bordered table remains live")
                     .object
                     .feature
-                && geometry.size.width > 0.
-                && geometry.size.height > 0.
             {
+                // The grid height can be zero even though its explicit
+                // border paints. In particular a square top edge extends
+                // into the first pixel row and a divider can lie at y=0.
                 let mut canvas = incular_rendering::Canvas::default();
                 let rect = Rect::from_origin_size(Offset::ZERO, geometry.size);
                 border.paint(&mut canvas, rect, &geometry.rows, &geometry.columns);

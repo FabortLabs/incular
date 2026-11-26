@@ -2590,3 +2590,5 @@ packages/flutter/test/rendering/table_test.dart	50	Table control test: constrain
 packages/flutter/test/rendering/table_test.dart	161	Table test: removing cells	paired-match	upstream-table-retention-and-layoutbuilder-baseline.md#rendertable-sizes-and-flat-cell-updates
 packages/flutter/test/rendering/table_test.dart	174	Table test: replacing cells	paired-match	upstream-table-retention-and-layoutbuilder-baseline.md#rendertable-sizes-and-flat-cell-updates
 packages/flutter/test/rendering/table_test.dart	295	Table flex sizing	paired-match	upstream-table-retention-and-layoutbuilder-baseline.md#rendertable-sizes-and-flat-cell-updates
+packages/flutter/test/rendering/table_test.dart	212	Table border painting	paired-match	upstream-table-border.md#explicit-borders-on-a-zero-height-grid
+packages/flutter/test/rendering/table_test.dart	320	Table paints a borderRadius	paired-match	upstream-table-border.md#explicit-borders-on-a-zero-height-grid
