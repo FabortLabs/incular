@@ -134,3 +134,22 @@ viewport at a zero-sized root, with a nonzero initial-offset request,
 without failing. The laid-out viewport size is exactly zero. The
 comparison does not assert that the native scroll controller preserves
 an out-of-range offset for an empty viewport.
+
+## Centered paint and hit order
+
+Flutter's `rendering/viewport_test.dart:2274,2291,2315,2337` uses five slivers
+around a viewport center and checks both paint orders and their inverse
+hit-test orders. All four pinned tests ran and passed. Incular's
+`flutter350_viewport_order` tests both orders with five mounted slivers:
+
+- Default paint invokes each painter and flattens its display list in
+  `[4,3,2,1,0]` order. Explicit `LastIsTop` produces `[0,1,2,3,4]`.
+- A raw pointer down at the center of five overlapping translucent slivers
+  reaches all listeners from front to back in the inverse order, not just
+  the winning child.
+
+Before the fix, the retained layer order was correct but custom painters
+ran in logical child order in the default case. Paint traversal now uses the
+same sliver slot order as layer installation and hit testing. The existing
+`sliver_paint_order` regressions for the published scene and topmost hit
+also passed. This did not change the wgpu renderer.

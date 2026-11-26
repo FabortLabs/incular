@@ -800,10 +800,24 @@ impl WidgetTree {
         } else {
             self.diagnostics.display_lists_reused += 1;
         }
+        // Invoke child painters in the same back-to-front order that the
+        // compositor uses for their layers. Only mixed sliver viewports
+        // whose children need reordering allocate a slot list.
+        let slots = self.viewport_paint_slots(
+            id,
+            self.render_live(id, "retained render must remain live"),
+        );
         for index in 0.. {
+            let slot = match &slots {
+                Some(slots) => match slots.get(index) {
+                    Some(&slot) => slot,
+                    None => break,
+                },
+                None => index,
+            };
             let Some(&child) =
                 visible_paint_children(self.render_live(id, "retained render must remain live"))
-                    .get(index)
+                    .get(slot)
             else {
                 break;
             };
@@ -1228,51 +1242,42 @@ impl WidgetTree {
         }
     }
 
+    fn viewport_paint_slots(&self, id: RenderObjectId, node: &RenderNode) -> Option<Vec<usize>> {
+        let RenderKind::SliverViewport { config } = node.object.kind() else {
+            return None;
+        };
+        let element = self
+            .element_for_render(id)
+            .and_then(|element| self.elements.get(element.0))?;
+        // Render children and sliver ids are parallel. sync_render_children
+        // also uses these same slots to order their compositor layers.
+        debug_assert!(
+            node.children.len() == element.children.len()
+                && node
+                    .children
+                    .iter()
+                    .zip(&element.children)
+                    .all(|(render, child)| self.render_id(*child) == Some(*render)),
+            "viewport render children are parallel to its element's children"
+        );
+        crate::scrolling::sliver_paint_slots(element.sliver_child_ids(), config.paint_order)
+    }
+
     /// Children in paint order, hit-tested in reverse. Sliver viewports paint
-    /// whole slivers in their `SliverPaintOrder` (Flutter
-    /// `childrenInPaintOrder`); an indexed stack shows one child.
+    /// whole slivers in their SliverPaintOrder; an indexed stack shows one child.
     fn hit_children<'a>(
         &self,
         id: RenderObjectId,
         node: &'a RenderNode,
     ) -> std::borrow::Cow<'a, [RenderObjectId]> {
-        match node.object.kind() {
-            RenderKind::SliverViewport { config } => {
-                // Every pointer event walks this. A viewport whose children
-                // already paint in order, the usual case, keeps them as they
-                // are.
-                let Some(element) = self
-                    .element_for_render(id)
-                    .and_then(|element| self.elements.get(element.0))
-                else {
-                    return node.children.as_slice().into();
-                };
-                // The viewport's render children, its element's children and
-                // their sliver ids are parallel (`sync_render_children` orders
-                // the painted layers by the same index), so a child's slot is
-                // its own position: no lookup through its element.
-                debug_assert!(
-                    node.children.len() == element.children.len()
-                        && node
-                            .children
-                            .iter()
-                            .zip(&element.children)
-                            .all(|(render, child)| self.render_id(*child) == Some(*render)),
-                    "viewport render children are parallel to its element's children"
-                );
-                let Some(slots) = crate::scrolling::sliver_paint_slots(
-                    element.sliver_child_ids(),
-                    config.paint_order,
-                ) else {
-                    return node.children.as_slice().into();
-                };
-                slots
-                    .into_iter()
-                    .filter_map(|slot| node.children.get(slot).copied())
-                    .collect::<Vec<_>>()
-                    .into()
-            }
-            _ => visible_paint_children(node).into(),
+        if let Some(slots) = self.viewport_paint_slots(id, node) {
+            slots
+                .into_iter()
+                .filter_map(|slot| node.children.get(slot).copied())
+                .collect::<Vec<_>>()
+                .into()
+        } else {
+            visible_paint_children(node).into()
         }
     }
     pub(super) fn scrollbar_controller_and_geometry(
