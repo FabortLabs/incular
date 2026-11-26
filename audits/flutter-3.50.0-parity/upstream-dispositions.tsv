@@ -1803,11 +1803,11 @@ packages/flutter/test/gestures/scale_test.dart	1506	ScaleStartDetails and ScaleU
 packages/flutter/test/gestures/scale_test.dart	1832	ScaleStartDetails should contain the correct PointerDeviceKind	partial-match	upstream-geometry-input-gestures.md#scale-contact-eligibility-and-callback-details
 packages/flutter/test/gestures/scale_test.dart	380	Scale gesture competes with drag	paired-match	upstream-geometry-input-gestures.md#scale-contact-admission-after-the-first-win
 packages/flutter/test/gestures/scale_test.dart	694	First rotation test	paired-match	upstream-geometry-input-gestures.md#local-scale-deltas-and-first-rotation
-packages/flutter/test/gestures/scale_test.dart	774	Should recognize scale gestures from pointer pan/zoom events	reference-ran-incular-open	upstream-geometry-input-gestures.md#trackpad-scale-input-remains-separate
-packages/flutter/test/gestures/scale_test.dart	890	Pointer pan/zooms should work alongside touches	reference-ran-incular-open	upstream-geometry-input-gestures.md#trackpad-scale-input-remains-separate
+packages/flutter/test/gestures/scale_test.dart	774	Should recognize scale gestures from pointer pan/zoom events	partial-match	upstream-geometry-input-gestures.md#direct-absolute-panzoom-events
+packages/flutter/test/gestures/scale_test.dart	890	Pointer pan/zooms should work alongside touches	partial-match	upstream-geometry-input-gestures.md#direct-absolute-panzoom-events
 packages/flutter/test/gestures/scale_test.dart	1092	Scale gesture competes with drag for trackpad gesture	reference-ran-incular-open	upstream-geometry-input-gestures.md#trackpad-scale-input-remains-separate
-packages/flutter/test/gestures/scale_test.dart	1186	Scale gesture from pan/zoom events properly handles DragStartBehavior.start	reference-ran-incular-open	upstream-geometry-input-gestures.md#trackpad-scale-input-remains-separate
-packages/flutter/test/gestures/scale_test.dart	1293	scale trackpadScrollCausesScale	reference-ran-incular-open	upstream-geometry-input-gestures.md#trackpad-scale-input-remains-separate
+packages/flutter/test/gestures/scale_test.dart	1186	Scale gesture from pan/zoom events properly handles DragStartBehavior.start	partial-match	upstream-geometry-input-gestures.md#direct-absolute-panzoom-events
+packages/flutter/test/gestures/scale_test.dart	1293	scale trackpadScrollCausesScale	paired-match	upstream-geometry-input-gestures.md#direct-absolute-panzoom-events
 packages/flutter/test/gestures/scale_test.dart	1447	scale ending velocity	reference-ran-incular-open	upstream-geometry-input-gestures.md#trackpad-scale-input-remains-separate
 packages/flutter/test/gestures/scale_test.dart	472	Should recognize rotation gestures	paired-match	upstream-geometry-input-gestures.md#drag-before-scale-and-signed-rotations
 packages/flutter/test/rendering/proxy_box_test.dart	619	RenderFractionalTranslation updates its semantics after its translation value is set	paired-match	upstream-hit-transforms.md#proxy-follower-hit-gating-and-semantic-translation

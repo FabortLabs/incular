@@ -107,6 +107,53 @@ struct Contact {
     velocity: VelocityTracker,
 }
 
+/// Phase of the absolute pointer pan/zoom protocol.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum PointerPanZoomPhase {
+    Start,
+    Update {
+        /// Translation relative to the gesture's start, in global coordinates.
+        pan: Offset,
+        /// Multiplicative scale relative to the gesture's start (initially 1).
+        scale: f32,
+        /// Rotation in radians relative to the gesture's start.
+        rotation: f32,
+    },
+    End,
+}
+
+/// A trackpad gesture stream. Unlike a platform delta, each update describes
+/// the full motion since Start; do not sum successive updates.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PointerPanZoomEvent {
+    pub device: u64,
+    pub pointer: u64,
+    pub position: Offset,
+    pub phase: PointerPanZoomPhase,
+    pub time: Instant,
+    pub synthesized: bool,
+}
+
+/// The default scroll-to-scale gain when converting a trackpad pan to zoom.
+pub const DEFAULT_TRACKPAD_SCROLL_TO_SCALE_FACTOR: Offset = Offset::new(0.0, -1.0 / 200.0);
+
+struct PanZoomContact {
+    id: ContactId,
+    position: Offset,
+    pan: Offset,
+    scale: f32,
+    rotation: f32,
+    velocity: VelocityTracker,
+}
+
+impl PanZoomContact {
+    fn scale(&self, scroll_to_scale: Option<Offset>) -> f32 {
+        scroll_to_scale.map_or(self.scale, |gain| {
+            self.scale * (self.pan.x * gain.x + self.pan.y * gain.y).exp()
+        })
+    }
+}
+
 /// Flutter `_ScaleState`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ScaleState {
@@ -130,6 +177,10 @@ enum ScaleState {
 /// the pan slop is a one-pointer scale, as in Flutter.
 pub struct ScaleGestureDetector {
     pointers: Vec<Contact>,
+    pan_zooms: Vec<PanZoomContact>,
+    initial_pan_zoom_scale: f32,
+    initial_pan_zoom_rotation: f32,
+    scroll_to_scale: Option<Offset>,
     state: ScaleState,
     initial_focal_point: Offset,
     current_focal_point: Option<Offset>,
@@ -182,6 +233,10 @@ impl ScaleGestureDetector {
     ) -> Self {
         Self {
             pointers: Vec::new(),
+            pan_zooms: Vec::new(),
+            initial_pan_zoom_scale: 1.0,
+            initial_pan_zoom_rotation: 0.0,
+            scroll_to_scale: None,
             state: ScaleState::Ready,
             initial_focal_point: Offset::ZERO,
             current_focal_point: None,
@@ -260,10 +315,18 @@ impl ScaleGestureDetector {
             .is_none_or(|devices| devices.contains(&kind))
     }
 
-    /// Number of currently tracked pointer contacts.
+    /// Enables scroll-to-scale with the given gain, or disables it with
+    /// `None` (the default). When enabled the trackpad focal point stays at
+    /// its reported position instead of following the pan.
+    pub fn set_trackpad_scroll_to_scale(&mut self, gain: Option<Offset>) {
+        self.scroll_to_scale = gain;
+    }
+
+    /// Number of currently tracked fingers. Each trackpad stream represents
+    /// at least two fingers and contributes two to this count.
     #[must_use]
     pub fn pointer_count(&self) -> usize {
-        self.pointers.len()
+        self.pointers.len() + 2 * self.pan_zooms.len()
     }
 
     /// Sets the global-to-local transform used for the details' local
@@ -374,22 +437,98 @@ impl ScaleGestureDetector {
                 (true, false)
             }
         };
-        self.last_event_time = Some(event.time);
+        self.finish_event(
+            configuration_changed,
+            should_start,
+            lifted.as_ref().map(|contact| &contact.velocity),
+            event.kind,
+            event.time,
+        )
+    }
+
+    /// Observes a routed absolute trackpad event. Arbitration follows the
+    /// same `wants_acceptance` / `accept` contract as touch events. An arena
+    /// that grants a sole member the stream when it closes should call
+    /// `accept_without_update` after routing Start.
+    pub fn observe_pan_zoom(&mut self, event: PointerPanZoomEvent) -> Option<ScaleUpdateDetails> {
+        self.wants_acceptance = false;
+        let kind = PointerDeviceKind::Trackpad;
+        if !self.allows_device(kind) {
+            return None;
+        }
+        let id = ContactId {
+            device: event.device,
+            pointer: event.pointer,
+        };
+        let index = self.pan_zooms.iter().position(|contact| contact.id == id);
+        let mut lifted = None;
+        let (configuration_changed, should_start) = match event.phase {
+            PointerPanZoomPhase::Start => {
+                if index.is_some() {
+                    return None;
+                }
+                self.initial_event_time = Some(event.time);
+                if self.state == ScaleState::Ready {
+                    self.state = ScaleState::Possible;
+                    self.initial_pan_zoom_scale = 1.0;
+                    self.initial_pan_zoom_rotation = 0.0;
+                }
+                self.pending_contacts = true;
+                self.pan_zooms.push(PanZoomContact {
+                    id,
+                    position: event.position,
+                    pan: Offset::ZERO,
+                    scale: 1.0,
+                    rotation: 0.0,
+                    velocity: VelocityTracker::default(),
+                });
+                (true, true)
+            }
+            PointerPanZoomPhase::Update {
+                pan,
+                scale,
+                rotation,
+            } => {
+                let contact = &mut self.pan_zooms[index?];
+                if !event.synthesized && self.scroll_to_scale.is_none() {
+                    contact.velocity.add_position(event.time, pan);
+                }
+                contact.position = event.position;
+                contact.pan = pan;
+                contact.scale = scale;
+                contact.rotation = rotation;
+                (false, true)
+            }
+            PointerPanZoomPhase::End => {
+                lifted = Some(self.pan_zooms.remove(index?));
+                (true, false)
+            }
+        };
+        self.finish_event(
+            configuration_changed,
+            should_start,
+            lifted.as_ref().map(|contact| &contact.velocity),
+            kind,
+            event.time,
+        )
+    }
+
+    fn finish_event(
+        &mut self,
+        configuration_changed: bool,
+        should_start: bool,
+        velocity: Option<&VelocityTracker>,
+        kind: PointerDeviceKind,
+        time: Instant,
+    ) -> Option<ScaleUpdateDetails> {
+        self.last_event_time = Some(time);
         self.update_lines();
         self.update();
         let mut details = None;
-        if !configuration_changed || self.reconfigure(lifted.as_ref(), event.time) {
-            details = self.advance_state_machine(should_start, event.kind, event.time);
+        if !configuration_changed || self.reconfigure(velocity, time) {
+            details = self.advance_state_machine(should_start, kind, time);
         }
-        if self.pointers.is_empty() {
-            // Flutter `didStopTrackingLastPointer`.
-            self.state = ScaleState::Ready;
-            self.current_focal_point = None;
-            self.initial_line = None;
-            self.current_line = None;
-            self.wants_acceptance = false;
-            self.pending_contacts = false;
-        }
+        self.reset_if_empty();
         details
     }
 
@@ -411,53 +550,65 @@ impl ScaleGestureDetector {
     /// [`DragStartBehavior::Start`], measures later updates from the current
     /// contacts. Returns the update for the event that won the arena.
     pub fn accept(&mut self) -> Option<ScaleUpdateDetails> {
-        self.wants_acceptance = false;
-        self.pending_contacts = false;
-        match self.state {
-            ScaleState::Possible => {
-                self.state = ScaleState::Started;
-                self.dispatch_start();
-                if self.drag_start_behavior == DragStartBehavior::Start {
-                    self.initial_focal_point = self.current_focal_point?;
-                    self.initial_span = self.current_span;
-                    self.initial_line = self.current_line;
-                    self.initial_horizontal_span = self.current_horizontal_span;
-                    self.initial_vertical_span = self.current_vertical_span;
-                }
-                let details = self.details(self.last_event_time);
-                self.track_scale(details);
-                Some(details)
-            }
-            ScaleState::Ready | ScaleState::Accepted | ScaleState::Started => None,
+        if !self.accept_without_update() {
+            return None;
         }
+        let details = self.details(self.last_event_time);
+        self.track_scale(details);
+        Some(details)
     }
 
-    /// Flutter `rejectGesture`: another recognizer won this pointer's arena,
-    /// so the scale stops tracking it without reconfiguring.
+    /// Grants acceptance without synthesizing an update, as when a sole
+    /// recognizer wins its arena immediately after the start event.
+    pub fn accept_without_update(&mut self) -> bool {
+        self.wants_acceptance = false;
+        self.pending_contacts = false;
+        if self.state != ScaleState::Possible {
+            return false;
+        }
+        self.state = ScaleState::Started;
+        self.dispatch_start();
+        if self.drag_start_behavior == DragStartBehavior::Start {
+            self.rebase();
+        }
+        true
+    }
+
+    /// Flutter `rejectGesture`: another recognizer won this pointer's arena.
     pub fn reject_pointer(&mut self, pointer: u64) {
-        if let Some(index) = self
+        let id = self
             .pointers
             .iter()
-            .position(|contact| contact.id.pointer == pointer)
-        {
-            self.remove_rejected_contact(index);
+            .find(|contact| contact.id.pointer == pointer)
+            .map(|contact| contact.id)
+            .or_else(|| {
+                self.pan_zooms
+                    .iter()
+                    .find(|contact| contact.id.pointer == pointer)
+                    .map(|contact| contact.id)
+            });
+        if let Some(id) = id {
+            self.reject_device_pointer(id.device, id.pointer);
         }
     }
 
     /// Rejects only the contact from the specified device and pointer.
-    /// Retained arenas use this rather than comparing pointer IDs alone.
     pub fn reject_device_pointer(&mut self, device: u64, pointer: u64) {
         let id = ContactId { device, pointer };
         if let Some(index) = self.pointers.iter().position(|contact| contact.id == id) {
-            self.remove_rejected_contact(index);
+            self.pointers.remove(index);
+        } else if let Some(index) = self.pan_zooms.iter().position(|contact| contact.id == id) {
+            self.pan_zooms.remove(index);
         }
+        self.reset_if_empty();
     }
 
-    fn remove_rejected_contact(&mut self, index: usize) {
-        self.pointers.remove(index);
-        if self.pointers.is_empty() {
+    fn reset_if_empty(&mut self) {
+        if self.pointer_count() == 0 {
             self.state = ScaleState::Ready;
             self.current_focal_point = None;
+            self.initial_line = None;
+            self.current_line = None;
             self.wants_acceptance = false;
             self.pending_contacts = false;
         }
@@ -513,17 +664,31 @@ impl ScaleGestureDetector {
                 focal_point.y + contact.position.y,
             );
         }
-        let divisor = count.max(1) as f32;
-        let focal_point = Offset::new(focal_point.x / divisor, focal_point.y / divisor);
+        let touch_divisor = count.max(1) as f32;
+        let touch_focal = Offset::new(focal_point.x / touch_divisor, focal_point.y / touch_divisor);
+        let focal_point = if self.pan_zooms.is_empty() {
+            touch_focal
+        } else {
+            for trackpad in &self.pan_zooms {
+                let trackpad_focal = if self.scroll_to_scale.is_some() {
+                    trackpad.position
+                } else {
+                    trackpad.position + trackpad.pan
+                };
+                focal_point = focal_point + trackpad_focal;
+            }
+            let divisor = (count + self.pan_zooms.len()) as f32;
+            Offset::new(focal_point.x / divisor, focal_point.y / divisor)
+        };
         let local = self.local(focal_point);
         self.current_focal_point = Some(focal_point);
         self.current_local_focal_point = local;
         self.focal_point_delta = previous_local.map_or(Offset::ZERO, |previous| local - previous);
         let (mut total, mut horizontal, mut vertical) = (0.0, 0.0, 0.0);
         for contact in &self.pointers {
-            total += distance(focal_point, contact.position);
-            horizontal += (focal_point.x - contact.position.x).abs();
-            vertical += (focal_point.y - contact.position.y).abs();
+            total += distance(touch_focal, contact.position);
+            horizontal += (touch_focal.x - contact.position.x).abs();
+            vertical += (touch_focal.y - contact.position.y).abs();
         }
         let mean = |sum: f32| if count > 0 { sum / count as f32 } else { 0.0 };
         self.current_span = mean(total);
@@ -531,9 +696,14 @@ impl ScaleGestureDetector {
         self.current_vertical_span = mean(vertical);
     }
 
-    /// Flutter `_reconfigure`: a contact went down or up. Returns whether the
-    /// state machine should still advance for this event.
-    fn reconfigure(&mut self, lifted: Option<&Contact>, time: Instant) -> bool {
+    fn pan_zoom_scale(&self) -> f32 {
+        self.pan_zooms
+            .iter()
+            .map(|contact| contact.scale(self.scroll_to_scale) / self.initial_pan_zoom_scale)
+            .product()
+    }
+
+    fn rebase(&mut self) {
         if let Some(focal_point) = self.current_focal_point {
             self.initial_focal_point = focal_point;
         }
@@ -541,14 +711,23 @@ impl ScaleGestureDetector {
         self.initial_line = self.current_line;
         self.initial_horizontal_span = self.current_horizontal_span;
         self.initial_vertical_span = self.current_vertical_span;
+        self.initial_pan_zoom_scale = self.pan_zoom_scale();
+        self.initial_pan_zoom_rotation =
+            self.pan_zooms.iter().map(|contact| contact.rotation).sum();
+    }
+
+    /// Flutter `_reconfigure`: a contact went down or up. Returns whether the
+    /// state machine should still advance for this event.
+    fn reconfigure(&mut self, velocity: Option<&VelocityTracker>, time: Instant) -> bool {
+        self.rebase();
         if self.state == ScaleState::Started {
             if let Some(callback) = &self.on_end {
                 let scale_velocity = self.scale_velocity.as_ref().map_or(-1.0, |tracker| {
                     tracker.estimate_at(time).pixels_per_second.x
                 });
                 // `_isFlingGesture`, then clamped to `kMaxFlingVelocity`.
-                let velocity = lifted
-                    .map(|contact| contact.velocity.estimate_at(time).pixels_per_second)
+                let velocity = velocity
+                    .map(|tracker| tracker.estimate_at(time).pixels_per_second)
                     .filter(|velocity| velocity.x.hypot(velocity.y) > MIN_FLING_VELOCITY)
                     .map_or(Velocity::ZERO, |velocity| {
                         let speed = velocity.x.hypot(velocity.y);
@@ -562,7 +741,7 @@ impl ScaleGestureDetector {
                 callback(ScaleEndDetails {
                     velocity,
                     scale_velocity,
-                    pointer_count: self.pointers.len(),
+                    pointer_count: self.pointer_count(),
                 });
             }
             self.state = ScaleState::Accepted;
@@ -597,11 +776,10 @@ impl ScaleGestureDetector {
             let focal_point = self.current_focal_point?;
             let span_delta = (self.current_span - self.initial_span).abs();
             let focal_point_delta = distance(focal_point, self.initial_focal_point);
-            // Without trackpad pan-zoom contacts `_scaleFactor` equals
-            // `_pointerScaleFactor`, so Flutter's third (1.05 ratio) test
-            // never passes here.
+            let pan_zoom = self.pan_zoom_scale();
             if span_delta > compute_scale_slop(kind)
                 || focal_point_delta > compute_pan_slop(kind, self.gesture_settings)
+                || pan_zoom.max(pan_zoom.recip()) > 1.05
             {
                 self.wants_acceptance = true;
             }
@@ -629,22 +807,33 @@ impl ScaleGestureDetector {
             callback(ScaleStartDetails {
                 focal_point,
                 local_focal_point: self.current_local_focal_point,
-                pointer_count: self.pointers.len(),
+                pointer_count: self.pointer_count(),
                 source_time: self.initial_event_time,
-                kind: self.pointers.first().map(|contact| contact.kind),
+                kind: self
+                    .pointers
+                    .first()
+                    .map(|contact| contact.kind)
+                    .or_else(|| self.pan_zooms.first().map(|_| PointerDeviceKind::Trackpad)),
             });
         }
     }
 
-    /// Flutter `_computeRotationFactor` without trackpad contacts.
+    /// Flutter `_computeRotationFactor`.
     fn rotation(&self) -> f32 {
-        let (Some(initial), Some(current)) = (self.initial_line, self.current_line) else {
-            return 0.0;
-        };
         let angle = |line: LineBetweenPointers| {
             (line.start.y - line.end.y).atan2(line.start.x - line.end.x)
         };
-        angle(current) - angle(initial)
+        let touch = self
+            .initial_line
+            .zip(self.current_line)
+            .map_or(0.0, |(initial, current)| angle(current) - angle(initial));
+        touch
+            + self
+                .pan_zooms
+                .iter()
+                .map(|contact| contact.rotation)
+                .sum::<f32>()
+            - self.initial_pan_zoom_rotation
     }
 
     fn details(&self, source_time: Option<Instant>) -> ScaleUpdateDetails {
@@ -657,15 +846,18 @@ impl ScaleGestureDetector {
             }
         };
         let focal_point = self.current_focal_point.unwrap_or(Offset::ZERO);
+        let pan_zoom = self.pan_zoom_scale();
         ScaleUpdateDetails {
             focal_point,
             local_focal_point: self.current_local_focal_point,
-            scale: ratio(self.current_span, self.initial_span),
-            horizontal_scale: ratio(self.current_horizontal_span, self.initial_horizontal_span),
-            vertical_scale: ratio(self.current_vertical_span, self.initial_vertical_span),
+            scale: ratio(self.current_span, self.initial_span) * pan_zoom,
+            horizontal_scale: ratio(self.current_horizontal_span, self.initial_horizontal_span)
+                * pan_zoom,
+            vertical_scale: ratio(self.current_vertical_span, self.initial_vertical_span)
+                * pan_zoom,
             rotation: self.rotation(),
             focal_point_delta: self.focal_point_delta,
-            pointer_count: self.pointers.len(),
+            pointer_count: self.pointer_count(),
             source_time,
         }
     }

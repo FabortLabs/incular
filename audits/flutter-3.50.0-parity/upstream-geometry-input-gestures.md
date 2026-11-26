@@ -201,6 +201,24 @@ an independent retained callback and do not enter the touch-scale
 recognizer as correlated pan/zoom contacts. These are reference-only
 rather than equivalences with native aggregate callbacks.
 
+#### Direct absolute pan/zoom events
+
+Pinned :774/:890/:1092/:1186/:1293 were rerun on the Linux reference.
+The recognizer now takes absolute trackpad pan, multiplicative zoom and
+rotation as one stream. A trackpad contributes two to pointer count but
+one to the global centroid; touch spans are measured about the touch-only
+centroid. Zoom multiplies those spans, rotation adds to the touch angle,
+and `DragStartBehavior::Start` rebases both. Native tests reproduce the
+scale-side geometry of :774/:890/:1186; those registrations remain
+partial until the horizontal drag participates in the same arena.
+
+Pinned :1293 is paired using the actual managed arena's deferred sole
+winner: no start on close, start without an update after the routed
+begin, anchored focal point, count two, and both default vertical gain
+and a custom horizontal gain across two lifecycles. This is the direct
+input protocol. The OS aggregate trackpad callback and hardware ingress
+are separate and not verified by this run.
+
 ### Drag before scale and signed rotations
 
 The authored Flutter and native mounted probes also reverse the route
