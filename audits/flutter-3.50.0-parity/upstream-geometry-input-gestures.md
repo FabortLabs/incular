@@ -265,6 +265,17 @@ These are correlated events passed to the widget tree. The platform
 aggregate path still does not manufacture absolute streams from
 independent native pinch/rotation/pan notifications.
 
+#### Portable runtime ingress for absolute streams
+
+An embedder can send `InputEvent::PointerPanZoom` through the ordinary
+window platform event route. The runtime uses the real position and
+timestamp carried by the stream. The integration test needs no mouse
+cursor or hover fallback, does not call the native aggregate callback,
+does not dispatch an update outside a stream, and reports Start/Update/
+End with the right focal points, count, and scale. The existing
+aggregate input test still requires an observed hover position. This adds
+no claims about device drivers that do not supply correlated input.
+
 ### Drag before scale and signed rotations
 
 The authored Flutter and native mounted probes also reverse the route

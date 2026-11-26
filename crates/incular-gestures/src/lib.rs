@@ -88,8 +88,9 @@ pub use raw::{
     ErasedGestureRecognizerFactory, GestureRecognizer, GestureRecognizerFactory,
     GestureRecognizerFactoryError, GestureRecognizerFactoryWithHandlers,
 };
+pub use incular_core::{PointerPanZoomEvent, PointerPanZoomPhase};
 pub use scale::{
-    DEFAULT_TRACKPAD_SCROLL_TO_SCALE_FACTOR, PointerPanZoomEvent, PointerPanZoomPhase,
+    DEFAULT_TRACKPAD_SCROLL_TO_SCALE_FACTOR,
     ScaleEndDetails, ScaleGestureDetector, ScaleStartDetails, ScaleUpdateDetails,
 };
 pub use slop::{compute_hit_slop, compute_pan_slop, compute_scale_slop};

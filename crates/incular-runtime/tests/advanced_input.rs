@@ -90,3 +90,93 @@ fn aggregate_trackpad_gesture_requires_real_pointer_location_then_routes_normall
         ]
     );
 }
+
+#[test]
+fn absolute_trackpad_input_respects_its_own_position_without_a_cursor() {
+    use incular_core::{PointerPanZoomEvent, PointerPanZoomPhase};
+
+    let calls = Rc::new(RefCell::new(Vec::new()));
+    let scale_root = GestureDetector::new(Widget::box_(Size::new(100., 100.), Color::WHITE))
+        .drag_start_behavior(incular_core::DragStartBehavior::Down)
+        .on_scale_start({
+            let calls = calls.clone();
+            move |d| {
+                calls
+                    .borrow_mut()
+                    .push((d.focal_point, 0., d.pointer_count))
+            }
+        })
+        .on_scale_update({
+            let calls = calls.clone();
+            move |d| {
+                calls
+                    .borrow_mut()
+                    .push((d.focal_point, d.scale, d.pointer_count))
+            }
+        })
+        .on_scale_end({
+            let calls = calls.clone();
+            move |d| calls.borrow_mut().push((Offset::ZERO, 0., d.pointer_count))
+        })
+        .on_trackpad_gesture(|_| {
+            panic!("correlated input must not trigger the OS aggregate callback")
+        })
+        .into();
+    let mut application = Application::new_with_options(
+        WindowOptions {
+            initial_logical_size: Size::new(100., 100.),
+            ..WindowOptions::new("absolute trackpad input")
+        },
+        move |_| Widget::clone(&scale_root),
+    )
+    .unwrap();
+    let id = application.primary_window();
+    let _ = application.take_native_window_commands();
+    let now = Instant::now();
+    application
+        .run_window_frame_at(id, Constraints::tight(Size::new(100., 100.)), now)
+        .unwrap();
+
+    let position = Offset::new(32., 43.);
+    let pan = Offset::new(7., 8.);
+    let mut send = |phase| {
+        application.handle_window_event(WindowEvent::platform(
+            id,
+            PlatformEvent::Input(InputEvent::PointerPanZoom(PointerPanZoomEvent {
+                pointer: 51,
+                device: 88,
+                position,
+                phase,
+                time: now,
+                synthesized: false,
+            })),
+        ));
+    };
+    send(PointerPanZoomPhase::Update {
+        pan,
+        scale: 1.5,
+        rotation: 0.,
+    });
+    assert!(calls.borrow().is_empty());
+    send(PointerPanZoomPhase::Start);
+    assert_eq!(*calls.borrow(), [(position, 0., 2)]);
+    send(PointerPanZoomPhase::Update {
+        pan,
+        scale: 1.5,
+        rotation: 0.,
+    });
+    send(PointerPanZoomPhase::End);
+    send(PointerPanZoomPhase::Update {
+        pan,
+        scale: 2.,
+        rotation: 0.,
+    });
+    assert_eq!(
+        *calls.borrow(),
+        [
+            (position, 0., 2),
+            (position + pan, 1.5, 2),
+            (Offset::ZERO, 0., 0)
+        ]
+    );
+}

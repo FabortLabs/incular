@@ -1680,7 +1680,9 @@ impl DesktopHost {
                         }
                     }
                     PlatformEvent::Input(
-                        InputEvent::Scroll { .. } | InputEvent::TrackpadGesture(_),
+                        InputEvent::Scroll { .. }
+                        | InputEvent::TrackpadGesture(_)
+                        | InputEvent::PointerPanZoom(_),
                     ) => pointer_event = true,
                     _ => {}
                 }

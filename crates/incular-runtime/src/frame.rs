@@ -273,6 +273,10 @@ pub(crate) fn diagnostic_input_trigger(event: &InputEvent) -> String {
             "pointer({pointer}, device={device}, {kind:?}, buttons={buttons:#x}, changed={button:?}, {phase:?}, {:.1}, {:.1})",
             position.x, position.y
         ),
+        InputEvent::PointerPanZoom(event) => format!(
+            "pointer_pan_zoom({}, device={}, {:?}, {:.1}, {:.1})",
+            event.pointer, event.device, event.phase, event.position.x, event.position.y
+        ),
         InputEvent::TrackpadGesture(event) => format!(
             "trackpad(device={}, kind={:?}, phase={:?})",
             event.device(),
@@ -1722,7 +1726,7 @@ impl Runtime {
             (u64::from(window.index()) << 32) | u64::from(window.generation())
         })
     }
-    /// Handles the events that carry no pointer sample.
+    /// Handles events other than ordinary pointer samples.
     fn handle_non_pointer_input(&mut self, event: InputEvent) -> Option<EventTarget> {
         match event {
             InputEvent::Scroll { delta } => {
@@ -1738,6 +1742,13 @@ impl Runtime {
             }
             InputEvent::Text(text) => self.insert_text(&text),
             InputEvent::Ime(ime) => self.handle_ime(ime),
+            InputEvent::PointerPanZoom(event) => {
+                let gesture_window = self.gesture_window();
+                if let Some(element) = self.tree.dispatch_pointer_pan_zoom_in_window(gesture_window, event) {
+                    self.frame_requested = true;
+                    return Some(EventTarget { element, action: None });
+                }
+            }
             InputEvent::TrackpadGesture(gesture) => {
                 // Aggregate gestures do not carry a focal position in
                 // Winit. Use only a genuine cursor position already

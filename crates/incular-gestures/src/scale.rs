@@ -1,7 +1,10 @@
 use std::rc::Rc;
 
 use incular_core::time::Instant;
-use incular_core::{DeviceGestureSettings, DragStartBehavior, Offset, PointerPhase, Transform};
+use incular_core::{
+    DeviceGestureSettings, DragStartBehavior, Offset, PointerPanZoomEvent, PointerPanZoomPhase,
+    PointerPhase, Transform,
+};
 
 use crate::constants::{MAX_FLING_VELOCITY, MIN_FLING_VELOCITY};
 use crate::details::{PointerDeviceKind, PointerEvent, RawPointerEvent, Velocity};
@@ -105,33 +108,6 @@ struct Contact {
     position: Offset,
     kind: PointerDeviceKind,
     velocity: VelocityTracker,
-}
-
-/// Phase of the absolute pointer pan/zoom protocol.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum PointerPanZoomPhase {
-    Start,
-    Update {
-        /// Translation relative to the gesture's start, in global coordinates.
-        pan: Offset,
-        /// Multiplicative scale relative to the gesture's start (initially 1).
-        scale: f32,
-        /// Rotation in radians relative to the gesture's start.
-        rotation: f32,
-    },
-    End,
-}
-
-/// A trackpad gesture stream. Unlike a platform delta, each update describes
-/// the full motion since Start; do not sum successive updates.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct PointerPanZoomEvent {
-    pub device: u64,
-    pub pointer: u64,
-    pub position: Offset,
-    pub phase: PointerPanZoomPhase,
-    pub time: Instant,
-    pub synthesized: bool,
 }
 
 /// The default scroll-to-scale gain when converting a trackpad pan to zoom.

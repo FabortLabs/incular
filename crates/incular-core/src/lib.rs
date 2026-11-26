@@ -55,7 +55,7 @@ pub use id::IdGenerator;
 pub use input::{
     BACK_POINTER_BUTTON, Code, DeviceGestureSettings, DragStartBehavior, FORWARD_POINTER_BUTTON,
     ImeEvent, InputEvent, Key as KeyboardKey, KeyState, KeyboardEvent, Location, Modifiers,
-    NamedKey, NormalizedPressure, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase,
+    NamedKey, NormalizedPressure, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPanZoomEvent, PointerPanZoomPhase, PointerPhase,
     PointerSampleMetadata, SECONDARY_POINTER_BUTTON, StylusMetadata, StylusOrientation,
     TERTIARY_POINTER_BUTTON, TrackpadGesture, TrackpadGestureKind, TrackpadGesturePhase,
     WindowResizeDirection, additional_pointer_button_mask,
