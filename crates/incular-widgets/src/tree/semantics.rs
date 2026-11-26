@@ -2176,7 +2176,7 @@ impl WidgetTree {
                         && (annotation.state.sort_key.is_some()
                             || annotation.state.effective_validation_result()
                                 != SemanticValidationResult::None
-                            || (annotation.state.container
+                            || ((annotation.state.container || annotation.state.toggled.is_some())
                                 && annotation.label.is_none()
                                 && annotation.value.is_none()
                                 && annotation.description.is_none()

@@ -6,8 +6,8 @@ The ten pinned Flutter originals at `widgets/sliver_semantics_widget_test.dart:
 - **Reading direction (210, 232, 251, 298).** The real retained node
   inherits the ambient RTL/LTR direction. An explicit direction overrides
   it in either direction, as the original assertions show despite the
-  test names. The two inherited cases are paired; the tests for explicit
-  direction also assert Flutter's complete two-pane tree.
+  test names. All four cases are paired, including the explicit
+  directions' two-pane topology and default fields.
 - **Reparenting (114).** Two annotations on one sliver previously collided
   on the same generated child ID, rejecting layout. The native test inserts
   and removes a nested container and verifies exact edges, stale node
@@ -15,8 +15,8 @@ The ten pinned Flutter originals at `widgets/sliver_semantics_widget_test.dart:
   Flutter's GlobalKey-based render-object move or two-pane graph.
 - **Annotation content (342, 386, 437).** The native graph includes label,
   hint, and current value on one node. Independent hints merge in order
-  with one newline for both sliver and box annotations. The field and
-  merging checks pass; the renderer-specific outer topology is partial.
+  with one newline for both sliver and box annotations. The single
+  label, hint and value case is paired across the whole two-pane graph.
 - **Disable/restart (18).** The host projection removes the label when
   disabled, schedules a frame when re-enabled, and publishes the fresh
   node with the same direction beneath an implicit-scroll ancestor.
@@ -338,8 +338,8 @@ only `focusable(false)` removes focusability. The node ID remains
 stable, and none of these annotation changes creates a keyboard
 target or makes an unbound Focus action executable. The projected
 values follow through the portable mobile adapter. All 37 targeted
-Rust checks passed. The upstream combined role and route flags are
-not yet completely covered.
+Rust checks passed in this isolated slice. The combined flags on an
+explicit child boundary are covered in the subsequent full-graph test.
 
 ### Independent role and route annotations
 
@@ -400,3 +400,21 @@ to work. In addition to the 12 strict tag and topology tests, 62
 focused page, runtime, table and widget regressions passed. The
 browser uses the shared capability predicate; a wasm build was not
 run here.
+
+### Complete graphs for flags and annotation values
+
+The pinned originals at 251, 298, 342, 934, 1170 and 1423 now have
+native graph checks. Each tests the outer boundary, implicit-scroll
+pane, and immediately tagged annotation, not just the field in
+isolation. The explicit direction wins in both directions. The label,
+hint, current value, tooltip, and adjacent range values stay in their
+respective fields; only the range case advertises increase/decrease.
+
+The all-flags test checks the two child boundaries for the checked and
+indeterminate states, along with every independent role/route flag
+and the actual hidden/focusable/expanded states. The toggled-only
+annotation absorbs its compatible text even without an explicit
+container. The same test checks the unflagged scope and the return
+to an explicit child node. These cases are paired; platform route
+announcements are not part of the upstream test. All 37 focused Rust
+tests passed.

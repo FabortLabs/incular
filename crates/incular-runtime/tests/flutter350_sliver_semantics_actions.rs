@@ -1239,3 +1239,211 @@ fn merging_annotations_unions_independent_flags_without_reassigning_them() {
     );
     assert_eq!(merged.state.annotation_flags.get(Flag::Image), None);
 }
+
+#[test]
+fn sliver_flags_keep_children_separate_and_report_checked_mixed_and_toggled() {
+    use incular_semantics::{CheckedState, SemanticAnnotationFlag as Flag};
+    use incular_widgets::{CustomScrollView, SliverList, Text, Viewport};
+
+    let build = |variant: u8| -> Widget {
+        let slivers: [Box<dyn Sliver>; 1] = [Box::new(SliverSemantics::new(
+            move || {
+                let base = Semantics::default();
+                match variant {
+                    0 | 3 => base
+                        .container(true)
+                        .explicit_child_nodes(true)
+                        .enabled(true)
+                        .hidden(true)
+                        .checked(if variant == 0 {
+                            CheckedState::Checked
+                        } else {
+                            CheckedState::Indeterminate
+                        })
+                        .selected(true)
+                        .button(true)
+                        .slider(true)
+                        .keyboard_key(true)
+                        .link(true)
+                        .text_field(true)
+                        .read_only(true)
+                        .focused(true)
+                        .focusable(true)
+                        .in_mutually_exclusive_group(true)
+                        .header(true)
+                        .obscured(true)
+                        .multiline(true)
+                        .scopes_route(true)
+                        .names_route(true)
+                        .image(true)
+                        .live_region(true)
+                        .expanded(true)
+                        .required(true),
+                    1 => base.container(true).scopes_route(false),
+                    _ => base.toggled(true),
+                }
+            },
+            SliverList::builder(1, |_| Text::new("Lorem Ipsum 0")),
+        ))];
+        Directionality::new(TextDirection::Ltr, CustomScrollView::new(slivers)).into()
+    };
+    let flags = [
+        Flag::Button,
+        Flag::Slider,
+        Flag::KeyboardKey,
+        Flag::Link,
+        Flag::TextField,
+        Flag::MutuallyExclusiveGroup,
+        Flag::Header,
+        Flag::ScopesRoute,
+        Flag::NamesRoute,
+        Flag::Image,
+    ];
+
+    let mut runtime = Runtime::new(build(0)).unwrap();
+    frame(&mut runtime);
+    let root = runtime.tree().root().unwrap();
+    for variant in 0..4 {
+        runtime.schedule_update(root, build(variant)).unwrap();
+        frame(&mut runtime);
+        let tree = runtime.tree().semantics();
+        let outer = tree.node(tree.root().unwrap()).unwrap();
+        assert!(outer.actions.is_empty());
+        assert_eq!(outer.children.len(), 1);
+        let pane = tree.node(outer.children[0]).unwrap();
+        assert!(pane.state.has_implicit_scrolling);
+        assert!(pane.actions.is_empty());
+        assert_eq!(pane.children.len(), 1);
+        let annotation = tree.node(pane.children[0]).unwrap();
+        assert!(annotation.is_tagged(Viewport::use_two_pane_semantics_tag()));
+        assert!(annotation.actions.is_empty());
+        let state = &annotation.state;
+        if variant == 0 || variant == 3 {
+            assert_eq!(
+                state.checked,
+                Some(if variant == 0 {
+                    CheckedState::Checked
+                } else {
+                    CheckedState::Indeterminate
+                })
+            );
+            assert!(state.toggled.is_none());
+            assert!(state.has_enabled_state && state.enabled);
+            assert!(state.hidden && state.selected && state.focusable && state.focused);
+            assert!(state.read_only && state.obscured && state.multiline);
+            assert!(state.live_region && state.required);
+            assert_eq!(state.expanded, Some(true));
+            for flag in flags {
+                assert_eq!(state.annotation_flags.get(flag), Some(true));
+            }
+            assert!(annotation.label.is_none());
+            assert_eq!(annotation.children.len(), 1);
+            let label = tree.node(annotation.children[0]).unwrap();
+            assert_eq!(label.label.as_deref(), Some("Lorem Ipsum 0"));
+            assert_eq!(label.state.text_direction, Some(TextDirection::Ltr));
+            assert!(!label.is_tagged(Viewport::use_two_pane_semantics_tag()));
+            assert!(label.children.is_empty());
+        } else {
+            assert_eq!(annotation.label.as_deref(), Some("Lorem Ipsum 0"));
+            assert_eq!(state.text_direction, Some(TextDirection::Ltr));
+            assert!(annotation.children.is_empty());
+            assert!(state.checked.is_none());
+            assert_eq!(state.toggled, (variant == 2).then_some(true));
+            assert!(state.annotation_flags.get(Flag::ScopesRoute) != Some(true));
+            assert!(!state.hidden && !state.focusable && !state.focused);
+        }
+    }
+}
+
+#[test]
+fn sliver_annotation_values_and_directions_match_the_complete_two_pane_shape() {
+    use incular_widgets::Viewport;
+
+    for variant in 0..5 {
+        let annotation = move || match variant {
+            0 => Semantics::default()
+                .label("test1")
+                .text_direction(TextDirection::Ltr),
+            1 => Semantics::default()
+                .label("test1")
+                .text_direction(TextDirection::Rtl),
+            2 => Semantics::default()
+                .label("label")
+                .hint("hint")
+                .value("value"),
+            3 => Semantics::default()
+                .tooltip("test1")
+                .text_direction(TextDirection::Ltr),
+            _ => Semantics::default()
+                .container(true)
+                .value("10s")
+                .increased_value("11s")
+                .decreased_value("9s")
+                .on_increase(|| {})
+                .on_decrease(|| {}),
+        };
+        let slivers: [Box<dyn Sliver>; 1] = [Box::new(SliverSemantics::new(
+            annotation,
+            SliverToBoxAdapter::new(SizedBox::new().height(10.)),
+        ))];
+        let ambient = if variant == 0 {
+            TextDirection::Rtl
+        } else {
+            TextDirection::Ltr
+        };
+        let mut runtime =
+            Runtime::new(Directionality::new(ambient, CustomScrollView::new(slivers)).into())
+                .unwrap();
+        frame(&mut runtime);
+        let tree = runtime.tree().semantics();
+        assert_eq!(tree.iter().count(), 3);
+        assert_eq!(tree.roots().len(), 1);
+        let outer = tree.node(tree.root().unwrap()).unwrap();
+        assert_eq!(outer.children.len(), 1);
+        let pane = tree.node(outer.children[0]).unwrap();
+        for node in [outer, pane] {
+            assert!(node.actions.is_empty());
+            assert!(node.tags().is_empty());
+            assert!(node.label.is_none() && node.value.is_none() && node.description.is_none());
+        }
+        assert!(!outer.state.has_implicit_scrolling);
+        assert!(pane.state.has_implicit_scrolling);
+        assert_eq!(pane.children.len(), 1);
+        let leaf = tree.node(pane.children[0]).unwrap();
+        assert!(leaf.children.is_empty());
+        assert_eq!(
+            leaf.tags(),
+            &[Viewport::use_two_pane_semantics_tag().clone()]
+        );
+        assert!(!leaf.state.has_enabled_state && !leaf.state.hidden && !leaf.state.focusable);
+        assert_eq!(leaf.state.annotation_flags, Default::default());
+        assert_eq!(
+            leaf.state.text_direction,
+            Some(if variant == 1 {
+                TextDirection::Rtl
+            } else {
+                TextDirection::Ltr
+            }),
+        );
+        let (label, hint, value, tooltip, increase, decrease) = match variant {
+            0 | 1 => (Some("test1"), None, None, None, None, None),
+            2 => (Some("label"), Some("hint"), Some("value"), None, None, None),
+            3 => (None, None, None, Some("test1"), None, None),
+            _ => (None, None, Some("10s"), None, Some("11s"), Some("9s")),
+        };
+        assert_eq!(leaf.label.as_deref(), label);
+        assert_eq!(leaf.description.as_deref(), hint);
+        assert_eq!(leaf.value.as_deref(), value);
+        assert_eq!(leaf.state.tooltip.as_deref(), tooltip);
+        assert_eq!(leaf.state.increased_value.as_deref(), increase);
+        assert_eq!(leaf.state.decreased_value.as_deref(), decrease);
+        if variant == 4 {
+            assert_eq!(
+                leaf.actions,
+                [SemanticActionKind::Increment, SemanticActionKind::Decrement]
+            );
+        } else {
+            assert!(leaf.actions.is_empty());
+        }
+    }
+}
