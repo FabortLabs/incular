@@ -18,3 +18,14 @@ All 15 focused editor measurement, alignment, and paragraph tests
 passed. The original :12 additionally compares a detached renderer's
 full diagnostic tree and minimum intrinsic width; it is not counted
 by this batch.
+
+## Explicit scaler and ambient changes
+
+The pinned authored `editable_scaling_and_strut_test.dart` verifies
+the widget-level precedence. Ambient 3× first gives a 30-pixel editor.
+An explicit 2× scaler applies to both the glyphs and a forced 50-pixel
+strut, giving 100-pixel height. Changing the ambient scale to 4× leaves
+that override at 100; removing the override restores a 40-pixel field.
+The native case also checks widths and retained identity through every
+change. All four focused controls passed; the authored probe does not
+add an original registration.

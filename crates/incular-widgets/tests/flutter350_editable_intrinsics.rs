@@ -99,3 +99,48 @@ fn a_forced_strut_controls_both_intrinsic_and_laid_out_height() {
     assert_eq!(tree.element_bounds(root).unwrap().size.height, 100.);
     assert_eq!(tree.editable_max_intrinsic_width(root), Some(112.));
 }
+
+#[test]
+fn an_explicit_scaler_resolves_the_strut_without_following_ambient_scaling() {
+    let Some(style) = base_style() else { return };
+    let controller = TextEditingController::with_text("Hello World");
+    let scene = |explicit| {
+        let field = editor(&controller, &style);
+        if explicit {
+            field
+                .text_scaler(TextScaler::linear(2.))
+                .strut_style(StrutStyle::new().font_size(50.).force_strut_height(true))
+                .into()
+        } else {
+            field.into()
+        }
+    };
+    let mut tree = WidgetTree::new();
+    let mut ambient = tree.environment().clone();
+    ambient.text_scale = 3.;
+    tree.set_environment(ambient.clone());
+    let root = tree.mount(scene(false)).unwrap();
+    frame(&mut tree);
+    let render = tree.render_id(root);
+    assert_eq!(tree.element_bounds(root).unwrap().size.height, 30.);
+    assert_eq!(tree.editable_max_intrinsic_width(root), Some(332.));
+
+    tree.update(root, scene(true)).unwrap();
+    frame(&mut tree);
+    assert_eq!(tree.render_id(root), render);
+    assert_eq!(tree.element_bounds(root).unwrap().size.height, 100.);
+    assert_eq!(tree.editable_intrinsic_height(root, 200.), Some(100.));
+    assert_eq!(tree.editable_max_intrinsic_width(root), Some(222.));
+
+    ambient.text_scale = 4.;
+    tree.set_environment(ambient);
+    frame(&mut tree);
+    assert_eq!(tree.element_bounds(root).unwrap().size.height, 100.);
+    assert_eq!(tree.editable_max_intrinsic_width(root), Some(222.));
+
+    tree.update(root, scene(false)).unwrap();
+    frame(&mut tree);
+    assert_eq!(tree.render_id(root), render);
+    assert_eq!(tree.element_bounds(root).unwrap().size.height, 40.);
+    assert_eq!(tree.editable_max_intrinsic_width(root), Some(442.));
+}
