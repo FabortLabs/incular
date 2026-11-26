@@ -3871,6 +3871,9 @@ impl Runtime {
         if let Some(next) = self.tree.finish_updated_autofocus(self.focused) {
             self.set_focus_with_external_selection(Some(next), false);
         }
+        if let Some(next) = self.tree.finish_hosted_scope_autofocus() {
+            self.set_focus_with_external_selection(Some(next), false);
+        }
         let _composite_guard = tracing::info_span!("incular.composite").entered();
         let composite_span = profiling::PhaseSpan::start();
         let (composited, animations_active) = self.tree.update_compositor(now)?;

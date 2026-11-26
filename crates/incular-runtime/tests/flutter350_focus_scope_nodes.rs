@@ -559,3 +559,106 @@ fn detaching_a_focused_child_restores_history_unless_a_new_request_is_pending() 
         );
     }
 }
+
+#[test]
+fn programmatic_scope_autofocus_yields_to_an_explicit_child_request() {
+    use incular_widgets::Column;
+    let scope = FocusScopeNode::new();
+    let parent = FocusNode::new();
+    let first = FocusNode::new();
+    let second = FocusNode::new();
+    let scene = FocusScope::new(
+        Focus::new(Column::new([
+            Focus::new(SizedBox::shrink()).node(first.clone()),
+            Focus::new(SizedBox::shrink()).node(second.clone()),
+        ]))
+        .node(parent.clone()),
+    )
+    .node(scope.clone());
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let mut runtime = Runtime::new(scene.into()).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert!(scope.autofocus(&second));
+    assert!(!second.has_primary_focus());
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(scope.focused_child(), Some(second.clone()));
+    assert!(parent.has_focus() && !parent.has_primary_focus());
+    assert!(!first.has_focus());
+    assert!(second.has_primary_focus());
+
+    first.request_focus();
+    assert!(scope.autofocus(&second));
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(scope.focused_child(), Some(first.clone()));
+    assert!(parent.has_focus() && !parent.has_primary_focus());
+    assert!(first.has_primary_focus());
+    assert!(!second.has_focus());
+}
+
+#[test]
+fn scoped_autofocus_drops_a_moved_target_and_keeps_the_first_valid_request() {
+    use incular_widgets::Column;
+    let scope = FocusScopeNode::new();
+    let unrelated = FocusScopeNode::new();
+    let moving = FocusNode::new();
+    let first = FocusNode::new();
+    let later = FocusNode::new();
+    let view = |inside| -> Widget {
+        let candidates = if inside {
+            vec![Focus::new(SizedBox::shrink()).node(moving.clone())]
+        } else {
+            vec![
+                Focus::new(SizedBox::shrink()).node(first.clone()),
+                Focus::new(SizedBox::shrink()).node(later.clone()),
+            ]
+        };
+        let outside = if inside {
+            Widget::from(SizedBox::shrink())
+        } else {
+            Focus::new(SizedBox::shrink()).node(moving.clone()).into()
+        };
+        Column::new([
+            FocusScope::new(Column::new(candidates)).node(scope.clone()),
+            FocusScope::new(outside).node(unrelated.clone()),
+        ])
+        .into()
+    };
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let mut runtime = Runtime::new(view(true)).unwrap();
+    let root = runtime.tree().root().unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert!(scope.autofocus(&moving));
+    assert!(scope.autofocus(&first));
+    assert!(scope.autofocus(&later));
+    runtime.schedule_update(root, view(false)).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert!(!moving.has_primary_focus());
+    assert!(first.has_primary_focus());
+    assert!(!later.has_primary_focus());
+}
+
+#[test]
+fn a_runtime_cannot_drain_another_hosts_scoped_autofocus() {
+    let scene = |scope: &FocusScopeNode, child: &FocusNode| -> Widget {
+        FocusScope::new(Focus::new(SizedBox::shrink()).node(child.clone()))
+            .node(scope.clone())
+            .into()
+    };
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let left_scope = FocusScopeNode::new();
+    let right_scope = FocusScopeNode::new();
+    let left_child = FocusNode::new();
+    let right_child = FocusNode::new();
+    let mut left = Runtime::new(scene(&left_scope, &left_child)).unwrap();
+    let mut right = Runtime::new(scene(&right_scope, &right_child)).unwrap();
+    left.run_frame(bounds).unwrap();
+    right.run_frame(bounds).unwrap();
+
+    assert!(right_scope.autofocus(&right_child));
+    assert!(left_scope.autofocus(&left_child));
+    left.run_frame(bounds).unwrap();
+    assert!(left_child.has_primary_focus());
+    assert!(!right_child.has_primary_focus());
+    right.run_frame(bounds).unwrap();
+    assert!(right_child.has_primary_focus());
+}

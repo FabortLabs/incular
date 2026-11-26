@@ -55,7 +55,7 @@ pub use focus::{
     UnfocusDisposition,
     FocusTraversalPolicy, FocusTraversalPolicyKind, OrderedTraversalPolicy,
     ReadingOrderTraversalPolicy, TraversalDirection, WidgetOrderTraversalPolicy,
-    directional_focus_index, focus_epoch, reading_order_by,
+    directional_focus_index, focus_epoch, reading_order_by, take_hosted_scope_autofocus,
 };
 pub use force_press::{
     ForceInterpolation, ForcePressDetails, ForcePressGestureRecognizer, ForcePressureSample,

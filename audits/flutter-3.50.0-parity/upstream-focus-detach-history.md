@@ -23,3 +23,20 @@ layout and verifies neither the dead node nor the reused slot gets it.
 Twenty-nine focused Rust checks passed, covering mounted scopes,
 editable focus, mount autofocus and retained focus history. The three
 authored Flutter controls do not add upstream registrations.
+
+## Programmatic scope autofocus
+
+Pinned `widgets/focus_manager_test.dart:660` passed. The native
+mounted scope now accepts an explicit autofocus candidate and
+evaluates it after attachment and explicit focus requests. In the
+matching test, the first request selects the second child of an
+ordinary focus parent, and a later autofocus request does not
+replace the explicitly focused child or change scope history.
+
+The authored Flutter control verifies a target moved out of the
+enqueuing scope is discarded and the first valid candidate wins.
+Native controls also cover queue isolation between two runtimes
+sharing one UI thread. The native API requires a mounted scope;
+an unmounted scope does not enqueue a request. All 26 selected
+Rust tests passed. The authored case does not add an upstream
+registration.

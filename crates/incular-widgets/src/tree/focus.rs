@@ -1231,6 +1231,52 @@ impl WidgetTree {
         });
     }
 
+    /// Applies explicit FocusScopeNode::autofocus requests after actual
+    /// attachment and explicit focus updates. Earlier eligible requests
+    /// fill their scope and its ancestors before the next request is tried.
+    #[doc(hidden)]
+    pub fn finish_hosted_scope_autofocus(&self) -> Option<ElementId> {
+        let hosted = self.hosted_focus_nodes.as_ref()?;
+        let find = |node: &incular_gestures::FocusNode| {
+            hosted
+                .iter()
+                .find_map(|(&id, attachment)| (attachment.node() == node).then_some(id))
+        };
+        let pending = incular_gestures::take_hosted_scope_autofocus(|scope| {
+            find(&scope.scope_focus_node()).is_some()
+        });
+        let mut chosen = None;
+        let mut filled = Vec::new();
+        for (scope, node) in pending {
+            let Some(owner) = find(&scope.scope_focus_node()) else {
+                continue;
+            };
+            if scope.focused_child().is_some() || filled.contains(&owner) {
+                continue;
+            }
+            let Some(target) = find(&node).filter(|&id| {
+                id != owner && self.is_descendant_or_self(id, owner) && self.can_request_focus(id)
+            }) else {
+                continue;
+            };
+            let target = node.scope_owner().map_or(target, |child_scope| {
+                self.restore_scope_history(target, child_scope, None)
+            });
+            chosen = Some(target);
+            let mut ancestor = self.parent(target);
+            while let Some(element) = ancestor {
+                if hosted
+                    .get(&element)
+                    .is_some_and(|attachment| attachment.node().scope_owner().is_some())
+                {
+                    filled.push(element);
+                }
+                ancestor = self.parent(element);
+            }
+        }
+        chosen
+    }
+
     /// Resolves retained Focus updates after direct focus requests and layout.
     #[doc(hidden)]
     pub fn finish_updated_autofocus(&mut self, focused: Option<ElementId>) -> Option<ElementId> {

@@ -6,8 +6,42 @@ use incular_core::{Offset, Rect, Size, Transform};
 
 use crate::details::PointerDeviceKind;
 
+struct ScopeAutofocusRequest {
+    scope: Weak<FocusScopeState>,
+    target: Weak<FocusState>,
+}
+
 thread_local! {
     static FOCUS_EPOCH: Cell<u64> = const { Cell::new(0) };
+    static SCOPED_AUTOFOCUS: RefCell<Vec<ScopeAutofocusRequest>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Drains pending autofocus requests for scopes owned by this retained host.
+/// Other live windows keep their requests and apply them at their own layout.
+#[doc(hidden)]
+pub fn take_hosted_scope_autofocus(
+    mut belongs_to_host: impl FnMut(&FocusScopeNode) -> bool,
+) -> Vec<(FocusScopeNode, FocusNode)> {
+    SCOPED_AUTOFOCUS.with(|pending| {
+        let mut pending = pending.borrow_mut();
+        let mut owned = Vec::new();
+        pending.retain(|request| {
+            let (Some(scope), Some(target)) = (request.scope.upgrade(), request.target.upgrade())
+            else {
+                return false;
+            };
+            let scope = FocusScopeNode { state: scope };
+            if scope.mounted_anchor().is_none() {
+                return false;
+            }
+            if !belongs_to_host(&scope) {
+                return true;
+            }
+            owned.push((scope, FocusNode { state: target }));
+            false
+        });
+        owned
+    })
 }
 
 /// Counter bumped whenever any [`FocusNode`] on this thread gains or loses
@@ -188,6 +222,14 @@ impl Drop for FocusNodeAttachment {
         let remaining = state.host_attachment_count.get() - 1;
         state.host_attachment_count.set(remaining);
         if remaining == 0 {
+            if let Some(scope) = self.node.scope_owner() {
+                let retired = Rc::downgrade(&scope.state);
+                let _ = SCOPED_AUTOFOCUS.try_with(|pending| {
+                    pending
+                        .borrow_mut()
+                        .retain(|request| !request.scope.ptr_eq(&retired));
+                });
+            }
             state.schedule_host_frame.set(None);
             self.node.set_host_enclosing_scope(None);
             self.node.apply_host_focus(false);
@@ -2047,6 +2089,25 @@ impl FocusScopeNode {
         }
         self.state.bump_revision();
         transition.notify();
+    }
+
+    /// Requests autofocus for a descendant after the host's next layout.
+    /// It is considered only while this scope still has no focused child
+    /// and the target belongs to it. Returns false if this scope has no
+    /// mounted host; a queued request may still be rejected when applied.
+    #[must_use]
+    pub fn autofocus(&self, node: &FocusNode) -> bool {
+        let Some(anchor) = self.mounted_anchor() else {
+            return false;
+        };
+        SCOPED_AUTOFOCUS.with(|pending| {
+            pending.borrow_mut().push(ScopeAutofocusRequest {
+                scope: Rc::downgrade(&self.state),
+                target: Rc::downgrade(&node.state),
+            });
+        });
+        anchor.state.schedule_host_frame();
+        true
     }
 
     /// Gives a node exclusive focus in this scope. A mounted scope queues
