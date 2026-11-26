@@ -2028,3 +2028,6 @@ packages/flutter/test/painting/text_painter_test.dart	1731	TextPainter computeWi
 packages/flutter/test/painting/text_painter_test.dart	1746	TextPainter computeMaxIntrinsicWidth	paired-match	upstream-text-painter.md#scaled-text-and-caret-height
 packages/flutter/test/painting/text_painter_test.dart	1261	TextPainter set TextHeightBehavior null test	paired-match	upstream-text-painter.md#full-line-metrics-and-height-behavior
 packages/flutter/test/painting/text_painter_test.dart	1310	TextPainter line metrics	paired-match	upstream-text-painter.md#full-line-metrics-and-height-behavior
+packages/flutter/test/painting/text_painter_test.dart	1956	strut style applies when the span has no style	paired-match	upstream-text-painter.md#strut-spacing-and-tall-inline-children
+packages/flutter/test/painting/text_painter_test.dart	1966	strut style leading is a fontSize multiplier	paired-match	upstream-text-painter.md#strut-spacing-and-tall-inline-children
+packages/flutter/test/painting/text_painter_test.dart	2017	force strut height applies to widget spans	paired-match	upstream-text-painter.md#strut-spacing-and-tall-inline-children

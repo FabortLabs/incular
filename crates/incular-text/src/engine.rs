@@ -1017,8 +1017,7 @@ impl TextEngine {
     /// descent, scaled so they sum to `height * fontSize` when a height is
     /// set (proportionally, or evenly around the font metrics with
     /// [`TextLeadingDistribution::Even`]). Unset fields fall back to the
-    /// base style; Flutter's strut leading is not modelled (it is zero by
-    /// default).
+    /// base style. Additional leading defaults to the resolved font's line gap.
     pub fn resolve_strut(&mut self, strut: &crate::StrutStyle, base: &TextStyle) -> TextStrut {
         let mut style = base.clone();
         style.line_height = None;
@@ -1038,12 +1037,11 @@ impl TextEngine {
         self.sync_application_fonts();
         let mut layout = self.shape_paragraph("M", &style, None, None, &[]);
         layout.break_all_lines(None);
-        let (ascent, descent) = layout
+        let (ascent, descent, font_leading) = layout
             .lines()
-            .flat_map(|line| line.runs().collect::<Vec<_>>())
-            .next()
-            .map_or((style.size, 0.), |run| {
-                (run.font_metrics().ascent, run.font_metrics().descent)
+            .find_map(|line| line.runs().next().map(|run| *run.font_metrics()))
+            .map_or((style.size, 0., 0.), |metrics| {
+                (metrics.ascent, metrics.descent, metrics.leading)
             });
         let (ascent, descent) = match strut.height {
             Some(height) if ascent + descent > 0. => {
@@ -1065,9 +1063,10 @@ impl TextEngine {
             }
             _ => (ascent, descent),
         };
+        let half_leading = 0.5 * strut.leading.map_or(font_leading, |factor| factor * style.size);
         TextStrut {
-            ascent,
-            descent,
+            ascent: ascent + half_leading,
+            descent: descent + half_leading,
             force: strut.force_strut_height.unwrap_or(false),
         }
     }

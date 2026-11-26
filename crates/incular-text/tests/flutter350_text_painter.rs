@@ -650,3 +650,54 @@ fn clipping_mixed_line_heights_keeps_the_retained_lines_actual_height() {
     assert_eq!(shape.lines[1].height, 30.);
     assert_eq!(shape.metrics.size.height, 40.);
 }
+
+#[test]
+fn strut_leading_expands_an_empty_unstyled_span_evenly() {
+    use incular_text::StrutStyle;
+    let Ok(path) = std::env::var("INCULAR_FLUTTER_TEST_FONT_PATH") else {
+        return;
+    };
+    let mut engine = TextEngine::new();
+    assert!(engine.register_font_bytes_as("FlutterTest", std::fs::read(path).unwrap()));
+    let mut p = painter(TextSpan::empty(), TextDirection::Ltr);
+    p.set_default_style(TextStyle::default().font_family("FlutterTest"));
+    let strut = StrutStyle::new().height(10.).font_size(10.);
+    p.set_strut_style(Some(strut.clone()));
+    p.layout_with_engine(&mut engine, 0., f32::INFINITY)
+        .unwrap();
+    assert_eq!(p.size(), Ok(Size::new(0., 100.)));
+    assert_eq!(p.preferred_line_height(), Ok(100.));
+    assert_eq!(p.alphabetic_baseline(), Ok(75.));
+
+    p.set_strut_style(Some(strut.leading(2.)));
+    p.layout_with_engine(&mut engine, 0., f32::INFINITY)
+        .unwrap();
+    assert_eq!(p.size(), Ok(Size::new(0., 120.)));
+    assert_eq!(p.preferred_line_height(), Ok(120.));
+    assert_eq!(p.alphabetic_baseline(), Ok(85.));
+}
+
+#[test]
+fn forced_strut_keeps_the_line_height_when_a_widget_is_much_taller() {
+    use incular_text::{StrutStyle, WidgetSpanAlignment};
+    let Ok(path) = std::env::var("INCULAR_FLUTTER_TEST_FONT_PATH") else {
+        return;
+    };
+    let mut engine = TextEngine::new();
+    assert!(engine.register_font_bytes_as("FlutterTest", std::fs::read(path).unwrap()));
+    let widget =
+        WidgetSpan::sized(1, Size::new(1000., 1000.)).alignment(WidgetSpanAlignment::TextBottom);
+    let mut p = painter(TextSpan::empty().children([widget]), TextDirection::Ltr);
+    p.set_default_style(TextStyle::default().font_family("FlutterTest"));
+    p.set_strut_style(Some(
+        StrutStyle::new()
+            .height(10.)
+            .font_size(10.)
+            .force_strut_height(true),
+    ));
+    p.layout_with_engine(&mut engine, 0., f32::INFINITY)
+        .unwrap();
+    assert_eq!(p.size().unwrap().height, 100.);
+    let placement = &p.shaped_layout().unwrap().placeholders[0];
+    assert_eq!(placement.rect.size, Size::new(1000., 1000.));
+}

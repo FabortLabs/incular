@@ -133,6 +133,8 @@ pub struct StrutStyle {
     pub font_weight: Option<FontWeight>,
     pub font_style: Option<FontStyle>,
     pub height: Option<f32>,
+    /// Additional spacing as a multiple of the resolved font size.
+    pub leading: Option<f32>,
     pub leading_distribution: Option<TextLeadingDistribution>,
     pub force_strut_height: Option<bool>,
 }
@@ -170,6 +172,12 @@ impl StrutStyle {
     #[must_use]
     pub fn height(mut self, height: f32) -> Self {
         self.height = Some(height.max(0.0));
+        self
+    }
+
+    #[must_use]
+    pub fn leading(mut self, factor: f32) -> Self {
+        self.leading = Some(factor.max(0.0));
         self
     }
 

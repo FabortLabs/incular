@@ -92,3 +92,14 @@ INCULAR_FLUTTER_TEST_FONT_PATH="$PWD/.tmp/FlutterTest-embedded.ttf" \
 INCULAR_FLUTTER_AHEM_PATH="$PWD/.tmp/flutter/packages/flutter_tools/static/Ahem.ttf" \
   cargo test --locked --offline -j1 -p incular-text --test flutter350_text_painter --test height_behavior --test selection_spans -- --test-threads=1
 ```
+
+## Strut spacing and tall inline children
+
+Three original strut registrations pair. An unstyled empty span takes
+the explicit 100 px strut. Adding a 2× leading multiplier to the 10 px
+strut adds exactly 10 px above and below, giving 120 px height and an
+85 px alphabetic baseline. Preferred line height uses the actual
+template height. A forced strut keeps a 1,000 px inline child in a 100 px
+line without shrinking the child's own box. Three original Flutter and
+31 focused Rust cases passed. Glyph selection boxes under forced strut
+are a separate comparison.

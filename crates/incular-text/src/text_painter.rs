@@ -253,6 +253,11 @@ impl TextPainter {
             || {
                 let mut style = self.strut_style.clone()?;
                 style.font_size = style.font_size.map(|size| self.scaler.scale(size));
+                if style.leading_distribution.is_none() {
+                    style.leading_distribution = self
+                        .height_behavior
+                        .map(|behavior| behavior.leading_distribution);
+                }
                 (style.font_size != Some(0.)).then(|| engine.resolve_strut(&style, &base))
             },
             |last| last.strut,
@@ -338,6 +343,11 @@ impl TextPainter {
 
     pub fn max_intrinsic_width(&self) -> Result<f32, TextPainterError> {
         Ok(self.measured()?.max_intrinsic_width)
+    }
+
+    /// Distance from the top to the first line's alphabetic baseline.
+    pub fn alphabetic_baseline(&self) -> Result<f32, TextPainterError> {
+        Ok(self.measured()?.shaped.metrics.baseline)
     }
 
     pub fn paint_offset(&self) -> Result<Offset, TextPainterError> {
