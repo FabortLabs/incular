@@ -59,6 +59,7 @@ use std::{
 mod hover_devices;
 mod system_chrome;
 mod text_actions;
+mod autofill;
 mod text_gestures;
 
 /// Sequence numbering runtime driver domains so outlet ownership errors

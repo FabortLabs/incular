@@ -17,5 +17,6 @@ maps the finish action to AutofillManager on supported API levels;
 this audit did not exercise a device password manager. Winit and the
 web hidden IME input have no explicit save/cancel operation.
 
-This batch covers mounted scope and disposal. The channel adapter's
-tagged update routing into those actual editors is tracked separately.
+This batch covers mounted scope and disposal. See
+[the mounted channel comparison](upstream-mounted-autofill.md) for
+tagged update routing into those actual editors.

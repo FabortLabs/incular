@@ -1443,6 +1443,13 @@ impl WidgetTree {
         }
     }
 
+    /// Stable mounted client identifier without taking an editing snapshot.
+    #[must_use]
+    pub fn text_field_client_id(&self, id: ElementId) -> Option<u64> {
+        matches!(self.elements.get(id.0)?.widget.kind(), WidgetKind::TextField(_))
+            .then_some((u64::from(id.0.generation()) << 32) | u64::from(id.0.index()))
+    }
+
     /// The closest retained autofill scope for this element, including the
     /// element itself when it is a scope.
     #[must_use]

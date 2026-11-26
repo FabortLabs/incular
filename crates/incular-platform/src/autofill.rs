@@ -301,9 +301,25 @@ impl FlutterAutofillScope {
         data: &[u8],
         mut apply: impl FnMut(&str, AutofillEditingValue),
     ) -> Result<bool, AutofillMessageError> {
+        let Some(values) = Self::decode_tagged_update(data)? else {
+            return Ok(false);
+        };
+        for (tag, value) in values {
+            if self.get(&tag).is_some_and(|field| field.autofill.enabled) {
+                apply(&tag, value);
+            }
+        }
+        Ok(true)
+    }
+
+    /// Decodes a tagged batch without collecting or exposing the current
+    /// text of any already mounted field.
+    pub fn decode_tagged_update(
+        data: &[u8],
+    ) -> Result<Option<Vec<(String, AutofillEditingValue)>>, AutofillMessageError> {
         let call = JsonMethodCodec::decode_method_call(data)?;
         if call.method != "TextInputClient.updateEditingStateWithTag" {
-            return Ok(false);
+            return Ok(None);
         }
         let fields = call
             .arguments
@@ -313,13 +329,10 @@ impl FlutterAutofillScope {
             .ok_or(AutofillMessageError::InvalidField("tagged editing values"))?;
         let values = fields
             .iter()
-            .map(|(tag, value)| AutofillEditingValue::from_json(value).map(|value| (tag, value)))
+            .map(|(tag, value)| {
+                AutofillEditingValue::from_json(value).map(|value| (tag.clone(), value))
+            })
             .collect::<Result<Vec<_>, _>>()?;
-        for (tag, value) in values {
-            if self.get(tag).is_some_and(|field| field.autofill.enabled) {
-                apply(tag, value);
-            }
-        }
-        Ok(true)
+        Ok(Some(values))
     }
 }

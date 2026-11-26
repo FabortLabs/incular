@@ -16,7 +16,8 @@ wire format.
 This is the optional Flutter-compatible channel contract. The retained
 widget tree and group-dispose events are covered in
 [the widget scope batch](upstream-autofill-groups.md); routing the
-channel into mounted editors is separate.
+channel into mounted editors is covered by
+[the mounted channel comparison](upstream-mounted-autofill.md).
 
 ```sh
 cargo test --locked -j 1 -p incular-platform --test flutter350_autofill --test flutter350_json_method_codec -- --test-threads=1

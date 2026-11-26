@@ -406,6 +406,7 @@ struct ControllerState {
     caret_reset: Option<Instant>,
     preferred_caret_x: Option<f32>,
     caret_affinity: TextAffinity,
+    selection_is_directional: bool,
     preedit: Option<String>,
     preedit_selection: Option<TextRange>,
     restoration: Option<TextRestoration>,
@@ -483,6 +484,12 @@ impl fmt::Debug for TextEditingController {
     }
 }
 
+enum CommitSelection {
+    Set,
+    Reset,
+    Autofill { is_set: bool, affinity: TextAffinity, is_directional: bool },
+}
+
 impl TextEditingController {
     #[must_use]
     pub fn new() -> Self {
@@ -543,6 +550,7 @@ impl TextEditingController {
             state.caret_reset = None;
             state.preferred_caret_x = None;
             state.caret_affinity = TextAffinity::Downstream;
+            state.selection_is_directional = false;
         }
         drop(state);
         if changed {
@@ -604,6 +612,13 @@ impl TextEditingController {
         self.changes.track();
         let state = self.inner.borrow();
         (!state.selection_unset).then_some(state.value.selection)
+    }
+
+    /// Whether the last platform selection explicitly distinguished
+    /// anchor and extent instead of allowing platform direction inference.
+    #[must_use]
+    pub fn selection_is_directional(&self) -> bool {
+        self.inner.borrow().selection_is_directional
     }
 
     /// Collapses an unset selection at the end of the text, as Flutter's
@@ -750,6 +765,27 @@ impl TextEditingController {
         let next = delta.try_apply(&self.inner.borrow().value)?;
         self.update_user(next);
         Ok(())
+    }
+
+    /// Applies one tagged autofill value as a platform edit. A missing
+    /// selection stays unset rather than looking like a tap at offset zero.
+    pub fn apply_autofill_value(
+        &self,
+        value: TextEditingValue,
+        selection_is_set: bool,
+        affinity: TextAffinity,
+        selection_is_directional: bool,
+    ) {
+        let text_or_composing_changed = self.with_value(|old| {
+            old.text != value.text || old.composing != value.composing
+        });
+        self.commit_with_selection(
+            value,
+            text_or_composing_changed,
+            true,
+            text_or_composing_changed,
+            CommitSelection::Autofill { is_set: selection_is_set, affinity, is_directional: selection_is_directional },
+        );
     }
 
     /// Replaces the selection as a user edit: input formatters run on the
@@ -1177,6 +1213,20 @@ impl TextEditingController {
         user: bool,
         reset_selection: bool,
     ) {
+        self.commit_with_selection(
+            value, content_changed, end_preedit, user,
+            if reset_selection { CommitSelection::Reset } else { CommitSelection::Set },
+        );
+    }
+
+    fn commit_with_selection(
+        &self,
+        value: TextEditingValue,
+        content_changed: bool,
+        end_preedit: bool,
+        user: bool,
+        selection: CommitSelection,
+    ) {
         incular_core::reactivity::assert_mutation_allowed();
         let mut value = {
             let transforms = if user {
@@ -1205,26 +1255,27 @@ impl TextEditingController {
         };
         let (listeners, text_changed) = {
             let mut state = self.inner.borrow_mut();
-            let selection_unset = if reset_selection {
-                state.caret_affinity = TextAffinity::Downstream;
-                if state
-                    .focused_selection_policies
-                    .last()
-                    .is_some_and(|(_, all)| *all)
-                {
-                    value.selection = TextSelection::new(0, value.text.len());
+            let (selection_unset, affinity, is_directional) = match selection {
+                CommitSelection::Reset => {
+                    if state.focused_selection_policies.last().is_some_and(|(_, all)| *all) {
+                        value.selection = TextSelection::new(0, value.text.len());
+                    }
+                    (state.focused_selection_policies.is_empty(), TextAffinity::Downstream, false)
                 }
-                state.focused_selection_policies.is_empty()
-            } else {
-                false
+                CommitSelection::Set => (false, state.caret_affinity, false),
+                CommitSelection::Autofill { is_set, affinity, is_directional } => (!is_set, affinity, is_directional),
             };
             if state.value == value
                 && !(end_preedit && state.preedit.is_some())
                 && state.selection_unset == selection_unset
+                && state.caret_affinity == affinity
+                && state.selection_is_directional == is_directional
             {
                 return;
             }
             state.selection_unset = selection_unset;
+            state.caret_affinity = affinity;
+            state.selection_is_directional = is_directional;
             let text_changed = user && state.value.text != value.text;
             state.value = value;
             if content_changed {
