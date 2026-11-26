@@ -1802,6 +1802,11 @@ impl Widget {
         self.semantic_properties_mut().always_include_semantics = include;
         self
     }
+    pub(crate) fn with_blocked_semantic_user_actions(mut self) -> Self {
+        self.semantic_properties_mut().block_user_actions = true;
+        self
+    }
+
     /// Excludes this widget and its implementation-detail subtree from semantics.
     #[must_use]
     pub fn exclude_semantics(mut self) -> Self {

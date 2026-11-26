@@ -145,9 +145,16 @@ impl RenderSliver for SemanticsRenderSliver {
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout {
         let mut layout = self.inner.borrow_mut().perform_layout(constraints);
         let extent = layout.geometry.scroll_extent.max(0.);
+        let semantics = (self.semantics)();
+        let block_user_actions = semantics.blocks_user_actions();
         for child in &mut layout.children {
             if self.exclude_semantics {
                 child.widget = child.widget.clone().exclude_semantics();
+            }
+            if block_user_actions {
+                // The grouped child renders beside the annotation anchor,
+                // so carry its suppression along the real ancestor path.
+                child.widget = child.widget.clone().with_blocked_semantic_user_actions();
             }
             if child.id.0 >> 32 == 0 && is_semantics_anchor(child.id) {
                 // Proxies can nest without introducing an indexed sliver
@@ -166,9 +173,7 @@ impl RenderSliver for SemanticsRenderSliver {
             0,
             SliverChildLayout {
                 id: SliverChildId(ANCHOR),
-                widget: (self.semantics)()
-                    .with_child(crate::SizedBox::expand())
-                    .into(),
+                widget: semantics.with_child(crate::SizedBox::expand()).into(),
                 semantic_index: None,
                 offset: 0.,
                 cross_offset: 0.,

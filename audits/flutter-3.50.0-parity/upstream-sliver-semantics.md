@@ -139,3 +139,26 @@ portable state. The web mapping uses the same effective invalid bit;
 a browser/wasm build was not run here. Flutter's direct render
 configuration query (2538) remains partial, while the labeled
 precedence case is paired.
+
+## Blocking semantic user actions
+
+All six pinned Flutter originals at lines 2298, 2341, 2385, 2421, 2453,
+and 2494 passed. The new `Semantics::block_user_actions` applies both
+to box annotations and to sliver annotations, whose descendants are
+physically retained next to the annotation anchor. The native runtime
+tests confirm that:
+
+- An explicit group can keep both child labels and withhold their
+  tap actions. Requests to the blocked IDs are rejected, while a
+  physical tap on the same box still works. Unblocking restores the
+  callbacks without replacing either semantic node.
+- Two child tap annotations remain distinct even if one is blocked.
+  Only the unblocked node can invoke its handler. The explicit/action
+  contract matches; Incular's portable reveal action may appear on
+  surrounding unblocked nodes.
+- Automatic merging of *disjoint* child actions beneath a sliver
+  container (the blocked tap plus unblocked long-press cases) remains
+  open. It is different from merely filtering the blocked callback.
+
+Both the eight focused action tests and the fifteen existing runtime
+action/keyboard focus regressions passed.

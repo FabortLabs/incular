@@ -77,6 +77,8 @@ pub struct Semantics {
     on_dismiss: Option<Rc<dyn Fn() + 'static>>,
     #[builder(default)]
     state: SemanticState,
+    #[builder(default)]
+    block_user_actions: bool,
     #[builder(default, setter(skip))]
     // The outer option keeps the explicit annotation when a caller clears
     // its tag, so handling that update does not remount the subtree.
@@ -93,6 +95,18 @@ impl Semantics {
     pub fn locale_for_subtree(mut self, locale: incular_config::Locale) -> Self {
         self.locale_for_subtree = Some(locale);
         self
+    }
+
+    /// Suppresses user actions in the accessibility tree without disabling
+    /// pointer input, keyboard focus, or labels beneath this annotation.
+    #[must_use]
+    pub fn block_user_actions(mut self, block: bool) -> Self {
+        self.block_user_actions = block;
+        self
+    }
+
+    pub(crate) const fn blocks_user_actions(&self) -> bool {
+        self.block_user_actions
     }
 
     /// Replaces the annotated child.
@@ -123,6 +137,7 @@ impl Semantics {
             on_long_press: None,
             on_dismiss: None,
             state: SemanticState::default(),
+            block_user_actions: false,
             tag_for_children: None,
             locale_for_subtree: None,
             child: Some(child.into()),
@@ -677,6 +692,9 @@ impl From<Semantics> for Widget {
                 mode: ChildLayoutMode::SemanticAnnotation,
                 child: widget,
             });
+        }
+        if value.block_user_actions {
+            widget = widget.with_blocked_semantic_user_actions();
         }
         if let Some(explicit) = explicit {
             widget = widget.semantics(explicit);

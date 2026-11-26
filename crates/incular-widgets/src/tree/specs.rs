@@ -244,6 +244,8 @@ pub(crate) struct SemanticProperties {
     /// semantics even while the opacity is zero.
     pub(super) always_include_semantics: bool,
     pub(super) block_previous_siblings: bool,
+    /// Flutter's `blockUserActions`: affects semantic action exposure only.
+    pub(super) block_user_actions: bool,
     pub(super) focus_traversal_policy: Option<FocusTraversalPolicyKind>,
     pub(super) focus_traversal_order: Option<incular_gestures::FocusOrder>,
     pub(super) exclude_focus: bool,

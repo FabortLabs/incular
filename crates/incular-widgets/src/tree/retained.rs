@@ -1415,8 +1415,9 @@ impl WidgetTree {
             _ => None,
         }
     }
-    /// Whether the current retained pointer policy blocks user actions in
-    /// the exposed semantics tree. This does not change keyboard focus.
+    /// Whether pointer policy or a semantic annotation blocks user actions
+    /// in the exposed tree. The semantic flag does not block physical input
+    /// or change keyboard focus.
     #[doc(hidden)]
     #[must_use]
     pub fn pointer_actions_blocked(&self, mut id: ElementId) -> bool {
@@ -1424,6 +1425,9 @@ impl WidgetTree {
             let Some(element) = self.elements.get(id.0) else {
                 return true;
             };
+            if element.widget.semantic_properties().block_user_actions {
+                return true;
+            }
             match element.widget.kind() {
                 WidgetKind::IgnorePointer { ignoring: true, .. }
                 | WidgetKind::AbsorbPointer {

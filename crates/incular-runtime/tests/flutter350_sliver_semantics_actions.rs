@@ -386,3 +386,141 @@ fn excluding_sliver_semantics_keeps_its_annotation_and_visual_input() {
     assert_eq!(parent.id, outer);
     assert_eq!(parent.children, [node(&runtime, "other label").id]);
 }
+
+struct BoxedSliver(Box<dyn Sliver>);
+
+impl Sliver for BoxedSliver {
+    fn build(&self, ctl: &incular_widgets::ScrollController) -> Widget {
+        self.0.build(ctl)
+    }
+
+    fn create_render_sliver(
+        &self,
+        ctl: &incular_widgets::ScrollController,
+        axis: incular_config::Axis,
+        reverse: bool,
+    ) -> Box<dyn incular_widgets::internal::RenderSliver> {
+        self.0.create_render_sliver(ctl, axis, reverse)
+    }
+}
+
+fn blocked_actions_scene(
+    boxed: bool,
+    block_parent: bool,
+    block_first: bool,
+    physical_hits: Rc<std::cell::Cell<u32>>,
+    semantic_hits: Rc<RefCell<Vec<usize>>>,
+) -> Widget {
+    use incular_core::Color;
+    use incular_widgets::{GestureDetector, SliverList, SliverMainAxisGroup};
+
+    let content = move || {
+        Widget::from(
+            GestureDetector::new(Widget::box_(Size::new(800., 10.), Color::WHITE)).on_tap({
+                let hits = physical_hits.clone();
+                move || hits.set(hits.get() + 1)
+            }),
+        )
+    };
+    let annotation = move |index, child: Widget| {
+        let hits = semantic_hits.clone();
+        Semantics::new(child)
+            .label(if index == 0 { "label1" } else { "label2" })
+            .block_user_actions(index == 0 && block_first)
+            .on_tap(move || hits.borrow_mut().push(index))
+    };
+    let group: Box<dyn Sliver> = if boxed {
+        Box::new(SliverList::builder(2, move |index| {
+            annotation(index, content())
+        }))
+    } else {
+        Box::new(SliverMainAxisGroup::new((0..2).map(
+            |index| -> Box<dyn Sliver> {
+                let annotation = annotation.clone();
+                Box::new(SliverSemantics::new(
+                    move || annotation(index, SizedBox::shrink().into()),
+                    SliverToBoxAdapter::new(content()),
+                ))
+            },
+        )))
+    };
+    let root = SliverSemantics::new(
+        move || {
+            Semantics::default()
+                .container(true)
+                .label("group")
+                .explicit_child_nodes(block_parent)
+                .block_user_actions(block_parent)
+        },
+        BoxedSliver(group),
+    );
+    let slivers: [Box<dyn Sliver>; 1] = [Box::new(root)];
+    Directionality::new(TextDirection::Ltr, CustomScrollView::new(slivers)).into()
+}
+
+#[test]
+fn semantic_sliver_block_preserves_labels_and_physical_pointer_input() {
+    use incular_core::{InputEvent, Offset, PointerPhase};
+    use std::cell::Cell;
+
+    for boxed in [false, true] {
+        let physical = Rc::new(Cell::new(0));
+        let semantic = Rc::new(RefCell::new(Vec::new()));
+        let view =
+            |block| blocked_actions_scene(boxed, block, false, physical.clone(), semantic.clone());
+        let mut runtime = Runtime::new(view(true)).unwrap();
+        frame(&mut runtime);
+        let root = runtime.tree().root().unwrap();
+        let children = ["label1", "label2"].map(|name| node(&runtime, name).id);
+        assert_eq!(node(&runtime, "group").children, children);
+        for id in children {
+            assert!(
+                !runtime
+                    .tree()
+                    .semantics()
+                    .node(id)
+                    .unwrap()
+                    .actions
+                    .contains(&SemanticActionKind::Activate)
+            );
+            assert!(!runtime.dispatch_semantic_action(id, SemanticAction::Activate));
+        }
+        for phase in [PointerPhase::Down, PointerPhase::Up] {
+            let _ = runtime.handle_input(InputEvent::Pointer {
+                phase,
+                position: Offset::new(250., 5.),
+            });
+        }
+        assert_eq!(physical.get(), 1);
+        assert!(semantic.borrow().is_empty());
+        runtime.schedule_update(root, view(false)).unwrap();
+        frame(&mut runtime);
+        assert_eq!(
+            ["label1", "label2"].map(|name| node(&runtime, name).id),
+            children
+        );
+        for id in children {
+            assert!(runtime.dispatch_semantic_action(id, SemanticAction::Activate));
+        }
+        assert_eq!(&*semantic.borrow(), &[0, 1]);
+    }
+}
+
+#[test]
+fn tap_action_conflict_stays_separate_even_if_one_annotation_blocks_it() {
+    use std::cell::Cell;
+
+    for boxed in [false, true] {
+        let semantic = Rc::new(RefCell::new(Vec::new()));
+        let scene =
+            blocked_actions_scene(boxed, false, true, Rc::new(Cell::new(0)), semantic.clone());
+        let mut runtime = Runtime::new(scene).unwrap();
+        frame(&mut runtime);
+        let first = node(&runtime, "label1").id;
+        let second = node(&runtime, "label2").id;
+        assert_eq!(node(&runtime, "group").children, [first, second]);
+        assert!(!runtime.dispatch_semantic_action(first, SemanticAction::Activate));
+        assert!(runtime.dispatch_semantic_action(second, SemanticAction::Activate));
+        assert_eq!(&*semantic.borrow(), &[1]);
+    }
+}
