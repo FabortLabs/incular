@@ -524,46 +524,73 @@ pub fn round_intrinsic_step(extent: f32, step: Option<f32>) -> f32 {
     (rounded.min(f64::from(f32::MAX)) as f32).max(0.0)
 }
 
-/// Fits a child to an aspect ratio while respecting both incoming bounds.
+/// Sizes a render aspect-ratio box in the same width-first order as Flutter.
+/// Returns no size if neither axis has a finite maximum.
+#[must_use]
+pub fn aspect_ratio_size(constraints: Constraints, config: AspectRatio) -> Option<Size> {
+    if !constraints.is_width_bounded() && !constraints.is_height_bounded() {
+        return None;
+    }
+    if constraints.min_width() == constraints.max_width()
+        && constraints.min_height() == constraints.max_height()
+    {
+        return Some(constraints.smallest());
+    }
+    let [min_width, max_width, min_height, max_height] = [
+        constraints.min_width(),
+        constraints.max_width(),
+        constraints.min_height(),
+        constraints.max_height(),
+    ].map(f64::from);
+    let ratio = f64::from(config.effective_ratio());
+    let (mut width, mut height) = if max_width.is_finite() {
+        (max_width, max_width / ratio)
+    } else {
+        (max_height * ratio, max_height)
+    };
+    if width > max_width {
+        width = max_width;
+        height = width / ratio;
+    }
+    if height > max_height {
+        height = max_height;
+        width = height * ratio;
+    }
+    if width < min_width {
+        width = min_width;
+        height = width / ratio;
+    }
+    if height < min_height {
+        height = min_height;
+        width = height * ratio;
+    }
+    let extent = |value: f64| value.min(f64::from(f32::MAX)) as f32;
+    Some(constraints.constrain(Size::new(extent(width), extent(height))))
+}
+
+/// Fits a premeasured child to an aspect ratio. Without any finite parent
+/// bound this lower-level helper uses the given child as an explicit scale;
+/// the render widget instead diagnoses the ambiguous constraints.
 #[must_use]
 pub fn layout_aspect_ratio<A>(constraints: Constraints, child: Size, config: A) -> LayoutResult
 where
     A: Borrow<AspectRatio>,
 {
-    let ratio = config.borrow().aspect_ratio;
-    let ratio = if ratio.is_finite() && ratio > 0.0 {
-        ratio
-    } else {
-        1.0
-    };
-    let width = constraints.max_width();
-    let height = constraints.max_height();
-    let (mut target_width, mut target_height) = if width.is_finite() && height.is_finite() {
-        let by_width_height = width / ratio;
-        if by_width_height.is_finite() && by_width_height <= height {
-            (width, by_width_height)
+    let config = *config.borrow();
+    let size = aspect_ratio_size(constraints, config).unwrap_or_else(|| {
+        let ratio = config.effective_ratio();
+        let wanted = if child.height > 0. {
+            Size::new(safe_mul(child.height, ratio).unwrap_or(child.width), child.height)
         } else {
-            (safe_mul(height, ratio).unwrap_or(child.width), height)
-        }
-    } else if width.is_finite() {
-        (width, width / ratio)
-    } else if height.is_finite() {
-        (safe_mul(height, ratio).unwrap_or(child.width), height)
-    } else if child.height > 0.0 {
-        (
-            safe_mul(child.height, ratio).unwrap_or(child.width),
-            child.height,
-        )
-    } else {
-        (child.width.max(0.0), child.width.max(0.0) / ratio)
-    };
-    if !target_width.is_finite() || !target_height.is_finite() {
-        target_width = child.width;
-        target_height = child.height;
-    }
-    target_width = target_width.max(constraints.min_width());
-    target_height = target_height.max(constraints.min_height());
-    let size = constraints.constrain(Size::new(target_width, target_height));
+            let width = child.width.max(0.);
+            Size::new(width, width / ratio)
+        };
+        constraints.constrain(if wanted.width.is_finite() && wanted.height.is_finite() {
+            wanted
+        } else {
+            child
+        })
+    });
     LayoutResult::new(size, vec![ChildLayout::new(Offset::ZERO, child)])
 }
 

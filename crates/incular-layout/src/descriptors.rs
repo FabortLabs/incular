@@ -520,6 +520,30 @@ impl AspectRatio {
     pub const fn new(aspect_ratio: f32) -> Self {
         Self { aspect_ratio }
     }
+
+    pub(crate) fn effective_ratio(self) -> f32 {
+        if self.aspect_ratio.is_finite() && self.aspect_ratio > 0. {
+            self.aspect_ratio
+        } else {
+            1.
+        }
+    }
+
+    /// Aspect-derived intrinsic extent when the opposite axis is finite.
+    /// With an infinite opposite extent the caller must query its child's
+    /// corresponding min/max intrinsic, or use zero if there is no child.
+    #[must_use]
+    pub fn intrinsic_extent(self, axis: Axis, cross_extent: f32) -> Option<f32> {
+        if !cross_extent.is_finite() {
+            return None;
+        }
+        let ratio = self.effective_ratio();
+        Some(if axis.is_horizontal() {
+            cross_extent * ratio
+        } else {
+            cross_extent / ratio
+        })
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]

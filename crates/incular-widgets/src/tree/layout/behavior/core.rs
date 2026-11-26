@@ -24,6 +24,24 @@ impl WidgetTree {
                 0.0,
                 Constraints::at_most(f32::INFINITY, f32::INFINITY),
             ),
+            RenderKind::AspectRatio { ratio } => {
+                let cross_extent = if dimension.is_horizontal() {
+                    probe.max_height()
+                } else {
+                    probe.max_width()
+                };
+                if let Some(value) = incular_layout::AspectRatio::new(*ratio)
+                    .intrinsic_extent(dimension, cross_extent)
+                {
+                    return Ok(value);
+                }
+                let Some(&grandchild) = node.children.first() else {
+                    return Ok(0.);
+                };
+                return with_recursive_tree_stack(|| {
+                    self.probe_intrinsic_extent(grandchild, dimension, probe)
+                });
+            }
             RenderKind::Decorated { desired: None, .. } => {
                 let Some(&grandchild) = node.children.first() else {
                     return Ok(0.0);

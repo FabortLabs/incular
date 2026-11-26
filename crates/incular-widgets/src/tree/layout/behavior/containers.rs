@@ -809,17 +809,16 @@ impl WidgetTree {
                 }
             }
             RenderKind::AspectRatio { ratio } => {
-                let mut size = if constraints.is_width_bounded() {
-                    Size::new(constraints.max_width(), constraints.max_width() / ratio)
-                } else if constraints.is_height_bounded() {
-                    Size::new(constraints.max_height() * ratio, constraints.max_height())
-                } else {
-                    Size::ZERO
-                };
-                if size.height > constraints.max_height() {
-                    size = Size::new(constraints.max_height() * ratio, constraints.max_height());
-                }
-                size = constraints.constrain(size);
+                let size = incular_layout::aspect_ratio_size(
+                    constraints,
+                    incular_layout::AspectRatio::new(ratio),
+                )
+                .ok_or_else(|| TreeError::InvalidWidgetConfiguration {
+                    widget: "AspectRatio",
+                    reason: format!(
+                        "aspect ratio {ratio} has unbounded width and height; at least one axis needs a finite maximum"
+                    ),
+                })?;
                 if let Some(&child) = children.first() {
                     self.layout_render(child, Constraints::tight(size))?;
                     (size, ChildOffsets::One(Offset::ZERO))

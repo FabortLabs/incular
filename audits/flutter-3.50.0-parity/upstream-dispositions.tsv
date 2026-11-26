@@ -2135,3 +2135,9 @@ packages/flutter/test/rendering/layer_annotations_test.dart	319	TransformLayer.f
 packages/flutter/test/rendering/layer_annotations_test.dart	418	LeaderLayer.findAllAnnotations respects offset	paired-match	upstream-layer-annotations.md#affine-and-leader-placement
 packages/flutter/test/rendering/layer_annotations_test.dart	549	AnnotatedRegionLayer.findAllAnnotations should not add to children's opacity during a successful hit if it is not opaque	paired-match	upstream-layer-annotations.md#affine-and-leader-placement
 packages/flutter/test/rendering/layer_annotations_test.dart	571	AnnotatedRegionLayer.findAllAnnotations should add to children's opacity during a successful hit if it is opaque	paired-match	upstream-layer-annotations.md#affine-and-leader-placement
+packages/flutter/test/rendering/aspect_ratio_test.dart	13	RenderAspectRatio: Intrinsic sizing 2.0	paired-match	upstream-render-aspect-ratio.md
+packages/flutter/test/rendering/aspect_ratio_test.dart	34	RenderAspectRatio: Intrinsic sizing 0.5	paired-match	upstream-render-aspect-ratio.md
+packages/flutter/test/rendering/aspect_ratio_test.dart	55	RenderAspectRatio: Intrinsic sizing 2.0	paired-match	upstream-render-aspect-ratio.md
+packages/flutter/test/rendering/aspect_ratio_test.dart	76	RenderAspectRatio: Intrinsic sizing 0.5	paired-match	upstream-render-aspect-ratio.md
+packages/flutter/test/rendering/aspect_ratio_test.dart	97	RenderAspectRatio: Unbounded	partial-match	upstream-render-aspect-ratio.md
+packages/flutter/test/rendering/aspect_ratio_test.dart	125	RenderAspectRatio: Sizing	paired-match	upstream-render-aspect-ratio.md
