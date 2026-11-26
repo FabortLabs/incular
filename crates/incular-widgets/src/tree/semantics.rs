@@ -12,7 +12,7 @@
 use super::*;
 use incular_semantics::{
     AccessibilityFocusBlockType, CustomSemanticsAction, CustomSemanticsActionId, SemanticAction,
-    SemanticsHitTestBehavior, StringAttribute,
+    SemanticValidationResult, SemanticsHitTestBehavior, StringAttribute,
 };
 use std::{borrow::Cow, rc::Rc};
 
@@ -51,6 +51,7 @@ struct MergedSemanticSummary {
     label_attributes: Vec<StringAttribute>,
     direction: Option<TextDirection>,
     heading: Option<u8>,
+    validation: SemanticValidationResult,
     focus_block: AccessibilityFocusBlockType,
     custom_actions: Vec<CustomSemanticsActionId>,
     has_custom_callback: bool,
@@ -1442,6 +1443,7 @@ impl WidgetTree {
             state.tags = tags.into_boxed_slice();
         }
         state.heading_level = state.heading_level.or(merged.heading);
+        state.validation_result = state.validation_result.merge(merged.validation);
         state.accessibility_focus_block_type = own_focus_block.merge(merged.focus_block);
         if state.heading_level.is_some() && role == Some(SemanticRole::GenericContainer) {
             role = Some(SemanticRole::Heading);
@@ -1959,8 +1961,8 @@ impl WidgetTree {
         });
     }
 
-    /// A heading or ordered annotation on a sliver owns its compatible
-    /// text. This keeps the label on the node with its role or sort key
+    /// A heading, ordered, or validating sliver annotation owns compatible
+    /// text. This keeps the label on the node with its semantic properties
     /// without absorbing independent actions or explicit child nodes.
     fn is_sliver_label_annotation_owner(&self, element: ElementId, entry: &Element) -> bool {
         entry
@@ -1972,7 +1974,9 @@ impl WidgetTree {
                 !annotation.state.explicit_child_nodes
                     && (annotation.role == SemanticRole::Heading
                         || (annotation.role == SemanticRole::GenericContainer
-                            && annotation.state.sort_key.is_some()))
+                            && (annotation.state.sort_key.is_some()
+                                || annotation.state.effective_validation_result()
+                                    != SemanticValidationResult::None)))
             })
             && entry.parent.is_some_and(|viewport| {
                 self.elements.get(viewport.0).is_some_and(|parent| {
@@ -2005,10 +2009,12 @@ impl WidgetTree {
             Some(explicit) => {
                 // Incompatible annotations keep their independent node.
                 let state = &explicit.state;
+                let merges_validation = policy == SemanticTextMerge::CompatibleLabels;
+                let validation = state.effective_validation_result();
                 let text_is_compatible = match policy {
                     SemanticTextMerge::None => false,
                     SemanticTextMerge::CompatibleLabels => {
-                        explicit.label.is_some()
+                        (explicit.label.is_some() || validation != SemanticValidationResult::None)
                             && explicit.value.is_none()
                             && explicit.description.is_none()
                             && state.text_attributes.as_ref().is_none_or(|attributes| {
@@ -2050,6 +2056,12 @@ impl WidgetTree {
                             text_direction: state.text_direction,
                             text_attributes: state.text_attributes.clone(),
                             accessibility_focus_block_type: state.accessibility_focus_block_type,
+                            invalid: merges_validation && state.invalid,
+                            validation_result: if merges_validation {
+                                state.validation_result
+                            } else {
+                                SemanticValidationResult::None
+                            },
                             ..SemanticState::default()
                         }
             }
@@ -2067,6 +2079,11 @@ impl WidgetTree {
         };
         if !self.can_merge_text_fragment(element, entry, SemanticTextMerge::CompatibleLabels) {
             return;
+        }
+        if let Some(explicit) = &entry.widget.semantic_properties().explicit {
+            merged.validation = merged
+                .validation
+                .merge(explicit.state.effective_validation_result());
         }
         if let Some(label) = element_own_label(entry) {
             merged.add_label(
@@ -2184,6 +2201,9 @@ impl WidgetTree {
             merged.add_custom_actions(callbacks);
         }
         if let Some(explicit) = &entry.widget.semantic_properties().explicit {
+            merged.validation = merged
+                .validation
+                .merge(explicit.state.effective_validation_result());
             merged.add_tags(&explicit.state.tags);
             if merged.hit_test == SemanticsHitTestBehavior::Defer {
                 merged.hit_test = explicit.state.hit_test_behavior;
@@ -2781,6 +2801,7 @@ fn overlay_semantic_state(base: &mut SemanticState, overlay: &SemanticState) {
     if let Some(enabled) = overlay.enabled_state() {
         base.set_enabled_state(Some(enabled));
     }
+    base.validation_result = base.validation_result.merge(overlay.validation_result);
     if !overlay.tags.is_empty() {
         base.tags.clone_from(&overlay.tags);
     }

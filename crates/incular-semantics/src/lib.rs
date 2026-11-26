@@ -334,6 +334,29 @@ pub enum SemanticsHitTestBehavior {
     Transparent,
 }
 
+/// Explicit validation state, distinct from editable/enabled state and
+/// from a control that has not been validated.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum SemanticValidationResult {
+    #[default]
+    None,
+    Valid,
+    Invalid,
+}
+
+impl SemanticValidationResult {
+    /// A subtree is invalid if any compatible annotation is invalid;
+    /// validity otherwise outranks an unspecified result.
+    #[must_use]
+    pub const fn merge(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Invalid, _) | (_, Self::Invalid) => Self::Invalid,
+            (Self::Valid, _) | (_, Self::Valid) => Self::Valid,
+            _ => Self::None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct SemanticState {
     /// Whether the node accepts input. Flutter's default is "unspecified",
@@ -365,8 +388,10 @@ pub struct SemanticState {
     pub set_size: Option<usize>,
     /// Indicates that the node's value is still being produced.
     pub busy: bool,
-    /// Validation state exposed independently from enabled/read-only state.
+    /// Legacy invalid flag, which still takes precedence over a valid result.
     pub invalid: bool,
+    /// Flutter's `validationResult`, including explicit validity.
+    pub validation_result: SemanticValidationResult,
     /// Whether the user must provide a value.
     pub required: bool,
     /// Numeric range/value metadata used by sliders, meters, and progress
@@ -424,6 +449,23 @@ pub struct SemanticState {
 }
 
 impl SemanticState {
+    #[must_use]
+    pub const fn effective_validation_result(&self) -> SemanticValidationResult {
+        if self.invalid {
+            SemanticValidationResult::Invalid
+        } else {
+            self.validation_result
+        }
+    }
+
+    #[must_use]
+    pub const fn is_invalid(&self) -> bool {
+        matches!(
+            self.effective_validation_result(),
+            SemanticValidationResult::Invalid
+        )
+    }
+
     /// Adds a tag once, preserving discovery order.
     pub fn add_tag(&mut self, tag: SemanticsTag) {
         if !self.tags.contains(&tag) {
@@ -476,6 +518,7 @@ impl Default for SemanticState {
             set_size: None,
             busy: false,
             invalid: false,
+            validation_result: SemanticValidationResult::None,
             required: false,
             numeric_value: None,
             numeric_min: None,

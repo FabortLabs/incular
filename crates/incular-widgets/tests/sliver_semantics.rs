@@ -592,3 +592,67 @@ fn changing_sliver_sort_keys_reorders_the_same_labeled_nodes() {
         [original[0], original[2], original[1]]
     );
 }
+
+#[test]
+fn semantic_validation_merges_all_nested_sliver_pairs_without_losing_the_label() {
+    use incular_semantics::SemanticValidationResult::{Invalid, None, Valid};
+    for (outer, inner, expected) in [
+        (None, None, None),
+        (None, Valid, Valid),
+        (None, Invalid, Invalid),
+        (Valid, None, Valid),
+        (Valid, Valid, Valid),
+        (Valid, Invalid, Invalid),
+        (Invalid, None, Invalid),
+        (Invalid, Valid, Invalid),
+        (Invalid, Invalid, Invalid),
+    ] {
+        let inner = SliverSemantics::new(
+            move || Semantics::default().validation_result(inner),
+            SliverToBoxAdapter::new(row("validation")),
+        );
+        let outer =
+            SliverSemantics::new(move || Semantics::default().validation_result(outer), inner);
+        let mut tree = WidgetTree::new();
+        tree.mount(semantic_view(TextDirection::Ltr, outer))
+            .unwrap();
+        layout(&mut tree);
+        let node = find(&tree, "validation");
+        assert_eq!(node.state.effective_validation_result(), expected);
+        assert_eq!(node.state.is_invalid(), expected == Invalid);
+        assert_eq!(scroll_node(&tree).children, [node.id]);
+        assert!(node.children.is_empty());
+    }
+}
+
+#[test]
+fn updating_a_sliver_validation_result_keeps_the_same_explicit_annotation_node() {
+    use incular_semantics::SemanticValidationResult::{Invalid, None, Valid};
+    let scene = |result| {
+        semantic_view(
+            TextDirection::Ltr,
+            SliverSemantics::new(
+                move || {
+                    Semantics::default()
+                        .label("submit")
+                        .validation_result(result)
+                },
+                short_box(),
+            ),
+        )
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scene(None)).unwrap();
+    layout(&mut tree);
+    let id = find(&tree, "submit").id;
+    let mut revision = tree.semantics().revision();
+    for state in [Valid, Invalid, None] {
+        tree.update(root, scene(state)).unwrap();
+        layout(&mut tree);
+        let node = find(&tree, "submit");
+        assert_eq!(node.id, id);
+        assert_eq!(node.state.effective_validation_result(), state);
+        assert!(tree.semantics().revision() > revision);
+        revision = tree.semantics().revision();
+    }
+}

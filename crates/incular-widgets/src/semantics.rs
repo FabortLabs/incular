@@ -417,6 +417,17 @@ impl Semantics {
         self
     }
 
+    /// Sets Flutter's explicit result without conflating a valid field
+    /// with one whose validity has not been established.
+    #[must_use]
+    pub fn validation_result(
+        mut self,
+        result: incular_semantics::SemanticValidationResult,
+    ) -> Self {
+        self.state.validation_result = result;
+        self
+    }
+
     #[must_use]
     pub fn required(mut self, required: bool) -> Self {
         self.state.required = required;

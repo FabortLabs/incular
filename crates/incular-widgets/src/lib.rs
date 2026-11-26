@@ -278,7 +278,7 @@ pub use incular_scroll::{
     ScrollNotificationSubscription, ScrollNotificationType, ScrollPhysics,
     ScrollViewKeyboardDismissBehavior, SliverConstraints, SliverGrowthDirection,
 };
-pub use incular_semantics::AccessibilityFocusBlockType;
+pub use incular_semantics::{AccessibilityFocusBlockType, SemanticValidationResult};
 pub use incular_text::{
     FontFeature, FontVariation, FontWeight, IconData, RichText, StrutStyle, TextAlign,
     TextBaseline, TextEditingController, TextEditingValue, TextHeightBehavior, TextMetricAdjustment,

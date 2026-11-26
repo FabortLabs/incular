@@ -1945,3 +1945,5 @@ packages/flutter/test/widgets/sliver_semantics_widget_test.dart	2857	SliverSeman
 packages/flutter/test/widgets/sliver_semantics_widget_test.dart	1519	SliverSemantics slivers built in a widget tree are sorted properly	partial-match	upstream-sliver-semantics.md#reading-order-through-nested-axis-groups
 packages/flutter/test/widgets/sliver_semantics_widget_test.dart	1606	SliverSemantics Semantics widgets built with explicit sort orders are sorted properly	partial-match	upstream-sliver-semantics.md#reading-order-through-nested-axis-groups
 packages/flutter/test/widgets/sliver_semantics_widget_test.dart	1661	SliverSemantics slivers without sort orders are sorted properly	paired-match	upstream-sliver-semantics.md#reading-order-through-nested-axis-groups
+packages/flutter/test/widgets/sliver_semantics_widget_test.dart	2538	SliverSemantics RenderSliverSemanticsAnnotations provides validation result	partial-match	upstream-sliver-semantics.md#validation-result-and-precedence
+packages/flutter/test/widgets/sliver_semantics_widget_test.dart	2583	SliverSemantics validation result precedence	paired-match	upstream-sliver-semantics.md#validation-result-and-precedence

@@ -83,3 +83,25 @@ fn a_checked_state_wins_over_toggled() {
     );
     assert_eq!(node.toggled(), Some(Toggled::Mixed));
 }
+
+#[test]
+fn typed_validation_projects_invalid_without_confusing_valid_or_unspecified() {
+    use incular_semantics::SemanticValidationResult::{Invalid, None, Valid};
+
+    for (validation_result, legacy_invalid, expected) in [
+        (None, false, false),
+        (Valid, false, false),
+        (Invalid, false, true),
+        (Valid, true, true),
+    ] {
+        let node = project(
+            Role::TextField,
+            SemanticState {
+                validation_result,
+                invalid: legacy_invalid,
+                ..SemanticState::default()
+            },
+        );
+        assert_eq!(node.invalid().is_some(), expected);
+    }
+}

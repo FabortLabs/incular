@@ -121,3 +121,21 @@ the order without replacing the existing labeled nodes.
 Incular's named `OrdinalSortKey` represents the key group in the native
 fixtures; Dart subclass sort-key identity and the two-pane wrapper
 are still open. The unkeyed behavioral comparison is paired.
+
+## Validation result and precedence
+
+Pinned Flutter lines 2538 and 2583 passed. Incular now exposes
+`SemanticValidationResult` with `None`, `Valid`, and `Invalid`
+in the retained graph. The native sliver suite verifies all nine
+outer/inner combinations: invalid outranks valid, and valid outranks
+an unspecified result. The merged result is on the single labeled
+node. Rebuilding a labeled annotation changes its validation state
+without replacing that node's ID.
+
+AccessKit projection reports invalid for either the typed invalid
+result or the legacy invalid flag; explicit validity and unspecified
+both omit AccessKit's invalid marker but remain distinct in the
+portable state. The web mapping uses the same effective invalid bit;
+a browser/wasm build was not run here. Flutter's direct render
+configuration query (2538) remains partial, while the labeled
+precedence case is paired.

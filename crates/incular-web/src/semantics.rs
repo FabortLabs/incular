@@ -393,7 +393,7 @@ fn apply_node(
     );
     set_flag(&element, "aria-multiline", state.multiline);
     set_flag(&element, "aria-required", state.required);
-    set_flag(&element, "aria-invalid", state.invalid);
+    set_flag(&element, "aria-invalid", state.is_invalid());
     set_flag(&element, "aria-busy", state.busy);
     let number = |value: Option<f64>| value.map(|value| value.to_string());
     set_or_remove(

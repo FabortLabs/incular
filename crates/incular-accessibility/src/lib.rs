@@ -1053,7 +1053,7 @@ impl AccessKitProjection {
         if semantic.state.busy {
             node.set_busy();
         }
-        if semantic.state.invalid {
+        if semantic.state.is_invalid() {
             node.set_invalid(Invalid::True);
         }
         if semantic.state.required {
