@@ -729,3 +729,119 @@ fn custom_clipper_only_sees_the_committed_child_size() {
     );
     assert_eq!(*sizes.borrow(), [Size::new(800., 100.)]);
 }
+
+#[derive(Clone)]
+struct HalfWidth;
+impl CustomClipper for HalfWidth {
+    fn get_clip(&self, size: Size) -> ClipShape {
+        ClipShape::Rect(Rect::from_origin_size(
+            Offset::ZERO,
+            Size::new(size.width / 2., size.height),
+        ))
+    }
+}
+
+#[test]
+fn custom_clippers_keep_physical_half_width_and_half_height_under_axis_reversal() {
+    for (axis, reverse) in [(Axis::Horizontal, false), (Axis::Vertical, true)] {
+        let controller = ScrollController::new();
+        let key = GlobalKey::new();
+        let leaf = SliverToBoxAdapter::new(Widget::box_(axis.size(100., 100.), FILL).with_key(key));
+        let clip = SliverClipRect::new(leaf);
+        let clip = if axis.is_vertical() {
+            clip.clipper(HalfHeight)
+        } else {
+            clip.clipper(HalfWidth)
+        };
+        let mut tree = WidgetTree::new();
+        tree.mount(scene(&controller, Box::new(clip), axis, reverse, false))
+            .unwrap();
+        layout(&mut tree);
+        let (inside, outside) = if reverse {
+            (Offset::new(400., 525.), Offset::new(400., 575.))
+        } else {
+            (Offset::new(25., 50.), Offset::new(75., 50.))
+        };
+        assert!(hit(&tree, key, inside));
+        assert!(!hit(&tree, key, outside));
+    }
+}
+
+#[derive(Clone)]
+struct RoundedInset(f32);
+impl CustomClipper for RoundedInset {
+    fn get_clip(&self, size: Size) -> ClipShape {
+        let ClipShape::Rect(rect) = Inset(self.0).get_clip(size) else {
+            unreachable!()
+        };
+        ClipShape::RRect(incular_rendering::RRect::uniform(rect, 0.))
+    }
+}
+
+#[test]
+fn overlap_never_expands_the_clippers_custom_inset() {
+    for rounded in [false, true] {
+        let controller = ScrollController::new();
+        let leaf = SliverToBoxAdapter::new(Widget::box_(Size::new(800., 200.), FILL));
+        let clip: Box<dyn Sliver> = if rounded {
+            Box::new(SliverClipRRect::new(leaf).clipper(RoundedInset(30.)))
+        } else {
+            Box::new(SliverClipRect::new(leaf).clipper(Inset(30.)))
+        };
+        let header =
+            SliverPersistentHeader::new(100., Widget::box_(Size::new(800., 100.), Color::BLACK))
+                .pinned(true);
+        let viewport = Directionality::new(
+            TextDirection::Ltr,
+            CustomScrollView::new(vec![
+                Box::new(header) as Box<dyn Sliver>,
+                Box::new(SliverToBoxAdapter::new(
+                    incular_widgets::SizedBox::new().height(50.),
+                )),
+                clip,
+                Box::new(SliverToBoxAdapter::new(
+                    incular_widgets::SizedBox::new().height(1000.),
+                )),
+            ])
+            .clip_behavior(Clip::None)
+            .controller(controller.clone()),
+        );
+        let mut tree = WidgetTree::new();
+        tree.mount(viewport.into()).unwrap();
+        layout(&mut tree);
+        for (scroll, y, height) in [(60., 120., 170.), (100., 100., 150.)] {
+            assert!(controller.jump_to(scroll));
+            layout(&mut tree);
+            assert_eq!(
+                clipped_paint(&mut tree, rounded),
+                [Rect::from_origin_size(
+                    Offset::new(0., y),
+                    Size::new(800., height)
+                )],
+            );
+        }
+    }
+}
+
+#[test]
+fn default_rounded_clip_hits_after_the_corner_arc() {
+    let controller = ScrollController::new();
+    let key = GlobalKey::new();
+    let clip = SliverClipRRect::new(SliverToBoxAdapter::new(
+        Widget::box_(Size::new(800., 100.), FILL).with_key(key),
+    ))
+    .border_radius(BorderRadiusGeometry::circular(20.));
+    let mut tree = WidgetTree::new();
+    tree.mount(scene(
+        &controller,
+        Box::new(clip),
+        Axis::Vertical,
+        false,
+        false,
+    ))
+    .unwrap();
+    layout(&mut tree);
+    assert!(!hit(&tree, key, Offset::ZERO));
+    assert!(hit(&tree, key, Offset::new(400., 50.)));
+    assert!(hit(&tree, key, Offset::new(25., 25.)));
+}

@@ -2334,3 +2334,8 @@ packages/flutter/test/widgets/sliver_clip_rrect_test.dart	155	changing borderRad
 packages/flutter/test/widgets/sliver_clip_rrect_test.dart	234	updates clip when overlap changes even if geometry is same	paired-match	upstream-sliver-clipping.md#retained-clip-property-changes
 packages/flutter/test/widgets/sliver_clip_rrect_test.dart	291	changing clipBehavior or clipOverlap invalidates the cached clip	paired-match	upstream-sliver-clipping.md#retained-clip-property-changes
 packages/flutter/test/widgets/sliver_clip_rrect_test.dart	536	clipBehavior of Clip.none allows overlap hits	paired-match	upstream-sliver-clipping.md#retained-clip-property-changes
+packages/flutter/test/widgets/sliver_clip_rect_test.dart	260	custom clipper boundaries are not incorrectly expanded during overlap	paired-match	upstream-sliver-clipping.md#custom-boundaries-and-rounded-hit-edges
+packages/flutter/test/widgets/sliver_clip_rect_test.dart	457	respects half-width clipper with horizontal axis	paired-match	upstream-sliver-clipping.md#custom-boundaries-and-rounded-hit-edges
+packages/flutter/test/widgets/sliver_clip_rect_test.dart	495	respects half-height clipper with reverse axis	paired-match	upstream-sliver-clipping.md#custom-boundaries-and-rounded-hit-edges
+packages/flutter/test/widgets/sliver_clip_rrect_test.dart	73	hit test respects border radius	paired-match	upstream-sliver-clipping.md#custom-boundaries-and-rounded-hit-edges
+packages/flutter/test/widgets/sliver_clip_rrect_test.dart	361	custom clipper boundaries are not incorrectly expanded during overlap	paired-match	upstream-sliver-clipping.md#custom-boundaries-and-rounded-hit-edges

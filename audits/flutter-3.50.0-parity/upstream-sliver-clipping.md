@@ -107,3 +107,15 @@ The viewport waits until its size/position sweeps settle before updating
 its shared sliver clip layers; painted, pointer and accessibility
 geometry still use the same selected clip frame. All 21 focused native
 clip, decorated-sliver and grouped editor tests passed.
+
+## Custom boundaries and rounded hit edges
+
+Pairs rectangle :260/:457/:495 and rounded rectangle :73/:361. A
+30 px custom inset is not expanded to a 10 px overlap; a subsequent
+50 px overlap trims it to 50 instead. Physical half-width clipping
+accepts x=25 and rejects x=75 in horizontal layout. In reversed
+vertical scrolling the physical half-height clip accepts logical
+main=75 and rejects main=25. A default antialiased rounded clip
+includes the center and (25,25), but excludes its (0,0) corner.
+
+All 14 focused native clip tests passed.
