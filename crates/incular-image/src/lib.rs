@@ -593,6 +593,13 @@ impl ImageHandle {
             .scale = finite_positive_or_one(scale);
     }
 
+    /// Decoded RGBA8 pixel bytes, independent of the image's logical scale.
+    /// Does not count encoded input, allocator overhead, or GPU copies.
+    #[must_use]
+    pub fn size_bytes(&self) -> usize {
+        self.0.image.byte_len()
+    }
+
     #[must_use]
     pub fn decoded(&self) -> &DecodedImage {
         &self.0.image
@@ -786,7 +793,7 @@ impl ImageCache {
     /// Admits a freshly decoded image unless it cannot fit the budget, then
     /// evicts oldest-first back within the limits.
     fn admit(&mut self, bytes: &[u8], image: ImageHandle) {
-        let entry_bytes = bytes.len().saturating_add(image.decoded().byte_len());
+        let entry_bytes = bytes.len().saturating_add(image.size_bytes());
         if self.limits.max_entries == 0 || entry_bytes > self.limits.max_bytes {
             return;
         }
@@ -809,7 +816,7 @@ impl ImageCache {
             let Some((key, image)) = self.images.pop_lru() else {
                 break;
             };
-            let entry_bytes = key.len().saturating_add(image.decoded().byte_len());
+            let entry_bytes = key.len().saturating_add(image.size_bytes());
             self.resident_bytes = self.resident_bytes.saturating_sub(entry_bytes);
             self.diagnostics.evictions += 1;
         }

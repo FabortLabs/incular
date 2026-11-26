@@ -131,3 +131,26 @@ fn weak_handle_reports_when_every_handle_is_dropped() {
     assert!(weak.is_dropped());
     assert!(weak.upgrade().is_none());
 }
+
+#[test]
+fn image_info_size_counts_four_bytes_per_decoded_pixel() {
+    for (width, height, expected) in [(10, 20, 800), (20, 100, 8_000), (100, 200, 80_000)] {
+        let image = ImageHandle::from_rgba8(width, height, vec![0_u8; expected]).unwrap();
+        assert_eq!(image.size_bytes(), expected);
+        assert_eq!(image.clone().size_bytes(), expected);
+    }
+}
+
+#[test]
+fn decoding_a_transparent_one_pixel_png_preserves_rgba() {
+    use image::{ExtendedColorType, ImageEncoder, codecs::png::PngEncoder};
+
+    let mut encoded = Vec::new();
+    PngEncoder::new(&mut encoded)
+        .write_image(&[0; 4], 1, 1, ExtendedColorType::Rgba8)
+        .unwrap();
+    let image = ImageHandle::from_bytes(encoded).unwrap();
+    assert_eq!((image.decoded().width(), image.decoded().height()), (1, 1));
+    assert_eq!(image.decoded().pixels().as_ref(), [0; 4]);
+    assert_eq!(image.size_bytes(), 4);
+}

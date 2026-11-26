@@ -112,7 +112,7 @@ impl State {
             let Some((key, image)) = self.ready.pop_lru() else {
                 break;
             };
-            self.bytes -= image.decoded().byte_len();
+            self.bytes -= image.size_bytes();
             removed.push((key, image));
         }
     }
@@ -128,7 +128,7 @@ impl State {
             // callback path was decoding; both should publish one identity.
             return warm.clone();
         }
-        let bytes = image.decoded().byte_len();
+        let bytes = image.size_bytes();
         if self.fits(bytes) {
             self.bytes += bytes;
             self.ready.put(key, image.clone());
@@ -208,7 +208,7 @@ impl BundleImageCache {
             let detached = state.pending.remove_entry(&key);
             state.generation = state.generation.wrapping_add(1);
             if let Some((_, image)) = &removed {
-                state.bytes -= image.decoded().byte_len();
+                state.bytes -= image.size_bytes();
             }
             (removed, detached)
         };

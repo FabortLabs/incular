@@ -2453,3 +2453,5 @@ packages/flutter/test/widgets/scrollable_fling_test.dart	34	Flings on different 
 packages/flutter/test/widgets/scrollable_grid_test.dart	9	GridView default control	paired-match	upstream-grid-direction-and-cache.md#padded-and-changing-static-grids
 packages/flutter/test/widgets/scrollable_grid_test.dart	19	GridView displays correct children with nonzero padding	paired-match	upstream-grid-direction-and-cache.md#padded-and-changing-static-grids
 packages/flutter/test/widgets/scrollable_grid_test.dart	77	GridView.count() fixed itemExtent, scroll to end, append, scroll	paired-match	upstream-grid-direction-and-cache.md#padded-and-changing-static-grids
+packages/flutter/test/painting/image_info_test.dart	15	ImageInfo sizeBytes	paired-match	upstream-image-metadata.md
+packages/flutter/test/painting/image_decoder_test.dart	16	Image decoder control test	partial-match	upstream-image-metadata.md
