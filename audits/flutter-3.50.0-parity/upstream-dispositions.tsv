@@ -194,7 +194,11 @@ packages/flutter/test/gestures/long_press_test.dart	163	Drag start delayed by mi
 packages/flutter/test/gestures/long_press_test.dart	188	Should recognize long press up	paired-match	upstream-long-press-release.md
 packages/flutter/test/gestures/long_press_test.dart	227	Should cancel long press when buttons change before acceptance	paired-match	upstream-long-press-release.md#device-filters-button-changes-and-disposal
 packages/flutter/test/gestures/long_press_test.dart	254	non-allowed pointer does not inadvertently reset the recognizer	paired-match	upstream-long-press-release.md#device-filters-button-changes-and-disposal
+packages/flutter/test/gestures/long_press_test.dart	317	Should recognize long press down	paired-match	upstream-long-press-release.md#remaining-direct-lifecycle-registrations
+packages/flutter/test/gestures/long_press_test.dart	331	Short up cancels long press	paired-match	upstream-long-press-release.md#remaining-direct-lifecycle-registrations
+packages/flutter/test/gestures/long_press_test.dart	347	Moving before accept cancels	paired-match	upstream-long-press-release.md#remaining-direct-lifecycle-registrations
 packages/flutter/test/gestures/long_press_test.dart	365	Moving after accept does not cancel	paired-match	upstream-current-route-aspect-and-long-press.md#direct-long-press-arena-checkpoints
+packages/flutter/test/gestures/long_press_test.dart	412	Should cancel long press when buttons change before acceptance	paired-match	upstream-long-press-release.md#remaining-direct-lifecycle-registrations
 packages/flutter/test/gestures/long_press_test.dart	427	Buttons change before acceptance should not prevent the next long press	paired-match	upstream-current-route-aspect-and-long-press.md#current-disposition-of-button-mask-regression
 packages/flutter/test/gestures/long_press_test.dart	75	Should recognize long press with altered duration	paired-match	upstream-current-route-aspect-and-long-press.md#direct-long-press-arena-checkpoints
 packages/flutter/test/gestures/long_press_test.dart	91	Up cancels long press	paired-match	upstream-current-route-aspect-and-long-press.md#direct-long-press-arena-checkpoints

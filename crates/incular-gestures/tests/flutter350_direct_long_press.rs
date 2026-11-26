@@ -232,21 +232,26 @@ fn disposal_cancels_a_pending_routed_hold_but_not_an_unrouted_registration() {
 }
 
 #[test]
-fn changing_to_the_tertiary_button_before_the_deadline_cancels_once() {
-    let (mut press, log) = setup();
-    let at = Instant::now();
-    begin(&mut press, &log, at);
-    press.poll(at + Duration::from_millis(300));
-    assert_eq!(*log.borrow(), [Down]);
-    let mut moved = raw(at, 300, PointerPhase::Move, 10., 10.);
-    moved.kind = PointerDeviceKind::Mouse;
-    moved.buttons = TERTIARY_POINTER_BUTTON;
-    press.handle_event(moved);
-    assert_eq!(*log.borrow(), [Down, Cancel]);
-    press.poll(at + Duration::from_secs(1));
-    press.handle_event(raw(at, 1000, PointerPhase::Up, 11., 9.));
-    press.dispose();
-    assert_eq!(*log.borrow(), [Down, Cancel]);
+fn changing_buttons_before_the_deadline_cancels_once() {
+    for (buttons, kind) in [
+        (TERTIARY_POINTER_BUTTON, PointerDeviceKind::Mouse),
+        (SECONDARY_POINTER_BUTTON, PointerDeviceKind::Touch),
+    ] {
+        let (mut press, log) = setup();
+        let at = Instant::now();
+        begin(&mut press, &log, at);
+        press.poll(at + Duration::from_millis(300));
+        assert_eq!(*log.borrow(), [Down]);
+        let mut moved = raw(at, 300, PointerPhase::Move, 10., 10.);
+        moved.kind = kind;
+        moved.buttons = buttons;
+        press.handle_event(moved);
+        assert_eq!(*log.borrow(), [Down, Cancel]);
+        press.poll(at + Duration::from_secs(1));
+        press.handle_event(raw(at, 1000, PointerPhase::Up, 11., 9.));
+        press.dispose();
+        assert_eq!(*log.borrow(), [Down, Cancel]);
+    }
 }
 
 #[test]

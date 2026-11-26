@@ -59,3 +59,13 @@ confirm that configured button callbacks are live. A hold begun
 with primary sends one primary end even after adding secondary and
 then releasing primary in either of the original contact sequences.
 Four standalone button tests and three actual runtime tests passed.
+
+## Remaining direct lifecycle registrations
+
+The pinned :317, :331, :347 and :412 variants also passed. The native
+direct fixture verifies down, the 300 ms pending state, and the
+subsequent start or cancellation for each variant. Both the
+secondary and tertiary button changes cancel at the same point when
+the hold is still pending. All 15 native direct tests pass.
+All 26 pinned registrations in `gestures/long_press_test.dart` are now
+paired individually.
