@@ -67,4 +67,55 @@ void main() {
     red.dispose();
     green.dispose();
   });
+
+  testWidgets('a nested crossfade composites source-over in either outer slot', (
+    WidgetTester tester,
+  ) async {
+    final pixels = [
+      solid(const Color(0xFFFF0000)),
+      solid(const Color(0xFF00FF00)),
+      solid(const Color(0xFF0000FF)),
+    ];
+    final [red, green, blue] = [
+      for (final pixel in pixels)
+        DecorationImage(image: PixelProvider(pixel), fit: BoxFit.fill),
+    ];
+    final nested = DecorationImage.lerp(green, blue, 0.5)!;
+    for (final (value, expected) in [
+      (DecorationImage.lerp(red, nested, 0.5)!, <int>[64, 64, 64, 255]),
+      (DecorationImage.lerp(nested, red, 0.5)!, <int>[128, 64, 64, 255]),
+    ]) {
+      final key = GlobalKey();
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Center(
+            child: RepaintBoundary(
+              key: key,
+              child: ColoredBox(
+                color: const Color(0xFF000000),
+                child: SizedBox.square(
+                  dimension: 16,
+                  child: DecoratedBox(decoration: BoxDecoration(image: value)),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final boundary = key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+      final rgba = (await tester.runAsync(() async {
+        final image = boundary.toImageSync();
+        final bytes = (await image.toByteData())!.buffer.asUint8List();
+        image.dispose();
+        return bytes;
+      }))!;
+      final offset = (8 * 16 + 8) * 4;
+      expect(rgba.sublist(offset, offset + 4), expected);
+    }
+    for (final pixel in pixels) {
+      pixel.dispose();
+    }
+  });
 }

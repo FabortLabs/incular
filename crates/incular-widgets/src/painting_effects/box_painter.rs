@@ -11,7 +11,7 @@ use std::{
 
 use incular_config::{Clip, EdgeInsets, TextDirection};
 use incular_core::{Color, Offset, Rect, Size};
-use incular_rendering::{Brush, Canvas, CornerRadii, DisplayList, FillRule, Path, RRect};
+use incular_rendering::{BlendMode, Brush, Canvas, CornerRadii, DisplayList, FillRule, Path, RRect};
 
 use super::decoration::{
     Border, BorderDirectional, BorderSide, BorderStyle, BoxDecoration, BoxShadow, BoxShape,
@@ -351,31 +351,37 @@ impl CustomClipper for BoxDecorationClipper {
 /// The image stage of a decoration: the image fitted with the resolved fit,
 /// alignment, repeat, scale, sampling and opacity. The caller clips it.
 pub(crate) fn decoration_image_widget(image: &DecorationImage) -> Widget {
-    use crate::{AlignmentGeometry, Builder, tree::DirectionRequirement};
+    weighted_decoration_image(image, 1., BlendMode::SrcOver)
+}
 
+fn weighted_decoration_image(image: &DecorationImage, weight: f32, mode: BlendMode) -> Widget {
     if let Some(blend) = &image.blend {
-        let weighted = |image, factor| {
-            faded_decoration_image(Some(image), factor).as_ref().map_or_else(
-                || crate::SizedBox::shrink().into(),
-                decoration_image_widget,
-            )
-        };
-        let from = weighted(&blend.from, 1. - blend.t);
-        let to = weighted(&blend.to, blend.t);
-        let images = Stack::new([
-            Positioned::fill(from),
-            Positioned::fill(Widget::blend(incular_rendering::BlendMode::Plus, to)),
-        ])
-        .clip_behavior(Clip::None);
-        // Add weighted premultiplied colors *within* a transparent group,
-        // then composite the result once over the decoration's background.
-        let isolated = Widget::blend(incular_rendering::BlendMode::SrcOver, images.into());
-        return if blend.opacity < 1. {
-            Opacity::new(blend.opacity, isolated).into()
-        } else {
-            isolated
-        };
+        let weight = weight * blend.opacity;
+        let from = weighted_decoration_image(&blend.from, weight * (1. - blend.t), mode);
+        let to = weighted_decoration_image(&blend.to, weight * blend.t, BlendMode::Plus);
+        let images = Stack::new([Positioned::fill(from), Positioned::fill(to)])
+            .clip_behavior(Clip::None);
+        // Flutter passes the incoming mode to the first painter inside a
+        // saveLayer. Restoring an already-blended endpoint is source-over
+        // even if its parent asked the endpoint to add to the destination.
+        return Widget::blend(BlendMode::SrcOver, images.into());
     }
+    let painted = if weight == 1. {
+        leaf_decoration_image(image)
+    } else {
+        faded_decoration_image(Some(image), weight)
+            .as_ref()
+            .map_or_else(|| crate::SizedBox::shrink().into(), leaf_decoration_image)
+    };
+    if mode == BlendMode::SrcOver {
+        painted
+    } else {
+        Widget::blend(mode, painted)
+    }
+}
+
+fn leaf_decoration_image(image: &DecorationImage) -> Widget {
+    use crate::{AlignmentGeometry, Builder, tree::DirectionRequirement};
 
     let has_logical_alignment = matches!(
         image.alignment_geometry,

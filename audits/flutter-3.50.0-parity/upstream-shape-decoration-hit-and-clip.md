@@ -169,3 +169,14 @@ checks exact colors, outlines and paint in both directions. The
 mounted transition test now asserts interpolation rather than the
 previously incorrect midpoint switch. Nineteen focused native tests
 passed. The authored probe does not increase the registration count.
+
+When a crossfade is retargeted before completion, a blended image
+encountered as an endpoint restores its own group with source-over.
+It must not be added to the outer group merely because it is the
+second endpoint. The authored Flutter pixel probe checks both nesting
+orders over black: red followed by a green/blue group produces
+(64, 64, 64, 255), while that group followed by red produces
+(128, 64, 64, 255). The native test now checks both group orders and
+each exact leaf opacity. The earlier implementation failed by
+emitting Plus *around* the nested group. Ten focused image and
+transition tests passed. No additional registration was counted.
