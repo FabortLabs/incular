@@ -263,7 +263,8 @@ fn picture_origins(list: &DisplayList) -> (Offset, Offset) {
             PaintCommand::PopTransform => {
                 transforms.pop();
             }
-            PaintCommand::Rect { rect: bounds, .. } => {
+            PaintCommand::Rect { rect: bounds, .. }
+            | PaintCommand::HardEdgeRect { rect: bounds, .. } => {
                 rect = Some(bounds.origin + *transforms.last().unwrap());
             }
             PaintCommand::GlyphRun { run, .. } => {

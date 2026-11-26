@@ -56,8 +56,9 @@ use incular_navigation::{
 };
 use incular_rendering::DisplayList;
 use incular_widgets::{
-    DoubleAnimation, ExcludeFocusTraversal, IgnorePointer, LayoutBuilder,
-    ModalBarrier as ModalBarrierWidget, SizedBox, Stack, Visibility, Widget, always_dismissed,
+    DoubleAnimation, ExcludeFocusTraversal, FocusScope, FocusScopeNode, GlobalKey, IgnorePointer,
+    LayoutBuilder, ModalBarrier as ModalBarrierWidget, SizedBox, Stack, Visibility, Widget,
+    always_dismissed,
     internal::{
         ElementId, Key, ModalBarrierDismissScope, TapRegionRouteCurrent, TreeError, WidgetTree,
     },
@@ -325,6 +326,12 @@ pub enum OutletAttachError {
     AlreadyAttached,
 }
 
+#[derive(Clone)]
+struct PageRouteFocusScope {
+    node: FocusScopeNode,
+    key: Key,
+}
+
 /// Mounts one [`Navigator`] as presentation-aware stack content.
 ///
 /// The outlet owns the integration state the navigator cannot: per-route
@@ -359,6 +366,7 @@ pub struct RouteOutlet {
     focus: RouteFocusState,
     bindings: HashMap<RouteId, RouteTaskBinding>,
     tags: Rc<RefCell<HashMap<RouteId, Key>>>,
+    page_focus_scopes: RefCell<HashMap<RouteId, PageRouteFocusScope>>,
     /// Directly nested outlets, weakest first. Elements inside a nested
     /// outlet belong to it even when an outer tag sits above them;
     /// transitivity follows containment, so only direct children register.
@@ -501,6 +509,7 @@ impl RouteOutlet {
             focus,
             bindings: HashMap::new(),
             tags,
+            page_focus_scopes: RefCell::default(),
             nested,
             modal_route_scopes: true,
             host_overlay_routes: true,
@@ -1056,7 +1065,7 @@ impl RouteOutlet {
         retained_focus: bool,
     ) -> Widget {
         // `ModalRoute.of` for everything the route presents, when enabled.
-        let content = if self.modal_route_scopes {
+        let mut content = if self.modal_route_scopes {
             Widget::environment_scope(
                 ModalRoute::new(route.clone(), self.navigator.clone()),
                 Widget::environment_scope(
@@ -1067,6 +1076,18 @@ impl RouteOutlet {
         } else {
             self.route_body(route)
         };
+        if self.modal_route_scopes && matches!(route.presentation, RoutePresentation::Page { .. }) {
+            let scope = self
+                .page_focus_scopes
+                .borrow_mut()
+                .entry(route.id)
+                .or_insert_with(|| PageRouteFocusScope {
+                    node: FocusScopeNode::new(),
+                    key: GlobalKey::new().into(),
+                })
+                .clone();
+            content = Widget::from(FocusScope::new(content).node(scope.node)).with_key(scope.key);
+        }
         let mut wrapped: Widget = Visibility::new(content)
             .visible(visible)
             .maintain_state(true)
@@ -1527,6 +1548,10 @@ impl RouteOutlet {
                     .iter()
                     .any(|leaving| leaving.route.id == *id)
         });
+        let tags = self.tags.borrow();
+        self.page_focus_scopes
+            .get_mut()
+            .retain(|id, _| tags.contains_key(id));
     }
 
     /// Binds every live route lacking a binding. Scope ownership follows
@@ -1558,6 +1583,21 @@ impl RouteOutlet {
         };
         if transitioned {
             self.focus.restore_saved(runtime, &self.navigator, id);
+            if runtime.focused_element().is_none() && !self.focus.has_saved_target(id) {
+                let scope_element = self
+                    .page_focus_scopes
+                    .borrow()
+                    .get(&id)
+                    .and_then(|scope| runtime.tree().element_with_key(&scope.key));
+                if let Some(element) = scope_element
+                    && runtime.tree().can_request_focus(element)
+                {
+                    // A page without a focused child still owns primary
+                    // focus at its scope. Do not take valid outside focus or
+                    // replace an explicit invalidated saved target.
+                    runtime.set_focus(Some(element));
+                }
+            }
         } else {
             self.focus.restore_if_vacant(runtime, &self.navigator, id);
         }

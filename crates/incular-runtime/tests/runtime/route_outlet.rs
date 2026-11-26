@@ -13,6 +13,23 @@ use incular_widgets::{
 };
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
+fn assert_primary_route_scope(runtime: &Runtime) {
+    let element = runtime.focused_element().expect("page scope has primary focus");
+    let scope = runtime
+        .tree()
+        .focus_node_at(element)
+        .and_then(|node| node.scope_owner())
+        .expect("focus is parked on a scope, not a content control");
+    assert!(scope.has_primary_focus());
+}
+
+fn finish_route_scope_focus_frame(runtime: &mut Runtime, outlet: &Rc<RefCell<RouteOutlet>>) {
+    assert_primary_route_scope(runtime);
+    // Scope focus is applied after the committed navigation frame. Its
+    // single follow-up is distinct from a pending navigation revision.
+    present_outer_tree(runtime, outlet);
+}
+
 fn focus_child(node: &FocusNode) -> Widget {
     Focus::new(Widget::box_(Size::new(40., 40.), Color::WHITE))
         .node(node.clone())
@@ -1101,11 +1118,9 @@ fn nested_inner_focus_not_saved_by_outer() {
     );
     outer.pop();
     present_outer_tree(&mut runtime, &outlet_outer);
-    // The return leaves focus alone instead of yanking the inner element
-    // back: the slot is empty (node flags for unmounted elements go stale
-    // through the frame drain, so the slot is authoritative here), outer A
-    // was never focused, and the inner route stays mounted and alive.
-    assert_eq!(runtime.focused_element(), None);
+    // Returning parks focus on the surviving route scope rather than
+    // yanking back the nested content control. The inner route is still alive.
+    assert_primary_route_scope(&runtime);
     assert!(!node_a.has_focus());
     assert!(inner.current().is_some());
     let _ = (node_b, node_c);
@@ -1445,7 +1460,7 @@ fn outlet_transient_routes_never_bind() {
     );
     let id = navigator.current().expect("route A").id;
     assert!(harness.outlet.borrow().route_task_scope(id).is_some());
-    assert_eq!(harness.runtime.focused_element(), None);
+    assert_primary_route_scope(&harness.runtime);
 }
 
 fn two_focus_route(name: &str, first: &FocusNode, second: &FocusNode, color: Color) -> Page {
@@ -1469,7 +1484,15 @@ fn outlet_rebuild_failure_consumes_nothing() {
     let mut harness = harness(&navigator);
     let node_a1 = FocusNode::new();
     let node_a2 = FocusNode::new();
-    navigator.push_page(two_focus_route_page("a", &node_a1, &node_a2));
+    let node_a3 = FocusNode::new();
+    navigator.push_page(Page::new(
+        "a",
+        Column::new([
+            focus_child(&node_a1),
+            focus_child(&node_a2),
+            focus_child(&node_a3),
+        ]),
+    ));
     present(&mut harness);
     tab_until(&mut harness.runtime, &node_a1);
     let ea1 = harness.runtime.focused_element().expect("A1 focused");
@@ -1515,13 +1538,22 @@ fn outlet_rebuild_failure_consumes_nothing() {
     tab_until(&mut harness.runtime, &node_a2);
     let _ea2 = harness.runtime.focused_element().expect("A2 focused");
     assert!(navigator.lifetime_of(rb).is_none());
-    // The dropped save never committed: disabling the current target clears
-    // both the node flag and the runtime slot (no stale focus owner), and
-    // presenting must not resurrect the pre-failure focus through a stale
-    // record.
+    // Establish different live scope history from the pre-failure A1
+    // capture, so a legitimate fallback cannot mask a stale restore.
+    node_a3.request_focus();
+    present(&mut harness);
+    assert!(node_a3.has_primary_focus());
+    node_a2.request_focus();
+    present(&mut harness);
+    assert!(node_a2.has_primary_focus());
     node_a2.set_can_request_focus(false);
     present(&mut harness);
-    assert_eq!(harness.runtime.focused_element(), None);
+    assert!(
+        node_a3.has_primary_focus(),
+        "restore live scope history, not the failed route capture"
+    );
+    assert!(!node_a1.has_focus());
+    assert!(!node_a2.has_focus());
 }
 
 fn two_focus_route_page(name: &str, first: &FocusNode, second: &FocusNode) -> Page {
@@ -2312,7 +2344,7 @@ fn outlet_combined_receipt_scheduling_closeout() {
         focus_widget(&node_d, Widget::box_(Size::new(40., 40.), YELLOW)),
     ));
     present_outer_tree(&mut runtime1, &outlet_outer);
-    assert_eq!(runtime1.focused_element(), None);
+    assert_primary_route_scope(&runtime1);
     assert!(outlet_inner.borrow().needs_frame());
     assert!(
         runtime1.frame_requested(),
@@ -3905,7 +3937,8 @@ fn outlet_transparent_top_reorder_paints_and_hits_in_order() {
     // lifetimes exactly and the live top tabs normally.
     navigator.pop();
     present(&mut harness);
-    assert_eq!(harness.runtime.focused_element(), None);
+    assert_primary_route_scope(&harness.runtime);
+    assert!(!node_a.has_focus());
     let routes = navigator.routes();
     assert_eq!(routes.len(), 2);
     let (rb, ra) = (routes[0].id, routes[1].id);
@@ -4580,6 +4613,7 @@ fn outlet_deferred_revision_requests_again() {
     assert!(paints(remounted.commands(), BLUE));
     assert!(!outlet_inner.borrow().needs_frame());
     assert!(!outlet_outer.borrow().needs_frame());
+    finish_route_scope_focus_frame(&mut runtime, &outlet_outer);
     assert!(!runtime.frame_requested(), "executed work idles");
     let _ = outer;
 }
@@ -4813,6 +4847,7 @@ fn outlet_failed_present_resets_schedule_suppression() {
     let recovered = present_outer_tree_output(&mut runtime, &outlet_outer);
     assert!(paints(recovered.commands(), YELLOW));
     assert!(!outlet_inner.borrow().needs_frame());
+    finish_route_scope_focus_frame(&mut runtime, &outlet_outer);
     assert!(
         !runtime.frame_requested(),
         "consumed work schedules nothing further"
@@ -4892,6 +4927,7 @@ fn outlet_panicking_present_resets_schedule_suppression() {
     RouteOutlet::attach_nested(&outlet_outer, &outlet_inner).expect("nested attaches");
     let recovered = present_outer_tree_output(&mut runtime, &outlet_outer);
     assert!(paints(recovered.commands(), YELLOW));
+    finish_route_scope_focus_frame(&mut runtime, &outlet_outer);
     assert!(!runtime.frame_requested());
     let _ = outer;
 }
@@ -4942,6 +4978,7 @@ fn outlet_scheduling_tracks_participation() {
     present_outer_tree(&mut runtime, &outlet_outer);
     assert!(!outlet_outer.borrow().needs_frame());
     assert!(!outlet_inner.borrow().needs_frame());
+    finish_route_scope_focus_frame(&mut runtime, &outlet_outer);
     assert!(!runtime.frame_requested(), "converged tree idles");
     // Slotless with inner work outstanding: first success flags...
     outer
@@ -5005,6 +5042,7 @@ fn outlet_scheduling_tracks_participation() {
     assert!(!paints(remounted.commands(), GREEN));
     assert!(!outlet_inner.borrow().needs_frame());
     assert!(!outlet_outer.borrow().needs_frame());
+    finish_route_scope_focus_frame(&mut runtime, &outlet_outer);
     assert!(!runtime.frame_requested(), "consumed revision idles");
     let _ = outer;
 }
@@ -5822,4 +5860,70 @@ fn static_barrier_default_pops_only_the_nearest_outlet() {
     present_outer_tree(&mut runtime, &outer_outlet);
     assert_eq!(inner.routes().len(), 1);
     assert_eq!(outer.routes().len(), 2);
+}
+
+#[test]
+fn flutter_350_simultaneous_route_pops_restore_the_surviving_focus_scope() {
+    use incular_widgets::{FocusScope, FocusScopeNode};
+
+    fn route(name: &str, key: &Key, child_focus: Option<&FocusNode>) -> Page {
+        let marker = Widget::box_(Size::new(40., 40.), Color::WHITE).with_key(key.clone());
+        let child: Widget = if let Some(node) = child_focus {
+            Column::new([marker, focus_child(node)]).into()
+        } else {
+            marker
+        };
+        Page::new(name, child)
+    }
+
+    fn scope_at(harness: &OutletHarness, key: &Key) -> FocusScopeNode {
+        let tree = harness.runtime.tree();
+        let page = tree.element_with_key(key).expect("route body");
+        FocusScope::maybe_of(tree, page).expect("each mounted route has an implicit focus scope")
+    }
+
+    for with_focused_child in [false, true] {
+        let navigator = Navigator::new();
+        let mut harness = harness(&navigator);
+        let keys = ["root body", "second body", "third body"].map(Key::from);
+        let leaf = FocusNode::new();
+
+        let root = navigator.push_page(route("root", &keys[0], None));
+        present(&mut harness);
+        let home = scope_at(&harness, &keys[0]);
+        assert!(home.has_focus());
+
+        navigator.push_page(route(
+            "second",
+            &keys[1],
+            with_focused_child.then_some(&leaf),
+        ));
+        present(&mut harness);
+        let second = scope_at(&harness, &keys[1]);
+        assert_eq!([home.has_focus(), second.has_focus()], [false, true]);
+        if with_focused_child {
+            let _ = harness
+                .runtime
+                .handle_input(InputEvent::Key(key_down(Code::Tab)));
+            present(&mut harness);
+            assert!(second.has_focus());
+            assert!(!second.has_primary_focus());
+            assert!(leaf.has_primary_focus());
+        }
+
+        navigator.push_page(route("third", &keys[2], None));
+        present(&mut harness);
+        let third = scope_at(&harness, &keys[2]);
+        assert_eq!(
+            [home.has_focus(), second.has_focus(), third.has_focus()],
+            [false, false, true]
+        );
+
+        assert!(navigator.pop_until(|route| route.id == root));
+        present(&mut harness);
+        assert_eq!(
+            [home.has_focus(), second.has_focus(), third.has_focus()],
+            [true, false, false]
+        );
+    }
 }

@@ -780,8 +780,8 @@ packages/flutter/test/widgets/clip_test.dart	826	ClipRRect supports BorderRadius
 packages/flutter/test/widgets/clip_test.dart	862	ClipRRect is direction-aware	paired-match	upstream-clip-visibility-focus.md#directional-rounded-clips
 packages/flutter/test/widgets/clip_test.dart	788	CustomClipper reclips when notified	paired-match	upstream-clip-visibility-focus.md#custom-clipper-notifications
 packages/flutter/test/physics/to_string_test.dart	20	Simulation.toString	paired-match	upstream-physics-comparisons.md#simulation-diagnostics-and-invalid-spring-duration
-packages/flutter/test/widgets/routes_test.dart	1921	focus traversal is correct when popping multiple pages simultaneously	reference-ran-incular-open	navigation-comparisons.md#direct-focus-versus-tab-traversal-on-route-return
-packages/flutter/test/widgets/routes_test.dart	1964	focus traversal is correct when popping multiple pages simultaneously - with focused children	reference-ran-incular-open	navigation-comparisons.md#direct-focus-versus-tab-traversal-on-route-return
+packages/flutter/test/widgets/routes_test.dart	1921	focus traversal is correct when popping multiple pages simultaneously	paired-match	upstream-route-focus-scopes.md
+packages/flutter/test/widgets/routes_test.dart	1964	focus traversal is correct when popping multiple pages simultaneously - with focused children	paired-match	upstream-route-focus-scopes.md
 packages/flutter/test/rendering/box_constraints_test.dart	186	BoxConstraints normalize	paired-match	upstream-border-constraints-formatters.md#constraint-normalization-and-empty-sizes
 packages/flutter/test/rendering/box_constraints_test.dart	210	BoxConstraints.constrainSizeAndAttemptToPreserveAspectRatio can handle empty size	paired-match	upstream-border-constraints-formatters.md#constraint-normalization-and-empty-sizes
 packages/flutter/test/painting/box_decoration_test.dart	154	BoxDecoration.getClipPath with borderRadius	paired-match	upstream-limited-box-and-decoration-contracts.md#boxdecoration-clip-and-hit-geometry

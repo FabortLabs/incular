@@ -67,6 +67,10 @@ impl RouteFocusState {
         }
     }
 
+    pub(crate) fn has_saved_target(&self, route: RouteId) -> bool {
+        matches!(self.saved.get(&route), Some(Some(_)))
+    }
+
     /// Records the currently focused element as `route`'s focus. Call when
     /// `route` deactivates. Only focus owned by `route` is recorded: focus
     /// owned elsewhere (or by nothing) records no information rather than
