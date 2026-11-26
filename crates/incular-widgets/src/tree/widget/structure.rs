@@ -2015,6 +2015,7 @@ pub(crate) enum WidgetType {
     ClipOval,
     ClipPath,
     LayoutBuilder,
+    StatefulBuilder,
     Visibility,
     AspectRatio,
     SizeObserver,
@@ -2115,6 +2116,7 @@ impl WidgetType {
             Self::ClipOval => "ClipOval",
             Self::ClipPath => "ClipPath",
             Self::LayoutBuilder => "LayoutBuilder",
+            Self::StatefulBuilder => "StatefulBuilder",
             Self::Visibility => "Visibility",
             Self::AspectRatio => "AspectRatio",
             Self::SizeObserver => "SizeObserver",
@@ -2534,8 +2536,15 @@ impl WidgetKind {
                 Optional,
                 WidgetChildren::Optional(child.as_ref()),
             ),
-            WidgetKind::LayoutBuilder { .. } => {
-                (WidgetType::LayoutBuilder, Layout, Dynamic, DynamicChildren)
+            WidgetKind::LayoutBuilder { retained, .. } => {
+                let kind = if retained.as_ref().is_some_and(|slot| {
+                    slot.is_state::<crate::stateful_builder::StatefulBuilderState>()
+                }) {
+                    WidgetType::StatefulBuilder
+                } else {
+                    WidgetType::LayoutBuilder
+                };
+                (kind, Layout, Dynamic, DynamicChildren)
             }
             WidgetKind::Visibility { child, .. } => (
                 WidgetType::Visibility,

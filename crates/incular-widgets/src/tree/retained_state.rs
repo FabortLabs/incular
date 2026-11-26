@@ -84,6 +84,10 @@ impl RetainedSlot {
         Some((slot, builder))
     }
 
+    pub(crate) fn is_state<S: RetainedState>(&self) -> bool {
+        self.type_id == TypeId::of::<S>()
+    }
+
     pub(crate) fn revision(&self) -> Rc<Cell<u64>> {
         self.revision.clone()
     }
