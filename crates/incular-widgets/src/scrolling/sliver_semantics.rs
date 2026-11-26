@@ -170,6 +170,19 @@ impl RenderSliver for SemanticsRenderSliver {
                 .set_child_keep_alive(child, grid_tile, keep_alive)
     }
 
+    fn set_child_focus_keep_alive(
+        &mut self,
+        child: SliverChildId,
+        grid_tile: Option<usize>,
+        keep_alive: bool,
+    ) -> bool {
+        !is_semantics_anchor(child)
+            && self
+                .inner
+                .borrow_mut()
+                .set_child_focus_keep_alive(child, grid_tile, keep_alive)
+    }
+
     fn scroll_layout_dependency(&self) -> SliverScrollDependency {
         self.inner.borrow().scroll_layout_dependency()
     }

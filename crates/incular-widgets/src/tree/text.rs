@@ -37,6 +37,7 @@ impl WidgetTree {
         let render = self.render_id(id).ok_or(TreeError::MissingElement(id))?;
         let node = self.render_live_mut(render, "retained render must remain live");
         let mut repaint = false;
+        let mut changed_editor_focus = false;
         if let Some(button) = node.button_state_mut() {
             let changed = button.focused != focused;
             button.focused = focused;
@@ -69,6 +70,7 @@ impl WidgetTree {
                 .expect("text field state")
                 .focused = focused;
             repaint = true;
+            changed_editor_focus = true;
             if focused && let RenderKind::TextField(field) = node.object.kind() {
                 // EditableText._handleFocusChanged: gaining focus with an
                 // invalid selection collapses it at the end of the text.
@@ -84,6 +86,9 @@ impl WidgetTree {
                 .expect("selectable text state")
                 .focused = focused;
             repaint = true;
+        }
+        if changed_editor_focus {
+            self.set_editor_sliver_keep_alive(id, focused);
         }
         if repaint {
             self.mark_render_paint(render);

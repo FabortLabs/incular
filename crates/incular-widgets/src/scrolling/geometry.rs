@@ -263,6 +263,17 @@ pub trait RenderSliver {
     ) -> bool {
         false
     }
+
+    /// Retains an active editor independently of explicit KeepAlive.
+    #[doc(hidden)]
+    fn set_child_focus_keep_alive(
+        &mut self,
+        _child: SliverChildId,
+        _grid_tile: Option<usize>,
+        _keep_alive: bool,
+    ) -> bool {
+        false
+    }
 }
 
 /// Scroll input that invalidates a sliver's retained layout.
@@ -340,6 +351,17 @@ pub(crate) trait SliverViewportDelegate {
         false
     }
     fn set_child_keep_alive(
+        &self,
+        _child: SliverChildId,
+        _grid_tile: Option<usize>,
+        _keep_alive: bool,
+    ) -> bool {
+        false
+    }
+
+    /// Retains an active editor independently of explicit KeepAlive.
+    #[doc(hidden)]
+    fn set_child_focus_keep_alive(
         &self,
         _child: SliverChildId,
         _grid_tile: Option<usize>,

@@ -58,3 +58,22 @@ the native control uses separate retained focus nodes and a shared
 editing controller. These two cases and the previous close case that
 asserts `wantKeepAlive` are therefore partial. Three pinned Flutter and
 seven targeted Rust cases passed.
+
+## Automatic keep-alive follows editor focus
+
+The pinned authored Flutter control keeps the same editor state
+and primary focus when its lazy row leaves the viewport cache. When the
+host closes input, that row can be evicted without submitting, echoing
+a host command, or changing the draft. Incular now routes a focused
+editor's automatic retention through the materialized sliver ancestry.
+It releases only that automatic request; an explicit KeepAlive
+continues to retain the row. A non-editor lazy focus target still
+detaches as before. The authored Flutter probe and 16 targeted Rust
+cases passed.
+
+Together with the close and native tap controls above, this completes
+the single-editor close and reopen cases. The other-field original
+still uses a shared FocusNode across two fields and remains partial.
+The original that inserts a large item before a kept keyed editor
+passed on Flutter only; keyed remapping plus offscreen repaint is still
+a distinct comparison.

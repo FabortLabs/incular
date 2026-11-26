@@ -291,10 +291,27 @@ impl Widget {
         self
     }
 
+    pub(crate) fn with_focus_keep_alive_request(mut self, keep_alive: bool) -> Self {
+        if self.semantic_properties().focus_keep_alive != keep_alive {
+            self.semantic_properties_mut().focus_keep_alive = keep_alive;
+        }
+        self
+    }
+
+    #[must_use]
+    pub(crate) fn focus_keep_alive_request(&self) -> bool {
+        self.semantic_properties().focus_keep_alive
+    }
+
+    #[must_use]
+    pub(crate) fn explicit_keep_alive_request(&self) -> bool {
+        self.semantic_properties().keep_alive
+    }
+
     /// Whether this descriptor asks its sliver to keep it alive.
     #[must_use]
     pub(crate) fn keep_alive_request(&self) -> bool {
-        self.semantic_properties().keep_alive
+        self.explicit_keep_alive_request() || self.focus_keep_alive_request()
     }
 
     #[doc(hidden)]

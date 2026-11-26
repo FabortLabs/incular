@@ -269,3 +269,51 @@ fn user_taps_reopen_the_closed_connection_and_edit_the_selected_field() {
         assert!(!platform_call(&mut runtime, "onConnectionClosed", prior));
     }
 }
+
+#[test]
+fn focused_off_cache_editor_releases_only_its_automatic_keep_alive() {
+    use incular_widgets::{KeepAlive, ListView, ScrollController, internal::Key};
+    for explicit in [false, true] {
+        let text = TextEditingController::with_text("draft");
+        let focus = FocusNode::new();
+        let scroll = ScrollController::new();
+        let key = Key::from("kept editor");
+        let list = ListView::builder(60, {
+            let (text, focus, key) = (text.clone(), focus.clone(), key.clone());
+            move |index| {
+                if index == 0 {
+                    let row = Widget::from(Column::new([Widget::from(field(&text, &focus, true))]))
+                        .with_key(key.clone());
+                    KeepAlive::new(explicit, row).into_child()
+                } else {
+                    SizedBox::expand().into()
+                }
+            }
+        })
+        .item_extent(40.)
+        .controller(scroll.clone());
+        let mut runtime = Runtime::new(list.into()).unwrap();
+        frame(&mut runtime);
+        assert!(focus.has_primary_focus());
+        let client = attached(&mut runtime);
+        let row = runtime.tree().element_with_key(&key).unwrap();
+        let editor = runtime.focused_element().unwrap();
+
+        assert!(scroll.jump_to(scroll.max_offset()));
+        frame(&mut runtime);
+        assert_eq!(runtime.tree().element_with_key(&key), Some(row));
+        assert_eq!(runtime.focused_element(), Some(editor));
+        assert!(focus.has_primary_focus());
+        let _ = runtime.take_text_input_commands();
+
+        assert!(platform_call(&mut runtime, "onConnectionClosed", client));
+        frame(&mut runtime);
+        assert!(!focus.has_focus());
+        assert_eq!(
+            runtime.tree().element_with_key(&key),
+            explicit.then_some(row)
+        );
+        assert!(runtime.take_text_input_commands().is_empty());
+        assert_eq!(text.text(), "draft");
+    }
+}

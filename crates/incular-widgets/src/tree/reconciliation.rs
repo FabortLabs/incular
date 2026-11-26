@@ -442,15 +442,15 @@ impl WidgetTree {
         let old_request = self
             .element_live(id, "updated child")
             .widget
-            .keep_alive_request();
-        let new_request = widget.keep_alive_request();
+            .explicit_keep_alive_request();
+        let new_request = widget.explicit_keep_alive_request();
         let changed = self.with_global_key_transaction(|tree| tree.update_existing(id, &widget))?;
         // A skipped root retains its complete subtree and existing listener
         // registrations. Rebuilding those registrations would walk unchanged
         // descendants after reconciliation had just avoided that work.
         if changed {
             if old_request != new_request {
-                self.apply_materialized_keep_alive(id, new_request);
+                self.apply_materialized_keep_alive(id, new_request, false);
             }
             self.refresh_notification_listeners();
         }
@@ -459,7 +459,7 @@ impl WidgetTree {
 
     /// KeepAlive is parent data. Route a local update to its materializer
     /// before the next viewport pass so rebuilding the list is unnecessary.
-    fn apply_materialized_keep_alive(&mut self, id: ElementId, keep_alive: bool) {
+    fn apply_materialized_keep_alive(&mut self, id: ElementId, keep_alive: bool, focus: bool) {
         let Some(parent) = self.parent(id) else {
             return;
         };
@@ -490,11 +490,37 @@ impl WidgetTree {
         else {
             return;
         };
-        if config
-            .delegate
-            .set_child_keep_alive(scoped, grid_tile, keep_alive)
-        {
+        let changed = if focus {
+            config
+                .delegate
+                .set_child_focus_keep_alive(scoped, grid_tile, keep_alive)
+        } else {
+            config
+                .delegate
+                .set_child_keep_alive(scoped, grid_tile, keep_alive)
+        };
+        if changed {
             self.mark_render_dirty(render, DirtyFlags::LAYOUT, true);
+        }
+    }
+
+    /// AutomaticKeepAlive for the focused EditableText. Route the request
+    /// through each materialized ancestor without altering explicit KeepAlive.
+    pub(super) fn set_editor_sliver_keep_alive(&mut self, editor: ElementId, focused: bool) {
+        let mut child = editor;
+        while let Some(parent) = self.parent(child) {
+            let entry = self.element_live(parent, "retained editor ancestor");
+            if matches!(entry.widget.key(), Some(Key::GridCell(_)))
+                || matches!(
+                    self.render_live(entry.render, "editor ancestor render")
+                        .object
+                        .kind(),
+                    RenderKind::SliverViewport { .. }
+                )
+            {
+                self.apply_materialized_keep_alive(child, focused, true);
+            }
+            child = parent;
         }
     }
 
