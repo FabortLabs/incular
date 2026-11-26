@@ -19,3 +19,19 @@ tap. A foreground painter defaults to leaving the child alone. Returning
 true claims the point before the child; returning false leaves it to
 the child. The delegate sees the local point. All 21 focused native
 painter, semantics, and decorated-sliver tests passed.
+
+## Independent paint and accessibility invalidation
+
+The pinned authored probe and native regression hold semantic regions
+while a replacement repaints, rebuild those regions on a size change
+even when shouldRebuildSemantics returns false, and then change only
+semantics while shouldRepaint returns false. The keyed region keeps its
+node ID across all four states. The region-builder call trace matches
+the three required sizes. The built regions are retained per mount
+rather than shared by cloned descriptors.
+
+The original `widgets/custom_painter_test.dart:795` is partial:
+the behavior and region-builder gate match, but its extra assertion
+on the number of times Flutter reads the semanticsBuilder getter is
+not a Rust API contract. Incular retains the callback on each delegate.
+All 13 focused native paint, hit, and semantics tests passed.

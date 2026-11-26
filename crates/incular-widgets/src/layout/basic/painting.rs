@@ -1,6 +1,6 @@
 //! Painting and placeholder layout primitives.
 
-use std::sync::Arc;
+use std::{cell::{Cell, RefCell}, rc::Rc, sync::Arc};
 
 use incular_config::{Clip, StackFit};
 use incular_core::{Color, Offset, Size};
@@ -177,10 +177,12 @@ impl From<CustomPaint> for Widget {
         } = value;
         let background_semantics = painter
             .as_ref()
-            .and_then(PainterDelegate::semantics_builder);
+            .filter(|painter| painter.semantics_builder().is_some())
+            .cloned();
         let foreground_semantics = foreground_painter
             .as_ref()
-            .and_then(PainterDelegate::semantics_builder);
+            .filter(|painter| painter.semantics_builder().is_some())
+            .cloned();
         if child.is_none() && foreground_painter.is_none() && background_semantics.is_none() {
             return Widget::from_kind(WidgetKind::CustomPaint {
                 size,
@@ -208,12 +210,12 @@ impl From<CustomPaint> for Widget {
         if painter.is_some() || !display_list.is_empty() {
             children.push(layer(painter, display_list, false));
         }
-        children.extend(background_semantics.map(semantics_layer));
+        children.extend(background_semantics.map(|painter| semantics_layer(painter, false)));
         children.extend(child);
         if let Some(foreground) = foreground_painter {
             children.push(layer(Some(foreground), DisplayList::default(), true));
         }
-        children.extend(foreground_semantics.map(semantics_layer));
+        children.extend(foreground_semantics.map(|painter| semantics_layer(painter, true)));
         let stack: Widget = Stack::new(children)
             .fit(StackFit::Passthrough)
             .clip_behavior(Clip::None)
@@ -345,28 +347,51 @@ impl From<Placeholder> for Widget {
     }
 }
 
-/// The semantic regions of a painter (Flutter `CustomPainter.semanticsBuilder`):
-/// one transparent `Semantics` node per region, laid out over the painting at
-/// its size. The layer ignores pointers, so it never takes hits meant for the
-/// child, and rebuilds whenever the painting's size changes.
-fn semantics_layer(builder: crate::painting_effects::SemanticsBuilder) -> Widget {
-    Positioned::fill(IgnorePointer::new(crate::LayoutBuilder::new(
-        move |_, constraints| {
-            let regions = builder(constraints.biggest()).into_iter().map(|region| {
-                let (rect, key, semantics) = region.into_parts();
-                let node: Widget = Positioned::new(semantics.with_child(SizedBox::new()))
-                    .left(rect.origin.x)
-                    .top(rect.origin.y)
-                    .width(rect.size.width.max(0.))
-                    .height(rect.size.height.max(0.))
-                    .into();
-                match key {
-                    Some(key) => node.with_key(key),
-                    None => node,
+/// Saved separately from the painter's display list. Repainting does
+/// not rebuild semantic regions; a change in size always does.
+#[derive(Default)]
+struct PainterRegionsState(RefCell<Option<(Size, bool, PainterDelegate, Widget)>>);
+
+impl crate::tree::RetainedState for PainterRegionsState {
+    fn rebind_revision(&self, _: Rc<Cell<u64>>) {}
+}
+
+fn semantics_layer(painter: PainterDelegate, foreground: bool) -> Widget {
+    Positioned::fill(IgnorePointer::new(Widget::mount_scoped_layout_builder(
+        |_| PainterRegionsState::default(),
+        move |state, _, constraints| {
+            let size = constraints.biggest();
+            let mut cached = state.0.borrow_mut();
+            if let Some((old_size, old_foreground, old, regions)) = cached.as_mut() {
+                let same_role = *old_foreground == foreground;
+                let refresh = !same_role
+                    || *old != painter && painter.should_rebuild_semantics_over(old);
+                if !refresh && *old_size == size {
+                    // Flutter compares against the actual replacement next
+                    // time, even when it elects to keep the old regions.
+                    *old = painter.clone();
+                    return regions.clone();
                 }
-            });
-            Stack::new(regions).clip_behavior(Clip::None).into()
+            }
+            let regions = painter.semantics_builder().into_iter().flat_map(|builder| builder(size))
+                .map(|region| {
+                    let (rect, key, semantics) = region.into_parts();
+                    let node: Widget = Positioned::new(semantics.with_child(SizedBox::new()))
+                        .left(rect.origin.x)
+                        .top(rect.origin.y)
+                        .width(rect.size.width.max(0.))
+                        .height(rect.size.height.max(0.))
+                        .into();
+                    match key {
+                        Some(key) => node.with_key(key),
+                        None => node,
+                    }
+                });
+            let regions: Widget = Stack::new(regions).clip_behavior(Clip::None).into();
+            *cached = Some((size, foreground, painter.clone(), regions.clone()));
+            regions
         },
+        true,
     )))
     .into()
 }

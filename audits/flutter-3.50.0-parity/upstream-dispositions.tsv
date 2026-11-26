@@ -2339,3 +2339,4 @@ packages/flutter/test/widgets/sliver_clip_rect_test.dart	457	respects half-width
 packages/flutter/test/widgets/sliver_clip_rect_test.dart	495	respects half-height clipper with reverse axis	paired-match	upstream-sliver-clipping.md#custom-boundaries-and-rounded-hit-edges
 packages/flutter/test/widgets/sliver_clip_rrect_test.dart	73	hit test respects border radius	paired-match	upstream-sliver-clipping.md#custom-boundaries-and-rounded-hit-edges
 packages/flutter/test/widgets/sliver_clip_rrect_test.dart	361	custom clipper boundaries are not incorrectly expanded during overlap	paired-match	upstream-sliver-clipping.md#custom-boundaries-and-rounded-hit-edges
+packages/flutter/test/widgets/custom_painter_test.dart	795	does not rebuild when shouldRebuildSemantics is false	partial-match	upstream-custom-paint.md#independent-paint-and-accessibility-invalidation

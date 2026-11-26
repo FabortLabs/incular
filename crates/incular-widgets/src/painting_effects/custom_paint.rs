@@ -80,6 +80,15 @@ pub trait CustomPainter {
         None
     }
 
+    /// Whether this replacement changes its accessibility regions. By
+    /// default this follows `should_repaint`, but either can be independent.
+    fn should_rebuild_semantics(&self, old: &Self) -> bool
+    where
+        Self: Sized,
+    {
+        self.should_repaint(old)
+    }
+
     /// Flutter `semanticsBuilder`: the painting's semantic regions, or `None`
     /// (the default) when the painting has none. `CustomPaint` rebuilds the
     /// regions whenever it rebuilds or its size changes.
@@ -99,6 +108,7 @@ pub struct PainterDelegate {
     paint: fn(&dyn Any, incular_core::Size) -> DisplayList,
     should_repaint: fn(&dyn Any, &dyn Any) -> bool,
     hit_test: fn(&dyn Any, Offset) -> Option<bool>,
+    should_rebuild_semantics: fn(&dyn Any, &dyn Any) -> bool,
     semantics: Option<SemanticsBuilder>,
 }
 
@@ -122,6 +132,13 @@ fn should_repaint_erased<P: CustomPainter + 'static>(new: &dyn Any, old: &dyn An
     }
 }
 
+fn should_rebuild_semantics_erased<P: CustomPainter + 'static>(new: &dyn Any, old: &dyn Any) -> bool {
+    match (new.downcast_ref::<P>(), old.downcast_ref::<P>()) {
+        (Some(new), Some(old)) => new.should_rebuild_semantics(old),
+        _ => true,
+    }
+}
+
 impl PainterDelegate {
     /// Retains a painter delegate.
     #[must_use]
@@ -133,6 +150,7 @@ impl PainterDelegate {
             paint: paint_erased::<P>,
             should_repaint: should_repaint_erased::<P>,
             hit_test: hit_test_erased::<P>,
+            should_rebuild_semantics: should_rebuild_semantics_erased::<P>,
         }
     }
 
@@ -150,6 +168,10 @@ impl PainterDelegate {
     #[must_use]
     pub(crate) fn semantics_builder(&self) -> Option<SemanticsBuilder> {
         self.semantics.clone()
+    }
+
+    pub(crate) fn should_rebuild_semantics_over(&self, old: &Self) -> bool {
+        (self.should_rebuild_semantics)(&*self.painter, &*old.painter)
     }
 
     /// Flutter's `shouldRepaint` gate: whether this painter requires a repaint

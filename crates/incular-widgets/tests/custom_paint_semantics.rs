@@ -234,3 +234,85 @@ fn regions_do_not_take_pointer_hits_from_the_child() {
     }
     assert_eq!(taps.get(), 1);
 }
+
+#[derive(Clone)]
+struct IndependentPolicy {
+    label: &'static str,
+    repaint: bool,
+    rebuild_semantics: bool,
+    paints: Rc<std::cell::RefCell<Vec<&'static str>>>,
+    regions: Rc<std::cell::RefCell<Vec<Size>>>,
+}
+
+impl CustomPainter for IndependentPolicy {
+    fn paint(&self, _: Size) -> DisplayList {
+        self.paints.borrow_mut().push(self.label);
+        DisplayList::default()
+    }
+
+    fn should_repaint(&self, _: &Self) -> bool {
+        self.repaint
+    }
+
+    fn should_rebuild_semantics(&self, _: &Self) -> bool {
+        self.rebuild_semantics
+    }
+
+    fn semantics_builder(&self) -> Option<SemanticsBuilder> {
+        let regions = self.regions.clone();
+        let label = self.label;
+        Some(Rc::new(move |size| {
+            regions.borrow_mut().push(size);
+            vec![CustomPainterSemantics::new(
+                Rect::from_origin_size(Offset::ZERO, Size::new(size.width / 2., 20.)),
+                Semantics::builder().label(label).build(),
+            )
+            .key(41_u64)]
+        }))
+    }
+}
+
+#[test]
+fn painter_semantic_rebuilds_are_independent_of_repainting_and_preserve_keys() {
+    let paints = Rc::new(std::cell::RefCell::new(Vec::new()));
+    let regions = Rc::new(std::cell::RefCell::new(Vec::new()));
+    let widget = |label, width, repaint, rebuild_semantics| {
+        Widget::from(
+            CustomPaint::from_painter(Size::new(width, 40.), IndependentPolicy {
+                label, repaint, rebuild_semantics,
+                paints: paints.clone(),
+                regions: regions.clone(),
+            }),
+        )
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(widget("old", 100., true, false)).unwrap();
+    let frame = |tree: &mut WidgetTree| {
+        tree.layout(Constraints::loose(Size::new(600., 400.))).unwrap();
+        let _ = tree.paint();
+        tree.update_semantics();
+    };
+    frame(&mut tree);
+    let id = labelled(&tree, "old").unwrap().id;
+    assert_eq!(*regions.borrow(), [Size::new(100., 40.)]);
+
+    tree.update(root, widget("pending", 100., true, false)).unwrap();
+    frame(&mut tree);
+    assert_eq!(labelled(&tree, "old").unwrap().id, id);
+    assert_eq!(paints.borrow().last(), Some(&"pending"));
+    assert_eq!(*regions.borrow(), [Size::new(100., 40.)]);
+
+    tree.update(root, widget("pending", 120., true, false)).unwrap();
+    frame(&mut tree);
+    let resized = labelled(&tree, "pending").unwrap();
+    assert_eq!(resized.id, id);
+    assert_eq!(resized.bounds.size, Size::new(60., 20.));
+    assert_eq!(*regions.borrow(), [Size::new(100., 40.), Size::new(120., 40.)]);
+
+    let paint_count = paints.borrow().len();
+    tree.update(root, widget("fresh", 120., false, true)).unwrap();
+    frame(&mut tree);
+    assert_eq!(labelled(&tree, "fresh").unwrap().id, id);
+    assert_eq!(paints.borrow().len(), paint_count);
+    assert_eq!(*regions.borrow(), [Size::new(100., 40.), Size::new(120., 40.), Size::new(120., 40.)]);
+}

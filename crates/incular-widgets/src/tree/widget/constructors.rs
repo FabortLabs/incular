@@ -1240,15 +1240,24 @@ impl Widget {
         init: impl Fn(Rc<Cell<u64>>) -> S + 'static,
         build: impl for<'a> Fn(&Rc<S>, &BuildContext<'a>) -> Self + 'static,
     ) -> Self {
+        Self::mount_scoped_layout_builder(init, move |state, context, _| build(state, context), false)
+    }
+
+    /// A mount-scoped builder that can also react to the current constraints.
+    pub(crate) fn mount_scoped_layout_builder<S: super::super::RetainedState>(
+        init: impl Fn(Rc<Cell<u64>>) -> S + 'static,
+        build: impl for<'a> Fn(&Rc<S>, &BuildContext<'a>, Constraints) -> Self + 'static,
+        constraint_dependent: bool,
+    ) -> Self {
         use super::super::{context::LayoutBuilderCallback, retained_state::RetainedSlot};
         let init = Rc::new(init);
         let build = Rc::new(build);
         let factory = Rc::new(move |slot: Rc<RetainedSlot>| -> Rc<LayoutBuilderCallback> {
             let init = init.clone();
             let build = build.clone();
-            Rc::new(move |context, _| {
+            Rc::new(move |context, constraints| {
                 let state = slot.get_or_init(|revision| init(revision));
-                build(&state, context)
+                build(&state, context, constraints)
             })
         });
         let revision = Rc::new(Cell::new(0));
@@ -1261,7 +1270,7 @@ impl Widget {
                 environment: None,
                 environment_boundary: false,
                 revision: Some(revision),
-                constraint_dependent: false,
+                constraint_dependent,
                 retained: Some(slot),
                 static_child: None,
                 direction_requirement: None,
