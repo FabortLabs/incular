@@ -2595,3 +2595,6 @@ packages/flutter/test/rendering/table_test.dart	320	Table paints a borderRadius	
 packages/flutter/test/widgets/focus_manager_test.dart	886	Can move node between scopes and lose scope focus	paired-match	upstream-mounted-focus-scope-nodes.md#moving-active-subtrees-between-scopes
 packages/flutter/test/widgets/focus_manager_test.dart	932	ancestors and descendants are computed and recomputed properly	paired-match	upstream-mounted-focus-scope-nodes.md#moving-active-subtrees-between-scopes
 packages/flutter/test/painting/border_rtl_test.dart	971	BorderDirectional hashCode	paired-match	upstream-border-constraints-formatters.md#directional-border-hash-behavior
+packages/flutter/test/animation/curves_test.dart	184	Cubic transformInternal clamps values outside the unit interval	paired-match	upstream-curves-intrinsic-layout-and-system-overlay.md#checked-curve-inputs-and-raw-cubic-sampling
+packages/flutter/test/animation/curves_test.dart	189	Cubic transformInternal throws for NaN	paired-match	upstream-curves-intrinsic-layout-and-system-overlay.md#checked-curve-inputs-and-raw-cubic-sampling
+packages/flutter/test/animation/curves_test.dart	193	Invalid transform parameter should assert	paired-match	upstream-curves-intrinsic-layout-and-system-overlay.md#checked-curve-inputs-and-raw-cubic-sampling

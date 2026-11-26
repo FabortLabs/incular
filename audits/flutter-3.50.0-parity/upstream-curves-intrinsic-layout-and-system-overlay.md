@@ -24,3 +24,14 @@ Pinned Flutter 3.50.0 `ab2912035e`; unchanged Incular production `c647cb85`.
   payload. Partial: no Dart platform channel, native status
   or navigation rendering, or Fuchsia Rust mobile host claim.
   See `flutter350_system_overlay_annotations_parity`.
+
+## Checked curve inputs and raw cubic sampling
+
+Pinned `animation/curves_test.dart:184,189,193` passed. The raw cubic
+entry point returns the exact endpoint for out-of-range progress
+and rejects NaN with a typed error. The checked transform rejects
+out-of-range inputs in debug builds across all twelve original
+curve families, while keeping their exact endpoints. Incular's
+existing clamping `apply` remains unchanged for callers who
+intentionally accept arbitrary input. All 24 focused curve and
+public API tests passed.

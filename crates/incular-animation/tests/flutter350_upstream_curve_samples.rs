@@ -138,3 +138,56 @@ fn catmull_rom_timing_curve_matches_the_reference_samples() {
         );
     }
 }
+
+#[test]
+fn a_raw_cubic_clamps_overrange_samples_and_rejects_nan() {
+    use incular_animation::CubicTransformError;
+
+    let curve = Curve::EaseOut;
+    assert_eq!(curve.try_cubic_transform_internal(2.), Ok(1.));
+    assert_eq!(curve.try_cubic_transform_internal(-1.), Ok(0.));
+    assert_eq!(curve.try_cubic_transform_internal(-0.).unwrap().to_bits(), 0);
+    assert_eq!(curve.try_cubic_transform_internal(f32::INFINITY), Ok(1.));
+    assert_eq!(curve.try_cubic_transform_internal(f32::NEG_INFINITY), Ok(0.));
+    assert_eq!(
+        curve.try_cubic_transform_internal(f32::NAN),
+        Err(CubicTransformError::NaNProgress)
+    );
+    for progress in [0.25, 0.5, 0.75] {
+        assert_eq!(curve.try_cubic_transform_internal(progress), Ok(curve.transform(progress)));
+    }
+    assert_eq!(
+        Curve::Linear.try_cubic_transform_internal(0.5),
+        Err(CubicTransformError::NotCubic)
+    );
+}
+
+#[test]
+#[cfg(debug_assertions)]
+fn checked_curve_transform_rejects_invalid_progress_for_every_pinned_curve() {
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+    let curves = [
+        Curve::SawTooth(2),
+        Curve::interval(0., 1., &Curve::Linear),
+        Curve::split(0., &Curve::Linear, &Curve::Linear),
+        Curve::Threshold(0.5),
+        Curve::ElasticIn(0.4),
+        Curve::ElasticOut(0.4),
+        Curve::cubic_bezier(0.42, 0., 0.58, 1.),
+        Curve::EaseInOutCubicEmphasized,
+        Curve::Decelerate,
+        Curve::EaseInBounce,
+        Curve::EaseOutBounce,
+        Curve::EaseInOutBounce,
+    ];
+    for curve in curves {
+        for invalid in [-0.0001, 1.0001] {
+            assert!(catch_unwind(AssertUnwindSafe(|| curve.transform(invalid))).is_err(),
+                "{curve:?} accepted {invalid}");
+        }
+        assert_eq!(curve.transform(0.), 0.);
+        assert_eq!(curve.transform(1.), 1.);
+        assert_eq!(curve.apply(-0.0001), 0.);
+        assert_eq!(curve.apply(1.0001), 1.);
+    }
+}

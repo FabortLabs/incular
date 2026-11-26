@@ -5,9 +5,10 @@ use std::{
     sync::{Arc, Mutex, PoisonError, Weak},
 };
 
-/// A normalized timing function. Curves clamp input to `[0, 1]` and map the
-/// endpoints exactly. Overshooting curves may return values outside `[0, 1]`,
-/// as Flutter's curves do.
+/// A normalized timing function. [`Self::apply`] clamps input to `[0, 1]`;
+/// [`Self::transform`] checks Flutter's normalized-input contract. Both map
+/// the endpoints exactly. Overshooting curves can still return values
+/// outside the unit interval.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub enum Curve {
     #[default]
@@ -120,6 +121,26 @@ pub struct CurveBlend {
     weight: f32,
 }
 
+/// Error from sampling the raw cubic timing function.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CubicTransformError {
+    /// The curve does not represent a single cubic Bezier.
+    NotCubic,
+    /// Progress was NaN, rather than a numeric sample or clamped endpoint.
+    NaNProgress,
+}
+
+impl std::fmt::Display for CubicTransformError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::NotCubic => "the timing curve is not cubic",
+            Self::NaNProgress => "cubic timing progress must not be NaN",
+        })
+    }
+}
+
+impl std::error::Error for CubicTransformError {}
+
 impl Curve {
     /// Blends the evaluated outputs, retaining both curves for nested blends.
     /// A weight of zero or one reuses that endpoint without allocating.
@@ -136,6 +157,42 @@ impl Curve {
             second,
             weight,
         }))
+    }
+
+    /// Samples a normalized value, like Flutter's Curve.transform.
+    ///
+    /// # Panics
+    /// Asserts in debug builds if progress is outside `[0, 1]` or NaN.
+    /// Use [`Self::apply`] to deliberately clamp arbitrary inputs.
+    #[must_use]
+    #[track_caller]
+    pub fn transform(&self, value: f32) -> f32 {
+        debug_assert!(
+            (0.0..=1.0).contains(&value),
+            "curve transform requires progress in [0, 1]"
+        );
+        self.apply(value)
+    }
+
+    /// Samples Flutter's raw cubic transform. Values outside the unit
+    /// interval clamp to the exact endpoints; NaN is rejected. Both
+    /// named and explicitly authored cubic Beziers are accepted.
+    ///
+    /// # Errors
+    /// Returns [`CubicTransformError`] when the curve is not cubic or
+    /// progress is NaN.
+    pub fn try_cubic_transform_internal(&self, value: f32) -> Result<f32, CubicTransformError> {
+        let (x1, y1, x2, y2) = self.cubic_points().ok_or(CubicTransformError::NotCubic)?;
+        if value.is_nan() {
+            return Err(CubicTransformError::NaNProgress);
+        }
+        if value <= 0.0 {
+            Ok(0.0)
+        } else if value >= 1.0 {
+            Ok(1.0)
+        } else {
+            Ok(cubic_bezier(x1, y1, x2, y2, value))
+        }
     }
 
     #[must_use]
