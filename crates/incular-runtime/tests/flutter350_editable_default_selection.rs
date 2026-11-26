@@ -78,3 +78,38 @@ fn raw_editable_neither_invents_a_highlight_nor_inherits_the_selection_style() {
     assert!(focus.has_primary_focus());
     assert_eq!(controller.selection(), selected);
 }
+
+#[test]
+fn logical_selection_and_affinity_survive_focusing_then_blurring_a_raw_editor() {
+    use incular_text::TextAffinity;
+
+    let controller = TextEditingController::with_text("test test");
+    let selected = TextSelection::new(5, 7);
+    let affinity = TextAffinity::Upstream;
+    controller.set_selection_with_affinity(selected, affinity);
+    let node = FocusNode::new();
+    let field = EditableText::new(controller.clone())
+        .focus_node(node.clone())
+        .text_direction(TextDirection::Ltr);
+    let mut runtime = Runtime::new(field.into()).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
+
+    frame(&mut runtime);
+    assert!(!node.has_focus());
+    assert_eq!(controller.text(), "test test");
+    assert_eq!(controller.selection(), selected);
+    assert_eq!(controller.caret_affinity(), affinity);
+
+    node.request_focus();
+    frame(&mut runtime);
+    assert!(node.has_primary_focus());
+    assert_eq!(controller.selection(), selected);
+    assert_eq!(controller.caret_affinity(), affinity);
+
+    node.unfocus();
+    frame(&mut runtime);
+    assert!(!node.has_focus());
+    assert_eq!(controller.text(), "test test");
+    assert_eq!(controller.selection(), selected);
+    assert_eq!(controller.caret_affinity(), affinity);
+}

@@ -23,3 +23,11 @@ instead of comparing with the whole area. RTL fixture expectations
 outside that native margin path are unchanged in this batch.
 All 48 focused native controls pass, including color, spell-check,
 and geometry. No motion or platform text policy changed here.
+
+## Logical selection on focus and blur
+
+The pinned Linux reference at `widgets/editable_text_test.dart:1344`
+and the native port both pass. The initially unfocused editor keeps
+the (5, 7) range and upstream affinity, then keeps them both while
+focused and after blur. The comparison uses the original's native
+branch; its conditional web select-all path is not newly verified here.

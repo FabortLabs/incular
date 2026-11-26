@@ -2562,3 +2562,4 @@ packages/flutter/test/widgets/box_decoration_test.dart	487	BoxDecoration rounded
 packages/flutter/test/widgets/box_decoration_test.dart	55	DecoratedBox handles loading images	paired-match	upstream-async-decoration-image.md
 packages/flutter/test/widgets/box_decoration_test.dart	77	Moving a DecoratedBox	paired-match	upstream-async-decoration-image.md
 packages/flutter/test/widgets/editable_text_test.dart	1395	EditableText does not derive selection color from DefaultSelectionStyle	paired-match	upstream-editable-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	1344	selection persists when unfocused	paired-match	upstream-editable-defaults.md#logical-selection-on-focus-and-blur
