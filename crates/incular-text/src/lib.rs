@@ -9,6 +9,8 @@ mod editing;
 mod flutter_editing_delta;
 mod spans;
 mod style;
+mod text_painter;
+pub use text_painter::{TextPainter, TextPainterError, TextPainterLine};
 #[cfg(all(target_os = "windows", not(feature = "bundled-dictionaries")))]
 mod windows_segmentation;
 

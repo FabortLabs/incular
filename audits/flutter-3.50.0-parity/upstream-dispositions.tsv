@@ -1998,3 +1998,13 @@ packages/flutter/test/painting/edge_insets_test.dart	399	EdgeInsetsGeometry toSt
 packages/flutter/test/painting/edge_insets_test.dart	434	EdgeInsetsGeometry factories	paired-match	upstream-edge-insets.md#mixed-values-resolve-at-layout
 packages/flutter/test/painting/edge_insets_test.dart	463	EdgeInsetsDirectional.resolve with null TextDirection asserts	paired-match	upstream-edge-insets.md#mixed-values-resolve-at-layout
 packages/flutter/test/painting/edge_insets_test.dart	478	resolve method of _MixedEdgeInsets throws detailed error when TextDirection is null	paired-match	upstream-edge-insets.md#mixed-values-resolve-at-layout
+packages/flutter/test/painting/text_painter_test.dart	943	TextPainter requires textDirection	paired-match	upstream-text-painter.md
+packages/flutter/test/painting/text_painter_test.dart	1538	TextPainter line metrics update after layout	paired-match	upstream-text-painter.md
+packages/flutter/test/painting/text_painter_test.dart	1560	TextPainter line metrics are cached when the paint offset is not zero	paired-match	upstream-text-painter.md
+packages/flutter/test/painting/text_painter_test.dart	1582	TextPainter line metrics are shifted by the paint offset	paired-match	upstream-text-painter.md
+packages/flutter/test/painting/text_painter_test.dart	1718	TextPainter - debugDisposed	paired-match	upstream-text-painter.md
+packages/flutter/test/painting/text_painter_test.dart	1725	TextPainter - asserts if disposed more than once	paired-match	upstream-text-painter.md
+packages/flutter/test/painting/text_painter_test.dart	1768	TextPainter.getWordBoundary works	paired-match	upstream-text-painter.md
+packages/flutter/test/painting/text_painter_test.dart	1814	TextPainter plainText getter	paired-match	upstream-text-painter.md
+packages/flutter/test/painting/text_painter_test.dart	1916	LongestLine TextPainter properly relayout when maxWidth changes.	paired-match	upstream-text-painter.md
+packages/flutter/test/painting/text_painter_test.dart	1934	TextPainter line breaking does not round to integers	paired-match	upstream-text-painter.md

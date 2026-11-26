@@ -673,6 +673,7 @@ fn note_missing_characters(text: &str) {
 /// The sole owner of font discovery and app-registered fonts. Parley owns the
 /// actual font collection and resolves scripts, bidi direction and fallback.
 pub struct TextEngine {
+    instance_id: u64,
     /// One `FontHandle` per distinct font blob. Handles share the font bytes
     /// through a single `Arc`, so every cached text layout references the
     /// same allocation instead of holding a private copy of the whole font
@@ -755,7 +756,9 @@ impl Default for TextEngine {
 impl TextEngine {
     #[must_use]
     pub fn new() -> Self {
+        static IDS: incular_core::IdGenerator = incular_core::IdGenerator::new();
         Self {
+            instance_id: IDS.next(),
             font_handles: HashMap::new(),
             font_context: FontContext::new(),
             layout_context: LayoutContext::new(),
@@ -857,6 +860,10 @@ impl TextEngine {
         self.cache.tick();
         self.unwrapped.tick();
         self.shaped.tick();
+    }
+
+    pub(crate) const fn instance_id(&self) -> u64 {
+        self.instance_id
     }
 
     #[must_use]
