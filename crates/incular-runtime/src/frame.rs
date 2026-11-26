@@ -1862,8 +1862,11 @@ impl Runtime {
         let other_button_event = metadata_rich
             && matches!(phase, PointerPhase::Down | PointerPhase::Up)
             && button.is_some_and(|button| button != PRIMARY_POINTER_BUTTON);
-        let ordinary_gesture_allowed =
-            legacy_pointer || !metadata_rich || !hover_capable || other_button_event;
+        let ordinary_gesture_allowed = legacy_pointer
+            || !metadata_rich
+            || !hover_capable
+            || other_button_event
+            || self.tree.has_active_pointer_gesture(gesture_window, device, pointer);
         if ordinary_gesture_allowed
             && let Some(element) =
                 self.tree

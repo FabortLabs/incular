@@ -423,6 +423,8 @@ impl ButtonGestureCallbacks {
 #[derive(Clone, Default)]
 pub struct GestureCallbacks {
     pub on_tap: Option<Rc<dyn Fn()>>,
+    /// A pointer-only tap with any stable contact mask (not a semantic tap).
+    pub on_any_tap: Option<Rc<dyn Fn()>>,
     pub on_tap_down: Option<Rc<dyn Fn(TapDownDetails)>>,
     pub on_tap_up: Option<Rc<dyn Fn(TapUpDetails)>>,
     pub on_tap_cancel: Option<Rc<dyn Fn()>>,
@@ -579,6 +581,32 @@ impl GestureCallbacks {
         self.supported_devices
             .as_ref()
             .is_none_or(|kinds| kinds.contains(&kind))
+    }
+
+    /// Includes pointer-only any-button taps even when the mask has no
+    /// corresponding primary, secondary, or tertiary callback set.
+    #[doc(hidden)]
+    pub fn for_button_mask(&self, mask: u32) -> Option<Self> {
+        let class = PointerButtonClass::of_press(mask);
+        let mut callbacks = match class {
+            Some(class) => self.for_button_class(class),
+            None if self.on_any_tap.is_some() => Self::default(),
+            None => return None,
+        };
+        if let Some(any) = &self.on_any_tap {
+            let specific = callbacks.on_tap.take();
+            callbacks.on_tap = Some(if let Some(specific) = specific {
+                let any = any.clone();
+                Rc::new(move || {
+                    specific();
+                    any();
+                })
+            } else {
+                any.clone()
+            });
+            callbacks.on_any_tap = None;
+        }
+        Some(callbacks)
     }
 
     /// The callbacks a press made with `class` competes with, as Flutter

@@ -1763,3 +1763,8 @@ packages/flutter/test/widgets/raw_menu_anchor_test.dart	1830	[Group] diagnostics
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	1847	Surface clip behavior	reference-ran-incular-open	upstream-raw-menu-animation-observer-and-shadow.md#remaining-raw-menu-registration-gaps
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	3138	MenuController can be overridden after removing final modifier	reference-ran-incular-open	upstream-raw-menu-animation-observer-and-shadow.md#remaining-raw-menu-registration-gaps
 packages/flutter/test/widgets/single_child_scroll_view_test.dart	111	SingleChildScrollView respects clipBehavior	paired-match	upstream-single-child-scroll-basics.md#retained-clip-coverage
+packages/flutter/test/widgets/modal_barrier_test.dart	732	may pop the Navigator when competing with other gestures	paired-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md#barrier-competition-and-pop-vetoes
+packages/flutter/test/widgets/modal_barrier_test.dart	762	does not pop the Navigator with a WillPopScope that returns false	paired-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md#barrier-competition-and-pop-vetoes
+packages/flutter/test/widgets/modal_barrier_test.dart	808	pops the Navigator with a WillPopScope that returns true	paired-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md#barrier-competition-and-pop-vetoes
+packages/flutter/test/widgets/modal_barrier_test.dart	854	will call onDismiss callback	paired-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md#barrier-competition-and-pop-vetoes
+packages/flutter/test/widgets/modal_barrier_test.dart	883	will not pop when given an onDismiss callback	paired-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md#barrier-competition-and-pop-vetoes

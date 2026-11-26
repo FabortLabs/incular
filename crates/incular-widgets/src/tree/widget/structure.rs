@@ -1847,6 +1847,7 @@ impl PartialEq for WidgetKind {
 
 fn gesture_callbacks_eq(left: &GestureCallbacks, right: &GestureCallbacks) -> bool {
     same_rc(&left.on_tap, &right.on_tap)
+        && same_rc(&left.on_any_tap, &right.on_any_tap)
         && same_rc(&left.on_tap_down, &right.on_tap_down)
         && same_rc(&left.on_tap_up, &right.on_tap_up)
         && same_rc(&left.on_tap_cancel, &right.on_tap_cancel)

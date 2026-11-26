@@ -6,10 +6,11 @@ use incular_core::{
     Color, InputEvent, Offset, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase,
     PointerSampleMetadata, SECONDARY_POINTER_BUTTON, Size,
 };
-use incular_navigation::{Navigator, PageRouteBuilder, Route};
+use incular_navigation::{Navigator, PageRouteBuilder, PopDecision, Route};
 use incular_runtime::{RouteOutlet, Runtime};
 use incular_widgets::{
-    Align, Alignment, AnimatedModalBarrier, GestureDetector, Positioned, SizedBox, Stack, Widget,
+    Align, Alignment, AnimatedModalBarrier, GestureDetector, HitTestBehavior, Positioned, SizedBox,
+    Stack, Widget,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -35,12 +36,32 @@ fn send_touch(
 ) {
     // Flutter WidgetController.press defaults to touch. Its non-primary
     // test sets the secondary bit without switching to a native mouse.
+    send_pointer(
+        runtime,
+        at,
+        pointer,
+        phase,
+        position,
+        button,
+        PointerDeviceKind::Touch,
+    );
+}
+
+fn send_pointer(
+    runtime: &mut Runtime,
+    at: Instant,
+    pointer: u64,
+    phase: PointerPhase,
+    position: Offset,
+    button: u32,
+    kind: PointerDeviceKind,
+) {
     let _ = runtime.handle_input_at(
         InputEvent::PointerWithMetadata {
             pointer,
             device: 1,
-            kind: PointerDeviceKind::Touch,
-            buttons: if phase == PointerPhase::Down {
+            kind,
+            buttons: if matches!(phase, PointerPhase::Down | PointerPhase::Move) {
                 button
             } else {
                 0
@@ -110,8 +131,35 @@ fn a_non_dismissible_barrier_allows_taps_in_front_of_it() {
     check_stack_tap(true);
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ModalScenario {
+    Ordinary,
+    WithDrag,
+    Guarded(bool),
+    Override,
+}
+
 fn check_pop(button: u32) {
+    check_barrier(button, ModalScenario::Ordinary);
+}
+
+fn check_barrier(button: u32, scenario: ModalScenario) {
     let navigator = Rc::new(Navigator::new());
+    let guard_calls = Rc::new(Cell::new(0));
+    let dismissals = Rc::new(Cell::new(0));
+    let drags = Rc::new(Cell::new(0));
+    if let ModalScenario::Guarded(allow) = scenario {
+        let called = guard_calls.clone();
+        navigator.set_pop_guard(move |route| {
+            assert_eq!(route.name, "modal");
+            called.set(called.get() + 1);
+            if allow {
+                PopDecision::Allow
+            } else {
+                PopDecision::Deny
+            }
+        });
+    }
     let mut runtime = Runtime::new(SizedBox::shrink().into()).expect("mount navigation host");
     let outlet = Rc::new(RefCell::new(RouteOutlet::new(
         &navigator,
@@ -136,19 +184,40 @@ fn check_pop(button: u32) {
     let start_button = GestureDetector::new(Widget::box_(Size::new(10., 10.), Color::WHITE))
         .on_tap({
             let navigator = Rc::downgrade(&navigator);
+            let dismissals = dismissals.clone();
+            let drags = drags.clone();
             move || {
                 let navigator = navigator.upgrade().expect("live navigation host");
                 let barrier =
                     Widget::from(AnimatedModalBarrier::with_flat_color(RED).on_dismiss({
                         let navigator = Rc::downgrade(&navigator);
+                        let dismissals = dismissals.clone();
                         move || {
-                            if let Some(navigator) = navigator.upgrade() {
+                            dismissals.set(dismissals.get() + 1);
+                            if scenario != ModalScenario::Override
+                                && let Some(navigator) = navigator.upgrade()
+                            {
                                 let _ = navigator.maybe_pop();
                             }
                         }
                     }))
                     .with_key("opened modal");
-                navigator.push(PageRouteBuilder::new("modal", barrier).build());
+                let panel = if scenario == ModalScenario::WithDrag {
+                    Widget::from(Stack::new([
+                        barrier,
+                        Widget::from(
+                            GestureDetector::new(SizedBox::new().width(800.).height(600.))
+                                .behavior(HitTestBehavior::Translucent)
+                                .on_vertical_drag_start({
+                                    let drags = drags.clone();
+                                    move |_| drags.set(drags.get() + 1)
+                                }),
+                        ),
+                    ]))
+                } else {
+                    barrier
+                };
+                navigator.push(PageRouteBuilder::new("modal", panel).build());
             }
         });
     navigator.push(Route::new(
@@ -189,6 +258,59 @@ fn check_pop(button: u32) {
     present(&mut runtime, 32);
     present(&mut runtime, 1032);
     assert_eq!(snapshot(&runtime), ("modal".to_owned(), true));
+    assert_eq!((guard_calls.get(), dismissals.get()), (0, 0));
+
+    if scenario == ModalScenario::WithDrag {
+        for (ms, phase, offset) in [
+            (1034, PointerPhase::Down, 0.),
+            (1036, PointerPhase::Move, 65.),
+            (1038, PointerPhase::Up, 65.),
+        ] {
+            send_touch(
+                &mut runtime,
+                now + Duration::from_millis(ms),
+                3,
+                phase,
+                BARRIER_CENTER + Offset::new(0., offset),
+                PRIMARY_POINTER_BUTTON,
+            );
+        }
+        present(&mut runtime, 1040);
+        assert_eq!(snapshot(&runtime), ("modal".to_owned(), true));
+        assert_eq!((dismissals.get(), drags.get()), (0, 1));
+
+        for (ms, phase) in [(1042, PointerPhase::Down), (1043, PointerPhase::Cancel)] {
+            send_touch(
+                &mut runtime,
+                now + Duration::from_millis(ms),
+                4,
+                phase,
+                BARRIER_CENTER,
+                PRIMARY_POINTER_BUTTON,
+            );
+        }
+        present(&mut runtime, 1044);
+        assert_eq!(snapshot(&runtime), ("modal".to_owned(), true));
+        assert_eq!(dismissals.get(), 0);
+
+        for (ms, phase, offset) in [
+            (1045, PointerPhase::Down, 0.),
+            (1046, PointerPhase::Move, 65.),
+            (1047, PointerPhase::Up, 65.),
+        ] {
+            send_pointer(
+                &mut runtime,
+                now + Duration::from_millis(ms),
+                5,
+                phase,
+                BARRIER_CENTER + Offset::new(0., offset),
+                SECONDARY_POINTER_BUTTON,
+                PointerDeviceKind::Mouse,
+            );
+        }
+        assert_eq!(dismissals.get(), 0, "a nonprimary mouse drag is not a tap");
+        assert_eq!(drags.get(), 1);
+    }
 
     send_touch(
         &mut runtime,
@@ -215,10 +337,26 @@ fn check_pop(button: u32) {
     );
     present(&mut runtime, 1096);
     present(&mut runtime, 2096);
+    let remains = matches!(
+        scenario,
+        ModalScenario::Guarded(false) | ModalScenario::Override
+    );
     assert_eq!(
         snapshot(&runtime),
-        ("initial".to_owned(), false),
-        "release pops the modal"
+        (
+            if remains { "modal" } else { "initial" }.to_owned(),
+            remains
+        ),
+        "release only pops a permitted route with the default dismiss handler"
+    );
+    assert_eq!(dismissals.get(), 1);
+    assert_eq!(
+        guard_calls.get(),
+        usize::from(matches!(scenario, ModalScenario::Guarded(_)))
+    );
+    assert_eq!(
+        drags.get(),
+        usize::from(scenario == ModalScenario::WithDrag)
     );
 }
 
@@ -244,4 +382,21 @@ fn additional_buttons_release_the_modal_barrier_without_dismissing_on_press() {
     ] {
         check_pop(button);
     }
+}
+
+#[test]
+fn a_drag_or_cancel_leaves_the_barrier_open_but_a_tap_with_a_drag_competitor_pops_it() {
+    check_barrier(PRIMARY_POINTER_BUTTON, ModalScenario::WithDrag);
+}
+
+#[test]
+fn the_barrier_consults_the_pop_guard_on_release_and_respects_both_results() {
+    for allow in [false, true] {
+        check_barrier(PRIMARY_POINTER_BUTTON, ModalScenario::Guarded(allow));
+    }
+}
+
+#[test]
+fn an_override_receives_dismissal_instead_of_popping_the_route() {
+    check_barrier(PRIMARY_POINTER_BUTTON, ModalScenario::Override);
 }

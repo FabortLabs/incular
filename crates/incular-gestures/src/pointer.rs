@@ -389,13 +389,6 @@ impl PointerGestureRecognizer {
         true
     }
 
-    /// Rebinds a raw tap handler without interrupting an in-flight press.
-    /// Used by retained recognizer factories after widget updates.
-    #[doc(hidden)]
-    pub fn set_tap_callback(&mut self, callback: Option<std::rc::Rc<dyn Fn()>>) {
-        self.callbacks.on_tap = callback;
-    }
-
     /// Reports `onTapDown` once, for the press in progress.
     fn flush_tap_down(&mut self) {
         if let Some(details) = self.pending_tap_down.take() {

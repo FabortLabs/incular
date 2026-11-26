@@ -32,6 +32,8 @@ fn visible_paint_children(node: &RenderNode) -> &[RenderObjectId] {
 pub struct PointerHitTest {
     raw: Vec<ElementId>,
     target: Option<RenderObjectId>,
+    // Translucent siblings and pointer-only taps share the ordinary arena.
+    coincident_gestures: Vec<ElementId>,
 }
 
 impl PointerHitTest {
@@ -40,6 +42,10 @@ impl PointerHitTest {
     #[must_use]
     pub const fn target(&self) -> Option<RenderObjectId> {
         self.target
+    }
+
+    pub(super) fn coincident_gestures(&self) -> &[ElementId] {
+        &self.coincident_gestures
     }
 
     /// Raw-input annotations in hit-test order, deepest/frontmost first.
@@ -168,6 +174,7 @@ fn self_hit_after_children(kind: Option<&WidgetKind>, size: Size, local: Offset)
 #[derive(Default)]
 pub(super) struct RawHitResult {
     elements: Vec<ElementId>,
+    coincident_gestures: Vec<ElementId>,
     subtree_hit: bool,
     /// A render target accepted the hit, not just a layout box containing
     /// the point or a translucent annotation adding itself to the path.
@@ -330,6 +337,7 @@ impl WidgetTree {
     pub fn pointer_hit_test(&self, point: Offset) -> PointerHitTest {
         let mut raw = None;
         let mut target = None;
+        let mut coincident_gestures = Vec::new();
         for (_, marker, _, stack, _, popup) in self.transient_portal_entries().into_iter().rev() {
             if raw.is_some() && target.is_some() {
                 break;
@@ -355,6 +363,7 @@ impl WidgetTree {
                 );
                 if claims_overlay_hit(&marker, &result) {
                     raw = Some(result.elements);
+                    coincident_gestures = result.coincident_gestures;
                     target = target.or(hit);
                 } else if !precise {
                     target = target.or(hit);
@@ -375,6 +384,7 @@ impl WidgetTree {
                     false,
                 );
                 raw = Some(result.elements);
+                coincident_gestures = result.coincident_gestures;
                 target = target.or(hit);
             } else {
                 target = self.hit_test_render(root, point, Offset::ZERO);
@@ -383,6 +393,7 @@ impl WidgetTree {
         PointerHitTest {
             raw: raw.unwrap_or_default(),
             target,
+            coincident_gestures,
         }
     }
 
@@ -660,7 +671,13 @@ impl WidgetTree {
                 result.accepts_hit = false;
             }
         } else {
-            use crate::gestures::HitTestBehavior::Opaque;
+            use crate::gestures::HitTestBehavior::{Opaque, Translucent};
+            if let (Some(element), Some(WidgetKind::Gesture { behavior, callbacks, .. })) =
+                (element, kind)
+                && (*behavior == Translucent || callbacks.on_any_tap.is_some())
+            {
+                result.coincident_gestures.push(element);
+            }
             result.accepts_hit |= match kind {
                 Some(WidgetKind::Gesture { behavior, .. })
                 | Some(WidgetKind::Scroll {
@@ -693,6 +710,7 @@ impl WidgetTree {
     ) -> (bool, Option<RenderObjectId>) {
         let mut child_hit = false;
         let mut target = None;
+        let mut coincident_path_blocked = false;
         let mut children = children
             .iter()
             .rev()
@@ -705,6 +723,10 @@ impl WidgetTree {
             } else {
                 child_result.subtree_hit
             };
+            if !coincident_path_blocked {
+                result.coincident_gestures.extend(child_result.coincident_gestures);
+                coincident_path_blocked = child_result.accepts_hit;
+            }
             result.content_hit |= child_result.content_hit;
             result.accepts_hit |= child_result.accepts_hit;
             result.elements.extend(child_result.elements);

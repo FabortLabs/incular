@@ -106,6 +106,15 @@ impl GestureDetector {
         self
     }
 
+    /// Reports a pointer tap regardless of its stable button mask, without
+    /// adding a semantic activation callback.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn on_any_pointer_tap(mut self, callback: impl Fn() + 'static) -> Self {
+        self.callbacks.on_any_tap = Some(Rc::new(callback));
+        self
+    }
+
     /// Sets the on_tap_up callback.
     #[must_use]
     pub fn on_tap_up(mut self, callback: impl Fn(TapUpDetails) + 'static) -> Self {

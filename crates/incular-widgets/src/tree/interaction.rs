@@ -688,10 +688,10 @@ impl WidgetTree {
         kind: crate::raw_input::PointerDeviceKind,
         event: PointerEvent,
     ) -> Option<ElementId> {
-        let target = if event.phase == incular_core::PointerPhase::Down {
-            self.hit_test(event.position)
+        let hit = if event.phase == incular_core::PointerPhase::Down {
+            self.pointer_hit_test(event.position)
         } else {
-            None
+            PointerHitTest::default()
         };
         self.dispatch_pointer_gesture_with_target(
             window,
@@ -701,7 +701,8 @@ impl WidgetTree {
             incular_core::PointerSampleMetadata::EMPTY,
             event,
             false,
-            target,
+            hit.target(),
+            hit.coincident_gestures(),
         )
     }
     /// [`Self::dispatch_pointer_gesture_in_window`] over a hit test the
@@ -723,6 +724,7 @@ impl WidgetTree {
             event,
             false,
             hit.target(),
+            hit.coincident_gestures(),
         )
     }
     /// [`Self::dispatch_pointer_gesture_with_hit`] for a press that carries its
@@ -747,6 +749,7 @@ impl WidgetTree {
             event,
             false,
             hit.target(),
+            hit.coincident_gestures(),
         )
     }
     /// [`Self::dispatch_pointer_gesture_with_hit_buttons`] for an event that
@@ -774,6 +777,7 @@ impl WidgetTree {
             event,
             false,
             hit.target(),
+            hit.coincident_gestures(),
         )
     }
     /// Routes a complete pointer sample to the retained detector arena.
@@ -793,7 +797,16 @@ impl WidgetTree {
             raw.legacy(),
             raw.synthesized,
             hit.target(),
+            hit.coincident_gestures(),
         )
+    }
+
+    /// Whether a physical pointer has joined the ordinary gesture arena.
+    #[doc(hidden)]
+    pub fn has_active_pointer_gesture(&self, window: u64, device: u64, pointer: u64) -> bool {
+        self.input
+            .active_gestures
+            .contains_key(&GestureArenaKey::pointer_device(window, device, pointer))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -807,6 +820,7 @@ impl WidgetTree {
         event: PointerEvent,
         synthesized: bool,
         target: Option<RenderObjectId>,
+        coincident_gestures: &[ElementId],
     ) -> Option<ElementId> {
         use incular_core::PointerPhase;
 
@@ -814,10 +828,29 @@ impl WidgetTree {
         self.flush_single_tap_deadlines(event.time);
         if matches!(event.phase, PointerPhase::Down) {
             self.cancel_gesture_stream(key, true);
-            let hit = target.and_then(|render| self.element_for_render(render))?;
-            let button_class = crate::gestures::PointerButtonClass::of_press(buttons)?;
-            let primary = button_class == crate::gestures::PointerButtonClass::Primary;
-            let elements = self.gesture_ancestors(hit);
+            let hit = target
+                .and_then(|render| self.element_for_render(render))
+                .or_else(|| coincident_gestures.first().copied())?;
+            let primary = crate::gestures::PointerButtonClass::of_press(buttons)
+                == Some(crate::gestures::PointerButtonClass::Primary);
+            let mut elements = self.gesture_ancestors(hit);
+            if !coincident_gestures.is_empty() {
+                // Preserve the target's child-before-parent chain while
+                // inserting translucent paint siblings in the hit order.
+                let mut ordered = Vec::with_capacity(elements.len() + coincident_gestures.len());
+                let mut next_ancestor = 0;
+                for &candidate in coincident_gestures {
+                    if let Some(relative) = elements[next_ancestor..].iter().position(|&id| id == candidate) {
+                        let next = next_ancestor + relative + 1;
+                        ordered.extend_from_slice(&elements[next_ancestor..next]);
+                        next_ancestor = next;
+                    } else if !ordered.contains(&candidate) {
+                        ordered.push(candidate);
+                    }
+                }
+                ordered.extend_from_slice(&elements[next_ancestor..]);
+                elements = ordered;
+            }
             // Fall back to the hit element itself when no gesture
             // ancestor participates: touch-drag scrolling below claims
             // otherwise-unclaimed presses on scrollable viewports.
@@ -853,7 +886,9 @@ impl WidgetTree {
                     continue;
                 }
                 // A press competes only with the callbacks of its own button.
-                let mut callbacks = callbacks.for_button_class(button_class);
+                let Some(mut callbacks) = callbacks.for_button_mask(buttons) else {
+                    continue;
+                };
                 if inner_button.is_some() {
                     callbacks.on_tap = None;
                     callbacks.on_tap_down = None;

@@ -74,3 +74,22 @@ primary-button GestureDetector. No semantic activation is added
 by that recognizer. Five focused runtime cases and four existing
 raw-arena cases passed. This comparison is normalized pointer
 input, not OS-level mouse button integration.
+
+### Barrier competition and pop vetoes
+
+Pinned :732 and the authored competition control now match the mounted
+route. A translucent foreground drag recognizer and the barrier tap
+enter the same arena. A touch drag, a canceled touch, and a moving
+secondary mouse contact do not dismiss; a stable tap dismisses
+exactly once. The initial native any-tap repair consumed the stream
+in the raw route before the foreground recognizer could see it.
+The shared ordinary arena preserves hit order and the target's
+child-before-parent chain.
+
+Pinned :762/:808 and the native guard fixture call the pop guard
+once on release and respect both results. The reference guards
+resolve immediately; native uses its synchronous boolean decision
+and compares settled route/marker presence, not future scheduling.
+Pinned :854/:883 also pair: the supplied onDismiss runs once
+instead of popping the route. Eight modal tests and focused
+pointer, raw-arena, transformed-gesture and menu controls passed.

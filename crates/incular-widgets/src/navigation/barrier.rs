@@ -1,12 +1,9 @@
 //! Animated modal barrier composition and semantics.
 
 use crate::{
-    Animation, Color, Container, ExplicitSemantics, HitTestBehavior, RawGestureDetector, Widget,
+    Animation, Color, Container, ExplicitSemantics, GestureDetector, HitTestBehavior, Widget,
 };
 use incular_animation::{AnimationController, Tween, TweenValue};
-use incular_gestures::{
-    GestureCallbacks, GestureRecognizerFactoryWithHandlers, PointerGestureRecognizer,
-};
 use incular_semantics::{SemanticActionKind, SemanticRole};
 use std::rc::Rc;
 
@@ -260,17 +257,12 @@ impl From<AnimatedModalBarrier> for Widget {
                 None => Container::new().into(),
             };
             if dismissible {
-                // Flutter's private any-tap recognizer accepts the whole
-                // contact mask, not just the primary button. Raw detection
-                // dispatches the release after arena acceptance and doesn't
-                // install a semantic Activate action of its own.
+                // The barrier taps in the same arena as translucent
+                // siblings. Dismiss only after the stable contact wins.
                 let dismiss = dismiss.clone();
-                barrier = RawGestureDetector::new(barrier)
+                barrier = GestureDetector::new(barrier)
                     .behavior(HitTestBehavior::Opaque)
-                    .gesture(GestureRecognizerFactoryWithHandlers::new(
-                        || PointerGestureRecognizer::new(GestureCallbacks::default()),
-                        move |recognizer| recognizer.set_tap_callback(Some(dismiss.clone())),
-                    ))
+                    .on_any_pointer_tap(move || dismiss())
                     .into();
             } else {
                 barrier = Widget::absorb_pointer(true, barrier);
