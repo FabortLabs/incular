@@ -635,3 +635,100 @@ fn declarative_tap_conflict_is_not_removed_by_blocking_one_callback() {
         assert_eq!(&*trace.borrow(), &["second tap"]);
     }
 }
+
+#[test]
+fn sliver_text_payloads_are_delivered_unchanged_to_current_handlers() {
+    #[derive(Debug, PartialEq)]
+    enum Call {
+        Text(&'static str, String),
+        Selection(&'static str, usize, usize),
+    }
+    let calls = Rc::new(RefCell::new(Vec::new()));
+    let build = |marker: &'static str, active: bool, blocked: bool| {
+        let calls = calls.clone();
+        scene(move || {
+            let semantics = Semantics::default()
+                .container(true)
+                .label("editable annotation")
+                .block_user_actions(blocked);
+            if active {
+                let text = calls.clone();
+                let selection = calls.clone();
+                semantics
+                    .on_set_text(move |value| text.borrow_mut().push(Call::Text(marker, value)))
+                    .on_set_selection(move |value| {
+                        selection.borrow_mut().push(Call::Selection(
+                            marker,
+                            value.base,
+                            value.extent,
+                        ));
+                    })
+            } else {
+                // Declaring a payload kind alone must not create an unreachable action.
+                semantics
+                    .action(SemanticAction::SetText(String::new()))
+                    .action(SemanticAction::SetSelection { base: 0, extent: 0 })
+            }
+        })
+    };
+    let mut runtime = Runtime::new(build("first", true, false)).unwrap();
+    frame(&mut runtime);
+    let root = runtime.tree().root().unwrap();
+    let id = node(&runtime, "editable annotation").id;
+    let revision = runtime.tree().semantics().revision();
+    let mut projection = MobileAccessibilityProjection::new();
+    assert!(projection.sync(runtime.tree().semantics()).is_some());
+    let has_text_actions = |runtime: &Runtime, expected| {
+        let node = node(runtime, "editable annotation");
+        assert_eq!(node.id, id);
+        assert_eq!(
+            node.actions.contains(&SemanticActionKind::SetText),
+            expected
+        );
+        assert_eq!(
+            node.actions.contains(&SemanticActionKind::SetSelection),
+            expected
+        );
+        assert!(!node.state.focusable);
+    };
+    has_text_actions(&runtime, true);
+    assert!(runtime.dispatch_semantic_action(id, SemanticAction::SetText("café\nrepeat".into())));
+    assert!(
+        runtime.dispatch_semantic_action(id, SemanticAction::SetSelection { base: 4, extent: 1 },)
+    );
+
+    runtime
+        .schedule_update(root, build("second", true, false))
+        .unwrap();
+    frame(&mut runtime);
+    has_text_actions(&runtime, true);
+    assert_eq!(runtime.tree().semantics().revision(), revision);
+    assert!(projection.sync(runtime.tree().semantics()).is_none());
+    assert!(runtime.dispatch_semantic_action(id, SemanticAction::SetText(String::new())));
+    assert!(
+        runtime.dispatch_semantic_action(id, SemanticAction::SetSelection { base: 1, extent: 5 },)
+    );
+    assert_eq!(
+        &*calls.borrow(),
+        &[
+            Call::Text("first", "café\nrepeat".into()),
+            Call::Selection("first", 4, 1),
+            Call::Text("second", String::new()),
+            Call::Selection("second", 1, 5),
+        ],
+    );
+
+    for (active, blocked) in [(true, true), (false, false)] {
+        runtime
+            .schedule_update(root, build("ignored", active, blocked))
+            .unwrap();
+        frame(&mut runtime);
+        has_text_actions(&runtime, false);
+        assert!(!runtime.dispatch_semantic_action(id, SemanticAction::SetText("ignored".into())));
+        assert!(
+            !runtime
+                .dispatch_semantic_action(id, SemanticAction::SetSelection { base: 0, extent: 0 },)
+        );
+        assert_eq!(calls.borrow().len(), 4);
+    }
+}

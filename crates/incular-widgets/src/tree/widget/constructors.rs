@@ -403,6 +403,22 @@ impl Widget {
         self
     }
 
+    pub(crate) fn with_semantic_payload_callbacks(
+        mut self,
+        bindings: Vec<crate::semantics::SemanticPayloadBinding>,
+    ) -> Self {
+        let payload = &mut self.semantic_properties_mut().callbacks.payload;
+        if payload.is_empty() {
+            *payload = bindings;
+        } else {
+            for binding in bindings {
+                payload.retain(|existing| existing.kind != binding.kind);
+                payload.push(binding);
+            }
+        }
+        self
+    }
+
     pub(crate) fn with_custom_semantic_actions(
         mut self,
         bindings: Vec<crate::semantics::CustomActionBinding>,

@@ -1101,6 +1101,25 @@ impl Runtime {
             self.frame_requested |= notified;
         }
         self.tree.note_semantic_action();
+        if matches!(
+            action,
+            SemanticAction::SetText(_) | SemanticAction::SetSelection { .. }
+        ) {
+            let kind = action.kind();
+            if let Some(callback) = self.tree.semantic_payload_callback(element, kind) {
+                if !self
+                    .tree
+                    .semantics()
+                    .node(node)
+                    .is_some_and(|node| node.actions.contains(&kind))
+                {
+                    return false;
+                }
+                callback(action);
+                self.frame_requested = true;
+                return true;
+            }
+        }
         let handled = match action {
             SemanticAction::Focus => {
                 let blocked =

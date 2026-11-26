@@ -1469,6 +1469,25 @@ impl WidgetTree {
                 .or_else(|| self.merged_sliver_action_callback(id, action))
         })
     }
+    /// Returns the current bound handler for an action with a payload.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn semantic_payload_callback(
+        &self,
+        id: ElementId,
+        action: SemanticActionKind,
+    ) -> Option<Rc<dyn Fn(incular_semantics::SemanticAction) + 'static>> {
+        if self.pointer_actions_blocked(id) {
+            return None;
+        }
+        self.elements
+            .get(id.0)?
+            .widget
+            .semantic_properties()
+            .callbacks
+            .payload_callback(action)
+    }
+
     #[must_use]
     pub fn action_ids(&self) -> HashSet<ActionId> {
         // A local rebuild may prune callbacks without changing any other

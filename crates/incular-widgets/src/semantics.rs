@@ -2,7 +2,7 @@
 
 use incular_semantics::{
     AccessibilityFocusBlockType, AttributedString, CustomSemanticsAction, SemanticAction,
-    SemanticActionKind, SemanticRole, SemanticState, SemanticTextAttributes,
+    SemanticActionKind, SemanticRole, SemanticState, SemanticTextAttributes, TextSelection,
 };
 use smart_default::SmartDefault;
 use std::{rc::Rc, sync::Arc};
@@ -38,6 +38,28 @@ impl PartialEq for CustomActionBinding {
     }
 }
 
+pub(crate) type SemanticPayloadCallback = Rc<dyn Fn(SemanticAction) + 'static>;
+
+#[derive(Clone)]
+pub(crate) struct SemanticPayloadBinding {
+    pub(crate) kind: SemanticActionKind,
+    pub(crate) callback: SemanticPayloadCallback,
+}
+
+impl std::fmt::Debug for SemanticPayloadBinding {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("SemanticPayloadBinding")
+            .field(&self.kind)
+            .finish()
+    }
+}
+
+impl PartialEq for SemanticPayloadBinding {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind == other.kind && Rc::ptr_eq(&self.callback, &other.callback)
+    }
+}
+
 /// An accessible semantic annotation on a widget subtree.
 #[derive(Clone, Default, TypedBuilder)]
 pub struct Semantics {
@@ -53,6 +75,8 @@ pub struct Semantics {
     actions: Vec<SemanticAction>,
     #[builder(default, setter(skip))]
     custom_actions: Vec<CustomActionBinding>,
+    #[builder(default, setter(skip))]
+    payload_callbacks: Vec<SemanticPayloadBinding>,
     #[builder(default)]
     on_tap: Option<Rc<dyn Fn() + 'static>>,
     #[builder(default)]
@@ -125,6 +149,7 @@ impl Semantics {
             description: None,
             actions: Vec::new(),
             custom_actions: Vec::new(),
+            payload_callbacks: Vec::new(),
             on_tap: None,
             on_increase: None,
             on_decrease: None,
@@ -560,6 +585,45 @@ impl Semantics {
         self.action(SemanticAction::LongPress)
     }
 
+    /// Receives the replacement text from an accessibility SetText action.
+    /// This handler does not require or mutate an editable child.
+    #[must_use]
+    pub fn on_set_text(self, callback: impl Fn(String) + 'static) -> Self {
+        self.with_payload_callback(SemanticAction::SetText(String::new()), move |action| {
+            if let SemanticAction::SetText(text) = action {
+                callback(text);
+            }
+        })
+    }
+
+    /// Receives the requested selection in the original base/extent order.
+    #[must_use]
+    pub fn on_set_selection(self, callback: impl Fn(TextSelection) + 'static) -> Self {
+        self.with_payload_callback(
+            SemanticAction::SetSelection { base: 0, extent: 0 },
+            move |action| {
+                if let SemanticAction::SetSelection { base, extent } = action {
+                    callback(TextSelection { base, extent });
+                }
+            },
+        )
+    }
+
+    fn with_payload_callback(
+        mut self,
+        action: SemanticAction,
+        callback: impl Fn(SemanticAction) + 'static,
+    ) -> Self {
+        let kind = action.kind();
+        self.payload_callbacks
+            .retain(|binding| binding.kind != kind);
+        self.payload_callbacks.push(SemanticPayloadBinding {
+            kind,
+            callback: Rc::new(callback),
+        });
+        self.action(action)
+    }
+
     /// Flutter's `Semantics.onDismiss`: advertises a dismiss action and
     /// invokes this callback when the framework dispatches it.
     #[must_use]
@@ -758,6 +822,9 @@ impl From<Semantics> for Widget {
             if let Some(callback) = callback {
                 widget = widget.with_semantic_callback(action, callback);
             }
+        }
+        if !value.payload_callbacks.is_empty() {
+            widget = widget.with_semantic_payload_callbacks(value.payload_callbacks);
         }
         if !value.custom_actions.is_empty() {
             widget = widget.with_custom_semantic_actions(value.custom_actions);

@@ -168,3 +168,20 @@ The ten focused action tests and fifteen runtime action/keyboard focus
 regressions passed. The merged cases are partial matches because
 Incular exposes its portable `ShowOnScreen` action on the node,
 whereas Flutter uses a separate fallback rather than an action bit.
+
+## Typed text action payloads
+
+The pinned all-actions case (line 784) passed. The focused Flutter
+probe `sliver_semantic_text_payloads_test.dart` and Incular's
+`flutter350_sliver_semantics_actions` exercise `SetText` and
+`SetSelection` on a plain annotation, without a text editor. The
+handler receives multiline Unicode or an empty string verbatim and
+preserves reversed and forward base/extent pairs. Replacing the
+handlers uses the same semantic node without publishing an update.
+Removing them rejects requests to the previously advertised actions;
+a blocked callback or an unbound payload kind is not advertised.
+
+All 27 targeted Rust tests passed, including the existing formatter,
+on-change, and disabled-field behavior. The all-actions case remains
+partial: it also requires clipboard, cursor, focus lifecycle, expand
+and collapse callbacks and Flutter's two-pane tags.

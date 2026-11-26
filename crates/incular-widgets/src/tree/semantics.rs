@@ -1510,6 +1510,8 @@ impl WidgetTree {
             SemanticActionKind::ScrollUp,
             SemanticActionKind::ScrollDown,
             SemanticActionKind::LongPress,
+            SemanticActionKind::SetText,
+            SemanticActionKind::SetSelection,
         ] {
             if entry
                 .widget
@@ -2099,6 +2101,7 @@ impl WidgetTree {
             || properties.locale_for_subtree.is_some()
             || properties.description.is_some()
             || !properties.callbacks.custom.is_empty()
+            || !properties.callbacks.payload.is_empty()
             || matches!(entry.widget.kind(), WidgetKind::IndexedSemantics { .. })
         {
             return None;

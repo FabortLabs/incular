@@ -319,6 +319,7 @@ type SemanticActionCallback = Rc<dyn Fn() + 'static>;
 pub(super) struct SemanticCallbacks {
     pub(super) gesture_policy: Option<GestureSemanticPolicy>,
     pub(super) custom: Vec<crate::semantics::CustomActionBinding>,
+    pub(super) payload: Vec<crate::semantics::SemanticPayloadBinding>,
     pub(super) activate: Option<Rc<dyn Fn() + 'static>>,
     pub(super) increment: Option<Rc<dyn Fn() + 'static>>,
     pub(super) decrement: Option<Rc<dyn Fn() + 'static>>,
@@ -335,6 +336,7 @@ impl std::fmt::Debug for SemanticCallbacks {
             .debug_struct("SemanticCallbacks")
             .field("gesture_policy", &self.gesture_policy)
             .field("custom", &self.custom)
+            .field("payload", &self.payload)
             .field("activate", &self.activate.is_some())
             .field("increment", &self.increment.is_some())
             .field("decrement", &self.decrement.is_some())
@@ -356,6 +358,7 @@ impl PartialEq for SemanticCallbacks {
     fn eq(&self, other: &Self) -> bool {
         self.gesture_policy == other.gesture_policy
             && self.custom == other.custom
+            && self.payload == other.payload
             && same_rc(&self.activate, &other.activate)
             && same_rc(&self.increment, &other.increment)
             && same_rc(&self.decrement, &other.decrement)
@@ -421,8 +424,18 @@ impl SemanticCallbacks {
         }
     }
 
+    pub(super) fn payload_callback(
+        &self,
+        action: SemanticActionKind,
+    ) -> Option<crate::semantics::SemanticPayloadCallback> {
+        self.payload
+            .iter()
+            .find(|binding| binding.kind == action)
+            .map(|binding| binding.callback.clone())
+    }
+
     pub(super) fn supports(&self, action: SemanticActionKind) -> bool {
-        self.callback(action).is_some()
+        self.callback(action).is_some() || self.payload.iter().any(|binding| binding.kind == action)
     }
 }
 #[doc(hidden)]
