@@ -54,6 +54,10 @@ pub(super) fn editable_horizontal_max_scroll(
     (width + editable_caret_margin(field) - viewport).max(0.)
 }
 
+pub(super) fn editable_vertical_max_scroll(layout: &impl TextGeometry, viewport: f32) -> f32 {
+    (layout.metrics().size.height - viewport).max(0.)
+}
+
 pub(super) fn reveal_horizontal_caret(
     current: f32,
     caret_left: f32,
@@ -80,7 +84,7 @@ pub(super) fn editable_content_clip(
     let padding = field.content_padding;
     let width = (size.width - padding.horizontal()).max(0.);
     let overflowing = if field.multiline {
-        layout.metrics().size.height > (size.height - padding.vertical()).max(0.)
+        editable_vertical_max_scroll(layout, (size.height - padding.vertical()).max(0.)) > 0.
     } else {
         editable_horizontal_max_scroll(field, layout, width) > 0.
     };
@@ -560,7 +564,7 @@ impl WidgetTree {
         let size = node.size;
         let (target_x, target_y) = if field.multiline {
             let viewport = (size.height - field.content_padding.vertical()).max(0.);
-            let max = (layout.metrics().size.height - viewport).max(0.);
+            let max = editable_vertical_max_scroll(&layout, viewport);
             if max == 0. {
                 return false;
             }
@@ -608,6 +612,32 @@ impl WidgetTree {
         }
         changed
     }
+    /// The editor's maximum scroll extent in content pixels, after layout.
+    /// Limited-line editors use the full wrapped document height, not the
+    /// height of the visible lines. Single-line editors use the caret tail.
+    #[must_use]
+    pub fn editable_max_scroll_extent(&self, id: ElementId) -> Option<f32> {
+        let node = self.renders.get(self.render_id(id)?.0)?;
+        let RenderKind::TextField(field) = node.object.kind() else {
+            return None;
+        };
+        let state = node.text_field_state()?;
+        if node.dirty.contains(DirtyFlags::LAYOUT)
+            || field.controller.revisions() != (state.content_revision, state.visual_revision)
+        {
+            return None;
+        }
+        let layout = node.field_layout()?;
+        let padding = field.content_padding;
+        Some(if field.multiline {
+            let viewport = (node.size.height - padding.vertical()).max(0.);
+            editable_vertical_max_scroll(&layout, viewport)
+        } else {
+            let viewport = (node.size.width - padding.horizontal()).max(0.);
+            editable_horizontal_max_scroll(field, &layout, viewport)
+        })
+    }
+
     /// The text field's current scroll offsets in content pixels.
     #[must_use]
     pub fn text_field_scroll_offset(&self, id: ElementId) -> Option<Offset> {

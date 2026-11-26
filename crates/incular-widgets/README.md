@@ -172,6 +172,8 @@ for the caret.
 
 `WidgetTree::editable_composing_rect` reports local range bounds using
 the editor’s current shaping and scroll.
+Use `WidgetTree::editable_max_scroll_extent` to read the current viewport
+limit without moving the selection or scrolling.
 
 ## Read-only selection
 

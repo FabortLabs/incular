@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- Retained editors can report their scroll extent, including wrapped lines
+  below the viewport and the horizontal caret reservation.
+
 - A mounted editor can report the local text bounds of an IME composing range.
 
 - Retained editable text can measure its minimum and maximum intrinsic widths.

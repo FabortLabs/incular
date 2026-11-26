@@ -2572,6 +2572,7 @@ packages/flutter/test/rendering/editable_test.dart	80	RenderEditable respects cl
 packages/flutter/test/widgets/editable_text_test.dart	11497	EditableText can set and update clipBehavior	paired-match	upstream-editable-paint-clip.md#default-and-live-clip-mode
 packages/flutter/test/rendering/editable_test.dart	334	Can change textAlign	paired-match	upstream-editable-defaults.md#retained-alignment-invalidation
 packages/flutter/test/rendering/editable_test.dart	815	editable hasFocus correctly initialized	paired-match	upstream-editable-focus-selection.md
+packages/flutter/test/rendering/editable_test.dart	834	has correct maxScrollExtent	paired-match	upstream-editable-paint-clip.md#scroll-extent-of-a-line-limited-editor
 packages/flutter/test/rendering/editable_test.dart	917	returns null when no composing range	paired-match	upstream-editable-composing-bounds.md
 packages/flutter/test/rendering/editable_test.dart	937	more than 1 run on the same line	paired-match	upstream-editable-composing-bounds.md
 packages/flutter/test/widgets/focus_scope_test.dart	438	Setting parentNode determines focus tree hierarchy.	paired-match	upstream-mounted-focus-scope-nodes.md#explicit-focus-parents

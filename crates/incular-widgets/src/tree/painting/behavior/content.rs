@@ -1,6 +1,7 @@
 use super::super::*;
 use crate::tree::text::{
-    editable_content_clip, editable_horizontal_max_scroll, reveal_horizontal_caret,
+    editable_content_clip, editable_horizontal_max_scroll, editable_vertical_max_scroll,
+    reveal_horizontal_caret,
 };
 use incular_rendering::{ClipCoverage, ClipIsolation};
 use incular_text::TextGeometry;
@@ -266,7 +267,7 @@ impl WidgetTree {
                             active_scroll_y = caret_y + caret_height - viewport;
                         }
                         active_scroll_y = active_scroll_y
-                            .clamp(0., (layout.metrics().size.height - viewport).max(0.));
+                            .clamp(0., editable_vertical_max_scroll(&layout, viewport));
                     }
                     let clip = editable_content_clip(
                         field,

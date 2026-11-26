@@ -73,3 +73,16 @@ The isolated selection test now explicitly supplies a highlight,
 preserving its actual selection-plus-glyph cache assertion after
 the raw editor's default became unpainted. All five focused native
 tests pass. The original :240 external offset case remains open.
+
+## Scroll extent of a line-limited editor
+
+Pinned `rendering/editable_test.dart:834` passed. The native test uses
+the same mixed-script text and five viewport widths, with Ahem and
+full-width Noto CJK fallback. The same retained editor stays at 20
+pixels tall, while the full text yields extents 90, 50, 40, 10, and 10
+pixels at widths 100, 150, 200, 500, and 1000. Page scrolling reaches
+the measured end without changing the selection. The query uses the
+same vertical extent as clipping and paint, and a single-line
+control also verifies the caret tail and the reset after text becomes
+shorter. Twenty focused native extent, caret, alignment and composing
+checks passed.

@@ -116,3 +116,6 @@ misaligned UTF-8 replacement range does not edit the value or run formatters.
 For renderer-level IME placement, the retained editor can resolve a composing
 range to a local rectangle. The range indexes displayed UTF-8 text before
 masking, and the rectangle includes the current text scroll offset.
+
+The renderer can also report the current scroll extent. A multiline editor
+uses all its wrapped lines, even when `max_lines` limits the viewport.
