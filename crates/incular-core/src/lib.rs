@@ -7,6 +7,7 @@ mod caching_iterable;
 mod change_notifier;
 pub mod collections;
 pub mod debug_double;
+pub mod matrix4;
 pub mod debug_print;
 mod context;
 mod fast_hash;
@@ -78,3 +79,5 @@ pub enum TextDirection {
     /// Right to left.
     Rtl,
 }
+
+pub use matrix4::{CylindricalOrientation, Matrix4, Point64, Rect64};

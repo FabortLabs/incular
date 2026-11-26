@@ -2244,3 +2244,13 @@ packages/flutter/test/widgets/basic_test.dart	568	Semantics can set controls vis
 packages/flutter/test/widgets/basic_test.dart	583	Semantics can set semantics input type	paired-match	upstream-semantic-input-and-controls.md
 packages/flutter/test/foundation/double_precision_test.dart	9	debugFormatDouble formats doubles	paired-match	upstream-debug-double-precision.md
 packages/flutter/test/foundation/double_precision_test.dart	15	debugDoublePrecision can control double precision	paired-match	upstream-debug-double-precision.md
+packages/flutter/test/painting/matrix_utils_test.dart	12	MatrixUtils.transformRect handles very large finite values	paired-match	upstream-matrix-utils.md
+packages/flutter/test/painting/matrix_utils_test.dart	19	MatrixUtils.multiplyInPlace stores result in the second argument	paired-match	upstream-matrix-utils.md
+packages/flutter/test/painting/matrix_utils_test.dart	30	MatrixUtils.getAsTranslation()	paired-match	upstream-matrix-utils.md
+packages/flutter/test/painting/matrix_utils_test.dart	63	cylindricalProjectionTransform identity	paired-match	upstream-matrix-utils.md
+packages/flutter/test/painting/matrix_utils_test.dart	73	cylindricalProjectionTransform rotate with no radius	paired-match	upstream-matrix-utils.md
+packages/flutter/test/painting/matrix_utils_test.dart	83	cylindricalProjectionTransform radius does not change scale	paired-match	upstream-matrix-utils.md
+packages/flutter/test/painting/matrix_utils_test.dart	93	cylindricalProjectionTransform calculation spot check	paired-match	upstream-matrix-utils.md
+packages/flutter/test/painting/matrix_utils_test.dart	119	forceToPoint	paired-match	upstream-matrix-utils.md
+packages/flutter/test/painting/matrix_utils_test.dart	139	transformRect with no perspective (w = 1)	paired-match	upstream-matrix-utils.md
+packages/flutter/test/painting/matrix_utils_test.dart	158	transformRect with perspective (w != 1)	paired-match	upstream-matrix-utils.md
