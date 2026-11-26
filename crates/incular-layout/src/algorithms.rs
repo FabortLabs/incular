@@ -1263,3 +1263,52 @@ fn enforce_constraints(a: Constraints, b: Constraints) -> Constraints {
         max_height.max(min_height),
     )
 }
+
+/// Places a measured child above or below a target in its container.
+///
+/// If exactly one side fits, it wins. Otherwise `prefer_below` breaks
+/// the tie. An overwide child is centered rather than clamped to one edge.
+/// Flutter's default vertical offset is zero and its default margin is ten.
+#[must_use]
+pub fn position_dependent_box(
+    size: Size,
+    child: Size,
+    target: Offset,
+    prefer_below: bool,
+    vertical_offset: f32,
+    margin: f32,
+) -> Offset {
+    let below = target.y + vertical_offset;
+    let above = target.y - vertical_offset - child.height;
+    let lower_edge = size.height - margin;
+    let fits_below = below + child.height <= lower_edge;
+    let fits_above = above >= margin;
+    let use_below = if fits_above == fits_below {
+        prefer_below
+    } else {
+        fits_below
+    };
+    let y = if use_below {
+        if below.is_nan() || lower_edge.is_nan() {
+            f32::NAN
+        } else {
+            below.min(lower_edge)
+        }
+    } else if above.is_nan() || margin.is_nan() {
+        f32::NAN
+    } else {
+        above.max(margin)
+    };
+
+    let horizontal_space = size.width - child.width;
+    let x = if horizontal_space <= 2.0 * margin {
+        horizontal_space / 2.0
+    } else {
+        incular_core::clamp_double(
+            f64::from(target.x - child.width / 2.0),
+            f64::from(margin),
+            f64::from(horizontal_space - margin),
+        ) as f32
+    };
+    Offset::new(x, y)
+}

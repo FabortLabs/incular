@@ -177,6 +177,7 @@ pub use back_gesture::{
     dispatch_back_gesture, dispatch_back_gesture_checked, dispatch_pop_route, dispatch_pop_route_checked,
 };
 pub use box_fit::{FittedSizes, apply_box_fit};
+pub use incular_layout::position_dependent_box;
 pub use compositing::{
     AnnotatedRegion, BackdropFilter, BackdropGroup, CompositedTransformFollower,
     CompositedTransformTarget, ShaderCallback, ShaderMask,
