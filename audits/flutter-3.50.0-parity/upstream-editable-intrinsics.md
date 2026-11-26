@@ -29,3 +29,21 @@ that override at 100; removing the override restores a 40-pixel field.
 The native case also checks widths and retained identity through every
 change. All four focused controls passed; the authored probe does not
 add an original registration.
+
+## Default line height when glyphs use a fallback font
+
+The pinned authored `editable_default_strut_fallback_test.dart` uses
+Ahem plus the repository's Inter fixture. A Greek glyph switches to
+Inter; Flutter still keeps the editor at the base font's 20-pixel
+line height. Incular previously expanded to 24 pixels. The default
+editable strut now forces the base metrics, and the resolved text
+layout reports that height instead of reintroducing the larger
+pre-strut line metric. An explicit zero-size strut disables the
+default and allows the natural fallback height. Both modes keep the
+same render object.
+
+Strut font metrics use a bounded cache. Repeated edits do not reshape
+the template glyph, and registering a font invalidates stale entries.
+The tests check both effects through native counters. All 62 distinct
+focused editor, text painter and document checks passed. The authored
+reference does not add an original registration.

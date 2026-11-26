@@ -482,6 +482,10 @@ pub struct TextDiagnostics {
     pub fallback_fonts_used: u64,
     pub missing_clusters: u64,
     pub shaping_runs: u64,
+    /// Fresh shapes of the template glyph used for strut font metrics.
+    pub strut_font_shapes: u64,
+    /// Resolutions reusing previously shaped strut font metrics.
+    pub strut_font_hits: u64,
     // Task 15 document-granularity instrumentation.
     /// Paragraphs examined by the document path.
     pub paragraphs_considered: u64,
@@ -707,6 +711,9 @@ pub struct TextEngine {
     /// Shaped Parley layouts of paragraphs that wrapped, keyed without their
     /// width; see `shape_raw`.
     shaped: LayoutPool<Layout<()>>,
+    /// Small MRU of font-only strut metrics. Repeated edits use the same
+    /// template glyph metrics rather than reshaping it on each layout.
+    strut_font_metrics: Vec<(LayoutKey<'static>, (f32, f32, f32))>,
     /// Approximate bytes the three pools may retain together; see
     /// `set_cache_byte_budget`.
     cache_byte_budget: usize,
@@ -782,6 +789,7 @@ impl TextEngine {
             cache: LayoutPool::new(cache_share(DEFAULT_CACHE_BYTE_BUDGET)),
             unwrapped: LayoutPool::new(minor_share(DEFAULT_CACHE_BYTE_BUDGET)),
             shaped: LayoutPool::new(minor_share(DEFAULT_CACHE_BYTE_BUDGET)),
+            strut_font_metrics: Vec::new(),
             cache_byte_budget: DEFAULT_CACHE_BYTE_BUDGET,
             documents: Vec::new(),
             retained_documents: Vec::new(),
@@ -835,6 +843,9 @@ impl TextEngine {
         self.cache.set_byte_budget(cache_share(bytes));
         self.unwrapped.set_byte_budget(minor_share(bytes));
         self.shaped.set_byte_budget(minor_share(bytes));
+        if bytes == 0 {
+            self.strut_font_metrics.clear();
+        }
     }
 
     /// Approximate bytes the layout pools retain now. Layouts shared between
@@ -948,6 +959,7 @@ impl TextEngine {
         self.cache.clear();
         self.unwrapped.clear();
         self.shaped.clear();
+        self.strut_font_metrics.clear();
         self.documents.clear();
         self.retained_documents.clear();
         !families.is_empty()
@@ -1037,14 +1049,7 @@ impl TextEngine {
             style.style = font_style;
         }
         self.sync_application_fonts();
-        let mut layout = self.shape_paragraph("M", &style, None, None, &[]);
-        layout.break_all_lines(None);
-        let (ascent, descent, font_leading) = layout
-            .lines()
-            .find_map(|line| line.runs().next().map(|run| *run.font_metrics()))
-            .map_or((style.size, 0., 0.), |metrics| {
-                (metrics.ascent, metrics.descent, metrics.leading)
-            });
+        let (ascent, descent, font_leading) = self.measure_strut_font_metrics(&style);
         let (ascent, descent) = match strut.height {
             Some(height) if ascent + descent > 0. => {
                 let total = height * style.size;
@@ -1071,6 +1076,42 @@ impl TextEngine {
             descent: descent + half_leading,
             force: strut.force_strut_height.unwrap_or(false),
         }
+    }
+
+    fn measure_strut_font_metrics(&mut self, style: &TextStyle) -> (f32, f32, f32) {
+        const STRUT_FONTS_RETAINED: usize = 16;
+        let retain = self.cache_byte_budget != 0;
+        let key = retain.then(|| {
+            LayoutKey::new("M", style, TextLayoutOptions::new(None, TextAlign::Start), self.generation)
+        });
+        if let Some(position) = key.as_ref().and_then(|key| {
+            self.strut_font_metrics.iter().rposition(|(cached, _)| cached == key)
+        }) {
+            self.diagnostics.strut_font_hits += 1;
+            let metrics = self.strut_font_metrics[position].1;
+            if position + 1 != self.strut_font_metrics.len() {
+                let entry = self.strut_font_metrics.remove(position);
+                self.strut_font_metrics.push(entry);
+            }
+            return metrics;
+        }
+
+        self.diagnostics.strut_font_shapes += 1;
+        let mut layout = self.shape_paragraph("M", style, None, None, &[]);
+        layout.break_all_lines(None);
+        let metrics = layout
+            .lines()
+            .find_map(|line| line.runs().next().map(|run| *run.font_metrics()))
+            .map_or((style.size, 0., 0.), |metrics| {
+                (metrics.ascent, metrics.descent, metrics.leading)
+            });
+        if let Some(key) = key {
+            if self.strut_font_metrics.len() == STRUT_FONTS_RETAINED {
+                self.strut_font_metrics.remove(0);
+            }
+            self.strut_font_metrics.push((key, metrics));
+        }
+        metrics
     }
 
     /// Shapes a paragraph with retained wrapping and overflow policy.
@@ -1741,6 +1782,12 @@ impl TextEngine {
             apply_strut(&mut boxes, strut);
         }
         snap_line_boxes(&mut translated, &boxes);
+        if strut.is_some() {
+            // Consumers use this for minimum line counts and viewport
+            // height. Do not let pre-strut fallback font metrics undo a
+            // forced strut (or an enlarged non-forced strut).
+            translated.metrics.line_height = translated.lines[0].height;
+        }
         if !text.is_empty() {
             translated.backgrounds = text_backgrounds(&layout, &translated.lines, style, runs, height_behavior);
         }

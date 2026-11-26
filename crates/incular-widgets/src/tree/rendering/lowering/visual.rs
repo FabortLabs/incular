@@ -211,14 +211,32 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                 }
                 style
             };
+            let style = resolve_field_style(&spec.style);
+            let strut = match spec.strut.as_deref() {
+                Some(strut) if strut.font_size == Some(0.) => None,
+                authored => {
+                    let mut strut = authored.cloned().unwrap_or_else(|| {
+                        incular_text::StrutStyle::new().force_strut_height(true)
+                    });
+                    strut.font_size = strut.font_size.map(|size| scaler.scale(size));
+                    let font_size = strut.font_size.unwrap_or(style.size);
+                    if strut.height.is_none() {
+                        strut.height = match style.line_height {
+                            Some(incular_text::LineHeight::Multiplier(height)) => Some(height),
+                            Some(incular_text::LineHeight::Absolute(height)) if font_size > 0. => {
+                                Some(height / font_size)
+                            }
+                            _ => None,
+                        };
+                    }
+                    Some(Box::new(strut))
+                }
+            };
             RenderKind::TextField(Box::new(TextFieldRender {
                 controller: spec.controller.clone(),
                 desired: spec.size,
-                style: resolve_field_style(&spec.style),
-                strut: spec.strut.clone().map(|mut strut| {
-                    strut.font_size = strut.font_size.map(|size| scaler.scale(size));
-                    strut
-                }),
+                style,
+                strut,
                 placeholder: spec.placeholder.clone(),
                 placeholder_color: spec.placeholder_color,
                 focused_border: spec.focused_border,

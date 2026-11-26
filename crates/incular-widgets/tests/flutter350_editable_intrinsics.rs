@@ -144,3 +144,59 @@ fn an_explicit_scaler_resolves_the_strut_without_following_ambient_scaling() {
     assert_eq!(tree.element_bounds(root).unwrap().size.height, 40.);
     assert_eq!(tree.editable_max_intrinsic_width(root), Some(442.));
 }
+
+#[test]
+fn default_editor_strut_stabilizes_line_height_when_the_glyph_font_falls_back() {
+    let Some(style) = base_style() else { return };
+    const FALLBACK: &str = "Pinned Editable Inter";
+    register_application_font_as(
+        FALLBACK,
+        include_bytes!("../../../harness/flutter/fonts/Inter-Regular.ttf").to_vec(),
+    );
+    let style = style.font_size(20.).fallback_families([FALLBACK]);
+    let controller = TextEditingController::with_text("AΨ");
+    let scene = |disabled| {
+        let field = editor(&controller, &style);
+        Widget::from(if disabled {
+            field.strut_style(StrutStyle::new().font_size(0.))
+        } else {
+            field
+        })
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scene(false)).unwrap();
+    frame(&mut tree);
+    let render = tree.render_id(root);
+    assert_eq!(tree.element_bounds(root).unwrap().size.height, 20.);
+    assert_eq!(tree.editable_intrinsic_height(root, 200.), Some(20.));
+
+    tree.update(root, scene(true)).unwrap();
+    frame(&mut tree);
+    assert_eq!(tree.render_id(root), render);
+    let height = tree.element_bounds(root).unwrap().size.height;
+    assert!(height > 20., "fallback line height is {height}");
+    assert_eq!(tree.editable_intrinsic_height(root, 200.), Some(height));
+
+    tree.update(root, scene(false)).unwrap();
+    frame(&mut tree);
+    assert_eq!(tree.element_bounds(root).unwrap().size.height, 20.);
+
+    let before = tree.text_diagnostics();
+    for value in ["AAΨ", "ΨA", "AAAAΨ"] {
+        controller.set_text(value);
+        frame(&mut tree);
+        assert_eq!(tree.element_bounds(root).unwrap().size.height, 20.);
+    }
+    let after = tree.text_diagnostics();
+    assert_eq!(after.strut_font_shapes, before.strut_font_shapes);
+    assert!(after.strut_font_hits >= before.strut_font_hits + 3);
+
+    register_application_font_as(
+        "Late Editor Font",
+        include_bytes!("../../../harness/flutter/fonts/Inter-Regular.ttf").to_vec(),
+    );
+    assert!(tree.has_pending_application_fonts());
+    frame(&mut tree);
+    assert!(tree.text_diagnostics().strut_font_shapes > after.strut_font_shapes);
+    assert_eq!(tree.element_bounds(root).unwrap().size.height, 20.);
+}
