@@ -1934,6 +1934,7 @@ packages/flutter/test/widgets/sliver_semantics_widget_test.dart	635	SliverSemant
 packages/flutter/test/widgets/sliver_semantics_widget_test.dart	682	SliverSemantics tagForChildren works	reference-ran-incular-open	upstream-sliver-semantics.md#viewport-tag-scope
 packages/flutter/test/widgets/sliver_semantics_widget_test.dart	735	SliverSemantics tagForChildren works with Semantics widget	reference-ran-incular-open	upstream-sliver-semantics.md#viewport-tag-scope
 packages/flutter/test/widgets/sliver_semantics_widget_test.dart	784	SliverSemantics supports all actions	partial-match	upstream-sliver-semantics.md#typed-text-action-payloads
+packages/flutter/test/widgets/sliver_semantics_widget_test.dart	934	SliverSemantics supports all flags	partial-match	upstream-sliver-semantics.md#declared-flags-and-actual-input-focus
 packages/flutter/test/widgets/sliver_semantics_widget_test.dart	1170	SliverSemantics supports tooltip	partial-match	upstream-sliver-semantics.md#action-replacement-descriptions-and-exclusion
 packages/flutter/test/widgets/sliver_semantics_widget_test.dart	1210	SliverSemantics actions can be replaced without triggering semantics update	partial-match	upstream-sliver-semantics.md#action-replacement-descriptions-and-exclusion
 packages/flutter/test/widgets/sliver_semantics_widget_test.dart	1351	SliverSemantics onTapHint and onLongPressHint create custom actions	partial-match	upstream-sliver-semantics.md#action-replacement-descriptions-and-exclusion

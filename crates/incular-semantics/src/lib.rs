@@ -411,6 +411,11 @@ pub struct SemanticState {
     pub has_enabled_state: bool,
     pub focused: bool,
     pub focusable: bool,
+    /// Explicit semantic focus state; absent when derived from a real
+    /// keyboard focus target. False still declares the node focusable.
+    pub declared_focused: Option<bool>,
+    /// Legacy explicit override of the focusable semantics flag.
+    pub declared_focusable: Option<bool>,
     /// Effective Flutter accessibility focus scope for this semantic node.
     pub accessibility_focus_block_type: AccessibilityFocusBlockType,
     /// Preferred hit policy for platforms supporting semantic overlays.
@@ -492,6 +497,17 @@ pub struct SemanticState {
 }
 
 impl SemanticState {
+    /// Effective override of the input-focus flag. A focused declaration
+    /// takes precedence over the legacy focusable declaration.
+    #[must_use]
+    pub const fn declared_input_focusable(&self) -> Option<bool> {
+        if self.declared_focused.is_some() {
+            Some(true)
+        } else {
+            self.declared_focusable
+        }
+    }
+
     #[must_use]
     pub const fn effective_validation_result(&self) -> SemanticValidationResult {
         if self.invalid {
@@ -547,6 +563,8 @@ impl Default for SemanticState {
             has_enabled_state: false,
             focused: false,
             focusable: false,
+            declared_focused: None,
+            declared_focusable: None,
             accessibility_focus_block_type: AccessibilityFocusBlockType::None,
             hit_test_behavior: SemanticsHitTestBehavior::Defer,
             selected: false,

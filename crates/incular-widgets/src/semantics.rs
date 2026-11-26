@@ -427,9 +427,19 @@ impl Semantics {
         self
     }
 
+    /// Declares the accessibility representation of input focus without
+    /// requesting keyboard focus. Both true and false declare focusability.
     #[must_use]
     pub fn focused(mut self, focused: bool) -> Self {
-        self.state.focused = focused;
+        self.state.declared_focused = Some(focused);
+        self
+    }
+
+    /// Sets the legacy focusable flag without creating a keyboard target.
+    /// A declared `focused` value takes precedence if also supplied.
+    #[must_use]
+    pub fn focusable(mut self, focusable: bool) -> Self {
+        self.state.declared_focusable = Some(focusable);
         self
     }
 

@@ -1628,17 +1628,27 @@ impl WidgetTree {
             actions.push(SemanticActionKind::ShowOnScreen);
         }
         let focus_blocked = state.accessibility_focus_block_type.blocks_focus();
-        let focusable = !focus_blocked && self.can_request_focus(element);
-        if focus_blocked || (focus_annotation.is_some() && !focusable) {
-            // The portable projection uses false for the omitted focused
-            // flag. The independent retained keyboard focus is untouched.
+        let keyboard_target = !focus_blocked && self.can_request_focus(element);
+        let declared_focusable = state.declared_input_focusable();
+        state.focusable = !focus_blocked
+            && declared_focusable.unwrap_or(
+                keyboard_target || state.focusable || (focus_annotation.is_none() && state.focused),
+            );
+        if let Some(focused) = state.declared_focused {
+            state.focused = focused;
+        }
+        if !state.focusable
+            || (focus_annotation.is_some() && !keyboard_target && declared_focusable.is_none())
+        {
+            // The independent retained keyboard focus is not changed.
             state.focused = false;
         }
-        state.focusable = focusable;
         let bound_focus = !focus_blocked
             && entry.widget.semantic_properties().callbacks.supports(SemanticActionKind::Focus);
         let focus_action = bound_focus
-            || (focusable && (focus_annotation.is_none() || self.focus_semantic_actions_enabled));
+            || (keyboard_target
+                && declared_focusable != Some(false)
+                && (focus_annotation.is_none() || self.focus_semantic_actions_enabled));
         let has_user_actions = focus_action
             || !actions.is_empty()
             || merged.standard_actions != 0
@@ -3168,6 +3178,8 @@ fn overlay_semantic_state(base: &mut SemanticState, overlay: &SemanticState) {
     take!(
         focused,
         focusable,
+        declared_focused,
+        declared_focusable,
         hit_test_behavior,
         selected,
         checked,

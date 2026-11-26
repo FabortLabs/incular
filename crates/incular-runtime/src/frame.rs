@@ -1136,6 +1136,7 @@ impl Runtime {
                 let blocked =
                     self.tree.semantics().node(node).is_some_and(|node| {
                         node.state.accessibility_focus_block_type.blocks_focus()
+                            || node.state.declared_input_focusable() == Some(false)
                     });
                 if !blocked && self.tree.can_dispatch_semantic_focus(element) {
                     self.set_focus(Some(element));

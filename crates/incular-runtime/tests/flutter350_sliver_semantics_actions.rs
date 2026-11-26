@@ -1055,3 +1055,64 @@ fn accessibility_focus_notifications_survive_user_action_blocking_without_steali
     }
     assert!(calls.borrow().is_empty());
 }
+
+#[test]
+fn declared_semantic_input_focus_does_not_create_or_move_keyboard_focus() {
+    let build = |focused: Option<bool>, focusable: Option<bool>| {
+        scene(move || {
+            let mut annotation = Semantics::default().container(true).label("annotation");
+            if let Some(focused) = focused {
+                annotation = annotation.focused(focused);
+            }
+            if let Some(focusable) = focusable {
+                annotation = annotation.focusable(focusable);
+            }
+            annotation
+        })
+    };
+    let mut runtime = Runtime::new(build(None, None)).unwrap();
+    frame(&mut runtime);
+    let root = runtime.tree().root().unwrap();
+    let keyboard_focus = runtime.focused_element();
+    let id = node(&runtime, "annotation").id;
+    let mut mobile = MobileAccessibilityProjection::new();
+    let mut old_flags = None;
+    for (focused, focusable, expected) in [
+        (None, None, (false, false)),
+        (Some(false), None, (true, false)),
+        (Some(true), None, (true, true)),
+        (None, Some(true), (true, false)),
+        (None, Some(false), (false, false)),
+        (None, None, (false, false)),
+    ] {
+        runtime
+            .schedule_update(root, build(focused, focusable))
+            .unwrap();
+        frame(&mut runtime);
+        let annotation = node(&runtime, "annotation");
+        assert_eq!(annotation.id, id);
+        assert_eq!(
+            (annotation.state.focusable, annotation.state.focused),
+            expected
+        );
+        assert!(!annotation.actions.contains(&SemanticActionKind::Focus));
+        assert!(!runtime.dispatch_semantic_action(id, SemanticAction::Focus));
+        assert_eq!(runtime.focused_element(), keyboard_focus);
+        if old_flags != Some(expected) {
+            let update = mobile.sync(runtime.tree().semantics()).unwrap();
+            let native = update
+                .nodes
+                .iter()
+                .find(|entry| entry.semantic.id == id)
+                .unwrap();
+            assert_eq!(
+                (
+                    native.semantic.state.focusable,
+                    native.semantic.state.focused
+                ),
+                expected
+            );
+        }
+        old_flags = Some(expected);
+    }
+}

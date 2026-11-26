@@ -329,3 +329,17 @@ offset zero. Incular checks both its fixed and delegate-based
 persistent header forms. The 18 focused Rust cases passed.
 The upstream resizing case is partial because it additionally
 asserts Flutter's separately tagged render wrapper.
+
+## Declared flags and actual input focus
+
+The pinned all-flags registration at line 934 passed. The authored
+focus probe and paired retained check distinguish an unspecified flag
+from unconditionally declared false. `focused(false)` and
+`focusable(true)` report a focusable but unfocused semantic node.
+`focused(true)` reports focused; removing the declaration or setting
+only `focusable(false)` removes focusability. The node ID remains
+stable, and none of these annotation changes creates a keyboard
+target or makes an unbound Focus action executable. The projected
+values follow through the portable mobile adapter. All 37 targeted
+Rust checks passed. The upstream combined role and route flags are
+not yet completely covered.
