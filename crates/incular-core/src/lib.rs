@@ -25,6 +25,7 @@ mod observer_list;
 pub mod reactivity;
 mod restoration;
 pub mod serialization;
+pub mod standard_message_codec;
 pub mod time;
 mod value_notifier;
 mod widget;
