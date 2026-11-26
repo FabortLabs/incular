@@ -31,3 +31,14 @@ gets an unclamped reveal offset of 60 while the scrolling operation
 clamps to the available 40 and leaves the row visible at y=20.
 The focused native viewport, EnsureVisible and grid-cache suites and
 the minimal facade check passed.
+
+## Padded box sliver geometry
+
+Pinned :314/:363/:413/:567 and the native CustomScrollView fixtures
+use 100 px box adapters with 22 px physical leading-side padding and
+23 px on the opposite side. The fifth adapter's mounted box has the
+same bounds as the one-box Flutter sliver. The query returns 747/647
+down and right, and 748/648 up and left, for the whole box. A local
+(1,2,2,2) subrectangle matches all eight pinned offsets, including
+the reversed edges. None of the queries moves the controller.
+The separate reverse-growth center case is still under comparison.

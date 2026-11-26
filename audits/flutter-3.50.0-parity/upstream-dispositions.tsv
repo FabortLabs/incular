@@ -1827,3 +1827,7 @@ packages/flutter/test/rendering/viewport_test.dart	91	Viewport getOffsetToReveal
 packages/flutter/test/rendering/viewport_test.dart	145	Viewport getOffsetToReveal - right	paired-match	upstream-viewport-reveal.md#leading-trailing-and-subrectangle-geometry
 packages/flutter/test/rendering/viewport_test.dart	201	Viewport getOffsetToReveal - up	paired-match	upstream-viewport-reveal.md#leading-trailing-and-subrectangle-geometry
 packages/flutter/test/rendering/viewport_test.dart	257	Viewport getOffsetToReveal - left	paired-match	upstream-viewport-reveal.md#leading-trailing-and-subrectangle-geometry
+packages/flutter/test/rendering/viewport_test.dart	314	Viewport getOffsetToReveal Sliver - down	paired-match	upstream-viewport-reveal.md#padded-box-sliver-geometry
+packages/flutter/test/rendering/viewport_test.dart	363	Viewport getOffsetToReveal Sliver - right	paired-match	upstream-viewport-reveal.md#padded-box-sliver-geometry
+packages/flutter/test/rendering/viewport_test.dart	413	Viewport getOffsetToReveal Sliver - up	paired-match	upstream-viewport-reveal.md#padded-box-sliver-geometry
+packages/flutter/test/rendering/viewport_test.dart	567	Viewport getOffsetToReveal Sliver - left	paired-match	upstream-viewport-reveal.md#padded-box-sliver-geometry

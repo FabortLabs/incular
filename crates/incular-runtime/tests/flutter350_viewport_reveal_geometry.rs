@@ -132,3 +132,61 @@ fn a_variable_box_list_reports_unclamped_geometry_and_scrolls_within_its_range()
         Some(rect(0., 20., 120., 80.))
     );
 }
+
+#[test]
+fn padded_box_slivers_reveal_at_the_correct_logical_edge() {
+    use incular_config::EdgeInsets;
+    use incular_widgets::{CustomScrollView, Sliver, SliverPadding, SliverToBoxAdapter};
+
+    for axis in [Axis::Vertical, Axis::Horizontal] {
+        for reverse in [false, true] {
+            let ctl = ScrollController::new().with_initial_scroll_offset(300.);
+            let (w, h, tile_w, tile_h, padding) = match axis {
+                Axis::Vertical => (300., 200., 300., 100., EdgeInsets::only(0., 22., 0., 23.)),
+                Axis::Horizontal => (200., 300., 100., 300., EdgeInsets::only(22., 0., 23., 0.)),
+            };
+            let slivers = (0u64..20).map(|index| -> Box<dyn Sliver> {
+                let row: Widget = SizedBox::new().width(tile_w).height(tile_h).into();
+                Box::new(SliverPadding::new(
+                    padding,
+                    SliverToBoxAdapter::new(row.with_key(index)),
+                ))
+            });
+            let viewport = CustomScrollView::new(slivers)
+                .controller(ctl.clone())
+                .scroll_direction(axis)
+                .reverse(reverse);
+            let mut runtime =
+                Runtime::new(Directionality::new(TextDirection::Ltr, viewport).into()).unwrap();
+            runtime
+                .run_frame(Constraints::tight(Size::new(w, h)))
+                .unwrap();
+            assert_eq!(ctl.offset(), 300.);
+            let tree = runtime.tree();
+            let target = tree
+                .element_with_key(&5u64.into())
+                .expect("first three pixels of the target are inside the cache");
+            let subrect = Some(rect(1., 2., 2., 2.));
+            let expected = match (axis, reverse) {
+                (Axis::Vertical, false) => [747., 647., 749., 551.],
+                (Axis::Horizontal, false) => [747., 647., 748., 550.],
+                (Axis::Vertical, true) => [748., 648., 844., 646.],
+                (Axis::Horizontal, true) => [748., 648., 845., 647.],
+            };
+            for ((alignment, subrect), expected) in
+                [(0., None), (1., None), (0., subrect), (1., subrect)]
+                    .into_iter()
+                    .zip(expected)
+            {
+                assert_eq!(
+                    Scrollable::get_offset_to_reveal(tree, target, alignment, subrect)
+                        .unwrap()
+                        .offset,
+                    expected,
+                    "{axis:?} reverse={reverse}, alignment={alignment}, subrect={subrect:?}"
+                );
+            }
+            assert_eq!(ctl.offset(), 300.);
+        }
+    }
+}
