@@ -44,6 +44,15 @@ pub enum AnimationStatus {
 }
 
 impl AnimationStatus {
+    pub(crate) const fn diagnostic_symbol(self) -> &'static str {
+        match self {
+            Self::Forward => "▶",
+            Self::Reverse => "◀",
+            Self::Completed => "⏭",
+            Self::Dismissed => "⏮",
+        }
+    }
+
     /// Flutter `AnimationStatus.isAnimating`: running forward or in reverse.
     #[must_use]
     pub const fn is_animating(self) -> bool {
@@ -495,12 +504,7 @@ impl fmt::Debug for AnimationController {
 impl fmt::Display for AnimationController {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let controller = self.inner.borrow();
-        let symbol = match controller.state.status {
-            AnimationStatus::Forward => "▶",
-            AnimationStatus::Reverse => "◀",
-            AnimationStatus::Completed => "⏭",
-            AnimationStatus::Dismissed => "⏮",
-        };
+        let symbol = controller.state.status.diagnostic_symbol();
         write!(f, "AnimationController({symbol} {:.3}", controller.state.value)?;
         if controller.run.is_none() {
             f.write_str("; paused")?;

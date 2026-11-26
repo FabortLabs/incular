@@ -71,7 +71,7 @@ fn chained_tween_maps_the_controllers_initial_progress() {
     use std::time::Duration;
 
     let outer = TweenValue::new(0.30_f64, 0.50);
-    assert_one_line_debug(outer);
+    assert_one_line_debug(&outer);
     let chain = outer.chain(TweenValue::new(0.50_f32, 1.0));
     let controller = AnimationController::new(Duration::from_millis(100));
     assert_eq!(chain.transform(controller.value()), 0.40);
@@ -80,16 +80,23 @@ fn chained_tween_maps_the_controllers_initial_progress() {
 
 #[test]
 fn animated_and_driven_tweens_observe_the_controller_after_attachment() {
-    use incular_animation::{AnimationController, DoubleAnimation, TweenValue};
-    use std::time::Duration;
+    use incular_animation::{AnimationController, TweenValue};
 
-    let controller = AnimationController::new(Duration::from_millis(100));
+    let controller = AnimationController::without_duration();
     let tween = TweenValue::new(0.30_f64, 0.50);
-    let from_tween = tween.animate(&controller);
-    let from_controller = DoubleAnimation::from(&controller).drive(tween);
+    let from_tween = tween.clone().animate(&controller);
+    let from_controller = controller.drive_animatable(tween);
     assert_eq!((from_tween.value(), from_controller.value()), (0.30, 0.30));
     controller.set_value(0.50);
-    assert_eq!((from_tween.value(), from_controller.value()), (0.40, 0.40));
+    for animation in [&from_tween, &from_controller] {
+        assert_eq!(animation.value(), 0.40);
+        let whole = animation.to_string();
+        let details = animation.diagnostic_details().to_string();
+        assert_eq!(whole.lines().count(), 1);
+        assert_eq!(details.lines().count(), 1);
+        assert!(whole.contains("0.5") && whole.ends_with("0.4"), "{whole}");
+        assert!(details.contains("TweenValue") && details.ends_with("0.4"), "{details}");
+    }
 }
 
 #[test]

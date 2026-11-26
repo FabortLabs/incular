@@ -1149,8 +1149,8 @@ packages/flutter/test/services/system_chrome_test.dart	393	SystemChrome reports 
 packages/flutter/test/painting/box_decoration_test.dart	69	BoxDecoration.lerp supports custom BoxBorder subclasses	paired-match	upstream-custom-box-border.md
 packages/flutter/test/painting/box_decoration_test.dart	79	BoxDecoration.scale supports custom BoxBorder subclasses	paired-match	upstream-custom-box-border.md
 packages/flutter/test/animation/tween_test.dart	99	Can chain tweens	paired-match	upstream-tween-transform-and-lifecycle.md#nullable-borders-and-typed-tween-values
-packages/flutter/test/animation/tween_test.dart	108	Can animate tweens	partial-match	upstream-tween-transform-and-lifecycle.md#nullable-borders-and-typed-tween-values
-packages/flutter/test/animation/tween_test.dart	118	Can drive tweens	partial-match	upstream-tween-transform-and-lifecycle.md#nullable-borders-and-typed-tween-values
+packages/flutter/test/animation/tween_test.dart	108	Can animate tweens	paired-match	upstream-tween-transform-and-lifecycle.md#driven-tween-diagnostics
+packages/flutter/test/animation/tween_test.dart	118	Can drive tweens	paired-match	upstream-tween-transform-and-lifecycle.md#driven-tween-diagnostics
 packages/flutter/test/animation/tween_test.dart	128	BorderTween nullable test	paired-match	upstream-tween-transform-and-lifecycle.md#nullable-borders-and-typed-tween-values
 packages/flutter/test/animation/tween_test.dart	139	SizeTween	paired-match	upstream-tween-transform-and-lifecycle.md#nullable-borders-and-typed-tween-values
 packages/flutter/test/animation/tween_test.dart	151	RectTween	paired-match	upstream-tween-transform-and-lifecycle.md#nullable-borders-and-typed-tween-values

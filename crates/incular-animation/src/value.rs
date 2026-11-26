@@ -6,6 +6,12 @@ use std::{marker::PhantomData, time::Duration};
 
 /// A value that can be sampled from normalized animation progress.
 pub trait Animatable<T> {
+    /// The concrete transform type shown by a driven animation diagnostic.
+    #[doc(hidden)]
+    fn diagnostic_name(&self) -> &'static str {
+        std::any::type_name::<Self>()
+    }
+
     #[must_use]
     fn value_at(&self, progress: f32) -> T;
 }

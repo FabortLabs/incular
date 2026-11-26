@@ -18,6 +18,7 @@ use incular_core::reactivity::{DependencySource, Subscription, TrackingGuard};
 use incular_core::ValueNotifier;
 use std::{
     cell::{Cell, OnceCell, RefCell},
+    fmt,
     rc::{Rc, Weak},
 };
 
@@ -288,6 +289,43 @@ impl<T> Clone for DrivenAnimation<T> {
     }
 }
 
+struct DrivenAnimationDetails<'a, T>(&'a DrivenAnimation<T>);
+
+impl<T: fmt::Debug> fmt::Display for DrivenAnimationDetails<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let animation = self.0;
+        write!(
+            f,
+            "{} {}: {:?}",
+            animation.status().diagnostic_symbol(),
+            animation.animatable.diagnostic_name(),
+            animation.value(),
+        )
+    }
+}
+
+impl<T: fmt::Debug> fmt::Display for DrivenAnimation<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}➩{}", self.parent, self.diagnostic_details())
+    }
+}
+
+impl<T: fmt::Debug> fmt::Debug for DrivenAnimation<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+
+impl AnimationController {
+    /// Drives a typed animatable from this controller's live value.
+    /// This is Flutter's typed drive operation; Incular's timestamped
+    /// `drive` continues to animate the controller itself to a target.
+    #[must_use]
+    pub fn drive_animatable<T>(&self, animatable: impl Animatable<T> + 'static) -> DrivenAnimation<T> {
+        DrivenAnimation::new(self, animatable)
+    }
+}
+
 impl<T> DrivenAnimation<T> {
     #[must_use]
     pub fn new(
@@ -308,6 +346,15 @@ impl<T> DrivenAnimation<T> {
     #[must_use]
     pub fn status(&self) -> AnimationStatus {
         self.parent.status()
+    }
+
+    /// Describes the live value and transform without formatting its
+    /// parent or creating a new animation.
+    pub fn diagnostic_details(&self) -> impl fmt::Display + '_
+    where
+        T: fmt::Debug,
+    {
+        DrivenAnimationDetails(self)
     }
 
     #[must_use]

@@ -199,3 +199,14 @@ asserts Dart's animation details string. Matrix4Tween (:159) is partial:
 the XY translation and scale projection and the rotation around Z match,
 but Incular's affine transform does not represent the Z scale of 5 or
 its interpolated value of 3. Six focused Rust targets passed.
+
+## Driven tween diagnostics
+
+Pinned `animation/tween_test.dart:108,118` passed. Both attachment
+paths evaluate the live controller, giving 0.30 initially and 0.40
+after the original 0.50 assignment. The complete description and its
+details are each a single line, reflecting the concrete transform
+and live value. The direct typed controller API is
+`drive_animatable`; Incular's existing timestamped `drive` remains
+unchanged. Also repaired stale test moves after TweenValue became
+owned. All 45 focused tween, controller and animation-graph tests passed.
