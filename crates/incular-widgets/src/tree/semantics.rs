@@ -1080,12 +1080,12 @@ impl WidgetTree {
                 clip.intersection(bounds).unwrap_or_default()
             })
         };
-        let child_bounds_clip = if render
+        let child_bounds_clip = if let Some(local_clip) = render
             .object
             .layers
-            .has_semantic_overflow_clip(render.object.kind())
+            .approximate_box_paint_clip(render.object.kind(), render.size)
         {
-            let clip = world.transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, render.size));
+            let clip = world.transform_rect_bbox(local_clip);
             Some(semantic_bounds_clip.map_or(clip, |ancestor| {
                 ancestor.intersection(clip).unwrap_or_default()
             }))

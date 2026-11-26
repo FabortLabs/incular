@@ -827,8 +827,8 @@ fn nested_clips_balance() {
 fn transformed_child_crossing_clip_boundary_keeps_picture() {
     // Clipping is a raster effect: the translated child's picture is still
     // recorded (no retained culling) while the clip bounds raster output.
-    // Hit testing follows layout bounds through the clip node, and
-    // semantic bounds stay whole.
+    // Hit testing follows layout bounds; Flutter also intersects the
+    // accessibility rectangle without shrinking the retained child.
     let mut tree = WidgetTree::new();
     let root = tree
         .mount(centered(Widget::from(ClipRect::new(Widget::from(
@@ -844,7 +844,7 @@ fn transformed_child_crossing_clip_boundary_keeps_picture() {
     let clips = world_clips(&list);
     assert_eq!(clips.len(), 1, "clip still records, got {clips:?}");
     // Child 40x40 at column x 80, shifted +30: paints at (110,0), hanging
-    // 10px past the clip's right edge at x 120... the clip node spans
+    // 30px past the clip's right edge at x 120... the clip node spans
     // (80,0,40,40) while the picture spans (110,0,40,40).
     let expected_clip = Rect::from_origin_size(Offset::new(80., 0.), Size::new(40., 40.));
     match &clips[0] {
@@ -852,6 +852,7 @@ fn transformed_child_crossing_clip_boundary_keeps_picture() {
         other => panic!("expected plain rect clip, got {other:?}"),
     }
     let expected_child = Rect::from_origin_size(Offset::new(110., 0.), Size::new(40., 40.));
+    assert_rect_eq(tree.element_bounds(moved).unwrap(), expected_child, "retained child");
     // Positive target: inside both the translated child and the clip node.
     let hit = tree
         .hit_test(Offset::new(115., 10.))
@@ -870,7 +871,11 @@ fn transformed_child_crossing_clip_boundary_keeps_picture() {
         .semantic_node_for_element(moved)
         .and_then(|id| tree.semantics().node(id))
         .expect("shifted semantics");
-    assert_rect_eq(semantic.bounds, expected_child, "shifted semantic bounds");
+    assert_rect_eq(
+        semantic.bounds,
+        Rect::from_origin_size(Offset::new(110., 0.), Size::new(10., 40.)),
+        "shifted semantic bounds",
+    );
 }
 
 #[test]

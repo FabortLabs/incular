@@ -1144,6 +1144,19 @@ impl WidgetTree {
     pub fn render_object_kind(&self, id: RenderObjectId) -> Option<&RenderKind> {
         self.renders.get(id.0).map(|render| render.object.kind())
     }
+
+    /// Flutter's approximate paint clip for an ordinary retained box, in
+    /// that box's local coordinates. This is the accessibility projection,
+    /// not the precise paint or hit-test shape.
+    #[must_use]
+    pub fn describe_approximate_paint_clip(&self, id: RenderObjectId) -> Option<Rect> {
+        let render = self.renders.get(id.0)?;
+        render
+            .object
+            .layers
+            .approximate_box_paint_clip(render.object.kind(), render.size)
+    }
+
     /// Describes all retained IndexedStack children in their logical
     /// order. Only the selected child is shown as an ordinary sparse node;
     /// a null selection marks every child as offstage without unmounting.

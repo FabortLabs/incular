@@ -746,6 +746,11 @@ impl WidgetTree {
             world_transform,
             content_transform,
         );
+        if layers.has_box_semantic_clip(&kind) {
+            // A live reclip can change the accessibility rectangle without
+            // changing the retained widget or any child's layout.
+            self.mark_render_semantics(render, SemanticsDirty::Subtree);
+        }
         self.diagnostics.compositor_only_updates += 1;
     }
 

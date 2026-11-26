@@ -16,6 +16,11 @@ use crate::layout::ClipShape;
 use crate::painting_effects::RasterPaintSources;
 use crate::tree::{RenderKind, WidgetKind};
 
+enum BoxPaintClip<'a> {
+    LayoutBounds,
+    Custom(&'a ClipDelegate),
+}
+
 /// Whether a widget clips raster output through a compositor clip layer.
 /// `Clip::None` disables clipping; every other behavior clips.
 fn widget_clips(widget: &WidgetKind) -> bool {
@@ -1292,12 +1297,51 @@ impl RenderLayers {
         self.layout_overflow.set(overflow);
     }
 
-    /// Flutter RenderFlex's approximate semantic clip is active only
-    /// when its paint would actually apply the configured overflow clip.
+    fn box_paint_clip<'a>(&self, kind: &'a RenderKind) -> Option<BoxPaintClip<'a>> {
+        match kind {
+            RenderKind::ClipRect {
+                clip_behavior,
+                clipper,
+            }
+            | RenderKind::ClipRRect {
+                clip_behavior,
+                clipper,
+                ..
+            }
+            | RenderKind::ClipOval {
+                clip_behavior,
+                clipper,
+            }
+            | RenderKind::ClipPath {
+                clip_behavior,
+                clipper,
+                ..
+            } if *clip_behavior != Clip::None => Some(
+                clipper
+                    .as_ref()
+                    .map_or(BoxPaintClip::LayoutBounds, BoxPaintClip::Custom),
+            ),
+            RenderKind::Flex { clip_behavior, .. }
+                if *clip_behavior != Clip::None && self.layout_overflow.get() =>
+            {
+                Some(BoxPaintClip::LayoutBounds)
+            }
+            _ => None,
+        }
+    }
+
     #[must_use]
-    pub(crate) fn has_semantic_overflow_clip(&self, kind: &RenderKind) -> bool {
-        matches!(kind, RenderKind::Flex { clip_behavior, .. } if *clip_behavior != Clip::None)
-            && self.layout_overflow.get()
+    pub(crate) fn has_box_semantic_clip(&self, kind: &RenderKind) -> bool {
+        self.box_paint_clip(kind).is_some()
+    }
+
+    /// The clip bounds for accessibility are independent of the paint
+    /// and hit-test shape, as in Flutter's describeApproximatePaintClip.
+    pub(crate) fn approximate_box_paint_clip(&self, kind: &RenderKind, size: Size) -> Option<Rect> {
+        Some(match self.box_paint_clip(kind)? {
+            BoxPaintClip::LayoutBounds => Rect::from_origin_size(Offset::ZERO, size),
+            BoxPaintClip::Custom(clipper) => clipper.approximate_clip_rect(size),
+        })
     }
 
     /// Keep the child's content and clip stage available, but bypass the

@@ -1253,7 +1253,7 @@ impl WidgetTree {
         let geometry_before = (
             previous.size,
             self.content_transform(id),
-            previous.object.layers.has_semantic_overflow_clip(&kind),
+            previous.object.layers.has_box_semantic_clip(&kind),
         );
         let (size, offsets) = self.layout_kind(id, &kind, children, constraints)?;
         for (&child, offset) in children.iter().zip(offsets) {
@@ -1273,7 +1273,7 @@ impl WidgetTree {
             self.compositor
                 .update_transform(layer, CoreTransform::translation(offset));
         }
-        let (layer, node_offset, overflow_clip_active) = {
+        let (layer, node_offset, semantic_clip_active) = {
             let node = self.render_live_mut(id, "retained render must remain live");
             node.size = size;
             node.constraints = Some(constraints);
@@ -1281,7 +1281,7 @@ impl WidgetTree {
             (
                 node.object.layers.root,
                 node.offset,
-                node.object.layers.has_semantic_overflow_clip(&kind),
+                node.object.layers.has_box_semantic_clip(&kind),
             )
         };
         self.render_live_mut(id, "retained render must remain live")
@@ -1310,8 +1310,8 @@ impl WidgetTree {
         // above, and whoever places this node marks it. A new size changes
         // this node's bounds alone; a new content transform moves everything
         // below it.
-        if overflow_clip_active != geometry_before.2
-            || (overflow_clip_active && size != geometry_before.0)
+        if semantic_clip_active != geometry_before.2
+            || (semantic_clip_active && size != geometry_before.0)
         {
             // Descendants can enter or leave the accessibility clip even
             // when their own layout size and offset remain unchanged.
