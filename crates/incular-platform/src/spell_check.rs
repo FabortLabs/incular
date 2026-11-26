@@ -9,6 +9,15 @@ use std::{cell::RefCell, fmt, ops::Range, rc::Rc};
 
 use incular_config::Locale;
 
+use crate::message_codecs::{MessageValue, MethodCall, StandardMethodCodec};
+
+/// Platform channel used by Flutter's default spelling service.
+pub const FLUTTER_SPELL_CHECK_CHANNEL: &str = "flutter/spellcheck";
+
+/// The asynchronous reply from a standard method channel, if one was received.
+pub type FlutterSpellCheckReply = Box<dyn FnOnce(Option<Vec<u8>>)>;
+
+
 /// Flutter's `SuggestionSpan`: a misspelled range and the replacements the
 /// spell checker suggests for it.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
@@ -136,7 +145,8 @@ pub trait SpellCheckService {
 /// native spell checker and merges repeated results for unchanged text.
 ///
 /// Flutter talks to the native checker over the `flutter/spellcheck`
-/// channel. Here a host supplies the checker with [`Self::with_native`];
+/// channel. A host can supply either that transport with
+/// [`Self::with_flutter_method_channel`] or a checker with [`Self::with_native`];
 /// without one, as on every platform Incular currently runs on, each check
 /// answers `None`, as Flutter does when the channel call fails.
 #[derive(Default)]
@@ -159,6 +169,16 @@ impl DefaultSpellCheckService {
             native: Some(Rc::new(native)),
             last_saved_results: Rc::default(),
         }
+    }
+
+    /// Uses the Flutter spell-check standard method channel as the native
+    /// provider. The embedder supplies the transport and completes each
+    /// reply; this service encodes calls and validates UTF-16 reply ranges.
+    #[must_use]
+    pub fn with_flutter_method_channel(
+        send: impl Fn(&'static str, Vec<u8>, FlutterSpellCheckReply) + 'static,
+    ) -> Self {
+        Self::with_native(FlutterSpellCheckTransport(send))
     }
 
     /// Flutter `lastSavedResults`: the last results this service answered.
@@ -233,5 +253,113 @@ impl SpellCheckService for DefaultSpellCheckService {
                 done(Some(spans));
             }),
         );
+    }
+}
+
+
+struct FlutterSpellCheckTransport<F>(F);
+
+impl<F> SpellCheckService for FlutterSpellCheckTransport<F>
+where
+    F: Fn(&'static str, Vec<u8>, FlutterSpellCheckReply),
+{
+    fn fetch_spell_check_suggestions(&self, locale: &Locale, text: &str, done: SpellCheckCallback) {
+        let Ok(call) = StandardMethodCodec::encode_method_call(&MethodCall {
+            method: "SpellCheck.initiateSpellCheck".into(),
+            arguments: MessageValue::List(vec![
+                MessageValue::String(locale.to_string()),
+                MessageValue::String(text.to_owned()),
+            ]),
+        }) else {
+            done(None);
+            return;
+        };
+        let offsets = SpellCheckOffsets::new(text);
+        (self.0)(
+            FLUTTER_SPELL_CHECK_CHANNEL,
+            call,
+            Box::new(move |response| {
+                let spans = response.and_then(|bytes| {
+                    let MessageValue::List(results) =
+                        StandardMethodCodec::decode_envelope(&bytes).ok()?
+                    else {
+                        return None;
+                    };
+                    results.into_iter().map(|span| offsets.decode_span(span)).collect()
+                });
+                done(spans);
+            }),
+        );
+    }
+}
+
+enum SpellCheckOffsets {
+    Ascii(usize),
+    Utf16(Vec<usize>),
+}
+
+impl SpellCheckOffsets {
+    fn new(text: &str) -> Self {
+        if text.is_ascii() {
+            return Self::Ascii(text.len());
+        }
+        let mut boundaries = vec![0];
+        for (byte, ch) in text.char_indices() {
+            if ch.len_utf16() == 2 {
+                // An offset inside a surrogate pair has no UTF-8 boundary.
+                boundaries.push(usize::MAX);
+            }
+            boundaries.push(byte + ch.len_utf8());
+        }
+        Self::Utf16(boundaries)
+    }
+
+    fn byte_offset(&self, value: Option<MessageValue>) -> Option<usize> {
+        let MessageValue::Int(offset) = value? else {
+            return None;
+        };
+        let offset = usize::try_from(offset).ok()?;
+        match self {
+            Self::Ascii(length) => (offset <= *length).then_some(offset),
+            Self::Utf16(boundaries) => boundaries
+                .get(offset)
+                .copied()
+                .filter(|&byte| byte != usize::MAX),
+        }
+    }
+
+    fn decode_span(&self, span: MessageValue) -> Option<SuggestionSpan> {
+        let MessageValue::Map(fields) = span else {
+            return None;
+        };
+        let (mut start, mut end, mut suggestions) = (None, None, None);
+        for (key, value) in fields {
+            let MessageValue::String(key) = key else {
+                continue;
+            };
+            match key.as_str() {
+                "startIndex" => start = Some(value),
+                "endIndex" => end = Some(value),
+                "suggestions" => suggestions = Some(value),
+                _ => {}
+            }
+        }
+        let (start, end) = (self.byte_offset(start)?, self.byte_offset(end)?);
+        if start > end {
+            return None;
+        }
+        let MessageValue::List(suggestions) = suggestions? else {
+            return None;
+        };
+        Some(SuggestionSpan {
+            range: start..end,
+            suggestions: suggestions
+                .into_iter()
+                .map(|suggestion| match suggestion {
+                    MessageValue::String(suggestion) => Some(suggestion),
+                    _ => None,
+                })
+                .collect::<Option<_>>()?,
+        })
     }
 }

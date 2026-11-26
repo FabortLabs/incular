@@ -86,8 +86,8 @@ pub use pointer::{
     LogicalWindowPositionError, NativePointerSample, PointerMetadata,
 };
 pub use spell_check::{
-    DefaultSpellCheckService, SpellCheckCallback, SpellCheckResults, SpellCheckService,
-    SuggestionSpan,
+    DefaultSpellCheckService, FLUTTER_SPELL_CHECK_CHANNEL, FlutterSpellCheckReply,
+    SpellCheckCallback, SpellCheckResults, SpellCheckService, SuggestionSpan,
 };
 pub use system_environment::{
     MemorySystemEnvironmentProvider, SystemEnvironmentPreferences, SystemEnvironmentProvider,
