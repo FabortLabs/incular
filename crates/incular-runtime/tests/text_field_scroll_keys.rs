@@ -165,3 +165,75 @@ fn apple_page_keys_scroll_beyond_the_visible_line_cap() {
         assert_eq!(scroll(&runtime), Offset::ZERO);
     }
 }
+
+#[test]
+fn apple_single_line_page_keys_preserve_selection_and_reach_the_full_right_extent() {
+    use incular_text::{TextAffinity, TextAlign, TextStyle};
+
+    // The pinned fixture's first line is followed by other logical lines.
+    // Exercise its full-width setup and a narrower width with real overflow.
+    let text = "Now is the time for\nall good people\nto come to the aid\nof their country.";
+    for platform in [TextShortcutPlatform::Ios, TextShortcutPlatform::MacOs] {
+        for width in [400., 80.] {
+            let controller = TextEditingController::with_text(text);
+            let selection = TextSelection::collapsed(0);
+            controller.set_selection_with_affinity(selection, TextAffinity::Upstream);
+            let mut runtime = Runtime::new(
+                EditableText::new(controller.clone())
+                    .autofocus(true)
+                    .min_lines(Some(1))
+                    .text_align(TextAlign::Right)
+                    .text_direction(incular_widgets::TextDirection::Ltr)
+                    .style(TextStyle::new().font_size(14.).line_height_absolute(20.))
+                    .into(),
+            )
+            .unwrap();
+            runtime.set_text_shortcut_platform(platform);
+            let bounds = Constraints::new(width, width, 0., 400.);
+            let first = runtime.run_frame(bounds).unwrap();
+            assert_eq!(controller.selection(), selection);
+            assert_eq!(scroll(&runtime), Offset::ZERO);
+
+            let glyph_end = first
+                .0
+                .commands()
+                .iter()
+                .filter_map(|command| match command {
+                    incular_rendering::PaintCommand::GlyphRun { run, .. } => {
+                        Some(run.glyphs.iter().fold(0.0_f32, |edge, glyph| {
+                            edge.max(run.origin.x + glyph.offset.x + glyph.advance)
+                        }))
+                    }
+                    _ => None,
+                })
+                .fold(0.0_f32, f32::max);
+            // At the overflowing width layout starts at x=0. The viewport
+            // must scroll the two-pixel caret plus its one-pixel gap too.
+            let extent = if width == 80. {
+                glyph_end + 3. - width
+            } else {
+                0.
+            };
+            assert!(
+                width != 80. || extent > 10.,
+                "the narrow case really overflows"
+            );
+            for (key, expected) in [
+                (Code::PageUp, extent),
+                (Code::Home, 0.),
+                (Code::PageDown, extent),
+            ] {
+                let event =
+                    KeyboardEvent::key_down(KeyboardKey::Named(NamedKey::Unidentified), key);
+                let _ = runtime.handle_input(InputEvent::Key(event));
+                runtime.run_frame(bounds).unwrap();
+                let actual = scroll(&runtime).x;
+                assert!(
+                    (actual - expected).abs() < 0.05,
+                    "{platform:?} {width} {key:?}: {actual} != {expected}"
+                );
+                assert_eq!(controller.selection(), selection);
+            }
+        }
+    }
+}

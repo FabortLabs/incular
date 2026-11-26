@@ -1,7 +1,6 @@
 use super::super::*;
 use crate::tree::text::{
-    editable_content_clip, editable_horizontal_max_scroll, editable_left_aligned_ltr,
-    reveal_horizontal_caret,
+    editable_content_clip, editable_horizontal_max_scroll, reveal_horizontal_caret,
 };
 use incular_rendering::{ClipCoverage, ClipIsolation};
 use incular_text::TextGeometry;
@@ -212,7 +211,7 @@ impl WidgetTree {
                     );
                     let available = (size.width - content_padding.horizontal()).max(0.);
                     if !multiline {
-                        if editable_left_aligned_ltr(field) {
+                        if field.text_direction == TextDirection::Ltr {
                             if reveal {
                                 active_scroll_x = reveal_horizontal_caret(
                                     active_scroll_x,

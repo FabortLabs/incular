@@ -6,11 +6,10 @@ use crate::selection::{
 };
 use incular_text::{LineBoundary, TextGeometry};
 
-/// Whether the editor uses the nonnegative, left-aligned horizontal range.
-/// RTL alignment can intentionally produce a negative visual origin.
-pub(super) fn editable_left_aligned_ltr(field: &TextFieldRender) -> bool {
-    field.text_direction == TextDirection::Ltr
-        && rendering::physical_text_align(field.text_align, field.text_direction) == TextAlign::Left
+/// The cursor and the one-pixel gap after it are part of the paragraph's
+/// scrollable tail, but not its alignment width.
+pub(super) fn editable_caret_margin(field: &TextFieldRender) -> f32 {
+    field.cursor_width + 1.
 }
 
 /// Includes the invisible one-pixel gap and caret width in the scrollable
@@ -21,7 +20,7 @@ pub(super) fn editable_horizontal_max_scroll(
     viewport: f32,
 ) -> f32 {
     let width = layout.get_line(0).map_or(0., |line| line.width());
-    (width + field.cursor_width + 1. - viewport).max(0.)
+    (width + editable_caret_margin(field) - viewport).max(0.)
 }
 
 pub(super) fn reveal_horizontal_caret(
@@ -482,7 +481,7 @@ impl WidgetTree {
         let multiline = field.multiline;
         let available = (size.width - field.content_padding.horizontal()).max(0.);
         let viewport = (size.height - field.content_padding.vertical()).max(0.);
-        let horizontal = (!multiline && editable_left_aligned_ltr(field)).then(|| {
+        let horizontal = (!multiline && field.text_direction == TextDirection::Ltr).then(|| {
             (
                 field.cursor_width,
                 editable_horizontal_max_scroll(field, &layout, available),
@@ -544,7 +543,7 @@ impl WidgetTree {
             (None, Some(target.clamp(0., max)))
         } else {
             let available = (size.width - field.content_padding.horizontal()).max(0.);
-            let max = if editable_left_aligned_ltr(field) {
+            let max = if field.text_direction == TextDirection::Ltr {
                 editable_horizontal_max_scroll(field, &layout, available)
             } else {
                 let (left, right) =

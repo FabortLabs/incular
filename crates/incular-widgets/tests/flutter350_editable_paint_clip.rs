@@ -230,3 +230,41 @@ fn single_line_caret_is_fully_revealed_at_the_horizontal_viewport_edge() {
     assert!((scroll.x - 1.).abs() < 0.01, "shows the full end caret");
     assert_eq!(controller.selection(), TextSelection::collapsed(0));
 }
+
+#[test]
+fn fitting_right_aligned_editor_reserves_the_caret_margin_inside_the_box() {
+    let editor = TextEditingController::with_text("A");
+    editor.set_selection(TextSelection::collapsed(1));
+    let mut tree = WidgetTree::new();
+    let cursor = incular_core::Color::rgba(17, 31, 49, 255);
+    let root = tree
+        .mount(
+            EditableText::new(editor)
+                .text_direction(TextDirection::Ltr)
+                .text_align(incular_text::TextAlign::Right)
+                .cursor_width(4.)
+                .cursor_color(cursor)
+                .into(),
+        )
+        .unwrap();
+    let now = incular_core::time::Instant::now();
+    tree.set_focused(root, true, now).unwrap();
+    tree.layout(Constraints::tight(Size::new(80., 30.)))
+        .unwrap();
+    tree.update_compositor(now).unwrap();
+    let caret = tree
+        .paint()
+        .commands()
+        .iter()
+        .find_map(|command| match command {
+            PaintCommand::Rect { rect, color } if *color == cursor => Some(*rect),
+            _ => None,
+        })
+        .expect("painted caret");
+    assert!(
+        (caret.origin.x + caret.size.width - 79.).abs() < 0.02,
+        "{caret:?}"
+    );
+    assert_eq!(tree.text_field_scroll_offset(root), Some(Offset::ZERO));
+    assert!(tree.editable_approximate_paint_clip(root).is_none());
+}

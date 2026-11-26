@@ -17,3 +17,22 @@ the previously scrolled viewport.
 Both pinned Flutter platform variants and all 36 focused native
 checks passed. The single-line registration at :9411 was rerun in
 Flutter as a control; it is not yet paired with this fixture.
+
+## Single-line scrolling
+
+The right-aligned :9411 case now also pairs on iOS and macOS.
+Both Page Up and Page Down go to the maximum position, Home returns
+to the start, and all three leave the collapsed selection alone.
+A narrower native control exercised a real overflow instead of
+only the full-width case. The old Page Up offset stopped three
+pixels short because it ignored the default two-pixel caret and
+one-pixel gap.
+
+For fitting right-aligned text, the pinned authored probe also
+verified the four-pixel caret ended at x=79 in an 80 px viewport.
+Incular previously painted that caret at x=80 through x=84.
+Single-line LTR layout now reserves the same caret margin used by
+clipping and scrolling; the retained RTL path stays separate.
+
+Both Flutter variants, two authored Flutter probes, and all 38
+focused native checks passed.
