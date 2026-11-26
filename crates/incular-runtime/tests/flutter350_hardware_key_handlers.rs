@@ -101,6 +101,59 @@ fn failed_handler_does_not_interrupt_state_or_later_handlers() {
     );
 }
 
+#[cfg(panic = "unwind")]
+#[test]
+fn hardware_key_error_reports_the_original_event_in_both_transit_modes() {
+    use incular_runtime::KeyMessage;
+    use incular_widgets::RawKeyEvent;
+
+    for raw_only in [true, false] {
+        let mut runtime = Runtime::new(SizedBox::shrink().into()).unwrap();
+        let reports = Rc::new(RefCell::new(Vec::new()));
+        runtime.set_hardware_key_error_handler({
+            let reports = reports.clone();
+            move |error| {
+                reports.borrow_mut().push((
+                    error.event.code,
+                    error.event.key,
+                    error.event.state.is_down(),
+                    *error.payload.downcast::<u8>().unwrap(),
+                ));
+            }
+        });
+        let bad = runtime.add_hardware_key_handler(|_| std::panic::panic_any(1_u8));
+        let later = Rc::new(Cell::new(0));
+        let _later = runtime.add_hardware_key_handler({
+            let later = later.clone();
+            move |_| {
+                later.set(later.get() + 1);
+                false
+            }
+        });
+        let message = |down| {
+            let typed = key(down);
+            let raw = RawKeyEvent::from(typed.clone());
+            if raw_only {
+                KeyMessage::Raw(raw)
+            } else {
+                KeyMessage::TypedAndRaw { typed, raw }
+            }
+        };
+        assert!(!runtime.dispatch_key_message(message(true)));
+        assert_eq!(later.get(), 1);
+        assert_eq!(
+            reports.take(),
+            [(Code::KeyA, KeyboardKey::Character("a".into()), true, 1)]
+        );
+        assert!(runtime.hardware_keyboard().is_physical_key_pressed(Code::KeyA));
+        drop(bad);
+        assert!(!runtime.dispatch_key_message(message(false)));
+        assert_eq!(later.get(), 2);
+        assert!(reports.borrow().is_empty());
+        assert!(!runtime.hardware_keyboard().is_physical_key_pressed(Code::KeyA));
+    }
+}
+
 #[test]
 fn mutations_apply_after_the_current_dispatch_snapshot() {
     let dispatcher = HardwareKeyHandlers::default();

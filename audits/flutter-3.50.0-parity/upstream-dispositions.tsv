@@ -834,7 +834,7 @@ packages/flutter/test/services/keyboard_key_test.dart	50	Control characters are 
 packages/flutter/test/services/hardware_keyboard_test.dart	18	HardwareKeyboard records pressed keys and enabled locks	paired-match	upstream-keyboard-services.md#pressed-keys-and-lock-state
 packages/flutter/test/services/hardware_keyboard_test.dart	105	KeyEvent can tell which keys are pressed	paired-match	upstream-keyboard-services.md#pressed-keys-and-lock-state
 packages/flutter/test/services/hardware_keyboard_test.dart	164	Dispatch events to all handlers	paired-match	upstream-keyboard-services.md#window-wide-handler-order-and-failure-isolation
-packages/flutter/test/services/hardware_keyboard_test.dart	529	Exceptions from HardwareKeyboard handlers are caught and reported	partial-match	upstream-keyboard-services.md#window-wide-handler-order-and-failure-isolation
+packages/flutter/test/services/hardware_keyboard_test.dart	529	Exceptions from HardwareKeyboard handlers are caught and reported	paired-match	upstream-keyboard-services.md#window-wide-handler-order-and-failure-isolation
 packages/flutter/test/services/hardware_keyboard_test.dart	573	debugPrintKeyboardEvents causes logging of key events	paired-match	upstream-keyboard-services.md#irregular-events-and-keyboard-diagnostics
 packages/flutter/test/services/hardware_keyboard_test.dart	593	Irregular key events are processed	paired-match	upstream-keyboard-services.md#irregular-events-and-keyboard-diagnostics
 packages/flutter/test/scheduler/debug_test.dart	9	debugAssertAllSchedulerVarsUnset control test	paired-match	scheduler-callback-phases-comparisons.md#scheduler-debug-banners

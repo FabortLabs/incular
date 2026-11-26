@@ -51,6 +51,7 @@ use incular_widgets::{
     Widget,
 };
 use std::{
+    any::Any,
     cell::{Cell, RefCell},
     collections::{HashMap, VecDeque},
     rc::{Rc, Weak},
@@ -150,6 +151,13 @@ pub enum KeyMessage {
     },
 }
 
+/// A caught failure from a window-wide hardware-key handler. The event
+/// is the same portable event whose pressed state the runtime recorded.
+pub struct HardwareKeyHandlerError {
+    pub event: KeyboardEvent,
+    pub payload: Box<dyn Any + Send + 'static>,
+}
+
 /// Retained application execution, input dispatch and frame coordination.
 pub struct Runtime {
     pub(crate) tree: WidgetTree,
@@ -203,6 +211,7 @@ pub struct Runtime {
     pub(crate) keyboard_modifiers: incular_core::Modifiers,
     hardware_keyboard: incular_core::HardwareKeyboardState,
     hardware_key_handlers: incular_core::HardwareKeyHandlers,
+    hardware_key_error_handler: Option<Box<dyn Fn(HardwareKeyHandlerError)>>,
     early_focus_key_handlers: FocusKeyHandlers,
     late_focus_key_handlers: FocusKeyHandlers,
     keyboard_event_debug_listener: Option<Box<dyn Fn(&str)>>,
@@ -432,6 +441,7 @@ impl Runtime {
             keyboard_modifiers: incular_core::Modifiers::empty(),
             hardware_keyboard: incular_core::HardwareKeyboardState::default(),
             hardware_key_handlers: incular_core::HardwareKeyHandlers::default(),
+            hardware_key_error_handler: None,
             early_focus_key_handlers: FocusKeyHandlers::default(),
             late_focus_key_handlers: FocusKeyHandlers::default(),
             keyboard_event_debug_listener: None,
@@ -3004,6 +3014,20 @@ impl Runtime {
         self.hardware_key_handlers.add(handler)
     }
 
+    /// Reports caught hardware-key callback failures with their original
+    /// panic payload and input event. Other callbacks and pressed-state
+    /// bookkeeping continue. Without a reporter, failures are logged.
+    pub fn set_hardware_key_error_handler(
+        &mut self,
+        handler: impl Fn(HardwareKeyHandlerError) + 'static,
+    ) {
+        self.hardware_key_error_handler = Some(Box::new(handler));
+    }
+
+    pub fn clear_hardware_key_error_handler(&mut self) {
+        self.hardware_key_error_handler = None;
+    }
+
     /// Adds a window-local focus-key handler before the focused node and
     /// its ancestors. A handled result prevents the focus route from running.
     pub fn add_early_focus_key_handler(
@@ -3132,6 +3156,13 @@ impl Runtime {
 
         let hardware = self.hardware_key_handlers.dispatch(&event);
         for failure in hardware.failures {
+            if let Some(handler) = &self.hardware_key_error_handler {
+                handler(HardwareKeyHandlerError {
+                    event: event.clone(),
+                    payload: failure,
+                });
+                continue;
+            }
             let message = failure
                 .downcast_ref::<&str>()
                 .copied()

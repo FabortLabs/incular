@@ -31,10 +31,15 @@ Both pinned variants of `services/hardware_keyboard_test.dart:164` and
 duplicate registrations, removal, all-callback delivery even when one
 handler accepts, and focused notification after global handlers. A
 snapshot control verifies that edits to the registration list during
-dispatch apply to subsequent events. A panic does not prevent later
-handlers or pressed-state updates. That case (:529) stays partial: Rust
-collects typed payloads and logs the event context rather than producing
-FlutterErrorDetails. Fourteen focused Rust checks passed.
+dispatch apply to subsequent events.
+
+The :529 keyboard error reporter receives the original typed panic
+payload and key event in both raw-only and typed-plus-raw transit.
+A later handler still runs, the failed key-down remains pressed, and
+key-up clears it without producing another report after the faulty
+handler is removed. The event is structured data, not a reconstructed
+log line. The default with no installed reporter still logs the
+failure. Dart's diagnostic presentation is not copied.
 
 ## Irregular events and keyboard diagnostics
 
