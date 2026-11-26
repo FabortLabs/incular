@@ -259,7 +259,7 @@ pub enum MouseCursor {
 pub use incular_core::PointerDeviceKind;
 
 /// Physical pointer velocity in logical pixels per second.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Default, PartialEq)]
 pub struct Velocity {
     pub pixels_per_second: Offset,
 }
@@ -272,6 +272,88 @@ impl Velocity {
     #[must_use]
     pub const fn new(pixels_per_second: Offset) -> Self {
         Self { pixels_per_second }
+    }
+
+    /// Scales the magnitude into `min..=max`, preserving direction.
+    ///
+    /// A zero vector has no direction, so a positive minimum yields NaN
+    /// coordinates, as in Flutter. Debug builds check that the bounds are
+    /// nonnegative and ordered.
+    #[must_use]
+    pub fn clamp_magnitude(self, min: f32, max: f32) -> Self {
+        debug_assert!(min >= 0. && max >= min);
+        let x = f64::from(self.pixels_per_second.x);
+        let y = f64::from(self.pixels_per_second.y);
+        let magnitude_squared = x * x + y * y;
+        let min = f64::from(min);
+        let max = f64::from(max);
+        let target = if magnitude_squared > max * max {
+            max
+        } else if magnitude_squared < min * min {
+            min
+        } else {
+            return self;
+        };
+        let magnitude = magnitude_squared.sqrt();
+        Self::new(Offset::new(
+            ((x / magnitude) * target) as f32,
+            ((y / magnitude) * target) as f32,
+        ))
+    }
+}
+
+impl std::ops::Neg for Velocity {
+    type Output = Self;
+
+    fn neg(self) -> Self {
+        Self::new(Offset::new(
+            -self.pixels_per_second.x,
+            -self.pixels_per_second.y,
+        ))
+    }
+}
+
+impl std::ops::Add for Velocity {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self {
+        Self::new(self.pixels_per_second + rhs.pixels_per_second)
+    }
+}
+
+impl std::ops::Sub for Velocity {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self {
+        Self::new(self.pixels_per_second - rhs.pixels_per_second)
+    }
+}
+
+impl std::hash::Hash for Velocity {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        for value in [self.pixels_per_second.x, self.pixels_per_second.y] {
+            // Equality equates positive and negative zero.
+            (if value == 0. { 0 } else { value.to_bits() }).hash(state);
+        }
+    }
+}
+
+impl std::fmt::Display for Velocity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use incular_core::debug_double::format_double_fixed;
+
+        write!(
+            f,
+            "Velocity({}, {})",
+            format_double_fixed(f64::from(self.pixels_per_second.x), 1),
+            format_double_fixed(f64::from(self.pixels_per_second.y), 1),
+        )
+    }
+}
+
+impl std::fmt::Debug for Velocity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
     }
 }
 
