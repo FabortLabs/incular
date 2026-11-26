@@ -14,6 +14,7 @@ mod focus;
 mod force_press;
 mod hit_test;
 mod keyboard;
+mod least_squares;
 mod managed_arena;
 mod mouse;
 mod multidrag;
@@ -62,6 +63,7 @@ pub use keyboard::{
     LogicalShortcutKey, ShortcutActivator, ShortcutKey, ShortcutMatch, ShortcutTrigger, Shortcuts,
     SingleActivator,
 };
+pub use least_squares::{LeastSquaresSolver, PolynomialFit};
 pub use managed_arena::{GestureArenaClient, GestureArenaManager, GestureArenaRegistration};
 pub use mouse::MouseRegion;
 pub use multidrag::{Drag, MultiDragGestureRecognizer, MultiDragStartCallback};

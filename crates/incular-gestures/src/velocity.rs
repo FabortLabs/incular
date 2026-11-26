@@ -127,10 +127,8 @@ impl VelocityTracker {
         );
 
         if count >= Self::MIN_SAMPLE_SIZE
-            && let (Some(slope_x), Some(slope_y)) = (
-                solve_linear_slope(&time[..count], &x[..count]),
-                solve_linear_slope(&time[..count], &y[..count]),
-            )
+            && let Some((slope_x, slope_y)) =
+                fit_velocity_slopes(&time[..count], &x[..count], &y[..count])
         {
             // The slopes are in pixels per millisecond; report pixels per second.
             return VelocityEstimate {
@@ -179,66 +177,26 @@ fn micros_between(from: Instant, to: Instant) -> f64 {
     }
 }
 
-/// Returns the linear coefficient of a degree-2 least-squares fit with unit
-/// weights, following Flutter's `LeastSquaresSolver.solve(2)`.
-fn solve_linear_slope(x: &[f64], y: &[f64]) -> Option<f64> {
-    const PRECISION_ERROR_TOLERANCE: f64 = 1e-10;
+/// The axes share the same timestamps and unit weights, so factor the
+/// bounded design once and solve both coordinate responses on the stack.
+fn fit_velocity_slopes(time: &[f64], x: &[f64], y: &[f64]) -> Option<(f64, f64)> {
+    use crate::least_squares::FitScratch;
 
-    let m = x.len();
-    // Design matrix rows are 1, x and x^2 (all weights are 1). The fit holds
-    // at most `HISTORY_SIZE` samples, so the scratch rows are fixed arrays.
-    let mut a = [[0.0_f64; VelocityTracker::HISTORY_SIZE]; 3];
-    a[0][..m].fill(1.0);
-    for (i, &value) in x.iter().enumerate() {
-        a[1][i] = value;
-        a[2][i] = value * value;
+    let mut design = [[0.; VelocityTracker::HISTORY_SIZE]; 3];
+    let mut basis = [[0.; VelocityTracker::HISTORY_SIZE]; 3];
+    let mut triangular = [0.; 9];
+    let mut coefficients = [0.; 3];
+    let factor = FitScratch {
+        design: design.as_flattened_mut(),
+        basis: basis.as_flattened_mut(),
+        triangular: &mut triangular,
+        stride: VelocityTracker::HISTORY_SIZE,
     }
-
-    // Gram-Schmidt orthonormalisation of the design matrix: A = Q R.
-    let mut q = [[0.0_f64; VelocityTracker::HISTORY_SIZE]; 3];
-    let mut r = [[0.0_f64; 3]; 3];
-    for j in 0..3 {
-        let (done, rest) = q.split_at_mut(j);
-        let current = &mut rest[0][..m];
-        current.copy_from_slice(&a[j][..m]);
-        for basis in done {
-            let basis = &basis[..m];
-            let projection = dot(current, basis);
-            for (value, b) in current.iter_mut().zip(basis) {
-                *value -= projection * b;
-            }
-        }
-        let norm = dot(current, current).sqrt();
-        if norm < PRECISION_ERROR_TOLERANCE {
-            return None;
-        }
-        let inverse_norm = 1.0 / norm;
-        for value in current.iter_mut() {
-            *value *= inverse_norm;
-        }
-        for (i, column) in a.iter().enumerate() {
-            r[j][i] = if i < j {
-                0.0
-            } else {
-                dot(current, &column[..m])
-            };
-        }
-    }
-
-    // Solve R B = Q^T Y by back substitution; with unit weights W Y = Y.
-    let mut coefficients = [0.0_f64; 3];
-    for i in (0..3).rev() {
-        coefficients[i] = dot(&q[i][..m], y);
-        for j in ((i + 1)..3).rev() {
-            coefficients[i] -= r[i][j] * coefficients[j];
-        }
-        coefficients[i] /= r[i][i];
-    }
-    Some(coefficients[1])
-}
-
-fn dot(left: &[f64], right: &[f64]) -> f64 {
-    left.iter().zip(right).fold(0.0, |sum, (a, b)| sum + a * b)
+    .factor(time, None, 3)?;
+    factor.solve_response(x, &mut coefficients);
+    let slope_x = coefficients[1];
+    factor.solve_response(y, &mut coefficients);
+    Some((slope_x, coefficients[1]))
 }
 
 #[cfg(test)]

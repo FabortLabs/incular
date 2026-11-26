@@ -2224,3 +2224,8 @@ packages/flutter/test/gestures/transformed_long_press_test.dart	12	gets local co
 packages/flutter/test/gestures/transformed_long_press_test.dart	53	scaled up	paired-match	upstream-transformed-recognizer-coordinates.md
 packages/flutter/test/gestures/transformed_long_press_test.dart	123	scaled down	paired-match	upstream-transformed-recognizer-coordinates.md
 packages/flutter/test/gestures/transformed_scale_test.dart	9	gets local coordinates	paired-match	upstream-transformed-recognizer-coordinates.md
+packages/flutter/test/gestures/lsq_solver_test.dart	14	Least-squares fit: linear polynomial to line	paired-match	upstream-least-squares.md
+packages/flutter/test/gestures/lsq_solver_test.dart	28	Least-squares fit: linear polynomial to sloped line	paired-match	upstream-least-squares.md
+packages/flutter/test/gestures/lsq_solver_test.dart	42	Least-squares fit: quadratic polynomial to line	paired-match	upstream-least-squares.md
+packages/flutter/test/gestures/lsq_solver_test.dart	57	Least-squares fit: quadratic polynomial to sloped line	paired-match	upstream-least-squares.md
+packages/flutter/test/gestures/lsq_solver_test.dart	72	Least-squares fit: toString	paired-match	upstream-least-squares.md
