@@ -253,6 +253,12 @@ impl TextStyle {
         self
     }
 
+    /// The solid color used to paint beneath each styled glyph run.
+    #[must_use]
+    pub fn effective_background_color(&self) -> Option<Color> {
+        self.background.or(self.background_color)
+    }
+
     #[must_use]
     pub fn shadows<I>(mut self, shadows: I) -> Self
     where
@@ -415,7 +421,10 @@ impl TextStyle {
             merged.color = other.color;
             merged.has_explicit_color = true;
         }
-        if other.background_color.is_some() {
+        if let Some(background) = other.background {
+            merged.background = Some(background);
+            merged.background_color = None;
+        } else if merged.background.is_none() && other.background_color.is_some() {
             merged.background_color = other.background_color;
         }
         if other.line_height.is_some() {
@@ -438,9 +447,7 @@ impl TextStyle {
             merged.locale = other.locale.clone();
         }
 
-        if other.background.is_some() {
-            merged.background = other.background;
-        }
+
         if !other.shadows.is_empty() {
             merged.shadows = other.shadows.clone();
         }
@@ -485,7 +492,9 @@ impl TextStyle {
             res.color = c;
             res.has_explicit_color = true;
         }
-        if let Some(bg) = background_color {
+        if let Some(bg) = background_color
+            && res.background.is_none()
+        {
             res.background_color = Some(bg);
         }
         if let Some(factor) = font_size_factor {
@@ -528,6 +537,8 @@ impl TextStyle {
             || self.font_variations != other.font_variations
             || self.font_features != other.font_features
             || self.overflow != other.overflow
+            || self.effective_background_color().is_some()
+                != other.effective_background_color().is_some()
         {
             ChangeImpact::Layout
         } else {
@@ -553,6 +564,8 @@ impl TextStyle {
             || self.font_variations != other.font_variations
             || self.font_features != other.font_features
             || self.overflow != other.overflow
+            || self.effective_background_color().is_some()
+                != other.effective_background_color().is_some()
         {
             incular_core::Invalidation::LAYOUT | incular_core::Invalidation::PAINT
         } else {
@@ -571,6 +584,17 @@ impl Lerp for TextStyle {
             let endpoint = if t < 0.5 { self } else { other };
             endpoint.effective_foreground_color()
         });
+        let uses_background_paint = self.background.is_some() || other.background.is_some();
+        let background = if uses_background_paint {
+            let endpoint = if t < 0.5 { self } else { other };
+            endpoint.effective_background_color()
+        } else {
+            None
+        };
+        let fade = |color: Color, amount: f32| Color {
+            alpha: (f32::from(color.alpha) * amount).round() as u8,
+            ..color
+        };
         Self {
             inherit: if t < 0.5 { self.inherit } else { other.inherit },
             has_explicit_color: foreground.is_none()
@@ -602,23 +626,15 @@ impl Lerp for TextStyle {
             weight: self.weight.lerp(&other.weight, t),
             style: if t < 0.5 { self.style } else { other.style },
             color: foreground.unwrap_or_else(|| self.color.lerp(&other.color, t)),
-            background_color: match (self.background_color, other.background_color) {
-                (Some(a), Some(b)) => Some(a.lerp(&b, t)),
-                (Some(a), None) => {
-                    if t < 0.5 {
-                        Some(a)
-                    } else {
-                        None
-                    }
+            background_color: if uses_background_paint {
+                None
+            } else {
+                match (self.background_color, other.background_color) {
+                    (Some(a), Some(b)) => Some(a.lerp(&b, t)),
+                    (Some(a), None) => Some(fade(a, 1. - t)),
+                    (None, Some(b)) => Some(fade(b, t)),
+                    (None, None) => None,
                 }
-                (None, Some(b)) => {
-                    if t >= 0.5 {
-                        Some(b)
-                    } else {
-                        None
-                    }
-                }
-                (None, None) => None,
             },
             line_height: match (self.line_height, other.line_height) {
                 (Some(LineHeight::Multiplier(a)), Some(LineHeight::Multiplier(b))) => {
@@ -673,24 +689,7 @@ impl Lerp for TextStyle {
                 other.locale.clone()
             },
             foreground,
-            background: match (self.background, other.background) {
-                (Some(a), Some(b)) => Some(a.lerp(&b, t)),
-                (Some(a), None) => {
-                    if t < 0.5 {
-                        Some(a)
-                    } else {
-                        None
-                    }
-                }
-                (None, Some(b)) => {
-                    if t >= 0.5 {
-                        Some(b)
-                    } else {
-                        None
-                    }
-                }
-                (None, None) => None,
-            },
+            background,
             shadows: if self.shadows == other.shadows {
                 self.shadows.clone()
             } else {

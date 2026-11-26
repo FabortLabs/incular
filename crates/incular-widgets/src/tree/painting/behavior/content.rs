@@ -41,6 +41,7 @@ impl WidgetTree {
                             });
                         }
                     }
+                    push_text_backgrounds(cache, &layout, style.effective_background_color());
                     let layered = self
                         .render_live(id, "retained render must remain live")
                         .object
@@ -69,12 +70,14 @@ impl WidgetTree {
                             color: Color::rgba(72, 120, 220, 150),
                         });
                     }
+                    push_text_backgrounds(cache, &layout, style.effective_background_color());
                     push_text_shadows(cache, &layout, &style.shadows, false);
                     push_layout_runs(cache, &layout, style.effective_foreground_color());
                 } else if let Some(layout) = self
                     .render_live(id, "retained render must remain live")
                     .text_layout_cloned()
                 {
+                    push_text_backgrounds(cache, &layout, style.effective_background_color());
                     push_text_shadows(cache, &layout, &style.shadows, false);
                     push_layout_runs(cache, &layout, style.effective_foreground_color());
                 }
@@ -348,6 +351,16 @@ impl WidgetTree {
                 }
             }
             _ => unreachable!("content paint received a non-content render kind"),
+        }
+    }
+}
+
+fn push_text_backgrounds(cache: &mut DisplayList, layout: &TextLayout, color: Option<Color>) {
+    for background in layout.backgrounds.as_deref().unwrap_or_default() {
+        if let Some(color) = background.color_override.or(color)
+            && color.alpha > 0
+        {
+            cache.push(PaintCommand::Rect { rect: background.rect, color });
         }
     }
 }

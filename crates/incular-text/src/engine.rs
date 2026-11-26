@@ -251,10 +251,21 @@ pub struct TextLayout {
     /// Per-range colors of a rich paragraph whose styled runs differ in color.
     /// Empty for plain text, where the paint color applies to every glyph.
     pub color_runs: Arc<[TextColorRun]>,
+    /// Background coverage is retained only for text that requests a background.
+    pub backgrounds: Option<Arc<[TextBackgroundRect]>>,
     /// Where each inline placeholder box was placed (Flutter
     /// `getBoxesForPlaceholders`), in paragraph coordinates. Empty without
     /// placeholders.
     pub placeholders: Arc<[TextPlaceholderBox]>,
+}
+
+/// The background of a shaped run. Plain backgrounds take their color from
+/// the live style; rich spans can supply their own color.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TextBackgroundRect {
+    pub line: usize,
+    pub rect: Rect,
+    pub color_override: Option<Color>,
 }
 
 /// A byte range of a rich paragraph painted in one color.
@@ -495,6 +506,7 @@ struct LayoutKey<'a> {
     letter_spacing: u32,
     font_variations: Option<Arc<str>>,
     font_features: Option<Arc<str>>,
+    has_background: bool,
     width: Option<u32>,
     align: TextAlign,
     text_direction: Option<TextDirection>,
@@ -524,6 +536,7 @@ impl<'a> LayoutKey<'a> {
             letter_spacing: style.letter_spacing.to_bits(),
             font_variations: style.font_variations.clone(),
             font_features: style.font_features.clone(),
+            has_background: style.effective_background_color().is_some(),
             width: options.max_width.map(f32::to_bits),
             align: options.align,
             text_direction: options.text_direction,
@@ -549,6 +562,7 @@ impl<'a> LayoutKey<'a> {
             letter_spacing: self.letter_spacing,
             font_variations: self.font_variations,
             font_features: self.font_features,
+            has_background: self.has_background,
             width: self.width,
             align: self.align,
             text_direction: self.text_direction,
@@ -1175,6 +1189,7 @@ impl TextEngine {
         self.reserve_document(text.bytes().filter(|byte| *byte == b'\n').count() + 1);
         let mut lines: Vec<TextLine> = Vec::new();
         let mut font_runs = Vec::new();
+        let mut backgrounds = Vec::new();
         let mut starts = Vec::new();
         let mut state = ParagraphStart {
             byte: 0,
@@ -1195,6 +1210,10 @@ impl TextEngine {
             state = previous.starts[carried];
             lines.extend_from_slice(&previous.lines[..state.line]);
             font_runs.extend_from_slice(&previous.font_runs[..state.font_run]);
+            if let Some(retained) = previous.layout.backgrounds.as_deref() {
+                let count = retained.partition_point(|rect| rect.line < state.line);
+                backgrounds.extend_from_slice(&retained[..count]);
+            }
             starts.extend_from_slice(&previous.starts[..carried]);
             self.diagnostics.paragraphs_carried += carried as u64;
         }
@@ -1244,6 +1263,14 @@ impl TextEngine {
                 rebased.range.start += byte_start;
                 rebased.range.end += byte_start;
                 font_runs.push(rebased);
+            }
+            if let Some(spans) = paragraph_layout.backgrounds.as_deref() {
+                backgrounds.extend(spans.iter().map(|span| {
+                    let mut shifted = *span;
+                    shifted.line += lines.len();
+                    shifted.rect.origin.y += height;
+                    shifted
+                }));
             }
             for line in paragraph_layout.lines.iter() {
                 // Exact-size iterators collect straight into `Arc<[T]>` with
@@ -1329,6 +1356,7 @@ impl TextEngine {
             line_carets: OnceLock::new(),
             overflowed,
             color_runs: Arc::new([]),
+            backgrounds: (!backgrounds.is_empty()).then(|| backgrounds.into()),
             placeholders: Arc::new([]),
         };
         // Same horizontal-overflow policy as `shape_and_wrap` for unwrapped
@@ -1677,6 +1705,9 @@ impl TextEngine {
             apply_strut(&mut boxes, strut);
         }
         snap_line_boxes(&mut translated, &boxes);
+        if !text.is_empty() {
+            translated.backgrounds = text_backgrounds(&layout, &translated.lines, style, runs, height_behavior);
+        }
         if text.is_empty() {
             // Parley uses an internal space to obtain empty-paragraph font
             // metrics. That space must not become a visible advance or move
@@ -1998,6 +2029,7 @@ impl TextEngine {
             line_carets: OnceLock::new(),
             overflowed: false,
             color_runs: Arc::new([]),
+            backgrounds: None,
             placeholders: placeholders.into(),
         };
         if has_join_controls(text) {
@@ -2106,6 +2138,94 @@ fn color_runs(runs: &[StyledTextRun]) -> Arc<[TextColorRun]> {
         })
         .collect::<Vec<_>>()
         .into()
+}
+
+fn text_backgrounds(
+    source: &Layout<()>,
+    lines: &[TextLine],
+    style: &TextStyle,
+    spans: &[StyledTextRun],
+    height_behavior: TextHeightBehavior,
+) -> Option<Arc<[TextBackgroundRect]>> {
+    let plain = spans.is_empty();
+    if if plain {
+        style.effective_background_color().is_none()
+    } else {
+        spans.iter().all(|span| span.style.effective_background_color().is_none())
+    } {
+        return None;
+    }
+
+    let mut backgrounds = Vec::new();
+    for (line_index, (shaped, line)) in source.lines().zip(lines).enumerate() {
+        if line.width <= 0. || line.runs.is_empty() {
+            continue;
+        }
+        for item in shaped.items() {
+            let PositionedLayoutItem::GlyphRun(placed) = item else {
+                continue;
+            };
+            let left = placed.offset().max(line.offset);
+            let right = (placed.offset() + placed.advance()).min(line.offset + line.width);
+            let run = placed.run();
+            let font = run.font_metrics();
+            let mut add = |x0: f32, x1: f32, style: &TextStyle, color_override: Option<Color>| {
+                let x0 = x0.max(left);
+                let x1 = x1.min(right);
+                let leading = font.leading * 0.5;
+                let mut ascent = font.ascent + leading;
+                let mut descent = font.descent + leading;
+                let desired = match style.line_height {
+                    Some(crate::LineHeight::Multiplier(scale)) => scale * run.font_size(),
+                    Some(crate::LineHeight::Absolute(height)) => height,
+                    _ => 0.,
+                };
+                let natural = ascent + descent;
+                if desired > f32::EPSILON && natural > 0. {
+                    if style.leading_distribution == Some(TextLeadingDistribution::Even) {
+                        let extra = (desired - natural) * 0.5;
+                        ascent += extra;
+                        descent += extra;
+                    } else {
+                        ascent *= desired / natural;
+                        descent *= desired / natural;
+                    }
+                }
+                if line_index == 0 && !height_behavior.apply_height_to_first_ascent {
+                    ascent = font.ascent;
+                }
+                if line_index + 1 == lines.len() && !height_behavior.apply_height_to_last_descent {
+                    descent = font.descent;
+                }
+                let y0 = line.baseline - ascent;
+                let y1 = line.baseline + descent;
+                if x0 < x1 && y0 < y1 {
+                    backgrounds.push(TextBackgroundRect {
+                        line: line_index,
+                        rect: Rect::from_origin_size(Offset::new(x0, y0), Size::new(x1 - x0, y1 - y0)),
+                        color_override,
+                    });
+                }
+            };
+            if plain {
+                add(left, right, style, None);
+            } else {
+                let range = run.text_range();
+                let first = spans.partition_point(|span| span.range.end <= range.start);
+                for span in spans[first..].iter().take_while(|span| span.range.start < range.end) {
+                    let Some(paint) = span.style.effective_background_color() else {
+                        continue;
+                    };
+                    let start = span.range.start.max(range.start);
+                    let end = span.range.end.min(range.end);
+                    for (x0, x1) in line.selection_spans(start, end) {
+                        add(x0, x1, &span.style, Some(paint));
+                    }
+                }
+            }
+        }
+    }
+    (!backgrounds.is_empty()).then(|| backgrounds.into())
 }
 
 fn has_join_controls(text: &str) -> bool {
@@ -2267,6 +2387,12 @@ fn clipped_layout(mut layout: TextLayout, limit: usize) -> TextLayout {
     layout.lines = lines;
     layout.line_carets = OnceLock::new();
     layout.overflowed = true;
+    if let Some(backgrounds) = &mut layout.backgrounds {
+        let count = backgrounds.partition_point(|background| background.line < limit);
+        if count < backgrounds.len() {
+            *backgrounds = Arc::from(&backgrounds[..count]);
+        }
+    }
     if layout
         .placeholders
         .iter()

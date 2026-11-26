@@ -148,13 +148,7 @@ fn text_paint_only_change(old: &RenderKind, new: &RenderKind) -> bool {
         && old_spans == new_spans
         && old_inline == new_inline
         && old_strut == new_strut
-        && old_style.leading_distribution == new_style.leading_distribution
-        && old_style.family == new_style.family
-        && old_style.size == new_style.size
-        && old_style.weight == new_style.weight
-        && old_style.style == new_style.style
-        && old_style.line_height == new_style.line_height
-        && old_style.letter_spacing == new_style.letter_spacing
+        && old_style.change_impact(new_style) != incular_core::ChangeImpact::Layout
 }
 
 fn custom_paint_only_change(old: &RenderKind, new: &RenderKind) -> bool {

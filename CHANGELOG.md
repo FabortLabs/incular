@@ -331,6 +331,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- Text and rich spans draw their background behind the measured glyph runs.
+  Background paint takes precedence over plain background color.
+
 - Text styles honor a solid foreground paint over plain color. Foreground paint
   tweens switch at the midpoint instead of blending the paint.
 

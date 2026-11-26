@@ -32,3 +32,39 @@ fn a_named_application_font_updates_retained_text_at_the_next_layout() {
     assert_ne!(font.id(), before);
     assert_eq!(font.bytes().as_ref(), distinctive);
 }
+
+#[test]
+fn changing_only_the_fallback_family_reselects_the_font_in_place() {
+    let mut one = INTER.to_vec();
+    one.extend_from_slice(b"incular explicit fallback one");
+    let mut two = INTER.to_vec();
+    two.extend_from_slice(b"incular explicit fallback two");
+    register_application_font_as("packages/first/Body", one.clone());
+    register_application_font_as("packages/second/Body", two.clone());
+    let build = |package: &str| {
+        Text::new("ΨΨΨ")
+            .text_direction(TextDirection::Ltr)
+            .style(
+                TextStyle::new()
+                    .font_family("unregistered named primary")
+                    .packaged_fallback_families(package, ["Body"]),
+            )
+            .into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(build("first")).unwrap();
+    let render = tree.render_id(root).unwrap();
+    let bounds = Constraints::loose(Size::new(800., 600.));
+    tree.layout(bounds).unwrap();
+    let bytes = |tree: &WidgetTree| {
+        tree.text_layout(render).unwrap().lines[0].runs[0]
+            .font
+            .bytes()
+            .clone()
+    };
+    assert_eq!(bytes(&tree).as_ref(), one);
+    tree.update(root, build("second")).unwrap();
+    tree.layout(bounds).unwrap();
+    assert_eq!(tree.render_id(root), Some(render));
+    assert_eq!(bytes(&tree).as_ref(), two);
+}

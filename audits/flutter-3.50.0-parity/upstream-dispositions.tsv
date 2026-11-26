@@ -1515,3 +1515,5 @@ packages/flutter/test/painting/text_style_test.dart	340	TextStyle using package 
 packages/flutter/test/painting/text_style_test.dart	375	TextStyle package font merge	paired-match	upstream-package-fonts.md
 packages/flutter/test/painting/text_style_test.dart	400	TextStyle font family fallback	partial-match	upstream-package-fonts.md
 packages/flutter/test/painting/text_style_test.dart	506	TextStyle foreground and color combos	partial-match	upstream-text-paint.md
+packages/flutter/test/painting/text_style_test.dart	547	backgroundColor	partial-match	upstream-text-paint.md#solid-run-backgrounds
+packages/flutter/test/painting/text_style_test.dart	562	TextStyle background and backgroundColor combos	paired-match	upstream-text-paint.md#solid-run-backgrounds

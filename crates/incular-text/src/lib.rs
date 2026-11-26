@@ -35,7 +35,7 @@ pub use style::{
 
 mod engine;
 pub use engine::{
-    FontId, FontRunDebug, TextCaretPosition, TextClusterSpan, TextColorRun, TextDiagnostics,
+    FontId, FontRunDebug, TextBackgroundRect, TextCaretPosition, TextClusterSpan, TextColorRun, TextDiagnostics,
     TextDocumentLayout, TextEngine, TextLayout, TextLayoutOptions, TextLine, TextMetrics,
     TextPlaceholder, TextPlaceholderBox, TextStrut, register_application_font,
     register_application_font_as,
