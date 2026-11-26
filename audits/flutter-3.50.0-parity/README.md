@@ -1,8 +1,8 @@
 # Flutter 3.50.0 parity audit
 
-**Stage:** Broad source audit and API inventory; no framework changes. Every
-in-scope library is covered by the inventory and has source-reviewed findings.
-Unreviewed individual contracts remain open. This is not a parity certification.
+**Stage:** Focused behavioral verification and framework fixes after the
+initial source audit. Every in-scope library is inventoried. Unreviewed
+contracts remain open; this is not a parity certification.
 
 - Flutter reference: local `.tmp/flutter`, tag `3.50.0`, commit
   `ab2912035e160d9cad6306df307576da6128ebdb`. No fetch or checkout was done.

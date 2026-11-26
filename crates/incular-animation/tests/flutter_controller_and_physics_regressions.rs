@@ -280,3 +280,24 @@ fn clamped_simulation_rejects_inverted_bounds_in_debug() {
             .is_err();
     assert_eq!([position_rejected, velocity_rejected], [true, true]);
 }
+
+#[test]
+fn reversing_mid_run_uses_the_unrounded_value_and_remaining_duration() {
+    let controller = AnimationController::new(Duration::from_millis(600));
+    let now = Instant::now();
+    let reverse_at = now + Duration::from_millis(200);
+    let _ = controller.forward(now);
+    assert!(controller.tick(reverse_at));
+    assert!((controller.value_f64() - 1.0 / 3.0).abs() < 1e-12);
+    assert_ne!(f64::from(controller.value()), controller.value_f64());
+
+    let _ = controller.reverse(reverse_at);
+    assert!((controller.value_f64() - 1.0 / 3.0).abs() < 1e-12);
+    assert!(controller.tick(reverse_at + Duration::from_millis(100)));
+    assert!((controller.value_f64() - 1.0 / 6.0).abs() < 1e-12);
+    assert!(controller.tick(reverse_at + Duration::from_millis(200)));
+    assert_eq!(controller.value_f64(), 0.0);
+    assert_eq!(controller.status(), AnimationStatus::Reverse);
+    assert!(controller.tick(reverse_at + Duration::from_millis(201)));
+    assert_eq!(controller.status(), AnimationStatus::Dismissed);
+}

@@ -63,3 +63,21 @@ at -30px; the reported baseline shifts by exactly that amount. The
 baseline-free initial child still produces no actual baseline. The
 transparent ticker also forwards the value rather than hiding it.
 Fourteen focused native tests passed; this adds no upstream registration.
+
+
+## Double-precision linear controller values
+
+Pinned :184 and the retained Rust frame-driven test both pass all 16
+samples at Flutter's original absolute tolerance of `1e-10`. Default
+linear controllers keep elapsed sampling, active value and remaining
+range in double precision, including on a reversal. `value_f64()`
+exposes that result; the existing `value()` and listener arguments
+continue to use the framework's 32-bit rendering scalar. Custom curves
+and externally supplied simulations still control their output precision.
+
+An authored Flutter probe and the Rust clock-driven control both verify
+that reversing at one-third starts at that unrounded point, reaches one
+sixth partway back, remains reverse exactly at the endpoint, and becomes
+dismissed on the following tick. Incular's existing f32 listener,
+repeat, curve, velocity, and status tests also pass. A stale test that
+moved a now-non-Copy curve was repaired without changing its assertion.

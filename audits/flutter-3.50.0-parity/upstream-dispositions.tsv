@@ -359,7 +359,7 @@ packages/flutter/test/widgets/animated_size_test.dart	491	AnimatedSize does not 
 packages/flutter/test/widgets/overflow_box_test.dart	115	SizedOverflowBox alignment	paired-match	upstream-sized-overflow-retained.md
 packages/flutter/test/widgets/overflow_box_test.dart	142	SizedOverflowBox alignment (direction-sensitive)	paired-match	upstream-sized-overflow-retained.md
 packages/flutter/test/widgets/overflow_box_test.dart	169	SizedOverflowBox does not crash at zero area	paired-match	upstream-sized-overflow-retained.md
-packages/flutter/test/animation/animation_controller_test.dart	184	Forward and reverse with different durations	partial-mismatch	upstream-animated-size-overflow-controller-and-navigation.md
+packages/flutter/test/animation/animation_controller_test.dart	184	Forward and reverse with different durations	paired-match	upstream-animated-size-overflow-controller-and-navigation.md#double-precision-linear-controller-values
 packages/flutter/test/animation/animation_controller_test.dart	449	velocity test - linear	paired-match	upstream-animated-size-overflow-controller-and-navigation.md
 packages/flutter/test/animation/animation_controller_test.dart	1087	Simulations run forward	paired-match	upstream-animated-size-overflow-controller-and-navigation.md
 packages/flutter/test/animation/animation_controller_test.dart	1102	Simulations run forward even after a reverse run	paired-match	upstream-animated-size-overflow-controller-and-navigation.md

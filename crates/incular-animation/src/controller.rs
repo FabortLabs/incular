@@ -209,7 +209,7 @@ impl Run {
                 } else if progress == 1.0 {
                     *end
                 } else {
-                    begin + (end - begin) * f64::from(curve.apply(progress as f32))
+                    begin + (end - begin) * controller_ease(curve, progress)
                 };
                 (x, None)
             }
@@ -225,7 +225,7 @@ impl Run {
                 let total = t + initial_t;
                 let cycle_t = (total / period).rem_euclid(1.0);
                 let odd = ((total / period).floor() as u64) % 2 == 1;
-                let eased = f64::from(curve.apply(cycle_t as f32));
+                let eased = controller_ease(curve, cycle_t);
                 if *reverse && odd {
                     (max + (min - max) * eased, Some(false))
                 } else {
@@ -272,9 +272,18 @@ impl Run {
     }
 }
 
+// The ordinary Flutter controller is linear. Preserve its elapsed-time
+// precision without changing Incular's public custom-curve input type.
+fn controller_ease(curve: &Curve, t: f64) -> f64 {
+    match curve {
+        Curve::Linear => t,
+        _ => f64::from(curve.apply(t as f32)),
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 struct State {
-    value: f32,
+    value: f64,
     status: AnimationStatus,
     duration: Duration,
     reverse_duration: Option<Duration>,
@@ -320,10 +329,10 @@ impl Default for State {
 
 impl State {
     /// Status implied by a value, as Flutter's `_internalSetValue` derives it.
-    fn status_at(&self, value: f32) -> AnimationStatus {
-        if value <= self.lower_bound {
+    fn status_at(&self, value: f64) -> AnimationStatus {
+        if value <= f64::from(self.lower_bound) {
             AnimationStatus::Dismissed
-        } else if value >= self.upper_bound {
+        } else if value >= f64::from(self.upper_bound) {
             AnimationStatus::Completed
         } else if self.forward {
             AnimationStatus::Forward
@@ -332,8 +341,8 @@ impl State {
         }
     }
 
-    fn clamp(&self, value: f64) -> f32 {
-        (value as f32).clamp(self.lower_bound, self.upper_bound)
+    fn clamp(&self, value: f64) -> f64 {
+        value.clamp(f64::from(self.lower_bound), f64::from(self.upper_bound))
     }
 
     fn running(&self) -> bool {
@@ -473,7 +482,7 @@ impl AnimationController {
             duration,
             lower_bound,
             upper_bound,
-            value: lower_bound,
+            value: f64::from(lower_bound),
             ..State::default()
         };
         Self {
@@ -615,7 +624,7 @@ impl AnimationController {
             let old = controller.state.value;
             controller.state.lower_bound = lower_bound;
             controller.state.upper_bound = upper_bound;
-            controller.state.value = old.clamp(lower_bound, upper_bound);
+            controller.state.value = controller.state.clamp(old);
             controller.state.value != old
         };
         if changed {
@@ -887,8 +896,18 @@ impl AnimationController {
         changed
     }
 
+    /// Current value projected to Incular's layout and painting scalar type.
     #[must_use]
     pub fn value(&self) -> f32 {
+        self.value_f64() as f32
+    }
+
+    /// Current value before projection to a 32-bit rendering scalar.
+    ///
+    /// Linear interpolation keeps its double-precision clock and value.
+    /// Custom curves and simulations still use their own output precision.
+    #[must_use]
+    pub fn value_f64(&self) -> f64 {
         self.changes.track();
         self.inner.borrow().state.value
     }
@@ -991,7 +1010,7 @@ impl AnimationController {
         let inner = Rc::downgrade(&self.inner);
         self.changes.subscribe((), move || {
             if let Some(inner) = inner.upgrade() {
-                let value = inner.borrow().state.value;
+                let value = inner.borrow().state.value as f32;
                 listener(value);
             }
         })
@@ -1073,12 +1092,12 @@ impl AnimationController {
                 } else {
                     state.reverse_duration.unwrap_or(state.duration)
                 };
-                base.mul_f64(f64::from(remaining_fraction(
+                base.mul_f64(remaining_fraction(
                     state.value,
                     target,
                     state.lower_bound,
                     state.upper_bound,
-                )))
+                ))
             }
         };
         let curve = curve.unwrap_or_else(|| state.curve.clone());
@@ -1119,8 +1138,8 @@ impl AnimationController {
         self.start_run(
             now,
             Run::Interpolation {
-                begin: f64::from(state.value),
-                end: f64::from(target),
+                begin: state.value,
+                end: target,
                 duration: duration.as_secs_f64() * scale,
                 curve,
             },
@@ -1147,7 +1166,7 @@ impl AnimationController {
         let initial_t = if max == min {
             0.0
         } else {
-            (f64::from(state.value).clamp(min.min(max), min.max(max)) - min) / (max - min) * period
+            (state.value.clamp(min.min(max), min.max(max)) - min) / (max - min) * period
         };
         self.start_run(
             now,
@@ -1184,7 +1203,7 @@ impl AnimationController {
         };
         let simulation = SpringSimulation::new(
             spring.unwrap_or_else(fling_spring),
-            state.value,
+            state.value as f32,
             target,
             velocity * scale,
             FLING_TOLERANCE,
@@ -1260,7 +1279,7 @@ impl AnimationController {
     fn notify_value(&self, changed: bool) {
         let (listeners, value) = {
             let controller = self.inner.borrow();
-            (controller.listeners.clone(), controller.state.value)
+            (controller.listeners.clone(), controller.state.value as f32)
         };
         for listener in listeners {
             if listener.active.get() {
@@ -1330,19 +1349,19 @@ fn next_listener_id(controller: &mut ControllerState) -> usize {
 
 /// Clamps a requested value to the bounds; a non-finite one goes to the
 /// lower bound.
-fn clamp_finite(value: f32, state: &State) -> f32 {
+fn clamp_finite(value: f32, state: &State) -> f64 {
     if value.is_finite() {
-        value.clamp(state.lower_bound, state.upper_bound)
+        state.clamp(f64::from(value))
     } else {
-        state.lower_bound
+        f64::from(state.lower_bound)
     }
 }
 
 /// Fraction of the bounded range covered by a run from `from` to `to`, as
 /// Flutter's `remainingFraction`. An infinite range counts as the whole span.
 /// An empty range covers no distance, so the run takes no time.
-fn remaining_fraction(from: f32, to: f32, lower: f32, upper: f32) -> f32 {
-    let range = upper - lower;
+fn remaining_fraction(from: f64, to: f64, lower: f32, upper: f32) -> f64 {
+    let range = f64::from(upper) - f64::from(lower);
     if !range.is_finite() {
         1.0
     } else if range == 0.0 {

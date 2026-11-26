@@ -28,8 +28,8 @@ fn controller(duration_ms: u64) -> AnimationController {
 
 #[test]
 fn forward_and_reverse_each_use_their_own_duration() {
-    // Upstream :184. moreOrLessEquals uses absolute 1e-10. Widen the
-    // controller observation rather than rounding Flutter's decimal to f32.
+    // Upstream :184. moreOrLessEquals uses absolute 1e-10. Observe
+    // the controller before conversion to a rendering scalar.
     let mut frame = frame_driver();
     let mut samples = Vec::new();
     for (forward_ms, reverse_ms, forward, reverse) in [
@@ -60,7 +60,8 @@ fn forward_and_reverse_each_use_their_own_duration() {
             frame(first_tick);
             for &(millis, expected) in sequence {
                 frame(millis);
-                let actual = f64::from(animation.value());
+                let actual = animation.value_f64();
+                assert_eq!(animation.value(), actual as f32);
                 samples.push((direction, period, millis, actual, expected));
             }
             animation.stop();

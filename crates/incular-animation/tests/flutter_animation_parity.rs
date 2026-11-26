@@ -108,7 +108,7 @@ fn curves_match_flutter() {
 #[test]
 fn flipping_twice_restores_a_curve() {
     for curve in [Curve::Ease, Curve::EaseInElastic, Curve::Decelerate] {
-        assert_eq!(curve.flipped().flipped(), curve);
+        assert_eq!(curve.clone().flipped().flipped(), curve);
     }
     // A cubic flips to the named cubic with mirrored control points.
     assert_eq!(Curve::EaseIn.flipped(), Curve::EaseOut);
