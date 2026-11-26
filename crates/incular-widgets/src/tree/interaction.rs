@@ -1504,6 +1504,7 @@ impl WidgetTree {
                 }
             }
         }
+        let had_rejections = !rejects.is_empty();
         for member in rejects {
             self.input.gesture_arena.reject(key, member);
             self.apply_arena_entries(key, self.input.gesture_arena.entries(key));
@@ -1531,6 +1532,12 @@ impl WidgetTree {
                     }
                 }
             }
+        }
+        if had_rejections && event.phase == PointerPhase::Move {
+            // Closing/settling an arena with one remaining drag gives it
+            // the default win, after explicit claims from this move. A
+            // pressure recognizer can leave below the drag's distance slop.
+            self.accept_remaining_arena_drag(key, &event);
         }
         for (member, action) in callbacks {
             self.dispatch_gesture_action(key, member, action);
@@ -2291,6 +2298,59 @@ impl WidgetTree {
             }
         }
     }
+    fn accept_remaining_arena_drag(&mut self, key: GestureArenaKey, event: &PointerEvent) {
+        let entries = self.input.gesture_arena.entries(key);
+        if entries
+            .iter()
+            .any(|entry| entry.disposition == GestureDisposition::Accepted)
+        {
+            return;
+        }
+        let mut pending = entries
+            .iter()
+            .filter(|entry| entry.disposition == GestureDisposition::Pending);
+        let Some(member) = pending.next().map(|entry| entry.member) else {
+            return;
+        };
+        if pending.next().is_some() {
+            return;
+        }
+        let Some(active) = self
+            .input
+            .active_gestures
+            .get_mut(&key)
+            .filter(|active| !active.yields_taps)
+        else {
+            return;
+        };
+        let Some(candidate) = active
+            .members
+            .iter_mut()
+            .find(|candidate| candidate.member == member)
+        else {
+            return;
+        };
+        let action = match candidate.kind {
+            RetainedGestureKind::SharedPan => None,
+            RetainedGestureKind::Pointer => {
+                let Some(recognizer) = candidate
+                    .recognizer
+                    .as_mut()
+                    .filter(|recognizer| recognizer.can_accept_on_press())
+                else {
+                    return;
+                };
+                recognizer.accept_drag_after_competitors_leave(event)
+            }
+            _ => return,
+        };
+        let entries = self.input.gesture_arena.accept(key, member);
+        self.apply_arena_entries(key, entries);
+        if let Some(action) = action {
+            self.dispatch_gesture_action(key, member, action);
+        }
+    }
+
     pub(super) fn apply_arena_entries(
         &mut self,
         key: GestureArenaKey,

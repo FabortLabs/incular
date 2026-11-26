@@ -2369,3 +2369,12 @@ packages/flutter/test/widgets/routes_test.dart	2051	requestFocus can be updated	
 packages/flutter/test/widgets/routes_test.dart	2776	requestFocus works correctly in showGeneralDialog.	paired-match	upstream-route-focus-scopes.md#explicit-route-and-dialog-focus
 packages/flutter/test/rendering/editable_test.dart	178	Editable respect clipBehavior in describeApproximatePaintClip	paired-match	upstream-editable-paint-clip.md
 packages/flutter/test/rendering/editable_test.dart	240	correct clipping	reference-ran-incular-open	upstream-editable-paint-clip.md
+packages/flutter/test/gestures/force_press_test.dart	14	A force press can be recognized	paired-match	upstream-force-press.md
+packages/flutter/test/gestures/force_press_test.dart	200	Invalid pressure ranges capabilities are not recognized	partial-match	upstream-force-press.md
+packages/flutter/test/gestures/force_press_test.dart	266	If minimum pressure is not reached, start and end callbacks are not called	paired-match	upstream-force-press.md
+packages/flutter/test/gestures/force_press_test.dart	329	Should recognize drag and not force touch if there is a drag recognizer	paired-match	upstream-force-press.md
+packages/flutter/test/gestures/force_press_test.dart	428	Should not call ended on pointer up if the gesture was never accepted	paired-match	upstream-force-press.md
+packages/flutter/test/gestures/force_press_test.dart	482	Should call start only once if there is a competing gesture recognizer	paired-match	upstream-force-press.md
+packages/flutter/test/gestures/force_press_test.dart	554	A force press can be recognized with a custom interpolation function	partial-match	upstream-force-press.md
+packages/flutter/test/gestures/force_press_test.dart	751	A pressure outside of the device reported min and max pressure will not give an error	paired-match	upstream-force-press.md
+packages/flutter/test/gestures/force_press_test.dart	825	A pressure of NAN will not give an error	paired-match	upstream-force-press.md

@@ -342,6 +342,29 @@ impl PointerGestureRecognizer {
         Some(self.begin_drag(down, action, &down, DragStartBehavior::Down))
     }
 
+    /// Accept a drag by default when the other arena members left during
+    /// this move. Unlike an uncontested press, the default start position
+    /// and time are taken from the move for `DragStartBehavior::Start`.
+    #[doc(hidden)]
+    pub fn accept_drag_after_competitors_leave(
+        &mut self,
+        event: &PointerEvent,
+    ) -> Option<GestureAction> {
+        if event.phase != PointerPhase::Move || !self.can_accept_on_press() {
+            return None;
+        }
+        let down = self.down.filter(|down| down.pointer == event.pointer)?;
+        let action = self.sole_drag_axis()?;
+        if self.pan_started || self.drag_rejected {
+            return None;
+        }
+        self.accepted_on_press = true;
+        if self.callbacks.only_accept_drag_on_threshold {
+            return None;
+        }
+        Some(self.begin_drag(down, action, event, self.callbacks.drag_start_behavior))
+    }
+
     /// The timestamp of the last pending drag event, cleared on resolution.
     #[doc(hidden)]
     #[must_use]
