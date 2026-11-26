@@ -44,3 +44,21 @@ initial page 4; expanding to 300 pixels with fraction 0.75 yields offset
 origin with the **old** width to decode pixel 425, then yields page 1.55
 at 618.75 pixels, with snapping both on and off. These authored controls
 do not add original registrations to the ledger.
+
+## Native PageView regression fixtures use the real viewport
+
+The older `scroll_pages_reorder` target had four baseline failures.
+Three tests were inspecting the PageView's mounting wrapper instead
+of its retained sliver and pages, and one expected a replacement
+controller to reset to page zero. Pinned Flutter verifies that a
+same-type controller replacement transfers the identical live
+position, detaches the previous controller, and lets only the new
+one drive it. The earlier fractional/unsnapped handoff probe still
+passes alongside this new exact-position control.
+
+The native target now inspects the actual rendered pages for cache
+membership, geometry, fraction/axis/reverse changes, and identity.
+It also checks detachment and verifies that the old controller's
+movement does not drive the retained page. All 19 focused native
+tests pass. These are test corrections and authored comparisons;
+none add to the count of upstream registrations.

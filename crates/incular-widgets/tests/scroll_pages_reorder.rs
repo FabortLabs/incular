@@ -59,6 +59,30 @@ fn subtree_geometry(
     geometry
 }
 
+fn mounted_page_viewport(
+    tree: &WidgetTree,
+    root: incular_widgets::internal::ElementId,
+) -> incular_widgets::internal::ElementId {
+    let mut stack = vec![root];
+    while let Some(element) = stack.pop() {
+        if matches!(
+            tree.render_id(element)
+                .and_then(|render| tree.render_object_kind(render)),
+            Some(incular_widgets::internal::RenderKind::SliverViewport { .. })
+        ) {
+            return element;
+        }
+        stack.extend(
+            tree.children(element)
+                .unwrap_or_default()
+                .iter()
+                .rev()
+                .copied(),
+        );
+    }
+    panic!("PageView did not mount a sliver viewport");
+}
+
 fn descriptions(tree: &mut WidgetTree) -> Vec<String> {
     tree.update_semantics();
     tree.semantics()
@@ -98,7 +122,10 @@ fn page_view_pages_fill_viewport() {
         100.,
         40.,
     );
-    let kids = tree.children(root).expect("pages").to_vec();
+    let kids = tree
+        .children(mounted_page_viewport(&tree, root))
+        .expect("pages")
+        .to_vec();
     assert_eq!(kids.len(), 1);
     assert_eq!(
         tree.element_bounds(kids[0]).expect("bounds").size,
@@ -112,7 +139,10 @@ fn page_view_pages_fill_viewport() {
     assert!(controller.jump_to(100.));
     tree.layout(Constraints::tight(Size::new(100., 40.)))
         .expect("layout");
-    let kids = tree.children(root).expect("pages").to_vec();
+    let kids = tree
+        .children(mounted_page_viewport(&tree, root))
+        .expect("pages")
+        .to_vec();
     assert_eq!(kids.len(), 1);
     assert_eq!(
         tree.element_bounds(kids[0]).expect("bounds").origin,
@@ -129,7 +159,10 @@ fn page_view_viewport_fraction_sizes_pages() {
         100.,
         40.,
     );
-    let kids = tree.children(root).expect("pages").to_vec();
+    let kids = tree
+        .children(mounted_page_viewport(&tree, root))
+        .expect("pages")
+        .to_vec();
     assert_eq!(
         tree.element_bounds(kids[0]).expect("bounds").size,
         Size::new(50., 40.)
@@ -156,7 +189,10 @@ fn page_view_viewport_fraction_sizes_pages() {
         100.,
         40.,
     );
-    let flush_kids = flush.children(flush_root).expect("pages").to_vec();
+    let flush_kids = flush
+        .children(mounted_page_viewport(&flush, flush_root))
+        .expect("pages")
+        .to_vec();
     assert_eq!(
         flush.element_bounds(flush_kids[0]).expect("bounds").origin,
         Offset::new(0., 0.)
@@ -199,10 +235,22 @@ fn page_view_builder_matches_children() {
         100.,
         40.,
     );
-    assert_eq!(via_builder.children(builder_root).expect("pages").len(), 1);
     assert_eq!(
-        via_builder.children(builder_root).expect("pages").len(),
-        via_children.children(children_root).expect("pages").len()
+        via_builder
+            .children(mounted_page_viewport(&via_builder, builder_root))
+            .expect("pages")
+            .len(),
+        1
+    );
+    assert_eq!(
+        via_builder
+            .children(mounted_page_viewport(&via_builder, builder_root))
+            .expect("pages")
+            .len(),
+        via_children
+            .children(mounted_page_viewport(&via_children, children_root))
+            .expect("pages")
+            .len()
     );
 
     assert!(builder_controller.jump_to(100.));
@@ -213,9 +261,12 @@ fn page_view_builder_matches_children() {
     via_children
         .layout(Constraints::tight(Size::new(100., 40.)))
         .expect("layout");
-    let builder_pages = via_builder.children(builder_root).expect("pages").to_vec();
+    let builder_pages = via_builder
+        .children(mounted_page_viewport(&via_builder, builder_root))
+        .expect("pages")
+        .to_vec();
     let children_pages = via_children
-        .children(children_root)
+        .children(mounted_page_viewport(&via_children, children_root))
         .expect("pages")
         .to_vec();
     assert_eq!(builder_pages.len(), 1);
@@ -248,7 +299,12 @@ fn page_view_controller_replacement_isolates_old() {
     tree.layout(Constraints::tight(Size::new(100., 40.)))
         .expect("layout");
     // Flutter cache 0: at offset 100 only page 1 is built.
-    assert_eq!(tree.children(root).expect("pages").len(), 1);
+    assert_eq!(
+        tree.children(mounted_page_viewport(&tree, root))
+            .expect("pages")
+            .len(),
+        1
+    );
 
     tree.update(
         root,
@@ -257,19 +313,39 @@ fn page_view_controller_replacement_isolates_old() {
     .expect("update");
     tree.layout(Constraints::tight(Size::new(100., 40.)))
         .expect("layout");
-    assert_eq!(second.offset(), 0.);
-    assert!(second.jump_to(100.));
+    // Flutter Scrollable detaches and reattaches the same position
+    // when only the controller instance changes.
+    assert!(!first.has_clients());
+    assert!(second.has_clients());
+    assert_eq!(second.offset(), 100.);
     tree.layout(Constraints::tight(Size::new(100., 40.)))
         .expect("layout");
     // The attached controller now drives the view; the detached one must not.
-    let kids = tree.children(root).expect("pages").to_vec();
+    let kids = tree
+        .children(mounted_page_viewport(&tree, root))
+        .expect("pages")
+        .to_vec();
     assert_eq!(kids.len(), 1);
     assert!(first.jump_to(0.));
     tree.layout(Constraints::tight(Size::new(100., 40.)))
         .expect("layout");
     assert_eq!(first.offset(), 0.);
     assert_eq!(second.offset(), 100.);
-    assert_eq!(tree.children(root).expect("pages").to_vec(), kids);
+    assert_eq!(
+        tree.children(mounted_page_viewport(&tree, root))
+            .expect("pages")
+            .to_vec(),
+        kids
+    );
+    assert!(second.jump_to(0.));
+    tree.layout(Constraints::tight(Size::new(100., 40.)))
+        .expect("new controller drives viewport");
+    assert_ne!(
+        tree.children(mounted_page_viewport(&tree, root))
+            .expect("pages")
+            .to_vec(),
+        kids
+    );
 }
 
 #[test]
@@ -283,7 +359,10 @@ fn page_view_reverse_change_anchors_trailing_edge() {
         40.,
     );
     // Flutter 3.41.7 widgets/page_view.dart cacheExtent 0.0: only page 0 is built at offset 0.
-    let kids = tree.children(root).expect("pages").to_vec();
+    let kids = tree
+        .children(mounted_page_viewport(&tree, root))
+        .expect("pages")
+        .to_vec();
     assert_eq!(kids.len(), 1);
     assert_eq!(
         tree.element_bounds(kids[0]).expect("bounds").origin,
@@ -299,11 +378,13 @@ fn page_view_reverse_change_anchors_trailing_edge() {
     .expect("update");
     tree.layout(Constraints::tight(Size::new(200., 40.)))
         .expect("layout");
-    let after = tree.children(root).expect("pages").to_vec();
+    let after = tree
+        .children(mounted_page_viewport(&tree, root))
+        .expect("pages")
+        .to_vec();
     assert_eq!(after.len(), 1);
     // Flutter 3.41.7 widgets/page_view.dart builds Scrollable -> Viewport -> SliverFillViewport
-    // with no child keys, so a reverse change updates the built page in place and keeps its
-    // element. Incular re-creates the page element here: a library difference, reported.
+    // with no child keys. A reverse change updates the built page in place.
     assert!(
         tree.element_exists(kids[0]),
         "reverse change keeps the built page element (Flutter updates children in place)"
@@ -320,7 +401,10 @@ fn page_view_reverse_change_anchors_trailing_edge() {
     assert!(controller.jump_to(200.));
     tree.layout(Constraints::tight(Size::new(200., 40.)))
         .expect("layout");
-    let kids = tree.children(root).expect("pages").to_vec();
+    let kids = tree
+        .children(mounted_page_viewport(&tree, root))
+        .expect("pages")
+        .to_vec();
     assert_eq!(kids.len(), 1);
     assert_eq!(
         tree.element_bounds(kids[0]).expect("bounds").origin,
@@ -339,7 +423,10 @@ fn page_view_axis_change_reflows() {
         40.,
     );
     // Flutter 3.41.7 widgets/page_view.dart cacheExtent 0.0: only page 0 is built at offset 0.
-    let kids = tree.children(root).expect("pages").to_vec();
+    let kids = tree
+        .children(mounted_page_viewport(&tree, root))
+        .expect("pages")
+        .to_vec();
     assert_eq!(kids.len(), 1);
     assert_eq!(
         tree.element_bounds(kids[0]).expect("bounds").origin,
@@ -361,7 +448,10 @@ fn page_view_axis_change_reflows() {
     tree.layout(Constraints::tight(Size::new(100., 40.)))
         .expect("layout");
     // Page 1 is now the visible page on the vertical axis: y = 40 - 40 = 0.
-    let kids = tree.children(root).expect("pages").to_vec();
+    let kids = tree
+        .children(mounted_page_viewport(&tree, root))
+        .expect("pages")
+        .to_vec();
     assert_eq!(kids.len(), 1);
     assert_eq!(
         tree.element_bounds(kids[0]).expect("bounds").origin,
@@ -390,7 +480,10 @@ fn page_view_resize_retains_offset_and_pages() {
     // the last page: Flutter's `_PagePosition` keeps page 1, at 1 x 200.
     assert_eq!(controller.offset(), 200.);
     assert_eq!(controller.max_offset(), 200.);
-    let kids = tree.children(root).expect("pages").to_vec();
+    let kids = tree
+        .children(mounted_page_viewport(&tree, root))
+        .expect("pages")
+        .to_vec();
     for kid in &kids {
         assert!(tree.element_exists(*kid));
     }
@@ -421,7 +514,8 @@ fn page_view_snapping_settles_and_releases() {
     assert!(snapping.jump_to(30.));
     assert!(snapping.settle_physics(ScrollPhysics::clamping().page(), 0.));
     assert_eq!(snapping.offset(), 0.);
-    let render = tree.render_id(root).expect("render");
+    let viewport = mounted_page_viewport(&tree, root);
+    let render = tree.render_id(viewport).expect("render");
     assert!(matches!(
         tree.render_object_kind(render).expect("kind"),
         incular_widgets::internal::RenderKind::SliverViewport { .. }
@@ -447,7 +541,10 @@ fn page_view_snapping_settles_and_releases() {
 fn page_view_page_identity_survives_updates() {
     let mut tree = WidgetTree::new();
     let root = mount_tight(&mut tree, PageView::new(pages()).into(), 100., 40.);
-    let kids = tree.children(root).expect("pages").to_vec();
+    let kids = tree
+        .children(mounted_page_viewport(&tree, root))
+        .expect("pages")
+        .to_vec();
     assert_eq!(kids.len(), 1);
     tree.update(root, PageView::new(pages()).viewport_fraction(0.5).into())
         .expect("update");
@@ -458,7 +555,10 @@ fn page_view_page_identity_survives_updates() {
     // Flutter 3.41.7 rendering/sliver_fixed_extent_list.dart targetLastIndex =
     // getMaxChildIndexForScrollOffset(100 - 25) with itemExtent 50 gives 1.
     // The page already built is resized, not rebuilt; the second page is new.
-    let after = tree.children(root).expect("pages").to_vec();
+    let after = tree
+        .children(mounted_page_viewport(&tree, root))
+        .expect("pages")
+        .to_vec();
     assert_eq!(after.len(), 2);
     assert_eq!(after[0], kids[0]);
     assert_eq!(

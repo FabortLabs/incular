@@ -31,4 +31,34 @@ void main() {
     await tester.pump();
     expect(second.position.pixels, closeTo(1080, 1e-12));
   });
+
+  testWidgets(
+    'Replacing a PageController transfers the current position and detaches the old controller',
+    (tester) async {
+      final first = PageController();
+      final second = PageController();
+      addTearDown(first.dispose);
+      addTearDown(second.dispose);
+      Widget view(PageController controller) => Directionality(
+        textDirection: TextDirection.ltr,
+        child: PageView(
+          controller: controller,
+          children: const [Text('First page'), Text('Second page')],
+        ),
+      );
+      await tester.pumpWidget(view(first));
+      first.jumpToPage(1);
+      await tester.pump();
+      final retained = first.position;
+      expect(first.page, 1.0);
+      await tester.pumpWidget(view(second));
+      expect(first.hasClients, isFalse);
+      expect(second.position, same(retained));
+      expect(second.page, 1.0);
+      expect(find.text('Second page'), findsOneWidget);
+      second.jumpToPage(0);
+      await tester.pump();
+      expect(find.text('First page'), findsOneWidget);
+    },
+  );
 }
