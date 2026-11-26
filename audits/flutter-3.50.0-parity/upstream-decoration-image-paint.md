@@ -21,12 +21,21 @@ Flutter records a single `drawImageNine`; Incular emits multiple bounded
 image draws. Tests check the observable paint requirements, not the command
 encoding, and do not assert GPU pixels.
 
-The fourth registration (:165) supplies a slice whose scaled right and
-bottom exceed the 300×300 bitmap. It tests arguments logged by a mock
-canvas, not native drawing. Incular does not forward an unchecked
-nine-slice draw command and this is not counted as paired.
+- :165 Scale 2: the original checks the scaled center and destination
+  arguments of `drawImageNine` for a 300×300 bitmap drawn at
+  (10,20)–(430,420). Its scaled center exceeds the decoded image.
+  The authored `scaled_center_slice_pixels_test.dart` confirms the pinned
+  Linux Flutter tester paints the whole image into the requested logical
+  rect: both edges, the center color seam, and pixels immediately
+  outside the rect. It also covers one-axis overflow and a negative
+  leading edge. Incular previously panicked on signed slice borders;
+  the native regression checks the original bitmap and a single bounded,
+  full-source draw at the correct translated destination for all four
+  variants. This pairing does not assert Impeller behavior for an
+  out-of-bounds center or imply a wgpu pixel readback on this host.
 
-Four focused Rust targets passed (32 tests).
+Both focused Rust paint targets passed (31 tests); all four originals
+and the authored Flutter pixel probe passed.
 
 ## Ordinary image repetition
 

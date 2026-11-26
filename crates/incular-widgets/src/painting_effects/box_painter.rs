@@ -1087,6 +1087,22 @@ fn paint_nine(
     pixels: Size,
 ) {
     let scale = paint.scale.max(0.001);
+    // Flutter rounds the scaled center's four edges to decoded pixels.
+    let left = (center.origin.x * scale).round();
+    let top = (center.origin.y * scale).round();
+    let right = ((center.origin.x + center.size.width) * scale).round();
+    let bottom = ((center.origin.y + center.size.height) * scale).round();
+    if left < 0.0 || top < 0.0 || right > pixels.width || bottom > pixels.height {
+        // The pinned Flutter software rasterizer falls back to a whole-image
+        // draw when any edge of the center is outside the decoded bitmap.
+        canvas.image_with_sampling(
+            paint.image.clone(),
+            Rect::from_origin_size(Offset::ZERO, pixels),
+            destination,
+            paint.sampling,
+        );
+        return;
+    }
     let split = |start: f32, end: f32, total: f32, origin: f32, extent: f32| {
         let (low, high) = (start / scale, (total - end) / scale);
         let edge = origin + extent;
@@ -1102,15 +1118,15 @@ fn paint_nine(
         ([0.0, start, end, total], [origin, first, second, edge])
     };
     let (sx, dx) = split(
-        center.origin.x,
-        center.origin.x + center.size.width,
+        left,
+        right,
         pixels.width,
         destination.origin.x,
         destination.size.width,
     );
     let (sy, dy) = split(
-        center.origin.y,
-        center.origin.y + center.size.height,
+        top,
+        bottom,
         pixels.height,
         destination.origin.y,
         destination.size.height,
@@ -1147,7 +1163,8 @@ pub(crate) fn paint_image(paint: &ImagePaint, rect: Rect) -> DisplayList {
     let pixels = Size::new(decoded.width() as f32, decoded.height() as f32);
     let scale = paint.scale.max(0.001);
     let border = paint.center_slice.map(|slice| {
-        Size::new(
+        // A center can be larger than the decoded image in logical units.
+        Offset::new(
             pixels.width / scale - slice.size.width,
             pixels.height / scale - slice.size.height,
         )
@@ -1156,15 +1173,15 @@ pub(crate) fn paint_image(paint: &ImagePaint, rect: Rect) -> DisplayList {
     let (input, fit_output) = match border {
         Some(border) => (
             Size::new(
-                (pixels.width - border.width * scale).max(0.0),
-                (pixels.height - border.height * scale).max(0.0),
+                (pixels.width - border.x * scale).max(0.0),
+                (pixels.height - border.y * scale).max(0.0),
             ),
             // A destination smaller than a slice border has no stretchable
             // center on that axis. Flutter fits that empty center, then adds
             // the fixed borders back. Do not construct a negative Size.
             Size::new(
-                (output.width - border.width).max(0.0),
-                (output.height - border.height).max(0.0),
+                (output.width - border.x).max(0.0),
+                (output.height - border.y).max(0.0),
             ),
         ),
         None => (pixels, output),
@@ -1185,10 +1202,12 @@ pub(crate) fn paint_image(paint: &ImagePaint, rect: Rect) -> DisplayList {
     let source = Size::new(source.width * scale, source.height * scale);
     let mut destination = destination;
     if let Some(border) = border {
-        destination = Size::new(
-            destination.width + border.width,
-            destination.height + border.height,
-        );
+        let width = destination.width + border.x;
+        let height = destination.height + border.y;
+        if width <= 0.0 || height <= 0.0 {
+            return canvas.finish();
+        }
+        destination = Size::new(width, height);
     }
     let mut repeat = paint.repeat;
     if repeat != crate::ImageRepeat::NoRepeat && destination == output {
@@ -1232,13 +1251,7 @@ pub(crate) fn paint_image(paint: &ImagePaint, rect: Rect) -> DisplayList {
         ),
         source,
     );
-    let center = paint.center_slice.map(|slice| {
-        Rect::from_origin_size(
-            Offset::new(slice.origin.x * scale, slice.origin.y * scale),
-            Size::new(slice.size.width * scale, slice.size.height * scale),
-        )
-    });
-    let mut paint_tile = |tile: Rect| match center {
+    let mut paint_tile = |tile: Rect| match paint.center_slice {
         None => {
             canvas.image_with_sampling(paint.image.clone(), source_rect, tile, paint.sampling);
         }

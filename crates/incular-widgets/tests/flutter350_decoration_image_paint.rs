@@ -104,3 +104,24 @@ fn nine_slice_tolerates_noninteger_pixel_to_logical_round_trip() {
 fn nine_slice_can_paint_even_when_a_destination_axis_is_smaller_than_its_borders() {
     nine_slice(Size::new(100., 46.), rect(15.5, 15.5, 1., 1.));
 }
+
+#[test]
+fn scaled_center_outside_either_image_axis_paints_the_full_bitmap() {
+    let bitmap = pixels(300, 300);
+    let id = bitmap.id();
+    for slice in [
+        rect(50., 40., 200., 220.),
+        rect(50., 40., 200., 40.),
+        rect(50., 40., 40., 220.),
+        rect(-1., 40., 40., 40.),
+    ] {
+        let mut image = DecorationImage::new(bitmap.clone());
+        image.scale = 2.;
+        image.center_slice = Some(slice);
+        assert_eq!(
+            decoration_draws(image, Size::new(420., 400.), Offset::new(10., 20.)),
+            [(id, rect(0., 0., 300., 300.), rect(10., 20., 420., 400.))],
+            "slice {slice:?}"
+        );
+    }
+}
