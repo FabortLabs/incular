@@ -2148,3 +2148,6 @@ packages/flutter/test/rendering/stack_test.dart	64	Stack can layout with top, ri
 packages/flutter/test/rendering/stack_test.dart	101	Stack can layout with no children	paired-match	upstream-render-stack.md
 packages/flutter/test/rendering/stack_test.dart	110	Stack has correct clipBehavior	paired-match	upstream-render-stack.md
 packages/flutter/test/rendering/stack_test.dart	233	Stack in Flex can layout with no children	paired-match	upstream-render-stack.md
+packages/flutter/test/rendering/stack_test.dart	148	visitChildrenForSemantics only visits displayed child	paired-match	upstream-render-stack.md#indexedstack-semantics-and-inspection
+packages/flutter/test/rendering/stack_test.dart	176	debugDescribeChildren marks invisible children as offstage	paired-match	upstream-render-stack.md#indexedstack-semantics-and-inspection
+packages/flutter/test/rendering/stack_test.dart	204	debugDescribeChildren handles a null index	paired-match	upstream-render-stack.md#indexedstack-semantics-and-inspection

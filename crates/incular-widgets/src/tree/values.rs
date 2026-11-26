@@ -35,6 +35,20 @@ pub struct ElementAddress {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct RenderObjectId(pub(crate) ArenaId);
+/// Diagnostic presentation of an IndexedStack child, not a mount state.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IndexedStackChildDebugStyle {
+    Sparse,
+    Offstage,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct IndexedStackChildDiagnostic {
+    pub render: RenderObjectId,
+    pub name: String,
+    pub style: IndexedStackChildDebugStyle,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ActionId(pub u64);
 

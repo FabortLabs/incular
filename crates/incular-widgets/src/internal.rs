@@ -96,7 +96,7 @@ pub use crate::scrolling::*;
 pub use crate::selection::*;
 #[doc(hidden)]
 pub use crate::transient::TransientPlacementOverride;
-pub use crate::tree::icons;
+pub use crate::tree::{IndexedStackChildDebugStyle, IndexedStackChildDiagnostic, icons};
 pub use crate::tree::{
     ActionId, AnimationRetargetBridge, Blend, Blur, BlurController, BoxFit, BuildContext,
     ButtonInk, ButtonSpec, ButtonState, ColorFilterController, ColorFiltered, DecoratedBox,

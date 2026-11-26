@@ -1110,6 +1110,33 @@ impl WidgetTree {
     pub fn render_object_kind(&self, id: RenderObjectId) -> Option<&RenderKind> {
         self.renders.get(id.0).map(|render| render.object.kind())
     }
+    /// Describes all retained IndexedStack children in their logical
+    /// order. Only the selected child is shown as an ordinary sparse node;
+    /// a null selection marks every child as offstage without unmounting.
+    #[must_use]
+    pub fn indexed_stack_child_diagnostics(
+        &self,
+        id: RenderObjectId,
+    ) -> Option<Vec<IndexedStackChildDiagnostic>> {
+        let retained = self.renders.get(id.0)?;
+        let &RenderKind::IndexedStack { index, .. } = retained.object.kind() else {
+            return None;
+        };
+        Some(
+            retained.children.iter().copied().enumerate().map(|(slot, render)| {
+                IndexedStackChildDiagnostic {
+                    render,
+                    name: format!("child {}", slot + 1),
+                    style: if index == Some(slot) {
+                        IndexedStackChildDebugStyle::Sparse
+                    } else {
+                        IndexedStackChildDebugStyle::Offstage
+                    },
+                }
+            }).collect(),
+        )
+    }
+
     /// Returns the cached text layout for a retained text render object.
     #[doc(hidden)]
     #[must_use]
