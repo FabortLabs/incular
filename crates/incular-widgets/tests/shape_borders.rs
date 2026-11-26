@@ -761,3 +761,47 @@ fn circle_and_stadium_scales_lerps_and_stroked_centerlines_match_originals() {
         assert_eq!(stroked_bounds(&stadium, area), expected);
     }
 }
+
+#[test]
+fn oversized_circle_oval_and_stadium_distinguish_query_bounds_from_paint() {
+    use incular_widgets::{CircleBorder, OvalBorder};
+    let area = rect(4., 4., 4., 4.);
+    let center = Offset::new(6., 6.);
+    for width in [2., 3., 4., 8.] {
+        let side = BorderSide::solid(Color::BLACK, width);
+        let radius = (2. - width).abs();
+        let expected = rect(6. - radius, 6. - radius, 2. * radius, 2. * radius);
+        for (name, border, draws) in [
+            (
+                "circle",
+                &CircleBorder::new(side) as &dyn ShapeBorder,
+                width < 4.,
+            ),
+            ("oval", &OvalBorder::new(side), width != 4.),
+            ("stadium", &StadiumBorder::new(side), width != 4.),
+        ] {
+            let inner = border.inner_path(area);
+            assert_bounds(&inner, expected);
+            assert_eq!(
+                inner.contains(center, FillRule::NonZero),
+                radius > 0.,
+                "{name}, {width}"
+            );
+            let mut canvas = Canvas::default();
+            border.paint(&mut canvas, area);
+            let drawing = canvas.finish();
+            assert_eq!(!drawing.is_empty(), draws, "{name}, {width}");
+            if draws {
+                let [PaintCommand::StrokePath { path, stroke, .. }] = drawing.commands() else {
+                    panic!("one stroke")
+                };
+                let radius = (2. - width * 0.5).abs();
+                assert_bounds(
+                    path,
+                    rect(6. - radius, 6. - radius, radius * 2., radius * 2.),
+                );
+                assert_eq!(stroke.width, width);
+            }
+        }
+    }
+}

@@ -320,6 +320,23 @@ fn inflated_edges(rect: Rect, delta: f32) -> [f32; 4] {
     ]
 }
 
+// Native addOval/addRRect order their signed edges. Point/line bounds
+// remain available to path queries even when nothing is painted.
+fn ordered_inflate(rect: Rect, delta: f32) -> Option<Rect> {
+    let [left, top, right, bottom] = inflated_edges(rect, delta);
+    if ![left, top, right, bottom].into_iter().all(f32::is_finite) {
+        return None;
+    }
+    Some(Rect::from_origin_size(
+        Offset::new(left.min(right), top.min(bottom)),
+        Size::maybe_new((right - left).abs(), (bottom - top).abs())?,
+    ))
+}
+
+fn non_flat(rect: &Rect) -> bool {
+    rect.size.width > 0. && rect.size.height > 0.
+}
+
 /// Flutter `RRect.inflate`: the radii grow with the rectangle and stop at
 /// zero.
 fn inflate_radii(radii: CornerRadii, delta: f32) -> CornerRadii {
@@ -396,9 +413,9 @@ impl ShapeBorder for StadiumBorder {
 
     fn inner_path(&self, rect: Rect) -> Path {
         let inset = self.side.stroke_inset();
-        rounded_rect_path(
-            inflate(rect, -inset),
-            inflate_radii(Self::radii(rect), -inset),
+        ordered_inflate(rect, -inset).map_or_else(
+            || Path::builder().build(),
+            |inner| rounded_rect_path(inner, inflate_radii(Self::radii(rect), -inset)),
         )
     }
 
@@ -407,14 +424,13 @@ impl ShapeBorder for StadiumBorder {
             return;
         }
         let delta = self.side.stroke_offset() / 2.0;
-        stroke(
-            canvas,
-            &self.side,
-            rounded_rect_path(
-                inflate(rect, delta),
-                inflate_radii(Self::radii(rect), delta),
-            ),
-        );
+        if let Some(contour) = ordered_inflate(rect, delta).filter(non_flat) {
+            stroke(
+                canvas,
+                &self.side,
+                rounded_rect_path(contour, inflate_radii(Self::radii(rect), delta)),
+            );
+        }
     }
 }
 
@@ -732,7 +748,8 @@ impl ShapeBorder for CircleBorder {
     }
 
     fn inner_path(&self, rect: Rect) -> Path {
-        ellipse_path(inflate(self.fitted_rect(rect), -self.side.stroke_inset()))
+        ordered_inflate(self.fitted_rect(rect), -self.side.stroke_inset())
+            .map_or_else(|| Path::builder().build(), ellipse_path)
     }
 
     fn prefer_paint_interior(&self) -> bool {
@@ -754,11 +771,15 @@ impl ShapeBorder for CircleBorder {
             return;
         }
         let delta = self.side.stroke_offset() / 2.0;
-        stroke(
-            canvas,
-            &self.side,
-            ellipse_path(inflate(self.fitted_rect(rect), delta)),
-        );
+        let fitted = self.fitted_rect(rect);
+        // Unlike DrawOval, DrawCircle with a nonpositive radius does not
+        // reflect the contour through the center and draw another circle.
+        if self.eccentricity == 0. && shortest_side(fitted) + 2. * delta <= 0. {
+            return;
+        }
+        if let Some(contour) = ordered_inflate(fitted, delta).filter(non_flat) {
+            stroke(canvas, &self.side, ellipse_path(contour));
+        }
     }
 }
 
@@ -803,7 +824,8 @@ impl ShapeBorder for OvalBorder {
     }
 
     fn inner_path(&self, rect: Rect) -> Path {
-        ellipse_path(inflate(rect, -self.side.stroke_inset()))
+        ordered_inflate(rect, -self.side.stroke_inset())
+            .map_or_else(|| Path::builder().build(), ellipse_path)
     }
 
     fn paint(&self, canvas: &mut Canvas, rect: Rect) {
@@ -811,7 +833,9 @@ impl ShapeBorder for OvalBorder {
             return;
         }
         let delta = self.side.stroke_offset() / 2.0;
-        stroke(canvas, &self.side, ellipse_path(inflate(rect, delta)));
+        if let Some(contour) = ordered_inflate(rect, delta).filter(non_flat) {
+            stroke(canvas, &self.side, ellipse_path(contour));
+        }
     }
 }
 

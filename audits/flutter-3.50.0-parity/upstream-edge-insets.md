@@ -118,3 +118,20 @@ original rectangles, inside, center and outside stadium strokes retain
 their exact centerlines and layout insets; the circle's inside stroke
 has center (25, 40), radius 10, and width 10. Six Flutter and 22 focused
 Rust cases passed.
+
+## Oversized oval, circle and stadium outlines
+
+Three authored Flutter 3.50.0 probes distinguish the queried inner path
+from the actual paint. With a 4×4 shape and a 3 px inside side, the inner
+path has ordered 2×2 bounds and still encloses the center. At width 4
+the inner path's bounds coincide with the original edges, but the
+centerline has flattened and emits no paint. At width 8 a zero-
+eccentricity CircleBorder stays blank, while OvalBorder and StadiumBorder
+paint their ordered inverted centerlines. This removes the native
+negative-size panic without turning a negative-radius circle into an
+unexpected reflected stroke.
+
+The pinned Flutter checks assert actual raster samples. The 23 focused
+Rust cases check retained bounds, center containment, and the
+presence or absence of a genuine stroke. No GPU readback or additional
+upstream registration credit is claimed for these authored probes.
