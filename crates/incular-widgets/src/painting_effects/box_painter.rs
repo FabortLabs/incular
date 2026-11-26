@@ -342,13 +342,60 @@ impl CustomClipper for BoxDecorationClipper {
 /// The image stage of a decoration: the image fitted with the resolved fit,
 /// alignment, repeat, scale, sampling and opacity. The caller clips it.
 pub(crate) fn decoration_image_widget(image: &DecorationImage) -> Widget {
-    let mut painted: Widget = Image::new(image.image.clone())
-        .fit(image.resolved_fit())
-        .alignment(image.alignment)
-        .repeat(image.repeat)
-        .scale(image.scale)
-        .filter_quality(image.filter_quality)
-        .into();
+    use crate::{AlignmentGeometry, Builder, tree::DirectionRequirement};
+
+    let has_logical_alignment = matches!(
+        image.alignment_geometry,
+        Some(AlignmentGeometry::Directional(_) | AlignmentGeometry::Mixed { .. })
+    );
+    if !has_logical_alignment && !image.match_text_direction {
+        return resolved_decoration_image(image, None);
+    }
+    let required = has_logical_alignment || cfg!(debug_assertions) && image.match_text_direction;
+    let image = image.clone();
+    let builder = Builder::new(move |context| {
+        resolved_decoration_image(&image, context.text_direction())
+    });
+    if required {
+        builder
+            .require_directionality(&DirectionRequirement {
+                widget: "DecorationImage",
+                reason: "No TextDirection found. Directional DecorationImage settings need a Directionality ancestor",
+            })
+            .into()
+    } else {
+        builder.into()
+    }
+}
+
+fn resolved_decoration_image(image: &DecorationImage, direction: Option<TextDirection>) -> Widget {
+    let alignment = image.alignment_geometry.map_or(image.alignment, |alignment| {
+        alignment.resolve(direction.unwrap_or(TextDirection::Ltr))
+    });
+    let flip = image.match_text_direction && direction == Some(TextDirection::Rtl);
+    let mut painted: Widget = if image.center_slice.is_some() || flip {
+        painted_image(
+            ImagePaint {
+                image: image.image.clone(),
+                scale: image.scale,
+                fit: image.fit,
+                alignment,
+                center_slice: image.center_slice,
+                repeat: image.repeat,
+                flip_horizontally: flip,
+                sampling: image.filter_quality.sampling(),
+            },
+            None,
+        )
+    } else {
+        Image::new(image.image.clone())
+            .fit(image.resolved_fit())
+            .alignment(alignment)
+            .repeat(image.repeat)
+            .scale(image.scale)
+            .filter_quality(image.filter_quality)
+            .into()
+    };
     if image.opacity < 1.0 {
         painted = Opacity::new(image.opacity, painted).into();
     }
@@ -472,29 +519,7 @@ fn decorated_with_source(
             });
         }
         if let Some(image) = &decoration.image {
-            // `DecorationImagePainter.paint`: flip when the image matches
-            // an ambient right-to-left direction.
-            let flip = image.match_text_direction
-                && context.text_direction() == Some(incular_config::TextDirection::Rtl);
-            let mut painted = if image.center_slice.is_some() || flip {
-                let paint = ImagePaint {
-                    image: image.image.clone(),
-                    scale: image.scale,
-                    fit: image.fit,
-                    alignment: image.alignment,
-                    center_slice: image.center_slice,
-                    repeat: image.repeat,
-                    flip_horizontally: flip,
-                    sampling: image.filter_quality.sampling(),
-                };
-                let mut painted = painted_image(paint, None);
-                if image.opacity < 1.0 {
-                    painted = Opacity::new(image.opacity, painted).into();
-                }
-                painted
-            } else {
-                decoration_image_widget(image)
-            };
+            let mut painted = decoration_image_widget(image);
             if let Some(clip) = decoration.image_clip(Rect::from_origin_size(Offset::ZERO, size)) {
                 painted = ClipPath::new(Arc::new(clip), painted).into();
             }

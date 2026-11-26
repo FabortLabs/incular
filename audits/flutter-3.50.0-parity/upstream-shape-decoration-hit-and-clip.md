@@ -60,3 +60,21 @@ nearby outside point, degenerate frames and the same scaled logical
 radius in both text directions. Thirty-four prior shape regressions
 passed. This does not count the pinned primitive-matrix registration,
 which also requires superellipse and heterogeneous border interpolation.
+
+## Directional decoration images
+
+Pinned `painting/shape_decoration_test.dart:228` passes. In the mounted
+RTL case, the 100 × 200 source is recorded at destination (20, 760)
+with its full size. Previously it was centered at (470, 360). Logical
+alignment now resolves against ambient direction; it reports a missing
+direction instead of silently centering. The LTR path also records source
+and destination rectangles, and both cases retain the circular clip.
+
+Both decoration types now share their image painter. Shape decoration
+also honors RTL mirroring and nine-slice patches. Three mounted native
+cases passed and check actual compositor commands, exact crop and
+destination, missing-direction diagnostics, and all nine patches. The
+three box image paint cases, seven shape controls and 15 paint option
+controls passed. Incular accepts an already-decoded image handle here;
+the upstream synchronous test provider makes no async callbacks. No
+provider lifecycle or GPU pixel equivalence is claimed.

@@ -660,6 +660,10 @@ pub struct DecorationImage {
     pub fit: Option<ImageFit>,
     #[builder(default = incular_config::Alignment::CENTER)]
     pub alignment: incular_config::Alignment,
+    /// Optional logical or mixed alignment, resolved by the decoration painter.
+    /// When set, this takes precedence over the physical `alignment` field.
+    #[builder(default, setter(strip_option, into))]
+    pub alignment_geometry: Option<AlignmentGeometry>,
     /// Flutter `centerSlice`, in logical image pixels: the image paints as
     /// a nine-slice (`Canvas.drawImageNine`), and a missing fit is fill.
     #[builder(default, setter(strip_option))]
@@ -691,12 +695,20 @@ impl DecorationImage {
         })
     }
 
+    /// Sets alignment in physical or logical coordinates.
+    #[must_use]
+    pub fn alignment_geometry(mut self, alignment: impl Into<AlignmentGeometry>) -> Self {
+        self.alignment_geometry = Some(alignment.into());
+        self
+    }
+
     #[must_use]
     pub fn new(image: ImageHandle) -> Self {
         Self {
             image,
             fit: None,
             alignment: incular_config::Alignment::CENTER,
+            alignment_geometry: None,
             center_slice: None,
             repeat: ImageRepeat::NoRepeat,
             match_text_direction: false,
