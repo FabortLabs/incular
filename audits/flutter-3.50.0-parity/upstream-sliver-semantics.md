@@ -184,8 +184,8 @@ a blocked callback or an unbound payload kind is not advertised.
 All 27 targeted Rust tests passed, including the existing formatter,
 on-change, and disabled-field behavior. The all-actions case remains
 partial: the clipboard and expansion cases are described below;
-cursor and focus lifecycle callbacks and Flutter's two-pane tags
-remain open.
+cursor callbacks are covered below; focus lifecycle and Flutter's
+two-pane tags remain open.
 
 ### Clipboard and expansion callbacks
 
@@ -203,3 +203,14 @@ Collapse preserves the native ID, withdraws Expand, and dispatches
 only Collapse. Clipboard actions are verified through the portable
 mobile projection, not host clipboard or assistive-technology
 integration. The 29 focused Rust checks passed.
+
+### Character cursor callbacks
+
+The pinned `sliver_semantic_cursor_payloads_test.dart` probe and the
+matching retained/mobile projection test exercise forward and backward
+movement with each value of the selection-extension flag. Both
+directions invoke their own current callbacks. Replacement emits no
+native update; removal withdraws the two action bits and rejects stale
+requests. The 30 targeted Rust tests passed. Host assistive-technology
+routing and movement by word are not covered by this slice; neither
+word callback is publicly configured by Flutter's SliverSemantics.

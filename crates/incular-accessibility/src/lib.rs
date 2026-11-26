@@ -1279,6 +1279,8 @@ fn map_action(action: SemanticActionKind) -> Option<Action> {
         | SemanticActionKind::Copy
         | SemanticActionKind::Cut
         | SemanticActionKind::Paste
+        | SemanticActionKind::MoveCursorForwardByCharacter
+        | SemanticActionKind::MoveCursorBackwardByCharacter
         | SemanticActionKind::Custom => None,
     }
 }

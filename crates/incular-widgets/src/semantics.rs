@@ -639,6 +639,40 @@ impl Semantics {
         self.with_bound_callback(SemanticAction::Collapse, move |_| callback())
     }
 
+    /// Receives a request to move the accessibility cursor forward by
+    /// a character, with the original selection-extension flag.
+    #[must_use]
+    pub fn on_move_cursor_forward_by_character(
+        self,
+        callback: impl Fn(bool) + 'static,
+    ) -> Self {
+        self.with_bound_callback(
+            SemanticAction::MoveCursorForwardByCharacter { extend_selection: false },
+            move |action| {
+                if let SemanticAction::MoveCursorForwardByCharacter { extend_selection } = action {
+                    callback(extend_selection);
+                }
+            },
+        )
+    }
+
+    /// Receives a request to move the accessibility cursor backward by
+    /// a character, with the original selection-extension flag.
+    #[must_use]
+    pub fn on_move_cursor_backward_by_character(
+        self,
+        callback: impl Fn(bool) + 'static,
+    ) -> Self {
+        self.with_bound_callback(
+            SemanticAction::MoveCursorBackwardByCharacter { extend_selection: false },
+            move |action| {
+                if let SemanticAction::MoveCursorBackwardByCharacter { extend_selection } = action {
+                    callback(extend_selection);
+                }
+            },
+        )
+    }
+
     fn with_bound_callback(
         mut self,
         action: SemanticAction,

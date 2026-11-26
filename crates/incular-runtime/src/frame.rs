@@ -1110,6 +1110,8 @@ impl Runtime {
                 | SemanticAction::Paste
                 | SemanticAction::Expand
                 | SemanticAction::Collapse
+                | SemanticAction::MoveCursorForwardByCharacter { .. }
+                | SemanticAction::MoveCursorBackwardByCharacter { .. }
         ) {
             let kind = action.kind();
             if let Some(callback) = self.tree.semantic_bound_callback(element, kind) {
@@ -1269,7 +1271,9 @@ impl Runtime {
             | SemanticAction::Cut
             | SemanticAction::Paste
             | SemanticAction::Expand
-            | SemanticAction::Collapse => false,
+            | SemanticAction::Collapse
+            | SemanticAction::MoveCursorForwardByCharacter { .. }
+            | SemanticAction::MoveCursorBackwardByCharacter { .. } => false,
             SemanticAction::ShowOnScreen => self.tree.semantic_show_on_screen(element),
             SemanticAction::Custom(id) => self
                 .tree

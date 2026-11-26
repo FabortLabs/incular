@@ -154,6 +154,8 @@ pub enum SemanticActionKind {
     Paste,
     Expand,
     Collapse,
+    MoveCursorForwardByCharacter,
+    MoveCursorBackwardByCharacter,
 }
 
 impl SemanticActionKind {
@@ -201,6 +203,8 @@ pub enum SemanticAction {
     Paste,
     Expand,
     Collapse,
+    MoveCursorForwardByCharacter { extend_selection: bool },
+    MoveCursorBackwardByCharacter { extend_selection: bool },
 }
 
 impl SemanticAction {
@@ -229,6 +233,12 @@ impl SemanticAction {
             Self::Paste => SemanticActionKind::Paste,
             Self::Expand => SemanticActionKind::Expand,
             Self::Collapse => SemanticActionKind::Collapse,
+            Self::MoveCursorForwardByCharacter { .. } => {
+                SemanticActionKind::MoveCursorForwardByCharacter
+            }
+            Self::MoveCursorBackwardByCharacter { .. } => {
+                SemanticActionKind::MoveCursorBackwardByCharacter
+            }
         }
     }
 }

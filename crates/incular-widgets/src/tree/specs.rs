@@ -419,6 +419,8 @@ impl SemanticCallbacks {
             | SemanticActionKind::Paste
             | SemanticActionKind::Expand
             | SemanticActionKind::Collapse
+            | SemanticActionKind::MoveCursorForwardByCharacter
+            | SemanticActionKind::MoveCursorBackwardByCharacter
             | SemanticActionKind::ScrollToOffset
             | SemanticActionKind::ShowOnScreen
             | SemanticActionKind::ScrollLeft

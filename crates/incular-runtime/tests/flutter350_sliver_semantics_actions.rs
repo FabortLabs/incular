@@ -882,3 +882,81 @@ fn accesskit_expand_and_collapse_requests_reach_the_matching_callback() {
     assert!(runtime.dispatch_semantic_action(collapse.node, collapse.action));
     assert_eq!(&*calls.borrow(), &["expand", "collapse"]);
 }
+
+#[test]
+fn cursor_callbacks_preserve_direction_and_selection_extension_without_an_editor() {
+    let calls = Rc::new(RefCell::new(Vec::new()));
+    let build = |marker: &'static str, active: bool| {
+        let calls = calls.clone();
+        scene(move || {
+            let sem = Semantics::default()
+                .container(true)
+                .label("cursor controls");
+            if !active {
+                return sem;
+            }
+            let forward = calls.clone();
+            let backward = calls.clone();
+            sem.on_move_cursor_forward_by_character(move |extend| {
+                forward.borrow_mut().push((marker, "forward", extend));
+            })
+            .on_move_cursor_backward_by_character(move |extend| {
+                backward.borrow_mut().push((marker, "backward", extend));
+            })
+        })
+    };
+    let mut runtime = Runtime::new(build("first", true)).unwrap();
+    frame(&mut runtime);
+    let root = runtime.tree().root().unwrap();
+    let id = node(&runtime, "cursor controls").id;
+    let revision = runtime.tree().semantics().revision();
+    let directions = |extend_selection| {
+        [
+            SemanticAction::MoveCursorForwardByCharacter { extend_selection },
+            SemanticAction::MoveCursorBackwardByCharacter { extend_selection },
+        ]
+    };
+    let mut mobile = MobileAccessibilityProjection::new();
+    let native = mobile
+        .sync(runtime.tree().semantics())
+        .unwrap()
+        .nodes
+        .into_iter()
+        .find(|native| native.semantic.id == id)
+        .unwrap()
+        .native_id;
+    for marker in ["first", "second"] {
+        runtime.schedule_update(root, build(marker, true)).unwrap();
+        frame(&mut runtime);
+        assert_eq!(node(&runtime, "cursor controls").id, id);
+        assert_eq!(runtime.tree().semantics().revision(), revision);
+        assert!(mobile.sync(runtime.tree().semantics()).is_none());
+        for extend in [false, true] {
+            for action in directions(extend) {
+                let request = mobile.translate_action(native, action).unwrap();
+                assert!(runtime.dispatch_semantic_action(request.node, request.action));
+            }
+        }
+        assert_eq!(
+            &*calls.borrow(),
+            &[
+                (marker, "forward", false),
+                (marker, "backward", false),
+                (marker, "forward", true),
+                (marker, "backward", true),
+            ],
+        );
+        calls.borrow_mut().clear();
+    }
+    runtime
+        .schedule_update(root, build("removed", false))
+        .unwrap();
+    frame(&mut runtime);
+    assert_eq!(node(&runtime, "cursor controls").id, id);
+    assert!(mobile.sync(runtime.tree().semantics()).is_some());
+    for action in directions(true) {
+        assert!(mobile.translate_action(native, action.clone()).is_none());
+        assert!(!runtime.dispatch_semantic_action(id, action));
+    }
+    assert!(calls.borrow().is_empty());
+}

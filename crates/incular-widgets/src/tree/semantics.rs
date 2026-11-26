@@ -3155,7 +3155,9 @@ pub(super) fn semantic_action_is_executable(
         | SemanticActionKind::Cut
         | SemanticActionKind::Paste
         | SemanticActionKind::Expand
-        | SemanticActionKind::Collapse => false,
+        | SemanticActionKind::Collapse
+        | SemanticActionKind::MoveCursorForwardByCharacter
+        | SemanticActionKind::MoveCursorBackwardByCharacter => false,
         // Advertised only inside a viewport; the dispatch reports whether a
         // viewport actually moved.
         SemanticActionKind::ShowOnScreen => true,
