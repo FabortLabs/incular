@@ -1643,6 +1643,21 @@ impl RenderSliver for CrossAxisGroupRenderSliver {
         sliver.reveal_child(child.local(), rect, options)
     }
 
+    fn set_child_focus_keep_alive(
+        &mut self,
+        child: SliverChildId,
+        grid_tile: Option<usize>,
+        keep_alive: bool,
+    ) -> bool {
+        // The retained viewport addresses a flattened row. Restore the
+        // lane-local ID before its lazy delegate handles editor focus.
+        self.children
+            .get_mut(child.scope())
+            .is_some_and(|(sliver, _)| {
+                sliver.set_child_focus_keep_alive(child.local(), grid_tile, keep_alive)
+            })
+    }
+
     fn scroll_layout_dependency(&self) -> SliverScrollDependency {
         self.children
             .iter()

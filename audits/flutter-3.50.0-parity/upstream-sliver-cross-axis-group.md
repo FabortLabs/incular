@@ -64,3 +64,17 @@ release before the press deadline; Incular then rejected a detector
 that used only onTapDown. The release now checks the same set of
 tap callbacks as enrollment. Tests ran against the original Flutter
 registrations and the native retained tree and recognizer.
+
+## Focused editor retention
+
+An authored pinned probe places a real EditableText in a fixed-extent
+lane, both directly and beneath SliverConstrainedCrossAxis. At offset
+1200 the field remains mounted and focused, but is no longer a hit
+target. When it loses focus it is allowed to leave the cache. Scrolling
+back mounts a new editor with the same controller text. Both Flutter
+controls and the matching native scenarios passed.
+
+Incular previously dropped the active text-input client on the first
+jump. The group now forwards the focus keep-alive request using the
+individual lane's child ID. This is an authored regression, not an
+additional upstream registration.
