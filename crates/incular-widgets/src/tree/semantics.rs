@@ -2276,10 +2276,11 @@ impl WidgetTree {
             .inverse_transform_point(position)?;
         // Like Flutter's Rect.contains, a semantic box excludes its right
         // and bottom edges. The pointer path has separate edge semantics.
-        if !(local.x >= 0.0
-            && local.x < render.size.width
-            && local.y >= 0.0
-            && local.y < render.size.height)
+        let bounds = self.semantic_local_bounds(render_id, render.size);
+        if !(local.x >= bounds.origin.x
+            && local.x < bounds.origin.x + bounds.size.width
+            && local.y >= bounds.origin.y
+            && local.y < bounds.origin.y + bounds.size.height)
         {
             return None;
         }
@@ -2318,7 +2319,26 @@ impl WidgetTree {
     ) -> Rect {
         let render = self.render_live(render_id, "semantic render must remain live");
         self.semantic_bounds_transform(render_id, world, child_world)
-            .transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, render.size))
+            .transform_rect_bbox(self.semantic_local_bounds(render_id, render.size))
+    }
+
+    /// Insets operate in local coordinates before the retained world transform.
+    /// An over-deflated axis is empty rather than an invalid Size.
+    fn semantic_local_bounds(&self, render: RenderObjectId, size: Size) -> Rect {
+        let unmodified = Rect::from_origin_size(Offset::ZERO, size);
+        if self.semantic_bounds_insets.is_empty() {
+            return unmodified;
+        }
+        let Some(insets) = self.semantic_bounds_insets.get(&render) else {
+            return unmodified;
+        };
+        let finite = |value: f32| if value.is_finite() { value } else { 0. };
+        let left = finite(insets.left);
+        let top = finite(insets.top);
+        let width = (size.width - finite(insets.right) - left).max(0.);
+        let height = (size.height - finite(insets.bottom) - top).max(0.);
+        let size = Size::maybe_new(width, height).unwrap_or(Size::ZERO);
+        Rect::from_origin_size(Offset::new(left, top), size)
     }
 
     fn semantic_bounds_transform(

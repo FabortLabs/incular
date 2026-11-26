@@ -4,6 +4,8 @@ use crate::{
     Animation, Color, Container, ExplicitSemantics, GestureDetector, HitTestBehavior, Widget,
 };
 use incular_animation::{AnimationController, Tween, TweenValue};
+use incular_config::EdgeInsets;
+use incular_core::ValueNotifier;
 use incular_semantics::{SemanticActionKind, SemanticRole};
 use std::rc::Rc;
 
@@ -63,6 +65,7 @@ pub struct AnimatedModalBarrier {
     semantics_label: Option<String>,
     barrier_semantics_dismissible: bool,
     semantics_on_tap_hint: Option<String>,
+    clip_details_notifier: Option<Rc<ValueNotifier<EdgeInsets>>>,
     on_dismiss: Option<Rc<dyn Fn()>>,
     dismissal_handler: Option<Rc<dyn Fn() -> bool>>,
     child: Option<Widget>,
@@ -112,6 +115,7 @@ impl AnimatedModalBarrier {
             semantics_label: None,
             barrier_semantics_dismissible: true,
             semantics_on_tap_hint: None,
+            clip_details_notifier: None,
             on_dismiss: None,
             dismissal_handler: None,
             child: None,
@@ -202,6 +206,14 @@ impl AnimatedModalBarrier {
         self
     }
 
+    /// Insets the barrier's accessibility bounds only. Updating the notifier
+    /// does not change the veil's size, paint, or pointer hit region.
+    #[must_use]
+    pub fn clip_details_notifier(mut self, notifier: ValueNotifier<EdgeInsets>) -> Self {
+        self.clip_details_notifier = Some(Rc::new(notifier));
+        self
+    }
+
     /// Optionally places the barrier above a retained child in a stack.
     #[must_use]
     pub fn child(mut self, child: impl Into<Widget>) -> Self {
@@ -235,6 +247,7 @@ impl From<AnimatedModalBarrier> for Widget {
         let semantics_label = value.semantics_label;
         let semantics_dismissible = value.barrier_semantics_dismissible;
         let semantics_hint = value.semantics_on_tap_hint;
+        let semantics_insets = value.clip_details_notifier;
         let on_dismiss = value.on_dismiss;
         let dismissal_handler = value.dismissal_handler;
         let child = value.child;
@@ -295,6 +308,9 @@ impl From<AnimatedModalBarrier> for Widget {
                         .semantics(explicit)
                         .with_semantic_callback(SemanticActionKind::Activate, dismiss.clone())
                         .with_semantic_callback(SemanticActionKind::Dismiss, dismiss.clone());
+                    if let Some(insets) = &semantics_insets {
+                        barrier = barrier.with_semantic_bounds_insets(insets.clone());
+                    }
                 } else {
                     barrier = barrier.semantics(explicit);
                 }

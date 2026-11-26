@@ -4,7 +4,7 @@
 
 use super::super::*;
 use super::{Widget, WidgetAllocation, WidgetChildren, WidgetNode};
-use crate::tree::specs::{EditChanged, EditTransform, TextParagraphPolicy};
+use crate::tree::specs::{EditChanged, EditTransform, SemanticBoundsInsets, TextParagraphPolicy};
 
 impl Widget {
     fn from_node(node: WidgetNode) -> Self {
@@ -367,6 +367,14 @@ impl Widget {
     }
 
     #[doc(hidden)]
+    pub(crate) fn with_semantic_bounds_insets(
+        mut self,
+        insets: Rc<incular_core::ValueNotifier<EdgeInsets>>,
+    ) -> Self {
+        self.semantic_properties_mut().bounds_insets = Some(SemanticBoundsInsets(insets));
+        self
+    }
+
     pub(crate) fn with_semantic_callback(
         mut self,
         action: SemanticActionKind,

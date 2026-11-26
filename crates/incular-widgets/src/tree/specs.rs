@@ -212,6 +212,22 @@ impl ExplicitSemantics {
     }
 }
 
+/// A render-phase source for the node's own accessibility rectangle.
+#[derive(Clone)]
+pub(super) struct SemanticBoundsInsets(pub(super) Rc<incular_core::ValueNotifier<EdgeInsets>>);
+
+impl std::fmt::Debug for SemanticBoundsInsets {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SemanticBoundsInsets").finish_non_exhaustive()
+    }
+}
+
+impl PartialEq for SemanticBoundsInsets {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct SemanticProperties {
     pub(super) label: Option<String>,
@@ -220,6 +236,7 @@ pub(crate) struct SemanticProperties {
     /// Boxed: it is several hundred bytes and most widgets that carry
     /// semantic metadata set only a label or a flag.
     pub(super) explicit: Option<Box<ExplicitSemantics>>,
+    pub(super) bounds_insets: Option<SemanticBoundsInsets>,
     pub(super) merge_descendants: bool,
     pub(super) tag_for_children: Option<incular_semantics::SemanticsTag>,
     pub(super) locale_for_subtree: Option<std::sync::Arc<str>>,

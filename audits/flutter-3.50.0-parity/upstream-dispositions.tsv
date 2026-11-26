@@ -1776,3 +1776,4 @@ packages/flutter/test/widgets/modal_barrier_test.dart	910	Undismissible Animated
 packages/flutter/test/widgets/modal_barrier_test.dart	922	Dismissible AnimatedModalBarrier includes button in semantic tree on iOS, macOS and android	partial-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md#barrier-semantics-hover-and-cursor
 packages/flutter/test/widgets/modal_barrier_test.dart	954	AnimatedModalBarrier does not crash at zero area	paired-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md#barrier-semantics-hover-and-cursor
 packages/flutter/test/widgets/modal_barrier_test.dart	1009	uses default mouse cursor	paired-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md#barrier-semantics-hover-and-cursor
+packages/flutter/test/widgets/modal_barrier_test.dart	968	SemanticsClipper correctly clips Semantics.rect in four directions	partial-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md#reactive-accessibility-bounds

@@ -1433,6 +1433,9 @@ pub struct WidgetTree {
     input: InputState,
     semantics: SemanticsTree,
     semantic_ids: FastHashMap<ElementId, SemanticNodeId>,
+    /// Optional render-phase snapshots of local accessibility bounds insets.
+    /// Most nodes use their unmodified layout rectangle.
+    semantic_bounds_insets: FastHashMap<RenderObjectId, EdgeInsets>,
     table_semantic_wrappers: FastHashMap<ElementId, semantics::table::TableSemanticWrappers>,
     // Each blocker and the non-boundary ancestors through which it reaches siblings.
     semantics_block_reach: FastHashSet<ElementId>,

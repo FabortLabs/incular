@@ -9,6 +9,21 @@ use super::widget::WidgetChildren;
 use crate::overscroll_indicator::ScrollOverscrollIndicator;
 use crate::scroll_behavior::OverscrollStyle;
 
+/// Semantics-only reactive sources use the same retained render consumer,
+/// so neither rebuild nor measurement is scheduled when an inset changes.
+fn render_configuration(
+    widget: &Widget,
+    context: &DependencyContext,
+) -> (RenderKind, Option<EdgeInsets>) {
+    let insets = widget
+        .semantic_properties()
+        .bounds_insets
+        .as_ref()
+        .map(|source| source.0.value())
+        .filter(|insets| !insets.is_zero());
+    (render_kind(widget, context), insets)
+}
+
 /// The inherited scope an element of `widget` provides and whether it is a
 /// lookup boundary: a layout builder's environment, or the
 /// [`ScrollableScope`](crate::scroll_aware_image_provider::ScrollableScope)
@@ -378,7 +393,9 @@ impl WidgetTree {
                     (build_consumer, render_consumer),
                     indexed_visible,
                 );
-            let new_kind = render_context.build(|context| render_kind(&widget, context));
+            let (new_kind, insets) =
+                render_context.build(|context| render_configuration(&widget, context));
+            self.update_semantic_bounds_insets(render, insets);
             let invalidation = self
                 .render_live_mut(render, "rebound render must remain live")
                 .object
@@ -608,7 +625,8 @@ impl WidgetTree {
         );
         self.check_keys_borrowed(None, widget.children_refs())?;
         let layers = RenderLayers::create(&mut self.compositor, widget.kind());
-        let kind = render_context.build(|context| render_kind(&widget, context));
+        let (kind, insets) =
+            render_context.build(|context| render_configuration(&widget, context));
         let render = self.renders.insert(RenderNode {
             parent: None,
             children: Vec::new(),
@@ -625,6 +643,9 @@ impl WidgetTree {
             subtree_needs_semantics: true,
             object: RenderObjectPayload::new(kind, layers),
         });
+        if let Some(insets) = insets {
+            self.semantic_bounds_insets.insert(RenderObjectId(render), insets);
+        }
         let id = ElementId(self.elements.insert(Element {
             parent,
             children: Vec::new(),
@@ -699,6 +720,23 @@ impl WidgetTree {
         self.diagnostics.compositor_only_updates += 1;
     }
 
+    fn update_semantic_bounds_insets(
+        &mut self,
+        render: RenderObjectId,
+        insets: Option<EdgeInsets>,
+    ) {
+        let previous = match insets {
+            Some(insets) => self.semantic_bounds_insets.insert(render, insets),
+            None if !self.semantic_bounds_insets.is_empty() => {
+                self.semantic_bounds_insets.remove(&render)
+            }
+            None => None,
+        };
+        if previous != insets {
+            self.mark_render_semantics(render, SemanticsDirty::OwnBounds);
+        }
+    }
+
     pub(super) fn apply_inherited_invalidations(&mut self) {
         let dirty = self.dependency_root.take_dirty_consumers();
         for consumer in dirty {
@@ -726,7 +764,9 @@ impl WidgetTree {
                         let element = self.element_live(id, "inherited consumer must remain live");
                         (element.widget.clone(), element.render_context.clone())
                     };
-                    let new_kind = context.build(|context| render_kind(&widget, context));
+                    let (new_kind, insets) =
+                        context.build(|context| render_configuration(&widget, context));
+                    self.update_semantic_bounds_insets(render, insets);
                     let invalidation = self
                         .render_live_mut(render, "inherited render must remain live")
                         .object
@@ -929,7 +969,9 @@ impl WidgetTree {
             .render_live(render, "updated render must remain live")
             .object
             .shared_kind();
-        let new_kind = render_context.build(|context| render_kind(widget, context));
+        let (new_kind, insets) =
+            render_context.build(|context| render_configuration(widget, context));
+        self.update_semantic_bounds_insets(render, insets);
         carry_replaced_transition(&old_kind, &new_kind);
         // A rebuilt viewport descriptor starts with fresh sliver estimates.
         // Hand compatible retained measurement to the replacement before it
@@ -2614,6 +2656,9 @@ impl WidgetTree {
                     }
                     self.unregister_global_key(id, &element.widget);
                     let render = element.render;
+                    if !self.semantic_bounds_insets.is_empty() {
+                        self.semantic_bounds_insets.remove(&render);
+                    }
                     let indexed_element = self.render_elements.remove(&render);
                     debug_assert_eq!(indexed_element, Some(id));
                     if let Some(semantic) = self.semantic_ids.remove(&id) {

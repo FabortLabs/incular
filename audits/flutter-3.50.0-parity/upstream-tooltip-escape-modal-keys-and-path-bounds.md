@@ -130,3 +130,21 @@ the press-time button mask and competition but resolves its any-button
 tap callback from the mounted widget at delivery. The new regression and
 the earlier modal drag/cancel, pointer, and menu outside-tap tests pass.
 This authored control is not counted as an upstream registration.
+
+### Reactive accessibility bounds
+
+Pinned :968 passed for iOS, macOS and Android. The native notifier
+insets the local accessibility rectangle on each side before applying
+world transforms. The exact reference vector (10, 20, 30, 40) on an
+800×600 veil gives edges (10, 20, 770, 560) with Activate and Dismiss.
+The pinned authored Android probe also verifies live replacement,
+restoring zero insets and pointer delivery outside the semantic rect.
+The native retained probe checks semantic hit edges, same semantic
+node ID, identical paint commands, and zero rebuild, layout or repaint
+work on notifier changes. It also verifies detachment when the notifier
+is replaced, excluded or unmounted.
+
+The behavioral geometry is paired, but :968 stays partial until the
+static ModalBarrier API is paired. Incular does not emulate Flutter's
+platform gating; the behavior applies whenever Incular exposes the
+barrier dismissal node.

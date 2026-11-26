@@ -684,3 +684,155 @@ fn a_barrier_uses_the_current_handler_when_an_active_tap_releases() {
         assert_eq!(&*callbacks.borrow(), &[2]);
     }
 }
+
+#[test]
+fn reactive_barrier_insets_clip_only_the_semantic_rectangle() {
+    use incular_config::EdgeInsets;
+    use incular_core::{Rect, ValueNotifier};
+    use incular_semantics::{SemanticAction, SemanticActionKind};
+
+    fn rect(left: f32, top: f32, right: f32, bottom: f32) -> Rect {
+        Rect::from_origin_size(
+            Offset::new(left, top),
+            Size::new(right - left, bottom - top),
+        )
+    }
+
+    let original = ValueNotifier::new(EdgeInsets::from_ltrb(10., 20., 30., 40.));
+    let replacement = ValueNotifier::new(EdgeInsets::from_ltrb(8., 9., 10., 11.));
+    let calls = Rc::new(Cell::new(0));
+    let build = |source: ValueNotifier<EdgeInsets>| {
+        let calls = calls.clone();
+        Stack::new([Widget::from(
+            AnimatedModalBarrier::with_flat_color(RED)
+                .semantics_label("Dismiss")
+                .clip_details_notifier(source)
+                .on_dismiss(move || calls.set(calls.get() + 1)),
+        )])
+        .into()
+    };
+    let mut runtime = Runtime::new(build(original.clone())).unwrap();
+    let now = Instant::now();
+    let (before, _) = runtime.run_frame_at(bounds(), now).unwrap();
+    let id = runtime
+        .tree()
+        .semantics()
+        .iter()
+        .find_map(|(id, node)| (node.label.as_deref() == Some("Dismiss")).then_some(id))
+        .unwrap();
+    let node = runtime.tree().semantics().node(id).unwrap();
+    assert_eq!(node.bounds, rect(10., 20., 770., 560.));
+    assert_eq!(
+        node.actions,
+        [SemanticActionKind::Activate, SemanticActionKind::Dismiss]
+    );
+
+    let point = Offset::new(12., 24.);
+    assert_eq!(
+        runtime
+            .tree()
+            .semantic_action_target_at(point, &SemanticAction::Dismiss),
+        Some(id)
+    );
+    original.set_value(EdgeInsets::from_ltrb(40., 30., 20., 10.));
+    assert!(runtime.frame_requested());
+    // Input and bounds agree with the last completed semantics frame.
+    assert_eq!(
+        runtime
+            .tree()
+            .semantic_action_target_at(point, &SemanticAction::Dismiss),
+        Some(id)
+    );
+    let (after, frame) = runtime
+        .run_frame_at(bounds(), now + Duration::from_millis(16))
+        .unwrap();
+    assert_eq!(frame.rebuilt_elements, 0);
+    assert_eq!(frame.laid_out_render_objects, 0);
+    assert_eq!(frame.repainted_render_objects, 0);
+    assert_eq!(before, after);
+    assert_eq!(
+        runtime.tree().semantics().node(id).unwrap().bounds,
+        rect(40., 30., 780., 590.)
+    );
+    assert!(!runtime.dispatch_semantic_action_at(point, SemanticAction::Dismiss));
+    assert!(!runtime.dispatch_semantic_action_at(Offset::new(780., 60.), SemanticAction::Dismiss));
+    assert!(runtime.dispatch_semantic_action_at(Offset::new(40., 30.), SemanticAction::Dismiss));
+    assert_eq!(calls.get(), 1);
+
+    for (phase, millis) in [(PointerPhase::Down, 20), (PointerPhase::Up, 22)] {
+        send_touch(
+            &mut runtime,
+            now + Duration::from_millis(millis),
+            1,
+            phase,
+            point,
+            PRIMARY_POINTER_BUTTON,
+        );
+    }
+    assert_eq!(calls.get(), 2, "physical taps still reach the full veil");
+
+    runtime
+        .schedule_update(runtime.tree().root().unwrap(), build(replacement.clone()))
+        .unwrap();
+    runtime
+        .run_frame_at(bounds(), now + Duration::from_millis(32))
+        .unwrap();
+    assert_eq!(
+        runtime.tree().semantics().node(id).unwrap().bounds,
+        rect(8., 9., 790., 589.)
+    );
+    assert!(!runtime.frame_requested());
+    original.set_value(EdgeInsets::all(60.));
+    assert!(!runtime.frame_requested(), "old notifier was detached");
+    replacement.set_value(EdgeInsets::ZERO);
+    assert!(runtime.frame_requested());
+    runtime
+        .run_frame_at(bounds(), now + Duration::from_millis(48))
+        .unwrap();
+    assert_eq!(
+        runtime.tree().semantics().node(id).unwrap().bounds,
+        rect(0., 0., 800., 600.)
+    );
+
+    let excluded: Widget = Stack::new([Widget::from(
+        AnimatedModalBarrier::with_flat_color(RED)
+            .semantics_label("Dismiss")
+            .clip_details_notifier(replacement.clone())
+            .barrier_semantics_dismissible(false),
+    )])
+    .into();
+    let root = runtime.tree().root().unwrap();
+    runtime.schedule_update(root, excluded).unwrap();
+    runtime
+        .run_frame_at(bounds(), now + Duration::from_millis(64))
+        .unwrap();
+    let node = runtime.tree().semantics().node(id).unwrap();
+    assert_eq!(node.bounds, rect(0., 0., 800., 600.));
+    assert!(node.actions.is_empty());
+    replacement.set_value(EdgeInsets::all(100.));
+    assert!(
+        !runtime.frame_requested(),
+        "excluded semantics are not tracked"
+    );
+
+    runtime
+        .schedule_update(root, build(replacement.clone()))
+        .unwrap();
+    runtime
+        .run_frame_at(bounds(), now + Duration::from_millis(80))
+        .unwrap();
+    assert!(runtime.tree().semantics().iter().any(|(_, node)| {
+        node.label.as_deref() == Some("Dismiss") && node.bounds == rect(100., 100., 700., 500.)
+    }));
+    runtime
+        .schedule_update(root, Stack::new([Widget::box_(Size::ZERO, RED)]).into())
+        .unwrap();
+    runtime
+        .run_frame_at(bounds(), now + Duration::from_millis(96))
+        .unwrap();
+    replacement.set_value(EdgeInsets::all(120.));
+    assert!(
+        !runtime.frame_requested(),
+        "unmounted barriers are not tracked"
+    );
+}
