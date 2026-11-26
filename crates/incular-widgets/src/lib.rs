@@ -378,7 +378,7 @@ pub use scrolling::{
     PersistentHeaderBuilder, PinnedHeaderSliver, ReorderableDelayedDragStartListener,
     ReorderableDragStartListener, ReorderableList, ScrollCacheExtent, ScrollNotificationObserver,
     RevealedOffset, ScrollPositionAlignmentPolicy, Scrollable, SemanticIndexCallback,
-    ShrinkWrappingViewport,
+    ShowOnScreen, ShrinkWrappingViewport,
     SingleChildScrollView, Sliver, SliverAnimatedList, SliverAnimatedListController,
     SliverAnimatedOpacity, SliverChildBuilderDelegate, SliverChildDelegate,
     SliverChildListDelegate, SliverConstrainedCrossAxis, SliverCrossAxisExpanded,

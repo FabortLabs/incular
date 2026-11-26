@@ -205,7 +205,8 @@ same viewport is used by `ListView`, `GridView`, `PageView`, and
 For mounted children, `Scrollable::get_offset_to_reveal` reports an
 unclamped viewport offset and projected rectangle without moving the
 scroll position. Use `Scrollable::ensure_visible` to apply a clamped
-reveal instead.
+explicit alignment, or `Scrollable::show_on_screen` to reveal the
+requested rectangle using the least movement in each enclosing viewport.
 
 ## Lazy sliver viewports
 

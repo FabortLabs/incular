@@ -7,7 +7,7 @@ use std::time::Duration;
 use incular_animation::{Curve, Curves};
 use incular_config::Axis;
 use incular_core::{Offset, Rect, Size};
-use incular_scroll::ScrollController;
+use incular_scroll::{ScrollController, ScrollPhysics};
 
 use super::{Scrollable, SliverRevealGeometry};
 use crate::tree::{ElementId, RenderKind, WidgetTree};
@@ -94,12 +94,59 @@ impl EnsureVisible {
     }
 }
 
+/// Options for automatic nearest-edge reveal (Flutter `showOnScreen`).
+/// By default it reveals the target's layout bounds without animation.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ShowOnScreen {
+    rect: Option<Rect>,
+    duration: Duration,
+    curve: Curve,
+}
+
+impl Default for ShowOnScreen {
+    fn default() -> Self {
+        Self {
+            rect: None,
+            duration: Duration::ZERO,
+            curve: Curves::EASE,
+        }
+    }
+}
+
+impl ShowOnScreen {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Reveals only this target-local rectangle.
+    #[must_use]
+    pub fn rect(mut self, rect: Rect) -> Self {
+        self.rect = Some(rect);
+        self
+    }
+
+    /// A nonzero duration animates all affected viewports together.
+    #[must_use]
+    pub fn duration(mut self, duration: Duration) -> Self {
+        self.duration = duration;
+        self
+    }
+
+    #[must_use]
+    pub fn curve(mut self, curve: Curve) -> Self {
+        self.curve = curve;
+        self
+    }
+}
+
 /// One enclosing viewport found by the ancestor walk.
 struct AncestorViewport {
     element: ElementId,
     controller: ScrollController,
     axis: Axis,
     reverse: bool,
+    physics: ScrollPhysics,
 }
 
 impl WidgetTree {
@@ -114,19 +161,24 @@ impl WidgetTree {
                     controller,
                     axis,
                     reverse,
+                    physics,
                     ..
-                }) => Some((controller.clone(), *axis, *reverse)),
-                Some(RenderKind::SliverViewport { config }) => {
-                    Some((config.controller.clone(), config.axis, config.reverse))
-                }
+                }) => Some((controller.clone(), *axis, *reverse, *physics)),
+                Some(RenderKind::SliverViewport { config }) => Some((
+                    config.controller.clone(),
+                    config.axis,
+                    config.reverse,
+                    config.physics,
+                )),
                 _ => None,
             };
-            if let Some((controller, axis, reverse)) = found {
+            if let Some((controller, axis, reverse, physics)) = found {
                 return Some(AncestorViewport {
                     element: candidate,
                     controller,
                     axis,
                     reverse,
+                    physics,
                 });
             }
             cursor = self.parent(candidate);
@@ -228,6 +280,19 @@ fn offset_to_reveal(
     leading_scroll_offset - (viewport_extent - sliver.obstruction_before - extent) * alignment
 }
 
+fn project_revealed_rect(rect: Rect, axis: Axis, reverse: bool, pixels: f32, offset: f32) -> Rect {
+    let shift = if reverse {
+        offset - pixels
+    } else {
+        pixels - offset
+    };
+    let translation = match axis {
+        Axis::Vertical => Offset::new(0., shift),
+        Axis::Horizontal => Offset::new(shift, 0.),
+    };
+    Rect::from_origin_size(rect.origin + translation, rect.size)
+}
+
 impl Scrollable {
     /// Calculates where the nearest enclosing viewport would reveal a target,
     /// without scrolling it. Alignment 0 is the logical leading edge and
@@ -267,16 +332,81 @@ impl Scrollable {
         if !offset.is_finite() || !rect.origin.x.is_finite() || !rect.origin.y.is_finite() {
             return None;
         }
-        let shift = pixels - offset;
-        let shift = if viewport.reverse { -shift } else { shift };
-        let translation = match viewport.axis {
-            Axis::Vertical => Offset::new(0., shift),
-            Axis::Horizontal => Offset::new(shift, 0.),
-        };
         Some(RevealedOffset {
             offset,
-            rect: Rect::from_origin_size(rect.origin + translation, rect.size),
+            rect: project_revealed_rect(rect, viewport.axis, viewport.reverse, pixels, offset),
         })
+    }
+
+    /// Reveals the target with the least scroll movement in each enclosing
+    /// viewport, innermost first. An oversized target keeps its currently
+    /// visible portion if the position is already between the two aligned
+    /// edges. A viewport that disallows implicit scrolling is left unchanged
+    /// and passes the original rectangle on to its ancestors.
+    ///
+    /// Call after layout. For nested standard viewports, each outer viewport
+    /// receives the inner viewport's projected target rectangle. Returns
+    /// the number of viewports asked to move; wheel and two-dimensional
+    /// viewports are not handled by this method.
+    pub fn show_on_screen(tree: &WidgetTree, target: ElementId, options: ShowOnScreen) -> usize {
+        let Some((_, size)) = tree.element_geometry(target) else {
+            return 0;
+        };
+        let mut request = options
+            .rect
+            .unwrap_or_else(|| Rect::from_origin_size(Offset::ZERO, size));
+        let mut object = target;
+        let mut ancestor_cursor = target;
+        let mut moves = Vec::new();
+
+        while let Some(viewport) = tree.enclosing_viewport(ancestor_cursor) {
+            ancestor_cursor = viewport.element;
+            if !viewport.physics.allows_implicit_scrolling() {
+                continue;
+            }
+            let Some((_, size)) = tree.element_geometry(viewport.element) else {
+                break;
+            };
+            let Some(rect) = tree.rect_in_viewport(object, request, viewport.element) else {
+                break;
+            };
+            let pixels = viewport.controller.offset();
+            let sliver = tree.reveal_sliver_for_rect(&viewport, object, rect);
+            let aligned = |alignment| {
+                offset_to_reveal(
+                    rect,
+                    size,
+                    viewport.axis,
+                    viewport.reverse,
+                    pixels,
+                    alignment,
+                    sliver,
+                )
+            };
+            let start = aligned(0.);
+            let end = aligned(1.);
+            if !start.is_finite() || !end.is_finite() {
+                break;
+            }
+            let target = pixels.clamp(start.min(end), start.max(end));
+            let min = viewport.controller.min_offset();
+            let max = viewport.controller.max_offset().max(min);
+            let target = target.clamp(min, max);
+            if target != pixels {
+                moves.push((viewport.controller.clone(), target));
+            }
+            object = viewport.element;
+            request = project_revealed_rect(rect, viewport.axis, viewport.reverse, pixels, target);
+        }
+        let count = moves.len();
+        for (controller, offset) in moves {
+            if options.duration.is_zero() {
+                controller.reveal_at(offset);
+            } else {
+                controller.animate_to(offset, options.duration, options.curve.clone());
+            }
+        }
+        count
     }
 
     /// Scrolls every viewport enclosing `element` so it becomes visible

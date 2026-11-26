@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- Automatic ShowOnScreen can reveal a mounted box or subrectangle
+  through nested viewports, including coordinated scrolling animations.
+
 - Scrollable can query an enclosing viewport's reveal offset and the
   resulting rectangle without changing the scroll position.
 

@@ -93,3 +93,21 @@ only 25 for the padded sliver's actual descendant. The semantic
 route preserves the requested bounds rather than substituting the
 entire inner viewport. Both controls already passed before the
 oversized-tile correction.
+
+## Automatic reveal across multiple viewports
+
+Pinned :985 and the native public ShowOnScreen test mount a 10×10
+grid of 100 px boxes from nested vertical and horizontal lists in a
+200×200 view. Both controllers start at 400. The native test checks
+all nine center/side/diagonal requests against the pinned offsets
+300, 400, and 500 on each axis. Its two-second diagonal request
+starts both controllers, moves both partway by one second and
+settles both at 500.
+
+Pinned :1236/:1252/:1268/:1284/:1300 compare two nested vertical
+viewports. The outer viewport receives the inner viewport's projected
+target rectangle rather than the previous world bounds or the entire
+inner viewport. Exact controller pairs are (inner, outer):
+(0,100), (300,200), (200,200), (400,200), and (0,200).
+The render-facing API does not require a semantic node; the previous
+section independently tests the accessibility action adapter.

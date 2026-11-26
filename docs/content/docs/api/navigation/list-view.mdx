@@ -85,3 +85,10 @@ viewport without moving it. Pass a child-local rectangle to reveal only
 a part of the child, or pass `None` to use its layout bounds. The query
 does not clamp to the available scroll range; `ensure_visible` applies
 the corresponding clamped scroll operation.
+
+
+Use `Scrollable::show_on_screen` with `ShowOnScreen::new()` to move only
+as far as needed across enclosing viewports. An optional target-local
+rectangle narrows the request; a duration animates the affected
+viewports. An inner viewport that disallows implicit scrolling keeps
+its position and forwards the request.

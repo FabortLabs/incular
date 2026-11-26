@@ -65,7 +65,7 @@ use child_delegates::delegate_builder;
 pub use child_delegates::{
     SemanticIndexCallback, SliverChildBuilderDelegate, SliverChildDelegate, SliverChildListDelegate,
 };
-pub use ensure_visible::{EnsureVisible, RevealedOffset, ScrollPositionAlignmentPolicy};
+pub use ensure_visible::{EnsureVisible, RevealedOffset, ScrollPositionAlignmentPolicy, ShowOnScreen};
 pub use notifications::*;
 pub use reorderable::{
     ReorderableDelayedDragStartListener, ReorderableDragStartListener, ReorderableList,

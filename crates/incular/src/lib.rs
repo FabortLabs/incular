@@ -30,7 +30,7 @@ pub use incular_widgets::widget_previews;
 /// are implementation details of the widget/runtime boundary and are kept
 /// out of the application facade.
 pub mod scroll {
-    pub use incular_widgets::RevealedOffset;
+    pub use incular_widgets::{RevealedOffset, ShowOnScreen};
     pub use incular_scroll::{
         BoundaryPhysics, ClampingScrollPhysics, DragStartBehavior, PageMetrics, PageMetricsUpdate,
         ScrollAnimation,

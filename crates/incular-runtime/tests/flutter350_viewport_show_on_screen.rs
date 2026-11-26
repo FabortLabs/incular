@@ -122,3 +122,134 @@ fn an_implicit_scroll_veto_forwards_box_and_padded_sliver_bounds() {
         assert_eq!(vertical.offset(), if padded { 25. } else { 50. });
     }
 }
+
+#[test]
+fn nested_standard_viewports_reveal_both_axes_with_one_request() {
+    use std::time::Duration;
+
+    use incular_core::time::Instant;
+    use incular_widgets::{Scrollable, ShowOnScreen};
+
+    let columns = (0..10)
+        .map(|_| ScrollController::new().with_initial_scroll_offset(400.))
+        .collect::<Vec<_>>();
+    let rows = (0..10).map(|y| {
+        let cells = (0..10).map(|x| {
+            Widget::from(SizedBox::square(100.))
+                .with_key(incular_widgets::internal::Key::String(format!("{x},{y}")))
+        });
+        SizedBox::new().height(100.).child(
+            ListView::new(cells)
+                .scroll_direction(Axis::Horizontal)
+                .controller(columns[y].clone()),
+        )
+    });
+    let vertical = ScrollController::new().with_initial_scroll_offset(400.);
+    let scene = Directionality::new(
+        TextDirection::Ltr,
+        ListView::new(rows).controller(vertical.clone()),
+    );
+    let mut runtime = Runtime::new(scene.into()).unwrap();
+    let bounds = Constraints::tight(Size::new(200., 200.));
+    let mut now = Instant::now();
+    let mut frame = |runtime: &mut Runtime, elapsed| {
+        now += Duration::from_millis(elapsed);
+        runtime.run_frame_at(bounds, now).unwrap()
+    };
+    frame(&mut runtime, 0);
+    let find = |runtime: &Runtime, x, y| {
+        runtime
+            .tree()
+            .element_with_key(&incular_widgets::internal::Key::String(format!("{x},{y}")))
+            .unwrap_or_else(|| panic!("missing cached tile {x},{y}"))
+    };
+    for (x, y, wanted_x, wanted_y) in [
+        (4, 4, 400., 400.),
+        (4, 3, 400., 300.),
+        (4, 6, 400., 500.),
+        (3, 4, 300., 400.),
+        (6, 4, 500., 400.),
+        (3, 3, 300., 300.),
+        (3, 6, 300., 500.),
+        (6, 3, 500., 300.),
+        (6, 6, 500., 500.),
+    ] {
+        let _ = columns[y].jump_to(400.);
+        let _ = vertical.jump_to(400.);
+        frame(&mut runtime, 16);
+        let target = find(&runtime, x, y);
+        assert_eq!(
+            Scrollable::show_on_screen(runtime.tree(), target, ShowOnScreen::new()),
+            usize::from(wanted_x != 400.) + usize::from(wanted_y != 400.)
+        );
+        frame(&mut runtime, 16);
+        assert_eq!(
+            (columns[y].offset(), vertical.offset()),
+            (wanted_x, wanted_y)
+        );
+    }
+
+    assert!(columns[6].jump_to(400.));
+    assert!(vertical.jump_to(400.));
+    frame(&mut runtime, 16);
+    let target = find(&runtime, 6, 6);
+    assert_eq!(
+        Scrollable::show_on_screen(
+            runtime.tree(),
+            target,
+            ShowOnScreen::new().duration(Duration::from_secs(2)),
+        ),
+        2
+    );
+    frame(&mut runtime, 16);
+    let (_, activity) = frame(&mut runtime, 1000);
+    assert!(activity.requested_another_frame);
+    for current in [columns[6].offset(), vertical.offset()] {
+        assert!(current > 400. && current < 500., "midpoint: {current}");
+    }
+    frame(&mut runtime, 1040);
+    assert_eq!((columns[6].offset(), vertical.offset()), (500., 500.));
+}
+
+#[test]
+fn same_axis_reveal_forwards_the_post_move_inner_rectangle() {
+    use incular_widgets::{Scrollable, ShowOnScreen};
+
+    for (inner_start, outer_start, item, inner_end, outer_end) in [
+        (0., 0., 0u64, 0., 100.),
+        (0., 0., 4, 300., 200.),
+        (200., 200., 2, 200., 200.),
+        (200., 200., 5, 400., 200.),
+        (0., 100., 1, 0., 200.),
+    ] {
+        let inner = ScrollController::new().with_initial_scroll_offset(inner_start);
+        let outer = ScrollController::new().with_initial_scroll_offset(outer_start);
+        let inner_list = ListView::new(
+            (0u64..10).map(|i| Widget::from(SizedBox::new().height(100.)).with_key(i)),
+        )
+        .controller(inner.clone());
+        let spacer = || Widget::from(SizedBox::new().height(200.));
+        let outer_list = ListView::new([
+            spacer(),
+            SizedBox::new().height(200.).child(inner_list).into(),
+            spacer(),
+        ])
+        .controller(outer.clone());
+        let bounds = Constraints::tight(Size::new(300., 200.));
+        let mut runtime =
+            Runtime::new(Directionality::new(TextDirection::Ltr, outer_list).into()).unwrap();
+        runtime.run_frame(bounds).unwrap();
+        assert_eq!((inner.offset(), outer.offset()), (inner_start, outer_start));
+        let target = runtime.tree().element_with_key(&item.into()).unwrap();
+        assert_eq!(
+            Scrollable::show_on_screen(runtime.tree(), target, ShowOnScreen::new()),
+            usize::from(inner_start != inner_end) + usize::from(outer_start != outer_end)
+        );
+        runtime.run_frame(bounds).unwrap();
+        assert_eq!(
+            (inner.offset(), outer.offset()),
+            (inner_end, outer_end),
+            "inner start {inner_start}, outer start {outer_start}, item {item}"
+        );
+    }
+}

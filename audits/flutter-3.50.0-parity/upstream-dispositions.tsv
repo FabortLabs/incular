@@ -1842,3 +1842,9 @@ packages/flutter/test/rendering/viewport_test.dart	923	left, reverse growth	pair
 packages/flutter/test/rendering/viewport_test.dart	1319	Nested Viewports showOnScreen with allowImplicitScrolling=false for inner viewport	paired-match	upstream-viewport-reveal.md#automatic-reveal-of-an-oversized-tile-and-implicit-scroll-veto
 packages/flutter/test/rendering/viewport_test.dart	1367	Nested Viewports showOnScreen on Sliver with allowImplicitScrolling=false for inner viewport	paired-match	upstream-viewport-reveal.md#automatic-reveal-of-an-oversized-tile-and-implicit-scroll-veto
 packages/flutter/test/rendering/viewport_test.dart	1419	Viewport showOnScreen with objects larger than viewport	paired-match	upstream-viewport-reveal.md#automatic-reveal-of-an-oversized-tile-and-implicit-scroll-veto
+packages/flutter/test/rendering/viewport_test.dart	985	Nested Viewports showOnScreen	paired-match	upstream-viewport-reveal.md#automatic-reveal-across-multiple-viewports
+packages/flutter/test/rendering/viewport_test.dart	1236	in view in inner, but not in outer	paired-match	upstream-viewport-reveal.md#automatic-reveal-across-multiple-viewports
+packages/flutter/test/rendering/viewport_test.dart	1252	not in view of neither inner nor outer	paired-match	upstream-viewport-reveal.md#automatic-reveal-across-multiple-viewports
+packages/flutter/test/rendering/viewport_test.dart	1268	in view in inner and outer	paired-match	upstream-viewport-reveal.md#automatic-reveal-across-multiple-viewports
+packages/flutter/test/rendering/viewport_test.dart	1284	inner shown in outer, but item not visible	paired-match	upstream-viewport-reveal.md#automatic-reveal-across-multiple-viewports
+packages/flutter/test/rendering/viewport_test.dart	1300	inner half shown in outer, item only visible in inner	paired-match	upstream-viewport-reveal.md#automatic-reveal-across-multiple-viewports
