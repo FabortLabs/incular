@@ -450,6 +450,17 @@ impl ClampingMotion {
     }
 }
 
+/// The motion model inside a released or programmatically driven scroll.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum FlingSimulationKind {
+    Clamping,
+    Bouncing,
+    Spring,
+    Friction,
+    Driven,
+}
+
 /// Flutter's ballistic `Simulation` for a released drag, as created by
 /// [`ScrollPhysics::ballistic_simulation`](crate::ScrollPhysics::ballistic_simulation).
 ///
@@ -717,6 +728,18 @@ impl FlingSimulation {
     pub(crate) fn mapped(mut self, map: NestedMap) -> Self {
         self.map = Some(map);
         self
+    }
+
+    /// The underlying motion, independent of a nested viewport's offset map.
+    #[must_use]
+    pub const fn kind(&self) -> FlingSimulationKind {
+        match self.model {
+            FlingModel::Clamping(_) => FlingSimulationKind::Clamping,
+            FlingModel::Bouncing(_) => FlingSimulationKind::Bouncing,
+            FlingModel::Spring(_) => FlingSimulationKind::Spring,
+            FlingModel::Friction(_) => FlingSimulationKind::Friction,
+            FlingModel::Curved(_) => FlingSimulationKind::Driven,
+        }
     }
 
     /// Whether this simulation is allowed to carry the position beyond the

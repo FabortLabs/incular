@@ -1,8 +1,7 @@
 //! Trajectory assertions from Flutter 3.50.0 widgets/scroll_physics_test.dart.
-//! Incular's public FlingSimulation has no exact subtype query. The original
-//! BouncingScrollSimulation type assertions are not covered by this port.
+//! The Rust motion kind exposes the same model selection without a downcast.
 
-use incular_scroll::ScrollPhysics;
+use incular_scroll::{FlingSimulationKind, ScrollPhysics};
 
 fn assert_overscroll_return(pixels: f32, expected: [f64; 4]) {
     // Flutter's viewport dimension (500) and axis direction (down) are not
@@ -14,6 +13,8 @@ fn assert_overscroll_return(pixels: f32, expected: [f64; 4]) {
     let moving = physics
         .ballistic_simulation(pixels, -100.0, 0.0, 1000.0)
         .expect("moving overscroll returns to its extent");
+    assert_eq!(stationary.kind(), FlingSimulationKind::Bouncing);
+    assert_eq!(moving.kind(), FlingSimulationKind::Bouncing);
     assert!(stationary.may_overscroll() && moving.may_overscroll());
 
     // Flutter uses precisionErrorTolerance (1e-10) for the assertion that

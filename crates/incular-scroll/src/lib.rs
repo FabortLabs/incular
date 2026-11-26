@@ -21,7 +21,7 @@ pub use attachment::{
     AttachmentConflict, MetricAttachment, MetricOwner, MetricWriteError, ViewportMetricsUpdate,
     ViewportPositionHandoff,
 };
-pub use ballistic::{FlingSimulation, ScrollSpring, ScrollTolerance};
+pub use ballistic::{FlingSimulation, FlingSimulationKind, ScrollSpring, ScrollTolerance};
 pub use controller::{ScrollAnimation, ScrollController, page_for_pixels, pixels_for_page};
 pub use coordinator::{NestedScrollCoordinator, NestedScrollViewCoordinator, ScrollDriveDelegate};
 pub use extent_index::{ExtentIndexMetrics, MeasuredExtentIndex};

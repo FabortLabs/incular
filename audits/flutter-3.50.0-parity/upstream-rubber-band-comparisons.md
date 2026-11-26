@@ -20,3 +20,12 @@ counted as complete paired registrations. The separately committed
 `flutter350_bouncing_overscroll_at_rest` target and its pinned custom
 Flutter reference compare return coordinates and actual completion
 without relying on private subtype identity.
+
+## Current result
+
+Both pinned originals and their focused native counterparts now pass.
+The earlier spring correction matches all eight sampled positions
+within 0.01px. The native simulation's model query now verifies both
+stationary and moving simulations are specifically Bouncing, not just
+that they may overscroll. The moving and stationary trajectories remain
+distinct. These are full behavioral pairs at the scroll-model boundary.
