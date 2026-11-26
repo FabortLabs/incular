@@ -72,3 +72,24 @@ fn elliptical_corners_hit_the_same_interior_as_a_translated_clip() {
         assert_eq!(path.contains(point + origin, FillRule::NonZero), expected);
     }
 }
+
+#[test]
+fn a_one_ulp_step_crosses_the_rounded_corner_without_eating_the_tangent() {
+    let radius = 12.3_f64;
+    let diagonal = (radius - radius * std::f64::consts::FRAC_1_SQRT_2) as f32;
+    let decoration =
+        BoxDecoration::new().border_radius(BorderRadius::all(Radius::circular(radius as f32)));
+    let bounds = Size::new(50., 50.);
+    for (coordinate, expected) in [
+        (diagonal.next_down(), false),
+        (diagonal, false),
+        (diagonal.next_up(), true),
+    ] {
+        assert_eq!(
+            decoration.hit_test(bounds, Offset::new(coordinate, coordinate)),
+            expected,
+            "{coordinate:?}"
+        );
+    }
+    assert!(decoration.hit_test(bounds, Offset::new(radius as f32, 0.)));
+}

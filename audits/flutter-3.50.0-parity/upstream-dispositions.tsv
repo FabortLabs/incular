@@ -2423,3 +2423,8 @@ packages/flutter/test/gestures/tap_test.dart	568	PointerCancelEvent cancels tap	
 packages/flutter/test/gestures/tap_test.dart	1105	onTapMove works	paired-match	upstream-tap-recognizers.md#tap-movement-and-acceptance
 packages/flutter/test/gestures/tap_test.dart	432	Should log exceptions from callbacks	paired-match	upstream-tap-recognizers.md#tap-callback-failures
 packages/flutter/test/gestures/tap_test.dart	457	onTapCancel should show reason in the proper format	paired-match	upstream-tap-recognizers.md#tap-callback-failures
+packages/flutter/test/widgets/box_decoration_test.dart	258	Can hit test on BoxDecoration	paired-match	upstream-box-decoration-hits.md
+packages/flutter/test/widgets/box_decoration_test.dart	293	Can hit test on BoxDecoration circle	paired-match	upstream-box-decoration-hits.md
+packages/flutter/test/widgets/box_decoration_test.dart	331	Can hit test on BoxDecoration border	paired-match	upstream-box-decoration-hits.md
+packages/flutter/test/widgets/box_decoration_test.dart	372	BoxDecoration not tap outside rounded angles - Top Left	paired-match	upstream-box-decoration-hits.md
+packages/flutter/test/widgets/box_decoration_test.dart	436	BoxDecoration tap inside rounded angles - Top Left	paired-match	upstream-box-decoration-hits.md

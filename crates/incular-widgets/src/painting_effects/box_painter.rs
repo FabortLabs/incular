@@ -310,7 +310,11 @@ impl BoxDecoration {
             }
             BoxShape::Rectangle => self.effective_radius(direction).is_none_or(|radius| {
                 let [tl, tr, br, bl] = normalized_radii(size, clockwise_radii(radius));
-                let (right, bottom) = (size.width - x, size.height - y);
+                // Flutter evaluates the corner in double precision.
+                // Rounding the normalized axes to f32 first can turn a
+                // represented outside point into an apparent hit at 1.0.
+                let (x, y) = (f64::from(x), f64::from(y));
+                let (right, bottom) = (f64::from(size.width) - x, f64::from(size.height) - y);
                 [
                     (x, y, tl),
                     (right, y, tr),
@@ -318,11 +322,12 @@ impl BoxDecoration {
                     (x, bottom, bl),
                 ]
                 .into_iter()
-                .find(|&(x, y, (rx, ry))| x < rx && y < ry)
-                .is_none_or(|(x, y, (rx, ry))| {
+                .map(|(x, y, (rx, ry))| (x, y, f64::from(rx), f64::from(ry)))
+                .find(|&(x, y, rx, ry)| x < rx && y < ry)
+                .is_none_or(|(x, y, rx, ry)| {
                     let dx = (rx - x) / rx;
                     let dy = (ry - y) / ry;
-                    dx.mul_add(dx, dy * dy) <= 1.0
+                    dx * dx + dy * dy <= 1.0
                 })
             }),
         }
