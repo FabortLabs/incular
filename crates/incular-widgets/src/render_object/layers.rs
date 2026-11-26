@@ -1168,14 +1168,28 @@ impl RenderLayers {
         if let RenderKind::CustomLayout { delegate } = kind
             && let Some(behavior) = delegate.overflow_clip()
         {
-            self.apply_overflow_clip_with_coverage(compositor, size, behavior, self.layout_overflow.get());
+            let always_clip = matches!(
+                delegate,
+                crate::custom_layout::CustomLayoutDelegate::Flow(_)
+            );
+            self.apply_overflow_clip_with_coverage(
+                compositor,
+                size,
+                behavior,
+                always_clip || self.layout_overflow.get(),
+            );
             return;
         }
         if let RenderKind::Flex { clip_behavior, .. }
         | RenderKind::Wrap { clip_behavior, .. }
         | RenderKind::Unconstrained { clip_behavior, .. } = *kind
         {
-            self.apply_overflow_clip_with_coverage(compositor, size, clip_behavior, self.layout_overflow.get());
+            self.apply_overflow_clip_with_coverage(
+                compositor,
+                size,
+                clip_behavior,
+                self.layout_overflow.get(),
+            );
             return;
         }
         if let RenderKind::SliverViewport { config } = kind {

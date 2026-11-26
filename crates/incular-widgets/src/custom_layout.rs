@@ -225,6 +225,7 @@ pub struct FlowRenderDelegate {
     base: DelegateCell<dyn FlowDelegate>,
     relayout: fn(&dyn Any, &dyn Any) -> bool,
     repaint: Option<Rc<FlowRepaintSource>>,
+    clip_behavior: incular_config::Clip,
     observation: u64,
 }
 
@@ -240,6 +241,7 @@ impl PartialEq for FlowRenderDelegate {
     fn eq(&self, other: &Self) -> bool {
         self.base == other.base
             && self.observation == other.observation
+            && self.clip_behavior == other.clip_behavior
             && match (&self.repaint, &other.repaint) {
                 (Some(a), Some(b)) => Rc::ptr_eq(a, b),
                 (None, None) => true,
@@ -278,7 +280,9 @@ impl FlowRenderDelegate {
     }
 
     pub(crate) fn needs_paint_from(&self, old: &Self) -> bool {
-        self.observation != old.observation || self.base.changes_from(&old.base)
+        self.observation != old.observation
+            || self.clip_behavior != old.clip_behavior
+            || self.base.changes_from(&old.base)
     }
 }
 
@@ -365,6 +369,7 @@ impl CustomLayoutDelegate {
     pub fn overflow_clip(&self) -> Option<incular_config::Clip> {
         match self {
             Self::ChildSized(layout) => layout.overflow_clip(),
+            Self::Flow(delegate) => Some(delegate.clip_behavior),
             _ => None,
         }
     }
@@ -821,6 +826,7 @@ impl From<LayoutId> for Widget {
 pub struct Flow {
     delegate: FlowRenderDelegate,
     children: Vec<Widget>,
+    wrap_children: bool,
 }
 
 impl Flow {
@@ -841,11 +847,32 @@ impl Flow {
                 },
                 relayout: flow_layout_changed::<D>,
                 repaint: None,
+                clip_behavior: incular_config::Clip::HardEdge,
                 observation: 0,
             },
             children: children.into_iter().map(Into::into).collect(),
+            wrap_children: true,
         }
     }
+    /// A Flow whose children are not automatically wrapped in individual
+    /// repaint boundaries.
+    #[must_use]
+    pub fn unwrapped<D: FlowDelegate>(
+        delegate: D,
+        children: impl IntoIterator<Item = impl Into<Widget>>,
+    ) -> Self {
+        let mut flow = Self::new(delegate, children);
+        flow.wrap_children = false;
+        flow
+    }
+
+    /// Sets the viewport clip. Both constructors default to HardEdge.
+    #[must_use]
+    pub fn clip_behavior(mut self, clip_behavior: incular_config::Clip) -> Self {
+        self.delegate.clip_behavior = clip_behavior;
+        self
+    }
+
     /// Requests repaint when this Listenable changes, like Flutter's
     /// `FlowDelegate(repaint: ...)`.
     #[must_use]
@@ -884,7 +911,14 @@ impl From<Flow> for Widget {
                         .children
                         .iter()
                         .zip(slots.iter())
-                        .map(|(child, slot)| slot.wrap(child.clone()))
+                        .map(|(child, slot)| {
+                            let child = if value.wrap_children {
+                                crate::RepaintBoundary::new(child.clone()).into()
+                            } else {
+                                child.clone()
+                            };
+                            slot.wrap(child)
+                        })
                         .collect(),
                 })
             },

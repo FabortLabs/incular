@@ -53,3 +53,13 @@ repaint in Flutter. Native render subscriptions wake the runtime,
 detach on replacement, and tick the same Flow render without adding
 a ticker widget around its child tree. Delegate painting and the
 last paint order are now committed in paint, not during layout.
+
+### Wrapped and unwrapped clip coverage
+
+Pinned :160 and :185 pair with the default HardEdge setting and same
+retained Flow render across Clip.none, HardEdge, AntiAlias and
+AntiAliasWithSaveLayer. Native tests also read the actual viewport
+draw clip and the isolated save layer, use overflowing translated
+content, and confirm these updates do not remeasure the delegate.
+The regular constructor adds child repaint boundaries; unwrapped
+leaves them out. The existing Flow and repaint tests still pass.
