@@ -630,7 +630,9 @@ fn scoped_autofocus_drops_a_moved_target_and_keeps_the_first_valid_request() {
     assert!(scope.autofocus(&moving));
     assert!(scope.autofocus(&first));
     assert!(scope.autofocus(&later));
-    runtime.schedule_update(root, view(false)).unwrap();
+    // Change the mounted ancestry itself before the focus boundary,
+    // like Flutter's manual FocusAttachment.reparent control.
+    runtime.tree_mut().update(root, view(false)).unwrap();
     runtime.run_frame(bounds).unwrap();
     assert!(!moving.has_primary_focus());
     assert!(first.has_primary_focus());
@@ -720,4 +722,88 @@ fn skipping_a_mounted_scope_does_not_skip_its_children_or_change_focus() {
     child2.request_focus();
     runtime.run_frame(bounds).unwrap();
     assert!(child2.has_primary_focus(), "traversal restrictions are not focus restrictions");
+}
+
+#[test]
+fn queued_autofocus_precedes_a_global_key_move_to_a_different_scope() {
+    use incular_widgets::{Column, GlobalKey};
+
+    let first = FocusScopeNode::new();
+    let second = FocusScopeNode::new();
+    let node = FocusNode::new();
+    let key = GlobalKey::new();
+    let scene = |in_first| -> Widget {
+        let leaf = Widget::from(Focus::new(SizedBox::shrink()).node(node.clone())).with_key(key);
+        let empty = Widget::from(SizedBox::shrink());
+        let (left, right) = if in_first { (leaf, empty) } else { (empty, leaf) };
+        Column::new([
+            FocusScope::new(left).node(first.clone()),
+            FocusScope::new(right).node(second.clone()),
+        ])
+        .into()
+    };
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let mut runtime = Runtime::new(scene(true)).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    let element = runtime.tree().element_with_key(&key.into()).unwrap();
+    assert!(!node.has_focus());
+
+    assert!(first.autofocus(&node));
+    runtime
+        .schedule_update(runtime.tree().root().unwrap(), scene(false))
+        .unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(runtime.tree().element_with_key(&key.into()), Some(element));
+    assert!(node.has_primary_focus());
+    assert!(second.has_focus());
+    assert_eq!(second.focused_child(), Some(node));
+}
+
+#[test]
+fn an_inactive_scope_keeps_its_focused_child_when_the_child_is_reparented_inside_it() {
+    use incular_widgets::{Column, GlobalKey};
+
+    let first = FocusScopeNode::new();
+    let second = FocusScopeNode::new();
+    let owner = FocusNode::new();
+    let leaf = FocusNode::new();
+    let key = GlobalKey::new();
+    let scene = |wrapped| -> Widget {
+        let content = Widget::from(Focus::new(SizedBox::shrink()).node(leaf.clone())).with_key(key);
+        let content = if wrapped {
+            Widget::from(Focus::new(content).node(owner.clone()))
+        } else {
+            content
+        };
+        Column::new([
+            FocusScope::new(content).node(first.clone()),
+            FocusScope::new(SizedBox::shrink()).node(second.clone()),
+        ])
+        .into()
+    };
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let mut runtime = Runtime::new(scene(true)).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    let element = runtime.tree().element_with_key(&key.into()).unwrap();
+
+    assert!(first.autofocus(&leaf));
+    runtime.run_frame(bounds).unwrap();
+    assert!(leaf.has_primary_focus());
+    assert!(second.request_focus_in_scope());
+    runtime.run_frame(bounds).unwrap();
+    assert!(second.has_primary_focus());
+    assert_eq!(first.focused_child(), Some(leaf.clone()));
+
+    runtime
+        .schedule_update(runtime.tree().root().unwrap(), scene(false))
+        .unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(runtime.tree().element_with_key(&key.into()), Some(element));
+    assert_eq!(first.focused_child(), Some(leaf.clone()));
+    assert!(second.has_primary_focus());
+
+    assert!(first.request_focus_in_scope());
+    runtime.run_frame(bounds).unwrap();
+    assert!(leaf.has_primary_focus());
+    assert_eq!(first.focused_child(), Some(leaf));
 }

@@ -57,3 +57,20 @@ that flag removes the descendants from traversal without changing
 the active leaf or blocking explicit focus. All 34 selected native
 focus checks passed. Nested Tab policy is not inferred from the
 raw snapshot, and this authored case adds no upstream registration.
+
+## Scope history and keyed reparenting
+
+Pinned `widgets/focus_manager_test.dart:1825` passed. Incular dropped the
+queued scoped autofocus when a scheduled build moved the same GlobalKey
+element into a different scope. The mounted request now settles before
+the scheduled build, so focus follows the retained element into the new
+scope. A target moved synchronously before the focus boundary is still
+rejected by its old scope; a target awaiting attachment is evaluated
+after layout without letting later requests jump the queue.
+
+Pinned `:1874` also passed. The native case changes a keyed leaf's
+ordinary parent while its scope is inactive. The scope's focused child
+remains the same, the other scope stays focused, and a later request
+for the original scope restores that leaf. All 40 selected native
+checks passed, including autofocus mount, direct requests, actual
+reparenting, detach fallback, and per-runtime queue isolation.

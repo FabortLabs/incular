@@ -2631,6 +2631,17 @@ impl Runtime {
         self.adopted_focus_epoch = Some(epoch);
     }
 
+    fn settle_scope_autofocus(&mut self, before_build: bool) {
+        let pending = self.tree.take_scope_autofocus(before_build);
+        if pending.is_empty() {
+            return;
+        }
+        self.adopt_external_focus_change();
+        if let Some(next) = self.tree.finish_hosted_scope_autofocus(pending) {
+            self.set_focus_with_external_selection(Some(next), false);
+        }
+    }
+
     fn primary_focus_node_replaced(&self) -> bool {
         self.focused.is_some_and(|element| {
             self.primary_focus_node
@@ -3762,6 +3773,10 @@ impl Runtime {
             tracing::info_span!("incular.build", elements_updated = tracing::field::Empty,)
                 .entered();
         let build_span = profiling::PhaseSpan::start();
+        // Flutter settles queued requests for existing attachments before
+        // build moves their contexts. A retained GlobalKey move can then
+        // carry that focus to the new scope.
+        self.settle_scope_autofocus(true);
         let focused_at_start = self.focused;
         let mut updated = 0;
         while let Some(id) = self.order.pop_front() {
@@ -3871,9 +3886,7 @@ impl Runtime {
         if let Some(next) = self.tree.finish_updated_autofocus(self.focused) {
             self.set_focus_with_external_selection(Some(next), false);
         }
-        if let Some(next) = self.tree.finish_hosted_scope_autofocus() {
-            self.set_focus_with_external_selection(Some(next), false);
-        }
+        self.settle_scope_autofocus(false);
         let _composite_guard = tracing::info_span!("incular.composite").entered();
         let composite_span = profiling::PhaseSpan::start();
         let (composited, animations_active) = self.tree.update_compositor(now)?;

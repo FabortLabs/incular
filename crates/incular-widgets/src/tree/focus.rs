@@ -1292,20 +1292,45 @@ impl WidgetTree {
         });
     }
 
-    /// Applies explicit FocusScopeNode::autofocus requests after actual
-    /// attachment and explicit focus updates. Earlier eligible requests
-    /// fill their scope and its ancestors before the next request is tried.
+    /// Drains this host's scope autofocus queue. Before rebuilding, only
+    /// consume requests through the first candidate still awaiting attachment.
+    /// After layout, process the remaining requests in submission order.
     #[doc(hidden)]
-    pub fn finish_hosted_scope_autofocus(&self) -> Option<ElementId> {
+    pub fn take_scope_autofocus(
+        &self,
+        before_build: bool,
+    ) -> Vec<(incular_gestures::FocusScopeNode, incular_gestures::FocusNode)> {
+        let Some(hosted) = self.hosted_focus_nodes.as_ref() else {
+            return Vec::new();
+        };
+        let contains = |node: &incular_gestures::FocusNode| {
+            hosted.values().any(|attachment| attachment.node() == node)
+        };
+        let mut waiting_for_attachment = false;
+        incular_gestures::take_hosted_scope_autofocus(|scope, target| {
+            if !contains(&scope.scope_focus_node()) {
+                return false;
+            }
+            if before_build {
+                waiting_for_attachment |= !contains(target);
+            }
+            !waiting_for_attachment
+        })
+    }
+
+    /// Earlier eligible requests fill their scope and its ancestors before
+    /// the next request is tried.
+    #[doc(hidden)]
+    pub fn finish_hosted_scope_autofocus(
+        &self,
+        pending: Vec<(incular_gestures::FocusScopeNode, incular_gestures::FocusNode)>,
+    ) -> Option<ElementId> {
         let hosted = self.hosted_focus_nodes.as_ref()?;
         let find = |node: &incular_gestures::FocusNode| {
             hosted
                 .iter()
                 .find_map(|(&id, attachment)| (attachment.node() == node).then_some(id))
         };
-        let pending = incular_gestures::take_hosted_scope_autofocus(|scope| {
-            find(&scope.scope_focus_node()).is_some()
-        });
         let mut chosen = None;
         let mut filled = Vec::new();
         for (scope, node) in pending {

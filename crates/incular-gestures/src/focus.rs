@@ -16,11 +16,11 @@ thread_local! {
     static SCOPED_AUTOFOCUS: RefCell<Vec<ScopeAutofocusRequest>> = const { RefCell::new(Vec::new()) };
 }
 
-/// Drains pending autofocus requests for scopes owned by this retained host.
-/// Other live windows keep their requests and apply them at their own layout.
+/// Drains requests selected by a retained host, preserving queue order.
+/// Other windows and requests waiting for attachment keep their entries.
 #[doc(hidden)]
 pub fn take_hosted_scope_autofocus(
-    mut belongs_to_host: impl FnMut(&FocusScopeNode) -> bool,
+    mut take: impl FnMut(&FocusScopeNode, &FocusNode) -> bool,
 ) -> Vec<(FocusScopeNode, FocusNode)> {
     SCOPED_AUTOFOCUS.with(|pending| {
         let mut pending = pending.borrow_mut();
@@ -34,10 +34,11 @@ pub fn take_hosted_scope_autofocus(
             if scope.mounted_anchor().is_none() {
                 return false;
             }
-            if !belongs_to_host(&scope) {
+            let target = FocusNode { state: target };
+            if !take(&scope, &target) {
                 return true;
             }
-            owned.push((scope, FocusNode { state: target }));
+            owned.push((scope, target));
             false
         });
         owned
