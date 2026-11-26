@@ -19,8 +19,8 @@ use incular_accessibility::AccessibilityDiagnostics;
 use incular_config::{Constraints, ContentSensitivity, RuntimeEnvironment, WindowSizePolicy};
 use incular_core::{RestorationKey, RestorationScope, Size};
 use incular_platform::{
-    PlatformCapabilities, PlatformOperationError, WindowId, WindowLifecycle, WindowMetrics,
-    WindowObservedState, WindowOptions, WindowRequestedState,
+    PlatformCapabilities, PlatformEvent, PlatformOperationError, WindowId, WindowLifecycle,
+    WindowMetrics, WindowObservedState, WindowOptions, WindowRequestedState,
 };
 use incular_widgets::Widget;
 use std::{
@@ -98,6 +98,7 @@ pub(crate) struct WindowRecord {
     pub(crate) requested_frames: u64,
     pub(crate) frame_scheduled: bool,
     pub(crate) warm_up_requested: bool,
+    pub(crate) warm_up_pointer_events: VecDeque<PlatformEvent>,
     pub(crate) presented_frames: u64,
     pub(crate) skipped_frames: u64,
     pub(crate) input_events: u64,
@@ -561,6 +562,7 @@ impl WindowManager {
                 requested_frames: 0,
                 frame_scheduled: false,
                 warm_up_requested: false,
+                warm_up_pointer_events: VecDeque::new(),
                 presented_frames: 0,
                 skipped_frames: 0,
                 input_events: 0,

@@ -83,3 +83,56 @@ fn reassemble_keeps_signal_state_and_dependencies() {
     frame(&mut application, window);
     assert_eq!(seen.get(), 4);
 }
+
+#[test]
+fn pointer_events_wait_until_the_reassembled_root_is_drawn() {
+    use incular_core::{Color, InputEvent, Offset, PointerPhase};
+    use incular_platform::{PlatformEvent, WindowEvent};
+    use incular_widgets::GestureDetector;
+    use std::cell::RefCell;
+
+    let generation = Rc::new(Cell::new("before"));
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let mut application = Application::new({
+        let generation = generation.clone();
+        let log = log.clone();
+        move |_| {
+            let label = generation.get();
+            let tapped = log.clone();
+            GestureDetector::new(Widget::box_(Size::new(120., 80.), Color::WHITE))
+                .on_tap(move || tapped.borrow_mut().push(label))
+                .into()
+        }
+    })
+    .unwrap();
+    let primary = application.primary_window();
+    frame(&mut application, primary);
+    let tap = |application: &mut Application| {
+        for phase in [PointerPhase::Down, PointerPhase::Up] {
+            application.handle_window_event(WindowEvent::platform(
+                primary,
+                PlatformEvent::Input(InputEvent::Pointer {
+                    phase,
+                    position: Offset::new(40., 40.),
+                }),
+            ));
+        }
+    };
+
+    tap(&mut application);
+    assert_eq!(*log.borrow(), ["before"]);
+    generation.set("after");
+    application.reassemble();
+    tap(&mut application);
+    tap(&mut application);
+    assert_eq!(
+        *log.borrow(),
+        ["before"],
+        "old callbacks must not see queued taps"
+    );
+
+    frame(&mut application, primary);
+    assert_eq!(*log.borrow(), ["before", "after", "after"]);
+    tap(&mut application);
+    assert_eq!(*log.borrow(), ["before", "after", "after", "after"]);
+}

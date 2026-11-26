@@ -399,3 +399,52 @@ fn application_only_exposes_a_deferred_native_redraw_after_warm_up() {
         .unwrap();
     assert!(!app.frame_requested(window));
 }
+
+#[test]
+fn a_scheduled_warm_up_delivers_pointer_packets_after_the_frame_in_order() {
+    use incular_core::{InputEvent, Offset, PointerPhase};
+    use incular_platform::{PlatformEvent, WindowEvent};
+    use incular_runtime::Application;
+    use incular_widgets::Listener;
+
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let mut app = Application::new({
+        let log = log.clone();
+        move |_| {
+            let down = log.clone();
+            let up = log.clone();
+            Listener::new(Widget::box_(Size::new(100., 100.), Color::WHITE))
+                .on_pointer_down(move |event| down.borrow_mut().push((event.phase, event.time)))
+                .on_pointer_up(move |event| up.borrow_mut().push((event.phase, event.time)))
+                .into()
+        }
+    })
+    .unwrap();
+    let window = app.primary_window();
+    let now = Instant::now();
+    app.run_window_frame_at(window, constraints(), now)
+        .unwrap()
+        .unwrap();
+    assert!(app.schedule_window_warm_up_frame(window));
+    let packets = [
+        (PointerPhase::Down, now + Duration::from_millis(1)),
+        (PointerPhase::Up, now + Duration::from_millis(2)),
+    ];
+    for (phase, time) in packets {
+        app.handle_window_event(WindowEvent::platform(
+            window,
+            PlatformEvent::InputAt {
+                input: InputEvent::Pointer {
+                    phase,
+                    position: Offset::new(50., 50.),
+                },
+                time,
+            },
+        ));
+    }
+    assert!(log.borrow().is_empty());
+    app.run_window_frame_at(window, constraints(), now + Duration::from_millis(3))
+        .unwrap()
+        .unwrap();
+    assert_eq!(*log.borrow(), packets);
+}

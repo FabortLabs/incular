@@ -47,8 +47,8 @@ use incular_accessibility::{
     MobileAccessibilityUpdate, NativeAccessibilityUpdate, SemanticActionRequest,
 };
 use incular_config::{Constraints, RuntimeEnvironment};
-use incular_core::RestorationKey;
 use incular_core::time::Instant;
+use incular_core::{InputEvent, RestorationKey};
 use incular_platform::{
     ApplicationActivation, Clipboard, DisplayId, DisplaySnapshot, ExternalDragEvent,
     ExternalDragResponse, FileDialogError, FileDialogOutcome, FileDialogRequest,
@@ -68,6 +68,25 @@ use std::{
     sync::{Arc, RwLock, atomic::Ordering, mpsc},
 };
 use tokio::sync::oneshot;
+
+/// Flutter's GestureBinding queues pointer packets while a warm-up frame
+/// rebuilds. Key events and window/lifecycle operations are separate.
+fn is_pointer_packet(event: &PlatformEvent) -> bool {
+    match event {
+        PlatformEvent::Input(input) | PlatformEvent::InputAt { input, .. } => matches!(
+            input,
+            InputEvent::Pointer { .. }
+                | InputEvent::PointerWithId { .. }
+                | InputEvent::PointerWithMetadata { .. }
+                | InputEvent::PointerPanZoom(_)
+                | InputEvent::TrackpadGesture(_)
+                | InputEvent::Scroll { .. }
+                | InputEvent::ScrollAt { .. }
+        ),
+        PlatformEvent::HoverDevice(_) => true,
+        _ => false,
+    }
+}
 
 struct PendingNativeRequest {
     window_id: WindowId,
@@ -1380,7 +1399,20 @@ impl Application {
             ) => {
                 let _ = self.with_window_mut(window_id, |record| {
                     record.input_events = record.input_events.wrapping_add(1);
-                    let _ = record.runtime.handle_platform_event(event);
+                    if (record.warm_up_requested || !record.warm_up_pointer_events.is_empty())
+                        && is_pointer_packet(&event)
+                    {
+                        let packet = match event {
+                            PlatformEvent::Input(input) => PlatformEvent::InputAt {
+                                input,
+                                time: Instant::now(),
+                            },
+                            packet => packet,
+                        };
+                        record.warm_up_pointer_events.push_back(packet);
+                    } else {
+                        let _ = record.runtime.handle_platform_event(event);
+                    }
                 });
             }
             WindowEventKind::Platform(PlatformEvent::TextInputAction(action)) => {
@@ -1705,7 +1737,18 @@ impl Application {
                     record
                         .runtime
                         .run_frame_at(frame_constraints, now)
-                        .map(|(list, stats)| {
+                        .map(|(list, mut stats)| {
+                            if !record.warm_up_requested
+                                && !record.warm_up_pointer_events.is_empty()
+                            {
+                                // The rebuilt layout is now the hit target. Input
+                                // can request a follow-up frame without consuming
+                                // this warm-up frame's clock or timing sample.
+                                while let Some(packet) = record.warm_up_pointer_events.pop_front() {
+                                    let _ = record.runtime.handle_platform_event(packet);
+                                }
+                                stats.requested_another_frame |= record.runtime.frame_requested();
+                            }
                             let sensitivity = record.runtime.content_sensitivity();
                             if record.last_content_sensitivity != Some(sensitivity) {
                                 record.last_content_sensitivity = Some(sensitivity);
