@@ -1879,3 +1879,5 @@ packages/flutter/test/rendering/viewport_test.dart	2579	allows overscrolling per
 packages/flutter/test/rendering/viewport_test.dart	2622	allows overscrolling per physics - horizontal	paired-match	upstream-viewport-reveal.md#shrink-wrap-bounce-and-apple-platform-defaults
 packages/flutter/test/rendering/viewport_test.dart	2670	Handles infinite constraints when TargetPlatform is iOS or macOS	paired-match	upstream-viewport-reveal.md#shrink-wrap-bounce-and-apple-platform-defaults
 packages/flutter/test/rendering/viewport_test.dart	1871	RenderViewportBase.showOnScreen should not scroll if the rect is already visible, even if it does not scroll linearly (reversed order version)	paired-match	upstream-viewport-reveal.md#reverse-growing-floating-pinned-header
+packages/flutter/test/rendering/viewport_test.dart	2423	constrained viewport correctly clips overflow	partial-match	upstream-viewport-reveal.md#shrink-wrap-overscroll-clips-the-translated-content
+packages/flutter/test/rendering/viewport_test.dart	2452	correctly clips overflow without constraints	partial-match	upstream-viewport-reveal.md#shrink-wrap-overscroll-clips-the-translated-content

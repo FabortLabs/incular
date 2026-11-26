@@ -188,3 +188,116 @@ fn apple_shrink_wrapping_grid_inside_a_column_lays_out_and_accepts_a_drag() {
         assert_eq!(runtime.tree().element_bounds(tile).unwrap(), before);
     }
 }
+
+#[test]
+fn overscrolled_shrink_wrapping_viewport_never_clips_its_siblings() {
+    use incular_core::{Color, Rect};
+    use incular_rendering::PaintCommand;
+    use incular_widgets::Column;
+
+    for constrained in [false, true] {
+        let controller = ScrollController::new();
+        let tile_color = Color::rgba(245, 90, 42, 255);
+        let sibling_color = Color::rgba(0, 176, 255, 255);
+        let children =
+            (0u64..10).map(|i| Widget::box_(Size::new(800., 14.), tile_color).with_key(i));
+        let view = ListView::new(children)
+            .item_extent(14.)
+            .controller(controller.clone())
+            .shrink_wrap(true)
+            .physics(ScrollPhysics::BOUNCING.always_scrollable());
+        let view = if constrained {
+            SizedBox::new().height(150.).child(view).into()
+        } else {
+            view.into()
+        };
+        let sibling = || Widget::box_(Size::new(800., 100.), sibling_color);
+        let scene = Directionality::new(
+            TextDirection::Ltr,
+            Column::new([sibling(), view, sibling()]),
+        );
+        let bounds = Constraints::tight(Size::new(800., 600.));
+        let mut runtime = Runtime::new(scene.into()).unwrap();
+        let now = Instant::now();
+        runtime.run_frame_at(bounds, now).unwrap();
+        assert_eq!(controller.offset(), 0.);
+
+        let top_of = |runtime: &Runtime, index: u64| {
+            let tree = runtime.tree();
+            let id = tree.element_with_key(&index.into()).unwrap();
+            tree.element_bounds(id).unwrap().origin.y
+        };
+        assert_eq!((top_of(&runtime, 0), top_of(&runtime, 9)), (100., 226.));
+        let start = Offset::new(400., 107.);
+        let moved = Offset::new(400., 207.);
+        let track = |runtime: &mut Runtime, phase, position, ms| {
+            let _ = runtime.handle_raw_pointer_event(RawPointerEvent::new(
+                1,
+                0,
+                PointerDeviceKind::Touch,
+                if phase == PointerPhase::Up {
+                    0
+                } else {
+                    PRIMARY_POINTER_BUTTON
+                },
+                position,
+                phase,
+                now + Duration::from_millis(ms),
+            ));
+        };
+        track(&mut runtime, PointerPhase::Down, start, 10);
+        track(&mut runtime, PointerPhase::Move, moved, 26);
+        assert_eq!(
+            controller.offset(),
+            -100.,
+            "immediately after touch, constrained={constrained}"
+        );
+        let (list, _) = runtime
+            .run_frame_at(bounds, now + Duration::from_millis(26))
+            .unwrap();
+        assert_eq!(
+            controller.offset(),
+            -100.,
+            "after the frame, constrained={constrained}"
+        );
+        assert_eq!(top_of(&runtime, 0), 200.);
+        let mut current_clip = None;
+        let mut sibling_clips = Vec::new();
+        let mut tile_clips = Vec::new();
+        for command in list.commands() {
+            match command {
+                PaintCommand::PushClip { rect } => {
+                    assert!(current_clip.replace(*rect).is_none());
+                }
+                PaintCommand::PopClip => assert!(current_clip.take().is_some()),
+                PaintCommand::Rect { color, .. } if *color == sibling_color => {
+                    sibling_clips.push(current_clip);
+                }
+                PaintCommand::Rect { color, .. } if *color == tile_color => {
+                    tile_clips.push(current_clip);
+                }
+                _ => {}
+            }
+        }
+        assert_eq!(sibling_clips, [None, None]);
+        assert!(!tile_clips.is_empty());
+        let expected = Rect::from_origin_size(
+            Offset::new(0., 100.),
+            Size::new(800., if constrained { 150. } else { 140. }),
+        );
+        assert!(tile_clips.iter().all(|clip| *clip == Some(expected)));
+        assert!(current_clip.is_none());
+
+        track(&mut runtime, PointerPhase::Up, moved, 110);
+        for frame in 0..150 {
+            let (_, stats) = runtime
+                .run_frame_at(bounds, now + Duration::from_millis(110 + frame * 16))
+                .unwrap();
+            if !stats.requested_another_frame && controller.offset() == 0. {
+                break;
+            }
+        }
+        assert_eq!(controller.offset(), 0.);
+        assert_eq!((top_of(&runtime, 0), top_of(&runtime, 9)), (100., 226.));
+    }
+}

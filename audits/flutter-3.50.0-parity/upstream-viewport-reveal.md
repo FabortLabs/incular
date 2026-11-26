@@ -246,3 +246,21 @@ revealing the visible header does not move the controller. Revealing
 tile 9 at −3100 moves to −3000 to clear the obstruction. These cases only
 cover a visible header and normal viewport reveal of content, not the
 floating header's separate reveal-to-expand lifecycle.
+
+## Shrink-wrap overscroll clips the translated content
+
+Both pinned Flutter cases at `rendering/viewport_test.dart:2423,2452`
+passed, including their visual checks. Incular's mounted
+`overscrolled_shrink_wrapping_viewport_never_clips_its_siblings` verifies
+the same input and geometry. A 100 px drag holds offset −100 through
+layout, the first tile moves from y=100 to y=200, and the retained scene
+applies a hard clip to the translated tiles, not to the siblings. That
+clip is exactly y=100–250 for the constrained viewport or y=100–240 when
+naturally sized. On release both instances land exactly at offset zero.
+
+Before this fix the initial shrink-wrap measurement published its
+provisional zero viewport extent, clamping away a live bounce. The
+measurement now informs sizing without being published as the actual
+viewport dimensions. The native test compares paint commands and exact
+geometry, not Flutter's raster golden; these two cases are partial.
+The existing shrink-wrap convergence and grid regressions passed.

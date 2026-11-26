@@ -350,47 +350,42 @@ impl WidgetTree {
                     )?;
                 }
                 let mut last_published: Option<PublishedViewportAttempt> = None;
-                let mut sliver_layout = self.publish_sliver_attempt(
-                    viewport_element,
-                    config,
-                    &mut last_published,
-                    (size, viewport_extent),
-                    handoff,
-                    perform_layout(config.controller.offset(), viewport_extent)?,
-                );
+                let initial_layout = perform_layout(config.controller.offset(), viewport_extent)?;
                 // Content extent the current size/viewport were computed
                 // from. Fixed-size viewports never consult it; shrink-wrap
                 // viewports keep it in sync below as measurement converges.
-                let mut sized_content = sliver_layout.geometry.scroll_extent.max(0.);
+                let mut sized_content = initial_layout.geometry.scroll_extent.max(0.);
 
                 // A shrink-wrapping viewport derives its own main-axis size
-                // from the sliver geometry. The first pass supplies a
-                // provisional zero/unbounded extent, then the real viewport
-                // extent is laid out again before children are materialized.
-                if config.shrink_wrap {
+                // from the sliver geometry. The first pass supplies only a
+                // size estimate. Publishing its provisional dimensions would
+                // reset an active bounce (e.g. 140 -> 0 -> 140 for a ListView
+                // under an unbounded Column), even though the range is steady.
+                let measured_layout = if config.shrink_wrap {
                     (size, viewport_extent) = shrink_wrap_viewport_geometry(
                         config.axis,
                         sized_content,
                         constraints,
                         cross_extent,
                     );
-                    // Provisional: only its metrics publication matters; the
-                    // corrective layout below supersedes its geometry.
-                    let _ = self.publish_sliver_attempt(
-                        viewport_element,
-                        config,
-                        &mut last_published,
-                        (size, viewport_extent),
-                        None,
-                        perform_layout(config.controller.offset(), viewport_extent)?,
-                    );
-                }
+                    perform_layout(config.controller.offset(), viewport_extent)?
+                } else {
+                    initial_layout
+                };
+                self.publish_sliver_attempt(
+                    viewport_element,
+                    config,
+                    &mut last_published,
+                    (size, viewport_extent),
+                    handoff,
+                    measured_layout,
+                );
 
                 // Extent updates can clamp a restored/programmatic offset or
                 // establish the physical origin of a reversed viewport. One
                 // corrective layout keeps geometry and the retained range in
                 // the same coordinate space from the first frame.
-                sliver_layout = self.publish_sliver_attempt(
+                let mut sliver_layout = self.publish_sliver_attempt(
                     viewport_element,
                     config,
                     &mut last_published,
