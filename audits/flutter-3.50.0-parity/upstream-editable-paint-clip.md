@@ -57,3 +57,19 @@ global pixel snapping. It verified both exact offsets and caret
 edges. This is separate from the original :240 immutable external
 offset case (still open). Right or center alignment was not
 verified by this probe; the existing path for those is unchanged.
+
+## Default and live clip mode
+
+Pinned `rendering/editable_test.dart:80` and
+`widgets/editable_text_test.dart:11497` passed. The native one-pixel
+viewport retains all 10,000 characters and paints text on every
+mode. The default and explicit hard-edge modes record a 1 px clip;
+none records no clip; antialiasing records the right coverage mode;
+only the save-layer mode has isolation. Updates keep the same
+render object. The wider overflow/fit control also tests changing
+the default live to antiAlias and back.
+
+The isolated selection test now explicitly supplies a highlight,
+preserving its actual selection-plus-glyph cache assertion after
+the raw editor's default became unpainted. All five focused native
+tests pass. The original :240 external offset case remains open.

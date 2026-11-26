@@ -2568,3 +2568,5 @@ packages/flutter/test/rendering/editable_test.dart	490	cursor can paint above or
 packages/flutter/test/rendering/editable_test.dart	534	does not paint the caret when selection is null or invalid	paired-match	upstream-editable-defaults.md#caret-and-selection-paint-order
 packages/flutter/test/widgets/editable_text_test.dart	12174	onEditingComplete can throw errors	paired-match	upstream-editable-action-focus.md#completion-and-submission-errors
 packages/flutter/test/widgets/editable_text_test.dart	12207	onSubmitted can throw errors	paired-match	upstream-editable-action-focus.md#completion-and-submission-errors
+packages/flutter/test/rendering/editable_test.dart	80	RenderEditable respects clipBehavior	paired-match	upstream-editable-paint-clip.md#default-and-live-clip-mode
+packages/flutter/test/widgets/editable_text_test.dart	11497	EditableText can set and update clipBehavior	paired-match	upstream-editable-paint-clip.md#default-and-live-clip-mode

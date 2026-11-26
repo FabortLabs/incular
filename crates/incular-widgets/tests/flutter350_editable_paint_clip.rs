@@ -110,10 +110,13 @@ fn isolated_overflow_clip_reuses_layer_and_updates_the_cached_contents() {
     let controller = TextEditingController::with_text("AAAAAAAAAAAA");
     let mut tree = WidgetTree::new();
     let root = tree
-        .mount(field(
-            controller.clone(),
-            Some(Clip::AntiAliasWithSaveLayer),
-        ))
+        .mount(
+            EditableText::new(controller.clone())
+                .text_direction(TextDirection::Ltr)
+                .selection_color(incular_core::Color::BLACK)
+                .clip_behavior(Clip::AntiAliasWithSaveLayer)
+                .into(),
+        )
         .unwrap();
     let now = incular_core::time::Instant::now();
     tree.set_focused(root, true, now).unwrap();
@@ -267,4 +270,61 @@ fn fitting_right_aligned_editor_reserves_the_caret_margin_inside_the_box() {
     );
     assert_eq!(tree.text_field_scroll_offset(root), Some(Offset::ZERO));
     assert!(tree.editable_approximate_paint_clip(root).is_none());
+}
+
+#[test]
+fn one_pixel_viewport_records_the_requested_clip_without_losing_its_text() {
+    let controller = TextEditingController::with_text("a".repeat(10_000));
+    controller.set_selection(TextSelection::collapsed(0));
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(field(controller.clone(), None)).unwrap();
+    let original_render = tree.render_id(root);
+    let constraints = Constraints::loose(Size::new(1., 100.));
+    let now = incular_core::time::Instant::now();
+    for (mode, expected) in [
+        (None, Some(ClipCoverage::HardEdge)),
+        (Some(Clip::None), None),
+        (Some(Clip::HardEdge), Some(ClipCoverage::HardEdge)),
+        (Some(Clip::AntiAlias), Some(ClipCoverage::AntiAlias)),
+        (
+            Some(Clip::AntiAliasWithSaveLayer),
+            Some(ClipCoverage::AntiAliasWithSaveLayer),
+        ),
+    ] {
+        tree.update(root, field(controller.clone(), mode)).unwrap();
+        tree.layout(constraints).unwrap();
+        tree.update_compositor(now).unwrap();
+        assert_eq!(tree.render_id(root), original_render);
+        let painted = tree.paint();
+        let mut counts = Vec::new();
+        let mut glyph_count = 0;
+        for command in painted.commands() {
+            match command {
+                PaintCommand::PushClip { rect } => {
+                    counts.push(ClipCoverage::HardEdge);
+                    assert_eq!(rect.size.width, 1.);
+                }
+                PaintCommand::PushClipRRect {
+                    rrect,
+                    coverage,
+                    isolation,
+                } => {
+                    counts.push(*coverage);
+                    assert_eq!(rrect.rect.size.width, 1.);
+                    assert_eq!(
+                        isolation.is_some(),
+                        *coverage == ClipCoverage::AntiAliasWithSaveLayer
+                    );
+                }
+                PaintCommand::GlyphRun { run, .. } => glyph_count += run.glyphs.len(),
+                _ => {}
+            }
+        }
+        assert_eq!(counts, expected.into_iter().collect::<Vec<_>>(), "{mode:?}");
+        assert!(
+            glyph_count > 0,
+            "the clipped editor still paints text: {mode:?}"
+        );
+        assert_eq!(controller.with_value(|value| value.text.len()), 10_000);
+    }
 }
