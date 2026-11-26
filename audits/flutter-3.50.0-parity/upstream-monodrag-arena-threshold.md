@@ -84,3 +84,19 @@ The separate retained-tree test `flutter350_gesture_device_allowlist` verifies
 that an excluded inner detector does not delay an eligible ancestor, and that
 the touch-only child still wins for touch. Existing button-change, transformed
 drag, device slop and tap/drag targets also passed.
+
+## Explicit press button filters
+
+Pinned `gestures/monodrag_test.dart:212` and `:222` passed. Two
+horizontal drags compete at (10,10); only the recognizer accepting
+the initial button mask enters the arena, so it starts at arena
+close without a movement sample. A primary press calls only the
+primary callback and a secondary press only the secondary callback.
+A native control rejects a combined mask in both exact-match
+filters.
+
+Raw recognizers can now set a press filter without rewriting device
+allowlists, button-change cancellation, or the widget-level
+GestureDetector's button-specific callback routing. Filters are
+evaluated on Down, not repeated over the active stream. Fourteen
+focused native drag checks passed.

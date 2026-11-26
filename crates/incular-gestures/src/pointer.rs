@@ -127,6 +127,7 @@ impl PendingTapRelease {
 /// A reusable recognizer for tap, double-tap, long-press, and pan.
 pub struct PointerGestureRecognizer {
     callbacks: GestureCallbacks,
+    allowed_buttons: Option<Rc<dyn Fn(u32) -> bool>>,
     kind: PointerDeviceKind,
     down: Option<PointerEvent>,
     down_buttons: Option<u32>,
@@ -279,6 +280,7 @@ impl PointerGestureRecognizer {
     pub fn new(callbacks: GestureCallbacks) -> Self {
         Self {
             callbacks,
+            allowed_buttons: None,
             kind: PointerDeviceKind::Unknown,
             down: None,
             down_buttons: None,
@@ -324,6 +326,19 @@ impl PointerGestureRecognizer {
     /// Filters new raw pointer presses by device category.
     pub fn set_supported_devices(&mut self, kinds: impl IntoIterator<Item = PointerDeviceKind>) {
         self.callbacks.set_supported_devices(kinds);
+    }
+
+    /// Restricts which initial button masks may enter this raw recognizer.
+    /// Active presses keep their original admission. Legacy pointer events
+    /// without a mask are treated as primary for this filter.
+    pub fn set_allowed_buttons_filter(&mut self, filter: Option<Rc<dyn Fn(u32) -> bool>>) {
+        self.allowed_buttons = filter;
+    }
+
+    fn allows_buttons(&self, buttons: u32) -> bool {
+        self.allowed_buttons
+            .as_ref()
+            .is_none_or(|accept| accept(buttons))
     }
 
     /// Overrides the tap's maximum movement before and after it wins its
@@ -946,9 +961,8 @@ impl PointerGestureRecognizer {
     /// recognizer. Direct users should normally keep using [`Self::handle`].
     pub fn observe(&mut self, event: PointerEvent) -> GestureDecision {
         if event.phase == PointerPhase::Down {
-            if !self
-                .callbacks
-                .allows_pointer_device(PointerDeviceKind::Unknown)
+            if !self.callbacks.allows_pointer_device(PointerDeviceKind::Unknown)
+                || !self.allows_buttons(PRIMARY_POINTER_BUTTON)
             {
                 return GestureDecision::Reject;
             }
@@ -1585,7 +1599,9 @@ impl GestureRecognizer for PointerGestureRecognizer {
 
     fn observe_raw(&mut self, event: crate::details::RawPointerEvent) -> GestureDecision {
         if event.phase == PointerPhase::Down {
-            if !self.callbacks.allows_pointer_device(event.kind) {
+            if !self.callbacks.allows_pointer_device(event.kind)
+                || !self.allows_buttons(event.buttons)
+            {
                 return GestureDecision::Reject;
             }
             if self.down.is_none_or(|press| press.pointer == event.pointer) {
