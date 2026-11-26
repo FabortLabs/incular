@@ -362,11 +362,10 @@ fn decorated_box_transition_animates_a_shape_decoration() {
     );
 }
 
-/// transitions-005: decorations of different kinds do not interpolate, so
-/// the transition switches from one to the other at the midpoint, as
-/// Flutter's `Decoration.lerp` falls back to `t < 0.5 ? a : b`.
+/// A mixed Flutter decoration tween converts the box to a shape so
+/// the mounted decoration's fill interpolates continuously.
 #[test]
-fn decorated_box_transition_switches_between_decoration_kinds_at_the_midpoint() {
+fn decorated_box_transition_interpolates_the_fill_of_mixed_decoration_kinds() {
     use incular_widgets::Decoration;
     let controller = AnimationController::new(DURATION);
     let tween = TweenAnimation::new(
@@ -380,11 +379,11 @@ fn decorated_box_transition_switches_between_decoration_kinds_at_the_midpoint() 
     ));
     controller.set_value(0.25);
     layout(&mut tree);
-    assert_eq!(painted_colors(&tree.paint()), vec![BLACK]);
+    assert_eq!(painted_colors(&tree.paint()), vec![Color::rgba(50, 25, 0, 255)]);
 
     controller.set_value(0.75);
     layout(&mut tree);
-    assert_eq!(painted_colors(&tree.paint()), vec![ORANGE]);
+    assert_eq!(painted_colors(&tree.paint()), vec![Color::rgba(150, 75, 0, 255)]);
 }
 
 /// The sampling of every matrix filter stage in paint order

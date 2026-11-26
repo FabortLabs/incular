@@ -467,9 +467,8 @@ impl From<RelativePositionedTransition> for Widget {
 /// Flutter's `Decoration` as a transition animates it: a [`BoxDecoration`]
 /// or a [`ShapeDecoration`].
 ///
-/// Two values of the same kind interpolate. Two kinds that do not
-/// interpolate with each other switch at the midpoint, as Flutter's
-/// `Decoration.lerp` falls back to `t < 0.5 ? a : b`.
+/// A mixed transition converts the box to a shape for intermediate
+/// values. The exact endpoints keep their original kinds.
 #[derive(Clone)]
 pub enum Decoration {
     Box(BoxDecoration),
@@ -524,8 +523,12 @@ impl Lerp for Decoration {
         match (self, other) {
             (Self::Box(a), Self::Box(b)) => Self::Box(a.lerp(b, t)),
             (Self::Shape(a), Self::Shape(b)) => Self::Shape(a.lerp(b, t)),
-            _ if t < 0.5 => self.clone(),
-            _ => other.clone(),
+            (Self::Box(a), Self::Shape(b)) => {
+                Self::Shape(ShapeDecoration::from_box_decoration(a).lerp(b, t))
+            }
+            (Self::Shape(a), Self::Box(b)) => {
+                Self::Shape(a.lerp(&ShapeDecoration::from_box_decoration(b), t))
+            }
         }
     }
 }

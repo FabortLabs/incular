@@ -158,3 +158,14 @@ shadows and box-relative shaders. The same logical gradient's actual
 paint coordinates reverse after an ambient direction change, with
 the correct box dimensions. Three constructor and 17 regression
 cases passed (13 widget cases and four concrete pointer routes).
+
+## Mixed box and shape transitions
+
+An authored Flutter probe verifies exact endpoint types and continuous
+fill colors at 25%, 50% and 75%, with a 150-pixel wide midpoint
+contour when a 200 × 100 circular box transitions to a rectangle.
+The native counterpart previously returned a box at 25%; it now
+checks exact colors, outlines and paint in both directions. The
+mounted transition test now asserts interpolation rather than the
+previously incorrect midpoint switch. Nineteen focused native tests
+passed. The authored probe does not increase the registration count.
