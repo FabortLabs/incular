@@ -170,3 +170,21 @@ The separate mismatched-axis registration at line 2050 passed in Flutter.
 Flutter ignores the supplied axis for one-dimensional viewports;
 Incular's one-dimensional query takes no axis argument and always uses the
 viewport's axis. The mismatched argument itself has no paired exercise.
+
+## Visible pinned header and an inner viewport with no outer cache
+
+Both `rendering/viewport_test.dart:1479,2061` passed in pinned Flutter.
+The matching mounted Incular regressions are in
+`flutter350_viewport_show_on_screen`:
+
+- A variable-size pinned header collapses to 100 px and stays at y=0.
+  Revealing the already-visible header leaves the controller at 4500.
+  Revealing the box after it from offsets 3600 (upstream) and 3400
+  (partly visible) moves to 3200 and places the box at y=100, clear of
+  the header. The checked-in Dart probe `viewport_pinned_geometry_test.dart`
+  verifies these exact positions and offsets in Flutter 3.50.0.
+- With a zero-cache outer viewport, a full-height tile begins at y=300
+  in the inner viewport. After reveal it occupies y=0–300; the inner
+  controller moves to 300 and the outer stays at 0.
+
+These results do not establish floating-header expansion on reveal.

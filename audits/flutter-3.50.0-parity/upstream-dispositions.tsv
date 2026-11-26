@@ -1864,3 +1864,5 @@ packages/flutter/test/rendering/viewport_test.dart	2017	down, reverse growth	pai
 packages/flutter/test/rendering/viewport_test.dart	2028	left, forward growth	paired-match	upstream-viewport-reveal.md#nested-box-to-sliver-coordinate-conversion
 packages/flutter/test/rendering/viewport_test.dart	2039	left, reverse growth	paired-match	upstream-viewport-reveal.md#nested-box-to-sliver-coordinate-conversion
 packages/flutter/test/rendering/viewport_test.dart	2050	will not assert on mismatched axis	partial-match	upstream-viewport-reveal.md#nested-box-to-sliver-coordinate-conversion
+packages/flutter/test/rendering/viewport_test.dart	1479	Viewport showOnScreen should not scroll if the rect is already visible, even if it does not scroll linearly	paired-match	upstream-viewport-reveal.md#visible-pinned-header-and-an-inner-viewport-with-no-outer-cache
+packages/flutter/test/rendering/viewport_test.dart	2061	RenderViewportBase.showOnScreen reports the correct targetRect	paired-match	upstream-viewport-reveal.md#visible-pinned-header-and-an-inner-viewport-with-no-outer-cache

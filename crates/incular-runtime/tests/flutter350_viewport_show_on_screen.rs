@@ -302,3 +302,110 @@ fn centered_reversed_list_can_animate_an_offstage_negative_item_into_view() {
     assert!(viewport.intersects(after), "{after:?}");
     assert!(controller.offset() < 0.);
 }
+
+#[test]
+fn reveal_does_not_move_a_visible_pinned_header_but_exposes_obstructed_content() {
+    use incular_widgets::{
+        Scrollable, ShowOnScreen, SliverHeaderScrollBehavior, SliverPersistentHeader,
+    };
+
+    let controller = ScrollController::new().with_initial_scroll_offset(300.);
+    let slivers = (0u64..20).map(|index| -> Box<dyn Sliver> {
+        if index == 10 {
+            Box::new(
+                SliverPersistentHeader::with_delegate(100., 300., |_, _| {
+                    Widget::from(SizedBox::expand()).with_key("pinned")
+                })
+                .scroll_behavior(SliverHeaderScrollBehavior::Pinned),
+            )
+        } else {
+            let tile = Widget::from(SizedBox::new().height(300.)).with_key(index);
+            Box::new(SliverToBoxAdapter::new(tile))
+        }
+    });
+    let list = CustomScrollView::new(slivers).controller(controller.clone());
+    let root = Directionality::new(TextDirection::Ltr, list);
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let mut runtime = Runtime::new(root.into()).unwrap();
+    runtime.run_frame(bounds).unwrap();
+
+    controller.jump_to(4500.);
+    runtime.run_frame(bounds).unwrap();
+    let header = runtime.tree().element_with_key(&"pinned".into()).unwrap();
+    let header_bounds = runtime.tree().element_bounds(header).unwrap();
+    assert_eq!(
+        (header_bounds.origin.y, header_bounds.size.height),
+        (0., 100.)
+    );
+    assert_eq!(
+        Scrollable::show_on_screen(runtime.tree(), header, ShowOnScreen::new()),
+        0
+    );
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(controller.offset(), 4500.);
+
+    // The upstream jump starts with the tile above the viewport. Also
+    // check a closer offset where the header covers part of a visible tile.
+    for (pixels, before) in [(3600., -300.), (3400., -100.)] {
+        controller.jump_to(pixels);
+        runtime.run_frame(bounds).unwrap();
+        let content = runtime.tree().element_with_key(&11u64.into()).unwrap();
+        assert_eq!(
+            runtime.tree().element_bounds(content).unwrap().origin.y,
+            before
+        );
+        assert_eq!(
+            Scrollable::show_on_screen(runtime.tree(), content, ShowOnScreen::new()),
+            1
+        );
+        runtime.run_frame(bounds).unwrap();
+        assert_eq!(controller.offset(), 3200.);
+        assert_eq!(
+            runtime.tree().element_bounds(content).unwrap().origin.y,
+            100.
+        );
+    }
+}
+
+#[test]
+fn reveal_forwards_the_inner_tile_projected_into_the_outer_viewport_with_no_cache() {
+    use incular_widgets::{Scrollable, ShowOnScreen};
+
+    let inner = ScrollController::new();
+    let outer = ScrollController::new();
+    let inner_slivers = (0u64..5).map(|index| -> Box<dyn Sliver> {
+        let tile = Widget::from(SizedBox::new().height(300.)).with_key(index);
+        Box::new(SliverToBoxAdapter::new(tile))
+    });
+    let inner_list = CustomScrollView::new(inner_slivers).controller(inner.clone());
+    let outer_slivers: [Box<dyn Sliver>; 2] = [
+        Box::new(SliverToBoxAdapter::new(
+            SizedBox::new().height(300.).child(inner_list),
+        )),
+        Box::new(SliverToBoxAdapter::new(SizedBox::new().height(300.))),
+    ];
+    let outer_list = CustomScrollView::new(outer_slivers)
+        .controller(outer.clone())
+        .cache_extent(0.);
+    let bounds = Constraints::tight(Size::new(800., 300.));
+    let mut runtime =
+        Runtime::new(Directionality::new(TextDirection::Ltr, outer_list).into()).unwrap();
+    runtime.run_frame(bounds).unwrap();
+
+    let target = runtime.tree().element_with_key(&1u64.into()).unwrap();
+    assert_eq!(
+        runtime.tree().element_bounds(target).unwrap().origin.y,
+        300.
+    );
+    assert_eq!(
+        Scrollable::show_on_screen(runtime.tree(), target, ShowOnScreen::new()),
+        1
+    );
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!((inner.offset(), outer.offset()), (300., 0.));
+    let target_bounds = runtime.tree().element_bounds(target).unwrap();
+    assert_eq!(
+        (target_bounds.origin.y, target_bounds.size.height),
+        (0., 300.)
+    );
+}
