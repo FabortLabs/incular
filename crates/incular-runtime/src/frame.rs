@@ -2721,7 +2721,16 @@ impl Runtime {
             TextInputCommand::FinishAutofillContext { .. } => true,
         });
         if self.focused == Some(active.target) {
-            self.set_focus(None);
+            if let Some(node) = self.tree.focus_node_at(active.target) {
+                // Flutter's connectionClosed unsets focus with the default
+                // scope disposition: retire the editor and its scope history,
+                // then focus the enclosing scope itself, not another editor.
+                node.unfocus();
+                self.adopt_external_focus_change();
+            }
+            if self.focused == Some(active.target) {
+                self.set_focus(None);
+            }
         }
         true
     }

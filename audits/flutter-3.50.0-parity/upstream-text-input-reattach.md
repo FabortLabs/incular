@@ -143,3 +143,14 @@ backward and partially overlapping selections, and verify the same
 mounted client receives its updated selection and composing range
 without a new attachment or keyboard show. Thirteen focused text
 tests and 21 runtime/host tests passed.
+
+## Keyboard close restores scope focus
+
+An authored Flutter control focuses two editors successively in one
+scope, then closes the second client's keyboard. The nearest scope
+itself takes primary focus, its child history is cleared, and neither
+editor becomes active. No hide or clear command is echoed. Requesting
+focus again attaches the first editor to a fresh client with its own
+draft. Previously Incular cleared primary focus entirely even with a
+mounted scope. The native scope counterpart plus 19 focused lifecycle
+and focus-scope tests passed. The scope test is authored.
