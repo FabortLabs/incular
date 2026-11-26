@@ -281,3 +281,99 @@ fn an_open_nested_surface_retargets_when_its_root_changes_overlay_choice() {
     assert_eq!(updated.len(), 2);
     assert!(updated.iter().all(|entry| entry.parent.is_none()));
 }
+
+#[test]
+fn transformed_anchors_do_not_transform_their_overlay_controls_again() {
+    use incular_rendering::PaintCommand;
+    use std::cell::Cell;
+    let menu = MenuController::new();
+    let hits = Rc::new(Cell::new(0));
+    let published = Rc::new(Cell::new(None));
+    let panel_key = Key::from("absolute-preview-panel");
+    let expected = Rect::from_origin_size(Offset::new(380., 405.), Size::new(200., 40.));
+    let anchor = RawMenuAnchor::new(menu.clone(), {
+        let hits = hits.clone();
+        let key = panel_key.clone();
+        let published = published.clone();
+        move |_, info| {
+            published.set(Some(info.anchor_rect));
+            let target = info.anchor_rect.origin + Offset::new(80., 65.);
+            let hits = hits.clone();
+            let item = Widget::from(
+                GestureDetector::new(Widget::box_(Size::new(200., 40.), PANEL))
+                    .on_tap(move || hits.set(hits.get() + 1)),
+            )
+            .with_key(key.clone());
+            Stack::new([Widget::from(
+                Positioned::new(item).left(target.x).top(target.y),
+            )])
+            .into()
+        }
+    })
+    .child(
+        Widget::from(SizedBox::new().width(100.).height(20.))
+            .with_key(Key::from("transformed-anchor")),
+    );
+    let transform = Affine::translation(Offset::new(-50., 50.)).then(Affine::scale(1.2));
+    let mut runtime = Runtime::new(Center::new(Transform::new(transform, anchor)).into()).unwrap();
+    frame(&mut runtime);
+    menu.open(None);
+    let list = runtime.run_frame(Constraints::tight(VIEW)).unwrap().0;
+    let mut matrices = vec![Affine::IDENTITY];
+    let mut panels = Vec::new();
+    for command in list.commands() {
+        match command {
+            PaintCommand::PushTransform { transform } => {
+                matrices.push(matrices.last().unwrap().then(*transform));
+            }
+            PaintCommand::PopTransform => {
+                matrices.pop();
+            }
+            PaintCommand::Rect { rect, color } if *color == PANEL => {
+                panels.push(matrices.last().unwrap().transform_rect_bbox(*rect));
+            }
+            _ => {}
+        }
+    }
+    let observed = bounds(&runtime, "absolute-preview-panel");
+    assert_eq!(panels.len(), 1);
+    let anchor = bounds(&runtime, "transformed-anchor");
+    assert_eq!(published.get(), Some(anchor));
+    assert_eq!(anchor.origin, Offset::new(300., 340.));
+    for actual in [observed, panels[0]] {
+        assert!(
+            (actual.origin.x - expected.origin.x).abs()
+                + (actual.origin.y - expected.origin.y).abs()
+                < 0.0002,
+            "{actual:?}"
+        );
+        assert!(
+            (actual.size.width - expected.size.width).abs() < 0.0002,
+            "{actual:?}"
+        );
+        assert!(
+            (actual.size.height - expected.size.height).abs() < 0.0002,
+            "{actual:?}"
+        );
+    }
+    let position = expected.origin + Offset::new(195., 5.);
+    for (phase, buttons) in [
+        (PointerPhase::Down, PRIMARY_POINTER_BUTTON),
+        (PointerPhase::Up, 0),
+    ] {
+        let _ = runtime.handle_input_at(
+            InputEvent::PointerWithMetadata {
+                pointer: 1,
+                device: 0,
+                kind: PointerDeviceKind::Touch,
+                buttons,
+                button: Some(PRIMARY_POINTER_BUTTON),
+                sample: PointerSampleMetadata::default(),
+                phase,
+                position,
+            },
+            Instant::now(),
+        );
+    }
+    assert_eq!(hits.get(), 1);
+}

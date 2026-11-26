@@ -272,3 +272,21 @@ retained group: the group tracks whether either descendant is open,
 including one behind Padding; tapping switches the visible panel
 and retapping closes it. Group open does nothing, while both close
 methods clear the appropriate popup and leave its anchor mounted.
+
+#### Painted and interactive controls under a transformed anchor
+
+The additional pinned geometry probe positions a 200 by 40 control
+80 pixels right and 65 down from the transformed anchor's origin.
+Flutter paints/interacts at (380,405); the native baseline instead
+reported (46,128) with size 240 by 48. The native fix keeps the popup
+out of the anchor's size calculation and cancels the anchor's
+invertible scale/rotation at the lifted overlay boundary. Normal
+translations keep their faster offset path.
+
+The native test now compares published anchor geometry, the actual
+retained and painted control rectangles, and a routed tap near the
+desired far edge. Focused menu, tooltip, existing OverlayPortal,
+transient-surface, and layout-builder neighbors passed. No new
+upstream registration is counted for the authored probe. Singular
+anchor transforms and separate Overlay host coordinate spaces are
+not covered by this comparison.

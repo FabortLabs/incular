@@ -64,6 +64,7 @@ impl WidgetTree {
             native_transient_bounds: None,
             native_transient_presentations: HashSet::new(),
             layout_overlay_popups: FastHashSet::default(),
+            view_space_overlay_roots: FastHashSet::default(),
             recursion_diagnostics: RecursionDiagnostics::new(),
             tracked: TrackedElements::default(),
             hosted_focus_nodes: None,
@@ -231,6 +232,7 @@ impl WidgetTree {
             .retain(|id, _| active.contains(id));
         self.native_transient_presentations
             .retain(|id| active.contains(id));
+        self.view_space_overlay_roots.clear();
         self.layout_overlay_popups = entries
             .iter()
             .filter(|entry| entry.1.layout_slot.is_some())
@@ -266,10 +268,25 @@ impl WidgetTree {
                     self.refresh_stateful_layout_builders();
                 }
                 self.layout_render(popup_render, Constraints::tight(viewport_size))?;
-                let stack_origin = self
-                    .element_bounds(stack)
-                    .map_or(Offset::ZERO, |bounds| bounds.origin);
-                let local_offset = viewport.origin - stack_origin;
+                let stack_world = self.render_id(stack).map(|render| {
+                    self.render_world_transform(render).then(self.child_content_transform(render))
+                });
+                let (local_offset, layer_transform) = if let Some(inverse) = stack_world
+                    .filter(|world| !world.is_translation())
+                    .and_then(CoreTransform::inverse)
+                {
+                    // The builder positions controls in overlay coordinates.
+                    // Paint keeps the retained ancestor transforms while
+                    // lifting partitions, so neutralize them at this boundary.
+                    self.view_space_overlay_roots.insert(popup_render);
+                    (Offset::ZERO, inverse)
+                } else {
+                    let stack_origin = self
+                        .element_bounds(stack)
+                        .map_or(Offset::ZERO, |bounds| bounds.origin);
+                    let offset = viewport.origin - stack_origin;
+                    (offset, CoreTransform::translation(offset))
+                };
                 let (layer, moved) = {
                     let node = self.render_live_mut(
                         popup_render,
@@ -282,8 +299,7 @@ impl WidgetTree {
                 if moved {
                     self.mark_render_semantics(popup_render, SemanticsDirty::Bounds);
                 }
-                self.compositor
-                    .update_transform(layer, CoreTransform::translation(local_offset));
+                self.compositor.update_transform(layer, layer_transform);
                 self.transient_placements.insert(
                     id,
                     RetainedTransientPlacement {
@@ -381,6 +397,19 @@ impl WidgetTree {
         Ok(())
     }
 
+    pub(super) fn transient_hit_parent_origin(
+        &self,
+        stack: ElementId,
+        popup: RenderObjectId,
+    ) -> Offset {
+        if self.view_space_overlay_roots.contains(&popup) {
+            Offset::ZERO
+        } else {
+            self.element_bounds(stack)
+                .map_or(Offset::ZERO, |bounds| bounds.origin)
+        }
+    }
+
     /// Applies a semantic dismissal cause to every visible transient whose
     /// policy accepts it. Callbacks are collected before invocation so closing
     /// a controller cannot mutate retained traversal in the middle of a scan.
@@ -458,9 +487,7 @@ impl WidgetTree {
             .filter(|entry| entry.1.layout_slot.is_some())
             .filter_map(|(id, _, _, stack, _, popup)| {
                 let render = self.render_id(*popup)?;
-                let origin = self
-                    .element_bounds(*stack)
-                    .map_or(Offset::ZERO, |bounds| bounds.origin);
+                let origin = self.transient_hit_parent_origin(*stack, render);
                 let hit = self
                     .collect_pointer_hit_render(render, point, origin, false, true)
                     .0

@@ -1471,6 +1471,8 @@ pub struct WidgetTree {
     /// Popup roots of visible overlays built from their layout info. They
     /// fill the view, so pointer walks only accept hits on their content.
     layout_overlay_popups: FastHashSet<RenderObjectId>,
+    /// Layout-built overlay roots with a world-aligned screen coordinate space.
+    view_space_overlay_roots: FastHashSet<RenderObjectId>,
     recursion_diagnostics: RecursionDiagnostics,
     tracked: TrackedElements,
     /// Runtime-only focus attachments; a standalone WidgetTree keeps its

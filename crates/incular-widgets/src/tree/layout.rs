@@ -679,6 +679,9 @@ impl WidgetTree {
         let mut cursor = Some(id);
         while let Some(current) = cursor {
             path.push(current);
+            if self.view_space_overlay_roots.contains(&current) {
+                break;
+            }
             cursor = self
                 .render_live(current, "world-transform ancestor must remain live")
                 .parent;
@@ -733,6 +736,21 @@ impl WidgetTree {
             .ok_or(TreeError::MissingElement(destination.element))?;
         if from == to {
             return Ok(Some(CoreTransform::IDENTITY));
+        }
+        if !self.view_space_overlay_roots.is_empty() {
+            let coordinate_root = |mut render| {
+                loop {
+                    if self.view_space_overlay_roots.contains(&render) {
+                        return Some(render);
+                    }
+                    render = self.renders.get(render.0)?.parent?;
+                }
+            };
+            if coordinate_root(from) != coordinate_root(to) {
+                return Ok(self.render_world_transform(to).inverse().map(|inverse| {
+                    inverse.then(self.render_world_transform(from))
+                }));
+            }
         }
 
         let depth = |mut render| {

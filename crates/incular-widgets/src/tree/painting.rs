@@ -292,9 +292,7 @@ impl WidgetTree {
             let Some(render) = self.render_id(popup) else {
                 continue;
             };
-            let origin = self
-                .element_bounds(stack)
-                .map_or(Offset::ZERO, |bounds| bounds.origin);
+            let origin = self.transient_hit_parent_origin(stack, render);
             if let Some(hit) = self.overlay_hit_target(&marker, render, point, origin) {
                 return Some(hit);
             }
@@ -343,9 +341,7 @@ impl WidgetTree {
             let Some(render) = self.render_id(popup) else {
                 continue;
             };
-            let origin = self
-                .element_bounds(stack)
-                .map_or(Offset::ZERO, |bounds| bounds.origin);
+            let origin = self.transient_hit_parent_origin(stack, render);
             if raw.is_none() {
                 let precise = marker.layout_slot.is_some();
                 let (result, hit) = self.collect_pointer_hit_render(
@@ -423,9 +419,7 @@ impl WidgetTree {
             let Some(render) = self.render_id(popup) else {
                 continue;
             };
-            let origin = self
-                .element_bounds(stack)
-                .map_or(Offset::ZERO, |bounds| bounds.origin);
+            let origin = self.transient_hit_parent_origin(stack, render);
             let (result, _) = self.collect_pointer_hit_render(
                 render,
                 point,
@@ -491,6 +485,9 @@ impl WidgetTree {
         let Some(node) = self.renders.get(id.0) else {
             return (RawHitResult::default(), None);
         };
+        if !precise && self.view_space_overlay_roots.contains(&id) {
+            return (RawHitResult::default(), None);
+        }
         if self.misses_outside_bounds(id, node, point, origin) {
             return (RawHitResult::default(), None);
         }
@@ -694,7 +691,10 @@ impl WidgetTree {
     ) -> (bool, Option<RenderObjectId>) {
         let mut child_hit = false;
         let mut target = None;
-        let mut children = children.iter().rev();
+        let mut children = children
+            .iter()
+            .rev()
+            .filter(|child| !self.view_space_overlay_roots.contains(*child));
         for child in children.by_ref() {
             let (child_result, child_target) =
                 self.collect_pointer_hit_render(*child, point, origin, want_target, precise);
@@ -1049,6 +1049,9 @@ impl WidgetTree {
         point: Offset,
         origin: Offset,
     ) -> Option<RenderObjectId> {
+        if self.view_space_overlay_roots.contains(&id) {
+            return None;
+        }
         let node = self.renders.get(id.0)?;
         if self.misses_outside_bounds(id, node, point, origin) {
             return None;
@@ -1165,7 +1168,10 @@ impl WidgetTree {
         let mut node = self.renders.get(id.0)?;
         let mut local_to_world =
             CoreTransform::translation(self.hit_origin(id, node, Offset::ZERO));
-        while let Some(parent) = node.parent {
+        let mut current = id;
+        while !self.view_space_overlay_roots.contains(&current) {
+            let Some(parent) = node.parent else { break };
+            current = parent;
             node = self.renders.get(parent.0)?;
             let origin = self.hit_origin(parent, node, Offset::ZERO);
             let to_parent = if hit_test_transforms_children(node.object.kind()) {

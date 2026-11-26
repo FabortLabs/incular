@@ -195,7 +195,9 @@ impl From<OverlayPortal> for Widget {
             // A transient never participates in the owning stack's intrinsic
             // size. The retained placement pass measures this positioned child
             // independently and assigns its final offset after root layout.
-            let popup: Widget = Positioned::new(popup).into();
+            // An all-null Positioned is non-positioned (like Flutter's
+            // StackParentData), so give the placeholder an explicit corner.
+            let popup: Widget = Positioned::new(popup).left(0.).top(0.).into();
             let mut children = Vec::with_capacity(3);
             if let Some(barrier) = value.barrier_child {
                 children.push(barrier);

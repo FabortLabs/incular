@@ -79,4 +79,41 @@ void main() {
     expect(before.top - after.top, 100);
     expect(menu.isOpen, isTrue);
   });
+  testWidgets('a transformed anchor does not transform its overlay controls', (
+    WidgetTester tester,
+  ) async {
+    final menu = MenuController();
+    final key = GlobalKey();
+    var taps = 0;
+    await tester.pumpWidget(
+      app(
+        Transform(
+          transform: Matrix4.translationValues(-50, 50, 0)
+            ..scaleByDouble(1.2, 1.2, 1.2, 1),
+          child: RawMenuAnchor(
+            controller: menu,
+            child: const SizedBox(width: 100, height: 20),
+            overlayBuilder: (_, info) => Positioned(
+              left: info.anchorRect.left + 80,
+              top: info.anchorRect.top + 65,
+              child: GestureDetector(
+                key: key,
+                behavior: HitTestBehavior.opaque,
+                onTap: () => taps++,
+                child: const SizedBox(width: 200, height: 40),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    menu.open();
+    await tester.pump();
+    expect(
+      tester.getRect(find.byKey(key)),
+      const Rect.fromLTWH(380, 405, 200, 40),
+    );
+    await tester.tapAt(const Offset(575, 410));
+    expect(taps, 1);
+  });
 }
