@@ -505,6 +505,7 @@ pub enum LayerKind {
     Leader {
         link: LayerLink,
         size: Size,
+        offset: Offset,
         publisher: PublisherIdentity,
     },
     Follower(FollowerLayer),
@@ -966,9 +967,16 @@ impl LayerTree {
     }
 
     pub fn create_leader(&mut self, link: LayerLink, size: Size) -> LayerId {
+        self.create_leader_at(link, size, Offset::ZERO)
+    }
+
+    /// Creates a leader whose children and linked followers inherit a
+    /// local translation in this layer's parent coordinate system.
+    pub fn create_leader_at(&mut self, link: LayerLink, size: Size, offset: Offset) -> LayerId {
         self.insert(LayerKind::Leader {
             link,
             size,
+            offset,
             publisher: PublisherIdentity::new(),
         })
     }
@@ -1604,6 +1612,7 @@ impl LayerTree {
             link: current_link,
             size: current_size,
             publisher,
+            ..
         } = &mut layer.kind
         else {
             return false;
@@ -1633,6 +1642,26 @@ impl LayerTree {
         *current = size;
         layer.generation = next_generation(&mut self.next_generation);
         self.scene_dirty = true;
+        true
+    }
+    /// Changes a leader's offset for painting, lookups and link publication.
+    pub fn update_leader_offset(&mut self, id: LayerId, offset: Offset) -> bool {
+        let Some(layer) = self.layers.get_mut(id.0) else {
+            return false;
+        };
+        let LayerKind::Leader {
+            offset: current, ..
+        } = &mut layer.kind
+        else {
+            return false;
+        };
+        if *current == offset {
+            return false;
+        }
+        *current = offset;
+        layer.generation = next_generation(&mut self.next_generation);
+        self.scene_dirty = true;
+        self.reset_cull_bounds(id);
         true
     }
     pub fn update_follower(&mut self, id: LayerId, follower: FollowerLayer) -> bool {
@@ -1975,6 +2004,7 @@ impl LayerTree {
         let (local, own_bounds) = match &layer.kind {
             LayerKind::Picture { bounds, .. } => (Transform::IDENTITY, Some(*bounds)),
             LayerKind::Transform { transform, .. } => (*transform, None),
+            LayerKind::Leader { offset, .. } => (Transform::translation(*offset), None),
             _ => (Transform::IDENTITY, None),
         };
         let mut bounds = own_bounds;
@@ -2329,11 +2359,12 @@ impl LayerTree {
                     tree.flatten_layer(child, world_transform, clip, out)
                 });
             }
-            LayerKind::Leader { .. } => {
+            LayerKind::Leader { offset, .. } => {
                 // Publication already ran in the dedicated pass above; the
                 // flatten walk only positions children here.
+                let next = leader_world_transform(world_transform, offset);
                 self.visit_children(id, false, |tree, child| {
-                    tree.flatten_layer(child, world_transform, clip, out)
+                    tree.flatten_layer(child, next, clip, out)
                 });
             }
             LayerKind::Follower(follower) => {
@@ -2438,6 +2469,7 @@ impl LayerTree {
             link,
             size,
             publisher,
+            ..
         } = &layer.kind
         {
             leaders.push(LeaderRecord {
@@ -2525,6 +2557,9 @@ impl LayerTree {
             match &layer.kind {
                 LayerKind::Transform { transform, .. } => {
                     world = world.then(*transform);
+                }
+                LayerKind::Leader { offset, .. } => {
+                    world = leader_world_transform(world, *offset);
                 }
                 LayerKind::Follower(follower) => {
                     let link = &follower.link;
@@ -2718,6 +2753,12 @@ impl LayerTree {
                     });
                 }
             }
+            LayerKind::Leader { offset, .. } => {
+                let next = leader_world_transform(world_transform, offset);
+                self.visit_children(id, true, |tree, child| {
+                    tree.collect_annotations(child, next, clip, parent_site)
+                });
+            }
             LayerKind::Picture { .. }
             | LayerKind::Opacity { .. }
             | LayerKind::Blur { .. }
@@ -2725,8 +2766,7 @@ impl LayerTree {
             | LayerKind::ColorFilter { .. }
             | LayerKind::Blend { .. }
             | LayerKind::ShaderMask { .. }
-            | LayerKind::BackdropFilter { .. }
-            | LayerKind::Leader { .. } => {
+            | LayerKind::BackdropFilter { .. } => {
                 self.visit_children(id, true, |tree, child| {
                     tree.collect_annotations(child, world_transform, clip, parent_site)
                 });
@@ -2826,11 +2866,15 @@ impl LayerTree {
                             ^ u64::from(size.width.to_bits()).rotate_left(9)
                             ^ u64::from(size.height.to_bits()).rotate_left(15);
                     }
-                    LayerKind::Leader { link, size, .. } => {
+                    LayerKind::Leader {
+                        link, size, offset, ..
+                    } => {
                         value = value.rotate_left(13)
                             ^ link.leader_generation()
                             ^ u64::from(size.width.to_bits()).rotate_left(9)
-                            ^ u64::from(size.height.to_bits()).rotate_left(15);
+                            ^ u64::from(size.height.to_bits()).rotate_left(15)
+                            ^ u64::from(offset.x.to_bits()).rotate_left(21)
+                            ^ u64::from(offset.y.to_bits()).rotate_left(28);
                     }
                     LayerKind::Follower(follower) => {
                         value = value.rotate_left(13)
@@ -2901,12 +2945,19 @@ impl LayerTree {
                 .reduce(union_rect),
             LayerKind::ShaderMask { .. }
             | LayerKind::BackdropFilter { .. }
-            | LayerKind::AnnotatedRegion { .. }
-            | LayerKind::Leader { .. } => layer
+            | LayerKind::AnnotatedRegion { .. } => layer
                 .children
                 .iter()
                 .filter_map(|child| self.subtree_bounds(*child, world_transform))
                 .reduce(union_rect),
+            LayerKind::Leader { offset, .. } => {
+                let next = leader_world_transform(world_transform, *offset);
+                layer
+                    .children
+                    .iter()
+                    .filter_map(|child| self.subtree_bounds(*child, next))
+                    .reduce(union_rect)
+            }
             LayerKind::Follower(follower) => {
                 let next = self.follower_transform(world_transform, follower)?;
                 layer
@@ -2948,8 +2999,10 @@ impl LayerTree {
             | LayerKind::Blend { .. }
             | LayerKind::ShaderMask { .. }
             | LayerKind::BackdropFilter { .. }
-            | LayerKind::AnnotatedRegion { .. }
-            | LayerKind::Leader { .. } => child_bounds(self, world_transform),
+            | LayerKind::AnnotatedRegion { .. } => child_bounds(self, world_transform),
+            LayerKind::Leader { offset, .. } => {
+                child_bounds(self, leader_world_transform(world_transform, *offset))
+            }
             LayerKind::Blur { blur } => child_bounds(self, world_transform)
                 .map(|bounds| blur_bounds(bounds, blur.sigma_x, blur.sigma_y)),
             LayerKind::DropShadow { shadow } => child_bounds(self, world_transform).map(|bounds| {
@@ -3080,8 +3133,10 @@ impl LayerTree {
                 "AnnotatedRegion(sized={sized}, size={size:?}, generation={})",
                 self.subtree_generation(id)
             ),
-            LayerKind::Leader { link, size, .. } => format!(
-                "CompositedTransformTarget(size={size:?}, linked={}, generation={})",
+            LayerKind::Leader {
+                link, size, offset, ..
+            } => format!(
+                "CompositedTransformTarget(size={size:?}, offset={offset:?}, linked={}, generation={})",
                 link.is_linked(),
                 self.subtree_generation(id)
             ),
@@ -3125,8 +3180,10 @@ impl LayerTree {
             LayerKind::ColorFilter { .. } | LayerKind::Blend { .. } => (world_transform, clip),
             LayerKind::ShaderMask { .. }
             | LayerKind::BackdropFilter { .. }
-            | LayerKind::AnnotatedRegion { .. }
-            | LayerKind::Leader { .. } => (world_transform, clip),
+            | LayerKind::AnnotatedRegion { .. } => (world_transform, clip),
+            LayerKind::Leader { offset, .. } => {
+                (leader_world_transform(world_transform, *offset), clip)
+            }
             LayerKind::Follower(follower) => (
                 self.follower_transform(world_transform, follower)
                     .unwrap_or(world_transform),
@@ -3181,6 +3238,14 @@ fn brush_generation(brush: &Brush) -> u64 {
                 ^ u64::from(gradient.start_angle.to_bits()).rotate_left(19)
                 ^ (gradient.tile_mode as u64).rotate_left(29)
         }
+    }
+}
+
+fn leader_world_transform(parent: Transform, offset: Offset) -> Transform {
+    if offset == Offset::ZERO {
+        parent
+    } else {
+        parent.then(Transform::translation(offset))
     }
 }
 

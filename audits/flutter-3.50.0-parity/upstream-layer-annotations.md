@@ -67,3 +67,18 @@ from its own returned position, not from any child's coordinates.
 The original test-only child uses a shifted box for its search while
 reporting the incoming point. The Rust fixture uses an ordinary
 child clip to reproduce that distinction without a custom layer.
+
+### Affine and leader placement
+
+The five remaining Flutter registrations (281, 319, 418, 549, 571)
+passed. Incular reproduces 281, 418, 549 and 571: a 2x/4x transform and
+translation return the exact inverse-mapped point; a leader offset moves
+its own child and reports the child's local point; and a transparent
+child does not change whether its annotated parent absorbs the
+background. Additional native tests verify that painting, the follower
+link, scene bounds and cached clip culling all consume a changed leader
+offset in the same coordinate system.
+
+The perspective case at 319 is reference-only. The retained layer
+transform here is affine; replacing it with a 2D approximation would
+not preserve the reference's projective inside/outside tests.

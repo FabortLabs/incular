@@ -1,6 +1,7 @@
-use incular_core::{Offset, Rect, Size, Transform};
+use incular_core::{Color, Offset, Rect, Size, Transform};
 use incular_rendering::{
-    Annotation, AnnotationEntry, AnnotationSearchOptions, FillRule, LayerId, LayerTree, Path, RRect,
+    Annotation, AnnotationEntry, AnnotationSearchOptions, Canvas, FillRule, FollowerLayer,
+    LayerAnchor, LayerId, LayerLink, LayerTree, Path, RRect,
 };
 use std::sync::Arc;
 
@@ -439,5 +440,165 @@ fn a_point_inside_the_unshifted_size_is_not_a_hit_when_the_annotation_is_shifted
     assert_eq!(
         offset_parent(Offset::ZERO).find_annotation_entries(point),
         [entry(2, point), entry(1000, point)]
+    );
+}
+
+#[test]
+fn nonuniform_transform_reports_the_inverse_mapped_annotation_point() {
+    let mut tree = LayerTree::new();
+    let root = tree.create_transform(Transform::IDENTITY);
+    let background = annotated(&mut tree, 1000, false);
+    let transform = Transform::from_coefficients([2., 0., 0., 4., 10., 20.]);
+    let shifted = tree.create_transform(transform);
+    let local_bounds = tree.create_clip_rect(rect(10., 10., 10., 10.));
+    let foreground = annotated(&mut tree, 1, true);
+    tree.set_children(root, vec![background, shifted]);
+    tree.set_children(shifted, vec![local_bounds]);
+    tree.set_children(local_bounds, vec![foreground]);
+    tree.set_root(root);
+    let _ = tree.flatten();
+    assert_eq!(
+        tree.find_annotation_entries(Offset::new(40., 80.)),
+        [entry(1, Offset::new(15., 15.))]
+    );
+    assert_eq!(
+        tree.find_annotation_entries(Offset::new(20., 40.)),
+        [entry(1000, Offset::new(20., 40.))]
+    );
+}
+
+#[test]
+fn leader_offset_translates_annotation_placement_and_returns_local_positions() {
+    let mut tree = LayerTree::new();
+    let root = tree.create_transform(Transform::IDENTITY);
+    let background = annotated(&mut tree, 1000, false);
+    let size = Size::new(10., 10.);
+    let link = LayerLink::new();
+    let leader = tree.create_leader_at(link.clone(), size, Offset::new(-10., 0.));
+    let foreground = tree.create_annotated_region(Annotation::new(1_i32), true, size);
+    assert!(tree.set_annotation_search_options(
+        foreground,
+        AnnotationSearchOptions {
+            opaque: true,
+            ..Default::default()
+        }
+    ));
+    tree.set_children(root, vec![background, leader]);
+    tree.set_children(leader, vec![foreground]);
+    tree.set_root(root);
+    let _ = tree.flatten();
+    assert_eq!(
+        tree.find_annotation_entries(Offset::new(-5., 5.)),
+        [entry(1, Offset::new(5., 5.))]
+    );
+    assert_eq!(
+        tree.find_annotation_entries(Offset::new(5., 5.)),
+        [entry(1000, Offset::new(5., 5.))]
+    );
+    assert_eq!(
+        link.leader_transform(),
+        Some(Transform::translation(Offset::new(-10., 0.)))
+    );
+}
+
+#[test]
+fn a_parent_contributes_opacity_only_for_its_own_matching_annotation() {
+    let point = Offset::new(5., 5.);
+    assert_eq!(
+        active_parent(false).find_annotation_entries(point),
+        [entry(2, point), entry(1, point), entry(1000, point)]
+    );
+    assert_eq!(
+        active_parent(true).find_annotation_entries(point),
+        [entry(2, point), entry(1, point)]
+    );
+}
+
+fn white_picture(tree: &mut LayerTree, size: Size) -> LayerId {
+    let mut canvas = Canvas::default();
+    let rect = Rect::from_origin_size(Offset::ZERO, size);
+    canvas.rect(rect, Color::WHITE);
+    tree.create_picture(canvas.finish(), rect)
+}
+
+#[test]
+fn leader_paint_follower_and_scene_bounds_agree_on_its_offset_before_and_after_update() {
+    let mut tree = LayerTree::new();
+    let root = tree.create_transform(Transform::scale_non_uniform(2., 3.));
+    let link = LayerLink::new();
+    let size = Size::new(4., 4.);
+    let leader = tree.create_leader_at(link.clone(), size, Offset::new(5., 6.));
+    let follower = tree.create_follower(FollowerLayer {
+        link: link.clone(),
+        show_when_unlinked: false,
+        offset: Offset::new(1., 2.),
+        target_anchor: LayerAnchor::TOP_LEFT,
+        follower_anchor: LayerAnchor::TOP_LEFT,
+        size,
+    });
+    let leader_picture = white_picture(&mut tree, size);
+    let follower_picture = white_picture(&mut tree, size);
+    tree.set_children(root, vec![follower, leader]);
+    tree.set_children(leader, vec![leader_picture]);
+    tree.set_children(follower, vec![follower_picture]);
+    tree.set_root(root);
+
+    for (offset, origin) in [
+        (Offset::new(5., 6.), Offset::new(10., 18.)),
+        (Offset::new(-3., 2.), Offset::new(-6., 6.)),
+    ] {
+        assert_eq!(tree.update_leader_offset(leader, offset), offset.x < 0.);
+        let _ = tree.flatten();
+        assert_eq!(
+            link.leader_transform()
+                .unwrap()
+                .transform_point(Offset::ZERO),
+            origin
+        );
+        let world = |layer| {
+            tree.flattened_pictures()
+                .iter()
+                .find(|picture| picture.layer == layer)
+                .unwrap()
+                .world_bounds
+        };
+        assert_eq!(
+            world(leader_picture),
+            Rect::from_origin_size(origin, Size::new(8., 12.))
+        );
+        assert_eq!(
+            world(follower_picture),
+            Rect::from_origin_size(origin + Offset::new(2., 6.), Size::new(8., 12.))
+        );
+        assert_eq!(
+            tree.scene_bounds(),
+            Some(Rect::from_origin_size(origin, Size::new(10., 18.)))
+        );
+    }
+}
+
+#[test]
+fn moving_a_leader_invalidates_cached_clip_culling() {
+    let mut tree = LayerTree::new();
+    let root = tree.create_clip_rect(rect(10., 10., 5., 5.));
+    let size = Size::new(2., 2.);
+    let kid = white_picture(&mut tree, size);
+    let leader = tree.create_leader_at(LayerLink::new(), size, Offset::new(12., 12.));
+    tree.set_children(root, vec![leader]);
+    tree.set_children(leader, vec![kid]);
+    tree.set_root(root);
+    let _ = tree.flatten();
+    assert_eq!(
+        tree.flattened_pictures()[0].world_bounds,
+        rect(12., 12., 2., 2.)
+    );
+    assert!(tree.update_leader_offset(leader, Offset::new(30., 30.)));
+    let _ = tree.flatten();
+    assert!(tree.flattened_pictures().is_empty());
+    assert!(tree.update_leader_offset(leader, Offset::new(11., 11.)));
+    let _ = tree.flatten();
+    assert_eq!(
+        tree.flattened_pictures()[0].world_bounds,
+        rect(11., 11., 2., 2.)
     );
 }
