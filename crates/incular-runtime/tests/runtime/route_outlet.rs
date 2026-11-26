@@ -5728,3 +5728,64 @@ fn back_buttons_do_not_follow_back_gestures() {
             .handle_back_gesture(BackGestureEvent::Start(swipe(0.)))
     );
 }
+
+#[test]
+fn static_barrier_default_pops_only_the_nearest_outlet() {
+    use incular_widgets::ModalBarrier as ModalBarrierWidget;
+
+    let outer = Navigator::new();
+    let inner = Navigator::new();
+    let mut runtime = Runtime::new(SizedBox::shrink().into()).unwrap();
+    let parent = runtime.spawner().scope();
+    let outer_outlet = Rc::new(RefCell::new(RouteOutlet::new(&outer, &parent)));
+    let inner_outlet = Rc::new(RefCell::new(RouteOutlet::new(&inner, &parent)));
+    outer.push(Route::new("outer base", Widget::box_(Size::ZERO, BLUE)));
+    outer.push(Route::new(
+        "outer current",
+        SizedBox::from_dimensions(
+            Some(200.),
+            Some(200.),
+            Some(RouteOutlet::nested_widget(&inner_outlet)),
+        ),
+    ));
+    inner.push(Route::new("inner base", ModalBarrierWidget::new()));
+    inner.push(Route::new("inner current", ModalBarrierWidget::new()));
+
+    runtime
+        .register_builder(runtime.tree().root().unwrap(), {
+            let outer_outlet = outer_outlet.clone();
+            move || {
+                SizedBox::from_dimensions(
+                    Some(200.),
+                    Some(200.),
+                    Some(outer_outlet.borrow().widget()),
+                )
+                .into()
+            }
+        })
+        .unwrap();
+    frame(&mut runtime);
+    RouteOutlet::attach(&outer_outlet, &mut runtime).unwrap();
+    RouteOutlet::attach_nested(&outer_outlet, &inner_outlet).unwrap();
+    present_outer_tree(&mut runtime, &outer_outlet);
+
+    let tap = |runtime: &mut Runtime| {
+        for phase in [PointerPhase::Down, PointerPhase::Up] {
+            let _ = runtime.handle_input(InputEvent::Pointer {
+                phase,
+                position: Offset::new(100., 100.),
+            });
+        }
+    };
+    tap(&mut runtime);
+    present_outer_tree(&mut runtime, &outer_outlet);
+    assert_eq!(inner.current().unwrap().name, "inner base");
+    assert_eq!(outer.current().unwrap().name, "outer current");
+
+    // The only route of the nearest navigator must not pop or fall through
+    // to the outer navigator, even when the outer stack could have popped.
+    tap(&mut runtime);
+    present_outer_tree(&mut runtime, &outer_outlet);
+    assert_eq!(inner.routes().len(), 1);
+    assert_eq!(outer.routes().len(), 2);
+}

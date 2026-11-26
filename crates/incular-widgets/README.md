@@ -353,6 +353,15 @@ Use `dispatch_back_gesture_checked` or `dispatch_pop_route_checked` to
 collect the failed callback stage and its message instead of logging them.
 Automatic nested navigators keep their existing ordinary-back priority.
 
+## Modal barriers
+
+Use `ModalBarrier::new()` for a transparent, input-blocking veil, optionally
+with a color. Use `AnimatedModalBarrier::with_color` for a retained color
+animation. A stable tap invokes the explicit `on_dismiss` handler or asks the
+nearest mounted route outlet to pop. Both barriers can react to an
+`EdgeInsets` notifier through `clip_details_notifier`: the accessibility
+bounds change without changing layout, paint, or the pointer region.
+
 ## Retained layout closure
 
 `LimitedBox` supplies maxima only when its incoming axis is unbounded, never

@@ -94,8 +94,16 @@ kinds `RouteInformationChanged` / `DelegateChanged` / `Restored` /
 observer vocabulary.
 
 [`BackButtonDispatcher`](/docs/api/navigation/navigator) reports `handled`, `depth`, `blocked`, `pop`.
-[`AnimatedModalBarrier`](/docs/api/navigation/navigator) takes color animation, `dismissible`, and semantics
-label.
+Use `incular::widgets::ModalBarrier` for a static veil, or
+`AnimatedModalBarrier` for a color animation. The prelude calls the static
+widget `ModalBarrierWidget` to distinguish it from the route configuration.
+The static veil paints no fill unless you set a color. A stable tap invokes
+`on_dismiss` if provided; otherwise the nearest mounted route outlet attempts a
+guarded pop. Setting `dismissible(false)` still blocks input behind the veil.
+
+Both barriers accept a `clip_details_notifier` containing `EdgeInsets`.
+Changing the notifier updates only the exposed accessibility bounds, not the
+pointer region or the visual veil.
 
 Related: [`Overlay`](/docs/api/navigation/overlay),
 [`Restoration`](/docs/api/application/restoration).

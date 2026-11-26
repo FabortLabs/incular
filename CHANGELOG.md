@@ -7,6 +7,11 @@ a version and date when publishing.
 
 ### Added
 
+- `widgets::ModalBarrier` provides a transparent-by-default static veil, shared
+  gesture handling with `AnimatedModalBarrier`, and guarded dismissal through
+  the nearest route outlet. Both barrier types accept a notifier for
+  accessibility-only bounds insets.
+
 - Fonts can be registered under package-qualified family aliases. Existing text
   layouts refresh when the named font becomes available.
 

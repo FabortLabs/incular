@@ -12,6 +12,7 @@ use incular_core::{Color, Size};
 use incular_text::TextStyle;
 
 pub use crate::hero::{HeroFlights, RouteHeroes};
+pub use crate::navigation::ModalBarrierDismissScope;
 pub use crate::recursion::FramePhase;
 
 /// Callback-bearing compilation of Flutter's semantic platform-menu model.

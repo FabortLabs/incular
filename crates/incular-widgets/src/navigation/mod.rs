@@ -15,7 +15,7 @@ mod restoration;
 pub use back_dispatch::{
     BackButtonDispatcher, BackDispatchReport, BackHandlerResult, BackRegistration, PopAttempt,
 };
-pub use barrier::{AnimatedModalBarrier, OptionalColorAnimation};
+pub use barrier::{AnimatedModalBarrier, ModalBarrier, ModalBarrierDismissScope, OptionalColorAnimation};
 pub use page_storage::{
     PageStorage, PageStorageBucket, PageStorageIdentifier, PageStorageKey,
     current_page_storage_bucket,

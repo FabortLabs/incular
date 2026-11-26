@@ -144,7 +144,37 @@ node ID, identical paint commands, and zero rebuild, layout or repaint
 work on notifier changes. It also verifies detachment when the notifier
 is replaced, excluded or unmounted.
 
-The behavioral geometry is paired, but :968 stays partial until the
-static ModalBarrier API is paired. Incular does not emulate Flutter's
-platform gating; the behavior applies whenever Incular exposes the
-barrier dismissal node.
+Incular does not emulate Flutter's platform gating; the geometry
+applies whenever Incular exposes the barrier dismissal node.
+
+### Non-animated ModalBarrier
+
+The public `incular::widgets::ModalBarrier` is the static veil; the
+main prelude exports it as `ModalBarrierWidget` to preserve the existing
+navigation route configuration named `ModalBarrier`. Static and animated
+descriptors share input and semantics; the static one is transparent by
+default and has no animation ticker. A supplied color produces one
+edge-to-edge solid fill without a border.
+
+Pinned :55/:67/:91/:105/:132 and the native static veils cover rear and
+foreground taps and hover plus a 20 px translucent foreground drag.
+Pinned :191/:222/:258/:288/:334 and the mounted outlet agree on press
+versus release, drag competition, and honoring both guard results.
+The tested native guards decide synchronously; the pinned WillPopScope
+callbacks resolve immediately. No fixture handler stands in for the
+native static default. A nested-outlet test proves it addresses only
+the nearest outlet and cannot pop that outlet's sole route or fall
+through to an enclosing outlet. Pinned :380/:429 pair with explicit
+callbacks, which bypass the default pop.
+
+Pinned :456/:499 pair for a locked unlabeled barrier and for zero-area
+layout. :1009 now exercises the static public type over a Click region.
+:968 pairs with its exact static type, inset rectangle, label and
+framework tap/dismiss actions. The native authored probe continues to
+verify semantics-only invalidation. :466 remains partial: both explicit
+actions, typed direction and full-screen bounds match, but native
+platform gating and a separate AccessKit Dismiss projection do not.
+
+Pinned :159 and :409 passed upstream but remain open in Incular: the
+former requires forwarding the native system-alert request and the
+latter observes Flutter's gesture error-reporting context.

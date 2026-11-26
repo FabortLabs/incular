@@ -9,8 +9,8 @@ use incular_core::{
 use incular_navigation::{Navigator, PageRouteBuilder, PopDecision, Route};
 use incular_runtime::{RouteOutlet, Runtime};
 use incular_widgets::{
-    Align, Alignment, AnimatedModalBarrier, GestureDetector, HitTestBehavior, Positioned, SizedBox,
-    Stack, Widget,
+    Align, Alignment, AnimatedModalBarrier, GestureDetector, HitTestBehavior, ModalBarrier,
+    Positioned, SizedBox, Stack, Widget,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -75,7 +75,24 @@ fn send_pointer(
     );
 }
 
-fn check_stack_tap(target_in_front: bool) {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum BarrierKind {
+    Static,
+    Animated,
+}
+
+impl BarrierKind {
+    fn plain(self, dismissible: bool) -> Widget {
+        match self {
+            Self::Static => ModalBarrier::new().dismissible(dismissible).into(),
+            Self::Animated => AnimatedModalBarrier::with_flat_color(RED)
+                .dismissible(dismissible)
+                .into(),
+        }
+    }
+}
+
+fn check_stack_tap(target_in_front: bool, kind: BarrierKind) {
     let taps = Rc::new(Cell::new(0));
     let target = Widget::from(
         GestureDetector::new(Widget::box_(Size::new(10., 10.), Color::WHITE)).on_tap({
@@ -84,10 +101,7 @@ fn check_stack_tap(target_in_front: bool) {
         }),
     )
     .with_key("tap target");
-    let barrier = Widget::from(Positioned::fill(
-        AnimatedModalBarrier::with_flat_color(RED).dismissible(false),
-    ))
-    .with_key("barrier");
+    let barrier = Widget::from(Positioned::fill(kind.plain(false))).with_key("barrier");
     let children = if target_in_front {
         [barrier, target]
     } else {
@@ -122,13 +136,17 @@ fn check_stack_tap(target_in_front: bool) {
 /// modal_barrier_test.dart:510 "AnimatedModalBarrier prevents interactions with widgets behind it".
 #[test]
 fn a_non_dismissible_barrier_blocks_taps_behind_it() {
-    check_stack_tap(false);
+    for kind in [BarrierKind::Static, BarrierKind::Animated] {
+        check_stack_tap(false, kind);
+    }
 }
 
 /// modal_barrier_test.dart:556 "AnimatedModalBarrier does not prevent interactions with widgets in front of it".
 #[test]
 fn a_non_dismissible_barrier_allows_taps_in_front_of_it() {
-    check_stack_tap(true);
+    for kind in [BarrierKind::Static, BarrierKind::Animated] {
+        check_stack_tap(true, kind);
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -144,6 +162,10 @@ fn check_pop(button: u32) {
 }
 
 fn check_barrier(button: u32, scenario: ModalScenario) {
+    check_barrier_kind(button, scenario, BarrierKind::Animated);
+}
+
+fn check_barrier_kind(button: u32, scenario: ModalScenario, kind: BarrierKind) {
     let navigator = Rc::new(Navigator::new());
     let guard_calls = Rc::new(Cell::new(0));
     let dismissals = Rc::new(Cell::new(0));
@@ -188,20 +210,34 @@ fn check_barrier(button: u32, scenario: ModalScenario) {
             let drags = drags.clone();
             move || {
                 let navigator = navigator.upgrade().expect("live navigation host");
-                let barrier =
-                    Widget::from(AnimatedModalBarrier::with_flat_color(RED).on_dismiss({
-                        let navigator = Rc::downgrade(&navigator);
+                let barrier: Widget = if kind == BarrierKind::Static {
+                    let mut barrier = ModalBarrier::new();
+                    if scenario == ModalScenario::Override {
                         let dismissals = dismissals.clone();
-                        move || {
+                        barrier = barrier.on_dismiss(move || {
                             dismissals.set(dismissals.get() + 1);
-                            if scenario != ModalScenario::Override
-                                && let Some(navigator) = navigator.upgrade()
-                            {
-                                let _ = navigator.maybe_pop();
+                        });
+                    }
+                    // No handler in the other static cases: use the
+                    // production nearest-outlet default.
+                    barrier.into()
+                } else {
+                    AnimatedModalBarrier::with_flat_color(RED)
+                        .on_dismiss({
+                            let navigator = Rc::downgrade(&navigator);
+                            let dismissals = dismissals.clone();
+                            move || {
+                                dismissals.set(dismissals.get() + 1);
+                                if scenario != ModalScenario::Override
+                                    && let Some(navigator) = navigator.upgrade()
+                                {
+                                    let _ = navigator.maybe_pop();
+                                }
                             }
-                        }
-                    }))
-                    .with_key("opened modal");
+                        })
+                        .into()
+                };
+                let barrier = barrier.with_key("opened modal");
                 let panel = if scenario == ModalScenario::WithDrag {
                     Widget::from(Stack::new([
                         barrier,
@@ -349,7 +385,10 @@ fn check_barrier(button: u32, scenario: ModalScenario) {
         ),
         "release only pops a permitted route with the default dismiss handler"
     );
-    assert_eq!(dismissals.get(), 1);
+    assert_eq!(
+        dismissals.get(),
+        usize::from(kind == BarrierKind::Animated || scenario == ModalScenario::Override)
+    );
     assert_eq!(
         guard_calls.get(),
         usize::from(matches!(scenario, ModalScenario::Guarded(_)))
@@ -402,30 +441,61 @@ fn an_override_receives_dismissal_instead_of_popping_the_route() {
 }
 
 #[test]
+fn static_barrier_primary_and_secondary_release_pop_the_nearest_outlet() {
+    for button in [PRIMARY_POINTER_BUTTON, SECONDARY_POINTER_BUTTON] {
+        check_barrier_kind(button, ModalScenario::Ordinary, BarrierKind::Static);
+    }
+}
+
+#[test]
+fn static_barrier_uses_the_shared_drag_arena_and_pop_guard() {
+    for scenario in [
+        ModalScenario::WithDrag,
+        ModalScenario::Guarded(false),
+        ModalScenario::Guarded(true),
+        ModalScenario::Override,
+    ] {
+        check_barrier_kind(PRIMARY_POINTER_BUTTON, scenario, BarrierKind::Static);
+    }
+}
+
+#[test]
 fn locked_modal_without_a_label_advertises_no_semantic_node() {
-    let mut runtime = Runtime::new(
-        AnimatedModalBarrier::with_flat_color(RED)
-            .dismissible(false)
-            .into(),
-    )
-    .unwrap();
-    runtime.run_frame(bounds()).unwrap();
-    assert!(runtime.tree().semantics().iter().next().is_none());
+    for kind in [BarrierKind::Static, BarrierKind::Animated] {
+        let mut runtime = Runtime::new(kind.plain(false)).unwrap();
+        runtime.run_frame(bounds()).unwrap();
+        assert_eq!(runtime.tree().semantics().iter().count(), 0, "{kind:?}");
+    }
 }
 
 #[test]
 fn labeled_barrier_exposes_and_dispatches_both_activation_and_dismissal() {
+    for kind in [BarrierKind::Static, BarrierKind::Animated] {
+        check_labeled_barrier_actions(kind);
+    }
+}
+
+fn check_labeled_barrier_actions(kind: BarrierKind) {
     use incular_core::Rect;
     use incular_semantics::{SemanticAction, SemanticActionKind, SemanticRole};
+    use incular_widgets::{Directionality, TextDirection};
     let events = Rc::new(Cell::new(0));
     let build = |dismissible| {
         let events = events.clone();
-        Widget::from(
-            AnimatedModalBarrier::with_flat_color(RED)
+        let callback = move || events.set(events.get() + 1);
+        let barrier: Widget = match kind {
+            BarrierKind::Static => ModalBarrier::new()
                 .semantics_label("Dismiss")
                 .dismissible(dismissible)
-                .on_dismiss(move || events.set(events.get() + 1)),
-        )
+                .on_dismiss(callback)
+                .into(),
+            BarrierKind::Animated => AnimatedModalBarrier::with_flat_color(RED)
+                .semantics_label("Dismiss")
+                .dismissible(dismissible)
+                .on_dismiss(callback)
+                .into(),
+        };
+        Directionality::new(TextDirection::Ltr, barrier).into()
     };
     let mut runtime = Runtime::new(build(true)).unwrap();
     runtime.run_frame(bounds()).unwrap();
@@ -440,6 +510,7 @@ fn labeled_barrier_exposes_and_dispatches_both_activation_and_dismissal() {
     let id = find_label(&runtime);
     let data = runtime.tree().semantics().node(id).unwrap();
     assert_eq!(data.role, SemanticRole::Button);
+    assert_eq!(data.state.text_direction, Some(TextDirection::Ltr));
     assert_eq!(
         data.bounds,
         Rect::from_origin_size(Offset::ZERO, Size::new(800., 600.))
@@ -471,8 +542,14 @@ fn labeled_barrier_exposes_and_dispatches_both_activation_and_dismissal() {
 }
 
 #[test]
-fn an_animated_barrier_can_lay_out_at_zero_area() {
-    let child = Widget::from(AnimatedModalBarrier::with_flat_color(RED)).with_key("zero-barrier");
+fn static_and_animated_barriers_can_lay_out_at_zero_area() {
+    for kind in [BarrierKind::Static, BarrierKind::Animated] {
+        check_barrier_at_zero_area(kind);
+    }
+}
+
+fn check_barrier_at_zero_area(kind: BarrierKind) {
+    let child = kind.plain(true).with_key("zero-barrier");
     let scene =
         incular_widgets::Center::new(SizedBox::from_dimensions(Some(0.), Some(0.), Some(child)));
     let mut runtime = Runtime::new(scene.into()).unwrap();
@@ -489,6 +566,12 @@ fn an_animated_barrier_can_lay_out_at_zero_area() {
 
 #[test]
 fn a_translucent_drag_in_front_of_a_locked_barrier_still_reaches_its_recognizer() {
+    for kind in [BarrierKind::Static, BarrierKind::Animated] {
+        check_translucent_drag_in_front_of_barrier(kind);
+    }
+}
+
+fn check_translucent_drag_in_front_of_barrier(kind: BarrierKind) {
     let moves = Rc::new(Cell::new(0));
     let target = GestureDetector::new(incular_widgets::Center::new(Widget::box_(
         Size::new(50., 30.),
@@ -499,10 +582,7 @@ fn a_translucent_drag_in_front_of_a_locked_barrier_still_reaches_its_recognizer(
         let moves = moves.clone();
         move |_| moves.set(moves.get() + 1)
     });
-    let scene = Stack::new([
-        Widget::from(AnimatedModalBarrier::with_flat_color(RED).dismissible(false)),
-        Widget::from(target),
-    ]);
+    let scene = Stack::new([kind.plain(false), Widget::from(target)]);
     let mut runtime = Runtime::new(scene.into()).unwrap();
     let now = Instant::now();
     runtime.run_frame_at(bounds(), now).unwrap();
@@ -542,6 +622,12 @@ fn mouse(runtime: &mut Runtime, at: Instant, point: Offset, phase: PointerPhase)
 
 #[test]
 fn the_locked_barrier_blocks_hover_behind_it_but_not_in_front() {
+    for kind in [BarrierKind::Static, BarrierKind::Animated] {
+        check_locked_barrier_hover(kind);
+    }
+}
+
+fn check_locked_barrier_hover(kind: BarrierKind) {
     use incular_widgets::MouseRegion;
     for front in [false, true] {
         let log = Rc::new(RefCell::new(Vec::new()));
@@ -555,7 +641,7 @@ fn the_locked_barrier_blocks_hover_behind_it_but_not_in_front() {
                 move |_| log.borrow_mut().push("exit")
             });
         let subject = Widget::from(Positioned::new(region).left(0.).top(0.));
-        let locked = Widget::from(AnimatedModalBarrier::with_flat_color(RED).dismissible(false));
+        let locked = kind.plain(false);
         let stack = Stack::new(if front {
             [locked, subject]
         } else {
@@ -617,7 +703,7 @@ fn a_modal_barrier_keeps_the_basic_cursor_over_a_click_cursor() {
     for dismissible in [false, true] {
         let underneath = MouseRegion::new(Widget::box_(Size::new(800., 600.), Color::WHITE))
             .cursor(MouseCursor::Click);
-        let barrier = AnimatedModalBarrier::with_flat_color(RED).dismissible(dismissible);
+        let barrier = ModalBarrier::new().dismissible(dismissible);
         let scene = Stack::new([Widget::from(underneath), Widget::from(barrier)]);
         let mut runtime = Runtime::new(scene.into()).unwrap();
         let now = Instant::now();
@@ -704,7 +790,7 @@ fn reactive_barrier_insets_clip_only_the_semantic_rectangle() {
     let build = |source: ValueNotifier<EdgeInsets>| {
         let calls = calls.clone();
         Stack::new([Widget::from(
-            AnimatedModalBarrier::with_flat_color(RED)
+            ModalBarrier::new()
                 .semantics_label("Dismiss")
                 .clip_details_notifier(source)
                 .on_dismiss(move || calls.set(calls.get() + 1)),
@@ -795,7 +881,7 @@ fn reactive_barrier_insets_clip_only_the_semantic_rectangle() {
     );
 
     let excluded: Widget = Stack::new([Widget::from(
-        AnimatedModalBarrier::with_flat_color(RED)
+        ModalBarrier::new()
             .semantics_label("Dismiss")
             .clip_details_notifier(replacement.clone())
             .barrier_semantics_dismissible(false),
@@ -835,4 +921,46 @@ fn reactive_barrier_insets_clip_only_the_semantic_rectangle() {
         !runtime.frame_requested(),
         "unmounted barriers are not tracked"
     );
+}
+
+#[test]
+fn static_barrier_default_is_unpainted_and_explicit_color_paints_the_full_veil() {
+    use incular_core::Rect;
+    use incular_rendering::{Brush, PaintCommand};
+    let mut runtime = Runtime::new(ModalBarrier::new().into()).unwrap();
+    let (no_fill, stats) = runtime.run_frame(bounds()).unwrap();
+    assert!(!no_fill.commands().iter().any(|command| {
+        matches!(
+            command,
+            PaintCommand::Rect { .. } | PaintCommand::RRect { .. }
+        )
+    }));
+    assert_eq!(stats.active_animations, 0);
+
+    let root = runtime.tree().root().unwrap();
+    runtime
+        .schedule_update(root, ModalBarrier::new().color(RED).into())
+        .unwrap();
+    let (colored, stats) = runtime.run_frame(bounds()).unwrap();
+    let expected = Rect::from_origin_size(Offset::ZERO, Size::new(800., 600.));
+    assert!(
+        colored.commands().iter().any(|command| match command {
+            PaintCommand::Rect { rect, color } => *rect == expected && *color == RED,
+            PaintCommand::RRect {
+                rrect,
+                brush: Brush::Solid(color),
+            } => {
+                rrect.rect == expected && rrect.radii == Default::default() && *color == RED
+            }
+            _ => false,
+        }),
+        "unexpected veil paint: {colored:?}"
+    );
+    assert!(
+        !colored
+            .commands()
+            .iter()
+            .any(|command| matches!(command, PaintCommand::Border { .. }))
+    );
+    assert_eq!(stats.active_animations, 0);
 }

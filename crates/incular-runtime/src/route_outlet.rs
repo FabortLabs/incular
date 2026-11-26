@@ -56,9 +56,9 @@ use incular_navigation::{
 };
 use incular_rendering::DisplayList;
 use incular_widgets::{
-    AnimatedModalBarrier, DoubleAnimation, ExcludeFocusTraversal, IgnorePointer, LayoutBuilder,
-    SizedBox, Stack, Visibility, Widget, always_dismissed,
-    internal::{ElementId, Key, TapRegionRouteCurrent, TreeError, WidgetTree},
+    DoubleAnimation, ExcludeFocusTraversal, IgnorePointer, LayoutBuilder,
+    ModalBarrier as ModalBarrierWidget, SizedBox, Stack, Visibility, Widget, always_dismissed,
+    internal::{ElementId, Key, ModalBarrierDismissScope, TapRegionRouteCurrent, TreeError, WidgetTree},
 };
 
 use super::{
@@ -353,6 +353,7 @@ pub enum OutletAttachError {
 /// `mount` (attached element — cleared when it vanishes).
 pub struct RouteOutlet {
     navigator: Navigator,
+    barrier_dismiss_scope: Rc<ModalBarrierDismissScope>,
     focus: RouteFocusState,
     bindings: HashMap<RouteId, RouteTaskBinding>,
     tags: Rc<RefCell<HashMap<RouteId, Key>>>,
@@ -481,6 +482,16 @@ impl RouteOutlet {
         let namespace = OUTLET_SEQUENCE.next();
         Self {
             navigator: navigator.clone(),
+            barrier_dismiss_scope: ModalBarrierDismissScope::new({
+                let navigator = navigator.clone();
+                move || {
+                    // Flutter's initial route bubbles instead of dismissing
+                    // the only route in this navigator.
+                    if navigator.can_pop() {
+                        let _ = navigator.maybe_pop();
+                    }
+                }
+            }),
             focus,
             bindings: HashMap::new(),
             tags,
@@ -999,10 +1010,10 @@ impl RouteOutlet {
             children.push(self.exiting_widget(&leaving.route));
         }
         // The outlet root carries the mount tag so `attach` locates it;
-        // route tags live on the per-route wrappers inside. The root is
-        // always a stack — even empty — so mounting and unmounting the
-        // last route never flips the element kind.
-        let root: Widget = Stack::new(children).into();
+        // route tags live on the per-route wrappers inside. A stable scope
+        // wraps the stack even when empty, so the nearest
+        // nested outlet owns the default dismissal of barriers within it.
+        let root = self.barrier_dismiss_scope.wrap(Stack::new(children).into());
         (root.with_key(self.root_key.clone()), attempt)
     }
 
@@ -1251,7 +1262,8 @@ impl RouteOutlet {
             // blocks its own content but cannot cover an unknown area.
             let size = constraints.biggest();
             let navigator = navigator.clone();
-            let mut veil = AnimatedModalBarrier::with_flat_color(barrier.color)
+            let mut veil = ModalBarrierWidget::new()
+                .color(barrier.color)
                 .dismissible(barrier.dismissible);
             if let Some(label) = barrier.label.clone() {
                 veil = veil.semantics_label(label);

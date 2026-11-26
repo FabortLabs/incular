@@ -6,7 +6,7 @@ use crate::{
 use incular_animation::{AnimationController, Tween, TweenValue};
 use incular_config::EdgeInsets;
 use incular_core::ValueNotifier;
-use incular_semantics::{SemanticActionKind, SemanticRole};
+use incular_semantics::{SemanticActionKind, SemanticRole, SemanticState};
 use std::rc::Rc;
 
 /// A barrier color animation whose sampled value may be absent, as Flutter's
@@ -52,15 +52,29 @@ impl OptionalColorAnimation {
     }
 }
 
-/// A retained, animated modal barrier.
-///
-/// The barrier always occupies the constraints supplied by its parent,
-/// absorbs background pointer input, blocks preceding semantics, and invokes
-/// its dismissal handler from either a pointer tap or an accessibility
-/// activate action when dismissal is enabled.
+/// The nearest route outlet's default dismissal handler. Published by
+/// the runtime without giving Widgets a dependency on the navigator.
+#[doc(hidden)]
+pub struct ModalBarrierDismissScope(Rc<dyn Fn()>);
+
+impl ModalBarrierDismissScope {
+    #[must_use]
+    pub fn new(dismiss: impl Fn() + 'static) -> Rc<Self> {
+        Rc::new(Self(Rc::new(dismiss)))
+    }
+
+    #[must_use]
+    pub fn wrap(self: &Rc<Self>, child: Widget) -> Widget {
+        Widget::shared_environment_scope(self.clone(), child)
+    }
+}
+
+/// A non-animated modal veil. By default it covers its constraints, paints
+/// no fill, and a stable tap asks the nearest mounted route outlet to pop.
+/// It always intercepts background input and blocks preceding semantics.
 #[derive(Clone)]
-pub struct AnimatedModalBarrier {
-    color: OptionalColorAnimation,
+pub struct ModalBarrier {
+    color: Option<Color>,
     dismissible: bool,
     semantics_label: Option<String>,
     barrier_semantics_dismissible: bool,
@@ -69,6 +83,44 @@ pub struct AnimatedModalBarrier {
     on_dismiss: Option<Rc<dyn Fn()>>,
     dismissal_handler: Option<Rc<dyn Fn() -> bool>>,
     child: Option<Widget>,
+}
+
+impl Default for ModalBarrier {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ModalBarrier {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            color: None,
+            dismissible: true,
+            semantics_label: None,
+            barrier_semantics_dismissible: true,
+            semantics_on_tap_hint: None,
+            clip_details_notifier: None,
+            on_dismiss: None,
+            dismissal_handler: None,
+            child: None,
+        }
+    }
+
+    /// A missing color intercepts hits without painting a fill.
+    #[must_use]
+    pub fn color(mut self, color: impl Into<Option<Color>>) -> Self {
+        self.color = color.into();
+        self
+    }
+}
+
+/// A modal barrier with a retained color animation. All hit-testing and
+/// accessibility settings are shared with the non-animated ModalBarrier.
+#[derive(Clone)]
+pub struct AnimatedModalBarrier {
+    color: OptionalColorAnimation,
+    barrier: ModalBarrier,
 }
 
 impl Default for AnimatedModalBarrier {
@@ -111,14 +163,7 @@ impl AnimatedModalBarrier {
     pub fn with_optional_color(color: OptionalColorAnimation) -> Self {
         Self {
             color,
-            dismissible: true,
-            semantics_label: None,
-            barrier_semantics_dismissible: true,
-            semantics_on_tap_hint: None,
-            clip_details_notifier: None,
-            on_dismiss: None,
-            dismissal_handler: None,
-            child: None,
+            barrier: ModalBarrier::new(),
         }
     }
 
@@ -162,6 +207,74 @@ impl AnimatedModalBarrier {
         self.color.clone()
     }
 
+    /// Enables or disables pointer and semantic dismissal.
+    #[must_use]
+    pub fn dismissible(mut self, dismissible: bool) -> Self {
+        self.barrier = self.barrier.dismissible(dismissible);
+        self
+    }
+
+    /// Sets the callback invoked by pointer and semantic dismissal.
+    #[must_use]
+    pub fn on_dismiss(mut self, callback: impl Fn() + 'static) -> Self {
+        self.barrier = self.barrier.on_dismiss(callback);
+        self
+    }
+
+    /// Installs a boolean dismissal bridge.  This is the integration seam for
+    /// `incular-navigation::Overlay::dismiss_top` or a route pop operation.
+    #[must_use]
+    pub fn dismissal_handler(mut self, callback: impl Fn() -> bool + 'static) -> Self {
+        self.barrier = self.barrier.dismissal_handler(callback);
+        self
+    }
+
+    /// Sets the accessibility label exposed for the modal barrier.
+    #[must_use]
+    pub fn semantics_label(mut self, label: impl Into<String>) -> Self {
+        self.barrier = self.barrier.semantics_label(label);
+        self
+    }
+
+    /// Controls whether a labeled barrier exposes an accessibility dismiss
+    /// action.  Pointer dismissal remains governed by `dismissible`.
+    #[must_use]
+    pub fn barrier_semantics_dismissible(mut self, value: bool) -> Self {
+        self.barrier = self.barrier.barrier_semantics_dismissible(value);
+        self
+    }
+
+    /// Supplies the platform-specific accessibility tap hint.
+    #[must_use]
+    pub fn semantics_on_tap_hint(mut self, hint: impl Into<String>) -> Self {
+        self.barrier = self.barrier.semantics_on_tap_hint(hint);
+        self
+    }
+
+    /// Insets the barrier's accessibility bounds only. Updating the notifier
+    /// does not change the veil's size, paint, or pointer hit region.
+    #[must_use]
+    pub fn clip_details_notifier(mut self, notifier: ValueNotifier<EdgeInsets>) -> Self {
+        self.barrier = self.barrier.clip_details_notifier(notifier);
+        self
+    }
+
+    /// Optionally places the barrier above a retained child in a stack.
+    #[must_use]
+    pub fn child(mut self, child: impl Into<Widget>) -> Self {
+        self.barrier = self.barrier.child(child);
+        self
+    }
+
+    /// Invokes the configured dismissal bridge and returns whether it handled
+    /// the dismissal.  A void callback is considered handled.
+    #[must_use]
+    pub fn dismiss(&self) -> bool {
+        self.barrier.dismiss()
+    }
+}
+
+impl ModalBarrier {
     /// Enables or disables pointer and semantic dismissal.
     #[must_use]
     pub fn dismissible(mut self, dismissible: bool) -> Self {
@@ -238,95 +351,111 @@ impl AnimatedModalBarrier {
     }
 }
 
+impl ModalBarrier {
+    fn dismissal_callback(&self, context: &crate::BuildContext<'_>) -> Option<Rc<dyn Fn()>> {
+        if !self.dismissible {
+            return None;
+        }
+        if let Some(callback) = &self.on_dismiss {
+            return Some(callback.clone());
+        }
+        if let Some(handler) = &self.dismissal_handler {
+            let handler = handler.clone();
+            return Some(Rc::new(move || {
+                let _ = handler();
+            }));
+        }
+        context
+            .find_shared::<ModalBarrierDismissScope>()
+            .map(|scope| scope.0.clone())
+    }
+
+    fn veil(&self, color: Option<Color>, context: &crate::BuildContext<'_>) -> Widget {
+        let mut veil: Widget = match color {
+            Some(fill) => Container::new().color(fill).into(),
+            None => Container::new().into(),
+        };
+        let dismiss = self.dismissal_callback(context);
+        if self.dismissible {
+            // Join the same arena as translucent siblings; a stable
+            // contact dismisses only if it wins on release.
+            let dismiss = dismiss.clone();
+            veil = GestureDetector::new(veil)
+                .behavior(HitTestBehavior::Opaque)
+                .on_any_pointer_tap(move || {
+                    if let Some(dismiss) = &dismiss {
+                        dismiss();
+                    }
+                })
+                .into();
+        } else {
+            veil = Widget::absorb_pointer(true, veil);
+        }
+
+        // Retain a supplied label when native semantic dismissal is
+        // disabled. Pointer blocking is independent of semantic policy.
+        let semantic_dismiss = self.dismissible && self.barrier_semantics_dismissible;
+        if self.semantics_label.is_some() || semantic_dismiss {
+            let mut explicit = ExplicitSemantics::new(if semantic_dismiss {
+                SemanticRole::Button
+            } else {
+                SemanticRole::GenericContainer
+            });
+            if let Some(label) = &self.semantics_label {
+                explicit = explicit.label(label.clone());
+                if semantic_dismiss {
+                    explicit = explicit.state(SemanticState {
+                        text_direction: context.text_direction(),
+                        ..Default::default()
+                    });
+                }
+            }
+            if let Some(hint) = &self.semantics_on_tap_hint {
+                explicit = explicit.description(hint.clone());
+            }
+            if semantic_dismiss {
+                let dismiss = dismiss.unwrap_or_else(|| Rc::new(|| {}));
+                explicit =
+                    explicit.actions([SemanticActionKind::Activate, SemanticActionKind::Dismiss]);
+                veil = veil
+                    .semantics(explicit)
+                    .with_semantic_callback(SemanticActionKind::Activate, dismiss.clone())
+                    .with_semantic_callback(SemanticActionKind::Dismiss, dismiss);
+                if let Some(insets) = &self.clip_details_notifier {
+                    veil = veil.with_semantic_bounds_insets(insets.clone());
+                }
+            } else {
+                veil = veil.semantics(explicit);
+            }
+        }
+        // Inner block hides a child behind the veil; the outer block on
+        // each descriptor hides preceding siblings outside the barrier.
+        let veil = veil.block_semantics();
+        if let Some(child) = &self.child {
+            crate::Stack::new([child.clone(), veil]).into()
+        } else {
+            veil
+        }
+    }
+}
+
+impl From<ModalBarrier> for Widget {
+    fn from(barrier: ModalBarrier) -> Self {
+        let widget: Widget =
+            crate::Builder::new(move |context| barrier.veil(barrier.color, context)).into();
+        widget.block_semantics()
+    }
+}
+
 impl From<AnimatedModalBarrier> for Widget {
     fn from(value: AnimatedModalBarrier) -> Self {
-        // Flutter's `AnimatedWidget`: listen while mounted, not per conversion.
+        // Listen only while mounted; the static spelling never creates a ticker.
         let animation = incular_animation::DoubleAnimation::from(value.color.controller());
         let color = value.color;
-        let dismissible = value.dismissible;
-        let semantics_label = value.semantics_label;
-        let semantics_dismissible = value.barrier_semantics_dismissible;
-        let semantics_hint = value.semantics_on_tap_hint;
-        let semantics_insets = value.clip_details_notifier;
-        let on_dismiss = value.on_dismiss;
-        let dismissal_handler = value.dismissal_handler;
-        let child = value.child;
-
-        let dismiss: Rc<dyn Fn()> = Rc::new(move || {
-            if let Some(callback) = &on_dismiss {
-                callback();
-            } else if let Some(callback) = &dismissal_handler {
-                let _ = callback();
-            }
-        });
-
-        crate::explicit_animations::animated_widget_for(animation, move |_| {
-            // Pointer interception is unconditional: a dismissible barrier
-            // reports taps through an opaque detector, a locked barrier
-            // absorbs them. Either way nothing falls through to content
-            // behind the veil. An absent color only omits the fill.
-            let mut barrier: Widget = match color.value() {
-                Some(fill) => Container::new().color(fill).into(),
-                None => Container::new().into(),
-            };
-            if dismissible {
-                // The barrier taps in the same arena as translucent
-                // siblings. Dismiss only after the stable contact wins.
-                let dismiss = dismiss.clone();
-                barrier = GestureDetector::new(barrier)
-                    .behavior(HitTestBehavior::Opaque)
-                    .on_any_pointer_tap(move || dismiss())
-                    .into();
-            } else {
-                barrier = Widget::absorb_pointer(true, barrier);
-            }
-
-            // Semantic ownership is split three ways. The label (with its
-            // tap hint) always gets a node when present, so removing
-            // dismissal never drops the name. Activate and Dismiss live on
-            // that same veil node exactly when pointer dismissal
-            // and the semantic-dismiss flag agree; it never depends on the
-            // label existing. Modal blocking below is independent of both.
-            let semantic_dismiss = dismissible && semantics_dismissible;
-            if semantics_label.is_some() || semantic_dismiss {
-                let role = if semantic_dismiss {
-                    SemanticRole::Button
-                } else {
-                    SemanticRole::GenericContainer
-                };
-                let mut explicit = ExplicitSemantics::new(role);
-                if let Some(label) = &semantics_label {
-                    explicit = explicit.label(label.clone());
-                }
-                if let Some(hint) = &semantics_hint {
-                    explicit = explicit.description(hint.clone());
-                }
-                if semantic_dismiss {
-                    explicit = explicit
-                        .actions([SemanticActionKind::Activate, SemanticActionKind::Dismiss]);
-                    barrier = barrier
-                        .semantics(explicit)
-                        .with_semantic_callback(SemanticActionKind::Activate, dismiss.clone())
-                        .with_semantic_callback(SemanticActionKind::Dismiss, dismiss.clone());
-                    if let Some(insets) = &semantics_insets {
-                        barrier = barrier.with_semantic_bounds_insets(insets.clone());
-                    }
-                } else {
-                    barrier = barrier.semantics(explicit);
-                }
-            }
-            // Inner block hides the background child beneath the veil: the
-            // modal contract for content behind the barrier.
-            barrier = barrier.block_semantics();
-
-            if let Some(child) = &child {
-                crate::Stack::new([child.clone(), barrier]).into()
-            } else {
-                barrier
-            }
+        let barrier = value.barrier;
+        crate::explicit_animations::animated_widget_for(animation, move |context| {
+            barrier.veil(color.value(), context)
         })
-        // Outer block hides preceding siblings outside the barrier. The
-        // veil block only scopes the veil/child pair inside the builder.
         .block_semantics()
     }
 }

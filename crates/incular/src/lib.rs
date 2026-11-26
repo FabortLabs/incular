@@ -237,6 +237,7 @@ pub mod prelude {
     pub use incular_config::MediaQueryEdges;
     pub use incular_widgets::{BoxRadialGradient, BoxSweepGradient};
     pub use incular_widgets::extensions::ExternalDropTarget;
+    pub use incular_widgets::ModalBarrier as ModalBarrierWidget;
     pub use incular_widgets::{LayoutChildError, LayoutRelayout, OverflowBarAlignment, OverflowBoxFit};
     pub use incular_widgets::{BorderRadiusGeometry, FittedSizes, apply_box_fit};
     pub use incular_widgets::{

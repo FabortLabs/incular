@@ -311,7 +311,8 @@ pub use magnifier::{
 pub use navigation::BackButtonDispatcher as NavigationBackButtonDispatcher;
 pub use navigation::{
     AnimatedModalBarrier, BackButtonListener, BackDispatchReport, BackHandlerResult,
-    BackRegistration, NavigatorPopHandler, NavigatorPopHandlerController, OptionalColorAnimation,
+    BackRegistration, ModalBarrier, NavigatorPopHandler, NavigatorPopHandlerController,
+    OptionalColorAnimation,
     PageStorage, PageStorageBucket, PageStorageIdentifier, PageStorageKey, PopAttempt, PopScope,
     PopScopeController, RootRestorationScope, UnmanagedRestorationScope,
     current_page_storage_bucket, current_restoration_scope,
