@@ -189,8 +189,8 @@ tests confirm that:
   declared taps still prevent merging even if one cannot execute.
 
 The ten focused action tests and fifteen runtime action/keyboard focus
-regressions passed. The original merged cases also compare the
-complete graph, not just the label and handler results.
+regressions passed. The original matchers' exact merged action set and ordered
+conflicting children are paired in the later inventory check.
 
 ## Typed text action payloads
 
@@ -205,10 +205,8 @@ Removing them rejects requests to the previously advertised actions;
 a blocked callback or an unbound payload kind is not advertised.
 
 All 27 targeted Rust tests passed, including the existing formatter,
-on-change, and disabled-field behavior. The all-actions case remains
-partial: the clipboard and expansion cases are described below;
-cursor and focus callbacks are covered below. Flutter's two-pane
-tags and host-specific event routing remain open.
+on-change, and disabled-field behavior. The complete action inventory is paired below. The isolated
+payload and routing checks remain useful regression controls.
 
 ### Clipboard and expansion callbacks
 
@@ -419,3 +417,20 @@ container. The same test checks the unflagged scope and the return
 to an explicit child node. These cases are paired; platform route
 announcements are not part of the upstream test. All 37 focused Rust
 tests passed.
+
+### Complete action inventory and blocked action conflicts
+
+Pinned line 784 and the retained action-inventory fixture both use an
+unlabeled sliver annotation around padded text. One tagged semantic
+node absorbs the label and advertises exactly the 21 declared actions.
+Each dispatch invokes the matching current callback with its payload:
+selection base 4/extent 5, text "text", and true for both cursor
+extension requests. Focus callbacks leave actual keyboard focus alone.
+
+For lines 2385, 2421, 2453 and 2494, both the nested sliver and box
+forms now have strict checks. A blocked tap plus long press combines
+the labels and advertises only LongPress. Two declared taps remain
+two ordered children, even after masking one callback. The box fixture
+uses a lazy list for the merging case and a Column for the conflicting
+case, as the originals do. All five registrations are paired.
+The 37 focused Rust tests passed.

@@ -532,7 +532,7 @@ fn disjoint_actions_scene(
     marker: &'static str,
     trace: Rc<RefCell<Vec<&'static str>>>,
 ) -> Widget {
-    use incular_widgets::{SliverList, SliverMainAxisGroup};
+    use incular_widgets::{Column, SliverList, SliverMainAxisGroup};
 
     let annotation = move |index, child: Widget| {
         let trace = trace.clone();
@@ -546,7 +546,12 @@ fn disjoint_actions_scene(
             sem.on_long_press(move || trace.borrow_mut().push(marker))
         }
     };
-    let group: Box<dyn Sliver> = if boxed {
+    let group: Box<dyn Sliver> = if boxed && second_is_tap {
+        Box::new(SliverToBoxAdapter::new(Column::new([
+            annotation(0, SizedBox::square(10.).into()),
+            annotation(1, SizedBox::square(10.).into()),
+        ])))
+    } else if boxed {
         Box::new(SliverList::builder(2, move |i| {
             annotation(i, SizedBox::new().height(10.).into())
         }))
@@ -579,8 +584,8 @@ fn blocked_tap_merges_its_label_with_a_long_press_but_not_its_callback() {
         let merged = node(&runtime, "label1\nlabel2");
         let id = merged.id;
         assert!(merged.children.is_empty());
-        assert!(!merged.actions.contains(&SemanticActionKind::Activate));
-        assert!(merged.actions.contains(&SemanticActionKind::LongPress));
+        assert_eq!(merged.actions, [SemanticActionKind::LongPress]);
+        assert!(merged.value.is_none() && merged.description.is_none());
         assert!(!runtime.dispatch_semantic_action(id, SemanticAction::Activate));
         assert!(runtime.dispatch_semantic_action(id, SemanticAction::LongPress));
         assert_eq!(&*trace.borrow(), &["long"]);
@@ -623,13 +628,14 @@ fn declarative_tap_conflict_is_not_removed_by_blocking_one_callback() {
         frame(&mut runtime);
         let first = node(&runtime, "label1").id;
         let second = node(&runtime, "label2").id;
-        assert!(
-            runtime
-                .tree()
-                .semantics()
-                .iter()
-                .any(|(_, parent)| parent.children == [first, second])
-        );
+        let tree = runtime.tree().semantics();
+        let outer = tree.node(tree.root().unwrap()).unwrap();
+        let pane = tree.node(outer.children[0]).unwrap();
+        assert_eq!(pane.children.len(), 1);
+        let parent = tree.node(pane.children[0]).unwrap();
+        assert!(parent.actions.is_empty());
+        assert!(parent.label.is_none());
+        assert_eq!(parent.children, [first, second]);
         assert!(!runtime.dispatch_semantic_action(first, SemanticAction::Activate));
         assert!(runtime.dispatch_semantic_action(second, SemanticAction::Activate));
         assert_eq!(&*trace.borrow(), &["second tap"]);
@@ -1446,4 +1452,133 @@ fn sliver_annotation_values_and_directions_match_the_complete_two_pane_shape() {
             assert!(leaf.actions.is_empty());
         }
     }
+}
+
+#[test]
+fn full_sliver_action_inventory_dispatches_exact_arguments_from_one_tagged_node() {
+    use incular_widgets::{Padding, SliverList, Text, Viewport};
+
+    let calls = Rc::new(RefCell::new(Vec::new()));
+    let observe = calls.clone();
+    let slivers: [Box<dyn Sliver>; 1] = [Box::new(SliverSemantics::new(
+        move || {
+            let callback = |action: SemanticAction| {
+                let calls = observe.clone();
+                move || calls.borrow_mut().push(action.clone())
+            };
+            let text = observe.clone();
+            let selection = observe.clone();
+            let forward = observe.clone();
+            let backward = observe.clone();
+            Semantics::default()
+                .container(true)
+                .on_dismiss(callback(SemanticAction::Dismiss))
+                .on_tap(callback(SemanticAction::Activate))
+                .on_long_press(callback(SemanticAction::LongPress))
+                .on_scroll_left(callback(SemanticAction::ScrollLeft))
+                .on_scroll_right(callback(SemanticAction::ScrollRight))
+                .on_scroll_up(callback(SemanticAction::ScrollUp))
+                .on_scroll_down(callback(SemanticAction::ScrollDown))
+                .on_increase(callback(SemanticAction::Increment))
+                .on_decrease(callback(SemanticAction::Decrement))
+                .on_copy(callback(SemanticAction::Copy))
+                .on_cut(callback(SemanticAction::Cut))
+                .on_paste(callback(SemanticAction::Paste))
+                .on_move_cursor_forward_by_character(move |extend_selection| {
+                    forward
+                        .borrow_mut()
+                        .push(SemanticAction::MoveCursorForwardByCharacter { extend_selection });
+                })
+                .on_move_cursor_backward_by_character(move |extend_selection| {
+                    backward
+                        .borrow_mut()
+                        .push(SemanticAction::MoveCursorBackwardByCharacter { extend_selection });
+                })
+                .on_set_selection(move |value| {
+                    selection.borrow_mut().push(SemanticAction::SetSelection {
+                        base: value.base,
+                        extent: value.extent,
+                    });
+                })
+                .on_set_text(move |value| text.borrow_mut().push(SemanticAction::SetText(value)))
+                .on_did_gain_accessibility_focus(callback(
+                    SemanticAction::DidGainAccessibilityFocus,
+                ))
+                .on_did_lose_accessibility_focus(callback(
+                    SemanticAction::DidLoseAccessibilityFocus,
+                ))
+                .on_focus(callback(SemanticAction::Focus))
+                .on_expand(callback(SemanticAction::Expand))
+                .on_collapse(callback(SemanticAction::Collapse))
+        },
+        SliverList::builder(1, |_| Padding::all(8., Text::new("Lorem Ipsum 0"))),
+    ))];
+    let mut runtime = Runtime::new(
+        Directionality::new(TextDirection::Ltr, CustomScrollView::new(slivers)).into(),
+    )
+    .unwrap();
+    frame(&mut runtime);
+
+    let commands = [
+        SemanticAction::Dismiss,
+        SemanticAction::Activate,
+        SemanticAction::LongPress,
+        SemanticAction::ScrollLeft,
+        SemanticAction::ScrollRight,
+        SemanticAction::ScrollUp,
+        SemanticAction::ScrollDown,
+        SemanticAction::Increment,
+        SemanticAction::Decrement,
+        SemanticAction::Copy,
+        SemanticAction::Cut,
+        SemanticAction::Paste,
+        SemanticAction::MoveCursorForwardByCharacter {
+            extend_selection: true,
+        },
+        SemanticAction::MoveCursorBackwardByCharacter {
+            extend_selection: true,
+        },
+        SemanticAction::SetSelection { base: 4, extent: 5 },
+        SemanticAction::SetText("text".into()),
+        SemanticAction::DidGainAccessibilityFocus,
+        SemanticAction::DidLoseAccessibilityFocus,
+        SemanticAction::Focus,
+        SemanticAction::Expand,
+        SemanticAction::Collapse,
+    ];
+    let id = {
+        let tree = runtime.tree().semantics();
+        assert_eq!(tree.iter().count(), 3);
+        let outer = tree.node(tree.root().unwrap()).unwrap();
+        let pane = tree.node(outer.children[0]).unwrap();
+        assert!(!outer.state.has_implicit_scrolling && pane.state.has_implicit_scrolling);
+        assert!(outer.actions.is_empty() && pane.actions.is_empty());
+        assert!(outer.tags().is_empty() && pane.tags().is_empty());
+        assert!(outer.value.is_none() && pane.value.is_none());
+        let leaf = tree.node(pane.children[0]).unwrap();
+        assert_eq!(leaf.label.as_deref(), Some("Lorem Ipsum 0"));
+        assert_eq!(leaf.state.text_direction, Some(TextDirection::Ltr));
+        assert!(leaf.value.is_none() && leaf.description.is_none());
+        assert!(leaf.children.is_empty());
+        assert_eq!(
+            leaf.tags(),
+            &[Viewport::use_two_pane_semantics_tag().clone()]
+        );
+        assert_eq!(leaf.actions.len(), commands.len());
+        assert!(
+            commands
+                .iter()
+                .all(|action| leaf.actions.contains(&action.kind()))
+        );
+        leaf.id
+    };
+    let focused = runtime.focused_element();
+    for (i, action) in commands.iter().cloned().enumerate() {
+        assert!(
+            runtime.dispatch_semantic_action(id, action.clone()),
+            "{action:?}"
+        );
+        assert_eq!(&*calls.borrow(), &commands[..=i]);
+    }
+    assert_eq!(runtime.focused_element(), focused);
 }
