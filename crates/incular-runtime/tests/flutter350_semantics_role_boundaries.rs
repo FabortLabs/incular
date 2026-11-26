@@ -71,3 +71,72 @@ fn dialog_and_keyboard_key_have_two_distinct_nodes() {
         None,
     );
 }
+
+fn mounted(child: Semantics) -> Runtime {
+    let mut runtime = Runtime::new(child.into()).unwrap();
+    runtime
+        .run_frame(Constraints::tight(Size::new(800., 600.)))
+        .unwrap();
+    runtime
+}
+
+#[test]
+fn an_alert_dialog_keeps_its_role_inside_a_dialog() {
+    let inner = Semantics::new(Placeholder::new()).role(Role::AlertDialog);
+    let runtime = mounted(Semantics::new(inner).role(Role::Dialog));
+    let tree = runtime.tree().semantics();
+    let (id, dialog) = tree
+        .iter()
+        .find(|(_, node)| node.role == Role::Dialog)
+        .unwrap();
+    let (alert_id, _) = tree
+        .iter()
+        .find(|(_, node)| node.role == Role::AlertDialog)
+        .unwrap();
+    assert_ne!(id, alert_id);
+    assert_eq!(dialog.children, [alert_id]);
+}
+
+fn assert_single_root_role(view: Semantics, role: Role) {
+    let runtime = mounted(view);
+    let tree = runtime.tree().semantics();
+    assert_eq!(tree.roots().len(), 1);
+    assert_eq!(tree.node(tree.roots()[0]).unwrap().role, role);
+}
+
+#[test]
+fn time_sensitive_information_keeps_the_alert_role() {
+    assert_single_root_role(
+        Semantics::new(Placeholder::new()).role(Role::Alert),
+        Role::Alert,
+    );
+}
+
+#[test]
+fn advisory_information_keeps_the_status_role() {
+    assert_single_root_role(
+        Semantics::new(Placeholder::new()).role(Role::Status),
+        Role::Status,
+    );
+}
+
+#[test]
+fn a_childless_form_keeps_its_declared_role() {
+    assert_single_root_role(
+        Semantics::default().role(Role::Form).container(true),
+        Role::Form,
+    );
+}
+
+#[test]
+fn a_list_and_its_item_keep_distinct_role_nodes() {
+    let item = Semantics::new(Placeholder::new())
+        .role(Role::ListItem)
+        .container(true);
+    let runtime = mounted(Semantics::new(item).role(Role::List).container(true));
+    let tree = runtime.tree().semantics();
+    let list = tree.node(tree.roots()[0]).unwrap();
+    assert_eq!(list.role, Role::List);
+    assert_eq!(list.children.len(), 1);
+    assert_eq!(tree.node(list.children[0]).unwrap().role, Role::ListItem);
+}

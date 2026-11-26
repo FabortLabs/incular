@@ -2234,3 +2234,8 @@ packages/flutter/test/widgets/basic_test.dart	412	Semantics does not merge role 
 packages/flutter/test/widgets/basic_test.dart	429	Semantics does not merge role - link	paired-match	upstream-basic-semantic-boundaries.md
 packages/flutter/test/widgets/basic_test.dart	489	Semantics does not merge role - image	paired-match	upstream-basic-semantic-boundaries.md
 packages/flutter/test/widgets/basic_test.dart	523	Semantics does not merge role - keyboard key	paired-match	upstream-basic-semantic-boundaries.md
+packages/flutter/test/widgets/basic_test.dart	395	Semantics does not merge role	paired-match	upstream-extended-semantic-roles.md
+packages/flutter/test/widgets/basic_test.dart	596	Semantics can set alert rule	paired-match	upstream-extended-semantic-roles.md
+packages/flutter/test/widgets/basic_test.dart	606	Semantics can set status rule	paired-match	upstream-extended-semantic-roles.md
+packages/flutter/test/widgets/basic_test.dart	670	Semantics can use list and list item	paired-match	upstream-extended-semantic-roles.md
+packages/flutter/test/widgets/basic_test.dart	693	Semantics can use form	paired-match	upstream-extended-semantic-roles.md

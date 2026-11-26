@@ -82,6 +82,14 @@ pub enum Role {
     Slider,
     Menu,
     Dialog,
+    /// A modal alert that needs the user's attention.
+    AlertDialog,
+    /// Time-sensitive information that should be announced promptly.
+    Alert,
+    /// Advisory information that does not interrupt the current task.
+    Status,
+    /// A region containing form controls.
+    Form,
     Image,
     Heading,
     Link,

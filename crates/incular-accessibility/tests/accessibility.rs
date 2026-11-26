@@ -506,3 +506,27 @@ fn scoped_pronunciation_locale_updates_and_clears_on_same_native_node() {
         assert_eq!(language(update.into_accesskit()).as_deref(), locale);
     }
 }
+
+#[test]
+fn alert_dialog_alert_status_and_form_keep_distinct_native_roles() {
+    let mut tree = SemanticsTree::new();
+    let roles = [
+        (Role::AlertDialog, AccessKitRole::AlertDialog),
+        (Role::Alert, AccessKitRole::Alert),
+        (Role::Status, AccessKitRole::Status),
+        (Role::Form, AccessKitRole::Form),
+    ];
+    let ids = roles.map(|(role, _)| tree.insert(node(role)));
+    let mut root = node(Role::GenericContainer);
+    root.children = ids.to_vec();
+    let root = tree.insert(root);
+    tree.set_root(Some(root));
+
+    let mut projection = AccessKitProjection::new();
+    let update = full(&mut projection, &tree);
+    for (id, (_, expected)) in ids.into_iter().zip(roles) {
+        let native = projection.native_node_id(id).unwrap();
+        let (_, node) = update.nodes.iter().find(|(id, _)| id.0 == native).unwrap();
+        assert_eq!(node.role(), expected);
+    }
+}
