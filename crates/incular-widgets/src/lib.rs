@@ -293,6 +293,7 @@ pub use incular_text::{
     TextWidthBasis, WidgetSpan, lerp_font_variations,
 };
 pub use indexed_semantics::IndexedSemantics;
+pub use scrolling::{ClipOverlapBehavior, SliverClipRRect, SliverClipRect};
 pub use inherited_data::{
     CapturedThemes, InheritedModel, InheritedModelData, InheritedNotifier, SharedAppData,
     SharedAppDataKey, SharedAppDataStore,

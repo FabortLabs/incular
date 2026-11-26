@@ -413,6 +413,8 @@ pub(crate) struct RenderNode {
     pub(crate) dirty: DirtyFlags,
     /// Retained for state while excluded from presentation by its parent.
     pub(crate) parked: bool,
+    pub(crate) parent_sliver_clips:
+        Option<Rc<[crate::scrolling::sliver_clip::SliverClipPlacement]>>,
     /// Whether this node or a descendant still has [`DirtyFlags::PAINT`].
     /// Derived from `dirty`: paint invalidation sets it on the node and its
     /// ancestors, and the paint pass clears it once the subtree is clean, so

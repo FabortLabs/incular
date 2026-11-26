@@ -216,6 +216,11 @@ impl WidgetTree {
             self.compositor
                 .update_transform(layer, CoreTransform::translation(offset));
         }
+        if let Some(owner) = self.element_for_render(id)
+            && self.has_sliver_clip_layers(owner)
+        {
+            self.sync_render_children(owner);
+        }
         Ok((pass_changed, mapping_changed))
     }
 

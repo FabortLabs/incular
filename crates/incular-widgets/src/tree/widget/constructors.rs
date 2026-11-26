@@ -276,6 +276,34 @@ impl Widget {
         self
     }
 
+    pub(crate) fn with_sliver_clip(
+        mut self,
+        placement: crate::scrolling::sliver_clip::SliverClipPlacement,
+    ) -> Self {
+        let properties = self.semantic_properties_mut();
+        let mut chain = vec![placement];
+        chain.extend(properties.sliver_clip_placements.iter().flat_map(|old| old.iter().cloned()));
+        properties.sliver_clip_placements = Some(chain.into());
+        self
+    }
+
+    pub(crate) fn take_sliver_clips(
+        &mut self,
+    ) -> Option<Rc<[crate::scrolling::sliver_clip::SliverClipPlacement]>> {
+        self.semantic_properties().sliver_clip_placements.as_ref()?;
+        self.semantic_properties_mut().sliver_clip_placements.take()
+    }
+
+    pub(crate) fn restore_sliver_clips(
+        mut self,
+        clips: Option<Rc<[crate::scrolling::sliver_clip::SliverClipPlacement]>>,
+    ) -> Self {
+        if clips.is_some() {
+            self.semantic_properties_mut().sliver_clip_placements = clips;
+        }
+        self
+    }
+
     pub(crate) fn with_ensured_sliver_semantics(mut self) -> Self {
         if !self.semantic_properties().ensures_sliver_semantics {
             self.semantic_properties_mut().ensures_sliver_semantics = true;

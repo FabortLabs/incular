@@ -6,7 +6,7 @@ use incular_scroll::{SliverConstraints, SliverGeometry, SliverGrowthDirection};
 /// Full sliver paint bounds, including its cached offscreen extent, in the
 /// physical coordinate space of its render sliver.
 pub(super) struct SliverPaintBounds {
-    pub rect: Rect,
+    pub(super) rect: Rect,
     /// Distance from the maximum rectangle's leading edge to its visible
     /// paint origin, in logical scroll direction. Pinning can cap this.
     logical_leading: f32,
@@ -54,7 +54,7 @@ impl SliverPaintBounds {
     }
 }
 
-fn is_reversed(constraints: SliverConstraints) -> bool {
+pub(super) fn is_reversed(constraints: SliverConstraints) -> bool {
     constraints.reverse ^ (constraints.growth_direction == SliverGrowthDirection::Reverse)
 }
 

@@ -664,6 +664,7 @@ impl WidgetTree {
             },
             dirty: DirtyFlags::LAYOUT | DirtyFlags::PAINT,
             parked: false,
+            parent_sliver_clips: None,
             subtree_needs_paint: true,
             semantics_dirty: SemanticsDirty::Subtree,
             subtree_needs_semantics: true,
@@ -1544,12 +1545,17 @@ impl WidgetTree {
             let element = self.element_live(element_id, "sliver viewport element must remain live");
             element.sliver_child_ids().to_vec()
         };
+        let mut placements = None::<Vec<_>>;
         let desired = layout
             .children
             .iter()
-            .map(|child| DesiredDynamicChild {
-                key: child.id,
-                widget: child.widget.clone(),
+            .enumerate()
+            .map(|(index, child)| {
+                let mut widget = child.widget.clone();
+                if let Some(clips) = widget.take_sliver_clips() {
+                    placements.get_or_insert_with(|| vec![None; layout.children.len()])[index] = Some(clips);
+                }
+                DesiredDynamicChild { key: child.id, widget }
             })
             .collect::<Vec<_>>();
         let reconciled =
@@ -1596,15 +1602,23 @@ impl WidgetTree {
             }
         }
 
-        for (&element, layout) in reconciled.children.iter().zip(&layout.children) {
+        for (index, (&element, layout)) in reconciled.children.iter().zip(&layout.children).enumerate() {
             let render = self
                 .element_live(element, "materialized sliver child")
                 .render;
             let node = self.render_live_mut(render, "materialized sliver child render");
+            let placement = placements.as_ref().and_then(|p| p[index].clone());
+            let clip_changed = node.parent_sliver_clips != placement;
+            if clip_changed {
+                node.parent_sliver_clips = placement;
+            }
             let parked = layout.placement == crate::scrolling::SliverChildPlacement::Parked;
-            if node.parked != parked {
-                node.parked = parked;
+            let visibility_changed = node.parked != parked;
+            node.parked = parked;
+            if clip_changed || visibility_changed {
                 self.input.hover_hit_revision = self.input.hover_hit_revision.wrapping_add(1);
+            }
+            if visibility_changed {
                 self.mark_render_semantics(render, SemanticsDirty::Subtree);
             }
         }
@@ -2694,9 +2708,14 @@ impl WidgetTree {
                     if let Some(leases) = self.scroll_attachments.remove(&id) {
                         detached.extend(leases);
                     }
-                    let Some(element) = self.elements.remove(id.0) else {
+                    let Some(mut element) = self.elements.remove(id.0) else {
                         continue;
                     };
+                    if let Some(layers) = element.scrolling_state.as_mut()
+                        .and_then(|state| state.sliver_clip_layers.take())
+                    {
+                        layers.remove_all(&mut self.compositor);
+                    }
                     if let WidgetKind::LayoutBuilder {
                         retained: Some(slot), ..
                     } = element.widget.kind()
@@ -3117,6 +3136,16 @@ impl WidgetTree {
                 .filter_map(layer_for_child)
                 .collect()
         };
+        if self.has_sliver_clip_layers(id)
+            || (matches!(
+                self.render_live(render, "sliver clip arrangement").object.kind(),
+                RenderKind::SliverViewport { .. }
+            ) && render_children.iter().any(|child| {
+                self.render_live(*child, "mounted sliver clip child").parent_sliver_clips.is_some()
+            }))
+        {
+            child_layers = self.arrange_sliver_clip_layers(id, &render_children, child_layers);
+        }
         let object = &self
             .renders
             .get(render.0)

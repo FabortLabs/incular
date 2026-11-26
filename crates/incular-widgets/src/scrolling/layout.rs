@@ -3051,7 +3051,9 @@ impl RenderSliver for WidgetWrapRenderSliver {
             layout.absorbed_overlap = 0.;
         }
         for child in &mut layout.children {
-            child.widget = (self.wrap)(child.widget.clone());
+            let mut inner = child.widget.clone();
+            let clips = inner.take_sliver_clips();
+            child.widget = (self.wrap)(inner).restore_sliver_clips(clips);
         }
         layout
     }
@@ -3427,6 +3429,12 @@ pub(crate) fn transfer_retained_sliver_state(
         fresh.adopt_compatible_state(retained, probes, preserve_anchor);
         return;
     }
+    transfer_single_inner_sliver_state::<super::sliver_clip::ClipRenderSliver>(
+        fresh,
+        retained,
+        probes,
+        preserve_anchor,
+    );
     transfer_single_inner_sliver_state::<PaddingRenderSliver>(
         fresh,
         retained,

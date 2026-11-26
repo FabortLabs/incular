@@ -1197,6 +1197,12 @@ impl WidgetTree {
         if node.parked {
             return true;
         }
+        if let Some(clips) = &node.parent_sliver_clips {
+            let local = point - self.hit_origin(id, node, origin);
+            if clips.iter().any(|clip| !crate::scrolling::sliver_clip::shape_contains(&clip.shape, local)) {
+                return true;
+            }
+        }
         if matches!(
             node.object.kind(),
             RenderKind::Gesture | RenderKind::Positioned { .. }
