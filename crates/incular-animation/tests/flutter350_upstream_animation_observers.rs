@@ -64,7 +64,7 @@ fn reverse_animation_stops_notifying_when_listener_is_removed() {
 
 #[test]
 fn train_switches_on_crossing_before_a_value_read() {
-    // Upstream :97 (behavioral assertions, not Dart diagnostic formatting).
+    // Upstream :97.
     let current = controller(0.5);
     let next = controller(0.75);
     let next_animation: DoubleAnimation = (&next).into();
@@ -74,10 +74,14 @@ fn train_switches_on_crossing_before_a_value_read() {
         .on_switched_train(move || flag.set(true));
     assert!(!called.get());
     assert_eq!(train.value(), 0.5);
+    let before = format!("{train:?}");
+    assert!(!before.contains('\n') && before.contains("next:"));
     next.set_value(0.25);
     assert!(called.get());
     assert_eq!(train.value(), 0.25);
     assert_eq!(train.current_train(), next_animation);
+    let after = format!("{train:?}");
+    assert!(!after.contains('\n') && after.contains("no next"));
 }
 
 // A typed DrivenAnimation has no conversion to DoubleAnimation. Preserve its

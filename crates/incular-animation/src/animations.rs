@@ -12,6 +12,8 @@
 //! change therefore takes effect, and fires its callbacks, on the change itself.
 
 use crate::{Animatable, AnimationController, AnimationStatus, Curve, Tween};
+#[cfg(debug_assertions)]
+use incular_core::memory::allocations::ObjectLifetime;
 use incular_core::reactivity::{DependencySource, Subscription, TrackingGuard};
 use std::{
     cell::{Cell, OnceCell, RefCell},
@@ -308,6 +310,8 @@ pub struct CurvedAnimation {
     /// Flutter's public listeners still proxy the parent. Disposal detaches
     /// only the animation's own direction listener.
     passive_link: OnceCell<Subscription>,
+    #[cfg(debug_assertions)]
+    allocation: RefCell<Option<ObjectLifetime>>,
 }
 
 /// Flutter `_updateCurveDirection`: the direction latched when a run starts,
@@ -345,6 +349,8 @@ impl CurvedAnimation {
             changes,
             direction_link: RefCell::new(Some(link)),
             passive_link: OnceCell::new(),
+            #[cfg(debug_assertions)]
+            allocation: RefCell::new(Some(ObjectLifetime::new("animation", "CurvedAnimation"))),
         }
     }
 
@@ -359,15 +365,32 @@ impl CurvedAnimation {
     /// Removes the private direction observer. The current curve latch
     /// is retained and subsequent value reads still use the parent value.
     pub fn dispose(&self) {
-        if self.direction_link.borrow_mut().take().is_some() {
+        let direction_link = self.direction_link.borrow_mut().take();
+        if let Some(direction_link) = direction_link {
+            drop(direction_link);
             self.passive_link
                 .get_or_init(|| forward(&self.parent, self.changes.clone()));
+            #[cfg(debug_assertions)]
+            {
+                let allocation = self.allocation.borrow_mut().take();
+                drop(allocation);
+            }
         }
     }
 
     #[must_use]
     pub fn is_disposed(&self) -> bool {
         self.direction_link.borrow().is_none()
+    }
+}
+
+impl std::fmt::Debug for CurvedAnimation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CurvedAnimation")
+            .field("parent", &self.parent)
+            .field("curve", &self.curve)
+            .field("reverse_curve", &self.reverse_curve)
+            .finish()
     }
 }
 
@@ -735,6 +758,17 @@ impl From<ProxyAnimation> for DoubleAnimation {
     }
 }
 
+impl std::fmt::Debug for ProxyAnimation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let state = self.state.borrow();
+        if let Some(parent) = &state.parent {
+            write!(f, "{parent:?}➩ProxyAnimation")
+        } else {
+            write!(f, "ProxyAnimation(null; {:?} {:.3})", state.status, state.value)
+        }
+    }
+}
+
 /// Flutter `TrainHoppingAnimation`: follows `current` until `next` crosses
 /// its value, then follows `next` for good.
 pub struct TrainHoppingAnimation {
@@ -742,7 +776,7 @@ pub struct TrainHoppingAnimation {
 }
 
 struct TrainState {
-    current: RefCell<DoubleAnimation>,
+    current: RefCell<Option<DoubleAnimation>>,
     next: RefCell<Option<DoubleAnimation>>,
     /// Flutter `_mode`: whether `current` was below `next` at the start.
     current_below: Option<bool>,
@@ -757,6 +791,8 @@ struct TrainState {
     /// Flutter's value listener on the next train; moves to `current_link`
     /// when the hop happens.
     next_link: RefCell<Option<Subscription>>,
+    #[cfg(debug_assertions)]
+    allocation: RefCell<Option<ObjectLifetime>>,
 }
 
 /// Re-checks the trains whenever one of them changes, as Flutter's
@@ -777,7 +813,9 @@ impl TrainState {
         let Some(next) = self.next.borrow().clone() else {
             return false;
         };
-        let current = self.current.borrow().value();
+        let Some(current) = self.current.borrow().as_ref().map(DoubleAnimation::value) else {
+            return false;
+        };
         let next_value = next.value();
         let hop = match self.current_below {
             Some(true) => next_value <= current,
@@ -787,12 +825,13 @@ impl TrainState {
         if !hop {
             return false;
         }
-        *self.current.borrow_mut() = next;
-        *self.next.borrow_mut() = None;
+        let former = self.current.borrow_mut().replace(next);
+        let next = self.next.borrow_mut().take();
         // The old current train no longer matters: its edge goes, and the
         // edge of the train that is now current takes its place.
         let link = self.next_link.borrow_mut().take();
-        *self.current_link.borrow_mut() = link;
+        let old_link = std::mem::replace(&mut *self.current_link.borrow_mut(), link);
+        drop((old_link, former, next));
         true
     }
 
@@ -800,6 +839,9 @@ impl TrainState {
         let hopped = self.hop();
         let (value, status) = {
             let current = self.current.borrow();
+            let Some(current) = current.as_ref() else {
+                return;
+            };
             (current.value(), current.status())
         };
         let value_changed = self.last_value.replace(value) != value;
@@ -844,7 +886,7 @@ impl TrainHoppingAnimation {
         let last_value = Cell::new(current.value());
         let last_status = Cell::new(current.status());
         let state = Rc::new(TrainState {
-            current: RefCell::new(current),
+            current: RefCell::new(Some(current.clone())),
             next: RefCell::new(next),
             current_below,
             on_switched_train: RefCell::new(None),
@@ -855,9 +897,10 @@ impl TrainHoppingAnimation {
             last_status,
             current_link: RefCell::new(None),
             next_link: RefCell::new(None),
+            #[cfg(debug_assertions)]
+            allocation: RefCell::new(Some(ObjectLifetime::new("animation", "TrainHoppingAnimation"))),
         });
         let weak = Rc::downgrade(&state);
-        let current = state.current.borrow().clone();
         *state.current_link.borrow_mut() =
             Some(current.changes().subscribe((), train_relay(weak.clone())));
         let next = state.next.borrow().clone();
@@ -878,21 +921,74 @@ impl TrainHoppingAnimation {
     /// Flutter `currentTrain`.
     #[must_use]
     pub fn current_train(&self) -> DoubleAnimation {
-        self.state.current.borrow().clone()
+        self.state
+            .current
+            .borrow()
+            .as_ref()
+            .expect("TrainHoppingAnimation has been disposed")
+            .clone()
+    }
+
+    /// Detaches both trains and releases owned subscriptions immediately.
+    /// As in Flutter, values and status cannot be read afterward.
+    pub fn dispose(&self) {
+        let current = self.state.current.borrow_mut().take();
+        if current.is_none() {
+            return;
+        }
+        let current_link = self.state.current_link.borrow_mut().take();
+        let next_link = self.state.next_link.borrow_mut().take();
+        let next = self.state.next.borrow_mut().take();
+        let on_switched = self.state.on_switched_train.borrow_mut().take();
+        drop((current_link, next_link, current, next, on_switched));
+        #[cfg(debug_assertions)]
+        {
+            let allocation = self.state.allocation.borrow_mut().take();
+            drop(allocation);
+        }
+    }
+}
+
+impl std::fmt::Debug for TrainHoppingAnimation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let current = self.state.current.borrow();
+        let Some(current) = current.as_ref() else {
+            return f.write_str("TrainHoppingAnimation(disposed)");
+        };
+        match self.state.next.borrow().as_ref() {
+            Some(next) => write!(f, "{current:?}➩TrainHoppingAnimation(next: {next:?})"),
+            None => write!(f, "{current:?}➩TrainHoppingAnimation(no next)"),
+        }
     }
 }
 
 impl AnimationSource for TrainHoppingAnimation {
     fn value(&self) -> f32 {
-        self.state.current.borrow().value()
+        self.state
+            .current
+            .borrow()
+            .as_ref()
+            .expect("TrainHoppingAnimation has been disposed")
+            .value()
     }
 
     fn status(&self) -> AnimationStatus {
-        self.state.current.borrow().status()
+        self.state
+            .current
+            .borrow()
+            .as_ref()
+            .expect("TrainHoppingAnimation has been disposed")
+            .status()
     }
 
     fn controllers(&self) -> Vec<AnimationController> {
-        let mut controllers = self.state.current.borrow().controllers();
+        let mut controllers = self
+            .state
+            .current
+            .borrow()
+            .as_ref()
+            .map(DoubleAnimation::controllers)
+            .unwrap_or_default();
         if let Some(next) = &*self.state.next.borrow() {
             for controller in next.controllers() {
                 if !controllers.contains(&controller) {

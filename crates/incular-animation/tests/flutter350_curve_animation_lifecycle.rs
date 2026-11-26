@@ -122,3 +122,109 @@ fn disposing_a_curved_animation_freezes_its_curve_direction_not_parent_reads() {
         "value reads still track the original parent"
     );
 }
+
+#[test]
+fn animation_wrappers_have_one_line_diagnostics_in_either_direction() {
+    use incular_animation::{
+        AlwaysStoppedAnimation, ProxyAnimation, always_complete, always_dismissed,
+    };
+
+    fn one_line(value: impl std::fmt::Debug) -> String {
+        let text = format!("{value:?}");
+        assert!(!text.is_empty() && !text.contains('\n'), "{text}");
+        text
+    }
+    one_line(always_complete());
+    one_line(always_dismissed());
+    one_line(AlwaysStoppedAnimation(0.5));
+    one_line(CurvedAnimation::new(always_dismissed(), Curve::Ease));
+    one_line(
+        CurvedAnimation::new(always_dismissed(), Curve::Ease)
+            .reverse_curve(incular_animation::Curves::ELASTIC_OUT),
+    );
+    let controller = AnimationController::new(ms(500)).with_value(0.5);
+    let _ = controller.reverse_on_next_tick();
+    one_line(
+        CurvedAnimation::new(&controller, Curve::Ease)
+            .reverse_curve(incular_animation::Curves::ELASTIC_OUT),
+    );
+    controller.stop();
+
+    let proxy = ProxyAnimation::new(None);
+    assert_eq!(proxy.value(), 0.);
+    assert_eq!(proxy.status(), AnimationStatus::Dismissed);
+    assert!(one_line(&proxy).contains("null;"));
+    proxy.set_parent(Some(always_dismissed()));
+    let description = one_line(&proxy);
+    assert!(description.ends_with("➩ProxyAnimation"));
+    assert!(!description.contains("null;"));
+}
+
+#[test]
+fn disposing_a_train_disconnects_both_clocks_before_they_can_cross() {
+    use incular_animation::TrainHoppingAnimation;
+
+    let current = AnimationController::new(ms(100)).with_value(0.5);
+    let next = AnimationController::new(ms(100)).with_value(0.75);
+    let train = TrainHoppingAnimation::new(&current, Some((&next).into()))
+        .on_switched_train(|| panic!("a disposed train hopped"));
+    let _subscription = train
+        .changes()
+        .subscribe((), || panic!("a disposed train emitted an update"));
+    assert!(format!("{train:?}").contains("next:"));
+    train.dispose();
+    train.dispose();
+    current.set_value(0.8);
+    next.set_value(0.25);
+    assert!(train.controllers().is_empty());
+    assert!(format!("{train:?}").contains("disposed"));
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn wrapped_animation_lifetimes_emit_exactly_one_create_and_dispose() {
+    use incular_animation::{AlwaysStoppedAnimation, TrainHoppingAnimation};
+    use incular_core::memory::allocations::{MemoryAllocations, ObjectEventKind};
+
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let _subscription = MemoryAllocations::current().add_listener({
+        let events = events.clone();
+        move |event| {
+            if event.library == "animation"
+                && matches!(
+                    event.class_name,
+                    "CurvedAnimation" | "TrainHoppingAnimation"
+                )
+            {
+                events.borrow_mut().push(event);
+            }
+        }
+    });
+    let curve = CurvedAnimation::new(AnimationController::new(ms(100)), Curve::Linear);
+    assert!(!curve.is_disposed());
+    curve.dispose();
+    curve.dispose();
+    assert!(curve.is_disposed());
+    drop(curve);
+    let train = TrainHoppingAnimation::new(
+        AlwaysStoppedAnimation(1.0),
+        Some(AlwaysStoppedAnimation(1.0).into()),
+    );
+    train.dispose();
+    train.dispose();
+    drop(train);
+
+    let events = events.borrow();
+    assert_eq!(events.len(), 4);
+    for (pair, expected) in events
+        .chunks_exact(2)
+        .zip(["CurvedAnimation", "TrainHoppingAnimation"])
+    {
+        assert_eq!(pair[0].class_name, expected);
+        assert_eq!(pair[1].class_name, expected);
+        assert_eq!(pair[0].id, pair[1].id);
+        assert_eq!(pair[0].kind, ObjectEventKind::Created);
+        assert_eq!(pair[1].kind, ObjectEventKind::Disposed);
+    }
+    assert_ne!(events[0].id, events[2].id);
+}

@@ -22,3 +22,18 @@ Seven pinned `animation/animations_test.dart` registrations pair:
 
 The three focused native targets passed 28 cases. Native diagnostic
 assertions cover one-line descriptions rather than Dart class spelling.
+
+## Wrapper diagnostics and object lifetimes
+
+Five more pinned originals pair. Constant, forward/reverse curved,
+and detached/attached proxy wrappers have useful single-line debug
+descriptions (:27, :51). A train starts with a pending next train,
+switches without waiting for a read, and describes the new active
+train with no pending next train (:97). Explicit disposal stops both
+clock subscriptions; further crossings do not notify it.
+
+CurvedAnimation and TrainHoppingAnimation emit one debug create and
+one debug dispose event with the same identity (:500, :122). Repeated
+disposal followed by Rust drop does not emit another event. Release
+builds do not store these debug lifetimes. Five original Flutter
+and 31 focused native tests passed.

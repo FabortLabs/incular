@@ -15,7 +15,10 @@ Pinned Flutter 3.50.0 `ab2912035e`; unchanged Incular production `c647cb85`.
   the old controller; the original debug closeChildren assertion
   passes. Only Rust tests also assert old open authority and a live
   replacement control. See `flutter350_raw_menu_close_parity`.
-- All five animation graph registrations passed on Flutter.
+- At this checkpoint all five animation graph registrations passed on Flutter.
+  The [later wrapper audit](upstream-curve-animation-lifecycle.md) covers the
+  diagnostic comparisons and disposal; the divergences below describe this
+  original run.
   Parent assignment/updates match (:60). Default, removal, and
   switching active train (:51, :77, :97) match outputs, not
   Dart-only diagnostics. Train status (:136) fires Forward and

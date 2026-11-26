@@ -338,10 +338,10 @@ packages/flutter/test/widgets/raw_menu_anchor_test.dart	513	[Group] Submenus cal
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	953	Detached MenuController does not throw when calling close	paired-match	upstream-raw-menu-animation-observer-and-shadow.md
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	962	Detached MenuController returns false when calling isOpen	paired-match	upstream-raw-menu-animation-observer-and-shadow.md
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	969	[Default] MenuController is detached on update	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#raw-menu-controller-and-close-lifecycle
-packages/flutter/test/animation/animations_test.dart	51	ProxyAnimation.toString control test	partial-match	upstream-raw-menu-animation-observer-and-shadow.md
+packages/flutter/test/animation/animations_test.dart	51	ProxyAnimation.toString control test	paired-match	upstream-curve-animation-lifecycle.md#wrapper-diagnostics-and-object-lifetimes
 packages/flutter/test/animation/animations_test.dart	60	ProxyAnimation set parent generates value changed	paired-match	upstream-raw-menu-animation-observer-and-shadow.md
 packages/flutter/test/animation/animations_test.dart	77	ReverseAnimation calls listeners	paired-match	upstream-curve-animation-lifecycle.md
-packages/flutter/test/animation/animations_test.dart	97	TrainHoppingAnimation	partial-match	upstream-raw-menu-animation-observer-and-shadow.md
+packages/flutter/test/animation/animations_test.dart	97	TrainHoppingAnimation	paired-match	upstream-curve-animation-lifecycle.md#wrapper-diagnostics-and-object-lifetimes
 packages/flutter/test/animation/animations_test.dart	136	TrainHoppingAnimation notifies status listeners	paired-match	upstream-raw-menu-animation-observer-and-shadow.md
 packages/flutter/test/painting/box_painter_test.dart	101	BoxShadow control test	partial-match	upstream-raw-menu-animation-observer-and-shadow.md
 packages/flutter/test/painting/box_painter_test.dart	138	BoxShadow BlurStyle test	partial-match	upstream-raw-menu-animation-observer-and-shadow.md
@@ -2384,3 +2384,6 @@ packages/flutter/test/animation/animations_test.dart	221	AnimationMin control te
 packages/flutter/test/animation/animations_test.dart	277	CurvedAnimation running with different forward and reverse durations.	paired-match	upstream-curve-animation-lifecycle.md
 packages/flutter/test/animation/animations_test.dart	326	CurvedAnimation stops listening to parent when disposed.	paired-match	upstream-curve-animation-lifecycle.md
 packages/flutter/test/animation/animations_test.dart	367	ReverseAnimation running with different forward and reverse durations.	paired-match	upstream-curve-animation-lifecycle.md
+packages/flutter/test/animation/animations_test.dart	27	toString control test	paired-match	upstream-curve-animation-lifecycle.md#wrapper-diagnostics-and-object-lifetimes
+packages/flutter/test/animation/animations_test.dart	122	TrainHoppingAnimation dispatches memory events	paired-match	upstream-curve-animation-lifecycle.md#wrapper-diagnostics-and-object-lifetimes
+packages/flutter/test/animation/animations_test.dart	500	'$CurvedAnimation dispatches memory events'	paired-match	upstream-curve-animation-lifecycle.md#wrapper-diagnostics-and-object-lifetimes
