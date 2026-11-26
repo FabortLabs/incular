@@ -228,6 +228,28 @@ anchored. Native and reference ending scale velocity agree within 0.0001
 (Flutter: 281.41454098027765). No translational fling is reported by the
 native scroll-to-scale path.
 
+#### Trackpad scale versus drag
+
+Pinned :774, :1092 and :1186 now pair. Direct pan/zoom scale and an actual
+horizontal trackpad drag recognizer are registered in the same ordered
+managed arena. Pinch and sufficiently large pan win for scale routed
+first; a second trackpad joins a scale already in progress, ending and
+restarting at the right boundaries. The drag is never started on those
+winning scale streams. The start-behavior case measures zoom and rotation
+from the accepting sample.
+
+The authored Flutter and native probes also take the losing-scale path:
+exactly 18 horizontal pixels is still pending, 20 wins for drag, and a
+later zoom cannot steal the gesture. Moving the reported origin changes
+the callback's position, not its pan delta; the next update is (50, 0)
+at (102, 45). Only drag ends. Native controls exercise projected vertical
+slop at 2× and panning based on path length rather than net displacement.
+
+The absolute drag recognizer is single-stream and the aggregate native
+callback is unchanged. Mixed touch-and-trackpad geometry (:890) remains
+partial pending competing touch recognition on all the corresponding
+mounted routes; no physical trackpad is claimed as tested.
+
 ### Drag before scale and signed rotations
 
 The authored Flutter and native mounted probes also reverse the route

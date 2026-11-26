@@ -1502,3 +1502,217 @@ impl DragGestureDetector {
         }
     }
 }
+
+/// The movement an absolute trackpad drag recognizer accepts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TrackpadDragAxis {
+    Horizontal,
+    Vertical,
+    Pan,
+}
+
+#[derive(Clone, Copy)]
+struct TrackpadDragContact {
+    device: u64,
+    down: PointerEvent,
+    pan: Offset,
+}
+
+/// A single-stream trackpad drag recognizer. The caller routes absolute
+/// pan/zoom events and resolves its arena before granting `accept`.
+/// Only pan influences drag; scaling and rotation alone do not move it.
+pub struct TrackpadDragRecognizer {
+    recognizer: PointerGestureRecognizer,
+    axis: PanAction,
+    contact: Option<TrackpadDragContact>,
+    wants_acceptance: bool,
+}
+
+impl TrackpadDragRecognizer {
+    #[must_use]
+    pub fn new(axis: TrackpadDragAxis, callbacks: DragCallbacks) -> Self {
+        let (axis, callbacks) = match axis {
+            TrackpadDragAxis::Horizontal => (
+                PanAction::Horizontal,
+                GestureCallbacks {
+                    on_horizontal_drag_start: callbacks.on_start,
+                    on_horizontal_drag_update: callbacks.on_update,
+                    on_horizontal_drag_end: callbacks.on_end,
+                    ..GestureCallbacks::default()
+                },
+            ),
+            TrackpadDragAxis::Vertical => (
+                PanAction::Vertical,
+                GestureCallbacks {
+                    on_vertical_drag_start: callbacks.on_start,
+                    on_vertical_drag_update: callbacks.on_update,
+                    on_vertical_drag_end: callbacks.on_end,
+                    ..GestureCallbacks::default()
+                },
+            ),
+            TrackpadDragAxis::Pan => (
+                PanAction::Pan,
+                GestureCallbacks {
+                    on_pan_start: callbacks.on_start,
+                    on_pan_update: callbacks.on_update,
+                    on_pan_end: callbacks.on_end,
+                    ..GestureCallbacks::default()
+                },
+            ),
+        };
+        let mut recognizer = PointerGestureRecognizer::new(callbacks);
+        recognizer.kind = PointerDeviceKind::Trackpad;
+        Self {
+            recognizer,
+            axis,
+            contact: None,
+            wants_acceptance: false,
+        }
+    }
+
+    #[must_use]
+    pub fn with_drag_start_behavior(mut self, behavior: DragStartBehavior) -> Self {
+        self.recognizer.callbacks.drag_start_behavior = behavior;
+        self
+    }
+
+    pub fn set_local_transform(&mut self, transform: incular_core::Transform) {
+        self.recognizer.set_local_transform(transform);
+    }
+
+    pub fn set_gesture_settings(&mut self, settings: DeviceGestureSettings) {
+        self.recognizer.set_gesture_settings(settings);
+    }
+
+    /// Routes an absolute event, returning whether it belongs to this drag.
+    /// Started drags deliver updates and end here; a pending drag asks the
+    /// caller to resolve acceptance without delivering callbacks.
+    pub fn observe(&mut self, event: crate::PointerPanZoomEvent) -> bool {
+        use crate::PointerPanZoomPhase;
+
+        self.wants_acceptance = false;
+        if event.phase == PointerPanZoomPhase::Start {
+            if self.contact.is_some() {
+                return false;
+            }
+            self.contact = Some(TrackpadDragContact {
+                device: event.device,
+                down: PointerEvent {
+                    pointer: event.pointer,
+                    position: event.position,
+                    phase: PointerPhase::Down,
+                    time: event.time,
+                },
+                pan: Offset::ZERO,
+            });
+            self.recognizer.drag = DragProgress::at(event.position);
+            self.recognizer.drag.pending_time = Some(event.time);
+            self.recognizer.velocity.clear();
+            if !event.synthesized {
+                self.recognizer
+                    .velocity
+                    .add_position(event.time, Offset::ZERO);
+            }
+            return true;
+        }
+
+        let Some(contact) = self.contact.as_mut().filter(|contact| {
+            (contact.device, contact.down.pointer) == (event.device, event.pointer)
+        }) else {
+            return false;
+        };
+        let inner = &mut self.recognizer;
+        match event.phase {
+            PointerPanZoomPhase::Start => unreachable!(),
+            PointerPanZoomPhase::Update { pan, .. } => {
+                if !event.synthesized {
+                    inner.velocity.add_position(event.time, pan);
+                }
+                // Moving the event origin changes the callback's position, not
+                // its pan delta or the distance traveled toward acceptance.
+                let position = event.position + pan;
+                let step = pan - contact.pan;
+                contact.pan = pan;
+                inner.drag.last_position = position;
+                if inner.pan_started {
+                    let update = inner.drag_update_local(
+                        self.axis,
+                        inner.local_delta(step),
+                        position,
+                        inner.local(position),
+                        event.time,
+                    );
+                    inner.dispatch(update);
+                    return true;
+                }
+                inner.drag.pending = pan;
+                let local_pan = inner.local_delta(pan);
+                inner.drag.pending_local = local_pan;
+                inner.drag.pending_time = Some(event.time);
+                let (distance, slop) = match self.axis {
+                    PanAction::Horizontal => (
+                        f64::from(local_pan.x.abs()) * inner.world_axis_scale[0],
+                        compute_hit_slop(inner.kind, inner.gesture_settings),
+                    ),
+                    PanAction::Vertical => (
+                        f64::from(local_pan.y.abs()) * inner.world_axis_scale[1],
+                        compute_hit_slop(inner.kind, inner.gesture_settings),
+                    ),
+                    PanAction::Pan => {
+                        inner.drag.moved_pan += step.x.hypot(step.y);
+                        (
+                            f64::from(inner.drag.moved_pan),
+                            compute_pan_slop(inner.kind, inner.gesture_settings),
+                        )
+                    }
+                };
+                self.wants_acceptance = distance > f64::from(slop);
+            }
+            PointerPanZoomPhase::End => {
+                self.contact = None;
+                if let Some(end) = inner.drag_end(event.time) {
+                    inner.dispatch(end);
+                }
+            }
+        }
+        true
+    }
+
+    #[must_use]
+    pub const fn wants_acceptance(&self) -> bool {
+        self.wants_acceptance
+    }
+
+    /// Called by the owner of the arena after this drag wins.
+    pub fn accept(&mut self) {
+        self.wants_acceptance = false;
+        let Some(contact) = self.contact else { return };
+        let inner = &mut self.recognizer;
+        if inner.pan_started {
+            return;
+        }
+        let start = inner.begin_drag(
+            contact.down,
+            self.axis,
+            &contact.down,
+            inner.callbacks.drag_start_behavior,
+        );
+        inner.dispatch(start);
+        if let Some(update) = inner.take_start_update() {
+            inner.dispatch(update);
+        }
+    }
+
+    /// Drops the matching losing stream without emitting a start or end.
+    pub fn reject(&mut self, device: u64, pointer: u64) {
+        if self
+            .contact
+            .is_some_and(|c| (c.device, c.down.pointer) == (device, pointer))
+        {
+            self.contact = None;
+            self.wants_acceptance = false;
+            self.recognizer.pan_started = false;
+            self.recognizer.pan_action = None;
+        }
+    }
+}

@@ -76,6 +76,7 @@ pub use multitap::{
 };
 pub use pointer::{
     DragGestureDetector, FlingLimits, GestureDetector, PointerGestureRecognizer, TapMemory,
+    TrackpadDragAxis, TrackpadDragRecognizer,
 };
 pub use signal::{PointerSignalError, PointerSignalEvent, PointerSignalResolver};
 pub use pointer_resampler::PointerEventResampler;
