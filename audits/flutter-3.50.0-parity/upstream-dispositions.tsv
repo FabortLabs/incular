@@ -2570,3 +2570,4 @@ packages/flutter/test/widgets/editable_text_test.dart	12174	onEditingComplete ca
 packages/flutter/test/widgets/editable_text_test.dart	12207	onSubmitted can throw errors	paired-match	upstream-editable-action-focus.md#completion-and-submission-errors
 packages/flutter/test/rendering/editable_test.dart	80	RenderEditable respects clipBehavior	paired-match	upstream-editable-paint-clip.md#default-and-live-clip-mode
 packages/flutter/test/widgets/editable_text_test.dart	11497	EditableText can set and update clipBehavior	paired-match	upstream-editable-paint-clip.md#default-and-live-clip-mode
+packages/flutter/test/rendering/editable_test.dart	334	Can change textAlign	paired-match	upstream-editable-defaults.md#retained-alignment-invalidation

@@ -429,3 +429,39 @@ fn pointer_maps_through_centered_text() {
     assert!(tree.text_field_set_caret(root, Offset::new(ink_max + 2., 16.), false, now));
     assert_eq!(controller.selection().extent, 2);
 }
+
+#[test]
+fn changing_text_alignment_invalidates_the_retained_text_layout_once() {
+    let size = Size::new(200., 32.);
+    let controller = TextEditingController::with_text("test");
+    let scene = |center| {
+        let field = EditableText::new(controller.clone())
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .size(size);
+        Widget::from(if center {
+            field.text_align(TextAlign::Center)
+        } else {
+            field
+        })
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scene(false)).unwrap();
+    let render = tree.render_id(root);
+    layout_tight(&mut tree, size.width, size.height);
+    let left = ink_bounds(&glyph_edges(&tree.paint())).0;
+    assert_eq!(left, 0.);
+    let clean = tree.diagnostics().layouts;
+    layout_tight(&mut tree, size.width, size.height);
+    assert_eq!(tree.diagnostics().layouts, clean);
+
+    tree.update(root, scene(true)).unwrap();
+    assert_eq!(tree.diagnostics().layouts, clean, "not yet processed");
+    layout_tight(&mut tree, size.width, size.height);
+    assert_eq!(tree.render_id(root), render, "updated the original render");
+    assert!(tree.diagnostics().layouts > clean);
+    let centered = ink_bounds(&glyph_edges(&tree.paint())).0;
+    assert!(centered > left + 10.);
+    let settled = tree.diagnostics().layouts;
+    layout_tight(&mut tree, size.width, size.height);
+    assert_eq!(tree.diagnostics().layouts, settled);
+}

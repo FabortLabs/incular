@@ -65,3 +65,12 @@ The native fixture compares the actual retained display-list order
 and the number and color of rectangles. All 33 focused native
 checks passed. The raw editor still defaults to painting its caret
 below the text, and the renderer remains wgpu.
+
+## Retained alignment invalidation
+
+Pinned `rendering/editable_test.dart:334` passed. The native graph
+starts at default Start, is quiet on a repeated layout without
+changes, and schedules one real layout after Center is set. The
+same render object survives, the painted glyphs move to the
+center, and subsequent identical layouts are quiet. All nine
+focused alignment controls passed.
