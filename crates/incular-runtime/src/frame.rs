@@ -3497,45 +3497,79 @@ impl Runtime {
         if !editable {
             return false;
         }
-        let handled = match action {
-            TextInputAction::Newline => {
-                if self.tree.is_multiline_text_field(field) {
-                    return true;
-                } else {
-                    self.finish_text_editing(field)
-                }
-            }
-            TextInputAction::Next | TextInputAction::Previous => {
-                if !self.tree.text_field_has_editing_complete(field) {
-                    if let Some(controller) = self.tree.text_controller(field) {
-                        controller.set_composing(None);
-                    }
-                    self.focus_next(action == TextInputAction::Previous);
-                }
-                self.tree.submit_text_field(field)
-            }
-            TextInputAction::Done
-            | TextInputAction::Go
-            | TextInputAction::Search
-            | TextInputAction::Send => self.finish_text_editing(field),
-            TextInputAction::Unspecified | TextInputAction::None => false,
-        };
+        if action == TextInputAction::Newline && self.tree.is_multiline_text_field(field) {
+            return true;
+        }
+        let handled = self.finish_text_editing(field, action);
         if handled {
             self.frame_requested = true;
         }
         handled
     }
 
-    /// Flutter's `_finalizeEditing` for a completion action. Without an
-    /// `on_editing_complete` callback the field gives up focus first, then
-    /// `on_submit` runs; with one, the callback runs before `on_submit` and
-    /// focus is left alone.
-    pub(crate) fn finish_text_editing(&mut self, field: ElementId) -> bool {
+    /// Flutter's `_finalizeEditing`. An explicit completion callback
+    /// replaces the default composition and focus policy. Run submission
+    /// before settling a blur so a synchronous refocus can cancel that blur.
+    fn finish_text_editing(&mut self, field: ElementId, action: TextInputAction) -> bool {
+        let should_move_focus = !matches!(
+            action,
+            TextInputAction::Unspecified | TextInputAction::None
+        );
+        let will_submit = self.tree.text_field_has_submit(field);
+        let mut requested_blur = false;
+        let mut focus_node = None;
         if !self.tree.text_field_has_editing_complete(field) {
-            self.set_focus(None);
+            if let Some(controller) = self.tree.text_controller(field) {
+                controller.clear_composing();
+            }
+            if should_move_focus {
+                match action {
+                    TextInputAction::Next | TextInputAction::Previous => {
+                        self.focus_next(action == TextInputAction::Previous);
+                    }
+                    _ => {
+                        requested_blur = true;
+                        focus_node = self.tree.focus_node_at(field);
+                        if let Some(node) = &focus_node {
+                            node.unfocus();
+                        }
+                    }
+                }
+            }
         }
-        self.tree.submit_text_field(field)
+        let handled = self.tree.submit_text_field(field);
+        if should_move_focus {
+            let refocus_requested = focus_node.as_ref().is_some_and(|node| {
+                node.has_pending_focus_request() && self.tree.can_request_focus(field)
+            });
+            self.adopt_external_focus_change();
+            if requested_blur && self.focused == Some(field) && !refocus_requested {
+                // An ordinary TextField may not supply a FocusNode. It
+                // still releases focus after submission.
+                self.set_focus(None);
+            }
+            if will_submit && self.focused == Some(field) {
+                self.restart_submitted_text_input(field);
+            }
+        }
+        handled
     }
+
+    fn restart_submitted_text_input(&mut self, field: ElementId) {
+        let Some(old) = self
+            .text_input_client
+            .filter(|connection| connection.target == field)
+        else {
+            return;
+        };
+        // Switch client generations without requesting Hide between them.
+        // A late close from the old attachment cannot close the replacement.
+        self.text_input_client = None;
+        self.text_input_commands
+            .push_back(TextInputCommand::Clear { client: old.client });
+        self.sync_text_input_client();
+    }
+
     /// Drops the open composition, clearing the owner's stale preedit.
     /// Single cleanup path: the owner's own controller is the only
     /// writer, so cleanup never lands in another editor. Clearing an

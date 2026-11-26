@@ -1849,6 +1849,18 @@ impl WidgetTree {
         })
     }
 
+    /// Whether completing this editor will invoke a submission callback.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn text_field_has_submit(&self, id: ElementId) -> bool {
+        self.elements.get(id.0).is_some_and(|element| {
+            matches!(
+                element.widget.kind(),
+                WidgetKind::TextField(spec) if spec.on_submit.is_some()
+            )
+        })
+    }
+
     pub(super) fn text_field_ancestor(&self, mut id: ElementId) -> Option<ElementId> {
         loop {
             if self.is_text_field(id) {
