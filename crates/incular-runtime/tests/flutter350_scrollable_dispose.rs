@@ -35,9 +35,9 @@ fn touch(runtime: &mut Runtime, time: Instant, id: u64, phase: PointerPhase, at:
     ));
 }
 
-fn fling_y(runtime: &mut Runtime, now: Instant, x: f32, start: f32, step: f32) {
+fn fling_y(runtime: &mut Runtime, now: Instant, x: f32, start: f32, step: f32, samples: u64) {
     touch(runtime, now, 1, PointerPhase::Down, Offset::new(x, start));
-    for i in 1..=7 {
+    for i in 1..=samples {
         touch(
             runtime,
             now + Duration::from_millis(i * 16),
@@ -48,10 +48,10 @@ fn fling_y(runtime: &mut Runtime, now: Instant, x: f32, start: f32, step: f32) {
     }
     touch(
         runtime,
-        now + Duration::from_millis(113),
+        now + Duration::from_millis(16 * samples + 1),
         1,
         PointerPhase::Up,
-        Offset::new(x, start + step * 7.),
+        Offset::new(x, start + step * samples as f32),
     );
 }
 
@@ -78,6 +78,7 @@ fn replacing_a_list_on_the_frame_its_fling_would_end_releases_the_position() {
         400.,
         300.,
         -28.,
+        7,
     );
     frame(&mut runtime, now + Duration::from_millis(123));
     let dragged = controller.offset();
@@ -113,7 +114,7 @@ fn replacing_nested_scrollables_while_holding_overscroll_detaches_both_positions
         let at = |ms| now + Duration::from_millis(ms);
         frame(&mut runtime, now);
         assert!(controller.has_clients() && outer_controller.has_clients());
-        fling_y(&mut runtime, at(10), 250., 50., 70.);
+        fling_y(&mut runtime, at(10), 250., 50., 70., 7);
         frame(&mut runtime, at(123));
         frame(&mut runtime, at(223));
         let previous = controller.offset();
@@ -156,7 +157,7 @@ fn ending_a_hold_without_dragging_resumes_springback() {
         let at = |ms| now + Duration::from_millis(ms);
         frame(&mut runtime, now);
 
-        fling_y(&mut runtime, at(10), 400., 50., 70.);
+        fling_y(&mut runtime, at(10), 400., 50., 70., 7);
         frame(&mut runtime, at(123));
         frame(&mut runtime, at(223));
         let previous = controller.offset();
@@ -185,4 +186,195 @@ fn ending_a_hold_without_dragging_resumes_springback() {
         assert!(controller.offset().abs() < 0.001);
         assert!(!controller.is_scrolling());
     }
+}
+
+#[test]
+fn settled_touch_flings_can_restart_and_advance_the_same_position() {
+    let controller = ScrollController::new();
+    let list = ListView::new([SizedBox::new().height(100_000.)]).controller(controller.clone());
+    let mut runtime = Runtime::new(Directionality::new(TextDirection::Ltr, list).into()).unwrap();
+    let now = Instant::now();
+    frame(&mut runtime, now);
+    assert_eq!(controller.offset(), 0.);
+    assert!(controller.max_offset() > 10_000.);
+
+    let mut previous = 0.;
+    for start in [10, 6010] {
+        // 200 logical pixels at 500 px/s, as in scroll_interaction_test.dart.
+        fling_y(
+            &mut runtime,
+            now + Duration::from_millis(start),
+            200.,
+            300.,
+            -8.,
+            25,
+        );
+        frame(&mut runtime, now + Duration::from_millis(start + 401));
+        let offset_at_release = controller.offset();
+        frame(&mut runtime, now + Duration::from_millis(start + 5401));
+        let settled = controller.offset();
+        assert!(
+            offset_at_release > previous,
+            "the new contact advances the position"
+        );
+        assert!(
+            settled > offset_at_release,
+            "motion continues after release"
+        );
+        assert!(!controller.is_scrolling(), "the position returns to idle");
+        previous = settled;
+    }
+}
+
+fn reference_fling(runtime: &mut Runtime, start: Instant, distance: f32, speed: f64) -> Instant {
+    let center = Offset::new(400., 300.);
+    touch(runtime, start, 1, PointerPhase::Down, center);
+    let sample_us = 1_000_000. * f64::from(distance.abs()) / (50. * speed);
+    let mut frame_us = 0.;
+    for index in 0..=50 {
+        let us = f64::from(index) * sample_us;
+        touch(
+            runtime,
+            start + Duration::from_micros(us.round() as u64),
+            1,
+            PointerPhase::Move,
+            center + Offset::new(0., distance * index as f32 / 50.),
+        );
+        if us + sample_us - frame_us > 16_000. {
+            frame_us = us + sample_us;
+            frame(runtime, start + Duration::from_micros(frame_us as u64));
+        }
+    }
+    let end = start + Duration::from_micros((51. * sample_us).round() as u64);
+    touch(
+        runtime,
+        end,
+        1,
+        PointerPhase::Up,
+        center + Offset::new(0., distance),
+    );
+    end
+}
+
+fn tap_center(runtime: &mut Runtime, now: Instant) {
+    let center = Offset::new(400., 300.);
+    touch(runtime, now, 2, PointerPhase::Down, center);
+    touch(
+        runtime,
+        now + Duration::from_millis(1),
+        2,
+        PointerPhase::Up,
+        center,
+    );
+    frame(runtime, now + Duration::from_millis(51));
+}
+
+fn taps_around_a_fling(stop_early: bool) {
+    use incular_core::{Color, DragStartBehavior};
+    use incular_widgets::{GestureDetector, Widget};
+    use std::{cell::RefCell, rc::Rc};
+
+    let tapped = Rc::new(RefCell::new(Vec::new()));
+    let controller = ScrollController::new();
+    let rows = (0..250).map(|index| {
+        let tapped = tapped.clone();
+        let row = Widget::box_(Size::new(800., 14.), Color::WHITE);
+        GestureDetector::new(row).on_tap(move || tapped.borrow_mut().push(index))
+    });
+    let list = ListView::new(rows)
+        .item_extent(14.)
+        .controller(controller.clone())
+        .drag_start_behavior(DragStartBehavior::Down);
+    let configured = ScrollConfiguration::new(list)
+        .behavior(ScrollBehavior::new().platform(TargetPlatform::Android));
+    let mut runtime =
+        Runtime::new(Directionality::new(TextDirection::Ltr, configured).into()).unwrap();
+    let now = Instant::now();
+    frame(&mut runtime, now);
+    assert!(tapped.borrow().is_empty());
+    tap_center(&mut runtime, now + Duration::from_millis(1));
+    assert_eq!(*tapped.borrow(), [21]);
+
+    let release = reference_fling(&mut runtime, now + Duration::from_millis(60), -200., 1000.);
+    let first_fling_frame = release + Duration::from_millis(50);
+    frame(&mut runtime, first_fling_frame);
+    assert_eq!(*tapped.borrow(), [21]);
+    assert!(controller.is_scrolling());
+
+    if stop_early {
+        let stopping_at = controller.offset();
+        tap_center(&mut runtime, first_fling_frame + Duration::from_millis(1));
+        assert_eq!(
+            *tapped.borrow(),
+            [21],
+            "the stop tap must not reach the row"
+        );
+        assert_eq!(controller.offset(), stopping_at);
+        assert!(!controller.is_scrolling());
+        tap_center(&mut runtime, first_fling_frame + Duration::from_millis(60));
+        assert_eq!(*tapped.borrow(), [21, 35]);
+    } else {
+        let settled_frame = first_fling_frame + Duration::from_secs(50);
+        frame(&mut runtime, settled_frame);
+        assert!(!controller.is_scrolling());
+        tap_center(&mut runtime, settled_frame + Duration::from_millis(1));
+        assert_eq!(*tapped.borrow(), [21, 49]);
+    }
+}
+
+#[test]
+fn the_first_tap_stops_a_fling_and_only_the_next_tap_hits_the_row() {
+    taps_around_a_fling(true);
+}
+
+#[test]
+fn a_settled_fling_does_not_consume_the_next_tap() {
+    taps_around_a_fling(false);
+}
+
+#[test]
+fn stopping_a_driven_scroll_does_not_dispatch_a_new_contact_to_rows() {
+    use incular_animation::Curve;
+    use incular_core::Color;
+    use incular_widgets::{GestureDetector, Listener, Widget};
+    use std::{cell::Cell, rc::Rc};
+
+    let presses = Rc::new(Cell::new(0));
+    let taps = Rc::new(Cell::new(0));
+    let controller = ScrollController::new();
+    let rows = (0..100).map(|_| {
+        let presses = presses.clone();
+        let taps = taps.clone();
+        let row = Widget::box_(Size::new(800., 40.), Color::WHITE);
+        Listener::new(GestureDetector::new(row).on_tap(move || taps.set(taps.get() + 1)))
+            .on_pointer_down(move |_| presses.set(presses.get() + 1))
+    });
+    let mut runtime = Runtime::new(
+        Directionality::new(
+            TextDirection::Ltr,
+            ListView::new(rows)
+                .item_extent(40.)
+                .controller(controller.clone()),
+        )
+        .into(),
+    )
+    .unwrap();
+    let now = Instant::now();
+    let at = |ms| now + Duration::from_millis(ms);
+    frame(&mut runtime, now);
+    tap_center(&mut runtime, at(1));
+    assert_eq!((presses.get(), taps.get()), (1, 1));
+
+    assert!(controller.animate_to(400., Duration::from_secs(1), Curve::Linear));
+    frame(&mut runtime, at(60));
+    frame(&mut runtime, at(160));
+    let stopped = controller.offset();
+    assert!(stopped > 0. && stopped < 400.);
+    tap_center(&mut runtime, at(161));
+    assert_eq!((presses.get(), taps.get()), (1, 1));
+    assert_eq!(controller.offset(), stopped);
+    assert!(!controller.is_scrolling());
+
+    tap_center(&mut runtime, at(220));
+    assert_eq!((presses.get(), taps.get()), (2, 2));
 }

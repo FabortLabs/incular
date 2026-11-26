@@ -518,7 +518,11 @@ impl WidgetTree {
     /// `controller`: one of its stored leases names the controller's
     /// current attachment identity. Identities are never reused, so a
     /// match proves liveness; stale leases and failed claims never match.
-    fn viewport_lease_live(&self, element: ElementId, controller: &ScrollController) -> bool {
+    pub(super) fn viewport_lease_live(
+        &self,
+        element: ElementId,
+        controller: &ScrollController,
+    ) -> bool {
         let Some(live) = controller.attachment_id() else {
             return false;
         };
@@ -858,7 +862,7 @@ impl WidgetTree {
         target: Option<RenderObjectId>,
         coincident_gestures: &[ElementId],
     ) -> Option<ElementId> {
-        use incular_core::PointerPhase;
+        use incular_core::{PointerDeviceKind, PointerPhase};
 
         let key = GestureArenaKey::pointer_device(window, device, event.pointer);
         self.flush_single_tap_deadlines(event.time);
@@ -1581,7 +1585,7 @@ impl WidgetTree {
             // still starts a zero-velocity ballistic to settle overscroll or
             // a snapped position (ScrollDragController.cancel).
             let cancelled = event.phase == PointerPhase::Cancel;
-            self.maybe_begin_fling(key, cancelled);
+            self.maybe_begin_fling(key, cancelled, kind != PointerDeviceKind::Trackpad);
             self.finish_drag(key, cancelled, event.position);
             self.cancel_gesture_stream(key, cancelled);
         } else {
@@ -1599,7 +1603,12 @@ impl WidgetTree {
     /// close here with `End`: only the gesture's own viewport goes
     /// ballistic. Fling remainder routing is a separate, unbuilt
     /// policy — this transfer never carries it implicitly.
-    fn maybe_begin_fling(&mut self, key: GestureArenaKey, cancelled: bool) {
+    fn maybe_begin_fling(
+        &mut self,
+        key: GestureArenaKey,
+        cancelled: bool,
+        ignores_child_pointers: bool,
+    ) {
         let Some(bracket) = self.input.scroll_brackets.remove(&key) else {
             return;
         };
@@ -1643,6 +1652,7 @@ impl WidgetTree {
                 self.input.scroll_flings.push(ScrollFlingDriver {
                     _completion: None,
                     overscroll: simulation.may_overscroll(),
+                    ignores_child_pointers,
                     simulation,
                     started: None,
                     simulated: from,
@@ -1678,6 +1688,7 @@ impl WidgetTree {
         self.input.scroll_flings.push(ScrollFlingDriver {
             _completion: None,
             controller: bracket.controller,
+            ignores_child_pointers,
             activity,
             simulation,
             // Only bouncing physics let the position leave the content; the
@@ -1879,6 +1890,7 @@ impl WidgetTree {
             self.input.scroll_flings.push(ScrollFlingDriver {
                 _completion: None,
                 overscroll: simulation.may_overscroll(),
+                ignores_child_pointers: true,
                 simulation,
                 started: Some(now),
                 simulated: from,
@@ -1948,6 +1960,8 @@ impl WidgetTree {
                     _completion: None,
                     simulation,
                     overscroll: true,
+                    // A programmatic jump begins this settle from idle.
+                    ignores_child_pointers: false,
                     started: None,
                     simulated: from,
                     expected_offset: from,
@@ -1978,6 +1992,7 @@ impl WidgetTree {
                     request.curve,
                 ),
                 overscroll: false,
+                ignores_child_pointers: true,
                 started: None,
                 simulated: from,
                 expected_offset: from,

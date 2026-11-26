@@ -1294,6 +1294,29 @@ impl WidgetTree {
         crate::scrolling::sliver_paint_slots(element.sliver_child_ids(), config.paint_order)
     }
 
+    /// A moving Flutter Scrollable can ignore pointer hits on its content
+    /// without taking the viewport's own recognizer out of the hit path. A
+    /// stop tap ends the old ballistic; that contact never hits a child.
+    fn viewport_ignores_child_pointers(&self, id: RenderObjectId, kind: &RenderKind) -> bool {
+        if self.input.scroll_flings.is_empty() {
+            return false;
+        }
+        let controller = match kind {
+            RenderKind::Scroll { controller, .. } => controller,
+            RenderKind::SliverViewport { config } => &config.controller,
+            RenderKind::ListWheelScrollView { config } => config.scroll_interaction().0,
+            _ => return false,
+        };
+        self.input.scroll_flings.iter().any(|driver| {
+            driver.ignores_child_pointers
+                && driver.controller == *controller
+                && driver.activity.is_current()
+                && driver.expected_revision == controller.revision()
+        }) && self
+            .element_for_render(id)
+            .is_some_and(|element| self.viewport_lease_live(element, controller))
+    }
+
     /// Children in paint order, hit-tested in reverse. Sliver viewports paint
     /// whole slivers in their SliverPaintOrder; an indexed stack shows one child.
     fn hit_children<'a>(
@@ -1301,6 +1324,9 @@ impl WidgetTree {
         id: RenderObjectId,
         node: &'a RenderNode,
     ) -> std::borrow::Cow<'a, [RenderObjectId]> {
+        if self.viewport_ignores_child_pointers(id, node.object.kind()) {
+            return std::borrow::Cow::Borrowed(&[]);
+        }
         if let Some(slots) = self.viewport_paint_slots(id, node) {
             slots
                 .into_iter()

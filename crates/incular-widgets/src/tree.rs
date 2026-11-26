@@ -1095,6 +1095,9 @@ struct ScrollFlingDriver {
     /// Whether the simulation may carry the offset beyond the content
     /// (bouncing physics); clamping physics clamp every step.
     overscroll: bool,
+    /// Flutter BallisticScrollActivity inherits this from its predecessor;
+    /// a driven animateTo always suppresses hits on viewport children.
+    ignores_child_pointers: bool,
     /// The first frame the driver ran. Flutter's animation controller starts
     /// its simulation clock at the first tick after the release, so that
     /// frame applies no motion.

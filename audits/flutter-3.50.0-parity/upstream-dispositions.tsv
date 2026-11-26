@@ -2446,3 +2446,6 @@ packages/flutter/test/services/asset_bundle_test.dart	261	Throws expected except
 packages/flutter/test/services/asset_bundle_test.dart	226	AssetImage.obtainKey succeeds with ImageConfiguration.empty	paired-match	upstream-asset-image-keys.md#empty-image-configuration
 packages/flutter/test/widgets/scrollable_dispose_test.dart	11	simultaneously dispose a widget and end the scroll animation	paired-match	upstream-scrollable-disposal.md
 packages/flutter/test/widgets/scrollable_dispose_test.dart	31	Disposing a (nested) Scrollable while holding in overscroll does not crash	paired-match	upstream-scrollable-disposal.md
+packages/flutter/test/widgets/scroll_interaction_test.dart	9	Scroll flings twice in a row does not crash	paired-match	upstream-scroll-fling-taps.md
+packages/flutter/test/widgets/scrollable_fling_test.dart	101	fling and tap to stop	paired-match	upstream-scroll-fling-taps.md
+packages/flutter/test/widgets/scrollable_fling_test.dart	136	fling and wait and tap	paired-match	upstream-scroll-fling-taps.md
