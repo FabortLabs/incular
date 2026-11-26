@@ -150,14 +150,30 @@ impl AccessibilityMessenger for Failing {
 }
 
 #[test]
-fn a_node_transport_failure_keeps_its_error_and_send_context() {
+fn an_attached_node_reports_its_async_transport_error_once_with_context() {
     let mut service = SemanticsService::new(Failing);
+    let reports = Rc::new(RefCell::new(Vec::new()));
+    let seen = reports.clone();
+    service.set_node_error_reporter(move |report| {
+        let SemanticsMessageError::Send(source) = report.error else {
+            panic!("the transport failure must keep its original error");
+        };
+        seen.borrow_mut().push((
+            report.node_id,
+            report.library,
+            report.context,
+            source.to_string(),
+        ));
+    });
+    assert!(!immediate(service.send_node_event(None, SemanticsEvent::Focus)).unwrap());
+    assert!(reports.borrow().is_empty());
     let mut result = std::pin::pin!(service.send_node_event(
         Some(1),
         SemanticsEvent::Announce(SemanticsAnnouncement::new(0, "hello", TextDirection::Ltr)),
     ));
     let mut cx = Context::from_waker(Waker::noop());
     assert!(result.as_mut().poll(&mut cx).is_pending());
+    assert!(reports.borrow().is_empty());
     let Poll::Ready(Err(error)) = result.as_mut().poll(&mut cx) else {
         panic!("missing send error");
     };
@@ -167,5 +183,14 @@ fn a_node_transport_failure_keeps_its_error_and_send_context() {
     );
     assert!(
         matches!(error,SemanticsMessageError::Send(source) if source.to_string()=="Test exception")
+    );
+    assert_eq!(
+        *reports.borrow(),
+        [(
+            1,
+            "semantics library",
+            "while sending accessibility event",
+            "Test exception".to_owned()
+        )]
     );
 }

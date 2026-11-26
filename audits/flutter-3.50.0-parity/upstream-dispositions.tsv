@@ -1073,7 +1073,7 @@ packages/flutter/test/semantics/semantics_update_test.dart	308	Semantics update 
 packages/flutter/test/semantics/semantics_service_test.dart	12	Semantic announcement	paired-match	upstream-semantics-messages.md
 packages/flutter/test/semantics/semantics_test.dart	70	SemanticsConfiguration can set both string label/value/hint and attributed version	partial-match	upstream-attributed-semantics.md#retained-speech-span-metadata
 packages/flutter/test/semantics/semantics_test.dart	901	Attributed String can concat	paired-match	upstream-attributed-semantics.md
-packages/flutter/test/semantics/semantics_node_send_event_test.dart	17	SemanticsNode.sendEvent reports error to FlutterError	partial-match	upstream-semantics-messages.md
+packages/flutter/test/semantics/semantics_node_send_event_test.dart	17	SemanticsNode.sendEvent reports error to FlutterError	paired-match	upstream-semantics-messages.md
 packages/flutter/test/services/text_boundary_test.dart	60	Character boundary works	paired-match	upstream-text-boundary-services.md
 packages/flutter/test/services/text_boundary_test.dart	83	Character boundary works with grapheme	paired-match	upstream-text-boundary-services.md
 packages/flutter/test/services/text_boundary_test.dart	108	wordBoundary.moveByWordBoundary	paired-match	upstream-text-boundary-services.md

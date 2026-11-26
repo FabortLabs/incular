@@ -72,7 +72,7 @@ pub use file_dialog::{
 };
 pub use semantics_messages::{
     AccessibilityMessenger, Assertiveness, SemanticsAnnouncement, SemanticsEvent,
-    SemanticsMessageError, SemanticsService,
+    SemanticsMessageError, SemanticsNodeErrorReport, SemanticsService,
 };
 pub use incular_config::{TransparencyMode, WindowSizePolicy};
 pub use operation::{

@@ -8,9 +8,12 @@ and omit default polite assertiveness but encode explicit assertive as
 it does not make an unconnected platform speak.
 
 The focused native adapter also encodes node-scoped tooltip, tap,
-long-press, and focus and skips detached nodes. The source transport
-error and its send context survive an asynchronous failure. This is
-a partial pair of `semantics_node_send_event_test.dart:17`: the Rust
-caller receives a typed error, not a global FlutterError publication.
-Both exact Flutter originals, three Rust adapter tests, and six
-neighboring codec tests passed.
+long-press, and focus and skips detached nodes. The exact
+`semantics_node_send_event_test.dart:17` reference and native test
+now pair the asynchronous error report. An attached node produces
+no report while transport is pending, then exactly one carrying the
+original exception and the semantics library and delivery context.
+Native embedders install the framework reporter on the service
+instead of mutating a process-global FlutterError handler. Rust
+callers still receive the typed error. Detached nodes never send or
+report. Three targeted adapter tests and six adjacent codec tests passed.

@@ -113,10 +113,22 @@ pub enum SemanticsMessageError<E> {
     Send(E),
 }
 
+/// Async failure reported by an attached semantic node. The original
+/// transport error is preserved alongside its framework context.
+pub struct SemanticsNodeErrorReport<'a, E> {
+    pub node_id: i64,
+    pub error: &'a SemanticsMessageError<E>,
+    pub library: &'static str,
+    pub context: &'static str,
+}
+
+type NodeErrorReporter<E> = Box<dyn for<'a> FnMut(SemanticsNodeErrorReport<'a, E>)>;
+
 /// Flutter's `SemanticsService` for embedders that own an accessibility
 /// channel. It waits for transport delivery; it does not speak the text itself.
-pub struct SemanticsService<M> {
+pub struct SemanticsService<M: AccessibilityMessenger> {
     messenger: M,
+    node_error_reporter: Option<NodeErrorReporter<M::Error>>,
 }
 
 impl<M: AccessibilityMessenger> SemanticsService<M> {
@@ -124,7 +136,24 @@ impl<M: AccessibilityMessenger> SemanticsService<M> {
 
     #[must_use]
     pub const fn new(messenger: M) -> Self {
-        Self { messenger }
+        Self {
+            messenger,
+            node_error_reporter: None,
+        }
+    }
+
+    /// Registers the embedder's framework error handler for node events.
+    /// The typed Result is still returned to Rust callers. Announcements
+    /// made directly through the service report errors to their caller only.
+    pub fn set_node_error_reporter(
+        &mut self,
+        reporter: impl for<'a> FnMut(SemanticsNodeErrorReport<'a, M::Error>) + 'static,
+    ) {
+        self.node_error_reporter = Some(Box::new(reporter));
+    }
+
+    pub fn clear_node_error_reporter(&mut self) {
+        self.node_error_reporter = None;
     }
 
     /// Sends one view-targeted announcement without a node ID.
@@ -146,8 +175,18 @@ impl<M: AccessibilityMessenger> SemanticsService<M> {
         let Some(node_id) = attached_node_id else {
             return Ok(false);
         };
-        self.send(Some(node_id), event).await?;
-        Ok(true)
+        let result = self.send(Some(node_id), event).await;
+        if let Err(error) = &result
+            && let Some(reporter) = &mut self.node_error_reporter
+        {
+            reporter(SemanticsNodeErrorReport {
+                node_id,
+                error,
+                library: "semantics library",
+                context: "while sending accessibility event",
+            });
+        }
+        result.map(|()| true)
     }
 
     async fn send(
