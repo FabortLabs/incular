@@ -994,7 +994,7 @@ packages/flutter/test/rendering/proxy_box_test.dart	100	RenderSemanticsGestureHa
 packages/flutter/test/widgets/gesture_detector_semantics_test.dart	13	Vertical gesture detector has up/down actions	paired-match	upstream-semantic-gesture-directions.md#gesturedetector-recognizer-phases
 packages/flutter/test/widgets/gesture_detector_semantics_test.dart	62	Horizontal gesture detector has up/down actions	paired-match	upstream-semantic-gesture-directions.md#gesturedetector-recognizer-phases
 packages/flutter/test/widgets/gesture_detector_semantics_test.dart	111	All registered handlers for the gesture kind are called	paired-match	upstream-semantic-gesture-directions.md#gesturedetector-recognizer-phases
-packages/flutter/test/widgets/semantics_test.dart	474	Semantics widget supports all actions	partial-match	upstream-semantic-gesture-directions.md#explicit-semantics-callbacks
+packages/flutter/test/widgets/semantics_test.dart	474	Semantics widget supports all actions	paired-match	upstream-semantic-gesture-directions.md#full-ordinary-semantics-action-inventory
 packages/flutter/test/gestures/transformed_monodrag_test.dart	15	gets local coordinates	paired-match	upstream-transformed-monodrag.md
 packages/flutter/test/gestures/transformed_monodrag_test.dart	71	kTouchSlop is evaluated in the global coordinate space when scaled up	paired-match	upstream-transformed-monodrag.md
 packages/flutter/test/gestures/transformed_monodrag_test.dart	177	kTouchSlop is evaluated in the global coordinate space when scaled down	paired-match	upstream-transformed-monodrag.md

@@ -67,3 +67,14 @@ register logical forward/backward callbacks explicitly.
 Pinned `widgets/semantics_test.dart:474` passes on Flutter. This
 is partial for that registration: it also covers dismiss, clipboard,
 cursor movement and additional actions beyond this directional batch.
+
+## Full ordinary Semantics action inventory
+
+Pinned `widgets/semantics_test.dart:474` is now fully paired. An ordinary
+mounted Incular annotation advertises the same 21 public callback
+actions on one leaf. Every action reaches exactly its own callback,
+including both character directions with selection extension and
+the selection/text payloads. Its declarative focus callback does not
+steal runtime keyboard focus. This comparison is to the ordinary
+widget, not the separate SliverSemantics fixture. One targeted Rust
+case and the pinned original passed.
