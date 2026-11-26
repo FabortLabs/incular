@@ -312,6 +312,21 @@ controls. Scroll brackets, payload drag-and-drop and mixed callback
 detectors retain their specialized routes; they are not covered by the
 mounted shared-pan claim.
 
+#### Full scale lifecycle and device kind
+
+Pinned scale_test.dart :15 and :1832 now pair in the mounted tree. The
+first replays all 14 moves with one, two and three active contacts, an
+actual competing tap, axis-specific scaling and focal deltas, five start
+and end brackets, and no update on contact reconfiguration or tap leak.
+The second reuses the mounted recognizer across touch, mouse, stylus,
+inverted stylus, unknown and true absolute trackpad streams; each
+publishes the initiating kind and terminates before the next begins.
+
+All 15 registrations in the pinned scale test file now have paired
+evidence at their applicable recognizer or widget boundaries. This is
+a file-scoped checkpoint, not a claim about OS hardware or the rest of
+the gestures library.
+
 ### Drag before scale and signed rotations
 
 The authored Flutter and native mounted probes also reverse the route
