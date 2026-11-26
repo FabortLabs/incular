@@ -376,3 +376,60 @@ fn live_reclip_updates_hit_and_paint_without_rebuilding_or_laying_out() {
     assert_eq!(tree.diagnostics().layouts, before.layouts);
     assert_eq!(tree.diagnostics().rebuilds, before.rebuilds);
 }
+
+#[derive(Clone)]
+struct ReplaceableInset {
+    top: f32,
+    invalidate: bool,
+}
+
+impl CustomClipper for ReplaceableInset {
+    fn get_clip(&self, size: Size) -> ClipShape {
+        Inset(self.top).get_clip(size)
+    }
+
+    fn should_reclip(&self, _: &Self) -> bool {
+        self.invalidate
+    }
+}
+
+#[test]
+fn replacement_respects_should_reclip_until_paint_geometry_changes() {
+    let controller = ScrollController::new();
+    let key = GlobalKey::new();
+    let widget = |top, invalidate| {
+        scene(
+            &controller,
+            Box::new(
+                SliverClipRect::new(SliverToBoxAdapter::new(
+                    Widget::box_(Size::new(800., 100.), FILL).with_key(key),
+                ))
+                .clipper(ReplaceableInset { top, invalidate }),
+            ),
+            Axis::Vertical,
+            false,
+            false,
+        )
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(widget(50., false)).unwrap();
+    layout(&mut tree);
+    let child = tree.element_with_key(&key.into());
+    assert!(!hit(&tree, key, Offset::new(400., 40.)));
+
+    tree.update(root, widget(30., false)).unwrap();
+    layout(&mut tree);
+    assert_eq!(rect(&mut tree)[0].origin.y, 50.);
+    assert!(!hit(&tree, key, Offset::new(400., 40.)));
+
+    assert!(controller.jump_to(10.));
+    layout(&mut tree);
+    assert_eq!(rect(&mut tree)[0].origin.y, 20.);
+    assert!(hit(&tree, key, Offset::new(400., 40.)));
+
+    tree.update(root, widget(55., true)).unwrap();
+    layout(&mut tree);
+    assert_eq!(rect(&mut tree)[0].origin.y, 45.);
+    assert!(!hit(&tree, key, Offset::new(400., 40.)));
+    assert_eq!(tree.element_with_key(&key.into()), child);
+}

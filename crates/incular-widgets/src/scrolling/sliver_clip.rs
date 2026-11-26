@@ -417,6 +417,36 @@ impl SliverClipPlacement {
     }
 }
 
+struct CustomClipSnapshot {
+    resolver: ClipShapeResolver,
+    shape: ClipShape,
+    live: Option<Rc<LiveClipFrame>>,
+}
+
+impl CustomClipSnapshot {
+    fn new(resolver: ClipShapeResolver, clipper: &ClipDelegate, shape: ClipShape) -> Self {
+        let live = clipper.reclip_signal().map(|signal| {
+            Rc::new(LiveClipFrame {
+                resolver,
+                clipper: clipper.clone(),
+                signal: signal.clone(),
+                cached: RefCell::new((signal.revision(), shape.clone())),
+            })
+        });
+        Self {
+            resolver,
+            shape,
+            live,
+        }
+    }
+
+    fn shape(&self) -> ClipShape {
+        self.live
+            .as_ref()
+            .map_or_else(|| self.shape.clone(), |live| live.shape())
+    }
+}
+
 pub(super) struct ClipRenderSliver {
     pub inner: std::cell::RefCell<Box<dyn RenderSliver>>,
     key: u64,
@@ -424,6 +454,7 @@ pub(super) struct ClipRenderSliver {
     overlap: ClipOverlapBehavior,
     clipper: Option<ClipDelegate>,
     radii: Option<BorderRadiusGeometry>,
+    cached_custom: Option<Box<CustomClipSnapshot>>,
 }
 
 impl ClipRenderSliver {
@@ -442,6 +473,7 @@ impl ClipRenderSliver {
             overlap,
             clipper,
             radii,
+            cached_custom: None,
         }
     }
 }
@@ -469,17 +501,21 @@ impl RenderSliver for ClipRenderSliver {
             radii: self.radii,
             overlap: self.overlap,
         };
-        let shape = resolver.resolve(self.clipper.as_ref());
-        let live = self.clipper.as_ref().and_then(|clipper| {
-            let signal = clipper.reclip_signal()?.clone();
-            let cached = RefCell::new((signal.revision(), shape.clone()));
-            Some(Rc::new(LiveClipFrame {
-                resolver,
-                clipper: clipper.clone(),
-                signal,
-                cached,
-            }))
-        });
+        let (shape, live) = if let Some(clipper) = self.clipper.as_ref() {
+            if self
+                .cached_custom
+                .as_ref()
+                .is_none_or(|cached| cached.resolver != resolver)
+            {
+                let shape = resolver.resolve(Some(clipper));
+                self.cached_custom =
+                    Some(Box::new(CustomClipSnapshot::new(resolver, clipper, shape)));
+            }
+            let cached = self.cached_custom.as_ref().expect("custom clip resolved");
+            (cached.shape(), cached.live.clone())
+        } else {
+            (resolver.resolve(None), None)
+        };
         let coverage = match self.behavior {
             Clip::None => unreachable!(),
             Clip::HardEdge => ClipCoverage::HardEdge,
@@ -586,6 +622,22 @@ impl super::layout::SingleInnerSliver for ClipRenderSliver {
     fn adopt_outer_state(&mut self, previous: &mut Self) {
         if self.radii.is_some() == previous.radii.is_some() {
             self.key = previous.key;
+        }
+        if self.behavior == previous.behavior
+            && self.overlap == previous.overlap
+            && self.radii == previous.radii
+            && let (Some(next), Some(old), Some(cached)) = (
+                self.clipper.as_ref(),
+                previous.clipper.as_ref(),
+                previous.cached_custom.as_ref(),
+            )
+            && !next.reclips_from(old)
+        {
+            self.cached_custom = Some(Box::new(CustomClipSnapshot::new(
+                cached.resolver,
+                next,
+                cached.shape(),
+            )));
         }
     }
 

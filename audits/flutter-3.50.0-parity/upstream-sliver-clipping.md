@@ -64,3 +64,10 @@ exactly once. The native test also verifies unchanged rebuild and
 layout counts. The retained viewport subscribes only to clip sources
 that currently participate in it, and drops subscriptions with the
 layers.
+
+A separate authored replacement probe returns false from shouldReclip.
+The mounted clip preserves its top at 50, then a 10 px scroll
+recomputes the new clipper's top (20 in paint coordinates). A second
+replacement returning true immediately changes the top to 45. Paint,
+hits, and retained child state are checked without conflating reclip
+and layout. All seven focused clip cases passed.
