@@ -978,8 +978,17 @@ impl WidgetTree {
         };
         let before_mouse = mouse_policy(old.kind());
         let after_mouse = mouse_policy(widget.kind());
-        let hit_policy = |(_, opaque, behavior)| (opaque, behavior);
-        if before_mouse.map(hit_policy) != after_mouse.map(hit_policy) {
+        let control_cursor = |kind: &WidgetKind| match kind {
+            WidgetKind::Button(spec) => Some(spec.mouse_cursor),
+            WidgetKind::TextField(spec) => Some(if spec.enabled {
+                crate::MouseCursor::Text
+            } else {
+                crate::MouseCursor::Basic
+            }),
+            _ => None,
+        };
+        if before_mouse != after_mouse || control_cursor(old.kind()) != control_cursor(widget.kind()) {
+            // A still pointer also needs a new cursor for config-only updates.
             self.input.hover_hit_revision = self.input.hover_hit_revision.wrapping_add(1);
         }
         self.check_keys_borrowed(Some(id), widget.children_refs())?;

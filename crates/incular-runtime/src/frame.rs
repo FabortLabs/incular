@@ -57,6 +57,7 @@ use std::{
 };
 
 mod hover_devices;
+pub use hover_devices::MouseCursorUpdate;
 mod system_chrome;
 mod text_actions;
 mod autofill;
@@ -159,6 +160,7 @@ pub struct Runtime {
     pub(crate) legacy_pointer: Option<(u64, u64)>,
     pub(crate) last_pointer: Offset,
     hover_devices: hover_devices::HoverDevices,
+    mouse_cursor_update_handler: Option<Rc<dyn Fn(MouseCursorUpdate)>>,
     hover_hit_revision: u64,
     pub(crate) focused: Option<ElementId>,
     primary_focus_node: Option<FocusNode>,
@@ -389,6 +391,7 @@ impl Runtime {
             legacy_pointer: None,
             last_pointer: Offset::ZERO,
             hover_devices: hover_devices::HoverDevices::default(),
+            mouse_cursor_update_handler: None,
             hover_hit_revision: 0,
             focused: None,
             primary_focus_node: None,
@@ -1782,6 +1785,7 @@ impl Runtime {
                 self.hover_devices.record(raw);
                 let hit = self.tree.pointer_hit_test(event.position);
                 self.tree.add_positioned_hover_device(window, raw, &hit);
+                self.update_mouse_cursor(raw, &hit);
                 if self.legacy_pointer.is_none() {
                     let target = self.button_target(&hit);
                     self.set_hover(target.map(|(element, _)| element));
@@ -1877,6 +1881,9 @@ impl Runtime {
         let raw_target = self
             .tree
             .dispatch_raw_pointer_with_hit(gesture_window, raw_event, &hit);
+        if hover_capable && !matches!(phase, PointerPhase::Enter | PointerPhase::Exit) {
+            self.update_mouse_cursor(raw_event, &hit);
+        }
         if metadata_rich
             && self.text_secondary_pointer(
                 phase,
@@ -2268,7 +2275,9 @@ impl Runtime {
         let now = self.input_now();
         let primary_key = primary.hover_device_identity();
         let mut target = None;
-        for sample in self.hover_devices.iter() {
+        let mut index = 0;
+        while let Some(sample) = self.hover_devices.sample_at(index) {
+            index += 1;
             let event = RawPointerEvent {
                 local_position: sample.position,
                 delta: Offset::ZERO,
@@ -2278,6 +2287,7 @@ impl Runtime {
             };
             let hit = self.tree.pointer_hit_test(sample.position);
             self.tree.refresh_mouse_hover_in_window(window, event, &hit);
+            self.update_mouse_cursor(sample, &hit);
             if self.legacy_pointer.is_none() && sample.hover_device_identity() == primary_key {
                 target = self.button_target(&hit).map(|(id, _)| id);
             }
@@ -2318,17 +2328,45 @@ impl Runtime {
         }
     }
 
-    /// Cursor selected by the current retained hover route. `Defer` is resolved
-    /// to the ordinary platform cursor before crossing the native boundary.
-    #[must_use]
-    pub fn effective_mouse_cursor(&self) -> MouseCursor {
-        let Some(event) = self.hover_devices.latest() else {
-            return MouseCursor::Basic;
-        };
-        match self.tree.mouse_cursor_at(event.position) {
+    fn update_mouse_cursor(&mut self, event: RawPointerEvent, hit: &PointerHitTest) {
+        let cursor = match self.tree.mouse_cursor_for_hit(hit) {
             MouseCursor::Defer => MouseCursor::Basic,
             cursor => cursor,
+        };
+        if self.hover_devices.set_cursor(event, cursor)
+            && let Some(handler) = &self.mouse_cursor_update_handler
+        {
+            handler(MouseCursorUpdate {
+                device: event.device,
+                pointer: event.pointer,
+                kind: event.kind,
+                cursor,
+            });
         }
+    }
+
+    /// Installs a host callback for future per-device cursor activations.
+    /// A matching cursor is not sent twice. Removing a device ends its
+    /// session without issuing another activation.
+    pub fn set_mouse_cursor_update_handler(
+        &mut self,
+        handler: Option<Rc<dyn Fn(MouseCursorUpdate)>>,
+    ) {
+        self.mouse_cursor_update_handler = handler;
+    }
+
+    /// Returns the cursor of one device's active hover session. If no device
+    /// identifier is available (zero), the pointer identifier is the key.
+    #[must_use]
+    pub fn mouse_cursor_for_device(&self, device: u64, pointer: u64) -> Option<MouseCursor> {
+        self.hover_devices.cursor_for(device, pointer)
+    }
+
+    /// The single cursor exposed to desktop hosts, selected by the most
+    /// recently positioned device. With no hover device it is basic.
+    #[must_use]
+    pub fn effective_mouse_cursor(&self) -> MouseCursor {
+        self.hover_devices.latest_cursor().unwrap_or(MouseCursor::Basic)
     }
     pub(crate) fn set_focus(&mut self, next: Option<ElementId>) {
         self.set_focus_with_external_selection(next, true);

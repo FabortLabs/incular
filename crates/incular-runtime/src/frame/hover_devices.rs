@@ -1,11 +1,22 @@
 //! Last positioned sample per hover device, independent of touch input.
 
-use incular_widgets::internal::RawPointerEvent;
+use incular_core::PointerDeviceKind;
+use incular_widgets::{MouseCursor, internal::RawPointerEvent};
+
+/// A newly activated native cursor for one positioned hover device.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MouseCursorUpdate {
+    pub device: u64,
+    pub pointer: u64,
+    pub kind: PointerDeviceKind,
+    pub cursor: MouseCursor,
+}
 
 #[derive(Clone, Copy)]
 struct Sample {
     event: RawPointerEvent,
     recency: u64,
+    cursor: Option<MouseCursor>,
 }
 
 /// Keeps the common one-device case inline and iterates in connection
@@ -27,6 +38,7 @@ impl HoverDevices {
         let sample = Sample {
             event,
             recency: self.recency,
+            cursor: None,
         };
         if let Some(previous) = self
             .first
@@ -34,7 +46,8 @@ impl HoverDevices {
             .chain(&mut self.rest)
             .find(|previous| previous.event.hover_device_identity() == key)
         {
-            *previous = sample;
+            previous.event = event;
+            previous.recency = sample.recency;
         } else if self.first.is_none() {
             self.first = Some(sample);
         } else {
@@ -63,19 +76,57 @@ impl HoverDevices {
         was_latest
     }
 
+    pub(super) fn set_cursor(&mut self, event: RawPointerEvent, cursor: MouseCursor) -> bool {
+        let key = event.hover_device_identity();
+        let Some(sample) = self
+            .first
+            .iter_mut()
+            .chain(&mut self.rest)
+            .find(|sample| sample.event.hover_device_identity() == key)
+        else {
+            return false;
+        };
+        if sample.cursor == Some(cursor) {
+            return false;
+        }
+        sample.cursor = Some(cursor);
+        true
+    }
+
+    pub(super) fn latest_cursor(&self) -> Option<MouseCursor> {
+        self.samples()
+            .max_by_key(|sample| sample.recency)
+            .and_then(|sample| sample.cursor)
+    }
+
+    pub(super) fn cursor_for(&self, device: u64, pointer: u64) -> Option<MouseCursor> {
+        let key = (device, if device == 0 { pointer } else { 0 });
+        self.samples()
+            .find(|sample| sample.event.hover_device_identity() == key)
+            .and_then(|sample| sample.cursor)
+    }
+
+    pub(super) fn sample_at(&self, index: usize) -> Option<RawPointerEvent> {
+        (if index == 0 {
+            self.first.as_ref()
+        } else {
+            self.rest.get(index - 1)
+        })
+        .map(|sample| sample.event)
+    }
+
+    fn samples(&self) -> impl Iterator<Item = &Sample> {
+        self.first.iter().chain(&self.rest)
+    }
+
     pub(super) fn latest(&self) -> Option<RawPointerEvent> {
-        self.first
-            .iter()
-            .chain(&self.rest)
+        self.samples()
             .max_by_key(|sample| sample.recency)
             .map(|sample| sample.event)
     }
 
     pub(super) fn iter(&self) -> impl Iterator<Item = RawPointerEvent> + '_ {
-        self.first
-            .iter()
-            .chain(&self.rest)
-            .map(|sample| sample.event)
+        self.samples().map(|sample| sample.event)
     }
 
     pub(super) fn is_empty(&self) -> bool {

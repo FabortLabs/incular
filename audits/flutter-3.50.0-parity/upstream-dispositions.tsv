@@ -2151,3 +2151,8 @@ packages/flutter/test/rendering/stack_test.dart	233	Stack in Flex can layout wit
 packages/flutter/test/rendering/stack_test.dart	148	visitChildrenForSemantics only visits displayed child	paired-match	upstream-render-stack.md#indexedstack-semantics-and-inspection
 packages/flutter/test/rendering/stack_test.dart	176	debugDescribeChildren marks invisible children as offstage	paired-match	upstream-render-stack.md#indexedstack-semantics-and-inspection
 packages/flutter/test/rendering/stack_test.dart	204	debugDescribeChildren handles a null index	paired-match	upstream-render-stack.md#indexedstack-semantics-and-inspection
+packages/flutter/test/rendering/mouse_tracker_cursor_test.dart	89	pointer is added and removed out of any annotations	paired-match	upstream-mouse-cursor-sessions.md#activation-and-stationary-pointers
+packages/flutter/test/rendering/mouse_tracker_cursor_test.dart	150	pointer is added and removed in an annotation	paired-match	upstream-mouse-cursor-sessions.md#activation-and-stationary-pointers
+packages/flutter/test/rendering/mouse_tracker_cursor_test.dart	212	pointer change caused by new frames	paired-match	upstream-mouse-cursor-sessions.md#activation-and-stationary-pointers
+packages/flutter/test/rendering/mouse_tracker_cursor_test.dart	255	The first annotation with non-deferring cursor is used	paired-match	upstream-mouse-cursor-sessions.md#activation-and-stationary-pointers
+packages/flutter/test/rendering/mouse_tracker_cursor_test.dart	287	Annotations with deferring cursors are ignored	paired-match	upstream-mouse-cursor-sessions.md#activation-and-stationary-pointers
