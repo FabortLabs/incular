@@ -1,9 +1,12 @@
 //! Animated modal barrier composition and semantics.
 
 use crate::{
-    Animation, Color, Container, ExplicitSemantics, GestureDetector, HitTestBehavior, Widget,
+    Animation, Color, Container, ExplicitSemantics, HitTestBehavior, RawGestureDetector, Widget,
 };
 use incular_animation::{AnimationController, Tween, TweenValue};
+use incular_gestures::{
+    GestureCallbacks, GestureRecognizerFactoryWithHandlers, PointerGestureRecognizer,
+};
 use incular_semantics::{SemanticActionKind, SemanticRole};
 use std::rc::Rc;
 
@@ -257,17 +260,17 @@ impl From<AnimatedModalBarrier> for Widget {
                 None => Container::new().into(),
             };
             if dismissible {
-                barrier = GestureDetector::new(barrier)
+                // Flutter's private any-tap recognizer accepts the whole
+                // contact mask, not just the primary button. Raw detection
+                // dispatches the release after arena acceptance and doesn't
+                // install a semantic Activate action of its own.
+                let dismiss = dismiss.clone();
+                barrier = RawGestureDetector::new(barrier)
                     .behavior(HitTestBehavior::Opaque)
-                    // Flutter's `_ModalBarrierGestureDetector` dismisses on
-                    // `_AnyTapGestureRecognizer.onAnyTapUp`
-                    // (widgets/modal_barrier.dart:392-396, 438), which adds
-                    // no semantic tap. `on_tap` would expose a GestureDetector
-                    // Activate action and bypass the semantic-dismiss gate.
-                    .on_tap_up({
-                        let dismiss = dismiss.clone();
-                        move |_| dismiss()
-                    })
+                    .gesture(GestureRecognizerFactoryWithHandlers::new(
+                        || PointerGestureRecognizer::new(GestureCallbacks::default()),
+                        move |recognizer| recognizer.set_tap_callback(Some(dismiss.clone())),
+                    ))
                     .into();
             } else {
                 barrier = Widget::absorb_pointer(true, barrier);

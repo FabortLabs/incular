@@ -322,8 +322,8 @@ packages/flutter/test/widgets/raw_tooltip_test.dart	1241	Multiple Tooltips are d
 packages/flutter/test/widgets/raw_tooltip_test.dart	3290	Escape key dismisses open RawTooltip inside WidgetsApp without invoking ancestor DismissIntent	partial-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md#current-rawtooltip-escape-routing
 packages/flutter/test/widgets/modal_barrier_test.dart	510	prevents interactions with widgets behind it	paired-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md
 packages/flutter/test/widgets/modal_barrier_test.dart	556	does not prevent interactions with widgets in front of it	paired-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md
-packages/flutter/test/widgets/modal_barrier_test.dart	665	pops the Navigator when dismissed by primary tap	partial-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md
-packages/flutter/test/widgets/modal_barrier_test.dart	696	pops the Navigator when dismissed by non-primary tap	partial-mismatch	upstream-tooltip-escape-modal-keys-and-path-bounds.md
+packages/flutter/test/widgets/modal_barrier_test.dart	665	pops the Navigator when dismissed by primary tap	paired-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md#modal-barrier-contact-and-release
+packages/flutter/test/widgets/modal_barrier_test.dart	696	pops the Navigator when dismissed by non-primary tap	paired-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md#modal-barrier-contact-and-release
 packages/flutter/test/widgets/keyboard_listener_test.dart	10	Can dispose without keyboard	paired-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md
 packages/flutter/test/widgets/keyboard_listener_test.dart	42	Web key event	partial-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md
 packages/flutter/test/widgets/keyboard_listener_test.dart	66	Defunct listeners do not receive events	partial-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md

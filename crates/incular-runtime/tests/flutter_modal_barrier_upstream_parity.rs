@@ -1,12 +1,12 @@
 //! AnimatedModalBarrier comparisons with Flutter 3.50.0.
-//! No semantics, transition timing, or native-input device behavior is implied.
+//! Checks modal route presence at input and settled frame checkpoints, not native-input devices or Flutter raster frames.
 
 use incular_config::Constraints;
 use incular_core::{
     Color, InputEvent, Offset, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase,
     PointerSampleMetadata, SECONDARY_POINTER_BUTTON, Size,
 };
-use incular_navigation::{ModalBarrier, Navigator, Route};
+use incular_navigation::{Navigator, PageRouteBuilder, Route};
 use incular_runtime::{RouteOutlet, Runtime};
 use incular_widgets::{
     Align, Alignment, AnimatedModalBarrier, GestureDetector, Positioned, SizedBox, Stack, Widget,
@@ -138,11 +138,17 @@ fn check_pop(button: u32) {
             let navigator = Rc::downgrade(&navigator);
             move || {
                 let navigator = navigator.upgrade().expect("live navigation host");
-                let marker = Widget::from(SizedBox::shrink()).with_key("opened modal");
-                navigator.push(Route::new("modal", marker).modal(ModalBarrier {
-                    color: RED,
-                    ..ModalBarrier::default()
-                }));
+                let barrier =
+                    Widget::from(AnimatedModalBarrier::with_flat_color(RED).on_dismiss({
+                        let navigator = Rc::downgrade(&navigator);
+                        move || {
+                            if let Some(navigator) = navigator.upgrade() {
+                                let _ = navigator.maybe_pop();
+                            }
+                        }
+                    }))
+                    .with_key("opened modal");
+                navigator.push(PageRouteBuilder::new("modal", barrier).build());
             }
         });
     navigator.push(Route::new(
@@ -226,4 +232,16 @@ fn primary_release_on_the_barrier_pops_the_modal_route() {
 #[test]
 fn secondary_release_on_the_barrier_pops_the_modal_route() {
     check_pop(SECONDARY_POINTER_BUTTON);
+}
+
+#[test]
+fn additional_buttons_release_the_modal_barrier_without_dismissing_on_press() {
+    for button in [
+        incular_core::TERTIARY_POINTER_BUTTON,
+        incular_core::BACK_POINTER_BUTTON,
+        incular_core::FORWARD_POINTER_BUTTON,
+        SECONDARY_POINTER_BUTTON | incular_core::TERTIARY_POINTER_BUTTON,
+    ] {
+        check_pop(button);
+    }
 }

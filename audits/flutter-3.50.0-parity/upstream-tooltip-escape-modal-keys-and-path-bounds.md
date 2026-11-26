@@ -58,3 +58,19 @@ shortcut, the first press closes the tooltip without invoking that shortcut;
 the next press invokes it. The early stage only dismisses tooltip portals;
 other transient roles keep their ordinary key routing. The shortcut case is
 still partial because Incular's named action is not Flutter's typed intent.
+
+### Modal barrier contact and release
+
+Pinned :665 and :696 now pair with actual anchor input opening a
+named, animated route containing an AnimatedModalBarrier. At the
+settled frame, both primary and secondary press leave the barrier
+visible and the modal current; release and reverse-animation
+settling return to the initial route and remove the barrier.
+
+The authored pinned Flutter probe and native retained test also
+verify tertiary, back, forward, and secondary+tertiary masks.
+The barrier uses raw arena tap recognition rather than a
+primary-button GestureDetector. No semantic activation is added
+by that recognizer. Five focused runtime cases and four existing
+raw-arena cases passed. This comparison is normalized pointer
+input, not OS-level mouse button integration.
