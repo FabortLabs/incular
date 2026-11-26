@@ -1,6 +1,67 @@
 use super::super::*;
 use incular_scroll::ViewportPositionHandoff;
 
+/// An expanding viewport needs bounded constraints on both axes; a
+/// shrink-wrapping one only requires the cross axis. Diagnose the main
+/// axis first when both are unbounded, like Flutter.
+fn check_viewport_constraints(
+    axis: Axis,
+    constraints: Constraints,
+    shrink_wrap: bool,
+) -> Result<(), TreeError> {
+    let (main_bounded, cross_bounded, name, main, cross, main_dim, cross_dim, flex) = match axis {
+        Axis::Vertical => (
+            constraints.is_height_bounded(),
+            constraints.is_width_bounded(),
+            "Vertical",
+            "vertical",
+            "horizontal",
+            "height",
+            "width",
+            "Column",
+        ),
+        Axis::Horizontal => (
+            constraints.is_width_bounded(),
+            constraints.is_height_bounded(),
+            "Horizontal",
+            "horizontal",
+            "vertical",
+            "width",
+            "height",
+            "Row",
+        ),
+    };
+    let reason = if !main_bounded && !shrink_wrap {
+        format!(
+            "{name} viewport was given unbounded {main_dim}.\n\
+             Viewports expand in the scrolling direction to fill their container. In this case, \
+             a {main} viewport was given an unlimited amount of {main} space in which to expand. \
+             This situation typically happens when a scrollable widget is nested inside another \
+             scrollable widget.\n\
+             Consider using a {flex} or Wrap when the children should not scroll independently, \
+             or a CustomScrollView to combine the slivers into a single scrollable."
+        )
+    } else if !cross_bounded {
+        let shrinking = if shrink_wrap { " shrinkwrapping" } else { "" };
+        format!(
+            "{name} viewport was given unbounded {cross_dim}.\n\
+             Viewports expand in the cross axis to fill their container and constrain their \
+             children to match their extent in the cross axis. In this case, a {main}{shrinking} \
+             viewport was given an unlimited amount of {cross} space in which to expand."
+        )
+    } else {
+        return Ok(());
+    };
+    Err(TreeError::InvalidWidgetConfiguration {
+        widget: if shrink_wrap {
+            "RenderShrinkWrappingViewport"
+        } else {
+            "RenderViewport"
+        },
+        reason,
+    })
+}
+
 /// Computes the constrained shrink-wrap size and viewport main-axis extent
 /// from content in one place. Initial sizing and convergence corrections
 /// below share this calculation so the reported size, the sliver
@@ -167,6 +228,9 @@ impl WidgetTree {
     ) -> Result<(Size, ChildOffsets), TreeError> {
         Ok(match *kind {
             RenderKind::SliverViewport { ref config } => {
+                if cfg!(debug_assertions) {
+                    check_viewport_constraints(config.axis, constraints, config.shrink_wrap)?;
+                }
                 // Axis context publishes with the geometry below — never
                 // ahead of the claim — so a rejected viewport leaves both
                 // untouched.

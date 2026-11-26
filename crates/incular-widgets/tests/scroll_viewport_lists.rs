@@ -4340,7 +4340,9 @@ fn sliver_unmount_ends_open_activity() {
     let slivers: Widget = CustomScrollView::new(slivers(3))
         .controller(controller.clone())
         .into();
-    let root = mount_tight(&mut tree, Column::new(vec![slivers]).into(), 200., 200.);
+    // Column leaves non-flex children unbounded along its main axis.
+    let bounded = Widget::from(SizedBox::new().height(200.).child(slivers));
+    let root = mount_tight(&mut tree, Column::new(vec![bounded]).into(), 200., 200.);
     assert!(controller.begin_activity());
     tree.update(root, Column::new(Vec::<Widget>::new()).into())
         .expect("unmount");

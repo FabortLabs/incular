@@ -1866,3 +1866,9 @@ packages/flutter/test/rendering/viewport_test.dart	2039	left, reverse growth	pai
 packages/flutter/test/rendering/viewport_test.dart	2050	will not assert on mismatched axis	partial-match	upstream-viewport-reveal.md#nested-box-to-sliver-coordinate-conversion
 packages/flutter/test/rendering/viewport_test.dart	1479	Viewport showOnScreen should not scroll if the rect is already visible, even if it does not scroll linearly	paired-match	upstream-viewport-reveal.md#visible-pinned-header-and-an-inner-viewport-with-no-outer-cache
 packages/flutter/test/rendering/viewport_test.dart	2061	RenderViewportBase.showOnScreen reports the correct targetRect	paired-match	upstream-viewport-reveal.md#visible-pinned-header-and-an-inner-viewport-with-no-outer-cache
+packages/flutter/test/rendering/viewport_test.dart	2142	Horizontal viewport was given unbounded height	paired-match	upstream-viewport-reveal.md#unbounded-viewport-constraints
+packages/flutter/test/rendering/viewport_test.dart	2156	Horizontal viewport was given unbounded width	paired-match	upstream-viewport-reveal.md#unbounded-viewport-constraints
+packages/flutter/test/rendering/viewport_test.dart	2176	Vertical viewport was given unbounded width	paired-match	upstream-viewport-reveal.md#unbounded-viewport-constraints
+packages/flutter/test/rendering/viewport_test.dart	2190	Vertical viewport was given unbounded height	paired-match	upstream-viewport-reveal.md#unbounded-viewport-constraints
+packages/flutter/test/rendering/viewport_test.dart	2212	Viewport debugThrowIfNotCheckingIntrinsics() control test	reference-ran-incular-open	upstream-viewport-reveal.md#unbounded-viewport-constraints
+packages/flutter/test/rendering/viewport_test.dart	2751	Shrinkwrapping viewport asserts bounded cross axis	paired-match	upstream-viewport-reveal.md#unbounded-viewport-constraints

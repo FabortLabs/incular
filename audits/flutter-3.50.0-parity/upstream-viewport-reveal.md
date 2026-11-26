@@ -188,3 +188,20 @@ The matching mounted Incular regressions are in
   controller moves to 300 and the outer stays at 0.
 
 These results do not establish floating-header expansion on reveal.
+
+## Unbounded viewport constraints
+
+All four nested-axis tests at `rendering/viewport_test.dart:2142–2190`
+and the shrink-wrapping test at line 2751 passed in the pinned SDK.
+The mounted Incular tests in `flutter350_viewport_constraints` verify the
+matching worded diagnosis for both axes, including the empty shrink-wrapping
+case, and ensure the invalid inner viewport does not attach its controller.
+An expanding viewport requires both axes to be bounded in debug builds;
+a shrink-wrapping viewport still accepts an unbounded main axis and measured
+50 px there in each orientation. Previously the invalid fixtures laid out
+silently, commonly with a zero extent. The release path is unchanged.
+
+The direct `RenderViewport` and `RenderShrinkWrappingViewport` intrinsic
+diagnostic (line 2212) passed in Flutter only. Incular has no corresponding
+direct render intrinsic query, and its intrinsic wrapper measurements remain
+a separate comparison.
