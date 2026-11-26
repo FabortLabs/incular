@@ -192,9 +192,14 @@ impl WidgetTree {
                 // can otherwise report overflow for children that fit.
                 // Compare non-flex occupancy at the layout coordinate precision
                 // before applying Flutter's precisionErrorTolerance.
-                let overflow = main_max.is_finite()
-                    && f64::from(occupied_non_flex as f32) - f64::from(main_max) > 1e-10;
-                self.set_layout_overflow(id, overflow);
+                let overflow = if main_max.is_finite() {
+                    (f64::from(occupied_non_flex as f32) - f64::from(main_max)).max(0.)
+                } else {
+                    0.
+                };
+                self.set_layout_overflow(id, overflow > 1e-10);
+                #[cfg(debug_assertions)]
+                self.note_flex_overflow_layout(id, flex.direction, overflow);
                 (result.size, offsets)
             }
             RenderKind::CustomLayout { ref delegate } => {

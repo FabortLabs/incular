@@ -98,6 +98,7 @@ mod context;
 mod departing;
 mod descriptors;
 mod external_drop;
+mod flex_overflow;
 mod focus;
 mod global_keys;
 mod interaction;
@@ -151,6 +152,7 @@ use widget::{
 
 #[doc(hidden)]
 pub use invariants::{InvariantCategory, InvariantViolation};
+pub use flex_overflow::FlexOverflowDiagnostic;
 pub use painting::PointerHitTest;
 pub use rendering::{image_fit_rects, image_repeat_destinations, render_kind};
 pub use retained::{PERFORMANCE_OVERLAY_KEY, performance_overlay_placeholder};
@@ -1428,6 +1430,8 @@ pub struct WidgetTree {
     render_elements: FastHashMap<RenderObjectId, ElementId>,
     root: Option<ElementId>,
     diagnostics: Diagnostics,
+    #[cfg(debug_assertions)]
+    flex_overflow_diagnostics: Option<Box<flex_overflow::FlexOverflowDiagnostics>>,
     unmounted: Vec<ElementId>,
     autofill_registry: Option<Box<autofill::AutofillRegistry>>,
     autofill_context_completions: Vec<incular_platform::autofill::AutofillContextAction>,

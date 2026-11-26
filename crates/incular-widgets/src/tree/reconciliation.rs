@@ -2858,6 +2858,8 @@ impl WidgetTree {
                         self.autofill_context_completions.push(action);
                     }
                     self.detach_custom_painter_repaint(render_id);
+                    #[cfg(debug_assertions)]
+                    self.forget_flex_overflow(render_id);
                     if let Some(render) = self.renders.remove(render_id.0) {
                         render.object.layers.remove(&mut self.compositor);
                     }

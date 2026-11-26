@@ -434,7 +434,8 @@ pub use transient::{
 };
 pub use tree::{
     AffineController, AffineParts, BoxFit, BuildContext, ColorFiltered, DecoratedBox, EditableText,
-    FadeTransition, GlobalKey, Icon, Image, ImageRepeat, Opacity, OpacityController, PathView,
+    FadeTransition, FlexOverflowDiagnostic, GlobalKey, Icon, Image, ImageRepeat, Opacity,
+    OpacityController, PathView,
     RichParagraph, RotationController, RotationTransition, ScaleController, ScaleTransition,
     SlideTransition, Text, TextFieldInputSnapshot, TextInputActionHint, TextInputTypeHint,
     ToolbarOptions, Transform, TranslationController, Widget,

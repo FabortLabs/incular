@@ -869,6 +869,10 @@ impl WidgetTree {
         let mut picture = std::mem::take(&mut self.paint_scratch);
         picture.clear();
         let focus_ring = self.paint_kind(id, &kind, size, &mut picture);
+        #[cfg(debug_assertions)]
+        if matches!(kind.as_ref(), RenderKind::Flex { .. }) && size.width > 0. && size.height > 0. {
+            self.publish_flex_overflow_on_paint(id);
+        }
         // A picture may paint past its box (an offset box shadow, a stroke on
         // the edge); effect layers above it size their input from these
         // bounds, so they cover what was painted, as Flutter's layers do.

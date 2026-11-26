@@ -28,6 +28,8 @@ impl WidgetTree {
             render_elements: FastHashMap::default(),
             root: None,
             diagnostics: Diagnostics::default(),
+            #[cfg(debug_assertions)]
+            flex_overflow_diagnostics: None,
             unmounted: Vec::new(),
             autofill_registry: None,
             autofill_context_completions: Vec::new(),

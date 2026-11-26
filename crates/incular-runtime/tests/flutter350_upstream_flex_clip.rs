@@ -221,6 +221,17 @@ fn hard_edge_flex_clips_separate_semantics_and_keeps_labels_merged_inside() {
         runtime
             .run_frame(Constraints::tight(Size::new(800., 600.)))
             .unwrap();
+        #[cfg(debug_assertions)]
+        {
+            let reports = runtime.tree_mut().take_flex_overflow_diagnostics();
+            assert_eq!(reports.len(), 1);
+            assert_eq!(reports[0].pixels, 125.);
+            assert_eq!(reports[0].axis, Axis::Horizontal);
+            assert_eq!(
+                reports[0].to_string(),
+                "A RenderFlex overflowed by 125 pixels on the right."
+            );
+        }
         let semantics = runtime.tree().semantics();
         let actual = semantics
             .iter()
@@ -315,4 +326,43 @@ fn retained_semantic_bounds_follow_flex_resize_and_clip_policy_changes() {
         first,
         "the visible node keeps identity"
     );
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn flex_overflow_is_reported_once_when_painted_not_when_laid_out_offstage() {
+    use incular_widgets::{Offstage, internal::WidgetTree};
+
+    let scene = |offstage| -> Widget {
+        let children = (0..3).map(|_| SizedBox::from_size(Size::new(14., 75.)));
+        Offstage::new(Flex::new(Axis::Vertical, children))
+            .offstage(offstage)
+            .into()
+    };
+    let constraints = Constraints::tight(Size::new(14., 100.));
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scene(true)).unwrap();
+    tree.layout(constraints).unwrap();
+    assert!(tree.take_flex_overflow_diagnostics().is_empty());
+    let _ = tree.paint();
+    assert!(tree.take_flex_overflow_diagnostics().is_empty());
+
+    tree.update(root, scene(false)).unwrap();
+    tree.layout(constraints).unwrap();
+    assert!(tree.take_flex_overflow_diagnostics().is_empty());
+    let _ = tree.paint();
+    let reports = tree.take_flex_overflow_diagnostics();
+    assert_eq!(reports.len(), 1);
+    assert_eq!(reports[0].axis, Axis::Vertical);
+    assert_eq!(
+        reports[0].to_string(),
+        "A RenderFlex overflowed by 125 pixels on the bottom."
+    );
+
+    for height in [225., 100., 110.] {
+        tree.layout(Constraints::tight(Size::new(14., height)))
+            .unwrap();
+        let _ = tree.paint();
+        assert!(tree.take_flex_overflow_diagnostics().is_empty());
+    }
 }
