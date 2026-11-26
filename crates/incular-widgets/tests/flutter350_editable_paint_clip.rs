@@ -161,3 +161,72 @@ fn isolated_overflow_clip_reuses_layer_and_updates_the_cached_contents() {
     assert_eq!(changed.layer, initial.layer);
     assert_ne!(changed.generation, initial.generation);
 }
+
+#[test]
+fn single_line_caret_is_fully_revealed_at_the_horizontal_viewport_edge() {
+    let controller = TextEditingController::with_text("A");
+    controller.set_selection(TextSelection::collapsed(1));
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(
+            EditableText::new(controller.clone())
+                .text_direction(TextDirection::Ltr)
+                .cursor_width(4.)
+                .cursor_color(incular_core::Color::rgba(17, 31, 49, 255))
+                .into(),
+        )
+        .unwrap();
+    let now = incular_core::time::Instant::now();
+    tree.set_focused(root, true, now).unwrap();
+    let caret = |tree: &mut WidgetTree, width| {
+        tree.layout(Constraints::tight(Size::new(width, 30.)))
+            .unwrap();
+        tree.update_compositor(now).unwrap();
+        let list = tree.paint();
+        let caret = list
+            .commands()
+            .iter()
+            .find_map(|command| match command {
+                PaintCommand::Rect { rect, color }
+                    if (color.red, color.green, color.blue) == (17, 31, 49) =>
+                {
+                    Some(*rect)
+                }
+                _ => None,
+            })
+            .expect("focused editor paints a caret");
+        (
+            caret,
+            tree.text_field_scroll_offset(root).unwrap(),
+            tree.editable_approximate_paint_clip(root),
+        )
+    };
+    let (baseline, scroll, clip) = caret(&mut tree, 500.);
+    assert_eq!(scroll, Offset::ZERO);
+    assert!(clip.is_none());
+
+    let viewport = baseline.origin.x + 3.;
+    let (revealed, scroll, clip) = caret(&mut tree, viewport);
+    assert_eq!(clip.unwrap().size.width, viewport);
+    assert!(
+        (scroll.x - 1.).abs() < 0.01,
+        "scroll {scroll:?}, caret {revealed:?}, viewport {viewport}"
+    );
+    assert!((revealed.origin.x + revealed.size.width - viewport).abs() < 0.01);
+
+    controller.set_selection(TextSelection::collapsed(0));
+    let (leading, scroll, _) = caret(&mut tree, viewport);
+    assert_eq!(leading.origin.x, 0.);
+    assert_eq!(scroll, Offset::ZERO);
+
+    assert!(tree.text_field_scroll_page(root, true));
+    let (_, scroll, _) = caret(&mut tree, viewport);
+    assert!((scroll.x - 2.).abs() < 0.01, "includes the one-pixel gap");
+    assert!(tree.text_field_scroll_to_document_boundary(root, false));
+    let (_, scroll, _) = caret(&mut tree, viewport);
+    assert_eq!(scroll, Offset::ZERO);
+    assert!(tree.text_field_scroll_to_document_boundary(root, true));
+    let (_, scroll, _) = caret(&mut tree, viewport);
+    assert!((scroll.x - 1.).abs() < 0.01, "shows the full end caret");
+    assert_eq!(controller.selection(), TextSelection::collapsed(0));
+}

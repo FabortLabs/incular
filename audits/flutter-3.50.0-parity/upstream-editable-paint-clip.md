@@ -39,3 +39,21 @@ the matching native tree tests passed for focus, read-only and blur.
 The full `editable_text` target passed all 17 cases. This was a
 fixture correction, not a change to production semantics or audit
 registration coverage.
+
+## Full caret reveal at the horizontal edge
+
+The bare left-aligned LTR single-line editor previously calculated a
+clip using the caret margin but clamped scroll to the glyph-only
+extent. In the native regression, the 4 px caret ended at x=12.946
+in an 11.946 px viewport, while the offset remained zero. The
+horizontal scroll range now uses the same glyph width, caret width,
+and 1 px gap as clipping. Reveal moves 1 px to expose the whole
+caret; page scroll uses the full 2 px extent. Document scrolling
+also reveals the whole caret without changing the selection.
+
+The authored pinned Flutter fixture used actual `EditableText`
+and its scroll position, with a 1× device-pixel ratio to avoid
+global pixel snapping. It verified both exact offsets and caret
+edges. This is separate from the original :240 immutable external
+offset case (still open). Right or center alignment was not
+verified by this probe; the existing path for those is unchanged.

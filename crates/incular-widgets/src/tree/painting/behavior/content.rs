@@ -1,5 +1,8 @@
 use super::super::*;
-use crate::tree::text::editable_content_clip;
+use crate::tree::text::{
+    editable_content_clip, editable_horizontal_max_scroll, editable_left_aligned_ltr,
+    reveal_horizontal_caret,
+};
 use incular_rendering::{ClipCoverage, ClipIsolation};
 use incular_text::TextGeometry;
 
@@ -207,37 +210,47 @@ impl WidgetTree {
                         value_empty,
                         field,
                     );
-                    // The text viewport is the box inside the content padding,
-                    // which stands in for the decoration Flutter lays out around
-                    // the editable. Text is laid out that wide (Flutter narrows it
-                    // by `_caretMargin` instead), so scrolling keeps the caret's
-                    // leading edge inside it and fitting text never scrolls.
                     let available = (size.width - content_padding.horizontal()).max(0.);
-                    if reveal && !multiline && caret - active_scroll_x > available {
-                        active_scroll_x = caret - available;
-                    } else if reveal && !multiline && caret < active_scroll_x {
-                        active_scroll_x = caret;
-                    }
-                    if !multiline && matches!(field.text_align, TextAlign::Start | TextAlign::End) {
-                        // RTL overflow can have a negative line origin. Reveal
-                        // the caret in layout coordinates, then keep the same
-                        // translation for glyphs, selection and pointer mapping.
-                        let (left, right) = layout.lines().fold(
-                            (f32::INFINITY, f32::NEG_INFINITY),
-                            |(left, right), line| {
-                                (
-                                    left.min(line.offset()),
-                                    right.max(line.offset() + line.width()),
-                                )
-                            },
-                        );
-                        active_scroll_x = if right - left > available {
-                            active_scroll_x.clamp(left, right - available)
+                    if !multiline {
+                        if editable_left_aligned_ltr(field) {
+                            if reveal {
+                                active_scroll_x = reveal_horizontal_caret(
+                                    active_scroll_x,
+                                    caret,
+                                    cursor_width,
+                                    available,
+                                );
+                            }
+                            active_scroll_x = active_scroll_x.clamp(
+                                0.,
+                                editable_horizontal_max_scroll(field, &layout, available),
+                            );
                         } else {
-                            0.0
-                        };
-                    } else {
-                        active_scroll_x = active_scroll_x.max(0.);
+                            if reveal && caret - active_scroll_x > available {
+                                active_scroll_x = caret - available;
+                            } else if reveal && caret < active_scroll_x {
+                                active_scroll_x = caret;
+                            }
+                            if matches!(field.text_align, TextAlign::Start | TextAlign::End) {
+                                // RTL overflow can have a negative line origin.
+                                let (left, right) = layout.lines().fold(
+                                    (f32::INFINITY, f32::NEG_INFINITY),
+                                    |(left, right), line| {
+                                        (
+                                            left.min(line.offset()),
+                                            right.max(line.offset() + line.width()),
+                                        )
+                                    },
+                                );
+                                active_scroll_x = if right - left > available {
+                                    active_scroll_x.clamp(left, right - available)
+                                } else {
+                                    0.
+                                };
+                            } else {
+                                active_scroll_x = active_scroll_x.max(0.);
+                            }
+                        }
                     }
                     let top = text_field_content_top(
                         multiline,

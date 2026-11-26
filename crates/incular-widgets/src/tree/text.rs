@@ -6,6 +6,38 @@ use crate::selection::{
 };
 use incular_text::{LineBoundary, TextGeometry};
 
+/// Whether the editor uses the nonnegative, left-aligned horizontal range.
+/// RTL alignment can intentionally produce a negative visual origin.
+pub(super) fn editable_left_aligned_ltr(field: &TextFieldRender) -> bool {
+    field.text_direction == TextDirection::Ltr
+        && rendering::physical_text_align(field.text_align, field.text_direction) == TextAlign::Left
+}
+
+/// Includes the invisible one-pixel gap and caret width in the scrollable
+/// content, even if the glyphs alone fit.
+pub(super) fn editable_horizontal_max_scroll(
+    field: &TextFieldRender,
+    layout: &impl TextGeometry,
+    viewport: f32,
+) -> f32 {
+    let width = layout.get_line(0).map_or(0., |line| line.width());
+    (width + field.cursor_width + 1. - viewport).max(0.)
+}
+
+pub(super) fn reveal_horizontal_caret(
+    current: f32,
+    caret_left: f32,
+    caret_width: f32,
+    viewport: f32,
+) -> f32 {
+    if caret_width >= viewport {
+        // A caret wider than the viewport cannot be fully visible; center it.
+        caret_left + (caret_width - viewport) * 0.5
+    } else {
+        current.clamp(caret_left + (caret_width - viewport), caret_left)
+    }
+}
+
 pub(super) fn editable_content_clip(
     field: &TextFieldRender,
     layout: &impl TextGeometry,
@@ -20,9 +52,7 @@ pub(super) fn editable_content_clip(
     let overflowing = if field.multiline {
         layout.metrics().size.height > (size.height - padding.vertical()).max(0.)
     } else {
-        // RenderEditable includes the cursor and its 1px gap in the
-        // horizontal scroll extent, even when the cursor is not visible.
-        layout.get_line(0).map_or(0., |line| line.width()) + field.cursor_width + 1. > width
+        editable_horizontal_max_scroll(field, layout, width) > 0.
     };
     (overflowing || scroll != Offset::ZERO)
         .then(|| Rect::from_origin_size(Offset::new(padding.left, 0.), Size::new(width, size.height)))
@@ -452,6 +482,12 @@ impl WidgetTree {
         let multiline = field.multiline;
         let available = (size.width - field.content_padding.horizontal()).max(0.);
         let viewport = (size.height - field.content_padding.vertical()).max(0.);
+        let horizontal = (!multiline && editable_left_aligned_ltr(field)).then(|| {
+            (
+                field.cursor_width,
+                editable_horizontal_max_scroll(field, &layout, available),
+            )
+        });
         let state = self.text_field_state_live_mut(render);
         let (before_x, before_y) = (state.scroll_x, state.scroll_y);
         if multiline {
@@ -460,6 +496,9 @@ impl WidgetTree {
             } else if caret_y + caret_height - state.scroll_y > viewport {
                 state.scroll_y = caret_y + caret_height - viewport;
             }
+        } else if let Some((cursor_width, max)) = horizontal {
+            state.scroll_x = reveal_horizontal_caret(state.scroll_x, caret, cursor_width, available)
+                .clamp(0., max);
         } else if caret - state.scroll_x > available {
             state.scroll_x = caret - available;
         } else if caret < state.scroll_x {
@@ -505,19 +544,23 @@ impl WidgetTree {
             (None, Some(target.clamp(0., max)))
         } else {
             let available = (size.width - field.content_padding.horizontal()).max(0.);
-            let (left, right) =
-                layout
-                    .lines()
-                    .fold((f32::INFINITY, f32::NEG_INFINITY), |(left, right), line| {
-                        (
-                            left.min(line.offset()),
-                            right.max(line.offset() + line.width()),
-                        )
-                    });
-            let max = if right - left > available {
-                right - available
+            let max = if editable_left_aligned_ltr(field) {
+                editable_horizontal_max_scroll(field, &layout, available)
             } else {
-                0.
+                let (left, right) =
+                    layout
+                        .lines()
+                        .fold((f32::INFINITY, f32::NEG_INFINITY), |(left, right), line| {
+                            (
+                                left.min(line.offset()),
+                                right.max(line.offset() + line.width()),
+                            )
+                        });
+                if right - left > available {
+                    right - available
+                } else {
+                    0.
+                }
             };
             (Some(max), None)
         };
