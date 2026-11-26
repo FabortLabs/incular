@@ -45,3 +45,14 @@ or an empty sized child leaves the background eligible. An annotated
 parent adds its own match after its child, even when that parent is
 opaque. Its opacity then stops the background, not the already visited
 child. These cases assert the complete result order and local positions.
+
+### Status-bar consumer
+
+The authored `status_bar_rounded_annotation_test.dart` reference passed
+on Flutter's Android, iOS, and Fuchsia widget-test variants. Both widget
+trees place a green annotated foreground at the status-bar sample point
+over blue. At local (1, 1) the rounded corner clips it and the style is
+blue; at (6, 6) it is inside and the style is green. Incular's runtime
+asserts the actual style drained for the host after its frame, rather
+than only exercising an isolated layer query. No physical status-bar
+rendering was claimed and this authored case does not change the tally.

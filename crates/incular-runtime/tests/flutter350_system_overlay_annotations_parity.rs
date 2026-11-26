@@ -6,7 +6,10 @@ use incular_config::{Alignment, Constraints, EdgeInsets, RuntimeEnvironment};
 use incular_core::{Color, Size};
 use incular_platform::SystemUiOverlayStyle;
 use incular_runtime::Runtime;
-use incular_widgets::{Align, AnnotatedRegion, Column, Expanded, SizedBox, Widget};
+use incular_widgets::{
+    Align, AnnotatedRegion, ClipRRect, ColoredBox, Column, Expanded, Positioned, SizedBox, Stack,
+    Widget,
+};
 
 const BLUE: Color = Color::rgba(0x21, 0x96, 0xf3, 0xff);
 const GREEN: Color = Color::rgba(0x4c, 0xaf, 0x50, 0xff);
@@ -76,4 +79,30 @@ fn upper_and_lower_annotations_supply_their_own_system_bar_colors() {
         style_for_host(Column::new([annotation(BLUE), annotation(GREEN)])).expect("style for host");
     assert_eq!(style.status_bar_color, Some(BLUE));
     assert_eq!(style.system_navigation_bar_color, Some(GREEN));
+}
+
+#[test]
+fn status_bar_metadata_ignores_a_visually_clipped_foreground_corner() {
+    let region = |color| {
+        AnnotatedRegion::new(
+            SystemUiOverlayStyle {
+                status_bar_color: Some(color),
+                ..SystemUiOverlayStyle::default()
+            },
+            ColoredBox::new(color, SizedBox::expand()),
+        )
+    };
+    // The system samples (240, 12.5). The foreground's bounding box
+    // contains that point in both runs; its actual rounded area only
+    // contains the point in the second.
+    for (inset, expected) in [(1., BLUE), (6., GREEN)] {
+        let front = Positioned::new(ClipRRect::new(8., region(GREEN)))
+            .left(240. - inset)
+            .top(12.5 - inset)
+            .width(20.)
+            .height(20.);
+        let style = style_for_host(Stack::new([Widget::from(region(BLUE)), front.into()]))
+            .expect("style for host");
+        assert_eq!(style.status_bar_color, Some(expected));
+    }
 }
