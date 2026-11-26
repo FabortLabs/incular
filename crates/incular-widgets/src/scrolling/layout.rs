@@ -147,6 +147,27 @@ fn fixed_extent_boundary(offset: f32, item_extent: f32) -> f64 {
     }
 }
 
+/// Exclusive materialization interval for a fixed-size child sequence.
+fn fixed_extent_cache_range(
+    cache_start: f32,
+    cache_end: f32,
+    item_extent: f32,
+    count: usize,
+) -> std::ops::Range<usize> {
+    let (start, end) = if item_extent > 0. {
+        (
+            fixed_extent_boundary(cache_start, item_extent).floor() as usize,
+            fixed_extent_boundary(cache_end, item_extent).ceil() as usize,
+        )
+    } else {
+        // Layout the first zero-sized child without scanning the other
+        // children that all share that same offset.
+        (0, 1)
+    };
+    let start = start.min(count);
+    start..end.min(count).max(start)
+}
+
 fn set_cached_keep_alive(
     widgets: &mut HashMap<usize, Widget>,
     index: usize,
@@ -255,18 +276,8 @@ impl RenderSliver for FixedExtentRenderSliver {
         let total = self.item_count as f32 * self.item_extent;
         let cache_start = (constraints.scroll_offset + constraints.cache_origin).max(0.);
         let cache_end = (cache_start + constraints.remaining_cache_extent).max(cache_start);
-        // Flutter's fixed-extent index math reports index zero for a zero
-        // item extent instead of dividing by it.
-        let (start, end) = if self.item_extent > 0. {
-            (
-                fixed_extent_boundary(cache_start, self.item_extent).floor() as usize,
-                fixed_extent_boundary(cache_end, self.item_extent).ceil() as usize,
-            )
-        } else {
-            (0, 1)
-        };
         let range =
-            start.min(self.item_count)..end.min(self.item_count).max(start.min(self.item_count));
+            fixed_extent_cache_range(cache_start, cache_end, self.item_extent, self.item_count);
         let parked = retain_fixed_cache(&mut self.widgets, &range, self.item_count);
         let children = fixed_cache_slots(range, &parked)
             .map(|(index, placement)| {
@@ -1933,20 +1944,7 @@ impl RenderSliver for ViewportExtentRenderSliver {
             + constraints.remaining_cache_extent
             - pad)
             .max(cache_start);
-        let start = if extent > 0. {
-            (cache_start / extent).floor() as usize
-        } else {
-            0
-        };
-        let end = if extent > 0. {
-            (cache_end / extent).ceil() as usize
-        } else {
-            // Flutter still builds the first zero-sized child, but must
-            // not traverse the unbounded set of equal-offset children.
-            1
-        };
-        let range =
-            start.min(self.item_count)..end.min(self.item_count).max(start.min(self.item_count));
+        let range = fixed_extent_cache_range(cache_start, cache_end, extent, self.item_count);
         let parked = retain_fixed_cache(&mut self.widgets, &range, self.item_count);
         let children = fixed_cache_slots(range, &parked)
             .map(|(index, placement)| {

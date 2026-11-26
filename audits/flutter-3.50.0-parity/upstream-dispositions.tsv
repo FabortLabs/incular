@@ -1887,3 +1887,21 @@ packages/flutter/test/rendering/viewport_test.dart	1690	RenderViewportBase.showO
 packages/flutter/test/rendering/viewport_test.dart	1735	RenderViewportBase.showOnScreen with maxShowOnScreenExtent 	paired-match	upstream-viewport-reveal.md#floating-persistent-header-expansion-on-reveal
 packages/flutter/test/rendering/viewport_test.dart	1803	RenderViewportBase.showOnScreen with minShowOnScreenExtent 	paired-match	upstream-viewport-reveal.md#floating-persistent-header-expansion-on-reveal
 packages/flutter/test/rendering/viewport_test.dart	2709	Viewport describeApproximateClip respects clipBehavior	reference-ran-incular-open	upstream-viewport-reveal.md#approximate-clip-query-versus-painted-clip
+packages/flutter/test/rendering/sliver_fixed_extent_layout_test.dart	13	RenderSliverFixedExtentList layout test - rounding error	paired-match	upstream-sliver-fixed-extent-edges.md
+packages/flutter/test/rendering/sliver_fixed_extent_layout_test.dart	49	should be 0 when item extent is 0	paired-match	upstream-sliver-fixed-extent-edges.md
+packages/flutter/test/rendering/sliver_fixed_extent_layout_test.dart	55	should be 0 when offset is 0	partial-match	upstream-sliver-fixed-extent-edges.md
+packages/flutter/test/rendering/sliver_fixed_extent_layout_test.dart	60	should be 0 when offset is equal to item extent	paired-match	upstream-sliver-fixed-extent-edges.md
+packages/flutter/test/rendering/sliver_fixed_extent_layout_test.dart	65	should be 1 when offset is greater than item extent	paired-match	upstream-sliver-fixed-extent-edges.md
+packages/flutter/test/rendering/sliver_fixed_extent_layout_test.dart	73	should be 1 when offset is slightly greater than item extent	partial-match	upstream-sliver-fixed-extent-edges.md
+packages/flutter/test/rendering/sliver_fixed_extent_layout_test.dart	81	should be 4 when offset is four times and a half greater than item extent	paired-match	upstream-sliver-fixed-extent-edges.md
+packages/flutter/test/rendering/sliver_fixed_extent_layout_test.dart	89	should be 5 when offset is 6 times greater than item extent	paired-match	upstream-sliver-fixed-extent-edges.md
+packages/flutter/test/rendering/sliver_fixed_extent_layout_test.dart	98	should be 5 when offset is 6 times greater than a specific item extent where the division will return more than 13 zero decimals	partial-match	upstream-sliver-fixed-extent-edges.md
+packages/flutter/test/rendering/sliver_fixed_extent_layout_test.dart	107	should be 0 when offset is a bit greater than item extent	partial-match	upstream-sliver-fixed-extent-edges.md
+packages/flutter/test/rendering/sliver_fixed_extent_layout_test.dart	116	Implements paintsChild correctly	paired-match	upstream-sliver-fixed-extent-edges.md
+packages/flutter/test/rendering/sliver_fixed_extent_layout_test.dart	150	RenderSliverFillViewport correctly references itemExtent, non-zero offset	partial-match	upstream-sliver-fixed-extent-edges.md
+packages/flutter/test/rendering/sliver_fixed_extent_layout_test.dart	194	RenderSliverFillViewport correctly references itemExtent, zero offset	partial-match	upstream-sliver-fixed-extent-edges.md
+packages/flutter/test/rendering/sliver_fixed_extent_layout_test.dart	238	RenderSliverFixedExtentList correctly references itemExtent, non-zero offset	partial-match	upstream-sliver-fixed-extent-edges.md
+packages/flutter/test/rendering/sliver_fixed_extent_layout_test.dart	283	RenderSliverFixedExtentList correctly references itemExtent, zero offset	partial-match	upstream-sliver-fixed-extent-edges.md
+packages/flutter/test/rendering/sliver_fixed_extent_layout_test.dart	328	RenderSliverMultiBoxAdaptor has calculate leading and trailing garbage	reference-ran-incular-open	upstream-sliver-fixed-extent-edges.md
+packages/flutter/test/rendering/sliver_fixed_extent_layout_test.dart	349	RenderSliverFixedExtentBoxAdaptor assertion test	reference-ran-incular-open	upstream-sliver-fixed-extent-edges.md
+packages/flutter/test/rendering/sliver_fixed_extent_layout_test.dart	381	RenderSliverFixedExtentBoxAdaptor rounding tolerance test	reference-ran-incular-open	upstream-sliver-fixed-extent-edges.md
