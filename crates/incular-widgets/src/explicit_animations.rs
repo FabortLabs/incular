@@ -12,9 +12,12 @@ use std::{
     rc::{Rc, Weak},
 };
 
-use incular_animation::{AnimationController, DoubleAnimation, DrivenAnimation};
+use incular_animation::{AnimationController, AnimationSource, DoubleAnimation, DrivenAnimation};
 use incular_config::TextDirection;
-use incular_core::Offset;
+use incular_core::{
+    Offset,
+    reactivity::{Subscription, TrackingGuard},
+};
 
 use crate::tree::RetainedState;
 use crate::{
@@ -98,6 +101,13 @@ pub(crate) fn animated_widget_for(
     animation: DoubleAnimation,
     build: impl for<'a> Fn(&BuildContext<'a>) -> Widget + 'static,
 ) -> Widget {
+    if animation.controllers().is_empty() {
+        return crate::Builder::new(move |context| {
+            animation.changes().track();
+            build(context)
+        })
+        .into();
+    }
     Widget::retained_builder(
         |revision| RebuildState {
             revision: RefCell::new(revision),
@@ -317,7 +327,7 @@ impl incular_animation::AnimationSource for Clocks {
 
 struct CompositorState<C> {
     target: C,
-    listeners: ControllerListeners,
+    observation: RefCell<Option<Subscription>>,
 }
 
 impl<C: 'static> RetainedState for CompositorState<C> {
@@ -336,18 +346,22 @@ fn compositor_transition<C: Clone + 'static>(
     Widget::retained_builder(
         move |_| CompositorState {
             target: make(),
-            listeners: ControllerListeners::default(),
+            observation: RefCell::new(None),
         },
         move |state, _, _| {
-            apply(&state.target, animation.value());
+            {
+                // The graph drives the retained layer directly, not this build.
+                let _untracked = TrackingGuard::enter(|_| {});
+                apply(&state.target, animation.value());
+            }
             let target = state.target.clone();
-            let followed = animation.clone();
-            let controllers = animation.controllers();
             state
-                .listeners
-                .listen(&controllers, move || apply(&target, followed.value()));
+                .observation
+                .replace(Some(animation.observe(move |value| {
+                    apply(&target, value);
+                })));
             ticking(
-                controllers,
+                animation.controllers(),
                 &Rc::new(Cell::new(0)),
                 wrap(state.target.clone(), child.clone()),
             )

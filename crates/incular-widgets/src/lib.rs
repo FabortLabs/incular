@@ -372,7 +372,8 @@ pub use raw_menu_anchor::{
 };
 pub use raw_tooltip::{
     RawTooltip, RawTooltipBuilder, RawTooltipController, RawTooltipDurations,
-    RawTooltipTriggerMode, RawTooltipVisibility, TooltipComponentBuilder, TooltipDurations,
+    RawTooltipTriggerMode, RawTooltipVisibility, TooltipAnimationBuilder, TooltipComponentBuilder,
+    TooltipDurations,
     TooltipPositionContext, TooltipPositionDelegate, TooltipTriggerMode, TooltipVisibility,
 };
 pub use repeating_animation_builder::{

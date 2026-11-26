@@ -378,7 +378,7 @@ pub mod prelude {
         TapRegion, TapRegionCallbacks,
         TapRegionGroupId, TapRegionSurface, Text, TextFieldTapRegion, TextInputActionHint,
         TextInputTypeHint, TickerMode, TileMode, Title, TitleController, TitleData, TitleError,
-        ToolbarOptions, TooltipComponentBuilder, TooltipDurations, TooltipPositionContext,
+        ToolbarOptions, TooltipAnimationBuilder, TooltipComponentBuilder, TooltipDurations, TooltipPositionContext,
         TooltipPositionDelegate, TooltipTriggerMode,
         TooltipVisibility, Transform, TransformationController, TreeRowAnimation, TreeSliver,
         TreeSliverController, TreeSliverIndentation, TreeSliverNode, TreeSliverNodeId,

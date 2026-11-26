@@ -2526,3 +2526,8 @@ packages/flutter/test/services/message_codecs_vm_test.dart	22	should encode and 
 packages/flutter/test/services/message_codecs_vm_test.dart	32	should encode integers correctly at boundary cases	paired-match	upstream-vm-codec-integers.md
 packages/flutter/test/services/message_codecs_vm_test.dart	102	should encode and decode big numbers	paired-match	upstream-vm-codec-integers.md
 packages/flutter/test/services/message_codecs_vm_test.dart	106	should encode and decode a list containing big numbers	paired-match	upstream-vm-codec-integers.md
+packages/flutter/test/widgets/raw_tooltip_test.dart	2762	AnimationStyle.reverseCurve is used for the hide animation	paired-match	upstream-raw-tooltip-animation.md
+packages/flutter/test/widgets/raw_tooltip_test.dart	2810	Hide animation uses the forward curve when AnimationStyle.reverseCurve is null	paired-match	upstream-raw-tooltip-animation.md
+packages/flutter/test/widgets/raw_tooltip_test.dart	2851	AnimationStyle duration changes take effect after the first show	paired-match	upstream-raw-tooltip-animation.md
+packages/flutter/test/widgets/raw_tooltip_test.dart	2916	Null AnimationStyle durations fall back to the documented defaults	paired-match	upstream-raw-tooltip-animation.md
+packages/flutter/test/widgets/raw_tooltip_test.dart	2957	Hide animation defaults to 75ms even when AnimationStyle.duration is set	paired-match	upstream-raw-tooltip-animation.md

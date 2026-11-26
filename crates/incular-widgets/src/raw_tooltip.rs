@@ -18,15 +18,18 @@
 //! needs Flutter's application-wide outside-pointer behavior should forward
 //! that event to [`RawTooltipController::dismiss_all`].
 //!
-//! Flutter also supplies an animation to its tooltip builder. The retained
-//! widget layer has no renderer-independent animation argument for a component
-//! builder, so [`TooltipComponentBuilder`] returns the overlay widget directly;
-//! callers can add an existing retained transition around that widget. The
-//! `enable_feedback` flag is retained as policy, but acoustic and haptic side
-//! effects belong to a platform adapter and are not emitted by this crate.
+//! Use [`RawTooltip::with_animated_builder`] to receive Flutter's show/hide
+//! animation for the tooltip content. The ordinary Rust component builder
+//! retains its immediate, unanimated presentation unless a style is set.
+//! Acoustic and haptic effects belong to a platform adapter and are not
+//! emitted by this crate.
 
-use incular_core::finite_or_zero;
+use incular_animation::{
+    AnimationController, AnimationSource, AnimationStatus, AnimationStyle, Curve, CurvedAnimation,
+    DoubleAnimation,
+};
 use incular_core::time::Instant;
+use incular_core::{finite_or_zero, reactivity::DependencySource};
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::fmt;
@@ -145,8 +148,90 @@ enum PendingTransition {
     Hide { at: Instant, force: bool },
 }
 
+// The portal owns this clock. Consumers subscribe to its values, but must
+// not independently tick it (possibly multiple times in the same frame).
+struct PresentationClock(AnimationController);
+
+impl AnimationSource for PresentationClock {
+    fn value(&self) -> f32 {
+        self.0.value()
+    }
+
+    fn status(&self) -> AnimationStatus {
+        self.0.status()
+    }
+
+    fn controllers(&self) -> Vec<AnimationController> {
+        Vec::new()
+    }
+
+    fn changes(&self) -> DependencySource {
+        self.0.changes()
+    }
+}
+
+struct TooltipPresentation {
+    timeline: AnimationController,
+    curved: Rc<CurvedAnimation>,
+    style: RefCell<AnimationStyle>,
+    target_visible: Cell<bool>,
+    mounted: Cell<bool>,
+}
+
+impl TooltipPresentation {
+    fn new(style: AnimationStyle) -> Self {
+        let timeline =
+            AnimationController::new(style.duration.unwrap_or(Duration::from_millis(150)))
+                .with_reverse_duration(style.reverse_duration.unwrap_or(Duration::from_millis(75)));
+        let curved = CurvedAnimation::new(
+            DoubleAnimation::new(PresentationClock(timeline.clone())),
+            style.curve.clone().unwrap_or(Curve::FastOutSlowIn),
+        );
+        let curved = match style.reverse_curve.clone() {
+            Some(reverse) => curved.reverse_curve(reverse),
+            None => curved,
+        };
+        Self {
+            curved: Rc::new(curved),
+            timeline,
+            style: RefCell::new(style),
+            target_visible: Cell::new(false),
+            mounted: Cell::new(false),
+        }
+    }
+
+    fn update_style(&self, style: AnimationStyle) {
+        if *self.style.borrow() == style {
+            return;
+        }
+        self.timeline
+            .set_duration(style.duration.unwrap_or(Duration::from_millis(150)));
+        self.timeline.set_reverse_duration(Some(
+            style.reverse_duration.unwrap_or(Duration::from_millis(75)),
+        ));
+        let curve = style.curve.clone().unwrap_or(Curve::FastOutSlowIn);
+        let reverse = style.reverse_curve.clone();
+        self.style.replace(style);
+        self.curved.set_curves(curve, reverse);
+    }
+
+    fn tick(&self, now: Instant, visible: bool) -> bool {
+        self.timeline.tick(now);
+        if self.target_visible.replace(visible) != visible {
+            if visible {
+                let _ = self.timeline.forward(now);
+            } else {
+                let _ = self.timeline.reverse(now);
+            }
+        }
+        let next = visible || self.timeline.is_active() || self.timeline.value() > 0.0;
+        self.mounted.replace(next) != next
+    }
+}
+
 struct ControllerState {
     visible: bool,
+    presentation: Option<Rc<TooltipPresentation>>,
     hovering: HashSet<u64>,
     focused: bool,
     manual: bool,
@@ -199,6 +284,7 @@ impl RawTooltipController {
         Self {
             state: Rc::new(RefCell::new(ControllerState {
                 visible: false,
+                presentation: None,
                 hovering: HashSet::new(),
                 focused: false,
                 manual: false,
@@ -498,11 +584,8 @@ impl RawTooltipController {
     pub fn tick(&self, now: Instant) -> bool {
         let changed = {
             let mut state = self.state.borrow_mut();
-            let Some(pending) = state.pending else {
-                return false;
-            };
-            match pending {
-                PendingTransition::Show { at } if now >= at => {
+            match state.pending {
+                Some(PendingTransition::Show { at }) if now >= at => {
                     state.pending = None;
                     if state.manual || state.focused || !state.hovering.is_empty() {
                         set_visible(&mut state, true)
@@ -510,7 +593,7 @@ impl RawTooltipController {
                         false
                     }
                 }
-                PendingTransition::Hide { at, force } if now >= at => {
+                Some(PendingTransition::Hide { at, force }) if now >= at => {
                     if force || (!state.manual && !state.focused && state.hovering.is_empty()) {
                         state.pending = None;
                         state.manual = false;
@@ -523,10 +606,19 @@ impl RawTooltipController {
                 _ => false,
             }
         };
-        if changed && self.is_visible() {
+        let (visible, presentation) = {
+            let state = self.state.borrow();
+            (state.visible, state.presentation.clone())
+        };
+        if changed && visible {
             self.register_open();
         }
-        changed
+        let presentation_changed =
+            presentation.is_some_and(|presentation| presentation.tick(now, visible));
+        if presentation_changed {
+            bump_revision(&self.state.borrow().revision);
+        }
+        changed || presentation_changed
     }
 
     /// Convenience form for hosts whose frame clock is the system clock.
@@ -580,6 +672,44 @@ impl RawTooltipController {
     #[must_use]
     pub fn is_visible(&self) -> bool {
         self.state.borrow().visible
+    }
+
+    fn is_presenting(&self) -> bool {
+        let state = self.state.borrow();
+        state.visible
+            || state
+                .presentation
+                .as_ref()
+                .is_some_and(|presentation| presentation.mounted.get())
+    }
+
+    pub(crate) fn presentation_is_active(&self) -> bool {
+        self.state
+            .borrow()
+            .presentation
+            .as_ref()
+            .is_some_and(|presentation| presentation.timeline.is_active())
+    }
+
+    fn animation(&self) -> Option<DoubleAnimation> {
+        self.state
+            .borrow()
+            .presentation
+            .as_ref()
+            .map(|presentation| presentation.curved.clone().into())
+    }
+
+    fn configure_animation(&self, style: Option<AnimationStyle>) {
+        let presentation = self.state.borrow().presentation.clone();
+        match (presentation, style) {
+            (Some(presentation), Some(style)) => presentation.update_style(style),
+            (None, Some(style)) => {
+                self.state.borrow_mut().presentation =
+                    Some(Rc::new(TooltipPresentation::new(style)));
+            }
+            (Some(_), None) => self.state.borrow_mut().presentation = None,
+            (None, None) => {}
+        }
     }
 
     #[must_use]
@@ -671,14 +801,18 @@ fn set_visible(state: &mut ControllerState, visible: bool) -> bool {
         return false;
     }
     state.visible = visible;
-    state.revision.set(
-        state
-            .revision
-            .get()
-            .checked_add(1)
-            .expect("revision exhausted"),
-    );
+    if state.presentation.is_some() {
+        // Animation values drive paint; rebuild the overlay only at its
+        // actual mount or dismissal edge, not when a fade changes direction.
+        incular_animation::scheduler::schedule_frame();
+    } else {
+        bump_revision(&state.revision);
+    }
     true
+}
+
+fn bump_revision(revision: &Cell<u64>) {
+    revision.set(revision.get().checked_add(1).expect("revision exhausted"));
 }
 
 fn schedule_show(state: &mut ControllerState, at: Instant) {
@@ -770,6 +904,9 @@ impl PartialEq for TooltipComponentBuilder {
 /// Alias using Flutter's property name.
 pub type RawTooltipBuilder = TooltipComponentBuilder;
 
+/// A tooltip builder that receives the live, curved presentation animation.
+pub type TooltipAnimationBuilder = Rc<dyn Fn(DoubleAnimation) -> Widget>;
+
 /// Semantics label override set by the builder.
 #[derive(Clone, Debug, Default)]
 enum SemanticsOverride {
@@ -852,6 +989,8 @@ pub struct RawTooltip {
     message: Option<String>,
     rich_message: Option<RichText>,
     tooltip_builder: Option<TooltipComponentBuilder>,
+    animated_builder: Option<TooltipAnimationBuilder>,
+    animation_style: Option<AnimationStyle>,
     controller: RawTooltipController,
     trigger_mode: TooltipTriggerMode,
     focus_node: FocusNode,
@@ -908,6 +1047,8 @@ impl RawTooltip {
             message: Some(message.into()),
             rich_message: None,
             tooltip_builder: None,
+            animated_builder: None,
+            animation_style: None,
             controller: RawTooltipController::new(),
             trigger_mode: TooltipTriggerMode::LongPress,
             focus_node: FocusNode::new(),
@@ -958,6 +1099,24 @@ impl RawTooltip {
         tooltip
     }
 
+    /// Supplies the tooltip's show and hide animation to its builder.
+    #[must_use]
+    pub fn with_animated_builder(
+        child: impl Into<Widget>,
+        builder: impl Fn(DoubleAnimation) -> Widget + 'static,
+    ) -> Self {
+        let mut tooltip = Self::empty(child);
+        tooltip.animated_builder = Some(Rc::new(builder));
+        tooltip
+    }
+
+    /// Selects the show and hide durations and curves.
+    #[must_use]
+    pub fn animation_style(mut self, style: AnimationStyle) -> Self {
+        self.animation_style = Some(style);
+        self
+    }
+
     #[must_use]
     pub fn with_tooltip_builder(
         builder: impl Into<TooltipComponentBuilder>,
@@ -976,6 +1135,7 @@ impl RawTooltip {
     pub fn set_message(mut self, message: impl Into<String>) -> Self {
         self.message = Some(message.into());
         self.rich_message = None;
+        self.animated_builder = None;
         self.tooltip_builder = None;
         self
     }
@@ -984,6 +1144,7 @@ impl RawTooltip {
     pub fn clear_message(mut self) -> Self {
         self.message = None;
         self.rich_message = None;
+        self.animated_builder = None;
         self.tooltip_builder = None;
         self
     }
@@ -992,6 +1153,7 @@ impl RawTooltip {
     pub fn set_rich_message(mut self, rich_message: RichText) -> Self {
         self.message = None;
         self.rich_message = Some(rich_message);
+        self.animated_builder = None;
         self.tooltip_builder = None;
         self
     }
@@ -1000,6 +1162,7 @@ impl RawTooltip {
     pub fn set_tooltip_builder(mut self, builder: impl Into<TooltipComponentBuilder>) -> Self {
         self.message = None;
         self.rich_message = None;
+        self.animated_builder = None;
         self.tooltip_builder = Some(builder.into());
         self
     }
@@ -1253,7 +1416,8 @@ impl RawTooltip {
     }
 
     fn has_overlay_content(&self) -> bool {
-        self.tooltip_builder.is_some()
+        self.animated_builder.is_some()
+            || self.tooltip_builder.is_some()
             || self
                 .message
                 .as_deref()
@@ -1289,7 +1453,11 @@ impl RawTooltip {
     }
 
     fn overlay_content(&self) -> Widget {
-        if let Some(builder) = self.tooltip_builder.as_ref() {
+        if let (Some(builder), Some(animation)) =
+            (self.animated_builder.as_ref(), self.controller.animation())
+        {
+            builder(animation)
+        } else if let Some(builder) = self.tooltip_builder.as_ref() {
             builder.build()
         } else if let Some(message) = self.rich_message.as_ref() {
             message.clone().into()
@@ -1433,7 +1601,12 @@ impl RawTooltip {
                 .into();
         }
 
-        let mut popup = self.overlay_content();
+        let presented = controller.is_presenting();
+        let mut popup = if presented {
+            self.overlay_content()
+        } else {
+            crate::SizedBox::shrink().into()
+        };
         let popup_hover_controller = controller.clone();
         let popup_exit_controller = controller.clone();
         popup = MouseRegion::new(popup)
@@ -1457,12 +1630,13 @@ impl RawTooltip {
             })
             .on_dismiss(move |_| dismiss_controller.hide())
             .tooltip_timer(controller.clone())
-            .show(controller.is_visible());
+            .show(presented);
 
-        if self.position_delegate.is_some() || !(self.explicit_layer_link
-            || self.target_anchor.is_some()
-            || self.follower_anchor.is_some()
-            || self.offset.is_some())
+        if self.position_delegate.is_some()
+            || !(self.explicit_layer_link
+                || self.target_anchor.is_some()
+                || self.follower_anchor.is_some()
+                || self.offset.is_some())
         {
             let custom = self.position_delegate.clone();
             let prefer_below = self.prefer_below;
@@ -1476,10 +1650,8 @@ impl RawTooltip {
                     };
                     let viewport = geometry.info.overlay_size;
                     let bottom_inset = context.media_query_view_insets().unwrap_or_default().bottom;
-                    let available = Size::new(
-                        viewport.width,
-                        (viewport.height - bottom_inset).max(0.0),
-                    );
+                    let available =
+                        Size::new(viewport.width, (viewport.height - bottom_inset).max(0.0));
                     crate::CustomSingleChildLayout::new(
                         ViewportTooltipLayout {
                             overlay_size: available,
@@ -1531,6 +1703,14 @@ impl From<RawTooltip> for Widget {
         value
             .controller
             .set_triggered_callback(value.on_triggered.clone());
+        value
+            .controller
+            .configure_animation(value.animation_style.clone().or_else(|| {
+                value
+                    .animated_builder
+                    .is_some()
+                    .then(AnimationStyle::default)
+            }));
         let revision = value.controller.revision_cell();
         Widget::stateful_builder(revision, move |_| value.build())
     }

@@ -465,7 +465,7 @@ impl WidgetTree {
                 .and_then(|marker| marker.tooltip_timer.as_ref());
             if let Some(timer) = timer {
                 timer.tick(now);
-                pending |= timer.pending_deadline().is_some();
+                pending |= timer.pending_deadline().is_some() || timer.presentation_is_active();
             }
         }
         pending

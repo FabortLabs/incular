@@ -341,8 +341,7 @@ impl<T: 'static> DrivenAnimation<T> {
 /// when the parent changes, so a reversal that no one samples still counts.
 pub struct CurvedAnimation {
     parent: DoubleAnimation,
-    curve: Curve,
-    reverse_curve: Option<Curve>,
+    curves: RefCell<(Curve, Option<Curve>)>,
     /// Flutter `_curveDirection`.
     direction: Rc<Cell<Option<AnimationStatus>>>,
     changes: DependencySource,
@@ -384,8 +383,7 @@ impl CurvedAnimation {
         });
         Self {
             parent,
-            curve,
-            reverse_curve: None,
+            curves: RefCell::new((curve, None)),
             direction,
             changes,
             direction_link: RefCell::new(Some(link)),
@@ -399,8 +397,17 @@ impl CurvedAnimation {
     /// `curve` when none is given.
     #[must_use]
     pub fn reverse_curve(mut self, curve: Curve) -> Self {
-        self.reverse_curve = Some(curve);
+        self.curves.get_mut().1 = Some(curve);
         self
+    }
+
+    /// Updates the curves on the existing graph without changing its clock or
+    /// its current direction latch. Already-bound transitions see the change.
+    pub fn set_curves(&self, curve: Curve, reverse_curve: Option<Curve>) {
+        if *self.curves.borrow() != (curve.clone(), reverse_curve.clone()) {
+            self.curves.replace((curve, reverse_curve));
+            self.changes.notify();
+        }
     }
 
     /// Removes the private direction observer. The current curve latch
@@ -427,10 +434,11 @@ impl CurvedAnimation {
 
 impl std::fmt::Debug for CurvedAnimation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let curves = self.curves.borrow();
         f.debug_struct("CurvedAnimation")
             .field("parent", &self.parent)
-            .field("curve", &self.curve)
-            .field("reverse_curve", &self.reverse_curve)
+            .field("curve", &curves.0)
+            .field("reverse_curve", &curves.1)
             .finish()
     }
 }
@@ -440,9 +448,10 @@ impl AnimationSource for CurvedAnimation {
         let t = self.parent.value();
         let reverse = self.direction.get().unwrap_or_else(|| self.parent.status())
             == AnimationStatus::Reverse;
-        let curve = match self.reverse_curve.as_ref() {
+        let curves = self.curves.borrow();
+        let curve = match curves.1.as_ref() {
             Some(reverse_curve) if reverse => reverse_curve,
-            _ => &self.curve,
+            _ => &curves.0,
         };
         if t == 0.0 || t == 1.0 {
             t
@@ -461,6 +470,12 @@ impl AnimationSource for CurvedAnimation {
 
     fn changes(&self) -> DependencySource {
         self.changes.clone()
+    }
+}
+
+impl From<Rc<CurvedAnimation>> for DoubleAnimation {
+    fn from(animation: Rc<CurvedAnimation>) -> Self {
+        Self(animation)
     }
 }
 
