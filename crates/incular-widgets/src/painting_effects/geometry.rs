@@ -1,6 +1,7 @@
 //! Corner-radius geometry shared by painting and decoration descriptors.
 
 use std::{
+    fmt,
     hash::{Hash, Hasher},
     ops::{Add, Div, Mul, Neg, Rem, Sub},
 };
@@ -54,6 +55,16 @@ impl Radius {
     #[must_use]
     pub fn lerp_optional(begin: Option<Self>, end: Option<Self>, t: f32) -> Option<Self> {
         lerp_optional(begin, end, t)
+    }
+}
+
+impl fmt::Display for Radius {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.x == self.y {
+            write!(f, "Radius.circular({:.1})", self.x)
+        } else {
+            write!(f, "Radius.elliptical({:.1}, {:.1})", self.x, self.y)
+        }
     }
 }
 
@@ -145,6 +156,41 @@ pub struct BorderRadius {
     pub bottom_right: Radius,
     #[builder(default = Radius::ZERO)]
     pub bottom_left: Radius,
+}
+
+impl fmt::Display for BorderRadius {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if *self == Self::ZERO {
+            return f.write_str("BorderRadius.zero");
+        }
+        let corners = [
+            ("topLeft", self.top_left),
+            ("topRight", self.top_right),
+            ("bottomLeft", self.bottom_left),
+            ("bottomRight", self.bottom_right),
+        ];
+        let first = self.top_left;
+        if corners.iter().all(|(_, radius)| *radius == first) {
+            return if first.x == first.y {
+                write!(f, "BorderRadius.circular({:.1})", first.x)
+            } else {
+                write!(f, "BorderRadius.all({first})")
+            };
+        }
+
+        f.write_str("BorderRadius.only(")?;
+        for (index, (corner, radius)) in corners
+            .into_iter()
+            .filter(|(_, radius)| *radius != Radius::ZERO)
+            .enumerate()
+        {
+            if index != 0 {
+                f.write_str(", ")?;
+            }
+            write!(f, "{corner}: {radius}")?;
+        }
+        f.write_str(")")
+    }
 }
 
 impl BorderRadius {

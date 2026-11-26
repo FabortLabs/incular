@@ -39,3 +39,15 @@ draws the vertical line, horizontal line, and rounded ring in that order.
 The test samples the actual retained path on both sides of each intended
 edge so an unnoticed extra pixel would fail. All eight focused table-border
 tests passed.
+
+## Equality, hashing and border descriptions
+
+The two distinct pinned `TableBorder Object API` registrations at
+`rendering/table_border_test.dart:128,136` each passed. The native value
+distinguishes no border from a solid zero-width edge in both equality and
+hashing. That distinction reaches real paint: no border emits nothing,
+while the explicit edge emits a hairline. Cross-type equality is ruled
+out by Rust's type system. The default description includes all six
+inactive sides and `BorderRadius.zero`, matching the reference; shaped
+controls also verify circular and separately elliptical corner labels.
+All 16 focused table and box-border tests passed.

@@ -319,11 +319,9 @@ impl ShapeBorder for BoxBorderStack {
     }
 }
 
-struct SideDescription(BorderSide);
-
-impl fmt::Display for SideDescription {
+impl fmt::Display for BorderSide {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let side = self.0;
+        let side = *self;
         f.write_str("BorderSide(")?;
         let mut separated = false;
         let scalar = |value: f32| {
@@ -379,7 +377,7 @@ fn format_edges(
         if index != 0 {
             f.write_str(", ")?;
         }
-        write!(f, "{edge}: {}", SideDescription(side))?;
+        write!(f, "{edge}: {side}")?;
     }
     f.write_str(")")
 }
@@ -387,7 +385,7 @@ fn format_edges(
 impl fmt::Display for Border {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.is_uniform() {
-            return write!(f, "Border.all({})", SideDescription(self.top));
+            return write!(f, "Border.all({})", self.top);
         }
         format_edges(
             f,

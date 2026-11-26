@@ -2583,3 +2583,5 @@ packages/flutter/test/painting/border_rtl_test.dart	710	BorderDirectional.add	pa
 packages/flutter/test/rendering/table_border_test.dart	145	TableBorder.all with a borderRadius	paired-match	upstream-table-border.md#rounded-outer-rings-and-independent-dividers
 packages/flutter/test/rendering/table_border_test.dart	150	TableBorder outer border uniformity	paired-match	upstream-table-border.md#rounded-outer-rings-and-independent-dividers
 packages/flutter/test/rendering/table_border_test.dart	177	TableBorder with non-uniform widths but uniform colors applies border radius	paired-match	upstream-table-border.md#rounded-outer-rings-and-independent-dividers
+packages/flutter/test/rendering/table_border_test.dart	128	TableBorder Object API	paired-match	upstream-table-border.md#equality-hashing-and-border-descriptions
+packages/flutter/test/rendering/table_border_test.dart	136	TableBorder Object API	paired-match	upstream-table-border.md#equality-hashing-and-border-descriptions

@@ -335,3 +335,57 @@ fn same_color_nonuniform_widths_keep_the_rounded_corners_and_independent_insets(
         assert!(!path.contains(outside_stroke, *fill_rule), "{outside_stroke:?}");
     }
 }
+
+#[test]
+fn table_border_value_hash_distinguishes_an_absent_edge_from_a_hairline() {
+    use std::hash::{DefaultHasher, Hash, Hasher};
+    let hash = |value: TableBorder| {
+        let mut state = DefaultHasher::new();
+        value.hash(&mut state);
+        state.finish()
+    };
+    let zero = TableBorder::default();
+    let hairline = TableBorder {
+        top: BorderSide::solid(Color::BLACK, 0.),
+        ..zero
+    };
+    assert_ne!(zero, hairline);
+    assert_ne!(hash(zero), hash(hairline));
+
+    let rect = Rect::from_origin_size(Offset::ZERO, Size::new(80., 50.));
+    let mut canvas = Canvas::default();
+    zero.paint(&mut canvas, rect, &[], &[]);
+    assert!(canvas.finish().commands().is_empty());
+    let mut canvas = Canvas::default();
+    hairline.paint(&mut canvas, rect, &[], &[]);
+    let list = canvas.finish();
+    assert!(matches!(
+        list.commands(),
+        [PaintCommand::StrokePath { stroke, brush: Brush::Solid(Color::BLACK), .. }]
+            if stroke.width == 0.
+    ));
+}
+
+#[test]
+fn table_border_description_preserves_six_sides_and_the_corner_radius() {
+    let zero = TableBorder::default();
+    let none = "BorderSide(width: 0.0, style: none)";
+    assert_eq!(
+        zero.to_string(),
+        format!("TableBorder({none}, {none}, {none}, {none}, {none}, {none}, BorderRadius.zero)")
+    );
+    let radius = BorderRadius::all(Radius::circular(8.));
+    assert_eq!(
+        TableBorder { top: BorderSide::default(), border_radius: radius, ..zero }.to_string(),
+        format!("TableBorder(BorderSide(), {none}, {none}, {none}, {none}, {none}, BorderRadius.circular(8.0))")
+    );
+    let radius = BorderRadius {
+        top_left: Radius::elliptical(3., 4.),
+        bottom_right: Radius::circular(8.),
+        ..BorderRadius::ZERO
+    };
+    assert_eq!(
+        radius.to_string(),
+        "BorderRadius.only(topLeft: Radius.elliptical(3.0, 4.0), bottomRight: Radius.circular(8.0))"
+    );
+}

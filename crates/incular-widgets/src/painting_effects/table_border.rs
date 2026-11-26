@@ -1,6 +1,6 @@
 //! Physical outer sides and internal dividers for a table grid.
 
-use std::sync::Arc;
+use std::{fmt, sync::Arc};
 
 use incular_config::EdgeInsets;
 use incular_core::{Lerp, Offset, Rect};
@@ -10,7 +10,7 @@ use super::box_painter::{deflate_rrect, fill_between, inflate_rrect, paint_borde
 use super::{Border, BorderRadius, BorderSide, BorderStyle};
 
 /// Optional table strokes. By default all six sides are absent.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq)]
 pub struct TableBorder {
     pub top: BorderSide,
     pub right: BorderSide,
@@ -19,6 +19,22 @@ pub struct TableBorder {
     pub horizontal_inside: BorderSide,
     pub vertical_inside: BorderSide,
     pub border_radius: BorderRadius,
+}
+
+impl fmt::Display for TableBorder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "TableBorder({}, {}, {}, {}, {}, {}, {})",
+            self.top,
+            self.right,
+            self.bottom,
+            self.left,
+            self.horizontal_inside,
+            self.vertical_inside,
+            self.border_radius,
+        )
+    }
 }
 
 impl Default for TableBorder {
