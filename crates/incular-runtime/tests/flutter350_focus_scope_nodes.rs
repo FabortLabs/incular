@@ -459,3 +459,103 @@ fn building_a_scope_with_different_permission_is_side_effect_free_until_mount() 
     assert!(!scope.can_request_focus() && !scope.has_primary_focus());
     assert_ne!(runtime.focused_element(), Some(focused));
 }
+
+#[test]
+fn detaching_an_autofocused_node_restores_the_retained_scope() {
+    let scope = FocusScopeNode::new();
+    let first = FocusNode::new();
+    let replacement = FocusNode::new();
+    let make = |node: &FocusNode, autofocus| -> Widget {
+        FocusScope::new(
+            Focus::new(SizedBox::shrink())
+                .node(node.clone())
+                .autofocus(autofocus),
+        )
+        .node(scope.clone())
+        .into()
+    };
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let mut runtime = Runtime::new(make(&first, true)).unwrap();
+    let root = runtime.tree().root().unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert!(first.has_primary_focus());
+
+    runtime
+        .schedule_update(root, make(&replacement, false))
+        .unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert!(!first.has_primary_focus());
+    assert!(!replacement.has_primary_focus());
+    assert!(scope.has_primary_focus());
+}
+
+#[test]
+fn a_deferred_autofocus_does_not_transfer_to_a_reused_focus_slot() {
+    let scope = FocusScopeNode::new();
+    let old = FocusNode::new();
+    let replacement = FocusNode::new();
+    let scene = |node: &FocusNode, autofocus| -> Widget {
+        FocusScope::new(
+            Focus::new(SizedBox::shrink())
+                .node(node.clone())
+                .autofocus(autofocus),
+        )
+        .node(scope.clone())
+        .into()
+    };
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let mut runtime = Runtime::new(scene(&old, true)).unwrap();
+    let root = runtime.tree().root().unwrap();
+    runtime
+        .schedule_update(root, scene(&replacement, false))
+        .unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert!(!old.has_primary_focus());
+    assert!(!replacement.has_primary_focus());
+}
+
+#[test]
+fn detaching_a_focused_child_restores_history_unless_a_new_request_is_pending() {
+    use incular_widgets::Column;
+    for request_replacement in [false, true] {
+        let scope = FocusScopeNode::new();
+        let earlier = FocusNode::new();
+        let old = FocusNode::new();
+        let replacement = FocusNode::new();
+        let scene = |last: &FocusNode| -> Widget {
+            FocusScope::new(Column::new([
+                Focus::new(SizedBox::shrink()).node(earlier.clone()),
+                Focus::new(SizedBox::shrink()).node(last.clone()),
+            ]))
+            .node(scope.clone())
+            .into()
+        };
+        let bounds = Constraints::tight(Size::new(800., 600.));
+        let mut runtime = Runtime::new(scene(&old)).unwrap();
+        let root = runtime.tree().root().unwrap();
+        runtime.run_frame(bounds).unwrap();
+        earlier.request_focus();
+        runtime.run_frame(bounds).unwrap();
+        assert!(earlier.has_primary_focus());
+        old.request_focus();
+        runtime.run_frame(bounds).unwrap();
+        assert!(old.has_primary_focus());
+
+        if request_replacement {
+            replacement.request_focus();
+        }
+        runtime.schedule_update(root, scene(&replacement)).unwrap();
+        runtime.run_frame(bounds).unwrap();
+        assert!(!old.has_primary_focus());
+        assert_eq!(replacement.has_primary_focus(), request_replacement);
+        assert_eq!(earlier.has_primary_focus(), !request_replacement);
+        assert_eq!(
+            scope.focused_child(),
+            Some(if request_replacement {
+                replacement
+            } else {
+                earlier
+            }),
+        );
+    }
+}

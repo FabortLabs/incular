@@ -1048,9 +1048,51 @@ impl WidgetTree {
         if !excluded {
             return None;
         }
-        let (mut owner, mut scope) = destination?;
+        let (owner, scope) = destination?;
+        Some(self.restore_scope_history(owner, scope, None))
+    }
+
+    /// Flutter detaches a primary FocusNode with PreviouslyFocusedChild.
+    /// Resolve its old scope path rather than the replacement element's
+    /// ancestry: the new descriptor may have moved to a different scope.
+    #[doc(hidden)]
+    pub fn focus_fallback_after_node_detached(&self) -> Option<ElementId> {
+        let hosted = self.hosted_focus_nodes.as_ref()?;
+        let retired = self
+            .hosted_focus_chain
+            .entries
+            .iter()
+            .find_map(|(node, primary)| primary.then_some(node));
+        for (anchor, primary) in &self.hosted_focus_chain.entries {
+            if *primary {
+                continue;
+            }
+            let Some(scope) = anchor.scope_owner() else {
+                continue;
+            };
+            if let Some(owner) = hosted.iter().find_map(|(&id, binding)| {
+                (binding.node() == anchor && self.can_request_focus(id)).then_some(id)
+            }) {
+                return Some(self.restore_scope_history(owner, scope, retired));
+            }
+        }
+        None
+    }
+
+    fn restore_scope_history(
+        &self,
+        mut owner: ElementId,
+        mut scope: crate::FocusScopeNode,
+        retired: Option<&incular_gestures::FocusNode>,
+    ) -> ElementId {
+        let Some(hosted) = &self.hosted_focus_nodes else {
+            return owner;
+        };
         loop {
             let next = scope.restore_hosted_focus_child(|node| {
+                if retired == Some(node) {
+                    return None;
+                }
                 hosted.iter().find_map(|(&id, binding)| {
                     (id != owner && binding.node() == node
                         && self.is_descendant_or_self(id, owner) && self.can_request_focus(id))
@@ -1062,8 +1104,8 @@ impl WidgetTree {
                     owner = id;
                     scope = inner_scope;
                 }
-                Some((id, None)) => return Some(id),
-                None => return Some(owner),
+                Some((id, None)) => return id,
+                None => return owner,
             }
         }
     }

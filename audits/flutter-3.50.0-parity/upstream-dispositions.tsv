@@ -2462,3 +2462,4 @@ packages/flutter/test/foundation/platform_web_test.dart	27	defaults `unknown` to
 packages/flutter/test/widgets/semantics_clipping_test.dart	11	SemanticNode.rect is clipped	paired-match	upstream-flex-semantics-clipping.md
 packages/flutter/test/widgets/semantics_clipping_test.dart	62	SemanticsNode is not removed if out of bounds and merged into something within bounds	paired-match	upstream-flex-semantics-clipping.md
 packages/flutter/test/rendering/proxy_box_test.dart	917	RenderCustomClip extenders respect clipBehavior when asked to describeApproximateClip	paired-match	upstream-box-approximate-clip.md
+packages/flutter/test/widgets/focus_manager_test.dart	1777	node detached before autofocus is applied	paired-match	upstream-focus-detach-history.md

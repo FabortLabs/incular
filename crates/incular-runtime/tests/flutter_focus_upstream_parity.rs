@@ -153,7 +153,9 @@ fn surviving_autofocus_is_not_replayed_when_a_different_node_detaches() {
         Some(other_id)
     );
     assert!(!other.has_primary_focus());
-    assert_eq!(runtime.focused_element(), None);
+    // Flutter parks focus on the live scope, not on the surviving child.
+    assert_eq!(runtime.focused_element(), Some(root));
+    assert!(runtime.tree().focus_node_at(root).unwrap().has_primary_focus());
 }
 
 #[test]

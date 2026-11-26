@@ -2620,10 +2620,11 @@ impl Runtime {
         if let Some(next) = self.tree.external_focus_change(current) {
             self.set_focus(next);
         } else if replaced {
-            // An Element reused for a different explicit FocusNode must
-            // not silently transfer focus to the replacement. The next
-            // focused node still needs a real request or autofocus.
-            self.set_focus(None);
+            // Do not transfer focus to a different node reusing the
+            // element. Only a real pending request can outrank restoring
+            // the old scope's last eligible child (or the scope itself).
+            let fallback = self.tree.focus_fallback_after_node_detached();
+            self.set_focus(fallback);
         }
         // Focus observers can queue another request while a transition is
         // being delivered. Do not acknowledge that newer request here.
@@ -3857,8 +3858,13 @@ impl Runtime {
         if self.initial_focus == InitialFocus::AwaitingLayout {
             self.set_focus_with_external_selection(self.tree.autofocus_element(), false);
         }
-        let replaces_detached_focus = self.focused.is_none()
-            && focused_at_start.is_some_and(|focused| !self.tree.element_exists(focused));
+        let replaces_detached_focus = focused_at_start
+            .is_some_and(|focused| !self.tree.element_exists(focused))
+            && (self.focused.is_none()
+                || self.focused
+                    .and_then(|focused| self.tree.focus_node_at(focused))
+                    .and_then(|node| node.scope_owner())
+                    .is_some_and(|scope| scope.focused_child().is_none()));
         if let Some(next) = self.tree.finish_mounted_autofocus(replaces_detached_focus) {
             self.set_focus_with_external_selection(Some(next), false);
         }
