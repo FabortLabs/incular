@@ -9,6 +9,7 @@ use std::{fmt, sync::Arc};
 mod bundle;
 mod network;
 pub mod notices;
+mod root_bundle;
 pub use bundle::{
     AssetBundle, AssetError, CachingAssetBundle, DirectoryAssetBundle, MemoryAssetBundle,
 };
@@ -17,6 +18,8 @@ pub use network::{
     AssetFetchCallback, AssetFetcher, AssetLoadCallback, AssetResponse, NetworkAssetBundle,
     resolve_url,
 };
+
+pub use root_bundle::{replace_root_asset_bundle, root_asset_bundle};
 
 /// Stable renderer-independent identity for a loaded font asset.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

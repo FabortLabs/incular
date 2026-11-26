@@ -26,6 +26,7 @@ mod route_focus;
 mod route_outlet;
 mod route_tasks;
 mod simulation;
+mod system_assets;
 mod tasks;
 mod text_shortcuts;
 mod timing_callbacks;

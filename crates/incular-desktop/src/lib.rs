@@ -2224,6 +2224,10 @@ impl ApplicationHandler<RuntimeWakeEvent> for DesktopHost {
         self.start_pending_file_dialogs();
     }
 
+    fn memory_warning(&mut self, _: &ActiveEventLoop) {
+        self.application.handle_memory_pressure();
+    }
+
     fn exiting(&mut self, _: &ActiveEventLoop) {
         if !self.application.should_exit() {
             self.application

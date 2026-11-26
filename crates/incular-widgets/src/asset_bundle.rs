@@ -1,8 +1,8 @@
 //! Flutter's `DefaultAssetBundle` (`widgets/basic.dart`).
 
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
-use incular_assets::{AssetBundle, MemoryAssetBundle};
+use incular_assets::{AssetBundle, root_asset_bundle};
 
 use crate::{BuildContext, Widget};
 
@@ -27,21 +27,14 @@ impl DefaultAssetBundle {
     }
 
     /// `DefaultAssetBundle.of`: the nearest bundle, else the root bundle.
-    /// Incular has no packaged application assets, so the root bundle is
-    /// empty; an application installs its own bundle near the root.
+    /// An unconfigured root is empty. Hosts can configure a root through
+    /// [incular_assets::replace_root_asset_bundle].
     #[must_use]
     pub fn of(context: &BuildContext<'_>) -> Arc<dyn AssetBundle> {
         context
             .depend_on::<BundleScope>()
-            .map_or_else(root_bundle, |scope| scope.0)
+            .map_or_else(root_asset_bundle, |scope| scope.0)
     }
-}
-
-/// Flutter's `rootBundle`: the bundle without a `DefaultAssetBundle`.
-fn root_bundle() -> Arc<dyn AssetBundle> {
-    static ROOT: OnceLock<Arc<dyn AssetBundle>> = OnceLock::new();
-    ROOT.get_or_init(|| Arc::new(MemoryAssetBundle::new()))
-        .clone()
 }
 
 impl From<DefaultAssetBundle> for Widget {
