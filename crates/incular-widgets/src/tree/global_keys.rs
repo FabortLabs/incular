@@ -148,7 +148,7 @@ impl WidgetTree {
         let compatible = self
             .elements
             .get(id.0)
-            .is_some_and(|element| element.widget.type_() == widget.type_());
+            .is_some_and(|element| element.widget.can_update(widget));
         // A widget cannot move below itself.
         if !compatible || self.is_inclusive_ancestor(id, parent) {
             return Ok(None);
@@ -157,6 +157,7 @@ impl WidgetTree {
         self.clear_render_parent(id);
         self.element_live_mut(id, "retaken element must remain live")
             .parent = Some(parent);
+        self.reparent_autofill_subtree(id);
         // Inherited values resolve from the new position.
         self.rebind_inherited_subtree(id);
         let render = self
@@ -194,6 +195,7 @@ impl WidgetTree {
                 })
                 .collect();
             for parked in outermost {
+                self.note_parked_autofill_ancestor(parked);
                 self.detach_from_parent(parked);
                 self.clear_render_parent(parked);
                 self.global_keys.parked.push(parked);

@@ -29,6 +29,7 @@ impl WidgetTree {
             root: None,
             diagnostics: Diagnostics::default(),
             unmounted: Vec::new(),
+            autofill_registry: None,
             autofill_context_completions: Vec::new(),
             global_keys: super::global_keys::GlobalKeyRegistry::default(),
             departures: super::departing::Departures::default(),

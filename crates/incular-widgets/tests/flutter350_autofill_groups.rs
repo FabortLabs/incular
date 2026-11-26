@@ -129,3 +129,42 @@ fn a_reparented_global_key_keeps_its_client_identity_but_changes_scope() {
     );
     assert!(tree.take_autofill_context_completions().is_empty());
 }
+
+#[test]
+fn registration_order_survives_sibling_reorder_and_cross_group_move() {
+    let moving = GlobalKey::new();
+    let screen = |phase| -> Widget {
+        let first = field(Some("first")).with_key(1_u64);
+        let second = field(Some("second")).with_key(2_u64);
+        let third = field(Some("moving")).with_key(moving.clone());
+        let mut outside = if phase == 0 {
+            vec![first, second]
+        } else {
+            vec![second, first]
+        };
+        let inside: Widget = AutofillGroup::new(Column::new(if phase < 2 {
+            vec![third.clone()]
+        } else {
+            Vec::new()
+        }))
+        .into();
+        if phase == 2 {
+            outside.insert(0, third);
+        }
+        outside.push(inside.with_key(3_u64));
+        AutofillGroup::new(Column::new(outside)).into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(screen(0)).unwrap();
+    layout(&mut tree);
+    let before = tree.autofill_clients(root);
+    assert_eq!(hints(&tree, root), ["first", "second"]);
+    tree.update(root, screen(1)).unwrap();
+    layout(&mut tree);
+    assert_eq!(tree.autofill_clients(root), before);
+    assert_eq!(hints(&tree, root), ["first", "second"]);
+    tree.update(root, screen(2)).unwrap();
+    layout(&mut tree);
+    assert_eq!(hints(&tree, root), ["first", "second", "moving"]);
+    assert!(hints(&tree, scopes(&tree, root)[1]).is_empty());
+}

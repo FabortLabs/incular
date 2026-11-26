@@ -1450,48 +1450,6 @@ impl WidgetTree {
             .then_some((u64::from(id.0.generation()) << 32) | u64::from(id.0.index()))
     }
 
-    /// The closest retained autofill scope for this element, including the
-    /// element itself when it is a scope.
-    #[must_use]
-    pub fn autofill_scope(&self, mut id: ElementId) -> Option<ElementId> {
-        loop {
-            let element = self.elements.get(id.0)?;
-            if element.widget.autofill_action().is_some() {
-                return Some(id);
-            }
-            id = element.parent?;
-        }
-    }
-
-    /// The scope's enabled, mounted clients in tree order. Nested groups
-    /// are independent; unmounted lazy children are not materialized.
-    #[must_use]
-    pub fn autofill_clients(&self, scope: ElementId) -> Vec<ElementId> {
-        let Some(group) = self.elements.get(scope.0).filter(|element| {
-            element.widget.autofill_action().is_some()
-        }) else {
-            return Vec::new();
-        };
-        let mut work: Vec<_> = group.children.iter().rev().copied().collect();
-        let mut clients = Vec::new();
-        while let Some(id) = work.pop() {
-            let Some(element) = self.elements.get(id.0) else { continue };
-            if element.widget.autofill_action().is_some() {
-                continue;
-            }
-            if matches!(element.widget.kind(), WidgetKind::TextField(spec) if spec.traits.autofill_hints.is_some()) {
-                clients.push(id);
-            }
-            work.extend(element.children.iter().rev().copied());
-        }
-        clients
-    }
-
-    /// Takes the completed top-level groups in disposal order.
-    pub fn take_autofill_context_completions(&mut self) -> Vec<incular_platform::autofill::AutofillContextAction> {
-        std::mem::take(&mut self.autofill_context_completions)
-    }
-
     /// Captures the current text-input client state after layout. The runtime
     /// turns this into a platform command; native window handles never enter
     /// the retained tree.

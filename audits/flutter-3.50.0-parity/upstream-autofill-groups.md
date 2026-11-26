@@ -20,3 +20,12 @@ web hidden IME input have no explicit save/cancel operation.
 This batch covers mounted scope and disposal. See
 [the mounted channel comparison](upstream-mounted-autofill.md) for
 tagged update routing into those actual editors.
+
+The additional authored order probes confirm registration order is not
+visual order. Moving an existing keyed field within a group keeps its
+position; reparenting it into a new group appends it even when it is
+visually inserted first. An inner globally keyed group removed during
+key reconciliation still belongs to its old outer ancestry for disposal
+and does not finish that context. The native registry is allocated only
+when a group is mounted; the text-input snapshot no longer walks a
+group subtree to reconstruct its members.

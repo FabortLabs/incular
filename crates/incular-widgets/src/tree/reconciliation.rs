@@ -571,6 +571,7 @@ impl WidgetTree {
             dev: ElementDevData::default(),
         }));
         self.note_mounted_autofocus(id, &widget);
+        self.register_autofill_element(id, &widget);
         let previous = self.render_elements.insert(RenderObjectId(render), id);
         debug_assert!(previous.is_none(), "a render belongs to only one element");
         self.register_global_key(id, &widget);
@@ -2490,7 +2491,7 @@ impl WidgetTree {
         // half-removed tree.
         let mut detached: Vec<MetricAttachment> = Vec::new();
         let outside_parent = self.parent(id);
-        let mut outside_group = None;
+        let mut outside_group = self.take_parked_autofill_ancestor(id).then_some(true);
         let mut work = vec![UnmountWork::Enter(id, false)];
         while let Some(next) = work.pop() {
             match next {
@@ -2514,6 +2515,7 @@ impl WidgetTree {
                             })
                     });
                     let nested = ancestor_group_removed || group.is_some();
+                    self.unregister_autofill_element(id, &element.widget);
                     self.tracked.untrack(id, element.tracked);
                     self.focus_change_bindings.remove(&id);
                     if let Some(nodes) = &mut self.standalone_focus_geometry {

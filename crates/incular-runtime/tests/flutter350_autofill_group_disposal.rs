@@ -77,3 +77,35 @@ fn disposing_only_top_level_groups_emits_their_current_commit_or_cancel() {
     }
     assert!(runtime.take_text_input_commands().is_empty());
 }
+
+#[test]
+fn removing_an_untaken_global_key_group_does_not_finish_its_live_parent_scope() {
+    use incular_widgets::GlobalKey;
+    let inner_key = GlobalKey::new();
+    let enabled = Signal::new(true);
+    let mut runtime = Runtime::new(
+        Builder::new({
+            let enabled = enabled.clone();
+            move |_| {
+                let child = if enabled.get() {
+                    Widget::from(
+                        AutofillGroup::new(field())
+                            .on_dispose_action(AutofillContextAction::Cancel),
+                    )
+                    .with_key(inner_key.clone())
+                } else {
+                    field()
+                };
+                AutofillGroup::new(child).into()
+            }
+        })
+        .into(),
+    )
+    .unwrap();
+    let limits = Constraints::loose(Size::new(300.0, 400.0));
+    runtime.run_frame(limits).unwrap();
+    assert!(runtime.take_text_input_commands().is_empty());
+    enabled.set(false);
+    runtime.run_frame(limits).unwrap();
+    assert!(runtime.take_text_input_commands().is_empty());
+}
