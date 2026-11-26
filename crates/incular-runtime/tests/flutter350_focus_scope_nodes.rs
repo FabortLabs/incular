@@ -1419,3 +1419,55 @@ fn public_focus_permissions_follow_the_logical_non_scope_ancestor() {
     assert!(!leaf.can_request_focus());
     assert!(leaf.skip_traversal());
 }
+
+#[test]
+fn authored_focus_gates_restore_history_and_then_allow_an_explicitly_reparented_leaf() {
+    use incular_widgets::Column;
+    let scope = FocusScopeNode::new();
+    let backup = FocusNode::new();
+    let bridge = FocusNode::new();
+    let gate = FocusNode::new();
+    let leaf = FocusNode::new();
+    let scene = |allowed, explicit: bool| {
+        let child = Focus::with_external_focus_node(SizedBox::shrink(), leaf.clone())
+            .parent_node(explicit.then(|| bridge.clone()));
+        FocusScope::with_external_focus_node(
+            Column::new([
+                Widget::from(Focus::with_external_focus_node(SizedBox::shrink(), backup.clone())),
+                Widget::from(Focus::with_external_focus_node(SizedBox::shrink(), bridge.clone())),
+                Widget::from(
+                    Focus::new(child)
+                        .node(gate.clone())
+                        .descendants_are_focusable(allowed)
+                        .descendants_are_traversable(allowed),
+                ),
+            ]),
+            scope.clone(),
+        )
+        .into()
+    };
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let mut runtime = Runtime::new(scene(true, false)).unwrap();
+    let root = runtime.tree().root().unwrap();
+    backup.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    leaf.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    assert!(leaf.has_primary_focus());
+    assert_eq!(scope.focused_child(), Some(leaf.clone()));
+
+    runtime.schedule_update(root, scene(false, false)).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert!(!leaf.can_request_focus());
+    assert!(backup.has_primary_focus());
+    assert_eq!(scope.focused_child(), Some(backup.clone()));
+
+    runtime.schedule_update(root, scene(false, true)).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert!(leaf.can_request_focus());
+    assert!(!leaf.skip_traversal());
+    assert!(runtime.tree().focus_traversal_descendants(Some(root)).contains(&leaf));
+    leaf.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    assert!(leaf.has_primary_focus() && bridge.has_focus() && !gate.has_focus());
+}

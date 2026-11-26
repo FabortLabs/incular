@@ -170,3 +170,16 @@ the old native getter error before the fix. The mounted ancestor
 walk no longer allocates a separate list to check scope permissions.
 All 45 targeted focus tests passed. This probe adds no original
 registration credit.
+
+### Focus widget gates and recorded history
+
+The authored pinned `authored_focus_descendant_gate_test.dart` checks a
+configured Focus widget, rather than an externally mutated node. Disabling
+its descendants restores the previous eligible control in the same scope.
+When the leaf is explicitly assigned to a different focus parent, the
+disabled visual wrapper no longer blocks traversal or direct focus.
+The native baseline reported the right public properties but incorrectly
+excluded the leaf from actual traversal. The permission now lives only
+on the focus node, and disabling it settles focus using scope history.
+Explicit exclusion and hidden-content regressions remain green. All 50
+focused tests passed. This authored probe adds no registration credit.

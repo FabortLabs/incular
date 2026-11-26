@@ -272,17 +272,11 @@ impl Focus {
 
 impl From<Focus> for Widget {
     fn from(value: Focus) -> Self {
-        let descendant_focus = value.allows_descendant_focus();
-        let descendant_traversal = value.allows_descendant_traversal();
-        let mut child = value
+        let child = value
             .child
             .unwrap_or_else(|| crate::SizedBox::shrink().into());
-        if !value.use_external_properties && !descendant_focus {
-            child = child.with_excluded_focus(true);
-        }
-        if !value.use_external_properties && !descendant_traversal {
-            child = child.with_excluded_focus_traversal(true);
-        }
+        // The node owns these permissions. Marking the child widget as
+        // excluded as well would block nodes reparented out of this branch.
         let owned_focus_permission = value
             .node
             .is_none()

@@ -708,6 +708,11 @@ impl FocusNode {
     }
     pub fn set_descendants_are_focusable(&self, focusable: bool) {
         if self.state.descendants_are_focusable.replace(focusable) != focusable {
+            if !focusable && self.state.authority.get() == FocusAuthority::Hosted {
+                // Publish the restriction before restoring scope history,
+                // otherwise the previously focused leaf is still eligible.
+                self.unfocus_with_disposition(UnfocusDisposition::PreviouslyFocusedChild);
+            }
             self.state.schedule_host_frame();
             self.state.notify();
         }
