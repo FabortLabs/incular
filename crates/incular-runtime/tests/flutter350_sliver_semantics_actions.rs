@@ -36,6 +36,31 @@ fn node<'a>(runtime: &'a Runtime, label: &str) -> &'a SemanticNode {
         .unwrap()
 }
 
+fn sole_sliver_annotation(runtime: &Runtime) -> &SemanticNode {
+    let tree = runtime.tree().semantics();
+    assert_eq!(tree.roots().len(), 1);
+    assert_eq!(tree.iter().count(), 3);
+    let outer = tree.node(tree.root().unwrap()).unwrap();
+    assert_eq!(outer.children.len(), 1);
+    let pane = tree.node(outer.children[0]).unwrap();
+    assert!(!outer.state.has_implicit_scrolling && pane.state.has_implicit_scrolling);
+    assert_eq!(pane.children.len(), 1);
+    for wrapper in [outer, pane] {
+        assert!(wrapper.actions.is_empty() && wrapper.tags().is_empty());
+        assert!(
+            wrapper.label.is_none() && wrapper.value.is_none() && wrapper.description.is_none()
+        );
+    }
+    let annotation = tree.node(pane.children[0]).unwrap();
+    assert_eq!(
+        annotation.tags(),
+        &[incular_widgets::Viewport::use_two_pane_semantics_tag().clone()]
+    );
+    assert!(annotation.children.is_empty());
+    assert!(annotation.value.is_none() && annotation.description.is_none());
+    annotation
+}
+
 #[test]
 fn replacing_only_a_tap_handler_uses_the_new_callback_without_a_native_update() {
     let events = Rc::new(RefCell::new(Vec::new()));
@@ -45,7 +70,6 @@ fn replacing_only_a_tap_handler_uses_the_new_callback_without_a_native_update() 
             let tap_log = trace.clone();
             let sem = Semantics::default()
                 .container(true)
-                .label("handler")
                 .on_tap(move || tap_log.borrow_mut().push(tap));
             if long {
                 let trace = trace.clone();
@@ -58,7 +82,10 @@ fn replacing_only_a_tap_handler_uses_the_new_callback_without_a_native_update() 
     let mut runtime = Runtime::new(build("first", false)).unwrap();
     frame(&mut runtime);
     let root = runtime.tree().root().unwrap();
-    let id = node(&runtime, "handler").id;
+    let initial = sole_sliver_annotation(&runtime);
+    assert!(initial.label.is_none());
+    assert_eq!(initial.actions, [SemanticActionKind::Activate]);
+    let id = initial.id;
     let initial_revision = runtime.tree().semantics().revision();
     let mut projection = MobileAccessibilityProjection::new();
     assert!(projection.sync(runtime.tree().semantics()).is_some());
@@ -70,7 +97,7 @@ fn replacing_only_a_tap_handler_uses_the_new_callback_without_a_native_update() 
         .schedule_update(root, build("second", false))
         .unwrap();
     frame(&mut runtime);
-    assert_eq!(node(&runtime, "handler").id, id);
+    assert_eq!(sole_sliver_annotation(&runtime).id, id);
     assert_eq!(runtime.tree().semantics().revision(), initial_revision);
     assert!(projection.sync(runtime.tree().semantics()).is_none());
     assert!(runtime.dispatch_semantic_action(id, SemanticAction::Activate));
@@ -80,9 +107,12 @@ fn replacing_only_a_tap_handler_uses_the_new_callback_without_a_native_update() 
         .schedule_update(root, build("second", true))
         .unwrap();
     frame(&mut runtime);
-    let updated = node(&runtime, "handler");
+    let updated = sole_sliver_annotation(&runtime);
     assert_eq!(updated.id, id);
-    assert!(updated.actions.contains(&SemanticActionKind::LongPress));
+    assert_eq!(
+        updated.actions,
+        [SemanticActionKind::Activate, SemanticActionKind::LongPress]
+    );
     assert!(runtime.tree().semantics().revision() > initial_revision);
     assert!(projection.sync(runtime.tree().semantics()).is_some());
     assert!(projection.sync(runtime.tree().semantics()).is_none());
@@ -93,11 +123,10 @@ fn replacing_only_a_tap_handler_uses_the_new_callback_without_a_native_update() 
         .schedule_update(root, build("second", false))
         .unwrap();
     frame(&mut runtime);
-    assert_eq!(node(&runtime, "handler").id, id);
-    assert!(
-        !node(&runtime, "handler")
-            .actions
-            .contains(&SemanticActionKind::LongPress)
+    assert_eq!(sole_sliver_annotation(&runtime).id, id);
+    assert_eq!(
+        sole_sliver_annotation(&runtime).actions,
+        [SemanticActionKind::Activate]
     );
     assert!(projection.sync(runtime.tree().semantics()).is_some());
     assert!(!runtime.dispatch_semantic_action(id, SemanticAction::LongPress));
@@ -118,6 +147,21 @@ fn sliver_annotation_adds_dispatches_and_removes_each_supported_callback() {
         (ScrollRight, SemanticAction::ScrollRight),
         (ScrollUp, SemanticAction::ScrollUp),
         (ScrollDown, SemanticAction::ScrollDown),
+        (Copy, SemanticAction::Copy),
+        (Cut, SemanticAction::Cut),
+        (Paste, SemanticAction::Paste),
+        (
+            SetSelection,
+            SemanticAction::SetSelection { base: 4, extent: 5 },
+        ),
+        (
+            DidGainAccessibilityFocus,
+            SemanticAction::DidGainAccessibilityFocus,
+        ),
+        (
+            DidLoseAccessibilityFocus,
+            SemanticAction::DidLoseAccessibilityFocus,
+        ),
     ];
     let trace = Rc::new(RefCell::new(Vec::new()));
     let build = |action: Option<SemanticActionKind>| {
@@ -139,6 +183,12 @@ fn sliver_annotation_adds_dispatches_and_removes_each_supported_callback() {
                 Some(ScrollRight) => sem.on_scroll_right(on_action),
                 Some(ScrollUp) => sem.on_scroll_up(on_action),
                 Some(ScrollDown) => sem.on_scroll_down(on_action),
+                Some(Copy) => sem.on_copy(on_action),
+                Some(Cut) => sem.on_cut(on_action),
+                Some(Paste) => sem.on_paste(on_action),
+                Some(SetSelection) => sem.on_set_selection(move |_| on_action()),
+                Some(DidGainAccessibilityFocus) => sem.on_did_gain_accessibility_focus(on_action),
+                Some(DidLoseAccessibilityFocus) => sem.on_did_lose_accessibility_focus(on_action),
                 _ => sem,
             }
         })
@@ -153,6 +203,7 @@ fn sliver_annotation_adds_dispatches_and_removes_each_supported_callback() {
         let current = node(&runtime, "foo");
         assert_eq!(current.id, id);
         assert_eq!(current.state.text_direction, Some(TextDirection::Ltr));
+        assert_eq!(current.actions, [*kind]);
         for (other, _) in &actions {
             assert_eq!(
                 current.actions.contains(other),
@@ -170,7 +221,7 @@ fn sliver_annotation_adds_dispatches_and_removes_each_supported_callback() {
         frame(&mut runtime);
         let current = node(&runtime, "foo");
         assert_eq!(current.id, id);
-        assert!(!current.actions.contains(kind), "{kind:?}");
+        assert!(current.actions.is_empty(), "{kind:?}");
         assert!(
             !runtime.dispatch_semantic_action(id, data.clone()),
             "stale {kind:?}"
@@ -188,7 +239,7 @@ fn standard_action_hints_describe_tap_and_long_press_without_a_duplicate_action(
         let hits = hits.clone();
         scene(move || {
             let hits = hits.clone();
-            let base = Semantics::default().container(true).label("target");
+            let base = Semantics::default().container(true);
             if long {
                 base.on_long_press(move || hits.borrow_mut().push("long press"))
                     .on_long_press_hint("foo")
@@ -219,9 +270,9 @@ fn standard_action_hints_describe_tap_and_long_press_without_a_duplicate_action(
             runtime.schedule_update(root, build(true)).unwrap();
             frame(&mut runtime);
         }
-        let target = node(&runtime, "target");
-        assert!(target.actions.contains(&kind));
-        assert!(!target.actions.contains(&SemanticActionKind::Custom));
+        let target = sole_sliver_annotation(&runtime);
+        assert!(target.label.is_none());
+        assert_eq!(target.actions, [kind]);
         let [hint_id] = target.state.custom_actions.as_ref() else {
             panic!("expected exactly one hint override");
         };
@@ -250,7 +301,6 @@ fn named_custom_actions_retain_independent_dispatch() {
             let bar = hits.clone();
             Semantics::default()
                 .container(true)
-                .label("target")
                 .custom_action(CustomSemanticsAction::new("foo"), move || {
                     foo.borrow_mut().push("foo")
                 })
@@ -261,8 +311,9 @@ fn named_custom_actions_retain_independent_dispatch() {
     }))
     .unwrap();
     frame(&mut runtime);
-    let target = node(&runtime, "target");
-    assert!(target.actions.contains(&SemanticActionKind::Custom));
+    let target = sole_sliver_annotation(&runtime);
+    assert!(target.label.is_none());
+    assert_eq!(target.actions, [SemanticActionKind::Custom]);
     let id = target.id;
     let mut mapped = target
         .state
@@ -1581,4 +1632,36 @@ fn full_sliver_action_inventory_dispatches_exact_arguments_from_one_tagged_node(
         assert_eq!(&*calls.borrow(), &commands[..=i]);
     }
     assert_eq!(runtime.focused_element(), focused);
+}
+
+#[test]
+fn excluding_a_nested_sliver_matches_the_complete_tagged_annotation_graph() {
+    let child = SliverSemantics::new(
+        || {
+            Semantics::default()
+                .label("other label")
+                .text_direction(TextDirection::Ltr)
+        },
+        SliverToBoxAdapter::new(SizedBox::new().height(10.)),
+    );
+    let parent = SliverSemantics::new(
+        || {
+            Semantics::default()
+                .label("label")
+                .text_direction(TextDirection::Ltr)
+        },
+        child,
+    )
+    .exclude_semantics(true);
+    let slivers: [Box<dyn Sliver>; 1] = [Box::new(parent)];
+    let mut runtime = Runtime::new(
+        Directionality::new(TextDirection::Ltr, CustomScrollView::new(slivers)).into(),
+    )
+    .unwrap();
+    frame(&mut runtime);
+    let annotation = sole_sliver_annotation(&runtime);
+    assert_eq!(annotation.label.as_deref(), Some("label"));
+    assert_eq!(annotation.state.text_direction, Some(TextDirection::Ltr));
+    assert!(annotation.actions.is_empty());
+    assert!(!annotation.state.hidden && !annotation.state.focusable);
 }

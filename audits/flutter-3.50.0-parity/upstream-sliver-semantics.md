@@ -89,9 +89,10 @@ the descriptor closures alone:
   accessibility focus gain/loss, and set-selection handlers on an
   arbitrary sliver remain open; editor-specific capabilities are separate.
 
-The original complete-tree checks also include Flutter's two-pane graph.
-The tested callback and annotation behavior matches. The wider cases
-remain partial until their full graph and action inventory are checked.
+The complete-tree cases now have retained graph checks, including
+the outer and inner viewport, meaningful node ID stability, and
+exact explicit action sets. See the full toggle and exclusion evidence
+below.
 
 ## Heading annotation on a sliver's text
 
@@ -434,3 +435,21 @@ two ordered children, even after masking one callback. The box fixture
 uses a lazy list for the merging case and a Column for the conflicting
 case, as the originals do. All five registrations are paired.
 The 37 focused Rust tests passed.
+
+### Handler replacement, hints, and excluded slivers
+
+For upstream 1210, one unlabeled tagged annotation keeps the same
+ID when its tap handler is replaced. No native update is published.
+Adding or removing long press gives exactly one update and the
+expected action set. The 15 single-handler transitions from 1715
+each show their one action, then none again when removed; the
+label, direction and ID stay fixed and stale requests are rejected.
+
+The exact 1351 and 1393 fixtures compare the mutually exclusive
+tap/long-press hint descriptors and the named foo/bar actions on
+unlabeled nodes. A hint does not masquerade as a separately
+dispatchable action. The 1474 fixture keeps only the tagged parent
+label in the two-pane graph when a nested sliver annotation is
+excluded. The companion visual/input test confirms exclusion does
+not remove drawing or pointer handling. All five cases are paired.
+The 48 focused Rust tests passed.
