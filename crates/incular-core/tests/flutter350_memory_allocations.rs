@@ -155,3 +155,43 @@ fn notifier_publishers_match_eager_value_and_lazy_change_lifetimes() {
     assert_eq!(trace[0].id, trace[2].id);
     assert_eq!(trace[1].id, trace[3].id);
 }
+
+#[test]
+fn a_manual_creation_reports_once_without_retaining_or_disposing_the_object() {
+    use incular_core::memory::allocations::ObjectAllocation;
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let _listener = MemoryAllocations::current().add_listener({
+        let log = log.clone();
+        move |event| log.borrow_mut().push(event)
+    });
+    let object = ObjectAllocation::new("incular_core::memory", "Fixture");
+    let id = object.id().unwrap();
+    assert!(log.borrow().is_empty());
+    assert!(object.debug_maybe_dispatch_created());
+    drop(object);
+    let seen = log.borrow();
+    assert_eq!(seen.len(), 1);
+    assert_eq!(seen[0].id, id);
+    assert_eq!(seen[0].kind, ObjectEventKind::Created);
+    assert_eq!(seen[0].library, "incular_core::memory");
+    assert_eq!(seen[0].class_name, "Fixture");
+}
+
+#[test]
+fn a_manual_disposal_does_not_require_a_creation_event() {
+    use incular_core::memory::allocations::ObjectAllocation;
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let _listener = MemoryAllocations::current().add_listener({
+        let log = log.clone();
+        move |event| log.borrow_mut().push(event)
+    });
+    let object = ObjectAllocation::new("incular_core::memory", "Fixture");
+    assert!(log.borrow().is_empty());
+    assert!(object.debug_maybe_dispatch_disposed());
+    let id = object.id().unwrap();
+    drop(object);
+    let seen = log.borrow();
+    assert_eq!(seen.len(), 1);
+    assert_eq!(seen[0].id, id);
+    assert_eq!(seen[0].kind, ObjectEventKind::Disposed);
+}

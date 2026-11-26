@@ -149,28 +149,31 @@ impl Drop for AllocationSubscription {
     }
 }
 
-/// An instrumented owned lifetime. In release builds it occupies no space
-/// and compiles down to no operations.
+/// Identity and metadata for explicitly instrumented object lifecycle
+/// events. The token does not retain the observed object and emits no
+/// event merely by being constructed or dropped.
 #[derive(Debug)]
-pub struct ObjectLifetime {
+pub struct ObjectAllocation {
     #[cfg(debug_assertions)]
     event: ObjectEvent,
 }
 
-impl ObjectLifetime {
+impl ObjectAllocation {
+    /// Prepares a stable identity. `library` is the caller's qualified
+    /// module or package label and is reported verbatim.
     #[must_use]
     pub fn new(library: &'static str, class_name: &'static str) -> Self {
         #[cfg(debug_assertions)]
         {
             static IDS: crate::IdGenerator = crate::IdGenerator::new();
-            let event = ObjectEvent {
-                id: ObjectId(IDS.next()),
-                library,
-                class_name,
-                kind: ObjectEventKind::Created,
-            };
-            let _ = ALLOCATIONS.try_with(|registry| registry.dispatch(event));
-            Self { event }
+            Self {
+                event: ObjectEvent {
+                    id: ObjectId(IDS.next()),
+                    library,
+                    class_name,
+                    kind: ObjectEventKind::Created,
+                },
+            }
         }
         #[cfg(not(debug_assertions))]
         {
@@ -190,17 +193,54 @@ impl ObjectLifetime {
             None
         }
     }
+
+    /// Reports construction if debug allocations are enabled. The true
+    /// return value makes the call usable inside `debug_assert!`.
+    pub fn debug_maybe_dispatch_created(&self) -> bool {
+        self.dispatch(ObjectEventKind::Created);
+        true
+    }
+
+    /// Reports disposal, even when no matching creation was reported.
+    /// The true return value makes it usable inside `debug_assert!`.
+    pub fn debug_maybe_dispatch_disposed(&self) -> bool {
+        self.dispatch(ObjectEventKind::Disposed);
+        true
+    }
+
+    fn dispatch(&self, kind: ObjectEventKind) {
+        #[cfg(debug_assertions)]
+        {
+            let event = ObjectEvent { kind, ..self.event };
+            let _ = ALLOCATIONS.try_with(|registry| registry.dispatch(event));
+        }
+        #[cfg(not(debug_assertions))]
+        let _ = kind;
+    }
+}
+
+/// An instrumented owned lifetime. In release builds it occupies no space
+/// and compiles down to no operations. Unlike [ObjectAllocation], this
+/// automatically reports creation and disposal.
+#[derive(Debug)]
+pub struct ObjectLifetime(ObjectAllocation);
+
+impl ObjectLifetime {
+    #[must_use]
+    pub fn new(library: &'static str, class_name: &'static str) -> Self {
+        let allocation = ObjectAllocation::new(library, class_name);
+        allocation.debug_maybe_dispatch_created();
+        Self(allocation)
+    }
+
+    #[must_use]
+    pub fn id(&self) -> Option<ObjectId> {
+        self.0.id()
+    }
 }
 
 impl Drop for ObjectLifetime {
     fn drop(&mut self) {
-        #[cfg(debug_assertions)]
-        {
-            let event = ObjectEvent {
-                kind: ObjectEventKind::Disposed,
-                ..self.event
-            };
-            let _ = ALLOCATIONS.try_with(|registry| registry.dispatch(event));
-        }
+        self.0.debug_maybe_dispatch_disposed();
     }
 }

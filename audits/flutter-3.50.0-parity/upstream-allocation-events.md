@@ -45,3 +45,18 @@ An immutable unmounted descriptor does not publish an event or retain
 a mounted state's instrumentation. The broader :20 BuildOwner,
 FocusManager, highlight manager, and Element publisher test ran only
 on Flutter; the standalone render-object event comparison is separate.
+
+## Explicit creation and disposal
+
+The explicit debug disposal original
+`foundation/debug_test.dart:87` now pairs. It emits one event for
+the specified object identity even if no creation was reported.
+ObjectAllocation can emit either event on demand without retaining
+the observed object or emitting extra events when dropped.
+ObjectLifetime still sends one automatic pair using the same event
+path, and release storage remains empty.
+
+The creation case (:69) is partial: the event records the stable
+identity and class but preserves the Rust caller's qualified
+library label verbatim. Flutter inserts a Dart package URI prefix.
+Both original Flutter and 17 focused native checks passed.

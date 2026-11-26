@@ -2439,3 +2439,5 @@ packages/flutter/test/widgets/box_decoration_test.dart	191	BoxDecoration paints 
 packages/flutter/test/widgets/box_decoration_test.dart	558	BoxDecoration doesn't crash with BorderRadiusDirectional	paired-match	upstream-mounted-box-borders.md
 packages/flutter/test/foundation/debug_test.dart	27	works with non-failing actions	paired-match	upstream-debug-action-timing.md
 packages/flutter/test/foundation/debug_test.dart	39	returns failing future if action throws	paired-match	upstream-debug-action-timing.md
+packages/flutter/test/foundation/debug_test.dart	69	debugMaybeDispatchCreated	partial-match	upstream-allocation-events.md#explicit-creation-and-disposal
+packages/flutter/test/foundation/debug_test.dart	87	debugMaybeDispatchDisposed	paired-match	upstream-allocation-events.md#explicit-creation-and-disposal
