@@ -183,3 +183,20 @@ the frame finishes and the error is not redelivered. This behavior
 requires an unwinding panic strategy.
 
 Both pinned originals and 28 focused native checks passed.
+
+## Tap details held for a double tap
+
+Previously the retained gesture path held the single onTap but
+sent TapDown and TapUp as soon as the first pointer released.
+Actual widgets could observe an apparently completed click while a
+double tap still had a chance to win. The candidate now carries its
+unreported details through the arena. When the single tap wins, it
+reports remaining Down, Up, then onTap. A winning double tap does
+not emit an ordinary Up. An already-reported long-hold Down is not
+repeated on success, and the first held candidate is replaced without
+an extra cancel when a new allowed pointer registers, as Flutter does.
+
+The authored pinned and retained native tests verify short and long
+first presses, both deadline and double-tap outcomes. Before the fix
+the native probe observed [down, up] on the first release; afterwards
+it waited. No original-registration credit is claimed for this probe.

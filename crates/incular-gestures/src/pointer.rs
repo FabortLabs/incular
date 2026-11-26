@@ -92,6 +92,38 @@ impl TapSlopTolerance {
     }
 }
 
+/// Tap details held after pointer-up until the tap wins the arena.
+#[doc(hidden)]
+#[derive(Clone, Copy)]
+pub struct PendingTapRelease {
+    down: Option<TapDownDetails>,
+    up: TapUpDetails,
+    down_announced: bool,
+}
+
+impl PendingTapRelease {
+    /// Reports the remaining detail callbacks in Flutter's order.
+    pub fn dispatch(self, callbacks: &GestureCallbacks) {
+        if let Some(details) = self.down
+            && let Some(callback) = &callbacks.on_tap_down
+        {
+            invoke_tap_callback(TapCallbackKind::Down, || callback(details));
+        }
+        if let Some(callback) = &callbacks.on_tap_up {
+            invoke_tap_callback(TapCallbackKind::Up, || callback(self.up));
+        }
+    }
+
+    /// Reports cancellation only if the tap already announced its down.
+    pub fn cancel(self, callbacks: &GestureCallbacks, reason: TapCancelReason) {
+        if self.down_announced
+            && let Some(callback) = &callbacks.on_tap_cancel
+        {
+            invoke_tap_callback(TapCallbackKind::Cancel(reason), || callback());
+        }
+    }
+}
+
 /// A reusable recognizer for tap, double-tap, long-press, and pan.
 pub struct PointerGestureRecognizer {
     callbacks: GestureCallbacks,
@@ -112,6 +144,7 @@ pub struct PointerGestureRecognizer {
     /// `onTapDown` of the current press, deferred until `kPressTimeout`
     /// elapses or the tap is accepted.
     pending_tap_down: Option<TapDownDetails>,
+    pending_tap_release: Cell<Option<PendingTapRelease>>,
     /// Flutter's `_sentTapDown`: `onTapCancel` follows only a reported
     /// `onTapDown`.
     tap_down_sent: bool,
@@ -255,6 +288,7 @@ impl PointerGestureRecognizer {
             double_tap_ignored: false,
             double_tap_moved: false,
             pending_tap_down: None,
+            pending_tap_release: Cell::new(None),
             tap_down_sent: false,
             tap_accepted: false,
             pre_accept_tap_slop: TapSlopTolerance::Default,
@@ -496,6 +530,9 @@ impl PointerGestureRecognizer {
     /// silent.
     fn tap_cancel(&mut self, reason: TapCancelReason) {
         self.pending_tap_down = None;
+        if let Some(release) = self.pending_tap_release.take() {
+            release.cancel(&self.callbacks, reason);
+        }
         if std::mem::take(&mut self.tap_down_sent)
             && let Some(callback) = &self.callbacks.on_tap_cancel
         {
@@ -1081,6 +1118,7 @@ impl PointerGestureRecognizer {
                 }
                 // Flutter's `TapGestureRecognizer` reports `onTapDown` only
                 // after `kPressTimeout`, or when the tap is accepted first.
+                self.pending_tap_release.take();
                 self.tap_down_sent = false;
                 self.tap_accepted = false;
                 self.pending_tap_down = self.has_tap_callbacks().then_some(TapDownDetails {
@@ -1321,8 +1359,7 @@ impl PointerGestureRecognizer {
                     // The second tap qualified when it went down (within
                     // `kDoubleTapTimeout` and `kDoubleTapSlop` of the first)
                     // and stayed within `kDoubleTapTouchSlop`.
-                    self.flush_tap_down();
-                    self.dispatch_tap_up(event);
+                    self.tap_cancel(TapCancelReason::Forced);
                     self.last_tap = None;
                     self.last_tap_down = None;
                     GestureDecision::Accept(GestureAction::DoubleTap)
@@ -1334,11 +1371,17 @@ impl PointerGestureRecognizer {
                     self.pending_tap_down = None;
                     GestureDecision::Reject
                 } else if self.has_tap_callbacks() {
-                    // Accepting the tap reports a still-deferred `onTapDown`
-                    // first, then `onTapUp`.
-                    self.flush_tap_down();
-                    self.tap_down_sent = false;
-                    self.dispatch_tap_up(event);
+                    // Releasing a pointer is not itself winning: a double
+                    // recognizer may still be holding this tap's arena.
+                    self.pending_tap_release.set(Some(PendingTapRelease {
+                        down: self.pending_tap_down.take(),
+                        up: TapUpDetails {
+                            global_position: event.position,
+                            local_position: self.local(event.position),
+                            kind: self.kind,
+                        },
+                        down_announced: std::mem::take(&mut self.tap_down_sent),
+                    }));
                     if !self.double_tap_ignored {
                         self.last_tap = Some(event.time);
                         self.last_tap_down = Some((down.time, down.position));
@@ -1379,14 +1422,17 @@ impl PointerGestureRecognizer {
         }
     }
 
-    fn dispatch_tap_up(&self, event: PointerEvent) {
-        if let Some(callback) = &self.callbacks.on_tap_up {
-            let details = TapUpDetails {
-                global_position: event.position,
-                local_position: self.local(event.position),
-                kind: self.kind,
-            };
-            invoke_tap_callback(TapCallbackKind::Up, || callback(details));
+    /// Moves the pending TapDown/TapUp details to the retaining arena.
+    #[doc(hidden)]
+    pub fn take_pending_tap_release(&self) -> Option<PendingTapRelease> {
+        self.pending_tap_release.take()
+    }
+
+    /// Emits details for a winning tap when its terminal callback is live.
+    #[doc(hidden)]
+    pub fn dispatch_pending_tap_details(&self) {
+        if let Some(release) = self.take_pending_tap_release() {
+            release.dispatch(&self.callbacks);
         }
     }
 
@@ -1412,11 +1458,13 @@ impl PointerGestureRecognizer {
     /// accepted this recognizer.
     pub fn dispatch(&self, action: GestureAction) {
         match action {
-            GestureAction::Tap => self
-                .callbacks
-                .on_tap
-                .as_ref()
-                .map(|callback| invoke_tap_callback(TapCallbackKind::Tap, || callback())),
+            GestureAction::Tap => {
+                self.dispatch_pending_tap_details();
+                self.callbacks
+                    .on_tap
+                    .as_ref()
+                    .map(|callback| invoke_tap_callback(TapCallbackKind::Tap, || callback()))
+            }
             GestureAction::DoubleTap => self
                 .callbacks
                 .on_double_tap

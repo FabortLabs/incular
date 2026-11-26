@@ -83,7 +83,8 @@ pub use tap_callback_error::{
 };
 pub use pointer::{
     DragAxis, DragGestureDetector, FlingLimits, GestureDetector, MonodragGestureRecognizer,
-    PointerGestureRecognizer, TapMemory, TapSlopTolerance, TrackpadDragAxis, TrackpadDragRecognizer,
+    PendingTapRelease, PointerGestureRecognizer, TapMemory, TapSlopTolerance, TrackpadDragAxis,
+    TrackpadDragRecognizer,
 };
 pub use signal::{PointerSignalError, PointerSignalEvent, PointerSignalResolver};
 pub use pointer_resampler::PointerEventResampler;

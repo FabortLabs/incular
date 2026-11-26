@@ -1358,6 +1358,7 @@ struct RawPointerRouteEntry {
 
 struct DeferredSingleTap {
     owner: ElementId,
+    details: Option<incular_gestures::PendingTapRelease>,
     live_tap_buttons: Option<u32>,
     double_tap_owner: ElementId,
     deadline: Instant,

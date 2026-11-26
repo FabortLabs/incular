@@ -2053,20 +2053,25 @@ impl WidgetTree {
         if let Some(memory) = self.input.tap_memories.get(&tap.double_tap_owner) {
             memory.set(incular_gestures::TapMemory::default());
         }
-        if let Some(callback) = self.mounted_tap_callback(tap.owner, tap.live_tap_buttons) {
-            incular_gestures::invoke_retained_tap(|| callback());
+        if let Some(callbacks) = self.mounted_tap_callbacks(tap.owner, tap.live_tap_buttons) {
+            if let Some(details) = tap.details {
+                details.dispatch(&callbacks);
+            }
+            if let Some(callback) = callbacks.on_tap {
+                incular_gestures::invoke_retained_tap(|| callback());
+            }
         }
     }
 
-    fn mounted_tap_callback(
+    fn mounted_tap_callbacks(
         &self,
         element: ElementId,
         buttons: Option<u32>,
-    ) -> Option<Rc<dyn Fn()>> {
+    ) -> Option<GestureCallbacks> {
         let callbacks = self.gesture_callbacks(element)?;
         match buttons {
-            Some(buttons) => callbacks.for_button_mask(buttons)?.on_tap,
-            None => callbacks.on_tap,
+            Some(buttons) => callbacks.for_button_mask(buttons),
+            None => Some(callbacks),
         }
     }
 
@@ -2496,6 +2501,7 @@ impl WidgetTree {
                     .retain(|tap| tap.owner != owner);
                 self.input.deferred_single_taps.push(DeferredSingleTap {
                     owner,
+                    details: recognizer.take_pending_tap_release(),
                     live_tap_buttons: candidate.live_tap_buttons,
                     double_tap_owner,
                     deadline,
@@ -2511,6 +2517,7 @@ impl WidgetTree {
                 {
                     // Retain the press and its arena decision, not the
                     // callback of a mounted any-button recognizer after a rebuild.
+                    recognizer.dispatch_pending_tap_details();
                     live_tap = Some((owner, buttons));
                 } else {
                     recognizer.dispatch(action);
@@ -2519,7 +2526,9 @@ impl WidgetTree {
             start_update = recognizer.take_start_update();
         }
         if let Some((owner, buttons)) = live_tap
-            && let Some(callback) = self.mounted_tap_callback(owner, Some(buttons))
+            && let Some(callback) = self
+                .mounted_tap_callbacks(owner, Some(buttons))
+                .and_then(|callbacks| callbacks.on_tap)
         {
             incular_gestures::invoke_retained_tap(|| callback());
         }
