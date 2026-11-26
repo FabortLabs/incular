@@ -2177,3 +2177,5 @@ packages/flutter/test/gestures/resampler_test.dart	528	skip	paired-match	upstrea
 packages/flutter/test/gestures/resampler_test.dart	599	skip all	paired-match	upstream-pointer-resampler.md#streaming-skipped-samples-and-lookahead
 packages/flutter/test/gestures/resampler_test.dart	648	stop	paired-match	upstream-pointer-resampler.md#streaming-skipped-samples-and-lookahead
 packages/flutter/test/gestures/resampler_test.dart	773	next sample time	paired-match	upstream-pointer-resampler.md#streaming-skipped-samples-and-lookahead
+packages/flutter/test/gestures/team_test.dart	13	GestureArenaTeam rejection test	paired-match	upstream-gesture-arena-team.md
+packages/flutter/test/gestures/team_test.dart	64	GestureArenaTeam captain	paired-match	upstream-gesture-arena-team.md

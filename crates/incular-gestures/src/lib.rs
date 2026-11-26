@@ -5,6 +5,7 @@
 //! boundary.
 
 mod arena;
+mod arena_team;
 pub(crate) mod arena_member;
 mod buttons;
 pub mod constants;
@@ -27,6 +28,7 @@ mod tap_and_drag;
 mod velocity;
 
 pub use arena_member::{ArenaGestureRecognizer, ArenaRecognizer, ArenaResolver};
+pub use arena_team::{GestureArenaTeam, GestureTeamRegistration};
 pub use buttons::{is_single_button, nth_mouse_button, nth_stylus_button, smallest_button};
 pub use velocity::VelocityTrackerKind;
 
