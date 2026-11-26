@@ -886,6 +886,7 @@ impl WidgetTree {
                     continue;
                 }
                 // A press competes only with the callbacks of its own button.
+                let live_tap_buttons = callbacks.on_any_tap.is_some().then_some(buttons);
                 let Some(mut callbacks) = callbacks.for_button_mask(buttons) else {
                     continue;
                 };
@@ -964,6 +965,7 @@ impl WidgetTree {
                         kind: RetainedGestureKind::Pointer,
                         recognizer: Some(recognizer),
                         force_press: None,
+                        live_tap_buttons,
                         on_cancel: callbacks.on_cancel.clone(),
                     });
                 }
@@ -1012,6 +1014,7 @@ impl WidgetTree {
                         kind: RetainedGestureKind::Scale,
                         recognizer: None,
                         force_press: None,
+                        live_tap_buttons: None,
                         on_cancel: callbacks.on_cancel.clone(),
                     });
                 }
@@ -1039,6 +1042,7 @@ impl WidgetTree {
                         kind: RetainedGestureKind::ForcePress,
                         recognizer: None,
                         force_press: Some(Box::new(force_press)),
+                        live_tap_buttons: None,
                         on_cancel: callbacks.on_cancel.clone(),
                     });
                 }
@@ -1202,6 +1206,7 @@ impl WidgetTree {
                         kind: RetainedGestureKind::Pointer,
                         recognizer: Some(recognizer),
                         force_press: None,
+                        live_tap_buttons: None,
                         on_cancel: None,
                     });
                     self.input.scroll_brackets.insert(
@@ -1949,11 +1954,20 @@ impl WidgetTree {
         if let Some(memory) = self.input.tap_memories.get(&tap.double_tap_owner) {
             memory.set(incular_gestures::TapMemory::default());
         }
-        if let Some(callback) = self
-            .gesture_callbacks(tap.owner)
-            .and_then(|callbacks| callbacks.on_tap)
-        {
+        if let Some(callback) = self.mounted_tap_callback(tap.owner, tap.live_tap_buttons) {
             callback();
+        }
+    }
+
+    fn mounted_tap_callback(
+        &self,
+        element: ElementId,
+        buttons: Option<u32>,
+    ) -> Option<Rc<dyn Fn()>> {
+        let callbacks = self.gesture_callbacks(element)?;
+        match buttons {
+            Some(buttons) => callbacks.for_button_mask(buttons)?.on_tap,
+            None => callbacks.on_tap,
         }
     }
 
@@ -2260,6 +2274,7 @@ impl WidgetTree {
             None
         };
         let mut start_update = None;
+        let mut live_tap = None;
         if let Some(candidate) = self.input.active_gestures.get_mut(&key).and_then(|active| {
             active
                 .members
@@ -2274,6 +2289,7 @@ impl WidgetTree {
                     .retain(|tap| tap.owner != owner);
                 self.input.deferred_single_taps.push(DeferredSingleTap {
                     owner,
+                    live_tap_buttons: candidate.live_tap_buttons,
                     double_tap_owner,
                     deadline,
                 });
@@ -2283,9 +2299,22 @@ impl WidgetTree {
                         .deferred_single_taps
                         .retain(|tap| tap.double_tap_owner != owner);
                 }
-                recognizer.dispatch(action);
+                if matches!(action, GestureAction::Tap)
+                    && let Some(buttons) = candidate.live_tap_buttons
+                {
+                    // Retain the press and its arena decision, not the
+                    // callback of a mounted any-button recognizer after a rebuild.
+                    live_tap = Some((owner, buttons));
+                } else {
+                    recognizer.dispatch(action);
+                }
             }
             start_update = recognizer.take_start_update();
+        }
+        if let Some((owner, buttons)) = live_tap
+            && let Some(callback) = self.mounted_tap_callback(owner, Some(buttons))
+        {
+            callback();
         }
         if let GestureAction::ArenaAccepted { .. } = action
             && let Some(force_press) = self.input.active_gestures.get_mut(&key).and_then(|active| {

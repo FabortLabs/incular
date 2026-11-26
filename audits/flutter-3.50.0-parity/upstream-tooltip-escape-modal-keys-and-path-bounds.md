@@ -119,3 +119,14 @@ Pinned :630 passed: a tap on a locked barrier submits the SystemSound
 alert service request. Incular still blocks that tap but has no paired
 alert service behavior. This upstream test observes the request, not
 whether a host audibly plays it.
+
+### Rebuilding during a barrier contact
+
+The authored Flutter probe replaces onDismiss between press and release
+for primary and secondary contacts. There is no callback during the
+replacement frame and release calls only the new handler. Incular
+previously called the old handler. A retained arena member now preserves
+the press-time button mask and competition but resolves its any-button
+tap callback from the mounted widget at delivery. The new regression and
+the earlier modal drag/cancel, pointer, and menu outside-tap tests pass.
+This authored control is not counted as an upstream registration.

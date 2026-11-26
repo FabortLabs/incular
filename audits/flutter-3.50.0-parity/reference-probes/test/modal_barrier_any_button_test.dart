@@ -81,4 +81,25 @@ void main() {
       expect((dismissals, drags), (1, 1));
     },
   );
+  testWidgets('a barrier uses the current handler when an active tap releases', (
+    WidgetTester tester,
+  ) async {
+    final callbacks = <int>[];
+    Widget barrier(int generation) => Directionality(
+      textDirection: TextDirection.ltr,
+      child: ModalBarrier(onDismiss: () => callbacks.add(generation)),
+    );
+    for (final mask in [kPrimaryButton, kSecondaryButton]) {
+      await tester.pumpWidget(barrier(1));
+      callbacks.clear();
+      final press = await tester.startGesture(
+        const Offset(400, 300),
+        buttons: mask,
+      );
+      await tester.pumpWidget(barrier(2));
+      expect(callbacks, isEmpty);
+      await press.up();
+      expect(callbacks, [2]);
+    }
+  });
 }

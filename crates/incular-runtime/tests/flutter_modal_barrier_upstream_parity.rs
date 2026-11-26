@@ -635,3 +635,52 @@ fn a_modal_barrier_keeps_the_basic_cursor_over_a_click_cursor() {
         );
     }
 }
+
+#[test]
+fn a_barrier_uses_the_current_handler_when_an_active_tap_releases() {
+    use incular_core::ValueNotifier;
+    use incular_widgets::Builder;
+    for button in [PRIMARY_POINTER_BUTTON, SECONDARY_POINTER_BUTTON] {
+        let generation = ValueNotifier::new(1);
+        let callbacks = Rc::new(RefCell::new(Vec::new()));
+        let mut runtime = Runtime::new(
+            Builder::new({
+                let generation = generation.clone();
+                let callbacks = callbacks.clone();
+                move |_| {
+                    let value = generation.value();
+                    let callbacks = callbacks.clone();
+                    AnimatedModalBarrier::with_flat_color(RED)
+                        .on_dismiss(move || callbacks.borrow_mut().push(value))
+                        .into()
+                }
+            })
+            .into(),
+        )
+        .unwrap();
+        let now = Instant::now();
+        runtime.run_frame_at(bounds(), now).unwrap();
+        send_touch(
+            &mut runtime,
+            now + Duration::from_millis(2),
+            1,
+            PointerPhase::Down,
+            BARRIER_CENTER,
+            button,
+        );
+        generation.set_value(2);
+        runtime
+            .run_frame_at(bounds(), now + Duration::from_millis(4))
+            .unwrap();
+        assert!(callbacks.borrow().is_empty());
+        send_touch(
+            &mut runtime,
+            now + Duration::from_millis(6),
+            1,
+            PointerPhase::Up,
+            BARRIER_CENTER,
+            button,
+        );
+        assert_eq!(&*callbacks.borrow(), &[2]);
+    }
+}

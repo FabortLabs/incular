@@ -1164,6 +1164,7 @@ struct ActiveGestureMember {
     kind: RetainedGestureKind,
     recognizer: Option<PointerGestureRecognizer>,
     force_press: Option<Box<ForcePressMember>>,
+    live_tap_buttons: Option<u32>,
     on_cancel: Option<Rc<dyn Fn()>>,
 }
 
@@ -1332,6 +1333,7 @@ struct RawPointerRouteEntry {
 
 struct DeferredSingleTap {
     owner: ElementId,
+    live_tap_buttons: Option<u32>,
     double_tap_owner: ElementId,
     deadline: Instant,
 }
