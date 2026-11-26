@@ -32,3 +32,19 @@ the old alpha. Recoloring replaces RGB and alpha while retaining the
 explicit stop offsets, geometry, tile mode, and rotation. The six
 focused Rust cases passed. Arbitrary non-rotation transform matrices
 are not represented by this descriptor.
+
+## Absolute brush transitions at decoration paint
+
+A new authored Flutter comparison exercises interpolated linear geometry
+and a merged three-stop list, true focal radial radii/centers, sweep
+angles, discrete tiling, and the transparent midpoint between different
+shader families. Native BoxDecoration and ShapeDecoration now pass the
+interpolated absolute brush to the actual display list, not one endpoint
+selected at half. The quarter-step grayscale stop is 96/255. A missing
+shader scales opacity, and compatible native implicit/explicit sweep
+branches remain continuous near their endpoints.
+
+The three authored Flutter tests and eleven focused Rust tests passed.
+These authored comparisons do not change the pinned registration count.
+Raw-to-box-relative coordinate changes remain separate. Native readback
+from a WGPU device was not available in this environment.

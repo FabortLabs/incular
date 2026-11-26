@@ -1,6 +1,6 @@
 use crate::display_list::ImageSampling;
 use incular_core::finite_or_zero;
-use incular_core::{Color, IdGenerator, Offset, Rect};
+use incular_core::{Color, IdGenerator, Lerp, Offset, Rect};
 use std::sync::Arc;
 
 static NEXT_GRADIENT_ID: IdGenerator = IdGenerator::new();
@@ -574,6 +574,78 @@ impl From<FilterQuality> for ImageSampling {
     }
 }
 impl Brush {
+    /// Interpolates shader geometry in absolute coordinates for two brushes
+    /// of the same kind, including resampling their merged gradient stops.
+    /// Different brush families need a policy from the caller.
+    #[must_use]
+    pub fn interpolate_same_kind(&self, other: &Self, t: f32) -> Option<Self> {
+        if std::mem::discriminant(self) != std::mem::discriminant(other) {
+            return None;
+        }
+        if std::ptr::eq(self, other) || t == 0. {
+            return Some(self.clone());
+        }
+        if t == 1. {
+            return Some(other.clone());
+        }
+        let mix = |a: f32, b: f32| a + (b - a) * t;
+        let point = |a: Offset, b: Offset| Offset::new(mix(a.x, b.x), mix(a.y, b.y));
+        let tile = |a, b| if t < 0.5 { a } else { b };
+        Some(match (self, other) {
+            (Self::Solid(a), Self::Solid(b)) => Self::Solid(a.lerp(b, t)),
+            (Self::LinearGradient(a), Self::LinearGradient(b)) => Self::LinearGradient(LinearGradient {
+                start: point(a.start, b.start),
+                end: point(a.end, b.end),
+                stops: a.stops.interpolate(&b.stops, t),
+                tile_mode: tile(a.tile_mode, b.tile_mode),
+            }),
+            (Self::RadialGradient(a), Self::RadialGradient(b)) => Self::RadialGradient(RadialGradient {
+                center: point(a.center, b.center),
+                radius: mix(a.radius, b.radius).max(0.),
+                stops: a.stops.interpolate(&b.stops, t),
+                tile_mode: tile(a.tile_mode, b.tile_mode),
+                focal: (a.focal.is_some() || b.focal.is_some()).then(|| {
+                    point(a.focal.unwrap_or(a.center), b.focal.unwrap_or(b.center))
+                }),
+                focal_radius: mix(a.focal_radius, b.focal_radius).max(0.),
+            }),
+            (Self::SweepGradient(a), Self::SweepGradient(b)) => {
+                let (start_angle, end_angle, rotation) = match (a.end_angle, b.end_angle) {
+                    (None, None) => (mix(a.start_angle, b.start_angle), None, 0.),
+                    (Some(end_a), Some(end_b)) => {
+                        let start = mix(a.start_angle, b.start_angle).max(0.);
+                        let rotation = if t < 0.5 { a.rotation } else { b.rotation };
+                        (start, Some(mix(end_a, end_b).max(start)), rotation)
+                    }
+                    _ => {
+                        // An implicit full turn wraps at its own start. Its
+                        // exactly equivalent explicit representation starts
+                        // at zero with that start in the branch rotation.
+                        let sector = |gradient: &SweepGradient| {
+                            gradient.end_angle.map_or(
+                                (0., std::f32::consts::TAU, gradient.start_angle),
+                                |end| (gradient.start_angle, end, gradient.rotation),
+                            )
+                        };
+                        let (start_a, end_a, rotation_a) = sector(a);
+                        let (start_b, end_b, rotation_b) = sector(b);
+                        let start = mix(start_a, start_b).max(0.);
+                        (start, Some(mix(end_a, end_b).max(start)), mix(rotation_a, rotation_b))
+                    }
+                };
+                Self::SweepGradient(SweepGradient {
+                    center: point(a.center, b.center),
+                    start_angle,
+                    end_angle,
+                    rotation,
+                    stops: a.stops.interpolate(&b.stops, t),
+                    tile_mode: tile(a.tile_mode, b.tile_mode),
+                })
+            }
+            _ => unreachable!("brush discriminants were checked"),
+        })
+    }
+
     /// Applies Flutter's `GradientRotation(radians)` for a shader created
     /// over `bounds`: the gradient field rotates by `radians` (clockwise
     /// in Incular's y-down space, as in Flutter) about the centre of

@@ -12,6 +12,7 @@ use incular_rendering::{Brush, Canvas, CornerRadii, DisplayList, FillRule, Gradi
 use super::decoration::{
     BorderSide, BoxDecoration, BoxLinearGradient, BoxRadialGradient, BoxShadow, BoxShape,
     BoxSweepGradient, DecorationImage, faded_brush, faded_decoration_image,
+    lerp_raw_brush,
 };
 use super::geometry::BorderRadiusGeometry;
 use super::shape_borders::{CircleBorder, RoundedRectangleBorder, ShapeBorder};
@@ -426,8 +427,8 @@ impl Lerp for ShapeDecoration {
 }
 
 /// The color-to-gradient case uses a matching uniform gradient. Compatible
-/// rounded and circular shapes morph continuously; unrelated families,
-/// and pairs of distinct gradients use a midpoint fallback.
+/// rounded and circular shapes morph continuously. Incompatible shape
+/// families and mixed relative/absolute gradient coordinates switch at half.
 fn lerp_shape_decoration(a: &ShapeDecoration, b: &ShapeDecoration, t: f32) -> ShapeDecoration {
     let switches = t >= 0.5;
     let mixes_coordinates = a.aligned_gradient.is_some() && b.gradient.is_some()
@@ -453,13 +454,7 @@ fn lerp_shape_decoration(a: &ShapeDecoration, b: &ShapeDecoration, t: f32) -> Sh
         let gradient = match (&a.gradient, &b.gradient) {
             (None, Some(gradient)) => Some(blend_shape_gradient(gradient, a.color, t, true)),
             (Some(gradient), None) => Some(blend_shape_gradient(gradient, b.color, t, false)),
-            (a, b) => {
-                if switches {
-                    b.clone()
-                } else {
-                    a.clone()
-                }
-            }
+            (a, b) => lerp_raw_brush(a.as_ref(), b.as_ref(), t),
         };
         (gradient, None)
     };

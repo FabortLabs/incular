@@ -806,6 +806,27 @@ pub(super) fn faded_brush(brush: &Brush, factor: f32) -> Brush {
     }
 }
 
+/// Interpolates raw absolute brushes. An incompatible shader fades out
+/// before the other family fades in; an absent endpoint scales opacity.
+pub(super) fn lerp_raw_brush(
+    a: Option<&Brush>,
+    b: Option<&Brush>,
+    t: f32,
+) -> Option<Brush> {
+    match (a, b) {
+        (Some(a), Some(b)) => Some(a.interpolate_same_kind(b, t).unwrap_or_else(|| {
+            if t < 0.5 {
+                faded_brush(a, 1. - 2. * t)
+            } else {
+                faded_brush(b, 2. * t - 1.)
+            }
+        })),
+        (Some(a), None) => Some(faded_brush(a, 1. - t)),
+        (None, Some(b)) => Some(faded_brush(b, t)),
+        (None, None) => None,
+    }
+}
+
 fn lerp_gradient_ref<'a, T: Clone + Lerp>(
     a: Option<&'a T>,
     b: Option<&'a T>,
@@ -1760,8 +1781,8 @@ fn lerp_physical_and_directional(
 impl incular_core::Lerp for BoxDecoration {
     /// Flutter `BoxDecoration.lerp`: a part present on one side only
     /// scales in or out (`Color.lerp(null, c, t)`, `BoxBorder.lerp`,
-    /// `BoxShadow.lerpList`). Raw brushes switch at the midpoint,
-    /// and, as in Flutter, a blend mode is kept only at the ends or when
+    /// `BoxShadow.lerpList`). Absolute shaders interpolate in their own
+    /// coordinate space. A blend mode stays only at the ends or when
     /// interpolating a decoration with itself.
     fn lerp(&self, other: &Self, t: f32) -> Self {
         if std::ptr::eq(self, other) || t == 0.0 {
@@ -1835,10 +1856,12 @@ impl incular_core::Lerp for BoxDecoration {
             )
             .map(Arc::new),
             box_shadow: BoxShadow::lerp_list(&self.box_shadow, &other.box_shadow, t),
-            gradient: if t < 0.5 {
-                self.gradient.clone()
+            gradient: if self.has_aligned_gradient() || other.has_aligned_gradient() {
+                // A resolved brush and a box-relative shader do not share
+                // coordinates until the widget is sized.
+                if t < 0.5 { self.gradient.clone() } else { other.gradient.clone() }
             } else {
-                other.gradient.clone()
+                lerp_raw_brush(self.gradient.as_ref(), other.gradient.as_ref(), t)
             },
             aligned_gradient,
             aligned_radial_gradient,
