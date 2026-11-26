@@ -27,7 +27,7 @@
     "widget_previews": 113,
     "incular_harness": 261
   },
-  "dynamicDescriptions": 70,
+  "dynamicDescriptions": 69,
   "diagnostics": [],
   "registrations": [
     "frameScenario",
@@ -36,6 +36,7 @@
     "testGesture",
     "testGolden",
     "testGoldens",
+    "testResampleEvent",
     "testUsingContext",
     "testWidgets",
     "testWidgetsWithLeakTracking",

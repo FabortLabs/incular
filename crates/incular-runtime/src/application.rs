@@ -1614,6 +1614,23 @@ impl Application {
             .is_some_and(|record| record.runtime.frame_requested())
     }
 
+    /// Configures optional touch sampling for this window. A zero or
+    /// omitted lookbehind disables sampling and flushes pending input.
+    pub fn set_window_touch_resampling_delay(
+        &mut self,
+        window_id: WindowId,
+        delay: Option<std::time::Duration>,
+    ) -> bool {
+        self.with_window_mut(window_id, |record| record.runtime.set_touch_resampling_delay(delay))
+            .is_some()
+    }
+
+    /// Delivers a window's due touch samples without requiring a presentation.
+    pub fn poll_window_touch_resampling_at(&mut self, window_id: WindowId, now: Instant) -> bool {
+        self.with_window_mut(window_id, |record| record.runtime.poll_touch_resampling_at(now))
+            .unwrap_or(false)
+    }
+
     /// Earliest non-animating wake a native window needs.
     #[must_use]
     pub fn frame_deadline(&self, window_id: WindowId) -> Option<Instant> {

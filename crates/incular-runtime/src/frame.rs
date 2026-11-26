@@ -1575,7 +1575,10 @@ impl Runtime {
     /// Enables touch resampling with Flutter's default 38 ms delay, or
     /// disables it and drains any queued raw input immediately.
     pub fn set_touch_resampling_enabled(&mut self, enabled: bool) {
-        self.set_touch_resampling_delay(enabled.then_some(touch_resampling::DEFAULT_DELAY));
+        let delay = enabled.then_some(
+            self.touch_resampling.preferred_delay.unwrap_or(touch_resampling::DEFAULT_DELAY),
+        );
+        self.set_touch_resampling_delay(delay);
     }
 
     /// Sets how far before a frame's clock time to sample touch positions.
@@ -1583,7 +1586,9 @@ impl Runtime {
     /// pointer signals always bypass this touch-only path.
     pub fn set_touch_resampling_delay(&mut self, delay: Option<Duration>) {
         self.touch_resampling.delay = delay.filter(|value| !value.is_zero());
-        if self.touch_resampling.delay.is_none() {
+        if let Some(delay) = self.touch_resampling.delay {
+            self.touch_resampling.preferred_delay = Some(delay);
+        } else {
             self.touch_resampling.stop();
             self.dispatch_sampled_touch();
         }
@@ -1592,6 +1597,18 @@ impl Runtime {
     #[must_use]
     pub fn touch_resampling_delay(&self) -> Option<Duration> {
         self.touch_resampling.delay
+    }
+
+    /// Services a due touch sampling deadline without drawing a frame. An
+    /// embedder can call this with its event-loop clock at `next_frame_deadline`.
+    /// Late calls use the most recent sampling tick, not the unaligned time.
+    pub fn poll_touch_resampling_at(&mut self, now: Instant) -> bool {
+        let Some(tick) = self.touch_resampling.due_tick(now) else {
+            return false;
+        };
+        self.touch_resampling.sample(tick);
+        self.dispatch_sampled_touch();
+        true
     }
 
     fn enqueue_touch_sample(&mut self, event: RawPointerEvent) -> bool {

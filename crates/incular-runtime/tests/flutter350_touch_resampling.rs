@@ -178,3 +178,95 @@ fn touches_are_immediate_by_default_and_mouse_bypasses_the_opt_in() {
     assert_eq!(events[2].time, at(epoch, 1));
     assert_eq!(events[2].position, Offset::new(8., 0.));
 }
+
+#[test]
+fn pointer_sampling_continues_on_due_ticks_without_rendering_a_frame() {
+    let epoch = Instant::now();
+    let (mut runtime, events) = mount(epoch);
+    runtime.set_touch_resampling_delay(Some(Duration::from_millis(5)));
+    for (ms, phase, x) in [
+        (0, PointerPhase::Enter, 0.),
+        (10, PointerPhase::Down, 0.),
+        (20, PointerPhase::Move, 10.),
+        (30, PointerPhase::Move, 20.),
+        (40, PointerPhase::Move, 30.),
+        (50, PointerPhase::Move, 40.),
+        (60, PointerPhase::Move, 50.),
+        (70, PointerPhase::Up, 50.),
+        (70, PointerPhase::Exit, 50.),
+    ] {
+        send(
+            &mut runtime,
+            phase,
+            PointerDeviceKind::Touch,
+            at(epoch, ms),
+            x,
+        );
+    }
+    assert!(events.borrow().is_empty());
+    assert!(runtime.frame_requested());
+    frame(&mut runtime, at(epoch, 15));
+    assert_eq!(events.borrow().len(), 1);
+    frame(&mut runtime, at(epoch, 25));
+    assert_eq!(events.borrow().len(), 2);
+    assert_eq!(events.borrow()[0].time, at(epoch, 10));
+    assert_eq!(events.borrow()[0].phase, PointerPhase::Down);
+    assert_eq!(events.borrow()[0].position, Offset::ZERO);
+    assert_eq!(events.borrow()[1].time, at(epoch, 20));
+    assert_eq!(events.borrow()[1].phase, PointerPhase::Move);
+    assert_eq!(events.borrow()[1].position, Offset::new(10. / DPR, 0.));
+    assert_eq!(events.borrow()[1].delta, Offset::new(10. / DPR, 0.));
+
+    let tick = Duration::from_micros(16_667);
+    assert_eq!(runtime.next_frame_deadline(), Some(at(epoch, 25) + tick));
+    assert!(!runtime.poll_touch_resampling_at(at(epoch, 40)));
+    let rendered = runtime.diagnostics().layouts;
+    assert!(runtime.poll_touch_resampling_at(at(epoch, 50)));
+    assert_eq!(events.borrow().len(), 3);
+    assert_eq!(events.borrow()[2].time, at(epoch, 20) + tick);
+    assert_eq!(events.borrow()[2].phase, PointerPhase::Move);
+    assert!(runtime.poll_touch_resampling_at(at(epoch, 67)));
+    assert_eq!(events.borrow().len(), 5);
+    assert_eq!(events.borrow()[3].time, at(epoch, 20) + tick * 2);
+    assert_eq!(events.borrow()[3].phase, PointerPhase::Move);
+    assert_eq!(events.borrow()[4].time, at(epoch, 20) + tick * 2);
+    assert_eq!(events.borrow()[4].phase, PointerPhase::Up);
+    assert_eq!(runtime.diagnostics().layouts, rendered);
+    assert!(!runtime.poll_touch_resampling_at(at(epoch, 100)));
+    assert_eq!(events.borrow().len(), 5);
+}
+
+#[test]
+fn changing_the_lookbehind_does_not_rewind_an_active_contact() {
+    let epoch = Instant::now();
+    let (mut runtime, events) = mount(epoch);
+    runtime.set_touch_resampling_delay(Some(Duration::from_millis(5)));
+    for (ms, phase, x) in [
+        (0, PointerPhase::Down, 0.),
+        (10, PointerPhase::Move, 15.),
+        (20, PointerPhase::Move, 30.),
+        (30, PointerPhase::Move, 45.),
+    ] {
+        send(
+            &mut runtime,
+            phase,
+            PointerDeviceKind::Touch,
+            at(epoch, ms),
+            x,
+        );
+    }
+    frame(&mut runtime, at(epoch, 15));
+    assert_eq!(events.borrow().len(), 1);
+    assert_eq!(events.borrow()[0].position, Offset::new(5., 0.));
+    runtime.set_touch_resampling_delay(Some(Duration::from_millis(20)));
+    frame(&mut runtime, at(epoch, 22));
+    assert_eq!(
+        events.borrow().len(),
+        1,
+        "a bigger lookbehind would move this finger backwards"
+    );
+    frame(&mut runtime, at(epoch, 40));
+    assert_eq!(events.borrow().len(), 2);
+    assert_eq!(events.borrow()[1].position, Offset::new(10., 0.));
+    assert_eq!(events.borrow()[1].delta, Offset::new(5., 0.));
+}

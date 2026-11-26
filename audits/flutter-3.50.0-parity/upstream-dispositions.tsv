@@ -2181,3 +2181,4 @@ packages/flutter/test/gestures/team_test.dart	13	GestureArenaTeam rejection test
 packages/flutter/test/gestures/team_test.dart	64	GestureArenaTeam captain	paired-match	upstream-gesture-arena-team.md
 packages/flutter/test/gestures/gesture_binding_resample_event_on_widget_test.dart	13	PointerEvent resampling on a widget	paired-match	upstream-pointer-resampler.md#opt-in-runtime-touch-delivery
 packages/flutter/test/gestures/gesture_binding_resample_event_on_widget_test.dart	109	Timer should be canceled when resampling stopped	paired-match	upstream-pointer-resampler.md#opt-in-runtime-touch-delivery
+packages/flutter/test/gestures/gesture_binding_resample_event_test.dart	64	Pointer event resampling	paired-match	upstream-pointer-resampler.md#sampling-deadlines-without-a-redraw

@@ -43,3 +43,18 @@ immediately. Disabling clears the runtime polling deadline and delivers
 pending events with their original times; the test checks that a later
 frame cannot replay them. The runtime uses its existing host frame
 deadline interface rather than spawning a separate timer per contact.
+
+### Sampling deadlines without a redraw
+
+The pinned `gestures/gesture_binding_resample_event_test.dart` scenario
+passed. Its local `testResampleEvent` wrapper registers the single named
+scenario on line 64; the catalog now points there rather than to the
+generic forwarding call on line 55. The denominator is unchanged.
+
+The native runtime dispatches Down and Move in its first two frames.
+A host-facing deadline poll then dispatches the remaining events at
+the same 16,667-microsecond ticks without visiting layout or presenting
+a frame. Late polls use the latest aligned tick; after release there
+is no remaining deadline. A native control verifies that increasing
+the lookbehind cannot replay a finger's movement backwards. The
+application bridge exposes the same behavior per window to embedders.

@@ -13,6 +13,8 @@ type Contact = (u64, u64);
 #[derive(Default)]
 pub(super) struct TouchResampling {
     pub(super) delay: Option<Duration>,
+    pub(super) preferred_delay: Option<Duration>,
+    last_sample: Option<Instant>,
     pub(super) deadline: Option<Instant>,
     streams: Vec<(Contact, PointerEventResampler)>,
     pub(super) ready: Vec<RawPointerEvent>,
@@ -41,13 +43,19 @@ impl TouchResampling {
         let Some(delay) = self.delay else {
             return;
         };
-        if let Some(at) = frame_time.checked_sub(delay) {
+        if let Some(at) = frame_time.checked_sub(delay)
+            && self.last_sample.is_none_or(|previous| at >= previous)
+        {
+            self.last_sample = Some(at);
             let next = at.checked_add(INTERVAL);
             for (_, stream) in &mut self.streams {
                 stream.sample(at, next, |event| self.ready.push(event));
             }
             self.streams
                 .retain(|(_, stream)| stream.has_pending_events() || stream.is_down());
+            if self.streams.is_empty() {
+                self.last_sample = None;
+            }
         }
         // An idle finger with no new data does not wake the host needlessly.
         self.deadline = self
@@ -58,8 +66,22 @@ impl TouchResampling {
             .flatten();
     }
 
+    pub(super) fn due_tick(&self, now: Instant) -> Option<Instant> {
+        let deadline = self.deadline.filter(|deadline| now >= *deadline)?;
+        let elapsed = now.duration_since(deadline).as_micros();
+        let period = INTERVAL.as_micros();
+        let aligned = elapsed / period * period;
+        let extra = u64::try_from(aligned).ok().map(Duration::from_micros);
+        Some(
+            extra
+                .and_then(|extra| deadline.checked_add(extra))
+                .unwrap_or(now),
+        )
+    }
+
     pub(super) fn stop(&mut self) {
         self.deadline = None;
+        self.last_sample = None;
         for (_, mut stream) in self.streams.drain(..) {
             stream.stop(|event| self.ready.push(event));
         }

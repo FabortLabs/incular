@@ -20,7 +20,7 @@ const otherPreviewDirs = [
 const registrations = {
   'test', 'testWidgets', 'testGoldens', 'testGolden', 'testWithoutContext',
   'testWithContext', 'testUsingContext', 'testWidgetsWithLeakTracking',
-  'testExecutable', 'testGesture', 'frameScenario',
+  'testExecutable', 'testGesture', 'testResampleEvent', 'frameScenario',
 };
 const groups = {'group', 'groupWithContext', 'groupWithoutContext'};
 typedef Row = Map<String,Object?>;
@@ -56,7 +56,14 @@ class ScenarioVisitor extends RecursiveAstVisitor<void> {
     // invokes an async fixture helper inside an already registered case.
     // None of the pinned registrations use an import prefix. If one does in
     // a future revision, verify and allow that specific test-library prefix.
+    // This pinned file registers one scenario through a local FakeAsync
+    // wrapper. Count the named wrapper call, not its forwarded test call.
+    final resampleWrapperBody =
+        source.endsWith('/gesture_binding_resample_event_test.dart') &&
+        method == 'test' &&
+        node.thisOrAncestorOfType<FunctionDeclaration>()?.name.lexeme == 'testResampleEvent';
     if (registrations.contains(method) &&
+        !resampleWrapperBody &&
         node.realTarget == null &&
         !(method == 'test' && node.parent is AwaitExpression) &&
         args.where((argument) => argument is! NamedArgument).length >= 2) {
