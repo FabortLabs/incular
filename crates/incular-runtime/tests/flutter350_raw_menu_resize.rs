@@ -75,7 +75,13 @@ fn a_media_view_resize_closes_an_open_menu_after_the_build_but_never_a_closed_on
 }
 
 #[test]
-fn resizing_a_grouped_open_menu_callbacks_without_mutating_during_build() {
+fn resizing_an_open_menu_callbacks_without_mutating_during_build() {
+    for grouped in [false, true] {
+        check_resize_callbacks(grouped);
+    }
+}
+
+fn check_resize_callbacks(grouped: bool) {
     use incular_widgets::RawMenuAnchorGroup;
     let group = MenuController::new();
     let menu = MenuController::new();
@@ -99,19 +105,25 @@ fn resizing_a_grouped_open_menu_callbacks_without_mutating_during_build() {
                 counts.set((open, close + 1));
             }
         });
+        let content = if grouped {
+            Widget::from(RawMenuAnchorGroup::new(group.clone(), anchor))
+        } else {
+            Widget::from(anchor)
+        };
         Widget::from(MediaQuery::new(
             RuntimeEnvironment {
                 viewport: size,
                 ..RuntimeEnvironment::default()
             },
-            RawMenuAnchorGroup::new(group.clone(), anchor),
+            content,
         ))
     };
     let mut runtime = Runtime::new(build(LIMITS)).unwrap();
     assert!(!panel_visible(&frame(&mut runtime)));
     menu.open(None);
     assert!(panel_visible(&frame(&mut runtime)));
-    assert!(group.is_open());
+    assert_eq!(group.is_open(), grouped);
+    assert!(menu.is_open());
     assert_eq!(counts.get(), (1, 0));
 
     let small = Size::new(200., 200.);

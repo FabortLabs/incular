@@ -311,3 +311,62 @@ fn scrolling_the_overlay_keeps_both_menus_open_until_the_outer_position_scrolls(
     assert!(!root.is_open() && !child.is_open());
     assert_eq!(*log.borrow(), ["child", "root"]);
 }
+
+#[test]
+fn scrolling_an_ancestor_calls_the_default_on_close_without_replaying_on_open() {
+    let scroll = ScrollController::new();
+    let menu = MenuController::new();
+    let history = Rc::new(RefCell::new(Vec::new()));
+    let anchor = RawMenuAnchor::new(menu.clone(), |_, _| {
+        Widget::box_(Size::new(80., 40.), PANEL)
+    })
+    .on_open({
+        let log = history.clone();
+        move || log.borrow_mut().push("open")
+    })
+    .on_close({
+        let log = history.clone();
+        move || log.borrow_mut().push("close")
+    })
+    .child(
+        Widget::from(
+            GestureDetector::new(Widget::box_(Size::new(100., 30.), Color::WHITE)).on_tap({
+                let menu = menu.clone();
+                move || menu.open(None)
+            }),
+        )
+        .with_key(Key::from("notification-anchor")),
+    );
+    let mut runtime = Runtime::new(
+        SingleChildScrollView::new(anchor)
+            .controller(scroll.clone())
+            .into(),
+    )
+    .unwrap();
+    let now = Instant::now();
+    assert!(!visible(&frame(&mut runtime, now)));
+    assert_eq!(scroll.max_offset(), 0.);
+    let id = runtime
+        .tree()
+        .element_with_key(&Key::from("notification-anchor"))
+        .unwrap();
+    let box_ = runtime.tree().element_bounds(id).unwrap();
+    let position = box_.origin + Offset::new(10., 8.);
+    for phase in [PointerPhase::Down, PointerPhase::Up] {
+        let _ = runtime.handle_input_at(InputEvent::Pointer { phase, position }, now);
+    }
+    assert!(visible(&frame(
+        &mut runtime,
+        now + Duration::from_millis(1)
+    )));
+    assert_eq!(*history.borrow(), ["open"]);
+    history.borrow_mut().clear();
+
+    assert!(scroll.jump_to(1000.));
+    assert!(!visible(&frame(
+        &mut runtime,
+        now + Duration::from_millis(2)
+    )));
+    assert_eq!(*history.borrow(), ["close"]);
+    assert!(!menu.is_open());
+}

@@ -377,3 +377,30 @@ fn transformed_anchors_do_not_transform_their_overlay_controls_again() {
     }
     assert_eq!(hits.get(), 1);
 }
+
+#[test]
+fn a_group_panel_is_a_transparent_host_for_its_padded_content_geometry() {
+    use incular_config::EdgeInsets;
+    use incular_widgets::{
+        Align, Alignment, Directionality, MainAxisSize, Padding, Row, TextDirection,
+    };
+    let panel = Widget::from(Padding::new(
+        EdgeInsets::all(8.),
+        Row::new([
+            Widget::box_(Size::new(100., 100.), Color::WHITE),
+            Widget::box_(Size::new(100., 100.), PANEL),
+        ])
+        .main_axis_size(MainAxisSize::Min),
+    ))
+    .with_key(Key::from("group-panel"));
+    let group = RawMenuAnchorGroup::new(MenuController::new(), panel);
+    let mut runtime = Runtime::new(
+        Directionality::new(TextDirection::Ltr, Align::new(Alignment::TOP_LEFT, group)).into(),
+    )
+    .unwrap();
+    frame(&mut runtime);
+    assert_eq!(
+        bounds(&runtime, "group-panel"),
+        Rect::from_origin_size(Offset::ZERO, Size::new(216., 116.)),
+    );
+}

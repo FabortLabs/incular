@@ -1754,3 +1754,6 @@ packages/flutter/test/widgets/raw_menu_anchor_test.dart	1215	[Default] Focus tra
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	1734	onOpen is called when the menu is opened	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#controller-moves-and-open-close-notifications
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	1766	onClose is called when the menu is closed	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#controller-moves-and-open-close-notifications
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	1881	Tab traversal is not handled	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#focus-traversal-keeps-application-shortcuts
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	1445	[Group] Menu panel builder	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#group-panel-geometry-and-default-root-closure
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	1981	Menu closes on view size change	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#group-panel-geometry-and-default-root-closure
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	2023	Menu closes on ancestor scroll	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#group-panel-geometry-and-default-root-closure

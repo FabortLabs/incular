@@ -328,3 +328,12 @@ anchor and panel controls. The custom traversal actions get the same
 left/next/previous sequences (and the grouped next/previous sequence
 both before and after opening). The original node stays primary.
 Home and End don't cause built-in raw menu focus movement.
+
+### Group panel geometry and default root closure
+
+Pinned `:1445` pairs with an unstyled menu group wrapping a padded
+row: two 100 by 100 children and 8 px all around yield (0,0,216,116).
+Pinned `:1981` and `:2023` pair with default close behavior, not a
+custom close-request handler. A view resize or a jump beyond an
+ancestor's zero scroll extent produces the onClose notification once
+without replaying onOpen, and the overlay visibly disappears.
