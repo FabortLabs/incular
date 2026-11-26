@@ -294,16 +294,34 @@ impl WidgetTree {
         self.semantics_enabled
     }
 
+    fn geometry_stamp(&self) -> (u64, u64, u64) {
+        (
+            self.diagnostics.layouts,
+            self.diagnostics.compositor_only_updates,
+            self.diagnostics.scroll_offset_updates,
+        )
+    }
+
+    /// Publishes leader transforms before hover, focus, or semantics use
+    /// the current frame's follower geometry. Share the pre-paint pass.
+    #[doc(hidden)]
+    pub fn refresh_follower_links_for_geometry(&mut self) {
+        if self.tracked.followers.is_empty() {
+            return;
+        }
+        let stamp = self.geometry_stamp();
+        if self.follower_link_geometry_stamp != Some(stamp) {
+            self.compositor.publish_leader_links();
+            self.follower_link_geometry_stamp = Some(stamp);
+        }
+    }
+
     pub fn update_semantics(&mut self) {
         if !self.semantics_enabled && self.tracked.semantics_debuggers.is_empty() {
             return;
         }
         self.flush_focus_semantics_changes();
-        let stamp = (
-            self.diagnostics.layouts,
-            self.diagnostics.compositor_only_updates,
-            self.diagnostics.scroll_offset_updates,
-        );
+        let stamp = self.geometry_stamp();
         if stamp.2 != self.semantics_geometry_stamp.2 {
             // Scrolling moves the compositor only, so a scroll node's offset
             // value and edge actions would go stale. Re-collect the scroll
@@ -334,7 +352,7 @@ impl WidgetTree {
                 // Publish first so collection reflects this frame's layout
                 // instead of the previous paint; the gate itself is
                 // unchanged, so genuinely hidden content stays out.
-                self.compositor.publish_leader_links();
+                self.refresh_follower_links_for_geometry();
                 let followers = std::mem::take(&mut self.tracked.followers);
                 for &follower in &followers {
                     if let Some(render) = self.elements.get(follower.0).map(|entry| entry.render) {

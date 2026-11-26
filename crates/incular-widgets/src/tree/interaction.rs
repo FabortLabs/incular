@@ -3203,6 +3203,7 @@ impl WidgetTree {
         nodes.sort_unstable_by_key(|(render, ..)| render.0);
         let mut changed = false;
         let mut focus_geometry_changed = false;
+        let mut hover_geometry_changed = false;
         let mut active = false;
         for (_render, element, kind, layers) in nodes.drain(..) {
             // Hidden subtrees stop ticking; explicit controller changes still
@@ -3743,6 +3744,17 @@ impl WidgetTree {
                 )
             {
                 focus_geometry_changed = true;
+                // Retained transform controllers can move an interactive
+                // subtree, including a leader target, without laying it out.
+                hover_geometry_changed |= matches!(
+                    *kind,
+                    RenderKind::Translate { .. }
+                        | RenderKind::Transform { .. }
+                        | RenderKind::Scale { .. }
+                        | RenderKind::Affine { .. }
+                        | RenderKind::Rotation { .. }
+                        | RenderKind::FittedBox { .. }
+                );
                 self.mark_render_semantics(
                     _render,
                     SemanticsDirty::Bounds.union(SemanticsDirty::Node),
@@ -3780,6 +3792,9 @@ impl WidgetTree {
         }
         if changed {
             self.diagnostics.composites += 1;
+        }
+        if hover_geometry_changed {
+            self.input.hover_hit_revision = self.input.hover_hit_revision.wrapping_add(1);
         }
         if focus_geometry_changed {
             self.refresh_focus_geometry(true);

@@ -51,6 +51,7 @@ impl WidgetTree {
             semantics_block_reach: FastHashSet::default(),
             semantics_full_pass: true,
             semantics_geometry_stamp: (0, 0, 0),
+            follower_link_geometry_stamp: None,
             semantics_scratch: Default::default(),
             semantics_enabled: true,
             paint_scratch: DisplayList::new(),

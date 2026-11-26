@@ -1446,6 +1446,8 @@ pub struct WidgetTree {
     /// Followers track leaders elsewhere in the tree, so any change to them
     /// re-collects every follower.
     semantics_geometry_stamp: (u64, u64, u64),
+    /// Geometry generation already published for pre-paint follower readers.
+    follower_link_geometry_stamp: Option<(u64, u64, u64)>,
     /// Buffers reused by every semantics pass.
     semantics_scratch: semantics::SemanticsScratch,
     /// Whether the semantics pass runs; see [`WidgetTree::set_semantics_enabled`].

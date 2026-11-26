@@ -2208,6 +2208,7 @@ impl Runtime {
         let Some(primary) = self.hover_devices.latest() else {
             return;
         };
+        self.tree.refresh_follower_links_for_geometry();
         let window = self.gesture_window();
         let now = self.input_now();
         let primary_key = primary.hover_device_identity();

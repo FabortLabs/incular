@@ -36,3 +36,23 @@ compares the effect of invalidation, not a private mark-call counter.
 
 The focused runtime proxy (2), linked transform (7), and widget
 linked-layer (20) suites passed. No live window or OS input was needed.
+
+### Follower unlinking and stationary pointer geometry
+
+The authored mounted Flutter and Incular probes keep a follower mounted
+while removing and replacing its leader. A press admitted before unlink
+still completes on its captured route. New taps at either the former
+leader or the layout slot miss the hidden follower. Relinking moves hits
+to the new leader, not the old location; a visible orphan then responds
+only at its normal layout placement.
+
+For a stationary mouse, moving the leader (80,60) and back gives
+enter→exit→enter. The follower's focus-node offset also moves from
+(55,70) to (135,130) and back. Incular formerly kept the mouse hover
+until a later input event. The frame now invalidates hover for
+compositor-only geometry and publishes current links before hover,
+focus, or semantic readers, with one shared pre-paint publication per
+geometry stamp. The native probe disables semantic collection and
+verifies the result both with and without a focus attachment. The move
+uses no layout or repaint. These authored cases do not add upstream
+registration sites.

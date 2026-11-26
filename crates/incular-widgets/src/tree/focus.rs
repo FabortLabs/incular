@@ -282,6 +282,7 @@ impl WidgetTree {
             return;
         }
         self.focus_geometry_stamp = Some(stamp);
+        self.refresh_follower_links_for_geometry();
         let nodes = self.hosted_focus_nodes.iter().flat_map(|nodes| nodes.keys())
             .chain(self.standalone_focus_geometry.iter().flatten());
         for &id in nodes {
