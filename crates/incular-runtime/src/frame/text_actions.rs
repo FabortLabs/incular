@@ -98,6 +98,52 @@ impl Runtime {
         true
     }
 
+    /// Applies a user replacement to a mounted, editable field using the
+    /// current text, like Flutter's `ReplaceTextIntent`. Rust ranges use
+    /// UTF-8 bytes. An identical replacement still focuses an unfocused
+    /// field and requests caret reveal, but does not re-run its formatters.
+    #[must_use]
+    pub fn replace_text(
+        &mut self,
+        field: ElementId,
+        range: TextRange,
+        replacement: &str,
+        cause: SelectionChangedCause,
+    ) -> bool {
+        if !self.tree.text_field_is_editable(field) {
+            return false;
+        }
+        let Some(controller) = self.tree.text_controller(field) else {
+            return false;
+        };
+        let before = (
+            controller.selection_if_set(),
+            controller.caret_affinity(),
+            controller.selection_is_directional(),
+        );
+        let Ok(was_changed) = controller.replace_range_as_user_edit(range, replacement) else {
+            return false;
+        };
+        let after = (
+            controller.selection_if_set(),
+            controller.caret_affinity(),
+            controller.selection_is_directional(),
+        );
+        if self.focused != Some(field)
+            && (!was_changed || (before != after && cause != SelectionChangedCause::Keyboard))
+        {
+            // Flutter requestKeyboard marks this as internal focus; the
+            // desktop select-all-on-external-focus default must not win.
+            self.set_focus_with_external_selection(Some(field), false);
+        }
+        if self.focused == Some(field) && cause != SelectionChangedCause::Drag {
+            controller.reset_caret(self.input_now());
+            self.caret_reveal_key = None;
+        }
+        self.frame_requested = true;
+        true
+    }
+
     /// Runs the text-editing intent that `event` is bound to on the focused
     /// field. Returns whether anything happened, in which case the caller
     /// resets the caret blink and requests a frame.

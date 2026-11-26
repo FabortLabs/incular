@@ -487,7 +487,11 @@ impl fmt::Debug for TextEditingController {
 enum CommitSelection {
     Set,
     Reset,
-    Autofill { is_set: bool, affinity: TextAffinity, is_directional: bool },
+    Explicit {
+        is_set: bool,
+        affinity: TextAffinity,
+        is_directional: bool,
+    },
 }
 
 impl TextEditingController {
@@ -784,8 +788,57 @@ impl TextEditingController {
             text_or_composing_changed,
             true,
             text_or_composing_changed,
-            CommitSelection::Autofill { is_set: selection_is_set, affinity, is_directional: selection_is_directional },
+            CommitSelection::Explicit {
+                is_set: selection_is_set,
+                affinity,
+                is_directional: selection_is_directional,
+            },
         );
+    }
+
+    /// Replaces a byte range through the user-edit path, adjusting the
+    /// existing selection and composing range rather than collapsing them.
+    ///
+    /// Equal UTF-16 lengths preserve the selection's affinity and directional
+    /// bit, as Flutter's `TextEditingValue.replaced` does. A resize resets
+    /// that metadata but keeps the order of the two selection endpoints.
+    ///
+    /// # Errors
+    /// A malformed byte range is rejected before any formatter or listener runs.
+    pub fn replace_range_as_user_edit(
+        &self,
+        range: TextRange,
+        replacement: &str,
+    ) -> Result<bool, InvalidTextDeltaRange> {
+        let (next, selection) = {
+            let state = self.inner.borrow();
+            let value = &state.value;
+            if !range.is_valid_for(&value.text) {
+                return Err(InvalidTextDeltaRange {
+                    range,
+                    text_byte_len: value.text.len(),
+                });
+            }
+            let removed = &value.text[range.as_range()];
+            if removed == replacement {
+                return Ok(false);
+            }
+            let same_length = removed.encode_utf16().count() == replacement.encode_utf16().count();
+            (
+                value.clone().replace(range, replacement),
+                CommitSelection::Explicit {
+                    is_set: !state.selection_unset,
+                    affinity: if same_length {
+                        state.caret_affinity
+                    } else {
+                        TextAffinity::Downstream
+                    },
+                    is_directional: same_length && state.selection_is_directional,
+                },
+            )
+        };
+        self.commit_with_selection(next, true, false, true, selection);
+        Ok(true)
     }
 
     /// Replaces the selection as a user edit: input formatters run on the
@@ -1263,7 +1316,11 @@ impl TextEditingController {
                     (state.focused_selection_policies.is_empty(), TextAffinity::Downstream, false)
                 }
                 CommitSelection::Set => (false, state.caret_affinity, false),
-                CommitSelection::Autofill { is_set, affinity, is_directional } => (!is_set, affinity, is_directional),
+                CommitSelection::Explicit {
+                    is_set,
+                    affinity,
+                    is_directional,
+                } => (!is_set, affinity, is_directional),
             };
             if state.value == value
                 && !(end_preedit && state.preedit.is_some())
