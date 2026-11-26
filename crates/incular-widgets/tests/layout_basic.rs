@@ -1,6 +1,6 @@
-use incular_config::{Axis, EdgeInsets};
-use incular_core::Color;
-use incular_widgets::internal::{Placeholder, SplitView};
+use incular_config::{Axis, Constraints, EdgeInsets, TextDirection};
+use incular_core::{Color, Offset, Size};
+use incular_widgets::internal::{Placeholder, SplitView, WidgetTree};
 use incular_widgets::{
     ColoredBox, FittedBox, NavigationToolbar, OverflowBar, Padding, SizedBox, Text, Visibility,
     Widget,
@@ -26,19 +26,33 @@ fn optional_child_builders_accept_widgets() {
 }
 
 #[test]
-fn multiple_children_use_vec_widget_storage() {
+fn overflow_bar_builder_preserves_child_order_and_switches_axes() {
+    let child = |key| Widget::from(SizedBox::from_size(Size::new(20., 10.))).with_key(key);
     let overflow_bar = OverflowBar::builder()
-        .children([
-            incular_widgets::Text::new("first"),
-            incular_widgets::Text::new("second"),
-        ])
+        .children([child("first"), child("second")])
         .spacing(4.0)
+        .overflow_spacing(6.0)
+        .text_direction(TextDirection::Ltr)
         .build();
+    let mut tree = WidgetTree::new();
+    let widget = Widget::from(overflow_bar);
+    assert_eq!(widget.debug_type_name(), "OverflowBar");
+    tree.mount(widget).unwrap();
+    let first = tree.element_with_key(&"first".into()).unwrap();
+    let second = tree.element_with_key(&"second".into()).unwrap();
 
-    assert_eq!(Widget::from(overflow_bar).debug_type_name(), "Wrap");
+    tree.layout(Constraints::at_most(100., 100.)).unwrap();
+    assert_eq!(tree.element_bounds(first).unwrap().origin, Offset::ZERO);
     assert_eq!(
-        Widget::from(OverflowBar::default()).debug_type_name(),
-        "Wrap"
+        tree.element_bounds(second).unwrap().origin,
+        Offset::new(24., 0.)
+    );
+
+    tree.layout(Constraints::at_most(30., 100.)).unwrap();
+    assert_eq!(tree.element_bounds(first).unwrap().origin, Offset::ZERO);
+    assert_eq!(
+        tree.element_bounds(second).unwrap().origin,
+        Offset::new(0., 16.)
     );
 }
 
