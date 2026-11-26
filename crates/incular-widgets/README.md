@@ -496,3 +496,8 @@ settings. This API does not discover preview annotations or launch a server.
 Physical scroll contacts follow the nearest `ScrollConfiguration`'s
 `MultitouchDragStrategy`. Contacts driving one viewport share its active
 drag, so lifting one finger does not end the scroll under another.
+
+Custom `ShapeBorder` implementations can override `lerp_from` and
+`lerp_to`. `lerp_shape_border` tries both forward hooks, then the reversed
+timeline. ShapeDecoration uses the resulting outline for both hit testing
+and paint.

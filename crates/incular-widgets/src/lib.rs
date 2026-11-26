@@ -344,6 +344,7 @@ pub use painting_effects::{
     PhysicalModel, PhysicalShape, Radius, RawImage, RoundedCircleOutline, RoundedRectangleBorder, RoundedSuperellipseBorder,
     SemanticsBuilder, ShapeBorder, ShapeBorderClipper, ShapeDecoration, SnapshotWidget,
     StadiumBorder, StarBorder, StarBorderError, StarBorderUpdate, TableBorder, TileMode,
+    lerp_shape_border,
 };
 pub use platform_view::{
     PlatformViewController, PlatformViewHitTestBehavior, PlatformViewPlacement, PlatformViewSurface,

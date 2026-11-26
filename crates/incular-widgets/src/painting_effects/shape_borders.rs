@@ -64,6 +64,36 @@ pub trait ShapeBorder {
             .map(|outline| Rc::new(outline.scale(factor)) as Rc<dyn ShapeBorder>)
     }
 
+    /// Interpolates from the other shape into this one, or defers to the
+    /// other shape. A missing endpoint uses this border's scaled outline.
+    fn lerp_from(
+        &self,
+        other: Option<&dyn ShapeBorder>,
+        t: f32,
+    ) -> Option<Rc<dyn ShapeBorder>> {
+        let Some(other) = other else {
+            return self.scaled(t);
+        };
+        let a = other.rounded_circle_outline()?;
+        let b = self.rounded_circle_outline()?;
+        a.try_interpolate(b, t)
+            .map(|outline| Rc::new(outline) as Rc<dyn ShapeBorder>)
+    }
+
+    /// Interpolates from this shape toward the other one. Returning
+    /// `None` allows the reversed timeline to be tried as well.
+    fn lerp_to(
+        &self,
+        other: Option<&dyn ShapeBorder>,
+        t: f32,
+    ) -> Option<Rc<dyn ShapeBorder>> {
+        if other.is_none() {
+            self.scaled(1. - t)
+        } else {
+            None
+        }
+    }
+
     /// Whether this outline needs an ambient direction to paint its stroke.
     fn needs_text_direction(&self) -> bool {
         false
@@ -97,6 +127,29 @@ pub trait ShapeBorder {
     ) {
         self.paint(canvas, rect);
     }
+}
+
+/// Interpolates two shared shape borders. Identical endpoints retain the
+/// same allocation. Otherwise the target's forward hook is tried first,
+/// then the source's, then the same pair on the reversed timeline.
+#[must_use]
+pub fn lerp_shape_border(
+    a: Option<&Rc<dyn ShapeBorder>>,
+    b: Option<&Rc<dyn ShapeBorder>>,
+    t: f32,
+) -> Option<Rc<dyn ShapeBorder>> {
+    if let (Some(a), Some(b)) = (a, b)
+        && Rc::ptr_eq(a, b)
+    {
+        return Some(a.clone());
+    }
+    let from = a.map(Rc::as_ref);
+    let to = b.map(Rc::as_ref);
+    to.and_then(|shape| shape.lerp_from(from, t))
+        .or_else(|| from.and_then(|shape| shape.lerp_to(to, t)))
+        .or_else(|| to.and_then(|shape| shape.lerp_to(from, 1. - t)))
+        .or_else(|| from.and_then(|shape| shape.lerp_from(to, 1. - t)))
+        .or_else(|| if t < 0.5 { a.cloned() } else { b.cloned() })
 }
 
 /// Incompatible shape borders layered from outside to inside, like Flutter's

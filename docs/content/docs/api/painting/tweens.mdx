@@ -47,3 +47,8 @@ including absence. `ConstantTween` returns its single value at both
 ends and at every point between them.
 
 Related: [`Curves`](/docs/api/painting/curves).
+
+Custom shape borders may opt in to interpolation through `lerp_from` and
+`lerp_to`. `ShapeDecoration` uses the shared shape-border interpolation
+path, which can try the equivalent reverse transition before switching
+between incompatible outlines.

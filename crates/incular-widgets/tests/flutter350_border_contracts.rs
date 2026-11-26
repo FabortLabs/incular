@@ -131,3 +131,11 @@ fn flutter_350_border_symmetric_assigns_vertical_to_left_and_right() {
         "sides in left, top, right, bottom order"
     );
 }
+
+#[test]
+fn flutter_350_a_single_border_side_populates_every_physical_edge() {
+    let side = BorderSide::default();
+    let border = Border::from_border_side(side);
+    assert_eq!([border.left, border.top, border.right, border.bottom], [side; 4]);
+    assert_eq!(border, Border::all(side));
+}

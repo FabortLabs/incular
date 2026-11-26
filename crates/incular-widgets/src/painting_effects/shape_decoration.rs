@@ -15,7 +15,7 @@ use super::decoration::{
     lerp_raw_brush,
 };
 use super::geometry::BorderRadiusGeometry;
-use super::shape_borders::{CircleBorder, RoundedRectangleBorder, ShapeBorder};
+use super::shape_borders::{CircleBorder, RoundedRectangleBorder, ShapeBorder, lerp_shape_border};
 use crate::{
     Builder, ClipPath, ClipShape, CustomClipper, CustomPaint, IgnorePointer, LayoutBuilder,
     Positioned, Stack, StackFit, Widget,
@@ -458,18 +458,8 @@ fn lerp_shape_decoration(a: &ShapeDecoration, b: &ShapeDecoration, t: f32) -> Sh
         };
         (gradient, None)
     };
-    let shape = if Rc::ptr_eq(&a.shape, &b.shape) {
-        a.shape.clone()
-    } else if let Some(outline) = a.shape.rounded_circle_outline().and_then(|a| {
-        let b = b.shape.rounded_circle_outline()?;
-        a.try_interpolate(b, t)
-    }) {
-        Rc::new(outline)
-    } else if switches {
-        b.shape.clone()
-    } else {
-        a.shape.clone()
-    };
+    let shape = lerp_shape_border(Some(&a.shape), Some(&b.shape), t)
+        .expect("two present shape outlines");
     ShapeDecoration {
         color: if gradient.is_none() && aligned_gradient.is_none() {
             OptionalColorTween::new(a.color, b.color).lerp(t)

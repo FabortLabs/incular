@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- Custom shape borders can provide forward and reverse interpolation used
+  by ShapeDecoration painting, clipping and hit testing.
+
 - Mono-drag recognizers support latest-contact, summed, and frame-based
   boundary or averaged multi-touch movement.
 

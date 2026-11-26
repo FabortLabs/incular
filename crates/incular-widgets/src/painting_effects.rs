@@ -39,6 +39,7 @@ pub use shape_borders::{
     BeveledRectangleBorder, BorderComposition, CircleBorder, CompoundBorder,
     ContinuousRectangleBorder, LinearBorder, LinearBorderEdge, OvalBorder, RoundedRectangleBorder,
     RoundedSuperellipseBorder, ShapeBorder, StadiumBorder, StarBorder, StarBorderError, StarBorderUpdate,
+    lerp_shape_border,
 };
 pub use shape_decoration::{AlignedShapeGradient, DecoratedShapeBox, ShapeBorderClipper, ShapeDecoration};
 
