@@ -285,7 +285,7 @@ fn controller_ease(curve: &Curve, t: f64) -> f64 {
 struct State {
     value: f64,
     status: AnimationStatus,
-    duration: Duration,
+    duration: Option<Duration>,
     reverse_duration: Option<Duration>,
     /// Flutter's `_direction`.
     forward: bool,
@@ -311,7 +311,7 @@ impl Default for State {
         Self {
             value: 0.0,
             status: AnimationStatus::Dismissed,
-            duration: Duration::ZERO,
+            duration: None,
             reverse_duration: None,
             forward: true,
             lower_bound: 0.0,
@@ -328,6 +328,14 @@ impl Default for State {
 }
 
 impl State {
+    fn duration_for(&self, forward: bool) -> Option<Duration> {
+        if forward {
+            self.duration
+        } else {
+            self.reverse_duration.or(self.duration)
+        }
+    }
+
     /// Status implied by a value, as Flutter's `_internalSetValue` derives it.
     fn status_at(&self, value: f64) -> AnimationStatus {
         if value <= f64::from(self.lower_bound) {
@@ -479,7 +487,7 @@ impl AnimationController {
     pub fn with_bounds(duration: Duration, lower_bound: f32, upper_bound: f32) -> Self {
         let (lower_bound, upper_bound) = normalize_bounds(lower_bound, upper_bound);
         let state = State {
-            duration,
+            duration: Some(duration),
             lower_bound,
             upper_bound,
             value: f64::from(lower_bound),
@@ -491,12 +499,21 @@ impl AnimationController {
         }
     }
 
+    /// Creates a controller with no default duration. Explicit timings,
+    /// simulations and a reverse-only duration can still drive it.
+    #[must_use]
+    pub fn without_duration() -> Self {
+        let controller = Self::new(Duration::ZERO);
+        controller.set_optional_duration(None);
+        controller
+    }
+
     /// Flutter's `AnimationController.unbounded`: no bounds, value 0, for
     /// physics simulations. Like Flutter, it preserves its timing when
     /// animations are disabled.
     #[must_use]
     pub fn unbounded() -> Self {
-        let controller = Self::new(Duration::ZERO);
+        let controller = Self::without_duration();
         {
             let mut inner = controller.inner.borrow_mut();
             let state = &mut inner.state;
@@ -602,12 +619,24 @@ impl AnimationController {
         self.inner.borrow().state.animation_behavior
     }
 
+    /// The configured default duration, or zero if absent.
+    /// Use `optional_duration` to distinguish an explicit zero.
     #[must_use]
     pub fn duration(&self) -> Duration {
+        self.optional_duration().unwrap_or_default()
+    }
+
+    /// The configured default duration, including explicit zero.
+    #[must_use]
+    pub fn optional_duration(&self) -> Option<Duration> {
         self.inner.borrow().state.duration
     }
 
     pub fn set_duration(&self, duration: Duration) {
+        self.set_optional_duration(Some(duration));
+    }
+
+    pub fn set_optional_duration(&self, duration: Option<Duration>) {
         self.inner.borrow_mut().state.duration = duration;
     }
 
@@ -1076,16 +1105,30 @@ impl AnimationController {
     }
 
     fn forward_at(&self, now: Option<Instant>) -> TickerFuture {
+        self.require_direction_duration(true);
         let upper = self.inner.borrow().state.upper_bound;
         self.animate_to_internal(now, upper, None, None, true)
     }
 
     fn reverse_at(&self, now: Option<Instant>) -> TickerFuture {
+        self.require_direction_duration(false);
         let lower = self.inner.borrow().state.lower_bound;
         self.animate_to_internal(now, lower, None, None, false)
     }
 
+    #[track_caller]
+    fn require_direction_duration(&self, forward: bool) {
+        if self.inner.borrow().state.duration_for(forward).is_none() {
+            if forward {
+                panic!("AnimationController.forward() called with no default duration");
+            } else {
+                panic!("AnimationController.reverse() called with no default duration or reverseDuration");
+            }
+        }
+    }
+
     fn start_direction_from(&self, now: Option<Instant>, from: f32, forward: bool) -> TickerFuture {
+        self.require_direction_duration(forward);
         // The direction also applies to interpreting the assigned value.
         // Observers of an interior assignment therefore see the requested
         // direction immediately, without two opposing status events.
@@ -1135,11 +1178,13 @@ impl AnimationController {
             Some(_) if target == state.value => Duration::ZERO,
             Some(duration) => duration,
             None => {
-                let base = if forward {
-                    state.duration
-                } else {
-                    state.reverse_duration.unwrap_or(state.duration)
-                };
+                let base = state.duration_for(forward).unwrap_or_else(|| {
+                    if forward {
+                        panic!("AnimationController.animateTo() called with no explicit duration and no default duration");
+                    } else {
+                        panic!("AnimationController.animateBack() called with no explicit duration and no default duration or reverseDuration");
+                    }
+                });
                 base.mul_f64(remaining_fraction(
                     state.value,
                     target,
@@ -1203,7 +1248,9 @@ impl AnimationController {
         let state = self.inner.borrow().state.clone();
         let min = options.min.unwrap_or(state.lower_bound);
         let max = options.max.unwrap_or(state.upper_bound);
-        let period = options.period.unwrap_or(state.duration).as_secs_f64();
+        let period = options.period.or(state.duration).expect(
+            "AnimationController.repeat() called without an explicit period and with no default duration",
+        ).as_secs_f64();
         if period <= 0.0 {
             // Flutter asserts a positive period; without one the controller
             // has no cycle to run, so it rests at the cycle's end.

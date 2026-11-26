@@ -258,3 +258,113 @@ fn toggle_honors_unequal_durations_and_switches_an_active_forward_run() {
     let _ = controller.tick(start + ms(150));
     assert_eq!((controller.value(), controller.status()), (0., Dismissed));
 }
+
+fn panic_text(action: impl FnOnce()) -> String {
+    let error = std::panic::catch_unwind(std::panic::AssertUnwindSafe(action))
+        .expect_err("the missing timing must be rejected");
+    error
+        .downcast_ref::<String>()
+        .cloned()
+        .or_else(|| {
+            error
+                .downcast_ref::<&str>()
+                .map(|value| (*value).to_owned())
+        })
+        .expect("a diagnostic panic")
+}
+
+#[test]
+fn absent_duration_reports_the_operation_that_cannot_start() {
+    let controller = AnimationController::without_duration();
+    let now = Instant::now();
+    assert_eq!(controller.optional_duration(), None);
+    for (operation, error) in [
+        (
+            "forward",
+            panic_text(|| {
+                let _ = controller.forward(now);
+            }),
+        ),
+        (
+            "reverse",
+            panic_text(|| {
+                let _ = controller.reverse(now);
+            }),
+        ),
+        (
+            "animateTo",
+            panic_text(|| {
+                let _ = controller.animate_to(now, 0.8);
+            }),
+        ),
+        (
+            "animateBack",
+            panic_text(|| {
+                let _ = controller.animate_back(now, 0.8);
+            }),
+        ),
+        (
+            "repeat",
+            panic_text(|| {
+                let _ = controller.repeat(now, false);
+            }),
+        ),
+    ] {
+        assert!(
+            error.contains(&format!("AnimationController.{operation}()")),
+            "{error}"
+        );
+        assert!(error.contains("no default duration"), "{error}");
+        if operation == "reverse" || operation == "animateBack" {
+            assert!(error.contains("reverseDuration"), "{error}");
+        }
+    }
+    assert!(!controller.is_animating());
+    assert_eq!(controller.value(), 0.);
+}
+
+#[test]
+fn reverse_duration_alone_is_enough_for_animate_back_but_not_forward() {
+    use AnimationStatus::*;
+    let controller = AnimationController::without_duration().with_reverse_duration(ms(2000));
+    let log = observe_status(&controller);
+    let now = Instant::now();
+    let result = controller.animate_back(now, 0.8);
+    assert_eq!(&*log.borrow(), &[Reverse]);
+    let _ = controller.tick(now);
+    let _ = controller.tick(now + ms(2000));
+    assert!(result.is_complete());
+    assert_eq!(controller.value(), 0.8);
+    assert_eq!(&*log.borrow(), &[Reverse, Dismissed]);
+    let _ = panic_text(|| {
+        let _ = controller.forward(now);
+    });
+}
+
+#[test]
+fn explicit_timing_and_explicit_zero_differ_from_an_absent_default() {
+    use incular_animation::RepeatOptions;
+    let controller = AnimationController::without_duration();
+    let now = Instant::now();
+    let active = controller.animate_to_curved(now, 0.8, Some(ms(200)), Curve::Linear);
+    let _ = controller.tick(now + ms(100));
+    let value = controller.value();
+    let _ = panic_text(|| {
+        let _ = controller.forward_from(now + ms(100), 1.);
+    });
+    assert!(!active.is_canceled());
+    assert!(controller.is_animating());
+    assert_eq!(controller.value(), value);
+    let explicit = controller.repeat_with(now, RepeatOptions::default().period(ms(30)));
+    assert!(active.is_canceled());
+    assert!(!explicit.is_complete());
+    assert!(controller.is_animating());
+
+    controller.set_duration(Duration::ZERO);
+    assert_eq!(controller.optional_duration(), Some(Duration::ZERO));
+    let immediate = controller.forward(now);
+    assert!(explicit.is_canceled());
+    assert!(immediate.is_complete());
+    assert_eq!(controller.value(), 1.);
+    assert!(!controller.is_animating());
+}

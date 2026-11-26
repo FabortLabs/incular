@@ -70,3 +70,18 @@ bounds 1, 45, and −30; the original custom overdamped spring advances
 less than the default at 50 ms. Six pinned Flutter and 49 targeted
 Rust cases passed. This tranche adds backfill tests, not new motion
 policy or platform integration.
+
+## Absent duration is not zero duration
+
+`AnimationController::without_duration` preserves the distinction
+between a missing default and an explicit zero. With no default, a
+forward or reverse run, a target with no applicable timing, and a
+repeat with no period reject the request before changing the current
+value or canceling an active run. Explicit timing still works. A
+reverse-only duration successfully drives AnimateBack to 0.8 with
+Reverse then Dismissed, and does not admit Forward.
+
+The reverse-only and missing-repeat cases pair. Four error cases remain
+partial: Incular reports the matching failed operation and absent
+configuration, but not Dart's exact multiline FlutterError formatting.
+Six pinned Flutter and 41 focused Rust cases passed.
