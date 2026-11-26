@@ -136,3 +136,15 @@ check availability only after accepted values with valid selection
 commit. Both pinned authored and native timing tests pass. Fresh
 strict traces match all eight original undo/redo frames and all nine
 physical-End frames.
+
+## Windows redo shortcut control
+
+The older native Ctrl+Y test attempted undo before the initial
+500 ms history group had been recorded. It failed at Ctrl+Z and
+never checked Ctrl+Y. Both the mounted Rust test and the pinned
+authored Flutter variant now first commit the baseline, then commit
+the next edit, and send the three actual keyboard chords. Ctrl+Z
+restores `abc`, Ctrl+Y does nothing, and Ctrl+Shift+Z restores
+`abcd`. All 17 focused native text-shortcut checks passed; the
+authored Windows policy probe passed on the pinned Linux runner.
+No production shortcut changed or upstream case was added.

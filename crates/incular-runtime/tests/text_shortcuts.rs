@@ -172,15 +172,25 @@ fn control_y_is_not_a_redo_shortcut() {
         TextSelection::collapsed(3),
         false,
     );
+    use incular_core::time::Instant;
+    use std::time::Duration;
+
+    // The focused editor records its seed and later text groups after
+    // Flutter's 500 ms history throttle. Without the seed, an immediate
+    // Ctrl+Z correctly does nothing and the test never reaches Ctrl+Y.
+    let now = Instant::now();
+    let at = |ms| now + Duration::from_millis(ms);
+    let bounds = Constraints::tight(Size::new(300., 120.));
+    runtime.run_frame_at(bounds, at(500)).unwrap();
     controller.insert("d");
-    press(&mut runtime, Code::KeyZ, Modifiers::CONTROL);
+    runtime.run_frame_at(bounds, at(1000)).unwrap();
+    let _ = runtime.handle_input_at(key(Code::KeyZ, Modifiers::CONTROL), at(1001));
     assert_eq!(controller.text(), "abc");
-    press(&mut runtime, Code::KeyY, Modifiers::CONTROL);
+    let _ = runtime.handle_input_at(key(Code::KeyY, Modifiers::CONTROL), at(1002));
     assert_eq!(controller.text(), "abc", "Ctrl+Y does not redo");
-    press(
-        &mut runtime,
-        Code::KeyZ,
-        Modifiers::CONTROL | Modifiers::SHIFT,
+    let _ = runtime.handle_input_at(
+        key(Code::KeyZ, Modifiers::CONTROL | Modifiers::SHIFT),
+        at(1003),
     );
     assert_eq!(controller.text(), "abcd");
 }
