@@ -96,3 +96,18 @@ existing role filter; browser execution was not verified in this
 toolchain because its wasm standard library is not installed.
 
 Thirteen focused painter tests and five desktop projection tests passed.
+
+## Full painted-region metadata
+
+The pinned :652 case pairs. The same generated region exposes
+its strings and adjustment hints, URL, heading level, value lengths,
+identifier, tooltip, direction, framework tag, specified role,
+controlled-node identifiers, phone input type, and invalid state.
+Both action hints survive without creating new pointer actions.
+The painter-specific tag stays on the generated semantic node,
+not its empty visual child. Value lengths are declarative Unicode
+scalar counts, not an input limiter. No new native OS length
+property is claimed.
+
+All 39 focused native painter, adjacent semantic, and desktop
+projection tests passed.

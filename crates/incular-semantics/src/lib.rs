@@ -602,6 +602,9 @@ pub struct SemanticState {
     /// Flutter's `decreasedValue`: the value a decrement action would
     /// produce.
     pub decreased_value: Option<String>,
+    /// Optional length metadata in Unicode scalar values, not UTF-8 bytes.
+    pub max_value_length: Option<usize>,
+    pub current_value_length: Option<usize>,
     /// Flutter's `sortKey`: the traversal position of this node among its
     /// siblings. Siblings with compatible keys are reordered (see
     /// `OrdinalSortKey`); unkeyed siblings keep their widget order.
@@ -771,6 +774,8 @@ impl Default for SemanticState {
             controls_nodes: None,
             increased_value: None,
             decreased_value: None,
+            max_value_length: None,
+            current_value_length: None,
             sort_key: None,
             container: false,
             explicit_child_nodes: false,

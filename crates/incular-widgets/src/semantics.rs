@@ -177,6 +177,21 @@ impl Semantics {
         self
     }
 
+    /// Declares the maximum number of Unicode scalar values an editor
+    /// accepts. This is accessibility metadata, not an input limiter.
+    #[must_use]
+    pub fn max_value_length(mut self, length: usize) -> Self {
+        self.state.max_value_length = Some(length);
+        self
+    }
+
+    /// Declares the current number of Unicode scalar values.
+    #[must_use]
+    pub fn current_value_length(mut self, length: usize) -> Self {
+        self.state.current_value_length = Some(length);
+        self
+    }
+
     /// Declares the semantic kind of input without changing the keyboard.
     #[must_use]
     pub fn input_type(mut self, input_type: SemanticsInputType) -> Self {
@@ -414,6 +429,15 @@ impl Semantics {
     #[must_use]
     pub fn tag(mut self, tag: incular_semantics::SemanticsTag) -> Self {
         self.state.add_tag(tag);
+        self
+    }
+
+    pub(crate) fn as_custom_painter_region(mut self) -> Self {
+        // Flutter assembles the region directly as a semantic node and
+        // gives this tag to the synthetic node, not to a widget child.
+        if let Some(Some(tag)) = self.tag_for_children.take() {
+            self.state.add_tag(tag);
+        }
         self
     }
 

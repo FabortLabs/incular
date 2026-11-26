@@ -787,3 +787,96 @@ fn painted_accessibility_properties_update_in_place_with_the_region_key() {
     tree.update(root, build(true)).unwrap();
     assert_eq!(check(&mut tree, true), id);
 }
+
+#[test]
+fn painted_region_exports_field_lengths_tags_and_optional_metadata() {
+    use incular_config::TextDirection;
+    use incular_semantics::{
+        CustomSemanticsAction, SemanticActionKind, SemanticAnnotationFlag, SemanticRole,
+        SemanticValidationResult, SemanticsInputType, SemanticsTag,
+    };
+    let tag = SemanticsTag::new("tag");
+    let properties = Semantics::default()
+        .label("label")
+        .value("value")
+        .increased_value("increasedValue")
+        .decreased_value("decreasedValue")
+        .hint("hint")
+        .link(true)
+        .link_url("http://google.com")
+        .heading_level(1)
+        .max_value_length(3)
+        .current_value_length(1)
+        .identifier("id")
+        .tooltip("tooltip")
+        .on_long_press_hint("long")
+        .on_tap_hint("tap")
+        .text_direction(TextDirection::Rtl)
+        .tag_for_children(tag.clone())
+        .role(SemanticRole::AlertDialog)
+        .controls_nodes(["abc"])
+        .input_type(SemanticsInputType::Phone)
+        .validation_result(SemanticValidationResult::Invalid);
+    let tree = custom_paint_semantic_frame(CustomPaint::from_painter(
+        Size::ZERO,
+        PositionedProperties {
+            rect: Rect::from_origin_size(Offset::new(1., 2.), Size::new(2., 2.)),
+            semantics: properties,
+        },
+    ));
+    let node = labelled(&tree, "label").unwrap();
+    assert_eq!(
+        node.bounds,
+        Rect::from_origin_size(Offset::new(1., 2.), Size::new(2., 2.))
+    );
+    assert_eq!(node.value.as_deref(), Some("value"));
+    assert_eq!(node.description.as_deref(), Some("hint"));
+    assert_eq!(
+        node.state.increased_value.as_deref(),
+        Some("increasedValue")
+    );
+    assert_eq!(
+        node.state.decreased_value.as_deref(),
+        Some("decreasedValue")
+    );
+    assert_eq!(node.state.link_url.as_deref(), Some("http://google.com"));
+    assert_eq!(
+        node.state
+            .annotation_flags
+            .get(SemanticAnnotationFlag::Link),
+        Some(true)
+    );
+    assert_eq!(node.state.heading_level, Some(1));
+    assert_eq!(node.state.max_value_length, Some(3));
+    assert_eq!(node.state.current_value_length, Some(1));
+    assert_eq!(node.state.identifier.as_deref(), Some("id"));
+    assert_eq!(node.state.tooltip.as_deref(), Some("tooltip"));
+    assert_eq!(node.state.text_direction, Some(TextDirection::Rtl));
+    assert_eq!(node.tags(), &[tag]);
+    assert_eq!(node.role, SemanticRole::AlertDialog);
+    assert_eq!(node.state.controls_nodes.as_deref().unwrap(), &["abc"]);
+    assert_eq!(node.state.input_type, SemanticsInputType::Phone);
+    assert_eq!(
+        node.state.effective_validation_result(),
+        SemanticValidationResult::Invalid
+    );
+    assert!(node.actions.is_empty(), "hints don't create actions");
+    let hints: Vec<_> = node
+        .state
+        .custom_actions
+        .iter()
+        .filter_map(|id| CustomSemanticsAction::get_action(*id))
+        .collect();
+    assert!(
+        hints
+            .iter()
+            .any(|hint| hint.action() == Some(SemanticActionKind::Activate)
+                && hint.hint() == Some("tap"))
+    );
+    assert!(
+        hints
+            .iter()
+            .any(|hint| hint.action() == Some(SemanticActionKind::LongPress)
+                && hint.hint() == Some("long"))
+    );
+}

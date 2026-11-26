@@ -29,7 +29,7 @@ impl CustomPainterSemantics {
         Self {
             rect,
             key: None,
-            semantics,
+            semantics: semantics.as_custom_painter_region(),
         }
     }
 
