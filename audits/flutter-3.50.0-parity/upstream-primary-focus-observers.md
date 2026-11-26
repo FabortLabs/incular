@@ -16,3 +16,19 @@ focus and text input state update. The second focused test matches the
 listener counts and deferred, last-request-wins behavior of original
 :2045, but not the external nested FocusScopeNode attachment API used
 to set it up, so that registration remains partial.
+
+## Nested observer settling
+
+Pinned `:2045` now has the full nested fixture: an external mounted
+scope, a parent focus node, and a second focus node below that parent.
+The runtime observer sees one notification for programmatic autofocus,
+one for each settled explicit change, and one when unfocus parks
+primary focus on the scope. It sees no intermediate requests.
+
+Pinned `:1906` passed with a top scope and two child scopes. The
+native test checks each callback and sampled focus state at five
+boundaries: initial focus, child-to-scope unfocus, scope-to-child
+focus, moving between the sibling scopes, and a pair of requests
+whose final state is unchanged. A shared ancestor is not notified
+just because its active branch changes. All 29 selected native
+observer, scope and key-routing checks passed.

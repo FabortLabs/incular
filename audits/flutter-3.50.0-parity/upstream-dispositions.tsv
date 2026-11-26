@@ -1308,7 +1308,7 @@ packages/flutter/test/painting/gradient_test.dart	982	Gradient lerp test (with R
 packages/flutter/test/painting/gradient_test.dart	1026	Gradients can handle missing stops and report mismatched stops	paired-match	upstream-radial-gradients.md#generic-interpolation-and-stop-validation
 packages/flutter/test/widgets/focus_manager_test.dart	2107	FocusManager.addEarlyKeyEventHandler works	paired-match	upstream-focus-key-stages.md#raw-only-and-combined-key-messages
 packages/flutter/test/widgets/focus_manager_test.dart	2186	FocusManager.addLateKeyEventHandler works	paired-match	upstream-focus-key-stages.md#raw-only-and-combined-key-messages
-packages/flutter/test/widgets/focus_manager_test.dart	2045	Focus changes notify listeners.	partial-match	upstream-primary-focus-observers.md
+packages/flutter/test/widgets/focus_manager_test.dart	2045	Focus changes notify listeners.	paired-match	upstream-primary-focus-observers.md#nested-observer-settling
 packages/flutter/test/widgets/focus_manager_test.dart	2265	FocusManager notifies listeners when a widget loses focus because it was removed.	paired-match	upstream-primary-focus-observers.md
 packages/flutter/test/widgets/focus_scope_test.dart	16	Can focus	paired-match	upstream-focus-widget-semantics.md#focus-movement-and-reactive-labels
 packages/flutter/test/widgets/focus_scope_test.dart	30	Can unfocus	paired-match	upstream-focus-widget-semantics.md#focus-movement-and-reactive-labels
@@ -2466,3 +2466,4 @@ packages/flutter/test/widgets/focus_manager_test.dart	1777	node detached before 
 packages/flutter/test/widgets/focus_manager_test.dart	660	Autofocus works.	paired-match	upstream-focus-detach-history.md#programmatic-scope-autofocus
 packages/flutter/test/widgets/focus_manager_test.dart	846	skipTraversal doesn't affect children.	paired-match	upstream-focus-detach-history.md#scope-skip-traversal
 packages/flutter/test/widgets/focus_manager_test.dart	1874	Doesn't lose focused child when reparenting if the nearestScope doesn't change.	paired-match	upstream-focus-detach-history.md#scope-history-and-keyed-reparenting
+packages/flutter/test/widgets/focus_manager_test.dart	1906	Ancestors get notified exactly as often as needed if focused child changes focus.	paired-match	upstream-primary-focus-observers.md#nested-observer-settling
