@@ -8,12 +8,19 @@ use incular_core::{Color, DragStartBehavior, Offset, PointerPhase, Size};
 use incular_scroll::ScrollController;
 use incular_widgets::internal::WidgetTree;
 use incular_widgets::{CustomScrollView, GridView, ListView, PageView, SingleChildScrollView};
-use incular_widgets::{Directionality, SliverGridDelegate, Widget};
+use incular_widgets::{Directionality, Sliver, SliverGridDelegate, SliverToBoxAdapter, Widget};
 
 fn rows(count: usize) -> Vec<Widget> {
     (0..count)
         .map(|_| Widget::box_(Size::new(100., 40.), Color::WHITE))
         .collect()
+}
+
+fn custom_view(height: f32) -> CustomScrollView {
+    CustomScrollView::new([Box::new(SliverToBoxAdapter::new(Widget::box_(
+        Size::new(100., height),
+        Color::WHITE,
+    ))) as Box<dyn Sliver>])
 }
 
 fn mount(widget: Widget) -> WidgetTree {
@@ -43,10 +50,16 @@ fn scroll_views_clip_hard_edge_by_default() {
             rows(10),
         )),
         Widget::from(PageView::new(rows(3))),
-        Widget::from(CustomScrollView::new(Vec::new())),
+        Widget::from(custom_view(400.)),
     ] {
         assert_eq!(clip_layers(&mount(widget)), 1);
     }
+
+    // A viewport uses the default hard edge policy without allocating a
+    // paint clip when its content fits. This is distinct from describing
+    // the approximate logical clip to rendering/semantics callers.
+    assert_eq!(clip_layers(&mount(custom_view(20.).into())), 0);
+    assert_eq!(clip_layers(&mount(CustomScrollView::default().into())), 0);
 }
 
 #[test]
@@ -62,7 +75,7 @@ fn clip_none_paints_scrolled_content_without_a_clip_layer() {
                 .clip_behavior(Clip::None),
         ),
         Widget::from(PageView::new(rows(3)).clip_behavior(Clip::None)),
-        Widget::from(CustomScrollView::new(Vec::new()).clip_behavior(Clip::None)),
+        Widget::from(custom_view(400.).clip_behavior(Clip::None)),
     ] {
         assert_eq!(clip_layers(&mount(widget)), 0);
     }

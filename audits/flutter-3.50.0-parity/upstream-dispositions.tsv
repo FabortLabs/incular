@@ -1886,3 +1886,4 @@ packages/flutter/test/rendering/viewport_test.dart	1640	RenderViewportBase.showO
 packages/flutter/test/rendering/viewport_test.dart	1690	RenderViewportBase.showOnScreen but no child	partial-match	upstream-viewport-reveal.md#floating-persistent-header-expansion-on-reveal
 packages/flutter/test/rendering/viewport_test.dart	1735	RenderViewportBase.showOnScreen with maxShowOnScreenExtent 	paired-match	upstream-viewport-reveal.md#floating-persistent-header-expansion-on-reveal
 packages/flutter/test/rendering/viewport_test.dart	1803	RenderViewportBase.showOnScreen with minShowOnScreenExtent 	paired-match	upstream-viewport-reveal.md#floating-persistent-header-expansion-on-reveal
+packages/flutter/test/rendering/viewport_test.dart	2709	Viewport describeApproximateClip respects clipBehavior	reference-ran-incular-open	upstream-viewport-reveal.md#approximate-clip-query-versus-painted-clip

@@ -290,3 +290,14 @@ Flutter line 1690 addresses the sliver render object itself, without a
 descendant. Incular only exposes the mounted box child as a reveal
 target, so the corresponding presentation is verified but that direct
 render-sliver entry point is partial.
+
+## Approximate clip query versus painted clip
+
+Flutter's `rendering/viewport_test.dart:2709` passed. It queries an
+approximate clip for a fitting sliver: no result for `Clip.none`, and
+the viewport bounds for the default hard edge. Incular's
+`scrollable_options` verifies actual clip-layer installation: an
+overflowing viewport clips by default and does not with `Clip::None`;
+neither an empty nor a fitting viewport paints a redundant clip layer.
+It does not expose Flutter's per-sliver approximate paint-clip query,
+which stays open.
