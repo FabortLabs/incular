@@ -344,3 +344,100 @@ fn opaque_annotated_parent_appends_its_value_then_stops_at_its_background() {
         [entry(2, point), entry(1, point)]
     );
 }
+
+#[test]
+fn annotated_regions_are_transparent_by_default() {
+    let point = Offset::new(5., 5.);
+    assert_eq!(
+        active_parent(false).find_annotation_entries(point),
+        [entry(2, point), entry(1, point), entry(1000, point)]
+    );
+}
+
+fn missed_parent(parent_opaque: bool, child_opaque: bool) -> LayerTree {
+    let mut tree = LayerTree::new();
+    let root = tree.create_transform(Transform::IDENTITY);
+    let background = annotated(&mut tree, 1000, false);
+    let parent = tree.create_annotated_region(Annotation::new(1_i32), true, Size::ZERO);
+    assert_eq!(
+        tree.set_annotation_search_options(
+            parent,
+            AnnotationSearchOptions {
+                opaque: parent_opaque,
+                ..Default::default()
+            }
+        ),
+        parent_opaque
+    );
+    let child = annotated(&mut tree, 2, child_opaque);
+    tree.set_children(root, vec![background, parent]);
+    tree.set_children(parent, vec![child]);
+    tree.set_root(root);
+    let _ = tree.flatten();
+    tree
+}
+
+#[test]
+fn a_missed_opaque_parent_does_not_hide_a_transparent_child_or_the_background() {
+    let point = Offset::new(5., 5.);
+    assert_eq!(
+        missed_parent(true, false).find_annotation_entries(point),
+        [entry(2, point), entry(1000, point)]
+    );
+}
+
+#[test]
+fn a_missed_parent_does_not_prevent_its_child_from_absorbing() {
+    let point = Offset::new(5., 5.);
+    assert_eq!(
+        missed_parent(false, true).find_annotation_entries(point),
+        [entry(2, point)]
+    );
+}
+
+fn offset_parent(child_origin: Offset) -> LayerTree {
+    let mut tree = LayerTree::new();
+    let root = tree.create_transform(Transform::IDENTITY);
+    let background = annotated(&mut tree, 1000, false);
+    let parent = tree.create_annotated_region(Annotation::new(1_i32), true, Size::new(20., 20.));
+    assert!(tree.set_annotation_search_options(
+        parent,
+        AnnotationSearchOptions {
+            offset: Offset::new(90., 90.),
+            ..Default::default()
+        }
+    ));
+    // The upstream custom child reports its raw input point even when its
+    // own bounds start elsewhere. Reproduce that with an ordinary clip.
+    let child_clip =
+        tree.create_clip_rect(Rect::from_origin_size(child_origin, Size::new(110., 110.)));
+    let child = annotated(&mut tree, 2, false);
+    tree.set_children(root, vec![background, parent]);
+    tree.set_children(parent, vec![child_clip]);
+    tree.set_children(child_clip, vec![child]);
+    tree.set_root(root);
+    let _ = tree.flatten();
+    tree
+}
+
+#[test]
+fn a_hit_subtracts_the_annotations_own_offset_only_from_its_result() {
+    let point = Offset::new(100., 100.);
+    assert_eq!(
+        offset_parent(Offset::new(20., 20.)).find_annotation_entries(point),
+        [
+            entry(2, point),
+            entry(1, Offset::new(10., 10.)),
+            entry(1000, point)
+        ]
+    );
+}
+
+#[test]
+fn a_point_inside_the_unshifted_size_is_not_a_hit_when_the_annotation_is_shifted_away() {
+    let point = Offset::new(10., 10.);
+    assert_eq!(
+        offset_parent(Offset::ZERO).find_annotation_entries(point),
+        [entry(2, point), entry(1000, point)]
+    );
+}

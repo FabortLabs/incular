@@ -56,3 +56,14 @@ blue; at (6, 6) it is inside and the style is green. Incular's runtime
 asserts the actual style drained for the host after its frame, rather
 than only exercising an isolated layer query. No physical status-bar
 rendering was claimed and this authored case does not change the tally.
+
+### Region bounds are not subtree bounds
+
+Five remaining region cases passed (487, 508, 529, 592, 624).
+A region is transparent by default. Even a zero-size opaque region
+still searches its children, and only a matching child may absorb the
+background. The region offset changes its own bounds and subtracts
+from its own returned position, not from any child's coordinates.
+The original test-only child uses a shifted box for its search while
+reporting the incoming point. The Rust fixture uses an ordinary
+child clip to reproduce that distinction without a custom layer.
