@@ -136,7 +136,7 @@ packages/flutter_tools/test/commands.shard/hermetic/widget_preview/preview_manif
 packages/flutter_tools/test/commands.shard/hermetic/widget_preview/preview_manifest/preview_manifest_test.dart	61	identifies widget preview scaffold project needs to be generated	paired-match	upstream-widget-previews-runtime.md#preview-scaffold-manifest
 packages/flutter_tools/test/commands.shard/hermetic/widget_preview/preview_manifest/preview_manifest_test.dart	91	identifies root project pubspec has changed	paired-match	upstream-widget-previews-runtime.md#preview-scaffold-manifest
 packages/flutter/test/widgets/focus_scope_test.dart	1254	Focus is lost when set to not focusable.	paired-match	upstream-focus-policy-tween-dtd.md#mounted-focus-callbacks-and-permissions
-packages/flutter/test/widgets/focus_scope_test.dart	1947	ExcludeFocus doesn't transfer focus to another descendant.	partial-match	upstream-focus-policy-tween-dtd.md
+packages/flutter/test/widgets/focus_scope_test.dart	1947	ExcludeFocus doesn't transfer focus to another descendant.	paired-match	upstream-focus-policy-tween-dtd.md#excluding-focus-restores-only-eligible-scope-history
 packages/flutter/test/widgets/focus_scope_test.dart	1294	Child of unfocusable Focus can get focus.	paired-match	upstream-focus-policy-tween-dtd.md#mounted-focus-callbacks-and-permissions
 packages/flutter/test/widgets/focus_scope_test.dart	1562	descendantsAreFocusable works as expected.	paired-match	upstream-focus-policy-tween-dtd.md#mounted-focus-callbacks-and-permissions
 packages/flutter/test/animation/animations_test.dart	414	TweenSequence	paired-match	upstream-focus-policy-tween-dtd.md

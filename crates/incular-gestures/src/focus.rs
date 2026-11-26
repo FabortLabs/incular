@@ -2184,6 +2184,28 @@ impl FocusScopeNode {
             .retain(|known| !known.ptr_eq(&child_state));
     }
 
+    /// Selects the newest still-eligible child according to the retained
+    /// host, pruning stale and newly excluded history before returning it.
+    #[doc(hidden)]
+    pub fn restore_hosted_focus_child<T>(
+        &self,
+        mut resolve: impl FnMut(&FocusNode) -> Option<T>,
+    ) -> Option<T> {
+        let mut history = self.state.hosted_history.borrow_mut();
+        while let Some(remembered) = history.last() {
+            if let Some(state) = remembered.upgrade() {
+                let child = FocusNode { state };
+                if child.host_enclosing_scope().as_ref() == Some(self)
+                    && let Some(target) = resolve(&child)
+                {
+                    return Some(target);
+                }
+            }
+            history.pop();
+        }
+        None
+    }
+
     fn last_hosted_child(&self, require_focusable: bool) -> Option<FocusNode> {
         let mut history = self.state.hosted_history.borrow_mut();
         if require_focusable {

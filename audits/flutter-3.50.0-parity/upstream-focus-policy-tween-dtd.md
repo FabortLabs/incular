@@ -49,3 +49,22 @@ not cause a false/true notification on the common parent, an explicit
 permission can reenable an external node without autofocusing, and
 removing a widget detaches its callback before that node is reused.
 Sixteen focused Rust tests and all seven pinned Flutter cases passed.
+
+
+## Excluding focus restores only eligible scope history
+
+Pinned :1947 now pairs: both children get primary focus in sequence,
+the parent has descendant focus, and excluding the retained branch
+removes all three from the path. With no eligible recorded child the
+containing scope itself takes primary focus; a previously focused
+sibling inside the excluded branch never fires. The native fixture
+uses an explicit mounted root scope so it can observe that actual
+scope-owned focus target rather than inferring it from no focused leaf.
+
+A second authored Flutter/native comparison populates history with
+a child outside the branch. After exclusion it restores that last
+eligible child, not the scope itself or either excluded child. The
+unfixed Rust tests failed both target checks. The repair prunes
+excluded history using retained eligibility and keeps the existing
+unmounted and other visibility revocation policies. The focused editor
+eligibility and scope controls passed.

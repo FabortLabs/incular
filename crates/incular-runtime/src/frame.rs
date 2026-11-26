@@ -2639,11 +2639,11 @@ impl Runtime {
         if self.primary_focus_node_replaced() {
             self.adopt_external_focus_change();
         }
-        if self
-            .focused
-            .is_some_and(|focused| !self.tree.can_request_focus(focused))
+        if let Some(focused) = self.focused
+            && !self.tree.can_request_focus(focused)
         {
-            self.set_focus(None);
+            let fallback = self.tree.focus_fallback_after_exclusion(focused);
+            self.set_focus(fallback);
         }
         self.tree.sync_hosted_focus_chain(self.focused);
         self.sync_focused_selection_lease();

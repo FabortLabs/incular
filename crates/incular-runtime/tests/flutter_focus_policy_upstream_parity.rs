@@ -251,6 +251,7 @@ fn an_owned_focus_observer_does_not_flap_when_its_children_take_turns() {
 
 #[test]
 fn excluding_focus_clears_focused_descendant_without_refocusing_its_sibling() {
+    let scope = FocusScopeNode::new();
     let parent = FocusNode::new();
     let first = FocusNode::new();
     let second = FocusNode::new();
@@ -263,13 +264,21 @@ fn excluding_focus_clears_focused_descendant_without_refocusing_its_sibling() {
         ]);
         Focus::new(column).node(parent.clone())
     };
-    let build = |excluding| ExcludeFocus::new(subtree()).excluding(excluding).into();
+    let build = |excluding| {
+        FocusScope::with_external_focus_node(
+            ExcludeFocus::new(subtree()).excluding(excluding),
+            scope.clone(),
+        )
+        .into()
+    };
     let mut runtime = Runtime::new(build(false)).expect("mount focus group");
     frame(&mut runtime);
+    assert!(parent.has_focus());
     assert!(first.has_primary_focus());
     assert!(!second.has_focus());
     second.request_focus();
     frame(&mut runtime);
+    assert!(parent.has_focus());
     assert!(!first.has_focus());
     assert!(second.has_primary_focus());
 
@@ -283,9 +292,9 @@ fn excluding_focus_clears_focused_descendant_without_refocusing_its_sibling() {
     assert!(!first.has_focus());
     assert!(!second.has_focus());
     assert!(!parent.has_focus());
-    // Incular's mounted FocusScope is a traversal boundary rather than
-    // a separately focusable node; only absence of a retained target maps.
-    assert_eq!(runtime.focused_element(), None);
+    assert!(scope.has_primary_focus());
+    assert_eq!(runtime.focused_element(), Some(root));
+    assert!(scope.focused_child().is_none());
 }
 
 #[test]
@@ -370,4 +379,41 @@ fn removing_a_focus_widget_detaches_its_callback_before_the_node_is_reused() {
     frame(&mut runtime);
     assert_eq!(*old.borrow(), [true], "removed callback received new focus");
     assert_eq!(*new.borrow(), [true]);
+}
+
+#[test]
+fn excluding_a_branch_restores_the_most_recent_eligible_scope_child() {
+    let scope = FocusScopeNode::new();
+    let outside = FocusNode::new();
+    let first = FocusNode::new();
+    let second = FocusNode::new();
+    let scene = |exclude| {
+        let branch = Column::new([
+            Focus::new(SizedBox::shrink()).node(first.clone()),
+            Focus::new(SizedBox::shrink()).node(second.clone()),
+        ]);
+        FocusScope::with_external_focus_node(
+            Column::new([
+                Widget::from(Focus::new(SizedBox::shrink()).node(outside.clone())),
+                Widget::from(ExcludeFocus::new(branch).excluding(exclude)),
+            ]),
+            scope.clone(),
+        )
+        .into()
+    };
+    let mut runtime = Runtime::new(scene(false)).unwrap();
+    frame(&mut runtime);
+    for node in [&outside, &first, &second] {
+        node.request_focus();
+        frame(&mut runtime);
+        assert!(node.has_primary_focus());
+    }
+    let root = runtime.tree().root().unwrap();
+    runtime.schedule_update(root, scene(true)).unwrap();
+    frame(&mut runtime);
+
+    assert!(outside.has_primary_focus());
+    assert!(!first.has_focus() && !second.has_focus());
+    assert!(!scope.has_primary_focus());
+    assert_eq!(scope.focused_child(), Some(outside));
 }

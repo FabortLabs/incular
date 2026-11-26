@@ -978,6 +978,52 @@ impl WidgetTree {
         }
     }
 
+    /// Restores the most recent eligible target in the containing scope when
+    /// a mounted subtree becomes explicitly excluded from focus.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn focus_fallback_after_exclusion(&self, focused: ElementId) -> Option<ElementId> {
+        let hosted = self.hosted_focus_nodes.as_ref()?;
+        let mut current = Some(focused);
+        let mut excluded = false;
+        let mut destination = None;
+        while let Some(id) = current {
+            let entry = self.elements.get(id.0)?;
+            excluded |= entry.widget.semantic_properties().exclude_focus;
+            if id != focused
+                && let Some(scope) = hosted.get(&id).and_then(|binding| binding.node().scope_owner())
+                && self.can_request_focus(id)
+            {
+                destination = Some((id, scope));
+                break;
+            }
+            current = entry.parent;
+        }
+        // A gate higher than an otherwise eligible scope also makes that
+        // scope ineligible, so we have already walked past the active gate.
+        if !excluded {
+            return None;
+        }
+        let (mut owner, mut scope) = destination?;
+        loop {
+            let next = scope.restore_hosted_focus_child(|node| {
+                hosted.iter().find_map(|(&id, binding)| {
+                    (id != owner && binding.node() == node
+                        && self.is_descendant_or_self(id, owner) && self.can_request_focus(id))
+                        .then_some((id, node.scope_owner()))
+                })
+            });
+            match next {
+                Some((id, Some(inner_scope))) => {
+                    owner = id;
+                    scope = inner_scope;
+                }
+                Some((id, None)) => return Some(id),
+                None => return Some(owner),
+            }
+        }
+    }
+
     /// A focus change application code made through a [`FocusNode`] since the
     /// runtime last focused `current`: `Some(Some(element))` when another
     /// focusable node has an eligible pending request, `Some(None)`
