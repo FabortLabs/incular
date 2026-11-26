@@ -63,7 +63,9 @@ pub use file_dialogs::{
     FileDialogCompletionStatus, FileDialogRequest, FileDialogService, MemoryFileDialogAdapter,
     NativeFileDialogCompletion, NativeFileDialogRequest,
 };
-pub use flutter_text_input::{FlutterDeltaTextInputConnection, FlutterDeltaTextInputError};
+pub use flutter_text_input::{
+    FlutterDeltaTextInputConnection, FlutterDeltaTextInputError, FlutterTextInputLifecycleError,
+};
 pub use focus_keys::FocusKeySubscription;
 pub use frame::{EditingDiagnostics, EventTarget, FocusDiagnostics, FrameStats, Runtime};
 pub use global_shortcuts::{

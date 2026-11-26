@@ -2038,3 +2038,8 @@ packages/flutter/test/painting/text_painter_test.dart	1451	TextLeadingDistributi
 packages/flutter/test/painting/text_painter_test.dart	1473	TextLeadingDistribution does nothing if height multiplier is null	paired-match	upstream-text-painter.md#tight-selection-bounds-under-leading-and-strut
 packages/flutter/test/painting/text_painter_test.dart	1978	strut no half leading + force strut height	paired-match	upstream-text-painter.md#tight-selection-bounds-under-leading-and-strut
 packages/flutter/test/painting/text_painter_test.dart	1995	strut half leading + force strut height	paired-match	upstream-text-painter.md#tight-selection-bounds-under-leading-and-strut
+packages/flutter/test/widgets/editable_text_test.dart	2041	can re-acquire focus when the platform sends onFocusReceived	paired-match	upstream-text-input-reattach.md#host-closes-the-connection-and-requests-focus-again
+packages/flutter/test/widgets/editable_text_test.dart	2079	can re-acquire focus in Offstage	paired-match	upstream-text-input-reattach.md#host-closes-the-connection-and-requests-focus-again
+packages/flutter/test/widgets/editable_text_test.dart	2119	does not refocus when it is unmounted	paired-match	upstream-text-input-reattach.md#host-closes-the-connection-and-requests-focus-again
+packages/flutter/test/widgets/editable_text_test.dart	2308	The focus and callback behavior are correct when TextInputClient.onConnectionClosed message received	paired-match	upstream-text-input-reattach.md#host-closes-the-connection-and-requests-focus-again
+packages/flutter/test/widgets/editable_text_test.dart	2351	connection is closed when TextInputClient.onConnectionClosed message received	paired-match	upstream-text-input-reattach.md#host-closes-the-connection-and-requests-focus-again

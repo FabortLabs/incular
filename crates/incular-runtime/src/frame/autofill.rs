@@ -24,7 +24,7 @@ impl Runtime {
     fn mounted_autofill_scope(&self) -> Option<(ElementId, ElementId)> {
         let focused = self.focused?;
         let active = self.text_input_client?;
-        if self.tree.text_field_client_id(focused)? != active.get() {
+        if focused != active.target {
             return None;
         }
         Some((focused, self.tree.autofill_scope(focused)?))
@@ -43,7 +43,7 @@ impl Runtime {
         let Some((field, client)) = self.focused.zip(self.text_input_client) else {
             return Ok(None);
         };
-        if self.tree.text_field_client_id(field) != Some(client.get()) {
+        if field != client.target {
             return Ok(None);
         }
         let view_id = input_options.get("viewId").cloned().unwrap_or(Value::Null);
@@ -51,7 +51,7 @@ impl Runtime {
             return Ok(None);
         };
         trigger.input.extend(input_options);
-        trigger.encode_set_client(client).map(Some)
+        trigger.encode_set_client(client.client).map(Some)
     }
 
     /// Encodes a Flutter `TextInput.setClient` message for the mounted group
@@ -80,7 +80,7 @@ impl Runtime {
         let client = self
             .text_input_client
             .expect("active grouped editor has a client");
-        group.encode_set_client(client, &trigger).map(Some)
+        group.encode_set_client(client.client, &trigger).map(Some)
     }
 
     /// Applies a complete Flutter tagged update to eligible mounted fields in
@@ -283,9 +283,11 @@ fn field_input(field: &TextFieldInputSnapshot, view_id: &Value) -> Map<String, V
         incular_config::Brightness::Light => "Brightness.light",
         incular_config::Brightness::Dark => "Brightness.dark",
     };
-    let hint_locales = field.traits.hint_locales.as_ref().map(|locales| {
-        locales.iter().map(ToString::to_string).collect::<Vec<_>>()
-    });
+    let hint_locales = field
+        .traits
+        .hint_locales
+        .as_ref()
+        .map(|locales| locales.iter().map(ToString::to_string).collect::<Vec<_>>());
     json!({
         "viewId": view_id,
         "inputType":{"name":field.input_type.flutter_name(),"signed":signed,"decimal":decimal,"password":password},

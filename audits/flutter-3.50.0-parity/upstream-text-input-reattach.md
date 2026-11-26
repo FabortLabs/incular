@@ -18,3 +18,25 @@ programmatic edit made since the last frame is replayed with its
 reversed selection and composing range. The idle following frame does
 not resend the value. This is verified at the normalized host boundary;
 native adapters' behavior upon OS-specific reconnects was not tested.
+
+## Host closes the connection and requests focus again
+
+Five original `widgets/editable_text_test.dart` registrations pair at
+the runtime/host boundary. Closing the current host connection also
+ends the editor's focus. It does not submit, complete editing, change
+committed text, or send Hide/Clear back to a host that already closed
+the connection. An eligible mounted editor can regain focus on a
+matching host request, including a retained Offstage editor. An
+unmounted or no-longer-eligible editor cannot.
+
+Client identity now denotes a **single attachment**, separate from the
+element identity used for mounted autofill tags. Refocusing assigns a
+fresh ID, so delayed close and focus messages cannot disturb the same
+editor's new connection or a different focused field. The existing
+state-resend path still reuses the current attachment. Both the optional
+Flutter JSON adapter and the normalized host-close event were exercised.
+This does not imply that each operating system's default adapter
+generates these events for the same native interactions.
+
+Five pinned Flutter and 32 targeted Rust cases passed, including
+autofill, editing/IME gating, and client-state replay controls.

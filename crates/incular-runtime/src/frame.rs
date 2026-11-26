@@ -128,6 +128,12 @@ struct ParkedFocus {
     node: Option<FocusNode>,
 }
 
+#[derive(Clone, Copy)]
+struct MountedTextInputConnection {
+    client: TextInputClientId,
+    target: ElementId,
+}
+
 /// Retained application execution, input dispatch and frame coordination.
 pub struct Runtime {
     pub(crate) tree: WidgetTree,
@@ -201,7 +207,9 @@ pub struct Runtime {
     /// Mounted (or recently mounted) platform views and their last placement.
     pub(crate) platform_views: std::collections::BTreeMap<PlatformViewId, PlatformViewRecord>,
     pub(crate) platform_view_commands: VecDeque<PlatformViewCommand>,
-    pub(crate) text_input_client: Option<TextInputClientId>,
+    text_input_client: Option<MountedTextInputConnection>,
+    last_text_input_client: Option<MountedTextInputConnection>,
+    next_text_input_client: u64,
     pub(crate) text_input_configuration: Option<TextInputConfiguration>,
     pub(crate) text_input_state: Option<TextInputState>,
     pub(crate) text_input_caret_rect: Option<Rect>,
@@ -416,6 +424,8 @@ impl Runtime {
             platform_views: std::collections::BTreeMap::new(),
             platform_view_commands: VecDeque::new(),
             text_input_client: None,
+            last_text_input_client: None,
+            next_text_input_client: 1,
             text_input_configuration: None,
             text_input_state: None,
             text_input_caret_rect: None,
@@ -932,6 +942,7 @@ impl Runtime {
         self.platform_view_commands.clear();
         self.reported_undo_state = None;
         self.text_input_client = None;
+        self.last_text_input_client = None;
         self.text_input_configuration = None;
         self.text_input_state = None;
         self.text_input_caret_rect = None;
@@ -1398,6 +1409,10 @@ impl Runtime {
             }
             PlatformEvent::TextEditingState(state) => {
                 self.handle_text_editing_state(state);
+                None
+            }
+            PlatformEvent::TextInputConnectionClosed(client) => {
+                self.text_input_connection_closed(client);
                 None
             }
             PlatformEvent::RequestExistingTextInputState => {
@@ -2566,6 +2581,45 @@ impl Runtime {
         self.tree.text_field_show_caret_on_screen(field)
     }
 
+    /// Retires the current host connection and clears its editor focus. It
+    /// was already closed by the host, so no Hide/Clear is echoed back.
+    /// An older connection ID cannot affect a reattached editor.
+    pub fn text_input_connection_closed(&mut self, client: TextInputClientId) -> bool {
+        let Some(active) = self.text_input_client.filter(|active| active.client == client) else {
+            return false;
+        };
+        self.text_input_client = None;
+        self.text_input_commands.retain(|command| match command {
+            TextInputCommand::SetClient { configuration, .. } => configuration.client != client,
+            TextInputCommand::Update { client: id, .. }
+            | TextInputCommand::SetCaretRect { client: id, .. }
+            | TextInputCommand::Show { client: id }
+            | TextInputCommand::Hide { client: id }
+            | TextInputCommand::Clear { client: id } => *id != client,
+            TextInputCommand::FinishAutofillContext { .. } => true,
+        });
+        if self.focused == Some(active.target) {
+            self.set_focus(None);
+        }
+        true
+    }
+
+    /// Tries to refocus the last attached editor on behalf of the host.
+    /// The retained element must still be mounted and eligible.
+    pub fn text_input_focus_received(&mut self, client: TextInputClientId) -> bool {
+        let Some(previous) = self.last_text_input_client.filter(|previous| previous.client == client) else {
+            return false;
+        };
+        if self.focused == Some(previous.target)
+            || !self.tree.is_text_field(previous.target)
+            || !self.tree.can_request_focus(previous.target)
+        {
+            return false;
+        }
+        self.set_focus(Some(previous.target));
+        true
+    }
+
     fn sync_text_input_client(&mut self) {
         self.sync_text_input_client_for_host(false);
     }
@@ -2595,8 +2649,8 @@ impl Runtime {
                 self.tree.text_field_input_snapshot(id)
             }
         });
-        let Some(snapshot) = snapshot else {
-            if let Some(client) = self.text_input_client.take() {
+        let Some((target, snapshot)) = self.focused.zip(snapshot) else {
+            if let Some(MountedTextInputConnection { client, .. }) = self.text_input_client.take() {
                 self.text_input_commands
                     .push_back(TextInputCommand::Hide { client });
                 self.text_input_commands
@@ -2609,7 +2663,15 @@ impl Runtime {
             return;
         };
 
-        let client = TextInputClientId::new(snapshot.client_id);
+        let current = self.text_input_client.filter(|current| current.target == target);
+        let client_changed = current.is_none();
+        let connection = current.unwrap_or_else(|| {
+            let client = TextInputClientId::new(self.next_text_input_client);
+            self.next_text_input_client = self.next_text_input_client.checked_add(1)
+                .expect("text input connection IDs exhausted");
+            MountedTextInputConnection { client, target }
+        });
+        let client = connection.client;
         let input_type = snapshot.input_type;
         let action = match snapshot.input_action {
             TextInputActionHint::Unspecified => {
@@ -2651,7 +2713,6 @@ impl Runtime {
                 composing: snapshot.composing.map(|range| (range.start, range.end)),
             },
         };
-        let client_changed = self.text_input_client != Some(client);
         let configuration_changed = self.text_input_configuration.as_ref() != Some(&configuration);
         let set_client = resend_client || client_changed || configuration_changed;
         if set_client {
@@ -2683,7 +2744,8 @@ impl Runtime {
             self.text_input_commands
                 .push_back(TextInputCommand::Show { client });
         }
-        self.text_input_client = Some(client);
+        self.text_input_client = Some(connection);
+        self.last_text_input_client = Some(connection);
         self.text_input_configuration = Some(configuration);
         self.text_input_state = Some(state);
         self.text_input_caret_rect = Some(snapshot.caret_rect);

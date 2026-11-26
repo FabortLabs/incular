@@ -100,3 +100,48 @@ impl FlutterDeltaTextInputConnection {
         Ok(true)
     }
 }
+
+/// Malformed input lifecycle message on the optional Flutter channel.
+#[derive(Debug, thiserror::Error)]
+pub enum FlutterTextInputLifecycleError {
+    #[error(transparent)]
+    Codec(#[from] JsonMethodCodecError),
+    #[error("expected a text input connection ID")]
+    InvalidClientId,
+}
+
+impl crate::Runtime {
+    /// Handles Flutter's text-input close and focus-received messages.
+    /// Returns the accepted/rejected result, or `None` for another method.
+    /// IDs are scoped to this window and refer to a specific attachment.
+    pub fn handle_flutter_text_input_lifecycle_call(
+        &mut self,
+        data: &[u8],
+    ) -> Result<Option<bool>, FlutterTextInputLifecycleError> {
+        let call = JsonMethodCodec::decode_method_call(data)?;
+        let receive_focus = match call.method.as_str() {
+            "TextInputClient.onConnectionClosed" => false,
+            "TextInputClient.onFocusReceived" => true,
+            _ => return Ok(None),
+        };
+        let id = call
+            .arguments
+            .as_array()
+            .and_then(|args| args.first())
+            .ok_or(FlutterTextInputLifecycleError::InvalidClientId)?;
+        let Some(client) = id.as_u64().map(TextInputClientId::new) else {
+            // Ignore negative test sentinels rather than overriding the
+            // identity check of a production input attachment.
+            return if id.as_i64().is_some_and(|id| id < 0) {
+                Ok(Some(false))
+            } else {
+                Err(FlutterTextInputLifecycleError::InvalidClientId)
+            };
+        };
+        Ok(Some(if receive_focus {
+            self.text_input_focus_received(client)
+        } else {
+            self.text_input_connection_closed(client)
+        }))
+    }
+}
