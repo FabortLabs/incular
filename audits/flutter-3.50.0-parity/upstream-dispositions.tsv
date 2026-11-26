@@ -531,7 +531,7 @@ packages/flutter/test/widgets/stack_test.dart	494	Can change the text direction 
 packages/flutter/test/widgets/stack_test.dart	500	Alignment with partially-positioned children	paired-match	upstream-stack.md#directional-positioning-and-empty-parent-data
 packages/flutter/test/widgets/stack_test.dart	726	Stack error messages	partial-mismatch	upstream-stack.md
 packages/flutter/test/widgets/stack_test.dart	760	Stack does not crash at zero area	partial-match	upstream-stack.md
-packages/flutter/test/animation/animation_style_test.dart	12	copyWith, ==, hashCode basics	partial-match	upstream-animation-style.md
+packages/flutter/test/animation/animation_style_test.dart	12	copyWith, ==, hashCode basics	paired-match	upstream-animation-style.md#style-copy-and-hashing
 packages/flutter/test/animation/animation_style_test.dart	17	AnimationStyle.copyWith() overrides all properties	paired-match	upstream-animation-style.md
 packages/flutter/test/animation/animation_style_test.dart	36	AnimationStyle.merge() fills in null properties	paired-match	upstream-animation-style.md
 packages/flutter/test/animation/animation_style_test.dart	51	AnimationStyle.lerp identical a,b	partial-match	upstream-animation-style.md

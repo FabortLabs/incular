@@ -217,3 +217,25 @@ fn animation_style_diagnostics_preserve_the_typed_overrides_and_pinned_labels() 
         "duration: 1:01:01.005007"
     );
 }
+
+#[test]
+fn an_empty_style_copy_compares_equal_and_hashes_identically() {
+    use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher};
+    let hash = |value| BuildHasherDefault::<DefaultHasher>::default().hash_one(value);
+    let original = AnimationStyle::new();
+    let copy = original.copy_with(AnimationStyle::new());
+    assert_eq!(copy, original);
+    assert_eq!(hash(&copy), hash(&original));
+
+    let style = |zero| AnimationStyle::new()
+        .curve(Curve::cubic_bezier(zero, 0.25, 0.5, 1.))
+        .reverse_curve(Curve::blend(Curve::EaseOut, Curve::Linear, 0.25))
+        .duration(Duration::from_secs(1));
+    let positive = style(0.);
+    let negative = style(-0.);
+    assert_eq!(positive, negative);
+    assert_eq!(hash(&positive), hash(&negative));
+    let changed = positive.copy_with(AnimationStyle::new().reverse_duration(Duration::ZERO));
+    assert_ne!(positive, changed);
+    assert_ne!(hash(&positive), hash(&changed));
+}

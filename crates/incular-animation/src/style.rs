@@ -6,7 +6,7 @@ use std::{fmt, time::Duration};
 /// Flutter `AnimationStyle`: overrides for the curve and duration of a
 /// widget's built-in animations, forward and in reverse. An unset field
 /// keeps the widget's default.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, Hash, PartialEq)]
 pub struct AnimationStyle {
     pub curve: Option<Curve>,
     pub duration: Option<Duration>,
@@ -97,7 +97,13 @@ impl AnimationStyle {
         .flatten()
     }
 
-    /// Flutter `AnimationStyle.copyWith`: `other`'s set fields win.
+    /// Copies this style, taking only the explicitly supplied overrides.
+    #[must_use]
+    pub fn copy_with(&self, overrides: Self) -> Self {
+        self.clone().merge(overrides)
+    }
+
+    /// Merges two styles: `other`'s set fields win.
     #[must_use]
     pub fn merge(self, other: Self) -> Self {
         Self {

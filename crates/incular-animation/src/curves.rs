@@ -2,6 +2,7 @@
 
 use std::{
     collections::VecDeque,
+    hash::{Hash, Hasher},
     sync::{Arc, Mutex, PoisonError, Weak},
 };
 
@@ -111,6 +112,56 @@ pub enum Curve {
         a2: (f32, f32),
         b2: (f32, f32),
     },
+}
+
+fn hash_curve_values(values: &[f32], state: &mut impl Hasher) {
+    for &value in values {
+        (if value == 0.0 { 0 } else { value.to_bits() }).hash(state);
+    }
+}
+
+impl Hash for Curve {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(self).hash(state);
+        match self {
+            Self::CubicBezier { x1, y1, x2, y2 } => {
+                hash_curve_values(&[*x1, *y1, *x2, *y2], state);
+            }
+            Self::Blend(pair) => {
+                pair.first.hash(state);
+                pair.second.hash(state);
+                hash_curve_values(&[pair.weight], state);
+            }
+            Self::ElasticIn(period)
+            | Self::ElasticOut(period)
+            | Self::ElasticInOut(period)
+            | Self::Threshold(period) => hash_curve_values(&[*period], state),
+            Self::Interval { begin, end, curve } => {
+                hash_curve_values(&[*begin, *end], state);
+                curve.hash(state);
+            }
+            Self::SawTooth(count) => count.hash(state),
+            Self::Split { split, begin_curve, end_curve } => {
+                hash_curve_values(&[*split], state);
+                begin_curve.hash(state);
+                end_curve.hash(state);
+            }
+            Self::Flipped(curve) => curve.hash(state),
+            Self::CatmullRom(curve) => {
+                hash_curve_values(&[curve.tension()], state);
+                curve.control_points().len().hash(state);
+                for point in curve.control_points() {
+                    hash_curve_values(&[point.x, point.y], state);
+                }
+            }
+            Self::ThreePointCubic { a1, b1, midpoint, a2, b2 } => {
+                for (x, y) in [a1, b1, midpoint, a2, b2] {
+                    hash_curve_values(&[*x, *y], state);
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 /// The owned operands of a timing-curve blend.

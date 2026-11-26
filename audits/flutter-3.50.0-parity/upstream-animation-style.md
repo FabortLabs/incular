@@ -46,3 +46,12 @@ same cubic, bounce and duration descriptions. An explicitly zero
 duration remains visible, so the diagnostic distinguishes "no override"
 from "no animation". The iterator does not allocate or format strings
 until requested. All 24 focused style and curve tests passed.
+
+## Style copy and hashing
+
+Pinned `animation_style_test.dart:12` passed. An empty override
+preserves the value and hash. Native controls also check structural
+curve variants and blends, equivalent signed zeros, and that an
+explicit zero reverse duration differs from an absent override. Curve
+and style hashing do not sample animations or depend on allocation
+addresses. Numeric hashes remain Rust-specific. All 18 focused tests passed.
