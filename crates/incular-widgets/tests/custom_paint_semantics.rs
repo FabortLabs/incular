@@ -643,3 +643,147 @@ fn painter_semantics_reject_duplicate_keys() {
         "{error:?}"
     );
 }
+
+struct PositionedProperties {
+    rect: Rect,
+    semantics: Semantics,
+}
+
+impl CustomPainter for PositionedProperties {
+    fn paint(&self, _: Size) -> DisplayList {
+        DisplayList::default()
+    }
+    fn should_repaint(&self, _: &Self) -> bool {
+        true
+    }
+    fn semantics_builder(&self) -> Option<SemanticsBuilder> {
+        let rect = self.rect;
+        let props = self.semantics.clone();
+        Some(Rc::new(move |_| {
+            vec![CustomPainterSemantics::new(rect, props.clone()).key(1_u64)]
+        }))
+    }
+}
+
+#[test]
+fn painted_accessibility_properties_update_in_place_with_the_region_key() {
+    use incular_config::TextDirection;
+    use incular_semantics::{CheckedState, SemanticActionKind as Action, SemanticAnnotationFlag};
+    let build = |after: bool| {
+        let rect = Rect::from_origin_size(
+            if after {
+                Offset::new(5., 6.)
+            } else {
+                Offset::new(1., 2.)
+            },
+            Size::new(2., 2.),
+        );
+        let semantics = if after {
+            Semantics::default()
+                .checked(CheckedState::Checked)
+                .selected(true)
+                .button(true)
+                .label("label-after")
+                .value("value-after")
+                .increased_value("increase-after")
+                .decreased_value("decrease-after")
+                .hint("hint-after")
+                .text_direction(TextDirection::Ltr)
+                .on_scroll_down(|| {})
+                .on_long_press(|| {})
+                .on_decrease(|| {})
+                .on_increase(|| {})
+                .on_scroll_left(|| {})
+                .on_scroll_right(|| {})
+                .on_scroll_up(|| {})
+                .on_tap(|| {})
+        } else {
+            Semantics::default()
+                .checked(CheckedState::Unchecked)
+                .selected(false)
+                .button(false)
+                .label("label-before")
+                .value("value-before")
+                .increased_value("increase-before")
+                .decreased_value("decrease-before")
+                .hint("hint-before")
+                .text_direction(TextDirection::Rtl)
+        };
+        Widget::from(CustomPaint::from_painter(
+            Size::ZERO,
+            PositionedProperties { rect, semantics },
+        ))
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(build(false)).unwrap();
+    let check = |tree: &mut WidgetTree, after| {
+        tree.layout(Constraints::tight(Size::new(800., 600.)))
+            .unwrap();
+        tree.update_semantics();
+        let (label, value, hint, increase, decrease, origin, direction) = if after {
+            (
+                "label-after",
+                "value-after",
+                "hint-after",
+                "increase-after",
+                "decrease-after",
+                Offset::new(5., 6.),
+                TextDirection::Ltr,
+            )
+        } else {
+            (
+                "label-before",
+                "value-before",
+                "hint-before",
+                "increase-before",
+                "decrease-before",
+                Offset::new(1., 2.),
+                TextDirection::Rtl,
+            )
+        };
+        let node = labelled(tree, label).unwrap();
+        assert_eq!(
+            node.bounds,
+            Rect::from_origin_size(origin, Size::new(2., 2.))
+        );
+        assert_eq!(node.value.as_deref(), Some(value));
+        assert_eq!(node.description.as_deref(), Some(hint));
+        assert_eq!(node.state.increased_value.as_deref(), Some(increase));
+        assert_eq!(node.state.decreased_value.as_deref(), Some(decrease));
+        assert_eq!(node.state.text_direction, Some(direction));
+        assert_eq!(node.state.selected, after);
+        assert_eq!(node.state.declared_selected(), Some(after));
+        assert_eq!(
+            node.state.checked,
+            Some(if after {
+                CheckedState::Checked
+            } else {
+                CheckedState::Unchecked
+            })
+        );
+        assert_eq!(
+            node.state
+                .annotation_flags
+                .get(SemanticAnnotationFlag::Button),
+            Some(after)
+        );
+        let wants = [
+            Action::ScrollDown,
+            Action::LongPress,
+            Action::Decrement,
+            Action::Increment,
+            Action::ScrollLeft,
+            Action::ScrollRight,
+            Action::ScrollUp,
+            Action::Activate,
+        ];
+        assert_eq!(node.actions.len(), if after { wants.len() } else { 0 });
+        if after {
+            assert!(wants.iter().all(|action| node.actions.contains(action)));
+        }
+        node.id
+    };
+    let id = check(&mut tree, false);
+    tree.update(root, build(true)).unwrap();
+    assert_eq!(check(&mut tree, true), id);
+}

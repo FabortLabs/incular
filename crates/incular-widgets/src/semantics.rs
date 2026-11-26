@@ -387,6 +387,7 @@ impl Semantics {
     #[must_use]
     pub fn selected(mut self, selected: bool) -> Self {
         self.state.selected = selected;
+        self.state.has_selected_state = true;
         self
     }
 

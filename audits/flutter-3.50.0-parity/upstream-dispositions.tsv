@@ -2351,3 +2351,4 @@ packages/flutter/test/widgets/custom_painter_test.dart	725	complains about dupli
 packages/flutter/test/widgets/custom_painter_test.dart	765	rebuilds semantics upon resize	partial-match	upstream-custom-paint.md#region-metadata-enablement-and-retained-identities
 packages/flutter/test/widgets/custom_painter_test.dart	828	description	paired-match	upstream-custom-paint.md#region-metadata-enablement-and-retained-identities
 packages/flutter/test/widgets/custom_painter_test.dart	425	Supports all actions	paired-match	upstream-custom-paint.md#dispatching-a-painted-regions-accessibility-actions
+packages/flutter/test/widgets/custom_painter_test.dart	171	'applies $SemanticsProperties'	paired-match	upstream-custom-paint.md#painter-property-replacement

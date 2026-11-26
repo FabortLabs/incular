@@ -82,3 +82,17 @@ focus notifications. The region requires no keyboard-focusable
 editor. Its empty geometry boxes already pass ordinary touch to the
 real child, so the accidental IgnorePointer action mask was removed.
 The full 12-case native region target and this Runtime case passed.
+
+## Painter property replacement
+
+Paired :171. The same keyed 2×2 semantic region moves from (1,2)
+to (5,6) while its label, value, both adjustment hints, descriptive
+hint, text direction, checked and selected states, and eight actions
+update. Explicit selected=false is no longer lost as an unspecified
+flag. A desktop AccessKit control verifies absence → false → true →
+absence on one unchanged native ID and confirms that the initial
+false update emits a real patch. The web serialization follows the
+existing role filter; browser execution was not verified in this
+toolchain because its wasm standard library is not installed.
+
+Thirteen focused painter tests and five desktop projection tests passed.

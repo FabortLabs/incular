@@ -531,6 +531,8 @@ pub struct SemanticState {
     /// Preferred hit policy for platforms supporting semantic overlays.
     pub hit_test_behavior: SemanticsHitTestBehavior,
     pub selected: bool,
+    /// Whether selection was explicitly reported, even when false.
+    pub has_selected_state: bool,
     pub checked: Option<CheckedState>,
     pub expanded: Option<bool>,
     /// Independent Flutter annotation flags; a bridge can still choose
@@ -651,6 +653,17 @@ impl SemanticState {
         }
     }
 
+    /// Selection where it was explicitly reported. A legacy producer that
+    /// sets `selected` to true also declares a selected item.
+    #[must_use]
+    pub const fn declared_selected(&self) -> Option<bool> {
+        if self.has_selected_state || self.selected {
+            Some(self.selected)
+        } else {
+            None
+        }
+    }
+
     /// Effective override of the input-focus flag. A focused declaration
     /// takes precedence over the legacy focusable declaration.
     #[must_use]
@@ -722,6 +735,7 @@ impl Default for SemanticState {
             accessibility_focus_block_type: AccessibilityFocusBlockType::None,
             hit_test_behavior: SemanticsHitTestBehavior::Defer,
             selected: false,
+            has_selected_state: false,
             checked: None,
             expanded: None,
             annotation_flags: SemanticAnnotationFlags::default(),

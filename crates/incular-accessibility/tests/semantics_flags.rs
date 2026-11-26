@@ -105,3 +105,45 @@ fn typed_validation_projects_invalid_without_confusing_valid_or_unspecified() {
         assert_eq!(node.invalid().is_some(), expected);
     }
 }
+
+#[test]
+fn selection_presence_updates_one_stable_native_node() {
+    let mut tree = SemanticsTree::new();
+    let id = tree.insert(SemanticNode {
+        id: SemanticNodeId(ArenaId::from_parts(0, 0)),
+        role: Role::Tab,
+        label: Some("existing tab".into()),
+        value: None,
+        description: None,
+        bounds: Rect::default(),
+        state: SemanticState::default(),
+        actions: vec![],
+        children: vec![],
+    });
+    tree.set_root(Some(id));
+    let mut projection = AccessKitProjection::new();
+    projection.activate();
+    let mut stable = None;
+    for (index, declared) in [None, Some(false), Some(true), None]
+        .into_iter()
+        .enumerate()
+    {
+        if index != 0 {
+            let mut updated = tree.node(id).unwrap().clone();
+            updated.state.has_selected_state = declared.is_some();
+            updated.state.selected = declared.unwrap_or(false);
+            assert!(tree.update(id, updated), "the declaration itself is dirty");
+        }
+        let update = projection
+            .sync(&tree, 1.)
+            .expect("native selection update")
+            .into_accesskit();
+        let native = NodeId(projection.native_node_id(id).unwrap());
+        if let Some(previous) = stable {
+            assert_eq!(native, previous);
+        }
+        stable = Some(native);
+        let (_, node) = update.nodes.iter().find(|(id, _)| *id == native).unwrap();
+        assert_eq!(node.is_selected(), declared);
+    }
+}

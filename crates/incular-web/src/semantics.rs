@@ -381,10 +381,12 @@ fn apply_node(
             .map(|expanded| expanded.to_string())
             .as_deref(),
     );
-    set_flag(
+    set_or_remove(
         &element,
         "aria-selected",
-        state.selected && matches!(semantic.role, Role::Tab | Role::ListItem),
+        state.declared_selected()
+            .filter(|_| matches!(semantic.role, Role::Tab | Role::ListItem))
+            .map(|selected| if selected { "true" } else { "false" }),
     );
     set_flag(
         &element,

@@ -1026,8 +1026,8 @@ impl AccessKitProjection {
         if is_interactive_role(semantic.role) && !semantic.state.enabled {
             node.set_disabled();
         }
-        if semantic.state.selected {
-            node.set_selected(true);
+        if let Some(selected) = semantic.state.declared_selected() {
+            node.set_selected(selected);
         }
         if let Some(checked) = semantic.state.checked {
             node.set_toggled(match checked {
