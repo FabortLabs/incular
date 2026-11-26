@@ -483,3 +483,85 @@ fn separated_item_lookup_excludes_separators_when_reattributing_a_parked_editor(
     frame(&mut runtime);
     assert!(runtime.tree().element_with_key(&key).is_none());
 }
+
+#[test]
+fn closing_or_switching_keyboard_clients_never_replays_stale_composition() {
+    use incular_platform::{TextInputState, TextInputType};
+    use incular_text::{TextRange, TextSelection};
+    use incular_widgets::TextInputTypeHint;
+
+    let shared = TextEditingController::new();
+    let [first, second] = [FocusNode::new(), FocusNode::new()];
+    let root: Widget = Column::new([
+        Widget::from(field(&shared, &first, true)),
+        Widget::from(field(&shared, &second, false).input_type(TextInputTypeHint::Phone)),
+    ])
+    .into();
+    let mut runtime = Runtime::new(root).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
+    frame(&mut runtime);
+    let retired = attached(&mut runtime);
+    let editing = TextInputState {
+        text: "draft".into(),
+        selection_start: 3,
+        selection_end: 3,
+        composing: Some((1, 4)),
+    };
+    let _ = runtime.handle_platform_event(PlatformEvent::TextEditingState(editing.clone()));
+    frame(&mut runtime);
+    assert_eq!(shared.composing(), Some(TextRange::new(1, 4)));
+    runtime.take_text_input_commands();
+
+    assert!(platform_call(&mut runtime, "onConnectionClosed", retired));
+    frame(&mut runtime);
+    assert!(!first.has_focus());
+    assert_eq!(shared.text(), "draft");
+    assert_eq!(shared.selection(), TextSelection::collapsed(3));
+    assert_eq!(
+        shared.composing(),
+        None,
+        "the host closed its composing session"
+    );
+    assert!(runtime.take_text_input_commands().is_empty());
+
+    let _ = second.request_focus();
+    frame(&mut runtime);
+    assert!(second.has_primary_focus());
+    let reshow = runtime.take_text_input_commands();
+    let active = reshow
+        .iter()
+        .find_map(|command| match command {
+            TextInputCommand::SetClient {
+                configuration,
+                state,
+                ..
+            } if configuration.input_type == TextInputType::Phone => {
+                assert_eq!(state.text, "draft");
+                assert_eq!(state.composing, None);
+                Some(configuration.client)
+            }
+            _ => None,
+        })
+        .expect("the second field receives a phone input client");
+    assert_ne!(active, retired);
+    assert!(reshow.contains(&TextInputCommand::Show { client: active }));
+    assert!(!platform_call(&mut runtime, "onConnectionClosed", retired));
+
+    let _ = runtime.handle_platform_event(PlatformEvent::TextEditingState(editing));
+    frame(&mut runtime);
+    assert_eq!(shared.composing(), Some(TextRange::new(1, 4)));
+    runtime.take_text_input_commands();
+    let _ = first.request_focus();
+    frame(&mut runtime);
+    assert!(first.has_primary_focus());
+    assert_eq!(shared.text(), "draft");
+    assert_eq!(
+        shared.composing(),
+        None,
+        "focus transfer ends the old composition too"
+    );
+    assert!(runtime.take_text_input_commands().iter().any(|command| {
+        matches!(command, TextInputCommand::SetClient { configuration, state, .. }
+            if configuration.client != active && state.composing.is_none() && state.selection_end == 3)
+    }));
+}

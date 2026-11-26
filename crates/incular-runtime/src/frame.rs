@@ -2475,6 +2475,12 @@ impl Runtime {
             self.frame_requested = true;
         }
         if let Some(previous) = self.focused {
+            if let Some(controller) = self.tree.text_controller(previous) {
+                // A whole editing-state update can own a composing range
+                // even without a live preedit overlay. Retire it on blur
+                // before a new attachment snapshots the shared controller.
+                controller.clear_composing();
+            }
             self.tree.set_keyboard_focus(previous, false);
             let _ = self.tree.set_focused(previous, false, self.input_now());
             self.hide_text_field_overlays(previous);

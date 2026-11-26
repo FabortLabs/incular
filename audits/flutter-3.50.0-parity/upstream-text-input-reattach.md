@@ -111,3 +111,20 @@ text, and focus even though it now needs to park outside the viewport.
 Closing the host connection releases the kept row. Both originals,
 the authored control, and 20 focused Rust tests passed. This does not
 claim that all sliver classes expose these ListView hooks.
+
+## Do not replay composing ranges after blur
+
+Two authored Flutter cases pair. A keyboard close or ordinary focus
+transfer ends the old composing range without changing text or the
+caret. When the same draft controller is shared with a phone field,
+its fresh client receives the existing draft and an empty composing
+range. Closing an already-retired client stays silent.
+
+Incular previously cleared only native preedit overlays, leaving an
+IME range supplied as part of a whole editing state active. Blur now
+clears that committed controller range before taking the next client
+snapshot. Composing-only operations preserve an unset selection and
+do not notify when there was nothing to clear. Twenty runtime/host
+tests and ten controller/state tests passed; these authored cases
+do not add pinned registrations. The shared-FocusNode fixture above
+still has a separate ownership difference.

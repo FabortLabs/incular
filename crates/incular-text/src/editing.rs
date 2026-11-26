@@ -676,19 +676,25 @@ impl TextEditingController {
     }
 
     pub fn set_selection(&self, selection: TextSelection) {
-        self.update_ranges(|value| value.selection = selection);
+        self.update_ranges(true, |value| value.selection = selection);
         self.inner.borrow_mut().caret_affinity = TextAffinity::Downstream;
     }
 
     /// Sets a selection while preserving which visual edge of a bidi run owns
     /// a collapsed caret. Native hit testing should use this overload.
     pub fn set_selection_with_affinity(&self, selection: TextSelection, affinity: TextAffinity) {
-        self.update_ranges(|value| value.selection = selection);
+        self.update_ranges(true, |value| value.selection = selection);
         self.inner.borrow_mut().caret_affinity = affinity;
     }
 
     pub fn set_composing(&self, composing: Option<ComposingRange>) {
-        self.update_ranges(|value| value.composing = composing);
+        self.update_ranges(false, |value| value.composing = composing);
+    }
+
+    /// Clears the input method's composing range without moving the caret
+    /// or changing whether the selection is set.
+    pub fn clear_composing(&self) {
+        self.set_composing(None);
     }
 
     /// Observes committed editing changes with automatic cleanup on drop.
@@ -1108,7 +1114,7 @@ impl TextEditingController {
         } else {
             TextSelection::collapsed(target)
         };
-        self.update_ranges(|value| value.selection = selection);
+        self.update_ranges(true, |value| value.selection = selection);
         let mut state = self.inner.borrow_mut();
         state.preferred_caret_x = preferred_x;
         state.caret_affinity = affinity;
@@ -1210,14 +1216,14 @@ impl TextEditingController {
     /// Changes the selection or the composing range, which never needs a
     /// copy of the text. Input formatters do not run here: they format
     /// text edits, and a range change leaves the text as it is.
-    fn update_ranges(&self, apply: impl Fn(&mut TextEditingValue)) {
+    fn update_ranges(&self, sets_selection: bool, apply: impl Fn(&mut TextEditingValue)) {
         incular_core::reactivity::assert_mutation_allowed();
         self.changes.track();
         let listeners = {
             let mut state = self.inner.borrow_mut();
             // Setting any selection makes an unset one valid, a change even
             // when the stored offsets are the same.
-            let was_unset = std::mem::take(&mut state.selection_unset);
+            let was_unset = sets_selection && std::mem::take(&mut state.selection_unset);
             let value = &mut state.value;
             let before = (value.selection, value.composing);
             apply(value);

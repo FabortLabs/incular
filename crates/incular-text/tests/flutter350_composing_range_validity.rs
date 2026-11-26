@@ -38,3 +38,24 @@ fn composition_requires_representable_byte_boundaries() {
         assert_eq!(range.is_valid_for(text), valid);
     }
 }
+
+#[test]
+fn composition_only_updates_preserve_the_unset_selection_and_skip_redundant_notifications() {
+    use incular_text::TextEditingController;
+    use std::{cell::Cell, rc::Rc};
+
+    let controller = TextEditingController::with_text("draft");
+    let count = Rc::new(Cell::new(0));
+    let notifications = count.clone();
+    let _observer = controller.observe(move |_| notifications.set(notifications.get() + 1));
+    assert_eq!(controller.selection_if_set(), None);
+    controller.set_composing(Some(TextRange::new(1, 4)));
+    assert_eq!(controller.selection_if_set(), None);
+    assert_eq!(controller.composing(), Some(TextRange::new(1, 4)));
+    controller.clear_composing();
+    assert_eq!(controller.selection_if_set(), None);
+    assert_eq!(controller.composing(), None);
+    assert_eq!(controller.text(), "draft");
+    controller.clear_composing();
+    assert_eq!(count.get(), 2);
+}
