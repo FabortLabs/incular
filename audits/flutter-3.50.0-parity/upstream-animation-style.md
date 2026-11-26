@@ -53,5 +53,5 @@ Pinned `animation_style_test.dart:12` passed. An empty override
 preserves the value and hash. Native controls also check structural
 curve variants and blends, equivalent signed zeros, and that an
 explicit zero reverse duration differs from an absent override. Curve
-and style hashing do not sample animations or depend on allocation
-addresses. Numeric hashes remain Rust-specific. All 18 focused tests passed.
+and style hashing do not sample animations. Built-in curves hash by value;
+named custom callbacks hash by shared identity. Numeric hashes remain Rust-specific. All 18 focused tests passed.

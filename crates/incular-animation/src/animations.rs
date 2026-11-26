@@ -501,6 +501,15 @@ impl AnimationSource for CurvedAnimation {
             _ => &curves.0,
         };
         if t == 0.0 || t == 1.0 {
+            #[cfg(debug_assertions)]
+            if let Curve::Custom(_) = curve {
+                let actual = curve.transform(t);
+                let rounded = actual.round();
+                assert!(
+                    rounded == t,
+                    "Invalid curve endpoint at {t:?}.\nCurves must map 0.0 to near zero and 1.0 to near one but\n{curve} mapped {t:?} to {actual:?}, which is near {rounded:?}."
+                );
+            }
             t
         } else {
             curve.apply(t)

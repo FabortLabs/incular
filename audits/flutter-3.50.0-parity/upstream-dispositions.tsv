@@ -2600,3 +2600,4 @@ packages/flutter/test/animation/curves_test.dart	189	Cubic transformInternal thr
 packages/flutter/test/animation/curves_test.dart	193	Invalid transform parameter should assert	paired-match	upstream-curves-intrinsic-layout-and-system-overlay.md#checked-curve-inputs-and-raw-cubic-sampling
 packages/flutter/test/animation/animation_controller_test.dart	429	toString control test	paired-match	upstream-animation-controller-disposal.md#live-controller-descriptions-and-disposal-guards
 packages/flutter/test/animation/animation_controller_test.dart	1074	AnimationController methods assert _ticker is not null	paired-match	upstream-animation-controller-disposal.md#live-controller-descriptions-and-disposal-guards
+packages/flutter/test/animation/animations_test.dart	251	CurvedAnimation with bogus curve	paired-match	upstream-curve-lifetimes-and-shapes.md#custom-curve-endpoints

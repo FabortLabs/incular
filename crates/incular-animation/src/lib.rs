@@ -31,7 +31,7 @@ pub use controller::{
 pub use curve2d::{
     CatmullRomCurve, CatmullRomSpline, CatmullRomSplineError, Curve2D, Curve2DSample,
 };
-pub use curves::{CubicTransformError, Curve, CurveBlend, CurveChain, Curves};
+pub use curves::{CubicTransformError, Curve, CurveBlend, CurveChain, Curves, CustomCurve};
 pub use motion::{
     Channel, Keyframes, MotionValue, Spring, Transition, TransitionKind, end_transaction, ms, secs,
     transaction, with_transition, without_transition,

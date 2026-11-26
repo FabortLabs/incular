@@ -228,3 +228,38 @@ fn wrapped_animation_lifetimes_emit_exactly_one_create_and_dispose() {
     }
     assert_ne!(events[0].id, events[2].id);
 }
+
+#[test]
+#[cfg(debug_assertions)]
+fn a_bad_custom_curve_names_the_endpoint_it_maps_incorrectly() {
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
+    let controller = AnimationController::without_duration();
+    let curve = Curve::custom("BogusCurve", |_| 100.);
+    assert_eq!(curve, curve.clone());
+    assert_ne!(curve, Curve::custom("BogusCurve", |_| 100.));
+    let animation = CurvedAnimation::new(&controller, curve);
+    let error = catch_unwind(AssertUnwindSafe(|| animation.value())).unwrap_err();
+    let message = error.downcast_ref::<String>().expect("diagnostic message");
+    assert_eq!(
+        message,
+        "Invalid curve endpoint at 0.0.\nCurves must map 0.0 to near zero and 1.0 to near one but\nBogusCurve mapped 0.0 to 100.0, which is near 100.0."
+    );
+}
+
+#[test]
+fn valid_custom_curve_samples_the_interior_but_keeps_the_exact_animation_endpoints() {
+    let controller = AnimationController::without_duration();
+    let curve = Curve::custom("NearEndpointCurve", |t| {
+        if t == 0. { 0.001 } else if t == 1. { 0.999 } else { t * t }
+    });
+    assert_eq!(curve.transform(0.), 0.001);
+    assert_eq!(curve.apply(0.), 0.);
+    assert_eq!(curve.apply(0.5), 0.25);
+    let animation = CurvedAnimation::new(&controller, curve);
+    assert_eq!(animation.value(), 0.);
+    controller.set_value(0.5);
+    assert_eq!(animation.value(), 0.25);
+    controller.set_value(1.);
+    assert_eq!(animation.value(), 1.);
+}

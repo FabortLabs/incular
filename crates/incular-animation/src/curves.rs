@@ -55,6 +55,8 @@ pub enum Curve {
         x2: f32,
         y2: f32,
     },
+    /// A named application-defined timing function.
+    Custom(CustomCurve),
     StepStart,
     StepEnd,
     /// An owned blend of two curve outputs.
@@ -114,6 +116,25 @@ pub enum Curve {
     },
 }
 
+/// A named, shared custom curve callback. Clones retain one identity.
+#[derive(Clone)]
+pub struct CustomCurve {
+    name: &'static str,
+    sample: Arc<dyn Fn(f32) -> f32 + Send + Sync>,
+}
+
+impl PartialEq for CustomCurve {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && Arc::ptr_eq(&self.sample, &other.sample)
+    }
+}
+
+impl std::fmt::Debug for CustomCurve {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.debug_tuple("CustomCurve").field(&self.name).finish()
+    }
+}
+
 fn hash_curve_values(values: &[f32], state: &mut impl Hasher) {
     for &value in values {
         (if value == 0.0 { 0 } else { value.to_bits() }).hash(state);
@@ -124,6 +145,10 @@ impl Hash for Curve {
     fn hash<H: Hasher>(&self, state: &mut H) {
         std::mem::discriminant(self).hash(state);
         match self {
+            Self::Custom(curve) => {
+                curve.name.hash(state);
+                (Arc::as_ptr(&curve.sample) as *const ()).hash(state);
+            }
             Self::CubicBezier { x1, y1, x2, y2 } => {
                 hash_curve_values(&[*x1, *y1, *x2, *y2], state);
             }
@@ -222,7 +247,11 @@ impl Curve {
             (0.0..=1.0).contains(&value),
             "curve transform requires progress in [0, 1]"
         );
-        self.apply(value)
+        if let Self::Custom(curve) = self {
+            (curve.sample)(value)
+        } else {
+            self.apply(value)
+        }
     }
 
     /// Samples Flutter's raw cubic transform. Values outside the unit
@@ -261,6 +290,7 @@ impl Curve {
         let pi = std::f32::consts::PI;
         match *self {
             Self::Linear => t,
+            Self::Custom(ref curve) => (curve.sample)(t),
             Self::Blend(ref pair) => {
                 pair.first.apply(t) * (1. - pair.weight) + pair.second.apply(t) * pair.weight
             }
@@ -525,6 +555,14 @@ impl Curve {
         })
     }
 
+    /// Creates an application-defined timing curve. The callback receives
+    /// normalized progress and should map the endpoints near zero and one.
+    /// The name is used in diagnostics.
+    #[must_use]
+    pub fn custom(name: &'static str, sample: impl Fn(f32) -> f32 + Send + Sync + 'static) -> Self {
+        Self::Custom(CustomCurve { name, sample: Arc::new(sample) })
+    }
+
     #[must_use]
     pub const fn cubic_bezier(x1: f32, y1: f32, x2: f32, y2: f32) -> Self {
         Self::CubicBezier { x1, y1, x2, y2 }
@@ -597,6 +635,7 @@ impl std::fmt::Display for Curve {
             return write!(f, "Cubic({a:.2}, {b:.2}, {c:.2}, {d:.2})");
         }
         match self {
+            Self::Custom(curve) => f.write_str(curve.name),
             Self::Linear => f.write_str("_Linear"),
             Self::Decelerate => f.write_str("DecelerateCurve"),
             Self::EaseInBounce => f.write_str("_BounceInCurve"),
