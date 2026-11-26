@@ -24,3 +24,23 @@ the normal cache-window fast path could reuse layout.
 These comparisons verify caching/eviction without asserting Flutter's
 private debug strings or requiring either framework to perform extra
 work while the mounted interval stays unchanged.
+
+## Filling the remaining viewport: paint and cache are separate budgets
+
+All six pinned cases at `rendering/sliver_cache_test.dart:756,858,1045,
+1151,1346,1480` passed. The three additional native tests exercise both
+preceding-sliver sizes (400 and 850 px) for each mode. Each checkpoint
+compares the incoming cache origin/remaining paint/remaining cache/scroll
+offset, the returned paint/cache extent and visibility, and the actual
+constraints sent to the mounted child.
+
+- A non-scrolling fill remains tightly sized to 200 px after the
+  400 px box and 100 px after the 850 px box. It does not grow with
+  trailing overscroll.
+- A stretching fill grows its child maximum and reported paint extent
+  by 50 px on trailing overscroll. Its minimum and logical cache extent
+  remain 200 px or 100 px.
+- A scrolling fill has a zero minimum and a 250 px maximum when
+  cache-only, then fills the exact remaining paint budget once visible.
+  When it occupies the whole viewport its cache contribution is 600 px,
+  not the viewport's full available 850 px budget.

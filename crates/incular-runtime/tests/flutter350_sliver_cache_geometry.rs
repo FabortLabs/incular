@@ -5,14 +5,15 @@ use std::{cell::Cell, rc::Rc};
 use incular_config::{Axis, Constraints, EdgeInsets};
 use incular_core::{Color, Size};
 use incular_runtime::Runtime;
-use incular_scroll::{SliverConstraints, SliverGeometry};
+use incular_scroll::{ScrollPhysics, SliverConstraints, SliverGeometry};
 use incular_widgets::{
-    CustomScrollView, Directionality, ScrollController, Sliver, SliverFixedExtentList, SliverGrid,
-    SliverGridDelegate, SliverList, SliverPadding, SliverToBoxAdapter, TextDirection, Widget,
+    CustomScrollView, Directionality, ScrollController, Sliver, SliverFillRemaining,
+    SliverFixedExtentList, SliverGrid, SliverGridDelegate, SliverList, SliverPadding,
+    SliverToBoxAdapter, TextDirection, Widget,
     internal::{RenderSliver, SliverChildId, SliverLayout, SliverScrollDependency},
 };
 
-type Sample = (SliverConstraints, SliverGeometry);
+type Sample = (SliverConstraints, SliverGeometry, Option<Constraints>);
 type Samples = Rc<Cell<Option<Sample>>>;
 type Expected = (f32, f32, f32, f32, f32, f32, bool);
 
@@ -60,7 +61,11 @@ struct RecordRender {
 impl RenderSliver for RecordRender {
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout {
         let result = self.delegate.perform_layout(constraints);
-        self.latest.set(Some((constraints, result.geometry)));
+        self.latest.set(Some((
+            constraints,
+            result.geometry,
+            result.children.first().map(|child| child.constraints),
+        )));
         result
     }
 
@@ -103,7 +108,7 @@ fn at(runtime: &mut Runtime, ctl: &ScrollController, offset: f32) {
 }
 
 fn check(sample: &Samples, expected: Expected, context: impl std::fmt::Debug) {
-    let (c, g) = sample.get().expect("sliver ran during the mounted layout");
+    let (c, g, _) = sample.get().expect("sliver ran during the mounted layout");
     assert_eq!(
         (
             c.cache_origin,
@@ -307,4 +312,138 @@ fn padding_accounts_for_both_its_own_and_the_child_cache_geometry() {
             check(&samples[i].1, inner, (offset, i, "box"));
         }
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum Fill {
+    Static,
+    Stretch,
+    ScrollBody,
+}
+
+/// scroll offset, paint/cache budgets, reported paint/cache extents, child min/max height
+type FillCheck = (f32, f32, f32, f32, f32, f32, f32);
+
+fn check_fill(mode: Fill, preceding: f32, expected: &[FillCheck]) {
+    let controller = ScrollController::new();
+    let (first, first_sample) = Record::new(SliverToBoxAdapter::new(Widget::box_(
+        Size::new(400., preceding),
+        Color::WHITE,
+    )));
+    let (fill, fill_sample) = Record::new(
+        SliverFillRemaining::new(Widget::box_(Size::new(100., 100.), Color::WHITE))
+            .has_scroll_body(matches!(mode, Fill::ScrollBody))
+            .fill_overscroll(matches!(mode, Fill::Stretch)),
+    );
+    let slivers: [Box<dyn Sliver>; 2] = [Box::new(first), Box::new(fill)];
+    let physics = ScrollPhysics::BOUNCING.always_scrollable();
+    let viewport = CustomScrollView::new(slivers)
+        .cache_extent(250.)
+        .physics(physics)
+        .controller(controller.clone());
+    let mut runtime =
+        Runtime::new(Directionality::new(TextDirection::Ltr, viewport).into()).unwrap();
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    for &(offset, paint_budget, cache_budget, paint, cache, min_h, max_h) in expected {
+        let furthest = controller.max_offset();
+        if offset > furthest {
+            let _ = controller.jump_to(furthest);
+            let _ = controller.apply_physics(physics, offset - furthest);
+        } else {
+            let _ = controller.jump_to(offset);
+        }
+        runtime.run_frame(bounds).unwrap();
+        assert_eq!(
+            controller.offset(),
+            offset,
+            "{mode:?} preceding {preceding}"
+        );
+        if offset == 0. {
+            check(
+                &first_sample,
+                (0., 600., 850., 0., preceding.min(600.), preceding, true),
+                (mode, preceding),
+            );
+        }
+        check(
+            &fill_sample,
+            (0., paint_budget, cache_budget, 0., paint, cache, paint > 0.),
+            (mode, preceding, offset),
+        );
+        let (_, _, actual) = fill_sample.get().unwrap();
+        assert_eq!(
+            actual,
+            Some(Constraints::new(800., 800., min_h, max_h)),
+            "{mode:?} preceding={preceding}, offset={offset}"
+        );
+    }
+}
+
+#[test]
+fn non_scrollable_fill_keeps_its_intrinsic_size_while_entering_and_overscrolling() {
+    check_fill(
+        Fill::Static,
+        400.,
+        &[
+            (0., 200., 450., 200., 200., 200., 200.),
+            (50., 250., 500., 200., 200., 200., 200.),
+        ],
+    );
+    check_fill(
+        Fill::Static,
+        850.,
+        &[
+            (0., 0., 0., 0., 0., 100., 100.),
+            (250., 0., 250., 0., 100., 100., 100.),
+            (300., 50., 300., 50., 100., 100., 100.),
+            (350., 100., 350., 100., 100., 100., 100.),
+            (400., 150., 400., 100., 100., 100., 100.),
+        ],
+    );
+}
+
+#[test]
+fn stretching_fill_changes_paint_budget_but_not_the_cached_extent() {
+    check_fill(
+        Fill::Stretch,
+        400.,
+        &[
+            (0., 200., 450., 200., 200., 200., 200.),
+            (50., 250., 500., 250., 200., 200., 250.),
+        ],
+    );
+    check_fill(
+        Fill::Stretch,
+        850.,
+        &[
+            (0., 0., 0., 0., 0., 100., 100.),
+            (250., 0., 250., 0., 100., 100., 100.),
+            (300., 50., 300., 50., 100., 100., 100.),
+            (350., 100., 350., 100., 100., 100., 100.),
+            (400., 150., 400., 150., 100., 100., 150.),
+        ],
+    );
+}
+
+#[test]
+fn scrolling_fill_uses_loose_cached_height_and_tight_visible_height() {
+    check_fill(
+        Fill::ScrollBody,
+        400.,
+        &[
+            (0., 200., 450., 200., 450., 200., 200.),
+            (50., 250., 500., 250., 500., 250., 250.),
+            (400., 600., 850., 600., 600., 600., 600.),
+        ],
+    );
+    check_fill(
+        Fill::ScrollBody,
+        850.,
+        &[
+            (0., 0., 0., 0., 0., 0., 0.),
+            (250., 0., 250., 0., 250., 0., 250.),
+            (300., 50., 300., 50., 300., 50., 50.),
+            (850., 600., 850., 600., 600., 600., 600.),
+        ],
+    );
 }

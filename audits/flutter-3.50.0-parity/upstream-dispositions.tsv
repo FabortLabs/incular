@@ -1910,3 +1910,9 @@ packages/flutter/test/rendering/sliver_cache_test.dart	251	RenderSliverFixedExte
 packages/flutter/test/rendering/sliver_cache_test.dart	325	RenderSliverList calculates correct geometry	paired-match	upstream-sliver-cache-geometry.md
 packages/flutter/test/rendering/sliver_cache_test.dart	399	RenderSliverGrid calculates correct geometry	paired-match	upstream-sliver-cache-geometry.md
 packages/flutter/test/rendering/sliver_cache_test.dart	473	RenderSliverPadding calculates correct geometry	paired-match	upstream-sliver-cache-geometry.md
+packages/flutter/test/rendering/sliver_cache_test.dart	756	when initially in view	paired-match	upstream-sliver-cache-geometry.md#filling-the-remaining-viewport-paint-and-cache-are-separate-budgets
+packages/flutter/test/rendering/sliver_cache_test.dart	858	when scrolled into view	paired-match	upstream-sliver-cache-geometry.md#filling-the-remaining-viewport-paint-and-cache-are-separate-budgets
+packages/flutter/test/rendering/sliver_cache_test.dart	1045	when initially in view	paired-match	upstream-sliver-cache-geometry.md#filling-the-remaining-viewport-paint-and-cache-are-separate-budgets
+packages/flutter/test/rendering/sliver_cache_test.dart	1151	when scrolled into view	paired-match	upstream-sliver-cache-geometry.md#filling-the-remaining-viewport-paint-and-cache-are-separate-budgets
+packages/flutter/test/rendering/sliver_cache_test.dart	1346	when initially in view	paired-match	upstream-sliver-cache-geometry.md#filling-the-remaining-viewport-paint-and-cache-are-separate-budgets
+packages/flutter/test/rendering/sliver_cache_test.dart	1480	when scrolled into view	paired-match	upstream-sliver-cache-geometry.md#filling-the-remaining-viewport-paint-and-cache-are-separate-budgets
