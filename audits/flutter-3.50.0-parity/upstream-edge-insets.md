@@ -106,3 +106,15 @@ diagnostic strings match for the default outline, and directly and
 indirectly interpolated halfway values compare and hash identically.
 The native shape also retains eccentricity and paints the interpolated
 side width. One exact Flutter and 24 targeted Rust cases passed.
+
+## Circle, oval and stadium value and centerline controls
+
+Six pinned originals pair. Each outline can retain or replace its side
+without changing equality or hashing for equal values. Circle also
+retains or changes eccentricity in its copy operation. The 10/15/20 px
+scales and interpolation land at the exact expected values. Inner and
+outer unit circles agree on their bounds and interior probes. On the
+original rectangles, inside, center and outside stadium strokes retain
+their exact centerlines and layout insets; the circle's inside stroke
+has center (25, 40), radius 10, and width 10. Six Flutter and 22 focused
+Rust cases passed.

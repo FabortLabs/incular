@@ -675,3 +675,89 @@ fn rounded_outline_uses_independent_contours_and_only_a_zero_width_hairline() {
         matches!(canvas.finish().commands(), [PaintCommand::StrokePath { stroke, .. }] if stroke.width == 0.)
     );
 }
+
+#[test]
+fn circle_oval_and_stadium_copy_with_preserves_identity_and_hash() {
+    use incular_widgets::{CircleBorder, OvalBorder};
+    use std::hash::{DefaultHasher, Hash, Hasher};
+    fn hash(value: impl Hash) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        value.hash(&mut hasher);
+        hasher.finish()
+    }
+    let side = BorderSide::solid(Color::rgba(0x12, 0x34, 0x56, 255), 10.);
+    let circle = CircleBorder::default();
+    assert_eq!(circle.copy_with(None, None), circle);
+    assert_eq!(hash(circle.copy_with(None, None)), hash(circle));
+    assert_eq!(
+        hash(circle.copy_with(None, Some(0.5))),
+        hash(circle.with_eccentricity(0.5))
+    );
+    assert_eq!(circle.copy_with(Some(side), None), CircleBorder::new(side));
+    let oval = OvalBorder::default();
+    assert_eq!(oval.copy_with(None), oval);
+    assert_eq!(hash(oval.copy_with(None)), hash(oval));
+    assert_eq!(oval.copy_with(Some(side)), OvalBorder::new(side));
+    let stadium = StadiumBorder::default();
+    assert_eq!(stadium.copy_with(None), stadium);
+    assert_eq!(hash(stadium.copy_with(None)), hash(stadium));
+    assert_eq!(stadium.copy_with(Some(side)), StadiumBorder::new(side));
+}
+
+#[test]
+fn circle_and_stadium_scales_lerps_and_stroked_centerlines_match_originals() {
+    use incular_config::EdgeInsets;
+    use incular_core::Lerp;
+    use incular_widgets::CircleBorder;
+    let sides = [10., 15., 20.].map(|width| BorderSide::solid(Color::BLACK, width));
+    let circles = sides.map(CircleBorder::new);
+    let stadiums = sides.map(StadiumBorder::new);
+    assert_eq!(circles[0].dimensions(None), EdgeInsets::all(10.));
+    assert_eq!(stadiums[0].dimensions(None), EdgeInsets::all(10.));
+    assert_eq!(circles[0].scale(2.), circles[2]);
+    assert_eq!(circles[2].scale(0.5), circles[0]);
+    assert_eq!(stadiums[0].scale(2.), stadiums[2]);
+    assert_eq!(stadiums[2].scale(0.5), stadiums[0]);
+    for (i, t) in [0., 0.5, 1.].into_iter().enumerate() {
+        assert_eq!(circles[0].lerp(&circles[2], t), circles[i]);
+        assert_eq!(stadiums[0].lerp(&stadiums[2], t), stadiums[i]);
+    }
+    for circle in [
+        circles[0].inner_path(rect(-11., -11., 22., 22.)),
+        circles[0].outer_path(rect(-1., -1., 2., 2.)),
+        StadiumBorder::new(BorderSide::solid(Color::BLACK, 1.)).inner_path(rect(-2., -2., 4., 4.)),
+        StadiumBorder::new(BorderSide::solid(Color::BLACK, 1.)).outer_path(rect(-1., -1., 2., 2.)),
+    ] {
+        assert_bounds(&circle, rect(-1., -1., 2., 2.));
+        assert!(circle.contains(Offset::new(0.9, 0.), FillRule::NonZero));
+        assert!(!circle.contains(Offset::new(0.9, 0.9), FillRule::NonZero));
+    }
+
+    let stroked_bounds = |border: &dyn ShapeBorder, area| {
+        let mut canvas = Canvas::default();
+        border.paint(&mut canvas, area);
+        let drawing = canvas.finish();
+        let [PaintCommand::StrokePath { path, stroke, .. }] = drawing.commands() else {
+            panic!("expected one real stroke");
+        };
+        assert_eq!(stroke.width, 10.);
+        path.bounds().unwrap()
+    };
+    assert_eq!(
+        stroked_bounds(&circles[0], rect(10., 20., 30., 40.)),
+        rect(15., 30., 20., 20.)
+    );
+    let area = rect(10., 20., 90., 180.);
+    assert_eq!(
+        stroked_bounds(&stadiums[0], area),
+        rect(15., 25., 80., 170.)
+    );
+    for (align, inset, expected) in [(0., 5., area), (1., 0., rect(5., 15., 100., 190.))] {
+        let stadium = StadiumBorder::new(BorderSide {
+            stroke_align: align,
+            ..sides[0]
+        });
+        assert_eq!(stadium.dimensions(None), EdgeInsets::all(inset));
+        assert_eq!(stroked_bounds(&stadium, area), expected);
+    }
+}

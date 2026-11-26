@@ -358,7 +358,7 @@ fn stroke(canvas: &mut Canvas, side: &BorderSide, path: Path) {
 }
 
 /// Flutter's `StadiumBorder`: semicircular ends on the shorter sides.
-#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash, SmartDefault)]
 pub struct StadiumBorder {
     #[default(BorderSide::NONE)]
     pub side: BorderSide,
@@ -368,6 +368,11 @@ impl StadiumBorder {
     #[must_use]
     pub const fn new(side: BorderSide) -> Self {
         Self { side }
+    }
+
+    #[must_use]
+    pub fn copy_with(self, side: Option<BorderSide>) -> Self {
+        Self::new(side.unwrap_or(self.side))
     }
 
     #[must_use]
@@ -710,6 +715,13 @@ impl CircleBorder {
     }
 }
 
+impl Hash for CircleBorder {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.side.hash(state);
+        super::hash_paint_float(self.eccentricity, state);
+    }
+}
+
 impl ShapeBorder for CircleBorder {
     fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
         EdgeInsets::all(self.side.stroke_inset().max(0.))
@@ -758,7 +770,7 @@ impl incular_core::Lerp for CircleBorder {
 }
 
 /// Flutter's `OvalBorder`: an ellipse inscribed in the rectangle.
-#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash, SmartDefault)]
 pub struct OvalBorder {
     #[default(BorderSide::NONE)]
     pub side: BorderSide,
@@ -768,6 +780,11 @@ impl OvalBorder {
     #[must_use]
     pub const fn new(side: BorderSide) -> Self {
         Self { side }
+    }
+
+    #[must_use]
+    pub fn copy_with(self, side: Option<BorderSide>) -> Self {
+        Self::new(side.unwrap_or(self.side))
     }
 
     #[must_use]

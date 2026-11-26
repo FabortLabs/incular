@@ -2082,3 +2082,9 @@ packages/flutter/test/painting/rounded_rectangle_border_test.dart	38	RoundedRect
 packages/flutter/test/painting/rounded_rectangle_border_test.dart	165	RoundedRectangleBorder.dimensions and CircleBorder.dimensions	paired-match	upstream-edge-insets.md#rounded-outline-stroke-independently-normalized-contours
 packages/flutter/test/painting/rounded_rectangle_border_test.dart	193	RoundedRectangleBorder.lerp with different StrokeAlign	paired-match	upstream-edge-insets.md#rounded-outline-stroke-independently-normalized-contours
 packages/flutter/test/painting/rounded_rectangle_border_test.dart	84	RoundedRectangleBorder and CircleBorder	paired-match	upstream-edge-insets.md#rounded-rectangle-to-circle-morph
+packages/flutter/test/painting/circle_border_test.dart	33	CircleBorder copyWith, ==, hashCode	paired-match	upstream-edge-insets.md#circle-oval-and-stadium-value-and-centerline-controls
+packages/flutter/test/painting/circle_border_test.dart	44	CircleBorder	paired-match	upstream-edge-insets.md#circle-oval-and-stadium-value-and-centerline-controls
+packages/flutter/test/painting/oval_border_test.dart	14	OvalBorder copyWith, ==, hashCode	paired-match	upstream-edge-insets.md#circle-oval-and-stadium-value-and-centerline-controls
+packages/flutter/test/painting/stadium_border_test.dart	16	StadiumBorder copyWith, ==, hashCode	paired-match	upstream-edge-insets.md#circle-oval-and-stadium-value-and-centerline-controls
+packages/flutter/test/painting/stadium_border_test.dart	23	StadiumBorder	paired-match	upstream-edge-insets.md#circle-oval-and-stadium-value-and-centerline-controls
+packages/flutter/test/painting/stadium_border_test.dart	51	StadiumBorder with StrokeAlign	paired-match	upstream-edge-insets.md#circle-oval-and-stadium-value-and-centerline-controls
