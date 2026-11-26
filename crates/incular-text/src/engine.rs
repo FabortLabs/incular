@@ -2092,7 +2092,9 @@ fn clip_runs(runs: &[StyledTextRun], end: usize, new_len: usize) -> Vec<StyledTe
 fn color_runs(runs: &[StyledTextRun]) -> Arc<[TextColorRun]> {
     if runs
         .windows(2)
-        .all(|pair| pair[0].style.color == pair[1].style.color)
+        .all(|pair| {
+            pair[0].style.effective_foreground_color() == pair[1].style.effective_foreground_color()
+        })
     {
         return Arc::new([]);
     }
@@ -2100,7 +2102,7 @@ fn color_runs(runs: &[StyledTextRun]) -> Arc<[TextColorRun]> {
         .filter(|run| !run.range.is_empty())
         .map(|run| TextColorRun {
             range: run.range.clone(),
-            color: run.style.color,
+            color: run.style.effective_foreground_color(),
         })
         .collect::<Vec<_>>()
         .into()

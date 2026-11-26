@@ -235,7 +235,15 @@ impl TextStyle {
     #[must_use]
     pub fn foreground(mut self, color: Color) -> Self {
         self.foreground = Some(color);
+        self.has_explicit_color = false;
         self
+    }
+
+    /// The solid foreground supplied to the renderer, including paint
+    /// overrides. A foreground paint takes precedence over a plain color.
+    #[must_use]
+    pub fn effective_foreground_color(&self) -> Color {
+        self.foreground.unwrap_or(self.color)
     }
 
     #[must_use]
@@ -350,8 +358,10 @@ impl TextStyle {
     #[must_use]
     pub fn with_color(&self, color: Color) -> Self {
         let mut s = self.clone();
-        s.color = color;
-        s.has_explicit_color = true;
+        if s.foreground.is_none() {
+            s.color = color;
+            s.has_explicit_color = true;
+        }
         s
     }
 
@@ -398,7 +408,10 @@ impl TextStyle {
             merged.style = other.style;
             merged.has_explicit_style = true;
         }
-        if other.has_explicit_color || other.foreground.is_some() {
+        if let Some(foreground) = other.foreground {
+            merged.foreground = Some(foreground);
+            merged.has_explicit_color = false;
+        } else if merged.foreground.is_none() && other.has_explicit_color {
             merged.color = other.color;
             merged.has_explicit_color = true;
         }
@@ -424,9 +437,7 @@ impl TextStyle {
         if other.locale.is_some() {
             merged.locale = other.locale.clone();
         }
-        if other.foreground.is_some() {
-            merged.foreground = other.foreground;
-        }
+
         if other.background.is_some() {
             merged.background = other.background;
         }
@@ -468,8 +479,11 @@ impl TextStyle {
         letter_spacing_delta: Option<f32>,
     ) -> Self {
         let mut res = self.clone();
-        if let Some(c) = color {
+        if let Some(c) = color
+            && res.foreground.is_none()
+        {
             res.color = c;
+            res.has_explicit_color = true;
         }
         if let Some(bg) = background_color {
             res.background_color = Some(bg);
@@ -551,9 +565,16 @@ impl Lerp for TextStyle {
     fn lerp(&self, other: &Self, t: f32) -> Self {
         let t = t.clamp(0.0, 1.0);
         let mix = |left: f32, right: f32| left + (right - left) * t;
+        // Flutter switches Paint objects at the midpoint. When mixing paint
+        // and simple color, the simple endpoint is promoted to solid paint.
+        let foreground = (self.foreground.is_some() || other.foreground.is_some()).then(|| {
+            let endpoint = if t < 0.5 { self } else { other };
+            endpoint.effective_foreground_color()
+        });
         Self {
             inherit: if t < 0.5 { self.inherit } else { other.inherit },
-            has_explicit_color: self.has_explicit_color || other.has_explicit_color,
+            has_explicit_color: foreground.is_none()
+                && (self.has_explicit_color || other.has_explicit_color),
             has_explicit_size: self.has_explicit_size || other.has_explicit_size,
             has_explicit_weight: self.has_explicit_weight || other.has_explicit_weight,
             has_explicit_style: self.has_explicit_style || other.has_explicit_style,
@@ -580,7 +601,7 @@ impl Lerp for TextStyle {
             size: mix(self.size, other.size),
             weight: self.weight.lerp(&other.weight, t),
             style: if t < 0.5 { self.style } else { other.style },
-            color: self.color.lerp(&other.color, t),
+            color: foreground.unwrap_or_else(|| self.color.lerp(&other.color, t)),
             background_color: match (self.background_color, other.background_color) {
                 (Some(a), Some(b)) => Some(a.lerp(&b, t)),
                 (Some(a), None) => {
@@ -651,24 +672,7 @@ impl Lerp for TextStyle {
             } else {
                 other.locale.clone()
             },
-            foreground: match (self.foreground, other.foreground) {
-                (Some(a), Some(b)) => Some(a.lerp(&b, t)),
-                (Some(a), None) => {
-                    if t < 0.5 {
-                        Some(a)
-                    } else {
-                        None
-                    }
-                }
-                (None, Some(b)) => {
-                    if t >= 0.5 {
-                        Some(b)
-                    } else {
-                        None
-                    }
-                }
-                (None, None) => None,
-            },
+            foreground,
             background: match (self.background, other.background) {
                 (Some(a), Some(b)) => Some(a.lerp(&b, t)),
                 (Some(a), None) => {

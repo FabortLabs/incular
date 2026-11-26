@@ -331,6 +331,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- Text styles honor a solid foreground paint over plain color. Foreground paint
+  tweens switch at the midpoint instead of blending the paint.
+
 - One failing back gesture observer no longer stops the remaining observers.
 
 - Semantics containers combine compatible hints and a single value. Conflicting

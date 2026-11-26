@@ -1514,3 +1514,4 @@ packages/flutter/test/painting/text_scaler_test.dart	86	ClampedScaler asserts	pa
 packages/flutter/test/painting/text_style_test.dart	340	TextStyle using package font	partial-match	upstream-package-fonts.md
 packages/flutter/test/painting/text_style_test.dart	375	TextStyle package font merge	paired-match	upstream-package-fonts.md
 packages/flutter/test/painting/text_style_test.dart	400	TextStyle font family fallback	partial-match	upstream-package-fonts.md
+packages/flutter/test/painting/text_style_test.dart	506	TextStyle foreground and color combos	partial-match	upstream-text-paint.md

@@ -48,7 +48,7 @@ impl WidgetTree {
                         .shadow()
                         .is_some();
                     push_text_shadows(cache, &layout, &style.shadows, layered);
-                    push_styled_layout_runs(cache, &layout, style.color);
+                    push_styled_layout_runs(cache, &layout, style.effective_foreground_color());
                     if overflow == TextOverflow::Clip {
                         cache.push(PaintCommand::PopClip);
                     }
@@ -70,13 +70,13 @@ impl WidgetTree {
                         });
                     }
                     push_text_shadows(cache, &layout, &style.shadows, false);
-                    push_layout_runs(cache, &layout, style.color);
+                    push_layout_runs(cache, &layout, style.effective_foreground_color());
                 } else if let Some(layout) = self
                     .render_live(id, "retained render must remain live")
                     .text_layout_cloned()
                 {
                     push_text_shadows(cache, &layout, &style.shadows, false);
-                    push_layout_runs(cache, &layout, style.color);
+                    push_layout_runs(cache, &layout, style.effective_foreground_color());
                 }
             }
             RenderKind::SelectionArea
@@ -296,7 +296,7 @@ impl WidgetTree {
                     let color = if shows_placeholder {
                         placeholder_color
                     } else {
-                        style.color
+                        style.effective_foreground_color()
                     };
                     // Only lines inside the clipped viewport, padded for
                     // overhanging glyphs: a long document otherwise emits every
@@ -514,7 +514,7 @@ fn push_line_decorations(
         let font_size = style.size.max(0.);
         let thickness =
             (font_size / 14.).max(f32::EPSILON) * style.decoration_thickness.unwrap_or(1.);
-        let color = style.decoration_color.unwrap_or(style.color);
+        let color = style.decoration_color.unwrap_or(style.effective_foreground_color());
         let decoration_style = style.decoration_style.unwrap_or_default();
         let baseline = line.baseline();
         let mut positions = [0.0_f32; 3];

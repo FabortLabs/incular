@@ -967,7 +967,7 @@ impl WidgetTree {
             for run in line.runs.iter() {
                 output.push(PaintCommand::GlyphRun {
                     run: run.clone(),
-                    color: style.color,
+                    color: style.effective_foreground_color(),
                 });
             }
         }
