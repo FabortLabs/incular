@@ -19,3 +19,22 @@ Rust inset cases and two interpolation controls passed.
 ```sh
 cargo test --locked --offline -j1 -p incular-config --test flutter350_edge_insets_parity --test lerp_extrapolation -- --test-threads=1
 ```
+
+## Independent axes in rounded borders
+
+Six pinned rounded-rectangle registrations and all 18 focused native
+rounded-geometry, box-border, and table-border tests passed. The public
+`EllipticalRoundedRect` preserves the authored corner radii separately
+from their paint-time normalization. Inflation and deflation apply the
+two adjacent physical sides to each corner, clamp each axis at zero,
+and preserve all edges on zero adjustments and a reversible round trip.
+
+An authored raster probe showed a less obvious border case. A 3px
+inside border on a 5×4 rounded box paints the edge but retains a white
+center. Flutter orders the inverted inner bounds at raster conversion.
+A truly flat inner rectangle (6×6 or 6×7 outside) has no hole. At 7×7
+there is again a one-pixel hole. Incular's retained path now distinguishes
+inverted and exactly empty interiors rather than panicking on a
+negative size or filling the center incorrectly. Rust checks point
+coverage of the actual EvenOdd border paint path; it does not claim
+an Incular GPU readback.

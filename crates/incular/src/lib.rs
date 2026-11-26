@@ -243,7 +243,7 @@ pub mod prelude {
     pub use incular_widgets::extensions::ExternalDropTarget;
     pub use incular_widgets::ModalBarrier as ModalBarrierWidget;
     pub use incular_widgets::{LayoutChildError, LayoutRelayout, OverflowBarAlignment, OverflowBoxFit};
-    pub use incular_widgets::{BorderRadiusGeometry, FittedSizes, apply_box_fit};
+    pub use incular_widgets::{BorderRadiusGeometry, EllipticalRoundedRect, FittedSizes, apply_box_fit};
     pub use incular_widgets::{
         KeyEventResult, OptionalBorderRadiusTween, OptionalBorderTween, UnfocusDisposition,
     };

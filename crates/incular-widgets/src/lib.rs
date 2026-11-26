@@ -329,8 +329,8 @@ pub use painting_effects::{
     BoxDecoration, BoxLinearGradient, BoxRadialGradient, BoxShadow, BoxShape, BoxSweepGradient,
     CircleBorder, ClipRSuperellipse, CompoundBorder, ContinuousRectangleBorder, CustomPainter,
     CustomPainterSemantics, DecoratedShapeBox, DecorationImage, DecorationPosition, GridPaper,
-    ImageFiltered, ImageIcon, LinearBorder, LinearBorderEdge, OvalBorder, PhysicalModel,
-    PhysicalShape, Radius, RawImage, RoundedRectangleBorder, RoundedSuperellipseBorder,
+    EllipticalRoundedRect, ImageFiltered, ImageIcon, LinearBorder, LinearBorderEdge, OvalBorder,
+    PhysicalModel, PhysicalShape, Radius, RawImage, RoundedRectangleBorder, RoundedSuperellipseBorder,
     SemanticsBuilder, ShapeBorder, ShapeBorderClipper, ShapeDecoration, SnapshotWidget,
     StadiumBorder, StarBorder, StarBorderError, TableBorder, TileMode,
 };

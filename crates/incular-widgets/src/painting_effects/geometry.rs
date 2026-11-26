@@ -5,8 +5,9 @@ use std::{
     ops::{Add, Mul, Sub},
 };
 
-use incular_core::Lerp;
-use incular_rendering::CornerRadii;
+use incular_config::EdgeInsets;
+use incular_core::{Lerp, Offset, Rect, Size};
+use incular_rendering::{CornerRadii, Path};
 use typed_builder::TypedBuilder;
 
 /// A 2D radius for rounded corners.
@@ -198,6 +199,12 @@ impl BorderRadius {
         )
     }
 
+    /// Applies the unnormalized corner geometry to a rectangle.
+    #[must_use]
+    pub const fn to_rounded_rect(self, rect: Rect) -> EllipticalRoundedRect {
+        EllipticalRoundedRect { rect, radii: self }
+    }
+
     #[must_use]
     pub fn to_corner_radii(self) -> CornerRadii {
         CornerRadii {
@@ -212,6 +219,80 @@ impl BorderRadius {
 impl From<BorderRadius> for CornerRadii {
     fn from(value: BorderRadius) -> Self {
         value.to_corner_radii()
+    }
+}
+
+/// A rounded rectangle with independent horizontal and vertical corner
+/// radii. Unlike the renderer's circular fast path, it preserves the full
+/// authored geometry and normalizes only when creating a paint path.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct EllipticalRoundedRect {
+    pub rect: Rect,
+    pub radii: BorderRadius,
+}
+
+impl EllipticalRoundedRect {
+    #[must_use]
+    pub const fn new(rect: Rect, radii: BorderRadius) -> Self {
+        Self { rect, radii }
+    }
+
+    /// Moves each edge outward and extends the two axes of each adjacent
+    /// corner, flooring a radius at zero. An invalid render extent is rejected.
+    #[must_use]
+    pub fn inflate(self, insets: EdgeInsets) -> Option<Self> {
+        let rect = insets.inflate_rect(self.rect)?;
+        Some(self.with_adjusted_corners(rect, insets))
+    }
+
+    fn with_adjusted_corners(self, rect: Rect, insets: EdgeInsets) -> Self {
+        let adjust = |corner: Radius, dx: f32, dy: f32| {
+            Radius::elliptical((corner.x + dx).max(0.), (corner.y + dy).max(0.))
+        };
+        let corners = self.radii;
+        Self::new(
+            rect,
+            BorderRadius::only(
+                adjust(corners.top_left, insets.left, insets.top),
+                adjust(corners.top_right, insets.right, insets.top),
+                adjust(corners.bottom_right, insets.right, insets.bottom),
+                adjust(corners.bottom_left, insets.left, insets.bottom),
+            ),
+        )
+    }
+
+    /// Flutter's native RRect conversion orders inverted bounds at paint
+    /// time. Do not drop a reversed inner rectangle and fill its hole.
+    pub(super) fn inflated_paint_path(self, insets: EdgeInsets) -> Path {
+        let value = self.inflate(insets).or_else(|| {
+            let left = self.rect.origin.x - insets.left;
+            let top = self.rect.origin.y - insets.top;
+            let right = self.rect.origin.x + self.rect.size.width + insets.right;
+            let bottom = self.rect.origin.y + self.rect.size.height + insets.bottom;
+            if ![left, top, right, bottom].into_iter().all(f32::is_finite) {
+                return None;
+            }
+            let origin = Offset::new(left.min(right), top.min(bottom));
+            let size = Size::maybe_new((right - left).abs(), (bottom - top).abs())?;
+            Some(self.with_adjusted_corners(Rect::from_origin_size(origin, size), insets))
+        });
+        value.map_or_else(|| Path::builder().build(), Self::to_path)
+    }
+
+    /// Moves each edge inward and shrinks its adjacent radii independently.
+    #[must_use]
+    pub fn deflate(self, insets: EdgeInsets) -> Option<Self> {
+        self.inflate(-insets)
+    }
+
+    /// Creates a paint path using the same normalized quarter conics as
+    /// rounded decoration borders.
+    #[must_use]
+    pub fn to_path(self) -> Path {
+        if self.rect.size.width <= 0. || self.rect.size.height <= 0. {
+            return Path::builder().build();
+        }
+        super::box_painter::rrect_path(self.rect, self.radii)
     }
 }
 

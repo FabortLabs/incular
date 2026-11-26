@@ -1979,3 +1979,9 @@ packages/flutter/test/painting/edge_insets_test.dart	228	EdgeInsets copyWith	pai
 packages/flutter/test/painting/edge_insets_test.dart	358	EdgeInsets operators	paired-match	upstream-edge-insets.md
 packages/flutter/test/painting/edge_insets_test.dart	370	EdgeInsetsDirectional operators	paired-match	upstream-edge-insets.md
 packages/flutter/test/painting/edge_insets_test.dart	423	EdgeInsetsDirectional copyWith	paired-match	upstream-edge-insets.md
+packages/flutter/test/painting/edge_insets_test.dart	506	inflateRRect increases the size while preserving radius proportions	paired-match	upstream-edge-insets.md#independent-axes-in-rounded-borders
+packages/flutter/test/painting/edge_insets_test.dart	539	deflateRRect decreases the size while preserving radius proportions	paired-match	upstream-edge-insets.md#independent-axes-in-rounded-borders
+packages/flutter/test/painting/edge_insets_test.dart	572	inflateRRect with zero insets returns the same RRect	paired-match	upstream-edge-insets.md#independent-axes-in-rounded-borders
+packages/flutter/test/painting/edge_insets_test.dart	586	deflateRRect with zero insets returns the same RRect	paired-match	upstream-edge-insets.md#independent-axes-in-rounded-borders
+packages/flutter/test/painting/edge_insets_test.dart	600	deflateRRect clamps radius to zero when insets are larger than radius	paired-match	upstream-edge-insets.md#independent-axes-in-rounded-borders
+packages/flutter/test/painting/edge_insets_test.dart	625	inflateRRect and deflateRRect are inverse operations	paired-match	upstream-edge-insets.md#independent-axes-in-rounded-borders

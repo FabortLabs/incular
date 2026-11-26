@@ -863,7 +863,7 @@ fn deflate_sides(rect: Rect, insets: EdgeInsets) -> Rect {
 }
 
 /// `BorderRadius.toRRect(rect)` as a path with elliptical corners.
-fn rrect_path(rect: Rect, radius: BorderRadius) -> Path {
+pub(super) fn rrect_path(rect: Rect, radius: BorderRadius) -> Path {
     elliptical_rrect_path(rect, clockwise_radii(radius))
 }
 
@@ -879,28 +879,12 @@ fn clockwise_radii(radius: BorderRadius) -> [Radius; 4] {
 /// Flutter `EdgeInsets.inflateRRect`: the rectangle grows by `insets` and
 /// each corner radius by the two sides that meet there.
 pub(super) fn inflate_rrect(rect: Rect, radius: BorderRadius, insets: EdgeInsets) -> Path {
-    let grow = |corner: Radius, x: f32, y: f32| Radius {
-        x: (corner.x + x).max(0.0),
-        y: (corner.y + y).max(0.0),
-    };
-    elliptical_rrect_path(
-        inflate_sides(rect, insets),
-        [
-            grow(radius.top_left, insets.left, insets.top),
-            grow(radius.top_right, insets.right, insets.top),
-            grow(radius.bottom_right, insets.right, insets.bottom),
-            grow(radius.bottom_left, insets.left, insets.bottom),
-        ],
-    )
+    radius.to_rounded_rect(rect).inflated_paint_path(insets)
 }
 
 /// Flutter `EdgeInsets.deflateRRect`.
 pub(super) fn deflate_rrect(rect: Rect, radius: BorderRadius, insets: EdgeInsets) -> Path {
-    inflate_rrect(
-        rect,
-        radius,
-        EdgeInsets::only(-insets.left, -insets.top, -insets.right, -insets.bottom),
-    )
+    inflate_rrect(rect, radius, -insets)
 }
 
 /// Scale all corners together until adjacent radii fit on every side.
