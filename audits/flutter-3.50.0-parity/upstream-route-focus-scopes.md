@@ -64,3 +64,18 @@ opaque page can decline focus while its prior retained page still
 owns the focus. The native default for an unspecified popup stays
 focus-neutral; the new behavior is opt-in for dialogs. The
 focused route target passed all 106 tests.
+
+### Stacked dialogs, one of which declines focus
+
+Pinned Flutter was probed with an explicitly neutral dialog above an
+editor, then a focus-taking dialog above both. The second dialog owns
+primary focus; on pop the first dialog stays open and unfocused, and
+the editor regains primary focus. Incular's initial regression failed
+when the top dialog tried to take focus: the outgoing active route
+wasn't the actual editor owner. The outlet now captures actual focus
+ownership along with the target, releases that exact target only when
+a focus-taking route commits, and can restore it when the neutral route
+returns. The native regression sends actual text before, during, and
+after the focused dialog, with select-all-on-focus explicitly disabled
+so the assertions isolate delivery rather than selection behavior.
+The authored Flutter case adds no upstream registration credit.

@@ -190,8 +190,14 @@ impl FrameAttempt {
 struct PendingTransition {
     previous: Option<RouteId>,
     incoming: Option<RouteId>,
-    saved: Option<ElementId>,
+    saved: Option<RouteFocusCapture>,
     attempt: FrameAttempt,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct RouteFocusCapture {
+    owner: RouteId,
+    target: ElementId,
 }
 
 /// Identity of one [`RouteOutlet`], for actionable error data and host
@@ -422,6 +428,10 @@ pub struct RouteOutlet {
     /// The previous focus owner while the current route explicitly
     /// declines automatic focus. A revision gates speculative reuse.
     focus_neutral_activation: Option<(u64, RouteId)>,
+    /// A focus-taking route can interrupt a neutral route without that
+    /// neutral route ever owning primary focus. Keep the actual anchor
+    /// separate from each route's own saved descendant.
+    neutral_focus_returns: HashMap<RouteId, RouteFocusCapture>,
     /// Live revision last scheduled for. Follow-up scheduling is
     /// edge-triggered per outlet: a stale revision flags exactly once no
     /// matter how many frames observe it, so unconsumable staleness
@@ -526,6 +536,7 @@ impl RouteOutlet {
             consumed: None,
             focus_neutral_reorder: None,
             focus_neutral_activation: None,
+            neutral_focus_returns: HashMap::new(),
             signaled: Cell::new(0),
             animated: RefCell::default(),
             namespace,
@@ -978,8 +989,8 @@ impl RouteOutlet {
         let staged_focus_owner = self
             .pending
             .as_ref()
-            .filter(|pending| pending.saved.is_some())
-            .and_then(|pending| pending.previous);
+            .and_then(|pending| pending.saved)
+            .map(|saved| saved.owner);
         // Top-down visibility: everything paints until (and including) the
         // first opaque page.
         let mut visible = vec![false; routes.len()];
@@ -1461,8 +1472,9 @@ impl RouteOutlet {
     }
 
     /// Captures a pending transition when none is outstanding and the
-    /// active route moved since the last commit. The outgoing focus is
-    /// read once into the pending slot — never into the records. An
+    /// active route moved since the last commit. The actual primary
+    /// focus may belong to a lower route when the top opted out. The
+    /// owner and target are read once into the pending slot. An
     /// abandoned destination can still cover the outgoing widget and clear
     /// its focus, so reuse that initial read when recapturing the same
     /// outgoing route. Committed records change only on a valid transition.
@@ -1481,7 +1493,11 @@ impl RouteOutlet {
                 if let Some(prior) = prior.filter(|prior| prior.previous == Some(previous)) {
                     prior.saved
                 } else {
-                    self.focus.read_owned_focus(runtime, previous)
+                    let owner = self.focus.current_owner(runtime)?;
+                    self.navigator.lifetime_of(owner)?;
+                    self.focus
+                        .read_owned_focus(runtime, owner)
+                        .map(|target| RouteFocusCapture { owner, target })
                 }
             });
         self.pending = Some(PendingTransition {
@@ -1505,9 +1521,7 @@ impl RouteOutlet {
         let Some(pending) = self.pending.take() else {
             return false;
         };
-        if let Some(returning) = active
-            .filter(|active| Some(*active) == pending.previous && self.presented == Some(*active))
-        {
+        if active.is_some() && active == pending.previous && active == self.presented {
             // The entire push unwound before a transition committed.
             // A stale frame may still cover the returning route. Keep
             // the original snapshot until that route is actually mounted
@@ -1521,8 +1535,8 @@ impl RouteOutlet {
                     self.focus.restore_capture_if_vacant(
                         runtime,
                         &self.navigator,
-                        returning,
-                        saved,
+                        saved.owner,
+                        saved.target,
                     );
                 }
             } else {
@@ -1543,20 +1557,30 @@ impl RouteOutlet {
         }
         let enters_requested_scope = self.navigator.current().is_some_and(|route| route.requests_focus());
         let release_staged_focus = enters_requested_scope
-            && pending.previous.is_some_and(|previous| {
-                pending.saved.is_some()
-                    && runtime.focused_element() == pending.saved
-                    && self.focus.current_owner(runtime) == Some(previous)
+            && pending.saved.is_some_and(|saved| {
+                Some(saved.owner) != active
+                    && runtime.focused_element() == Some(saved.target)
+                    && self.focus.current_owner(runtime) == Some(saved.owner)
                     && !self.focus_neutral_reorder.is_some_and(|(revision, owner)| {
-                        revision == self.navigator.revision() && owner == Some(previous)
+                        revision == self.navigator.revision() && owner == Some(saved.owner)
                     })
             });
         if let Some(previous) = pending.previous {
-            self.focus.commit_saved(previous, pending.saved);
+            self.focus.commit_saved(
+                previous,
+                pending
+                    .saved
+                    .filter(|saved| saved.owner == previous)
+                    .map(|saved| saved.target),
+            );
+            self.neutral_focus_returns.remove(&previous);
+            if release_staged_focus && let Some(saved) = pending.saved {
+                self.neutral_focus_returns.insert(previous, saved);
+            }
         }
         self.presented = active;
         self.pending = None;
-        // The capture belongs to the previously committed route until
+        // The capture belongs to the previously committed stack until
         // this point. Release only that exact target; do not blur an
         // unrelated or reentrant focus request made during the build.
         if release_staged_focus {
@@ -1572,6 +1596,10 @@ impl RouteOutlet {
     /// everything: removal is a lifetime event, not a mount event.
     fn prune_removed(&mut self) {
         self.focus.retain_mounted(&self.navigator);
+        self.neutral_focus_returns.retain(|route, saved| {
+            self.navigator.lifetime_of(*route).is_some()
+                && self.navigator.lifetime_of(saved.owner).is_some()
+        });
         self.bindings
             .retain(|id, _| self.navigator.lifetime_of(*id).is_some());
         let animated = self.animated.borrow();
@@ -1616,6 +1644,17 @@ impl RouteOutlet {
             return;
         };
         if route.request_focus == Some(false) {
+            if transitioned
+                && self.presented == Some(route.id)
+                && let Some(saved) = self.neutral_focus_returns.remove(&route.id)
+            {
+                self.focus.restore_capture_if_vacant(
+                    runtime,
+                    &self.navigator,
+                    saved.owner,
+                    saved.target,
+                );
+            }
             return;
         }
         let id = route.id;
@@ -1791,7 +1830,10 @@ impl RouteOutlet {
             if route.request_focus != Some(false) {
                 return None;
             }
-            self.focus.current_owner(runtime)
+            self.focus
+                .current_owner(runtime)
+                .filter(|owner| self.navigator.lifetime_of(*owner).is_some())
+                .or_else(|| self.neutral_focus_returns.get(&route.id).map(|saved| saved.owner))
                 .filter(|&owner| owner != route.id)
                 .map(|owner| (self.navigator.revision(), owner))
         });

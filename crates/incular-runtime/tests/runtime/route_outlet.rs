@@ -6149,3 +6149,65 @@ fn an_opaque_page_can_decline_automatic_focus_without_restoring_text_focus_to_it
     assert_eq!(harness.runtime.focused_element(), Some(old));
     assert!(owner.has_primary_focus());
 }
+
+#[test]
+fn flutter_350_stacked_dialogs_restore_the_editor_below_a_neutral_route() {
+    use incular_widgets::{EditableText, FocusScope};
+
+    let navigator = Navigator::new();
+    let mut harness = harness(&navigator);
+    let controller = TextEditingController::with_text("");
+    let editor = FocusNode::new();
+    navigator.push_page(Page::new(
+        "editor",
+        EditableText::new(controller.clone())
+            .text_direction(TextDirection::Ltr)
+            .focus_node(editor.clone())
+            .select_all_on_focus(false),
+    ));
+    present(&mut harness);
+    editor.request_focus();
+    present(&mut harness);
+    assert!(editor.has_primary_focus());
+
+    let dialog = |name, request| {
+        Route::new(
+            name,
+            Widget::box_(Size::new(40., 40.), Color::WHITE).with_key(Key::from(name)),
+        )
+        .dialog()
+        .request_focus(request)
+    };
+    let scope = |runtime: &Runtime, name| {
+        let tree = runtime.tree();
+        let child = tree.element_with_key(&Key::from(name)).expect("dialog");
+        FocusScope::maybe_of(tree, child).expect("dialog scope")
+    };
+    let type_text = |runtime: &mut Runtime, text: &str| {
+        let _ = runtime.handle_input(InputEvent::Text(text.into()));
+    };
+
+    navigator.push(dialog("neutral", false));
+    present(&mut harness);
+    assert!(editor.has_primary_focus());
+    assert!(!scope(&harness.runtime, "neutral").has_focus());
+    type_text(&mut harness.runtime, "before");
+    assert_eq!(controller.text(), "before");
+
+    navigator.push(dialog("focused", true));
+    present(&mut harness);
+    assert!(
+        scope(&harness.runtime, "focused").has_primary_focus(),
+        "opt-in must take primary focus even though the immediately previous route did not have it"
+    );
+    assert!(!editor.has_focus());
+    type_text(&mut harness.runtime, "not sent to the editor");
+    assert_eq!(controller.text(), "before");
+
+    assert_eq!(navigator.pop().unwrap().name, "focused");
+    present(&mut harness);
+    assert!(!scope(&harness.runtime, "neutral").has_focus());
+    assert!(editor.has_primary_focus());
+    type_text(&mut harness.runtime, " after");
+    assert_eq!(controller.text(), "before after");
+}

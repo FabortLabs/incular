@@ -198,9 +198,10 @@ impl RouteFocusState {
         route: RouteId,
         captured: ElementId,
     ) {
-        if runtime
-            .focused_element()
-            .is_none_or(|current| Self::orphaned(runtime, navigator, &self.owner_of, current))
+        if navigator.lifetime_of(route).is_some()
+            && runtime
+                .focused_element()
+                .is_none_or(|current| Self::orphaned(runtime, navigator, &self.owner_of, current))
             && Self::eligible(runtime, &self.owner_of, route, captured)
         {
             runtime.set_focus(Some(captured));
