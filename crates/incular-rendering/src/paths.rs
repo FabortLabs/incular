@@ -393,6 +393,17 @@ impl PathBuilder {
         self
     }
 
+    /// Adds an RSuperellipse with independent x/y radii. Corners are
+    /// specified clockwise starting at the upper left.
+    pub fn rounded_superellipse_elliptical(
+        &mut self,
+        rect: Rect,
+        radii: [incular_core::Size; 4],
+    ) -> &mut Self {
+        crate::rsuperellipse::rounded_superellipse_elliptical(self, rect, radii);
+        self
+    }
+
     /// Adds every contour of `path`, as Flutter `Path.addPath` with no
     /// offset.
     pub fn append(&mut self, path: &Path) -> &mut Self {

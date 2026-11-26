@@ -2088,3 +2088,5 @@ packages/flutter/test/painting/oval_border_test.dart	14	OvalBorder copyWith, ==,
 packages/flutter/test/painting/stadium_border_test.dart	16	StadiumBorder copyWith, ==, hashCode	paired-match	upstream-edge-insets.md#circle-oval-and-stadium-value-and-centerline-controls
 packages/flutter/test/painting/stadium_border_test.dart	23	StadiumBorder	paired-match	upstream-edge-insets.md#circle-oval-and-stadium-value-and-centerline-controls
 packages/flutter/test/painting/stadium_border_test.dart	51	StadiumBorder with StrokeAlign	paired-match	upstream-edge-insets.md#circle-oval-and-stadium-value-and-centerline-controls
+packages/flutter/test/painting/rounded_superellipse_border_test.dart	20	RoundedSuperellipseBorder copyWith, ==, hashCode	paired-match	upstream-edge-insets.md#independent-superellipse-axes-and-clamping
+packages/flutter/test/painting/rounded_superellipse_border_test.dart	41	RoundedSuperellipseBorder	paired-match	upstream-edge-insets.md#independent-superellipse-axes-and-clamping

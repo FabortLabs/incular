@@ -805,3 +805,139 @@ fn oversized_circle_oval_and_stadium_distinguish_query_bounds_from_paint() {
         }
     }
 }
+
+#[test]
+fn superellipse_clamps_elliptical_axes_without_losing_their_orientation() {
+    use incular_widgets::Radius;
+    let area = rect(0., 0., 120., 300.);
+    let samples = [
+        (1., 1.),
+        (4., 5.),
+        (4., 20.),
+        (4., 35.),
+        (5., 2.),
+        (10., 2.),
+        (22., 5.),
+        (35., 4.),
+        (60., 150.),
+        (116., 2.),
+        (4., 298.),
+        (118., 298.),
+        (50., 20.),
+        (60., 5.),
+    ];
+    let corners = [
+        BorderRadius::all(Radius::elliptical(20., 50.)),
+        BorderRadius::circular(20.),
+        BorderRadius::circular(600.),
+        BorderRadius::only(
+            Radius::elliptical(1000., 1000.),
+            Radius::elliptical(0., 1000.),
+            Radius::elliptical(800., 1000.),
+            Radius::elliptical(100., 500.),
+        ),
+    ];
+    let included = [
+        &[3, 6, 7, 8, 12, 13][..],
+        &[2, 3, 6, 7, 8, 12, 13][..],
+        &[8, 12, 13][..],
+        &[8, 9][..],
+    ];
+    for (corner, wanted) in corners.into_iter().zip(included) {
+        let path = RoundedSuperellipseBorder::new(BorderSide::NONE, corner).outer_path(area);
+        assert_bounds(&path, area);
+        let covered: Vec<_> = samples
+            .iter()
+            .copied()
+            .enumerate()
+            .filter_map(|(index, (x, y))| {
+                path.contains(Offset::new(x, y), FillRule::NonZero)
+                    .then_some(index)
+            })
+            .collect();
+        assert_eq!(covered, wanted, "{corner:?}");
+    }
+}
+
+#[test]
+fn superellipse_copy_scale_and_mixed_radius_endpoints_match() {
+    use incular_config::EdgeInsets;
+    use incular_core::Lerp;
+    use incular_widgets::{BorderRadiusDirectional, Radius, TextDirection};
+    use std::hash::{DefaultHasher, Hash, Hasher};
+    fn hash(value: impl Hash) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        value.hash(&mut hasher);
+        hasher.finish()
+    }
+    let default = RoundedSuperellipseBorder::default();
+    assert_eq!(default, default.copy_with(None, None));
+    assert_eq!(hash(default), hash(default.copy_with(None, None)));
+    let side = BorderSide::solid(Color::rgba(0x12, 0x34, 0x56, 255), 10.);
+    let radius = BorderRadius::circular(16.);
+    assert_eq!(
+        default.copy_with(Some(side), Some(radius)),
+        RoundedSuperellipseBorder::new(side, radius)
+    );
+    let direction = BorderRadiusDirectional::circular(16.);
+    assert_eq!(
+        RoundedSuperellipseBorder::new(BorderSide::NONE, BorderRadiusDirectional::ZERO)
+            .copy_with(Some(side), Some(direction)),
+        RoundedSuperellipseBorder::new(side, direction)
+    );
+
+    let make = |width, radius| {
+        RoundedSuperellipseBorder::new(
+            BorderSide::solid(Color::BLACK, width),
+            BorderRadius::circular(radius),
+        )
+    };
+    let [a, b, c] = [make(10., 100.), make(15., 150.), make(20., 200.)];
+    assert_eq!(a.dimensions(None), EdgeInsets::all(10.));
+    assert_eq!(a.scale(2.), c);
+    assert_eq!(c.scale(0.5), a);
+    for (factor, expected) in [(0., a), (0.5, b), (1., c)] {
+        assert_eq!(a.lerp(&c, factor), expected);
+    }
+    for path in [
+        make(1., 2.).inner_path(rect(-2., -2., 4., 4.)),
+        make(1., 1.).outer_path(rect(-1., -1., 2., 2.)),
+    ] {
+        assert_bounds(&path, rect(-1., -1., 2., 2.));
+        assert!(path.contains(Offset::new(0.9, 0.), FillRule::NonZero));
+        assert!(!path.contains(Offset::new(0.9, 0.9), FillRule::NonZero));
+    }
+
+    let area = rect(10., 20., 70., 170.);
+    let mut canvas = Canvas::default();
+    a.paint(&mut canvas, area);
+    let drawing = canvas.finish();
+    let [PaintCommand::StrokePath { path, stroke, .. }] = drawing.commands() else {
+        panic!("one outline")
+    };
+    assert_eq!(stroke.width, 10.);
+    assert_bounds(path, rect(15., 25., 60., 160.));
+
+    let directional = RoundedSuperellipseBorder::new(
+        BorderSide::NONE,
+        BorderRadiusDirectional::only(
+            Radius::circular(20.),
+            Radius::ZERO,
+            Radius::ZERO,
+            Radius::ZERO,
+        ),
+    );
+    assert!(
+        !directional
+            .outer_path_with_direction(area, Some(TextDirection::Ltr))
+            .contains(Offset::new(11., 21.), FillRule::NonZero)
+    );
+    assert!(
+        directional
+            .outer_path_with_direction(area, Some(TextDirection::Rtl))
+            .contains(Offset::new(11., 21.), FillRule::NonZero)
+    );
+    let a = a.into_radius_geometry();
+    let directional = directional.into_radius_geometry();
+    assert_eq!(directional.lerp(&a, 1.), a.lerp(&directional, 0.));
+}

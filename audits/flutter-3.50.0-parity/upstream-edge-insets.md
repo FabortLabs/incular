@@ -135,3 +135,19 @@ The pinned Flutter checks assert actual raster samples. The 23 focused
 Rust cases check retained bounds, center containment, and the
 presence or absence of a genuine stroke. No GPU readback or additional
 upstream registration credit is claimed for these authored probes.
+
+## Independent superellipse axes and clamping
+
+Two original `rounded_superellipse_border_test.dart` value and stroke
+cases pair, including physical and directional radius copies, scaling,
+mixed-direction endpoints, unit-circle probes, and the 10 px stroke
+on the expected inset contour.
+
+The native path now keeps both corner axes. It removes the unused axis
+of a flat corner before looking for the shared clamp factor, then fits
+each nonflat corner from an affine circular basis. The authored Flutter
+control compares four sets of radii on a 120×300 shape, including
+20×50 elliptical, 20 circular, 600 circular, and non-uniform oversize
+corners with a flat top-right. All 56 containment decisions and the
+bounds match. The golden image registrations remain separate. Two
+pinned originals, one authored control, and 32 focused Rust cases passed.

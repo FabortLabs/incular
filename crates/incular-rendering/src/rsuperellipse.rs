@@ -3,7 +3,7 @@
 //! cubic in each octant. The native fit avoids the older web cubic's
 //! protrusion over the straight edge at some radius-to-size ratios.
 
-use incular_core::{Offset, Rect};
+use incular_core::{Offset, Rect, Size};
 
 use crate::geometry::CornerRadii;
 use crate::paths::PathBuilder;
@@ -350,7 +350,7 @@ fn compute_n_and_xj(ratio: f64) -> (f64, f64) {
     (n, 1.0 - 1.0 / factor_xj)
 }
 
-/// `_RSuperellipseQuadrant` for a circular corner radius.
+/// `_RSuperellipseQuadrant`, normalized to an affine circular basis.
 struct Quadrant {
     offset: Point,
     signed_scale: Point,
@@ -359,10 +359,22 @@ struct Quadrant {
 }
 
 impl Quadrant {
-    fn new(center: Point, corner: Point, radius: f64, sign: Point) -> Self {
+    fn new(center: Point, corner: Point, radius: Point, sign: Point) -> Self {
         let corner_vector = corner.sub(center);
-        let norm_radius = radius.abs();
-        let norm_half = Point::new(corner_vector.x.abs(), corner_vector.y.abs());
+        let radius = Point::new(
+            radius.x.min(corner_vector.x.abs()),
+            radius.y.min(corner_vector.y.abs()),
+        );
+        let norm_radius = radius.x.min(radius.y);
+        let scale = if norm_radius > 0. {
+            Point::new(radius.x / norm_radius, radius.y / norm_radius)
+        } else {
+            Point::new(1., 1.)
+        };
+        let norm_half = Point::new(
+            corner_vector.x.abs() / scale.x,
+            corner_vector.y.abs() / scale.y,
+        );
         let finite_or =
             |value: f64, fallback: f64| if value.is_finite() { value } else { fallback };
         let signed_scale = Point::new(
@@ -414,22 +426,56 @@ fn split(left: f64, right: f64, ratio_left: f64, ratio_right: f64) -> f64 {
     (left * ratio_right + right * ratio_left) / (ratio_left + ratio_right)
 }
 
-/// `_RSuperellipsePathBuilder.exact` for circular corner radii, which are
-/// first scaled down to fit the rectangle.
+/// Builds a circular-corner path through the same axis-aware implementation.
 pub(crate) fn rounded_superellipse(builder: &mut PathBuilder, rect: Rect, radii: CornerRadii) {
-    let radii = radii.normalized(rect.size);
+    rounded_superellipse_elliptical(
+        builder,
+        rect,
+        [radii.top_left, radii.top_right, radii.bottom_right, radii.bottom_left]
+            .map(|radius| Size { width: radius, height: radius }),
+    );
+}
+
+/// Flutter normalizes all corner radii together, dropping a flat corner
+/// before its unused axis can force neighboring corners to shrink.
+pub(crate) fn rounded_superellipse_elliptical(
+    builder: &mut PathBuilder,
+    rect: Rect,
+    radii: [Size; 4],
+) {
+    let [tl, tr, br, bl] = if rect.size.width <= 0.
+        || rect.size.height <= 0.
+        || radii.iter().any(|r| !r.width.is_finite() || !r.height.is_finite())
+    {
+        [Point::ZERO; 4]
+    } else {
+        radii.map(|r| {
+            if r.width <= 0. || r.height <= 0. {
+                Point::ZERO
+            } else {
+                Point::new(f64::from(r.width), f64::from(r.height))
+            }
+        })
+    };
+    let width = f64::from(rect.size.width);
+    let height = f64::from(rect.size.height);
+    let scale = [
+        (width, tl.x + tr.x),
+        (width, bl.x + br.x),
+        (height, tl.y + bl.y),
+        (height, tr.y + br.y),
+    ].into_iter().fold(1.0_f64, |scale, (dimension, sum)| {
+        if sum > dimension { scale.min(dimension / sum) } else { scale }
+    });
+    let [tl, tr, br, bl] = [tl, tr, br, bl].map(|radius| radius.scale(scale));
     let left = f64::from(rect.origin.x);
     let top = f64::from(rect.origin.y);
     let right = left + f64::from(rect.size.width);
     let bottom = top + f64::from(rect.size.height);
-    let tl = f64::from(radii.top_left);
-    let tr = f64::from(radii.top_right);
-    let br = f64::from(radii.bottom_right);
-    let bl = f64::from(radii.bottom_left);
-    let top_split = split(left, right, tl, tr);
-    let right_split = split(top, bottom, tr, br);
-    let bottom_split = split(left, right, bl, br);
-    let left_split = split(top, bottom, tl, bl);
+    let top_split = split(left, right, tl.x, tr.x);
+    let right_split = split(top, bottom, tr.y, br.y);
+    let bottom_split = split(left, right, bl.x, br.x);
+    let left_split = split(top, bottom, tl.y, bl.y);
     let start = Point::new(top_split, top);
     builder.move_to(start.offset());
     Quadrant::new(

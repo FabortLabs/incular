@@ -585,74 +585,108 @@ impl<R: Copy + incular_core::Lerp> incular_core::Lerp for RoundedRectangleBorder
 
 /// Flutter's `RoundedSuperellipseBorder`: a rectangle whose corners are
 /// rounded superellipses, the continuous corners of iOS.
-#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
-pub struct RoundedSuperellipseBorder {
-    #[default(BorderSide::NONE)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash)]
+pub struct RoundedSuperellipseBorder<R = BorderRadius> {
     pub side: BorderSide,
-    /// Circular corner radii; Incular's corner geometry has no elliptical
-    /// radii, so each corner uses its horizontal radius.
-    pub border_radius: BorderRadius,
+    pub border_radius: R,
 }
 
-impl RoundedSuperellipseBorder {
+impl Default for RoundedSuperellipseBorder<BorderRadius> {
+    fn default() -> Self {
+        Self::new(BorderSide::NONE, BorderRadius::ZERO)
+    }
+}
+
+impl<R> RoundedSuperellipseBorder<R> {
     #[must_use]
-    pub const fn new(side: BorderSide, border_radius: BorderRadius) -> Self {
-        Self {
-            side,
-            border_radius,
-        }
+    pub const fn new(side: BorderSide, border_radius: R) -> Self {
+        Self { side, border_radius }
     }
 
+    #[must_use]
+    pub fn copy_with(self, side: Option<BorderSide>, border_radius: Option<R>) -> Self {
+        Self::new(side.unwrap_or(self.side), border_radius.unwrap_or(self.border_radius))
+    }
+}
+
+impl<R: Copy + std::ops::Mul<f32, Output = R>> RoundedSuperellipseBorder<R> {
     #[must_use]
     pub fn scale(&self, t: f32) -> Self {
-        let radius =
-            |r: super::geometry::Radius| super::geometry::Radius::elliptical(r.x * t, r.y * t);
-        Self::new(
-            self.side.scale(t),
-            BorderRadius::only(
-                radius(self.border_radius.top_left),
-                radius(self.border_radius.top_right),
-                radius(self.border_radius.bottom_right),
-                radius(self.border_radius.bottom_left),
-            ),
-        )
+        Self::new(self.side.scale(t), self.border_radius * t)
+    }
+}
+
+impl<R: Copy + Into<BorderRadiusGeometry>> RoundedSuperellipseBorder<R> {
+    #[must_use]
+    pub fn into_radius_geometry(self) -> RoundedSuperellipseBorder<BorderRadiusGeometry> {
+        RoundedSuperellipseBorder::new(self.side, self.border_radius.into())
     }
 
-    fn path(&self, rect: Rect, delta: f32) -> Path {
-        if self.border_radius == BorderRadius::ZERO {
-            return rect_path(inflate(rect, delta));
+    fn path(&self, rect: Rect, delta: f32, direction: Option<TextDirection>) -> Path {
+        let Some(contour) = ordered_inflate(rect, delta) else {
+            return Path::builder().build();
+        };
+        let radius = self.border_radius.into().resolve(direction.unwrap_or(TextDirection::Ltr));
+        if radius == BorderRadius::ZERO {
+            return rect_path(contour);
         }
-        let radii = inflate_radii(self.border_radius.to_corner_radii(), delta);
+        let radii = [radius.top_left, radius.top_right, radius.bottom_right, radius.bottom_left]
+            .map(|corner| Size {
+                width: (corner.x + delta).max(0.),
+                height: (corner.y + delta).max(0.),
+            });
         let mut builder = Path::builder();
-        builder.rounded_superellipse(inflate(rect, delta), radii);
+        builder.rounded_superellipse_elliptical(contour, radii);
         builder.build()
     }
 }
 
-impl ShapeBorder for RoundedSuperellipseBorder {
+impl<R: Copy + Into<BorderRadiusGeometry>> ShapeBorder for RoundedSuperellipseBorder<R> {
     fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
         EdgeInsets::all(self.side.stroke_inset().max(0.))
     }
 
     fn outer_path(&self, rect: Rect) -> Path {
-        self.path(rect, 0.0)
+        self.outer_path_with_direction(rect, None)
+    }
+
+    fn outer_path_with_direction(&self, rect: Rect, direction: Option<TextDirection>) -> Path {
+        self.path(rect, 0., direction)
     }
 
     fn inner_path(&self, rect: Rect) -> Path {
-        self.path(rect, -self.side.stroke_inset())
+        self.inner_path_with_direction(rect, None)
+    }
+
+    fn inner_path_with_direction(&self, rect: Rect, direction: Option<TextDirection>) -> Path {
+        self.path(rect, -self.side.stroke_inset(), direction)
+    }
+
+    fn prefer_paint_interior(&self) -> bool {
+        true
+    }
+
+    fn paint_interior(&self, canvas: &mut Canvas, rect: Rect, paint: &Paint, direction: Option<TextDirection>) {
+        canvas.draw_path(Arc::new(self.outer_path_with_direction(rect, direction)), paint, FillRule::NonZero);
     }
 
     fn paint(&self, canvas: &mut Canvas, rect: Rect) {
+        self.paint_with_direction(canvas, rect, None);
+    }
+
+    fn paint_with_direction(&self, canvas: &mut Canvas, rect: Rect, direction: Option<TextDirection>) {
         if self.side.style == BorderStyle::None {
             return;
         }
         let offset = (self.side.stroke_outset() - self.side.stroke_inset()) / 2.0;
-        stroke(canvas, &self.side, self.path(rect, offset));
+        stroke(canvas, &self.side, self.path(rect, offset, direction));
     }
 }
 
-impl incular_core::Lerp for RoundedSuperellipseBorder {
+impl<R: Copy + incular_core::Lerp> incular_core::Lerp for RoundedSuperellipseBorder<R> {
     fn lerp(&self, other: &Self, t: f32) -> Self {
+        if t == 0. { return *self; }
+        if t == 1. { return *other; }
         Self::new(
             self.side.lerp(&other.side, t),
             self.border_radius.lerp(&other.border_radius, t),
