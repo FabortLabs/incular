@@ -196,3 +196,67 @@ fn raw_tooltip_mounts_at_zero_viewport_size() {
     let element = runtime.tree().element_with_key(&"zero size anchor".into()).unwrap();
     assert_eq!(runtime.tree().element_bounds(element).unwrap().size, Size::ZERO);
 }
+
+#[test]
+fn long_pressed_tooltip_paragraph_inherits_each_layout_direction() {
+    use incular_widgets::{Directionality, Text, TextDirection, internal::RenderKind};
+
+    let scene = |direction| {
+        let tooltip = RawTooltip::with_builder(
+            Widget::box_(Size::new(100., 100.), Color::rgba(0, 255, 0, 255)),
+            TooltipComponentBuilder::new(|| {
+                Widget::from(Text::new("A tooltip")).with_key("tooltip paragraph")
+            }),
+        )
+        .semantics_tooltip("A tooltip");
+        WidgetsApp::new(Directionality::new(direction, Center::new(tooltip))).into()
+    };
+    let mut runtime = Runtime::new(scene(TextDirection::Rtl)).unwrap();
+    let start = Instant::now();
+    frame(&mut runtime, start);
+    let press = |runtime: &mut Runtime, at: Instant, id| {
+        let send = |runtime: &mut Runtime, phase, offset| {
+            runtime.handle_input_at(
+                InputEvent::PointerWithMetadata {
+                    pointer: id,
+                    device: id,
+                    kind: PointerDeviceKind::Touch,
+                    buttons: if phase == PointerPhase::Down {
+                        PRIMARY_POINTER_BUTTON
+                    } else {
+                        0
+                    },
+                    button: Some(PRIMARY_POINTER_BUTTON),
+                    sample: PointerSampleMetadata::EMPTY,
+                    phase,
+                    position: Offset::new(400., 300.),
+                },
+                at + Duration::from_millis(offset),
+            );
+        };
+        send(runtime, PointerPhase::Down, 0);
+        frame(runtime, at + Duration::from_millis(501));
+        send(runtime, PointerPhase::Up, 510);
+        frame(runtime, at + Duration::from_millis(520));
+    };
+    let inspect = |runtime: &Runtime, expected| {
+        let tree = runtime.tree();
+        let text = tree.element_with_key(&"tooltip paragraph".into()).unwrap();
+        let render = tree.render_id(text).unwrap();
+        let Some(RenderKind::Text { text_direction, .. }) = tree.render_object_kind(render)
+        else {
+            panic!("expected the actual mounted tooltip paragraph");
+        };
+        assert_eq!(*text_direction, expected);
+        assert!(tree.text_layout(render).is_some());
+    };
+    press(&mut runtime, start + Duration::from_millis(10), 31);
+    inspect(&runtime, TextDirection::Rtl);
+    frame(&mut runtime, start + Duration::from_secs(10));
+    assert!(runtime.tree().element_with_key(&"tooltip paragraph".into()).is_none());
+    let root = runtime.tree().root().unwrap();
+    runtime.schedule_update(root, scene(TextDirection::Ltr)).unwrap();
+    frame(&mut runtime, start + Duration::from_millis(10001));
+    press(&mut runtime, start + Duration::from_secs(11), 32);
+    inspect(&runtime, TextDirection::Ltr);
+}

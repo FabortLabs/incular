@@ -13,6 +13,7 @@ impl WidgetTree {
                 ref text,
                 ref style,
                 align,
+                text_direction,
                 soft_wrap,
                 max_lines,
                 overflow,
@@ -53,6 +54,7 @@ impl WidgetTree {
                     .external_text_call("TextEngine::layout_with_options", text);
                 let options = |width| {
                     TextLayoutOptions::new(width, align)
+                        .text_direction(text_direction)
                         .soft_wrap(soft_wrap)
                         .max_lines(max_lines)
                         .overflow(overflow)

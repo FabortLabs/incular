@@ -179,6 +179,7 @@ fn text_paint_only_change(old: &RenderKind, new: &RenderKind) -> bool {
             text: old_text,
             style: old_style,
             align: old_align,
+            text_direction: old_direction,
             soft_wrap: old_soft_wrap,
             max_lines: old_max_lines,
             overflow: old_overflow,
@@ -191,6 +192,7 @@ fn text_paint_only_change(old: &RenderKind, new: &RenderKind) -> bool {
             text: new_text,
             style: new_style,
             align: new_align,
+            text_direction: new_direction,
             soft_wrap: new_soft_wrap,
             max_lines: new_max_lines,
             overflow: new_overflow,
@@ -205,6 +207,7 @@ fn text_paint_only_change(old: &RenderKind, new: &RenderKind) -> bool {
     };
     old_text == new_text
         && old_align == new_align
+        && old_direction == new_direction
         && old_soft_wrap == new_soft_wrap
         && old_max_lines == new_max_lines
         && old_overflow == new_overflow

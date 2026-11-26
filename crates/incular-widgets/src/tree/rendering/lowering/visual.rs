@@ -112,6 +112,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                     align.or(defaults.align).unwrap_or(TextAlign::Start),
                     direction,
                 ),
+                text_direction: direction,
                 soft_wrap: soft_wrap.or(defaults.soft_wrap).unwrap_or(true),
                 max_lines: max_lines.unwrap_or(defaults.max_lines),
                 overflow: overflow.or(defaults.overflow).unwrap_or(TextOverflow::Clip),

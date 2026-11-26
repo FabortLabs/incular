@@ -841,6 +841,7 @@ pub enum RenderKind {
         text: String,
         style: Arc<TextStyle>,
         align: TextAlign,
+        text_direction: TextDirection,
         soft_wrap: bool,
         max_lines: Option<usize>,
         overflow: TextOverflow,
