@@ -5,7 +5,7 @@ use std::fmt;
 
 use serde_json::Value;
 
-use crate::{TextAffinity, TextEditingValue, TextRange, TextSelection};
+use crate::{FlutterTextSelection, TextAffinity, TextEditingValue, TextRange, TextSelection};
 
 /// The inferred change sent by Flutter's platform text-input model. Offsets
 /// in this wire model count UTF-16 code units, not UTF-8 bytes.
@@ -132,8 +132,13 @@ impl FlutterTextEditingDelta {
         let decoded = Self {
             old_text: old_text.to_owned(),
             edit,
-            selection: range("selectionBase", "selectionExtent")?
-                .map(|range| TextSelection::new(range.start, range.end)),
+            selection: FlutterTextSelection {
+                base_offset: int("selectionBase", true)?,
+                extent_offset: int("selectionExtent", true)?,
+                affinity: selection_affinity,
+                is_directional: selection_is_directional,
+            }
+            .utf16_offsets(),
             selection_affinity,
             selection_is_directional,
             composing: range("composingBase", "composingExtent")?,

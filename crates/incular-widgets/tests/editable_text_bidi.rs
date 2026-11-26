@@ -249,7 +249,8 @@ fn mixed_affinities_at_run_edges_select_visual_sides() {
     relayout(&mut tree, 300., 32.);
     let upstream = colored_rects(&tree.paint(), cursor)[0].origin.x;
     controller.set_selection_with_affinity(TextSelection::collapsed(11), TextAffinity::Downstream);
-    controller.reset_caret(Instant::now());
+    // No caret reset or byte-offset change: affinity alone must invalidate
+    // the retained cursor drawing and move it to the other run edge.
     relayout(&mut tree, 300., 32.);
     let downstream = colored_rects(&tree.paint(), cursor)[0].origin.x;
     assert!(

@@ -7,6 +7,7 @@ use incular_core::{RestorationKey, RestorationScope};
 use std::{
     cell::RefCell,
     fmt,
+    hash::{Hash, Hasher},
     ops::Range,
     rc::{Rc, Weak},
 };
@@ -18,6 +19,68 @@ pub enum TextAffinity {
     #[default]
     Downstream,
     Upstream,
+}
+
+/// Flutter's signed UTF-16 selection coordinates. The retained editor
+/// uses unsigned UTF-8 positions; this type preserves the invalid
+/// sentinel and equality at the Flutter boundary.
+#[derive(Clone, Copy, Debug)]
+pub struct FlutterTextSelection {
+    pub base_offset: i64,
+    pub extent_offset: i64,
+    pub affinity: TextAffinity,
+    pub is_directional: bool,
+}
+
+impl FlutterTextSelection {
+    #[must_use]
+    pub const fn new(base_offset: i64, extent_offset: i64) -> Self {
+        Self {
+            base_offset,
+            extent_offset,
+            affinity: TextAffinity::Downstream,
+            is_directional: false,
+        }
+    }
+
+    #[must_use]
+    pub const fn is_valid(self) -> bool {
+        self.base_offset >= 0 && self.extent_offset >= 0
+    }
+
+    fn identity(self) -> Option<(i64, i64, TextAffinity, bool)> {
+        self.is_valid().then_some((
+            self.base_offset,
+            self.extent_offset,
+            if self.base_offset == self.extent_offset {
+                self.affinity
+            } else {
+                TextAffinity::Downstream
+            },
+            self.is_directional,
+        ))
+    }
+
+    pub(crate) fn utf16_offsets(self) -> Option<TextSelection> {
+        Some(TextSelection::new(
+            self.base_offset.try_into().ok()?,
+            self.extent_offset.try_into().ok()?,
+        ))
+    }
+}
+
+impl PartialEq for FlutterTextSelection {
+    fn eq(&self, other: &Self) -> bool {
+        self.identity() == other.identity()
+    }
+}
+
+impl Eq for FlutterTextSelection {}
+
+impl Hash for FlutterTextSelection {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.identity().hash(state);
+    }
 }
 
 /// A half-open UTF-8 byte range. Text engines use byte offsets so ranges can
@@ -645,8 +708,17 @@ impl TextEditingController {
     /// Edit transforms and user-edit observers do not run; only [`Self::observe`]
     /// listeners are notified.
     pub fn set_value(&self, value: TextEditingValue) {
-        self.update(value, true);
-        self.inner.borrow_mut().caret_affinity = TextAffinity::Downstream;
+        self.commit_with_selection(
+            value,
+            true,
+            false,
+            false,
+            CommitSelection::Explicit {
+                is_set: true,
+                affinity: TextAffinity::Downstream,
+                is_directional: false,
+            },
+        );
     }
 
     /// Replaces the text programmatically (Flutter's `controller.text`). Like
@@ -676,19 +748,17 @@ impl TextEditingController {
     }
 
     pub fn set_selection(&self, selection: TextSelection) {
-        self.update_ranges(true, |value| value.selection = selection);
-        self.inner.borrow_mut().caret_affinity = TextAffinity::Downstream;
+        self.set_selection_with_affinity(selection, TextAffinity::Downstream);
     }
 
     /// Sets a selection while preserving which visual edge of a bidi run owns
     /// a collapsed caret. Native hit testing should use this overload.
     pub fn set_selection_with_affinity(&self, selection: TextSelection, affinity: TextAffinity) {
-        self.update_ranges(true, |value| value.selection = selection);
-        self.inner.borrow_mut().caret_affinity = affinity;
+        self.update_ranges(Some(affinity), |value| value.selection = selection);
     }
 
     pub fn set_composing(&self, composing: Option<ComposingRange>) {
-        self.update_ranges(false, |value| value.composing = composing);
+        self.update_ranges(None, |value| value.composing = composing);
     }
 
     /// Clears the input method's composing range without moving the caret
@@ -1114,10 +1184,8 @@ impl TextEditingController {
         } else {
             TextSelection::collapsed(target)
         };
-        self.update_ranges(true, |value| value.selection = selection);
-        let mut state = self.inner.borrow_mut();
-        state.preferred_caret_x = preferred_x;
-        state.caret_affinity = affinity;
+        self.update_ranges(Some(affinity), |value| value.selection = selection);
+        self.inner.borrow_mut().preferred_caret_x = preferred_x;
     }
 
     fn move_visual(&self, layout: &(impl TextGeometry + ?Sized), right: bool, extend: bool) {
@@ -1176,10 +1244,6 @@ impl TextEditingController {
     }
 
     /// A programmatic update: stored as given, with no edit transforms.
-    fn update(&self, value: TextEditingValue, content_changed: bool) {
-        self.update_committed(value, content_changed, false, false, false);
-    }
-
     /// A user edit: edit transforms (input formatters) run first, and
     /// user-edit observers hear about a resulting text change.
     fn update_user(&self, value: TextEditingValue) {
@@ -1216,11 +1280,17 @@ impl TextEditingController {
     /// Changes the selection or the composing range, which never needs a
     /// copy of the text. Input formatters do not run here: they format
     /// text edits, and a range change leaves the text as it is.
-    fn update_ranges(&self, sets_selection: bool, apply: impl Fn(&mut TextEditingValue)) {
+    fn update_ranges(
+        &self,
+        selection_affinity: Option<TextAffinity>,
+        apply: impl Fn(&mut TextEditingValue),
+    ) {
         incular_core::reactivity::assert_mutation_allowed();
         self.changes.track();
         let listeners = {
             let mut state = self.inner.borrow_mut();
+            let sets_selection = selection_affinity.is_some();
+            let old_affinity = state.caret_affinity;
             // Setting any selection makes an unset one valid, a change even
             // when the stored offsets are the same.
             let was_unset = sets_selection && std::mem::take(&mut state.selection_unset);
@@ -1234,8 +1304,13 @@ impl TextEditingController {
             }) {
                 value.composing = None;
             }
-            if (value.selection, value.composing) == before && !was_unset {
+            let moved_caret_edge = value.selection.is_collapsed()
+                && selection_affinity.is_some_and(|affinity| affinity != old_affinity);
+            if (value.selection, value.composing) == before && !was_unset && !moved_caret_edge {
                 return;
+            }
+            if let Some(affinity) = selection_affinity {
+                state.caret_affinity = affinity;
             }
             state.visual_revision = state
                 .visual_revision
@@ -1333,11 +1408,17 @@ impl TextEditingController {
                     is_directional,
                 } => (!is_set, affinity, is_directional),
             };
-            if state.value == value
+            let selection_equal = if state.selection_unset || selection_unset {
+                state.selection_unset && selection_unset
+            } else {
+                state.value.selection == value.selection
+                    && state.selection_is_directional == is_directional
+                    && (!value.selection.is_collapsed() || state.caret_affinity == affinity)
+            };
+            if state.value.text == value.text
+                && state.value.composing == value.composing
                 && !(end_preedit && state.preedit.is_some())
-                && state.selection_unset == selection_unset
-                && state.caret_affinity == affinity
-                && state.selection_is_directional == is_directional
+                && selection_equal
             {
                 return;
             }

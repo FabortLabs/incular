@@ -18,7 +18,7 @@ pub use boundary::{
     LineBoundary, TextBoundaryKind, accessibility_word_cursor, is_layout_whitespace, set_word_segmenter, word_boundary_at,
 };
 pub use editing::{
-    ComposingRange, EditableText, FocusedSelectionLease, InvalidTextDeltaRange,
+    ComposingRange, EditableText, FlutterTextSelection, FocusedSelectionLease, InvalidTextDeltaRange,
     SelectionChangedCause, TextAffinity, TextEditingController, TextEditingDelta,
     TextEditingSubscription, TextEditingValue, TextField, TextRange, TextSelection,
     byte_offset_at_utf16_boundary,

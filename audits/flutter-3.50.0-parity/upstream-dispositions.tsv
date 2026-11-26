@@ -2401,3 +2401,5 @@ packages/flutter/test/services/restoration_bucket_test.dart	275	claiming a claim
 packages/flutter/test/services/restoration_bucket_test.dart	291	unclaiming and then claiming same id gives fresh bucket	paired-match	upstream-restoration-scope-ownership.md#explicit-disposal-and-empty-storage
 packages/flutter/test/services/restoration_bucket_test.dart	305	cleans up raw data if last value/child is dropped	partial-match	upstream-restoration-scope-ownership.md#explicit-disposal-and-empty-storage
 packages/flutter/test/services/restoration_bucket_test.dart	325	dispose deletes data	partial-match	upstream-restoration-scope-ownership.md#explicit-disposal-and-empty-storage
+packages/flutter/test/services/text_input_test.dart	17	The invalid selection is a singleton	paired-match	upstream-text-selection-identity.md
+packages/flutter/test/services/text_input_test.dart	28	TextAffinity does not affect equivalence when the selection is not collapsed	paired-match	upstream-text-selection-identity.md
