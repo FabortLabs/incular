@@ -80,6 +80,13 @@ pub trait CustomPainter {
         None
     }
 
+    /// An optional repaint source, like Flutter's painter Listenable.
+    /// A notification repaints the mounted picture without rebuilding
+    /// its widget, layout, or accessibility regions.
+    fn repaint_source(&self) -> Option<incular_core::reactivity::DependencySource> {
+        None
+    }
+
     /// Whether this replacement changes its accessibility regions. By
     /// default this follows `should_repaint`, but either can be independent.
     fn should_rebuild_semantics(&self, old: &Self) -> bool
@@ -110,6 +117,7 @@ pub struct PainterDelegate {
     hit_test: fn(&dyn Any, Offset) -> Option<bool>,
     should_rebuild_semantics: fn(&dyn Any, &dyn Any) -> bool,
     semantics: Option<SemanticsBuilder>,
+    repaint_source: Option<incular_core::reactivity::DependencySource>,
 }
 
 fn paint_erased<P: CustomPainter + 'static>(
@@ -144,8 +152,10 @@ impl PainterDelegate {
     #[must_use]
     pub fn new<P: CustomPainter + 'static>(painter: P) -> Self {
         let semantics = painter.semantics_builder();
+        let repaint_source = painter.repaint_source();
         Self {
             semantics,
+            repaint_source,
             painter: Rc::new(painter),
             paint: paint_erased::<P>,
             should_repaint: should_repaint_erased::<P>,
@@ -158,6 +168,10 @@ impl PainterDelegate {
     #[must_use]
     pub(crate) fn paint(&self, size: incular_core::Size) -> DisplayList {
         (self.paint)(&*self.painter, size)
+    }
+
+    pub(crate) fn repaint_source(&self) -> Option<incular_core::reactivity::DependencySource> {
+        self.repaint_source.clone()
     }
 
     pub(crate) fn hit_test(&self, position: Offset) -> Option<bool> {

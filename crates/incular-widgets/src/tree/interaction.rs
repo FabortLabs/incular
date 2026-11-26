@@ -3332,6 +3332,7 @@ impl WidgetTree {
         let mut changed = self.flush_sliver_reclips();
         let mut focus_geometry_changed = false;
         let mut hover_geometry_changed = changed;
+        changed |= self.flush_custom_painter_repaints();
         let mut active = false;
         for (_render, element, kind, layers) in nodes.drain(..) {
             // Hidden subtrees stop ticking; explicit controller changes still

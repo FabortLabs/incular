@@ -62,3 +62,12 @@ and movement; unkeyed lists match the expected reading order.
 laid-out sizes; Incular does not perform Flutter's repeated accesses
 to its painter's semanticsBuilder getter. All 12 focused native
 semantics tests passed against the selected pinned Flutter originals.
+
+## Mounted painter repaint source
+
+The authored Flutter case and native test change the actual painted
+color from red to blue via a notification, without invoking the region
+builder. A source replacement detaches the old source, leaves the
+existing picture intact, and only the new source can repaint it green.
+Native layout and rebuild counts stay unchanged; unmount releases the
+last subscription. All 24 targeted native tests passed.

@@ -218,6 +218,7 @@ impl WidgetTree {
     pub fn paint(&mut self) -> DisplayList {
         let _phase_guard = self.guard_phase_root(FramePhase::Paint);
         self.flush_sliver_reclips();
+        self.flush_custom_painter_repaints();
         self.flush_proxy_repaints();
         if let Some(root) = self.root.and_then(|id| self.render_id(id)) {
             self.paint_render(root);

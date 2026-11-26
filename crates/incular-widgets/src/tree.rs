@@ -107,6 +107,7 @@ mod layout;
 mod painting;
 mod raw_input;
 mod reconciliation;
+mod custom_painter_repaints;
 mod sliver_clip_layers;
 mod rendering;
 mod retained;
@@ -1430,6 +1431,7 @@ pub struct WidgetTree {
     default_spell_check_provider: Option<crate::DefaultSpellCheckProvider>,
     compositor: LayerTree,
     compositor_initialized: bool,
+    custom_painter_repaints: Option<Box<custom_painter_repaints::CustomPainterRepaints>>,
     sliver_reclips: Option<Rc<RefCell<FastHashSet<ElementId>>>>,
     /// Maps the platform's monotonic frame clock onto the animation-only
     /// clock. Tokio, input, profiler timing and all other runtime clocks keep

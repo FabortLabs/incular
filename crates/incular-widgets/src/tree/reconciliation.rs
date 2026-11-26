@@ -695,6 +695,7 @@ impl WidgetTree {
             #[cfg(feature = "devtools")]
             dev: ElementDevData::default(),
         }));
+        self.sync_custom_painter_repaint(RenderObjectId(render));
         self.note_mounted_autofocus(id, &widget);
         self.register_autofill_element(id, &widget);
         let previous = self.render_elements.insert(RenderObjectId(render), id);
@@ -1141,6 +1142,7 @@ impl WidgetTree {
                 self.mark_render_dirty(render, DirtyFlags::LAYOUT | DirtyFlags::PAINT, true);
             }
         }
+        self.sync_custom_painter_repaint(render);
         // Semantic configuration lives on the widget and is inherited by
         // descendants (hidden, merged, ignored or excluded from focus), so a
         // replaced widget re-collects its subtree. A changed sibling-blocking
@@ -2850,6 +2852,7 @@ impl WidgetTree {
                     if let Some(action) = autofill {
                         self.autofill_context_completions.push(action);
                     }
+                    self.detach_custom_painter_repaint(render_id);
                     if let Some(render) = self.renders.remove(render_id.0) {
                         render.object.layers.remove(&mut self.compositor);
                     }

@@ -38,6 +38,7 @@ impl WidgetTree {
             text_engine: TextEngine::new(),
             compositor: LayerTree::new(),
             compositor_initialized: false,
+            custom_painter_repaints: None,
             sliver_reclips: None,
             animation_time_scale: 1.,
             animation_clock: None,
