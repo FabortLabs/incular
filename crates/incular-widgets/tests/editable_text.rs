@@ -575,15 +575,12 @@ fn semantic_text_selection_and_actions() {
             .map(|selection| (selection.base, selection.extent)),
         Some((1, 3))
     );
-    for action in [SemanticActionKind::Focus, SemanticActionKind::SetSelection] {
-        assert!(node.actions.contains(&action), "missing {action:?}");
+    assert!(node.actions.contains(&SemanticActionKind::Focus));
+    // Flutter keeps selection metadata for a valid range, but both
+    // mutation actions require input focus (rendering/editable.dart).
+    for action in [SemanticActionKind::SetSelection, SemanticActionKind::SetText] {
+        assert!(!node.actions.contains(&action), "unfocused field has {action:?}");
     }
-    // Flutter advertises setText only on the focused, editable field
-    // (rendering/editable.dart:1390-1391), so an unfocused field omits it.
-    assert!(
-        !node.actions.contains(&SemanticActionKind::SetText),
-        "unfocused field must not advertise SetText"
-    );
     assert!(node.state.editable);
 
     tree.set_focused(root, true, Instant::now())
@@ -591,10 +588,9 @@ fn semantic_text_selection_and_actions() {
     tree.update_semantics();
     let sid = semantic_id(&mut tree, root);
     let node = tree.semantics().node(sid).expect("node");
-    assert!(
-        node.actions.contains(&SemanticActionKind::SetText),
-        "focused editable field advertises SetText"
-    );
+    for action in [SemanticActionKind::SetSelection, SemanticActionKind::SetText] {
+        assert!(node.actions.contains(&action), "focused editable field lacks {action:?}");
+    }
 
     let snapshot = tree
         .text_field_input_snapshot(root)
@@ -617,6 +613,7 @@ fn semantic_text_selection_and_actions() {
     let sid = semantic_id(&mut tree, root);
     let node = tree.semantics().node(sid).expect("node");
     assert!(!node.actions.contains(&SemanticActionKind::SetText));
+    assert!(!node.actions.contains(&SemanticActionKind::SetSelection));
     assert!(!node.state.editable);
 
     tree.update(
@@ -634,11 +631,18 @@ fn semantic_text_selection_and_actions() {
         .expect("layout");
     assert!(!tree.text_field_is_editable(root));
     assert!(tree.text_field_is_read_only(root));
+    tree.set_focused(root, true, Instant::now())
+        .expect("focus the read-only field");
     let sid = semantic_id(&mut tree, root);
     let node = tree.semantics().node(sid).expect("node");
     assert!(!node.actions.contains(&SemanticActionKind::SetText));
+    assert!(node.actions.contains(&SemanticActionKind::SetSelection));
     assert!(node.state.read_only);
     assert!(!node.state.editable);
+    tree.set_focused(root, false, Instant::now()).expect("blur");
+    let sid = semantic_id(&mut tree, root);
+    let node = tree.semantics().node(sid).expect("node");
+    assert!(!node.actions.contains(&SemanticActionKind::SetSelection));
 }
 
 /// Flutter's `EditableText` has no inset: `maxLines: 3` over five lines is

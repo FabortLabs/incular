@@ -27,3 +27,15 @@ All 37 focused native cases passed after excluding one preexisting
 stale semantics expectation (SetSelection while unfocused, confirmed
 by rerunning the unmodified baseline). Both original Flutter
 registrations and the authored clip probe passed.
+
+## Editor focus and accessibility actions
+
+The stale native test was corrected separately. A valid range remains
+available to accessibility while unfocused, but Flutter only offers
+SetSelection while the editor is focused and selection is enabled.
+Read-only focused editors can still select; SetText additionally
+requires an editable field. A pinned render-level Flutter fixture and
+the matching native tree tests passed for focus, read-only and blur.
+The full `editable_text` target passed all 17 cases. This was a
+fixture correction, not a change to production semantics or audit
+registration coverage.
