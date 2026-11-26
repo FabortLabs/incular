@@ -895,6 +895,23 @@ impl WidgetTree {
             self.diagnostics.identical_child_bailouts += 1;
             return Ok(false);
         }
+        let old_excluded = current.widget.semantic_properties().sliver_scroll_excluded;
+        let new_excluded = widget.semantic_properties().sliver_scroll_excluded;
+        if old_excluded != new_excluded
+            && current
+                .widget
+                .can_skip_update(&widget.clone().with_sliver_scroll_exclusion(old_excluded))
+        {
+            // A pinned sliver can cross into or out of the viewport's
+            // scrolling accessibility pane while its widget stays the same.
+            // Update the inherited tag, not the render or child descriptors.
+            let render = current.render;
+            let element = self.element_live_mut(id, "sliver semantic tag update");
+            element.widget = widget.clone();
+            element.dirty.remove(DirtyFlags::BUILD);
+            self.mark_render_semantics(render, SemanticsDirty::Subtree);
+            return Ok(true);
+        }
         #[cfg(feature = "devtools")]
         let overridden = self.devtools_overridden_widget(id, widget);
         #[cfg(feature = "devtools")]

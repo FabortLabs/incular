@@ -325,6 +325,13 @@ persistent header forms. The 18 focused Rust cases passed.
 The upstream resizing case is partial because it additionally
 asserts Flutter's separately tagged render wrapper.
 
+Changing only the scrolling-pane tag now updates retained semantics
+without rebuilding the header or its children. A retained regression
+checks the same node ID before pinning, while outside the scrolling pane,
+and after returning to it. Both original no-rebuild regressions previously
+reported two rebuilds and now report none. All 54 focused native tests
+passed across resizing, sliver semantics, obstruction, and floating headers.
+
 ## Declared flags and actual input focus
 
 The pinned all-flags registration at line 934 passed. The authored

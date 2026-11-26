@@ -94,6 +94,6 @@ either ordinary scrolling or floating headers.
 Delegate-backed persistent headers now track the full extent before
 floating back into view. The separate Incular resizing-header behavior
 is unchanged. The cross-axis and obstruction targets passed. Two
-adjacent resizing-header tests still fail their no-rebuild assertions
-(2 rather than 0); both failures reproduce identically on the previous
-published revision and are a separate performance issue.
+pre-existing no-rebuild failures found in adjacent tests were corrected
+separately by updating only the retained accessibility tag, without
+rebuilding the header subtree.

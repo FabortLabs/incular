@@ -2119,3 +2119,61 @@ fn fixed_size_inner_viewport_activity_preserves_outer_measurement() {
     tree.layout(constraints).expect("recovered layout");
     assert_eq!(tree.render_size(header), Some(Size::new(200., 100.)));
 }
+
+#[test]
+fn pinning_moves_header_semantics_between_panes_without_rebuilding() {
+    use incular_widgets::{Directionality, TextDirection, Viewport};
+    let controller = ScrollController::new();
+    let header = SliverResizingHeader::new(
+        40.,
+        100.,
+        Semantics::new(Widget::box_(Size::new(200., 100.), Color::WHITE))
+            .container(true)
+            .label("Filter choices"),
+    );
+    let body = SliverToBoxAdapter::new(
+        Semantics::new(Widget::box_(Size::new(200., 800.), Color::BLACK))
+            .container(true)
+            .label("Results"),
+    );
+    let slivers = vec![Box::new(header) as Box<dyn Sliver>, Box::new(body)];
+    let mut tree = WidgetTree::new();
+    tree.mount(
+        Directionality::new(
+            TextDirection::Ltr,
+            CustomScrollView::new(slivers)
+                .controller(controller.clone())
+                .cache_extent(1000.),
+        )
+        .into(),
+    )
+    .unwrap();
+    let view = Constraints::tight(Size::new(200., 200.));
+    tree.layout(view).unwrap();
+    tree.update_semantics();
+    let rebuilds = tree.diagnostics().rebuilds;
+    let mut child_id = None;
+    for (offset, excluded) in [(0., false), (80., true), (20., false)] {
+        controller.jump_to(offset);
+        tree.layout(view).unwrap();
+        tree.update_semantics();
+        let (id, node) = tree
+            .semantics()
+            .iter()
+            .find(|(_, node)| node.label.as_deref() == Some("Filter choices"))
+            .unwrap();
+        if let Some(previous) = child_id {
+            assert_eq!(id, previous);
+        }
+        child_id = Some(id);
+        assert_eq!(node.is_tagged(Viewport::exclude_from_scrolling_tag()), excluded);
+        let pane = tree
+            .semantics()
+            .iter()
+            .map(|(_, node)| node)
+            .find(|node| node.children.contains(&id))
+            .unwrap();
+        assert_eq!(pane.state.has_implicit_scrolling, !excluded);
+        assert_eq!(tree.diagnostics().rebuilds, rebuilds);
+    }
+}
