@@ -1,22 +1,10 @@
 //! Requests for the haptic patterns supplied by a platform host.
 
-use std::future::Future;
-
 use serde_json::Value;
 
-use crate::message_codecs::{JsonMethodCodec, JsonMethodCodecError, MethodCall};
-
-/// Transport for the optional Flutter-compatible platform channel.
-/// A missing handler returns `Ok(None)`.
-pub trait FlutterPlatformMessenger {
-    type Error;
-
-    fn send_platform_message(
-        &mut self,
-        channel: &'static str,
-        payload: Vec<u8>,
-    ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>>;
-}
+use crate::flutter_platform_channel::{
+    FlutterPlatformChannelError, FlutterPlatformMessenger, invoke_optional_json,
+};
 
 /// The haptic patterns selected by Flutter's platform protocol.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -48,13 +36,7 @@ impl HapticFeedbackType {
 }
 
 /// A malformed reply, remote platform error, or failed transport.
-#[derive(Debug, thiserror::Error)]
-pub enum HapticFeedbackError<E> {
-    #[error(transparent)]
-    Codec(#[from] JsonMethodCodecError),
-    #[error("while requesting platform haptic feedback: {0}")]
-    Transport(E),
-}
+pub type HapticFeedbackError<E> = FlutterPlatformChannelError<E>;
 
 /// Haptic feedback through a platform messenger supplied by the embedder.
 /// Unsupported hosts may ignore the request; there is no synthetic fallback.
@@ -110,18 +92,12 @@ impl<M: FlutterPlatformMessenger> HapticFeedback<M> {
         &mut self,
         effect: Option<HapticFeedbackType>,
     ) -> Result<(), HapticFeedbackError<M::Error>> {
-        let payload = JsonMethodCodec::encode_method_call(&MethodCall {
-            method: "HapticFeedback.vibrate".to_owned(),
-            arguments: effect.map_or(Value::Null, HapticFeedbackType::argument),
-        })?;
-        if let Some(reply) = self
-            .messenger
-            .send_platform_message(Self::CHANNEL, payload)
-            .await
-            .map_err(HapticFeedbackError::Transport)?
-        {
-            JsonMethodCodec::decode_envelope(&reply)?;
-        }
-        Ok(())
+        invoke_optional_json(
+            &mut self.messenger,
+            Self::CHANNEL,
+            "HapticFeedback.vibrate",
+            effect.map_or(Value::Null, HapticFeedbackType::argument),
+        )
+        .await
     }
 }

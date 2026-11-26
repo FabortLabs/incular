@@ -1,5 +1,6 @@
 use incular_platform::{
-    FlutterPlatformMessenger, HapticFeedback, HapticFeedbackError,
+    FlutterPlatformMessenger, HapticFeedback, HapticFeedbackError, RouteInformationUpdate,
+    SystemNavigator, SystemSound, SystemSoundType,
     message_codecs::{JsonMethodCodec, JsonMethodCodecError, MethodCall},
 };
 use serde_json::{Value, json};
@@ -50,19 +51,23 @@ fn service(reply: Result<Option<Vec<u8>>, &'static str>) -> (HapticFeedback<Mess
     )
 }
 
-fn check(log: &Log, arguments: Value) {
+fn check_command(log: &Log, expected_channel: &str, method: &str, arguments: Value) {
     let recorded = log.take();
     let [(channel, payload)] = recorded.as_slice() else {
         panic!("expected exactly one platform request, got {recorded:?}");
     };
-    assert_eq!(*channel, "flutter/platform");
+    assert_eq!(*channel, expected_channel);
     assert_eq!(
         JsonMethodCodec::decode_method_call(payload).unwrap(),
         MethodCall {
-            method: "HapticFeedback.vibrate".to_owned(),
+            method: method.to_owned(),
             arguments
         }
     );
+}
+
+fn check(log: &Log, arguments: Value) {
+    check_command(log, "flutter/platform", "HapticFeedback.vibrate", arguments);
 }
 
 #[test]
@@ -108,4 +113,84 @@ fn an_unhandled_optional_channel_is_a_noop_but_real_errors_propagate() {
         Err(HapticFeedbackError::Codec(JsonMethodCodecError::Platform(detail)))
             if detail.code == "denied"
     ));
+}
+
+#[test]
+fn system_navigator_pop_uses_the_platform_channel_with_an_optional_animation_flag() {
+    let log = Log::default();
+    let mut navigator = SystemNavigator::new(Messenger {
+        calls: log.clone(),
+        reply: Ok(Some(b"[null]".to_vec())),
+    });
+    finish(navigator.pop(None)).unwrap();
+    check_command(&log, "flutter/platform", "SystemNavigator.pop", Value::Null);
+
+    finish(navigator.pop(Some(false))).unwrap();
+    check_command(
+        &log,
+        "flutter/platform",
+        "SystemNavigator.pop",
+        json!(false),
+    );
+}
+
+#[test]
+fn history_mode_and_route_state_use_the_navigation_channel() {
+    let log = Log::default();
+    let mut navigator = SystemNavigator::new(Messenger {
+        calls: log.clone(),
+        reply: Ok(Some(b"[null]".to_vec())),
+    });
+    finish(navigator.select_single_entry_history()).unwrap();
+    check_command(
+        &log,
+        "flutter/navigation",
+        "selectSingleEntryHistory",
+        Value::Null,
+    );
+    finish(navigator.select_multi_entry_history()).unwrap();
+    check_command(
+        &log,
+        "flutter/navigation",
+        "selectMultiEntryHistory",
+        Value::Null,
+    );
+
+    for update in [
+        RouteInformationUpdate::default(),
+        RouteInformationUpdate {
+            state: json!(true),
+            replace: false,
+        },
+        RouteInformationUpdate {
+            state: json!(true),
+            replace: true,
+        },
+    ] {
+        let expected = json!({ "uri": "a", "state": update.state, "replace": update.replace });
+        finish(navigator.route_information_updated("a", update)).unwrap();
+        check_command(
+            &log,
+            "flutter/navigation",
+            "routeInformationUpdated",
+            expected,
+        );
+    }
+}
+
+#[test]
+fn system_sound_sends_a_single_method_call_with_the_sound_name() {
+    let log = Log::default();
+    let mut messenger = Messenger {
+        calls: log.clone(),
+        reply: Ok(Some(b"[null]".to_vec())),
+    };
+    for (sound, name) in [
+        (SystemSoundType::Click, "SystemSoundType.click"),
+        (SystemSoundType::Tick, "SystemSoundType.tick"),
+        (SystemSoundType::Alert, "SystemSoundType.alert"),
+    ] {
+        finish(SystemSound::play_on_flutter_channel(&mut messenger, sound)).unwrap();
+        check_command(&log, "flutter/platform", "SystemSound.play", json!(name));
+    }
 }

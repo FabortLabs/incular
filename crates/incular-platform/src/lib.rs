@@ -19,6 +19,7 @@ mod data_transfer;
 mod display;
 mod file_dialog;
 mod haptic_feedback;
+mod flutter_platform_channel;
 mod flutter_text_input_config;
 pub use flutter_text_input_config::FlutterTextInputConfiguration;
 pub mod message_codecs;
@@ -28,6 +29,7 @@ mod pointer;
 mod semantics_messages;
 mod spell_check;
 mod system_environment;
+mod system_navigator;
 mod system_sound;
 mod system_ui_overlay_style;
 mod undo_manager;
@@ -75,9 +77,8 @@ pub use file_dialog::{
     FileDialogOption, FileDialogOptions, FileDialogOutcome, FileDialogRequest, FileDialogRequestId,
     FileDialogSelection, FileDialogValidationError, FileExtension,
 };
-pub use haptic_feedback::{
-    FlutterPlatformMessenger, HapticFeedback, HapticFeedbackError, HapticFeedbackType,
-};
+pub use flutter_platform_channel::{FlutterPlatformChannelError, FlutterPlatformMessenger};
+pub use haptic_feedback::{HapticFeedback, HapticFeedbackError, HapticFeedbackType};
 pub use semantics_messages::{
     AccessibilityMessenger, Assertiveness, SemanticsAnnouncement, SemanticsEvent,
     SemanticsMessageError, SemanticsNodeErrorReport, SemanticsService,
@@ -103,6 +104,7 @@ pub use system_environment::{
     MemorySystemEnvironmentProvider, SystemEnvironmentPreferences, SystemEnvironmentProvider,
     canonicalize_system_locales,
 };
+pub use system_navigator::{RouteInformationUpdate, SystemNavigator};
 pub use system_sound::{SystemSound, SystemSoundType};
 pub use system_ui_overlay_style::SystemUiOverlayStyle;
 pub use undo_manager::{

@@ -2,6 +2,10 @@
 
 use std::{cell::RefCell, rc::Rc};
 
+use crate::flutter_platform_channel::{
+    FlutterPlatformChannelError, FlutterPlatformMessenger, invoke_optional_json,
+};
+
 /// A sound provided by the operating system, not by the application.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum SystemSoundType {
@@ -29,6 +33,26 @@ impl SystemSound {
         if let Some(handler) = handler {
             handler(sound);
         }
+    }
+
+    /// Plays a sound through a Flutter-compatible embedder. The native
+    /// typed service remains available through [Self::play].
+    pub async fn play_on_flutter_channel<M: FlutterPlatformMessenger>(
+        messenger: &mut M,
+        sound: SystemSoundType,
+    ) -> Result<(), FlutterPlatformChannelError<M::Error>> {
+        let name = match sound {
+            SystemSoundType::Click => "SystemSoundType.click",
+            SystemSoundType::Alert => "SystemSoundType.alert",
+            SystemSoundType::Tick => "SystemSoundType.tick",
+        };
+        invoke_optional_json(
+            messenger,
+            "flutter/platform",
+            "SystemSound.play",
+            serde_json::Value::String(name.to_owned()),
+        )
+        .await
     }
 
     /// Binds the window host's native implementation.
