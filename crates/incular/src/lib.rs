@@ -109,14 +109,15 @@ pub mod prelude {
     };
     pub use incular_core::{
         BACK_POINTER_BUTTON, ChangeImpact, ChangeNotifier, ChangeNotifierSubscription, Code, Color,
-        DirtyFlags, FORWARD_POINTER_BUTTON, HslColor, HsvColor, ImeEvent, InputEvent, Invalidation,
-        Key, KeyState, KeyboardEvent, KeyboardKey, Lerp, LicenseEntry, LicenseParagraph,
+        DebugPrintBuffer, DirtyFlags, FORWARD_POINTER_BUTTON, HslColor, HsvColor, ImeEvent, InputEvent,
+        Invalidation, Key, KeyState, KeyboardEvent, KeyboardKey, Lerp, LicenseEntry, LicenseParagraph,
         LicenseRegistry, LicenseStream, LocalKey, Location, Modifiers, NamedKey,
         NormalizedPressure, Offset, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase,
         PointerSampleMetadata, Rect, RestorationKey, RestorationKeyError, RestorationScope,
         SECONDARY_POINTER_BUTTON, Size, StylusMetadata, StylusOrientation, TERTIARY_POINTER_BUTTON,
         TrackpadGesture, TrackpadGestureKind, TrackpadGesturePhase, Transform as AffineTransform,
         UniqueKey, ValueKey, ValueNotifier, WindowResizeDirection, additional_pointer_button_mask,
+        debug_print_synchronously, debug_word_wrap,
     };
     pub use incular_gestures::{
         FocusExtent, FocusRect, PointerRouteError, PointerRouteErrorHandler, PointerRouteId, PointerRouter,

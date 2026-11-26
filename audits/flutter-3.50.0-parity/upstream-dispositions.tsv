@@ -1548,3 +1548,6 @@ packages/flutter/test/foundation/licenses_test.dart	9	LicenseEntryWithLineBreaks
 packages/flutter/test/foundation/licenses_test.dart	159	LicenseEntryWithLineBreaks - leading and trailing whitespace	paired-match	upstream-foundation-licenses.md
 packages/flutter/test/foundation/licenses_test.dart	182	LicenseEntryWithLineBreaks - CRLF line endings inside paragraphs	paired-match	upstream-foundation-licenses.md
 packages/flutter/test/foundation/licenses_test.dart	197	LicenseRegistry	paired-match	upstream-foundation-licenses.md
+packages/flutter/test/foundation/print_test.dart	12	debugPrint	paired-match	upstream-foundation-debug-print.md
+packages/flutter/test/foundation/print_test.dart	51	debugPrint throttling	paired-match	upstream-foundation-debug-print.md
+packages/flutter/test/foundation/print_test.dart	71	debugPrint can print null	paired-match	upstream-foundation-debug-print.md
