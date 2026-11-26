@@ -367,6 +367,38 @@ pub struct FlattenedAnnotation {
     pub world_bounds: Option<Rect>,
 }
 
+/// One typed annotation and the point in its own local coordinate system.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AnnotationEntry<T> {
+    pub annotation: T,
+    pub local_position: Offset,
+}
+
+/// Optional geometry and occlusion behavior for an annotated layer.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct AnnotationSearchOptions {
+    /// Moves the annotation within this layer without moving its children.
+    pub offset: Offset,
+    /// Stops the search of lower siblings after a matching hit.
+    pub opaque: bool,
+}
+
+struct AnnotationPlacement {
+    world_to_local: Transform,
+    region: Option<Rect>,
+    options: AnnotationSearchOptions,
+    // Index in the temporary pre-order site list; its value is the
+    // post-order index of the next enclosing annotation to check.
+    parent_site: Option<usize>,
+}
+
+fn annotation_rect_contains(rect: Rect, point: Offset) -> bool {
+    point.x >= rect.origin.x
+        && point.y >= rect.origin.y
+        && point.x < rect.origin.x + rect.size.width
+        && point.y < rect.origin.y + rect.size.height
+}
+
 #[derive(Clone, Debug)]
 pub enum LayerKind {
     Picture {
@@ -511,6 +543,9 @@ pub struct LayerTree {
     diagnostics: CompositorDiagnostics,
     flattened_pictures: Vec<FlattenedPicture>,
     flattened_annotations: Vec<FlattenedAnnotation>,
+    annotation_placements: Vec<AnnotationPlacement>,
+    annotation_sites: Vec<usize>,
+    annotation_options: HashMap<LayerId, AnnotationSearchOptions>,
     next_generation: u64,
     /// Live annotated-region layers; the per-frame annotation pass is
     /// skipped entirely while there are none.
@@ -573,6 +608,9 @@ impl LayerTree {
             diagnostics: CompositorDiagnostics::default(),
             flattened_pictures: Vec::new(),
             flattened_annotations: Vec::new(),
+            annotation_placements: Vec::new(),
+            annotation_sites: Vec::new(),
+            annotation_options: HashMap::new(),
             next_generation: 1,
             annotation_layers: 0,
             leader_layers: 0,
@@ -863,6 +901,36 @@ impl LayerTree {
             size,
         })
     }
+    /// Sets a layer's annotation-only offset and opacity. Ordinary animated
+    /// placement still uses a transform layer. Returns false for an invalid
+    /// layer or an unchanged configuration.
+    pub fn set_annotation_search_options(
+        &mut self,
+        id: LayerId,
+        options: AnnotationSearchOptions,
+    ) -> bool {
+        if !self
+            .layers
+            .get(id.0)
+            .is_some_and(|layer| matches!(layer.kind, LayerKind::AnnotatedRegion { .. }))
+            || self
+                .annotation_options
+                .get(&id)
+                .copied()
+                .unwrap_or_default()
+                == options
+        {
+            return false;
+        }
+        if options == AnnotationSearchOptions::default() {
+            self.annotation_options.remove(&id);
+        } else {
+            self.annotation_options.insert(id, options);
+        }
+        self.scene_dirty = true;
+        true
+    }
+
     pub fn create_leader(&mut self, link: LayerLink, size: Size) -> LayerId {
         self.insert(LayerKind::Leader {
             link,
@@ -899,6 +967,7 @@ impl LayerTree {
     pub fn remove(&mut self, id: LayerId) {
         if let Some(layer) = self.layers.remove(id.0) {
             self.matrix_stages.remove(&id);
+            self.annotation_options.remove(&id);
             // The retained flatten result may share resources owned by the
             // removed layer; release them with it. Its buffer is kept for
             // the next recording unless a reader still holds the list.
@@ -1557,30 +1626,80 @@ impl LayerTree {
     pub fn flattened_annotations(&self) -> &[FlattenedAnnotation] {
         &self.flattened_annotations
     }
-    /// Returns the front-most annotation of type `T` at `point`. Annotation
-    /// lookup follows layer paint order, honours ancestor clips, and treats
-    /// `sized: false` regions as covering the entire clipped subtree.
-    #[must_use]
-    pub fn find_annotation<T: Any + Clone>(&self, point: Offset) -> Option<T> {
-        self.flattened_annotations.iter().find_map(|entry| {
-            let in_bounds = entry
-                .world_bounds
-                .is_none_or(|bounds| bounds.contains(point));
-            in_bounds.then(|| entry.annotation.cloned::<T>()).flatten()
+    fn annotations_at<T: Any>(&self, point: Offset) -> impl Iterator<Item = (&T, Offset)> {
+        let mut index = Some(0);
+        let mut only_ancestors = false;
+        std::iter::from_fn(move || {
+            while let Some(current) = index {
+                let entry = self.flattened_annotations.get(current)?;
+                let placement = &self.annotation_placements[current];
+                let hit = entry
+                    .annotation
+                    .downcast_ref::<T>()
+                    .filter(|_| {
+                        entry
+                            .world_bounds
+                            .is_none_or(|bounds| bounds.contains(point))
+                    })
+                    .and_then(|value| {
+                        let local = placement.world_to_local.transform_point(point);
+                        (local.x.is_finite()
+                            && local.y.is_finite()
+                            && placement
+                                .region
+                                .is_none_or(|region| annotation_rect_contains(region, local)))
+                        .then_some((value, local - placement.options.offset))
+                    });
+                only_ancestors |= hit.is_some() && placement.options.opaque;
+                // An opaque hit skips its lower siblings, not the own
+                // annotation of any enclosing annotated layer.
+                index = if only_ancestors {
+                    placement
+                        .parent_site
+                        .map(|site| self.annotation_sites[site])
+                } else {
+                    Some(current + 1)
+                };
+                if hit.is_some() {
+                    return hit;
+                }
+            }
+            None
         })
     }
+
+    /// Returns the front-most matching annotation at the world-space point
+    /// in the scene published by the most recent flatten.
+    #[must_use]
+    pub fn find_annotation<T: Any + Clone>(&self, point: Offset) -> Option<T> {
+        self.annotations_at::<T>(point)
+            .next()
+            .map(|(value, _)| value.clone())
+    }
+
     #[must_use]
     pub fn find_annotations<T: Any + Clone>(&self, point: Offset) -> Vec<T> {
-        self.flattened_annotations
-            .iter()
-            .filter_map(|entry| {
-                let in_bounds = entry
-                    .world_bounds
-                    .is_none_or(|bounds| bounds.contains(point));
-                in_bounds.then(|| entry.annotation.cloned::<T>()).flatten()
+        self.annotations_at::<T>(point)
+            .map(|(value, _)| value.clone())
+            .collect()
+    }
+
+    /// Returns matching annotations in front-to-back order, with their local
+    /// positions. An opaque hit absorbs lower siblings but never another
+    /// type's results.
+    #[must_use]
+    pub fn find_annotation_entries<T: Any + Clone>(
+        &self,
+        point: Offset,
+    ) -> Vec<AnnotationEntry<T>> {
+        self.annotations_at::<T>(point)
+            .map(|(value, local_position)| AnnotationEntry {
+                annotation: value.clone(),
+                local_position,
             })
             .collect()
     }
+
     #[must_use]
     pub fn flatten(&mut self) -> DisplayList {
         // Nothing changed since the last flatten: the published list, the
@@ -1613,6 +1732,8 @@ impl LayerTree {
         out.reserve_total(self.flatten_len_hint);
         self.flattened_pictures.clear();
         self.flattened_annotations.clear();
+        self.annotation_placements.clear();
+        self.annotation_sites.clear();
         if let Some(root) = self.root {
             // Leader publication runs as its own pass before any follower
             // resolves, so flatten order cannot strand a follower behind
@@ -1621,7 +1742,7 @@ impl LayerTree {
             self.publish_leader_links();
             self.flatten_layer(root, Transform::IDENTITY, None, &mut out);
             if self.annotation_layers > 0 {
-                self.collect_annotations(root, Transform::IDENTITY, None);
+                self.collect_annotations(root, Transform::IDENTITY, None, None);
             }
         }
         self.scene_dirty = false;
@@ -2425,15 +2546,21 @@ impl LayerTree {
             *offset,
         ))
     }
-    fn collect_annotations(&mut self, id: LayerId, world_transform: Transform, clip: Option<Rect>) {
+    fn collect_annotations(
+        &mut self,
+        id: LayerId,
+        world_transform: Transform,
+        clip: Option<Rect>,
+        parent_site: Option<usize>,
+    ) {
         let Some(kind) = self.layers.get(id.0).map(|layer| layer.kind.clone()) else {
             return;
         };
         match kind {
             LayerKind::Transform { transform, .. } => {
                 let next = world_transform.then(transform);
-                self.visit_children(id, false, |tree, child| {
-                    tree.collect_annotations(child, next, clip)
+                self.visit_children(id, true, |tree, child| {
+                    tree.collect_annotations(child, next, clip, parent_site)
                 });
             }
             LayerKind::ClipRect { rect, .. } => {
@@ -2445,8 +2572,8 @@ impl LayerTree {
                 if next_clip.is_none() {
                     return;
                 }
-                self.visit_children(id, false, |tree, child| {
-                    tree.collect_annotations(child, world_transform, next_clip)
+                self.visit_children(id, true, |tree, child| {
+                    tree.collect_annotations(child, world_transform, next_clip, parent_site)
                 });
             }
             LayerKind::ClipRRect { .. }
@@ -2462,16 +2589,16 @@ impl LayerTree {
                 if next_clip.is_none() {
                     return;
                 }
-                self.visit_children(id, false, |tree, child| {
-                    tree.collect_annotations(child, world_transform, next_clip)
+                self.visit_children(id, true, |tree, child| {
+                    tree.collect_annotations(child, world_transform, next_clip, parent_site)
                 });
             }
             LayerKind::Follower(follower) => {
                 let Some(next) = self.follower_transform(world_transform, &follower) else {
                     return;
                 };
-                self.visit_children(id, false, |tree, child| {
-                    tree.collect_annotations(child, next, clip)
+                self.visit_children(id, true, |tree, child| {
+                    tree.collect_annotations(child, next, clip, parent_site)
                 });
             }
             LayerKind::AnnotatedRegion {
@@ -2479,28 +2606,49 @@ impl LayerTree {
                 sized,
                 size,
             } => {
-                // Container layers are painted in child order, but annotation
-                // lookup walks visually front-to-back. Visit children in
-                // reverse order, then append this layer's own annotation.
-                self.visit_children(id, true, |tree, child| {
-                    tree.collect_annotations(child, world_transform, clip)
+                let options = self
+                    .annotation_options
+                    .get(&id)
+                    .copied()
+                    .unwrap_or_default();
+                let region = sized.then(|| Rect::from_origin_size(options.offset, size));
+                let placement = world_transform.inverse().and_then(|world_to_local| {
+                    let world_bounds = if let Some(region) = region {
+                        let world = world_transform.transform_rect_bbox(region);
+                        match clip {
+                            Some(active) => Some(active.intersection(world)?),
+                            None => Some(world),
+                        }
+                    } else {
+                        clip
+                    };
+                    (options.offset.x.is_finite()
+                        && options.offset.y.is_finite()
+                        && world_bounds
+                            .is_none_or(|bounds| bounds.size.width > 0. && bounds.size.height > 0.))
+                    .then_some((world_bounds, world_to_local))
                 });
-                let region =
-                    world_transform.transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, size));
-                let world_bounds = if sized {
-                    match clip {
-                        Some(active) => active.intersection(region),
-                        None => Some(region),
-                    }
-                } else {
-                    clip
-                };
-                if world_bounds
-                    .is_none_or(|bounds| bounds.size.width > 0. && bounds.size.height > 0.)
-                {
+                let site = placement.map(|_| {
+                    let site = self.annotation_sites.len();
+                    self.annotation_sites.push(usize::MAX);
+                    site
+                });
+                // Reverse every sibling list, not just children of an
+                // annotated layer. The layer's own value is behind its children.
+                self.visit_children(id, true, |tree, child| {
+                    tree.collect_annotations(child, world_transform, clip, site.or(parent_site))
+                });
+                if let (Some(site), Some((world_bounds, world_to_local))) = (site, placement) {
+                    self.annotation_sites[site] = self.flattened_annotations.len();
                     self.flattened_annotations.push(FlattenedAnnotation {
                         annotation,
                         world_bounds,
+                    });
+                    self.annotation_placements.push(AnnotationPlacement {
+                        world_to_local,
+                        region,
+                        options,
+                        parent_site,
                     });
                 }
             }
@@ -2513,8 +2661,8 @@ impl LayerTree {
             | LayerKind::ShaderMask { .. }
             | LayerKind::BackdropFilter { .. }
             | LayerKind::Leader { .. } => {
-                self.visit_children(id, false, |tree, child| {
-                    tree.collect_annotations(child, world_transform, clip)
+                self.visit_children(id, true, |tree, child| {
+                    tree.collect_annotations(child, world_transform, clip, parent_site)
                 });
             }
         }

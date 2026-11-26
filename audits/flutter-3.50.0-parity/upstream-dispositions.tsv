@@ -2110,3 +2110,8 @@ packages/flutter/test/foundation/persistent_hash_map_test.dart	37	PersistentHash
 packages/flutter/test/foundation/persistent_hash_map_test.dart	67	PersistentHashMap - inflation of nodes	paired-match	upstream-persistent-hash-map.md
 packages/flutter/test/services/app_version_test.dart	9	appBuildName matches the FLUTTER_BUILD_NAME environment declaration	paired-match	upstream-app-build-version.md
 packages/flutter/test/services/app_version_test.dart	18	appBuildNumber matches the FLUTTER_BUILD_NUMBER environment declaration	paired-match	upstream-app-build-version.md
+packages/flutter/test/rendering/layer_annotations_test.dart	12	ContainerLayer.findAllAnnotations returns all results from its children	paired-match	upstream-layer-annotations.md#frontmost-and-opaque-results
+packages/flutter/test/rendering/layer_annotations_test.dart	32	ContainerLayer.find returns the first result from its children	paired-match	upstream-layer-annotations.md#frontmost-and-opaque-results
+packages/flutter/test/rendering/layer_annotations_test.dart	46	ContainerLayer.findAllAnnotations returns empty result when finding nothing	paired-match	upstream-layer-annotations.md#frontmost-and-opaque-results
+packages/flutter/test/rendering/layer_annotations_test.dart	59	ContainerLayer.find returns null when finding nothing	paired-match	upstream-layer-annotations.md#frontmost-and-opaque-results
+packages/flutter/test/rendering/layer_annotations_test.dart	72	ContainerLayer.findAllAnnotations stops at the first opaque child	paired-match	upstream-layer-annotations.md#frontmost-and-opaque-results

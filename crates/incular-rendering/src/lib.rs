@@ -18,7 +18,7 @@ pub use backdrop::{
 };
 pub use color_space::{premultiplied_working_rgba, working_rgba};
 pub use compositor::{
-    Annotation, CompositorDiagnostics, FlattenedAnnotation, FlattenedPicture, FollowerLayer,
+    Annotation, AnnotationEntry, AnnotationSearchOptions, CompositorDiagnostics, FlattenedAnnotation, FlattenedPicture, FollowerLayer,
     LayerAnchor, LayerId, LayerKind, LayerLink, LayerTree, PublisherIdentity, normalize_opacity,
     opacity_is_transparent, resolve_follower_target, resolve_linked_follower_world_transform,
 };
