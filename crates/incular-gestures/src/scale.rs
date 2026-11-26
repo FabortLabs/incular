@@ -597,10 +597,19 @@ impl ScaleGestureDetector {
         let id = ContactId { device, pointer };
         if let Some(index) = self.pointers.iter().position(|contact| contact.id == id) {
             self.pointers.remove(index);
-        } else if let Some(index) = self.pan_zooms.iter().position(|contact| contact.id == id) {
-            self.pan_zooms.remove(index);
+            self.reset_if_empty();
+        } else {
+            self.reject_pan_zoom(device, pointer);
         }
-        self.reset_if_empty();
+    }
+
+    /// Rejects an absolute stream without removing a touch with the same IDs.
+    pub fn reject_pan_zoom(&mut self, device: u64, pointer: u64) {
+        let id = ContactId { device, pointer };
+        if let Some(index) = self.pan_zooms.iter().position(|contact| contact.id == id) {
+            self.pan_zooms.remove(index);
+            self.reset_if_empty();
+        }
     }
 
     fn reset_if_empty(&mut self) {

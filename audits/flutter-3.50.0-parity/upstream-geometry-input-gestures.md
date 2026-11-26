@@ -250,6 +250,21 @@ callback is unchanged. Mixed touch-and-trackpad geometry (:890) remains
 partial pending competing touch recognition on all the corresponding
 mounted routes; no physical trackpad is claimed as tested.
 
+#### Mounted mixed touch and trackpad
+
+Pinned :890 pairs. Native input uses one mounted scale recognizer plus a
+competing horizontal drag on both hit paths. Starting a touch ends the
+existing bracket; movement starts a new one. Scale counts 2 → 3 → 4,
+does not give the trackpad twice the centroid weight, and combines the
+signed rotation and scale factors. The complete teardown sequence emits
+no drag or extra scale callbacks. An additional control reuses identical
+numeric device and pointer IDs across the two protocols. Window-local
+routing and cancel-all teardown are checked separately.
+
+These are correlated events passed to the widget tree. The platform
+aggregate path still does not manufacture absolute streams from
+independent native pinch/rotation/pan notifications.
+
 ### Drag before scale and signed rotations
 
 The authored Flutter and native mounted probes also reverse the route

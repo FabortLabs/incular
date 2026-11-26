@@ -101,6 +101,7 @@ mod external_drop;
 mod focus;
 mod global_keys;
 mod interaction;
+mod pan_zoom;
 mod invariants;
 mod layout;
 mod painting;
@@ -1358,6 +1359,7 @@ struct InputState {
     gesture_arena: GestureArena,
     active_gestures: HashMap<GestureArenaKey, ActiveGesture>,
     active_trackpad_gestures: HashMap<GestureArenaKey, ActiveTrackpadGesture>,
+    active_pan_zoom: HashMap<GestureArenaKey, pan_zoom::ActivePanZoom>,
     raw_recognizers: HashMap<ElementId, HashMap<TypeId, Box<dyn GestureRecognizer>>>,
     raw_gesture_streams: HashMap<GestureArenaKey, ActiveRawGesture>,
     raw_pointer_routes: HashMap<GestureArenaKey, Vec<RawPointerRouteEntry>>,

@@ -869,24 +869,7 @@ impl WidgetTree {
                 .or_else(|| coincident_gestures.first().copied())?;
             let primary = crate::gestures::PointerButtonClass::of_press(buttons)
                 == Some(crate::gestures::PointerButtonClass::Primary);
-            let mut elements = self.gesture_ancestors(hit);
-            if !coincident_gestures.is_empty() {
-                // Preserve the target's child-before-parent chain while
-                // inserting translucent paint siblings in the hit order.
-                let mut ordered = Vec::with_capacity(elements.len() + coincident_gestures.len());
-                let mut next_ancestor = 0;
-                for &candidate in coincident_gestures {
-                    if let Some(relative) = elements[next_ancestor..].iter().position(|&id| id == candidate) {
-                        let next = next_ancestor + relative + 1;
-                        ordered.extend_from_slice(&elements[next_ancestor..next]);
-                        next_ancestor = next;
-                    } else if !ordered.contains(&candidate) {
-                        ordered.push(candidate);
-                    }
-                }
-                ordered.extend_from_slice(&elements[next_ancestor..]);
-                elements = ordered;
-            }
+            let elements = self.gesture_route_elements(hit, coincident_gestures);
             // Fall back to the hit element itself when no gesture
             // ancestor participates: touch-drag scrolling below claims
             // otherwise-unclaimed presses on scrollable viewports.
@@ -2053,6 +2036,31 @@ impl WidgetTree {
             _ => None,
         }
     }
+    pub(super) fn gesture_route_elements(
+        &self,
+        hit: ElementId,
+        coincident_gestures: &[ElementId],
+    ) -> Vec<ElementId> {
+        let mut elements = self.gesture_ancestors(hit);
+        if !coincident_gestures.is_empty() {
+            // Preserve the target's child-before-parent chain while
+            // inserting translucent paint siblings in the hit order.
+            let mut ordered = Vec::with_capacity(elements.len() + coincident_gestures.len());
+            let mut next_ancestor = 0;
+            for &candidate in coincident_gestures {
+                if let Some(relative) = elements[next_ancestor..].iter().position(|&id| id == candidate) {
+                    let next = next_ancestor + relative + 1;
+                    ordered.extend_from_slice(&elements[next_ancestor..next]);
+                    next_ancestor = next;
+                } else if !ordered.contains(&candidate) {
+                    ordered.push(candidate);
+                }
+            }
+            ordered.extend_from_slice(&elements[next_ancestor..]);
+            elements = ordered;
+        }
+        elements
+    }
     pub(super) fn gesture_ancestors(&self, mut id: ElementId) -> Vec<ElementId> {
         let mut ancestors = Vec::new();
         loop {
@@ -2099,7 +2107,7 @@ impl WidgetTree {
     /// every pointer it tracks in the window. Once one claim holds, the
     /// recognizer starts (`acceptGesture`) and returns the update for the
     /// winning event.
-    fn accept_scale(
+    pub(super) fn accept_scale(
         &mut self,
         window: u64,
         element: ElementId,
@@ -2123,7 +2131,7 @@ impl WidgetTree {
                     .map(|candidate| (*key, candidate.member))
             })
             .collect();
-        let mut accepted = false;
+        let mut accepted = self.accept_scale_on_pan_zoom(window, element);
         for (key, member) in members {
             let entries = self.input.gesture_arena.accept(key, member);
             accepted |= entries.iter().any(|entry| {
@@ -2769,6 +2777,10 @@ impl WidgetTree {
             let _ = self.input.gesture_arena.cancel(key);
             self.input.active_trackpad_gestures.remove(&key);
         }
+        let pan_zoom: Vec<_> = self.input.active_pan_zoom.keys().copied().collect();
+        for key in pan_zoom {
+            self.cancel_pointer_pan_zoom(key);
+        }
         self.input.raw_pointer_routes.clear();
         self.input.raw_pointer_positions.clear();
         self.input.consumed_tap_pointers.clear();
@@ -2783,7 +2795,8 @@ impl WidgetTree {
     }
     pub(super) fn remove_scale_recognizers_when_idle(&mut self) {
         self.input.scale_gestures.retain(|element, _| {
-            self.input.active_gestures.values().any(|active| {
+            self.input.active_pan_zoom.values().any(|active| active.contains_scale(*element))
+                || self.input.active_gestures.values().any(|active| {
                 active.members.iter().any(|candidate| {
                     candidate.element == *element && candidate.kind == RetainedGestureKind::Scale
                 })

@@ -1804,7 +1804,7 @@ packages/flutter/test/gestures/scale_test.dart	1832	ScaleStartDetails should con
 packages/flutter/test/gestures/scale_test.dart	380	Scale gesture competes with drag	paired-match	upstream-geometry-input-gestures.md#scale-contact-admission-after-the-first-win
 packages/flutter/test/gestures/scale_test.dart	694	First rotation test	paired-match	upstream-geometry-input-gestures.md#local-scale-deltas-and-first-rotation
 packages/flutter/test/gestures/scale_test.dart	774	Should recognize scale gestures from pointer pan/zoom events	paired-match	upstream-geometry-input-gestures.md#trackpad-scale-versus-drag
-packages/flutter/test/gestures/scale_test.dart	890	Pointer pan/zooms should work alongside touches	partial-match	upstream-geometry-input-gestures.md#direct-absolute-panzoom-events
+packages/flutter/test/gestures/scale_test.dart	890	Pointer pan/zooms should work alongside touches	paired-match	upstream-geometry-input-gestures.md#mounted-mixed-touch-and-trackpad
 packages/flutter/test/gestures/scale_test.dart	1092	Scale gesture competes with drag for trackpad gesture	paired-match	upstream-geometry-input-gestures.md#trackpad-scale-versus-drag
 packages/flutter/test/gestures/scale_test.dart	1186	Scale gesture from pan/zoom events properly handles DragStartBehavior.start	paired-match	upstream-geometry-input-gestures.md#trackpad-scale-versus-drag
 packages/flutter/test/gestures/scale_test.dart	1293	scale trackpadScrollCausesScale	paired-match	upstream-geometry-input-gestures.md#direct-absolute-panzoom-events

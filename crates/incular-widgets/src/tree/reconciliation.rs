@@ -2775,6 +2775,15 @@ impl WidgetTree {
                     for stream in pruned {
                         self.cancel_gesture_stream(stream, true);
                     }
+                    let stale_pan_zoom: Vec<_> = self
+                        .input
+                        .active_pan_zoom
+                        .iter()
+                        .filter_map(|(key, active)| active.contains_element(id).then_some(*key))
+                        .collect();
+                    for key in stale_pan_zoom {
+                        self.cancel_pointer_pan_zoom(key);
+                    }
                     let stale_trackpad_streams = self
                         .input
                         .active_trackpad_gestures

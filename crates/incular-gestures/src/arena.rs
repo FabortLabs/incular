@@ -8,6 +8,10 @@ pub enum GestureArenaSource {
         device: u64,
         pointer: u64,
     },
+    PointerPanZoom {
+        device: u64,
+        pointer: u64,
+    },
     Trackpad {
         device: u64,
         kind: TrackpadGestureKind,
@@ -43,10 +47,20 @@ impl GestureArenaKey {
         }
     }
 
+    /// A correlated absolute trackpad stream, not a touch or an aggregate OS gesture.
+    #[must_use]
+    pub const fn pointer_pan_zoom(window: u64, device: u64, pointer: u64) -> Self {
+        Self {
+            window,
+            source: GestureArenaSource::PointerPanZoom { device, pointer },
+        }
+    }
+
     #[must_use]
     pub const fn pointer_id(self) -> Option<u64> {
         match self.source {
-            GestureArenaSource::Pointer { pointer, .. } => Some(pointer),
+            GestureArenaSource::Pointer { pointer, .. }
+            | GestureArenaSource::PointerPanZoom { pointer, .. } => Some(pointer),
             GestureArenaSource::Trackpad { .. } => None,
         }
     }
@@ -54,7 +68,8 @@ impl GestureArenaKey {
     #[must_use]
     pub const fn pointer_device_id(self) -> Option<u64> {
         match self.source {
-            GestureArenaSource::Pointer { device, .. } => Some(device),
+            GestureArenaSource::Pointer { device, .. }
+            | GestureArenaSource::PointerPanZoom { device, .. } => Some(device),
             GestureArenaSource::Trackpad { .. } => None,
         }
     }
@@ -105,10 +120,15 @@ impl GestureArena {
         let Some(entries) = self.streams.get(&key) else {
             return Vec::new();
         };
-        if entries.iter().any(|entry| entry.disposition == GestureDisposition::Accepted) {
+        if entries
+            .iter()
+            .any(|entry| entry.disposition == GestureDisposition::Accepted)
+        {
             return Vec::new();
         }
-        let mut pending = entries.iter().filter(|entry| entry.disposition == GestureDisposition::Pending);
+        let mut pending = entries
+            .iter()
+            .filter(|entry| entry.disposition == GestureDisposition::Pending);
         let Some(member) = pending.next().map(|entry| entry.member) else {
             return Vec::new();
         };
@@ -185,6 +205,20 @@ impl GestureArena {
             })
             .collect()
     }
+    /// Looks up a routed member without copying the stream's other entries.
+    #[must_use]
+    pub fn disposition(
+        &self,
+        key: GestureArenaKey,
+        member: GestureArenaMember,
+    ) -> Option<GestureDisposition> {
+        self.streams
+            .get(&key)?
+            .iter()
+            .find(|entry| entry.member == member)
+            .map(|entry| entry.disposition)
+    }
+
     #[must_use]
     pub fn entries(&self, key: GestureArenaKey) -> Vec<GestureArenaEntry> {
         self.streams
