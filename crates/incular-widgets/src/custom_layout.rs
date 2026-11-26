@@ -204,11 +204,81 @@ fn multi_changed<T: MultiChildLayoutDelegate>(new: &dyn Any, old: &dyn Any) -> b
     }
 }
 
-/// A flow repaints by laying out again, so either answer counts.
-fn flow_changed<T: FlowDelegate>(new: &dyn Any, old: &dyn Any) -> bool {
+fn flow_layout_changed<T: FlowDelegate>(new: &dyn Any, old: &dyn Any) -> bool {
     match (new.downcast_ref::<T>(), old.downcast_ref::<T>()) {
-        (Some(new), Some(old)) => new.should_relayout(old) || new.should_repaint(old),
+        (Some(new), Some(old)) => new.should_relayout(old),
         _ => true,
+    }
+}
+
+fn flow_paint_changed<T: FlowDelegate>(new: &dyn Any, old: &dyn Any) -> bool {
+    match (new.downcast_ref::<T>(), old.downcast_ref::<T>()) {
+        (Some(new), Some(old)) => new.should_repaint(old),
+        _ => true,
+    }
+}
+
+/// The Flow render configuration and its optional paint dependency.
+#[derive(Clone)]
+#[doc(hidden)]
+pub struct FlowRenderDelegate {
+    base: DelegateCell<dyn FlowDelegate>,
+    relayout: fn(&dyn Any, &dyn Any) -> bool,
+    repaint: Option<Rc<FlowRepaintSource>>,
+    observation: u64,
+}
+
+struct FlowRepaintSource {
+    source: Rc<dyn crate::Listenable>,
+    // Cache the controller set at registration rather than asking the
+    // Listenable or allocating a ticker subtree every frame.
+    controllers: Vec<incular_animation::AnimationController>,
+    revision: Cell<u64>,
+}
+
+impl PartialEq for FlowRenderDelegate {
+    fn eq(&self, other: &Self) -> bool {
+        self.base == other.base
+            && self.observation == other.observation
+            && match (&self.repaint, &other.repaint) {
+                (Some(a), Some(b)) => Rc::ptr_eq(a, b),
+                (None, None) => true,
+                _ => false,
+            }
+    }
+}
+
+impl FlowRenderDelegate {
+    pub(crate) fn get(&self) -> &dyn FlowDelegate {
+        self.base.get()
+    }
+
+    fn tracked(&self) -> Self {
+        let mut next = self.clone();
+        if let Some(repaint) = &self.repaint {
+            repaint.source.track();
+            // Render dependency invalidation lowers this retained widget
+            // again. The changed stamp requests paint, never build/layout.
+            let revision = repaint.revision.get().wrapping_add(1);
+            repaint.revision.set(revision);
+            next.observation = revision;
+        }
+        next
+    }
+
+    pub(crate) fn controllers(&self) -> &[incular_animation::AnimationController] {
+        self.repaint
+            .as_ref()
+            .map_or(&[], |repaint| repaint.controllers.as_slice())
+    }
+
+    pub(crate) fn needs_layout_from(&self, old: &Self) -> bool {
+        !Rc::ptr_eq(&self.base.concrete, &old.base.concrete)
+            && (self.relayout)(&*self.base.concrete, &*old.base.concrete)
+    }
+
+    pub(crate) fn needs_paint_from(&self, old: &Self) -> bool {
+        self.observation != old.observation || self.base.changes_from(&old.base)
     }
 }
 
@@ -218,7 +288,7 @@ fn flow_changed<T: FlowDelegate>(new: &dyn Any, old: &dyn Any) -> bool {
 pub enum CustomLayoutDelegate {
     Single(DelegateCell<dyn SingleChildLayoutDelegate>),
     Multi(DelegateCell<dyn MultiChildLayoutDelegate>),
-    Flow(DelegateCell<dyn FlowDelegate>),
+    Flow(FlowRenderDelegate),
     /// A single child laid out first under the box's constraints; the box
     /// then takes its size and the child's offset from the child's size.
     ChildSized(ChildSizedLayout),
@@ -303,6 +373,7 @@ impl CustomLayoutDelegate {
         match self {
             Self::Single(delegate) => Self::Single(delegate.tracked()),
             Self::Multi(delegate) => Self::Multi(delegate.tracked()),
+            Self::Flow(delegate) => Self::Flow(delegate.tracked()),
             _ => self.clone(),
         }
     }
@@ -313,7 +384,9 @@ impl CustomLayoutDelegate {
         match (self, old) {
             (Self::Single(new), Self::Single(old)) => new.changes_from(old),
             (Self::Multi(new), Self::Multi(old)) => new.changes_from(old),
-            (Self::Flow(new), Self::Flow(old)) => new.changes_from(old),
+            (Self::Flow(new), Self::Flow(old)) => {
+                new.needs_layout_from(old) || new.needs_paint_from(old)
+            }
             _ => self != old,
         }
     }
@@ -743,10 +816,10 @@ impl From<LayoutId> for Widget {
 /// at the origin, then paints it with the transform and opacity the
 /// delegate gives. Paint transforms are compositor-only, as in Flutter.
 ///
-/// The delegate's paint runs as part of the flow's layout, so a flow that
-/// should repaint, for example from an animation, needs a new delegate.
+/// A repaint Listenable can update geometry used for painting and input
+/// without rebuilding or measuring the flow's children.
 pub struct Flow {
-    delegate: DelegateCell<dyn FlowDelegate>,
+    delegate: FlowRenderDelegate,
     children: Vec<Widget>,
 }
 
@@ -758,15 +831,32 @@ impl Flow {
     ) -> Self {
         let delegate = Rc::new(delegate);
         Self {
-            delegate: DelegateCell {
-                delegate: delegate.clone(),
-                relayout: None,
-                concrete: delegate,
-                changed: flow_changed::<D>,
-                relayout_revision: 0,
+            delegate: FlowRenderDelegate {
+                base: DelegateCell {
+                    delegate: delegate.clone(),
+                    relayout: None,
+                    concrete: delegate,
+                    changed: flow_paint_changed::<D>,
+                    relayout_revision: 0,
+                },
+                relayout: flow_layout_changed::<D>,
+                repaint: None,
+                observation: 0,
             },
             children: children.into_iter().map(Into::into).collect(),
         }
+    }
+    /// Requests repaint when this Listenable changes, like Flutter's
+    /// `FlowDelegate(repaint: ...)`.
+    #[must_use]
+    pub fn repaint(mut self, listenable: impl crate::Listenable + 'static) -> Self {
+        let controllers = listenable.controllers();
+        self.delegate.repaint = Some(Rc::new(FlowRepaintSource {
+            source: Rc::new(listenable),
+            controllers,
+            revision: Cell::new(0),
+        }));
+        self
     }
 }
 

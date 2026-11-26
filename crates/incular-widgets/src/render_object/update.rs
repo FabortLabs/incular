@@ -11,6 +11,28 @@ impl RenderObjectPayload {
         if *self.kind == kind {
             return Invalidation::NONE;
         }
+        if let (
+            RenderKind::CustomLayout {
+                delegate: crate::custom_layout::CustomLayoutDelegate::Flow(old),
+            },
+            RenderKind::CustomLayout {
+                delegate: crate::custom_layout::CustomLayoutDelegate::Flow(new),
+            },
+        ) = (&*self.kind, &kind)
+        {
+            let invalidation = if new.needs_layout_from(old) {
+                Invalidation::LAYOUT
+                    | Invalidation::PAINT
+                    | Invalidation::SEMANTICS
+                    | Invalidation::HIT_TEST
+            } else if new.needs_paint_from(old) {
+                Invalidation::PAINT
+            } else {
+                Invalidation::NONE
+            };
+            self.replace_kind(kind);
+            return invalidation;
+        }
         if delegate_keeps_output(&self.kind, &kind) {
             // A replacement delegate can preserve layout or paint and
             // still receive the next update as the retained old delegate.

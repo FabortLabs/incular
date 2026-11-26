@@ -1,4 +1,5 @@
 //! Flow paint scheduling, input order, opacity and degenerate geometry.
+use incular_animation::AnimationController;
 use incular_config::Constraints;
 use incular_core::{Color, Offset, PointerPhase, Size, Transform};
 use incular_gestures::PointerEvent;
@@ -77,19 +78,34 @@ fn flow(shift: Rc<Cell<f32>>, order: Vec<usize>, spacing: f32, children: Vec<Wid
 
 #[test]
 fn flow_repaint_moves_overlap_hit_without_replacing_the_delegate() {
+    struct OffsetFlow(AnimationController);
+    impl FlowDelegate for OffsetFlow {
+        fn get_constraints_for_child(&self, _: usize, constraints: Constraints) -> Constraints {
+            constraints.loosen()
+        }
+        fn paint_children(&self, ctx: &mut FlowPaintingContext<'_>) {
+            let mut y = self.0.value();
+            for index in 0..ctx.child_count() {
+                ctx.paint_child(index, Transform::translation(Offset::new(0., y)), 1.);
+                y += 0.75 * ctx.get_child_size(index).unwrap().height;
+            }
+        }
+        fn should_repaint(&self, old: &Self) -> bool {
+            self.0 == old.0
+        }
+    }
     let hits = Rc::new(RefCell::new(Vec::new()));
-    let shift = Rc::new(Cell::new(0.));
+    let shift = AnimationController::unbounded();
     let children = (0..7)
         .map(|i| clickable(i, hits.clone()))
         .collect::<Vec<_>>();
     let mut tree = WidgetTree::new();
     let root = tree
-        .mount(flow(
-            shift.clone(),
-            (0..7).collect(),
-            0.75,
-            children.clone(),
-        ))
+        .mount(
+            Flow::new(OffsetFlow(shift.clone()), children.clone())
+                .repaint(shift.clone())
+                .into(),
+        )
         .unwrap();
     let viewport = Size::new(800., 600.);
     layout(&mut tree, viewport);
@@ -99,8 +115,12 @@ fn flow_repaint_moves_overlap_hit_without_replacing_the_delegate() {
     }
     assert_eq!(hits.take(), [0, 1, 2, 1]);
 
-    shift.set(50.);
+    let before = tree.diagnostics();
+    shift.set_value(50.);
     layout(&mut tree, viewport);
+    let after = tree.diagnostics();
+    assert_eq!(after.rebuilds, before.rebuilds, "no builder called");
+    assert_eq!(after.layouts, before.layouts, "no render boxes measured");
     tap(&mut tree, Offset::new(20., 90.), clock, 5);
     let same_delegate = hits.take();
     tree.update(

@@ -2881,6 +2881,9 @@ impl WidgetTree {
                         // tick before layout too, as Flutter's tickers do, so
                         // the value they produce is laid out in this frame.
                         RenderKind::SliverViewport { config } => config.delegate.is_animating(),
+                        RenderKind::CustomLayout {
+                            delegate: crate::custom_layout::CustomLayoutDelegate::Flow(delegate),
+                        } => delegate.controllers().iter().any(AnimationController::is_active),
                         _ => false,
                     })
         });
@@ -2889,6 +2892,7 @@ impl WidgetTree {
         }
         let now = self.animation_now(now);
         let mut changed = self.tick_sliver_viewports_before_layout(now);
+        changed |= self.tick_flow_controllers(now);
         let tickers = self
             .tracked
             .compositor_nodes
@@ -2955,6 +2959,37 @@ impl WidgetTree {
             }
         }
         changed
+    }
+
+    fn tick_flow_controllers(&mut self, now: Instant) -> bool {
+        let mut ticks = 0;
+        for &element in &self.tracked.compositor_nodes {
+            let Some(node) = self.elements.get(element.0)
+                .and_then(|element| self.renders.get(element.render.0))
+            else {
+                continue;
+            };
+            let RenderKind::CustomLayout {
+                delegate: crate::custom_layout::CustomLayoutDelegate::Flow(delegate),
+            } = node.object.kind()
+            else {
+                continue;
+            };
+            if delegate.controllers().is_empty() {
+                continue;
+            }
+            let muted = self.animation_muted(element);
+            for controller in delegate.controllers() {
+                if controller.has_vsync() {
+                    controller.set_ticker_muted(muted);
+                }
+                if !muted && controller.tick(now) {
+                    ticks += 1;
+                }
+            }
+        }
+        self.diagnostics.animation_ticks += ticks;
+        ticks != 0
     }
 
     /// Ticks the animating sliver viewports before layout and marks the
@@ -3235,6 +3270,21 @@ impl WidgetTree {
                         changed = true;
                         self.diagnostics.compositor_only_updates += 1;
                         self.diagnostics.scroll_offset_updates += 1;
+                    }
+                }
+                RenderKind::CustomLayout {
+                    delegate: crate::custom_layout::CustomLayoutDelegate::Flow(ref delegate),
+                } => {
+                    let enabled = ticking!();
+                    for controller in delegate.controllers() {
+                        if controller.has_vsync() {
+                            controller.set_ticker_muted(!enabled);
+                        }
+                        if enabled && controller.is_active() && controller.tick(now) {
+                            changed = true;
+                            self.diagnostics.animation_ticks += 1;
+                        }
+                        active |= enabled && controller.is_active();
                     }
                 }
                 RenderKind::AnimationTicker {

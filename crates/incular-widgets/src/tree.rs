@@ -1688,6 +1688,11 @@ impl TrackedElements {
                         | RenderKind::Blend { .. }
                         | RenderKind::ShaderMask { .. }
                         | RenderKind::BackdropFilter { .. }
+                ) || matches!(
+                    render,
+                    RenderKind::CustomLayout {
+                        delegate: crate::custom_layout::CustomLayoutDelegate::Flow(delegate),
+                    } if !delegate.controllers().is_empty()
                 ),
             ),
             (

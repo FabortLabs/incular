@@ -769,6 +769,9 @@ impl WidgetTree {
             return;
         }
         if node.dirty.contains(DirtyFlags::PAINT) {
+            if node.flow_paint_order().is_some() {
+                self.paint_flow(id);
+            }
             #[cfg(feature = "devtools")]
             let trace = self
                 .element_for_render(id)

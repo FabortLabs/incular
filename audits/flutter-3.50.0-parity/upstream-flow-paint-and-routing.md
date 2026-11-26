@@ -38,3 +38,18 @@ and semantics keep their retained child identities, but the composed
 and hit-tested order is the one actually painted; omitted children are
 not attached to the paint itinerary. The original repaint-provider
 registration (:64) is still open at this checkpoint.
+
+### Repaint without build or layout
+
+Pinned :64 now matches using the same unbounded AnimationController
+as a repaint Listenable. The first hit trace is [0,1,2,1]; setting
+the live controller to 50 changes the same overlap from child 1 to
+child 0. The retained tree does not rebuild or remeasure any child.
+
+An authored bounded controller on the pinned reference and native
+runtime also reports paints at [0,0,0.3] with unchanged layout
+counts and the moved hit target. The initial zero-value tick does
+repaint in Flutter. Native render subscriptions wake the runtime,
+detach on replacement, and tick the same Flow render without adding
+a ticker widget around its child tree. Delegate painting and the
+last paint order are now committed in paint, not during layout.

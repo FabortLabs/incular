@@ -1052,32 +1052,38 @@ impl WidgetTree {
             CustomLayoutDelegate::Flow(delegate) => {
                 let delegate = delegate.get();
                 let size = constraints.constrain(delegate.get_size(constraints));
-                let mut sizes = Vec::with_capacity(children.len());
                 for (index, &child) in children.iter().enumerate() {
                     self.layout_render(
                         child,
                         delegate.get_constraints_for_child(index, constraints),
                     )?;
-                    sizes.push(
-                        self.render_live(child, "retained render must remain live")
-                            .size,
-                    );
                 }
-                // `RenderFlow.paint` runs the delegate at paint time; its
-                // transforms only need the sizes known here.
-                let mut context = crate::custom_layout::FlowPaintingContext::new(size, &sizes);
-                delegate.paint_children(&mut context);
-                let (painted, ordered) = context.into_painted();
-                for (&child, painted) in children.iter().zip(painted) {
-                    self.apply_flow_slot(child, painted);
-                }
-                self.sync_flow_paint_order(
-                    id,
-                    ordered.into_iter().map(|index| children[index]).collect(),
-                );
+                // Child constraints are resolved here, but the paint
+                // delegate (and hit order) is committed only at paint time.
+                self.mark_render_paint(id);
                 Ok((size, children.iter().map(|_| Offset::ZERO).collect()))
             }
         }
+    }
+
+    pub(in crate::tree) fn paint_flow(&mut self, id: RenderObjectId) {
+        let node = self.render_live(id, "flow render must remain live");
+        let RenderKind::CustomLayout {
+            delegate: CustomLayoutDelegate::Flow(delegate),
+        } = node.object.kind() else {
+            return;
+        };
+        let children = node.children.clone();
+        let sizes = children.iter().map(|&child| {
+            self.render_live(child, "flow child must remain live").size
+        }).collect::<Vec<_>>();
+        let mut context = crate::custom_layout::FlowPaintingContext::new(node.size, &sizes);
+        delegate.get().paint_children(&mut context);
+        let (painted, ordered) = context.into_painted();
+        for (&child, painted) in children.iter().zip(painted) {
+            self.apply_flow_slot(child, painted);
+        }
+        self.sync_flow_paint_order(id, ordered.into_iter().map(|index| children[index]).collect());
     }
 
     fn sync_flow_paint_order(&mut self, id: RenderObjectId, next: Vec<RenderObjectId>) {
