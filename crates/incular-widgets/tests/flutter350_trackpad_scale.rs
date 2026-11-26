@@ -182,3 +182,122 @@ fn teardown_clears_absolute_streams_and_does_not_capture_other_windows() {
     assert!(tree.dispatch_pointer_pan_zoom_in_window(2, event).is_some());
     assert_eq!(trace.borrow().starts.len(), 1);
 }
+
+fn mounted_detector(detector: GestureDetector) -> WidgetTree {
+    let mut tree = WidgetTree::new();
+    tree.mount(detector.into()).unwrap();
+    tree.layout(Constraints::tight(Size::new(120., 120.)))
+        .unwrap();
+    tree
+}
+
+fn absolute(tree: &mut WidgetTree, phase: PointerPanZoomPhase) {
+    tree.dispatch_pointer_pan_zoom_in_window(
+        0,
+        PointerPanZoomEvent {
+            device: 7,
+            pointer: 4,
+            position: Offset::new(30., 30.),
+            phase,
+            time: Instant::now(),
+            synthesized: false,
+        },
+    );
+}
+
+#[test]
+fn mounted_trackpad_scroll_uses_explicit_gain_and_locks_focal_point() {
+    let updates = Rc::new(RefCell::new(Vec::new()));
+    let mut tree = mounted_detector(
+        GestureDetector::new(Widget::box_(Size::new(120., 120.), Color::BLACK))
+            .trackpad_scroll_causes_scale(true)
+            .trackpad_scroll_to_scale_factor(Offset::new(1. / 125., 0.))
+            .on_scale_update({
+                let updates = updates.clone();
+                move |d| updates.borrow_mut().push(d)
+            }),
+    );
+    absolute(&mut tree, PointerPanZoomPhase::Start);
+    assert!(updates.borrow().is_empty());
+    absolute(
+        &mut tree,
+        PointerPanZoomPhase::Update {
+            pan: Offset::new(125., 200.),
+            scale: 1.,
+            rotation: 0.,
+        },
+    );
+    absolute(&mut tree, PointerPanZoomPhase::End);
+    let updates = updates.borrow();
+    assert_eq!(updates.len(), 1);
+    let d = updates[0];
+    assert!((d.scale - consts::E).abs() < 0.0001);
+    assert_eq!(d.focal_point, Offset::new(30., 30.));
+    assert_eq!(d.focal_point_delta, Offset::ZERO);
+}
+
+#[test]
+fn trackpad_scale_admission_and_pending_drag_lifecycle_match_flutter() {
+    for touch_only in [false, true] {
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let detector = GestureDetector::new(Widget::box_(Size::new(120., 120.), Color::BLACK))
+            .on_horizontal_drag_down({
+                let log = log.clone();
+                move |details| {
+                    assert_eq!(details.global_position, Offset::new(30., 30.));
+                    log.borrow_mut().push("drag-down");
+                }
+            })
+            .on_horizontal_drag_start(|_| panic!("drag should not start"))
+            .on_horizontal_drag_cancel({
+                let log = log.clone();
+                move || log.borrow_mut().push("drag-cancel")
+            })
+            .on_scale_start({
+                let log = log.clone();
+                move |_| log.borrow_mut().push("scale-start")
+            })
+            .on_scale_update({
+                let log = log.clone();
+                move |_| log.borrow_mut().push("scale-update")
+            })
+            .on_scale_end({
+                let log = log.clone();
+                move |_| log.borrow_mut().push("scale-end")
+            });
+        let mut tree = if touch_only {
+            mounted_detector(detector.supported_devices([PointerDeviceKind::Touch]))
+        } else {
+            mounted_detector(detector)
+        };
+
+        absolute(&mut tree, PointerPanZoomPhase::Start);
+        let first = if touch_only {
+            "scale-start"
+        } else {
+            "drag-down"
+        };
+        assert_eq!(*log.borrow(), [first]);
+        absolute(
+            &mut tree,
+            PointerPanZoomPhase::Update {
+                pan: Offset::ZERO,
+                scale: 2.,
+                rotation: 0.,
+            },
+        );
+        absolute(&mut tree, PointerPanZoomPhase::End);
+        let want: &[&str] = if touch_only {
+            &["scale-start", "scale-update", "scale-end"]
+        } else {
+            &[
+                "drag-down",
+                "drag-cancel",
+                "scale-start",
+                "scale-update",
+                "scale-end",
+            ]
+        };
+        assert_eq!(&*log.borrow(), want);
+    }
+}

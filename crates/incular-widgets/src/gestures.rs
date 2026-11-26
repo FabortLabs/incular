@@ -519,6 +519,22 @@ impl GestureDetector {
         self
     }
 
+    /// Converts trackpad scroll to exponential zoom while keeping the
+    /// focal point fixed. Disabled by default.
+    #[must_use]
+    pub fn trackpad_scroll_causes_scale(mut self, enabled: bool) -> Self {
+        self.callbacks.trackpad_scroll_causes_scale = enabled;
+        self
+    }
+
+    /// Sets the horizontal and vertical gains used by scroll-to-scale.
+    /// The default is `(0, -1/200)`; this does not enable the conversion.
+    #[must_use]
+    pub fn trackpad_scroll_to_scale_factor(mut self, factor: incular_core::Offset) -> Self {
+        self.callbacks.trackpad_scroll_to_scale_factor = Some(factor);
+        self
+    }
+
     /// Sets the on_scale_start callback.
     #[must_use]
     pub fn on_scale_start(mut self, callback: impl Fn(ScaleStartDetails) + 'static) -> Self {

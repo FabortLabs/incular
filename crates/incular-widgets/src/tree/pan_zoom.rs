@@ -2,8 +2,8 @@
 
 use super::*;
 use incular_gestures::{
-    DragCallbacks, PointerDeviceKind, PointerPanZoomEvent, PointerPanZoomPhase, TrackpadDragAxis,
-    TrackpadDragRecognizer,
+    DEFAULT_TRACKPAD_SCROLL_TO_SCALE_FACTOR, DragCallbacks, PointerDeviceKind, PointerPanZoomEvent,
+    PointerPanZoomPhase, TrackpadDragAxis, TrackpadDragRecognizer,
 };
 
 enum Recognizer {
@@ -66,9 +66,25 @@ impl WidgetTree {
             let id = member.id;
             match &mut member.recognizer {
                 Recognizer::Scale => {
+                    let scroll_gain =
+                        self.elements.get(element.0).and_then(|mounted| {
+                            match mounted.widget.kind() {
+                                WidgetKind::Gesture { callbacks, .. }
+                                    if callbacks.trackpad_scroll_causes_scale =>
+                                {
+                                    Some(
+                                        callbacks
+                                            .trackpad_scroll_to_scale_factor
+                                            .unwrap_or(DEFAULT_TRACKPAD_SCROLL_TO_SCALE_FACTOR),
+                                    )
+                                }
+                                _ => None,
+                            }
+                        });
                     let Some(scale) = self.input.scale_gestures.get_mut(&element) else {
                         continue;
                     };
+                    scale.set_trackpad_scroll_to_scale(scroll_gain);
                     let observed = scale.observe_pan_zoom(event);
                     let details = if scale.wants_acceptance() {
                         self.accept_scale(window, element, observed)
@@ -116,34 +132,44 @@ impl WidgetTree {
             let Some(callbacks) = self.gesture_callbacks(element) else {
                 continue;
             };
-            if !callbacks.allows_pointer_device(PointerDeviceKind::Trackpad) {
-                continue;
-            }
+            let admits_drag = callbacks.allows_pointer_device(PointerDeviceKind::Trackpad);
             let transform = self
                 .render_id(element)
                 .and_then(|render| self.pointer_world_to_local(render));
             let settings = self.gesture_settings_at(element);
-            for (axis, start, update, end) in [
+            for (axis, down, start, update, end, cancel) in [
                 (
                     TrackpadDragAxis::Vertical,
+                    callbacks.on_vertical_drag_down,
                     callbacks.on_vertical_drag_start,
                     callbacks.on_vertical_drag_update,
                     callbacks.on_vertical_drag_end,
+                    callbacks.on_vertical_drag_cancel,
                 ),
                 (
                     TrackpadDragAxis::Horizontal,
+                    callbacks.on_horizontal_drag_down,
                     callbacks.on_horizontal_drag_start,
                     callbacks.on_horizontal_drag_update,
                     callbacks.on_horizontal_drag_end,
+                    callbacks.on_horizontal_drag_cancel,
                 ),
                 (
                     TrackpadDragAxis::Pan,
+                    callbacks.on_pan_down,
                     callbacks.on_pan_start,
                     callbacks.on_pan_update,
                     callbacks.on_pan_end,
+                    callbacks.on_pan_cancel,
                 ),
             ] {
-                if start.is_none() && update.is_none() && end.is_none() {
+                if !admits_drag
+                    || (down.is_none()
+                        && start.is_none()
+                        && update.is_none()
+                        && end.is_none()
+                        && cancel.is_none())
+                {
                     continue;
                 }
                 let mut drag = TrackpadDragRecognizer::new(
@@ -154,7 +180,8 @@ impl WidgetTree {
                         on_end: end,
                     },
                 )
-                .with_drag_start_behavior(callbacks.drag_start_behavior);
+                .with_drag_start_behavior(callbacks.drag_start_behavior)
+                .with_pending_callbacks(down, cancel);
                 drag.set_gesture_settings(settings);
                 if let Some(transform) = transform {
                     drag.set_local_transform(transform);

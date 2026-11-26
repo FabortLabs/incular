@@ -549,6 +549,10 @@ pub struct GestureCallbacks {
     /// accepted position; [`DragStartBehavior::Down`] starts at the press and
     /// reports the movement that crossed the slop as the first update.
     pub drag_start_behavior: DragStartBehavior,
+    /// Convert absolute trackpad panning to scale without moving the focal point.
+    pub trackpad_scroll_causes_scale: bool,
+    /// Optional override of Flutter's default vertical scroll-to-scale gain.
+    pub trackpad_scroll_to_scale_factor: Option<Offset>,
     /// Wait for drag slop even when the arena has already been won
     /// (Flutter `DragGestureRecognizer.onlyAcceptDragOnThreshold`).
     pub only_accept_drag_on_threshold: bool,

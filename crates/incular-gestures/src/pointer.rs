@@ -1526,6 +1526,8 @@ pub struct TrackpadDragRecognizer {
     axis: PanAction,
     contact: Option<TrackpadDragContact>,
     wants_acceptance: bool,
+    on_down: Option<Rc<dyn Fn(DragDownDetails)>>,
+    on_cancel: Option<Rc<dyn Fn()>>,
 }
 
 impl TrackpadDragRecognizer {
@@ -1567,12 +1569,26 @@ impl TrackpadDragRecognizer {
             axis,
             contact: None,
             wants_acceptance: false,
+            on_down: None,
+            on_cancel: None,
         }
     }
 
     #[must_use]
     pub fn with_drag_start_behavior(mut self, behavior: DragStartBehavior) -> Self {
         self.recognizer.callbacks.drag_start_behavior = behavior;
+        self
+    }
+
+    /// Sets the callbacks for admission and for losing before acceptance.
+    #[must_use]
+    pub fn with_pending_callbacks(
+        mut self,
+        on_down: Option<Rc<dyn Fn(DragDownDetails)>>,
+        on_cancel: Option<Rc<dyn Fn()>>,
+    ) -> Self {
+        self.on_down = on_down;
+        self.on_cancel = on_cancel;
         self
     }
 
@@ -1612,6 +1628,12 @@ impl TrackpadDragRecognizer {
                 self.recognizer
                     .velocity
                     .add_position(event.time, Offset::ZERO);
+            }
+            if let Some(down) = &self.on_down {
+                down(DragDownDetails {
+                    global_position: event.position,
+                    local_position: self.recognizer.local(event.position),
+                });
             }
             return true;
         }
@@ -1670,8 +1692,12 @@ impl TrackpadDragRecognizer {
             }
             PointerPanZoomPhase::End => {
                 self.contact = None;
+                let started = inner.pan_started;
                 if let Some(end) = inner.drag_end(event.time) {
                     inner.dispatch(end);
+                }
+                if !started && let Some(cancel) = &self.on_cancel {
+                    cancel();
                 }
             }
         }
@@ -1711,6 +1737,11 @@ impl TrackpadDragRecognizer {
         {
             self.contact = None;
             self.wants_acceptance = false;
+            if !self.recognizer.pan_started
+                && let Some(cancel) = &self.on_cancel
+            {
+                cancel();
+            }
             self.recognizer.pan_started = false;
             self.recognizer.pan_action = None;
         }

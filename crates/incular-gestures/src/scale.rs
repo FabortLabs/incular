@@ -428,10 +428,9 @@ impl ScaleGestureDetector {
     /// `accept_without_update` after routing Start.
     pub fn observe_pan_zoom(&mut self, event: PointerPanZoomEvent) -> Option<ScaleUpdateDetails> {
         self.wants_acceptance = false;
+        // Flutter's scale override admits absolute trackpad streams even
+        // when supportedDevices excludes Trackpad for ordinary pointers.
         let kind = PointerDeviceKind::Trackpad;
-        if !self.allows_device(kind) {
-            return None;
-        }
         let id = ContactId {
             device: event.device,
             pointer: event.pointer,

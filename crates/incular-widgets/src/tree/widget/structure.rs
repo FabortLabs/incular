@@ -1943,6 +1943,8 @@ fn gesture_callbacks_eq(left: &GestureCallbacks, right: &GestureCallbacks) -> bo
         && left.annotates_focus == right.annotates_focus
         && left.mouse_cursor == right.mouse_cursor
         && left.drag_start_behavior == right.drag_start_behavior
+        && left.trackpad_scroll_causes_scale == right.trackpad_scroll_causes_scale
+        && left.trackpad_scroll_to_scale_factor == right.trackpad_scroll_to_scale_factor
         && left.only_accept_drag_on_threshold == right.only_accept_drag_on_threshold
         && left.supported_devices == right.supported_devices
 }

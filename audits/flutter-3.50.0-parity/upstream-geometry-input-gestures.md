@@ -276,6 +276,16 @@ End with the right focal points, count, and scale. The existing
 aggregate input test still requires an observed hover position. This adds
 no claims about device drivers that do not supply correlated input.
 
+#### Mounted scroll-to-scale settings and drag admission
+
+Three authored Flutter probes pair with the mounted consumer: an enabled
+horizontal gain maps 125 px to e while keeping the original focal point
+and zero pan delta; scale accepts absolute trackpad input even when
+`supportedDevices` restricts ordinary input to touch, while drag does not;
+and a losing horizontal drag delivers one Down and one Cancel before
+ScaleStart, with no DragStart or duplicate cancellation. These authored
+probes are separate from the pinned registration count.
+
 ### Drag before scale and signed rotations
 
 The authored Flutter and native mounted probes also reverse the route
