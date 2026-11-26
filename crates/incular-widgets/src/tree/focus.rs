@@ -578,6 +578,7 @@ impl WidgetTree {
     ) -> Option<incular_gestures::ActionResult> {
         let intent = incular_gestures::ErasedIntent::from_intent(intent);
         let dismiss = intent.downcast_command::<crate::DismissIntent>().is_some();
+        let scroll = intent.downcast_command::<crate::ScrollIntent>().copied();
         let mut current = Some(element);
         while let Some(id) = current {
             let entry = self.elements.get(id.0)?;
@@ -600,7 +601,9 @@ impl WidgetTree {
             }
             current = entry.parent;
         }
-        None
+        scroll
+            .filter(|&intent| self.apply_scroll_intent(element, intent))
+            .map(|_| incular_gestures::ActionResult::Handled)
     }
 
     /// Routes keyboard input while preserving a Focus handler's request
@@ -877,38 +880,52 @@ impl WidgetTree {
         code: incular_core::Code,
         page: bool,
     ) -> bool {
+        use incular_config::AxisDirection;
+        use incular_gestures::TraversalDirection;
         let Some(direction) = traversal_direction_for(code, true) else {
             return false;
         };
         let Some(focused) = focused else {
             return false;
         };
-        let Some((_, controller, axis, reverse, physics)) =
-            self.scrollable_viewport_chain(focused).into_iter().next()
-        else {
+        let direction = match direction {
+            TraversalDirection::Up => AxisDirection::Up,
+            TraversalDirection::Down => AxisDirection::Down,
+            TraversalDirection::Left => AxisDirection::Left,
+            TraversalDirection::Right => AxisDirection::Right,
+        };
+        let command = crate::ScrollIntent::new(direction).increment_type(if page {
+            crate::ScrollIncrementType::Page
+        } else {
+            crate::ScrollIncrementType::Line
+        });
+        self.invoke_action_at(focused, &incular_gestures::Intent::<crate::ScrollIntent>::from(command))
+            == Some(incular_gestures::ActionResult::Handled)
+    }
+
+    fn apply_scroll_intent(&self, origin: ElementId, intent: crate::ScrollIntent) -> bool {
+        use incular_config::AxisDirection;
+        let target = self.scrollable_viewport_chain(origin).into_iter().next().or_else(|| {
+            let primary = self.elements.get(origin.0)?.build_context.read::<ScrollController>()?;
+            self.scroll_attachments.iter().find_map(|(element, leases)| {
+                if !leases.iter().any(|lease| lease.controller() == &primary) {
+                    return None;
+                }
+                self.scrollable_viewport_chain(*element).into_iter().find(|(_, controller, ..)| controller == &primary)
+            })
+        });
+        let Some((_, controller, axis, reverse, physics)) = target else {
             return false;
         };
-        // The retained render viewport has already resolved text direction.
-        // ScrollAction uses that physical axis, not the application's locale.
+        // Use the retained viewport's physical direction after resolving
+        // both the explicit reverse flag and inherited text direction.
         let axis_direction = match (axis, reverse) {
-            (Axis::Vertical, false) => incular_gestures::TraversalDirection::Down,
-            (Axis::Vertical, true) => incular_gestures::TraversalDirection::Up,
-            (Axis::Horizontal, false) => incular_gestures::TraversalDirection::Right,
-            (Axis::Horizontal, true) => incular_gestures::TraversalDirection::Left,
+            (Axis::Vertical, false) => AxisDirection::Down,
+            (Axis::Vertical, true) => AxisDirection::Up,
+            (Axis::Horizontal, false) => AxisDirection::Right,
+            (Axis::Horizontal, true) => AxisDirection::Left,
         };
-        let on_axis = matches!(
-            (axis, direction),
-            (
-                Axis::Vertical,
-                incular_gestures::TraversalDirection::Up
-                    | incular_gestures::TraversalDirection::Down
-            ) | (
-                Axis::Horizontal,
-                incular_gestures::TraversalDirection::Left
-                    | incular_gestures::TraversalDirection::Right
-            )
-        );
-        if !on_axis
+        if intent.direction.axis() != axis
             || !physics.should_accept_user_offset(
                 controller.offset(),
                 controller.min_offset(),
@@ -917,23 +934,20 @@ impl WidgetTree {
         {
             return true;
         }
-        let increment = if page {
-            0.8 * controller.viewport_extent()
-        } else {
-            50.0
+        let increment = match intent.increment_type {
+            crate::ScrollIncrementType::Page => 0.8 * controller.viewport_extent(),
+            crate::ScrollIncrementType::Line => 50.0,
         };
-        let signed = if direction == axis_direction {
-            increment
-        } else {
-            -increment
-        };
+        let signed = if intent.direction == axis_direction { increment } else { -increment };
         let target = (controller.offset() + signed)
             .clamp(controller.min_offset(), controller.max_offset().max(0.0));
-        controller.animate_to(
-            target,
-            std::time::Duration::from_millis(100),
-            incular_animation::Curve::EaseInOut,
-        );
+        if target != controller.offset() {
+            controller.animate_to(
+                target,
+                std::time::Duration::from_millis(100),
+                incular_animation::Curve::EaseInOut,
+            );
+        }
         true
     }
 

@@ -1181,7 +1181,7 @@ packages/flutter/test/widgets/scrollable_helpers_test.dart	419	Reversed horizont
 packages/flutter/test/widgets/scrollable_helpers_test.dart	101	Keyboard scrolling doesn't happen if scroll physics are set to NeverScrollableScrollPhysics	paired-match	upstream-custom-scroll-direction.md#keyboard-physics-and-a-centered-viewport
 packages/flutter/test/widgets/scrollable_helpers_test.dart	166	Vertical scrollables are scrolled when activated via keyboard.	paired-match	upstream-custom-scroll-direction.md#keyboard-physics-and-a-centered-viewport
 packages/flutter/test/widgets/scrollable_helpers_test.dart	475	Custom scrollables with a center sliver are scrolled when activated via keyboard.	paired-match	upstream-custom-scroll-direction.md#keyboard-physics-and-a-centered-viewport
-packages/flutter/test/widgets/scrollable_helpers_test.dart	546	Can scroll using intents only	reference-ran-incular-open	upstream-custom-scroll-direction.md#keyboard-physics-and-a-centered-viewport
+packages/flutter/test/widgets/scrollable_helpers_test.dart	546	Can scroll using intents only	paired-match	upstream-custom-scroll-direction.md#programmatic-scroll-intents
 packages/flutter/test/widgets/grid_view_test.dart	564	GridView cross axis layout	paired-match	upstream-grid-direction-and-cache.md
 packages/flutter/test/widgets/grid_view_test.dart	585	GridView crossAxisSpacing	paired-match	upstream-grid-direction-and-cache.md
 packages/flutter/test/widgets/grid_view_test.dart	611	GridView does not cache itemBuilder calls	paired-match	upstream-grid-direction-and-cache.md

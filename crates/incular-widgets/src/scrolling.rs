@@ -29,6 +29,38 @@ struct ListIndexLookup {
 
 type SliverLayoutBuilderFn = Rc<dyn Fn(SliverConstraints) -> Widget>;
 
+/// How far a keyboard or programmatic scroll action should move.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum ScrollIncrementType {
+    #[default]
+    Line,
+    Page,
+}
+
+/// A typed action request for the nearest retained scrollable. Invoke it
+/// from a mounted element through the runtime action dispatcher.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ScrollIntent {
+    pub direction: incular_config::AxisDirection,
+    pub increment_type: ScrollIncrementType,
+}
+
+impl ScrollIntent {
+    #[must_use]
+    pub const fn new(direction: incular_config::AxisDirection) -> Self {
+        Self {
+            direction,
+            increment_type: ScrollIncrementType::Line,
+        }
+    }
+
+    #[must_use]
+    pub const fn increment_type(mut self, increment_type: ScrollIncrementType) -> Self {
+        self.increment_type = increment_type;
+        self
+    }
+}
+
 const DEFAULT_LAZY_ITEM_EXTENT: f32 = WidgetDefaults::DEFAULT.lazy_item_extent;
 const DEFAULT_SLIVER_CACHE_EXTENT: f32 = WidgetDefaults::DEFAULT.sliver_cache_extent;
 

@@ -377,6 +377,7 @@ pub use repeating_animation_builder::{
 };
 pub use safe_area::{RemovePadding, SafeArea};
 pub use scroll_aware_image_provider::{ScrollAwareContext, ScrollAwareImageProvider};
+pub use scrolling::{ScrollIncrementType, ScrollIntent};
 pub use scroll_behavior::{
     AndroidOverscrollIndicator, MultitouchDragStrategy, ScrollBehavior, TOUCH_LIKE_DEVICE_KINDS,
 };

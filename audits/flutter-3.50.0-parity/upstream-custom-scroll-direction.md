@@ -109,3 +109,17 @@ physical reverse. Five focused widget binaries passed (67 tests),
 as did the nine PageView cache controls. The separate known PageView
 eviction failure after a partial jump remains open; see
 [the prior retained-lifecycle recheck](frame-retained-text-implicit-rechecks.md).
+
+## Programmatic scroll intents
+
+The pinned original :546 now pairs. Invoking two native `ScrollIntent`
+page actions from a mounted list child moves the viewport from 0 to 480
+to 960 logical pixels, with the exact intersecting page combinations.
+No keyboard event is synthesized. The default keyboard path also goes
+through the same typed action dispatcher. A nearer authored handler
+shadows the built-in action rather than scrolling as well.
+
+The primary-controller fallback from a sibling and the physical
+direction/cross-axis behavior on a reversed viewport passed on both
+pinned Flutter and native. Four native tests and all three pinned
+comparisons passed. Custom increment calculators remain separate.
