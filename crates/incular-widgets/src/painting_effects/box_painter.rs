@@ -15,7 +15,7 @@ use incular_rendering::{BlendMode, Brush, Canvas, CornerRadii, DisplayList, Fill
 
 use super::decoration::{
     Border, BorderDirectional, BorderSide, BorderStyle, BoxDecoration, BoxShadow, BoxShape,
-    DecorationImage, faded_decoration_image,
+    DecorationImage, DecorationImageSource, faded_decoration_image,
 };
 use super::geometry::{BorderRadius, Radius};
 use crate::{
@@ -426,6 +426,78 @@ fn leaf_decoration_image(image: &DecorationImage) -> Widget {
 }
 
 fn resolved_decoration_image(image: &DecorationImage, direction: Option<TextDirection>) -> Widget {
+    match &image.image {
+        DecorationImageSource::Decoded(bitmap) => {
+            paint_decoration_bitmap(image, bitmap.clone(), direction, 1.)
+        }
+        DecorationImageSource::Provider(provider) => {
+            let (provider, image) = (provider.clone(), image.clone());
+            Widget::mount_scoped_layout_builder(
+                |_| DecorationProviderState::default(),
+                move |state, context, constraints| {
+                    let size = constraints.biggest();
+                    let configuration = crate::provider_image::local_image_configuration(
+                        context,
+                        (size.width.is_finite() && size.height.is_finite()).then_some(size),
+                    );
+                    match state.stream(&provider, configuration).frame_state() {
+                        incular_image::ImageLoadState::Ready(bitmap) => {
+                            let source_scale = bitmap.scale() as f32;
+                            paint_decoration_bitmap(&image, bitmap, direction, source_scale)
+                        }
+                        _ => crate::SizedBox::shrink().into(),
+                    }
+                },
+                true,
+            )
+        }
+    }
+}
+
+#[derive(Default)]
+struct DecorationProviderState {
+    current: RefCell<Option<ResolvedDecorationImage>>,
+}
+
+struct ResolvedDecorationImage {
+    provider: crate::AnyImageProvider,
+    configuration: incular_image::ImageConfiguration,
+    stream: incular_image::ImageStream,
+}
+
+impl crate::tree::RetainedState for DecorationProviderState {
+    fn rebind_revision(&self, _: Rc<Cell<u64>>) {}
+}
+
+impl DecorationProviderState {
+    fn stream(
+        &self,
+        provider: &crate::AnyImageProvider,
+        configuration: incular_image::ImageConfiguration,
+    ) -> incular_image::ImageStream {
+        if let Some(active) = self.current.borrow().as_ref()
+            && active.provider == *provider
+            && active.configuration == configuration
+        {
+            return active.stream.clone();
+        }
+        let stream = provider.resolve(&configuration);
+        self.current.replace(Some(ResolvedDecorationImage {
+            provider: provider.clone(),
+            configuration,
+            stream: stream.clone(),
+        }));
+        stream
+    }
+}
+
+fn paint_decoration_bitmap(
+    image: &DecorationImage,
+    bitmap: incular_image::ImageHandle,
+    direction: Option<TextDirection>,
+    source_scale: f32,
+) -> Widget {
+    let scale = image.scale * source_scale;
     let alignment = image.alignment_geometry.map_or(image.alignment, |alignment| {
         alignment.resolve(direction.unwrap_or(TextDirection::Ltr))
     });
@@ -433,8 +505,8 @@ fn resolved_decoration_image(image: &DecorationImage, direction: Option<TextDire
     let mut painted: Widget = if image.center_slice.is_some() || flip {
         painted_image(
             ImagePaint {
-                image: image.image.clone(),
-                scale: image.scale,
+                image: bitmap,
+                scale,
                 fit: image.fit,
                 alignment,
                 center_slice: image.center_slice,
@@ -444,11 +516,11 @@ fn resolved_decoration_image(image: &DecorationImage, direction: Option<TextDire
             },
         )
     } else {
-        Image::new(image.image.clone())
+        Image::new(bitmap)
             .fit(image.resolved_fit())
             .alignment(alignment)
             .repeat(image.repeat)
-            .scale(image.scale)
+            .scale(scale)
             .filter_quality(image.filter_quality)
             .into()
     };

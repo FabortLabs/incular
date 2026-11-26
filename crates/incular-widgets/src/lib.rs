@@ -339,7 +339,7 @@ pub use painting_effects::{
     BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxBorderLayer, BoxBorderStack,
     BoxBorderValue, BoxDecoration, BoxLinearGradient, BoxRadialGradient, BoxShadow, BoxShape, BoxSweepGradient,
     CircleBorder, CircularNotchedRectangle, ClipRSuperellipse, CompoundBorder, ContinuousRectangleBorder, CustomBoxBorder, CustomBoxBorderHandle, CustomPainter,
-    CustomPainterSemantics, DecoratedShapeBox, DecorationImage, DecorationPosition, GridPaper,
+    CustomPainterSemantics, DecoratedShapeBox, DecorationImage, DecorationImageSource, DecorationPosition, GridPaper,
     EllipticalRoundedRect, ImageFiltered, ImageIcon, LinearBorder, LinearBorderEdge, NotchedShape, OvalBorder,
     PhysicalModel, PhysicalShape, Radius, RawImage, RoundedCircleOutline, RoundedRectangleBorder, RoundedSuperellipseBorder,
     SemanticsBuilder, ShapeBorder, ShapeBorderClipper, ShapeDecoration, SnapshotWidget,

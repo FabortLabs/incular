@@ -297,7 +297,7 @@ pub mod prelude {
         ConnectionState, ConstrainedBox, ConstraintsTransformBox, Container, CreateRectTween,
         CrossFadeState, CustomClipper, CustomMultiChildLayout, CustomPaint, CustomPainter,
         CustomPainterSemantics, CustomScrollView, CustomSingleChildLayout, DecoratedBox,
-        DecoratedBoxTransition, DecoratedShapeBox, DecoratedSliver, DecorationImage,
+        DecoratedBoxTransition, DecoratedShapeBox, DecoratedSliver, DecorationImage, DecorationImageSource,
         DecorationPosition, DefaultAssetBundle, DefaultSelectionStyle, DefaultTextHeightBehavior,
         DefaultTextStyle, DefaultTextStyleTransition, DiagonalDragBehavior, Directionality,
         DismissDirection, DismissIntent, DismissMenuAction, DismissUpdateDetails, Dismissible, DisplayFeatureSubScreen,

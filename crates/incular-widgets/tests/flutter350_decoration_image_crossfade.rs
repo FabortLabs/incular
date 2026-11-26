@@ -57,7 +57,10 @@ fn mounted_images(
 fn both_weighted_images_are_isolated_from_the_opaque_backdrop() {
     let red = image([255, 0, 0, 255], 0.5);
     let green = image([0, 255, 0, 255], 0.5);
-    let ids = [red.image.id(), green.image.id()];
+    let ids = [
+        red.image.decoded().unwrap().id(),
+        green.image.decoded().unwrap().id(),
+    ];
     let left = BoxDecoration::new().image(red);
     let right = BoxDecoration::new().image(green);
     let images = mounted_images(left.lerp(&right, 0.5), Color::rgba(0, 0, 255, 255));
@@ -76,7 +79,11 @@ fn retargeted_crossfades_restore_each_nested_layer_with_source_over() {
     let red = image([255, 0, 0, 255], 1.);
     let green = image([0, 255, 0, 255], 1.);
     let blue = image([0, 0, 255, 255], 1.);
-    let [red_id, green_id, blue_id] = [red.image.id(), green.image.id(), blue.image.id()];
+    let [red_id, green_id, blue_id] = [
+        red.image.decoded().unwrap().id(),
+        green.image.decoded().unwrap().id(),
+        blue.image.decoded().unwrap().id(),
+    ];
     let group = DecorationImage::lerp_optional(Some(&green), Some(&blue), 0.5).unwrap();
     let red_then_group = DecorationImage::lerp_optional(Some(&red), Some(&group), 0.5).unwrap();
     let group_then_red = DecorationImage::lerp_optional(Some(&group), Some(&red), 0.5).unwrap();

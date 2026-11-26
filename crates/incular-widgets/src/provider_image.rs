@@ -192,24 +192,13 @@ impl ProviderImage {
         self
     }
 
-    /// Flutter `createLocalImageConfiguration`: the configuration the
-    /// provider resolves against.
     fn configuration(&self, context: &BuildContext<'_>) -> ImageConfiguration {
-        let mut configuration = ImageConfiguration::new()
-            .device_pixel_ratio(context.media_query_device_pixel_ratio().unwrap_or(1.0));
-        if let Some(bundle) = DefaultAssetBundle::configured_of(context) {
-            configuration = configuration.bundle(bundle);
-        }
-        if let (Some(width), Some(height)) = (self.options.width, self.options.height) {
-            configuration = configuration.size(Size::new(width, height));
-        }
-        if let Some(direction) = context.text_direction() {
-            configuration = configuration.text_direction(direction);
-        }
-        if let Some(locale) = context.locales().into_iter().next() {
-            configuration = configuration.locale(locale);
-        }
-        configuration.normalized()
+        let size = self
+            .options
+            .width
+            .zip(self.options.height)
+            .map(|(width, height)| Size::new(width, height));
+        local_image_configuration(context, size)
     }
 
     /// The image, or an empty box of the explicit size while there is none
@@ -241,6 +230,28 @@ impl ProviderImage {
             }
         }
     }
+}
+
+/// Flutter `createLocalImageConfiguration`, shared by Image and DecorationImage.
+pub(crate) fn local_image_configuration(
+    context: &BuildContext<'_>,
+    size: Option<Size>,
+) -> ImageConfiguration {
+    let mut configuration = ImageConfiguration::new()
+        .device_pixel_ratio(context.media_query_device_pixel_ratio().unwrap_or(1.0));
+    if let Some(bundle) = DefaultAssetBundle::configured_of(context) {
+        configuration = configuration.bundle(bundle);
+    }
+    if let Some(size) = size {
+        configuration = configuration.size(size);
+    }
+    if let Some(direction) = context.text_direction() {
+        configuration = configuration.text_direction(direction);
+    }
+    if let Some(locale) = context.locales().into_iter().next() {
+        configuration = configuration.locale(locale);
+    }
+    configuration.normalized()
 }
 
 /// `_ImageState`.

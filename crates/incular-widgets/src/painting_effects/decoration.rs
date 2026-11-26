@@ -19,6 +19,7 @@ use crate::{
 use std::{
     borrow::Cow,
     hash::{Hash, Hasher},
+    rc::Rc,
     sync::Arc,
 };
 
@@ -659,10 +660,42 @@ impl incular_core::Lerp for BoxShadow {
 
 pub use incular_rendering::TileMode;
 
+/// The decoded pixels or the provider for a decoration image.
+#[derive(Clone, Debug, PartialEq)]
+pub enum DecorationImageSource {
+    Decoded(ImageHandle),
+    Provider(crate::AnyImageProvider),
+}
+
+impl DecorationImageSource {
+    /// The image supplied by the caller, if it was already decoded.
+    /// Provider-backed sources resolve separately for each mounted consumer.
+    #[must_use]
+    pub fn decoded(&self) -> Option<&ImageHandle> {
+        match self {
+            Self::Decoded(image) => Some(image),
+            Self::Provider(_) => None,
+        }
+    }
+}
+
+impl From<ImageHandle> for DecorationImageSource {
+    fn from(image: ImageHandle) -> Self {
+        Self::Decoded(image)
+    }
+}
+
+impl From<crate::AnyImageProvider> for DecorationImageSource {
+    fn from(provider: crate::AnyImageProvider) -> Self {
+        Self::Provider(provider)
+    }
+}
+
 /// An image configuration drawn inside a box decoration.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct DecorationImage {
-    pub image: ImageHandle,
+    #[builder(setter(into))]
+    pub image: DecorationImageSource,
     /// Flutter `fit`. `None` resolves like Flutter's `paintImage`: scale-down
     /// without a center slice, fill with one. See [`Self::resolved_fit`].
     #[builder(default, setter(strip_option))]
@@ -691,7 +724,7 @@ pub struct DecorationImage {
     #[builder(default = FilterQuality::Medium)]
     pub filter_quality: FilterQuality,
     #[builder(default, setter(skip))]
-    pub(super) blend: Option<Arc<DecorationImageBlend>>,
+    pub(super) blend: Option<Rc<DecorationImageBlend>>,
 
 }
 
@@ -718,7 +751,7 @@ impl DecorationImage {
             (None, None) => None,
             (Some(a), Some(b)) if std::ptr::eq(a, b) => Some(a.clone()),
             (Some(a), Some(b)) => Some(Self {
-                blend: Some(Arc::new(DecorationImageBlend {
+                blend: Some(Rc::new(DecorationImageBlend {
                     from: a.clone(),
                     to: b.clone(),
                     t,
@@ -750,9 +783,9 @@ impl DecorationImage {
     }
 
     #[must_use]
-    pub fn new(image: ImageHandle) -> Self {
+    pub fn new(image: impl Into<DecorationImageSource>) -> Self {
         Self {
-            image,
+            image: image.into(),
             fit: None,
             alignment: incular_config::Alignment::CENTER,
             alignment_geometry: None,
@@ -765,6 +798,13 @@ impl DecorationImage {
             blend: None,
         }
     }
+
+    /// Flutter's `DecorationImage(image: provider)`, including providers
+    /// whose first decoded frame arrives later.
+    #[must_use]
+    pub fn from_provider(provider: impl crate::ImageProvider + 'static) -> Self {
+        Self::new(crate::AnyImageProvider::new(provider))
+    }
 }
 
 pub(super) fn faded_decoration_image(
@@ -776,7 +816,7 @@ pub(super) fn faded_decoration_image(
     }
     image.cloned().map(|mut image| {
         if let Some(blend) = &mut image.blend {
-            let blend = Arc::make_mut(blend);
+            let blend = Rc::make_mut(blend);
             blend.opacity = (blend.opacity * factor).clamp(0., 1.);
         } else {
             image.opacity = (image.opacity * factor).clamp(0., 1.);

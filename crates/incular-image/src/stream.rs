@@ -10,7 +10,7 @@
 
 use std::{
     any::Any,
-    cell::{Cell, RefCell},
+    cell::{Cell, OnceCell, RefCell},
     fmt,
     rc::Rc,
 };
@@ -57,6 +57,7 @@ type FrameMap = Box<dyn FnOnce(ImageHandle) -> Result<ImageHandle, ImageError>>;
 struct StreamCell {
     state: RefCell<ImageLoadState>,
     changes: DependencySource,
+    frame_changes: OnceCell<DependencySource>,
     completed: Cell<bool>,
     /// The stream this one follows after [`ImageStreamCompleter::follow`].
     source: RefCell<Option<ImageStream>>,
@@ -95,6 +96,7 @@ impl ImageStream {
             cell: Rc::new(StreamCell {
                 state: RefCell::new(state),
                 changes: DependencySource::default(),
+                frame_changes: OnceCell::new(),
                 completed: Cell::new(completed),
                 source: RefCell::new(None),
                 map: RefCell::new(None),
@@ -196,9 +198,27 @@ impl ImageStream {
     /// on this stream.
     #[must_use]
     pub fn state(&self) -> ImageLoadState {
-        self.cell.changes.track();
+        self.observed_state(true)
+    }
+
+    /// Reads the frame or failure, observing completion but not progress
+    /// reports. Decoration painters do not show loading indicators.
+    #[must_use]
+    pub fn frame_state(&self) -> ImageLoadState {
+        self.observed_state(false)
+    }
+
+    fn observed_state(&self, include_progress: bool) -> ImageLoadState {
+        if include_progress {
+            self.cell.changes.track();
+        } else {
+            self.cell
+                .frame_changes
+                .get_or_init(DependencySource::default)
+                .track();
+        }
         if let Some(source) = self.source() {
-            let outcome = source.state();
+            let outcome = source.observed_state(include_progress);
             let map = if matches!(outcome, ImageLoadState::Loading(_)) {
                 None
             } else {
@@ -219,7 +239,10 @@ impl ImageStream {
             }
             return outcome;
         }
-        self.cell.state.borrow().clone()
+        match &*self.cell.state.borrow() {
+            ImageLoadState::Loading(_) if !include_progress => ImageLoadState::Loading(None),
+            state => state.clone(),
+        }
     }
 
     fn source(&self) -> Option<ImageStream> {
@@ -248,6 +271,9 @@ impl ImageStream {
         *self.cell.state.borrow_mut() = state;
         self.cell.completed.set(completes);
         self.cell.changes.notify();
+        if completes && let Some(changes) = self.cell.frame_changes.get() {
+            changes.notify();
+        }
         true
     }
 }
@@ -310,6 +336,11 @@ impl ImageStreamCompleter {
         }
         *stream.cell.source.borrow_mut() = Some(source.clone());
         stream.cell.changes.notify();
+        // A dormant frame-only reader must rebind to the followed source
+        // even when that source has not completed yet.
+        if let Some(changes) = stream.cell.frame_changes.get() {
+            changes.notify();
+        }
         true
     }
 }
