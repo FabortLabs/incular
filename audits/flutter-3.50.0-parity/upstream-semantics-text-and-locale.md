@@ -24,3 +24,23 @@ two hints, or a hint and one non-conflicting value, requires separate
 retained compatible annotation absorption. The two conflicting values
 above must remain separate after that work. Twenty-six focused Rust
 tests and the authored Flutter control passed.
+
+## Compatible hints and values
+
+The retained ports of :331 and :398 now pair. Two hints form one
+newline-separated hint. A hint and one compatible value live on the
+same semantic container. The container takes the fragments' reading
+direction when it has no text of its own. Two conflicting nonempty
+values remain independent nodes, including their own hints. Promoting
+and removing a conflict restores the merged owner without replacing
+an unrelated explicit boundary. Geometry-only passes reuse whether
+the owner already holds an absorbed value.
+
+The two pinned authored probes also check UTF-16 attribute ranges
+through an emoji, a separator and a direction mark. The RTL hint
+span shifts to 4..6; the independent value span stays at 0..4. Those
+probes and all 39 focused Rust tests pass. Strict frame rechecks:
+`semantics__value_hint_tooltip` (2), `semantics__increase_decrease` (3),
+and `semantics__merge` (2) all match. This does not implement the full
+Flutter semantic configuration conflict reducer; other annotations
+keep their independent roles, fields and actions.

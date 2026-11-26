@@ -26,6 +26,25 @@ pub(super) struct SemanticCollectionContext {
     set_size: Option<usize>,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum SemanticTextMerge {
+    #[default]
+    None,
+    BlockedLabels,
+    HintAndValue {
+        take_value: bool,
+    },
+}
+
+#[derive(Default)]
+struct MergedSemanticFields {
+    hint: String,
+    hint_attributes: Vec<StringAttribute>,
+    value: Option<String>,
+    value_attributes: Vec<StringAttribute>,
+    direction: Option<TextDirection>,
+}
+
 #[derive(Default)]
 struct MergedSemanticSummary {
     label: String,
@@ -47,36 +66,14 @@ impl MergedSemanticSummary {
         direction: Option<TextDirection>,
         attributes: &[StringAttribute],
     ) {
-        if self.direction.is_none() {
-            self.direction = direction;
-        }
-        if label.is_empty() {
-            return;
-        }
-        if !self.label.is_empty() {
-            self.label.push('\n');
-        }
-        let embedded = direction.filter(|direction| Some(*direction) != self.direction);
-        if let Some(direction) = embedded {
-            self.label.push(match direction {
-                TextDirection::Ltr => '\u{202a}',
-                TextDirection::Rtl => '\u{202b}',
-            });
-        }
-        // The source range follows any separator and opening direction mark.
-        // Plain labels don't need to scan previously concatenated text.
-        if !attributes.is_empty() {
-            let offset = self.label.encode_utf16().count();
-            self.label_attributes
-                .extend(attributes.iter().map(|attribute| {
-                    let range = attribute.range();
-                    attribute.with_range((offset + range.start)..(offset + range.end))
-                }));
-        }
-        self.label.push_str(label);
-        if embedded.is_some() {
-            self.label.push('\u{202c}');
-        }
+        append_semantic_text(
+            &mut self.label,
+            &mut self.label_attributes,
+            &mut self.direction,
+            label,
+            direction,
+            attributes,
+        );
     }
 
     fn add_tags(&mut self, tags: &[incular_semantics::SemanticsTag]) {
@@ -96,6 +93,43 @@ impl MergedSemanticSummary {
 }
 
 /// Paint and cache bounds of the owning sliver viewport, in world space.
+fn append_semantic_text(
+    output: &mut String,
+    output_attributes: &mut Vec<StringAttribute>,
+    output_direction: &mut Option<TextDirection>,
+    text: &str,
+    direction: Option<TextDirection>,
+    attributes: &[StringAttribute],
+) {
+    if output_direction.is_none() {
+        *output_direction = direction;
+    }
+    if text.is_empty() {
+        return;
+    }
+    if !output.is_empty() {
+        output.push('\n');
+    }
+    let embedded = direction.filter(|direction| Some(*direction) != *output_direction);
+    if let Some(direction) = embedded {
+        output.push(match direction {
+            TextDirection::Ltr => '\u{202a}',
+            TextDirection::Rtl => '\u{202b}',
+        });
+    }
+    if !attributes.is_empty() {
+        let offset = output.encode_utf16().count();
+        output_attributes.extend(attributes.iter().map(|attribute| {
+            let range = attribute.range();
+            attribute.with_range((offset + range.start)..(offset + range.end))
+        }));
+    }
+    output.push_str(text);
+    if embedded.is_some() {
+        output.push('\u{202c}');
+    }
+}
+
 #[derive(Clone, Copy)]
 struct SemanticSliverWindow {
     visible: Option<Rect>,
@@ -156,9 +190,8 @@ pub(super) struct SemanticVisit {
     force_bounds: bool,
     /// The visual ancestor set an accessibility subtree block.
     subtree_focus_blocked: bool,
-    /// An ancestor with the same effective focus block can absorb compatible
-    /// labels, but not independent semantic nodes or actions.
-    merges_blocked_labels: bool,
+    /// Compatible text fragments may join an established semantic node.
+    parent_text_merge: SemanticTextMerge,
     /// Plain text belongs to an enclosing Focus annotation until a
     /// descendant independent semantics boundary starts its own group.
     merges_focus_labels: bool,
@@ -361,7 +394,7 @@ impl WidgetTree {
             force_content: full,
             force_bounds: full,
             subtree_focus_blocked: false,
-            merges_blocked_labels: false,
+            parent_text_merge: SemanticTextMerge::None,
             merges_focus_labels: false,
             parent_world: CoreTransform::IDENTITY,
             viewport_clip: None,
@@ -375,12 +408,11 @@ impl WidgetTree {
         while let Some(visit) = visits.pop() {
             let entry =
                 self.element_live(visit.element, "semantic traversal element must remain live");
-            let merges_child_labels = super::focus::annotated_focus_node(entry.widget.kind())
-                .is_some()
-                || can_own_blocked_labels(
-                    entry,
-                    effective_focus_block(entry, visit.subtree_focus_blocked),
-                );
+            let block = effective_focus_block(entry, visit.subtree_focus_blocked);
+            let can_own_hints = can_own_hint_value(entry, block);
+            let merges_child_text = can_own_hints
+                || can_own_blocked_labels(entry, block)
+                || super::focus::annotated_focus_node(entry.widget.kind()).is_some();
             let render = entry.render;
             let node = self.render_live_mut(render, "semantic render must remain live");
             if !visit.force_content && !visit.force_bounds && !node.subtree_needs_semantics {
@@ -397,8 +429,11 @@ impl WidgetTree {
                 // may have appeared or disappeared, rebuilds fully.
                 content: visit.force_content
                     || dirty.any_content()
-                    || merges_child_labels && dirty.has_descendant_content(),
-                subtree_content: visit.force_content || dirty.subtree_content(),
+                    || merges_child_text && dirty.has_descendant_content(),
+                subtree_content: visit.force_content
+                    || dirty.subtree_content()
+                    // A value becoming conflicting affects clean siblings as well.
+                    || can_own_hints && dirty.has_descendant_content(),
                 own_bounds: visit.force_bounds || dirty.own_bounds(),
                 bounds_below: visit.force_bounds || dirty.bounds_below(),
                 descendant_bounds: dirty.has_descendant_bounds(),
@@ -836,7 +871,7 @@ impl WidgetTree {
             inherited_tags,
             parent_world,
             subtree_focus_blocked,
-            merges_blocked_labels,
+            parent_text_merge,
             merges_focus_labels,
             mut viewport_clip,
             sliver_window,
@@ -856,11 +891,41 @@ impl WidgetTree {
             .or(locale_scope);
         let own_focus_block = effective_focus_block(entry, subtree_focus_blocked);
         let child_focus_blocked = own_focus_block == AccessibilityFocusBlockType::BlockSubtree;
-        let joins_blocked_labels =
-            merges_blocked_labels && self.can_merge_blocked_label_fragment(element, entry);
-        let owns_blocked_labels =
-            !joins_blocked_labels && can_own_blocked_labels(entry, own_focus_block);
-        let child_merges_blocked_labels = joins_blocked_labels || owns_blocked_labels;
+        let retained_id = self.semantic_ids.get(&element).copied();
+        let joins_text_merge = parent_text_merge != SemanticTextMerge::None
+            && self.can_merge_text_fragment(element, entry, parent_text_merge);
+        let own_text_merge = if joins_text_merge {
+            SemanticTextMerge::None
+        } else if can_own_blocked_labels(entry, own_focus_block) {
+            SemanticTextMerge::BlockedLabels
+        } else if can_own_hint_value(entry, own_focus_block) {
+            let owns_value = entry
+                .widget
+                .semantic_properties()
+                .explicit
+                .as_ref()
+                .and_then(|data| data.value.as_deref())
+                .is_some_and(|value| !value.is_empty());
+            let take_value = !owns_value
+                && if let Some(retained) = retained_id.filter(|_| !scope.content) {
+                    // Geometry alone cannot introduce or remove a value
+                    // conflict. The owner already records an absorbed value.
+                    self.semantics
+                        .node(retained)
+                        .and_then(|node| node.value.as_deref())
+                        .is_some_and(|value| !value.is_empty())
+                } else {
+                    self.count_compatible_values(element, entry) < 2
+                };
+            SemanticTextMerge::HintAndValue { take_value }
+        } else {
+            SemanticTextMerge::None
+        };
+        let child_text_merge = if joins_text_merge {
+            parent_text_merge
+        } else {
+            own_text_merge
+        };
         let focus_annotation = super::focus::annotated_focus_node(entry.widget.kind());
         let joins_focus_annotation =
             merges_focus_labels && !self.focus_semantics_boundary(element, entry);
@@ -908,7 +973,7 @@ impl WidgetTree {
             _ => None,
         };
         let tag_for_children = entry.widget.semantic_properties().tag_for_children.as_ref();
-        let retained = self.semantic_ids.contains_key(&element);
+        let retained = retained_id.is_some();
         if !scope.content && retained {
             let next_tag_scope = ChildTagScope::extend(None, tag_for_children);
             // Nothing but geometry changed here or below, so the retained
@@ -946,7 +1011,7 @@ impl WidgetTree {
                             force_content: false,
                             force_bounds: false,
                             subtree_focus_blocked: child_focus_blocked,
-                            merges_blocked_labels: child_merges_blocked_labels,
+                            parent_text_merge: child_text_merge,
                             merges_focus_labels: child_merges_focus_labels,
                             viewport_clip,
                             sliver_window: if index < entry.children.len() {
@@ -993,7 +1058,7 @@ impl WidgetTree {
                         force_content: regroups,
                         force_bounds: scope.bounds_below || regroups,
                         subtree_focus_blocked: child_focus_blocked,
-                        merges_blocked_labels: child_merges_blocked_labels,
+                        parent_text_merge: child_text_merge,
                         merges_focus_labels: child_merges_focus_labels,
                         viewport_clip,
                         sliver_window: if index < entry.children.len() {
@@ -1201,7 +1266,9 @@ impl WidgetTree {
             role = None;
         }
         let explicitly_merges = absorbs_descendant_semantics(entry);
-        if (explicitly_merges || owns_blocked_labels) && focus_annotation.is_none() {
+        if (explicitly_merges || own_text_merge == SemanticTextMerge::BlockedLabels)
+            && focus_annotation.is_none()
+        {
             if let Some(own) = element_own_label(entry) {
                 merged.add_label(
                     &own,
@@ -1257,16 +1324,18 @@ impl WidgetTree {
                 state.text_attributes = None;
             }
         }
+        let mut description = properties.description.clone().or_else(|| {
+            properties
+                .explicit
+                .as_ref()
+                .and_then(|explicit| explicit.description.clone())
+        });
         state.text_direction = state.text_direction.or(merged.direction).or_else(|| {
             let has_text = default_label.is_some()
                 || merged_label.is_some()
                 || properties.label.is_some()
                 || value.is_some()
-                || properties.description.is_some()
-                || properties
-                    .explicit
-                    .as_ref()
-                    .is_some_and(|explicit| explicit.description.is_some())
+                || description.is_some()
                 || state.tooltip.is_some()
                 || state.increased_value.is_some()
                 || state.decreased_value.is_some();
@@ -1274,6 +1343,36 @@ impl WidgetTree {
                 .then(|| self.semantic_label_direction(element, entry))
                 .flatten()
         });
+        if let SemanticTextMerge::HintAndValue { .. } = own_text_merge {
+            let mut fields = MergedSemanticFields {
+                direction: state.text_direction,
+                ..MergedSemanticFields::default()
+            };
+            if let Some(hint) = description.as_deref() {
+                fields.hint.push_str(hint);
+                if let Some(attributes) = &state.text_attributes {
+                    fields.hint_attributes.clone_from(&attributes.hint);
+                }
+            }
+            for &child in self.visible_semantic_children(element, entry).iter() {
+                self.push_compatible_hint_value(child, own_text_merge, &mut fields);
+            }
+            if !fields.hint.is_empty() {
+                description = Some(fields.hint);
+            }
+            if let Some(taken) = fields.value {
+                value = Some(taken);
+                if !fields.value_attributes.is_empty() || state.text_attributes.is_some() {
+                    Arc::make_mut(state.text_attributes.get_or_insert_with(Arc::default)).value =
+                        fields.value_attributes;
+                }
+            }
+            if !fields.hint_attributes.is_empty() || state.text_attributes.is_some() {
+                Arc::make_mut(state.text_attributes.get_or_insert_with(Arc::default)).hint =
+                    fields.hint_attributes;
+            }
+            state.text_direction = fields.direction;
+        }
         // Flutter absorption preserves the parent's level if present.
         // Otherwise the first descendant with a heading supplies it.
         state.set_enabled_state(merge_enabled_state(state.enabled_state(), merged.enabled));
@@ -1376,7 +1475,7 @@ impl WidgetTree {
                 actions.push(SemanticActionKind::Custom);
             }
         }
-        if joins_blocked_labels {
+        if joins_text_merge {
             role = None;
         }
         if semantic_parent == RETAINED_LIST && role.is_some() != retained {
@@ -1426,19 +1525,7 @@ impl WidgetTree {
                         .or(default_label)
                 }),
                 value,
-                description: entry
-                    .widget
-                    .semantic_properties()
-                    .description
-                    .clone()
-                    .or_else(|| {
-                        entry
-                            .widget
-                            .semantic_properties()
-                            .explicit
-                            .as_ref()
-                            .and_then(|semantics| semantics.description.clone())
-                    }),
+                description,
                 bounds,
                 state,
                 actions,
@@ -1475,7 +1562,7 @@ impl WidgetTree {
                     force_content: scope.subtree_content || regroups,
                     force_bounds: scope.bounds_below || regroups,
                     subtree_focus_blocked: child_focus_blocked,
-                    merges_blocked_labels: child_merges_blocked_labels,
+                    parent_text_merge: child_text_merge,
                     merges_focus_labels: child_merges_focus_labels,
                     viewport_clip,
                     sliver_window: if index < entry.children.len() {
@@ -1809,7 +1896,12 @@ impl WidgetTree {
         });
     }
 
-    fn can_merge_blocked_label_fragment(&self, element: ElementId, entry: &Element) -> bool {
+    fn can_merge_text_fragment(
+        &self,
+        element: ElementId,
+        entry: &Element,
+        policy: SemanticTextMerge,
+    ) -> bool {
         let properties = entry.widget.semantic_properties();
         if !self.can_contribute_merged_semantics(entry)
             || properties.merge_descendants
@@ -1824,13 +1916,35 @@ impl WidgetTree {
         let kind = entry.widget.kind();
         match properties.explicit.as_deref() {
             Some(explicit) => {
-                // Only merge label fragments here: other annotations retain
-                // their actions, values, and geometry as independent nodes.
+                // Incompatible annotations keep their independent node.
                 let state = &explicit.state;
-                explicit.role == SemanticRole::GenericContainer
-                    && explicit.label.is_some()
-                    && explicit.value.is_none()
-                    && explicit.description.is_none()
+                let text_is_compatible = match policy {
+                    SemanticTextMerge::None => false,
+                    SemanticTextMerge::BlockedLabels => {
+                        explicit.label.is_some()
+                            && explicit.value.is_none()
+                            && explicit.description.is_none()
+                            && state.text_attributes.as_ref().is_none_or(|attributes| {
+                                attributes.hint.is_empty() && attributes.value.is_empty()
+                            })
+                    }
+                    SemanticTextMerge::HintAndValue { take_value } => {
+                        let has_value = explicit
+                            .value
+                            .as_deref()
+                            .is_some_and(|value| !value.is_empty());
+                        explicit.label.is_none()
+                            && (explicit.description.is_some() || explicit.value.is_some())
+                            && (take_value || !has_value)
+                            && !state.accessibility_focus_block_type.blocks_focus()
+                            && state
+                                .text_attributes
+                                .as_ref()
+                                .is_none_or(|attributes| attributes.label.is_empty())
+                    }
+                };
+                text_is_compatible
+                    && explicit.role == SemanticRole::GenericContainer
                     && explicit.actions.is_empty()
                     && !matches!(
                         kind,
@@ -1844,9 +1958,6 @@ impl WidgetTree {
                             | WidgetKind::SliverViewport { .. }
                             | WidgetKind::Table { .. }
                     )
-                    && state.text_attributes.as_ref().is_none_or(|attributes| {
-                        attributes.hint.is_empty() && attributes.value.is_empty()
-                    })
                     && *state
                         == SemanticState {
                             text_direction: state.text_direction,
@@ -1855,7 +1966,11 @@ impl WidgetTree {
                             ..SemanticState::default()
                         }
             }
-            None => !self.focus_semantics_boundary(element, entry),
+            None => {
+                !self.focus_semantics_boundary(element, entry)
+                    && (!matches!(policy, SemanticTextMerge::HintAndValue { .. })
+                        || element_own_label(entry).is_none())
+            }
         }
     }
 
@@ -1867,7 +1982,7 @@ impl WidgetTree {
         let Some(entry) = self.elements.get(element.0) else {
             return;
         };
-        if !self.can_merge_blocked_label_fragment(element, entry) {
+        if !self.can_merge_text_fragment(element, entry, SemanticTextMerge::BlockedLabels) {
             return;
         }
         if let Some(label) = element_own_label(entry) {
@@ -1880,6 +1995,82 @@ impl WidgetTree {
         with_recursive_tree_stack(|| {
             for &child in self.visible_semantic_children(element, entry).iter() {
                 self.push_compatible_blocked_labels(child, merged);
+            }
+        });
+    }
+
+    fn count_compatible_values(&self, element: ElementId, entry: &Element) -> u8 {
+        let mut count = 0;
+        for &child in self.visible_semantic_children(element, entry).iter() {
+            let Some(entry) = self.elements.get(child.0) else {
+                continue;
+            };
+            if !self.can_merge_text_fragment(
+                child,
+                entry,
+                SemanticTextMerge::HintAndValue { take_value: true },
+            ) {
+                continue;
+            }
+            if entry
+                .widget
+                .semantic_properties()
+                .explicit
+                .as_ref()
+                .and_then(|data| data.value.as_deref())
+                .is_some_and(|value| !value.is_empty())
+            {
+                count += 1;
+            }
+            if count < 2 {
+                count += with_recursive_tree_stack(|| self.count_compatible_values(child, entry));
+            }
+            // Two or more usable values conflict. No need to count farther.
+            if count >= 2 {
+                return 2;
+            }
+        }
+        count
+    }
+
+    fn push_compatible_hint_value(
+        &self,
+        element: ElementId,
+        policy: SemanticTextMerge,
+        fields: &mut MergedSemanticFields,
+    ) {
+        let Some(entry) = self.elements.get(element.0) else {
+            return;
+        };
+        if !self.can_merge_text_fragment(element, entry, policy) {
+            return;
+        }
+        if let Some(explicit) = &entry.widget.semantic_properties().explicit {
+            let direction = self.semantic_label_direction(element, entry);
+            if fields.direction.is_none() {
+                fields.direction = direction;
+            }
+            let attributes = explicit.state.text_attributes.as_deref();
+            if let Some(hint) = &explicit.description {
+                append_semantic_text(
+                    &mut fields.hint,
+                    &mut fields.hint_attributes,
+                    &mut fields.direction,
+                    hint,
+                    direction,
+                    attributes.map_or(&[], |attributes| attributes.hint.as_slice()),
+                );
+            }
+            if let Some(value) = explicit.value.as_ref().filter(|value| !value.is_empty()) {
+                fields.value = Some(value.clone());
+                if let Some(attributes) = attributes {
+                    fields.value_attributes.clone_from(&attributes.value);
+                }
+            }
+        }
+        with_recursive_tree_stack(|| {
+            for &child in self.visible_semantic_children(element, entry).iter() {
+                self.push_compatible_hint_value(child, policy, fields);
             }
         });
     }
@@ -2594,6 +2785,18 @@ fn can_own_blocked_labels(entry: &Element, block: AccessibilityFocusBlockType) -
     block == AccessibilityFocusBlockType::BlockSubtree
         && entry.widget.semantic_properties().explicit.is_some()
         && !keeps_explicit_child_nodes(entry)
+}
+
+fn can_own_hint_value(entry: &Element, block: AccessibilityFocusBlockType) -> bool {
+    let properties = entry.widget.semantic_properties();
+    block == AccessibilityFocusBlockType::None
+        && !entry.children.is_empty()
+        && !properties.merge_descendants
+        && !keeps_explicit_child_nodes(entry)
+        && properties
+            .explicit
+            .as_ref()
+            .is_some_and(|data| data.state.container && data.role == SemanticRole::GenericContainer)
 }
 
 /// Whether a merging element keeps its children as separate nodes

@@ -1489,7 +1489,7 @@ packages/flutter/test/widgets/semantics_test.dart	239	Semantics and Directionali
 packages/flutter/test/widgets/semantics_test.dart	253	Semantics and Directionality - cannot override RTL with LTR	paired-match	upstream-semantics-text-and-locale.md
 packages/flutter/test/widgets/semantics_test.dart	278	Semantics and Directionality - cannot override LTR with RTL	paired-match	upstream-semantics-text-and-locale.md
 packages/flutter/test/widgets/semantics_test.dart	303	Semantics label and hint	paired-match	upstream-semantics-text-and-locale.md
-packages/flutter/test/widgets/semantics_test.dart	331	Semantics hints can merge	reference-ran-incular-open	upstream-semantics-text-and-locale.md
+packages/flutter/test/widgets/semantics_test.dart	331	Semantics hints can merge	paired-match	upstream-semantics-text-and-locale.md#compatible-hints-and-values
 packages/flutter/test/widgets/semantics_test.dart	362	Semantics values do not merge	paired-match	upstream-semantics-text-and-locale.md
-packages/flutter/test/widgets/semantics_test.dart	398	Semantics value and hint can merge	reference-ran-incular-open	upstream-semantics-text-and-locale.md
+packages/flutter/test/widgets/semantics_test.dart	398	Semantics value and hint can merge	paired-match	upstream-semantics-text-and-locale.md#compatible-hints-and-values
 packages/flutter/test/widgets/semantics_test.dart	1199	Increased/decreased values are annotated	paired-match	upstream-semantics-text-and-locale.md

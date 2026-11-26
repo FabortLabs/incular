@@ -323,6 +323,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- Semantics containers combine compatible hints and a single value. Conflicting
+  values and explicit child nodes stay separate.
+
 - Locale-only semantics are retained. Hints, tooltips and values preserve
   their reading direction even when the node has no label.
 
