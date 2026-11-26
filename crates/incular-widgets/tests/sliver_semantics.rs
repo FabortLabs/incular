@@ -750,3 +750,119 @@ fn hint_and_value_merges_match_the_complete_two_pane_graph() {
         }
     }
 }
+
+#[test]
+fn sliver_descriptor_metadata_exposes_default_and_all_heading_levels() {
+    let unconfigured = SliverSemantics::new(Semantics::default, short_box());
+    assert_eq!(unconfigured.annotation_metadata().heading_level, None);
+    for level in 1_u8..=6 {
+        let annotated = SliverSemantics::new(
+            move || Semantics::default().heading_level(level),
+            short_box(),
+        );
+        assert_eq!(annotated.annotation_metadata().heading_level, Some(level));
+    }
+}
+
+#[test]
+fn render_sliver_reports_the_configuration_it_used_for_layout() {
+    use incular_config::Axis;
+    use incular_semantics::SemanticValidationResult as Validation;
+    use incular_widgets::{ScrollController, SliverConstraints};
+    use std::{cell::Cell, rc::Rc};
+
+    let calls = Rc::new(Cell::new(0));
+    let next = Rc::new(Cell::new(Validation::None));
+    let descriptor = SliverSemantics::new(
+        {
+            let calls = calls.clone();
+            let next = next.clone();
+            move || {
+                calls.set(calls.get() + 1);
+                Semantics::default().validation_result(next.get())
+            }
+        },
+        short_box(),
+    );
+    let mut render =
+        descriptor.create_render_sliver(&ScrollController::new(), Axis::Vertical, false);
+    let constraints = SliverConstraints::new(
+        Axis::Vertical,
+        false,
+        0.,
+        0.,
+        0.,
+        600.,
+        800.,
+        600.,
+        850.,
+        0.,
+    );
+    assert_eq!(render.semantic_annotation_metadata(), None);
+    for (i, result) in [Validation::None, Validation::Valid, Validation::Invalid]
+        .into_iter()
+        .enumerate()
+    {
+        next.set(result);
+        render.perform_layout(constraints);
+        for _ in 0..2 {
+            let snapshot = render.semantic_annotation_metadata().unwrap();
+            assert_eq!(snapshot.validation_result, result);
+            assert_eq!(snapshot.heading_level, None);
+        }
+        assert_eq!(
+            calls.get(),
+            i + 1,
+            "a query must not rerun the annotation builder"
+        );
+    }
+}
+
+#[test]
+fn render_sliver_heading_metadata_keeps_parent_precedence_when_absorbing_a_child() {
+    use incular_config::Axis;
+    use incular_semantics::SemanticAnnotationMetadata;
+    use incular_widgets::{ScrollController, SliverConstraints};
+
+    for (parent, child, expected) in [
+        (None, None, None),
+        (None, Some(1), Some(1)),
+        (None, Some(2), Some(2)),
+        (Some(1), None, Some(1)),
+        (Some(2), None, Some(2)),
+        (Some(3), Some(2), Some(3)),
+        (Some(4), Some(1), Some(4)),
+        (Some(2), Some(3), Some(2)),
+        (Some(1), Some(5), Some(1)),
+    ] {
+        let descriptor = SliverSemantics::new(
+            move || {
+                parent
+                    .map(|level| Semantics::default().heading_level(level))
+                    .unwrap_or_default()
+            },
+            short_box(),
+        );
+        let mut render =
+            descriptor.create_render_sliver(&ScrollController::new(), Axis::Vertical, false);
+        render.perform_layout(SliverConstraints::new(
+            Axis::Vertical,
+            false,
+            0.,
+            0.,
+            0.,
+            600.,
+            800.,
+            600.,
+            850.,
+            0.,
+        ));
+        let mut config = render.semantic_annotation_metadata().unwrap();
+        assert_eq!(config.heading_level, parent);
+        config.absorb(SemanticAnnotationMetadata {
+            heading_level: child,
+            ..SemanticAnnotationMetadata::default()
+        });
+        assert_eq!(config.heading_level, expected);
+    }
+}

@@ -1578,8 +1578,16 @@ impl WidgetTree {
             }
             state.tags = tags.into_boxed_slice();
         }
-        state.heading_level = state.heading_level.or(merged.heading);
-        state.validation_result = state.validation_result.merge(merged.validation);
+        let mut metadata = incular_semantics::SemanticAnnotationMetadata {
+            heading_level: state.heading_level,
+            validation_result: state.validation_result,
+        };
+        metadata.absorb(incular_semantics::SemanticAnnotationMetadata {
+            heading_level: merged.heading,
+            validation_result: merged.validation,
+        });
+        state.heading_level = metadata.heading_level;
+        state.validation_result = metadata.validation_result;
         state.annotation_flags = state.annotation_flags.merge(merged.annotation_flags);
         state.accessibility_focus_block_type = own_focus_block.merge(merged.focus_block);
         if state.heading_level.is_some() && role == Some(SemanticRole::GenericContainer) {

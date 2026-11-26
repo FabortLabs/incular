@@ -105,9 +105,9 @@ actions: a descendant button remains a separate actionable node.
 The same tests reject signed values −1, 0, 7, 8 and 9 in debug builds.
 The `flutter350_semantics_heading_geometry` target passed all nine
 parent/descendant level combinations in a merged retained graph.
-The Dart tests also examine the descriptor directly and call its
-render configuration's `absorb` method. Those direct APIs are partial;
-the rendered heading-node case is paired.
+The Dart tests also examine the descriptor directly and absorb a
+configuration into a laid-out sliver's metadata. Those heading
+and validity assertions are now paired as described below.
 
 ## Transformed descendants at the viewport's semantics cache
 
@@ -160,9 +160,8 @@ AccessKit projection reports invalid for either the typed invalid
 result or the legacy invalid flag; explicit validity and unspecified
 both omit AccessKit's invalid marker but remain distinct in the
 portable state. The web mapping uses the same effective invalid bit;
-a browser/wasm build was not run here. Flutter's direct render
-configuration query (2538) remains partial, while the labeled
-precedence case is paired.
+a browser/wasm build was not run here. Flutter's direct render configuration query (2538) and the
+labeled precedence case are both paired.
 
 ## Blocking semantic user actions
 
@@ -480,3 +479,14 @@ so both the logical element and semantic node keep their IDs across
 the move. The expected tagged two-pane graph, default actions, and
 retained tree invariants hold after each transition. All 18 focused
 Rust tests passed and the case is paired.
+
+### Direct annotation and renderer metadata
+
+Pinned lines 2538, 2672 and 2702 exercise more than the final semantic
+nodes. The native descriptor exposes an absent heading and each level
+1–6. The laid-out render sliver exposes absence, validity or invalidity
+from the actual annotation builder, and the test verifies that repeated
+queries do not rerun that builder. All nine parent/child heading pairs
+use the same precedence helper as the retained graph: keep the
+parent's level if present, otherwise adopt the child's. These three
+registration sites are paired. All 20 focused widget tests passed.

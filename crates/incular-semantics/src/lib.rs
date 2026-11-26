@@ -400,6 +400,23 @@ impl SemanticValidationResult {
     }
 }
 
+/// Heading and validity metadata shared by the declarative annotation,
+/// the laid-out render sliver, and the retained semantic graph.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SemanticAnnotationMetadata {
+    pub heading_level: Option<u8>,
+    pub validation_result: SemanticValidationResult,
+}
+
+impl SemanticAnnotationMetadata {
+    /// A parent's heading overrides a child's. Invalid validation overrides
+    /// valid, and valid overrides an unspecified result.
+    pub fn absorb(&mut self, child: Self) {
+        self.heading_level = self.heading_level.or(child.heading_level);
+        self.validation_result = self.validation_result.merge(child.validation_result);
+    }
+}
+
 /// Independent annotations that cannot be represented by a single native
 /// accessibility role. Flutter allows several of these on the same node.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

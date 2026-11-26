@@ -176,6 +176,12 @@ impl SliverLayout {
 pub trait RenderSliver {
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout;
 
+    /// Annotation metadata from the most recent layout. Unannotated
+    /// slivers and slivers that have never laid out return None.
+    fn semantic_annotation_metadata(&self) -> Option<incular_semantics::SemanticAnnotationMetadata> {
+        None
+    }
+
     /// Lets a sliver adjust a reveal request in its mounted child's
     /// coordinate space and schedule any required presentation change.
     /// The default leaves the target rectangle unchanged.

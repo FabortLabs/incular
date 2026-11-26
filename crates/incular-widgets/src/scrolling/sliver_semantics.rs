@@ -71,6 +71,13 @@ impl SliverSemantics {
         }
     }
 
+    /// Evaluates the current descriptor's heading and validity metadata.
+    /// For the last render snapshot, query the laid-out render sliver.
+    #[must_use]
+    pub fn annotation_metadata(&self) -> incular_semantics::SemanticAnnotationMetadata {
+        (self.semantics)().annotation_metadata()
+    }
+
     /// Gives a retained identity to the semantic boundary, including
     /// when it moves in or out of another sliver annotation.
     #[must_use]
@@ -115,6 +122,7 @@ impl Sliver for SliverSemantics {
             semantics: self.semantics.clone(),
             key: self.key.clone(),
             exclude_semantics: self.exclude_semantics,
+            metadata: None,
         })
     }
 }
@@ -124,6 +132,7 @@ pub(super) struct SemanticsRenderSliver {
     semantics: Rc<dyn Fn() -> Semantics>,
     key: Option<Key>,
     exclude_semantics: bool,
+    metadata: Option<incular_semantics::SemanticAnnotationMetadata>,
 }
 
 impl super::layout::SingleInnerSliver for SemanticsRenderSliver {
@@ -133,6 +142,12 @@ impl super::layout::SingleInnerSliver for SemanticsRenderSliver {
 }
 
 impl RenderSliver for SemanticsRenderSliver {
+    fn semantic_annotation_metadata(
+        &self,
+    ) -> Option<incular_semantics::SemanticAnnotationMetadata> {
+        self.metadata
+    }
+
     fn reveal_child(
         &mut self,
         child: SliverChildId,
@@ -163,6 +178,7 @@ impl RenderSliver for SemanticsRenderSliver {
         let mut layout = self.inner.borrow_mut().perform_layout(constraints);
         let extent = layout.geometry.scroll_extent.max(0.);
         let semantics = (self.semantics)();
+        self.metadata = Some(semantics.annotation_metadata());
         let block_user_actions = semantics.blocks_user_actions();
         for child in &mut layout.children {
             if self.exclude_semantics {

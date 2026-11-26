@@ -277,6 +277,15 @@ impl Semantics {
         self
     }
 
+    /// Reads the heading and validity this annotation contributes.
+    #[must_use]
+    pub fn annotation_metadata(&self) -> incular_semantics::SemanticAnnotationMetadata {
+        incular_semantics::SemanticAnnotationMetadata {
+            heading_level: self.state.heading_level,
+            validation_result: self.state.effective_validation_result(),
+        }
+    }
+
     /// Sets the complete retained semantic state for this annotation.
     ///
     /// The state is copied into the retained [`crate::ExplicitSemantics`]
