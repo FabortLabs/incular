@@ -98,9 +98,9 @@ packages/flutter/test/services/text_input_test.dart	94	replace after selection	p
 packages/flutter/test/gestures/velocity_tracker_test.dart	64	Interrupted velocity estimation	paired-match	upstream-geometry-input-gestures.md#standalone-velocity-tracker-comparisons
 packages/flutter/test/gestures/velocity_tracker_test.dart	77	No data velocity estimation	paired-match	upstream-geometry-input-gestures.md#standalone-velocity-tracker-comparisons
 packages/flutter/test/gestures/velocity_tracker_test.dart	158	Assume zero velocity when there are no recent samples - base VelocityTracker	paired-match	upstream-geometry-input-gestures.md#standalone-velocity-tracker-comparisons
-packages/flutter/test/gestures/arena_test.dart	66	Should win by accepting	partial-match	upstream-geometry-input-gestures.md
-packages/flutter/test/gestures/arena_test.dart	114	Only first winner should win	partial-match	upstream-geometry-input-gestures.md
-packages/flutter/test/gestures/arena_test.dart	125	Only first winner should win, regardless of order	partial-match	upstream-geometry-input-gestures.md
+packages/flutter/test/gestures/arena_test.dart	66	Should win by accepting	paired-match	upstream-managed-gesture-arena.md#first-valid-decision-in-either-member-order
+packages/flutter/test/gestures/arena_test.dart	114	Only first winner should win	paired-match	upstream-managed-gesture-arena.md#first-valid-decision-in-either-member-order
+packages/flutter/test/gestures/arena_test.dart	125	Only first winner should win, regardless of order	paired-match	upstream-managed-gesture-arena.md#first-valid-decision-in-either-member-order
 packages/flutter/test/services/text_input_test.dart	44	selection deletion	paired-match	upstream-text-replacement-boundaries.md
 packages/flutter/test/services/text_input_test.dart	66	insert	paired-match	upstream-text-replacement-boundaries.md
 packages/flutter/test/services/text_input_test.dart	110	replace inside selection - start boundary	paired-match	upstream-text-replacement-boundaries.md#current-text-replacement-disposition
@@ -2165,3 +2165,5 @@ packages/flutter/test/gestures/arena_test.dart	86	Should win on release after ho
 packages/flutter/test/gestures/arena_test.dart	100	Should win on sweep after hold release sweep	paired-match	upstream-managed-gesture-arena.md
 packages/flutter/test/gestures/arena_test.dart	136	Win before close is delayed to close	paired-match	upstream-managed-gesture-arena.md
 packages/flutter/test/gestures/arena_test.dart	174	Eager winner should be cleared when the eager winner rejects while arena is still open	paired-match	upstream-managed-gesture-arena.md
+packages/flutter/test/gestures/arena_test.dart	147	Win before close is delayed to close, and only first winner should win	paired-match	upstream-managed-gesture-arena.md#first-valid-decision-in-either-member-order
+packages/flutter/test/gestures/arena_test.dart	159	Win before close is delayed to close, and only first winner should win, regardless of order	paired-match	upstream-managed-gesture-arena.md#first-valid-decision-in-either-member-order

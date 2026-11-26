@@ -17,3 +17,15 @@ This API models Flutter's explicit arena lifecycle. Incular's live
 simultaneous-recognizer arbitration still uses its existing
 `GestureArena`; these registrations do not claim equivalence for
 every widget's integration with that runtime path.
+
+## First valid decision in either member order
+
+The other five registrations (66, 114, 125, 147, 159) passed. An
+explicit acceptance after close delivers immediately. In either
+member order, a second acceptance cannot replace the winner or
+produce a second callback. The same ordering holds for two eager
+acceptances, but both remain silent until close. This completes the
+previous partial rows that had only checked terminal dispositions.
+An additional native test opens another round from a rejection
+callback; it verifies that callbacks do not run with the arena state
+borrowed and that the new round is resolved independently.

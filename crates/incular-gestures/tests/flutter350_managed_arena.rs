@@ -123,3 +123,88 @@ fn deferred_default_cannot_deliver_twice_or_act_on_a_reused_key() {
     arena.flush_deferred_resolutions();
     assert_eq!(calls.take(), [("second", true)]);
 }
+
+#[test]
+fn an_explicit_acceptance_after_close_wins_immediately() {
+    let (arena, calls, [first, _]) = pair();
+    arena.close(KEY);
+    assert!(calls.borrow().is_empty());
+    first.resolve(Accepted);
+    assert_eq!(*calls.borrow(), [("second", false), ("first", true)]);
+}
+
+#[test]
+fn the_first_decision_after_close_remains_final() {
+    let (arena, calls, [first, second]) = pair();
+    arena.close(KEY);
+    assert!(calls.borrow().is_empty());
+    first.resolve(Accepted);
+    second.resolve(Accepted);
+    assert_eq!(*calls.borrow(), [("second", false), ("first", true)]);
+}
+
+#[test]
+fn decisions_after_close_do_not_depend_on_registration_order() {
+    let (arena, calls, [first, second]) = pair();
+    arena.close(KEY);
+    assert!(calls.borrow().is_empty());
+    second.resolve(Accepted);
+    first.resolve(Accepted);
+    assert_eq!(*calls.borrow(), [("first", false), ("second", true)]);
+}
+
+#[test]
+fn the_first_eager_decision_remains_final_after_close() {
+    let (arena, calls, [first, second]) = pair();
+    first.resolve(Accepted);
+    second.resolve(Accepted);
+    assert!(calls.borrow().is_empty());
+    arena.close(KEY);
+    assert_eq!(*calls.borrow(), [("second", false), ("first", true)]);
+}
+
+#[test]
+fn eager_decisions_do_not_depend_on_registration_order() {
+    let (arena, calls, [first, second]) = pair();
+    second.resolve(Accepted);
+    first.resolve(Accepted);
+    assert!(calls.borrow().is_empty());
+    arena.close(KEY);
+    assert_eq!(*calls.borrow(), [("first", false), ("second", true)]);
+}
+
+#[test]
+fn rejecting_callbacks_can_register_new_work_in_the_same_stream() {
+    let (arena, calls, [first, _]) = pair();
+    struct Reentrant {
+        arena: GestureArenaManager,
+        calls: Calls,
+    }
+    impl GestureArenaClient for Reentrant {
+        fn accept_gesture(&self, _: GestureArenaKey) {
+            panic!("the reentrant contender should be rejected");
+        }
+
+        fn reject_gesture(&self, key: GestureArenaKey) {
+            self.calls.borrow_mut().push(("reenter", false));
+            let _ = add(&self.arena, &self.calls, "next");
+            self.arena.close(key);
+        }
+    }
+
+    let _ = arena.add(
+        KEY,
+        Rc::new(Reentrant {
+            arena: arena.clone(),
+            calls: calls.clone(),
+        }),
+    );
+    arena.close(KEY);
+    first.resolve(Accepted);
+    assert_eq!(
+        calls.take(),
+        [("second", false), ("reenter", false), ("first", true)]
+    );
+    arena.flush_deferred_resolutions();
+    assert_eq!(calls.take(), [("next", true)]);
+}
