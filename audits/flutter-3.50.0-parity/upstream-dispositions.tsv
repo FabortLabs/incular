@@ -2443,3 +2443,4 @@ packages/flutter/test/foundation/debug_test.dart	69	debugMaybeDispatchCreated	pa
 packages/flutter/test/foundation/debug_test.dart	87	debugMaybeDispatchDisposed	paired-match	upstream-allocation-events.md#explicit-creation-and-disposal
 packages/flutter/test/services/asset_bundle_test.dart	254	toString works as intended	paired-match	upstream-asset-diagnostics.md
 packages/flutter/test/services/asset_bundle_test.dart	261	Throws expected exceptions when loading not exists asset	paired-match	upstream-asset-diagnostics.md
+packages/flutter/test/services/asset_bundle_test.dart	226	AssetImage.obtainKey succeeds with ImageConfiguration.empty	paired-match	upstream-asset-image-keys.md#empty-image-configuration

@@ -35,3 +35,14 @@ cargo test --locked -j 1 -p incular-image --test flutter350_asset_image_keys --t
 cargo test --locked -j 1 -p incular-widgets --test flutter350_bundled_asset_image --test provider_image --test default_asset_bundle -- --test-threads=1
 bash audits/flutter-3.50.0-parity/run-reference-linux.sh probe asset_image_hashed_pixels_test.dart
 ```
+
+## Empty image configuration
+
+The pinned `services/asset_bundle_test.dart:226` regression passed:
+the explicit caching bundle declares `one` with an empty variant
+list. Resolving its key with no configured DPR returns `one` at 1x
+and preserves that bundle. The check resolves the public key without
+decoding bytes, just as the original does. All eight native
+asset-key tests also passed. All 13 registrations in the pinned
+asset-bundle file now have paired evidence, with the upstream browser
+skips preserved.

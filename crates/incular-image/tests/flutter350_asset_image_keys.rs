@@ -99,6 +99,15 @@ fn variant_only_entry_is_picked_with_dpr_but_not_for_an_empty_configuration() {
 }
 
 #[test]
+fn obtain_key_accepts_empty_configuration_for_a_declared_asset_without_variants() {
+    let bundle = bundle(&[("one", vec![])]);
+    let image = AssetImage::new("one").bundle(bundle.clone());
+    let key = lookup(&image, &ImageConfiguration::empty()).unwrap();
+    assert_key(&key, "one", 1.0);
+    assert!(Arc::ptr_eq(key.bundle.shared(), &bundle));
+}
+
+#[test]
 fn empty_manifest_row_falls_back_to_the_main_key_even_at_high_dpr() {
     let image = AssetImage::new(MAIN).bundle(bundle(&[(MAIN, vec![])]));
     for config in [
