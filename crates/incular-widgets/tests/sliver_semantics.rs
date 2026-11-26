@@ -251,3 +251,120 @@ fn adjacent_hints_merge_under_a_sliver_boundary_with_or_without_box_annotation()
         );
     }
 }
+
+enum Pair {
+    Main(incular_widgets::SliverMainAxisGroup),
+    List(SliverList),
+}
+
+impl Sliver for Pair {
+    fn build(&self, controller: &incular_widgets::ScrollController) -> Widget {
+        match self {
+            Self::Main(group) => group.build(controller),
+            Self::List(list) => list.build(controller),
+        }
+    }
+
+    fn create_render_sliver(
+        &self,
+        controller: &incular_widgets::ScrollController,
+        axis: incular_config::Axis,
+        reverse: bool,
+    ) -> Box<dyn incular_widgets::internal::RenderSliver> {
+        match self {
+            Self::Main(group) => group.create_render_sliver(controller, axis, reverse),
+            Self::List(list) => list.create_render_sliver(controller, axis, reverse),
+        }
+    }
+}
+
+fn annotate_pair(
+    box_annotations: bool,
+    first: fn(Semantics) -> Semantics,
+    second: fn(Semantics) -> Semantics,
+) -> WidgetTree {
+    let properties = [first, second];
+    let children = if box_annotations {
+        Pair::List(SliverList::builder(2, move |i| {
+            properties[i](Semantics::new(SizedBox::new().height(10.)))
+        }))
+    } else {
+        let slivers = properties.map(|props| -> Box<dyn Sliver> {
+            Box::new(SliverSemantics::new(
+                move || props(Semantics::default()),
+                short_box(),
+            ))
+        });
+        Pair::Main(incular_widgets::SliverMainAxisGroup::new(slivers))
+    };
+    let sliver = SliverSemantics::new(|| Semantics::default().container(true), children);
+    let mut tree = WidgetTree::new();
+    tree.mount(semantic_view(TextDirection::Ltr, sliver))
+        .unwrap();
+    layout(&mut tree);
+    tree
+}
+
+#[test]
+fn distinct_current_values_remain_siblings_for_sliver_and_box_annotations() {
+    for box_annotations in [false, true] {
+        let tree = annotate_pair(
+            box_annotations,
+            |s| s.value("value one"),
+            |s| s.value("value two"),
+        );
+        let nodes = tree
+            .semantics()
+            .iter()
+            // The scroll ancestor's exposed position is not a child value.
+            .filter(|(_, node)| node.role != SemanticRole::ScrollView)
+            .filter_map(|(_, node)| node.value.as_deref().map(|value| (value, node)))
+            .collect::<Vec<_>>();
+        assert_eq!(nodes.len(), 2);
+        assert!(
+            nodes
+                .iter()
+                .all(|(_, node)| node.state.text_direction == Some(TextDirection::Ltr))
+        );
+        let group = tree.semantics().iter().find_map(|(_, node)| {
+            let values = node
+                .children
+                .iter()
+                .filter_map(|&id| tree.semantics().node(id)?.value.as_deref())
+                .collect::<Vec<_>>();
+            (values.len() == 2).then_some(values)
+        });
+        assert_eq!(
+            group,
+            Some(vec!["value one", "value two"]),
+            "box={box_annotations}"
+        );
+    }
+}
+
+#[test]
+fn compatible_hint_and_value_merge_for_sliver_and_box_annotations() {
+    for box_annotations in [false, true] {
+        let tree = annotate_pair(box_annotations, |s| s.hint("hint"), |s| s.value("value"));
+        let annotated = tree
+            .semantics()
+            .iter()
+            .filter(|(_, node)| {
+                node.role != SemanticRole::ScrollView
+                    && (node.value.is_some() || node.description.is_some())
+            })
+            .map(|(_, node)| {
+                (
+                    node.value.as_deref(),
+                    node.description.as_deref(),
+                    node.state.text_direction,
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            annotated,
+            [(Some("value"), Some("hint"), Some(TextDirection::Ltr))],
+            "box={box_annotations}"
+        );
+    }
+}

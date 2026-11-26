@@ -27,3 +27,13 @@ does not split Flutter's scrolling and non-scrolling panes or install
 the internal `RenderViewport.twoPane` tag. The direct viewport tag
 constraint at line 73 remains reference-only. The use of the renderer's
 reserved anchor IDs changes neither leaf child IDs nor paint/hit routing.
+
+## Merging a hint and a value without merging competing values
+
+Pinned Flutter lines 482, 535, 584 and 635 and the retained
+`sliver_semantics` tests compare annotations on both sliver wrappers
+and boxes in a lazy list. Two current values remain distinct siblings
+in reading order. A hint and one current value merge onto the same
+node, both with LTR reading direction. These are exact annotation
+checks within the subtree; the original assertions also include the
+Flutter-only two-pane ancestor described above.
