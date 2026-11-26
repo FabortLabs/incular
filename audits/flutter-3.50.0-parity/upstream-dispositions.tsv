@@ -2493,3 +2493,5 @@ packages/flutter/test/painting/notched_shapes_test.dart	36	guest center below ho
 packages/flutter/test/painting/notched_shapes_test.dart	46	inverted guest center above host	paired-match	upstream-circular-notched-rectangle.md
 packages/flutter/test/painting/notched_shapes_test.dart	56	inverted guest center below host	paired-match	upstream-circular-notched-rectangle.md
 packages/flutter/test/painting/notched_shapes_test.dart	66	no guest is ok	paired-match	upstream-circular-notched-rectangle.md
+packages/flutter/test/services/haptic_feedback_test.dart	11	Haptic feedback control test	paired-match	upstream-haptic-feedback.md
+packages/flutter/test/services/haptic_feedback_test.dart	28	Haptic feedback variation tests	paired-match	upstream-haptic-feedback.md

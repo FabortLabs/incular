@@ -18,6 +18,7 @@ mod content_sensitivity;
 mod data_transfer;
 mod display;
 mod file_dialog;
+mod haptic_feedback;
 mod flutter_text_input_config;
 pub use flutter_text_input_config::FlutterTextInputConfiguration;
 pub mod message_codecs;
@@ -73,6 +74,9 @@ pub use file_dialog::{
     FileDialogCapabilities, FileDialogError, FileDialogFilter, FileDialogFilterId, FileDialogKind,
     FileDialogOption, FileDialogOptions, FileDialogOutcome, FileDialogRequest, FileDialogRequestId,
     FileDialogSelection, FileDialogValidationError, FileExtension,
+};
+pub use haptic_feedback::{
+    FlutterPlatformMessenger, HapticFeedback, HapticFeedbackError, HapticFeedbackType,
 };
 pub use semantics_messages::{
     AccessibilityMessenger, Assertiveness, SemanticsAnnouncement, SemanticsEvent,
