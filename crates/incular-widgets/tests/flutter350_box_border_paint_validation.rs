@@ -24,14 +24,19 @@ fn paint(border: Border, shape: BoxShape, radius: Option<f32>) -> Option<Display
     decoration.paint_border(Size::new(40.0, 50.0))
 }
 
-fn rejects(border: Border, shape: BoxShape, radius: Option<f32>, diagnostic: &str) {
+fn reject_message(border: Border, shape: BoxShape, radius: Option<f32>) -> String {
     let error = catch_unwind(|| paint(border, shape, radius))
         .expect_err("unsupported border configuration silently painted");
-    let message = error
+    error
         .downcast_ref::<String>()
         .map(String::as_str)
         .or_else(|| error.downcast_ref::<&str>().copied())
-        .expect("border error should carry a diagnostic");
+        .expect("border error should carry a diagnostic")
+        .to_owned()
+}
+
+fn rejects(border: Border, shape: BoxShape, radius: Option<f32>, diagnostic: &str) {
+    let message = reject_message(border, shape, radius);
     assert!(message.contains(diagnostic), "{message:?}");
 }
 
@@ -52,7 +57,10 @@ fn rectangular_multicolor_border_requires_inside_alignment() {
             ..side(1.0, 1.0)
         })
         .build();
-    rejects(border, BoxShape::Rectangle, None, "stroke alignment");
+    assert_eq!(
+        reject_message(border, BoxShape::Rectangle, None),
+        "A Border can only draw strokeAlign different than\nBorderSide.strokeAlignInside on borders with uniform colors.\n",
+    );
     let inside = Border {
         left: BorderSide {
             stroke_align: -1.0,
@@ -77,7 +85,7 @@ fn nonuniform_border_variations_validate_at_the_paint_boundary() {
         side(20.0, -1.0),
         side(5.0, -1.0),
     );
-    rejects(mixed, rect, None, "stroke alignment");
+    rejects(mixed, rect, None, "strokeAlign different");
     accepts(mixed, rect, Some(25.0));
     accepts(mixed, circle, None);
 
@@ -106,7 +114,7 @@ fn nonuniform_border_variations_validate_at_the_paint_boundary() {
     let directional = BorderDirectional::only(mixed.top, mixed.left, mixed.right, mixed.bottom);
     for direction in [TextDirection::Ltr, TextDirection::Rtl] {
         let resolved = directional.resolve(direction);
-        rejects(resolved, rect, None, "stroke alignment");
+        rejects(resolved, rect, None, "strokeAlign different");
         accepts(resolved, rect, Some(25.0));
         accepts(resolved, circle, None);
     }

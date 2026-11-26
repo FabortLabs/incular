@@ -814,7 +814,7 @@ fn paint_box_border(
     );
     debug_assert!(
         sides.iter().all(|side| side.stroke_align == -1.0),
-        "a non-uniform rectangular border requires inside stroke alignment"
+        "A Border can only draw strokeAlign different than\nBorderSide.strokeAlignInside on borders with uniform colors.\n"
     );
     paint_border_sides(canvas, rect, border);
     true

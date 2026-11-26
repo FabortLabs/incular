@@ -149,3 +149,24 @@ fn the_rounded_top_left_accepts_tangencies_and_the_inside_sample() {
         ],
     );
 }
+
+#[test]
+fn all_four_rounded_corners_accept_their_interior_but_not_the_square_corner() {
+    check(
+        50.,
+        50.,
+        Alignment::TOP_LEFT,
+        rounded(20.),
+        &[
+            (Offset::new(25., 25.), true),
+            (Offset::new(30., 20.), true),
+            (Offset::new(50., 0.), false),
+            (Offset::new(30., 30.), true),
+            (Offset::new(50., 50.), false),
+            (Offset::new(20., 30.), true),
+            (Offset::new(0., 50.), false),
+            (Offset::new(20., 20.), true),
+            (Offset::new(0., 0.), false),
+        ],
+    );
+}

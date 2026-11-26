@@ -319,3 +319,17 @@ right, top, bottom, center, and exterior samples for a vertical-only and a
 horizontal-only crimson border. The unspecified pair emits no visible
 edge or hairline. This repairs the stale partial-mismatch disposition;
 Dart's object-identity assertion remains inapplicable to the Rust value.
+
+### Exact fallback error and all rounded corners
+
+Pinned `painting/border_test.dart:235` is now fully paired at the
+debug diagnostic boundary. The portable painter rejects the same
+center/outside multi-color border and exposes one diagnostic with the
+exact message and line breaks. Rust uses one panic payload, not a Dart
+FlutterError node. The release paint fallback is unchanged.
+
+Pinned `widgets/box_decoration_test.dart:487` and its mounted native
+port both pass. The native control dispatches all nine actual tap
+coordinates: the center and four interior corner samples fire; the
+four square corner points outside the round arcs do not. All 13
+focused runtime and widgets controls passed.
