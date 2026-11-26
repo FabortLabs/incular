@@ -66,3 +66,29 @@ run's caret height: 128→32 and 32→64 px. End-of-text returns to the
 controls caret height without changing the source style, and an empty
 zero-font paragraph still yields a finite template height. Ten Flutter
 and 25 focused Rust cases passed (18 painter, 3 scaler, 4 line height).
+
+## Full line metrics and height behavior
+
+The original four-line fixture now matches hard and soft breaks, line
+numbers, left edge, baseline, ascent, descent, unscaled ascent, height,
+and widths 70 / 294 / 266 / 168. Flutter's default test face is the
+engine's embedded **FlutterTest**, not the similarly monospaced Ahem:
+their ascent is 75% and 80% of font size respectively. The Rust suite
+extracts the exact pinned face without committing a font binary. The
+308→294 discrepancy was a hanging space on the soft break; it remains
+available to the caret but is excluded from the reported line width.
+The nullable height override can be cleared and invalidates retained
+layout. Mixed-size clipped paragraphs use the actual last retained
+line's bottom, not the first line height multiplied by the count.
+
+Both original Flutter registrations and 31 targeted Rust cases passed.
+The hanging-space fix applies to line metrics; this does not assert
+equivalence for every justify or arbitrary bidi layout.
+
+```sh
+python3 audits/flutter-3.50.0-parity/extract-flutter-test-font.py \
+  .tmp/flutter .tmp/FlutterTest-embedded.ttf
+INCULAR_FLUTTER_TEST_FONT_PATH="$PWD/.tmp/FlutterTest-embedded.ttf" \
+INCULAR_FLUTTER_AHEM_PATH="$PWD/.tmp/flutter/packages/flutter_tools/static/Ahem.ttf" \
+  cargo test --locked --offline -j1 -p incular-text --test flutter350_text_painter --test height_behavior --test selection_spans -- --test-threads=1
+```

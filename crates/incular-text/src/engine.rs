@@ -128,6 +128,8 @@ pub struct TextLine {
     pub glyphs: Arc<[GlyphPosition]>,
     pub clusters: Arc<[TextClusterSpan]>,
     pub width: f32,
+    /// Logically trailing whitespace that remains available to the caret.
+    pub hanging_advance: f32,
     /// Horizontal alignment offset in text-area coordinates. Glyph and
     /// caret x positions already include it; `width` stays the unshifted
     /// advance so extent checks keep working. Consumers mapping absolute
@@ -137,6 +139,13 @@ pub struct TextLine {
     /// Snapped top of the line box, in layout coordinates.
     pub top: f32,
     pub baseline: f32,
+    /// Post-leading ascent and descent, before line-box rounding.
+    pub ascent: f32,
+    pub descent: f32,
+    /// Natural content ascent before height behavior and strut.
+    pub unscaled_ascent: f32,
+    /// Rounded height used to stack the next visual line.
+    pub height: f32,
     pub start: usize,
     /// End of selectable/caret text on this visual line. This excludes a
     /// trailing hard line-break which has no shaped glyph of its own.
@@ -1327,9 +1336,14 @@ impl TextEngine {
                         })
                         .collect(),
                     width: line.width,
+                    hanging_advance: line.hanging_advance,
                     offset: line.offset,
                     top: line.top + height,
                     baseline: line.baseline + height,
+                    ascent: line.ascent,
+                    descent: line.descent,
+                    unscaled_ascent: line.unscaled_ascent,
+                    height: line.height,
                     start: line.start + byte_start,
                     caret_end: line.caret_end + byte_start,
                     end: line.end + byte_start,
@@ -1347,9 +1361,14 @@ impl TextEngine {
                 glyphs: Arc::new([]),
                 clusters: Arc::new([]),
                 width: 0.,
+                hanging_advance: 0.,
                 offset: 0.,
                 top: 0.,
                 baseline: 0.,
+                ascent: 0.,
+                descent: 0.,
+                unscaled_ascent: 0.,
+                height: 0.,
                 start: 0,
                 caret_end: 0,
                 end: 0,
@@ -2014,9 +2033,14 @@ impl TextEngine {
                 glyphs,
                 clusters: cluster_spans,
                 width: metrics.advance,
+                hanging_advance: metrics.hanging_advance,
                 offset: metrics.offset,
                 top: metrics.block_min_coord,
                 baseline: metrics.baseline,
+                ascent: metrics.baseline - metrics.block_min_coord,
+                descent: metrics.block_max_coord - metrics.baseline,
+                unscaled_ascent: metrics.baseline - metrics.content_block_min_coord,
+                height: metrics.line_height,
                 start: range.start,
                 caret_end,
                 end: range.end,
@@ -2030,9 +2054,14 @@ impl TextEngine {
                 glyphs: Arc::new([]),
                 clusters: Arc::new([]),
                 width: 0.0,
+                hanging_advance: 0.0,
                 offset: 0.0,
                 top: 0.0,
                 baseline: 0.0,
+                ascent: 0.0,
+                descent: 0.0,
+                unscaled_ascent: 0.0,
+                height: 0.0,
                 start: 0,
                 caret_end: 0,
                 end: 0,
@@ -2417,7 +2446,8 @@ fn clipped_layout(mut layout: TextLayout, limit: usize) -> TextLayout {
     let width = lines
         .iter()
         .fold(0.0_f32, |width, line| width.max(line.width));
-    layout.metrics.size = Size::new(width, layout.metrics.line_height * lines.len() as f32);
+    let height = lines.last().map_or(0., |line| line.top + line.height);
+    layout.metrics.size = Size::new(width, height);
     layout.metrics.baseline = lines.first().map_or(0.0, |line| line.baseline);
     layout.lines = lines;
     layout.line_carets = OnceLock::new();
@@ -2575,14 +2605,19 @@ fn snap_line_boxes(translated: &mut TextLayout, boxes: &[LineBox]) {
             }
         }
     }
-    for (line, (line_top, baseline, paint_baseline)) in Arc::make_mut(&mut translated.lines)
-        .iter_mut()
-        .zip(shifts())
+    for ((line, (line_top, baseline, paint_baseline)), bounds) in
+        Arc::make_mut(&mut translated.lines)
+            .iter_mut()
+            .zip(shifts())
+            .zip(boxes)
     {
         // Parley placed the glyphs on its own unrounded baseline.
         let shift = paint_baseline - line.baseline;
         line.top = line_top;
         line.baseline = baseline;
+        line.ascent = bounds.baseline - bounds.top;
+        line.descent = bounds.bottom - bounds.baseline;
+        line.height = (bounds.bottom - bounds.top).max(0.).round();
         if shift == 0. {
             continue;
         }

@@ -9,8 +9,9 @@ use incular_config::TextDirection;
 use incular_core::{Offset, Size};
 
 use crate::{
-    StrutStyle, TextAffinity, TextAlign, TextEngine, TextLayout, TextLayoutOptions, TextOverflow,
-    TextRange, TextScaler, TextSpan, TextStrut, TextStyle, TextWidthBasis, word_boundary_at,
+    StrutStyle, TextAffinity, TextAlign, TextEngine, TextHeightBehavior, TextLayout,
+    TextLayoutOptions, TextOverflow, TextRange, TextScaler, TextSpan, TextStrut, TextStyle,
+    TextWidthBasis, word_boundary_at,
 };
 
 /// A layout request or query that cannot be satisfied yet.
@@ -48,6 +49,10 @@ pub struct TextPainterLine {
     pub top: f32,
     pub width: f32,
     pub baseline: f32,
+    pub ascent: f32,
+    pub descent: f32,
+    pub unscaled_ascent: f32,
+    pub height: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -85,6 +90,7 @@ pub struct TextPainter {
     default_style: TextStyle,
     scaler: TextScaler,
     strut_style: Option<StrutStyle>,
+    height_behavior: Option<TextHeightBehavior>,
     measured: Option<MeasuredText>,
     disposed: bool,
 }
@@ -182,6 +188,18 @@ impl TextPainter {
         }
     }
 
+    /// Overrides how leading applies at the first and final line edges.
+    pub fn set_text_height_behavior(&mut self, behavior: Option<TextHeightBehavior>) {
+        if self.height_behavior != behavior {
+            self.height_behavior = behavior;
+            self.measured = None;
+        }
+    }
+
+    pub fn text(&self) -> Option<&TextSpan> {
+        self.text.as_ref()
+    }
+
     /// Text as laid out, not as announced. Inline widgets contribute U+FFFC.
     #[must_use]
     pub fn plain_text(&self) -> &str {
@@ -245,10 +263,13 @@ impl TextPainter {
                     .layout_with_options(
                         " ",
                         &base,
-                        TextLayoutOptions::new(None, TextAlign::Start).strut(strut),
+                        TextLayoutOptions::new(None, TextAlign::Start)
+                            .strut(strut)
+                            .height_behavior(self.height_behavior.unwrap_or_default()),
                     )
                     .metrics
-                    .line_height
+                    .size
+                    .height
             },
             |last| last.preferred_line_height,
         );
@@ -256,7 +277,8 @@ impl TextPainter {
             let options = TextLayoutOptions::new(width, self.alignment)
                 .text_direction(direction)
                 .overflow(TextOverflow::Visible)
-                .strut(strut);
+                .strut(strut)
+                .height_behavior(self.height_behavior.unwrap_or_default());
             if runs.is_empty() && placeholders.is_empty() {
                 engine.layout_with_options(&self.plain, &base, options)
             } else {
@@ -345,10 +367,20 @@ impl TextPainter {
                             Some(b'\n' | b'\r')
                         )
                         || i + 1 == lines.len(),
-                    left: line.offset + measured.paint_offset.x,
+                    left: line.offset
+                        + if self.direction == Some(TextDirection::Rtl) {
+                            line.hanging_advance
+                        } else {
+                            0.
+                        }
+                        + measured.paint_offset.x,
                     top: line.top,
-                    width: line.width,
+                    width: (line.width - line.hanging_advance).max(0.),
                     baseline: line.baseline,
+                    ascent: line.ascent,
+                    descent: line.descent,
+                    unscaled_ascent: line.unscaled_ascent,
+                    height: line.height,
                 })
                 .collect()
         }))

@@ -2026,3 +2026,5 @@ packages/flutter/test/painting/text_painter_test.dart	985	TextPainter default te
 packages/flutter/test/painting/text_painter_test.dart	996	TextPainter sets paragraph size from root	paired-match	upstream-text-painter.md#scaled-text-and-caret-height
 packages/flutter/test/painting/text_painter_test.dart	1731	TextPainter computeWidth	paired-match	upstream-text-painter.md#scaled-text-and-caret-height
 packages/flutter/test/painting/text_painter_test.dart	1746	TextPainter computeMaxIntrinsicWidth	paired-match	upstream-text-painter.md#scaled-text-and-caret-height
+packages/flutter/test/painting/text_painter_test.dart	1261	TextPainter set TextHeightBehavior null test	paired-match	upstream-text-painter.md#full-line-metrics-and-height-behavior
+packages/flutter/test/painting/text_painter_test.dart	1310	TextPainter line metrics	paired-match	upstream-text-painter.md#full-line-metrics-and-height-behavior

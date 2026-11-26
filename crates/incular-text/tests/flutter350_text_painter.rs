@@ -563,3 +563,90 @@ fn static_measurement_matches_the_live_width_and_unconstrained_intrinsic() {
         assert_eq!(p.max_intrinsic_width(), Ok(intrinsic));
     }
 }
+
+#[test]
+fn flutter_test_font_reports_exact_line_metrics_across_hard_and_soft_breaks() {
+    let Ok(path) = std::env::var("INCULAR_FLUTTER_TEST_FONT_PATH") else {
+        return;
+    };
+    let mut engine = TextEngine::new();
+    assert!(engine.register_font_bytes_as("FlutterTest", std::fs::read(path).unwrap()));
+    let span = TextSpan::new("test1\nhello line two really long for soft break\nfinal line 4");
+    let mut p = painter(span.clone(), TextDirection::Ltr);
+    p.set_default_style(TextStyle::default().font_family("FlutterTest"));
+    p.layout_with_engine(&mut engine, 0., 300.).unwrap();
+    assert_eq!(p.text(), Some(&span));
+    assert_eq!(p.preferred_line_height(), Ok(14.));
+    let lines = p.line_metrics().unwrap();
+    assert_eq!(lines.len(), 4);
+    for (i, (&width, &hard_break)) in [70., 294., 266., 168.]
+        .iter()
+        .zip(&[true, false, true, true])
+        .enumerate()
+    {
+        let line = lines[i];
+        assert_eq!(line.line_number, i);
+        assert_eq!(line.left, 0.);
+        assert_eq!(line.top, 14. * i as f32);
+        assert_eq!(line.baseline, 10.5 + 14. * i as f32);
+        assert_eq!(line.ascent, 10.5);
+        assert_eq!(line.descent, 3.5);
+        assert_eq!(line.unscaled_ascent, 10.5);
+        assert_eq!(line.height, 14.);
+        assert_eq!(line.width, width);
+        assert_eq!(line.hard_break, hard_break);
+    }
+}
+
+#[test]
+fn text_height_behavior_can_be_cleared_after_layout() {
+    use incular_text::{TextHeightBehavior, TextLeadingDistribution};
+    let mut p = painter(
+        TextSpan::new("X").style(TextStyle::default().line_height_multiplier(3.)),
+        TextDirection::Ltr,
+    );
+    p.set_text_height_behavior(Some(TextHeightBehavior::default()));
+    p.layout(0., f32::INFINITY).unwrap();
+    let original = p.size().unwrap();
+    p.set_text_height_behavior(Some(TextHeightBehavior::new(
+        false,
+        false,
+        TextLeadingDistribution::Proportional,
+    )));
+    assert_eq!(p.size(), Err(TextPainterError::NeedsLayout));
+    p.layout(0., f32::INFINITY).unwrap();
+    assert!(p.size().unwrap().height < original.height);
+    p.set_text_height_behavior(None);
+    p.layout(0., f32::INFINITY).unwrap();
+    assert_eq!(p.size(), Ok(original));
+}
+
+#[test]
+fn clipping_mixed_line_heights_keeps_the_retained_lines_actual_height() {
+    use incular_text::{TextLayoutOptions, TextOverflow};
+    let Ok(path) = std::env::var("INCULAR_FLUTTER_AHEM_PATH") else {
+        return;
+    };
+    let mut engine = TextEngine::new();
+    assert!(engine.register_font_bytes_as("Clip Ahem", std::fs::read(path).unwrap()));
+    let style = TextStyle::default().font_family("Clip Ahem").font_size(10.);
+    let span = TextSpan::new("small\n").children([
+        TextSpan::new("big")
+            .style(style.clone().font_size(30.))
+            .into(),
+        TextSpan::new("\nsmall"),
+    ]);
+    let shape = engine.layout_rich_with_options(
+        &span.plain_text(),
+        &span.flatten(&style),
+        &[],
+        TextLayoutOptions::new(None, TextAlign::Start)
+            .max_lines(Some(2))
+            .overflow(TextOverflow::Clip),
+    );
+    assert!(shape.overflowed);
+    assert_eq!(shape.lines.len(), 2);
+    assert_eq!(shape.lines[0].height, 10.);
+    assert_eq!(shape.lines[1].height, 30.);
+    assert_eq!(shape.metrics.size.height, 40.);
+}
