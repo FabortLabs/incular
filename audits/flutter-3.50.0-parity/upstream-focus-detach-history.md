@@ -74,3 +74,21 @@ remains the same, the other scope stays focused, and a later request
 for the original scope restores that leaf. All 40 selected native
 checks passed, including autofocus mount, direct requests, actual
 reparenting, detach fallback, and per-runtime queue isolation.
+
+## Scope permissions and empty Tab groups
+
+Pinned `widgets/focus_manager_test.dart:801` passed. The mounted native
+fixture verifies primary focus, historical focused child, raw descendant
+membership and immediate focus children in both the scope and an ordinary
+focus parent. Disabling the scope revokes primary focus and blocks a new
+child request, but preserves the original child in history. Descendant
+and direct-child traversal queries now both report no eligible child.
+An additional boundary control ensures a skipped parent does not
+promote its grandchildren into the raw immediate-child query.
+
+Pinned `widgets/focus_traversal_test.dart:4160` also passed. The native
+fixture uses the enabled and disabled FocusableActionDetector states that
+Flutter's test button uses. Real keyboard down/up inputs focus the first
+enabled control and cross the group containing only disabled controls
+in one further Tab press. No disabled node takes focus. All 33 selected
+native checks passed.

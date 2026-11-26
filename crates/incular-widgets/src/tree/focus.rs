@@ -505,6 +505,26 @@ impl WidgetTree {
         &self,
         root: Option<ElementId>,
     ) -> Vec<incular_gestures::FocusNode> {
+        self.focus_traversal_snapshot(root, false)
+    }
+
+    /// Raw traversal candidates on the first focus layer below `root`.
+    ///
+    /// Non-focus widgets are transparent. A skipped focus node is omitted
+    /// but its children are not promoted to the root's immediate children.
+    #[must_use]
+    pub fn focus_traversal_children(
+        &self,
+        root: Option<ElementId>,
+    ) -> Vec<incular_gestures::FocusNode> {
+        self.focus_traversal_snapshot(root, true)
+    }
+
+    fn focus_traversal_snapshot(
+        &self,
+        root: Option<ElementId>,
+        children_only: bool,
+    ) -> Vec<incular_gestures::FocusNode> {
         let Some(start) = root.or(self.root) else {
             return Vec::new();
         };
@@ -543,6 +563,9 @@ impl WidgetTree {
             }
             if root != Some(id) && node.is_some() {
                 pending.push((id, true));
+                if children_only {
+                    continue;
+                }
             }
             if node.is_none_or(incular_gestures::FocusNode::descendants_are_traversable) {
                 pending.extend(

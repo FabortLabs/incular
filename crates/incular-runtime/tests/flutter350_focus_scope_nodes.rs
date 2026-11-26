@@ -807,3 +807,144 @@ fn an_inactive_scope_keeps_its_focused_child_when_the_child_is_reparented_inside
     assert!(leaf.has_primary_focus());
     assert_eq!(first.focused_child(), Some(leaf));
 }
+
+#[test]
+fn a_disabled_scope_keeps_child_history_but_blocks_all_traversal_queries() {
+    use incular_widgets::{Column, GlobalKey};
+
+    let scope = FocusScopeNode::new();
+    let parent1 = FocusNode::new();
+    let parent2 = FocusNode::new();
+    let child1 = FocusNode::new();
+    let child2 = FocusNode::new();
+    let scope_key = GlobalKey::new();
+    let parent_key = GlobalKey::new();
+    let branch = Widget::from(
+        Focus::new(Column::new([
+            Focus::new(SizedBox::shrink()).node(child1.clone()),
+            Focus::new(SizedBox::shrink()).node(child2.clone()),
+        ]))
+        .node(parent1.clone()),
+    )
+    .with_key(parent_key);
+    let scene = Widget::from(FocusScope::with_external_focus_node(
+        Column::new([
+            branch,
+            Focus::new(SizedBox::shrink()).node(parent2.clone()).into(),
+        ]),
+        scope.clone(),
+    ))
+    .with_key(scope_key);
+    let mut runtime = Runtime::new(scene).unwrap();
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    child1.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    let ids =
+        |runtime: &Runtime, key: GlobalKey| runtime.tree().element_with_key(&key.into()).unwrap();
+    let scope_id = ids(&runtime, scope_key);
+    let parent_id = ids(&runtime, parent_key);
+
+    assert!(child1.has_primary_focus());
+    assert_eq!(scope.focused_child(), Some(child1.clone()));
+    assert_eq!(
+        runtime.tree().focus_traversal_descendants(Some(scope_id)),
+        [
+            child1.clone(),
+            child2.clone(),
+            parent1.clone(),
+            parent2.clone()
+        ]
+    );
+    assert_eq!(
+        runtime.tree().focus_traversal_children(Some(scope_id)),
+        [parent1.clone(), parent2.clone()]
+    );
+    assert_eq!(
+        runtime.tree().focus_traversal_children(Some(parent_id)),
+        [child1.clone(), child2.clone()]
+    );
+
+    parent1.set_skip_traversal(true);
+    assert_eq!(
+        runtime.tree().focus_traversal_children(Some(scope_id)),
+        [parent2]
+    );
+    assert!(
+        runtime
+            .tree()
+            .focus_traversal_descendants(Some(scope_id))
+            .contains(&child2)
+    );
+    parent1.set_skip_traversal(false);
+
+    scope.set_can_request_focus(false);
+    runtime.run_frame(bounds).unwrap();
+    child2.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    assert!(!child1.has_primary_focus() && !child2.has_primary_focus());
+    assert_eq!(scope.focused_child(), Some(child1));
+    assert!(
+        runtime
+            .tree()
+            .focus_traversal_descendants(Some(scope_id))
+            .is_empty()
+    );
+    assert!(
+        runtime
+            .tree()
+            .focus_traversal_children(Some(scope_id))
+            .is_empty()
+    );
+    assert!(
+        runtime
+            .tree()
+            .focus_traversal_children(Some(parent_id))
+            .is_empty()
+    );
+}
+
+#[test]
+fn tab_skips_a_group_with_only_disabled_controls_in_one_keypress() {
+    use incular_core::{Code, KeyboardEvent, KeyboardKey, NamedKey};
+    use incular_widgets::{Column, FocusTraversalGroup, FocusableActionDetector};
+
+    let first = FocusNode::new();
+    let second = FocusNode::new();
+    let disabled1 = FocusNode::new();
+    let disabled2 = FocusNode::new();
+    let control = |label, node: &FocusNode, enabled| -> Widget {
+        FocusableActionDetector::new(Text::new(label))
+            .focus_node(node.clone())
+            .enabled(enabled)
+            .into()
+    };
+    let dead_group = FocusTraversalGroup::new(Column::new([
+        control("Disabled Button 1", &disabled1, false),
+        SizedBox::new().height(16.).into(),
+        control("Disabled Button 2", &disabled2, false),
+    ]));
+    let scene = Directionality::new(
+        TextDirection::Ltr,
+        Center::new(Column::new([
+            control("Enabled Button 1", &first, true),
+            dead_group.into(),
+            control("Enabled Button 2", &second, true),
+        ])),
+    );
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let mut runtime = Runtime::new(scene.into()).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    let tab = |runtime: &mut Runtime| {
+        let key = KeyboardKey::Named(NamedKey::Tab);
+        assert!(runtime.dispatch_keyboard_event(KeyboardEvent::key_down(key.clone(), Code::Tab)));
+        let _ = runtime.dispatch_keyboard_event(KeyboardEvent::key_up(key, Code::Tab));
+        runtime.run_frame(bounds).unwrap();
+    };
+
+    assert!(!first.has_primary_focus() && !second.has_primary_focus());
+    tab(&mut runtime);
+    assert!(first.has_primary_focus() && !second.has_primary_focus());
+    tab(&mut runtime);
+    assert!(second.has_primary_focus() && !first.has_primary_focus());
+    assert!(!disabled1.has_focus() && !disabled2.has_focus());
+}
