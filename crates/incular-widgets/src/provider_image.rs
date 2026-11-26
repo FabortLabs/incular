@@ -16,7 +16,9 @@ use incular_image::{
 
 use crate::scroll_aware_image_provider::{ScrollAwareContext, ScrollAwareImageProvider};
 use crate::tree::{ImageOptions, RetainedState, image_option_setters};
-use crate::{BuildContext, ExcludeSemantics, Image, Semantics, SizedBox, Widget};
+use crate::{
+    BuildContext, DefaultAssetBundle, ExcludeSemantics, Image, Semantics, SizedBox, Widget,
+};
 
 /// Flutter's `ImageFrameBuilder`: wraps the image once per frame. `frame` is
 /// `None` until the first frame is ready and `Some(0)` after it (decoded
@@ -168,8 +170,11 @@ impl ProviderImage {
     /// Flutter `createLocalImageConfiguration`: the configuration the
     /// provider resolves against.
     fn configuration(&self, context: &BuildContext<'_>) -> ImageConfiguration {
-        let mut configuration =
-            ImageConfiguration::new().device_pixel_ratio(context.scale_factor());
+        let mut configuration = ImageConfiguration::new()
+            .device_pixel_ratio(context.media_query_device_pixel_ratio().unwrap_or(1.0));
+        if let Some(bundle) = DefaultAssetBundle::configured_of(context) {
+            configuration = configuration.bundle(bundle);
+        }
         if let (Some(width), Some(height)) = (self.options.width, self.options.height) {
             configuration = configuration.size(Size::new(width, height));
         }
@@ -186,7 +191,19 @@ impl ProviderImage {
     /// (Flutter's `RawImage` with a null image).
     fn raw(&self, image: Option<ImageHandle>) -> Widget {
         match image {
-            Some(image) => Image::with_options(image, self.options.clone()).into(),
+            Some(image) => {
+                let mut options = self.options.clone();
+                // The provider's scale maps decoded pixels to logical pixels.
+                // The widget builder's scale remains an additional explicit
+                // multiplier, preserving existing custom providers.
+                let scale = options.scale * image.scale() as f32;
+                options.scale = if scale.is_finite() && scale > 0.0 {
+                    scale
+                } else {
+                    1.0
+                };
+                Image::with_options(image, options).into()
+            }
             None => {
                 let mut empty = SizedBox::new();
                 if let Some(width) = self.options.width {

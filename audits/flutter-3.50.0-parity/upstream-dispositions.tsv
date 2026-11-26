@@ -1569,3 +1569,17 @@ packages/flutter/test/services/asset_bundle_test.dart	277	loadStructuredBinaryDa
 packages/flutter/test/services/asset_manifest_test.dart	56	loadFromBundle correctly parses a binary asset manifest	paired-match	upstream-asset-manifest.md
 packages/flutter/test/services/asset_manifest_test.dart	80	getAssetVariants returns null if the key not contained in the asset manifest	paired-match	upstream-asset-manifest.md
 packages/flutter/test/services/asset_manifest_test.dart	85	getAssetVariants marks primary 1.0x variant as main when content-hashed	paired-match	upstream-asset-manifest.md
+packages/flutter/test/painting/image_resolution_test.dart	74	When asset is main variant check scale is 1.0	paired-match	upstream-asset-image-keys.md
+packages/flutter/test/painting/image_resolution_test.dart	78	When asset path and key are the same string even though it could be took as a 3.0x variant	paired-match	upstream-asset-image-keys.md
+packages/flutter/test/painting/image_resolution_test.dart	85	When asset path contains variant identifier as part of parent folder name scale is 1.0	paired-match	upstream-asset-image-keys.md
+packages/flutter/test/painting/image_resolution_test.dart	92	When asset path contains variant identifier as part of leaf folder name scale is 1.0	paired-match	upstream-asset-image-keys.md
+packages/flutter/test/painting/image_resolution_test.dart	99	When asset path contains variant identifier as part of parent folder name scale is 1.0	paired-match	upstream-asset-image-keys.md
+packages/flutter/test/painting/image_resolution_test.dart	106	When asset path contains variant identifier in parent folder scale is 1.0	paired-match	upstream-asset-image-keys.md
+packages/flutter/test/painting/image_resolution_test.dart	112	When asset is not main variant check scale is not 1.0	paired-match	upstream-asset-image-keys.md
+packages/flutter/test/painting/image_resolution_test.dart	145	When high-res device and high-res asset not present in bundle then return main variant	paired-match	upstream-asset-image-keys.md
+packages/flutter/test/painting/image_resolution_test.dart	211	Obvious case 1.0 - we have exact asset	paired-match	upstream-asset-image-keys.md
+packages/flutter/test/painting/image_resolution_test.dart	215	Obvious case 3.0 - we have exact asset	paired-match	upstream-asset-image-keys.md
+packages/flutter/test/painting/image_resolution_test.dart	219	Typical case 2.0	paired-match	upstream-asset-image-keys.md
+packages/flutter/test/painting/image_resolution_test.dart	223	Borderline case 2.01	paired-match	upstream-asset-image-keys.md
+packages/flutter/test/painting/image_resolution_test.dart	226	Borderline case 2.9	paired-match	upstream-asset-image-keys.md
+packages/flutter/test/painting/image_resolution_test.dart	230	Typical case 4.0	paired-match	upstream-asset-image-keys.md

@@ -21,7 +21,7 @@ pub use network::{
 };
 pub use notices::{LicenseNoticeFormat, load_license_notices, register_license_notices};
 
-pub use root_bundle::{replace_root_asset_bundle, root_asset_bundle};
+pub use root_bundle::{configured_root_asset_bundle, replace_root_asset_bundle, root_asset_bundle};
 
 /// Stable renderer-independent identity for a loaded font asset.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

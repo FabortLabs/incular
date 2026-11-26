@@ -17,3 +17,10 @@ or widget state.
 use that identity to retain backend resources while widgets and display lists
 remain renderer independent. PNG, JPEG, and WebP decoding happens at load
 time, and generated RGBA8 pixels are validated before a handle is created.
+
+`AssetImage` resolves density from the packaged asset manifest, using the
+explicit bundle, image configuration, or root bundle in that order.
+`ExactAssetImage` reads its specified key and scale without a manifest.
+The resolved bundle key names the physical file and carries the density
+used to map source pixels into logical image size. Unbundled native file
+paths also support sibling density directories.

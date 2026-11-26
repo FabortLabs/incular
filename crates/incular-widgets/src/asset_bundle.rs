@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use incular_assets::{AssetBundle, root_asset_bundle};
+use incular_assets::{AssetBundle, configured_root_asset_bundle, root_asset_bundle};
 
 use crate::{BuildContext, Widget};
 
@@ -31,9 +31,14 @@ impl DefaultAssetBundle {
     /// [incular_assets::replace_root_asset_bundle].
     #[must_use]
     pub fn of(context: &BuildContext<'_>) -> Arc<dyn AssetBundle> {
+        Self::configured_of(context).unwrap_or_else(root_asset_bundle)
+    }
+
+    pub(crate) fn configured_of(context: &BuildContext<'_>) -> Option<Arc<dyn AssetBundle>> {
         context
             .depend_on::<BundleScope>()
-            .map_or_else(root_asset_bundle, |scope| scope.0)
+            .map(|scope| scope.0)
+            .or_else(configured_root_asset_bundle)
     }
 }
 

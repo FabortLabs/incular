@@ -4,7 +4,12 @@
 //! sampling, display-list commands, and widget layout belong to their own
 //! crates, preserving a one-way dependency from those consumers to images.
 
+mod asset_image;
 mod stream;
+
+pub use asset_image::{
+    AssetBundleImageKey, AssetImage, AssetImageKeyCallback, ExactAssetImage, ImageAssetBundle,
+};
 
 pub use stream::{
     AnyImageProvider, ImageChunkEvent, ImageLoadState, ImageStream, ImageStreamCompleter,
@@ -53,6 +58,9 @@ pub struct ImageConfiguration {
     pub size: Option<Size>,
     #[default(1.0)]
     pub device_pixel_ratio: f64,
+    #[default(true)]
+    has_device_pixel_ratio: bool,
+    pub bundle: Option<ImageAssetBundle>,
     pub text_direction: Option<TextDirection>,
     pub locale: Option<Locale>,
 }
@@ -61,6 +69,30 @@ impl ImageConfiguration {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Flutter's empty configuration: no bundle, size or target density.
+    #[must_use]
+    pub fn empty() -> Self {
+        Self::new().without_device_pixel_ratio()
+    }
+
+    #[must_use]
+    pub fn without_device_pixel_ratio(mut self) -> Self {
+        self.has_device_pixel_ratio = false;
+        self
+    }
+
+    #[must_use]
+    pub fn target_device_pixel_ratio(&self) -> Option<f64> {
+        self.has_device_pixel_ratio
+            .then(|| finite_positive_or_one(self.device_pixel_ratio))
+    }
+
+    #[must_use]
+    pub fn bundle(mut self, bundle: Arc<dyn incular_assets::AssetBundle>) -> Self {
+        self.bundle = Some(ImageAssetBundle::new(bundle));
+        self
     }
 
     #[must_use]
@@ -72,6 +104,7 @@ impl ImageConfiguration {
     #[must_use]
     pub fn device_pixel_ratio(mut self, ratio: f64) -> Self {
         self.device_pixel_ratio = finite_positive_or_one(ratio);
+        self.has_device_pixel_ratio = true;
         self
     }
 
@@ -111,6 +144,7 @@ pub enum ImageSource {
     Embedded,
     Memory,
     FileSystem(PathBuf),
+    Asset(String),
     Generated,
 }
 
@@ -134,105 +168,6 @@ pub trait ImageProvider: Clone + fmt::Debug + PartialEq + Eq {
     /// the stream from a UI-thread callback when its work finishes.
     fn resolve(&self, configuration: &ImageConfiguration) -> ImageStream {
         ImageStream::from_result(self.load_with(configuration))
-    }
-}
-
-/// Loads an image from an application asset path.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AssetImage(PathBuf);
-
-impl AssetImage {
-    #[must_use]
-    pub fn new(path: impl Into<PathBuf>) -> Self {
-        Self(path.into())
-    }
-
-    #[must_use]
-    pub fn path(&self) -> &Path {
-        &self.0
-    }
-
-    /// The file Flutter's `AssetImage` resolves for a device-pixel ratio.
-    ///
-    /// The main asset stands for pixel ratio 1.0. Variants live in sibling
-    /// directories named `<N>x` (for example `2.0x/heart.png` beside
-    /// `heart.png`), and the best one is chosen by `_findBestVariant` in
-    /// Flutter's `image_resolution.dart`: an exact match, else the nearest
-    /// lower or higher key; below 2.0 (the low-DPR limit), or past the
-    /// midpoint, the higher key wins. Flutter's locale and text-direction
-    /// selection is not implemented there either, so it is not modelled
-    /// here. Unreadable directories fall back to the main asset.
-    #[must_use]
-    pub fn variant_path(&self, device_pixel_ratio: f64) -> PathBuf {
-        let value = finite_positive_or_one(device_pixel_ratio);
-        let mut candidates = self.variants();
-        if candidates.is_empty() {
-            return self.0.clone();
-        }
-        candidates.push((1.0, self.0.clone()));
-        // Stable sort keeps the variant listed after the main asset, so an
-        // explicit `1.0x` variant wins over the main asset, as in Flutter's
-        // map assignment.
-        candidates.sort_by(|a, b| a.0.total_cmp(&b.0));
-        let mut deduped: Vec<(f64, PathBuf)> = Vec::with_capacity(candidates.len());
-        for candidate in candidates {
-            match deduped.last_mut() {
-                Some(last) if last.0 == candidate.0 => *last = candidate,
-                _ => deduped.push(candidate),
-            }
-        }
-        let lower = deduped.iter().rev().find(|(key, _)| *key < value);
-        let upper = deduped.iter().find(|(key, _)| *key > value);
-        let exact = deduped.iter().find(|(key, _)| *key == value);
-        let chosen = match (exact, lower, upper) {
-            (Some(exact), _, _) => exact,
-            (None, None, Some(upper)) => upper,
-            (None, Some(lower), None) => lower,
-            (None, Some(lower), Some(upper)) => {
-                if value < 2.0 || value > (lower.0 + upper.0) / 2.0 {
-                    upper
-                } else {
-                    lower
-                }
-            }
-            (None, None, None) => return self.0.clone(),
-        };
-        chosen.1.clone()
-    }
-
-    /// Variant files found beside the main asset, keyed by their `<N>x`
-    /// directory name.
-    fn variants(&self) -> Vec<(f64, PathBuf)> {
-        let Some(name) = self.0.file_name() else {
-            return Vec::new();
-        };
-        let directory = match self.0.parent() {
-            Some(parent) if !parent.as_os_str().is_empty() => parent,
-            _ => Path::new("."),
-        };
-        let Ok(entries) = std::fs::read_dir(directory) else {
-            return Vec::new();
-        };
-        entries
-            .filter_map(Result::ok)
-            .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
-            .filter_map(|entry| {
-                let dir_name = entry.file_name();
-                let scale = dir_name.to_str()?.strip_suffix('x')?.parse::<f64>().ok()?;
-                let path = entry.path().join(name);
-                (scale.is_finite() && scale > 0. && path.is_file()).then_some((scale, path))
-            })
-            .collect()
-    }
-}
-
-impl ImageProvider for AssetImage {
-    fn load(&self) -> Result<ImageHandle, ImageError> {
-        ImageHandle::from_file(&self.0)
-    }
-
-    fn load_with(&self, configuration: &ImageConfiguration) -> Result<ImageHandle, ImageError> {
-        ImageHandle::from_file(self.variant_path(configuration.device_pixel_ratio))
     }
 }
 
@@ -357,6 +292,8 @@ pub const MAX_DECODE_OUTPUT_BYTES: u64 = 256 * 1024 * 1024;
 pub enum ImageError {
     #[error("image I/O error: {0}")]
     Io(String),
+    #[error(transparent)]
+    Asset(#[from] incular_assets::AssetError),
     #[error("image decode error: {0}")]
     Decode(String),
     #[error("invalid image dimensions")]
@@ -388,6 +325,7 @@ struct ImageResource {
     id: ImageId,
     source: ImageSource,
     image: DecodedImage,
+    scale: f64,
 }
 impl Drop for ImageResource {
     fn drop(&mut self) {
@@ -587,6 +525,7 @@ impl ImageHandle {
             id: next_image_id(),
             source,
             image,
+            scale: 1.0,
         })))
     }
     #[must_use]
@@ -597,6 +536,18 @@ impl ImageHandle {
     pub fn source(&self) -> &ImageSource {
         &self.0.source
     }
+    /// Encoded source pixels per logical image pixel.
+    #[must_use]
+    pub fn scale(&self) -> f64 {
+        self.0.scale
+    }
+
+    fn set_decoded_scale(&mut self, scale: f64) {
+        Arc::get_mut(&mut self.0)
+            .expect("freshly decoded image")
+            .scale = finite_positive_or_one(scale);
+    }
+
     #[must_use]
     pub fn decoded(&self) -> &DecodedImage {
         &self.0.image

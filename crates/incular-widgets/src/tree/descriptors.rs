@@ -186,6 +186,12 @@ impl Image {
         crate::ProviderImage::new(provider)
     }
 
+    /// Loads a resolution-aware asset from the closest asset bundle.
+    #[must_use]
+    pub fn asset(path: impl Into<std::path::PathBuf>) -> crate::ProviderImage {
+        Self::provider(crate::AssetImage::new(path))
+    }
+
     pub(crate) fn with_options(image: ImageHandle, options: ImageOptions) -> Self {
         Self { image, options }
     }

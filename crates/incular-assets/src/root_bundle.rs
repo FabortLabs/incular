@@ -16,13 +16,18 @@ thread_local! {
 #[must_use]
 pub fn root_asset_bundle() -> Arc<dyn AssetBundle> {
     static EMPTY_ROOT: OnceLock<Arc<dyn AssetBundle>> = OnceLock::new();
-    OVERRIDE.with(|slot| {
-        slot.borrow().clone().unwrap_or_else(|| {
-            EMPTY_ROOT
-                .get_or_init(|| Arc::new(CachingAssetBundle::new(MemoryAssetBundle::new())))
-                .clone()
-        })
+    configured_root_asset_bundle().unwrap_or_else(|| {
+        EMPTY_ROOT
+            .get_or_init(|| Arc::new(CachingAssetBundle::new(MemoryAssetBundle::new())))
+            .clone()
     })
+}
+
+/// The host's configured root bundle, excluding the empty fallback. File
+/// adapters can use this to preserve their behavior without packaged assets.
+#[must_use]
+pub fn configured_root_asset_bundle() -> Option<Arc<dyn AssetBundle>> {
+    OVERRIDE.with(|slot| slot.borrow().clone())
 }
 
 /// Sets or clears the root bundle override, returning the previous override.

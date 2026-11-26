@@ -72,6 +72,15 @@ pub trait AssetBundle: Send + Sync + 'static {
         done(self.load(key));
     }
 
+    /// Reads a manifest immediately from a synchronous bundle. Applications
+    /// with a callback-only transport use [Self::load_asset_manifest].
+    fn read_asset_manifest(
+        &self,
+        format: AssetManifestFormat,
+    ) -> Result<AssetManifest, AssetError> {
+        AssetManifest::from_bytes(&self.load(format.asset_key())?, format)
+    }
+
     /// Starts a manifest load. The default uses the bundle's asynchronous
     /// byte transport, without caching the decoded result.
     fn load_asset_manifest(
@@ -366,16 +375,23 @@ impl<B: AssetBundle> AssetBundle for CachingAssetBundle<B> {
         self.inner.load_async(key, done);
     }
 
+    fn read_asset_manifest(
+        &self,
+        format: AssetManifestFormat,
+    ) -> Result<AssetManifest, AssetError> {
+        let key = format.asset_key();
+        self.load_cached_structured(key, manifest_kind(format), || {
+            AssetManifest::from_bytes(&self.load(key)?, format)
+        })
+    }
+
     fn load_asset_manifest(
         self: Arc<Self>,
         format: AssetManifestFormat,
         done: AssetManifestLoadCallback,
     ) {
         let key = format.asset_key();
-        let kind = match format {
-            AssetManifestFormat::Binary => StructuredKind::Binary,
-            AssetManifestFormat::WebJson => StructuredKind::Text,
-        };
+        let kind = manifest_kind(format);
         let (pending, generation) = {
             let mut cache = self.cache.lock().unwrap_or_else(PoisonError::into_inner);
             if let Some(value) = cache.structured_cache(kind).get(key).cloned() {
@@ -490,4 +506,11 @@ fn cached_manifest(
         .ok_or_else(|| AssetError::TypeMismatch {
             key: key.to_owned(),
         })
+}
+
+const fn manifest_kind(format: AssetManifestFormat) -> StructuredKind {
+    match format {
+        AssetManifestFormat::Binary => StructuredKind::Binary,
+        AssetManifestFormat::WebJson => StructuredKind::Text,
+    }
 }
