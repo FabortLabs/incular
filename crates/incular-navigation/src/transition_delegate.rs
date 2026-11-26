@@ -292,7 +292,7 @@ impl TransitionDelegate for DefaultTransitionDelegate {
     }
 }
 
-/// The decisions of the declarative updates a presenter has not read yet.
+/// Route transition decisions a presenter has not read yet.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PageTransitionDecisions {
     entering: std::collections::HashMap<RouteId, PageEntering>,
@@ -306,8 +306,8 @@ impl PageTransitionDecisions {
         self.entering.get(&route).copied()
     }
 
-    /// How `route` leaves and the location it leaves from, when a
-    /// declarative update removed it.
+    /// How `route` leaves and the location it leaves from, for a
+    /// declarative change or an immediate imperative removal.
     #[must_use]
     pub fn exiting(&self, route: RouteId) -> Option<(PageExiting, Option<RouteId>)> {
         self.exiting.get(&route).copied()
@@ -317,6 +317,11 @@ impl PageTransitionDecisions {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.entering.is_empty() && self.exiting.is_empty()
+    }
+
+    pub(crate) fn record_immediate_removal(&mut self, route: RouteId, previous: Option<RouteId>) {
+        self.entering.remove(&route);
+        self.exiting.insert(route, (PageExiting::Remove, previous));
     }
 
     /// Merges a later update's decisions over these. Entering decisions of

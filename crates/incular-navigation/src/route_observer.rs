@@ -273,7 +273,9 @@ impl RouteObserver {
                         aware.did_pop();
                     }
                 }
-                NavigationEvent::Replaced { .. } => pending.set(None),
+                NavigationEvent::Replaced { .. } | NavigationEvent::Removed { .. } => {
+                    pending.set(None);
+                }
                 NavigationEvent::ActiveRouteChanged { previous, current } => {
                     match pending.take() {
                         // `didPush(route, previousRoute)`.

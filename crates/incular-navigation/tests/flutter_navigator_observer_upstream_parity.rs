@@ -10,6 +10,7 @@ use std::{cell::RefCell, rc::Rc};
 enum Record {
     Pushed(String),
     Popped(String),
+    Removed(String, Option<String>),
     Replaced(String, String),
     Active(Option<String>, Option<String>),
 }
@@ -24,6 +25,9 @@ fn observe(navigator: &Navigator) -> (Log, NavigatorObserver) {
             let record = match event {
                 NavigationEvent::Pushed { route } => Record::Pushed(route.name),
                 NavigationEvent::Popped { route } => Record::Popped(route.name),
+                NavigationEvent::Removed { route, previous } => {
+                    Record::Removed(route.name, previous.map(|route| route.name))
+                }
                 NavigationEvent::Replaced { previous, route } => {
                     Record::Replaced(previous.name, route.name)
                 }
@@ -142,9 +146,8 @@ fn replacement_after_pop_until_reports_two_pops_then_a_replace() {
     );
 }
 
-/// navigator_test.dart:1677 "removeRoute". Flutter reports didRemove, not
-/// didPop. Incular exposes no removal-specific event; pin the observable
-/// negative contract (imperative removal must not notify pop listeners).
+/// navigator_test.dart:1677 "removeRoute": didRemove carries the route
+/// below the removed route and is distinct from didPop.
 #[test]
 fn removing_routes_must_not_emit_pop_observations() {
     let navigator = Navigator::new();
@@ -176,19 +179,28 @@ fn removing_routes_must_not_emit_pop_observations() {
     assert_eq!(navigator.current().expect("initial route remains").id, root);
     assert_eq!(navigator.routes().len(), 1);
 
-    let observations = log.take();
-    let active_changes: Vec<_> = observations
-        .iter()
-        .filter(|event| matches!(event, Record::Active(..)))
-        .collect();
     assert_eq!(
-        active_changes,
-        [&active(Some("/B"), "/A"), &active(Some("/A"), "/")]
+        log.take(),
+        [
+            Record::Removed("/B".into(), Some("/A".into())),
+            active(Some("/B"), "/A"),
+            Record::Removed("/A".into(), Some("/".into())),
+            active(Some("/A"), "/"),
+        ]
     );
-    assert!(
-        !observations
-            .iter()
-            .any(|event| matches!(event, Record::Popped(_))),
-        "removeRoute sent didPop-equivalent notifications: {observations:?}"
-    );
+}
+
+#[test]
+fn removing_a_middle_route_uses_its_neighbor_and_does_not_change_the_top() {
+    let navigator = Navigator::new();
+    let root = navigator.push(route("/"));
+    let middle = navigator.push(route("/A"));
+    let top = navigator.push(route("/B"));
+    let (log, _observer) = observe(&navigator);
+    assert_eq!(navigator.remove_route_below(top).unwrap().id, middle);
+    assert_eq!(current(&navigator), "/B");
+    assert_eq!(log.take(), [Record::Removed("/A".into(), Some("/".into()))]);
+    assert_eq!(navigator.remove_route(root).unwrap().id, root);
+    assert_eq!(current(&navigator), "/B");
+    assert_eq!(log.take(), [Record::Removed("/".into(), None)]);
 }

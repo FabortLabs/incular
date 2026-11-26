@@ -366,7 +366,7 @@ packages/flutter/test/animation/animation_controller_test.dart	1102	Simulations 
 packages/flutter/test/widgets/navigator_test.dart	779	Push and pop should trigger the observers	partial-match	upstream-animated-size-overflow-controller-and-navigation.md
 packages/flutter/test/widgets/navigator_test.dart	848	Add and remove an observer should work	partial-match	upstream-animated-size-overflow-controller-and-navigation.md
 packages/flutter/test/widgets/navigator_test.dart	1295	pushReplacement correctly reports didReplace to the observer	partial-match	upstream-animated-size-overflow-controller-and-navigation.md
-packages/flutter/test/widgets/navigator_test.dart	1677	removeRoute	partial-mismatch	upstream-animated-size-overflow-controller-and-navigation.md
+packages/flutter/test/widgets/navigator_test.dart	1677	removeRoute	paired-match	upstream-navigator-removal.md
 packages/flutter/test/widgets/ensure_visible_test.dart	72	SingleChildScrollView ensureVisible Axis.vertical	paired-match	upstream-ensure-visible-single-child.md
 packages/flutter/test/widgets/ensure_visible_test.dart	99	SingleChildScrollView ensureVisible Axis.horizontal	paired-match	upstream-ensure-visible-single-child.md
 packages/flutter/test/widgets/ensure_visible_test.dart	126	SingleChildScrollView ensureVisible Axis.vertical reverse	paired-match	upstream-ensure-visible-single-child.md

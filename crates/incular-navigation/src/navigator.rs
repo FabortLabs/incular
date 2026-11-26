@@ -51,9 +51,11 @@ use crate::transition_delegate::{PageTransition, PageTransitionDecisions, Transi
 pub enum NavigationEvent {
     /// A route was appended to the stack.
     Pushed { route: Route },
-    /// A route was removed from the stack, by a pop or an imperative removal
-    /// (`remove_route`, `remove_route_below`, `push_and_remove_until`).
+    /// A route was popped from the stack.
     Popped { route: Route },
+    /// An imperative removal, not a pop. `previous` was the route
+    /// immediately below the removed one, even if neither was the top.
+    Removed { route: Route, previous: Option<Route> },
     /// The active route was replaced in place.
     Replaced { previous: Route, route: Route },
     /// The route presented by this navigator changed.
@@ -1119,21 +1121,28 @@ impl Navigator {
         })
     }
 
-    /// Removes the entry chosen by `select` in one commit, reporting it as a
-    /// `Popped` event (the stack no longer holds it) and ending its lifetime.
+    /// Removes the entry in one commit, without a pop or reverse transition.
     fn remove_at(&self, select: impl FnOnce(&NavigatorState) -> Option<usize>) -> Option<Route> {
-        let (route, lifetime, cleanup, previous_top, current_top) = {
+        let (route, lifetime, cleanup, previous, previous_top, current_top) = {
             let mut state = self.state.borrow_mut();
             let index = select(&state)?;
             let previous_top = state.routes.last().map(|entry| entry.route.clone());
+            let previous = index.checked_sub(1).map(|index| state.routes[index].route.clone());
             let cleanup = scope_cleanup(&state, &state.routes[index]);
             let entry = state.routes.remove(index);
+            if state.records_page_transitions {
+                state.page_transitions.record_immediate_removal(
+                    entry.route.id,
+                    previous.as_ref().map(|route| route.id),
+                );
+            }
             state.revision = state.revision.checked_add(1).expect("revision exhausted");
             let current_top = state.routes.last().map(|entry| entry.route.clone());
             (
                 entry.route,
                 entry.lifetime,
                 cleanup,
+                previous,
                 previous_top,
                 current_top,
             )
@@ -1141,8 +1150,9 @@ impl Navigator {
         let mut effects = CommitEffects::default();
         effects.cleanups.extend(cleanup);
         effects.lifetimes.push(lifetime);
-        effects.events.push(NavigationEvent::Popped {
+        effects.events.push(NavigationEvent::Removed {
             route: route.clone(),
+            previous,
         });
         effects
             .events

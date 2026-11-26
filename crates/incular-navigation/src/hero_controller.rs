@@ -69,6 +69,7 @@ impl HeroController {
         // so the popped route is known when the top change arrives. Its
         // reverse animation starts on the next frame, after this event.
         let popping = Cell::new(None::<RouteId>);
+        let removing = Cell::new(None::<RouteId>);
         let observer = navigator.observe(move |event| {
             // Pushes, replacements and page reconciliation all add routes.
             for route in routes.routes() {
@@ -76,11 +77,16 @@ impl HeroController {
             }
             match event {
                 NavigationEvent::Popped { route } => popping.set(Some(route.id)),
+                NavigationEvent::Removed { route, .. } => removing.set(Some(route.id)),
                 NavigationEvent::ActiveRouteChanged {
                     previous: Some(previous),
                     current: Some(current),
                 } => {
                     let popped = popping.take() == Some(previous.id);
+                    if removing.take() == Some(previous.id) {
+                        // removeRoute does not run an outgoing animation.
+                        return;
+                    }
                     controller.did_change_top(&current, &previous, popped);
                 }
                 _ => {}

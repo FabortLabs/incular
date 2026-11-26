@@ -161,10 +161,9 @@ fn remove_route_below_removes_only_the_route_under_the_anchor() {
     assert!(navigator.remove_route_below(root).is_none());
 }
 
-/// Removal is reported as `Popped` (the stack no longer holds the route),
-/// and removing the top also reports the active route change.
+/// Removing the top reports didRemove before the active route change.
 #[test]
-fn imperative_removal_reports_popped_and_active_route_changes() {
+fn imperative_removal_reports_removed_and_active_route_changes() {
     let navigator = Navigator::new();
     navigator.push(Route::new("root", page()));
     let top = navigator.push(Route::new("top", page()));
@@ -173,7 +172,9 @@ fn imperative_removal_reports_popped_and_active_route_changes() {
         let log = log.clone();
         move |event| {
             let entry = match event {
-                NavigationEvent::Popped { route } => format!("popped {}", route.name),
+                NavigationEvent::Removed { route, previous } => {
+                    format!("removed {} after {}", route.name, previous.unwrap().name)
+                }
                 NavigationEvent::ActiveRouteChanged { current, .. } => {
                     format!("active {}", current.map_or_else(String::new, |r| r.name))
                 }
@@ -183,7 +184,7 @@ fn imperative_removal_reports_popped_and_active_route_changes() {
         }
     });
     navigator.remove_route(top);
-    assert_eq!(*log.borrow(), ["popped top", "active root"]);
+    assert_eq!(*log.borrow(), ["removed top after root", "active root"]);
 }
 
 /// Flutter `popUntil`: pops while the predicate rejects the top route, and
@@ -267,6 +268,9 @@ fn observers_receive_stack_and_active_route_lifecycle() {
             NavigationEvent::Popped { route } => {
                 events.borrow_mut().push(format!("pop:{}", route.name));
             }
+            NavigationEvent::Removed { route, previous } => events.borrow_mut().push(
+                format!("remove:{}:{}", route.name, previous.map_or_else(String::new, |route| route.name)),
+            ),
             NavigationEvent::Replaced { previous, route } => events
                 .borrow_mut()
                 .push(format!("replace:{}:{}", previous.name, route.name)),
@@ -1276,6 +1280,9 @@ fn event_log() -> (Rc<RefCell<Vec<String>>>, impl Fn(NavigationEvent) + Clone) {
             NavigationEvent::Popped { route } => {
                 events.borrow_mut().push(format!("pop:{}", route.name));
             }
+            NavigationEvent::Removed { route, previous } => events.borrow_mut().push(
+                format!("remove:{}:{}", route.name, previous.map_or_else(String::new, |route| route.name)),
+            ),
             NavigationEvent::Replaced { previous, route } => events
                 .borrow_mut()
                 .push(format!("replace:{}:{}", previous.name, route.name)),
@@ -1829,6 +1836,9 @@ fn commit_effects_deliver_identical_order_to_all_observers() {
             NavigationEvent::Popped { route } => {
                 events.borrow_mut().push(format!("pop:{}", route.name));
             }
+            NavigationEvent::Removed { route, previous } => events.borrow_mut().push(
+                format!("remove:{}:{}", route.name, previous.map_or_else(String::new, |route| route.name)),
+            ),
             NavigationEvent::Replaced { previous, route } => events
                 .borrow_mut()
                 .push(format!("replace:{}:{}", previous.name, route.name)),
