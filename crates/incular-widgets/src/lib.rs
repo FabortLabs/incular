@@ -332,7 +332,7 @@ pub use painting_effects::{
     EllipticalRoundedRect, ImageFiltered, ImageIcon, LinearBorder, LinearBorderEdge, OvalBorder,
     PhysicalModel, PhysicalShape, Radius, RawImage, RoundedCircleOutline, RoundedRectangleBorder, RoundedSuperellipseBorder,
     SemanticsBuilder, ShapeBorder, ShapeBorderClipper, ShapeDecoration, SnapshotWidget,
-    StadiumBorder, StarBorder, StarBorderError, TableBorder, TileMode,
+    StadiumBorder, StarBorder, StarBorderError, StarBorderUpdate, TableBorder, TileMode,
 };
 pub use platform_view::{
     PlatformViewController, PlatformViewHitTestBehavior, PlatformViewPlacement, PlatformViewSurface,

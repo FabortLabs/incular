@@ -362,7 +362,7 @@ pub mod prelude {
         SliverPrototypeExtentList, SliverReorderController, SliverReorderableList,
         SliverResizingHeader, SliverSafeArea, SliverSemantics, SliverToBoxAdapter,
         SliverVariedExtentList, SliverVisibility, SnapshotWidget, Spacer, Stack, StadiumBorder,
-        StarBorder, StreamBuilder, StreamBuilderBase, StreamEvent, StretchEffect,
+        StarBorder, StarBorderError, StarBorderUpdate, StreamBuilder, StreamBuilderBase, StreamEvent, StretchEffect,
         StretchingOverscrollIndicator, StringRouteInformationParser, Table, TableCell,
         TableBorder, TableCellVerticalAlignment, TableColumnWidth, TableRow, TableRowLengthError,
         TapRegion, TapRegionCallbacks,

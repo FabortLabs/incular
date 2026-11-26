@@ -33,7 +33,7 @@ pub use layers::{ClipRSuperellipse, GridPaper, PhysicalModel, PhysicalShape, Sna
 pub use shape_borders::{
     BeveledRectangleBorder, BorderComposition, CircleBorder, CompoundBorder,
     ContinuousRectangleBorder, LinearBorder, LinearBorderEdge, OvalBorder, RoundedRectangleBorder,
-    RoundedSuperellipseBorder, ShapeBorder, StadiumBorder, StarBorder, StarBorderError,
+    RoundedSuperellipseBorder, ShapeBorder, StadiumBorder, StarBorder, StarBorderError, StarBorderUpdate,
 };
 pub use shape_decoration::{DecoratedShapeBox, ShapeBorderClipper, ShapeDecoration};
 

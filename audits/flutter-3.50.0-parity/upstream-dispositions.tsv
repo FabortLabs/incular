@@ -2098,3 +2098,6 @@ packages/flutter/test/painting/border_radius_test.dart	662	BorderRadius copyWith
 packages/flutter/test/painting/border_radius_test.dart	688	BorderRadiusGeometry factories	paired-match	upstream-edge-insets.md#corner-radius-factories-and-signed-arithmetic
 packages/flutter/test/painting/shape_border_test.dart	86	Compound borders	paired-match	upstream-edge-insets.md#compound-physical-and-directional-borders
 packages/flutter/test/painting/shape_border_test.dart	153	Compound borders	paired-match	upstream-edge-insets.md#compound-physical-and-directional-borders
+packages/flutter/test/painting/star_border_test.dart	40	StarBorder defaults	paired-match	upstream-edge-insets.md#star-border-values-and-empty-layout
+packages/flutter/test/painting/star_border_test.dart	57	StarBorder copyWith, ==, hashCode	paired-match	upstream-edge-insets.md#star-border-values-and-empty-layout
+packages/flutter/test/painting/star_border_test.dart	221	StarBorder doesn't try to scale an infinite scale matrix	paired-match	upstream-edge-insets.md#star-border-values-and-empty-layout

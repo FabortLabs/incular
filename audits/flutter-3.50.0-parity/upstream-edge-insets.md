@@ -205,3 +205,17 @@ asymmetric mixed insets and which mixed pairs can merge. The native path
 recording uses rectangular stroke paths where Flutter records drawRect;
 these tests verify equivalent stroke centerlines and color, not raster
 goldens or Dart class identity.
+
+### Star border values and empty layout
+
+Pinned `painting/star_border_test.dart` passed the defaults (line 40), named
+copy/equality/hash (57), and positioned zero-size decoration (221) cases.
+`flutter350_star_border_values` checks those three behaviors and validates
+simultaneous rounding changes. The optional copy fields preserve unspecified
+values, including the polygon's current inner ratio, but copying it creates
+a star just as Flutter's public copy does. The hash uses the side only; equality
+still checks every field and distinguishes the star and polygon constructors.
+The native widget test runs the actual stack, positioned decoration and paint
+path, with a nonempty control. Empty bounds now produce an empty path rather
+than divide by zero and emit non-finite geometry. This batch does not count
+the upstream star raster goldens.

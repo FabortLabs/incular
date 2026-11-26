@@ -1047,11 +1047,23 @@ pub struct StarBorder {
     squash: f32,
 }
 
+/// Optional named changes for [`StarBorder::copy_with`].
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct StarBorderUpdate {
+    pub side: Option<BorderSide>,
+    pub points: Option<f32>,
+    pub inner_radius_ratio: Option<f32>,
+    pub point_rounding: Option<f32>,
+    pub valley_rounding: Option<f32>,
+    pub rotation_degrees: Option<f32>,
+    pub squash: Option<f32>,
+}
+
 /// Why a [`StarBorder`] value was rejected.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum StarBorderError {
-    /// The point count was below 2 or NaN.
+    /// The point count was below 2 or not finite.
     TooFewPoints,
     /// The inner radius ratio was outside `0.0..=1.0`.
     InnerRadiusRatioOutOfRange,
@@ -1066,7 +1078,7 @@ pub enum StarBorderError {
 impl std::fmt::Display for StarBorderError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Self::TooFewPoints => "a star has at least two points",
+            Self::TooFewPoints => "a star needs a finite count of at least two points",
             Self::InnerRadiusRatioOutOfRange => "inner radius ratio must be within 0..=1",
             Self::RoundingOutOfRange => "rounding must be within 0..=1",
             Self::RoundingSumExceedsOne => "point and valley rounding must sum to at most 1",
@@ -1128,12 +1140,12 @@ impl StarBorder {
     ///
     /// # Panics
     ///
-    /// Panics when `points` is below 2 or NaN. Use [`Self::try_points`] to
+    /// Panics when `points` is below 2 or not finite. Use [`Self::try_points`] to
     /// handle that case.
     #[must_use]
     pub fn points(self, points: f32) -> Self {
         self.try_points(points)
-            .expect("a star has at least two points; use try_points")
+            .expect("a star needs a finite count of at least two points; use try_points")
     }
 
     /// Sets the number of points, or reports a count below 2.
@@ -1141,9 +1153,9 @@ impl StarBorder {
     /// # Errors
     ///
     /// Returns [`StarBorderError::TooFewPoints`] when `points` is below 2 or
-    /// NaN.
+    /// non-finite.
     pub fn try_points(mut self, points: f32) -> Result<Self, StarBorderError> {
-        if points.is_nan() || points < 2.0 {
+        if !points.is_finite() || points < 2.0 {
             return Err(StarBorderError::TooFewPoints);
         }
         self.points = points;
@@ -1258,16 +1270,68 @@ impl StarBorder {
         Ok(self)
     }
 
+    /// Copies this border, overriding only named properties. Like Flutter,
+    /// copying a polygon materializes its current inner radius as a star.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the updated properties would produce an invalid star.
+    #[must_use]
+    pub fn copy_with(self, changes: StarBorderUpdate) -> Self {
+        self.try_copy_with(changes)
+            .expect("invalid StarBorder copy; use try_copy_with")
+    }
+
+    /// Validates the new point and valley rounding together, so adjusting both
+    /// can succeed even if applying one change in isolation would be invalid.
+    ///
+    /// # Errors
+    ///
+    /// Returns the offending property constraint when a change is invalid.
+    pub fn try_copy_with(mut self, changes: StarBorderUpdate) -> Result<Self, StarBorderError> {
+        let ratio = changes.inner_radius_ratio.unwrap_or_else(|| self.inner_ratio());
+        let point_rounding = changes.point_rounding.unwrap_or(self.point_rounding);
+        let valley_rounding = changes.valley_rounding.unwrap_or(self.valley_rounding);
+        check_rounding(point_rounding, valley_rounding)?;
+        check_rounding(valley_rounding, point_rounding)?;
+        self = self.try_points(changes.points.unwrap_or(self.points))?;
+        self = self.try_inner_radius_ratio(ratio)?;
+        self = self.try_squash(changes.squash.unwrap_or(self.squash))?;
+        self.point_rounding = point_rounding;
+        self.valley_rounding = valley_rounding;
+        if let Some(rotation) = changes.rotation_degrees {
+            self = self.rotation(rotation);
+        }
+        self.side = changes.side.unwrap_or(self.side);
+        Ok(self)
+    }
+
+    #[must_use]
+    pub const fn point_rounding_factor(&self) -> f32 {
+        self.point_rounding
+    }
+
+    #[must_use]
+    pub const fn valley_rounding_factor(&self) -> f32 {
+        self.valley_rounding
+    }
+
+    #[must_use]
+    pub const fn squash_factor(&self) -> f32 {
+        self.squash
+    }
+
     #[must_use]
     pub const fn point_count(&self) -> f32 {
         self.points
     }
 
     /// The valleys' radius ratio; a polygon's is `cos(π / sides)`.
+    #[expect(clippy::cast_possible_truncation, reason = "evaluate the two-sided limit before narrowing")]
     #[must_use]
     pub fn inner_ratio(&self) -> f32 {
         self.inner_radius_ratio
-            .unwrap_or_else(|| (std::f32::consts::PI / self.points).cos())
+            .unwrap_or_else(|| (PI / f64::from(self.points)).cos() as f32)
     }
 
     /// The rotation in degrees.
@@ -1295,6 +1359,14 @@ impl StarBorder {
             squash: f64::from(self.squash),
         }
         .generate(rect)
+    }
+}
+
+impl Hash for StarBorder {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // Flutter deliberately hashes the side only; equality still checks
+        // all properties, including the polygon marker.
+        self.side.hash(state);
     }
 }
 
@@ -1399,6 +1471,11 @@ impl StarGenerator {
     fn generate(&self, rect: Rect) -> Path {
         let width = f64::from(rect.size.width);
         let height = f64::from(rect.size.height);
+        if !width.is_finite() || !height.is_finite() || width <= 0.0 || height <= 0.0 {
+            // No drawable area. Computing the scale here divides by a zero
+            // diameter and can propagate NaNs through the rendering path.
+            return Path::builder().build();
+        }
         let shortest = width.min(height);
         let radius = shortest / 2.0;
         let center = Point::new(
@@ -1416,6 +1493,9 @@ impl StarGenerator {
                 radius,
                 radius * mapped_inner_radius_ratio,
             );
+        if !max_diameter.is_finite() || max_diameter <= 0.0 {
+            return Path::builder().build();
+        }
         let mut scale = Point::new(width / max_diameter, height / max_diameter);
         if shortest == width {
             scale = Point::new(
