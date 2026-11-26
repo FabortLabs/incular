@@ -681,9 +681,47 @@ pub struct DecorationImage {
     /// Flutter `filterQuality`, default [`FilterQuality::Medium`].
     #[builder(default = FilterQuality::Medium)]
     pub filter_quality: FilterQuality,
+    #[builder(default, setter(skip))]
+    pub(super) blend: Option<Arc<DecorationImageBlend>>,
+
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct DecorationImageBlend {
+    pub from: DecorationImage,
+    pub to: DecorationImage,
+    pub t: f32,
+    pub opacity: f32,
 }
 
 impl DecorationImage {
+    /// Blends the two images in an isolated layer, with each endpoint's
+    /// original fit, crop, orientation, repetition and opacity.
+    #[must_use]
+    pub fn lerp_optional(a: Option<&Self>, b: Option<&Self>, t: f32) -> Option<Self> {
+        if t == 0. {
+            return a.cloned();
+        }
+        if t == 1. {
+            return b.cloned();
+        }
+        match (a, b) {
+            (None, None) => None,
+            (Some(a), Some(b)) if std::ptr::eq(a, b) => Some(a.clone()),
+            (Some(a), Some(b)) => Some(Self {
+                blend: Some(Arc::new(DecorationImageBlend {
+                    from: a.clone(),
+                    to: b.clone(),
+                    t,
+                    opacity: 1.,
+                })),
+                ..b.clone()
+            }),
+            (None, Some(b)) => faded_decoration_image(Some(b), t),
+            (Some(a), None) => faded_decoration_image(Some(a), 1. - t),
+        }
+    }
+
     /// Flutter `paintImage`'s null-fit rule: `BoxFit.scaleDown` when there is
     /// no center slice, `BoxFit.fill` when there is one.
     #[must_use]
@@ -715,6 +753,7 @@ impl DecorationImage {
             scale: 1.0,
             opacity: 1.0,
             filter_quality: FilterQuality::Medium,
+            blend: None,
         }
     }
 }
@@ -727,7 +766,12 @@ pub(super) fn faded_decoration_image(
         return None;
     }
     image.cloned().map(|mut image| {
-        image.opacity = (image.opacity * factor).clamp(0., 1.);
+        if let Some(blend) = &mut image.blend {
+            let blend = Arc::make_mut(blend);
+            blend.opacity = (blend.opacity * factor).clamp(0., 1.);
+        } else {
+            image.opacity = (image.opacity * factor).clamp(0., 1.);
+        }
         image
     })
 }
@@ -1489,7 +1533,7 @@ enum AlignedGradientKind {
 impl incular_core::Lerp for BoxDecoration {
     /// Flutter `BoxDecoration.lerp`: a part present on one side only
     /// scales in or out (`Color.lerp(null, c, t)`, `BoxBorder.lerp`,
-    /// `BoxShadow.lerpList`). Raw brushes and images switch at the midpoint,
+    /// `BoxShadow.lerpList`). Raw brushes switch at the midpoint,
     /// and, as in Flutter, a blend mode is kept only at the ends or when
     /// interpolating a decoration with itself.
     fn lerp(&self, other: &Self, t: f32) -> Self {
@@ -1545,11 +1589,7 @@ impl incular_core::Lerp for BoxDecoration {
             };
         Self {
             color: lerp_color(self.color, other.color, t),
-            image: if t < 0.5 {
-                self.image.clone()
-            } else {
-                other.image.clone()
-            },
+            image: DecorationImage::lerp_optional(self.image.as_ref(), other.image.as_ref(), t),
             border: Border::lerp_optional(self.border, other.border, t),
             border_radius: BorderRadius::lerp_optional(self.border_radius, other.border_radius, t),
             directional_border_radius: BorderRadiusDirectional::lerp_optional(

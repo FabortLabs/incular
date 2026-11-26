@@ -15,7 +15,7 @@ use incular_rendering::{Brush, Canvas, CornerRadii, DisplayList, FillRule, Path,
 
 use super::decoration::{
     Border, BorderDirectional, BorderSide, BorderStyle, BoxDecoration, BoxShadow, BoxShape,
-    DecorationImage,
+    DecorationImage, faded_decoration_image,
 };
 use super::geometry::{BorderRadius, Radius};
 use crate::{
@@ -343,6 +343,30 @@ impl CustomClipper for BoxDecorationClipper {
 /// alignment, repeat, scale, sampling and opacity. The caller clips it.
 pub(crate) fn decoration_image_widget(image: &DecorationImage) -> Widget {
     use crate::{AlignmentGeometry, Builder, tree::DirectionRequirement};
+
+    if let Some(blend) = &image.blend {
+        let weighted = |image, factor| {
+            faded_decoration_image(Some(image), factor).as_ref().map_or_else(
+                || crate::SizedBox::shrink().into(),
+                decoration_image_widget,
+            )
+        };
+        let from = weighted(&blend.from, 1. - blend.t);
+        let to = weighted(&blend.to, blend.t);
+        let images = Stack::new([
+            Positioned::fill(from),
+            Positioned::fill(Widget::blend(incular_rendering::BlendMode::Plus, to)),
+        ])
+        .clip_behavior(Clip::None);
+        // Add weighted premultiplied colors *within* a transparent group,
+        // then composite the result once over the decoration's background.
+        let isolated = Widget::blend(incular_rendering::BlendMode::SrcOver, images.into());
+        return if blend.opacity < 1. {
+            Opacity::new(blend.opacity, isolated).into()
+        } else {
+            isolated
+        };
+    }
 
     let has_logical_alignment = matches!(
         image.alignment_geometry,

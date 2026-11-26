@@ -263,8 +263,7 @@ impl Lerp for ShapeDecoration {
 
 /// The color-to-gradient case uses a matching uniform gradient. Compatible
 /// rounded and circular shapes morph continuously; unrelated families,
-/// pairs of distinct images and pairs of distinct gradients use a midpoint
-/// fallback.
+/// and pairs of distinct gradients use a midpoint fallback.
 fn lerp_shape_decoration(a: &ShapeDecoration, b: &ShapeDecoration, t: f32) -> ShapeDecoration {
     let switches = t >= 0.5;
     let gradient = match (&a.gradient, &b.gradient) {
@@ -298,17 +297,7 @@ fn lerp_shape_decoration(a: &ShapeDecoration, b: &ShapeDecoration, t: f32) -> Sh
         },
         gradient,
         shadows: BoxShadow::lerp_list(&a.shadows, &b.shadows, t),
-        image: match (&a.image, &b.image) {
-            (Some(a), None) => faded_decoration_image(Some(a), 1. - t),
-            (None, Some(b)) => faded_decoration_image(Some(b), t),
-            (a, b) => {
-                if switches {
-                    b.clone()
-                } else {
-                    a.clone()
-                }
-            }
-        },
+        image: DecorationImage::lerp_optional(a.image.as_ref(), b.image.as_ref(), t),
         shape,
     }
 }

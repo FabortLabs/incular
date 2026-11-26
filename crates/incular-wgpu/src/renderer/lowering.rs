@@ -590,29 +590,39 @@ impl WgpuRenderer {
                     let start = command_index + 1;
                     let parent_clip = clip;
                     command_index = end.saturating_add(1);
+                    let group = LayerGroup {
+                        commands: &commands[start..end],
+                        scale,
+                        layer: *layer,
+                        generation: *generation,
+                        bounds: *bounds,
+                        parent_clip,
+                        translation,
+                    };
                     if *mode == BlendMode::SrcOver {
-                        // SrcOver is the ordinary painter operation. Keep it
-                        // on the direct path instead of isolating a source
-                        // texture solely to apply the default blend mode.
-                        self.lower_commands_into(
-                            &commands[start..end],
-                            scale,
-                            transform,
-                            parent_clip,
-                            batches,
-                        )?;
-                    } else if let Some(batch) = self.lower_blend_group(
-                        LayerGroup {
-                            commands: &commands[start..end],
-                            scale,
-                            layer: *layer,
-                            generation: *generation,
-                            bounds: *bounds,
-                            parent_clip,
-                            translation,
-                        },
-                        *mode,
-                    )? {
+                        // Only flatten a source-over group when its children
+                        // do not read the destination. In a decoration image
+                        // crossfade, for example, Plus must read the first
+                        // image over transparency, not the outer background.
+                        let needs_isolation =
+                            crate::compositor::commands_have_destination_blend(group.commands)
+                                || group.commands.iter().any(|command| {
+                                    matches!(command, PaintCommand::PushBlend { mode, .. } if *mode != BlendMode::SrcOver)
+                                });
+                        if needs_isolation {
+                            if let Some(batch) = self.lower_opacity_group(group, 1.)? {
+                                batches.push(batch);
+                            }
+                        } else {
+                            self.lower_commands_into(
+                                group.commands,
+                                scale,
+                                transform,
+                                parent_clip,
+                                batches,
+                            )?;
+                        }
+                    } else if let Some(batch) = self.lower_blend_group(group, *mode)? {
                         batches.push(batch);
                     }
                     continue;

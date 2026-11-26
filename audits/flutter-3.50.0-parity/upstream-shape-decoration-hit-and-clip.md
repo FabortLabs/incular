@@ -124,3 +124,21 @@ single image and gradient while preserving image/shader geometry. Four
 nullable cases and 18 focused transition controls passed. Two distinct
 images still need a true crossfade, and BoxDecoration-to-ShapeDecoration
 conversion remains separate.
+
+## Isolated image crossfades
+
+An authored reference widget produces RGBA (64, 64, 127, 255) when two
+half-opacity images crossfade over opaque blue at the midpoint. The
+native baseline only drew the second image. Both box and shape
+decorations now paint both images with their independent fit and crop,
+add their weighted premultiplied colors over transparency, and combine
+the group with the original background once. The wgpu source-over fast
+path still bypasses the group for ordinary drawing, but retains it
+when a child blend uses the group's destination.
+
+The native compositor test verifies both ordered image IDs, their
+effective 0.25 opacities, and that Plus sits inside a separate
+source-over group. Ten native image, shape and nullable controls
+passed, as did the wgpu library check. Incular GPU framebuffer and
+Flutter's three image-lerp goldens have not been compared and are not
+counted as paired.
