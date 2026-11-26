@@ -61,11 +61,45 @@ impl Focus {
         self
     }
 
-    /// Automatically requests focus upon initial mount.
+    /// Requests focus once if enabled on mount or on a retained update.
     #[must_use]
     pub fn autofocus(mut self, autofocus: bool) -> Self {
         self.autofocus = autofocus;
         self
+    }
+
+    /// Returns the nearest enclosing Focus node, not including this element.
+    /// Searches stop at the nearest FocusScope; set `scope_ok` to allow that
+    /// scope's own node. This retained-tree query does not subscribe to changes.
+    #[must_use]
+    pub fn maybe_of(
+        tree: &crate::tree::WidgetTree,
+        element: crate::tree::ElementId,
+        scope_ok: bool,
+    ) -> Option<FocusNode> {
+        let mut ancestor = tree.parent(element);
+        while let Some(id) = ancestor {
+            if let Some(node) = tree.focus_boundary_at(id) {
+                return (scope_ok || node.scope_owner().is_none()).then(|| node.clone());
+            }
+            ancestor = tree.parent(id);
+        }
+        None
+    }
+
+    /// Resolves the nearest enclosing node with the same scope rules as
+    /// [`Self::maybe_of`].
+    ///
+    /// # Panics
+    ///
+    /// Panics when there is no eligible enclosing Focus boundary.
+    #[must_use]
+    pub fn of(
+        tree: &crate::tree::WidgetTree,
+        element: crate::tree::ElementId,
+        scope_ok: bool,
+    ) -> FocusNode {
+        Self::maybe_of(tree, element, scope_ok).expect("no enclosing Focus boundary")
     }
 
     /// Controls whether focus can be requested by user interaction or programmatic focus.

@@ -100,6 +100,30 @@ pub(super) fn annotated_focus_node(kind: &WidgetKind) -> Option<&incular_gesture
     }
 }
 
+fn focus_boundary_node(kind: &WidgetKind) -> Option<&incular_gestures::FocusNode> {
+    match kind {
+        WidgetKind::Gesture { callbacks, .. } if callbacks.annotates_focus => {
+            callbacks.focus_node.as_ref()
+        }
+        _ => None,
+    }
+}
+
+fn widget_autofocus_node(widget: &Widget) -> Option<&incular_gestures::FocusNode> {
+    match widget.kind() {
+        WidgetKind::Gesture { callbacks, .. } if callbacks.autofocus => {
+            focus_boundary_node(widget.kind())
+        }
+        _ => None,
+    }
+}
+
+pub(super) struct UpdatedAutofocus {
+    id: ElementId,
+    node: incular_gestures::FocusNode,
+    scope: Option<incular_gestures::FocusScopeNode>,
+}
+
 fn external_node(kind: &WidgetKind) -> Option<&incular_gestures::FocusNode> {
     match kind {
         WidgetKind::Gesture { callbacks, .. } => callbacks.focus_node.as_ref(),
@@ -195,6 +219,12 @@ impl WidgetTree {
             .get(id.0)
             .and_then(|element| external_node(element.widget.kind()))
             .cloned()
+    }
+
+    pub(crate) fn focus_boundary_at(&self, id: ElementId) -> Option<&incular_gestures::FocusNode> {
+        self.elements
+            .get(id.0)
+            .and_then(|element| focus_boundary_node(element.widget.kind()))
     }
 
     /// Enables deferred FocusNode requests for a runtime-owned tree.
@@ -1016,7 +1046,50 @@ impl WidgetTree {
                 })
         {
             self.mounted_autofocus.push(id);
+            if widget_autofocus_node(widget).is_some() {
+                self.element_live_mut(id, "new autofocus element must remain live")
+                    .did_autofocus = true;
+            }
         }
+    }
+
+    pub(super) fn note_updated_autofocus(&mut self, id: ElementId, old: &Widget, widget: &Widget) {
+        if self.hosted_focus_nodes.is_none() || widget_autofocus_node(old).is_some() {
+            return;
+        }
+        let Some(node) = widget_autofocus_node(widget) else {
+            return;
+        };
+        let element = self.element_live_mut(id, "updated autofocus element must remain live");
+        if std::mem::replace(&mut element.did_autofocus, true) {
+            return;
+        }
+        self.updated_autofocus.push(UpdatedAutofocus {
+            id,
+            node: node.clone(),
+            scope: crate::FocusScope::maybe_of(self, id),
+        });
+    }
+
+    /// Resolves retained Focus updates after direct focus requests and layout.
+    #[doc(hidden)]
+    pub fn finish_updated_autofocus(&mut self, focused: Option<ElementId>) -> Option<ElementId> {
+        let requests = std::mem::take(&mut self.updated_autofocus);
+        requests.into_iter().find_map(|request| {
+            (self.focus_boundary_at(request.id) == Some(&request.node)
+                && crate::FocusScope::maybe_of(self, request.id) == request.scope
+                && request.scope.as_ref().map_or_else(
+                    || focused.is_none(),
+                    |scope| {
+                        scope.focused_child().is_none()
+                            && focused.is_none_or(|focused| {
+                                crate::FocusScope::maybe_of(self, focused).as_ref() != Some(scope)
+                            })
+                    },
+                )
+                && self.can_request_focus(request.id))
+            .then_some(request.id)
+        })
     }
 
     /// Drains mount-time autofocus requests; detached, hidden or otherwise

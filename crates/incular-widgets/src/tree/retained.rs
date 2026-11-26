@@ -79,6 +79,7 @@ impl WidgetTree {
             focus_semantics_bindings: None,
             focus_semantic_actions_enabled: !cfg!(target_os = "ios"),
             mounted_autofocus: Vec::new(),
+            updated_autofocus: Vec::new(),
             hosted_focus_chain: HostedFocusChain::default(),
             #[cfg(feature = "devtools")]
             deep_trace: None,

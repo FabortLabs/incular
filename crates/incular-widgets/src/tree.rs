@@ -347,6 +347,8 @@ pub struct Element {
     environment_override: Option<InheritedScopeValue>,
     /// Whether this element cuts off all environments installed above it.
     environment_boundary: bool,
+    /// A retained Focus attempts autofocus once per attachment.
+    did_autofocus: bool,
     /// Which [`TrackedElements`] indexes hold this element, one bit each.
     tracked: u16,
     /// DevTools-only instrumentation. Zero cost in production builds.
@@ -1497,6 +1499,7 @@ pub struct WidgetTree {
     /// Autofocus requests from newly mounted elements, consumed by the host
     /// after reconciliation and layout.
     mounted_autofocus: Vec<ElementId>,
+    updated_autofocus: Vec<focus::UpdatedAutofocus>,
     hosted_focus_chain: HostedFocusChain,
     #[cfg(feature = "devtools")]
     deep_trace: Option<DeepTraceCapture>,

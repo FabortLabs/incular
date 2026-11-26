@@ -689,6 +689,7 @@ impl WidgetTree {
             render_context: render_context.clone(),
             environment_override,
             environment_boundary,
+            did_autofocus: false,
             tracked: 0,
             #[cfg(feature = "devtools")]
             dev: ElementDevData::default(),
@@ -1131,6 +1132,7 @@ impl WidgetTree {
             }
             element.dirty.remove(DirtyFlags::BUILD);
         }
+        self.note_updated_autofocus(id, &old, widget);
         self.retrack(id);
         if let WidgetKind::Button(spec) = widget.kind()
             && let Some(interaction) = spec.interaction.as_ref()
