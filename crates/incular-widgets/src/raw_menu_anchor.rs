@@ -7,12 +7,13 @@ use std::{
     rc::{Rc, Weak},
 };
 
+use incular_animation::scheduler::{add_post_frame_callback, schedule_frame};
 use incular_core::{IdGenerator, Offset, Rect, Size};
 
 use crate::tree::RetainedState;
 use crate::{
-    BuildContext, FocusNode, OverlayChildLayoutInfo, OverlayPortal, TapRegion, TapRegionGroupId,
-    TransientDismissPolicy, TransientDismissReason, TransientRole, Widget,
+    BuildContext, FocusNode, MediaQuery, OverlayChildLayoutInfo, OverlayPortal, TapRegion,
+    TapRegionGroupId, TransientDismissPolicy, TransientDismissReason, TransientRole, Widget,
 };
 
 /// Flutter's `RawMenuOverlayInfo`: what a [`RawMenuAnchor`] overlay
@@ -141,7 +142,10 @@ impl AnchorNode {
     /// menu. Detaching a node must not clear a controller another node owns.
     fn bind_controller(self: &Rc<Self>, controller: &MenuController) {
         let mut bound = self.controller.borrow_mut();
-        if bound.as_ref().is_some_and(|old| Rc::ptr_eq(&old.anchor, &controller.anchor)) {
+        if bound
+            .as_ref()
+            .is_some_and(|old| Rc::ptr_eq(&old.anchor, &controller.anchor))
+        {
             return;
         }
         if let Some(old) = bound.replace(controller.clone()) {
@@ -262,13 +266,26 @@ impl AnchorNode {
 
     /// `didChangeDependencies` of a root: the menus close when the view
     /// changes size.
-    fn track_view_size(self: &Rc<Self>, size: Size) {
+    fn track_view_size(self: &Rc<Self>, context: &BuildContext<'_>) {
         if self.parent().is_some() {
             return;
         }
+        let size = MediaQuery::maybe_size_of(context).unwrap_or_else(|| context.viewport());
         let previous = self.view_size.replace(Some(size));
         if previous.is_some_and(|previous| previous != size) && self.is_open() {
-            self.request_close();
+            // This is called from dependency rebuilding. User callbacks
+            // may mutate state, so deliver them after layout and paint.
+            let node = Rc::downgrade(self);
+            add_post_frame_callback(move |_| {
+                let Some(node) = node.upgrade().filter(|node| node.is_open()) else {
+                    return;
+                };
+                let before = node.revision.borrow().get();
+                node.request_close();
+                if node.revision.borrow().get() != before {
+                    schedule_frame();
+                }
+            });
         }
     }
 
@@ -336,7 +353,10 @@ impl MenuController {
     /// Closes the submenus and leaves this menu open.
     pub fn close_children(&self) {
         let node = self.node();
-        debug_assert!(node.is_some(), "MenuController must be attached (_anchor != null)");
+        debug_assert!(
+            node.is_some(),
+            "MenuController must be attached (_anchor != null)"
+        );
         if let Some(node) = node {
             node.request_children_close();
         }
@@ -346,7 +366,8 @@ impl MenuController {
     /// anchor or group.
     #[must_use]
     pub fn maybe_of(context: &BuildContext<'_>) -> Option<Self> {
-        context.depend_on::<AnchorScope>()
+        context
+            .depend_on::<AnchorScope>()
             .and_then(|scope| scope.0.controller.borrow().clone())
     }
 }
@@ -502,7 +523,7 @@ impl RawMenuAnchor {
             on_open_requested: self.callbacks.on_open_requested.clone(),
             on_close_requested: self.callbacks.on_close_requested.clone(),
         };
-        node.track_view_size(context.viewport());
+        node.track_view_size(context);
         let root = node.root();
         let group = TapRegionGroupId::Numeric(root.group_id);
         let anchor = match &self.builder {
@@ -593,7 +614,7 @@ impl From<RawMenuAnchorGroup> for Widget {
                 let node = &state.0;
                 node.attach(context.depend_on::<AnchorScope>().map(|scope| scope.0));
                 node.bind_controller(&value.controller);
-                node.track_view_size(context.viewport());
+                node.track_view_size(context);
                 let root = node.root();
                 // A tap outside the tree closes the group's menus.
                 let weak = Rc::downgrade(node);

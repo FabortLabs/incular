@@ -81,3 +81,18 @@ Five separate legacy RawMenuAnchor fixture failures were reproduced
 with the production patch reverted. They are not covered by this
 lifecycle repair; focus adoption and outside interaction remain separate
 checks.
+
+### MediaQuery size and pending hide
+
+Pinned `:3027` pairs with `flutter350_raw_menu_resize`: changing
+only the ambient MediaQuery size requests no close while hidden,
+exactly one close while open, and none after hiding. The native
+test holds the physical viewport fixed and mutates a user signal
+from the close callback, outside the read-only build phase. It
+checks the open panel actually disappears from retained painting.
+
+Pinned `:2602` and `:2705` pair with the native pending-hide test.
+One attached controller close requests hiding without dismissing the
+menu until the supplied callback is invoked; a saved callback invoked
+after disposal is silent. No native timer or physical resize is
+required for these three behaviors.

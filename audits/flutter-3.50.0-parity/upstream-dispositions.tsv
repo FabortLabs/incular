@@ -1702,3 +1702,6 @@ packages/flutter/test/rendering/flex_test.dart	761	Flex RTL	paired-match	upstrea
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	995	[Group] MenuController is detached on update	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#raw-menu-controller-and-close-lifecycle
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	1015	[Default] MenuController is detached on dispose	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#raw-menu-controller-and-close-lifecycle
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	1033	[Group] MenuController is detached on dispose	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#raw-menu-controller-and-close-lifecycle
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	2602	Triggered by MenuController.close	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#mediaquery-size-and-pending-hide
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	2705	hideOverlay does nothing when called after disposal	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#mediaquery-size-and-pending-hide
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	3027	View size change triggers onCloseRequested on open menu	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#mediaquery-size-and-pending-hide

@@ -304,3 +304,47 @@ fn an_inherited_controller_obeys_the_same_detachment_as_the_anchor_controller() 
     layout(&mut tree);
     assert!(!current.is_open());
 }
+
+#[test]
+fn a_delayed_hide_is_silent_after_the_menu_is_removed() {
+    let controller = MenuController::new();
+    let closes = Rc::new(std::cell::Cell::new(0));
+    let requests = Rc::new(std::cell::Cell::new(0));
+    let pending = Rc::new(RefCell::new(None::<Rc<dyn Fn()>>));
+    let anchor = RawMenuAnchor::new(controller.clone(), |_, _| box_())
+        .child(box_())
+        .on_close_requested({
+            let pending = pending.clone();
+            let requests = requests.clone();
+            move |hide| {
+                requests.set(requests.get() + 1);
+                *pending.borrow_mut() = Some(hide);
+            }
+        })
+        .on_close({
+            let closes = closes.clone();
+            move || closes.set(closes.get() + 1)
+        });
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(Center::new(anchor).into()).unwrap();
+    layout(&mut tree);
+    assert_eq!(requests.get(), 0);
+    assert!(pending.borrow().is_none());
+    controller.open(None);
+    layout(&mut tree);
+    assert_eq!(requests.get(), 0);
+    assert!(pending.borrow().is_none());
+    controller.close();
+    assert!(controller.is_open());
+    assert_eq!(requests.get(), 1);
+    assert_eq!(closes.get(), 0);
+    let delayed = pending.borrow_mut().take().expect("one close request");
+
+    tree.update(root, Center::new(box_()).into()).unwrap();
+    layout(&mut tree);
+    assert!(!controller.is_open());
+    delayed();
+    layout(&mut tree);
+    assert_eq!(requests.get(), 1);
+    assert_eq!(closes.get(), 0);
+}
