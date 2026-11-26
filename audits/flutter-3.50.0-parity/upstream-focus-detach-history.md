@@ -40,3 +40,20 @@ sharing one UI thread. The native API requires a mounted scope;
 an unmounted scope does not enqueue a request. All 26 selected
 Rust tests passed. The authored case does not add an upstream
 registration.
+
+## Scope skip traversal
+
+Pinned `widgets/focus_manager_test.dart:846` passed. A new mounted
+snapshot separates raw traversal descendants from actual Tab stops.
+A scope anchor is eligible in the raw parent query by default;
+setting its skip flag omits only that anchor. Both leaf nodes stay
+in the scope snapshot, the active leaf keeps primary focus, and the
+scope keeps the same focused child. Incular still does not make
+the anchor an ordinary Tab stop.
+
+A separate pinned authored control verifies child-first depth-first
+order and the different behavior of `descendantsAreTraversable`:
+that flag removes the descendants from traversal without changing
+the active leaf or blocking explicit focus. All 34 selected native
+focus checks passed. Nested Tab policy is not inferred from the
+raw snapshot, and this authored case adds no upstream registration.

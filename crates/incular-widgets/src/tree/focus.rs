@@ -495,6 +495,67 @@ impl WidgetTree {
         self.focus_traversal_elements(None)
     }
 
+    /// The mounted focus nodes below `root`, in depth-first descendant order.
+    ///
+    /// With no root, inspects the whole mounted tree. Unlike the sorted Tab
+    /// stops, this list includes eligible scope anchors. Skipping a node here
+    /// does not skip its children; descendant restrictions do.
+    #[must_use]
+    pub fn focus_traversal_descendants(
+        &self,
+        root: Option<ElementId>,
+    ) -> Vec<incular_gestures::FocusNode> {
+        let Some(start) = root.or(self.root) else {
+            return Vec::new();
+        };
+        let mut ancestor = if root.is_some() { Some(start) } else { None };
+        while let Some(id) = ancestor {
+            let Some(element) = self.elements.get(id.0) else {
+                return Vec::new();
+            };
+            if element.widget.semantic_properties().exclude_focus_traversal
+                || external_node(element.widget.kind())
+                    .is_some_and(|node| !node.descendants_are_traversable())
+            {
+                return Vec::new();
+            }
+            ancestor = element.parent;
+        }
+
+        let mut descendants = Vec::new();
+        let mut pending = vec![(start, false)];
+        while let Some((id, visited_children)) = pending.pop() {
+            let Some(element) = self.elements.get(id.0) else {
+                continue;
+            };
+            let node = external_node(element.widget.kind());
+            if visited_children {
+                if let Some(node) = node
+                    && !node.skip_traversal()
+                    && self.can_request_focus(id)
+                {
+                    descendants.push(node.clone());
+                }
+                continue;
+            }
+            if element.widget.semantic_properties().exclude_focus_traversal {
+                continue;
+            }
+            if root != Some(id) && node.is_some() {
+                pending.push((id, true));
+            }
+            if node.is_none_or(incular_gestures::FocusNode::descendants_are_traversable) {
+                pending.extend(
+                    Self::focus_children(element)
+                        .iter()
+                        .rev()
+                        .map(|&child| (child, false)),
+                );
+            }
+        }
+        descendants
+    }
+
     /// Orders traversal candidates, keeping the explicitly focused node
     /// as the starting position even if traversal would not land on it.
     #[doc(hidden)]
@@ -1416,7 +1477,8 @@ impl WidgetTree {
             // each registered paragraph).
             let node = external_node(element.widget.kind());
             let traversal_candidate =
-                !scan.excluded_traversal && node.is_none_or(|node| !node.skip_traversal());
+                !scan.excluded_traversal
+                    && node.is_none_or(|node| node.scope_owner().is_none() && !node.skip_traversal());
             if !scan.excluded_focus
                 && (traversal_candidate || scan.anchor == Some(id))
                 && !matches!(element.widget.kind(), WidgetKind::Text { .. })
@@ -1456,14 +1518,7 @@ impl WidgetTree {
                 continue;
             }
             scan.excluded_focus |= !descendants_are_focusable;
-            let focus_children: &[ElementId] = match element.widget.kind() {
-                WidgetKind::IndexedStack { index, .. } => index
-                    .and_then(|slot| element.children.get(slot))
-                    .map_or(&[], std::slice::from_ref),
-                _ => &element.children,
-            };
-
-            for &child in focus_children.iter().rev() {
+            for &child in Self::focus_children(element).iter().rev() {
                 let child_policy = self
                     .elements
                     .get(child.0)
@@ -1476,6 +1531,15 @@ impl WidgetTree {
             }
         }
     }
+    fn focus_children(element: &Element) -> &[ElementId] {
+        match element.widget.kind() {
+            WidgetKind::IndexedStack { index, .. } => index
+                .and_then(|slot| element.children.get(slot))
+                .map_or(&[], std::slice::from_ref),
+            _ => &element.children,
+        }
+    }
+
     pub(super) fn is_descendant_or_self(&self, candidate: ElementId, ancestor: ElementId) -> bool {
         let mut current = Some(candidate);
         while let Some(id) = current {

@@ -662,3 +662,62 @@ fn a_runtime_cannot_drain_another_hosts_scoped_autofocus() {
     right.run_frame(bounds).unwrap();
     assert!(right_child.has_primary_focus());
 }
+
+#[test]
+fn skipping_a_mounted_scope_does_not_skip_its_children_or_change_focus() {
+    use incular_widgets::{Column, GlobalKey};
+
+    let scope = FocusScopeNode::new();
+    let parent1 = FocusNode::new();
+    let parent2 = FocusNode::new();
+    let child1 = FocusNode::new();
+    let child2 = FocusNode::new();
+    let key = GlobalKey::new();
+    let scene = Widget::from(FocusScope::with_external_focus_node(
+        Column::new(vec![
+            Focus::new(Column::new(vec![
+                Focus::new(SizedBox::shrink()).node(child1.clone()),
+                Focus::new(SizedBox::shrink()).node(child2.clone()),
+            ]))
+            .node(parent1.clone()),
+            Focus::new(SizedBox::shrink()).node(parent2.clone()),
+        ]),
+        scope.clone(),
+    ))
+    .with_key(key);
+    let mut runtime = Runtime::new(scene).unwrap();
+    let bounds = Constraints::tight(Size::new(160., 100.));
+    child1.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    let scope_id = runtime.tree().element_with_key(&key.into()).unwrap();
+    let snapshot = |runtime: &Runtime, root| runtime.tree().focus_traversal_descendants(root);
+    let children = vec![child1.clone(), child2.clone(), parent1.clone(), parent2.clone()];
+
+    assert!(child1.has_primary_focus());
+    assert_eq!(scope.focused_child(), Some(child1.clone()));
+    assert!(!scope.skip_traversal());
+    assert_eq!(snapshot(&runtime, Some(scope_id)), children);
+    assert_eq!(
+        snapshot(&runtime, None),
+        [children.clone(), vec![scope.scope_focus_node()]].concat()
+    );
+    assert!(!runtime.tree().focusable_elements().contains(&scope_id));
+
+    scope.set_skip_traversal(true);
+    runtime.run_frame(bounds).unwrap();
+    assert!(scope.skip_traversal() && child1.has_primary_focus());
+    assert_eq!(scope.focused_child(), Some(child1.clone()));
+    assert_eq!(snapshot(&runtime, Some(scope_id)), children);
+    assert_eq!(snapshot(&runtime, None), children);
+
+    scope.set_skip_traversal(false);
+    scope.set_descendants_are_traversable(false);
+    runtime.run_frame(bounds).unwrap();
+    assert!(child1.has_primary_focus());
+    assert_eq!(scope.focused_child(), Some(child1));
+    assert!(snapshot(&runtime, Some(scope_id)).is_empty());
+    assert_eq!(snapshot(&runtime, None), vec![scope.scope_focus_node()]);
+    child2.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    assert!(child2.has_primary_focus(), "traversal restrictions are not focus restrictions");
+}

@@ -414,7 +414,7 @@ impl FocusScope {
 
     #[must_use]
     pub fn skips_traversal(&self) -> bool {
-        self.node.as_ref().is_none_or(|scope| scope.scope_focus_node().skip_traversal())
+        self.node.as_ref().is_some_and(FocusScopeNode::skip_traversal)
     }
 
     /// Controls focus eligibility inside this scope. A disabled scope blocks

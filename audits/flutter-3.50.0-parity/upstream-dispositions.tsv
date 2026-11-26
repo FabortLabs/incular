@@ -2464,3 +2464,4 @@ packages/flutter/test/widgets/semantics_clipping_test.dart	62	SemanticsNode is n
 packages/flutter/test/rendering/proxy_box_test.dart	917	RenderCustomClip extenders respect clipBehavior when asked to describeApproximateClip	paired-match	upstream-box-approximate-clip.md
 packages/flutter/test/widgets/focus_manager_test.dart	1777	node detached before autofocus is applied	paired-match	upstream-focus-detach-history.md
 packages/flutter/test/widgets/focus_manager_test.dart	660	Autofocus works.	paired-match	upstream-focus-detach-history.md#programmatic-scope-autofocus
+packages/flutter/test/widgets/focus_manager_test.dart	846	skipTraversal doesn't affect children.	paired-match	upstream-focus-detach-history.md#scope-skip-traversal

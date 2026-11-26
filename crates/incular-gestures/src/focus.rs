@@ -1929,7 +1929,6 @@ impl FocusScopeNode {
             .anchor
             .get_or_init(|| {
                 let node = FocusNode::with_scope_owner(Some(Rc::downgrade(&self.state)));
-                node.set_skip_traversal(true);
                 let state = Rc::downgrade(&self.state);
                 let subscription = node.observe(move || {
                     if let Some(state) = state.upgrade() {
@@ -1943,6 +1942,16 @@ impl FocusScopeNode {
             })
             .node
             .clone()
+    }
+
+    /// Skips the scope itself in raw traversal without excluding its descendants.
+    pub fn set_skip_traversal(&self, skip: bool) {
+        self.scope_focus_node().set_skip_traversal(skip);
+    }
+
+    #[must_use]
+    pub fn skip_traversal(&self) -> bool {
+        self.scope_focus_node().skip_traversal()
     }
 
     /// Enables requests for the scope and its hosted descendants.
