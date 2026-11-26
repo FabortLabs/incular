@@ -92,7 +92,12 @@ fn rect(left: f32, top: f32, right: f32, bottom: f32) -> Rect {
 
 #[test]
 fn physical_control_corners_dimensions_and_rectangle_edges() {
+    use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher};
+    let hash = |value| BuildHasherDefault::<DefaultHasher>::default().hash_one(value);
     let insets = EdgeInsets::from_ltrb(5., 7., 11., 13.);
+    assert_eq!(insets.to_string(), "EdgeInsets(5.0, 7.0, 11.0, 13.0)");
+    assert_eq!(hash(insets), hash(EdgeInsets::only(5., 7., 11., 13.)));
+    assert_eq!(hash(EdgeInsets::all(-0.)), hash(EdgeInsets::ZERO));
     assert_eq!(insets.top_left(), Offset::new(5., 7.));
     assert_eq!(insets.top_right(), Offset::new(-11., 7.));
     assert_eq!(insets.bottom_left(), Offset::new(5., -13.));

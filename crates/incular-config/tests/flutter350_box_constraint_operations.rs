@@ -39,11 +39,19 @@ fn host_view_bounds_become_validated_layout_constraints() {
 
 #[test]
 fn copying_constraint_bounds_only_replaces_the_requested_values() {
+    use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher};
+    let hash = |value| BuildHasherDefault::<DefaultHasher>::default().hash_one(value);
     let start = Constraints::new(3., 7., 11., 17.);
-    assert_eq!(start.copy_with(None, None, None, None), start);
+    let unchanged = start.copy_with(None, None, None, None);
+    assert_eq!(unchanged, start);
+    assert_eq!(hash(unchanged), hash(start));
+    let modified = start.copy_with(Some(13.), Some(17.), Some(111.), Some(117.));
+    assert_eq!(modified, Constraints::new(13., 17., 111., 117.));
+    assert_ne!(modified, start);
+    assert_ne!(hash(modified), hash(start));
     assert_eq!(
-        start.copy_with(Some(13.), Some(17.), Some(111.), Some(117.)),
-        Constraints::new(13., 17., 111., 117.),
+        hash(Constraints::new(-0., 7., -0., f32::INFINITY)),
+        hash(Constraints::new(0., 7., 0., f32::INFINITY)),
     );
     assert_eq!(
         start.copy_with(None, Some(9.), None, None),

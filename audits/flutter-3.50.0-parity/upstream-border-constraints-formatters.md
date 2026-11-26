@@ -289,8 +289,11 @@ admit an uninvertible range just to store the Dart intermediate.
 Pinned `:200` matches default-unbounded and finite host-view
 conversion. The authored paired retained check actually sizes a
 child to (2,3), then to (5,6), without replacing the child when
-the view bounds change. Copy-with values at `:17` now match; no
-Dart hash value or hash inequality is claimed.
+the view bounds change. The pinned `:17` copy-with case now pairs
+all requested bounds and hash behavior. An unchanged copy hashes
+the same, the changed copy does not, and equivalent signed zeros
+share a hash. Three focused constraint tests passed. Numeric hash
+values remain language-specific.
 
 For `:95` and `:114`, the unbounded maximum and interpolation in
 the other axis match, but the original uses a tight infinite

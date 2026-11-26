@@ -34,3 +34,9 @@ pub use localization::{
     PluralForms,
 };
 pub use transient::{TransientPresentation, TransientRole};
+
+// Preserve the equality of IEEE positive and negative zero in value keys.
+fn hash_layout_floats<const N: usize>(values: [f32; N], state: &mut impl std::hash::Hasher) {
+    let bits = values.map(|value| if value == 0. { 0 } else { value.to_bits() });
+    std::hash::Hash::hash(&bits, state);
+}

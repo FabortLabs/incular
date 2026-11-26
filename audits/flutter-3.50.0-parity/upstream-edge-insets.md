@@ -10,11 +10,12 @@ remainder and truncation from flooring.
 
 The numeric control also checks all four signed corners, opposite-side
 flipping, both totals, and exact rectangle and size inflation and deflation.
-It is partial against Flutter's broader diagnostic/hash test: Incular
-exposes valid render sizes only, returns None for a negative or non-finite
-extent, and does not emulate Dart diagnostic/hash output. No existing
-layout normalization or rendering behavior was changed. Six focused
-Rust inset cases and two interpolation controls passed.
+The pinned control now also pairs its one-line diagnostic and
+equal-value hash behavior. Signed zeros produce equal hashes in Rust.
+Hash numbers themselves are language-specific. Incular still returns
+None for a negative or non-finite extent; the pinned control uses only
+valid sizes. No layout normalization or rendering behavior changed.
+All six focused inset checks passed.
 
 ```sh
 cargo test --locked --offline -j1 -p incular-config --test flutter350_edge_insets_parity --test lerp_extrapolation -- --test-threads=1

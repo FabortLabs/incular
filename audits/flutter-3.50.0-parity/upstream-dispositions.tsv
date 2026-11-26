@@ -67,7 +67,7 @@ packages/flutter/test/painting/border_side_test.dart	79	BorderSide - scale	paire
 packages/flutter/test/painting/border_side_test.dart	109	BorderSide - won't lerp into negative widths	paired-match	upstream-border-constraints-formatters.md#reverified-negative-extrapolation
 packages/flutter/test/painting/border_side_test.dart	126	BorderSide - lerp with strokeAlign	paired-match	upstream-border-constraints-formatters.md
 packages/flutter/test/painting/border_test.dart	27	Border.symmetric constructor	partial-match	upstream-border-constraints-formatters.md
-packages/flutter/test/rendering/box_constraints_test.dart	17	BoxConstraints copyWith	partial-match	upstream-border-constraints-formatters.md#layout-bound-arithmetic-and-view-conversion
+packages/flutter/test/rendering/box_constraints_test.dart	17	BoxConstraints copyWith	paired-match	upstream-border-constraints-formatters.md#layout-bound-arithmetic-and-view-conversion
 packages/flutter/test/rendering/box_constraints_test.dart	60	BoxConstraints lerp	paired-match	upstream-border-constraints-formatters.md#constraint-interpolation-repair
 packages/flutter/test/rendering/box_constraints_test.dart	134	BoxConstraints lerp with overshooting t is normalized	paired-match	upstream-border-constraints-formatters.md#constraint-interpolation-repair
 packages/flutter/test/rendering/box_test.dart	755	UnconstrainedBox honors constrainedAxis=Axis.horizontal	paired-match	upstream-border-constraints-formatters.md
@@ -1972,7 +1972,7 @@ packages/flutter_tools/test/commands.shard/hermetic/widget_preview/lsp_preview_d
 packages/flutter/test/foundation/change_notifier_test.dart	64	ChangeNotifier can not dispose in callback	paired-match	upstream-opacity-hover-flex-notifier-futures.md#notifier-disposal-diagnostics-and-composition
 packages/flutter/test/foundation/change_notifier_test.dart	415	Listenable.merge toString	partial-match	upstream-opacity-hover-flex-notifier-futures.md#notifier-disposal-diagnostics-and-composition
 packages/flutter/test/foundation/change_notifier_test.dart	480	ChangeNotifier as a mixin	partial-match	upstream-opacity-hover-flex-notifier-futures.md#notifier-disposal-diagnostics-and-composition
-packages/flutter/test/painting/edge_insets_test.dart	80	EdgeInsets control test	partial-match	upstream-edge-insets.md
+packages/flutter/test/painting/edge_insets_test.dart	80	EdgeInsets control test	paired-match	upstream-edge-insets.md
 packages/flutter/test/painting/edge_insets_test.dart	115	EdgeInsets.lerp()	paired-match	upstream-edge-insets.md
 packages/flutter/test/painting/edge_insets_test.dart	228	EdgeInsets copyWith	paired-match	upstream-edge-insets.md
 packages/flutter/test/painting/edge_insets_test.dart	358	EdgeInsets operators	paired-match	upstream-edge-insets.md

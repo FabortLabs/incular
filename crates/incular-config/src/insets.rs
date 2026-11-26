@@ -1,5 +1,8 @@
 use incular_core::{Lerp, Offset, Rect, Size, finite_non_negative};
-use std::ops::{Add, AddAssign, Rem, Sub, SubAssign};
+use std::{
+    hash::{Hash, Hasher},
+    ops::{Add, AddAssign, Rem, Sub, SubAssign},
+};
 
 /// Insets on the four physical edges of a rectangle.
 ///
@@ -13,6 +16,12 @@ pub struct EdgeInsets {
     pub top: f32,
     pub right: f32,
     pub bottom: f32,
+}
+
+impl Hash for EdgeInsets {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        super::hash_layout_floats([self.left, self.top, self.right, self.bottom], state);
+    }
 }
 
 impl EdgeInsets {

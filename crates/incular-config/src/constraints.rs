@@ -1,7 +1,10 @@
 //! Box constraints shared by all pure layout algorithms.
 
 use incular_core::{Lerp, Size};
-use std::ops::{Div, Mul, Rem};
+use std::{
+    hash::{Hash, Hasher},
+    ops::{Div, Mul, Rem},
+};
 
 /// Raw host-view size bounds, before they are admitted to the finite-minimum
 /// layout model. Unspecified width and height are unconstrained.
@@ -74,6 +77,15 @@ pub struct Constraints {
     min_height: f32,
     max_height: f32,
 }
+impl Hash for Constraints {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        super::hash_layout_floats(
+            [self.min_width, self.max_width, self.min_height, self.max_height],
+            state,
+        );
+    }
+}
+
 impl Default for Constraints {
     fn default() -> Self {
         Self::at_most(f32::INFINITY, f32::INFINITY)
