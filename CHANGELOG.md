@@ -362,6 +362,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- Physical touch scrolling follows the inherited multi-touch strategy and
+  keeps one scroll activity until the last contributing contact leaves.
+
 - Disposing a pending long press now reports cancellation after its down event.
 
 - Native text input anchors the IME at the logical selection start in either

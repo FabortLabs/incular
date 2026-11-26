@@ -1,5 +1,5 @@
 use super::*;
-pub use aggregation::MultitouchDragStrategy;
+pub use aggregation::{DragBoundaryFrame, MultitouchDragStrategy};
 
 mod aggregation;
 use crate::{
@@ -62,7 +62,7 @@ pub struct MonodragGestureRecognizer {
     active: Option<Stream>,
     last_acceptance: u64,
     strategy: MultitouchDragStrategy,
-    boundary: Option<Box<aggregation::BoundaryFrame>>,
+    boundary: Option<Box<DragBoundaryFrame<Stream>>>,
     observed: Option<Stream>,
     wants_acceptance: bool,
     on_down: Option<Rc<dyn Fn(DragDownDetails)>>,
@@ -135,7 +135,7 @@ impl MonodragGestureRecognizer {
         }
         self.strategy = strategy;
         self.boundary = (strategy == MultitouchDragStrategy::AverageBoundaryPointers)
-            .then(Box::<aggregation::BoundaryFrame>::default);
+            .then(Box::<DragBoundaryFrame<Stream>>::default);
     }
 
     /// Identifies the current system frame. A host calls this when its frame

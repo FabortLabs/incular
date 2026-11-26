@@ -1,4 +1,4 @@
-use super::{Instant, Offset, PanAction, Stream};
+use super::{Instant, Offset, PanAction};
 
 /// How a drag combines movement from several accepted contacts.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -13,16 +13,27 @@ pub enum MultitouchDragStrategy {
     SumAllPointers,
 }
 
-#[derive(Default)]
-pub(super) struct BoundaryFrame {
+/// Frame accumulator shared by recognizers and retained scroll groups.
+#[doc(hidden)]
+pub struct DragBoundaryFrame<K> {
     stamp: Option<Instant>,
-    samples: Vec<(Stream, Offset)>,
+    samples: Vec<(K, Offset)>,
     pan_emitted: Offset,
-    pending_crossing: Option<(Stream, Offset)>,
+    pending_crossing: Option<(K, Offset)>,
 }
 
-impl BoundaryFrame {
-    pub(super) fn begin(&mut self, stamp: Instant) {
+impl<K> Default for DragBoundaryFrame<K> {
+    fn default() -> Self {
+        Self {
+            stamp: None,
+            samples: Vec::new(),
+            pan_emitted: Offset::ZERO,
+            pending_crossing: None,
+        }
+    }
+}
+impl<K: Copy + Eq> DragBoundaryFrame<K> {
+    pub fn begin(&mut self, stamp: Instant) {
         if self.stamp != Some(stamp) {
             self.stamp = Some(stamp);
             self.samples.clear();
@@ -35,11 +46,11 @@ impl BoundaryFrame {
         self.pending_crossing = None;
     }
 
-    pub(super) fn threshold_crossing(&mut self, stream: Stream, delta: Offset) {
+    pub(super) fn threshold_crossing(&mut self, stream: K, delta: Offset) {
         self.pending_crossing = Some((stream, delta));
     }
 
-    pub(super) fn accepted(&mut self, stream: Stream) {
+    pub(super) fn accepted(&mut self, stream: K) {
         if self
             .pending_crossing
             .is_some_and(|(candidate, _)| candidate == stream)
@@ -49,14 +60,14 @@ impl BoundaryFrame {
         }
     }
 
-    pub(super) fn remove(&mut self, stream: Stream) {
+    pub fn remove(&mut self, stream: K) {
         self.samples.retain(|(candidate, _)| *candidate != stream);
     }
 
     pub(super) fn update(
         &mut self,
         axis: PanAction,
-        stream: Stream,
+        stream: K,
         local_delta: Offset,
         accepted: usize,
     ) -> Offset {
@@ -84,7 +95,13 @@ impl BoundaryFrame {
         resolved
     }
 
-    fn axis_delta(&self, stream: Stream, step: f32, component: impl Fn(Offset) -> f32) -> f32 {
+    /// Computes and records an update for a group on one fixed scroll axis.
+    pub fn update_scroll_axis(&mut self, stream: K, delta: f32) -> f32 {
+        self.update(PanAction::Horizontal, stream, Offset::new(delta, 0.), 1)
+            .x
+    }
+
+    fn axis_delta(&self, stream: K, step: f32, component: impl Fn(Offset) -> f32) -> f32 {
         if self.samples.is_empty() || step == 0. {
             return step;
         }
@@ -111,7 +128,7 @@ impl BoundaryFrame {
         }
     }
 
-    fn record(&mut self, stream: Stream, delta: Offset) {
+    fn record(&mut self, stream: K, delta: Offset) {
         if delta == Offset::ZERO {
             return;
         }

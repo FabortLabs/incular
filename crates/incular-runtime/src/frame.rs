@@ -3896,6 +3896,7 @@ impl Runtime {
         self.advance_text_history_clock(now);
         self.sync_mounted_text_histories();
         if !warm_up {
+            self.tree.set_scroll_drag_frame_time(now);
             self.touch_resampling.sample(now);
             self.dispatch_sampled_touch();
             self.process_runtime_work_at(now);

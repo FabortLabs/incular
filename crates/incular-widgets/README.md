@@ -492,3 +492,7 @@ new wrapper outside the existing chain. `MultiPreviewThemeData` treats its
 first theme as the outermost one. The optional size, brightness, and text
 scale are metadata for the embedding host; they are not global application
 settings. This API does not discover preview annotations or launch a server.
+
+Physical scroll contacts follow the nearest `ScrollConfiguration`'s
+`MultitouchDragStrategy`. Contacts driving one viewport share its active
+drag, so lifting one finger does not end the scroll under another.

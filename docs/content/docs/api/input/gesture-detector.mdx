@@ -169,3 +169,7 @@ Low-level mono-drag hosts can choose how accepted contacts combine:
 latest pointer, sum, or frame-based boundary averaging. Axis drags follow
 the cumulative boundary in each direction; free pans average accepted
 contacts. Pass the system-frame time, not the pointer-event time.
+
+For a mounted scroll view, set `ScrollBehavior::multitouch_drag_strategy`
+on the nearest `ScrollConfiguration`. Two accepted touch contacts share the
+scroll activity and follow the inherited movement policy.

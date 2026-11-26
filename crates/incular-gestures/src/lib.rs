@@ -81,6 +81,8 @@ pub use tap_callback_error::{
     TapCallbackError, TapCallbackErrorHandler, TapCallbackKind, TapCancelReason,
     invoke_retained_tap, set_tap_callback_error_handler,
 };
+#[doc(hidden)]
+pub use pointer::DragBoundaryFrame;
 pub use pointer::{
     DragAxis, DragGestureDetector, FlingLimits, GestureDetector, MonodragGestureRecognizer,
     MultitouchDragStrategy,

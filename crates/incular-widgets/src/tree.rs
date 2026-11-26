@@ -102,6 +102,7 @@ mod flex_overflow;
 mod focus;
 mod global_keys;
 mod interaction;
+mod scroll_contacts;
 mod pan_zoom;
 mod invariants;
 mod layout;
@@ -1412,6 +1413,8 @@ struct InputState {
     /// on stream teardown, member loss, fling transfer, and unmount;
     /// tree drop aborts any remainder silently through the tokens.
     scroll_brackets: HashMap<GestureArenaKey, ScrollBracket>,
+    scroll_contact_groups: HashMap<(u64, u64), scroll_contacts::ScrollContactGroup>,
+    scroll_drag_frame_time: Option<Instant>,
     /// Live ballistic tenures pumped once per frame by the runtime
     /// clock. Drivers leave on settle, takeover, external moves, and
     /// teardown; drops abort silently through the tokens.

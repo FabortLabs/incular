@@ -582,12 +582,31 @@ impl WidgetTree {
     /// a closed bracket re-opens here: when someone else owns an open
     /// bracket, moves drive under it and this stream takes nothing.
     fn open_scroll_bracket(&mut self, key: GestureArenaKey, member: GestureArenaMember) {
-        let Some(bracket) = self.input.scroll_brackets.get_mut(&key) else {
+        let Some(attachment) = self
+            .input
+            .scroll_brackets
+            .get(&key)
+            .filter(|bracket| bracket.member == member)
+            .map(|bracket| bracket.attachment)
+        else {
             return;
         };
-        if bracket.member != member {
+        let Some(viewport) = self.input.active_gestures.get(&key).and_then(|active| {
+            active
+                .members
+                .iter()
+                .find(|candidate| candidate.member == member)
+                .map(|candidate| candidate.element)
+        }) else {
             return;
-        }
+        };
+        let strategy = self.viewport_scroll_behavior(viewport).multitouch_drag_strategy;
+        self.join_scroll_contact(key, attachment, strategy);
+        let bracket = self
+            .input
+            .scroll_brackets
+            .get_mut(&key)
+            .expect("live scroll contact");
         let live = bracket
             .activity
             .as_ref()
@@ -643,7 +662,7 @@ impl WidgetTree {
     /// the gesture's own. Idempotent: missing entries are simply clean
     /// already.
     pub(super) fn finish_scroll_bracket(&mut self, key: GestureArenaKey) {
-        if let Some(bracket) = self.input.scroll_brackets.remove(&key) {
+        if let Some((bracket, _)) = self.take_scroll_contact(key) {
             for link in bracket.outer {
                 if let Some(activity) = link.activity {
                     activity.finish();
@@ -1325,7 +1344,18 @@ impl WidgetTree {
                     GestureDecision::Pending => {}
                 }
             }
-            if sole_press {
+            let shared_scroll = self
+                .input
+                .scroll_brackets
+                .get(&key)
+                .filter(|bracket| {
+                    bracket.cross.is_none()
+                        && self.scroll_group_has_live_activity(key.window, bracket.attachment)
+                })
+                .map(|bracket| bracket.member);
+            if let Some(member) = shared_scroll {
+                self.accept_continuing_scroll_contact(key, member);
+            } else if sole_press {
                 self.accept_sole_press(key);
             }
             if scroll_only {
@@ -1556,10 +1586,7 @@ impl WidgetTree {
         // a pending press still belongs to buttons and hover, while a
         // live bracket suppresses them like any active gesture.
         let claimed = match self.input.scroll_brackets.get(&key) {
-            Some(bracket) => bracket
-                .activity
-                .as_ref()
-                .is_some_and(|activity| activity.is_current()),
+            Some(bracket) => self.scroll_contact_is_driving(key, bracket),
             None => handled,
         };
         // A stream that yields its taps to a button claims the pointer
@@ -1609,7 +1636,7 @@ impl WidgetTree {
         cancelled: bool,
         ignores_child_pointers: bool,
     ) {
-        let Some(bracket) = self.input.scroll_brackets.remove(&key) else {
+        let Some((bracket, others_remain)) = self.take_scroll_contact(key) else {
             return;
         };
         for link in bracket.outer {
@@ -1620,6 +1647,10 @@ impl WidgetTree {
         let Some(activity) = bracket.activity else {
             return;
         };
+        if others_remain {
+            activity.finish();
+            return;
+        }
         if !activity.is_current() {
             return;
         }
@@ -2317,6 +2348,31 @@ impl WidgetTree {
             }
         }
     }
+    fn accept_continuing_scroll_contact(&mut self, key: GestureArenaKey, member: GestureArenaMember) {
+        let entries = self.input.gesture_arena.accept(key, member);
+        self.apply_arena_entries(key, entries);
+        if disposition_for(&self.input.gesture_arena.entries(key), member)
+            != GestureDisposition::Accepted
+        {
+            return;
+        }
+        let start = self
+            .input
+            .active_gestures
+            .get_mut(&key)
+            .and_then(|active| {
+                active
+                    .members
+                    .iter_mut()
+                    .find(|candidate| candidate.member == member)
+            })
+            .and_then(|candidate| candidate.recognizer.as_mut())
+            .and_then(PointerGestureRecognizer::accept_on_press);
+        if let Some(action) = start {
+            self.dispatch_gesture_action(key, member, action);
+        }
+    }
+
     fn accept_remaining_arena_drag(&mut self, key: GestureArenaKey, event: &PointerEvent) {
         let entries = self.input.gesture_arena.entries(key);
         if entries
@@ -2487,6 +2543,9 @@ impl WidgetTree {
         ) {
             self.open_scroll_bracket(key, member);
         }
+        let Some(action) = self.resolve_scroll_contact_motion(key, member, action) else {
+            return;
+        };
         // A descendant's double recognizer can hold an ancestor's ordinary
         // tap. Find the hold on the same pointer route before dispatching.
         let double_hold = if matches!(action, GestureAction::Tap) {

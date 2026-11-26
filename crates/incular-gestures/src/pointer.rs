@@ -1697,4 +1697,8 @@ impl DragGestureDetector {
 }
 
 mod monodrag;
-pub use monodrag::{DragAxis, MonodragGestureRecognizer, MultitouchDragStrategy, TrackpadDragAxis, TrackpadDragRecognizer};
+#[doc(hidden)]
+pub use monodrag::DragBoundaryFrame;
+pub use monodrag::{
+    DragAxis, MonodragGestureRecognizer, MultitouchDragStrategy, TrackpadDragAxis, TrackpadDragRecognizer,
+};
