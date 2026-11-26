@@ -5,10 +5,12 @@ import {fileURLToPath} from "node:url";
 
 const [chrome, ...chromeOptions] = process.argv.slice(2);
 if (!chrome) throw Error("Pass the Chrome executable");
+const moduleName = process.env.INCULAR_TEST_WASM_MODULE ?? "browser_platform";
+if (!/^[a-z_]+$/.test(moduleName)) throw Error("Invalid wasm module name");
 const allowed = new Map([
   ["/", ["index.html", "text/html"]],
-  ["/browser_platform.js", ["browser_platform.js", "text/javascript"]],
-  ["/browser_platform_bg.wasm", ["browser_platform_bg.wasm", "application/wasm"]],
+  [`/${moduleName}.js`, [`${moduleName}.js`, "text/javascript"]],
+  [`/${moduleName}_bg.wasm`, [`${moduleName}_bg.wasm`, "application/wasm"]],
 ]);
 const profile = fileURLToPath(new URL("./test-profile", import.meta.url));
 let resolveResult;

@@ -12,6 +12,7 @@ mod application_activation;
 mod application_shell;
 pub mod autofill;
 mod back_gesture;
+mod browser_context_menu;
 mod capabilities;
 mod clipboard_channel;
 mod content_sensitivity;
@@ -52,6 +53,9 @@ pub use application_shell::{
 pub use back_gesture::{
     BACK_GESTURE_CHANNEL, BackGestureEvent, BackGestureMessageError, PredictiveBackEvent, SwipeEdge,
 };
+pub use browser_context_menu::BrowserContextMenu;
+#[cfg(target_arch = "wasm32")]
+pub use browser_context_menu::{DomContextMenuError, DomContextMenuMessenger};
 pub use capabilities::{
     AdvancedInputCapabilities, ApplicationServiceCapabilities, CapabilitySupport,
     DataTransferCapabilities, DisplayPlacementCapabilities, NativeMenuCapabilities,

@@ -2504,3 +2504,7 @@ packages/flutter/test/services/scribe_test.dart	12	when receiving an unsupported
 packages/flutter/test/services/scribe_test.dart	29	Scribe.isStylusHandwritingAvailable calls through to platform channel	paired-match	upstream-scribe-messages.md
 packages/flutter/test/services/scribe_test.dart	52	Scribe.isFeatureAvailable calls through to platform channel	paired-match	upstream-scribe-messages.md
 packages/flutter/test/services/scribe_test.dart	74	Scribe.startStylusHandwriting calls through to platform channel	paired-match	upstream-scribe-messages.md
+packages/flutter/test/services/browser_context_menu_test.dart	23	disableContextMenu asserts	paired-match	upstream-browser-context-menu.md
+packages/flutter/test/services/browser_context_menu_test.dart	31	enableContextMenu asserts	paired-match	upstream-browser-context-menu.md
+packages/flutter/test/services/browser_context_menu_test.dart	57	disableContextMenu calls its platform channel method	paired-match	upstream-browser-context-menu.md
+packages/flutter/test/services/browser_context_menu_test.dart	74	enableContextMenu calls its platform channel method	paired-match	upstream-browser-context-menu.md

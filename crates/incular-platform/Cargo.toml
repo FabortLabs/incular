@@ -29,6 +29,10 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 url = { workspace = true }
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = { workspace = true }
+web-sys = { workspace = true, features = ["Event", "EventTarget"] }
+
 [package.metadata.docs.rs]
 all-features = true
 default-target = "x86_64-unknown-linux-gnu"

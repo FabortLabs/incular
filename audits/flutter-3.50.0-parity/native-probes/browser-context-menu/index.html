@@ -1,0 +1,34 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Incular browser context-menu parity</title>
+<div id="view"><canvas id="canvas"></canvas></div><button id="sibling">Outside the view</button>
+<pre id="results">running</pre>
+<script type="module">
+  import init, {ContextMenuProbe} from "./browser_context_menu.js";
+  const output = document.getElementById("results");
+  const canvas = document.getElementById("canvas");
+  const sibling = document.getElementById("sibling");
+  const menuAllowed = node => node.dispatchEvent(
+    new MouseEvent("contextmenu", {bubbles: true, cancelable: true, button: 2})
+  );
+  const confirm = (condition, message) => { if (!condition) throw Error(message); };
+  try {
+    await init();
+    const probe = new ContextMenuProbe(document.getElementById("view"));
+    confirm(probe.enabled() && menuAllowed(canvas) && menuAllowed(sibling), "initial browser menu");
+    probe.set_enabled(false);
+    confirm(!menuAllowed(canvas) && menuAllowed(sibling), "disable should affect only this view");
+    probe.set_enabled(false);
+    probe.set_enabled(true);
+    confirm(menuAllowed(canvas) && menuAllowed(sibling), "enable should remove the single listener");
+    probe.set_enabled(false);
+    confirm(!menuAllowed(canvas), "second disabled cycle");
+    probe.free();
+    confirm(menuAllowed(canvas), "dropping a host must remove its listener");
+    output.textContent = "PASS\nBoth exact channel commands, target-local bubbling, idempotence, and disposal";
+  } catch (error) {
+    output.textContent = `FAIL: ${error}`;
+  } finally {
+    await fetch("/result", {method:"POST", body: output.textContent});
+  }
+</script>
