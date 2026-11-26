@@ -1,6 +1,6 @@
 //! A shared reactive value with equality-filtered notifications.
 
-use crate::reactivity::{ReactiveCell, Subscription, assert_mutation_allowed};
+use crate::reactivity::{DependencySource, ReactiveCell, Subscription, assert_mutation_allowed};
 use std::rc::Rc;
 
 /// Flutter's `ValueNotifier`: observes replacement of a value, not mutation
@@ -41,6 +41,13 @@ impl<T> ValueNotifier<T> {
     /// Tracks this notifier as a dependency if a build is being recorded.
     pub fn track(&self) {
         self.inner.cell.source().track();
+    }
+
+    /// The shared notification source, for adapters that delegate to this
+    /// notifier without allocating an extra forwarding subscription.
+    #[must_use]
+    pub fn dependency_source(&self) -> DependencySource {
+        self.inner.cell.source().clone()
     }
 
     /// Reads a copy of the current value and tracks it in the active build.

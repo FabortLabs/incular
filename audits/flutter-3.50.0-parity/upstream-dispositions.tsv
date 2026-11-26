@@ -2387,3 +2387,6 @@ packages/flutter/test/animation/animations_test.dart	367	ReverseAnimation runnin
 packages/flutter/test/animation/animations_test.dart	27	toString control test	paired-match	upstream-curve-animation-lifecycle.md#wrapper-diagnostics-and-object-lifetimes
 packages/flutter/test/animation/animations_test.dart	122	TrainHoppingAnimation dispatches memory events	paired-match	upstream-curve-animation-lifecycle.md#wrapper-diagnostics-and-object-lifetimes
 packages/flutter/test/animation/animations_test.dart	500	'$CurvedAnimation dispatches memory events'	paired-match	upstream-curve-animation-lifecycle.md#wrapper-diagnostics-and-object-lifetimes
+packages/flutter/test/animation/animation_from_listener_test.dart	9	Animation created from ValueListenable	paired-match	upstream-curve-animation-lifecycle.md#value-listenable-backed-animations
+packages/flutter/test/animation/animation_from_listener_test.dart	38	Animation created from ValueListenable can transform value	paired-match	upstream-curve-animation-lifecycle.md#value-listenable-backed-animations
+packages/flutter/test/animation/animation_from_listener_test.dart	55	Animation created from ValueListenable can be transformed via drive	paired-match	upstream-curve-animation-lifecycle.md#value-listenable-backed-animations

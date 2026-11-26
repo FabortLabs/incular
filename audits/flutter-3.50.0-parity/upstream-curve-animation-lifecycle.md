@@ -37,3 +37,15 @@ one debug dispose event with the same identity (:500, :122). Repeated
 disposal followed by Rust drop does not emit another event. Release
 builds do not store these debug lifetimes. Five original Flutter
 and 31 focused native tests passed.
+
+## Value-listenable-backed animations
+
+All three original `animation/animation_from_listener_test.dart`
+registrations pair (:9, :38, :55). An animation can read a
+`ValueNotifier` directly, optionally transform its value lazily, and
+drive a typed callback such as an `Offset` without clamping values
+into [0, 1]. It stays forward, takes no controller or ticker, and
+uses the notifier's own dependency source. Native subscriptions
+see changed values and stop on removal; an equal notifier replacement
+and a nonchanging status do not emit callbacks. All three original
+Flutter and 19 focused native tests passed.

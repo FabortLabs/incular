@@ -10,6 +10,13 @@ pub trait Animatable<T> {
     fn value_at(&self, progress: f32) -> T;
 }
 
+/// Flutter `Animatable.fromCallback`: a Rust callback can be driven directly.
+impl<T, F: Fn(f32) -> T> Animatable<T> for F {
+    fn value_at(&self, progress: f32) -> T {
+        self(progress)
+    }
+}
+
 impl<T: Tween> Animatable<T> for TweenValue<T> {
     fn value_at(&self, progress: f32) -> T {
         self.evaluate(progress)

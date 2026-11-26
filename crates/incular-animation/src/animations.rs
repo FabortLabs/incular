@@ -15,6 +15,7 @@ use crate::{Animatable, AnimationController, AnimationStatus, Curve, Tween};
 #[cfg(debug_assertions)]
 use incular_core::memory::allocations::ObjectLifetime;
 use incular_core::reactivity::{DependencySource, Subscription, TrackingGuard};
+use incular_core::ValueNotifier;
 use std::{
     cell::{Cell, OnceCell, RefCell},
     rc::{Rc, Weak},
@@ -88,6 +89,23 @@ impl DoubleAnimation {
     #[must_use]
     pub fn new(source: impl AnimationSource + 'static) -> Self {
         Self(Rc::new(source))
+    }
+
+    /// Flutter `Animation.fromValueListenable`: this animation reads a
+    /// notifier rather than owning a ticker. Its status is always forward.
+    #[must_use]
+    pub fn from_value_listenable(listenable: ValueNotifier<f32>) -> Self {
+        Self::from_value_listenable_with(listenable, |value| value)
+    }
+
+    /// Applies a transformation when reading the source, while preserving
+    /// the source's notification timing and absence of a clock.
+    #[must_use]
+    pub fn from_value_listenable_with<T: Clone + 'static>(
+        listenable: ValueNotifier<T>,
+        transform: impl Fn(T) -> f32 + 'static,
+    ) -> Self {
+        Self::new(ValueListenableAnimation { listenable, transform })
     }
 
     #[must_use]
@@ -216,6 +234,29 @@ impl AnimationSource for DoubleAnimation {
 impl From<AnimationController> for DoubleAnimation {
     fn from(controller: AnimationController) -> Self {
         Self::new(controller)
+    }
+}
+
+struct ValueListenableAnimation<T, F> {
+    listenable: ValueNotifier<T>,
+    transform: F,
+}
+
+impl<T: Clone, F: Fn(T) -> f32> AnimationSource for ValueListenableAnimation<T, F> {
+    fn value(&self) -> f32 {
+        (self.transform)(self.listenable.value())
+    }
+
+    fn status(&self) -> AnimationStatus {
+        AnimationStatus::Forward
+    }
+
+    fn controllers(&self) -> Vec<AnimationController> {
+        Vec::new()
+    }
+
+    fn changes(&self) -> DependencySource {
+        self.listenable.dependency_source()
     }
 }
 
