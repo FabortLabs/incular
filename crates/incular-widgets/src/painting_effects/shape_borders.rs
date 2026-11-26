@@ -17,6 +17,7 @@ use smart_default::SmartDefault;
 
 use super::decoration::{Border, BorderSide, BorderStyle, BoxShape};
 use super::geometry::{BorderRadius, BorderRadiusGeometry, Radius, contains_half_open};
+use super::rounded_circle_outline::RoundedCircleOutline;
 
 /// Flutter's `ShapeBorder` for the outlined shapes Incular paints itself:
 /// the shape's outline and the area inside its stroke, and the stroke.
@@ -48,6 +49,12 @@ pub trait ShapeBorder {
 
     fn inner_path_with_direction(&self, rect: Rect, _direction: Option<TextDirection>) -> Path {
         self.inner_path(rect)
+    }
+
+    /// Returns an outline that can morph continuously with compatible
+    /// rounded, superelliptical or circular borders.
+    fn rounded_circle_outline(&self) -> Option<RoundedCircleOutline> {
+        None
     }
 
     /// Whether the interior has an equivalent specialized painting path.
@@ -518,6 +525,10 @@ impl<R: Copy + Into<BorderRadiusGeometry>> RoundedRectangleBorder<R> {
 }
 
 impl<R: Copy + Into<BorderRadiusGeometry>> ShapeBorder for RoundedRectangleBorder<R> {
+    fn rounded_circle_outline(&self) -> Option<RoundedCircleOutline> {
+        Some((*self).into())
+    }
+
     fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
         EdgeInsets::all(self.side.stroke_inset().max(0.))
     }
@@ -675,6 +686,10 @@ impl<R: Copy + Into<BorderRadiusGeometry>> RoundedSuperellipseBorder<R> {
 }
 
 impl<R: Copy + Into<BorderRadiusGeometry>> ShapeBorder for RoundedSuperellipseBorder<R> {
+    fn rounded_circle_outline(&self) -> Option<RoundedCircleOutline> {
+        Some((*self).into())
+    }
+
     fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
         EdgeInsets::all(self.side.stroke_inset().max(0.))
     }
@@ -806,6 +821,10 @@ impl Hash for CircleBorder {
 }
 
 impl ShapeBorder for CircleBorder {
+    fn rounded_circle_outline(&self) -> Option<RoundedCircleOutline> {
+        Some((*self).into())
+    }
+
     fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
         EdgeInsets::all(self.side.stroke_inset().max(0.))
     }
@@ -897,6 +916,10 @@ impl OvalBorder {
 }
 
 impl ShapeBorder for OvalBorder {
+    fn rounded_circle_outline(&self) -> Option<RoundedCircleOutline> {
+        Some(CircleBorder::new(self.side).with_eccentricity(1.).into())
+    }
+
     fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
         EdgeInsets::all(self.side.stroke_inset().max(0.))
     }

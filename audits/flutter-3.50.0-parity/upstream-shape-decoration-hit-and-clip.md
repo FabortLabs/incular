@@ -78,3 +78,19 @@ three box image paint cases, seven shape controls and 15 paint option
 controls passed. Incular accepts an already-decoded image handle here;
 the upstream synchronous test provider makes no async callbacks. No
 provider lifecycle or GPU pixel equivalence is claimed.
+
+## Morphing hit and clip outlines
+
+Pinned `painting/shape_decoration_test.dart:76` passes. The decoration
+transition now uses the existing fitted-outline interpolation for
+rounded rectangles, rounded superellipses, circles and ovals. It
+preserves exact endpoint identities. For a 200 × 100 box, the midpoint
+between a circle and a rectangle now has bounds (25, 0, 150, 100).
+Previously the endpoint switch widened it to the full box immediately.
+
+Both native counterparts passed. They check every pinned sample point,
+the reverse morph, equality of paint and clip contours, and the
+intermediate side width. Four existing nested outline cases, two
+gradient transition cases and 14 mounted transition cases also passed.
+The separate primitive-matrix registration still needs the stadium
+morphs; incompatible families still use the existing endpoint fallback.

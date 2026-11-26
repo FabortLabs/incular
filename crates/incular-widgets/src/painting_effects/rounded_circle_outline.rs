@@ -105,6 +105,13 @@ impl RoundedCircleOutline {
         }
     }
 
+    pub(crate) fn try_interpolate(self, other: Self, t: f32) -> Option<Self> {
+        match (self.family(), other.family()) {
+            (Some(a), Some(b)) if a != b => None,
+            _ => Some(self.lerp(&other, t)),
+        }
+    }
+
     /// Interpolates the unfitted geometry at double precision. In particular,
     /// a rectangle's authored radius is not scaled down to zero on the way
     /// to a circle: it is blended against the circle fitted to the paint box.
@@ -180,7 +187,11 @@ impl Hash for RoundedCircleOutline {
 }
 
 impl Morph {
-    fn path(self, rect: Rect, direction: Option<TextDirection>, inflation: f32) -> Path {
+    fn geometry(
+        self,
+        rect: Rect,
+        direction: Option<TextDirection>,
+    ) -> Option<(Rect, BorderRadius)> {
         let (width, height) = (rect.size.width, rect.size.height);
         let eccentricity = self.eccentricity;
         let delta =
@@ -199,9 +210,7 @@ impl Morph {
                 height,
             )
         };
-        let Some(size) = Size::maybe_new(fitted.1, fitted.2) else {
-            return Path::builder().build();
-        };
+        let size = Size::maybe_new(fitted.1, fitted.2)?;
         let resolved = self.radius.resolve(direction.unwrap_or(TextDirection::Ltr));
         let radius = if eccentricity == 0. {
             Radius::circular(width.min(height) / 2.)
@@ -211,7 +220,13 @@ impl Morph {
             Radius::elliptical((0.5 + eccentricity / 2.) * width / 2., height / 2.)
         };
         let radius = resolved.lerp(&BorderRadius::all(radius), self.circularity as f32);
-        let fitted = Rect::from_origin_size(fitted.0, size);
+        Some((Rect::from_origin_size(fitted.0, size), radius))
+    }
+
+    fn path(self, rect: Rect, direction: Option<TextDirection>, inflation: f32) -> Path {
+        let Some((fitted, radius)) = self.geometry(rect, direction) else {
+            return Path::builder().build();
+        };
         match self.family {
             CornerFamily::Rounded => radius
                 .to_rounded_rect(fitted)
@@ -224,6 +239,24 @@ impl Morph {
 }
 
 impl ShapeBorder for RoundedCircleOutline {
+    fn rounded_circle_outline(&self) -> Option<Self> {
+        Some(*self)
+    }
+
+    fn hit_test(&self, rect: Rect, position: Offset, direction: Option<TextDirection>) -> bool {
+        match self.0 {
+            Outline::Rounded(shape) => shape.hit_test(rect, position, direction),
+            Outline::Superellipse(shape) => shape.hit_test(rect, position, direction),
+            Outline::Circle(shape) => shape.hit_test(rect, position, direction),
+            Outline::Morph(shape) if shape.family == CornerFamily::Rounded => shape
+                .geometry(rect, direction)
+                .is_some_and(|(rect, radius)| radius.to_rounded_rect(rect).contains(position)),
+            Outline::Morph(shape) => shape
+                .path(rect, direction, 0.)
+                .contains(position, FillRule::NonZero),
+        }
+    }
+
     fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
         EdgeInsets::all(self.side().stroke_inset().max(0.))
     }

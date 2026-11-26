@@ -506,9 +506,9 @@ impl Lerp for Decoration {
     }
 }
 
-/// The color-to-gradient case uses a matching uniform gradient. Images,
-/// border shape morphs and transitions between two gradient geometries are
-/// still handled by the existing midpoint fallback.
+/// The color-to-gradient case uses a matching uniform gradient. Compatible
+/// rounded and circular shapes morph continuously; unrelated families,
+/// image transitions and pairs of distinct gradients use a midpoint fallback.
 fn lerp_shape_decoration(a: &ShapeDecoration, b: &ShapeDecoration, t: f32) -> ShapeDecoration {
     let switches = t >= 0.5;
     let gradient = match (&a.gradient, &b.gradient) {
@@ -517,6 +517,18 @@ fn lerp_shape_decoration(a: &ShapeDecoration, b: &ShapeDecoration, t: f32) -> Sh
         (a, b) => {
             if switches { b.clone() } else { a.clone() }
         }
+    };
+    let shape = if Rc::ptr_eq(&a.shape, &b.shape) {
+        a.shape.clone()
+    } else if let Some(outline) = a.shape.rounded_circle_outline().and_then(|a| {
+        let b = b.shape.rounded_circle_outline()?;
+        a.try_interpolate(b, t)
+    }) {
+        Rc::new(outline)
+    } else if switches {
+        b.shape.clone()
+    } else {
+        a.shape.clone()
     };
     ShapeDecoration {
         color: if gradient.is_none() {
@@ -531,11 +543,7 @@ fn lerp_shape_decoration(a: &ShapeDecoration, b: &ShapeDecoration, t: f32) -> Sh
         } else {
             a.image.clone()
         },
-        shape: if switches {
-            b.shape.clone()
-        } else {
-            a.shape.clone()
-        },
+        shape,
     }
 }
 
