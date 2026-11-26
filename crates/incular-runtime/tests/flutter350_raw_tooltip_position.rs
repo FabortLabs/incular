@@ -139,3 +139,60 @@ fn explicitly_anchored_tooltips_still_follow_the_incular_anchor_offsets() {
     frame(&mut runtime, now + Duration::from_millis(20));
     assert_eq!(tooltip_bounds(&runtime).origin, Offset::new(433., 329.));
 }
+
+#[test]
+fn ignore_pointer_tooltip_hides_when_the_mouse_leaves_its_anchor_for_the_bubble() {
+    use incular_widgets::Text;
+
+    for ignore_pointer in [true, false] {
+        let tooltip = RawTooltip::with_builder(Text::new("Hover me"), tooltip_builder(40.))
+            .ignore_pointer(ignore_pointer);
+        let mut runtime = Runtime::new(WidgetsApp::new(Center::new(tooltip)).into()).unwrap();
+        let start = Instant::now();
+        let at = |ms| start + Duration::from_millis(ms);
+        frame(&mut runtime, at(0));
+        let hover = |runtime: &mut Runtime, position, ms| {
+            runtime.handle_input_at(
+                InputEvent::PointerWithMetadata {
+                    pointer: 1,
+                    device: 1,
+                    kind: PointerDeviceKind::Mouse,
+                    buttons: 0,
+                    button: None,
+                    sample: PointerSampleMetadata::EMPTY,
+                    phase: PointerPhase::Move,
+                    position,
+                },
+                at(ms),
+            );
+        };
+        hover(&mut runtime, Offset::ZERO, 10);
+        hover(&mut runtime, Offset::new(400., 300.), 20);
+        frame(&mut runtime, at(120));
+        let bubble = tooltip_bounds(&runtime);
+        let center = bubble.origin + Offset::new(bubble.size.width / 2., bubble.size.height / 2.);
+        hover(&mut runtime, center, 130);
+        frame(&mut runtime, at(140));
+        frame(&mut runtime, at(500));
+        frame(&mut runtime, at(1000));
+        assert_eq!(
+            runtime.tree().element_with_key(&"measured tooltip".into()).is_none(),
+            ignore_pointer
+        );
+    }
+}
+
+#[test]
+fn raw_tooltip_mounts_at_zero_viewport_size() {
+    use incular_widgets::Text;
+
+    let tooltip = Widget::from(RawTooltip::with_builder(
+        Text::new("X"),
+        TooltipComponentBuilder::new(|| Text::new("Y").into()),
+    ))
+    .with_key("zero size anchor");
+    let mut runtime = Runtime::new(WidgetsApp::new(Center::new(tooltip)).into()).unwrap();
+    runtime.run_frame(Constraints::tight(Size::ZERO)).unwrap();
+    let element = runtime.tree().element_with_key(&"zero size anchor".into()).unwrap();
+    assert_eq!(runtime.tree().element_bounds(element).unwrap().size, Size::ZERO);
+}

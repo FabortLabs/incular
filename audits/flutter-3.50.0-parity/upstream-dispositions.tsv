@@ -2482,3 +2482,5 @@ packages/flutter/test/widgets/raw_tooltip_test.dart	278	Does tooltip end up in t
 packages/flutter/test/widgets/raw_tooltip_test.dart	336	Does tooltip end up in the right place - way off to the right	paired-match	upstream-dependent-box.md#mounted-raw-tooltip-placement
 packages/flutter/test/widgets/raw_tooltip_test.dart	399	Does tooltip end up in the right place - near the edge	paired-match	upstream-dependent-box.md#mounted-raw-tooltip-placement
 packages/flutter/test/widgets/raw_tooltip_test.dart	2660	Custom tooltip positioning - positionDelegate parameter	paired-match	upstream-dependent-box.md#mounted-raw-tooltip-placement
+packages/flutter/test/widgets/raw_tooltip_test.dart	2706	RawTooltip ignores pointer events when ignorePointer is true	paired-match	upstream-dependent-box.md#hover-routing-and-a-zero-area-view
+packages/flutter/test/widgets/raw_tooltip_test.dart	2745	RawTooltip does not crash at zero area	paired-match	upstream-dependent-box.md#hover-routing-and-a-zero-area-view

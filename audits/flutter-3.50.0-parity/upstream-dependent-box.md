@@ -30,3 +30,14 @@ offset. The position callback is held until measured geometry is
 available. The 14 focused native checks include Escape, hover, tap,
 long press, and all placement variants. This is RawTooltip rather
 than a Material or Cupertino tooltip.
+
+## Hover routing and a zero-area view
+
+Pinned `widgets/raw_tooltip_test.dart:2706` and `:2745` passed.
+Actual mouse motion from the measured anchor to the bubble dismisses
+it when pointer events are ignored. The same motion into the same
+bubble keeps it open when pointer input is enabled. A separate
+mounted text-backed tooltip starts at zero viewport size and keeps
+its anchor at zero size. All five focused native placement checks
+passed; 17 additional overlay layout, raw menu and tooltip
+regressions also passed against the placement implementation.
