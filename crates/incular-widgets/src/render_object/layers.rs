@@ -1201,11 +1201,18 @@ impl RenderLayers {
             );
             return;
         }
-        if matches!(
-            kind,
-            RenderKind::Stack { .. } | RenderKind::IndexedStack { .. }
-        ) {
-            self.apply_overflow_rect_clip(compositor, size, self.layout_overflow.get());
+        let stack_clip = match kind {
+            RenderKind::Stack { stack } => Some(stack.clip_behavior),
+            RenderKind::IndexedStack { clip_behavior, .. } => Some(*clip_behavior),
+            _ => None,
+        };
+        if let Some(behavior) = stack_clip {
+            self.apply_overflow_clip_with_coverage(
+                compositor,
+                size,
+                behavior,
+                self.layout_overflow.get(),
+            );
             return;
         }
         if matches!(

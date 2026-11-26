@@ -81,3 +81,15 @@ Focused layout/stack controls passed with the existing
 missing-Directionality diagnostic mismatch left open. A separate
 IgnoreBaseline regression was discovered in the same regression run
 and is tracked independently.
+
+### Painted clip coverage
+
+Pinned :269 now pairs with the same retained Stack inspecting HardEdge
+before and after an unchanged update. The additional Flutter
+stack_clip_coverage_test.dart and native test drive both Stack and
+IndexedStack through HardEdge, AntiAlias, AntiAliasWithSaveLayer, none,
+and back. The clipped 100 by 100 box keeps its geometry and the
+actual paint coverage follows the setting each time; the native
+baseline had always submitted HardEdge. This adds one original pair;
+IndexedStack :307 was already paired. The unrelated default
+Directionality diagnostic remains open.

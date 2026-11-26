@@ -520,7 +520,7 @@ packages/flutter/test/widgets/stack_test.dart	76	Can remove parent data	partial-
 packages/flutter/test/widgets/stack_test.dart	111	Can align non-positioned children (LTR)	paired-match	upstream-stack.md#directional-positioning-and-empty-parent-data
 packages/flutter/test/widgets/stack_test.dart	157	Can align non-positioned children (RTL)	paired-match	upstream-stack.md#directional-positioning-and-empty-parent-data
 packages/flutter/test/widgets/stack_test.dart	203	Can set width and height	partial-match	upstream-stack.md
-packages/flutter/test/widgets/stack_test.dart	269	Can set and update clipBehavior	reference-ran-incular-open	upstream-stack.md
+packages/flutter/test/widgets/stack_test.dart	269	Can set and update clipBehavior	paired-match	upstream-stack.md#painted-clip-coverage
 packages/flutter/test/widgets/stack_test.dart	278	Clip.none is respected by describeApproximateClip	reference-ran-incular-open	upstream-stack.md
 packages/flutter/test/widgets/stack_test.dart	308	Stack clip test	paired-match	upstream-stack.md
 packages/flutter/test/widgets/stack_test.dart	349	Stack sizing: default	paired-match	upstream-stack.md

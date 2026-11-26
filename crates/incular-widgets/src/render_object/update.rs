@@ -212,6 +212,26 @@ fn same_compositor_family(old: &RenderKind, new: &RenderKind) -> bool {
     {
         return stack_clip_only_change(old_stack, new_stack);
     }
+    if let (
+        RenderKind::IndexedStack {
+            alignment: old_alignment,
+            index: old_index,
+            fit: old_fit,
+            clip_behavior: old_clip,
+        },
+        RenderKind::IndexedStack {
+            alignment: new_alignment,
+            index: new_index,
+            fit: new_fit,
+            clip_behavior: new_clip,
+        },
+    ) = (old, new)
+    {
+        return old_clip != new_clip
+            && old_alignment == new_alignment
+            && old_index == new_index
+            && old_fit == new_fit;
+    }
     matches!(
         (old, new),
         (RenderKind::Opacity { .. }, RenderKind::Opacity { .. })
