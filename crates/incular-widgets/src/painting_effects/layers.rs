@@ -3,14 +3,17 @@
 use std::{rc::Rc, sync::Arc};
 
 use incular_config::Clip;
-use incular_core::{Color, Offset};
-use incular_rendering::{Canvas, CornerRadii, FillRule, Path};
+use incular_core::{Color, Offset, Rect, Size};
+use incular_rendering::{Canvas, CornerRadii, DisplayList, FillRule, Path};
 use typed_builder::TypedBuilder;
 
-use super::{BorderRadiusGeometry, RoundedSuperellipseBorder, decoration::{BorderSide, BoxDecoration, BoxShape}};
+use super::{
+    BorderRadiusGeometry, OvalBorder, RoundedSuperellipseBorder, ShapeBorder,
+    decoration::{BorderSide, BoxShape},
+};
 use crate::{
-    ClipOval, ClipPath, ClipRRect, CustomPaint, DecoratedBox, DropShadow,
-    Positioned, Stack, StackFit, Widget,
+    ClipOval, ClipPath, ClipRRect, CustomPaint, CustomPainter, DecoratedBox, DropShadow, Positioned,
+    Stack, StackFit, Widget,
 };
 
 /// Renders its child into a retained raster snapshot for performance optimization.
@@ -175,12 +178,8 @@ impl From<PhysicalModel> for Widget {
                 .into(),
         };
         let surface: Widget = match value.shape {
-            BoxShape::Circle => DecoratedBox::new(child)
-                .decoration(
-                    BoxDecoration::new()
-                        .color(value.color)
-                        .shape(BoxShape::Circle),
-                )
+            BoxShape::Circle => CustomPaint::from_painter(Size::ZERO, PhysicalOval(value.color))
+                .child(child)
                 .into(),
             BoxShape::Rectangle => DecoratedBox::new(child)
                 .background(value.color)
@@ -189,6 +188,34 @@ impl From<PhysicalModel> for Widget {
         };
         // Keep the same retained proxy when elevation turns on or off.
         elevation_shadow(value.elevation, value.shadow_color, surface)
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+struct PhysicalOval(Color);
+
+impl CustomPainter for PhysicalOval {
+    fn paint(&self, size: Size) -> DisplayList {
+        if size.width <= 0. || size.height <= 0. {
+            return DisplayList::default();
+        }
+        // Unlike BoxDecoration's circle, RenderPhysicalModel's circle
+        // uses half the width AND half the height as its ellipse radii.
+        let rect = Rect::from_origin_size(Offset::ZERO, size);
+        let path = OvalBorder::new(BorderSide::NONE).outer_path(rect);
+        let mut canvas = Canvas::default();
+        canvas.fill_path(Arc::new(path), self.0, FillRule::NonZero);
+        canvas.finish()
+    }
+
+    fn should_repaint(&self, old: &Self) -> bool {
+        self != old
+    }
+
+    fn hit_test(&self, _: Offset) -> Option<bool> {
+        // A physical model paints a backing for its child; the paint is
+        // not a hit target in its own right.
+        Some(false)
     }
 }
 
