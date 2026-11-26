@@ -1385,22 +1385,14 @@ impl WidgetTree {
             WidgetKind::Scroll { controller, .. } => (
                 Some(SemanticRole::ScrollView),
                 None,
-                Some(format!(
-                    "{:.0}/{:.0}",
-                    controller.offset(),
-                    controller.max_offset()
-                )),
+                None,
                 semantic_scroll_state(render.object.kind()),
                 scroll_edge_actions(controller, render.object.kind()),
             ),
             WidgetKind::SliverViewport { config } => (
                 Some(SemanticRole::ScrollView),
                 None,
-                Some(format!(
-                    "{:.0}/{:.0}",
-                    config.controller.offset(),
-                    config.controller.max_offset()
-                )),
+                None,
                 semantic_scroll_state(render.object.kind()),
                 scroll_edge_actions(&config.controller, render.object.kind()),
             ),

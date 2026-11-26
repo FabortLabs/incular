@@ -65,6 +65,9 @@ pub enum MobileAccessibilityEventKind {
     FocusChanged,
     ValueChanged,
     StateChanged,
+    /// A retained scroll node changed its logical offset. Its node update
+    /// contains the axis, range, and any collection position.
+    Scrolled,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -243,6 +246,15 @@ impl MobileAccessibilityProjection {
                     events.push(MobileAccessibilityEvent {
                         native_id,
                         kind: MobileAccessibilityEventKind::FocusChanged,
+                    });
+                }
+                if let (Some(before), Some(after)) =
+                    (old.state.scroll_metrics, semantic.state.scroll_metrics)
+                    && before.offset != after.offset
+                {
+                    events.push(MobileAccessibilityEvent {
+                        native_id,
+                        kind: MobileAccessibilityEventKind::Scrolled,
                     });
                 }
                 if old.value != semantic.value {

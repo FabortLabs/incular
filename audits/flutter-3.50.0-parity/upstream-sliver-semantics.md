@@ -373,3 +373,17 @@ reabsorption with the same parent ID and stale leaf removal.
 All 51 focused Rust tests passed. The upstream cases remain partial
 because Incular still exposes its portable default ShowOnScreen
 action and legacy numeric scroll value in that graph.
+
+### Numeric scroll position without fabricated value text
+
+The pinned Flutter probe checks box and sliver scrolling at 0,
+220.25, 220.5, and 0 again. Both renderers expose the numeric range
+and position with no value string. Incular now exposes the same
+typed position without allocating a rounded "offset/maximum" string
+each time the scroll changes. Explicit author-supplied values and
+the fallback for older untyped projections remain separate. AccessKit
+receives the exact fractional position with no fabricated value.
+The mobile projection emits a Scrolled event for a changed offset,
+not ValueChanged, and retains the pane ID. The 13 targeted Rust
+tests include the existing incremental scaling checks. Actual
+operating-system event delivery was not tested.

@@ -276,3 +276,82 @@ fn ten_list_tiles_withdraw_the_original_direction_after_an_out_of_range_jump() {
         assert_eq!(actions(&runtime), [ScrollToOffset, backward]);
     }
 }
+
+#[test]
+fn fractional_scroll_position_uses_numeric_metadata_and_a_scroll_event_not_value_text() {
+    use accesskit::NodeId;
+    use incular_accessibility::{MobileAccessibilityEventKind, MobileAccessibilityProjection};
+    use incular_widgets::{
+        CustomScrollView, Semantics, SingleChildScrollView, Sliver, SliverToBoxAdapter,
+    };
+
+    for sliver in [false, true] {
+        let controller = ScrollController::new();
+        let child = Semantics::new(SizedBox::new().height(1600.)).label("body");
+        let view = if sliver {
+            let slivers: [Box<dyn Sliver>; 1] = [Box::new(SliverToBoxAdapter::new(child))];
+            CustomScrollView::new(slivers)
+                .controller(controller.clone())
+                .into()
+        } else {
+            SingleChildScrollView::new(child)
+                .controller(controller.clone())
+                .into()
+        };
+        let mut runtime = Runtime::new(view).unwrap();
+        let bounds = Constraints::tight(Size::new(800., 600.));
+        let mut mobile = MobileAccessibilityProjection::new();
+        let mut accesskit = AccessKitProjection::new();
+        let mut id = None;
+
+        for offset in [0., 220.25, 220.5, 0.] {
+            let _ = controller.jump_to(offset);
+            runtime.run_frame(bounds).unwrap();
+            let tree = runtime.tree().semantics();
+            let scroll = tree
+                .iter()
+                .map(|(_, node)| node)
+                .find(|node| node.state.scroll_metrics.is_some())
+                .unwrap();
+            assert_eq!(scroll.value, None);
+            let metrics = scroll.state.scroll_metrics.unwrap();
+            assert_eq!(metrics.offset, f64::from(offset));
+            assert_eq!(metrics.maximum, 1000.);
+            let snapshot = mobile.sync(tree).unwrap();
+            let projected = snapshot
+                .nodes
+                .iter()
+                .find(|n| n.semantic.id == scroll.id)
+                .unwrap();
+            let native = accesskit.sync(tree, 1.).unwrap().into_accesskit();
+            let native_id = NodeId(accesskit.native_node_id(scroll.id).unwrap());
+            let native_node = &native
+                .nodes
+                .iter()
+                .find(|(id, _)| *id == native_id)
+                .unwrap()
+                .1;
+            assert_eq!(native_node.value(), None);
+            assert_eq!(native_node.scroll_y(), Some(f64::from(offset)));
+            assert!(
+                snapshot
+                    .events
+                    .iter()
+                    .all(|event| event.kind != MobileAccessibilityEventKind::ValueChanged)
+            );
+            let events: Vec<_> = snapshot
+                .events
+                .iter()
+                .filter(|event| event.kind == MobileAccessibilityEventKind::Scrolled)
+                .map(|event| event.native_id)
+                .collect();
+            if let Some((old_id, old_native)) = id {
+                assert_eq!((scroll.id, projected.native_id), (old_id, old_native));
+                assert_eq!(events, [old_native]);
+            } else {
+                assert!(events.is_empty());
+            }
+            id = Some((scroll.id, projected.native_id));
+        }
+    }
+}

@@ -58,10 +58,11 @@ fn scroll_frame(tree: &mut WidgetTree) {
 fn assert_scroll(tree: &WidgetTree, label: &str, controller: &ScrollController) {
     let node = find(tree, label);
     assert_eq!(node.role, SemanticRole::ScrollView);
-    assert_eq!(
-        node.value.as_deref(),
-        Some(format!("{:.0}/{:.0}", controller.offset(), controller.max_offset()).as_str())
-    );
+    assert_eq!(node.value, None);
+    let metrics = node.state.scroll_metrics.expect("typed scroll position");
+    assert_eq!(metrics.offset, f64::from(controller.offset()));
+    assert_eq!(metrics.minimum, f64::from(controller.min_offset()));
+    assert_eq!(metrics.maximum, f64::from(controller.max_offset()));
     assert_eq!(
         node.actions.contains(&SemanticActionKind::ScrollBackward),
         controller.offset() > controller.min_offset()
