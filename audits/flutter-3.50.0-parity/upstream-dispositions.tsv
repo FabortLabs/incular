@@ -66,7 +66,7 @@ packages/flutter/test/widgets/scroll_physics_test.dart	407	on trailing edge over
 packages/flutter/test/painting/border_side_test.dart	79	BorderSide - scale	paired-match	upstream-border-constraints-formatters.md
 packages/flutter/test/painting/border_side_test.dart	109	BorderSide - won't lerp into negative widths	paired-match	upstream-border-constraints-formatters.md#reverified-negative-extrapolation
 packages/flutter/test/painting/border_side_test.dart	126	BorderSide - lerp with strokeAlign	paired-match	upstream-border-constraints-formatters.md
-packages/flutter/test/painting/border_test.dart	27	Border.symmetric constructor	partial-mismatch	upstream-border-constraints-formatters.md
+packages/flutter/test/painting/border_test.dart	27	Border.symmetric constructor	partial-match	upstream-border-constraints-formatters.md
 packages/flutter/test/rendering/box_constraints_test.dart	17	BoxConstraints copyWith	partial-match	upstream-border-constraints-formatters.md#layout-bound-arithmetic-and-view-conversion
 packages/flutter/test/rendering/box_constraints_test.dart	60	BoxConstraints lerp	paired-match	upstream-border-constraints-formatters.md#constraint-interpolation-repair
 packages/flutter/test/rendering/box_constraints_test.dart	134	BoxConstraints lerp with overshooting t is normalized	paired-match	upstream-border-constraints-formatters.md#constraint-interpolation-repair

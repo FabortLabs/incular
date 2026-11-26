@@ -309,3 +309,13 @@ All five original extrapolation cases now match: negative widths are
 absent, a genuine zero remains a solid hairline, and positive overshoot
 retains its expanded width. The disposition is updated from mismatch
 to match; this does not add a second registration.
+
+## Symmetric borders with an omitted pair
+
+The original constructor still passed at the pin, and the matching Rust
+value checks are now independently backed by an authored paint comparison.
+Flutter's raster and Incular's generated fill geometry agree at the left,
+right, top, bottom, center, and exterior samples for a vertical-only and a
+horizontal-only crimson border. The unspecified pair emits no visible
+edge or hairline. This repairs the stale partial-mismatch disposition;
+Dart's object-identity assertion remains inapplicable to the Rust value.
