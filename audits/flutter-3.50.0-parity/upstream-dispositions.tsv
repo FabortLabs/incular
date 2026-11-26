@@ -2577,3 +2577,4 @@ packages/flutter/test/widgets/focus_scope_test.dart	1151	Can traverse Focus chil
 packages/flutter/test/painting/image_provider_and_image_cache_test.dart	48	AssetImageProvider - evicts on failure to load	paired-match	upstream-decoded-bundle-image-cache.md#failed-exact-asset-resolution
 packages/flutter/test/painting/image_provider_and_image_cache_test.dart	70	ImageProvider can evict images	paired-match	upstream-memory-image-provider.md
 packages/flutter/test/painting/image_provider_and_image_cache_test.dart	85	ImageProvider.evict respects the provided ImageCache	paired-match	upstream-memory-image-provider.md
+packages/flutter/test/painting/image_provider_and_image_cache_test.dart	115	ImageProvider errors can always be caught	paired-match	upstream-memory-image-provider.md#listening-for-a-provider-failure

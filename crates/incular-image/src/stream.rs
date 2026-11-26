@@ -17,7 +17,7 @@ use std::{
 
 use futures_channel::oneshot;
 use incular_animation::scheduler::{Priority, schedule_async_task};
-use incular_core::reactivity::DependencySource;
+use incular_core::reactivity::{DependencySource, Subscription, TrackingGuard};
 
 use crate::{ImageConfiguration, ImageError, ImageHandle, ImageProvider, ImageResizeOptions};
 
@@ -208,6 +208,23 @@ impl ImageStream {
         self.observed_state(false)
     }
 
+    /// Listens once for a decoded frame or its error, not for download
+    /// progress. The second callback argument is true if the outcome was
+    /// already available when the listener was attached. Drop the token to
+    /// cancel a pending listener.
+    pub fn listen_frame(
+        &self,
+        listener: impl FnOnce(Result<ImageHandle, ImageError>, bool) + 'static,
+    ) -> ImageFrameSubscription {
+        let binding = Rc::new(ImageFrameBinding {
+            stream: RefCell::new(Some(self.clone())),
+            callback: RefCell::new(Some(Box::new(listener))),
+            subscriptions: RefCell::new(Vec::new()),
+        });
+        binding.refresh(true);
+        ImageFrameSubscription { _binding: binding }
+    }
+
     fn observed_state(&self, include_progress: bool) -> ImageLoadState {
         if include_progress {
             self.cell.changes.track();
@@ -275,6 +292,60 @@ impl ImageStream {
             changes.notify();
         }
         true
+    }
+}
+
+type ImageFrameCallback = Box<dyn FnOnce(Result<ImageHandle, ImageError>, bool)>;
+
+/// Owns one listener for an image stream's first outcome.
+#[must_use = "keep the subscription alive until the image arrives"]
+pub struct ImageFrameSubscription {
+    _binding: Rc<ImageFrameBinding>,
+}
+
+struct ImageFrameBinding {
+    stream: RefCell<Option<ImageStream>>,
+    callback: RefCell<Option<ImageFrameCallback>>,
+    subscriptions: RefCell<Vec<Subscription>>,
+}
+
+impl ImageFrameBinding {
+    fn refresh(self: &Rc<Self>, synchronous: bool) {
+        let Some(stream) = self.stream.borrow().clone() else {
+            return;
+        };
+        let sources = Rc::new(RefCell::new(Vec::<DependencySource>::new()));
+        let outcome = {
+            let sources = sources.clone();
+            let _tracking = TrackingGuard::enter(move |source| sources.borrow_mut().push(source));
+            stream.frame_state()
+        };
+        let result = match outcome {
+            ImageLoadState::Loading(_) => {
+                let subscriptions = sources
+                    .borrow()
+                    .iter()
+                    .map(|source| {
+                        let listener = Rc::downgrade(self);
+                        source.subscribe((), move || {
+                            if let Some(listener) = listener.upgrade() {
+                                listener.refresh(false);
+                            }
+                        })
+                    })
+                    .collect();
+                *self.subscriptions.borrow_mut() = subscriptions;
+                return;
+            }
+            ImageLoadState::Ready(image) => Ok(image),
+            ImageLoadState::Failed(error) => Err(error),
+        };
+        self.subscriptions.borrow_mut().clear();
+        self.stream.borrow_mut().take();
+        let callback = self.callback.borrow_mut().take();
+        if let Some(callback) = callback {
+            callback(result, synchronous);
+        }
     }
 }
 

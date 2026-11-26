@@ -156,3 +156,83 @@ fn erased_providers_load_through_their_provider() {
         image
     );
 }
+
+#[test]
+fn listeners_catch_failed_provider_resolutions_even_if_the_error_already_exists() {
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    struct FailingProvider;
+    impl ImageProvider for FailingProvider {
+        fn load(&self) -> Result<ImageHandle, ImageError> {
+            Err(ImageError::Decode("provider failed".into()))
+        }
+    }
+
+    let result = std::rc::Rc::new(std::cell::RefCell::new(None));
+    let stream = FailingProvider.resolve(&ImageConfiguration::empty());
+    let _subscription = stream.listen_frame({
+        let result = result.clone();
+        move |outcome, synchronous| *result.borrow_mut() = Some((outcome, synchronous))
+    });
+    assert_eq!(
+        result.take(),
+        Some((Err(ImageError::Decode("provider failed".into())), true))
+    );
+}
+
+#[test]
+fn frame_listeners_follow_source_changes_without_replaying_progress_or_a_failure() {
+    use std::{cell::RefCell, rc::Rc};
+
+    let (outer, follow) = ImageStream::loading();
+    let (source, finish) = ImageStream::loading();
+    let mapped = outer.map_image(|_| panic!("failed images must not be transformed"));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let _subscription = mapped.listen_frame({
+        let events = events.clone();
+        move |outcome, synchronous| events.borrow_mut().push((outcome, synchronous))
+    });
+    let canceled = mapped.listen_frame(|_, _| panic!("canceled handler ran"));
+    drop(canceled);
+
+    assert!(follow.follow(&source));
+    assert!(finish.report_chunk(ImageChunkEvent::new(4, Some(10))));
+    assert!(events.borrow().is_empty());
+    assert!(finish.fail(ImageError::InvalidDimensions));
+    assert_eq!(events.take(), [(Err(ImageError::InvalidDimensions), false)]);
+    assert!(!finish.complete(pixel()));
+    assert!(events.borrow().is_empty());
+}
+
+#[test]
+fn frame_listener_distinguishes_synchronous_cache_hits_from_delayed_images() {
+    use std::{cell::RefCell, rc::Rc};
+
+    let image = pixel();
+    let captures = Rc::new(RefCell::new(Vec::new()));
+    let handler = || {
+        let captures = captures.clone();
+        move |image, synchronous| captures.borrow_mut().push((image, synchronous))
+    };
+    let _ready = ImageStream::ready(image.clone()).listen_frame(handler());
+    assert_eq!(captures.take(), [(Ok(image.clone()), true)]);
+
+    let (loading, completer) = ImageStream::loading();
+    let _pending = loading.listen_frame(handler());
+    assert!(captures.borrow().is_empty());
+    assert!(completer.complete(image.clone()));
+    assert_eq!(captures.take(), [(Ok(image), false)]);
+}
+
+#[test]
+fn a_consumed_frame_listener_does_not_retain_decoded_pixels() {
+    let image = pixel();
+    let weak = image.downgrade();
+    let (stream, completer) = ImageStream::loading();
+    let _subscription = stream.listen_frame(|result, _| {
+        assert_eq!(result.unwrap().decoded().pixels().as_ref(), [255, 255, 255, 255]);
+    });
+    drop(stream);
+    assert!(completer.complete(image));
+    drop(completer);
+    assert!(weak.is_dropped());
+}

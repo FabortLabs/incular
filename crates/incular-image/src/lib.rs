@@ -20,7 +20,8 @@ pub use bundled_cache::{
 pub use resize::{ImageResizeOptions, ResizeImage, ResizeImageKey, ResizeImagePolicy};
 
 pub use stream::{
-    AnyImageProvider, ImageChunkEvent, ImageLoadState, ImageStream, ImageStreamCompleter,
+    AnyImageProvider, ImageChunkEvent, ImageFrameSubscription, ImageLoadState, ImageStream,
+    ImageStreamCompleter,
 };
 
 use incular_core::finite_non_negative;

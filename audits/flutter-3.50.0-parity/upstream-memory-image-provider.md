@@ -17,3 +17,17 @@ Incular retains its existing byte-content key semantics and separate bounded
 memory and bundle caches; Flutter uses memory-buffer identity and a combined
 cache. The pinned cases reuse the same buffer and do not compare mixed-source
 cache budgets, resize-key eviction or live multi-frame images.
+
+## Listening for a provider failure
+
+Pinned `painting/image_provider_and_image_cache_test.dart:115` passed.
+A failing Rust provider returns its typed decoding error from the actual
+resolution path. A caller that attaches a frame listener after resolve
+still receives the original error exactly once. Native controls follow an
+asynchronously rebound stream, ignore chunk progress, cancel listeners on
+drop, distinguish cached from delayed success, and release decoded pixels
+after a completed listener no longer needs them. All 20 focused stream
+and bundle-cache checks passed.
+
+This is a first-outcome listener for Incular's single-frame stream.
+It does not claim Flutter's animated-frame or uncaught-error reporting APIs.
