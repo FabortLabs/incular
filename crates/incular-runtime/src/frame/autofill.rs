@@ -260,6 +260,9 @@ fn field_input(field: &TextFieldInputSnapshot, view_id: &Value) -> Map<String, V
         incular_config::Brightness::Dark => "Brightness.dark",
     };
     let smart = if field.obscure_text { "0" } else { "1" };
+    let hint_locales = field.traits.hint_locales.as_ref().map(|locales| {
+        locales.iter().map(ToString::to_string).collect::<Vec<_>>()
+    });
     json!({
         "viewId": view_id,
         "inputType":{"name":field.input_type.flutter_name(),"signed":signed,"decimal":decimal,"password":password},
@@ -270,7 +273,7 @@ fn field_input(field: &TextFieldInputSnapshot, view_id: &Value) -> Map<String, V
         "actionLabel":Value::Null, "inputAction":format!("TextInputAction.{action}"),
         "textCapitalization":format!("TextCapitalization.{capitalization}"), "keyboardAppearance":keyboard,
         "enableIMEPersonalizedLearning":field.traits.enable_ime_personalized_learning,
-        "contentCommitMimeTypes":[], "enableDeltaModel":false, "hintLocales":Value::Null,
+        "contentCommitMimeTypes":[], "enableDeltaModel":false, "hintLocales":hint_locales,
         "enableInlinePrediction":true,
     }).as_object().expect("text input options object").clone()
 }

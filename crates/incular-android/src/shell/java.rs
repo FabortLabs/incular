@@ -53,6 +53,7 @@ pub(super) enum Arg<'a> {
     Int(i32),
     Bool(bool),
     Str(&'a str),
+    OptionalStr(Option<&'a str>),
 }
 
 /// What a static method returns.
@@ -95,7 +96,8 @@ fn call(name: &CStr, signature: &CStr, args: &[Arg<'_>], returns: Returns) -> Op
                 Arg::Bool(value) => jvalue {
                     z: jboolean::from(value),
                 },
-                Arg::Str(value) => {
+                Arg::OptionalStr(None) => jvalue { l: std::ptr::null_mut() },
+                Arg::Str(value) | Arg::OptionalStr(Some(value)) => {
                     let string = new_string(env, value);
                     locals.push(string);
                     jvalue { l: string }

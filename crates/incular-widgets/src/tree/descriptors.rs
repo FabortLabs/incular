@@ -1072,6 +1072,7 @@ pub struct EditableText {
     text_capitalization: incular_platform::TextCapitalization,
     keyboard_appearance: incular_config::Brightness,
     autofill_hints: Option<Vec<String>>,
+    hint_locales: Option<Vec<incular_config::Locale>>,
     enable_ime_personalized_learning: bool,
     scroll_padding: incular_config::EdgeInsets,
     cursor_opacity_animates: bool,
@@ -1130,6 +1131,7 @@ impl EditableText {
             text_capitalization: incular_platform::TextCapitalization::None,
             keyboard_appearance: incular_config::Brightness::Light,
             autofill_hints: Some(Vec::new()),
+            hint_locales: None,
             enable_ime_personalized_learning: true,
             scroll_padding: incular_config::EdgeInsets::all(20.0),
             cursor_opacity_animates: false,
@@ -1597,6 +1599,15 @@ impl EditableText {
         self
     }
 
+    /// Flutter's `hintLocales`: the requested languages for the soft keyboard.
+    /// These do not change the editor's own locale. `None` leaves it up to the
+    /// keyboard; an empty list explicitly requests no language hints.
+    #[must_use]
+    pub fn hint_locales(mut self, locales: Option<Vec<incular_config::Locale>>) -> Self {
+        self.hint_locales = locales;
+        self
+    }
+
     /// Whether the IME may learn from what the user types. Defaults to true.
     #[must_use]
     pub fn enable_ime_personalized_learning(mut self, enable: bool) -> Self {
@@ -1772,6 +1783,7 @@ impl From<EditableText> for Widget {
                 text_capitalization: value.text_capitalization,
                 keyboard_appearance: value.keyboard_appearance,
                 autofill_hints: value.autofill_hints,
+                hint_locales: value.hint_locales,
                 enable_ime_personalized_learning: value.enable_ime_personalized_learning,
             },
             scroll_padding: value.scroll_padding,

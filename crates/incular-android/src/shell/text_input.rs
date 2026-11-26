@@ -45,9 +45,12 @@ pub(super) fn apply(commands: Vec<TextInputCommand>) {
                 }
                 let (text, selection_start, selection_end, composing_start, composing_end) =
                     utf16_state(&state);
+                let locale_tags = configuration.traits.hint_locales.as_ref().map(|locales| {
+                    locales.iter().map(ToString::to_string).collect::<Vec<_>>().join(",")
+                });
                 java::call_void(
                     c"showTextInput",
-                    c"(IILjava/lang/String;IIII)V",
+                    c"(IILjava/lang/String;IIIILjava/lang/String;)V",
                     &[
                         Arg::Int(input_type(&configuration)),
                         Arg::Int(ime_options(&configuration)),
@@ -56,6 +59,7 @@ pub(super) fn apply(commands: Vec<TextInputCommand>) {
                         Arg::Int(selection_end),
                         Arg::Int(composing_start),
                         Arg::Int(composing_end),
+                        Arg::OptionalStr(locale_tags.as_deref()),
                     ],
                 );
             }

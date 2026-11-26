@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.icu.text.BreakIterator
 import android.os.Build
+import android.os.LocaleList
 import android.text.Editable
 import android.text.InputType
 import android.text.Selection
@@ -29,6 +30,7 @@ internal class IncularInputView(context: Context) : SurfaceView(context) {
     private val imm = context.getSystemService(InputMethodManager::class.java)
     private var inputType = InputType.TYPE_NULL
     private var imeOptions = 0
+    private var languageTags: String? = null
     private var attached = false
     private val editable: Editable = Editable.Factory.getInstance().newEditable("")
 
@@ -49,6 +51,9 @@ internal class IncularInputView(context: Context) : SurfaceView(context) {
         }
         outAttrs.inputType = inputType
         outAttrs.imeOptions = imeOptions
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            outAttrs.hintLocales = languageTags?.let { LocaleList.forLanguageTags(it) }
+        }
         outAttrs.initialSelStart = Selection.getSelectionStart(editable)
         outAttrs.initialSelEnd = Selection.getSelectionEnd(editable)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) outAttrs.setInitialSurroundingText(editable)
@@ -60,9 +65,10 @@ internal class IncularInputView(context: Context) : SurfaceView(context) {
      * keyboard: a following [showKeyboard] does (`TextInput.show`), so a configuration change
      * the user did not ask for never reopens a keyboard they dismissed.
      */
-    fun attach(inputType: Int, imeOptions: Int, text: String, selStart: Int, selEnd: Int, compStart: Int, compEnd: Int) {
+    fun attach(inputType: Int, imeOptions: Int, text: String, selStart: Int, selEnd: Int, compStart: Int, compEnd: Int, languageTags: String?) {
         this.inputType = inputType
         this.imeOptions = imeOptions
+        this.languageTags = languageTags
         attached = true
         setMirror(text, selStart, selEnd, compStart, compEnd)
         requestFocus()
@@ -93,6 +99,7 @@ internal class IncularInputView(context: Context) : SurfaceView(context) {
         imm.hideSoftInputFromWindow(windowToken, 0)
         if (detach && attached) {
             attached = false
+            languageTags = null
             setMirror("", 0, 0, -1, -1)
             imm.restartInput(this)
         }

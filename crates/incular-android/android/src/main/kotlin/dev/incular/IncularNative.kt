@@ -92,8 +92,8 @@ internal object IncularNative {
         activity?.applySystemUiOverlayStyle(statusIcons, navIcons, statusColor, navColor, flags)
     }
 
-    @JvmStatic fun showTextInput(inputType: Int, imeOptions: Int, text: String, selStart: Int, selEnd: Int, compStart: Int, compEnd: Int) {
-        input?.attach(inputType, imeOptions, text, selStart, selEnd, compStart, compEnd)
+    @JvmStatic fun showTextInput(inputType: Int, imeOptions: Int, text: String, selStart: Int, selEnd: Int, compStart: Int, compEnd: Int, languageTags: String?) {
+        input?.attach(inputType, imeOptions, text, selStart, selEnd, compStart, compEnd, languageTags)
     }
 
     @JvmStatic fun updateTextInput(text: String, selStart: Int, selEnd: Int, compStart: Int, compEnd: Int) {

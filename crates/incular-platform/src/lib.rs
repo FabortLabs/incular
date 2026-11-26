@@ -663,6 +663,9 @@ pub struct TextInputTraits {
     /// field (`AutofillConfiguration.disabled`); an empty list enables it
     /// without hints.
     pub autofill_hints: Option<Vec<String>>,
+    /// Preferred keyboard languages. An explicit empty list clears hints;
+    /// `None` leaves the native keyboard's language unspecified.
+    pub hint_locales: Option<Vec<incular_config::Locale>>,
     /// Whether the IME may learn from what the user types (Android's
     /// `IME_FLAG_NO_PERSONALIZED_LEARNING` when false).
     pub enable_ime_personalized_learning: bool,
@@ -677,6 +680,7 @@ impl Default for TextInputTraits {
             text_capitalization: TextCapitalization::None,
             keyboard_appearance: incular_config::Brightness::Light,
             autofill_hints: None,
+            hint_locales: None,
             enable_ime_personalized_learning: true,
         }
     }

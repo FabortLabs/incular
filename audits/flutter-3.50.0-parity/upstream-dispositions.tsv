@@ -1690,3 +1690,4 @@ packages/flutter/test/widgets/editable_text_test.dart	16633	can show spell check
 packages/flutter/test/widgets/editable_text_test.dart	16693	can show spell check suggestions toolbar when there are no spell check results on iOS	partial-match	upstream-spell-check-toolbar.md
 packages/flutter/test/widgets/editable_text_test.dart	16997	tapping on a misspelled word hides the handles	partial-match	upstream-spell-check-toolbar.md#android-single-tap-handles
 packages/flutter/test/widgets/text_selection_test.dart	959	Touch drag moves the cursor	paired-match	upstream-android-touch-caret.md
+packages/flutter/test/widgets/editable_text_test.dart	1527	hintLocales is sent to the engine	paired-match	upstream-ime-hint-locales.md
