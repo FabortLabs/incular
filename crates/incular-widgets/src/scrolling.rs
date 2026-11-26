@@ -43,6 +43,7 @@ mod sliver_descriptors;
 mod sliver_decoration;
 pub use sliver_decoration::{SliverBoxPaintConfiguration, SliverBoxPainter, SliverBoxPainterFactory};
 mod sliver_fade;
+mod sliver_paint_geometry;
 mod sliver_lists;
 mod sliver_semantics;
 

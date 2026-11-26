@@ -1,6 +1,6 @@
 //! One retained paint layer for the sliver, not a decoration on each box row.
 
-use super::{layout::SingleInnerSliver, *};
+use super::{layout::SingleInnerSliver, sliver_paint_geometry::SliverPaintBounds, *};
 use crate::{
     CustomPaint, CustomPainter, DecorationPosition, ExcludeSemantics, IgnorePointer, SizedBox,
 };
@@ -121,25 +121,12 @@ impl RenderSliver for DecoratedRenderSliver {
         {
             return layout;
         }
-        // Flutter RenderSliver.getMaxPaintRect, expressed in the retained
-        // content coordinates used by the viewport. Reversed viewports
-        // mirror this box just as they mirror each real child.
-        let extent = if geometry.max_paint_extent.is_infinite() {
-            constraints.scroll_offset + geometry.cache_extent + constraints.cache_origin
-        } else {
-            geometry.max_paint_extent
-        };
-        if !extent.is_finite() || extent <= 0. {
+        let Some(bounds) =
+            SliverPaintBounds::new(constraints, geometry, self.reported_cross_axis_extent())
+        else {
             return layout;
-        }
-        let max_leading = (geometry.scroll_extent - geometry.max_scroll_obstruction_extent).max(0.);
-        let leading = constraints.scroll_offset.min(max_leading).max(0.);
-        let cross = self.reported_cross_axis_extent().unwrap_or(constraints.cross_axis_extent);
-        let size = if constraints.axis.is_vertical() {
-            Size::new(cross, extent)
-        } else {
-            Size::new(extent, cross)
         };
+        let size = bounds.size();
         let decoration = if let Some(painter) = &self.painter {
             CustomPaint::from_painter(
                 size,
@@ -159,10 +146,10 @@ impl RenderSliver for DecoratedRenderSliver {
             id: SliverChildId::scoped(1, SliverChildId(0)),
             widget,
             semantic_index: None,
-            offset: constraints.scroll_offset - leading,
+            offset: bounds.content_offset(constraints),
             cross_offset: 0.,
             constraints: Constraints::tight(size),
-            extent,
+            extent: constraints.axis.main_extent(size),
             placement: SliverChildPlacement::Flow,
         };
         match self.position {
