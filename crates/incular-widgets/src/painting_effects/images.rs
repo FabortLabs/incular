@@ -9,7 +9,7 @@ use incular_rendering::{
 use typed_builder::TypedBuilder;
 
 use crate::tree::{ImageFit, ImageOptions};
-use crate::{Blur, BlurController, ColorFiltered, Image, ImageRepeat, Widget};
+use crate::{AlignmentGeometry, Blur, BlurController, ColorFiltered, Image, ImageRepeat, Widget};
 
 /// A source filter and group opacity that are ready for the retained image.
 pub(crate) struct RasterPaintSources {
@@ -99,8 +99,8 @@ pub struct RawImage {
     #[builder(default = ImageRepeat::NoRepeat)]
     pub(super) repeat: ImageRepeat,
     /// Flutter `alignment`: where a fitted image sits inside its box.
-    #[builder(default = Alignment::CENTER)]
-    pub(super) alignment: Alignment,
+    #[builder(default = AlignmentGeometry::Physical(Alignment::CENTER), setter(into))]
+    pub(super) alignment: AlignmentGeometry,
     /// Flutter `filterQuality`; `None` keeps the default sampling.
     #[builder(default, setter(strip_option))]
     pub(super) filter_quality: Option<FilterQuality>,
@@ -146,7 +146,7 @@ impl RawImage {
             color: None,
             fit: None,
             repeat: ImageRepeat::NoRepeat,
-            alignment: Alignment::CENTER,
+            alignment: Alignment::CENTER.into(),
             filter_quality: None,
             opacity: 1.0,
             invert_colors: false,
@@ -200,8 +200,8 @@ impl RawImage {
     }
 
     #[must_use]
-    pub fn alignment(mut self, alignment: Alignment) -> Self {
-        self.alignment = alignment;
+    pub fn alignment(mut self, alignment: impl Into<AlignmentGeometry>) -> Self {
+        self.alignment = alignment.into();
         self
     }
 

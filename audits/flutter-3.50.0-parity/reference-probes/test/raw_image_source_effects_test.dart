@@ -15,6 +15,8 @@ Future<(Pixel, Pixel)> _sample(
   bool invert = false,
   double opacity = 1,
   TextDirection? direction,
+  bool logicalAlignment = false,
+  bool mirror = true,
 }) async {
   final recorder = ui.PictureRecorder();
   final canvas = ui.Canvas(recorder);
@@ -52,10 +54,12 @@ Future<(Pixel, Pixel)> _sample(
                 color: tint,
                 invertColors: invert,
                 opacity: AlwaysStoppedAnimation<double>(opacity),
-                alignment: direction == null
-                    ? Alignment.center
-                    : Alignment.topLeft,
-                matchTextDirection: direction != null,
+                alignment: logicalAlignment
+                    ? AlignmentDirectional.topStart
+                    : (direction == null
+                          ? Alignment.center
+                          : Alignment.topLeft),
+                matchTextDirection: direction != null && mirror,
                 filterQuality: ui.FilterQuality.none,
               ),
             ),
@@ -83,6 +87,9 @@ Future<(Pixel, Pixel)> _sample(
         );
       }
 
+      if (logicalAlignment && direction == TextDirection.rtl) {
+        return (pixel(4, 0), pixel(3, 0));
+      }
       return direction == null
           ? (pixel(3, 2), pixel(0, 2))
           : (pixel(0, 0), pixel(2, 0));
@@ -160,4 +167,28 @@ void main() {
       contains('No Directionality widget found'),
     );
   });
+
+  testWidgets(
+    'RawImage logical alignment resolves independently of mirroring',
+    (tester) async {
+      for (final mirror in [false, true]) {
+        for (final direction in [TextDirection.ltr, TextDirection.rtl]) {
+          final pixel = mirror && direction == TextDirection.rtl
+              ? (0, 0, 255, 255)
+              : (255, 0, 0, 255);
+          expect(
+            await _sample(
+              tester,
+              blend: ui.BlendMode.src,
+              background: const ui.Color(0xff00ff00),
+              direction: direction,
+              logicalAlignment: true,
+              mirror: mirror,
+            ),
+            (pixel, (0, 255, 0, 255)),
+          );
+        }
+      }
+    },
+  );
 }

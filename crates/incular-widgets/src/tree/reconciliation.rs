@@ -3250,11 +3250,15 @@ fn direction_need(kind: &WidgetKind) -> Option<DirectionNeed> {
             reason: "Text/RichText resolve their paragraph direction with Directionality.of",
             always: true,
         }),
-        WidgetKind::Image { match_text_direction: true, .. } => Some(DirectionNeed {
-            widget: "RawImage",
-            reason: "matchTextDirection requires an inherited text direction",
-            always: true,
-        }),
+        WidgetKind::Image { alignment, match_text_direction, .. }
+            if *match_text_direction || !matches!(alignment, crate::AlignmentGeometry::Physical(_)) =>
+        {
+            Some(DirectionNeed {
+                widget: "RawImage",
+                reason: "directional alignment or matchTextDirection requires Directionality",
+                always: true,
+            })
+        }
         WidgetKind::TextField(spec) if spec.text_direction.is_none() => Some(DirectionNeed {
             widget: "EditableText",
             reason: "EditableText resolves its direction with Directionality.of",

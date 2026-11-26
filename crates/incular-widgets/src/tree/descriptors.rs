@@ -40,7 +40,7 @@ pub(crate) struct ImageOptions {
     /// `None` is Flutter's null fit: scale-down, or fill with a center slice.
     pub(crate) fit: Option<ImageFit>,
     pub(crate) repeat: ImageRepeat,
-    pub(crate) alignment: Alignment,
+    pub(crate) alignment: crate::AlignmentGeometry,
     pub(crate) sampling: ImageSampling,
     pub(crate) center_slice: Option<Rect>,
     pub(crate) match_text_direction: bool,
@@ -61,7 +61,7 @@ impl Default for ImageOptions {
             scale: 1.0,
             fit: None,
             repeat: ImageRepeat::NoRepeat,
-            alignment: Alignment::CENTER,
+            alignment: Alignment::CENTER.into(),
             sampling: ImageSampling::Linear,
             center_slice: None,
             match_text_direction: false,
@@ -118,8 +118,8 @@ macro_rules! image_option_setters {
         /// Sets the alignment used when the fitted image is smaller than its
         /// box or cropped by `Cover`.
         #[must_use]
-        pub fn alignment(mut self, alignment: incular_config::Alignment) -> Self {
-            self.options.alignment = alignment;
+        pub fn alignment(mut self, alignment: impl Into<$crate::AlignmentGeometry>) -> Self {
+            self.options.alignment = alignment.into();
             self
         }
         #[must_use]

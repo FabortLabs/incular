@@ -1208,3 +1208,79 @@ fn raw_image_updates_loaded_configuration_on_the_original_render() {
         "zero opacity paints no image under SrcOver"
     );
 }
+
+#[test]
+fn raw_image_logical_alignment_follows_direction_independently_of_mirroring() {
+    use incular_config::AlignmentDirectional;
+    for mirror in [false, true] {
+        let image = handle(10, 10);
+        let config = || {
+            RawImage::builder()
+                .image(image.clone())
+                .alignment(AlignmentDirectional::TOP_START)
+                .match_text_direction(mirror)
+                .blend_mode(BlendMode::Src)
+                .build()
+        };
+        let mut tree = WidgetTree::new();
+        assert!(matches!(
+            tree.mount(config().into()),
+            Err(
+                incular_widgets::internal::TreeError::MissingDirectionality {
+                    widget: "RawImage",
+                    ..
+                }
+            )
+        ));
+        let root = tree
+            .mount(Directionality::new(TextDirection::Ltr, config()).into())
+            .expect("mount");
+        let constraints = Constraints::tight(Size::new(20., 12.));
+        tree.layout(constraints).expect("initial layout");
+        let id = tree.children(root).expect("direction scope")[0];
+        let render = tree.render_id(id).expect("image render");
+        for (direction, left) in [
+            (TextDirection::Ltr, 0.),
+            (TextDirection::Rtl, 10.),
+            (TextDirection::Ltr, 0.),
+        ] {
+            tree.update(root, Directionality::new(direction, config()).into())
+                .expect("update direction");
+            tree.layout(constraints).expect("layout");
+            tree.update_compositor(incular_core::time::Instant::now())
+                .expect("composite");
+            let display = tree.paint();
+            assert_eq!(tree.render_id(id), Some(render));
+            assert_eq!(
+                raw_image_destination_blend(display.commands())
+                    .expect("blend")
+                    .2,
+                rect(left, 0., 10., 10.)
+            );
+            let mirrored = display.commands().iter().any(|command| matches!(
+                command, PaintCommand::PushTransform { transform } if transform.coefficients()[0] < 0.,
+            ));
+            assert_eq!(mirrored, mirror && direction == TextDirection::Rtl);
+        }
+    }
+
+    let mixed = incular_widgets::AlignmentGeometry::Mixed {
+        x: 0.25,
+        start: 0.75,
+        y: -1.,
+    };
+    for (direction, left) in [(TextDirection::Ltr, 10.), (TextDirection::Rtl, 2.5)] {
+        let raw = RawImage::new()
+            .image(handle(10, 10))
+            .alignment(mixed)
+            .blend_mode(BlendMode::Src);
+        let display = painted(
+            Directionality::new(direction, raw).into(),
+            Size::new(20., 12.),
+        );
+        assert_eq!(
+            raw_image_destination_blend(&display).expect("blend").2,
+            rect(left, 0., 10., 10.)
+        );
+    }
+}

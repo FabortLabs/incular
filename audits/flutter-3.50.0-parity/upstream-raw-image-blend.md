@@ -80,3 +80,15 @@ does not treat that field as the destination blend. The Dart setter
 getter round-trip is not part of the exposed Rust renderer API.
 
 Both selected upstream cases and 53 focused native tests passed.
+
+## Logical alignment is independent of mirroring
+
+RawImage and the image-provider façade accept physical, directional,
+or mixed alignment geometry. A logical alignment reads Directionality
+even when the image itself is not mirrored. In the applied Flutter
+pixel checks, top-start changes edges under RTL whether mirroring is
+off or on; mirroring changes the order of the source columns, not the
+resolved edge. The native image keeps its render identity through an
+LTR → RTL → LTR change and applies destination blending only in the
+resolved raster bounds. It also tests mixed physical and directional
+alignment. Five authored Flutter probes and 54 native cases passed.

@@ -755,7 +755,7 @@ pub(crate) enum WidgetKind {
         scale: f32,
         fit: ImageFit,
         repeat: ImageRepeat,
-        alignment: Alignment,
+        alignment: crate::AlignmentGeometry,
         sampling: ImageSampling,
         blend_mode: BlendMode,
         center_slice: Option<Rect>,

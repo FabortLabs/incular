@@ -265,7 +265,7 @@ impl FadeInImage {
             height: self.height,
             fit,
             repeat: self.repeat,
-            alignment: self.alignment,
+            alignment: self.alignment.into(),
             sampling: look
                 .filter_quality
                 .map_or(ImageOptions::default().sampling, Into::into),

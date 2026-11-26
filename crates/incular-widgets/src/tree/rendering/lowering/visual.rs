@@ -167,20 +167,28 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             center_slice,
             match_text_direction,
             source_effects,
-        } => RenderKind::Image {
-            image: image.clone(),
-            width: *width,
-            height: *height,
-            scale: *scale,
-            fit: *fit,
-            repeat: *repeat,
-            alignment: *alignment,
-            sampling: *sampling,
-            blend_mode: *blend_mode,
-            center_slice: *center_slice,
-            flip_horizontally: *match_text_direction
-                && context.depend::<TextDirection>() == Some(TextDirection::Rtl),
-            source_effects: *source_effects,
+        } => {
+            let direction = if *match_text_direction
+                || !matches!(alignment, crate::AlignmentGeometry::Physical(_))
+            {
+                context.depend::<TextDirection>().unwrap_or(TextDirection::Ltr)
+            } else {
+                TextDirection::Ltr
+            };
+            RenderKind::Image {
+                image: image.clone(),
+                width: *width,
+                height: *height,
+                scale: *scale,
+                fit: *fit,
+                repeat: *repeat,
+                alignment: alignment.resolve(direction),
+                sampling: *sampling,
+                blend_mode: *blend_mode,
+                center_slice: *center_slice,
+                flip_horizontally: *match_text_direction && direction == TextDirection::Rtl,
+                source_effects: *source_effects,
+            }
         },
         WidgetKind::TextField(spec) => {
             let direction = spec
