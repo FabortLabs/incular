@@ -131,6 +131,8 @@ pub(crate) struct RenderTextFieldState {
     pub(crate) content_revision: u64,
     pub(crate) visual_revision: u64,
     pub(crate) scroll_x: f32,
+    /// Revision of the optional isolated clip inside the editor picture.
+    pub(crate) clip_picture_generation: u64,
     pub(crate) scroll_y: f32,
     pub(crate) focused: bool,
     /// The editing value (content revision and selection), focus and size

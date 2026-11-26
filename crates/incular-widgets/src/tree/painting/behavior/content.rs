@@ -1,4 +1,6 @@
 use super::super::*;
+use crate::tree::text::editable_content_clip;
+use incular_rendering::{ClipCoverage, ClipIsolation};
 use incular_text::TextGeometry;
 
 impl WidgetTree {
@@ -253,6 +255,45 @@ impl WidgetTree {
                         active_scroll_y = active_scroll_y
                             .clamp(0., (layout.metrics().size.height - viewport).max(0.));
                     }
+                    let clip = editable_content_clip(
+                        field,
+                        &layout,
+                        size,
+                        Offset::new(active_scroll_x, active_scroll_y),
+                    );
+                    if let Some(rect) = clip {
+                        match field.clip_behavior {
+                            Clip::None => unreachable!("an unclipped editor has no clip bounds"),
+                            Clip::HardEdge => cache.push(PaintCommand::PushClip { rect }),
+                            Clip::AntiAlias => cache.push(PaintCommand::PushClipRRect {
+                                rrect: RRect::uniform(rect, 0.0),
+                                coverage: ClipCoverage::AntiAlias,
+                                isolation: None,
+                            }),
+                            Clip::AntiAliasWithSaveLayer => {
+                                // The editable picture has exactly one isolated
+                                // clip. Its own layer ID gives the renderer a
+                                // stable cache key without isolating its border.
+                                let layer = self
+                                    .render_live(id, "retained editor")
+                                    .object
+                                    .layers
+                                    .picture
+                                    .expect("editor picture layer");
+                                let state = self.text_field_state_live_mut(id);
+                                state.clip_picture_generation =
+                                    state.clip_picture_generation.wrapping_add(1);
+                                cache.push(PaintCommand::PushClipRRect {
+                                    rrect: RRect::uniform(rect, 0.0),
+                                    coverage: ClipCoverage::AntiAliasWithSaveLayer,
+                                    isolation: Some(ClipIsolation {
+                                        layer,
+                                        generation: state.clip_picture_generation,
+                                    }),
+                                });
+                            }
+                        }
+                    }
                     let selection = value_selection.range();
                     if focused && !selection.is_empty() {
                         let selection = TextRange::new(
@@ -305,19 +346,6 @@ impl WidgetTree {
                             });
                         }
                     }
-                    // editable.dart clips to Offset.zero & size (clipBehavior), the
-                    // editable alone: text scrolled sideways never shows in the
-                    // decoration's horizontal padding. Full height keeps
-                    // ascenders and descenders that overhang the line.
-                    cache.push(PaintCommand::PushClip {
-                        rect: Rect::from_origin_size(
-                            Offset::new(content_padding.left, 0.),
-                            Size::new(
-                                (size.width - content_padding.horizontal()).max(0.),
-                                size.height,
-                            ),
-                        ),
-                    });
                     cache.push(PaintCommand::PushTransform {
                         transform: CoreTransform::translation(Offset::new(
                             content_padding.left - active_scroll_x,
@@ -340,7 +368,14 @@ impl WidgetTree {
                         layout.color_runs()
                     };
                     let visible_bottom = visible_top + size.height + pad * 2.;
-                    for line in layout.lines_between(visible_top, visible_bottom) {
+                    let lines = || {
+                        if clip.is_some() {
+                            layout.lines_between(visible_top, visible_bottom)
+                        } else {
+                            layout.lines()
+                        }
+                    };
+                    for line in lines() {
                         if color_runs.is_empty() {
                             push_line_runs(cache, line, color);
                         } else {
@@ -350,12 +385,14 @@ impl WidgetTree {
                     // Decorations paint over the glyphs, as SkParagraph's
                     // `TextLine::paint` draws them after the text.
                     if !shows_placeholder && !decorations.is_empty() {
-                        for line in layout.lines_between(visible_top, visible_bottom) {
+                        for line in lines() {
                             push_line_decorations(cache, line, &decorations);
                         }
                     }
                     cache.push(PaintCommand::PopTransform);
-                    cache.push(PaintCommand::PopClip);
+                    if clip.is_some() {
+                        cache.push(PaintCommand::PopClip);
+                    }
                 }
                 if focused && let Some((border, radius)) = focused_border {
                     let outset = focused_border_outset;

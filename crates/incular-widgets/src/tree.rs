@@ -621,6 +621,7 @@ pub struct TextFieldRender {
     pub(crate) focused_border: Option<(incular_rendering::Border, f32)>,
     pub(crate) focused_border_outset: incular_config::EdgeInsets,
     pub(crate) content_padding: incular_config::EdgeInsets,
+    pub(crate) clip_behavior: incular_config::Clip,
     pub(crate) multiline: bool,
     pub(crate) min_lines: Option<usize>,
     pub(crate) max_lines: Option<usize>,

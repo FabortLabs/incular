@@ -526,6 +526,7 @@ pub struct TextFieldSpec {
     pub(crate) focused_border: Option<(incular_rendering::Border, f32)>,
     pub(crate) focused_border_outset: incular_config::EdgeInsets,
     pub(crate) content_padding: incular_config::EdgeInsets,
+    pub(crate) clip_behavior: incular_config::Clip,
     pub(crate) on_editing_complete: Option<Rc<dyn Fn()>>,
     pub(crate) on_submit: Option<Rc<dyn Fn(String)>>,
     pub(crate) multiline: bool,

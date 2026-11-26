@@ -6,6 +6,28 @@ use crate::selection::{
 };
 use incular_text::{LineBoundary, TextGeometry};
 
+pub(super) fn editable_content_clip(
+    field: &TextFieldRender,
+    layout: &impl TextGeometry,
+    size: Size,
+    scroll: Offset,
+) -> Option<Rect> {
+    if field.clip_behavior == Clip::None {
+        return None;
+    }
+    let padding = field.content_padding;
+    let width = (size.width - padding.horizontal()).max(0.);
+    let overflowing = if field.multiline {
+        layout.metrics().size.height > (size.height - padding.vertical()).max(0.)
+    } else {
+        // RenderEditable includes the cursor and its 1px gap in the
+        // horizontal scroll extent, even when the cursor is not visible.
+        layout.get_line(0).map_or(0., |line| line.width()) + field.cursor_width + 1. > width
+    };
+    (overflowing || scroll != Offset::ZERO)
+        .then(|| Rect::from_origin_size(Offset::new(padding.left, 0.), Size::new(width, size.height)))
+}
+
 impl WidgetTree {
     #[must_use]
     pub fn text_field_at(&self, point: Offset) -> Option<ElementId> {
@@ -115,6 +137,26 @@ impl WidgetTree {
         self.elements
             .get(id.0)
             .is_some_and(|element| matches!(element.widget.kind(), WidgetKind::TextField(_)))
+    }
+
+    /// The bounds used to clip an overflowing editor's content, in the
+    /// editor's local coordinates. No bounds are returned for `Clip::None`
+    /// or a fitting, unscrolled editor.
+    #[must_use]
+    pub fn editable_approximate_paint_clip(&self, id: ElementId) -> Option<Rect> {
+        let render = self.render_id(id)?;
+        let node = self.renders.get(render.0)?;
+        let RenderKind::TextField(field) = node.object.kind() else {
+            return None;
+        };
+        let layout = node.field_layout()?;
+        let state = self.text_field_state_live(render);
+        editable_content_clip(
+            field,
+            &layout,
+            node.size,
+            Offset::new(state.scroll_x, state.scroll_y),
+        )
     }
 
     /// The placeholder (hint) text of a text field, when it has one. Test

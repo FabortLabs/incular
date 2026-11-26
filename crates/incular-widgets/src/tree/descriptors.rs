@@ -999,6 +999,7 @@ pub struct EditableText {
     focused_border: Option<(incular_rendering::Border, f32)>,
     focused_border_outset: incular_config::EdgeInsets,
     content_padding: incular_config::EdgeInsets,
+    clip_behavior: incular_config::Clip,
     on_editing_complete: Option<Rc<dyn Fn()>>,
     on_submit: Option<Rc<dyn Fn(String)>>,
     multiline: bool,
@@ -1065,6 +1066,7 @@ impl EditableText {
             focused_border: None,
             focused_border_outset: incular_config::EdgeInsets::ZERO,
             content_padding: incular_config::EdgeInsets::ZERO,
+            clip_behavior: incular_config::Clip::HardEdge,
             on_editing_complete: None,
             on_submit: None,
             multiline: false,
@@ -1116,6 +1118,15 @@ impl EditableText {
     #[must_use]
     pub fn focus_node(mut self, node: crate::FocusNode) -> Self {
         self.focus_node = Some(node);
+        self
+    }
+
+    /// Clips overflowing editable content, not its outer decoration or
+    /// selection handles. The default is a hard edge; fitting text does
+    /// not need a clip.
+    #[must_use]
+    pub fn clip_behavior(mut self, behavior: incular_config::Clip) -> Self {
+        self.clip_behavior = behavior;
         self
     }
 
@@ -1752,6 +1763,7 @@ impl From<EditableText> for Widget {
             focused_border: value.focused_border,
             focused_border_outset: value.focused_border_outset,
             content_padding: value.content_padding,
+            clip_behavior: value.clip_behavior,
             on_editing_complete: value.on_editing_complete,
             on_submit: value.on_submit,
             multiline: value.multiline,

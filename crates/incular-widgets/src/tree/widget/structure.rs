@@ -752,6 +752,7 @@ impl PartialEq for TextFieldSpec {
             && self.focused_border == other.focused_border
             && self.focused_border_outset == other.focused_border_outset
             && self.content_padding == other.content_padding
+            && self.clip_behavior == other.clip_behavior
             && self.multiline == other.multiline
             && self.min_lines == other.min_lines
             && self.max_lines == other.max_lines
