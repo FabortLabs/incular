@@ -39,3 +39,17 @@ native runtime controls:
 | 3063 | Updating the open tooltip applies the new 200 ms duration and curve to its next hide. |
 | 3125 | A new curve applies during an ongoing show, but the running 100 ms timeline is not restarted. |
 | 3186 | Zero show duration is immediately fully visible; the default reverse still takes 75 ms. |
+
+## Unmount and pending input
+
+Pinned registrations 787, 1292, 2581 and 2619 passed with native
+mount/unmount controls driven by real touch, mouse and fake time.
+Unmount releases the open registration, cancels delayed hover,
+rejects programmatic show on a previously attached state and removes
+active gesture callbacks. Allocation instrumentation verifies a
+pending long press does not allocate the animation clock on
+unmount, and a control explicitly retaining a sampled animation
+handle verifies that removing a visible tooltip releases its clock
+without waiting for the external handle to be dropped. The latter
+is an authored safety check, not an additional upstream registration.
+All 33 focused runtime checks passed.

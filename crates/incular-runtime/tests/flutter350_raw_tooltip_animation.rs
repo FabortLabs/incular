@@ -331,3 +331,195 @@ fn zero_show_duration_still_uses_the_default_reverse_duration() {
     tooltip.frame_us(95_001);
     assert!(!tooltip.mounted());
 }
+
+#[cfg(debug_assertions)]
+fn animation_events() -> (
+    Rc<RefCell<Vec<incular_core::memory::allocations::ObjectEvent>>>,
+    incular_core::memory::allocations::AllocationSubscription,
+) {
+    use incular_core::memory::allocations::MemoryAllocations;
+
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let seen = events.clone();
+    let sub = MemoryAllocations::current().add_listener(move |event| {
+        if event.library == "animation" && event.class_name == "AnimationController" {
+            seen.borrow_mut().push(event);
+        }
+    });
+    (events, sub)
+}
+
+impl Fixture {
+    fn touch(&mut self, phase: incular_core::PointerPhase, ms: u64) {
+        use incular_core::{
+            InputEvent, Offset, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase,
+            PointerSampleMetadata,
+        };
+        self.runtime.handle_input_at(
+            InputEvent::PointerWithMetadata {
+                pointer: 1,
+                device: 1,
+                kind: PointerDeviceKind::Touch,
+                buttons: if phase == PointerPhase::Down {
+                    PRIMARY_POINTER_BUTTON
+                } else {
+                    0
+                },
+                button: Some(PRIMARY_POINTER_BUTTON),
+                sample: PointerSampleMetadata::EMPTY,
+                phase,
+                position: Offset::new(400., 300.),
+            },
+            self.start + duration(ms),
+        );
+    }
+
+    fn remove(&mut self, ms: u64) {
+        let root = self.runtime.tree().root().unwrap();
+        self.runtime
+            .schedule_update(root, Center::new(SizedBox::shrink()).into())
+            .unwrap();
+        self.frame(ms);
+        assert!(!self.mounted());
+        assert!(self.runtime.tree().transient_surfaces().is_empty());
+    }
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn unmounting_during_an_unaccepted_press_never_allocates_a_timeline() {
+    use incular_core::PointerPhase;
+    let (events, _sub) = animation_events();
+    let mut tooltip = Fixture::new(short_linear());
+    tooltip.touch(PointerPhase::Down, 10);
+    tooltip.remove(11);
+    tooltip.touch(PointerPhase::Up, 12);
+    tooltip.frame(1_000);
+    assert!(events.borrow().is_empty());
+    assert!(tooltip.captured.borrow().is_none());
+    assert_eq!(tooltip.controller.pending_deadline(), None);
+}
+
+#[test]
+fn unmounting_after_show_request_clears_a_pending_press_and_the_open_registry() {
+    use incular_core::PointerPhase;
+    let mut tooltip = Fixture::new(short_linear());
+    tooltip.touch(PointerPhase::Down, 10);
+    assert!(
+        tooltip
+            .controller
+            .ensure_visible_at(tooltip.start + duration(10))
+    );
+    tooltip.remove(11);
+    tooltip.touch(PointerPhase::Up, 12);
+    tooltip.frame(1_000);
+    assert!(!tooltip.controller.is_visible());
+    assert_eq!(tooltip.controller.pending_deadline(), None);
+    assert!(!RawTooltipController::dismiss_all_at(
+        tooltip.start + duration(1_000)
+    ));
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn unmounting_while_animating_disposes_the_clock_even_when_builder_retained_the_animation() {
+    use incular_core::memory::allocations::ObjectEventKind;
+    let (events, _sub) = animation_events();
+    let mut tooltip = Fixture::new(short_linear());
+    let root = tooltip.runtime.tree().root().unwrap();
+    let captured = tooltip.captured.clone();
+    tooltip
+        .runtime
+        .schedule_update(
+            root,
+            Center::new(
+                RawTooltip::with_animated_builder(SizedBox::square(100.), move |animation| {
+                    captured.replace(Some(animation));
+                    Widget::box_(Size::new(60., 20.), Color::BLACK).with_key(KEY)
+                })
+                .animation_style(short_linear())
+                .controller(tooltip.controller.clone()),
+            )
+            .into(),
+        )
+        .unwrap();
+    tooltip.frame(1);
+    assert!(events.borrow().is_empty());
+    tooltip.show(10);
+    tooltip.frame(50);
+    close(tooltip.value(), 0.4);
+    tooltip.remove(51);
+    let retained = tooltip.captured.borrow().as_ref().unwrap().clone();
+    let last = retained.value();
+    tooltip.frame(1_000);
+    close(retained.value(), last);
+    assert!(!tooltip.controller.is_visible());
+    let seen = events.borrow();
+    assert_eq!(seen.len(), 2, "{seen:?}");
+    assert_eq!(seen[0].kind, ObjectEventKind::Created);
+    assert_eq!(seen[1].kind, ObjectEventKind::Disposed);
+    assert_eq!(seen[0].id, seen[1].id);
+}
+
+#[test]
+fn programmatic_show_is_rejected_after_the_mounted_tooltip_is_removed() {
+    let mut tooltip = Fixture::new(short_linear());
+    assert!(
+        tooltip
+            .controller
+            .ensure_visible_at(tooltip.start + duration(10))
+    );
+    tooltip.remove(11);
+    assert!(
+        !tooltip
+            .controller
+            .ensure_visible_at(tooltip.start + duration(12))
+    );
+    tooltip.frame(1_000);
+    assert!(!tooltip.mounted());
+}
+
+#[test]
+fn removing_the_tooltip_cancels_its_queued_pointer_hover() {
+    use incular_core::{
+        InputEvent, Offset, PointerDeviceKind, PointerPhase, PointerSampleMetadata,
+    };
+
+    let mut tooltip = Fixture::new(short_linear());
+    let root = tooltip.runtime.tree().root().unwrap();
+    tooltip
+        .runtime
+        .schedule_update(
+            root,
+            Center::new(
+                RawTooltip::with_animated_builder(SizedBox::square(100.), |_| {
+                    Widget::box_(Size::new(60., 20.), Color::BLACK).with_key(KEY)
+                })
+                .hover_delay(Duration::from_secs(1))
+                .controller(tooltip.controller.clone()),
+            )
+            .into(),
+        )
+        .unwrap();
+    tooltip.frame(1);
+    tooltip.runtime.handle_input_at(
+        InputEvent::PointerWithMetadata {
+            pointer: 2,
+            device: 2,
+            kind: PointerDeviceKind::Mouse,
+            buttons: 0,
+            button: None,
+            sample: PointerSampleMetadata::EMPTY,
+            phase: PointerPhase::Move,
+            position: Offset::new(400., 300.),
+        },
+        tooltip.start + duration(10),
+    );
+    tooltip.frame(10);
+    assert!(tooltip.controller.is_waiting());
+    tooltip.remove(11);
+    assert_eq!(tooltip.controller.pending_deadline(), None);
+    tooltip.frame(1_100);
+    assert!(!tooltip.controller.is_visible());
+    assert!(!tooltip.mounted());
+}

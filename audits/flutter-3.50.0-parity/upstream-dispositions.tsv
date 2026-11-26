@@ -2535,3 +2535,7 @@ packages/flutter/test/widgets/raw_tooltip_test.dart	2995	AnimationStyle curve ch
 packages/flutter/test/widgets/raw_tooltip_test.dart	3063	AnimationStyle changes while the tooltip is shown apply to the next animation	paired-match	upstream-raw-tooltip-animation.md
 packages/flutter/test/widgets/raw_tooltip_test.dart	3125	Changing animationStyle while the tooltip is animating in does not crash	paired-match	upstream-raw-tooltip-animation.md
 packages/flutter/test/widgets/raw_tooltip_test.dart	3186	Zero show duration shows instantly and hides with the default 75ms	paired-match	upstream-raw-tooltip-animation.md
+packages/flutter/test/widgets/raw_tooltip_test.dart	787	Calling ensureTooltipVisible on an unmounted RawTooltipState returns false	paired-match	upstream-raw-tooltip-animation.md
+packages/flutter/test/widgets/raw_tooltip_test.dart	1292	Tooltip does not attempt to show after unmount	paired-match	upstream-raw-tooltip-animation.md
+packages/flutter/test/widgets/raw_tooltip_test.dart	2581	Tooltip does not initialize animation controller in dispose process	paired-match	upstream-raw-tooltip-animation.md
+packages/flutter/test/widgets/raw_tooltip_test.dart	2619	Tooltip does not crash when showing the tooltip but the OverlayPortal is unmounted, during dispose	paired-match	upstream-raw-tooltip-animation.md

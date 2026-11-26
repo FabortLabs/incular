@@ -173,7 +173,6 @@ impl AnimationSource for PresentationClock {
 struct TooltipPresentation {
     timeline: AnimationController,
     curved: Rc<CurvedAnimation>,
-    style: RefCell<AnimationStyle>,
     target_visible: Cell<bool>,
     mounted: Cell<bool>,
 }
@@ -194,16 +193,12 @@ impl TooltipPresentation {
         Self {
             curved: Rc::new(curved),
             timeline,
-            style: RefCell::new(style),
             target_visible: Cell::new(false),
             mounted: Cell::new(false),
         }
     }
 
-    fn update_style(&self, style: AnimationStyle) {
-        if *self.style.borrow() == style {
-            return;
-        }
+    fn update_style(&self, style: &AnimationStyle) {
         self.timeline
             .set_duration(style.duration.unwrap_or(Duration::from_millis(150)));
         self.timeline.set_reverse_duration(Some(
@@ -211,7 +206,6 @@ impl TooltipPresentation {
         ));
         let curve = style.curve.clone().unwrap_or(Curve::FastOutSlowIn);
         let reverse = style.reverse_curve.clone();
-        self.style.replace(style);
         self.curved.set_curves(curve, reverse);
     }
 
@@ -229,8 +223,17 @@ impl TooltipPresentation {
     }
 }
 
+impl Drop for TooltipPresentation {
+    fn drop(&mut self) {
+        self.timeline.dispose();
+        self.curved.dispose();
+    }
+}
+
 struct ControllerState {
     visible: bool,
+    detached: bool,
+    animation_style: Option<AnimationStyle>,
     presentation: Option<Rc<TooltipPresentation>>,
     hovering: HashSet<u64>,
     focused: bool,
@@ -284,6 +287,8 @@ impl RawTooltipController {
         Self {
             state: Rc::new(RefCell::new(ControllerState {
                 visible: false,
+                detached: false,
+                animation_style: None,
                 presentation: None,
                 hovering: HashSet::new(),
                 focused: false,
@@ -320,6 +325,9 @@ impl RawTooltipController {
     pub fn show_at(&self, _now: Instant) -> bool {
         let (changed, callback) = {
             let mut state = self.state.borrow_mut();
+            if state.detached {
+                return false;
+            }
             state.pending = None;
             state.manual = true;
             let changed = set_visible(&mut state, true);
@@ -378,6 +386,9 @@ impl RawTooltipController {
     pub fn show_for(&self, duration: Duration, now: Instant) {
         let (changed, callback) = {
             let mut state = self.state.borrow_mut();
+            if state.detached {
+                return;
+            }
             state.manual = false;
             state.pending = None;
             let changed = set_visible(&mut state, true);
@@ -419,6 +430,9 @@ impl RawTooltipController {
     fn trigger_touch_at(&self, now: Instant, held: bool) -> bool {
         let (changed, callback) = {
             let mut state = self.state.borrow_mut();
+            if state.detached {
+                return false;
+            }
             state.manual = false;
             state.held = held;
             state.pending = None;
@@ -447,6 +461,9 @@ impl RawTooltipController {
     }
 
     pub fn mouse_enter_at(&self, device: u64, now: Instant) -> bool {
+        if self.state.borrow().detached {
+            return false;
+        }
         self.dismiss_other_hovered(now);
         let changed = {
             let mut state = self.state.borrow_mut();
@@ -508,6 +525,9 @@ impl RawTooltipController {
     pub fn focus_changed_at(&self, focused: bool, now: Instant) -> bool {
         let changed = {
             let mut state = self.state.borrow_mut();
+            if state.detached {
+                return false;
+            }
             state.focused = focused;
             if focused {
                 state.pending = None;
@@ -606,10 +626,8 @@ impl RawTooltipController {
                 _ => false,
             }
         };
-        let (visible, presentation) = {
-            let state = self.state.borrow();
-            (state.visible, state.presentation.clone())
-        };
+        let visible = self.is_visible();
+        let presentation = self.presentation();
         if changed && visible {
             self.register_open();
         }
@@ -691,25 +709,61 @@ impl RawTooltipController {
             .is_some_and(|presentation| presentation.timeline.is_active())
     }
 
+    fn presentation(&self) -> Option<Rc<TooltipPresentation>> {
+        let style = {
+            let state = self.state.borrow();
+            if state.presentation.is_some() || !state.visible {
+                return state.presentation.clone();
+            }
+            state.animation_style.clone()?
+        };
+        let presentation = Rc::new(TooltipPresentation::new(style));
+        self.state.borrow_mut().presentation = Some(presentation.clone());
+        Some(presentation)
+    }
+
     fn animation(&self) -> Option<DoubleAnimation> {
-        self.state
-            .borrow()
-            .presentation
-            .as_ref()
+        self.presentation()
             .map(|presentation| presentation.curved.clone().into())
     }
 
     fn configure_animation(&self, style: Option<AnimationStyle>) {
-        let presentation = self.state.borrow().presentation.clone();
-        match (presentation, style) {
-            (Some(presentation), Some(style)) => presentation.update_style(style),
-            (None, Some(style)) => {
-                self.state.borrow_mut().presentation =
-                    Some(Rc::new(TooltipPresentation::new(style)));
+        let presentation = {
+            let mut state = self.state.borrow_mut();
+            if state.animation_style == style {
+                return;
             }
-            (Some(_), None) => self.state.borrow_mut().presentation = None,
-            (None, None) => {}
+            state.animation_style.clone_from(&style);
+            if style.is_some() {
+                state.presentation.clone()
+            } else {
+                state.presentation.take()
+            }
+        };
+        if let (Some(presentation), Some(style)) = (presentation, style) {
+            presentation.update_style(&style);
         }
+    }
+
+    fn dispose_mount(&self) {
+        let (presentation, callback) = {
+            let mut state = self.state.borrow_mut();
+            state.visible = false;
+            state.detached = true;
+            state.hovering.clear();
+            state.focused = false;
+            state.manual = false;
+            state.held = false;
+            state.pending = None;
+            state.animation_style = None;
+            (state.presentation.take(), state.on_triggered.take())
+        };
+        let weak = Rc::downgrade(&self.state);
+        OPEN_TOOLTIPS.with(|open| {
+            open.borrow_mut()
+                .retain(|entry| !Weak::ptr_eq(entry, &weak));
+        });
+        drop((presentation, callback));
     }
 
     #[must_use]
@@ -801,7 +855,7 @@ fn set_visible(state: &mut ControllerState, visible: bool) -> bool {
         return false;
     }
     state.visible = visible;
-    if state.presentation.is_some() {
+    if state.animation_style.is_some() {
         // Animation values drive paint; rebuild the overlay only at its
         // actual mount or dismissal edge, not when a fade changes direction.
         incular_animation::scheduler::schedule_frame();
@@ -1469,7 +1523,6 @@ impl RawTooltip {
     }
 
     fn build(&self) -> Widget {
-        self.controller.set_durations(self.durations);
         if self.trigger_mode == TooltipTriggerMode::Focus {
             let _ = self
                 .controller
@@ -1696,22 +1749,52 @@ impl RawTooltip {
     }
 }
 
+struct TooltipMount {
+    controller: RefCell<RawTooltipController>,
+}
+
+impl crate::tree::RetainedState for TooltipMount {
+    const DISPOSE_ON_UNMOUNT: bool = true;
+
+    fn rebind_revision(&self, _: Rc<Cell<u64>>) {}
+
+    fn dispose(&self) {
+        self.controller.borrow().dispose_mount();
+    }
+}
+
 impl From<RawTooltip> for Widget {
     fn from(value: RawTooltip) -> Self {
         let value = Rc::new(value);
-        value.controller.set_durations(value.durations);
-        value
-            .controller
-            .set_triggered_callback(value.on_triggered.clone());
-        value
-            .controller
-            .configure_animation(value.animation_style.clone().or_else(|| {
+        let initial_controller = value.controller.clone();
+        Widget::mount_scoped_builder(
+            move |_| TooltipMount {
+                controller: RefCell::new(initial_controller.clone()),
+            },
+            move |mount, _| {
+                if *mount.controller.borrow() != value.controller {
+                    mount
+                        .controller
+                        .replace(value.controller.clone())
+                        .dispose_mount();
+                }
+                value.controller.state.borrow_mut().detached = false;
+                value.controller.set_durations(value.durations);
                 value
-                    .animated_builder
-                    .is_some()
-                    .then(AnimationStyle::default)
-            }));
-        let revision = value.controller.revision_cell();
-        Widget::stateful_builder(revision, move |_| value.build())
+                    .controller
+                    .set_triggered_callback(value.on_triggered.clone());
+                value
+                    .controller
+                    .configure_animation(value.animation_style.clone().or_else(|| {
+                        value
+                            .animated_builder
+                            .is_some()
+                            .then(AnimationStyle::default)
+                    }));
+                let revision = value.controller.revision_cell();
+                let value = value.clone();
+                Widget::stateful_builder(revision, move |_| value.build())
+            },
+        )
     }
 }
