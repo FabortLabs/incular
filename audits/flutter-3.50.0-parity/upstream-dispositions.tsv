@@ -1501,3 +1501,8 @@ packages/flutter/test/services/predictive_back_event_test.dart	47	fromMap throws
 packages/flutter/test/services/predictive_back_event_test.dart	58	fromMap throws when given invalid swipeEdge	paired-match	upstream-predictive-back-events.md
 packages/flutter/test/services/predictive_back_event_test.dart	69	equality when created with the same parameters	paired-match	upstream-predictive-back-events.md
 packages/flutter/test/services/predictive_back_event_test.dart	85	when created with different parameters	paired-match	upstream-predictive-back-events.md
+packages/flutter/test/widgets/binding_test.dart	866	didPopRoute	paired-match	upstream-predictive-back-events.md#back-observer-failure-isolation
+packages/flutter/test/widgets/binding_test.dart	1058	handleStartBackGesture	paired-match	upstream-predictive-back-events.md#back-observer-failure-isolation
+packages/flutter/test/widgets/binding_test.dart	1175	handleUpdateBackGestureProgress	paired-match	upstream-predictive-back-events.md#back-observer-failure-isolation
+packages/flutter/test/widgets/binding_test.dart	1225	handleCommitBackGesture	paired-match	upstream-predictive-back-events.md#back-observer-failure-isolation
+packages/flutter/test/widgets/binding_test.dart	1270	handleCancelBackGesture	paired-match	upstream-predictive-back-events.md#back-observer-failure-isolation

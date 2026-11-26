@@ -21,3 +21,20 @@ the following valid one. Thirteen focused Rust tests passed.
 This is channel decoding and retained observer delivery, not an
 Android-device callback or hardware back-button test. The host must
 feed parsed events into its existing platform dispatch.
+
+## Back observer failure isolation
+
+Five exact `widgets/binding_test.dart` originals (:866, :1058, :1175,
+:1225, :1270) pair on their asserted outcomes. Before the repair,
+a panic in the first start observer escaped and skipped later handlers.
+Start, progress, commit, cancel and ordinary back now isolate observer
+failures and continue through the appropriate handlers. The predictive
+ports decode the same standard method message before dispatch; each
+asserts one typed failure and confirms the other observer was notified.
+
+These checks compare failure count, callback stage and continued
+delivery, not FlutterErrorDetails or native SystemNavigator failure.
+Targets built with panic-abort cannot catch observer panics. Incular's
+automatic nested navigator priority and cleanup-on-removal stay
+unchanged. Eleven native tests passed, including the nested navigator
+fallbacks.

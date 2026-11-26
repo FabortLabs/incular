@@ -2,7 +2,11 @@
 //! and its siblings in `widgets/binding.dart`): the observers that may
 //! follow a system back gesture, and which of them took the current one.
 
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::RefCell,
+    panic::{AssertUnwindSafe, catch_unwind},
+    rc::Rc,
+};
 
 use incular_platform::{BackGestureEvent, PredictiveBackEvent};
 
@@ -33,6 +37,65 @@ pub trait BackGestureObserver {
     /// observer handled it, such as a navigator popping its top route.
     fn handle_pop_route(&self) -> bool {
         false
+    }
+}
+
+/// The observer callback that failed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BackGestureNotification {
+    Start,
+    Update,
+    Commit,
+    Cancel,
+    PopRoute,
+}
+
+/// A panic in an observer isolated from the rest of the gesture dispatch.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BackGestureObserverFailure {
+    pub notification: BackGestureNotification,
+    pub message: String,
+}
+
+/// Whether a gesture was followed, plus observer failures in delivery order.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct BackGestureDispatch {
+    pub handled: bool,
+    pub failures: Vec<BackGestureObserverFailure>,
+}
+
+impl BackGestureDispatch {
+    fn call<T>(
+        &mut self,
+        notification: BackGestureNotification,
+        callback: impl FnOnce() -> T,
+    ) -> Option<T> {
+        match catch_unwind(AssertUnwindSafe(callback)) {
+            Ok(value) => Some(value),
+            Err(payload) => {
+                let message = payload
+                    .downcast_ref::<String>()
+                    .map(String::as_str)
+                    .or_else(|| payload.downcast_ref::<&str>().copied())
+                    .unwrap_or("back gesture observer panicked")
+                    .to_owned();
+                self.failures.push(BackGestureObserverFailure {
+                    notification,
+                    message,
+                });
+                None
+            }
+        }
+    }
+
+    fn report(self) -> bool {
+        for error in self.failures {
+            eprintln!(
+                "Back gesture {:?} observer: {}",
+                error.notification, error.message
+            );
+        }
+        self.handled
     }
 }
 
@@ -68,7 +131,11 @@ impl Drop for BackGestureObserverRegistration {
         // Flutter `removeObserver` cancels the gesture for an observer that
         // leaves in the middle of it.
         if let Some(observer) = following {
-            observer.handle_cancel_back_gesture();
+            let mut report = BackGestureDispatch::default();
+            report.call(BackGestureNotification::Cancel, || {
+                observer.handle_cancel_back_gesture()
+            });
+            report.report();
         }
     }
 }
@@ -99,11 +166,25 @@ pub fn add_shared_back_gesture_observer(
 /// first, to handle a system back until one does. Returns `false` when none
 /// did; the host then leaves the app, as Flutter's `SystemNavigator.pop`.
 pub fn dispatch_pop_route() -> bool {
+    dispatch_pop_route_checked().report()
+}
+
+/// The checked form of [`dispatch_pop_route`], with observer failures.
+#[must_use]
+pub fn dispatch_pop_route_checked() -> BackGestureDispatch {
     let observers = REGISTRY.with(|registry| registry.borrow().observers.clone());
-    observers
-        .iter()
-        .rev()
-        .any(|(_, observer)| observer.handle_pop_route())
+    let mut report = BackGestureDispatch::default();
+    // Incular's automatically registered nested navigators retain newest-first
+    // priority. A failing observer declines and does not stop the fallback.
+    let handled = observers.iter().rev().any(|(_, observer)| {
+        report
+            .call(BackGestureNotification::PopRoute, || {
+                observer.handle_pop_route()
+            })
+            .unwrap_or(false)
+    });
+    report.handled = handled;
+    report
 }
 
 /// Delivers one stage of a back gesture to the observers, as Flutter's
@@ -116,7 +197,19 @@ pub fn dispatch_pop_route() -> bool {
 ///   the caller then handles it as an ordinary back, as Flutter's
 ///   `handlePopRoute` fallback does.
 pub fn dispatch_back_gesture(event: &BackGestureEvent) -> bool {
-    match event {
+    dispatch_back_gesture_checked(event).report()
+}
+
+/// Delivers a back stage over the observer snapshot and returns failures to
+/// the caller rather than printing them. A panicking start observer is not
+/// followed; a panicking follower does not block other followers.
+///
+/// Panic isolation requires a target built with unwinding, not panic abort.
+#[must_use]
+pub fn dispatch_back_gesture_checked(event: &BackGestureEvent) -> BackGestureDispatch {
+    use BackGestureNotification as Notification;
+    let mut report = BackGestureDispatch::default();
+    let handled = match event {
         BackGestureEvent::Start(event) => {
             let observers = REGISTRY.with(|registry| {
                 let mut registry = registry.borrow_mut();
@@ -125,7 +218,12 @@ pub fn dispatch_back_gesture(event: &BackGestureEvent) -> bool {
             });
             let mut following = Vec::new();
             for (id, observer) in observers {
-                if observer.handle_start_back_gesture(event) {
+                if report
+                    .call(Notification::Start, || {
+                        observer.handle_start_back_gesture(event)
+                    })
+                    .unwrap_or(false)
+                {
                     following.push((id, observer));
                 }
             }
@@ -136,23 +234,31 @@ pub fn dispatch_back_gesture(event: &BackGestureEvent) -> bool {
         BackGestureEvent::Update(event) => {
             let active = REGISTRY.with(|registry| registry.borrow().active.clone());
             for (_, observer) in &active {
-                observer.handle_update_back_gesture_progress(event);
+                report.call(Notification::Update, || {
+                    observer.handle_update_back_gesture_progress(event)
+                });
             }
             !active.is_empty()
         }
         BackGestureEvent::Commit => {
             let active = REGISTRY.with(|registry| registry.borrow().active.clone());
             for (_, observer) in &active {
-                observer.handle_commit_back_gesture();
+                report.call(Notification::Commit, || {
+                    observer.handle_commit_back_gesture()
+                });
             }
             !active.is_empty()
         }
         BackGestureEvent::Cancel => {
             let active = REGISTRY.with(|registry| registry.borrow().active.clone());
             for (_, observer) in &active {
-                observer.handle_cancel_back_gesture();
+                report.call(Notification::Cancel, || {
+                    observer.handle_cancel_back_gesture()
+                });
             }
             !active.is_empty()
         }
-    }
+    };
+    report.handled = handled;
+    report
 }

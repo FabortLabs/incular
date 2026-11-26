@@ -326,6 +326,8 @@ a version and date when publishing.
 
 ### Fixed
 
+- One failing back gesture observer no longer stops the remaining observers.
+
 - Semantics containers combine compatible hints and a single value. Conflicting
   values and explicit child nodes stay separate.
 

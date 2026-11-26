@@ -346,6 +346,13 @@ the public ListView/sliver surface. Semantics expose logical child counts and
 materialized item indices without creating one semantic node for every logical
 row.
 
+### Back gesture observer failures
+
+One unwinding observer panic does not stop the remaining observers.
+Use `dispatch_back_gesture_checked` or `dispatch_pop_route_checked` to
+collect the failed callback stage and its message instead of logging them.
+Automatic nested navigators keep their existing ordinary-back priority.
+
 ## Retained layout closure
 
 `LimitedBox` supplies maxima only when its incoming axis is unbounded, never

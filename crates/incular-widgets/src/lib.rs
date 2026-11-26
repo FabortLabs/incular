@@ -171,8 +171,9 @@ pub use async_builders::{
     UiStreamSubscription,
 };
 pub use back_gesture::{
-    BackGestureObserver, BackGestureObserverRegistration, add_back_gesture_observer,
-    add_shared_back_gesture_observer, dispatch_back_gesture, dispatch_pop_route,
+    BackGestureDispatch, BackGestureNotification, BackGestureObserver, BackGestureObserverFailure,
+    BackGestureObserverRegistration, add_back_gesture_observer, add_shared_back_gesture_observer,
+    dispatch_back_gesture, dispatch_back_gesture_checked, dispatch_pop_route, dispatch_pop_route_checked,
 };
 pub use box_fit::{FittedSizes, apply_box_fit};
 pub use compositing::{
