@@ -535,11 +535,7 @@ impl WidgetTree {
         if matches!(node.object.kind(), RenderKind::Follower { .. })
             && !self.follower_content_visible(id)
         {
-            // Only the raw route skips hidden followers.
-            let target = want_target
-                .then(|| self.hit_test_render(id, point, origin))
-                .flatten();
-            return (RawHitResult::default(), target);
+            return (RawHitResult::default(), None);
         }
         if matches!(
             kind,
@@ -1111,6 +1107,13 @@ impl WidgetTree {
                 .rev()
                 .find_map(|child| self.hit_test_render(*child, point, origin + node.offset));
         }
+        // A hidden follower has no input subtree. Check this before the
+        // transform path (which otherwise falls back to layout placement).
+        if matches!(node.object.kind(), RenderKind::Follower { .. })
+            && !self.follower_content_visible(id)
+        {
+            return None;
+        }
         if hit_test_transforms_children(node.object.kind()) {
             let current = origin + node.offset;
             let local = self
@@ -1143,11 +1146,6 @@ impl WidgetTree {
                 ..
             }
         ) {
-            return None;
-        }
-        if matches!(node.object.kind(), RenderKind::Follower { .. })
-            && !self.follower_content_visible(id)
-        {
             return None;
         }
         let child_origin = hit_child_origin(node.object.kind(), current);

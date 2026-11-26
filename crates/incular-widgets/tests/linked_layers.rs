@@ -458,7 +458,7 @@ fn unlink_relink_follows_show_policy_and_new_leader() {
 fn unlinked_hidden_follower_is_not_interactive_or_exposed() {
     let link = LayerLink::new();
     let mut tree = WidgetTree::new();
-    let root = tree
+    tree
         .mount(
             Column::new([Widget::from(
                 CompositedTransformFollower::new(
@@ -471,19 +471,13 @@ fn unlinked_hidden_follower_is_not_interactive_or_exposed() {
             .into(),
         )
         .unwrap();
-    let follower = tree.children(root).unwrap()[0];
-    let _moved = tree.children(follower).unwrap()[0];
     tree.layout(Constraints::tight(Size::new(200., 200.)))
         .expect("layout");
     assert!(!link.is_linked());
     assert!(painted_rects(&tree.paint()).is_empty());
-    assert!(
-        tree.hit_test(Offset::new(95., 5.)).is_none()
-            || tree
-                .hit_test(Offset::new(95., 5.))
-                .and_then(|render| tree.element_for_render(render))
-                != Some(follower)
-    );
+    let point = Offset::new(95., 5.);
+    assert!(tree.hit_test(point).is_none());
+    assert!(tree.pointer_hit_test(point).target().is_none());
     tree.update_semantics();
     assert!(
         !tree.semantics_debug_dump().contains("linked child"),
