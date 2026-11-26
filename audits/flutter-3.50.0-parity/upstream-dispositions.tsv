@@ -1566,3 +1566,6 @@ packages/flutter/test/services/asset_bundle_test.dart	82	caches results for load
 packages/flutter/test/services/asset_bundle_test.dart	189	for a given key, subsequent loadStructuredBinaryData calls are synchronous after the first call resolves	paired-match	upstream-structured-binary-assets.md
 packages/flutter/test/services/asset_bundle_test.dart	210	loadStructuredBinaryData handles exceptions correctly	paired-match	upstream-structured-binary-assets.md
 packages/flutter/test/services/asset_bundle_test.dart	277	loadStructuredBinaryData correctly loads ByteData	paired-match	upstream-structured-binary-assets.md
+packages/flutter/test/services/asset_manifest_test.dart	56	loadFromBundle correctly parses a binary asset manifest	paired-match	upstream-asset-manifest.md
+packages/flutter/test/services/asset_manifest_test.dart	80	getAssetVariants returns null if the key not contained in the asset manifest	paired-match	upstream-asset-manifest.md
+packages/flutter/test/services/asset_manifest_test.dart	85	getAssetVariants marks primary 1.0x variant as main when content-hashed	paired-match	upstream-asset-manifest.md

@@ -7,17 +7,19 @@
 use std::{fmt, sync::Arc};
 
 mod bundle;
+mod manifest;
 mod network;
 pub mod notices;
 mod root_bundle;
 pub use bundle::{
     AssetBundle, AssetError, CachingAssetBundle, DirectoryAssetBundle, MemoryAssetBundle,
 };
-pub use notices::{LicenseNoticeFormat, load_license_notices, register_license_notices};
+pub use manifest::{AssetManifest, AssetManifestFormat, AssetManifestLoadCallback, AssetMetadata};
 pub use network::{
     AssetFetchCallback, AssetFetcher, AssetLoadCallback, AssetResponse, NetworkAssetBundle,
     resolve_url,
 };
+pub use notices::{LicenseNoticeFormat, load_license_notices, register_license_notices};
 
 pub use root_bundle::{replace_root_asset_bundle, root_asset_bundle};
 

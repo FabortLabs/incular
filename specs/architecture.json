@@ -346,9 +346,11 @@
     {
       "name": "incular-assets",
       "default_api_class": "application",
-      "owner": "Font identities, shared font bytes and asset bundles.",
-      "support": "Partial resource foundation; byte and string asset bundles, no general image/font/shader loader.",
-      "allowed_dependencies": [],
+      "owner": "Font identities, shared font bytes, asset bundles and manifest metadata.",
+      "support": "Asset bundles and manifest metadata; raster decoding belongs to incular-image.",
+      "allowed_dependencies": [
+        "incular-core"
+      ],
       "path": "crates/incular-assets",
       "evidence": "crates/incular-assets/README.md"
     },

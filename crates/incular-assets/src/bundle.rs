@@ -9,6 +9,8 @@ use std::{
     sync::{Arc, Mutex, PoisonError},
 };
 
+use crate::{AssetManifest, AssetManifestFormat, AssetManifestLoadCallback};
+
 /// Why an asset could not be read.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -68,6 +70,21 @@ pub trait AssetBundle: Send + Sync + 'static {
     /// possibly on another thread, and never blocks.
     fn load_async(&self, key: &str, done: crate::AssetLoadCallback) {
         done(self.load(key));
+    }
+
+    /// Starts a manifest load. The default uses the bundle's asynchronous
+    /// byte transport, without caching the decoded result.
+    fn load_asset_manifest(
+        self: Arc<Self>,
+        format: AssetManifestFormat,
+        done: AssetManifestLoadCallback,
+    ) {
+        self.load_async(
+            format.asset_key(),
+            Box::new(move |bytes| {
+                done(bytes.and_then(|bytes| AssetManifest::from_bytes(&bytes, format)))
+            }),
+        );
     }
 
     /// `AssetBundle.evict`: forgets anything cached for `key`.
@@ -207,6 +224,8 @@ fn parse_error(key: &str, error: impl fmt::Display) -> AssetError {
     }
 }
 
+type PendingManifest = Arc<Mutex<Vec<AssetManifestLoadCallback>>>;
+
 type StructuredCache = HashMap<String, Arc<dyn Any + Send + Sync>>;
 
 #[derive(Clone, Copy)]
@@ -220,6 +239,7 @@ struct CachedAssets {
     strings: HashMap<String, Arc<str>>,
     structured: StructuredCache,
     binary: StructuredCache,
+    pending_manifests: HashMap<&'static str, PendingManifest>,
     generation: u64,
 }
 
@@ -346,6 +366,69 @@ impl<B: AssetBundle> AssetBundle for CachingAssetBundle<B> {
         self.inner.load_async(key, done);
     }
 
+    fn load_asset_manifest(
+        self: Arc<Self>,
+        format: AssetManifestFormat,
+        done: AssetManifestLoadCallback,
+    ) {
+        let key = format.asset_key();
+        let kind = match format {
+            AssetManifestFormat::Binary => StructuredKind::Binary,
+            AssetManifestFormat::WebJson => StructuredKind::Text,
+        };
+        let (pending, generation) = {
+            let mut cache = self.cache.lock().unwrap_or_else(PoisonError::into_inner);
+            if let Some(value) = cache.structured_cache(kind).get(key).cloned() {
+                drop(cache);
+                done(cached_manifest(&value, key));
+                return;
+            }
+            if let Some(pending) = cache.pending_manifests.get(key) {
+                pending
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .push(done);
+                return;
+            }
+            let pending = Arc::new(Mutex::new(vec![done]));
+            cache.pending_manifests.insert(key, pending.clone());
+            (pending, cache.generation)
+        };
+        let bundle = Arc::downgrade(&self);
+        self.inner.load_async(
+            key,
+            Box::new(move |bytes| {
+                let mut result = bytes.and_then(|bytes| AssetManifest::from_bytes(&bytes, format));
+                if let Some(bundle) = bundle.upgrade() {
+                    let mut cache = bundle.cache.lock().unwrap_or_else(PoisonError::into_inner);
+                    if cache
+                        .pending_manifests
+                        .get(key)
+                        .is_some_and(|current| Arc::ptr_eq(current, &pending))
+                    {
+                        cache.pending_manifests.remove(key);
+                        if cache.generation == generation
+                            && let Ok(value) = &result
+                        {
+                            // A synchronous typed reader might have populated
+                            // the same key while the asynchronous read ran.
+                            let value = cache
+                                .structured_cache_mut(kind)
+                                .entry(key.to_owned())
+                                .or_insert_with(|| Arc::new(value.clone()));
+                            result = cached_manifest(value, key);
+                        }
+                    }
+                }
+                let callbacks =
+                    std::mem::take(&mut *pending.lock().unwrap_or_else(PoisonError::into_inner));
+                for callback in callbacks {
+                    callback(result.clone());
+                }
+            }),
+        );
+    }
+
     fn load_string(&self, key: &str, cache: bool) -> Result<Arc<str>, AssetError> {
         if !cache {
             return decode(key, &self.inner.load(key)?);
@@ -373,6 +456,7 @@ impl<B: AssetBundle> AssetBundle for CachingAssetBundle<B> {
                 cache.strings.remove(key),
                 cache.structured.remove(key),
                 cache.binary.remove(key),
+                cache.pending_manifests.remove(key),
             )
         };
         drop(removed);
@@ -394,4 +478,16 @@ impl<B: AssetBundle> AssetBundle for CachingAssetBundle<B> {
         drop(removed);
         self.inner.clear();
     }
+}
+
+fn cached_manifest(
+    value: &Arc<dyn Any + Send + Sync>,
+    key: &str,
+) -> Result<AssetManifest, AssetError> {
+    value
+        .downcast_ref::<AssetManifest>()
+        .cloned()
+        .ok_or_else(|| AssetError::TypeMismatch {
+            key: key.to_owned(),
+        })
 }
