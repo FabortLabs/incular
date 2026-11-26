@@ -302,6 +302,7 @@ impl From<RawMagnifier> for Widget {
                     ShapeDecoration {
                         color: None,
                         gradient: None,
+                        aligned_gradient: None,
                         shadows: decoration.shadows,
                         image: None,
                         shape: decoration.shape,

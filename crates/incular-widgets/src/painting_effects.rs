@@ -35,7 +35,7 @@ pub use shape_borders::{
     ContinuousRectangleBorder, LinearBorder, LinearBorderEdge, OvalBorder, RoundedRectangleBorder,
     RoundedSuperellipseBorder, ShapeBorder, StadiumBorder, StarBorder, StarBorderError, StarBorderUpdate,
 };
-pub use shape_decoration::{DecoratedShapeBox, ShapeBorderClipper, ShapeDecoration};
+pub use shape_decoration::{AlignedShapeGradient, DecoratedShapeBox, ShapeBorderClipper, ShapeDecoration};
 
 
 // IEEE positive and negative zero compare equal in painting value types.

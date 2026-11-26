@@ -142,3 +142,19 @@ source-over group. Ten native image, shape and nullable controls
 passed, as did the wgpu library check. Incular GPU framebuffer and
 Flutter's three image-lerp goldens have not been compared and are not
 counted as paired.
+
+## Box-to-shape conversion
+
+Pinned `painting/shape_decoration_test.dart:16` passes. The native
+counterpart verifies equivalent shape values by comparing both
+directions' inner and outer paths, insets and drawing, rather than
+requiring equality on arbitrary Rust trait objects. A circle receives
+the uniform box side, logical corner radii remain logical, and a
+sharp rectangle keeps the original physical or directional border.
+The native constructor also rejects combining a color and a gradient.
+
+A separate mounted check confirms that conversion preserves images,
+shadows and box-relative shaders. The same logical gradient's actual
+paint coordinates reverse after an ambient direction change, with
+the correct box dimensions. Three constructor and 17 regression
+cases passed (13 widget cases and four concrete pointer routes).

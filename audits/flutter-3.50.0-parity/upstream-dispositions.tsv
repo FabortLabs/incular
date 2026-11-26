@@ -2265,3 +2265,4 @@ packages/flutter/test/painting/shape_decoration_test.dart	76	ShapeDecoration.ler
 packages/flutter/test/painting/shape_decoration_test.dart	120	ShapeBorder.hitTest matches getOuterPath for primitive shapes	paired-match	upstream-shape-decoration-hit-and-clip.md#primitive-shape-matrix-and-stadium-morphs
 packages/flutter/test/painting/shape_decoration_test.dart	62	ShapeDecoration.lerp identical a,b	paired-match	upstream-shape-decoration-hit-and-clip.md#nullable-and-identical-decorations
 packages/flutter/test/painting/shape_decoration_test.dart	68	ShapeDecoration.lerp null a,b	paired-match	upstream-shape-decoration-hit-and-clip.md#nullable-and-identical-decorations
+packages/flutter/test/painting/shape_decoration_test.dart	16	ShapeDecoration constructor	paired-match	upstream-shape-decoration-hit-and-clip.md#box-to-shape-conversion

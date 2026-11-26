@@ -9,12 +9,72 @@ use incular_config::{Clip, TextDirection};
 use incular_core::{Color, Lerp, Offset, Rect, Size};
 use incular_rendering::{Brush, Canvas, CornerRadii, DisplayList, FillRule, GradientStops};
 
-use super::decoration::{BoxShadow, DecorationImage, faded_brush, faded_decoration_image};
-use super::shape_borders::ShapeBorder;
+use super::decoration::{
+    Border, BorderSide, BoxDecoration, BoxLinearGradient, BoxRadialGradient, BoxShadow, BoxShape,
+    BoxSweepGradient, DecorationImage, faded_brush, faded_decoration_image,
+};
+use super::geometry::BorderRadiusGeometry;
+use super::shape_borders::{CircleBorder, RoundedRectangleBorder, ShapeBorder};
 use crate::{
     Builder, ClipPath, ClipShape, CustomClipper, CustomPaint, IgnorePointer, LayoutBuilder,
     Positioned, Stack, StackFit, Widget,
 };
+
+/// A gradient whose coordinates are relative to a shape's paint box.
+#[derive(Clone, Debug, PartialEq)]
+pub enum AlignedShapeGradient {
+    Linear(Arc<BoxLinearGradient>),
+    Radial(Arc<BoxRadialGradient>),
+    Sweep(Arc<BoxSweepGradient>),
+}
+
+impl AlignedShapeGradient {
+    fn needs_text_direction(&self) -> bool {
+        use crate::AlignmentGeometry;
+        let needs = |alignment| !matches!(alignment, AlignmentGeometry::Physical(_));
+        match self {
+            Self::Linear(g) => needs(g.begin) || needs(g.end),
+            Self::Radial(g) => needs(g.center) || g.focal.is_some_and(needs),
+            Self::Sweep(g) => needs(g.center),
+        }
+    }
+
+    fn resolve(&self, rect: Rect, direction: TextDirection) -> Brush {
+        match self {
+            Self::Linear(g) => g.resolve(rect, direction).into(),
+            Self::Radial(g) => g.resolve(rect, direction).into(),
+            Self::Sweep(g) => g.resolve(rect, direction).into(),
+        }
+    }
+
+    fn scale(&self, factor: f32) -> Self {
+        match self {
+            Self::Linear(g) => Self::Linear(Arc::new(g.scale(factor))),
+            Self::Radial(g) => Self::Radial(Arc::new(g.scale(factor))),
+            Self::Sweep(g) => Self::Sweep(Arc::new(g.scale(factor))),
+        }
+    }
+
+    fn from_color(&self, color: Color) -> Self {
+        match self {
+            Self::Linear(g) => Self::Linear(Arc::new(g.from_color(color))),
+            Self::Radial(g) => Self::Radial(Arc::new(g.from_color(color))),
+            Self::Sweep(g) => Self::Sweep(Arc::new(g.from_color(color))),
+        }
+    }
+}
+
+impl Lerp for AlignedShapeGradient {
+    fn lerp(&self, other: &Self, t: f32) -> Self {
+        match (self, other) {
+            (Self::Linear(a), Self::Linear(b)) => Self::Linear(Arc::new(a.lerp(b, t))),
+            (Self::Radial(a), Self::Radial(b)) => Self::Radial(Arc::new(a.lerp(b, t))),
+            (Self::Sweep(a), Self::Sweep(b)) => Self::Sweep(Arc::new(a.lerp(b, t))),
+            (a, _) if t < 0.5 => a.scale(1. - 2. * t),
+            (_, b) => b.scale(2. * t - 1.),
+        }
+    }
+}
 
 /// Flutter `ShapeDecoration`: a shape's interior filled with a color or
 /// gradient, an image clipped to the shape, its shadows, and the shape's own
@@ -24,6 +84,8 @@ pub struct ShapeDecoration {
     pub color: Option<Color>,
     /// A gradient fill is mutually exclusive with [`ShapeDecoration::color`].
     pub gradient: Option<Brush>,
+    /// A box-relative shader, kept unresolved until the shape is painted.
+    pub aligned_gradient: Option<AlignedShapeGradient>,
     pub shadows: Vec<BoxShadow>,
     /// Flutter `ShapeDecoration.image`: painted over the color or gradient,
     /// clipped to the shape's outer path, under the border.
@@ -37,16 +99,89 @@ impl ShapeDecoration {
         Self {
             color: None,
             gradient: None,
+            aligned_gradient: None,
             shadows: Vec::new(),
             image: None,
             shape: Rc::new(shape),
         }
     }
 
+    /// Converts Flutter's rectangular or circular BoxDecoration without
+    /// discarding logical borders, corner radii, or box-relative gradients.
+    ///
+    /// As in Flutter, a rounded rectangle or circle needs a uniform border
+    /// and a shape's solid color and gradient are mutually exclusive.
+    #[must_use]
+    pub fn from_box_decoration(source: &BoxDecoration) -> Self {
+        let logical = source.directional_border.as_deref();
+        let uniform = logical.map_or_else(
+            || source.border.is_none_or(|border| border.is_uniform()),
+            |border| border.is_uniform(),
+        );
+        let side = logical
+            .map(|border| border.top)
+            .or_else(|| source.border.map(|border| border.top))
+            .unwrap_or(BorderSide::NONE);
+        let radius = match (
+            source.border_radius,
+            source.directional_border_radius.as_deref(),
+        ) {
+            (Some(physical), Some(directional)) => Some(BorderRadiusGeometry::Mixed {
+                physical,
+                directional: *directional,
+            }),
+            (Some(radius), None) => Some(radius.into()),
+            (None, Some(radius)) => Some((*radius).into()),
+            (None, None) => None,
+        };
+        let shape: Rc<dyn ShapeBorder> = match (source.shape, radius) {
+            (BoxShape::Circle, _) => {
+                debug_assert!(uniform, "a circular shape needs a uniform border");
+                Rc::new(CircleBorder::new(side))
+            }
+            (BoxShape::Rectangle, Some(radius)) => {
+                debug_assert!(uniform, "a rounded shape needs a uniform border");
+                Rc::new(RoundedRectangleBorder::new(side, radius))
+            }
+            (BoxShape::Rectangle, None) => match logical {
+                Some(border) => Rc::new(*border),
+                None => Rc::new(source.border.unwrap_or(Border::default())),
+            },
+        };
+        let aligned_gradient = source
+            .aligned_gradient
+            .clone()
+            .map(AlignedShapeGradient::Linear)
+            .or_else(|| {
+                source
+                    .aligned_radial_gradient
+                    .clone()
+                    .map(AlignedShapeGradient::Radial)
+            })
+            .or_else(|| {
+                source
+                    .aligned_sweep_gradient
+                    .clone()
+                    .map(AlignedShapeGradient::Sweep)
+            });
+        debug_assert!(
+            source.color.is_none() || (source.gradient.is_none() && aligned_gradient.is_none()),
+            "color and gradient are mutually exclusive"
+        );
+        Self {
+            color: source.color,
+            gradient: source.gradient.clone(),
+            aligned_gradient,
+            shadows: source.box_shadow.clone(),
+            image: source.image.clone(),
+            shape,
+        }
+    }
+
     #[must_use]
     pub fn color(mut self, color: Color) -> Self {
         debug_assert!(
-            self.gradient.is_none(),
+            self.gradient.is_none() && self.aligned_gradient.is_none(),
             "color and gradient are mutually exclusive"
         );
         self.color = Some(color);
@@ -60,6 +195,19 @@ impl ShapeDecoration {
             "color and gradient are mutually exclusive"
         );
         self.gradient = Some(gradient.into());
+        self.aligned_gradient = None;
+        self
+    }
+
+    /// Sets a gradient relative to the eventual paint box and direction.
+    #[must_use]
+    pub fn aligned_gradient(mut self, gradient: AlignedShapeGradient) -> Self {
+        debug_assert!(
+            self.color.is_none(),
+            "color and gradient are mutually exclusive"
+        );
+        self.gradient = None;
+        self.aligned_gradient = Some(gradient);
         self
     }
 
@@ -100,6 +248,10 @@ impl ShapeDecoration {
                 .gradient
                 .as_ref()
                 .map(|brush| faded_brush(brush, factor)),
+            aligned_gradient: self
+                .aligned_gradient
+                .as_ref()
+                .map(|gradient| gradient.scale(factor)),
             shadows: self
                 .shadows
                 .iter()
@@ -195,8 +347,10 @@ impl ShapeDecoration {
     fn paint_fill_into(&self, canvas: &mut Canvas, size: Size, direction: Option<TextDirection>) {
         let rect = Rect::from_origin_size(Offset::ZERO, size);
         let brush = self
-            .gradient
-            .clone()
+            .aligned_gradient
+            .as_ref()
+            .map(|shader| shader.resolve(rect, direction.unwrap_or(TextDirection::Ltr)))
+            .or_else(|| self.gradient.clone())
             .or_else(|| self.color.map(Brush::Solid));
         if let Some(brush) = brush {
             self.paint_interior_or_path(canvas, rect, brush, direction);
@@ -266,16 +420,38 @@ impl Lerp for ShapeDecoration {
 /// and pairs of distinct gradients use a midpoint fallback.
 fn lerp_shape_decoration(a: &ShapeDecoration, b: &ShapeDecoration, t: f32) -> ShapeDecoration {
     let switches = t >= 0.5;
-    let gradient = match (&a.gradient, &b.gradient) {
-        (None, Some(gradient)) => Some(blend_shape_gradient(gradient, a.color, t, true)),
-        (Some(gradient), None) => Some(blend_shape_gradient(gradient, b.color, t, false)),
-        (a, b) => {
-            if switches {
-                b.clone()
-            } else {
-                a.clone()
+    let mixes_coordinates = a.aligned_gradient.is_some() && b.gradient.is_some()
+        || b.aligned_gradient.is_some() && a.gradient.is_some();
+    let (gradient, aligned_gradient) = if mixes_coordinates {
+        let endpoint = if switches { b } else { a };
+        (endpoint.gradient.clone(), endpoint.aligned_gradient.clone())
+    } else if a.aligned_gradient.is_some() || b.aligned_gradient.is_some() {
+        let aligned = match (&a.aligned_gradient, &b.aligned_gradient) {
+            (Some(a), Some(b)) => a.lerp(b, t),
+            (Some(gradient), None) => match b.color {
+                Some(color) => gradient.lerp(&gradient.from_color(color), t),
+                None => gradient.scale(1. - t),
+            },
+            (None, Some(gradient)) => match a.color {
+                Some(color) => gradient.from_color(color).lerp(gradient, t),
+                None => gradient.scale(t),
+            },
+            (None, None) => unreachable!("one box-relative shader is present"),
+        };
+        (None, Some(aligned))
+    } else {
+        let gradient = match (&a.gradient, &b.gradient) {
+            (None, Some(gradient)) => Some(blend_shape_gradient(gradient, a.color, t, true)),
+            (Some(gradient), None) => Some(blend_shape_gradient(gradient, b.color, t, false)),
+            (a, b) => {
+                if switches {
+                    b.clone()
+                } else {
+                    a.clone()
+                }
             }
-        }
+        };
+        (gradient, None)
     };
     let shape = if Rc::ptr_eq(&a.shape, &b.shape) {
         a.shape.clone()
@@ -290,12 +466,13 @@ fn lerp_shape_decoration(a: &ShapeDecoration, b: &ShapeDecoration, t: f32) -> Sh
         a.shape.clone()
     };
     ShapeDecoration {
-        color: if gradient.is_none() {
+        color: if gradient.is_none() && aligned_gradient.is_none() {
             OptionalColorTween::new(a.color, b.color).lerp(t)
         } else {
             None
         },
         gradient,
+        aligned_gradient,
         shadows: BoxShadow::lerp_list(&a.shadows, &b.shadows, t),
         image: DecorationImage::lerp_optional(a.image.as_ref(), b.image.as_ref(), t),
         shape,
@@ -373,7 +550,12 @@ impl From<DecoratedShapeBox> for Widget {
         use crate::tree::DecorationHitGeometry;
         let decoration = Rc::new(value.decoration);
         let child = value.child;
-        Builder::new(move |context| {
+        let needs_direction = decoration.shape.needs_text_direction()
+            || decoration
+                .aligned_gradient
+                .as_ref()
+                .is_some_and(AlignedShapeGradient::needs_text_direction);
+        let builder = Builder::new(move |context| {
             let direction = context.text_direction();
             let hit = DecorationHitGeometry::Shape {
                 border: decoration.shape.clone(),
@@ -428,8 +610,15 @@ impl From<DecoratedShapeBox> for Widget {
                 stack.into(),
                 Some(hit),
             )
-        })
-        .into()
+        });
+        if needs_direction {
+            builder.require_directionality(&crate::tree::DirectionRequirement {
+                widget: "DecoratedShapeBox",
+                reason: "No TextDirection found. A logical shape border or shader requires Directionality",
+            }).into()
+        } else {
+            builder.into()
+        }
     }
 }
 

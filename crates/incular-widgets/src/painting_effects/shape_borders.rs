@@ -15,7 +15,7 @@ use incular_core::{Offset, Rect, Size};
 use incular_rendering::{Brush, Canvas, CornerRadii, FillRule, Paint, PaintStyle, Path, Stroke};
 use smart_default::SmartDefault;
 
-use super::decoration::{Border, BorderSide, BorderStyle, BoxShape};
+use super::decoration::{Border, BorderDirectional, BorderSide, BorderStyle, BoxShape};
 use super::geometry::{BorderRadius, BorderRadiusGeometry, Radius, contains_half_open};
 use super::rounded_circle_outline::RoundedCircleOutline;
 
@@ -62,6 +62,11 @@ pub trait ShapeBorder {
     fn scaled(&self, factor: f32) -> Option<Rc<dyn ShapeBorder>> {
         self.rounded_circle_outline()
             .map(|outline| Rc::new(outline.scale(factor)) as Rc<dyn ShapeBorder>)
+    }
+
+    /// Whether this outline needs an ambient direction to paint its stroke.
+    fn needs_text_direction(&self) -> bool {
+        false
     }
 
     /// Whether the interior has an equivalent specialized painting path.
@@ -117,6 +122,10 @@ impl ShapeBorder for CompoundBorder {
                 .map(|border| border.scaled(factor).unwrap_or_else(|| border.clone()))
                 .collect(),
         }))
+    }
+
+    fn needs_text_direction(&self) -> bool {
+        self.borders.iter().any(|border| border.needs_text_direction())
     }
 
     fn dimensions(&self, direction: Option<TextDirection>) -> EdgeInsets {
@@ -261,6 +270,52 @@ impl ShapeBorder for Border {
 
     fn paint(&self, canvas: &mut Canvas, rect: Rect) {
         let _ = Border::paint(*self, canvas, rect, BoxShape::Rectangle, None);
+    }
+}
+
+impl ShapeBorder for BorderDirectional {
+    fn scaled(&self, factor: f32) -> Option<Rc<dyn ShapeBorder>> {
+        Some(Rc::new(self.scale(factor)))
+    }
+
+    fn needs_text_direction(&self) -> bool {
+        self.needs_direction_to_paint()
+    }
+
+    fn dimensions(&self, direction: Option<TextDirection>) -> EdgeInsets {
+        self.resolve(direction.unwrap_or(TextDirection::Ltr)).dimensions()
+    }
+
+    fn outer_path(&self, rect: Rect) -> Path {
+        BorderDirectional::outer_path(*self, rect)
+    }
+
+    fn inner_path(&self, rect: Rect) -> Path {
+        self.inner_path_with_direction(rect, None)
+    }
+
+    fn inner_path_with_direction(&self, rect: Rect, direction: Option<TextDirection>) -> Path {
+        BorderDirectional::inner_path(*self, rect, direction.unwrap_or(TextDirection::Ltr))
+    }
+
+    fn hit_test(&self, rect: Rect, position: Offset, _: Option<TextDirection>) -> bool {
+        contains_half_open(rect, position)
+    }
+
+    fn prefer_paint_interior(&self) -> bool {
+        true
+    }
+
+    fn paint_interior(&self, canvas: &mut Canvas, rect: Rect, paint: &Paint, _: Option<TextDirection>) {
+        ShapeBorder::paint_interior(&Border::default(), canvas, rect, paint, None);
+    }
+
+    fn paint(&self, canvas: &mut Canvas, rect: Rect) {
+        self.paint_with_direction(canvas, rect, None);
+    }
+
+    fn paint_with_direction(&self, canvas: &mut Canvas, rect: Rect, direction: Option<TextDirection>) {
+        let _ = BorderDirectional::paint(*self, canvas, rect, direction, BoxShape::Rectangle, None);
     }
 }
 
@@ -562,6 +617,10 @@ impl<R: Copy + Into<BorderRadiusGeometry>> ShapeBorder for RoundedRectangleBorde
         Some((*self).into())
     }
 
+    fn needs_text_direction(&self) -> bool {
+        !matches!(self.border_radius.into(), BorderRadiusGeometry::Physical(_))
+    }
+
     fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
         EdgeInsets::all(self.side.stroke_inset().max(0.))
     }
@@ -721,6 +780,10 @@ impl<R: Copy + Into<BorderRadiusGeometry>> RoundedSuperellipseBorder<R> {
 impl<R: Copy + Into<BorderRadiusGeometry>> ShapeBorder for RoundedSuperellipseBorder<R> {
     fn rounded_circle_outline(&self) -> Option<RoundedCircleOutline> {
         Some((*self).into())
+    }
+
+    fn needs_text_direction(&self) -> bool {
+        !matches!(self.border_radius.into(), BorderRadiusGeometry::Physical(_))
     }
 
     fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {

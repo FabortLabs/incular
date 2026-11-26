@@ -433,6 +433,17 @@ impl ShapeBorder for RoundedCircleOutline {
         Some(*self)
     }
 
+    fn needs_text_direction(&self) -> bool {
+        let radius = match self.0 {
+            Outline::StadiumMorph(StadiumMorph {
+                target: StadiumTarget::Rounded { radius },
+                ..
+            }) => Some(radius),
+            _ => self.radius(),
+        };
+        radius.is_some_and(|radius| !matches!(radius, BorderRadiusGeometry::Physical(_)))
+    }
+
     fn hit_test(&self, rect: Rect, position: Offset, direction: Option<TextDirection>) -> bool {
         match self.0 {
             Outline::Rounded(shape) => shape.hit_test(rect, position, direction),
