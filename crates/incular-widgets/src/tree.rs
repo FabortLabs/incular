@@ -1184,6 +1184,13 @@ struct ActiveGesture {
     yields_taps: bool,
 }
 
+/// Flutter's tap recognizer has one primary contact per mounted detector,
+/// even though the retained arena routes each contact separately.
+struct MountedTapContacts {
+    primary: Option<GestureArenaKey>,
+    additional: Vec<GestureArenaKey>,
+}
+
 struct ActiveTrackpadGesture {
     element: ElementId,
 }
@@ -1367,6 +1374,7 @@ struct InputState {
     active_drags: HashMap<GestureArenaKey, ActiveDrag>,
     active_external_drop: Option<ActiveExternalDrop>,
     scale_gestures: HashMap<ElementId, ScaleGestureDetector>,
+    mounted_tap_contacts: HashMap<ElementId, MountedTapContacts>,
     /// First-tap records per widget, carried across presses for double taps.
     tap_memories: HashMap<ElementId, Rc<Cell<incular_gestures::TapMemory>>>,
     deferred_single_taps: Vec<DeferredSingleTap>,

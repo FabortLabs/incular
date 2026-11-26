@@ -25,19 +25,25 @@ use crate::slop::{compute_hit_slop, compute_pan_slop};
 use incular_core::DeviceGestureSettings;
 
 impl GestureCallbacks {
+    #[doc(hidden)]
+    #[must_use]
+    pub fn has_tap_callbacks(&self) -> bool {
+        self.on_tap.is_some()
+            || self.on_tap_move.is_some()
+            || self.on_tap_down.is_some()
+            || self.on_tap_up.is_some()
+            || self.on_tap_cancel.is_some()
+    }
+
     /// Whether this callback set contributes an exclusive single-pointer
     /// recognizer to a gesture arena. Scale is intentionally separate so a
     /// pending pinch can coexist until one recognizer claims the stream.
     #[must_use]
     pub fn has_pointer_recognizer(&self) -> bool {
-        self.on_tap.is_some()
-            || self.on_tap_down.is_some()
-            || self.on_tap_up.is_some()
-            || self.on_tap_cancel.is_some()
+        self.has_tap_callbacks()
             || self.on_double_tap.is_some()
             || self.on_double_tap_down.is_some()
             || self.on_double_tap_cancel.is_some()
-            || self.on_tap_move.is_some()
             || self.on_long_press_down.is_some()
             || self.on_long_press_cancel.is_some()
             || self.on_long_press.is_some()
@@ -462,11 +468,7 @@ impl PointerGestureRecognizer {
         }
     }
     fn has_tap_callbacks(&self) -> bool {
-        self.callbacks.on_tap.is_some()
-            || self.callbacks.on_tap_move.is_some()
-            || self.callbacks.on_tap_down.is_some()
-            || self.callbacks.on_tap_up.is_some()
-            || self.callbacks.on_tap_cancel.is_some()
+        self.callbacks.has_tap_callbacks()
     }
     /// The recognizer lost its gesture arena (Flutter `rejectGesture`): a
     /// tap that already reported `onTapDown` is cancelled.

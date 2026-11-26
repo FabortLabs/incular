@@ -106,3 +106,27 @@ close cannot deliver a second down. A separate arena control waits
 while there are two contenders and awards the survivor once.
 This verifies the direct recognizer protocol; retained pointer
 adapters can use it without changing their competing tap claims.
+
+## Overlapping touch contacts on a mounted detector
+
+The standalone recognizer comparisons above did not cover how the
+runtime instantiates candidates per pointer. Four authored Flutter
+`mounted_overlapping_tap_test.dart` probes and corresponding Incular
+mount tests verify both release orders, a third press while a
+suppressed contact is still held, cancellation of the primary, and
+independent taps recognized by sibling detectors.
+
+Pre-fix, while one detector had multiple touches held down, the
+runtime reported taps for the later contacts. It now tracks the
+primary and its concurrent contacts per mounted detector, without
+blocking a separate detector or that widget's scale/drag recognizers.
+Pointer cancellation, final release and unmount remove the
+association. The first contact uses no additional pointer buffer
+allocation; later overlapping contacts are the only ones stored in
+the vector.
+
+All four authored references and 22 focused native tests passed
+(`flutter350_mounted_overlapping_taps`, transformed coordinates,
+double-tap competition and tap-region semantics). The original
+FIFO/FILO registrations were already counted; this live backfill is
+not counted twice.

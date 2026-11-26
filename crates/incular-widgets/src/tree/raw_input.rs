@@ -92,6 +92,11 @@ impl WidgetTree {
         hit: &PointerHitTest,
     ) -> Option<ElementId> {
         let key = GestureArenaKey::pointer_device(window, event.device, event.pointer);
+        if event.phase == PointerPhase::Cancel
+            || (event.phase == PointerPhase::Up && event.buttons == 0)
+        {
+            self.release_mounted_tap_contact(key);
+        }
         // Flutter `PointerEvent.delta`: movement since this pointer's
         // previous event; a press starts from rest.
         event.delta = match event.phase {

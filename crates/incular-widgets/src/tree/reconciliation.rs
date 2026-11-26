@@ -2665,6 +2665,7 @@ impl WidgetTree {
                         self.departures.active.remove(&id);
                     }
                     self.external_drop_target_unmounted(id);
+                    self.input.mounted_tap_contacts.remove(&id);
                     if let Some(leases) = self.scroll_attachments.remove(&id) {
                         detached.extend(leases);
                     }

@@ -809,6 +809,42 @@ impl WidgetTree {
             .contains_key(&GestureArenaKey::pointer_device(window, device, pointer))
     }
 
+    fn register_mounted_tap_contact(&mut self, element: ElementId, key: GestureArenaKey) -> bool {
+        use std::collections::hash_map::Entry;
+        match self.input.mounted_tap_contacts.entry(element) {
+            Entry::Vacant(entry) => {
+                entry.insert(MountedTapContacts {
+                    primary: Some(key),
+                    additional: Vec::new(),
+                });
+                true
+            }
+            Entry::Occupied(mut entry) => {
+                // Once the primary lifts, its already-tracked contacts
+                // must finish before a later press can become primary.
+                let group = entry.get_mut();
+                if group.primary == Some(key) {
+                    return true;
+                }
+                if group.primary.is_some() && !group.additional.contains(&key) {
+                    group.additional.push(key);
+                }
+                false
+            }
+        }
+    }
+
+    pub(super) fn release_mounted_tap_contact(&mut self, key: GestureArenaKey) {
+        self.input.mounted_tap_contacts.retain(|_, group| {
+            if group.primary == Some(key) {
+                group.primary = None;
+            } else {
+                group.additional.retain(|contact| *contact != key);
+            }
+            group.primary.is_some() || !group.additional.is_empty()
+        });
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn dispatch_pointer_gesture_with_target(
         &mut self,
@@ -886,16 +922,22 @@ impl WidgetTree {
                     continue;
                 }
                 // A press competes only with the callbacks of its own button.
-                let live_tap_buttons = callbacks.on_any_tap.is_some().then_some(buttons);
+                let mut live_tap_buttons = callbacks.on_any_tap.is_some().then_some(buttons);
                 let Some(mut callbacks) = callbacks.for_button_mask(buttons) else {
                     continue;
                 };
-                if inner_button.is_some() {
+                let owns_tap = callbacks.has_tap_callbacks()
+                    && inner_button.is_none()
+                    && self.register_mounted_tap_contact(candidate, key);
+                if !owns_tap {
                     callbacks.on_tap = None;
                     callbacks.on_tap_down = None;
                     callbacks.on_tap_up = None;
                     callbacks.on_tap_cancel = None;
                     callbacks.on_tap_move = None;
+                    live_tap_buttons = None;
+                }
+                if inner_button.is_some() {
                     callbacks.on_long_press_down = None;
                     callbacks.on_long_press_cancel = None;
                 }
@@ -1285,7 +1327,15 @@ impl WidgetTree {
             return Some(element);
         }
 
-        let element = self.input.active_gestures.get(&key)?.element;
+        let Some(active) = self.input.active_gestures.get(&key) else {
+            if matches!(event.phase, PointerPhase::Up | PointerPhase::Cancel) {
+                // A suppressed tap may have no arena member, but its contact
+                // still needs to leave the owning detector's sequence.
+                self.release_mounted_tap_contact(key);
+            }
+            return None;
+        };
+        let element = active.element;
         if !self.elements.contains(element.0) {
             self.cancel_gesture_stream(key, true);
             return None;
@@ -2676,6 +2726,7 @@ impl WidgetTree {
         }
     }
     pub(super) fn cancel_gesture_stream(&mut self, key: GestureArenaKey, notify: bool) {
+        self.release_mounted_tap_contact(key);
         // A dying stream closes its scroll bracket with `End` when open;
         // never-accepted streams hold no token and stay silent.
         self.finish_scroll_bracket(key);
@@ -2699,6 +2750,7 @@ impl WidgetTree {
     pub fn cancel_all_gesture_streams(&mut self) {
         self.input.deferred_single_taps.clear();
         self.input.tap_memories.clear();
+        self.input.mounted_tap_contacts.clear();
         let ordinary: Vec<GestureArenaKey> = self.input.active_gestures.keys().copied().collect();
         for key in ordinary {
             self.cancel_gesture_stream(key, true);
