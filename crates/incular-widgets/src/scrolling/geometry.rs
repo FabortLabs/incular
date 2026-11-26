@@ -42,6 +42,7 @@ impl ScrollCacheExtent {
 /// compact stack of eight-bit group scopes, with the innermost scope in the
 /// least-significant byte. Keeping the scope path in the ID means nested main
 /// and cross-axis groups cannot accidentally reuse each other's child state.
+/// The top 65,536 values of the low half are reserved for semantics anchors.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct SliverChildId(pub u64);
 
