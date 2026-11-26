@@ -1556,3 +1556,8 @@ packages/flutter/test/animation/curves_test.dart	408	CatmullRomSpline enforces c
 packages/flutter/test/animation/curves_test.dart	491	CatmullRomCurve interpolates given points correctly when precomputed	paired-match	upstream-catmull-rom-precompute.md
 packages/flutter/test/animation/curves_test.dart	576	CatmullRomCurve enforces contract when precomputed	paired-match	upstream-catmull-rom-precompute.md
 packages/flutter/test/services/binding_test.dart	73	Adds rootBundle LICENSES to LicenseRegistry	partial-match	upstream-services-license-notices.md
+packages/flutter/test/animation/curves_test.dart	11	toString control test	paired-match	upstream-curve-lifetimes-and-shapes.md
+packages/flutter/test/animation/curves_test.dart	19	Curve flipped control test	paired-match	upstream-curve-lifetimes-and-shapes.md
+packages/flutter/test/animation/curves_test.dart	126	Elastic overshoots its bounds	paired-match	upstream-curve-lifetimes-and-shapes.md
+packages/flutter/test/animation/curves_test.dart	143	Back overshoots its bounds	paired-match	upstream-curve-lifetimes-and-shapes.md
+packages/flutter/test/animation/curves_test.dart	160	Decelerate does so	paired-match	upstream-curve-lifetimes-and-shapes.md

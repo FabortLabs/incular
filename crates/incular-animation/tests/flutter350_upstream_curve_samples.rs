@@ -97,7 +97,7 @@ fn transforms_preserve_both_unit_endpoints() {
         Curve::Linear,
         EXPO,
         Curve::EaseInOutCubicEmphasized,
-        Curve::Flipped(&EXPO),
+        Curve::Flipped(std::sync::Arc::new(EXPO.clone())),
         Curve::Decelerate,
         Curve::EaseInBounce,
         Curve::EaseOutBounce,

@@ -1,6 +1,9 @@
 //! Timing curves used by explicit and implicit animations.
 
-use std::sync::Arc;
+use std::{
+    collections::VecDeque,
+    sync::{Arc, Mutex, PoisonError, Weak},
+};
 
 /// A normalized timing function. Curves clamp input to `[0, 1]` and map the
 /// endpoints exactly. Overshooting curves may return values outside `[0, 1]`,
@@ -93,11 +96,11 @@ pub enum Curve {
         end_curve: &'static Curve,
     },
     /// Flutter `FlippedCurve`: `1 - curve(1 - t)`.
-    Flipped(&'static Curve),
+    Flipped(Arc<Curve>),
     /// Flutter `CatmullRomCurve`: a centripetal Catmull-Rom spline through
     /// control points from `(0, 0)` to `(1, 1)`. Build one with
     /// [`Curve::catmull_rom`].
-    CatmullRom(&'static crate::CatmullRomCurve),
+    CatmullRom(Arc<crate::CatmullRomCurve>),
     /// Flutter `ThreePointCubic(a1, b1, midpoint, a2, b2)`: two cubic Bezier
     /// segments joined at `midpoint`. Points are `(x, y)`.
     ThreePointCubic {
@@ -301,7 +304,7 @@ impl Curve {
                     split + (1.0 - split) * end_curve.apply((t - split) / (1.0 - split))
                 }
             }
-            Self::Flipped(curve) => 1.0 - curve.apply(1.0 - t),
+            Self::Flipped(ref curve) => 1.0 - curve.apply(1.0 - t),
             Self::ThreePointCubic {
                 a1,
                 b1,
@@ -309,7 +312,7 @@ impl Curve {
                 a2,
                 b2,
             } => three_point_cubic(a1, b1, midpoint, a2, b2, t),
-            Self::CatmullRom(curve) => curve.transform(t),
+            Self::CatmullRom(ref curve) => curve.transform(t),
         }
     }
 
@@ -319,9 +322,9 @@ impl Curve {
         Self::Interval { begin, end, curve }
     }
 
-    /// Flutter `CatmullRomCurve(controlPoints, tension:)`. The samples are
-    /// computed once per distinct curve and kept for the program's life, as
-    /// `Curve` values are `'static`.
+    /// Flutter `CatmullRomCurve(controlPoints, tension:)`. The resulting
+    /// curve owns the sampled data. Recently used live instances can share
+    /// those samples without retaining them after all curves are dropped.
     ///
     /// # Panics
     ///
@@ -329,22 +332,37 @@ impl Curve {
     /// [`crate::CatmullRomCurve::validate_control_points`].
     #[must_use]
     pub fn catmull_rom(control_points: &[incular_core::Offset], tension: f32) -> Self {
-        static CURVES: std::sync::Mutex<Vec<&'static crate::CatmullRomCurve>> =
-            std::sync::Mutex::new(Vec::new());
-        let mut curves = CURVES
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(existing) = curves
-            .iter()
-            .find(|curve| curve.control_points() == control_points && curve.tension() == tension)
+        type SampleCache = VecDeque<Weak<crate::CatmullRomCurve>>;
+        static CURVES: Mutex<SampleCache> = Mutex::new(VecDeque::new());
+        const MAX_CACHED_CURVES: usize = 32;
+        let find_live = |cache: &mut SampleCache| {
+            cache.retain(|entry| entry.strong_count() != 0);
+            let (index, curve) = cache.iter().enumerate().find_map(|(index, entry)| {
+                let curve = entry.upgrade()?;
+                (curve.control_points() == control_points && curve.tension() == tension)
+                    .then_some((index, curve))
+            })?;
+            let entry = cache.remove(index).expect("matched cache entry");
+            cache.push_back(entry);
+            Some(curve)
+        };
         {
+            let mut cache = CURVES.lock().unwrap_or_else(PoisonError::into_inner);
+            if let Some(existing) = find_live(&mut cache) {
+                return Self::CatmullRom(existing);
+            }
+        }
+        // Validation and sampling are deliberately outside the mutex.
+        let prepared = Arc::new(crate::CatmullRomCurve::precompute(control_points, tension));
+        let mut cache = CURVES.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(existing) = find_live(&mut cache) {
             return Self::CatmullRom(existing);
         }
-        let curve: &'static crate::CatmullRomCurve = Box::leak(Box::new(
-            crate::CatmullRomCurve::new(control_points, tension),
-        ));
-        curves.push(curve);
-        Self::CatmullRom(curve)
+        if cache.len() == MAX_CACHED_CURVES {
+            cache.pop_front();
+        }
+        cache.push_back(Arc::downgrade(&prepared));
+        Self::CatmullRom(prepared)
     }
 
     /// Flutter `Split(split, beginCurve:, endCurve:)`.
@@ -417,7 +435,7 @@ impl Curve {
             Self::EaseInOutBounce => Self::EaseInOutBounce,
             Self::StepStart => Self::StepEnd,
             Self::StepEnd => Self::StepStart,
-            Self::Flipped(curve) => curve.clone(),
+            Self::Flipped(curve) => Arc::unwrap_or_clone(curve),
             Self::Blend(pair) => Self::blend(
                 pair.first.clone().flipped(),
                 pair.second.clone().flipped(),
@@ -448,7 +466,7 @@ impl Curve {
                             y2: flipped.3,
                         })
                 }
-                None => Self::Flipped(interned(self)),
+                None => Self::Flipped(Arc::new(self)),
             },
         }
     }
@@ -628,22 +646,6 @@ const NAMED_CUBICS: [Curve; 33] = [
     Curve::LinearToEaseOut,
     Curve::SlowMiddle,
 ];
-
-/// A `'static` copy of `curve` for the curves that hold other curves, kept
-/// once per distinct curve so flipping in a frame loop allocates only the
-/// first time.
-fn interned(curve: Curve) -> &'static Curve {
-    static INTERNED: std::sync::Mutex<Vec<&'static Curve>> = std::sync::Mutex::new(Vec::new());
-    let mut interned = INTERNED
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if let Some(existing) = interned.iter().find(|existing| ***existing == curve) {
-        return existing;
-    }
-    let leaked: &'static Curve = Box::leak(Box::new(curve));
-    interned.push(leaked);
-    leaked
-}
 
 /// Flutter `ThreePointCubic.transformInternal`.
 fn three_point_cubic(
