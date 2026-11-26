@@ -155,3 +155,12 @@ fn spell_check_results_display_the_text_and_entire_span_list() {
         "SpellCheckResults(spellCheckText: , suggestionSpans: [])"
     );
 }
+
+#[test]
+fn touching_suggestion_endpoints_start_at_the_lower_midpoint_like_flutter() {
+    let left = SuggestionSpan::new(0..2, ["a"]);
+    let right = SuggestionSpan::new(2..4, ["b"]);
+    let results = SpellCheckResults::new("abcd", vec![left.clone(), right.clone()]);
+    assert_eq!(results.suggestion_span_at(2), Some(&left));
+    assert_eq!(results.suggestion_span_at(4), Some(&right));
+}

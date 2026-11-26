@@ -82,7 +82,9 @@ impl SpellCheckResults {
         }
         let (mut left, mut right) = (0usize, spans.len());
         while left < right {
-            let middle = left + (right - left) / 2;
+            // Flutter calculates the midpoint with an inclusive upper bound.
+            // Use the lower midpoint for even counts, observable at a shared end.
+            let middle = left + (right - left - 1) / 2;
             let span = &spans[middle];
             if (span.range.start..=span.range.end).contains(&cursor_index) {
                 return Some(span);

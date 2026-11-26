@@ -1680,3 +1680,7 @@ packages/flutter/test/widgets/editable_text_test.dart	16278	Spell check disabled
 packages/flutter/test/widgets/editable_text_test.dart	16308	Spell check disabled for password autofill hints	paired-match	upstream-password-spell-check.md
 packages/flutter/test/widgets/editable_text_test.dart	16335	Spell check updates when non-password obscureText changes	paired-match	upstream-password-spell-check.md
 packages/flutter/test/widgets/editable_text_test.dart	16401	Spell check stays disabled for visible password when obscureText changes	paired-match	upstream-password-spell-check.md
+packages/flutter/test/widgets/editable_text_test.dart	16478	findSuggestionSpanAtCursorIndex finds correct span with cursor in middle of a word	paired-match	upstream-spell-check-at-caret.md
+packages/flutter/test/widgets/editable_text_test.dart	16518	findSuggestionSpanAtCursorIndex finds correct span with cursor on edge of a word	paired-match	upstream-spell-check-at-caret.md
+packages/flutter/test/widgets/editable_text_test.dart	16557	findSuggestionSpanAtCursorIndex finds no span when cursor out of range of spans	paired-match	upstream-spell-check-at-caret.md
+packages/flutter/test/widgets/editable_text_test.dart	16595	findSuggestionSpanAtCursorIndex finds no span when word correctly spelled	paired-match	upstream-spell-check-at-caret.md

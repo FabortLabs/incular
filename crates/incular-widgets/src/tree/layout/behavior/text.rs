@@ -389,7 +389,6 @@ fn text_field_decorations(
 }
 
 impl WidgetTree {
-    /// The latest spell check results of the text field `element`, Flutter's
     /// Whether this field currently has an active spell-check service.
     #[doc(hidden)]
     #[must_use]
@@ -400,6 +399,26 @@ impl WidgetTree {
             .is_some_and(|auxiliary| auxiliary.spell_check_session.is_some())
     }
 
+    /// Flutter's `findSuggestionSpanAtCursorIndex` for this mounted editor.
+    /// The caret offset is in UTF-8 bytes, like the editing controller.
+    #[must_use]
+    pub fn text_field_suggestion_span_at_cursor_index(
+        &self,
+        element: ElementId,
+        cursor_index: usize,
+    ) -> Option<incular_platform::SuggestionSpan> {
+        self.elements
+            .get(element.0)?
+            .auxiliary_state
+            .as_ref()?
+            .spell_check_session
+            .as_ref()?
+            .received()?
+            .suggestion_span_at(cursor_index)
+            .cloned()
+    }
+
+    /// The latest spell check results of the text field, Flutter's
     /// `EditableTextState.spellCheckResults`: `None` before the first answer
     /// or without spell checking.
     #[doc(hidden)]
