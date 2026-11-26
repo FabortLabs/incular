@@ -103,3 +103,39 @@ fn a_root_back_button_dispatcher_answers_system_back_while_it_has_callbacks() {
     assert!(!dispatch_pop_route());
     assert_eq!(hits.get(), 1);
 }
+
+#[test]
+fn decoded_back_gesture_stages_reach_only_the_accepting_observer() {
+    use incular_platform::message_codecs::{MessageValue as V, MethodCall, StandardMethodCodec};
+
+    let log = Rc::default();
+    let _follows = add_shared_back_gesture_observer(recorder("a", true, &log));
+    let _declines = add_shared_back_gesture_observer(recorder("b", false, &log));
+    let map = |progress| {
+        V::Map(vec![
+            (
+                V::String("touchOffset".into()),
+                V::List(vec![V::Float(0.), V::Float(100.)]),
+            ),
+            (V::String("progress".into()), V::Float(progress)),
+            (V::String("swipeEdge".into()), V::Int(1)),
+        ])
+    };
+    let deliver = |name: &str, arguments| {
+        let message = StandardMethodCodec::encode_method_call(&MethodCall {
+            method: name.into(),
+            arguments,
+        })
+        .unwrap();
+        let decoded = StandardMethodCodec::decode_method_call(&message).unwrap();
+        BackGestureEvent::try_from_method_call(&decoded).map(|event| dispatch_back_gesture(&event))
+    };
+    assert_eq!(deliver("startBackGesture", map(0.)), Ok(true));
+    assert!(deliver("updateBackGestureProgress", map(2.)).is_err());
+    assert_eq!(deliver("updateBackGestureProgress", map(0.5)), Ok(true));
+    assert_eq!(deliver("cancelBackGesture", V::Null), Ok(true));
+    assert_eq!(
+        *log.borrow(),
+        ["a start 0", "b start 0", "a update 0.5", "a cancel"]
+    );
+}

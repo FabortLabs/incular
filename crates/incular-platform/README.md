@@ -17,6 +17,12 @@ Desktop adapters convert physical pointers through
 framework's monotonic clock. Hosts can use it to preserve gesture timing
 when delivering buffered native samples.
 
+Hosts that receive Flutter-style predictive back messages can decode
+`flutter/backgesture` with `StandardMethodCodec`, then use
+`BackGestureEvent::try_from_method_call` before sending the event to the
+framework. Message coordinates are already logical. Typed Android callers
+can keep using `PredictiveBackEvent::from_android` for DPI conversion.
+
 ## Window contract
 
 `WindowId` is an Incular-owned `(slot, generation)` identity, never a Winit

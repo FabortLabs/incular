@@ -1493,3 +1493,11 @@ packages/flutter/test/widgets/semantics_test.dart	331	Semantics hints can merge	
 packages/flutter/test/widgets/semantics_test.dart	362	Semantics values do not merge	paired-match	upstream-semantics-text-and-locale.md
 packages/flutter/test/widgets/semantics_test.dart	398	Semantics value and hint can merge	paired-match	upstream-semantics-text-and-locale.md#compatible-hints-and-values
 packages/flutter/test/widgets/semantics_test.dart	1199	Increased/decreased values are annotated	paired-match	upstream-semantics-text-and-locale.md
+packages/flutter/test/services/predictive_back_event_test.dart	9	fromMap can be created with valid Map - SwipeEdge.left	paired-match	upstream-predictive-back-events.md
+packages/flutter/test/services/predictive_back_event_test.dart	19	fromMap can be created with valid Map - SwipeEdge.right	paired-match	upstream-predictive-back-events.md
+packages/flutter/test/services/predictive_back_event_test.dart	29	fromMap can be created with valid Map - isButtonEvent zero position	paired-match	upstream-predictive-back-events.md
+packages/flutter/test/services/predictive_back_event_test.dart	38	fromMap can be created with valid Map - isButtonEvent null position	paired-match	upstream-predictive-back-events.md
+packages/flutter/test/services/predictive_back_event_test.dart	47	fromMap throws when given invalid progress	paired-match	upstream-predictive-back-events.md
+packages/flutter/test/services/predictive_back_event_test.dart	58	fromMap throws when given invalid swipeEdge	paired-match	upstream-predictive-back-events.md
+packages/flutter/test/services/predictive_back_event_test.dart	69	equality when created with the same parameters	paired-match	upstream-predictive-back-events.md
+packages/flutter/test/services/predictive_back_event_test.dart	85	when created with different parameters	paired-match	upstream-predictive-back-events.md

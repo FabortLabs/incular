@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- Predictive back can decode Flutter-compatible standard method messages.
+  Invalid progress or swipe edges return typed errors.
+
 - FractionallySizedBox and AnimatedFractionallySizedBox support childless layout.
   FractionallySizedBox and OverflowBox accept logical start/end alignment.
 

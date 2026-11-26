@@ -37,7 +37,9 @@ pub use application_shell::{
     NotificationActionId, NotificationId, NotificationPresentation, TaskbarDockState,
     TaskbarProgress, TaskbarProgressError, TrayItemId, TrayItemPresentation,
 };
-pub use back_gesture::{BackGestureEvent, PredictiveBackEvent, SwipeEdge};
+pub use back_gesture::{
+    BACK_GESTURE_CHANNEL, BackGestureEvent, BackGestureMessageError, PredictiveBackEvent, SwipeEdge,
+};
 pub use capabilities::{
     AdvancedInputCapabilities, ApplicationServiceCapabilities, CapabilitySupport,
     DataTransferCapabilities, DisplayPlacementCapabilities, NativeMenuCapabilities,
