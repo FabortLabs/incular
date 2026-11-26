@@ -51,3 +51,41 @@ the new effective font instead of reusing a paint-only update.
 Twenty-nine focused Rust tests and three authored Dart cases passed.
 Complex overlapping grapheme boundaries, EditableText background
 painting and final GPU pixel equivalence remain separate checks.
+
+## Variable font axes during animation
+
+Pinned original `painting/text_style_test.dart:743` and its
+native comparison passed. Unspecified and empty lists keep their
+distinction; exact endpoints keep order and duplicates. Matching
+positions interpolate before divergent axes are reconciled by tag:
+the last duplicate in each unmatched tail wins, and unmatched tags
+appear or disappear at 0.5. The deterministic native tail order is
+one of the orders allowed by the original assertions. The helper
+accepts extrapolation and applies the signed 16.16 bound; because
+Incular uses f32 for shaping, its largest representable positive
+value below 32768 is slightly lower than Flutter's f64 bound.
+
+Previously, `TextStyle` jumped straight from one variation setting
+to the other at the midpoint, and the typed setter lost fractional
+precision to one decimal place. Shaping now receives intervening
+weights; raw settings in the ordinary quoted syntax are interpolated
+too. Unsupported raw strings keep the previous discrete selection.
+The default and identical settings do not allocate an axis list.
+
+The authored native and Dart probes load the same pinned Roboto
+Slab variable fixture, shape the same paragraph, and verify that
+the widths at the tween samples equal the explicit intermediate
+axis values in each engine. Width grows at the selected weights and
+does not jump between 0.499 and 0.5. This verifies changed layout,
+not identical cross-engine glyph rasterization. Twelve focused native
+checks (including the fixture test) and two authored Flutter checks
+passed.
+
+To rerun both fixture checks from the repository root with the pinned
+checkout present:
+
+```sh
+cargo test --locked -j 1 -p incular-text --test font_variations --test style -- --include-ignored --test-threads=1
+export INCULAR_FLUTTER_VARIABLE_FONT="$PWD/.tmp/flutter/engine/src/flutter/testing/resources/RobotoSlab-VariableFont_wght.ttf"
+bash audits/flutter-3.50.0-parity/run-reference-linux.sh probe font_variation_tween_test.dart
+```

@@ -278,6 +278,7 @@ pub use incular_text::{
     FontFeature, FontVariation, FontWeight, IconData, RichText, StrutStyle, TextAlign,
     TextBaseline, TextEditingController, TextEditingValue, TextHeightBehavior, TextOverflow,
     TextRange, TextScaler, TextSelection, TextSpan, TextStyle, TextWidthBasis, WidgetSpan,
+    lerp_font_variations,
 };
 pub use indexed_semantics::IndexedSemantics;
 pub use inherited_data::{

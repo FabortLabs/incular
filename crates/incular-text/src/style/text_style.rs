@@ -1,4 +1,7 @@
-use super::fonts::{FontFamily, FontFeature, FontVariation, FontWeight};
+use super::fonts::{
+    FontFamily, FontFeature, FontVariation, FontWeight, format_font_variations,
+    lerp_font_variation_settings,
+};
 use super::text::{
     FontStyle, LineHeight, TextBaseline, TextDecoration, TextDecorationStyle,
     TextLeadingDistribution, TextOverflow, TextScaler, TextShadow,
@@ -284,12 +287,7 @@ impl TextStyle {
 
     #[must_use]
     pub fn font_variation_settings(mut self, variations: &[FontVariation]) -> Self {
-        let formatted = variations
-            .iter()
-            .map(FontVariation::to_css_setting)
-            .collect::<Vec<_>>()
-            .join(", ");
-        self.font_variations = Some(formatted.into());
+        self.font_variations = Some(format_font_variations(variations));
         self
     }
 
@@ -576,6 +574,11 @@ impl TextStyle {
 
 impl Lerp for TextStyle {
     fn lerp(&self, other: &Self, t: f32) -> Self {
+        let font_variations = lerp_font_variation_settings(
+            self.font_variations.as_ref(),
+            other.font_variations.as_ref(),
+            t,
+        );
         let t = t.clamp(0.0, 1.0);
         let mix = |left: f32, right: f32| left + (right - left) * t;
         // Flutter switches Paint objects at the midpoint. When mixing paint
@@ -695,11 +698,7 @@ impl Lerp for TextStyle {
             } else {
                 TextShadow::lerp_list(&self.shadows, &other.shadows, t).into()
             },
-            font_variations: if t < 0.5 {
-                self.font_variations.clone()
-            } else {
-                other.font_variations.clone()
-            },
+            font_variations,
             font_features: if t < 0.5 {
                 self.font_features.clone()
             } else {

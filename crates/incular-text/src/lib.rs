@@ -30,7 +30,7 @@ pub use style::{
     FontFamily, FontFeature, FontStyle, FontVariation, FontWeight, IconData, LineHeight,
     StrutStyle, TextAlign, TextBaseline, TextDecoration, TextDecorationStyle, TextHeightBehavior,
     TextLeadingDistribution, TextOverflow, TextScaleBoundsError, TextScaler, TextScalerKind, TextShadow, TextStyle,
-    TextWidthBasis,
+    TextWidthBasis, lerp_font_variations,
 };
 
 mod engine;

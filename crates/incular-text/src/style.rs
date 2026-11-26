@@ -5,7 +5,7 @@ mod icons;
 mod text;
 mod text_style;
 
-pub use fonts::{FontFamily, FontFeature, FontVariation, FontWeight};
+pub use fonts::{FontFamily, FontFeature, FontVariation, FontWeight, lerp_font_variations};
 pub use icons::IconData;
 pub use text::{
     FontStyle, LineHeight, StrutStyle, TextAlign, TextBaseline, TextDecoration,

@@ -223,7 +223,7 @@ pub mod prelude {
         TextBaseline, TextCaretPosition, TextDecoration, TextDecorationStyle,
         TextEditingController, TextEditingValue, TextHeightBehavior, TextLayoutOptions,
         TextLeadingDistribution, TextOverflow, TextRange, TextScaler, TextSelection, TextShadow,
-        TextSpan, TextStyle, TextWidthBasis, WidgetSpan,
+        TextSpan, TextStyle, TextWidthBasis, WidgetSpan, lerp_font_variations,
     };
     pub use incular_config::MediaQueryEdges;
     pub use incular_widgets::{BoxRadialGradient, BoxSweepGradient};

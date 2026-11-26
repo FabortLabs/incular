@@ -1517,3 +1517,4 @@ packages/flutter/test/painting/text_style_test.dart	400	TextStyle font family fa
 packages/flutter/test/painting/text_style_test.dart	506	TextStyle foreground and color combos	partial-match	upstream-text-paint.md
 packages/flutter/test/painting/text_style_test.dart	547	backgroundColor	partial-match	upstream-text-paint.md#solid-run-backgrounds
 packages/flutter/test/painting/text_style_test.dart	562	TextStyle background and backgroundColor combos	paired-match	upstream-text-paint.md#solid-run-backgrounds
+packages/flutter/test/painting/text_style_test.dart	743	lerpFontVariations	paired-match	upstream-text-paint.md#variable-font-axes-during-animation
