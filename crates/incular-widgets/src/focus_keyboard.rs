@@ -18,6 +18,7 @@ use crate::{Widget, WidgetKind};
 #[derive(Clone)]
 pub struct Focus {
     node: Option<FocusNode>,
+    parent_node: Option<FocusNode>,
     autofocus: bool,
     can_request_focus: Option<bool>,
     skip_traversal: Option<bool>,
@@ -35,6 +36,7 @@ impl Default for Focus {
     fn default() -> Self {
         Self {
             node: None,
+            parent_node: None,
             autofocus: false,
             can_request_focus: None,
             skip_traversal: None,
@@ -76,6 +78,14 @@ impl Focus {
             use_external_properties: true,
             ..Self::new(child)
         }
+    }
+
+    /// Uses an explicit parent in the mounted focus tree rather than the
+    /// nearest ancestor supplied by the widget tree.
+    #[must_use]
+    pub fn parent_node(mut self, parent: impl Into<Option<FocusNode>>) -> Self {
+        self.parent_node = parent.into();
+        self
     }
 
     /// Requests focus once if enabled on mount or on a retained update.
@@ -279,6 +289,7 @@ impl From<Focus> for Widget {
             .then_some(value.can_request_focus.unwrap_or(true));
         let callbacks = incular_gestures::GestureCallbacks {
             focus_node: value.node,
+            focus_parent_node: value.parent_node,
             owned_focus_permission,
             focus_key_handler_owner: if value.use_external_properties {
                 incular_gestures::FocusKeyHandlerOwner::FocusNode
@@ -317,6 +328,7 @@ impl From<Focus> for Widget {
 #[derive(Clone)]
 pub struct FocusScope {
     node: Option<FocusScopeNode>,
+    parent_node: Option<FocusNode>,
     can_request_focus: Option<bool>,
     use_external_properties: bool,
     autofocus: bool,
@@ -328,6 +340,7 @@ impl Default for FocusScope {
     fn default() -> Self {
         Self {
             node: None,
+            parent_node: None,
             can_request_focus: None,
             use_external_properties: false,
             autofocus: false,
@@ -343,6 +356,7 @@ impl FocusScope {
     pub fn new(child: impl Into<Widget>) -> Self {
         Self {
             node: None,
+            parent_node: None,
             can_request_focus: None,
             use_external_properties: false,
             autofocus: false,
@@ -425,6 +439,14 @@ impl FocusScope {
         self
     }
 
+    /// Uses an explicit parent in the mounted focus tree. Pass
+    /// `scope.scope_focus_node()` when the parent is another scope.
+    #[must_use]
+    pub fn parent_node(mut self, parent: impl Into<Option<FocusNode>>) -> Self {
+        self.parent_node = parent.into();
+        self
+    }
+
     /// Automatically requests focus for its primary descendant on mount.
     #[must_use]
     pub fn autofocus(mut self, autofocus: bool) -> Self {
@@ -461,7 +483,7 @@ impl From<FocusScope> for Widget {
             .child
             .unwrap_or_else(|| crate::SizedBox::shrink().into());
         let scope = if let Some(node) = &value.node {
-            let mut widget = Widget::from(Focus::with_external_focus_node(child, node.scope_focus_node()));
+            let mut widget = Widget::from(Focus::with_external_focus_node(child, node.scope_focus_node()).parent_node(value.parent_node));
             if let WidgetKind::Gesture { callbacks, .. } = widget.kind_mut() {
                 callbacks.focus_scope = Some(node.clone());
                 if !value.use_external_properties && let Some(allowed) = value.can_request_focus {
@@ -476,7 +498,9 @@ impl From<FocusScope> for Widget {
             // Flutter always mounts a scope node, even without a supplied
             // node or explicit focus permission. Mount-owned descriptors
             // retain that identity and its focused-child history on rebuild.
-            let focus = Focus::new(child).can_request_focus(value.can_request_focus.unwrap_or(true));
+            let focus = Focus::new(child)
+                .parent_node(value.parent_node)
+                .can_request_focus(value.can_request_focus.unwrap_or(true));
             let mut widget = Widget::from(focus);
             if let WidgetKind::Gesture { callbacks, .. } = widget.kind_mut() {
                 callbacks.owns_focus_scope = true;

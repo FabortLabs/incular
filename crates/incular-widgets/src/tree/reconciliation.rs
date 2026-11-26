@@ -2750,6 +2750,7 @@ impl WidgetTree {
                     self.unregister_autofill_element(id, &element.widget);
                     self.tracked.untrack(id, element.tracked);
                     self.focus_change_bindings.remove(&id);
+                    self.requested_focus_parents.remove(&id);
                     if let Some(nodes) = &mut self.standalone_focus_geometry {
                         nodes.remove(&id);
                     }

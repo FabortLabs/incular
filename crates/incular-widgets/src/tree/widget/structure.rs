@@ -1959,6 +1959,7 @@ fn gesture_callbacks_eq(left: &GestureCallbacks, right: &GestureCallbacks) -> bo
         && same_rc(&left.on_focus_raw_key, &right.on_focus_raw_key)
         && left.focus_key_handler_owner == right.focus_key_handler_owner
         && left.focus_node_widget_properties == right.focus_node_widget_properties
+        && left.focus_parent_node == right.focus_parent_node
         && same_rc(&left.on_key_repeat, &right.on_key_repeat)
         && same_rc(&left.on_key_up, &right.on_key_up)
         && same_rc(&left.on_shortcut, &right.on_shortcut)

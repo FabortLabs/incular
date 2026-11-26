@@ -271,6 +271,21 @@ impl WidgetTree {
             self.focus_change_bindings.remove(&id);
         }
         if let Some(hosted) = self.hosted_focus_nodes.as_mut() {
+            let requested_parent = match (node, kind) {
+                (Some(_), Some(WidgetKind::Gesture { callbacks, .. })) => {
+                    callbacks.focus_parent_node.as_ref()
+                }
+                _ => None,
+            };
+            if self.requested_focus_parents.get(&id) != requested_parent {
+                if let Some(parent) = requested_parent {
+                    self.requested_focus_parents.insert(id, parent.clone());
+                } else {
+                    self.requested_focus_parents.remove(&id);
+                }
+                self.hosted_focus_chain.dirty = true;
+                self.hosted_scope_membership_dirty = true;
+            }
             if let Some(node) = node {
                 if !hosted
                     .get(&id)
@@ -345,6 +360,40 @@ impl WidgetTree {
         self.pending_focus_attachment_revision
     }
 
+    fn mounted_focus_parent(&self, element: ElementId) -> Option<ElementId> {
+        self.resolved_focus_parents.get(&element).copied().or_else(|| self.parent(element))
+    }
+
+    fn is_focus_descendant_or_self(&self, candidate: ElementId, ancestor: ElementId) -> bool {
+        let mut current = Some(candidate);
+        while let Some(id) = current {
+            if id == ancestor {
+                return true;
+            }
+            current = self.mounted_focus_parent(id);
+        }
+        false
+    }
+
+    fn refresh_explicit_focus_parents(&mut self) {
+        self.resolved_focus_parents.clear();
+        let Some(hosted) = &self.hosted_focus_nodes else {
+            return;
+        };
+        for (&id, parent) in &self.requested_focus_parents {
+            let Some(parent) = hosted.iter().find_map(|(&candidate, binding)| {
+                (binding.node() == parent).then_some(candidate)
+            }) else {
+                continue;
+            };
+            // Reject any loop, including one formed through ordinary widget
+            // ancestry. Until a valid parent is mounted, use widget ancestry.
+            if !self.is_focus_descendant_or_self(parent, id) {
+                self.resolved_focus_parents.insert(id, parent);
+            }
+        }
+    }
+
     /// Rebinds nearest external scopes after a mount or retained reparent.
     /// The focus hot path never scans the tree unless topology has changed.
     #[doc(hidden)]
@@ -352,12 +401,13 @@ impl WidgetTree {
         if !std::mem::take(&mut self.hosted_scope_membership_dirty) {
             return;
         }
+        self.refresh_explicit_focus_parents();
         let Some(hosted) = &self.hosted_focus_nodes else {
             return;
         };
         for (&id, binding) in hosted {
             let own_scope = binding.node().scope_owner();
-            let mut ancestor = self.parent(id);
+            let mut ancestor = self.mounted_focus_parent(id);
             let mut scope = None;
             while let Some(id) = ancestor {
                 if let Some(parent_scope) = hosted.get(&id).and_then(|node| node.node().scope_owner())
@@ -366,7 +416,7 @@ impl WidgetTree {
                     scope = Some(parent_scope);
                     break;
                 }
-                ancestor = self.parent(id);
+                ancestor = self.mounted_focus_parent(id);
             }
             binding.node().set_host_enclosing_scope(scope.as_ref());
         }
@@ -391,7 +441,7 @@ impl WidgetTree {
             {
                 next.push((binding.node().clone(), Some(id) == target));
             }
-            current = self.parent(id);
+            current = self.mounted_focus_parent(id);
         }
         // Each enclosing scope remembers the leaf or the nested scope
         // directly below it, not a descendant inside that nested scope.
@@ -763,7 +813,7 @@ impl WidgetTree {
             {
                 return KeyEventResult::Handled;
             }
-            current = element.parent;
+            current = self.mounted_focus_parent(id);
         }
         KeyEventResult::Ignored
     }
@@ -1136,6 +1186,34 @@ impl WidgetTree {
         Some(self.restore_scope_history(owner, scope, None))
     }
 
+    /// Finds the same external autofocus node after the layout widget that
+    /// hosted it was replaced, provided an explicit focus attachment still
+    /// connects it. A different newly mounted autofocus node cannot win
+    /// this way, and the host settles explicit requests first.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn reattached_autofocus_target(
+        &self,
+        node: &incular_gestures::FocusNode,
+    ) -> Option<ElementId> {
+        let hosted = self.hosted_focus_nodes.as_ref()?;
+        self.mounted_autofocus.iter().copied().find(|&id| {
+            if hosted.get(&id).is_none_or(|binding| binding.node() != node)
+                || !self.can_request_focus(id)
+            {
+                return false;
+            }
+            let mut current = Some(id);
+            while let Some(id) = current {
+                if self.resolved_focus_parents.contains_key(&id) {
+                    return true;
+                }
+                current = self.parent(id);
+            }
+            false
+        })
+    }
+
     /// Flutter detaches a primary FocusNode with PreviouslyFocusedChild.
     /// Resolve its old scope path rather than the replacement element's
     /// ancestry: the new descriptor may have moved to a different scope.
@@ -1179,7 +1257,7 @@ impl WidgetTree {
                 }
                 hosted.iter().find_map(|(&id, binding)| {
                     (id != owner && binding.node() == node
-                        && self.is_descendant_or_self(id, owner) && self.can_request_focus(id))
+                        && self.is_focus_descendant_or_self(id, owner) && self.can_request_focus(id))
                         .then_some((id, node.scope_owner()))
                 })
             });
@@ -1356,7 +1434,7 @@ impl WidgetTree {
         let Some(mut child) = hosted.get(&target).map(|binding| binding.node()) else {
             return;
         };
-        let mut current = self.parent(target);
+        let mut current = self.mounted_focus_parent(target);
         while let Some(id) = current {
             if let Some(anchor) = hosted.get(&id).map(|binding| binding.node())
                 && anchor != child
@@ -1365,7 +1443,7 @@ impl WidgetTree {
                 scope.record_host_focused_child(child);
                 child = anchor;
             }
-            current = self.parent(id);
+            current = self.mounted_focus_parent(id);
         }
     }
 
@@ -1391,7 +1469,7 @@ impl WidgetTree {
                 continue;
             }
             let Some(target) = find(&node).filter(|&id| {
-                id != owner && self.is_descendant_or_self(id, owner) && self.can_request_focus(id)
+                id != owner && self.is_focus_descendant_or_self(id, owner) && self.can_request_focus(id)
             }) else {
                 continue;
             };

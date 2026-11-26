@@ -1532,6 +1532,8 @@ pub struct WidgetTree {
     focus_geometry_stamp: Option<(u64, u64)>,
     pending_focus_attachment_revision: u64,
     hosted_scope_membership_dirty: bool,
+    requested_focus_parents: BTreeMap<ElementId, incular_gestures::FocusNode>,
+    resolved_focus_parents: BTreeMap<ElementId, ElementId>,
     focus_change_bindings: BTreeMap<ElementId, focus::FocusChangeBinding>,
     focus_semantics_bindings: Option<focus::FocusSemanticsBindings>,
     focus_semantic_actions_enabled: bool,

@@ -601,6 +601,9 @@ pub struct GestureCallbacks {
     /// Property overrides are separate from callback ownership.
     #[doc(hidden)]
     pub focus_node_widget_properties: Option<crate::FocusNodeWidgetProperties>,
+    /// The widget's optional mounted focus-tree parent.
+    #[doc(hidden)]
+    pub focus_parent_node: Option<crate::FocusNode>,
     /// Receives key-down events that were not consumed by [`Self::on_key`].
     pub on_key_down: Option<Rc<dyn Fn(KeyboardEvent)>>,
     /// Receives repeated key-down events in addition to [`Self::on_key_down`].

@@ -948,3 +948,100 @@ fn tab_skips_a_group_with_only_disabled_controls_in_one_keypress() {
     assert!(second.has_primary_focus() && !first.has_primary_focus());
     assert!(!disabled1.has_focus() && !disabled2.has_focus());
 }
+
+#[test]
+fn an_explicit_focus_parent_survives_inserting_a_widget_ancestor() {
+    use incular_core::{Code, KeyboardEvent, KeyboardKey};
+    use incular_widgets::{Column, KeyEventResult};
+    use std::{cell::RefCell, rc::Rc};
+
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let top = FocusNode::new();
+    let parent = FocusNode::new();
+    let child = FocusNode::new();
+    let inserted = FocusNode::new();
+    let routes = Rc::new(RefCell::new(Vec::new()));
+    for (node, label) in [(&top, "top"), (&parent, "parent"), (&inserted, "inserted")] {
+        let routes = routes.clone();
+        node.set_on_key_event(Some(Rc::new(move |_, _| {
+            routes.borrow_mut().push(label);
+            KeyEventResult::Ignored
+        })));
+    }
+    let scene = |wrap: bool| {
+        let child = Focus::with_external_focus_node(SizedBox::shrink(), child.clone())
+            .parent_node(parent.clone())
+            .autofocus(true);
+        let branch = if wrap {
+            Focus::with_external_focus_node(child, inserted.clone()).into()
+        } else {
+            Widget::from(child)
+        };
+        let column = Column::new([
+            Widget::from(Focus::with_external_focus_node(SizedBox::shrink(), parent.clone())),
+            branch,
+        ]);
+        FocusScope::new(Focus::with_external_focus_node(column, top.clone())).into()
+    };
+    let mut runtime = Runtime::new(scene(false)).unwrap();
+    for wrap in [false, true] {
+        if wrap {
+            runtime.schedule_update(runtime.tree().root().unwrap(), scene(true)).unwrap();
+        }
+        runtime.run_frame(bounds).unwrap();
+        assert!(child.has_primary_focus(), "wrapped: {wrap}, runtime: {:?}", runtime.focused_element());
+        assert!(parent.has_focus() && top.has_focus());
+        assert!(!inserted.has_focus());
+        runtime.dispatch_keyboard_event(KeyboardEvent::key_down(
+            KeyboardKey::Character("1".into()),
+            Code::Digit1,
+        ));
+        assert_eq!(routes.take(), ["parent", "top"]);
+        runtime.dispatch_keyboard_event(KeyboardEvent::key_up(
+            KeyboardKey::Character("1".into()),
+            Code::Digit1,
+        ));
+        routes.borrow_mut().clear();
+    }
+}
+
+#[test]
+fn an_explicit_scope_parent_survives_inserting_another_scope() {
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let top = FocusScopeNode::new();
+    let parent = FocusScopeNode::new();
+    let child = FocusScopeNode::new();
+    let inserted = FocusScopeNode::new();
+    let leaf = FocusNode::new();
+    let scene = |wrap: bool| {
+        let child = FocusScope::with_external_focus_node(
+            Focus::with_external_focus_node(SizedBox::shrink(), leaf.clone()).autofocus(true),
+            child.clone(),
+        )
+        .parent_node(parent.scope_focus_node());
+        let branch = if wrap {
+            FocusScope::with_external_focus_node(child, inserted.clone()).into()
+        } else {
+            Widget::from(child)
+        };
+        let column = incular_widgets::Column::new([
+            Widget::from(FocusScope::with_external_focus_node(SizedBox::shrink(), parent.clone())),
+            branch,
+        ]);
+        FocusScope::with_external_focus_node(column, top.clone()).into()
+    };
+    let mut runtime = Runtime::new(scene(false)).unwrap();
+    for wrap in [false, true] {
+        if wrap {
+            runtime.schedule_update(runtime.tree().root().unwrap(), scene(true)).unwrap();
+        }
+        runtime.run_frame(bounds).unwrap();
+        assert!(leaf.has_primary_focus(), "wrapped: {wrap}, runtime: {:?}", runtime.focused_element());
+        assert!(child.has_focus() && parent.has_focus() && top.has_focus());
+        assert!(!inserted.has_focus());
+        assert_eq!(top.focused_child(), Some(parent.scope_focus_node()));
+        assert_eq!(parent.focused_child(), Some(child.scope_focus_node()));
+        assert_eq!(child.focused_child(), Some(leaf.clone()));
+        assert_eq!(inserted.focused_child(), None);
+    }
+}

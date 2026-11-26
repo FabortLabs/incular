@@ -2643,9 +2643,15 @@ impl Runtime {
         // being delivered. Do not acknowledge that newer request here.
         self.adopted_focus_epoch = Some(epoch);
         self.tree.external_focus_change(current).or_else(|| {
-            // A different node reusing the element does not inherit focus.
-            // Without a real request, restore the old scope or its history.
-            replaced.then(|| self.tree.focus_fallback_after_node_detached())
+            // Replacing a widget can remount the same autofocused node in
+            // an explicitly parented branch. A different node reusing the
+            // element must never inherit focus.
+            replaced.then(|| {
+                self.primary_focus_node
+                    .as_ref()
+                    .and_then(|node| self.tree.reattached_autofocus_target(node))
+                    .or_else(|| self.tree.focus_fallback_after_node_detached())
+            })
         })
     }
 

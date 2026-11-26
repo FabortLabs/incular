@@ -99,3 +99,18 @@ and restores the most recent eligible one. Disabling the active scope
 restores a sibling's child without discarding the disabled scope's
 own history. The explicit outer Rust scope supplies the reference
 fixture's root focus target; implicit-root setup is independent.
+
+## Explicit focus parents
+
+Pinned `focus_scope_test.dart:438` and `:502` passed by exact name.
+The Rust counterparts mount the same two sibling branches, explicitly
+attach one to the other's focus node or scope, then insert another widget
+ancestor. The original leaf remains primary; its logical ancestors
+retain focus, and the inserted ancestor never receives it. The ordinary
+node case dispatches a real key and checks the exact recipient order.
+The scope case checks every scope's immediate focused child. All 23
+targeted mounted-scope tests passed.
+
+An absent or cyclic target safely falls back to widget ancestry in the
+runtime. Manual Flutter focus attachments, missing-parent diagnostics,
+and logical traversal order are separate from these comparisons.
