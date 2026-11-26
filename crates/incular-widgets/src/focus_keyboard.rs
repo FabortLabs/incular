@@ -20,8 +20,10 @@ pub struct Focus {
     node: Option<FocusNode>,
     autofocus: bool,
     can_request_focus: Option<bool>,
-    descendants_are_focusable: bool,
-    descendants_are_traversable: bool,
+    skip_traversal: Option<bool>,
+    descendants_are_focusable: Option<bool>,
+    descendants_are_traversable: Option<bool>,
+    use_external_properties: bool,
     include_semantics: bool,
     on_key_event: Option<incular_gestures::FocusKeyEventHandler>,
     on_focus_change: Option<Rc<dyn Fn(bool)>>,
@@ -34,8 +36,10 @@ impl Default for Focus {
             node: None,
             autofocus: false,
             can_request_focus: None,
-            descendants_are_focusable: true,
-            descendants_are_traversable: true,
+            skip_traversal: None,
+            descendants_are_focusable: None,
+            descendants_are_traversable: None,
+            use_external_properties: false,
             include_semantics: true,
             on_key_event: None,
             on_focus_change: None,
@@ -58,7 +62,18 @@ impl Focus {
     #[must_use]
     pub fn node(mut self, node: FocusNode) -> Self {
         self.node = Some(node);
+        self.use_external_properties = false;
         self
+    }
+
+    /// Wraps a node without replacing its callbacks or focus permissions.
+    #[must_use]
+    pub fn with_external_focus_node(child: impl Into<Widget>, node: FocusNode) -> Self {
+        Self {
+            node: Some(node),
+            use_external_properties: true,
+            ..Self::new(child)
+        }
     }
 
     /// Requests focus once if enabled on mount or on a retained update.
@@ -112,15 +127,62 @@ impl Focus {
     /// Controls explicit or implicit focus requests by descendants.
     #[must_use]
     pub fn descendants_are_focusable(mut self, focusable: bool) -> Self {
-        self.descendants_are_focusable = focusable;
+        self.descendants_are_focusable = Some(focusable);
         self
     }
 
     /// Controls traversal to descendants without denying explicit requests.
     #[must_use]
     pub fn descendants_are_traversable(mut self, traversable: bool) -> Self {
-        self.descendants_are_traversable = traversable;
+        self.descendants_are_traversable = Some(traversable);
         self
+    }
+
+    /// Excludes only this focus node from traversal, not its descendants.
+    #[must_use]
+    pub fn skip_traversal(mut self, skip: bool) -> Self {
+        self.skip_traversal = Some(skip);
+        self
+    }
+
+    #[must_use]
+    pub fn skips_traversal(&self) -> bool {
+        (!self.use_external_properties)
+            .then_some(self.skip_traversal)
+            .flatten()
+            .unwrap_or_else(|| self.node.as_ref().is_some_and(FocusNode::skip_traversal))
+    }
+
+    #[must_use]
+    pub fn allows_focus_requests(&self) -> bool {
+        (!self.use_external_properties)
+            .then_some(self.can_request_focus)
+            .flatten()
+            .unwrap_or_else(|| self.node.as_ref().is_none_or(FocusNode::can_request_focus))
+    }
+
+    #[must_use]
+    pub fn allows_descendant_focus(&self) -> bool {
+        (!self.use_external_properties)
+            .then_some(self.descendants_are_focusable)
+            .flatten()
+            .unwrap_or_else(|| {
+                self.node
+                    .as_ref()
+                    .is_none_or(FocusNode::descendants_are_focusable)
+            })
+    }
+
+    #[must_use]
+    pub fn allows_descendant_traversal(&self) -> bool {
+        (!self.use_external_properties)
+            .then_some(self.descendants_are_traversable)
+            .flatten()
+            .unwrap_or_else(|| {
+                self.node
+                    .as_ref()
+                    .is_none_or(FocusNode::descendants_are_traversable)
+            })
     }
 
     /// Includes this widget's focus annotation in the accessibility tree.
@@ -134,11 +196,31 @@ impl Focus {
     /// Handles keys delivered to this node or bubbled from a focused child.
     #[must_use]
     pub fn on_key_event(
-        mut self,
+        self,
         handler: impl Fn(&FocusNode, KeyboardEvent) -> KeyEventResult + 'static,
     ) -> Self {
-        self.on_key_event = Some(Rc::new(handler));
+        self.with_key_event_handler(Some(Rc::new(handler)))
+    }
+
+    /// Installs a shared callback or clears the typed handler.
+    #[must_use]
+    pub fn with_key_event_handler(
+        mut self,
+        handler: Option<incular_gestures::FocusKeyEventHandler>,
+    ) -> Self {
+        self.on_key_event = handler;
         self
+    }
+
+    /// Returns the callback that this widget supplies, or the external
+    /// node's current callback when the node owns its own properties.
+    #[must_use]
+    pub fn key_event_handler(&self) -> Option<incular_gestures::FocusKeyEventHandler> {
+        if self.use_external_properties {
+            self.node.as_ref().and_then(FocusNode::on_key_event)
+        } else {
+            self.on_key_event.clone()
+        }
     }
 
     /// Reports a change in whether the node or one of its descendants has focus.
@@ -151,19 +233,16 @@ impl Focus {
 
 impl From<Focus> for Widget {
     fn from(value: Focus) -> Self {
+        let descendant_focus = value.allows_descendant_focus();
+        let descendant_traversal = value.allows_descendant_traversal();
         let mut child = value
             .child
             .unwrap_or_else(|| crate::SizedBox::shrink().into());
-        if !value.descendants_are_focusable {
+        if !value.use_external_properties && !descendant_focus {
             child = child.with_excluded_focus(true);
         }
-        if !value.descendants_are_traversable {
+        if !value.use_external_properties && !descendant_traversal {
             child = child.with_excluded_focus_traversal(true);
-        }
-        if let Some(node) = &value.node
-            && let Some(can_request_focus) = value.can_request_focus
-        {
-            node.set_can_request_focus(can_request_focus);
         }
         let owned_focus_permission = value
             .node
@@ -172,6 +251,15 @@ impl From<Focus> for Widget {
         let callbacks = incular_gestures::GestureCallbacks {
             focus_node: value.node,
             owned_focus_permission,
+            routes_node_key_events: true,
+            focus_node_widget_properties: (!value.use_external_properties).then_some(
+                incular_gestures::FocusNodeWidgetProperties {
+                    can_request_focus: value.can_request_focus,
+                    skip_traversal: value.skip_traversal,
+                    descendants_are_focusable: value.descendants_are_focusable,
+                    descendants_are_traversable: value.descendants_are_traversable,
+                },
+            ),
             autofocus: value.autofocus,
             on_focus_change: value.on_focus_change,
             on_focus_key_event: value.on_key_event,

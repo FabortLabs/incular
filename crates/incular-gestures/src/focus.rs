@@ -30,6 +30,34 @@ pub enum UnfocusDisposition {
     PreviouslyFocusedChild,
 }
 
+/// Overrides owned by a regular mounted Focus widget. `None` preserves the
+/// value already on its node.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FocusNodeWidgetProperties {
+    pub can_request_focus: Option<bool>,
+    pub skip_traversal: Option<bool>,
+    pub descendants_are_focusable: Option<bool>,
+    pub descendants_are_traversable: Option<bool>,
+}
+
+impl FocusNodeWidgetProperties {
+    pub fn apply(self, node: &FocusNode) {
+        if let Some(value) = self.can_request_focus {
+            node.set_can_request_focus(value);
+        }
+        if let Some(value) = self.skip_traversal {
+            node.set_skip_traversal(value);
+        }
+        if let Some(value) = self.descendants_are_focusable {
+            node.set_descendants_are_focusable(value);
+        }
+        if let Some(value) = self.descendants_are_traversable {
+            node.set_descendants_are_traversable(value);
+        }
+    }
+}
+
 /// Shared focus handle usable by controls that are rebuilt often.
 ///
 /// For exclusive traversal use a [`FocusManager`]; calling
@@ -79,7 +107,10 @@ impl From<Rect> for FocusRect {
     fn from(rect: Rect) -> Self {
         Self {
             origin: rect.origin,
-            size: FocusExtent { width: rect.size.width, height: rect.size.height },
+            size: FocusExtent {
+                width: rect.size.width,
+                height: rect.size.height,
+            },
         }
     }
 }
@@ -88,6 +119,14 @@ impl From<Rect> for FocusRect {
 struct FocusGeometry {
     oriented: FocusRect,
     traversal: Rect,
+}
+
+type WeakFocusKeyEventHandler =
+    Weak<dyn Fn(&FocusNode, incular_core::KeyboardEvent) -> crate::KeyEventResult>;
+
+enum NodeKeyEventHandler {
+    External(crate::FocusKeyEventHandler),
+    Mounted(WeakFocusKeyEventHandler),
 }
 
 struct FocusState {
@@ -104,6 +143,7 @@ struct FocusState {
     skip_traversal: Cell<bool>,
     descendants_are_focusable: Cell<bool>,
     descendants_are_traversable: Cell<bool>,
+    key_event_handler: RefCell<Option<NodeKeyEventHandler>>,
     geometry: Cell<FocusGeometry>,
     traversal_order: std::cell::RefCell<Option<FocusOrder>>,
     changes: incular_core::reactivity::DependencySource,
@@ -200,6 +240,7 @@ impl FocusNode {
                 skip_traversal: Cell::new(false),
                 descendants_are_focusable: Cell::new(true),
                 descendants_are_traversable: Cell::new(true),
+                key_event_handler: RefCell::new(None),
                 geometry: Cell::new(FocusGeometry::default()),
                 traversal_order: std::cell::RefCell::new(None),
                 changes: incular_core::reactivity::DependencySource::default(),
@@ -212,6 +253,29 @@ impl FocusNode {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// The currently installed typed keyboard callback.
+    #[must_use]
+    pub fn on_key_event(&self) -> Option<crate::FocusKeyEventHandler> {
+        match self.state.key_event_handler.borrow().as_ref()? {
+            NodeKeyEventHandler::External(handler) => Some(handler.clone()),
+            NodeKeyEventHandler::Mounted(handler) => handler.upgrade(),
+        }
+    }
+
+    /// Replaces the node-owned callback. A regular mounted Focus widget
+    /// installs its own value when it next updates.
+    pub fn set_on_key_event(&self, handler: Option<crate::FocusKeyEventHandler>) {
+        *self.state.key_event_handler.borrow_mut() = handler.map(NodeKeyEventHandler::External);
+    }
+
+    /// Mirrors a mounted widget's callback without creating a cycle when
+    /// that callback itself captures this node.
+    #[doc(hidden)]
+    pub fn install_mounted_key_event_handler(&self, handler: Option<&crate::FocusKeyEventHandler>) {
+        *self.state.key_event_handler.borrow_mut() =
+            handler.map(|handler| NodeKeyEventHandler::Mounted(Rc::downgrade(handler)));
     }
 
     /// Subscribes to focus and focus-property changes.
@@ -516,7 +580,10 @@ impl FocusNode {
         self.state.geometry.set(FocusGeometry {
             oriented: FocusRect {
                 origin: corner,
-                size: FocusExtent { width: size_in_world.x, height: size_in_world.y },
+                size: FocusExtent {
+                    width: size_in_world.x,
+                    height: size_in_world.y,
+                },
             },
             traversal: local_to_world.transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, size)),
         });
@@ -1875,10 +1942,10 @@ impl FocusScopeNode {
     /// Whether the mounted scope or any of its descendants has focus.
     #[must_use]
     pub fn has_focus(&self) -> bool {
-        self.state
-            .anchor
-            .get()
-            .map_or_else(|| self.focused().is_some(), |anchor| anchor.node.has_focus())
+        self.state.anchor.get().map_or_else(
+            || self.focused().is_some(),
+            |anchor| anchor.node.has_focus(),
+        )
     }
 
     /// Whether this mounted scope itself owns primary focus.

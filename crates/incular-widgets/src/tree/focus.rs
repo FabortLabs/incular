@@ -244,6 +244,13 @@ impl WidgetTree {
             bindings.unbind(id);
         }
         let node = kind.and_then(external_node);
+        if let (Some(node), Some(WidgetKind::Gesture { callbacks, .. })) = (node, kind)
+            && let Some(properties) = callbacks.focus_node_widget_properties
+        {
+            properties.apply(node);
+            node.install_mounted_key_event_handler(callbacks.on_focus_key_event.as_ref());
+        }
+
         let callback = match kind {
             Some(WidgetKind::Gesture { callbacks, .. }) => callbacks.on_focus_change.as_ref(),
             _ => None,

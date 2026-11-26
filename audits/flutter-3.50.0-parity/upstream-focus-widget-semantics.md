@@ -73,6 +73,24 @@ the default framework traversal and still returns unconsumed at the
 Runtime boundary. Tests use normalized keyboard events, not native OS
 delivery or system shortcuts. Five focused Rust targets passed (20 tests).
 
+### Mounted callback identity and descriptor ownership
+
+Pinned :1696 and the externally owned Focus variant at :1750 reran.
+A regular mounted Focus now installs the identical typed callback on
+its node. The old callback ignores Enter; the updated callback handles
+it on the same focused element. Rebuilding without a callback clears
+the slot without dropping focus. An externally owned node keeps its
+own typed callback across widget rebuilds. The legacy RawKeyEvent
+assertions remain outside these typed checks.
+
+The authored Flutter and native retained probes also build and discard
+a descriptor that would disallow focus on the active node. Building it
+no longer changes the mounted node or clears its Enter callback;
+actually mounting it changes the node permissions and drops focus.
+The previous native widget conversion applied permissions eagerly.
+Ten focused Rust tests passed, including the existing focus and window
+lifecycle controls.
+
 ## Retained identity across focus reparenting
 
 The pinned `widgets/focus_manager_test.dart:1825` original and the

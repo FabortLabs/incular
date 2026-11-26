@@ -1920,6 +1920,8 @@ fn gesture_callbacks_eq(left: &GestureCallbacks, right: &GestureCallbacks) -> bo
         && same_rc(&left.on_key, &right.on_key)
         && same_rc(&left.on_key_down, &right.on_key_down)
         && same_rc(&left.on_focus_key_event, &right.on_focus_key_event)
+        && left.routes_node_key_events == right.routes_node_key_events
+        && left.focus_node_widget_properties == right.focus_node_widget_properties
         && same_rc(&left.on_key_repeat, &right.on_key_repeat)
         && same_rc(&left.on_key_up, &right.on_key_up)
         && same_rc(&left.on_shortcut, &right.on_shortcut)

@@ -90,13 +90,18 @@ impl GestureCallbacks {
         {
             return KeyEventResult::Handled;
         }
-        if let Some((handler, node)) = self
-            .on_focus_key_event
-            .as_ref()
-            .zip(self.focus_node.as_ref())
-        {
-            let result = handler(node, event.clone());
-            if result != KeyEventResult::Ignored {
+        if let Some(node) = &self.focus_node {
+            let result = if self.routes_node_key_events {
+                node.on_key_event()
+                    .map(|handler| handler(node, event.clone()))
+            } else {
+                self.on_focus_key_event
+                    .as_ref()
+                    .map(|handler| handler(node, event.clone()))
+            };
+            if let Some(result) = result
+                && result != KeyEventResult::Ignored
+            {
                 return result;
             }
         }

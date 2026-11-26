@@ -500,6 +500,12 @@ pub struct GestureCallbacks {
     pub on_key: Option<Rc<dyn Fn(KeyboardEvent) -> bool>>,
     /// A mounted Focus widget's typed keyboard handler.
     pub on_focus_key_event: Option<FocusKeyEventHandler>,
+    /// Whether this mounted Focus routes typed keys through the node's storage.
+    #[doc(hidden)]
+    pub routes_node_key_events: bool,
+    /// A regular Focus installs widget callbacks; an external Focus does not.
+    #[doc(hidden)]
+    pub focus_node_widget_properties: Option<crate::FocusNodeWidgetProperties>,
     /// Receives key-down events that were not consumed by [`Self::on_key`].
     pub on_key_down: Option<Rc<dyn Fn(KeyboardEvent)>>,
     /// Receives repeated key-down events in addition to [`Self::on_key_down`].
