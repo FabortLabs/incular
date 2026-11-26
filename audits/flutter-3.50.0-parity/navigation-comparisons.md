@@ -238,3 +238,25 @@ at the midpoint, and retain their existing transition-end and reverse
 checks. Both passed. This backfills the retained transition behavior;
 it does not count as an original Flutter registration or a native
 pixel comparison.
+
+## Pure keyed reorder keeps existing primary focus
+
+The pinned `navigator_keyed_reorder_focus_test.dart` demonstrates a
+difference between reordering the same routes and pushing a new one.
+Moving a focused keyed page underneath another does not itself move
+primary focus; an ordinary rebuild of that order does not either.
+An explicit request switches it, and reversing the permutation does
+not undo that request. Removing and reinserting a page with the same
+key creates a fresh route with no old focus history.
+
+RouteOutlet now treats a permutation of the same route identities as
+focus-neutral, retaining focusability only for the already focused
+route. The covered route still neither paints nor participates in
+ordinary traversal. Normal pushes, pops, and replacements retain
+their existing focus handling. The corrected native regression starts
+with actual keyed pages and compares both primary focus and mounted
+identity at every step. The focused RouteOutlet module moved from 87
+passing and 14 failing to 90 passing and 11 failing after this and
+the two transition-test repairs; the remaining failed attempts,
+retry scheduling, and focus assertions stay open. The pinned probe is
+authored, not an additional upstream registration.

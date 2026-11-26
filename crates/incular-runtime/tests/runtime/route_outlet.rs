@@ -369,51 +369,78 @@ fn outlet_restores_directly_focused_nodes_even_if_tab_traversal_skips_them() {
 fn outlet_reorder_preserves_and_repush_forgets() {
     let navigator = Navigator::new();
     let mut harness = harness(&navigator);
-    let key = |name: &str| PageKey::new(name).unwrap();
+    let keyed =
+        |name: &str, node: &FocusNode| focus_page(name, node).key(PageKey::new(name).unwrap());
     let node_a = FocusNode::new();
     let node_b = FocusNode::new();
-    navigator.push_page(focus_page("a", &node_a));
-    navigator.push_page(focus_page("b", &node_b));
+    navigator
+        .set_pages([keyed("a", &node_a), keyed("b", &node_b)])
+        .unwrap();
     present(&mut harness);
-    // Only the active route is focusable through the outlet: B is on top.
+    let b = navigator.current().unwrap().id;
     tab_until(&mut harness.runtime, &node_b);
-    // Keyed reorder deactivates B without removing it: the record survives
-    // reconciliation and restores after reordering back.
+    let b_focus = harness.runtime.focused_element().unwrap();
+
+    // Move the same keyed routes, not unkeyed-to-keyed replacements.
     navigator
-        .set_pages([
-            Page::new("b", focus_child(&node_b)).key(key("b")),
-            Page::new("a", focus_child(&node_a)).key(key("a")),
-        ])
+        .set_pages([keyed("b", &node_b), keyed("a", &node_a)])
         .unwrap();
     present(&mut harness);
-    assert!(node_b.has_focus());
-    tab_until(&mut harness.runtime, &node_a);
+    assert_eq!(navigator.routes()[0].id, b);
+    assert!(node_b.has_primary_focus());
+    assert_eq!(harness.runtime.focused_element(), Some(b_focus));
+    present(&mut harness);
+    assert!(
+        node_b.has_primary_focus(),
+        "a quiet frame does not move primary focus"
+    );
     navigator
-        .set_pages([
-            Page::new("a", focus_child(&node_a)).key(key("a")),
-            Page::new("b", focus_child(&node_b)).key(key("b")),
-        ])
+        .set_pages([keyed("b", &node_b), keyed("a", &node_a)])
         .unwrap();
     present(&mut harness);
-    assert!(node_b.has_focus());
-    // Permanent removal forgets through the outlet: re-pushing the same key
-    // mounts a fresh route with no history to restore and a fresh binding.
-    navigator.pop();
-    navigator.pop();
+    assert!(
+        node_b.has_primary_focus(),
+        "compatible rebuilding is focus-neutral"
+    );
+
+    node_a.request_focus();
     present(&mut harness);
-    assert_eq!(harness.runtime.focused_element(), None);
-    let node_a2 = FocusNode::new();
-    navigator.push_page(focus_page("a", &node_a2));
+    assert!(node_a.has_primary_focus());
+    let a_focus = harness.runtime.focused_element().unwrap();
+    assert!(!node_b.has_focus());
+
+    navigator
+        .set_pages([keyed("a", &node_a), keyed("b", &node_b)])
+        .unwrap();
     present(&mut harness);
-    assert_eq!(harness.runtime.focused_element(), None);
-    assert!(!node_a2.has_focus());
-    let fresh_id = navigator.current().expect("repushed route").id;
-    let fresh_scope = harness
-        .outlet
-        .borrow()
-        .route_task_scope(fresh_id)
-        .expect("repushed route is bound");
-    assert!(!fresh_scope.is_cancelled());
+    assert_eq!(navigator.current().unwrap().id, b);
+    assert!(!node_b.has_focus(), "no implicit restore on reorder");
+    assert!(node_a.has_primary_focus());
+    assert_eq!(harness.runtime.focused_element(), Some(a_focus));
+
+    // Reintroducing a removed page key must not reuse the dead lifetime
+    // or focus record, even though its declarative key matches.
+    let scope = harness.outlet.borrow().route_task_scope(b).unwrap();
+    navigator.set_pages([keyed("a", &node_a)]).unwrap();
+    present(&mut harness);
+    assert!(scope.is_cancelled());
+    assert!(!node_b.has_focus());
+    let new_b = FocusNode::new();
+    navigator
+        .set_pages([keyed("a", &node_a), keyed("b", &new_b)])
+        .unwrap();
+    present(&mut harness);
+    let fresh_id = navigator.current().unwrap().id;
+    assert_ne!(fresh_id, b);
+    assert!(!new_b.has_focus());
+    assert!(
+        !harness
+            .outlet
+            .borrow()
+            .route_task_scope(fresh_id)
+            .unwrap()
+            .is_cancelled()
+    );
 }
 
 #[test]

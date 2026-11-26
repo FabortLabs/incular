@@ -58,7 +58,9 @@ use incular_rendering::DisplayList;
 use incular_widgets::{
     DoubleAnimation, ExcludeFocusTraversal, IgnorePointer, LayoutBuilder,
     ModalBarrier as ModalBarrierWidget, SizedBox, Stack, Visibility, Widget, always_dismissed,
-    internal::{ElementId, Key, ModalBarrierDismissScope, TapRegionRouteCurrent, TreeError, WidgetTree},
+    internal::{
+        ElementId, Key, ModalBarrierDismissScope, TapRegionRouteCurrent, TreeError, WidgetTree,
+    },
 };
 
 use super::{
@@ -405,6 +407,10 @@ pub struct RouteOutlet {
     /// own: nested slot builders promote when they execute and reconcile,
     /// skipped builders keep the previous publication.
     consumed: Option<FrameAttempt>,
+    /// A pure keyed reorder does not request focus. If it covers the
+    /// currently focused route, keep only that route's focusability until
+    /// focus moves or a subsequent stack mutation changes membership.
+    focus_neutral_reorder: Option<(u64, Option<RouteId>)>,
     /// Live revision last scheduled for. Follow-up scheduling is
     /// edge-triggered per outlet: a stale revision flags exactly once no
     /// matter how many frames observe it, so unconsumable staleness
@@ -506,6 +512,7 @@ impl RouteOutlet {
             epoch: Cell::new(0),
             composing: RefCell::default(),
             consumed: None,
+            focus_neutral_reorder: None,
             signaled: Cell::new(0),
             animated: RefCell::default(),
             namespace,
@@ -945,6 +952,9 @@ impl RouteOutlet {
     fn compose(&self) -> (Widget, FrameAttempt) {
         let routes = self.navigator.routes();
         let attempt = FrameAttempt::of(self.navigator.revision(), &routes);
+        let retained_focus_owner = self.focus_neutral_reorder.and_then(|(revision, owner)| {
+            (attempt.revision == revision).then_some(owner).flatten()
+        });
         // Top-down visibility: everything paints until (and including) the
         // first opaque page.
         let mut visible = vec![false; routes.len()];
@@ -992,7 +1002,12 @@ impl RouteOutlet {
             if visible && let Some(barrier) = barrier {
                 children.push(self.veil_widget(route.id, &barrier));
             }
-            children.push(self.content_widget(route, visible, attempt.active == Some(route.id)));
+            children.push(self.content_widget(
+                route,
+                visible,
+                attempt.active == Some(route.id),
+                retained_focus_owner == Some(route.id),
+            ));
             // Routes leaving above this one: replaced routes stay under
             // their replacement until it settles.
             for leaving in exiting
@@ -1033,7 +1048,13 @@ impl RouteOutlet {
     /// outlet-owned wrapper — never on the presented child — so caller
     /// keys on route content survive navigation untouched, and the tag
     /// element stays stable across visibility flips.
-    fn content_widget(&self, route: &Route, visible: bool, is_current: bool) -> Widget {
+    fn content_widget(
+        &self,
+        route: &Route,
+        visible: bool,
+        is_current: bool,
+        retained_focus: bool,
+    ) -> Widget {
         // `ModalRoute.of` for everything the route presents, when enabled.
         let content = if self.modal_route_scopes {
             Widget::environment_scope(
@@ -1049,6 +1070,7 @@ impl RouteOutlet {
         let mut wrapped: Widget = Visibility::new(content)
             .visible(visible)
             .maintain_state(true)
+            .maintain_focusability(retained_focus)
             .into();
         if !visible {
             wrapped = ExcludeFocusTraversal::new(wrapped).into();
@@ -1613,7 +1635,58 @@ impl RouteOutlet {
         let transitioned = self.commit_transition(runtime);
         self.prune_removed();
         self.ensure_bindings();
-        self.restore_or_retry(runtime, transitioned);
+        if !self.focus_neutral_reorder.is_some_and(|(revision, _)| {
+            revision == self.navigator.revision()
+                && self
+                    .consumed
+                    .as_ref()
+                    .is_some_and(|attempt| attempt.revision == revision)
+        }) {
+            self.restore_or_retry(runtime, transitioned);
+        }
+    }
+
+    fn capture_focus_neutral_reorder(&mut self, runtime: &Runtime) {
+        let revision = self.navigator.revision();
+        let Some(previous) = self.consumed.as_ref() else {
+            self.focus_neutral_reorder = None;
+            return;
+        };
+        if let Some((recorded_revision, owner)) = self.focus_neutral_reorder.as_mut()
+            && *recorded_revision == revision
+        {
+            if owner.is_some() && self.focus.current_owner(runtime) != *owner {
+                *owner = None;
+            }
+            return;
+        }
+        let prior_reorder = self.focus_neutral_reorder.take();
+        if previous.revision == revision {
+            return;
+        }
+        let current = FrameAttempt::capture(&self.navigator);
+        if current.members == previous.members {
+            // A compatible Page update in the same order is not a new
+            // focus request either. Keep the existing no-push policy.
+            if let Some((_, owner)) = prior_reorder {
+                let live_owner = self.focus.current_owner(runtime);
+                self.focus_neutral_reorder =
+                    Some((revision, owner.filter(|id| live_owner == Some(*id))));
+            }
+            return;
+        }
+        if current.members.len() != previous.members.len() {
+            return;
+        }
+        let former: HashSet<_> = previous.members.iter().copied().collect();
+        if current.members.iter().all(|id| former.contains(id)) {
+            self.focus_neutral_reorder = Some((
+                revision,
+                self.focus
+                    .current_owner(runtime)
+                    .filter(|id| former.contains(id)),
+            ));
+        }
     }
 
     /// Bumps this outlet and every nested outlet, then captures pending
@@ -1630,6 +1703,7 @@ impl RouteOutlet {
                 .checked_add(1)
                 .expect("revision exhausted"),
         );
+        self.capture_focus_neutral_reorder(runtime);
         self.capture_transition(runtime, None);
         for nested in self.live_nested() {
             nested.borrow_mut().begin_frame(runtime, now);

@@ -89,6 +89,13 @@ impl RouteFocusState {
         })
     }
 
+    /// Reports the route that owns the actual live primary focus.
+    pub(crate) fn current_owner(&self, runtime: &Runtime) -> Option<RouteId> {
+        runtime
+            .focused_element()
+            .and_then(|id| (self.owner_of)(runtime.tree(), id))
+    }
+
     /// Commits a previously captured save into `route`'s record.
     pub(crate) fn commit_saved(&mut self, route: RouteId, saved: Option<ElementId>) {
         self.saved.insert(route, saved);
