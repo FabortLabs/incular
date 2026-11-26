@@ -276,9 +276,9 @@ pub use incular_scroll::{
 pub use incular_semantics::AccessibilityFocusBlockType;
 pub use incular_text::{
     FontFeature, FontVariation, FontWeight, IconData, RichText, StrutStyle, TextAlign,
-    TextBaseline, TextEditingController, TextEditingValue, TextHeightBehavior, TextOverflow,
-    TextRange, TextScaler, TextSelection, TextSpan, TextStyle, TextWidthBasis, WidgetSpan,
-    lerp_font_variations,
+    TextBaseline, TextEditingController, TextEditingValue, TextHeightBehavior, TextMetricAdjustment,
+    TextOverflow, TextRange, TextScaler, TextSelection, TextSpan, TextStyle, TextStyleApply,
+    TextWidthBasis, WidgetSpan, lerp_font_variations,
 };
 pub use indexed_semantics::IndexedSemantics;
 pub use inherited_data::{

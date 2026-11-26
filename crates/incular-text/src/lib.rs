@@ -29,8 +29,8 @@ pub use spans::{
 pub use style::{
     FontFamily, FontFeature, FontStyle, FontVariation, FontWeight, IconData, LineHeight,
     StrutStyle, TextAlign, TextBaseline, TextDecoration, TextDecorationStyle, TextHeightBehavior,
-    TextLeadingDistribution, TextOverflow, TextScaleBoundsError, TextScaler, TextScalerKind, TextShadow, TextStyle,
-    TextWidthBasis, lerp_font_variations,
+    TextLeadingDistribution, TextMetricAdjustment, TextOverflow, TextScaleBoundsError, TextScaler,
+    TextScalerKind, TextShadow, TextStyle, TextStyleApply, TextWidthBasis, lerp_font_variations,
 };
 
 mod engine;

@@ -12,4 +12,4 @@ pub use text::{
     TextDecorationStyle, TextHeightBehavior, TextLeadingDistribution, TextOverflow, TextScaleBoundsError, TextScaler,
     TextScalerKind, TextShadow, TextWidthBasis,
 };
-pub use text_style::TextStyle;
+pub use text_style::{TextMetricAdjustment, TextStyle, TextStyleApply};

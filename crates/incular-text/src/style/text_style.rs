@@ -10,6 +10,74 @@ use incular_config::WidgetDefaults;
 use incular_core::{ChangeImpact, Color, Lerp};
 use std::sync::{Arc, LazyLock};
 
+/// Multiplies a specified text metric by `factor`, then adds `delta`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TextMetricAdjustment {
+    pub factor: f32,
+    pub delta: f32,
+}
+
+impl TextMetricAdjustment {
+    #[must_use]
+    pub const fn new(factor: f32, delta: f32) -> Self {
+        Self { factor, delta }
+    }
+
+    fn transform(self, metric: f32) -> f32 {
+        metric * self.factor + self.delta
+    }
+
+    fn specified(self, metric: Option<f32>, name: &str) -> Option<f32> {
+        debug_assert!(
+            metric.is_some() || self == Self::default(),
+            "TextStyle.apply cannot adjust unspecified {name}."
+        );
+        metric.map(|metric| self.transform(metric))
+    }
+}
+
+impl Default for TextMetricAdjustment {
+    fn default() -> Self {
+        Self::new(1.0, 0.0)
+    }
+}
+
+/// Replacements and relative metric changes for [TextStyle::apply_options].
+/// Absent options keep the source value. An explicit empty slice replaces a
+/// list rather than inheriting it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TextStyleApply<'a> {
+    pub color: Option<Color>,
+    pub background_color: Option<Color>,
+    pub decoration: Option<TextDecoration>,
+    pub decoration_color: Option<Color>,
+    pub decoration_style: Option<TextDecorationStyle>,
+    pub decoration_thickness: TextMetricAdjustment,
+    pub font_family: Option<FontFamily>,
+    pub font_family_fallback: Option<&'a [FontFamily]>,
+    pub font_size: TextMetricAdjustment,
+    pub font_weight_delta: i32,
+    pub font_style: Option<FontStyle>,
+    pub letter_spacing: TextMetricAdjustment,
+    pub word_spacing: TextMetricAdjustment,
+    pub height: TextMetricAdjustment,
+    pub text_baseline: Option<TextBaseline>,
+    pub leading_distribution: Option<TextLeadingDistribution>,
+    pub locale: Option<&'a str>,
+    pub shadows: Option<&'a [TextShadow]>,
+    pub font_features: Option<&'a [FontFeature]>,
+    pub font_variations: Option<&'a [FontVariation]>,
+    pub overflow: Option<TextOverflow>,
+}
+
+fn flutter_height(height: f32) -> LineHeight {
+    if height == 0.0 {
+        LineHeight::Normal
+    } else {
+        LineHeight::Multiplier(height)
+    }
+}
+
 /// An immutable, Flutter-style text style description.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TextStyle {
@@ -23,6 +91,8 @@ pub struct TextStyle {
     pub has_explicit_fallback_families: bool,
     /// Distinguishes an explicit zero from unspecified inherited spacing.
     pub has_explicit_letter_spacing: bool,
+    /// Distinguishes an empty shadow override from an unset list.
+    pub has_explicit_shadows: bool,
     pub family: FontFamily,
     pub fallback_families: Arc<[FontFamily]>,
     pub size: f32,
@@ -181,9 +251,15 @@ impl TextStyle {
         self
     }
 
+    /// Flutter's proportional text height. Zero selects the natural font
+    /// metrics; use [Self::line_height_absolute] for a logical pixel height.
     #[must_use]
-    pub fn height(self, height: Option<f32>) -> Self {
-        self.line_height(height)
+    pub fn height(mut self, height: Option<f32>) -> Self {
+        self.line_height = height.map(|height| {
+            debug_assert!(!height.is_nan(), "TextStyle.height must not be NaN.");
+            flutter_height(height.max(0.0))
+        });
+        self
     }
 
     #[must_use]
@@ -268,6 +344,7 @@ impl TextStyle {
         I: IntoIterator<Item = TextShadow>,
     {
         self.shadows = shadows.into_iter().collect::<Vec<_>>().into();
+        self.has_explicit_shadows = true;
         self
     }
 
@@ -276,6 +353,7 @@ impl TextStyle {
         let mut shadows = self.shadows.to_vec();
         shadows.push(shadow);
         self.shadows = shadows.into();
+        self.has_explicit_shadows = true;
         self
     }
 
@@ -448,8 +526,9 @@ impl TextStyle {
         }
 
 
-        if !other.shadows.is_empty() {
+        if other.has_explicit_shadows || !other.shadows.is_empty() {
             merged.shadows = other.shadows.clone();
+            merged.has_explicit_shadows = true;
         }
         if other.font_variations.is_some() {
             merged.font_variations = other.font_variations.clone();
@@ -485,31 +564,108 @@ impl TextStyle {
         letter_spacing_factor: Option<f32>,
         letter_spacing_delta: Option<f32>,
     ) -> Self {
-        let mut res = self.clone();
-        if let Some(c) = color
-            && res.foreground.is_none()
+        self.apply_options(TextStyleApply {
+            color,
+            background_color,
+            font_size: TextMetricAdjustment::new(
+                font_size_factor.unwrap_or(1.0),
+                font_size_delta.unwrap_or(0.0),
+            ),
+            letter_spacing: TextMetricAdjustment::new(
+                letter_spacing_factor.unwrap_or(1.0),
+                letter_spacing_delta.unwrap_or(0.0),
+            ),
+            ..TextStyleApply::default()
+        })
+    }
+
+    /// Applies relative adjustments before replacing the supplied descriptors.
+    /// Existing foreground/background paint still wins over a plain color.
+    #[must_use]
+    pub fn apply_options(&self, options: TextStyleApply<'_>) -> Self {
+        let mut result = self.clone();
+        if let Some(color) = options.color
+            && result.foreground.is_none()
         {
-            res.color = c;
-            res.has_explicit_color = true;
+            result.color = color;
+            result.has_explicit_color = true;
         }
-        if let Some(bg) = background_color
-            && res.background.is_none()
+        if let Some(color) = options.background_color
+            && result.background.is_none()
         {
-            res.background_color = Some(bg);
+            result.background_color = Some(color);
         }
-        if let Some(factor) = font_size_factor {
-            res.size = (res.size * factor).max(0.0);
+        if let Some(size) = options.font_size.specified(
+            (self.has_explicit_size || self.size != WidgetDefaults::DEFAULT.text_size)
+                .then_some(self.size),
+            "fontSize",
+        ) {
+            result.size = size;
+            result.has_explicit_size = true;
         }
-        if let Some(delta) = font_size_delta {
-            res.size = (res.size + delta).max(0.0);
+        if let Some(spacing) = options.letter_spacing.specified(
+            (self.has_explicit_letter_spacing || self.letter_spacing != 0.0)
+                .then_some(self.letter_spacing),
+            "letterSpacing",
+        ) {
+            result.letter_spacing = spacing;
+            result.has_explicit_letter_spacing = true;
         }
-        if let Some(factor) = letter_spacing_factor {
-            res.letter_spacing *= factor;
+        if self.has_explicit_weight || self.weight != FontWeight::NORMAL {
+            let index = (i32::from(self.weight.value()) / 100 - 1).clamp(0, 8);
+            result.weight = FontWeight::new(
+                ((index.saturating_add(options.font_weight_delta).clamp(0, 8) + 1) * 100) as u16,
+            );
+            result.has_explicit_weight = true;
+        } else {
+            debug_assert!(
+                options.font_weight_delta == 0,
+                "TextStyle.apply cannot adjust unspecified fontWeight."
+            );
         }
-        if let Some(delta) = letter_spacing_delta {
-            res.letter_spacing += delta;
+        result.word_spacing = options.word_spacing.specified(self.word_spacing, "wordSpacing");
+        result.decoration_thickness = options
+            .decoration_thickness
+            .specified(self.decoration_thickness, "decorationThickness");
+        result.line_height = self.line_height.map(|height| match height {
+            LineHeight::Normal | LineHeight::Multiplier(0.0) => height,
+            LineHeight::Multiplier(factor) => flutter_height(options.height.transform(factor)),
+            LineHeight::Absolute(pixels) => LineHeight::Absolute(options.height.transform(pixels)),
+        });
+        if let Some(family) = options.font_family {
+            result = result.family(family);
         }
-        res
+        if let Some(fallback) = options.font_family_fallback {
+            result.fallback_families = fallback.into();
+            result.has_explicit_fallback_families = true;
+        }
+        if let Some(style) = options.font_style {
+            result = result.font_style(style);
+        }
+        result.decoration = options.decoration.or(self.decoration);
+        result.decoration_color = options.decoration_color.or(self.decoration_color);
+        result.decoration_style = options.decoration_style.or(self.decoration_style);
+        result.text_baseline = options.text_baseline.or(self.text_baseline);
+        result.leading_distribution = options.leading_distribution.or(self.leading_distribution);
+        result.overflow = options.overflow.or(self.overflow);
+        if let Some(locale) = options.locale {
+            result.locale = Some(locale.into());
+        }
+        if let Some(shadows) = options.shadows {
+            result.shadows = shadows.into();
+            result.has_explicit_shadows = true;
+        }
+        if let Some(features) = options.font_features {
+            result = result.font_feature_settings(features);
+        }
+        if let Some(variations) = options.font_variations {
+            result = result.font_variation_settings(variations);
+        }
+        #[cfg(debug_assertions)]
+        if let Some(label) = &self.debug_label {
+            result.debug_label = Some(format!("({label}).apply"));
+        }
+        result
     }
 
     #[must_use]
@@ -678,6 +834,10 @@ impl Lerp for TextStyle {
             has_explicit_fallback_families: endpoint.has_explicit_fallback_families
                 || !endpoint.fallback_families.is_empty(),
             has_explicit_letter_spacing: letter_spacing.is_some(),
+            has_explicit_shadows: self.has_explicit_shadows
+                || other.has_explicit_shadows
+                || !self.shadows.is_empty()
+                || !other.shadows.is_empty(),
             family: endpoint.family.clone(),
             fallback_families: endpoint.fallback_families.clone(),
             size: size.unwrap_or(WidgetDefaults::DEFAULT.text_size),
@@ -691,7 +851,13 @@ impl Lerp for TextStyle {
             },
             line_height: match (self.line_height, other.line_height) {
                 (Some(LineHeight::Multiplier(a)), Some(LineHeight::Multiplier(b))) => {
-                    Some(LineHeight::Multiplier(mix(a, b)))
+                    Some(flutter_height(mix(a, b)))
+                }
+                (Some(LineHeight::Normal), Some(LineHeight::Multiplier(b))) => {
+                    Some(flutter_height(mix(0.0, b)))
+                }
+                (Some(LineHeight::Multiplier(a)), Some(LineHeight::Normal)) => {
+                    Some(flutter_height(mix(a, 0.0)))
                 }
                 (Some(LineHeight::Absolute(a)), Some(LineHeight::Absolute(b))) => {
                     Some(LineHeight::Absolute(mix(a, b)))
@@ -779,6 +945,7 @@ impl Default for TextStyle {
             has_explicit_family: false,
             has_explicit_fallback_families: false,
             has_explicit_letter_spacing: false,
+            has_explicit_shadows: false,
             family: FontFamily::SystemUi,
             fallback_families: EMPTY_FALLBACK_FAMILIES.clone(),
             size: WidgetDefaults::DEFAULT.text_size,

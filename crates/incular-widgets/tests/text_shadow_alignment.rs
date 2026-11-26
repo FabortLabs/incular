@@ -134,3 +134,41 @@ fn centered_text_in_a_shrink_wrapped_box_stays_inside_it() {
         }
     }
 }
+
+#[test]
+fn clearing_an_inherited_shadow_removes_only_the_shadow_glyphs() {
+    use incular_text::TextStyleApply;
+    use incular_widgets::DefaultTextStyle;
+
+    let red = Color::rgba(212, 31, 42, 255);
+    let parent = TextStyle::new()
+        .font_size(20.)
+        .shadow(Shadow::new(red, Offset::new(3., 4.), 0.));
+    let scene = |style: TextStyle| {
+        DefaultTextStyle::new(
+            parent.clone(),
+            Text::new("Clear shadow")
+                .style(style)
+                .text_direction(TextDirection::Ltr),
+        )
+        .into()
+    };
+    let size = Size::new(300., 100.);
+    let (mut tree, original) = paint(scene(TextStyle::new()), size);
+    let foreground = |list: &DisplayList| {
+        glyph_runs(list)
+            .into_iter()
+            .filter(|(color, _)| *color != red)
+            .collect::<Vec<_>>()
+    };
+    assert!(glyph_runs(&original).iter().any(|(color, _)| *color == red));
+    let root = tree.root().unwrap();
+    let empty = TextStyle::new().apply_options(TextStyleApply {
+        shadows: Some(&[]),
+        ..TextStyleApply::default()
+    });
+    tree.update(root, scene(empty)).unwrap();
+    tree.layout(Constraints::tight(size)).unwrap();
+    let cleared = tree.paint();
+    assert_eq!(glyph_runs(&cleared), foreground(&original));
+}
