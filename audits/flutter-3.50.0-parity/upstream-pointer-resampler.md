@@ -16,3 +16,14 @@ events, with Enter/Exit representing tracking start/end. It is
 opt-in per stream and does not add latency to the default runtime
 input path. Flutter's metrics that are not present in Incular's
 raw pointer type were not asserted by these registrations.
+
+### Streaming, skipped samples and lookahead
+
+The other five registrations (179, 528, 599, 648, 773) passed.
+Incrementally queued input yields the same point/delta trace as
+preloaded input. A frame may coalesce motion across more than one
+contact but keeps every press, release and tracking transition.
+Stopping forwards each still-queued event unchanged and clears the
+track. A supplied next frame can process a release or removal early
+while keeping its interpolated position on the current sample, not
+jumping to the future hardware event.

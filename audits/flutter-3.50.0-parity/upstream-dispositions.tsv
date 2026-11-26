@@ -2172,3 +2172,8 @@ packages/flutter/test/gestures/resampler_test.dart	355	quick tap	paired-match	up
 packages/flutter/test/gestures/resampler_test.dart	392	advance slowly	paired-match	upstream-pointer-resampler.md#interpolation-and-lifecycle-transitions
 packages/flutter/test/gestures/resampler_test.dart	471	advance fast	paired-match	upstream-pointer-resampler.md#interpolation-and-lifecycle-transitions
 packages/flutter/test/gestures/resampler_test.dart	712	synthetic move	paired-match	upstream-pointer-resampler.md#interpolation-and-lifecycle-transitions
+packages/flutter/test/gestures/resampler_test.dart	179	stream	paired-match	upstream-pointer-resampler.md#streaming-skipped-samples-and-lookahead
+packages/flutter/test/gestures/resampler_test.dart	528	skip	paired-match	upstream-pointer-resampler.md#streaming-skipped-samples-and-lookahead
+packages/flutter/test/gestures/resampler_test.dart	599	skip all	paired-match	upstream-pointer-resampler.md#streaming-skipped-samples-and-lookahead
+packages/flutter/test/gestures/resampler_test.dart	648	stop	paired-match	upstream-pointer-resampler.md#streaming-skipped-samples-and-lookahead
+packages/flutter/test/gestures/resampler_test.dart	773	next sample time	paired-match	upstream-pointer-resampler.md#streaming-skipped-samples-and-lookahead
