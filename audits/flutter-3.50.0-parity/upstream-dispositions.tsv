@@ -2310,3 +2310,5 @@ packages/flutter/test/widgets/sliver_cross_axis_group_test.dart	537	Constrained 
 packages/flutter/test/widgets/sliver_cross_axis_group_test.dart	673	applyPaintTransform is implemented properly	paired-match	upstream-sliver-cross-axis-group.md#pins-and-physical-transforms
 packages/flutter/test/widgets/sliver_cross_axis_group_test.dart	691	SliverPinnedPersistentHeader is painted within bounds of SliverCrossAxisGroup	paired-match	upstream-sliver-cross-axis-group.md#pins-and-physical-transforms
 packages/flutter/test/widgets/sliver_cross_axis_group_test.dart	749	SliverPinnedPersistentHeader is painted within bounds of SliverCrossAxisGroup with different minExtent/maxExtent	paired-match	upstream-sliver-cross-axis-group.md#pins-and-physical-transforms
+packages/flutter/test/widgets/sliver_cross_axis_group_test.dart	459	Hit test works properly on various parts of SliverCrossAxisGroup	paired-match	upstream-sliver-cross-axis-group.md#hit-testing-and-pointer-coordinates
+packages/flutter/test/widgets/sliver_cross_axis_group_test.dart	1059	SliverCrossAxisGroup pointer event positions	paired-match	upstream-sliver-cross-axis-group.md#hit-testing-and-pointer-coordinates

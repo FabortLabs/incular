@@ -49,3 +49,18 @@ The viewport keeps using the geometry of the longest lane, while
 the group independently offsets each lane and its pin before painting.
 29 focused native tests and the two authored Flutter controls passed.
 Other floating-header gesture and paint-visibility cases remain separate.
+
+## Hit testing and pointer coordinates
+
+Paired :459 and :1059. Rebuilding switches a tap handler from lane 0
+row 0 to lane 1 row 2. Real down/up dispatch reaches each new target
+and does not call the removed handler. A separate 20 × 40 fixture
+taps both lanes at four positions on each axis. All eight callbacks
+receive the same local and global coordinates as Flutter.
+
+The coordinate fixture originally received no callbacks. When a
+scrollable's drag recognizer was also present, a quick tap reached
+release before the press deadline; Incular then rejected a detector
+that used only onTapDown. The release now checks the same set of
+tap callbacks as enrollment. Tests ran against the original Flutter
+registrations and the native retained tree and recognizer.

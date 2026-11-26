@@ -1228,10 +1228,7 @@ impl PointerGestureRecognizer {
                     self.last_tap_down = None;
                     self.pending_tap_down = None;
                     GestureDecision::Reject
-                } else if self.callbacks.on_tap.is_some()
-                    || self.callbacks.on_tap_up.is_some()
-                    || self.callbacks.on_tap_cancel.is_some()
-                {
+                } else if self.has_tap_callbacks() {
                     // Accepting the tap reports a still-deferred `onTapDown`
                     // first, then `onTapUp`.
                     self.flush_tap_down();
