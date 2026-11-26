@@ -2487,3 +2487,9 @@ packages/flutter/test/widgets/raw_tooltip_test.dart	2745	RawTooltip does not cra
 packages/flutter/test/widgets/raw_tooltip_test.dart	462	RawTooltip overlay respects ambient Directionality	paired-match	upstream-paragraph-base-direction.md
 packages/flutter/test/gestures/monodrag_test.dart	212	Primary button works	paired-match	upstream-monodrag-arena-threshold.md#explicit-press-button-filters
 packages/flutter/test/gestures/monodrag_test.dart	222	Secondary button works	paired-match	upstream-monodrag-arena-threshold.md#explicit-press-button-filters
+packages/flutter/test/painting/notched_shapes_test.dart	12	guest and host don't overlap	paired-match	upstream-circular-notched-rectangle.md
+packages/flutter/test/painting/notched_shapes_test.dart	26	guest center above host	paired-match	upstream-circular-notched-rectangle.md
+packages/flutter/test/painting/notched_shapes_test.dart	36	guest center below host	paired-match	upstream-circular-notched-rectangle.md
+packages/flutter/test/painting/notched_shapes_test.dart	46	inverted guest center above host	paired-match	upstream-circular-notched-rectangle.md
+packages/flutter/test/painting/notched_shapes_test.dart	56	inverted guest center below host	paired-match	upstream-circular-notched-rectangle.md
+packages/flutter/test/painting/notched_shapes_test.dart	66	no guest is ok	paired-match	upstream-circular-notched-rectangle.md

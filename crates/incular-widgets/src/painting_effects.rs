@@ -12,6 +12,8 @@ mod decoration;
 mod geometry;
 mod images;
 mod layers;
+mod notched_shape;
+pub use notched_shape::{CircularNotchedRectangle, NotchedShape};
 mod rounded_circle_outline;
 pub use rounded_circle_outline::RoundedCircleOutline;
 mod shape_borders;
