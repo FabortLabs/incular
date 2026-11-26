@@ -206,6 +206,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                 misspelled_text_style: spec
                     .spell_check
                     .as_ref()
+                    .filter(|_| !spec.spell_check_suppressed)
                     .and_then(crate::SpellCheckConfiguration::resolve)
                     .map(|(_, style)| text_field_style(&style, context)),
                 paragraph_layout: spec.paragraph_layout,

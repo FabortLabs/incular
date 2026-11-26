@@ -394,6 +394,7 @@ struct ElementAuxiliaryState {
     /// The latest spell check results of a text field (Flutter's
     /// `EditableTextState.spellCheckResults`).
     spell_check_session: Option<Rc<crate::spell_check::SpellCheckSession>>,
+    spell_check_refresh_on_enable: bool,
     layout_builder_constraints: Option<Constraints>,
     layout_builder_revision: u64,
     indexed_visibility: Option<Box<IndexedVisibilityBinding>>,

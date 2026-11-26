@@ -158,6 +158,12 @@ impl WidgetTree {
         let WidgetKind::TextField(spec) = element.widget.kind() else {
             return;
         };
+        if spec.spell_check_suppressed && spec.spell_check.is_some() {
+            let auxiliary = element.auxiliary_state_mut();
+            auxiliary.spell_check_refresh_on_enable = true;
+            auxiliary.spell_check_session = None;
+            return;
+        }
         let Some((service, _)) = spec
             .spell_check
             .as_ref()
@@ -177,15 +183,23 @@ impl WidgetTree {
             .next()
             .unwrap_or(incular_config::Locale::UNKNOWN);
         let auxiliary = element.auxiliary_state_mut();
+        let refresh = std::mem::take(&mut auxiliary.spell_check_refresh_on_enable);
         let session = auxiliary
             .spell_check_session
             .get_or_insert_with(Rc::default)
             .clone();
+        let on_edit = (session.clone(), service.clone(), locale.clone());
         auxiliary.spell_check_subscription = Some(controller.observe_user_edits(move |value| {
             if !value.text.is_empty() {
-                session.request(&service, &locale, &value.text);
+                on_edit.0.request(&on_edit.1, &on_edit.2, &value.text);
             }
         }));
+        if let Some(text) = refresh
+            .then(|| controller.text())
+            .filter(|text| !text.is_empty())
+        {
+            session.request(&service, &locale, &text);
+        }
     }
 
     fn inherited_contexts_for(

@@ -475,6 +475,7 @@ pub struct TextFieldSpec {
     pub(crate) cursor_opacity_animates: bool,
     /// Flutter `spellCheckConfiguration`.
     pub(crate) spell_check: Option<crate::SpellCheckConfiguration>,
+    pub(crate) spell_check_suppressed: bool,
     /// The field's context menu, present when it has a menu builder.
     pub(crate) context_menu: Option<Rc<crate::context_menu::TextContextMenuState>>,
     /// The field's selection handles, present when it has a handles builder.

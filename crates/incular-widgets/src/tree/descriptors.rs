@@ -1701,6 +1701,11 @@ impl From<EditableText> for Widget {
             infer_autofill_keyboard(AutofillKeyboardPlatform::current(), first_hint, value.max_lines != Some(1))
         });
         let input_action = value.input_action;
+        let spell_check_suppressed = incular_platform::autofill::is_password_input(
+            value.obscure_text,
+            input_type,
+            value.autofill_hints.as_deref(),
+        );
         let context_menu_builder = value.context_menu_builder.clone();
         let selection_handles_builder = value.selection_handles_builder.clone();
         let edit_transform = compose_edit_transform(
@@ -1718,6 +1723,7 @@ impl From<EditableText> for Widget {
             context_menu: None,
             selection_handles: None,
             spell_check: value.spell_check,
+            spell_check_suppressed,
             controller: value.controller,
             focus_node: value.focus_node,
             autofocus: value.autofocus,

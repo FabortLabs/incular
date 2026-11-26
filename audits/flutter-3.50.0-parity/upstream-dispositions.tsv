@@ -1674,3 +1674,9 @@ packages/flutter/test/widgets/editable_text_test.dart	1047	inferred keyboard typ
 packages/flutter/test/widgets/editable_text_test.dart	1088	inferred keyboard types can be overridden: non-ios	paired-match	upstream-autofill-keyboard-defaults.md
 packages/flutter/test/widgets/editable_text_test.dart	1122	infer keyboard types from autofillHints emailOTPCode: ios	partial-match	upstream-autofill-keyboard-defaults.md
 packages/flutter/test/widgets/editable_text_test.dart	1162	infer keyboard types from autofillHints emailOTPCode: non-ios	paired-match	upstream-autofill-keyboard-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	16220	Spell check disabled when obscureText is true	paired-match	upstream-password-spell-check.md
+packages/flutter/test/widgets/editable_text_test.dart	16248	Spell check disabled for visible password input type	paired-match	upstream-password-spell-check.md
+packages/flutter/test/widgets/editable_text_test.dart	16278	Spell check disabled for numeric password input type	paired-match	upstream-password-spell-check.md
+packages/flutter/test/widgets/editable_text_test.dart	16308	Spell check disabled for password autofill hints	paired-match	upstream-password-spell-check.md
+packages/flutter/test/widgets/editable_text_test.dart	16335	Spell check updates when non-password obscureText changes	paired-match	upstream-password-spell-check.md
+packages/flutter/test/widgets/editable_text_test.dart	16401	Spell check stays disabled for visible password when obscureText changes	paired-match	upstream-password-spell-check.md

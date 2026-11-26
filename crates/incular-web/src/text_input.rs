@@ -169,8 +169,10 @@ fn configure(
 ) {
     let mode = match configuration.input_type {
         // Flutter web: a decimal keypad only when the field takes a decimal point.
-        TextInputType::Number { decimal: true, .. } => "decimal",
-        TextInputType::Number { decimal: false, .. } => "numeric",
+        TextInputType::Number { decimal: true, .. }
+        | TextInputType::NumberPassword { decimal: true, .. } => "decimal",
+        TextInputType::Number { decimal: false, .. }
+        | TextInputType::NumberPassword { decimal: false, .. } => "numeric",
         TextInputType::Phone => "tel",
         TextInputType::Email => "email",
         TextInputType::Url => "url",
@@ -192,11 +194,14 @@ fn configure(
             }
         }
     };
-    let assisted = !configuration.obscure_text
-        && !matches!(
-            configuration.input_type,
-            TextInputType::Password | TextInputType::Email | TextInputType::Url
-        );
+    let assisted = !incular_platform::autofill::is_password_input(
+        configuration.obscure_text,
+        configuration.input_type,
+        configuration.traits.autofill_hints.as_deref(),
+    ) && !matches!(
+        configuration.input_type,
+        TextInputType::Email | TextInputType::Url
+    );
     let traits = &configuration.traits;
     // Flutter web: the first autofill hint, `on` for an autofill client
     // without hints, and `off` when autofill is disabled.

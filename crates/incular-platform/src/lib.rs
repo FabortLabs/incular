@@ -561,6 +561,11 @@ pub enum TextInputType {
         signed: bool,
         decimal: bool,
     },
+    /// Numeric credential entry; the platform must not suggest words.
+    NumberPassword {
+        signed: bool,
+        decimal: bool,
+    },
     Phone,
     Email,
     Url,
@@ -577,7 +582,7 @@ impl TextInputType {
         match self {
             Self::Text => "TextInputType.text",
             Self::Multiline => "TextInputType.multiline",
-            Self::Number { .. } => "TextInputType.number",
+            Self::Number { .. } | Self::NumberPassword { .. } => "TextInputType.number",
             Self::Phone => "TextInputType.phone",
             Self::Email => "TextInputType.emailAddress",
             Self::Url => "TextInputType.url",
@@ -586,6 +591,17 @@ impl TextInputType {
             Self::StreetAddress => "TextInputType.address",
             Self::DateTime => "TextInputType.datetime",
         }
+    }
+
+    #[must_use]
+    pub const fn is_password_keyboard(self) -> bool {
+        matches!(self, Self::Password | Self::NumberPassword { .. })
+    }
+
+    /// Flutter's numeric keyboard with `password: true`.
+    #[must_use]
+    pub const fn number_password(signed: bool, decimal: bool) -> Self {
+        Self::NumberPassword { signed, decimal }
     }
 
     /// Flutter's `TextInputType.number`: integers only, no sign.

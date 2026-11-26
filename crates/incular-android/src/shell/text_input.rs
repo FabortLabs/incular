@@ -121,6 +121,7 @@ fn input_type(configuration: &TextInputConfiguration) -> jint {
     const CLASS_NUMBER: jint = 0x2;
     const CLASS_PHONE: jint = 0x3;
     const CLASS_DATETIME: jint = 0x4;
+    const VARIATION_NUMBER_PASSWORD: jint = 0x10;
     const FLAG_NUMBER_SIGNED: jint = 0x1000;
     const FLAG_NUMBER_DECIMAL: jint = 0x2000;
     const VARIATION_URI: jint = 0x10;
@@ -136,8 +137,12 @@ fn input_type(configuration: &TextInputConfiguration) -> jint {
     const FLAG_MULTI_LINE: jint = 0x2_0000;
     const FLAG_NO_SUGGESTIONS: jint = 0x8_0000;
     let mut bits = match configuration.input_type {
-        TextInputType::Number { signed, decimal } => {
+        TextInputType::Number { signed, decimal }
+        | TextInputType::NumberPassword { signed, decimal } => {
             let mut bits = CLASS_NUMBER;
+            if configuration.input_type.is_password_keyboard() {
+                bits |= VARIATION_NUMBER_PASSWORD;
+            }
             if signed {
                 bits |= FLAG_NUMBER_SIGNED;
             }

@@ -390,6 +390,16 @@ fn text_field_decorations(
 
 impl WidgetTree {
     /// The latest spell check results of the text field `element`, Flutter's
+    /// Whether this field currently has an active spell-check service.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn text_field_spell_check_enabled(&self, id: ElementId) -> bool {
+        self.elements
+            .get(id.0)
+            .and_then(|element| element.auxiliary_state.as_ref())
+            .is_some_and(|auxiliary| auxiliary.spell_check_session.is_some())
+    }
+
     /// `EditableTextState.spellCheckResults`: `None` before the first answer
     /// or without spell checking.
     #[doc(hidden)]

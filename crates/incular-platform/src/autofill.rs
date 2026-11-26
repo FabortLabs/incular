@@ -149,6 +149,23 @@ pub fn infer_autofill_keyboard(
     }
 }
 
+/// Whether a password-oriented field must never send text to spell check,
+/// even when a spell-check service was configured explicitly.
+#[must_use]
+pub fn is_password_input(
+    obscure: bool,
+    keyboard: crate::TextInputType,
+    hints: Option<&[String]>,
+) -> bool {
+    obscure
+        || keyboard.is_password_keyboard()
+        || hints.is_some_and(|hints| {
+            hints
+                .iter()
+                .any(|hint| matches!(hint.as_str(), "password" | "newPassword"))
+        })
+}
+
 /// The Flutter wire affinity of a UTF-16 text selection.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum AutofillSelectionAffinity {

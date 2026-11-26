@@ -2549,7 +2549,7 @@ impl Runtime {
         };
         let configuration = TextInputConfiguration {
             client,
-            input_type: if snapshot.obscure_text {
+            input_type: if snapshot.obscure_text && input_type == TextInputType::Text {
                 TextInputType::Password
             } else {
                 input_type
