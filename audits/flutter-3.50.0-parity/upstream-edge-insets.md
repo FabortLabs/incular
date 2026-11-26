@@ -162,3 +162,16 @@ does not exclude taps in the clipped corners: its input boundary
 remains the layout box. Clip.none emits no clip. Native compares both
 paint contours and live hit testing, including a miss outside the box.
 The exact original, authored control and 34 focused Rust cases passed.
+
+## Superellipse to circle morph keeps three distinct edges
+
+The pinned `rounded_superellipse_border_test.dart:89` case pairs. Its
+full nested and reverse interpolation exercises superellipse path
+coverage and the default diagnostic, equality, and hash expectations.
+The independently authored Flutter control uses a 4 px inside stroke
+on a 100×20 rectangle halfway to a circle. The outer query spans
+x=20…80 and y=0…20. The public inner query is inset 8 px, while the
+painted centerline is inset 2 px and the layout dimension only 4 px.
+Those are distinct Flutter behaviors, not three ways to report the
+same border inset. One pinned original, one authored reference and
+37 targeted Rust cases passed.

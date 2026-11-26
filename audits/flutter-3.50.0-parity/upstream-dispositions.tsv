@@ -2091,3 +2091,4 @@ packages/flutter/test/painting/stadium_border_test.dart	51	StadiumBorder with St
 packages/flutter/test/painting/rounded_superellipse_border_test.dart	20	RoundedSuperellipseBorder copyWith, ==, hashCode	paired-match	upstream-edge-insets.md#independent-superellipse-axes-and-clamping
 packages/flutter/test/painting/rounded_superellipse_border_test.dart	41	RoundedSuperellipseBorder	paired-match	upstream-edge-insets.md#independent-superellipse-axes-and-clamping
 packages/flutter/test/widgets/clip_test.dart	947	ClipRSuperellipse does not crash at zero area	paired-match	upstream-edge-insets.md#superellipse-clips-use-the-final-child-size
+packages/flutter/test/painting/rounded_superellipse_border_test.dart	89	RoundedSuperellipseBorder and CircleBorder	paired-match	upstream-edge-insets.md#superellipse-to-circle-morph-keeps-three-distinct-edges

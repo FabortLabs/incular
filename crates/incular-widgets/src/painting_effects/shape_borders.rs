@@ -622,7 +622,7 @@ impl<R: Copy + Into<BorderRadiusGeometry>> RoundedSuperellipseBorder<R> {
         RoundedSuperellipseBorder::new(self.side, self.border_radius.into())
     }
 
-    fn path(&self, rect: Rect, delta: f32, direction: Option<TextDirection>) -> Path {
+    pub(super) fn path(&self, rect: Rect, delta: f32, direction: Option<TextDirection>) -> Path {
         let Some(contour) = ordered_inflate(rect, delta) else {
             return Path::builder().build();
         };

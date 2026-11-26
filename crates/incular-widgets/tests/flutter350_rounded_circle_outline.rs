@@ -4,7 +4,7 @@ use incular_core::{Color, Offset, Rect, Size};
 use incular_rendering::{Canvas, FillRule, PaintCommand};
 use incular_widgets::{
     BorderRadius, BorderSide, CircleBorder, RoundedCircleOutline, RoundedRectangleBorder,
-    ShapeBorder,
+    RoundedSuperellipseBorder, ShapeBorder,
 };
 use std::hash::{DefaultHasher, Hash, Hasher};
 
@@ -20,6 +20,19 @@ fn nested_rectangle_circle_morphs_preserve_coverage_value_and_diagnostics() {
         BorderSide::NONE,
         BorderRadius::circular(10.),
     ));
+    assert_nested_morph(rectangle, "RoundedRectangleBorder");
+}
+
+#[test]
+fn nested_superellipse_circle_morphs_preserve_coverage_value_and_diagnostics() {
+    let superellipse = RoundedCircleOutline::from(RoundedSuperellipseBorder::new(
+        BorderSide::NONE,
+        BorderRadius::circular(10.),
+    ));
+    assert_nested_morph(superellipse, "RoundedSuperellipseBorder");
+}
+
+fn assert_nested_morph(rectangle: RoundedCircleOutline, name: &str) {
     let circle = RoundedCircleOutline::from(CircleBorder::default());
     let early = rectangle.interpolate(circle, 0.1);
     let late = rectangle.interpolate(circle, 0.9);
@@ -59,7 +72,7 @@ fn nested_rectangle_circle_morphs_preserve_coverage_value_and_diagnostics() {
         (late.interpolate(early, 0.1), "82.0"),
     ] {
         let expected = format!(
-            "RoundedRectangleBorder(BorderSide(width: 0.0, style: none), BorderRadius.circular(10.0), {percentage}% of the way to being a CircleBorder)"
+            "{name}(BorderSide(width: 0.0, style: none), BorderRadius.circular(10.0), {percentage}% of the way to being a CircleBorder)"
         );
         assert_eq!(outline.to_string(), expected);
     }
@@ -101,4 +114,35 @@ fn morph_fits_eccentric_contours_and_paints_the_actual_side() {
         canvas.finish().commands(),
         [PaintCommand::StrokePath { stroke, .. }] if stroke.width == 3.
     ));
+}
+
+#[test]
+fn superellipse_inner_query_and_painted_centerline_use_different_insets() {
+    use incular_config::EdgeInsets;
+    let rect = |x, y, w, h| Rect::from_origin_size(Offset::new(x, y), Size::new(w, h));
+    let side = BorderSide::solid(Color::BLACK, 4.);
+    let source = RoundedCircleOutline::from(RoundedSuperellipseBorder::new(
+        side,
+        BorderRadius::circular(10.),
+    ));
+    let target = RoundedCircleOutline::from(CircleBorder::new(side));
+    let mixed = source.interpolate(target, 0.5);
+    let area = rect(0., 0., 100., 20.);
+    assert_eq!(mixed.dimensions(None), EdgeInsets::all(4.));
+    assert_eq!(
+        mixed.outer_path(area).bounds(),
+        Some(rect(20., 0., 60., 20.))
+    );
+    assert_eq!(
+        mixed.inner_path(area).bounds(),
+        Some(rect(28., 8., 44., 4.))
+    );
+    let mut canvas = Canvas::default();
+    mixed.paint(&mut canvas, area);
+    let picture = canvas.finish();
+    let [PaintCommand::StrokePath { path, stroke, .. }] = picture.commands() else {
+        panic!("one true superellipse stroke")
+    };
+    assert_eq!(path.bounds(), Some(rect(22., 2., 56., 16.)));
+    assert_eq!(stroke.width, 4.);
 }

@@ -11,10 +11,11 @@ use incular_rendering::{Canvas, FillRule, Paint, Path};
 
 use super::{
     BorderRadius, BorderRadiusGeometry, BorderSide, BorderStyle, CircleBorder, Radius,
-    RoundedRectangleBorder, ShapeBorder,
+    RoundedRectangleBorder, RoundedSuperellipseBorder, ShapeBorder,
 };
 
-/// A rounded rectangle, a circle, or an intermediate contour between them.
+/// A rounded rectangle, rounded superellipse, circle, or transition to
+/// or from a circle.
 /// Intermediate contours retain their geometric parameters so successive
 /// interpolations do not have to interpolate already-fitted paths.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -23,16 +24,24 @@ pub struct RoundedCircleOutline(Outline);
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Outline {
     Rounded(RoundedRectangleBorder<BorderRadiusGeometry>),
+    Superellipse(RoundedSuperellipseBorder<BorderRadiusGeometry>),
     Circle(CircleBorder),
     Morph(Morph),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Morph {
+    family: CornerFamily,
     side: BorderSide,
     radius: BorderRadiusGeometry,
     circularity: f64,
     eccentricity: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Hash)]
+enum CornerFamily {
+    Rounded,
+    Superellipse,
 }
 
 impl<R: Copy + Into<BorderRadiusGeometry>> From<RoundedRectangleBorder<R>>
@@ -40,6 +49,14 @@ impl<R: Copy + Into<BorderRadiusGeometry>> From<RoundedRectangleBorder<R>>
 {
     fn from(value: RoundedRectangleBorder<R>) -> Self {
         Self(Outline::Rounded(value.into_radius_geometry()))
+    }
+}
+
+impl<R: Copy + Into<BorderRadiusGeometry>> From<RoundedSuperellipseBorder<R>>
+    for RoundedCircleOutline
+{
+    fn from(value: RoundedSuperellipseBorder<R>) -> Self {
+        Self(Outline::Superellipse(value.into_radius_geometry()))
     }
 }
 
@@ -54,6 +71,7 @@ impl RoundedCircleOutline {
     pub fn side(self) -> BorderSide {
         match self.0 {
             Outline::Rounded(shape) => shape.side,
+            Outline::Superellipse(shape) => shape.side,
             Outline::Circle(shape) => shape.side,
             Outline::Morph(shape) => shape.side,
         }
@@ -63,7 +81,7 @@ impl RoundedCircleOutline {
     #[must_use]
     pub fn circularity(self) -> f64 {
         match self.0 {
-            Outline::Rounded(_) => 0.,
+            Outline::Rounded(_) | Outline::Superellipse(_) => 0.,
             Outline::Circle(_) => 1.,
             Outline::Morph(shape) => shape.circularity,
         }
@@ -72,8 +90,18 @@ impl RoundedCircleOutline {
     fn radius(self) -> Option<BorderRadiusGeometry> {
         match self.0 {
             Outline::Rounded(shape) => Some(shape.border_radius),
+            Outline::Superellipse(shape) => Some(shape.border_radius),
             Outline::Circle(_) => None,
             Outline::Morph(shape) => Some(shape.radius),
+        }
+    }
+
+    fn family(self) -> Option<CornerFamily> {
+        match self.0 {
+            Outline::Rounded(_) => Some(CornerFamily::Rounded),
+            Outline::Superellipse(_) => Some(CornerFamily::Superellipse),
+            Outline::Circle(_) => None,
+            Outline::Morph(shape) => Some(shape.family),
         }
     }
 
@@ -86,6 +114,9 @@ impl RoundedCircleOutline {
             (Outline::Rounded(a), Outline::Rounded(b)) => {
                 return Self(Outline::Rounded(a.lerp(&b, t as f32)));
             }
+            (Outline::Superellipse(a), Outline::Superellipse(b)) => {
+                return Self(Outline::Superellipse(a.lerp(&b, t as f32)));
+            }
             (Outline::Circle(a), Outline::Circle(b)) => {
                 return Self(Outline::Circle(a.lerp(&b, t as f32)));
             }
@@ -94,6 +125,11 @@ impl RoundedCircleOutline {
         if self == other {
             return self;
         }
+        let family = match (self.family(), other.family()) {
+            (Some(a), Some(b)) if a != b => return if t < 0.5 { self } else { other },
+            (Some(family), _) | (_, Some(family)) => family,
+            (None, None) => unreachable!("two circles are handled above"),
+        };
         let (a, b) = (self.circularity(), other.circularity());
         let circularity = match (self.0, other.0) {
             (Outline::Circle(_), _) => b + (1. - b) * (1. - t),
@@ -112,6 +148,7 @@ impl RoundedCircleOutline {
             (None, None) => unreachable!("two circles are handled above"),
         };
         Self(Outline::Morph(Morph {
+            family,
             side: self.side().lerp(&other.side(), t as f32),
             radius,
             circularity,
@@ -131,12 +168,13 @@ impl Hash for RoundedCircleOutline {
         std::mem::discriminant(&self.0).hash(state);
         self.side().hash(state);
         self.radius().hash(state);
+        self.family().hash(state);
         let canonical_bits = |value: f64| if value == 0. { 0 } else { value.to_bits() };
         canonical_bits(self.circularity()).hash(state);
         match self.0 {
             Outline::Circle(shape) => canonical_bits(f64::from(shape.eccentricity())).hash(state),
             Outline::Morph(shape) => canonical_bits(f64::from(shape.eccentricity)).hash(state),
-            Outline::Rounded(_) => {}
+            Outline::Rounded(_) | Outline::Superellipse(_) => {}
         }
     }
 }
@@ -172,10 +210,16 @@ impl Morph {
         } else {
             Radius::elliptical((0.5 + eccentricity / 2.) * width / 2., height / 2.)
         };
-        resolved
-            .lerp(&BorderRadius::all(radius), self.circularity as f32)
-            .to_rounded_rect(Rect::from_origin_size(fitted.0, size))
-            .inflated_paint_path(EdgeInsets::all(inflation))
+        let radius = resolved.lerp(&BorderRadius::all(radius), self.circularity as f32);
+        let fitted = Rect::from_origin_size(fitted.0, size);
+        match self.family {
+            CornerFamily::Rounded => radius
+                .to_rounded_rect(fitted)
+                .inflated_paint_path(EdgeInsets::all(inflation)),
+            CornerFamily::Superellipse => {
+                RoundedSuperellipseBorder::new(self.side, radius).path(fitted, inflation, direction)
+            }
+        }
     }
 }
 
@@ -191,6 +235,7 @@ impl ShapeBorder for RoundedCircleOutline {
     fn outer_path_with_direction(&self, rect: Rect, direction: Option<TextDirection>) -> Path {
         match self.0 {
             Outline::Rounded(shape) => shape.outer_path_with_direction(rect, direction),
+            Outline::Superellipse(shape) => shape.outer_path_with_direction(rect, direction),
             Outline::Circle(shape) => shape.outer_path(rect),
             Outline::Morph(shape) => shape.path(rect, direction, 0.),
         }
@@ -203,6 +248,7 @@ impl ShapeBorder for RoundedCircleOutline {
     fn inner_path_with_direction(&self, rect: Rect, direction: Option<TextDirection>) -> Path {
         match self.0 {
             Outline::Rounded(shape) => shape.inner_path_with_direction(rect, direction),
+            Outline::Superellipse(shape) => shape.inner_path_with_direction(rect, direction),
             Outline::Circle(shape) => shape.inner_path(rect),
             Outline::Morph(shape) => {
                 // Flutter's transitional shape uses the raw alignment in
@@ -228,6 +274,7 @@ impl ShapeBorder for RoundedCircleOutline {
     ) {
         match self.0 {
             Outline::Rounded(shape) => shape.paint_with_direction(canvas, rect, direction),
+            Outline::Superellipse(shape) => shape.paint_with_direction(canvas, rect, direction),
             Outline::Circle(shape) => shape.paint(canvas, rect),
             Outline::Morph(shape) if shape.side.style == BorderStyle::Solid => {
                 let path = shape.path(rect, direction, shape.side.stroke_offset() / 2.);
@@ -261,7 +308,11 @@ impl std::fmt::Display for RoundedCircleOutline {
         let Outline::Morph(shape) = self.0 else {
             return std::fmt::Debug::fmt(&self.0, f);
         };
-        write!(f, "RoundedRectangleBorder(")?;
+        let name = match shape.family {
+            CornerFamily::Rounded => "RoundedRectangleBorder",
+            CornerFamily::Superellipse => "RoundedSuperellipseBorder",
+        };
+        write!(f, "{name}(")?;
         if shape.side.style == BorderStyle::None {
             write!(f, "BorderSide(width: {:.1}, style: none)", shape.side.width)?;
         } else {
