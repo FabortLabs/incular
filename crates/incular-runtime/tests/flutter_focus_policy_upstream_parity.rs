@@ -4,7 +4,10 @@
 use incular_config::Constraints;
 use incular_core::Size;
 use incular_runtime::Runtime;
-use incular_widgets::{Column, ExcludeFocus, Focus, FocusNode, SizedBox, Widget, internal::Key};
+use incular_widgets::{
+    Column, ExcludeFocus, Focus, FocusNode, FocusScope, FocusScopeNode, SizedBox, Widget,
+    internal::Key,
+};
 use std::{cell::RefCell, rc::Rc};
 
 fn frame(runtime: &mut Runtime) {
@@ -93,6 +96,87 @@ fn unfocusable_parent_has_focus_within_when_its_child_has_primary_focus() {
         "being unable to take primary focus does not suppress descendant focus membership"
     );
     assert_eq!(*transitions.borrow(), [true]);
+}
+
+#[test]
+fn disabling_either_scope_blocks_nested_requests_where_disabling_an_ordinary_parent_does_not() {
+    let outer = FocusScopeNode::new();
+    let inner = FocusScopeNode::new();
+    let parent = FocusNode::new();
+    let child = FocusNode::new();
+    let layout = |[allow_outer, allow_inner, allow_parent, allow_child]: [bool; 4]| {
+        let leaf = Focus::new(SizedBox::shrink())
+            .node(child.clone())
+            .can_request_focus(allow_child);
+        let column = Focus::new(leaf)
+            .node(parent.clone())
+            .can_request_focus(allow_parent);
+        let inner_view = FocusScope::new(column)
+            .node(inner.clone())
+            .can_request_focus(allow_inner);
+        FocusScope::new(inner_view)
+            .node(outer.clone())
+            .can_request_focus(allow_outer)
+            .into()
+    };
+    let enabled = [true; 4];
+    let mut runtime = Runtime::new(layout(enabled)).unwrap();
+    frame(&mut runtime);
+    let update = |runtime: &mut Runtime, flags| {
+        runtime
+            .schedule_update(runtime.tree().root().unwrap(), layout(flags))
+            .unwrap();
+        frame(runtime);
+    };
+    let request = |runtime: &mut Runtime, node: &FocusNode| {
+        node.request_focus();
+        frame(runtime);
+    };
+
+    request(&mut runtime, &child);
+    assert!(child.has_primary_focus());
+    update(&mut runtime, [true, true, true, false]);
+    assert!(!child.has_focus());
+    request(&mut runtime, &child);
+    assert!(!child.has_focus());
+    update(&mut runtime, enabled);
+    request(&mut runtime, &child);
+    assert!(child.has_primary_focus());
+
+    update(&mut runtime, [true, true, false, true]);
+    assert!(child.has_primary_focus());
+    request(&mut runtime, &parent);
+    assert!(child.has_primary_focus() && !parent.has_primary_focus());
+    request(&mut runtime, &child);
+    assert!(child.has_primary_focus());
+    update(&mut runtime, enabled);
+    child.unfocus();
+    frame(&mut runtime);
+    assert!(!child.has_focus());
+    request(&mut runtime, &child);
+    assert!(child.has_primary_focus());
+
+    for (flags, denied_scope) in [
+        ([true, false, true, true], &inner),
+        ([false, true, true, true], &outer),
+    ] {
+        update(&mut runtime, flags);
+        assert!(!child.has_focus());
+        assert!(!denied_scope.request_focus_in_scope());
+        frame(&mut runtime);
+        if denied_scope == &outer {
+            let _ = inner.request_focus_in_scope();
+            frame(&mut runtime);
+            assert!(!inner.has_focus());
+        }
+        request(&mut runtime, &parent);
+        assert!(!parent.has_focus() && !child.has_focus());
+        request(&mut runtime, &child);
+        assert!(!parent.has_focus() && !child.has_focus());
+        update(&mut runtime, enabled);
+        request(&mut runtime, &child);
+        assert!(child.has_primary_focus());
+    }
 }
 
 #[test]

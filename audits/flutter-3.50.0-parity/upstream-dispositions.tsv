@@ -2195,3 +2195,6 @@ packages/flutter/test/widgets/focus_scope_test.dart	955	Can autofocus a node.	pa
 packages/flutter/test/widgets/focus_scope_test.dart	969	Won't autofocus a node if one is already focused.	paired-match	upstream-retained-autofocus.md
 packages/flutter/test/widgets/focus_scope_test.dart	1105	Focus.of stops at the nearest Focus widget.	partial-match	upstream-retained-autofocus.md#partial-matches
 packages/flutter/test/widgets/focus_scope_test.dart	1213	Can set focus.	paired-match	upstream-retained-autofocus.md
+packages/flutter/test/widgets/focus_scope_test.dart	85	Can have multiple focused children and they update accordingly	paired-match	upstream-focus-scope-interaction.md
+packages/flutter/test/widgets/focus_scope_test.dart	360	Removing focused widget moves focus to next widget	paired-match	upstream-focus-scope-interaction.md
+packages/flutter/test/widgets/focus_scope_test.dart	1399	canRequestFocus causes descendants of scope to be skipped.	paired-match	upstream-focus-scope-interaction.md

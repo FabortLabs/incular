@@ -1,8 +1,9 @@
 use incular_config::{Constraints, TextDirection};
-use incular_core::Size;
-use incular_runtime::{Application, Runtime};
+use incular_core::{InputEvent, Offset, PointerPhase, Size};
+use incular_runtime::{Application, Runtime, Signal};
 use incular_widgets::{
-    Column, Directionality, Focus, FocusNode, FocusScope, FocusScopeNode, GlobalKey, Text, Widget,
+    Column, Directionality, Focus, FocusNode, FocusScope, FocusScopeNode, GestureDetector,
+    GlobalKey, SizedBox, Text, Widget,
 };
 
 fn status(node: &FocusNode, name: &str, autofocus: bool, key: GlobalKey) -> Widget {
@@ -116,4 +117,89 @@ fn second_child_autofocus_updates_its_visible_status_without_claiming_first() {
     settle(&mut runtime);
     assert!(!a.has_focus() && b.has_focus());
     labels(&runtime, &["a", "B FOCUSED"]);
+}
+
+fn interactive_scene(
+    a: &FocusNode,
+    b: &FocusNode,
+    show_a: &Signal<bool>,
+    autofocus_a: bool,
+) -> (Runtime, [GlobalKey; 2]) {
+    let keys = [GlobalKey::new(), GlobalKey::new()];
+    let (a, b, show_a) = (a.clone(), b.clone(), show_a.clone());
+    let runtime = Application::new(move |_| {
+        let row = |node: &FocusNode, name: &str, autofocus, key| {
+            let focused = node.clone();
+            let child =
+                SizedBox::from_size(Size::new(160., 28.)).child(status(node, name, autofocus, key));
+            Widget::from(GestureDetector::new(child).on_tap(move || focused.request_focus()))
+                .with_key(incular_widgets::internal::Key::from(name))
+        };
+        let mut rows = Vec::<Widget>::with_capacity(2);
+        if show_a.get() {
+            rows.push(row(&a, "a", autofocus_a, keys[0]));
+        }
+        rows.push(row(&b, "b", false, keys[1]));
+        Directionality::new(TextDirection::Ltr, Column::new(rows)).into()
+    })
+    .unwrap()
+    .into_runtime();
+    (runtime, keys)
+}
+
+fn tap(runtime: &mut Runtime, key: GlobalKey) {
+    let tree = runtime.tree();
+    let element = tree.element_with_key(&key.into()).unwrap();
+    let bounds = tree.element_bounds(element).unwrap();
+    let position = bounds.origin + Offset::new(bounds.size.width * 0.5, bounds.size.height * 0.5);
+    for phase in [PointerPhase::Move, PointerPhase::Down, PointerPhase::Up] {
+        let _ = runtime.handle_input(InputEvent::Pointer { phase, position });
+    }
+    settle(runtime);
+}
+
+#[test]
+fn tapping_a_focused_child_is_idempotent_and_tapping_siblings_updates_both_labels() {
+    let a = FocusNode::new();
+    let b = FocusNode::new();
+    let (mut runtime, keys) = interactive_scene(&a, &b, &Signal::new(true), true);
+    settle(&mut runtime);
+    assert!(a.has_primary_focus() && !b.has_focus());
+    labels(&runtime, &["A FOCUSED", "b"]);
+
+    tap(&mut runtime, keys[0]);
+    assert!(a.has_primary_focus() && !b.has_focus());
+    labels(&runtime, &["A FOCUSED", "b"]);
+
+    tap(&mut runtime, keys[1]);
+    assert!(b.has_primary_focus() && !a.has_focus());
+    labels(&runtime, &["a", "B FOCUSED"]);
+
+    tap(&mut runtime, keys[0]);
+    assert!(a.has_primary_focus() && !b.has_focus());
+    labels(&runtime, &["A FOCUSED", "b"]);
+}
+
+#[test]
+fn deleting_a_focused_child_does_not_focus_the_unfocused_sibling() {
+    let a = FocusNode::new();
+    let b = FocusNode::new();
+    let show_a = Signal::new(true);
+    let (mut runtime, keys) = interactive_scene(&a, &b, &show_a, false);
+    settle(&mut runtime);
+    a.request_focus();
+    settle(&mut runtime);
+    assert!(a.has_primary_focus() && !b.has_focus());
+    labels(&runtime, &["A FOCUSED", "b"]);
+
+    let before = runtime.tree().element_with_key(&keys[1].into()).unwrap();
+    show_a.set(false);
+    settle(&mut runtime);
+    assert!(runtime.tree().element_with_key(&keys[0].into()).is_none());
+    assert_eq!(
+        runtime.tree().element_with_key(&keys[1].into()),
+        Some(before)
+    );
+    assert!(!a.has_focus() && !b.has_focus());
+    labels(&runtime, &["b"]);
 }
