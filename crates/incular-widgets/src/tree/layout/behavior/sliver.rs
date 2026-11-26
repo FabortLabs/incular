@@ -216,11 +216,6 @@ impl WidgetTree {
             self.compositor
                 .update_transform(layer, CoreTransform::translation(offset));
         }
-        if let Some(owner) = self.element_for_render(id)
-            && self.has_sliver_clip_layers(owner)
-        {
-            self.sync_render_children(owner);
-        }
         Ok((pass_changed, mapping_changed))
     }
 
@@ -580,6 +575,13 @@ impl WidgetTree {
                         .and_then(|leases| leases.first())
                 {
                     lease.finish_initial_page_layout();
+                }
+                // Custom shape callbacks see only the final measured
+                // geometry, not the successive guesses used by lazy layout.
+                if let Some(owner) = viewport_element
+                    && self.sliver_clip_layers_present(owner)
+                {
+                    self.sync_render_children(owner);
                 }
                 self.diagnostics.lazy_layouts += 1;
                 (size, ChildOffsets::default())

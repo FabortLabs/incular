@@ -97,3 +97,13 @@ The rounded test also follows the physical radius as the configuration
 changes from a 10 px top-start corner in LTR, to a 20 px top-right
 corner, back to the logical radius, and then to RTL. The same child
 stays mounted throughout. All ten focused native tests passed.
+
+## Committed clip measurements
+
+A lazy sliver's provisional 48 px box estimate no longer escapes to a
+custom clipper. A 100 px child supplies exactly one 800 × 100 size in
+both the pinned authored Flutter probe and the native retained viewport.
+The viewport waits until its size/position sweeps settle before updating
+its shared sliver clip layers; painted, pointer and accessibility
+geometry still use the same selected clip frame. All 21 focused native
+clip, decorated-sliver and grouped editor tests passed.

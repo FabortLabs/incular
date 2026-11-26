@@ -124,7 +124,7 @@ pub(crate) fn shape_contains(shape: &ClipShape, point: Offset) -> bool {
 }
 
 use super::{Sliver, SliverChildId, SliverLayout, SliverScrollDependency, geometry::RenderSliver};
-use crate::{ClipReclip, CustomClipper, Widget, layout::basic::ClipDelegate};
+use crate::{CustomClipper, Widget, layout::basic::ClipDelegate};
 use incular_config::Clip;
 use incular_rendering::ClipCoverage;
 use incular_scroll::ScrollController;
@@ -352,24 +352,71 @@ impl ClipShapeResolver {
 /// The same lazy shape snapshot is shared by every materialized row and
 /// used by both painting and input. Reclip does not need the sliver to lay
 /// its children out again.
-struct LiveClipFrame {
+struct CustomClipFrame {
     resolver: ClipShapeResolver,
     clipper: ClipDelegate,
-    signal: ClipReclip,
-    cached: RefCell<(u64, ClipShape, Rect)>,
+    retained: RefCell<Option<(u64, ClipShape)>>,
+    cached: RefCell<Option<(u64, ClipShape, Rect)>>,
 }
 
-impl LiveClipFrame {
-    fn refresh(&self) -> std::cell::Ref<'_, (u64, ClipShape, Rect)> {
-        let revision = self.signal.revision();
-        if revision != self.cached.borrow().0 {
-            *self.cached.borrow_mut() = (
-                revision,
-                self.resolver.resolve(Some(&self.clipper)),
-                self.resolver.approximate(Some(&self.clipper)),
-            );
+impl CustomClipFrame {
+    fn new(
+        resolver: ClipShapeResolver,
+        clipper: &ClipDelegate,
+        retained: Option<ClipShape>,
+    ) -> Self {
+        let revision = clipper
+            .reclip_signal()
+            .map_or(0, |signal| signal.revision());
+        Self {
+            resolver,
+            clipper: clipper.clone(),
+            retained: RefCell::new(retained.map(|shape| (revision, shape))),
+            cached: RefCell::new(None),
         }
-        self.cached.borrow()
+    }
+
+    fn revision(&self) -> u64 {
+        self.clipper
+            .reclip_signal()
+            .map_or(0, |signal| signal.revision())
+    }
+
+    fn resolved_paint(&self) -> Option<ClipShape> {
+        let revision = self.revision();
+        self.cached
+            .borrow()
+            .as_ref()
+            .filter(|entry| entry.0 == revision)
+            .map(|entry| entry.1.clone())
+            .or_else(|| {
+                self.retained
+                    .borrow()
+                    .as_ref()
+                    .filter(|entry| entry.0 == revision)
+                    .map(|entry| entry.1.clone())
+            })
+    }
+
+    fn refresh(&self) -> std::cell::Ref<'_, (u64, ClipShape, Rect)> {
+        let revision = self.revision();
+        if self
+            .cached
+            .borrow()
+            .as_ref()
+            .is_none_or(|entry| entry.0 != revision)
+        {
+            let adopted = self.retained.borrow_mut().take();
+            let shape = adopted.filter(|(epoch, _)| *epoch == revision).map_or_else(
+                || self.resolver.resolve(Some(&self.clipper)),
+                |(_, shape)| shape,
+            );
+            let bounds = self.resolver.approximate(Some(&self.clipper));
+            *self.cached.borrow_mut() = Some((revision, shape, bounds));
+        }
+        std::cell::Ref::map(self.cached.borrow(), |cache| {
+            cache.as_ref().expect("clip resolved")
+        })
     }
 
     fn shape(&self) -> ClipShape {
@@ -387,7 +434,7 @@ pub(crate) struct SliverClipPlacement {
     pub shape: ClipShape,
     pub coverage: ClipCoverage,
     approximate: Rect,
-    live: Option<Rc<LiveClipFrame>>,
+    live: Option<Rc<CustomClipFrame>>,
     translation: Offset,
 }
 
@@ -440,41 +487,7 @@ impl SliverClipPlacement {
     }
 
     pub(crate) fn dependency(&self) -> Option<incular_core::reactivity::DependencySource> {
-        Some(self.live.as_ref()?.signal.source())
-    }
-}
-
-struct CustomClipSnapshot {
-    resolver: ClipShapeResolver,
-    shape: ClipShape,
-    live: Option<Rc<LiveClipFrame>>,
-}
-
-impl CustomClipSnapshot {
-    fn new(resolver: ClipShapeResolver, clipper: &ClipDelegate, shape: ClipShape) -> Self {
-        let live = clipper.reclip_signal().map(|signal| {
-            Rc::new(LiveClipFrame {
-                resolver,
-                clipper: clipper.clone(),
-                signal: signal.clone(),
-                cached: RefCell::new((
-                    signal.revision(),
-                    shape.clone(),
-                    resolver.approximate(Some(clipper)),
-                )),
-            })
-        });
-        Self {
-            resolver,
-            shape,
-            live,
-        }
-    }
-
-    fn shape(&self) -> ClipShape {
-        self.live
-            .as_ref()
-            .map_or_else(|| self.shape.clone(), |live| live.shape())
+        Some(self.live.as_ref()?.clipper.reclip_signal()?.source())
     }
 }
 
@@ -485,7 +498,7 @@ pub(super) struct ClipRenderSliver {
     overlap: ClipOverlapBehavior,
     clipper: Option<ClipDelegate>,
     radii: Option<BorderRadiusGeometry>,
-    cached_custom: Option<Box<CustomClipSnapshot>>,
+    cached_custom: Option<Rc<CustomClipFrame>>,
 }
 
 impl ClipRenderSliver {
@@ -532,28 +545,23 @@ impl RenderSliver for ClipRenderSliver {
             radii: self.radii,
             overlap: self.overlap,
         };
-        let (shape, approximate, live) = if let Some(clipper) = self.clipper.as_ref() {
+        let live = if let Some(clipper) = self.clipper.as_ref() {
             if self
                 .cached_custom
                 .as_ref()
-                .is_none_or(|cached| cached.resolver != resolver)
+                .is_none_or(|frame| frame.resolver != resolver)
             {
-                let shape = resolver.resolve(Some(clipper));
-                self.cached_custom =
-                    Some(Box::new(CustomClipSnapshot::new(resolver, clipper, shape)));
+                self.cached_custom = Some(Rc::new(CustomClipFrame::new(resolver, clipper, None)));
             }
-            let cached = self.cached_custom.as_ref().expect("custom clip resolved");
-            (
-                cached.shape(),
-                cached.live.as_ref().map_or_else(
-                    || resolver.approximate(Some(clipper)),
-                    |live| live.approximate(),
-                ),
-                cached.live.clone(),
-            )
+            self.cached_custom.clone()
         } else {
-            (resolver.resolve(None), resolver.approximate(None), None)
+            None
         };
+        // The default needs no callback. Custom geometry is resolved only
+        // from the committed paint scope or a hit/semantics query, never
+        // from this provisional extent-measurement pass.
+        let shape = resolver.resolve(None);
+        let approximate = resolver.approximate(None);
         let coverage = match self.behavior {
             Clip::None => unreachable!(),
             Clip::HardEdge => ClipCoverage::HardEdge,
@@ -675,10 +683,10 @@ impl super::layout::SingleInnerSliver for ClipRenderSliver {
             )
             && !next.reclips_from(old)
         {
-            self.cached_custom = Some(Box::new(CustomClipSnapshot::new(
+            self.cached_custom = Some(Rc::new(CustomClipFrame::new(
                 cached.resolver,
                 next,
-                cached.shape(),
+                cached.resolved_paint(),
             )));
         }
     }

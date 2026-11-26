@@ -176,6 +176,18 @@ impl WidgetTree {
         root
     }
 
+    pub(super) fn sliver_clip_layers_present(&self, owner: ElementId) -> bool {
+        self.has_sliver_clip_layers(owner)
+            || self.elements.get(owner.0).is_some_and(|element| {
+                matches!(element.widget.kind(), WidgetKind::SliverViewport { .. })
+                    && element.children.iter().any(|child| {
+                        self.render_id(*child)
+                            .and_then(|render| self.renders.get(render.0))
+                            .is_some_and(|node| node.parent_sliver_clips.is_some())
+                    })
+            })
+    }
+
     pub(super) fn has_sliver_clip_layers(&self, owner: ElementId) -> bool {
         self.elements.get(owner.0).is_some_and(|entry| {
             entry

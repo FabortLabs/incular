@@ -693,3 +693,39 @@ fn directional_corners_recompute_when_the_radius_or_ambient_direction_changes() 
         assert_eq!(tree.element_with_key(&key.into()), Some(leaf));
     }
 }
+
+#[derive(Clone)]
+struct ClipSizeLog(std::rc::Rc<std::cell::RefCell<Vec<Size>>>);
+
+impl CustomClipper for ClipSizeLog {
+    fn get_clip(&self, size: Size) -> ClipShape {
+        self.0.borrow_mut().push(size);
+        ClipShape::Rect(Rect::from_origin_size(Offset::ZERO, size))
+    }
+}
+
+#[test]
+fn custom_clipper_only_sees_the_committed_child_size() {
+    let controller = ScrollController::new();
+    let sizes = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let clip = SliverClipRect::new(SliverToBoxAdapter::new(Widget::box_(
+        Size::new(800., 100.),
+        FILL,
+    )))
+    .clipper(ClipSizeLog(sizes.clone()));
+    let mut tree = WidgetTree::new();
+    tree.mount(scene(
+        &controller,
+        Box::new(clip),
+        Axis::Vertical,
+        false,
+        false,
+    ))
+    .unwrap();
+    layout(&mut tree);
+    assert_eq!(
+        rect(&mut tree),
+        [Rect::from_origin_size(Offset::ZERO, Size::new(800., 100.))]
+    );
+    assert_eq!(*sizes.borrow(), [Size::new(800., 100.)]);
+}

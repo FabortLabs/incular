@@ -1649,7 +1649,7 @@ impl WidgetTree {
         scrolling.advanced_child_keys.clear();
         scrolling.sliver_delegate_revision = config.delegate.revision();
         scrolling.sliver_scroll_revision = config.controller.revision();
-        self.sync_render_children(element_id);
+        self.sync_render_children_with_clip_phase(element_id, true);
         Ok(mapping_changed)
     }
 
@@ -3068,6 +3068,10 @@ impl WidgetTree {
         Ok(())
     }
     pub(super) fn sync_render_children(&mut self, id: ElementId) {
+        self.sync_render_children_with_clip_phase(id, false);
+    }
+
+    fn sync_render_children_with_clip_phase(&mut self, id: ElementId, measuring_sliver: bool) {
         let element = self.element_live(id, "mounted element must remain live");
         let render = element.render;
         let render_children: Vec<_> = element
@@ -3136,14 +3140,7 @@ impl WidgetTree {
                 .filter_map(layer_for_child)
                 .collect()
         };
-        if self.has_sliver_clip_layers(id)
-            || (matches!(
-                self.render_live(render, "sliver clip arrangement").object.kind(),
-                RenderKind::SliverViewport { .. }
-            ) && render_children.iter().any(|child| {
-                self.render_live(*child, "mounted sliver clip child").parent_sliver_clips.is_some()
-            }))
-        {
+        if !measuring_sliver && self.sliver_clip_layers_present(id) {
             child_layers = self.arrange_sliver_clip_layers(id, &render_children, child_layers);
         }
         let object = &self
