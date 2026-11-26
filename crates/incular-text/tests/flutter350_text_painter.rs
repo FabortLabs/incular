@@ -878,3 +878,54 @@ fn forced_strut_does_not_stretch_the_selected_glyph_box() {
         );
     }
 }
+
+#[test]
+fn terminal_caret_includes_trailing_spaces_in_both_base_directions() {
+    use incular_text::TextAffinity::Downstream;
+
+    let Ok(path) = std::env::var("INCULAR_FLUTTER_TEST_FONT_PATH") else {
+        return;
+    };
+    let mut engine = TextEngine::new();
+    assert!(engine.register_font_bytes_as("FlutterTest", std::fs::read(path).unwrap()));
+    let style = TextStyle::default().font_family("FlutterTest");
+    let mut p = painter(TextSpan::new("a    "), TextDirection::Ltr);
+    p.set_default_style(style.clone());
+    p.layout_with_engine(&mut engine, 1000., 1000.).unwrap();
+    assert_eq!(p.caret_offset_utf16(5, Downstream, 5.).unwrap().x, 70.);
+
+    p.set_text(Some(TextSpan::new("ل    ")));
+    p.set_text_direction(Some(TextDirection::Rtl));
+    p.layout_with_engine(&mut engine, 1000., 1000.).unwrap();
+    let actual = p.caret_offset_utf16(5, Downstream, 5.).unwrap().x;
+
+    // When the installed system font supplies lam, its measured advance
+    // differs from the Flutter tester's fallback. Isolate the geometry
+    // from this expected choice of glyph.
+    p.set_text(Some(TextSpan::new("ل")));
+    p.layout_with_engine(&mut engine, 1000., 1000.).unwrap();
+    let lam = p.max_intrinsic_width().unwrap();
+    assert!((actual - (1000. - lam - 4. * 14. - 5.)).abs() < 0.001);
+}
+
+#[test]
+fn flutter_test_lam_metrics_match_exact_terminal_and_bidi_boundary_carets() {
+    use incular_text::TextAffinity::Downstream;
+
+    let Ok(path) = std::env::var("INCULAR_FLUTTER_TEST_LAM_FONT_PATH") else {
+        return;
+    };
+    let mut engine = TextEngine::new();
+    assert!(engine.register_font_bytes_as("FlutterTest Lam", std::fs::read(path).unwrap()));
+    let mut p = painter(TextSpan::new("ل    "), TextDirection::Rtl);
+    p.set_default_style(TextStyle::default().font_family("FlutterTest Lam"));
+    p.layout_with_engine(&mut engine, 1000., 1000.).unwrap();
+    assert_eq!(p.caret_offset_utf16(5, Downstream, 5.).unwrap().x, 925.);
+
+    p.set_text(Some(TextSpan::new("aل")));
+    p.set_text_direction(Some(TextDirection::Ltr));
+    p.layout_with_engine(&mut engine, 1000., 1000.).unwrap();
+    for (offset, x) in [(0, 0.), (1, 23.), (2, 28.)] {
+        assert_eq!(p.caret_offset_utf16(offset, Downstream, 5.).unwrap().x, x);
+    }
+}

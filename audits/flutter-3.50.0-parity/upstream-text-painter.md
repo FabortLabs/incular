@@ -41,12 +41,35 @@ The UTF-16 entry point uses the shape's measured grapheme boundaries
 for family, skin-tone, flag, and other joined emoji. Internal UTF-16
 positions do not become extra caret stops; the visible prefixes and
 terminal offset agree with separately measured text. A deliberately
-narrow Korean jamo layout remains queryable. The bidi-width regression
-is partial because native Arabic fallback advances differ from the
-Ahem fixture. What pairs there is the direction-sensitive caret-width
-subtraction at the run boundary and the base-direction terminal
-caret. The exact trailing-space/RTL registration ran only on Flutter.
-All eight selected Flutter and 24 focused Rust cases passed.
+narrow Korean jamo layout remains queryable.
+
+The two remaining caret registrations now pair against controlled font
+metrics. Despite its name, :536 tests **trailing spaces**, not newlines.
+On a 1,000 px line, five 14 px advances give the terminal LTR caret
+at x=70 and the RTL caret with a 5 px caret width at x=925. The native
+system-fallback control measures the lam advance independently and
+checks that all four spaces still contribute their full width. For
+:561, the mixed LTR/RTL string has caret x=0, 23, 28; the RTL run
+boundary subtracts the caret width, but the paragraph's terminal edge
+does not. Flutter's test face gives its missing lam a full-em
+advance. The optional test-only font copy explicitly maps U+0644 to
+the pinned face's same-advance square so Incular does not use a
+different system fallback for the exact comparison. No production
+font choice, text shaping, or editor default is changed.
+
+Both originals and all 28 focused native painter tests passed:
+
+```sh
+python3 audits/flutter-3.50.0-parity/extract-flutter-test-font.py \
+  .tmp/flutter .tmp/FlutterTest-embedded.ttf
+# The optional fixture switch needs Python fontTools.
+python3 audits/flutter-3.50.0-parity/extract-flutter-test-font.py \
+  --arabic-lam-fixture .tmp/flutter .tmp/FlutterTest-lam.ttf
+INCULAR_FLUTTER_TEST_FONT_PATH="$PWD/.tmp/FlutterTest-embedded.ttf" \
+INCULAR_FLUTTER_TEST_LAM_FONT_PATH="$PWD/.tmp/FlutterTest-lam.ttf" \
+INCULAR_FLUTTER_AHEM_PATH="$PWD/.tmp/flutter/packages/flutter_tools/static/Ahem.ttf" \
+  cargo test --locked --offline -j1 -p incular-text --test flutter350_text_painter -- --test-threads=1
+```
 
 ## Scaled text and caret height
 
