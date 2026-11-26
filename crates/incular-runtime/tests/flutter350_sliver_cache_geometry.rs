@@ -447,3 +447,110 @@ fn scrolling_fill_uses_loose_cached_height_and_tight_visible_height() {
         ],
     );
 }
+
+#[test]
+fn zero_height_fill_can_have_paint_budget_without_painting_area_or_exposing_the_last_row_early() {
+    use std::time::Duration;
+
+    use incular_core::{
+        Offset, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase, time::Instant,
+    };
+    use incular_rendering::{DisplayList, PaintCommand};
+    use incular_semantics::SemanticRole;
+    use incular_widgets::{RawPointerEvent, internal::ExplicitSemantics};
+
+    for bouncing in [true, false] {
+        let ctl = ScrollController::new();
+        let fill_color = Color::rgba(0, 255, 0, 255);
+        let list = SliverFixedExtentList::new(5, 150., |i| {
+            Widget::box_(Size::ZERO, Color::rgba(255, 0, 0, 255)).semantics(
+                ExplicitSemantics::new(SemanticRole::GenericContainer).label(i.to_string()),
+            )
+        });
+        let (fill, sample) = Record::new(
+            SliverFillRemaining::new(Widget::box_(Size::ZERO, fill_color).with_key("zero fill"))
+                .has_scroll_body(false)
+                .fill_overscroll(true),
+        );
+        let slivers: [Box<dyn Sliver>; 2] = [Box::new(list), Box::new(fill)];
+        let viewport = CustomScrollView::new(slivers)
+            .controller(ctl.clone())
+            .physics(if bouncing {
+                ScrollPhysics::BOUNCING
+            } else {
+                ScrollPhysics::CLAMPING
+            });
+        let mut rt =
+            Runtime::new(Directionality::new(TextDirection::Ltr, viewport).into()).unwrap();
+        let bounds = Constraints::tight(Size::new(800., 600.));
+        let now = Instant::now();
+        let check = |rt: &Runtime, display: &DisplayList, pixels, paint, row_visible| {
+            assert_eq!(ctl.offset(), pixels, "bounce={bouncing}");
+            let (_, geometry, _) = sample.get().unwrap();
+            assert_eq!(
+                (geometry.paint_extent, geometry.visible),
+                (paint, paint > 0.)
+            );
+            let tree = rt.tree();
+            let fill = tree.element_with_key(&"zero fill".into()).unwrap();
+            assert_eq!(tree.element_bounds(fill).unwrap().size, Size::new(800., 0.));
+            assert!(!display.commands().iter().any(|cmd| matches!(
+                cmd,
+                PaintCommand::Rect { color, rect } if *color == fill_color && rect.size.height > 0.
+            )));
+            assert_eq!(
+                tree.semantics()
+                    .iter()
+                    .any(|(_, node)| { node.label.as_deref() == Some("4") && !node.state.hidden }),
+                row_visible
+            );
+        };
+        let (display, _) = rt.run_frame_at(bounds, now).unwrap();
+        check(&rt, &display, 0., 0., false);
+        ctl.jump_to(ctl.max_offset());
+        let (display, _) = rt
+            .run_frame_at(bounds, now + Duration::from_millis(16))
+            .unwrap();
+        check(&rt, &display, 150., 0., true);
+        let track = |rt: &mut Runtime, phase, y, ms| {
+            let _ = rt.handle_raw_pointer_event(RawPointerEvent::new(
+                1,
+                0,
+                PointerDeviceKind::Touch,
+                if phase == PointerPhase::Up {
+                    0
+                } else {
+                    PRIMARY_POINTER_BUTTON
+                },
+                Offset::new(400., y),
+                phase,
+                now + Duration::from_millis(ms),
+            ));
+        };
+        track(&mut rt, PointerPhase::Down, 300., 20);
+        track(&mut rt, PointerPhase::Move, 250., 36);
+        let (display, _) = rt
+            .run_frame_at(bounds, now + Duration::from_millis(36))
+            .unwrap();
+        check(
+            &rt,
+            &display,
+            if bouncing { 200. } else { 150. },
+            if bouncing { 50. } else { 0. },
+            true,
+        );
+        track(&mut rt, PointerPhase::Up, 250., 180);
+        let mut settled = false;
+        for n in 0..150 {
+            let (display, stats) = rt
+                .run_frame_at(bounds, now + Duration::from_millis(180 + n * 16))
+                .unwrap();
+            if !stats.requested_another_frame && (ctl.offset() - 150.).abs() < f32::EPSILON {
+                check(&rt, &display, 150., 0., true);
+                settled = true;
+                break;
+            }
+        }
+        assert!(settled, "released spring must settle");
+    }
+}

@@ -51,3 +51,23 @@ All remaining thirteen original registrations and their named iOS/macOS variants
 - :1175, :1198 and :1233: with clamping physics, the attempted swipe does not stretch the 450px fill or move its bottom-aligned small child; the padded 148px natural extent at the end of the long list also remains unchanged. These pass. The small button and padded center cases use neutral box analogues.
 
 Run cargo test --locked -p incular-runtime --test flutter350_sliver_fill_drag_semantics -- --nocapture. All 31 original registrations in this file now have an explicit disposition, including partials. See earlier sections for programmatic/reverse overscroll and no-swipe visibility.
+
+## Zero-height fill visibility versus painted pixels
+
+Both original iOS/macOS variants of line 902 and the clamping case at
+line 1283 passed again. The authored Flutter probe
+`zero_extent_fill_visibility_test.dart` distinguishes finder visibility,
+the sliver's paint extent, and the actual child size. Under a held 50 px
+bouncing drag the sliver is visible and its paint budget becomes 50 px,
+but the color box still measures exactly 800×0. It is mounted both in
+and out of view, and the default finder only includes it while the
+sliver is visible. Clamping never reports a positive paint budget.
+
+The native `flutter350_sliver_cache_geometry` check drives the same
+raw touch phases, samples the real laid-out sliver visibility and child
+bounds, and checks that no positive-area fill command is emitted. It
+also verifies that the cached last row is not visible to accessibility
+at offset zero, becomes visible at the range end, and stays visible
+through the drag and release. Both sides return to exactly 150 px
+with no visible fill. These checks replace the earlier partial-mismatch
+classification: sliver visibility and child paint area are different.
