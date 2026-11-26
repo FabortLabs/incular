@@ -2259,3 +2259,4 @@ packages/flutter/test/painting/shape_decoration_test.dart	112	ShapeDecoration.hi
 packages/flutter/test/painting/shape_decoration_test.dart	177	_CompoundBorder.hitTest preserves child hitTest optimizations	paired-match	upstream-shape-decoration-hit-and-clip.md
 packages/flutter/test/painting/shape_decoration_test.dart	272	ShapeDecoration.getClipPath	paired-match	upstream-shape-decoration-hit-and-clip.md
 packages/flutter/test/painting/shape_decoration_test.dart	282	ShapeDecoration.getClipPath for oval	paired-match	upstream-shape-decoration-hit-and-clip.md
+packages/flutter/test/painting/shape_decoration_test.dart	188	ShapeDecoration.lerp between gradient and color is smooth and does not throw	paired-match	upstream-shape-decoration-hit-and-clip.md#color-to-gradient-transitions

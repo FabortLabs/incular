@@ -21,7 +21,7 @@ use crate::{
 #[derive(Clone)]
 pub struct ShapeDecoration {
     pub color: Option<Color>,
-    /// Takes precedence over [`ShapeDecoration::color`], as in Flutter.
+    /// A gradient fill is mutually exclusive with [`ShapeDecoration::color`].
     pub gradient: Option<Brush>,
     pub shadows: Vec<BoxShadow>,
     /// Flutter `ShapeDecoration.image`: painted over the color or gradient,
@@ -44,12 +44,20 @@ impl ShapeDecoration {
 
     #[must_use]
     pub fn color(mut self, color: Color) -> Self {
+        debug_assert!(
+            self.gradient.is_none(),
+            "color and gradient are mutually exclusive"
+        );
         self.color = Some(color);
         self
     }
 
     #[must_use]
     pub fn gradient(mut self, gradient: impl Into<Brush>) -> Self {
+        debug_assert!(
+            self.color.is_none(),
+            "color and gradient are mutually exclusive"
+        );
         self.gradient = Some(gradient.into());
         self
     }

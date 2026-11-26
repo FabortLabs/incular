@@ -11,7 +11,8 @@ use incular_animation::{
     OptionalColorTween,
 };
 use incular_config::{Alignment, AlignmentDirectional, Axis, TextDirection};
-use incular_core::{Lerp, Offset, Rect, Size, Transform as CoreTransform};
+use incular_core::{Color, Lerp, Offset, Rect, Size, Transform as CoreTransform};
+use incular_rendering::{Brush, GradientStops};
 use incular_text::TextStyle;
 
 use crate::explicit_animations::animated_widget_for;
@@ -505,19 +506,25 @@ impl Lerp for Decoration {
     }
 }
 
-/// `ShapeDecoration.lerp`. The color interpolates with Flutter's nullable
-/// color rules. The gradient, image, shadows and shape switch at the
-/// midpoint, except the shadows, which pair up by index: Flutter lerps the
-/// gradient and ShapeBorder, which Incular does not yet do.
+/// The color-to-gradient case uses a matching uniform gradient. Images,
+/// border shape morphs and transitions between two gradient geometries are
+/// still handled by the existing midpoint fallback.
 fn lerp_shape_decoration(a: &ShapeDecoration, b: &ShapeDecoration, t: f32) -> ShapeDecoration {
     let switches = t >= 0.5;
+    let gradient = match (&a.gradient, &b.gradient) {
+        (None, Some(gradient)) => Some(blend_shape_gradient(gradient, a.color, t, true)),
+        (Some(gradient), None) => Some(blend_shape_gradient(gradient, b.color, t, false)),
+        (a, b) => {
+            if switches { b.clone() } else { a.clone() }
+        }
+    };
     ShapeDecoration {
-        color: OptionalColorTween::new(a.color, b.color).lerp(t),
-        gradient: if switches {
-            b.gradient.clone()
+        color: if gradient.is_none() {
+            OptionalColorTween::new(a.color, b.color).lerp(t)
         } else {
-            a.gradient.clone()
+            None
         },
+        gradient,
         shadows: BoxShadow::lerp_list(&a.shadows, &b.shadows, t),
         image: if switches {
             b.image.clone()
@@ -529,6 +536,50 @@ fn lerp_shape_decoration(a: &ShapeDecoration, b: &ShapeDecoration, t: f32) -> Sh
         } else {
             a.shape.clone()
         },
+    }
+}
+
+fn blend_shape_gradient(
+    template: &Brush,
+    solid: Option<Color>,
+    t: f32,
+    toward_gradient: bool,
+) -> Brush {
+    let stops = |gradient: &GradientStops| {
+        let Some(color) = solid else {
+            return gradient.scale_opacity(if toward_gradient { t } else { 1. - t });
+        };
+        let uniform = gradient.with_color(color);
+        if toward_gradient {
+            uniform.interpolate(gradient, t)
+        } else {
+            gradient.interpolate(&uniform, t)
+        }
+    };
+    match template {
+        Brush::Solid(color) => {
+            let (a, b) = if toward_gradient {
+                (solid, Some(*color))
+            } else {
+                (Some(*color), solid)
+            };
+            Brush::Solid(OptionalColorTween::new(a, b).lerp(t).unwrap_or(Color::TRANSPARENT))
+        }
+        Brush::LinearGradient(gradient) => {
+            let mut gradient = gradient.clone();
+            gradient.stops = stops(&gradient.stops);
+            Brush::LinearGradient(gradient)
+        }
+        Brush::RadialGradient(gradient) => {
+            let mut gradient = gradient.clone();
+            gradient.stops = stops(&gradient.stops);
+            Brush::RadialGradient(gradient)
+        }
+        Brush::SweepGradient(gradient) => {
+            let mut gradient = gradient.clone();
+            gradient.stops = stops(&gradient.stops);
+            Brush::SweepGradient(gradient)
+        }
     }
 }
 

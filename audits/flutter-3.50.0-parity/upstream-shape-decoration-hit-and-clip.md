@@ -29,3 +29,18 @@ testing share the inherited text direction. Shape-only hit updates also
 invalidate stationary pointer hit testing. Native: four mounted tests,
 nine ColoredBox controls and twelve focused shape API/widget tests
 passed. Authored cases are not counted as upstream registrations.
+
+## Color-to-gradient transitions
+
+Pinned `painting/shape_decoration_test.dart:188` passes. Incular used to
+hold a solid fill to the midpoint, then switch to a gradient. The
+intermediate keeps only a gradient now, using the existing gradient's
+geometry and a uniform version of the solid endpoint. The original
+decoration is returned unchanged at each exact endpoint.
+
+Two native tests cover seven forward and reverse fractions, independently
+calculated channel values rounded to Incular's RGBA8, near-solid stops,
+the actual gradient paint command, and preservation of radial and sweep
+geometry. Fourteen transition and seven ShapeDecoration controls also
+passed. Interpolation between two distinct gradient geometries, image
+interpolation, and heterogeneous border morphs remain separate gaps.
