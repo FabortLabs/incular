@@ -1855,3 +1855,12 @@ packages/flutter/test/rendering/viewport_test.dart	2274	default (firstIsTop)	pai
 packages/flutter/test/rendering/viewport_test.dart	2291	lastIsTop	paired-match	upstream-viewport-reveal.md#centered-paint-and-hit-order
 packages/flutter/test/rendering/viewport_test.dart	2315	default (firstIsTop)	paired-match	upstream-viewport-reveal.md#centered-paint-and-hit-order
 packages/flutter/test/rendering/viewport_test.dart	2337	lastIsTop	paired-match	upstream-viewport-reveal.md#centered-paint-and-hit-order
+packages/flutter/test/rendering/viewport_test.dart	1962	up, forward growth	paired-match	upstream-viewport-reveal.md#nested-box-to-sliver-coordinate-conversion
+packages/flutter/test/rendering/viewport_test.dart	1973	up, reverse growth	paired-match	upstream-viewport-reveal.md#nested-box-to-sliver-coordinate-conversion
+packages/flutter/test/rendering/viewport_test.dart	1984	right, forward growth	paired-match	upstream-viewport-reveal.md#nested-box-to-sliver-coordinate-conversion
+packages/flutter/test/rendering/viewport_test.dart	1995	right, reverse growth	paired-match	upstream-viewport-reveal.md#nested-box-to-sliver-coordinate-conversion
+packages/flutter/test/rendering/viewport_test.dart	2006	down, forward growth	paired-match	upstream-viewport-reveal.md#nested-box-to-sliver-coordinate-conversion
+packages/flutter/test/rendering/viewport_test.dart	2017	down, reverse growth	paired-match	upstream-viewport-reveal.md#nested-box-to-sliver-coordinate-conversion
+packages/flutter/test/rendering/viewport_test.dart	2028	left, forward growth	paired-match	upstream-viewport-reveal.md#nested-box-to-sliver-coordinate-conversion
+packages/flutter/test/rendering/viewport_test.dart	2039	left, reverse growth	paired-match	upstream-viewport-reveal.md#nested-box-to-sliver-coordinate-conversion
+packages/flutter/test/rendering/viewport_test.dart	2050	will not assert on mismatched axis	partial-match	upstream-viewport-reveal.md#nested-box-to-sliver-coordinate-conversion

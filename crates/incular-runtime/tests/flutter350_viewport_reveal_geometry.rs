@@ -430,3 +430,58 @@ fn an_empty_viewport_can_lay_out_at_zero_area() {
         Size::ZERO
     );
 }
+
+#[test]
+fn nested_box_padding_converts_to_scroll_space_for_all_growth_directions() {
+    use incular_config::EdgeInsets;
+    use incular_widgets::{CustomScrollView, Padding, Sliver, SliverPadding, SliverToBoxAdapter};
+
+    let padding = EdgeInsets::only(22., 22., 34., 34.);
+    for axis in [Axis::Vertical, Axis::Horizontal] {
+        for reverse in [false, true] {
+            for reverse_growth in [false, true] {
+                let ctl = ScrollController::new();
+                let slivers = (0u64..6).map(|index| -> Box<dyn Sliver> {
+                    let leaf = Widget::from(SizedBox::shrink()).with_key(index);
+                    let tile = SizedBox::new()
+                        .width(300.)
+                        .height(300.)
+                        .child(Padding::new(padding, leaf));
+                    Box::new(SliverPadding::new(padding, SliverToBoxAdapter::new(tile)))
+                });
+                let mut viewport = CustomScrollView::new(slivers)
+                    .controller(ctl.clone())
+                    .scroll_direction(axis)
+                    .reverse(reverse)
+                    // Keep the far descendant mounted for this pure query.
+                    .cache_extent(2200.);
+                if reverse_growth {
+                    viewport = viewport.center(5);
+                }
+                let mut runtime =
+                    Runtime::new(Directionality::new(TextDirection::Ltr, viewport).into()).unwrap();
+                runtime
+                    .run_frame(Constraints::tight(Size::new(400., 400.)))
+                    .unwrap();
+                let tree = runtime.tree();
+                let target_key = if reverse_growth { 0u64 } else { 5u64 };
+                let target = tree.element_with_key(&target_key.into()).unwrap();
+                let result = Scrollable::get_offset_to_reveal(tree, target, 0., None).unwrap();
+                let edge = if reverse { 34. } else { 22. };
+                let sign = if reverse_growth { -1. } else { 1. };
+                let context = (axis, reverse, reverse_growth);
+                assert_eq!(result.offset, sign * 5. * 356. + 2. * edge, "{context:?}");
+                let (start, extent) = match axis {
+                    Axis::Vertical => (result.rect.origin.y, result.rect.size.height),
+                    Axis::Horizontal => (result.rect.origin.x, result.rect.size.width),
+                };
+                assert_eq!(
+                    if reverse { start + extent } else { start },
+                    if reverse { 400. } else { 0. },
+                    "{context:?}"
+                );
+                assert_eq!(ctl.offset(), 0., "{context:?} query must not scroll");
+            }
+        }
+    }
+}

@@ -153,3 +153,20 @@ ran in logical child order in the default case. Paint traversal now uses the
 same sliver slot order as layer installation and hit testing. The existing
 `sliver_paint_order` regressions for the published scene and topmost hit
 also passed. This did not change the wgpu renderer.
+
+## Nested box-to-sliver coordinate conversion
+
+The eight direction/growth registrations at `rendering/viewport_test.dart:1962–2039`
+passed in the pinned SDK. The Incular
+`nested_box_padding_converts_to_scroll_space_for_all_growth_directions`
+fixture mounts the far target in a box with asymmetric inner padding inside
+an equally padded sliver. Leading-edge reveal is exactly
+`±5 × 356 + 44` (down/right) or `±5 × 356 + 68` (up/left). The target's
+projected edge lands at 0 or 400 in viewport coordinates, and the query
+leaves the controller at 0. The target is kept mounted by increasing the
+cache extent, not by scrolling to it.
+
+The separate mismatched-axis registration at line 2050 passed in Flutter.
+Flutter ignores the supplied axis for one-dimensional viewports;
+Incular's one-dimensional query takes no axis argument and always uses the
+viewport's axis. The mismatched argument itself has no paired exercise.
