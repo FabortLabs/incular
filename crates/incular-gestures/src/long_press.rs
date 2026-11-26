@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use crate::{
     GestureCallbacks, GestureDecision, GestureDisposition, GestureRecognizer,
-    PointerGestureRecognizer, RawPointerEvent, arena_member::ArenaLink,
+    LongPressStartDetails, PointerGestureRecognizer, RawPointerEvent, arena_member::ArenaLink,
 };
 
 /// The direct long-press recognizer. Register a down event, settle its arena,
@@ -30,7 +30,14 @@ struct Contact {
     pointer: u64,
     routed_down: bool,
     started: bool,
+    award: ArenaAward,
     engine: PointerGestureRecognizer,
+}
+
+enum ArenaAward {
+    Standalone,
+    Pending(Option<LongPressStartDetails>),
+    Accepted,
 }
 
 impl LongPressGestureRecognizer {
@@ -50,6 +57,19 @@ impl LongPressGestureRecognizer {
     #[must_use]
     pub fn duration(mut self, duration: Duration) -> Self {
         self.duration = duration;
+        self
+    }
+
+    /// Sends resolutions to a host arena instead of acting as the sole
+    /// member. The resolver may award the request synchronously or return
+    /// `None` and call [`Self::accept_gesture`] or [`Self::reject_gesture`]
+    /// after the recognizer returns. Configure it before adding a pointer.
+    #[must_use]
+    pub fn with_external_arena(
+        mut self,
+        resolver: impl FnMut(u64, GestureDisposition) -> Option<GestureDisposition> + 'static,
+    ) -> Self {
+        self.arena.set_external(Box::new(resolver));
         self
     }
 
@@ -103,8 +123,14 @@ impl LongPressGestureRecognizer {
         {
             return false;
         }
-        let mut engine =
-            PointerGestureRecognizer::new(callbacks).with_long_press_duration(self.duration);
+        let mut engine = PointerGestureRecognizer::new(callbacks);
+        let award = if self.arena.has_external() {
+            engine = engine.with_external_long_press_deadline();
+            ArenaAward::Pending(None)
+        } else {
+            engine = engine.with_long_press_duration(self.duration);
+            ArenaAward::Standalone
+        };
         engine.set_gesture_settings(self.gesture_settings);
         if let Some(transform) = self.local_transform {
             engine.set_local_transform(transform);
@@ -114,6 +140,7 @@ impl LongPressGestureRecognizer {
             pointer: down.pointer,
             routed_down: false,
             started: false,
+            award,
             engine,
         });
         true
@@ -124,7 +151,25 @@ impl LongPressGestureRecognizer {
         self.arena.close(pointer).is_some()
     }
 
-    /// Removes a rejected member and cancels only an already-routed press.
+    /// Receives an arena award. Winning by default before the deadline
+    /// does not cause an early long press.
+    pub fn accept_gesture(&mut self, pointer: u64) {
+        let Some(contact) = self
+            .contact
+            .as_mut()
+            .filter(|contact| contact.pointer == pointer)
+        else {
+            return;
+        };
+        if let ArenaAward::Pending(due) = contact.award {
+            contact.award = ArenaAward::Accepted;
+            if let Some(details) = due {
+                start_awarded_hold(contact, details);
+            }
+        }
+    }
+
+    /// Applies a host rejection without requesting a second resolution.
     pub fn reject_gesture(&mut self, pointer: u64) {
         if self
             .contact
@@ -133,7 +178,9 @@ impl LongPressGestureRecognizer {
             && let Some(mut contact) = self.contact.take()
         {
             contact.engine.reject();
-            let _ = self.arena.resolve(pointer, GestureDisposition::Rejected);
+            if !self.arena.has_external() {
+                let _ = self.arena.resolve(pointer, GestureDisposition::Rejected);
+            }
         }
     }
 
@@ -142,9 +189,22 @@ impl LongPressGestureRecognizer {
         let Some(contact) = self.contact.as_mut().filter(|contact| contact.routed_down) else {
             return;
         };
-        if let GestureDecision::Accept(action) = contact.engine.poll(now) {
-            contact.started = true;
-            contact.engine.dispatch(action);
+        if matches!(contact.award, ArenaAward::Pending(Some(_))) {
+            return;
+        }
+        let Some(details) = contact.engine.due_long_press(now, self.duration) else {
+            return;
+        };
+        if matches!(contact.award, ArenaAward::Pending(None)) {
+            contact.award = ArenaAward::Pending(Some(details));
+            let pointer = contact.pointer;
+            match self.arena.resolve(pointer, GestureDisposition::Accepted) {
+                Some(GestureDisposition::Accepted) => self.accept_gesture(pointer),
+                Some(GestureDisposition::Rejected) => self.reject_gesture(pointer),
+                _ => {}
+            }
+        } else {
+            start_awarded_hold(contact, details);
         }
     }
 
@@ -178,21 +238,34 @@ impl LongPressGestureRecognizer {
             GestureDecision::Cancelled => contact.engine.cancel(),
             _ => {}
         }
-        if terminal || !contact.started && !contact.engine.has_pending_deadline() {
+        if terminal || !contact.started && !contact.engine.has_pending_long_press() {
+            let withdraw = !matches!(contact.award, ArenaAward::Accepted);
             self.contact = None;
-            let _ = self.arena.resolve(pointer, GestureDisposition::Rejected);
+            if withdraw {
+                let _ = self.arena.resolve(pointer, GestureDisposition::Rejected);
+            }
         }
     }
 
     /// Abandons tracking. A routed hold that is still pending is canceled;
     /// disposal never synthesizes a release for an accepted hold.
     pub fn dispose(&mut self) {
-        if let Some(mut contact) = self.contact.take()
-            && contact.routed_down
-            && !contact.started
-        {
-            contact.engine.reject();
+        if let Some(mut contact) = self.contact.take() {
+            if contact.routed_down && !contact.started {
+                contact.engine.reject();
+            }
+            if !matches!(contact.award, ArenaAward::Accepted) {
+                let _ = self
+                    .arena
+                    .resolve(contact.pointer, GestureDisposition::Rejected);
+            }
         }
         self.arena = ArenaLink::default();
     }
+}
+
+fn start_awarded_hold(contact: &mut Contact, details: LongPressStartDetails) {
+    contact.started = true;
+    let action = contact.engine.begin_long_press(details);
+    contact.engine.dispatch(action);
 }

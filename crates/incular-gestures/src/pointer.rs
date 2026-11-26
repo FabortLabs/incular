@@ -161,7 +161,7 @@ pub struct PointerGestureRecognizer {
     pan_started: bool,
     pan_action: Option<PanAction>,
     long_press_started: bool,
-    long_press_duration: Duration,
+    long_press_duration: Option<Duration>,
     velocity: VelocityTracker,
     tap_rejected: bool,
     drag: DragProgress,
@@ -300,7 +300,7 @@ impl PointerGestureRecognizer {
             pan_started: false,
             pan_action: None,
             long_press_started: false,
-            long_press_duration: Self::LONG_PRESS_TIMEOUT,
+            long_press_duration: Some(Self::LONG_PRESS_TIMEOUT),
             velocity: VelocityTracker::default(),
             tap_rejected: false,
             drag: DragProgress::at(Offset::ZERO),
@@ -364,7 +364,7 @@ impl PointerGestureRecognizer {
     /// Sets the long-press deadline for this recognizer before routing a press.
     #[must_use]
     pub fn with_long_press_duration(mut self, duration: Duration) -> Self {
-        self.long_press_duration = duration;
+        self.long_press_duration = Some(duration);
         self
     }
     /// Makes the drag start only after the press has lasted `delay`, as
@@ -632,23 +632,52 @@ impl PointerGestureRecognizer {
         {
             return GestureDecision::Accept(action);
         }
-        if held >= self.long_press_duration
+        if let Some(duration) = self.long_press_duration
+            && let Some(details) = self.due_long_press(now, duration)
+        {
+            return GestureDecision::Accept(self.begin_long_press(details));
+        }
+        GestureDecision::Pending
+    }
+
+    /// An external arena must award the deadline before the recognizer
+    /// exposes a start, move, or end for that hold.
+    pub(crate) fn with_external_long_press_deadline(mut self) -> Self {
+        self.long_press_duration = None;
+        self
+    }
+
+    pub(crate) fn has_pending_long_press(&self) -> bool {
+        self.down.is_some()
             && !self.pan_started
             && !self.long_press_started
             && !self.long_press_rejected
             && self.has_long_press_callbacks()
-        {
-            self.long_press_started = true;
-            // The long press wins the arena; the tap loses.
-            self.tap_cancel(TapCancelReason::Forced);
-            let details = LongPressStartDetails {
+    }
+
+    pub(crate) fn due_long_press(
+        &self,
+        now: Instant,
+        duration: Duration,
+    ) -> Option<LongPressStartDetails> {
+        let down = self.down?;
+        if self.has_pending_long_press() && now.saturating_duration_since(down.time) >= duration {
+            Some(LongPressStartDetails {
                 global_position: down.position,
                 local_position: self.local(down.position),
-            };
-            return GestureDecision::Accept(GestureAction::LongPressStart(details));
+            })
+        } else {
+            None
         }
-        GestureDecision::Pending
     }
+
+    pub(crate) fn begin_long_press(&mut self, details: LongPressStartDetails) -> GestureAction {
+        self.long_press_started = true;
+        // The long press wins the arena; the tap loses.
+        self.tap_cancel(TapCancelReason::Forced);
+        GestureAction::LongPressStart(details)
+    }
+
     /// Whether [`poll`](Self::poll) still has a deadline to fire for the press
     /// in progress.
     #[must_use]
@@ -656,9 +685,7 @@ impl PointerGestureRecognizer {
         self.down.is_some()
             && !self.pan_started
             && (self.pending_tap_down.is_some()
-                || (!self.long_press_started
-                    && !self.long_press_rejected
-                    && self.has_long_press_callbacks())
+                || (self.long_press_duration.is_some() && self.has_pending_long_press())
                 || (self.delayed_drag.is_some() && !self.drag_rejected))
     }
     /// A possible long press can be cancelled even without a down callback.
@@ -1257,21 +1284,11 @@ impl PointerGestureRecognizer {
                 // A pan has no axis filter; projecting its full movement
                 // back to world space yields the original physical step.
                 self.drag.moved_pan += step.x.hypot(step.y);
-                // The long-press deadline passed on this movement: the press
-                // is a long press, as the deadline poll would have reported.
-                if !self.pan_started
-                    && !self.long_press_started
-                    && !self.long_press_rejected
-                    && self.has_long_press_callbacks()
-                    && event.time.saturating_duration_since(down.time) >= self.long_press_duration
+                // A standalone deadline may also become due on a movement.
+                if let Some(duration) = self.long_press_duration
+                    && let Some(details) = self.due_long_press(event.time, duration)
                 {
-                    self.long_press_started = true;
-                    self.tap_cancel(TapCancelReason::Forced);
-                    let details = LongPressStartDetails {
-                        global_position: down.position,
-                        local_position: self.local(down.position),
-                    };
-                    return GestureDecision::Accept(GestureAction::LongPressStart(details));
+                    return GestureDecision::Accept(self.begin_long_press(details));
                 }
                 if let Some(delay) = self.delayed_drag {
                     // Flutter `DelayedMultiDragGestureRecognizer`: no drag
@@ -1337,7 +1354,8 @@ impl PointerGestureRecognizer {
                 if elapsed >= PRESS_TIMEOUT {
                     self.flush_tap_down();
                 }
-                let long_press_taken = elapsed >= self.long_press_duration
+                let long_press_taken = (self.long_press_started
+                    || self.long_press_duration.is_some_and(|duration| elapsed >= duration))
                     && self.has_long_press_callbacks()
                     && !self.long_press_rejected;
                 if !long_press_taken {

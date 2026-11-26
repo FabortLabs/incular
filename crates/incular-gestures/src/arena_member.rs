@@ -60,6 +60,10 @@ impl ArenaLink {
         self.open.clear();
     }
 
+    pub(crate) fn has_external(&self) -> bool {
+        self.external.is_some()
+    }
+
     /// `gestureArena.add`.
     pub(crate) fn add(&mut self, pointer: u64) {
         if self.external.is_none() {

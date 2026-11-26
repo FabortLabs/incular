@@ -7,6 +7,8 @@ a version and date when publishing.
 
 ### Added
 
+- Standalone long-press recognizers can join an external gesture arena.
+
 - A window can retain accessibility semantics independently of its native
   host, with listeners for effective enable and disable transitions.
 

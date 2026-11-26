@@ -31,6 +31,19 @@ routed hold logged only down before disposal, instead of down and
 cancel. The standalone recognizer now cancels an unresolved routed
 hold before clearing its state. It neither reports a cancellation
 for an unrouted registration nor invents an end after acceptance.
-The surviving drag's microtask is not yet paired with this
-recognizer, so the original remains partial. All 34 focused native
+That standalone comparison did not verify the surviving drag's microtask. All 34 focused native
 long-press, button, and managed-arena controls passed.
+
+## Surviving drag after a pending hold is disposed
+
+The pinned original :163 now pairs. The real managed arena contains
+a horizontal drag and the long-press recognizer. Down and the first
+300 milliseconds leave both pending. Disposing the hold calls cancel
+and withdraws it; the remaining drag cannot start on that stack.
+Only the deferred arena drain starts it, once, at (10,10).
+
+External arena awards and deadline timing are independent. An early
+default award cannot start a hold before 500 ms. A deadline that
+precedes an award cannot leak a start, move, or end. Release before
+the award cancels and ignores a late result. The native suite includes
+70 focused arena and gesture checks and ten mounted runtime controls.

@@ -159,3 +159,8 @@ axis a [`Dismissible`](/docs/api/input/gesture-detector) may claim. [`LongPressD
 long-press instead of immediately.
 
 Related: [`Focus`](/docs/api/input/focus).
+
+For a lower-level host, `LongPressGestureRecognizer::with_external_arena`
+provides explicit arbitration. A hold needs both a deadline and an arena award.
+Disposing a pending hold withdraws it without starting the surviving drag on
+the disposal stack.

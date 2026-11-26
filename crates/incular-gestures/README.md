@@ -44,3 +44,8 @@ modality, not focus-scope selection transactions.
 Use `SingleActivator::with_num_lock` to require a locked or unlocked
 Num Lock state. The default is `LockState::Ignored`. Mounted
 `CallbackShortcuts` receive the runtime's separate lock snapshot.
+
+A standalone `LongPressGestureRecognizer` can use an external arena.
+The hold still waits for its deadline and an arena award; disposing a
+pending hold withdraws that member. In `GestureArenaManager`, a survivor
+then resolves at the deferred-resolution boundary, not during disposal.
