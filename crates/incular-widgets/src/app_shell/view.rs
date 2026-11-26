@@ -256,6 +256,10 @@ impl ViewController {
         self.state.borrow().revision.get()
     }
 
+    pub(crate) fn revision_cell(&self) -> Rc<Cell<u64>> {
+        self.state.borrow().revision.clone()
+    }
+
     /// Subscribes to metrics, environment, focus, lifecycle, and disposal.
     pub fn subscribe(&self, listener: impl Fn(ViewEvent) + 'static) -> ViewSubscription {
         let listener: ViewListener = Rc::new(listener);
@@ -515,7 +519,7 @@ impl View {
     pub fn into_widget(self) -> Widget {
         let controller = self.controller;
         let child = self.child;
-        let revision = controller.state.borrow().revision.clone();
+        let revision = controller.revision_cell();
         let retained_controller = controller.clone();
         Widget::stateful_builder(revision, move |_| {
             let data = retained_controller.data();

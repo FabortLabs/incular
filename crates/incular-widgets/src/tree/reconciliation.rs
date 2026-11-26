@@ -44,7 +44,9 @@ fn element_environment(
             let scope = match (previous, environment) {
                 (Some(previous), Some(next))
                     if previous.value.downcast_ref::<crate::environment::TickerModeScope>()
-                        .is_some_and(|mode| next.value.downcast_ref::<crate::environment::TickerModeScope>() == Some(mode)) =>
+                        .is_some_and(|mode| next.value.downcast_ref::<crate::environment::TickerModeScope>() == Some(mode))
+                        || previous.value.downcast_ref::<RuntimeEnvironment>()
+                            .is_some_and(|data| next.value.downcast_ref::<RuntimeEnvironment>() == Some(data)) =>
                 {
                     Some(previous.clone())
                 }

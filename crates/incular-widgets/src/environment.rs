@@ -41,6 +41,57 @@ impl MediaQuery {
         }
     }
 
+    /// Projects the selected view's metrics and installs a live MediaQuery.
+    /// A surrounding MediaQuery supplies platform preferences, but never
+    /// the selected view's dimensions, insets or gesture geometry.
+    #[must_use]
+    pub fn from_view(view: crate::ViewController, child: impl Into<Widget>) -> Widget {
+        let child = child.into();
+        Widget::stateful_builder(view.revision_cell(), move |context| {
+            // An absent MediaQuery is distinct from the root's retained
+            // runtime snapshot: use this view's own platform values then.
+            let parent = context.depend_on_shared::<RuntimeEnvironment>();
+            let data = Self::data_from_view(&view, parent.as_deref());
+            Self::new(data, child.clone()).into()
+        })
+    }
+
+    /// Snapshots the metrics of one view using an optional explicit source
+    /// for platform preferences (Flutter's `MediaQueryData.fromView`).
+    #[must_use]
+    pub fn data_from_view(
+        view: &crate::ViewController,
+        platform: Option<&MediaQueryData>,
+    ) -> MediaQueryData {
+        let mut data = view.data().environment;
+        data.navigation_mode = incular_config::NavigationMode::Traditional;
+        if let Some(platform) = platform {
+            data.text_scale = platform.text_scale;
+            data.brightness = platform.brightness;
+            data.accessible_navigation = platform.accessible_navigation;
+            data.invert_colors = platform.invert_colors;
+            data.reduced_motion = platform.reduced_motion;
+            data.bold_text = platform.bold_text;
+            data.high_contrast = platform.high_contrast;
+            data.on_off_switch_labels = platform.on_off_switch_labels;
+            data.supports_announce = platform.supports_announce;
+            data.always_use_24_hour_format = platform.always_use_24_hour_format;
+            data.navigation_mode = platform.navigation_mode;
+            data.supports_showing_system_context_menu =
+                platform.supports_showing_system_context_menu;
+            data.line_height_scale_factor_override = platform
+                .line_height_scale_factor_override
+                .or(data.line_height_scale_factor_override);
+            data.letter_spacing_override =
+                platform.letter_spacing_override.or(data.letter_spacing_override);
+            data.word_spacing_override =
+                platform.word_spacing_override.or(data.word_spacing_override);
+            data.paragraph_spacing_override =
+                platform.paragraph_spacing_override.or(data.paragraph_spacing_override);
+        }
+        data
+    }
+
     /// Subscribes to all data in the nearest MediaQuery, if present.
     #[must_use]
     pub fn maybe_of(context: &BuildContext<'_>) -> Option<MediaQueryData> {

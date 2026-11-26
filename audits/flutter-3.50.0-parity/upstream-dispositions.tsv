@@ -2546,3 +2546,6 @@ packages/flutter/test/widgets/raw_tooltip_test.dart	1597	Semantics excluded	pair
 packages/flutter/test/widgets/raw_tooltip_test.dart	640	RawTooltip is dismissed after tap to dismiss immediately	paired-match	upstream-raw-tooltip-tap-dismissal.md
 packages/flutter/test/widgets/raw_tooltip_test.dart	659	Tooltip is not dismissed after tap if enableTapToDismiss is false	paired-match	upstream-raw-tooltip-tap-dismissal.md
 packages/flutter/test/widgets/raw_tooltip_test.dart	2368	Hovered text should dismiss when clicked outside	paired-match	upstream-raw-tooltip-tap-dismissal.md
+packages/flutter/test/widgets/media_query_test.dart	428	MediaQuery.fromView updates on notifications (no parent data)	paired-match	upstream-media-query-from-view.md
+packages/flutter/test/widgets/media_query_test.dart	490	MediaQuery.fromView updates on notifications (with parent data)	paired-match	upstream-media-query-from-view.md
+packages/flutter/test/widgets/media_query_test.dart	551	MediaQuery.fromView updates when parent data changes	paired-match	upstream-media-query-from-view.md
