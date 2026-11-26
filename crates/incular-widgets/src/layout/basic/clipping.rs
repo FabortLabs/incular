@@ -78,6 +78,12 @@ pub trait CustomClipper: 'static {
     /// Returns the clip for a box of `size`.
     fn get_clip(&self, size: Size) -> ClipShape;
 
+    /// A conservative clip for accessibility, independent of the actual
+    /// painted shape. By default the whole box remains available.
+    fn get_approximate_clip_rect(&self, size: Size) -> Rect {
+        Rect::from_origin_size(Offset::ZERO, size)
+    }
+
     /// Optional reclip notification source for geometry that changes
     /// without replacing the widget or its delegate.
     fn reclip(&self) -> Option<ClipReclip> {
@@ -111,6 +117,13 @@ fn get_clip_erased<C: CustomClipper>(clipper: &dyn Any, size: Size) -> ClipShape
     }
 }
 
+fn approximate_clip_erased<C: CustomClipper>(clipper: &dyn Any, size: Size) -> Rect {
+    clipper.downcast_ref::<C>().map_or_else(
+        || Rect::from_origin_size(Offset::ZERO, size),
+        |clipper| clipper.get_approximate_clip_rect(size),
+    )
+}
+
 fn should_reclip_erased<C: CustomClipper>(new: &dyn Any, old: &dyn Any) -> bool {
     match (new.downcast_ref::<C>(), old.downcast_ref::<C>()) {
         (Some(new), Some(old)) => new.should_reclip(old),
@@ -123,6 +136,7 @@ fn should_reclip_erased<C: CustomClipper>(new: &dyn Any, old: &dyn Any) -> bool 
 pub struct ClipDelegate {
     clipper: Rc<dyn Any>,
     get_clip: fn(&dyn Any, Size) -> ClipShape,
+    approximate_clip: fn(&dyn Any, Size) -> Rect,
     should_reclip: fn(&dyn Any, &dyn Any) -> bool,
     reclip: Option<ClipReclip>,
     reclip_revision: u64,
@@ -137,6 +151,7 @@ impl ClipDelegate {
         Self {
             clipper: Rc::new(clipper),
             get_clip: get_clip_erased::<C>,
+            approximate_clip: approximate_clip_erased::<C>,
             should_reclip: should_reclip_erased::<C>,
             reclip,
             reclip_revision: 0,
@@ -163,6 +178,10 @@ impl ClipDelegate {
     #[must_use]
     pub(crate) fn clip(&self, size: Size) -> ClipShape {
         (self.get_clip)(&*self.clipper, size)
+    }
+
+    pub(crate) fn approximate_clip_rect(&self, size: Size) -> Rect {
+        (self.approximate_clip)(&*self.clipper, size)
     }
 
     pub(crate) fn reclip_signal(&self) -> Option<&ClipReclip> {

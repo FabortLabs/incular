@@ -433,3 +433,95 @@ fn replacement_respects_should_reclip_until_paint_geometry_changes() {
     assert!(!hit(&tree, key, Offset::new(400., 40.)));
     assert_eq!(tree.element_with_key(&key.into()), child);
 }
+
+#[derive(Clone)]
+struct ApproximateInset {
+    semantic_top: std::rc::Rc<std::cell::Cell<f32>>,
+    reclip: incular_widgets::ClipReclip,
+}
+
+impl CustomClipper for ApproximateInset {
+    fn get_clip(&self, size: Size) -> ClipShape {
+        Inset(20.).get_clip(size)
+    }
+
+    fn get_approximate_clip_rect(&self, size: Size) -> Rect {
+        let top = self.semantic_top.get();
+        Rect::from_origin_size(
+            Offset::new(0., top),
+            Size::new(size.width, (size.height - top).max(0.)),
+        )
+    }
+
+    fn reclip(&self) -> Option<incular_widgets::ClipReclip> {
+        Some(self.reclip.clone())
+    }
+}
+
+#[test]
+fn approximate_clip_controls_accessibility_bounds_and_membership_independently() {
+    use incular_widgets::{Column, Semantics, SizedBox};
+    let controller = ScrollController::new();
+    let approximate = ApproximateInset {
+        semantic_top: std::rc::Rc::new(std::cell::Cell::new(50.)),
+        reclip: incular_widgets::ClipReclip::default(),
+    };
+    let label = |name, height| {
+        Widget::from(
+            Semantics::new(SizedBox::new().width(800.).height(height))
+                .container(true)
+                .label(name),
+        )
+    };
+    let child = Column::new([
+        label("before", 40.),
+        label("crossing", 30.),
+        label("after", 30.),
+    ]);
+    let clip = SliverClipRect::new(SliverToBoxAdapter::new(child)).clipper(approximate.clone());
+    let mut tree = WidgetTree::new();
+    let root = Directionality::new(
+        TextDirection::Ltr,
+        CustomScrollView::new(vec![Box::new(clip) as Box<dyn Sliver>]).controller(controller),
+    );
+    tree.mount(root.into()).unwrap();
+    layout(&mut tree);
+    tree.update_semantics();
+    let find = |tree: &WidgetTree, label| {
+        tree.semantics()
+            .iter()
+            .find(|(_, node)| node.label.as_deref() == Some(label))
+            .map(|(id, node)| (id, node.bounds, node.state.hidden))
+    };
+    assert_eq!(find(&tree, "before"), None);
+    let (crossing, bounds, hidden) = find(&tree, "crossing").unwrap();
+    assert_eq!(
+        bounds,
+        Rect::from_origin_size(Offset::new(0., 50.), Size::new(800., 20.))
+    );
+    assert!(!hidden);
+    assert_eq!(
+        find(&tree, "after").unwrap().1,
+        Rect::from_origin_size(Offset::new(0., 70.), Size::new(800., 30.))
+    );
+
+    let before = tree.diagnostics();
+    approximate.semantic_top.set(0.);
+    approximate.reclip.notify();
+    tree.update_semantics();
+    assert!(find(&tree, "before").is_some());
+    assert_eq!(
+        find(&tree, "crossing"),
+        Some((
+            crossing,
+            Rect::from_origin_size(Offset::new(0., 40.), Size::new(800., 30.)),
+            false
+        ))
+    );
+    assert!(rect(&mut tree).contains(&Rect::from_origin_size(
+        Offset::new(0., 20.),
+        Size::new(800., 80.)
+    )));
+    assert_eq!(tree.diagnostics().layouts, before.layouts);
+    assert_eq!(tree.diagnostics().rebuilds, before.rebuilds);
+}

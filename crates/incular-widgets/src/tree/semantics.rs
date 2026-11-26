@@ -244,6 +244,9 @@ pub(super) struct SemanticVisit {
     /// Visibility clip inherited from ancestor slivers. Measured bounds
     /// and actions remain intact for cached, hidden semantic nodes.
     viewport_clip: Option<Rect>,
+    /// A sliver clipper's approximate accessibility geometry. Unlike a
+    /// viewport paint clip it constrains the projected node's actual bounds.
+    sliver_semantic_clip: Option<Rect>,
     /// Window to apply to the immediate children of a sliver viewport.
     sliver_window: Option<SemanticSliverWindow>,
 }
@@ -368,6 +371,7 @@ impl WidgetTree {
         if !self.semantics_enabled && self.tracked.semantics_debuggers.is_empty() {
             return;
         }
+        self.flush_sliver_reclips();
         self.flush_focus_semantics_changes();
         let stamp = self.geometry_stamp();
         if stamp.2 != self.semantics_geometry_stamp.2 {
@@ -464,6 +468,7 @@ impl WidgetTree {
             merges_focus_labels: false,
             parent_world: CoreTransform::IDENTITY,
             viewport_clip: None,
+            sliver_semantic_clip: None,
             sliver_window: None,
         });
         // Set when a node below a retained child list turns out to have
@@ -986,6 +991,7 @@ impl WidgetTree {
             parent_text_merge,
             merges_focus_labels,
             mut viewport_clip,
+            mut sliver_semantic_clip,
             mut sliver_window,
             ..
         } = visit;
@@ -1007,6 +1013,14 @@ impl WidgetTree {
         // walk over the ancestors per node.
         let world = parent_world.then(CoreTransform::translation(render.offset));
         let child_world = world.then(self.child_content_transform(render_id));
+        if let Some(clips) = &render.parent_sliver_clips {
+            for placement in clips.iter() {
+                let clip = world.transform_rect_bbox(placement.approximate_rect());
+                sliver_semantic_clip = Some(sliver_semantic_clip.map_or(clip, |outer| {
+                    outer.intersection(clip).unwrap_or_default()
+                }));
+            }
+        }
         let direct_sliver = entry
             .parent
             .and_then(|parent| self.elements.get(parent.0))
@@ -1018,8 +1032,8 @@ impl WidgetTree {
                     .position(|child| *child == element)
                     .map(|slot| (parent, slot))
             });
-        let cached_bounds =
-            sliver_window.map(|_| self.semantic_bounds(render_id, world, child_world));
+        let cached_bounds = (sliver_window.is_some() || sliver_semantic_clip.is_some())
+            .then(|| self.semantic_bounds(render_id, world, child_world));
         let mut outside_sliver_cache = false;
         if let Some(mut window) = sliver_window {
             let layout_box =
@@ -1055,6 +1069,16 @@ impl WidgetTree {
                     .is_some_and(|bounds| !semantic_clip_overlaps(window.cache, bounds));
             }
         }
+        outside_sliver_cache |= sliver_semantic_clip.is_some_and(|clip| {
+            cached_bounds.is_some_and(|bounds| !semantic_clip_overlaps(clip, bounds))
+        });
+        let semantic_bounds = || {
+            let bounds = cached_bounds
+                .unwrap_or_else(|| self.semantic_bounds(render_id, world, child_world));
+            sliver_semantic_clip.map_or(bounds, |clip| {
+                clip.intersection(bounds).unwrap_or_default()
+            })
+        };
         let child_sliver_window = match render.object.kind() {
             RenderKind::SliverViewport { config } => {
                 let visible = (config.clip_behavior != incular_config::Clip::None).then(|| {
@@ -1191,6 +1215,7 @@ impl WidgetTree {
                             parent_text_merge: child_text_merge,
                             merges_focus_labels: child_merges_focus_labels,
                             viewport_clip: child_viewport_clip,
+                            sliver_semantic_clip,
                             sliver_window: if index < entry.children.len() {
                                 child_sliver_window
                             } else {
@@ -1206,8 +1231,7 @@ impl WidgetTree {
                 return;
             }
             // Its bounds and child list are written.
-            let bounds = cached_bounds
-                .unwrap_or_else(|| self.semantic_bounds(render_id, world, child_world));
+            let bounds = semantic_bounds();
             out.push(Collected::Bounds {
                 element,
                 bounds,
@@ -1239,6 +1263,7 @@ impl WidgetTree {
                         parent_text_merge: child_text_merge,
                         merges_focus_labels: child_merges_focus_labels,
                         viewport_clip: child_viewport_clip,
+                        sliver_semantic_clip,
                         sliver_window: if index < entry.children.len() {
                             child_sliver_window
                         } else {
@@ -1770,8 +1795,7 @@ impl WidgetTree {
             if semantic_parent != RETAINED_LIST {
                 edges.push((semantic_parent, edges.len() as u32, element));
             }
-            let bounds = cached_bounds
-                .unwrap_or_else(|| self.semantic_bounds(render_id, world, child_world));
+            let bounds = semantic_bounds();
             state.hidden |= viewport_clip.is_some_and(|clip| !semantic_clip_overlaps(clip, bounds));
             out.push(Collected::Full(SemanticBuild {
                 element,
@@ -1828,6 +1852,7 @@ impl WidgetTree {
                     parent_text_merge: child_text_merge,
                     merges_focus_labels: child_merges_focus_labels,
                     viewport_clip: child_viewport_clip,
+                    sliver_semantic_clip,
                     sliver_window: if index < entry.children.len() {
                         child_sliver_window
                     } else {

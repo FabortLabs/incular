@@ -1618,7 +1618,7 @@ impl WidgetTree {
             if clip_changed || visibility_changed {
                 self.input.hover_hit_revision = self.input.hover_hit_revision.wrapping_add(1);
             }
-            if visibility_changed {
+            if clip_changed || visibility_changed {
                 self.mark_render_semantics(render, SemanticsDirty::Subtree);
             }
         }

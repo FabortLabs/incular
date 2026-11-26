@@ -37,8 +37,7 @@ are preserved with an 80 px final main extent even under a 50 px
 header overlap. The focused native clip tests, and the adjacent native
 decorator, grouped focus and grouped tap tests passed.
 
-Approximate semantic clipping, elliptical radii, and the rest of the
-nested and overlap edge cases
+Elliptical radii and the rest of the nested and overlap edge cases
 remain open. No physical GPU pixel readback was required to compare
 these exact retained clip commands and input targets.
 
@@ -71,3 +70,16 @@ recomputes the new clipper's top (20 in paint coordinates). A second
 replacement returning true immediately changes the top to 45. Paint,
 hits, and retained child state are checked without conflating reclip
 and layout. All seven focused clip cases passed.
+
+## Approximate accessibility clipping
+
+The pinned authored probe gives the sliver a 20 px paint inset and
+a separate 50 px accessibility inset. The label entirely above
+50 is omitted; a label spanning y=40–70 is exposed only at y=50–70.
+A notifier brings the first label back and restores the crossing
+label's original bounds and node identity, without changing the
+paint clip. This works when semantics are updated before painting.
+The same native test checks that it requires no rebuild or layout.
+
+58 focused native tests passed across sliver clips, resizing headers,
+and sliver semantics.

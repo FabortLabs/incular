@@ -314,6 +314,13 @@ struct ClipShapeResolver {
 }
 
 impl ClipShapeResolver {
+    fn approximate(self, clipper: Option<&ClipDelegate>) -> Rect {
+        clipper.map_or(self.bounds.rect, |clipper| {
+            let rect = clipper.approximate_clip_rect(self.bounds.size());
+            Rect::from_origin_size(rect.origin + self.bounds.rect.origin, rect.size)
+        })
+    }
+
     fn resolve(self, clipper: Option<&ClipDelegate>) -> ClipShape {
         let local_rect = Rect::from_origin_size(Offset::ZERO, self.bounds.size());
         let explicit = clipper.map(|clipper| clipper.clip(self.bounds.size()));
@@ -349,17 +356,28 @@ struct LiveClipFrame {
     resolver: ClipShapeResolver,
     clipper: ClipDelegate,
     signal: ClipReclip,
-    cached: RefCell<(u64, ClipShape)>,
+    cached: RefCell<(u64, ClipShape, Rect)>,
 }
 
 impl LiveClipFrame {
-    fn shape(&self) -> ClipShape {
+    fn refresh(&self) -> std::cell::Ref<'_, (u64, ClipShape, Rect)> {
         let revision = self.signal.revision();
-        let mut cached = self.cached.borrow_mut();
-        if revision != cached.0 {
-            *cached = (revision, self.resolver.resolve(Some(&self.clipper)));
+        if revision != self.cached.borrow().0 {
+            *self.cached.borrow_mut() = (
+                revision,
+                self.resolver.resolve(Some(&self.clipper)),
+                self.resolver.approximate(Some(&self.clipper)),
+            );
         }
-        cached.1.clone()
+        self.cached.borrow()
+    }
+
+    fn shape(&self) -> ClipShape {
+        self.refresh().1.clone()
+    }
+
+    fn approximate(&self) -> Rect {
+        self.refresh().2
     }
 }
 
@@ -368,6 +386,7 @@ pub(crate) struct SliverClipPlacement {
     pub key: u64,
     pub shape: ClipShape,
     pub coverage: ClipCoverage,
+    approximate: Rect,
     live: Option<Rc<LiveClipFrame>>,
     translation: Offset,
 }
@@ -387,6 +406,7 @@ impl PartialEq for SliverClipPlacement {
         self.key == other.key
             && self.shape == other.shape
             && self.coverage == other.coverage
+            && self.approximate == other.approximate
             && match (&self.live, &other.live) {
                 (Some(a), Some(b)) => Rc::ptr_eq(a, b) && self.translation == other.translation,
                 (None, None) => true,
@@ -401,6 +421,13 @@ impl SliverClipPlacement {
             || self.shape.clone(),
             |live| translate_shape(&live.shape(), self.translation),
         )
+    }
+
+    pub(crate) fn approximate_rect(&self) -> Rect {
+        self.live.as_ref().map_or(self.approximate, |live| {
+            let rect = live.approximate();
+            Rect::from_origin_size(rect.origin + self.translation, rect.size)
+        })
     }
 
     pub(crate) fn in_parent_space(&self, origin: Offset) -> Self {
@@ -430,7 +457,11 @@ impl CustomClipSnapshot {
                 resolver,
                 clipper: clipper.clone(),
                 signal: signal.clone(),
-                cached: RefCell::new((signal.revision(), shape.clone())),
+                cached: RefCell::new((
+                    signal.revision(),
+                    shape.clone(),
+                    resolver.approximate(Some(clipper)),
+                )),
             })
         });
         Self {
@@ -501,7 +532,7 @@ impl RenderSliver for ClipRenderSliver {
             radii: self.radii,
             overlap: self.overlap,
         };
-        let (shape, live) = if let Some(clipper) = self.clipper.as_ref() {
+        let (shape, approximate, live) = if let Some(clipper) = self.clipper.as_ref() {
             if self
                 .cached_custom
                 .as_ref()
@@ -512,9 +543,16 @@ impl RenderSliver for ClipRenderSliver {
                     Some(Box::new(CustomClipSnapshot::new(resolver, clipper, shape)));
             }
             let cached = self.cached_custom.as_ref().expect("custom clip resolved");
-            (cached.shape(), cached.live.clone())
+            (
+                cached.shape(),
+                cached.live.as_ref().map_or_else(
+                    || resolver.approximate(Some(clipper)),
+                    |live| live.approximate(),
+                ),
+                cached.live.clone(),
+            )
         } else {
-            (resolver.resolve(None), None)
+            (resolver.resolve(None), resolver.approximate(None), None)
         };
         let coverage = match self.behavior {
             Clip::None => unreachable!(),
@@ -536,6 +574,10 @@ impl RenderSliver for ClipRenderSliver {
                 key: self.key,
                 shape: translate_shape(&shape, translation),
                 coverage,
+                approximate: Rect::from_origin_size(
+                    approximate.origin + translation,
+                    approximate.size,
+                ),
                 live: live.clone(),
                 translation,
             };

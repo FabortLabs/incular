@@ -199,6 +199,9 @@ impl WidgetTree {
         for owner in pending {
             if self.has_sliver_clip_layers(owner) {
                 self.sync_render_children(owner);
+                if let Some(render) = self.render_id(owner) {
+                    self.mark_render_semantics(render, SemanticsDirty::Subtree);
+                }
                 changed = true;
             }
         }
