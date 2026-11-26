@@ -179,3 +179,99 @@ fn debug_dump_lists_every_root() {
     let second_at = dump.find("\"second\"").expect("second root dumped");
     assert!(first_at < second_at, "{dump}");
 }
+
+#[test]
+fn debug_dump_reports_tags_on_an_unattached_node() {
+    let mut tree = SemanticsTree::new();
+    let mut tagged = node(placeholder());
+    tagged.state.add_tag(incular_semantics::SemanticsTag::new(
+        "RenderViewport.twoPane",
+    ));
+    tree.insert(tagged);
+    assert!(
+        tree.debug_dump()
+            .contains("\n  tags: RenderViewport.twoPane\n")
+    );
+}
+
+#[test]
+fn debug_dump_shows_tags_and_current_child_index() {
+    let mut tree = SemanticsTree::new();
+    let children = (0..=10)
+        .map(|index| {
+            let mut child = node(placeholder());
+            child.label = Some(format!("child {index}").into());
+            if index == 10 {
+                child.state.tags = vec![
+                    incular_semantics::SemanticsTag::new("RenderViewport.twoPane"),
+                    incular_semantics::SemanticsTag::new("neighbor"),
+                ]
+                .into_boxed_slice();
+            }
+            tree.insert(child)
+        })
+        .collect::<Vec<_>>();
+    let root = tree.insert(SemanticNode {
+        children: children.clone(),
+        ..node(placeholder())
+    });
+    tree.set_root(Some(root));
+
+    let dump = tree.debug_dump();
+    let tagged_child = dump
+        .lines()
+        .find(|line| line.contains("\"child 10\""))
+        .unwrap();
+    assert!(tagged_child.contains("indexInParent: 10"), "{dump}");
+    assert!(
+        dump.contains("\n    tags: RenderViewport.twoPane, neighbor\n"),
+        "{dump}"
+    );
+    assert!(!dump.lines().next().unwrap().contains("indexInParent:"));
+    assert!(tree.debug_dump_limited(12, 2, 4).contains("tags: Rend…"));
+
+    let mut updated = tree.node(root).unwrap().clone();
+    updated.children.rotate_right(1);
+    tree.update(root, updated);
+    let dump = tree.debug_dump();
+    let tagged_child = dump
+        .lines()
+        .find(|line| line.contains("\"child 10\""))
+        .unwrap();
+    assert!(tagged_child.contains("indexInParent: 0"), "{dump}");
+
+    let mut child = tree.node(children[10]).unwrap().clone();
+    child.children.push(root);
+    tree.update(children[10], child);
+    let dump = tree.debug_dump_bounded(12);
+    assert_eq!(dump.matches("\"child 10\"").count(), 1);
+    assert!(!dump.contains("truncated"), "{dump}");
+}
+
+#[test]
+#[cfg(debug_assertions)]
+fn semantics_owner_dispatches_one_create_and_dispose_for_same_object() {
+    use incular_core::memory::allocations::{MemoryAllocations, ObjectEventKind};
+    use std::{cell::RefCell, rc::Rc};
+
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let _subscription = MemoryAllocations::current().add_listener({
+        let seen = Rc::clone(&seen);
+        move |event| seen.borrow_mut().push(event)
+    });
+    let mut tree = SemanticsTree::new();
+    let root = tree.insert(node(placeholder()));
+    tree.set_root(Some(root));
+    assert_eq!(seen.borrow().len(), 1);
+    drop(tree);
+
+    let seen = seen.borrow();
+    assert_eq!(seen.len(), 2);
+    assert_eq!(seen[0].kind, ObjectEventKind::Created);
+    assert_eq!(seen[1].kind, ObjectEventKind::Disposed);
+    assert_eq!(seen[0].id, seen[1].id);
+    assert!(
+        seen.iter()
+            .all(|event| event.library == "semantics" && event.class_name == "SemanticsOwner")
+    );
+}

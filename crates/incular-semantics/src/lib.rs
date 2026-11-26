@@ -8,6 +8,7 @@
 use incular_core::{Arena, ArenaId, Rect};
 use std::{
     cmp::Ordering,
+    fmt::Write,
     hash::{Hash, Hasher},
     sync::Arc,
 };
@@ -841,7 +842,6 @@ struct RetainedNode {
 
 /// Retained semantic arena. IDs are generational, so stale platform actions
 /// cannot address a node that later reuses the same storage slot.
-#[derive(Default)]
 pub struct SemanticsTree {
     nodes: Arena<RetainedNode>,
     // Latest content revision per contiguous block of 64 arena slots.
@@ -852,6 +852,25 @@ pub struct SemanticsTree {
     /// is the designated root.
     roots: Vec<SemanticNodeId>,
     diagnostics: SemanticsDiagnostics,
+    #[cfg(debug_assertions)]
+    _allocation: incular_core::memory::allocations::ObjectLifetime,
+}
+
+impl Default for SemanticsTree {
+    fn default() -> Self {
+        Self {
+            nodes: Arena::new(),
+            block_revisions: Vec::new(),
+            focused: Default::default(),
+            roots: Vec::new(),
+            diagnostics: SemanticsDiagnostics::default(),
+            #[cfg(debug_assertions)]
+            _allocation: incular_core::memory::allocations::ObjectLifetime::new(
+                "semantics",
+                "SemanticsOwner",
+            ),
+        }
+    }
 }
 
 impl SemanticsTree {
@@ -1136,14 +1155,18 @@ impl SemanticsTree {
         extra.sort_by_key(|id| id.0);
         let mut stack = Vec::new();
         for id in extra.into_iter().rev() {
-            stack.push((id, 0usize));
+            stack.push((id, 0usize, None));
         }
         for &root in self.roots.iter().rev() {
-            stack.push((root, 0usize));
+            stack.push((root, 0usize, None));
         }
-        let mut visited = 0usize;
-        while let Some((id, depth)) = stack.pop() {
-            if visited >= max_nodes {
+        let mut visited = std::collections::HashSet::new();
+        while let Some((id, depth, index_in_parent)) = stack.pop() {
+            if visited.contains(&id) {
+                continue;
+            }
+            let Some(node) = self.node(id) else { continue };
+            if visited.len() >= max_nodes {
                 output.push_str("… semantic dump truncated (node limit)\n");
                 break;
             }
@@ -1154,18 +1177,35 @@ impl SemanticsTree {
                 ));
                 continue;
             }
-            let Some(node) = self.node(id) else { continue };
-            visited = visited.saturating_add(1);
-            output.push_str(&format!(
-                "{}{:?}#{:?} label={:?} value={:?} bounds=({:.1},{:.1},{:.1},{:.1}) focused={} actions={:?}\n",
-                "  ".repeat(depth), node.role, node.id,
+            visited.insert(id);
+            let indent = "  ".repeat(depth);
+            let _ = write!(
+                output,
+                "{indent}{:?}#{:?} label={:?} value={:?} bounds=({:.1},{:.1},{:.1},{:.1}) focused={} actions={:?}",
+                node.role, node.id,
                 truncate(node.label.as_deref(), max_text_chars),
                 truncate(node.value.as_deref(), max_text_chars),
                 node.bounds.origin.x, node.bounds.origin.y, node.bounds.size.width,
                 node.bounds.size.height, node.state.focused, node.actions,
-            ));
-            for child in node.children.iter().rev() {
-                stack.push((*child, depth.saturating_add(1)));
+            );
+            if let Some(index) = index_in_parent {
+                let _ = write!(output, " indexInParent: {index}");
+            }
+            output.push('\n');
+            if !node.tags().is_empty() {
+                let mut names = node.tags().iter().enumerate().flat_map(|(index, tag)| {
+                    let separator = if index == 0 { "" } else { ", " };
+                    separator.chars().chain(tag.name().chars())
+                });
+                let _ = write!(output, "{indent}  tags: ");
+                output.extend(names.by_ref().take(max_text_chars));
+                if names.next().is_some() {
+                    output.push('…');
+                }
+                output.push('\n');
+            }
+            for (index, &child) in node.children.iter().enumerate().rev() {
+                stack.push((child, depth.saturating_add(1), Some(index)));
             }
         }
         output
