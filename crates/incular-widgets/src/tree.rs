@@ -1433,6 +1433,8 @@ pub struct WidgetTree {
     input: InputState,
     semantics: SemanticsTree,
     semantic_ids: FastHashMap<ElementId, SemanticNodeId>,
+    /// The optional scrolling pane below a sliver viewport's stable outer node.
+    viewport_semantic_panes: FastHashMap<ElementId, SemanticNodeId>,
     /// Optional render-phase snapshots of local accessibility bounds insets.
     /// Most nodes use their unmodified layout rectangle.
     semantic_bounds_insets: FastHashMap<RenderObjectId, EdgeInsets>,

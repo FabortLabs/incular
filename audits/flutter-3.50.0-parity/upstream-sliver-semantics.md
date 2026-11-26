@@ -22,10 +22,10 @@ The ten pinned Flutter originals at `widgets/sliver_semantics_widget_test.dart:
   node with the same direction beneath an implicit-scroll ancestor.
   The native host stays idle once the update is presented.
 
-Incular currently projects one scroll semantic node per viewport; it
-does not yet split Flutter's scrolling and non-scrolling panes. The use
-of the renderer's reserved anchor IDs changes neither leaf child IDs
-nor paint/hit routing.
+A sliver viewport with tagged children now projects an outer boundary
+and a scrolling pane, keeping the viewport's outer ID and the usual
+child IDs. The use of the renderer's reserved anchor IDs changes
+neither leaf child IDs nor paint/hit routing.
 
 ## Viewport tag scope
 
@@ -43,7 +43,16 @@ The pinned line 682 and 735 cases also passed, but their outer/inner
 scroll graph assertions remain open. The original pinned-header tag
 transition (`pinned_header_sliver_test.dart:250`) and nested-pane
 transform (`scrollable_semantics_test.dart:814`) passed on the reference;
-their retained migration and two-pane geometry still need equivalents.
+their retained pinned migration and nested reveal checks are still
+open. The empty-viewport transition is covered by the focused pinned
+Flutter probe `sliver_semantic_viewport_panes_test.dart` and retained
+`flutter350_semantics_tags`: attaching a semantic child splits the
+viewport, keeps the outer ID, and only the inner pane accepts
+ScrollToOffset. Removing all children retires the inner ID, restoring
+the single outer scroller. Reattaching a child allocates a new inner
+ID so old native scroll requests cannot affect it. The 38 focused Rust
+checks include action routing, native updates, and transformed-cache
+regressions under the new layout.
 
 ## Merging a hint and a value without merging competing values
 

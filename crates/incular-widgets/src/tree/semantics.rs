@@ -18,6 +18,7 @@ use std::{borrow::Cow, rc::Rc};
 
 pub(super) mod table;
 mod traversal;
+mod viewport;
 use traversal::TraversalItem;
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -304,6 +305,9 @@ impl WidgetTree {
             // unchanged one.
             for (_, node) in self.semantic_ids.drain() {
                 let _ = self.semantics.remove(node);
+            }
+            for (_, pane) in self.viewport_semantic_panes.drain() {
+                let _ = self.semantics.remove(pane);
             }
             for (_, wrappers) in self.table_semantic_wrappers.drain() {
                 for id in wrappers.into_ids() {
@@ -778,10 +782,11 @@ impl WidgetTree {
                     .map(|(_, _, child)| semantic_id(&self.semantic_ids, child)),
             );
             if let Some(old) = self.semantics.node(id) {
+                let pane = self.viewport_semantic_panes.get(&element);
                 detached.extend(
                     old.children
                         .iter()
-                        .filter(|child| !is_attached(attached, **child)),
+                        .filter(|child| Some(*child) != pane && !is_attached(attached, **child)),
                 );
             }
             let is_table = match &build {
@@ -810,27 +815,34 @@ impl WidgetTree {
 
             #[cfg(feature = "devtools")]
             let semantic_revision_before = self.semantics.revision();
-            match build {
-                Collected::Full(build) => {
-                    let _ = self.semantics.update(
-                        id,
-                        SemanticNode {
+            if matches!(
+                self.element_live(element, "semantic element remains live").widget.kind(),
+                WidgetKind::SliverViewport { .. }
+            ) {
+                self.assemble_viewport_semantic_panes(element, id, build, child_ids, detached);
+            } else {
+                match build {
+                    Collected::Full(build) => {
+                        let _ = self.semantics.update(
                             id,
-                            role: build.role,
-                            label: build.label,
-                            value: build.value,
-                            description: build.description,
-                            bounds: build.bounds,
-                            state: build.state,
-                            actions: build.actions,
-                            children: child_ids.clone(),
-                        },
-                    );
-                }
-                Collected::Bounds { bounds, hidden, .. } => {
-                    let _ = self
-                        .semantics
-                        .update_geometry_and_visibility(id, bounds, child_ids, hidden);
+                            SemanticNode {
+                                id,
+                                role: build.role,
+                                label: build.label,
+                                value: build.value,
+                                description: build.description,
+                                bounds: build.bounds,
+                                state: build.state,
+                                actions: build.actions,
+                                children: child_ids.clone(),
+                            },
+                        );
+                    }
+                    Collected::Bounds { bounds, hidden, .. } => {
+                        let _ = self
+                            .semantics
+                            .update_geometry_and_visibility(id, bounds, child_ids, hidden);
+                    }
                 }
             }
             #[cfg(feature = "devtools")]
@@ -895,6 +907,9 @@ impl WidgetTree {
                 .retain(|_, node| semantics.node(*node).is_some());
             self.table_semantic_wrappers
                 .retain(|element, _| self.semantic_ids.contains_key(element));
+            self.viewport_semantic_panes.retain(|element, pane| {
+                self.semantic_ids.contains_key(element) && semantics.node(*pane).is_some()
+            });
         }
     }
 

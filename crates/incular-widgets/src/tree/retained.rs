@@ -48,6 +48,7 @@ impl WidgetTree {
             semantic_ids: FastHashMap::default(),
             semantic_bounds_insets: FastHashMap::default(),
             table_semantic_wrappers: FastHashMap::default(),
+            viewport_semantic_panes: FastHashMap::default(),
             semantics_block_reach: FastHashSet::default(),
             semantics_full_pass: true,
             semantics_geometry_stamp: (0, 0, 0),
@@ -970,13 +971,24 @@ impl WidgetTree {
     }
     #[must_use]
     pub fn semantic_node_for_element(&self, element: ElementId) -> Option<SemanticNodeId> {
-        self.semantic_ids.get(&element).copied()
+        self.viewport_semantic_panes
+            .get(&element)
+            .or_else(|| self.semantic_ids.get(&element))
+            .copied()
     }
     #[must_use]
     pub fn element_for_semantic_node(&self, node: SemanticNodeId) -> Option<ElementId> {
         self.semantic_ids
             .iter()
-            .find_map(|(element, current)| (*current == node).then_some(*element))
+            .find_map(|(element, current)| {
+                (*current == node && !self.viewport_semantic_panes.contains_key(element))
+                    .then_some(*element)
+            })
+            .or_else(|| {
+                self.viewport_semantic_panes
+                    .iter()
+                    .find_map(|(element, current)| (*current == node).then_some(*element))
+            })
     }
     #[must_use]
     pub fn semantics_debug_dump(&self) -> String {

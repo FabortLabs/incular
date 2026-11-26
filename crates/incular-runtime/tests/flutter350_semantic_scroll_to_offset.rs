@@ -247,18 +247,13 @@ fn ten_list_tiles_withdraw_the_original_direction_after_an_out_of_range_jump() {
             Runtime::new(Directionality::new(TextDirection::Ltr, list).into()).unwrap();
         let mut time = Instant::now();
         runtime.run_frame_at(size, time).unwrap();
-        let id = runtime
-            .tree()
-            .semantics()
-            .iter()
-            .find_map(|(id, node)| (node.role == Role::ScrollView).then_some(id))
-            .unwrap();
         let actions = |runtime: &Runtime| {
             runtime
                 .tree()
                 .semantics()
-                .node(id)
-                .unwrap()
+                .iter()
+                .find_map(|(_, node)| (node.role == Role::ScrollView).then_some(node))
+                .expect("current scrolling pane")
                 .actions
                 .iter()
                 .copied()

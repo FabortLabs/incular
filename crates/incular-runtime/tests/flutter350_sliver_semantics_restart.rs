@@ -118,14 +118,23 @@ fn singular_fitted_sliver_drops_its_scroll_subtree_but_not_the_viewport() {
         let tree = rt.tree().semantics();
         assert_eq!(tree.roots(), [sem_root]);
         let viewport_node = tree.node(sem_root).unwrap();
-        assert_eq!(viewport_node.role, SemanticRole::ScrollView);
-        assert!(viewport_node.state.has_implicit_scrolling);
-        assert_eq!(
-            viewport_node.bounds,
-            Rect::from_origin_size(Offset::ZERO, viewport)
-        );
-        assert_eq!(viewport_node.children.len(), usize::from(height > 0.));
-        assert_eq!(tree.iter().count(), 1 + usize::from(height > 0.));
+        let world_bounds = Rect::from_origin_size(Offset::ZERO, viewport);
+        assert_eq!(viewport_node.bounds, world_bounds);
+        if height > 0. {
+            assert_eq!(viewport_node.role, SemanticRole::GenericContainer);
+            assert_eq!(viewport_node.children.len(), 1);
+            let pane = tree.node(viewport_node.children[0]).unwrap();
+            assert_eq!(pane.role, SemanticRole::ScrollView);
+            assert!(pane.state.has_implicit_scrolling);
+            assert_eq!(pane.bounds, world_bounds);
+            assert_eq!(pane.children.len(), 1);
+            assert_eq!(tree.iter().count(), 3);
+        } else {
+            assert_eq!(viewport_node.role, SemanticRole::ScrollView);
+            assert!(viewport_node.state.has_implicit_scrolling);
+            assert!(viewport_node.children.is_empty());
+            assert_eq!(tree.iter().count(), 1);
+        }
     }
 }
 
@@ -160,7 +169,11 @@ fn transformed_sliver_text_is_sorted_and_dropped_or_hidden_by_its_actual_bounds(
     for i in 0..2 {
         let tree = runtime.tree().semantics();
         let viewport = tree.node(tree.root().unwrap()).unwrap();
-        let children = viewport
+        assert_eq!(viewport.children.len(), 1);
+        let pane = tree.node(viewport.children[0]).unwrap();
+        assert!(pane.state.has_implicit_scrolling);
+        assert_eq!(pane.bounds, viewport.bounds);
+        let children = pane
             .children
             .iter()
             .map(|id| {

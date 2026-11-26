@@ -203,3 +203,73 @@ fn a_sliver_axis_group_does_not_mark_the_implicit_scroller_itself() {
     runtime.run_frame(constraints).unwrap();
     assert_eq!(snapshot(&runtime), before);
 }
+
+#[test]
+fn viewport_pane_lifetime_keeps_the_outer_id_and_rejects_stale_scroll_requests() {
+    use incular_semantics::{SemanticAction, SemanticActionKind};
+    use incular_widgets::{CustomScrollView, ScrollController, Sliver, SliverToBoxAdapter, Widget};
+
+    let controller = ScrollController::new();
+    let build = |content: bool| {
+        let mut slivers: Vec<Box<dyn Sliver>> = Vec::new();
+        if content {
+            slivers.push(Box::new(SliverToBoxAdapter::new(
+                Semantics::new(SizedBox::new().height(1600.)).label("body"),
+            )));
+        }
+        Widget::from(CustomScrollView::new(slivers).controller(controller.clone()))
+    };
+    let mut runtime = Runtime::new(build(false)).unwrap();
+    let constraints = Constraints::tight(Size::new(800., 600.));
+    runtime.run_frame(constraints).unwrap();
+    let element = runtime.tree().root().unwrap();
+    let viewport = runtime.tree().semantics().roots()[0];
+    assert_eq!(
+        runtime.tree().semantics().node(viewport).unwrap().role,
+        Role::ScrollView
+    );
+    let jump = || SemanticAction::ScrollToOffset { x: 0., y: 220. };
+
+    let attach = |runtime: &mut Runtime| {
+        runtime.schedule_update(element, build(true)).unwrap();
+        runtime.run_frame(constraints).unwrap();
+        let tree = runtime.tree().semantics();
+        assert_eq!(tree.roots(), &[viewport]);
+        let boundary = tree.node(viewport).unwrap();
+        assert_eq!(boundary.role, Role::GenericContainer);
+        assert!(boundary.actions.is_empty());
+        assert_eq!(boundary.children.len(), 1);
+        let pane = tree.node(boundary.children[0]).unwrap();
+        assert_eq!(pane.role, Role::ScrollView);
+        assert_eq!(pane.bounds, boundary.bounds);
+        assert!(pane.state.has_implicit_scrolling);
+        assert!(pane.actions.contains(&SemanticActionKind::ScrollToOffset));
+        assert_eq!(
+            tree.node(pane.children[0]).unwrap().label.as_deref(),
+            Some("body")
+        );
+        pane.id
+    };
+
+    let pane = attach(&mut runtime);
+    assert!(!runtime.dispatch_semantic_action(viewport, jump()));
+    assert!(runtime.dispatch_semantic_action(pane, jump()));
+    assert_eq!(controller.offset(), 220.);
+    runtime.run_frame(constraints).unwrap();
+    assert_eq!(
+        runtime.tree().semantics().node(viewport).unwrap().children,
+        &[pane]
+    );
+
+    runtime.schedule_update(element, build(false)).unwrap();
+    runtime.run_frame(constraints).unwrap();
+    let tree = runtime.tree().semantics();
+    assert_eq!(tree.roots(), &[viewport]);
+    assert_eq!(tree.node(viewport).unwrap().role, Role::ScrollView);
+    assert!(tree.node(viewport).unwrap().children.is_empty());
+    assert!(tree.node(pane).is_none());
+    assert!(!runtime.dispatch_semantic_action(pane, jump()));
+    let replacement = attach(&mut runtime);
+    assert_ne!(replacement, pane);
+    assert!(runtime.dispatch_semantic_action(replacement, jump()));
+}
