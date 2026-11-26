@@ -2521,3 +2521,8 @@ packages/flutter/test/foundation/consolidate_response_test.dart	127	Notifies onB
 packages/flutter/test/services/lifecycle_test.dart	11	initialLifecycleState is used to init state paused	paired-match	upstream-full-app-lifecycle.md
 packages/flutter/test/services/lifecycle_test.dart	22	Handles all of the allowed states of AppLifecycleState	paired-match	upstream-full-app-lifecycle.md
 packages/flutter/test/services/lifecycle_test.dart	33	AppLifecycleState values are in the right order for the state machine to be correct	paired-match	upstream-full-app-lifecycle.md
+packages/flutter/test/services/message_codecs_vm_test.dart	18	should encode and decode big numbers	paired-match	upstream-vm-codec-integers.md
+packages/flutter/test/services/message_codecs_vm_test.dart	22	should encode and decode list with a big number	paired-match	upstream-vm-codec-integers.md
+packages/flutter/test/services/message_codecs_vm_test.dart	32	should encode integers correctly at boundary cases	paired-match	upstream-vm-codec-integers.md
+packages/flutter/test/services/message_codecs_vm_test.dart	102	should encode and decode big numbers	paired-match	upstream-vm-codec-integers.md
+packages/flutter/test/services/message_codecs_vm_test.dart	106	should encode and decode a list containing big numbers	paired-match	upstream-vm-codec-integers.md
