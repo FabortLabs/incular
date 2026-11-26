@@ -188,12 +188,18 @@ impl AssetBundle for DirectoryAssetBundle {
 
 type StructuredCache = HashMap<String, Arc<dyn Any + Send + Sync>>;
 
+#[derive(Default)]
+struct CachedAssets {
+    strings: HashMap<String, Arc<str>>,
+    structured: StructuredCache,
+    generation: u64,
+}
+
 /// Flutter's `CachingAssetBundle`: keeps strings, and parsed structured
 /// data, until they are evicted. Bytes are not cached, as in Flutter.
 pub struct CachingAssetBundle<B> {
     inner: B,
-    strings: Mutex<HashMap<String, Arc<str>>>,
-    structured: Mutex<StructuredCache>,
+    cache: Mutex<CachedAssets>,
 }
 
 impl<B: AssetBundle> CachingAssetBundle<B> {
@@ -201,8 +207,7 @@ impl<B: AssetBundle> CachingAssetBundle<B> {
     pub fn new(inner: B) -> Self {
         Self {
             inner,
-            strings: Mutex::default(),
-            structured: Mutex::default(),
+            cache: Mutex::default(),
         }
     }
 
@@ -218,12 +223,11 @@ impl<B: AssetBundle> CachingAssetBundle<B> {
         key: &str,
         parser: impl FnOnce(&str) -> Result<T, E>,
     ) -> Result<T, AssetError> {
-        if let Some(value) = self
-            .structured
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .get(key)
-        {
+        let (cached, generation) = {
+            let cache = self.cache.lock().unwrap_or_else(PoisonError::into_inner);
+            (cache.structured.get(key).cloned(), cache.generation)
+        };
+        if let Some(value) = cached {
             return value
                 .downcast_ref::<T>()
                 .cloned()
@@ -236,10 +240,17 @@ impl<B: AssetBundle> CachingAssetBundle<B> {
             key: key.to_owned(),
             message: error.to_string(),
         })?;
-        self.structured
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .insert(key.to_owned(), Arc::new(value.clone()));
+        let shared = Arc::new(value.clone());
+        let previous = {
+            let mut cache = self.cache.lock().unwrap_or_else(PoisonError::into_inner);
+            if cache.generation == generation {
+                cache.structured.insert(key.to_owned(), shared)
+            } else {
+                None
+            }
+        };
+        // A custom cached value may run user code in its destructor.
+        drop(previous);
         Ok(value)
     }
 }
@@ -262,46 +273,47 @@ impl<B: AssetBundle> AssetBundle for CachingAssetBundle<B> {
     }
 
     fn load_string(&self, key: &str, cache: bool) -> Result<Arc<str>, AssetError> {
-        if cache
-            && let Some(text) = self
-                .strings
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .get(key)
-        {
-            return Ok(text.clone());
+        if !cache {
+            return decode(key, &self.inner.load(key)?);
         }
+        let generation = {
+            let cache = self.cache.lock().unwrap_or_else(PoisonError::into_inner);
+            if let Some(text) = cache.strings.get(key) {
+                return Ok(text.clone());
+            }
+            cache.generation
+        };
         let text = decode(key, &self.inner.load(key)?)?;
-        if cache {
-            self.strings
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .insert(key.to_owned(), text.clone());
+        let mut cache = self.cache.lock().unwrap_or_else(PoisonError::into_inner);
+        if cache.generation == generation {
+            cache.strings.insert(key.to_owned(), text.clone());
         }
         Ok(text)
     }
 
     fn evict(&self, key: &str) {
-        self.strings
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .remove(key);
-        self.structured
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .remove(key);
+        let removed = {
+            let mut cache = self.cache.lock().unwrap_or_else(PoisonError::into_inner);
+            cache.generation = cache.generation.wrapping_add(1);
+            (cache.strings.remove(key), cache.structured.remove(key))
+        };
+        drop(removed);
         self.inner.evict(key);
     }
 
     fn clear(&self) {
-        self.strings
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clear();
-        self.structured
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clear();
+        let removed = {
+            let mut cache = self.cache.lock().unwrap_or_else(PoisonError::into_inner);
+            let generation = cache.generation.wrapping_add(1);
+            std::mem::replace(
+                &mut *cache,
+                CachedAssets {
+                    generation,
+                    ..CachedAssets::default()
+                },
+            )
+        };
+        drop(removed);
         self.inner.clear();
     }
 }

@@ -24,3 +24,22 @@ cargo test --locked -j 1 -p incular-runtime --test flutter350_root_asset_pressur
 cargo check --locked -j 1 -p incular-desktop --no-default-features --lib
 bash audits/flutter-3.50.0-parity/run-reference-linux.sh upstream services/binding_test.dart 'didHaveMemoryPressure clears asset caches'
 ```
+
+## In-flight reads during invalidation
+
+A retained asset can finish loading after a cache clear or eviction.
+Previously it would repopulate Incular's cache. Reads and parses
+now capture an invalidation generation: the original caller still
+receives its result, but an old generation cannot insert that
+result. Cache lookup and insertion stay short and no storage or
+parser call happens under the lock. A single-key eviction leaves
+already-cached unrelated entries alone and conservatively skips
+any insertion that was already in flight.
+
+Deterministic native races cover text and structured results after
+both clear and eviction. The authored pinned Flutter test confirms
+the same safe behavior for string futures, but Flutter currently
+does re-insert a late parsed structured result. Incular deliberately
+does not copy that stale-cache behavior. Ten focused native cases
+and four authored Flutter checks passed. The authored checks do not
+change the original-case count.
