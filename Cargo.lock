@@ -2106,6 +2106,11 @@ dependencies = [
 [[package]]
 name = "incular-assets"
 version = "0.1.5"
+dependencies = [
+ "flate2",
+ "futures-core",
+ "incular-core",
+]
 
 [[package]]
 name = "incular-cli"

@@ -101,6 +101,7 @@ typed-builder = "0.23.2"
 # Keep custom field defaults visible without handwritten Default boilerplate.
 smart-default = "0.7"
 tokio-tungstenite = "0.24"
+flate2 = "1.1"
 futures-core = "0.3"
 futures-util = "0.3"
 getrandom = "0.3"

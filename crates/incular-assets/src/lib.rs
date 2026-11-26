@@ -8,9 +8,11 @@ use std::{fmt, sync::Arc};
 
 mod bundle;
 mod network;
+pub mod notices;
 pub use bundle::{
     AssetBundle, AssetError, CachingAssetBundle, DirectoryAssetBundle, MemoryAssetBundle,
 };
+pub use notices::{LicenseNoticeFormat, load_license_notices, register_license_notices};
 pub use network::{
     AssetFetchCallback, AssetFetcher, AssetLoadCallback, AssetResponse, NetworkAssetBundle,
     resolve_url,

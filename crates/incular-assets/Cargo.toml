@@ -22,6 +22,9 @@ workspace = true
 path = "src/lib.rs"
 
 [dependencies]
+flate2 = { workspace = true }
+futures-core = { workspace = true }
+incular-core = { workspace = true }
 
 [package.metadata.docs.rs]
 all-features = true

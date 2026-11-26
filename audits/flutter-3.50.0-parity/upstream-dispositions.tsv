@@ -1555,3 +1555,4 @@ packages/flutter/test/animation/curves_test.dart	381	CatmullRomSpline interpolat
 packages/flutter/test/animation/curves_test.dart	408	CatmullRomSpline enforces contract when precomputed	paired-match	upstream-catmull-rom-precompute.md
 packages/flutter/test/animation/curves_test.dart	491	CatmullRomCurve interpolates given points correctly when precomputed	paired-match	upstream-catmull-rom-precompute.md
 packages/flutter/test/animation/curves_test.dart	576	CatmullRomCurve enforces contract when precomputed	paired-match	upstream-catmull-rom-precompute.md
+packages/flutter/test/services/binding_test.dart	73	Adds rootBundle LICENSES to LicenseRegistry	partial-match	upstream-services-license-notices.md
