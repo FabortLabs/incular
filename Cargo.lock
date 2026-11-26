@@ -2285,7 +2285,9 @@ dependencies = [
 name = "incular-image"
 version = "0.1.5"
 dependencies = [
+ "futures-channel",
  "image",
+ "incular-animation",
  "incular-assets",
  "incular-config",
  "incular-core",

@@ -58,8 +58,9 @@ pub struct ImageConfiguration {
     pub size: Option<Size>,
     #[default(1.0)]
     pub device_pixel_ratio: f64,
+    /// Whether the target density participates in variant selection.
     #[default(true)]
-    has_device_pixel_ratio: bool,
+    pub has_device_pixel_ratio: bool,
     pub bundle: Option<ImageAssetBundle>,
     pub text_direction: Option<TextDirection>,
     pub locale: Option<Locale>,
@@ -147,6 +148,10 @@ pub enum ImageSource {
     Asset(String),
     Generated,
 }
+
+/// The one-shot outcome of asynchronous image loading. The callback may
+/// run on the originating thread or a worker.
+pub type ImageLoadCallback = Box<dyn FnOnce(Result<ImageHandle, ImageError>) + Send>;
 
 /// A Rust-native image provider. Providers are cheap descriptions; decoding
 /// happens only when [`Self::load`] is called, so rebuilds do not reread or

@@ -15,6 +15,8 @@ use std::{
     rc::Rc,
 };
 
+use futures_channel::oneshot;
+use incular_animation::scheduler::{Priority, schedule_async_task};
 use incular_core::reactivity::DependencySource;
 
 use crate::{ImageConfiguration, ImageError, ImageHandle, ImageProvider};
@@ -125,6 +127,44 @@ impl ImageStream {
         }
     }
 
+    /// Resolves a one-shot image callback into a UI-thread stream. A
+    /// synchronous completion is already ready or failed when this returns;
+    /// delayed completions wake the UI scheduler and invalidate listeners
+    /// on the owning thread rather than mutating UI state from a loader.
+    #[must_use]
+    pub fn from_load_callback(start: impl FnOnce(crate::ImageLoadCallback)) -> Self {
+        let (send, mut receive) = oneshot::channel();
+        start(Box::new(move |outcome| {
+            let _ = send.send(outcome);
+        }));
+        match receive.try_recv() {
+            Ok(Some(result)) => return Self::from_result(result),
+            Err(_) => return Self::failed(abandoned_image_load()),
+            Ok(None) => {}
+        }
+
+        let stream = Self::with(ImageLoadState::Loading(None));
+        let owner = Rc::downgrade(&stream.cell);
+        // The scheduler owns the task independently of its returned future.
+        // The weak cell prevents a transport from retaining an unmounted image.
+        drop(schedule_async_task(
+            move || async move {
+                let result = receive
+                    .await
+                    .unwrap_or_else(|_| Err(abandoned_image_load()));
+                if let Some(cell) = owner.upgrade() {
+                    let state = match result {
+                        Ok(image) => ImageLoadState::Ready(image),
+                        Err(error) => ImageLoadState::Failed(error),
+                    };
+                    Self { cell }.set(state);
+                }
+            },
+            Priority::ANIMATION,
+        ));
+        stream
+    }
+
     /// The current state. Reading it inside a build makes the build depend
     /// on this stream.
     #[must_use]
@@ -164,6 +204,10 @@ impl ImageStream {
         self.cell.changes.notify();
         true
     }
+}
+
+fn abandoned_image_load() -> ImageError {
+    ImageError::Io("image loader disconnected before delivering a result".into())
 }
 
 /// Reports progress and the outcome of a loading [`ImageStream`]

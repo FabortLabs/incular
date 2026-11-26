@@ -22,8 +22,10 @@ workspace = true
 path = "src/lib.rs"
 
 [dependencies]
+futures-channel = { workspace = true }
 smart-default = { workspace = true }
 image = { workspace = true }
+incular-animation = { workspace = true }
 incular-assets = { workspace = true }
 incular-config = { workspace = true }
 incular-core = { workspace = true }

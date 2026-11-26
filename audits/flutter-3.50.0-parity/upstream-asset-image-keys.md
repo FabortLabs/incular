@@ -26,10 +26,9 @@ DPR in both directions, uses the nearest bundle, and asserts the paint
 source size, destination size, density and decoded pixels. No GPU
 sampling parity is inferred from CPU decode and paint commands.
 
-The synchronous provider path covers immediate bundles. Async key lookup
-also works through the bundled transport; driving a loading widget with
-callback-only image bytes and Flutter's full decoded image cache remain
-separate work.
+The synchronous provider path covers immediate bundles. The subsequent
+[widget batch](upstream-bundled-image-widgets.md) compares callback-only
+delivery too. Flutter's full decoded image cache remains separate work.
 
 ```sh
 cargo test --locked -j 1 -p incular-image --test flutter350_asset_image_keys --test asset_variants --test defaults -- --test-threads=1

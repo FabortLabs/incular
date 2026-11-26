@@ -1583,3 +1583,12 @@ packages/flutter/test/painting/image_resolution_test.dart	219	Typical case 2.0	p
 packages/flutter/test/painting/image_resolution_test.dart	223	Borderline case 2.01	paired-match	upstream-asset-image-keys.md
 packages/flutter/test/painting/image_resolution_test.dart	226	Borderline case 2.9	paired-match	upstream-asset-image-keys.md
 packages/flutter/test/painting/image_resolution_test.dart	230	Typical case 4.0	paired-match	upstream-asset-image-keys.md
+packages/flutter/test/widgets/image_resolution_test.dart	167	Image for device pixel ratio 1.0	paired-match	upstream-bundled-image-widgets.md
+packages/flutter/test/widgets/image_resolution_test.dart	179	Image for device pixel ratio 0.5	paired-match	upstream-bundled-image-widgets.md
+packages/flutter/test/widgets/image_resolution_test.dart	191	Image for device pixel ratio 1.5	paired-match	upstream-bundled-image-widgets.md
+packages/flutter/test/widgets/image_resolution_test.dart	206	Image for device pixel ratio 1.75	paired-match	upstream-bundled-image-widgets.md
+packages/flutter/test/widgets/image_resolution_test.dart	218	Image for device pixel ratio 2.3	paired-match	upstream-bundled-image-widgets.md
+packages/flutter/test/widgets/image_resolution_test.dart	230	Image for device pixel ratio 3.7	paired-match	upstream-bundled-image-widgets.md
+packages/flutter/test/widgets/image_resolution_test.dart	242	Image for device pixel ratio 5.1	paired-match	upstream-bundled-image-widgets.md
+packages/flutter/test/widgets/image_resolution_test.dart	254	Image for device pixel ratio 1.0, with a main asset and a 1.0x asset	paired-match	upstream-bundled-image-widgets.md
+packages/flutter/test/widgets/image_resolution_test.dart	308	Low-resolution assets	paired-match	upstream-bundled-image-widgets.md

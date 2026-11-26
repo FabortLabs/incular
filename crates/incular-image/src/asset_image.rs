@@ -15,7 +15,8 @@ use incular_assets::{
 };
 
 use crate::{
-    ImageConfiguration, ImageError, ImageHandle, ImageProvider, ImageSource, finite_positive_or_one,
+    ImageConfiguration, ImageError, ImageHandle, ImageLoadCallback, ImageProvider, ImageSource,
+    ImageStream, finite_positive_or_one,
 };
 
 /// A shared bundle with identity-based equality. Two distinct bundles can
@@ -81,11 +82,38 @@ impl AssetBundleImageKey {
     /// Returns the bundle or decode error without retrying a different
     /// format or resolution variant.
     pub fn load(&self) -> Result<ImageHandle, ImageError> {
-        let bytes = self.bundle.0.load(&self.name)?;
-        let mut handle = ImageHandle::decode(&bytes, ImageSource::Asset(self.name.clone()))?;
-        handle.set_decoded_scale(self.scale);
-        Ok(handle)
+        self.decode(&self.bundle.0.load(&self.name)?)
     }
+
+    /// Loads the selected asset over the bundle's callback transport.
+    pub fn load_async(self, done: ImageLoadCallback) {
+        let Self {
+            bundle,
+            name,
+            scale,
+        } = self;
+        let requested = name.clone();
+        bundle.0.load_async(
+            &requested,
+            Box::new(move |outcome| {
+                done(
+                    outcome
+                        .map_err(ImageError::from)
+                        .and_then(|bytes| decode_asset(&bytes, name, scale)),
+                );
+            }),
+        );
+    }
+
+    fn decode(&self, bytes: &[u8]) -> Result<ImageHandle, ImageError> {
+        decode_asset(bytes, self.name.clone(), self.scale)
+    }
+}
+
+fn decode_asset(bytes: &[u8], name: String, scale: f64) -> Result<ImageHandle, ImageError> {
+    let mut handle = ImageHandle::decode(bytes, ImageSource::Asset(name))?;
+    handle.set_decoded_scale(scale);
+    Ok(handle)
 }
 
 fn comparable_scale(scale: f64) -> u64 {
@@ -169,11 +197,19 @@ impl AssetImage {
     /// Loads the bundle manifest and resolves the key, without decoding
     /// image pixels. A warm manifest can complete before this call returns.
     pub fn obtain_key(&self, config: &ImageConfiguration, done: AssetImageKeyCallback) {
+        self.obtain_key_from_bundle(select_bundle(self.bundle.as_ref(), config), config, done);
+    }
+
+    fn obtain_key_from_bundle(
+        &self,
+        bundle: ImageAssetBundle,
+        config: &ImageConfiguration,
+        done: AssetImageKeyCallback,
+    ) {
         let Some(logical) = self.key_name().map(Cow::into_owned) else {
             done(Err(non_utf8_asset()));
             return;
         };
-        let bundle = select_bundle(self.bundle.as_ref(), config);
         let target = config.target_device_pixel_ratio();
         AssetManifest::load_from_asset_bundle(
             bundle.0.clone(),
@@ -185,6 +221,19 @@ impl AssetImage {
                 );
             }),
         );
+    }
+
+    fn available_bundle(&self, config: &ImageConfiguration) -> Option<ImageAssetBundle> {
+        let bundle = self.bundle.clone().or_else(|| {
+            if self.path.is_absolute() && self.package.is_none() {
+                return None;
+            }
+            config
+                .bundle
+                .clone()
+                .or_else(|| configured_root_asset_bundle().map(ImageAssetBundle::new))
+        });
+        bundle.or_else(|| self.package.as_ref().map(|_| select_bundle(None, config)))
     }
 
     fn bundled_load(
@@ -264,20 +313,8 @@ impl ImageProvider for AssetImage {
     }
 
     fn load_with(&self, config: &ImageConfiguration) -> Result<ImageHandle, ImageError> {
-        let chosen = self.bundle.clone().or_else(|| {
-            if self.path.is_absolute() && self.package.is_none() {
-                return None;
-            }
-            config
-                .bundle
-                .clone()
-                .or_else(|| configured_root_asset_bundle().map(ImageAssetBundle::new))
-        });
-        if let Some(bundle) = chosen {
+        if let Some(bundle) = self.available_bundle(config) {
             return self.bundled_load(config, bundle);
-        }
-        if self.package.is_some() {
-            return self.bundled_load(config, select_bundle(None, config));
         }
         let (path, scale) = config.target_device_pixel_ratio().map_or_else(
             || (self.path.clone(), 1.0),
@@ -286,6 +323,22 @@ impl ImageProvider for AssetImage {
         let mut handle = ImageHandle::from_file(path)?;
         handle.set_decoded_scale(scale);
         Ok(handle)
+    }
+
+    fn resolve(&self, config: &ImageConfiguration) -> ImageStream {
+        let Some(bundle) = self.available_bundle(config) else {
+            return ImageStream::from_result(self.load_with(config));
+        };
+        ImageStream::from_load_callback(|done| {
+            self.obtain_key_from_bundle(
+                bundle,
+                config,
+                Box::new(move |key| match key {
+                    Ok(key) => key.load_async(done),
+                    Err(error) => done(Err(error)),
+                }),
+            );
+        })
     }
 }
 
@@ -360,6 +413,10 @@ impl ImageProvider for ExactAssetImage {
 
     fn load_with(&self, configuration: &ImageConfiguration) -> Result<ImageHandle, ImageError> {
         self.obtain_key(configuration).load()
+    }
+
+    fn resolve(&self, configuration: &ImageConfiguration) -> ImageStream {
+        ImageStream::from_load_callback(|done| self.obtain_key(configuration).load_async(done))
     }
 }
 
