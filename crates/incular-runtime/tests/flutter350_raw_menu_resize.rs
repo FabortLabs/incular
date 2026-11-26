@@ -73,3 +73,54 @@ fn a_media_view_resize_closes_an_open_menu_after_the_build_but_never_a_closed_on
     update(&mut runtime, 300.);
     assert_eq!(requests.get(), 1);
 }
+
+#[test]
+fn resizing_a_grouped_open_menu_callbacks_without_mutating_during_build() {
+    use incular_widgets::RawMenuAnchorGroup;
+    let group = MenuController::new();
+    let menu = MenuController::new();
+    let counts = Signal::new((0usize, 0usize));
+    let build = |size| {
+        let anchor = RawMenuAnchor::new(menu.clone(), |_, _| {
+            Widget::box_(Size::new(70., 50.), PANEL)
+        })
+        .child(Widget::box_(Size::new(30., 20.), Color::WHITE))
+        .on_open({
+            let counts = counts.clone();
+            move || {
+                let (open, close) = counts.get();
+                counts.set((open + 1, close));
+            }
+        })
+        .on_close({
+            let counts = counts.clone();
+            move || {
+                let (open, close) = counts.get();
+                counts.set((open, close + 1));
+            }
+        });
+        Widget::from(MediaQuery::new(
+            RuntimeEnvironment {
+                viewport: size,
+                ..RuntimeEnvironment::default()
+            },
+            RawMenuAnchorGroup::new(group.clone(), anchor),
+        ))
+    };
+    let mut runtime = Runtime::new(build(LIMITS)).unwrap();
+    assert!(!panel_visible(&frame(&mut runtime)));
+    menu.open(None);
+    assert!(panel_visible(&frame(&mut runtime)));
+    assert!(group.is_open());
+    assert_eq!(counts.get(), (1, 0));
+
+    let small = Size::new(200., 200.);
+    let root = runtime.tree().root().unwrap();
+    runtime.schedule_update(root, build(small)).unwrap();
+    runtime.run_frame(Constraints::tight(small)).unwrap();
+    assert_eq!(counts.get(), (1, 1));
+    assert!(!group.is_open() && !menu.is_open());
+    let (list, _) = runtime.run_frame(Constraints::tight(small)).unwrap();
+    assert!(!panel_visible(&list));
+    assert_eq!(counts.get(), (1, 1));
+}

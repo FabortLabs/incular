@@ -290,3 +290,22 @@ transient-surface, and layout-builder neighbors passed. No new
 upstream registration is counted for the authored probe. Singular
 anchor transforms and separate Overlay host coordinate spaces are
 not covered by this comparison.
+
+### Nested visibility and context-menu anchors
+
+Pinned `:82` toggles a live panel on actual anchor taps. `:108` opens
+and closes the nested and parent controllers in both orders, with
+the panel markers and attachment state following both closures.
+`:234` and `:559` use real taps to switch the visible menu between
+sibling anchors, under either a parent menu or a group. In `:279`,
+the second context menu is part of the first menu's anchor builder,
+not its panel; tapping each visible anchor still opens its panel.
+
+### Group resize does not write during build
+
+Pinned `:2366` resizes an open child under a menu group without a
+setState-during-build exception. The native runtime changes both the
+frame constraints and the inherited MediaQuery, and checks that
+onClose can mutate an application signal without hitting the pure
+build guard. The group and child both close and the next scene no
+longer contains the panel.

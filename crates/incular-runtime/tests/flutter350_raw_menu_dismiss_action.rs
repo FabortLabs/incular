@@ -448,3 +448,165 @@ fn a_groups_state_follows_padded_descendants_and_only_the_children_can_open_it()
     assert!(!frame(&mut runtime));
     assert!(!group.is_open() && !b.is_open() && shows(&runtime, 2));
 }
+
+fn toggle(label: u64, controller: &MenuController) -> Widget {
+    let controller = controller.clone();
+    Widget::from(
+        GestureDetector::new(Widget::box_(Size::new(100., 30.), Color::WHITE)).on_tap(move || {
+            if controller.is_open() {
+                controller.close()
+            } else {
+                controller.open(None)
+            }
+        }),
+    )
+    .with_key(Key::Value(label))
+}
+
+fn tagged_panel(label: u64) -> Widget {
+    Widget::box_(Size::new(70., 30.), PANEL).with_key(Key::Value(label))
+}
+
+fn alive(runtime: &Runtime, key: u64) -> bool {
+    runtime.tree().element_with_key(&Key::Value(key)).is_some()
+}
+
+#[test]
+fn toggling_a_menu_by_its_anchor_tracks_actual_overlay_visibility() {
+    let controller = MenuController::new();
+    let menu = RawMenuAnchor::new(controller.clone(), |_, info| {
+        positioned_below(info.anchor_rect, tagged_panel(11))
+    })
+    .child(toggle(1, &controller));
+    let mut runtime = Runtime::new(Center::new(menu).into()).unwrap();
+    assert!(!frame(&mut runtime));
+    tap(&mut runtime, Key::Value(1));
+    assert!(frame(&mut runtime));
+    assert!(controller.is_open() && alive(&runtime, 11));
+    tap(&mut runtime, Key::Value(1));
+    assert!(!frame(&mut runtime));
+    assert!(!controller.is_open() && !alive(&runtime, 11));
+}
+
+#[test]
+fn direct_close_hides_all_descendants_but_a_nested_close_keeps_the_parent() {
+    use incular_widgets::Column;
+    let parent = MenuController::new();
+    let child = MenuController::new();
+    let nested: Widget = RawMenuAnchor::new(child.clone(), |_, info| {
+        positioned_below(info.anchor_rect, tagged_panel(22))
+    })
+    .child(toggle(2, &child))
+    .into();
+    let content: Widget = Column::new([tagged_panel(11), nested])
+        .main_axis_size(incular_widgets::MainAxisSize::Min)
+        .into();
+    let menu = RawMenuAnchor::new(parent.clone(), move |_, info| {
+        positioned_below(info.anchor_rect, content.clone())
+    })
+    .child(toggle(1, &parent));
+    let mut runtime = Runtime::new(Center::new(menu).into()).unwrap();
+    assert!(!frame(&mut runtime));
+    assert!(alive(&runtime, 1));
+    assert!(!parent.is_open() && !alive(&runtime, 11));
+
+    parent.open(None);
+    frame(&mut runtime);
+    assert!(parent.is_open() && alive(&runtime, 11));
+    assert!(!child.is_open() && !alive(&runtime, 22));
+    child.open(None);
+    frame(&mut runtime);
+    assert!(parent.is_open() && child.is_open() && alive(&runtime, 11) && alive(&runtime, 22));
+    parent.close();
+    frame(&mut runtime);
+    assert!(!parent.is_open() && !child.is_open() && !alive(&runtime, 11) && !alive(&runtime, 22));
+
+    parent.open(None);
+    frame(&mut runtime);
+    child.open(None);
+    frame(&mut runtime);
+    assert!(parent.is_open() && child.is_open() && alive(&runtime, 11) && alive(&runtime, 22));
+    child.close();
+    frame(&mut runtime);
+    assert!(parent.is_open() && !child.is_open() && alive(&runtime, 11) && !alive(&runtime, 22));
+}
+
+#[test]
+fn tapping_one_child_anchor_then_another_switches_the_visible_submenu() {
+    use incular_widgets::{Directionality, RawMenuAnchorGroup, Row, TextDirection};
+    for grouped in [false, true] {
+        let parent = MenuController::new();
+        let (a, b) = (MenuController::new(), MenuController::new());
+        let make = |controller: &MenuController, key, panel| {
+            Widget::from(
+                RawMenuAnchor::new(controller.clone(), move |_, info| {
+                    positioned_below(info.anchor_rect, tagged_panel(panel))
+                })
+                .child(toggle(key, controller)),
+            )
+        };
+        let branch: Widget = Row::new([make(&a, 2, 12), make(&b, 3, 13)])
+            .main_axis_size(incular_widgets::MainAxisSize::Min)
+            .into();
+        let scene = if grouped {
+            Widget::from(RawMenuAnchorGroup::new(parent.clone(), branch))
+        } else {
+            Widget::from(
+                RawMenuAnchor::new(parent.clone(), move |_, info| {
+                    positioned_below(info.anchor_rect, branch.clone())
+                })
+                .child(toggle(1, &parent)),
+            )
+        };
+        let mut runtime =
+            Runtime::new(Directionality::new(TextDirection::Ltr, Center::new(scene)).into())
+                .unwrap();
+        frame(&mut runtime);
+        if !grouped {
+            tap(&mut runtime, Key::Value(1));
+            frame(&mut runtime);
+        }
+        assert!(alive(&runtime, 2) && alive(&runtime, 3));
+        assert!(!alive(&runtime, 12) && !alive(&runtime, 13));
+        for (button, panel) in [(2, 12), (3, 13)] {
+            tap(&mut runtime, Key::Value(button));
+            frame(&mut runtime);
+            assert!(parent.is_open() && alive(&runtime, panel));
+            assert!(!alive(&runtime, if panel == 12 { 13 } else { 12 }));
+        }
+    }
+}
+
+#[test]
+fn a_context_menu_button_can_itself_contain_another_context_menu() {
+    use incular_widgets::Column;
+    let (first, second) = (MenuController::new(), MenuController::new());
+    let second_menu: Widget = RawMenuAnchor::new(second.clone(), |_, info| {
+        positioned_below(info.anchor_rect, tagged_panel(12))
+    })
+    .child(toggle(2, &second))
+    .into();
+    let first_menu = RawMenuAnchor::new(first.clone(), |_, info| {
+        // Offset the first menu so both anchor buttons stay reachable.
+        let mut rect = info.anchor_rect;
+        rect.origin = rect.origin + Offset::new(120., 0.);
+        positioned_below(rect, tagged_panel(11))
+    })
+    .builder({
+        let first = first.clone();
+        move |_, discovered, _| {
+            assert!(discovered == &first);
+            Column::new([toggle(1, discovered), second_menu.clone()])
+                .main_axis_size(incular_widgets::MainAxisSize::Min)
+                .into()
+        }
+    });
+    let mut runtime = Runtime::new(Center::new(first_menu).into()).unwrap();
+    frame(&mut runtime);
+    tap(&mut runtime, Key::Value(1));
+    frame(&mut runtime);
+    assert!(alive(&runtime, 11));
+    tap(&mut runtime, Key::Value(2));
+    frame(&mut runtime);
+    assert!(second.is_open() && alive(&runtime, 12));
+}
