@@ -14,7 +14,7 @@
 use crate::{Animatable, AnimationController, AnimationStatus, Curve, Tween};
 use incular_core::reactivity::{DependencySource, Subscription, TrackingGuard};
 use std::{
-    cell::{Cell, RefCell},
+    cell::{Cell, OnceCell, RefCell},
     rc::{Rc, Weak},
 };
 
@@ -303,8 +303,11 @@ pub struct CurvedAnimation {
     /// Flutter `_curveDirection`.
     direction: Rc<Cell<Option<AnimationStatus>>>,
     changes: DependencySource,
-    /// Flutter's status listener on the parent.
-    _link: Subscription,
+    /// Tracks the curve direction as well as forwarding parent changes.
+    direction_link: RefCell<Option<Subscription>>,
+    /// Flutter's public listeners still proxy the parent. Disposal detaches
+    /// only the animation's own direction listener.
+    passive_link: OnceCell<Subscription>,
 }
 
 /// Flutter `_updateCurveDirection`: the direction latched when a run starts,
@@ -340,7 +343,8 @@ impl CurvedAnimation {
             reverse_curve: None,
             direction,
             changes,
-            _link: link,
+            direction_link: RefCell::new(Some(link)),
+            passive_link: OnceCell::new(),
         }
     }
 
@@ -350,6 +354,20 @@ impl CurvedAnimation {
     pub fn reverse_curve(mut self, curve: Curve) -> Self {
         self.reverse_curve = Some(curve);
         self
+    }
+
+    /// Removes the private direction observer. The current curve latch
+    /// is retained and subsequent value reads still use the parent value.
+    pub fn dispose(&self) {
+        if self.direction_link.borrow_mut().take().is_some() {
+            self.passive_link
+                .get_or_init(|| forward(&self.parent, self.changes.clone()));
+        }
+    }
+
+    #[must_use]
+    pub fn is_disposed(&self) -> bool {
+        self.direction_link.borrow().is_none()
     }
 }
 

@@ -45,7 +45,7 @@ fn proxy_parent_assignment_and_updates_notify_value_listener() {
 
 #[test]
 fn reverse_animation_stops_notifying_when_listener_is_removed() {
-    // Upstream :77 (behavioral assertions, not Dart diagnostic formatting).
+    // Upstream :77.
     let parent = controller(0.5);
     let animation = DoubleAnimation::from(&parent).reversed();
     let called = Rc::new(Cell::new(false));
@@ -59,6 +59,7 @@ fn reverse_animation_stops_notifying_when_listener_is_removed() {
     assert!(!called.get());
     parent.set_value(0.7);
     assert!(!called.get());
+    assert!(!format!("{animation:?}").contains('\n'));
 }
 
 #[test]
