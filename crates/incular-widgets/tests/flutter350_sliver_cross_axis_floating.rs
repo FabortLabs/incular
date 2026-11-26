@@ -169,3 +169,33 @@ fn jumping_back_does_not_reveal_the_scrolling_or_floating_header() {
         );
     }
 }
+
+#[test]
+fn releasing_touch_keeps_short_reveal_without_enabling_snap() {
+    use SliverHeaderScrollBehavior::{Floating, FloatingPinned};
+    for (behavior, expected_paint) in [(Floating, 10.), (FloatingPinned, 30.)] {
+        let (mut tree, scroll, geometry, key) = mounted_header(behavior, 30.);
+        assert!(scroll.jump_to(600.));
+        layout(&mut tree);
+        let time = Instant::now();
+        send(&mut tree, time, PointerPhase::Down, 300.);
+        for phase in [PointerPhase::Move, PointerPhase::Up] {
+            send(&mut tree, time, phase, 310.);
+            assert_eq!(scroll.offset(), 590., "{behavior:?} at {phase:?}");
+            assert_eq!(
+                geometry.get().paint_extent,
+                expected_paint,
+                "{behavior:?} at {phase:?}",
+            );
+            let node = tree.element_with_key(&key.into()).unwrap();
+            assert_eq!(
+                tree.element_bounds(node),
+                Some(Rect::from_origin_size(
+                    Offset::new(150., -20.),
+                    Size::new(150., 30.)
+                )),
+                "{behavior:?} at {phase:?}",
+            );
+        }
+    }
+}

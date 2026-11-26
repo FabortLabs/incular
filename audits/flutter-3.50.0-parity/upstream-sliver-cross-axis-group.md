@@ -97,3 +97,10 @@ is unchanged. The cross-axis and obstruction targets passed. Two
 pre-existing no-rebuild failures found in adjacent tests were corrected
 separately by updating only the retained accessibility tag, without
 rebuilding the header subtree.
+
+Pinned :896 and :937 also pair. A real 10 px touch move from
+offset 600 exposes 10 px of the ordinary floating header, or leaves
+the 30 px pinned minimum shifted up 20 px. In both cases the painted
+region ends at y=10, and lifting the finger keeps the same geometry
+and offset because snap is disabled. All three focused native
+floating-header cases passed.
