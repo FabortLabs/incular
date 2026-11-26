@@ -156,3 +156,58 @@ fn mounted_scale_keeps_event_timestamps_and_excludes_the_tap_competitor() {
     );
     assert_eq!(route(3, Up, 0., 0., 155), [("end", None, 0)]);
 }
+
+#[test]
+fn scale_keeps_same_numbered_pointers_on_separate_devices_distinct() {
+    use PointerPhase::{Down, Move, Up};
+
+    let now = Instant::now();
+    let trace = Rc::new(RefCell::new(Vec::new()));
+    let record = |phase| {
+        let trace = trace.clone();
+        move |count, focal, scale| trace.borrow_mut().push((phase, count, focal, scale))
+    };
+    let start = record("start");
+    let update = record("update");
+    let end = record("end");
+    let root = GestureDetector::new(SizedBox::expand())
+        .behavior(HitTestBehavior::Opaque)
+        .drag_start_behavior(DragStartBehavior::Down)
+        .on_scale_start(move |d| start(d.pointer_count, d.focal_point.x, 1.))
+        .on_scale_update(move |d| update(d.pointer_count, d.focal_point.x, d.scale))
+        .on_scale_end(move |d| end(d.pointer_count, 0., 0.));
+    let mut runtime = Runtime::new(root.into()).unwrap();
+    runtime
+        .run_frame_at(Constraints::tight(Size::new(100., 80.)), now)
+        .unwrap();
+    let mut ms = 0;
+    let mut route = |device, phase, x| {
+        ms += 1;
+        let _ = runtime.handle_raw_pointer_event(RawPointerEvent::new(
+            1,
+            device,
+            PointerDeviceKind::Touch,
+            if phase == Up {
+                0
+            } else {
+                PRIMARY_POINTER_BUTTON
+            },
+            Offset::new(x, 10.),
+            phase,
+            now + Duration::from_millis(ms),
+        ));
+        std::mem::take(&mut *trace.borrow_mut())
+    };
+    assert_eq!(route(4, Down, 10.), [("start", 1, 10., 1.)]);
+    assert_eq!(route(9, Down, 30.), [("end", 2, 0., 0.)]);
+    assert_eq!(
+        route(9, Move, 50.),
+        [("start", 2, 30., 1.), ("update", 2, 30., 2.)]
+    );
+    assert_eq!(route(4, Up, 10.), [("end", 1, 0., 0.)]);
+    assert_eq!(
+        route(9, Move, 60.),
+        [("start", 1, 60., 1.), ("update", 1, 60., 1.)]
+    );
+    assert_eq!(route(9, Up, 60.), [("end", 0, 0., 0.)]);
+}

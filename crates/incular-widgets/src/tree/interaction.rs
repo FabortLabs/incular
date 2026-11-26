@@ -1393,9 +1393,6 @@ impl WidgetTree {
                             disposition,
                             GestureDisposition::Rejected | GestureDisposition::Cancelled
                         ) {
-                            // Flutter `rejectGesture`: the recognizer stops
-                            // tracking a pointer whose arena it lost.
-                            scale.reject_pointer(event.pointer);
                             continue;
                         }
                         let details = scale.observe_raw(crate::raw_input::RawPointerEvent {
@@ -2205,6 +2202,15 @@ impl WidgetTree {
                 // reports `onTapCancel`.
                 if let Some(recognizer) = candidate.recognizer.as_mut() {
                     recognizer.reject();
+                }
+                if candidate.kind == RetainedGestureKind::Scale
+                    && let incular_gestures::GestureArenaSource::Pointer { device, pointer } =
+                        key.source
+                    && let Some(scale) = self.input.scale_gestures.get_mut(&candidate.element)
+                {
+                    // Flutter rejectGesture removes the contact at arena loss,
+                    // before movement of any other contact can sample it.
+                    scale.reject_device_pointer(device, pointer);
                 }
                 if let Some(force_press) = candidate.force_press.as_mut() {
                     incular_gestures::GestureRecognizer::cancel(&mut force_press.recognizer);

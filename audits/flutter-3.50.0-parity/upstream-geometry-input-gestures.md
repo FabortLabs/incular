@@ -168,3 +168,11 @@ report their 40, 90, 130 and 150 ms restart motions, and repeated 140 ms
 updates keep their shared timestamp. There are no taps. The standalone
 test independently checks focal geometry, scales and deltas on the
 same path.
+
+The authored retained-input control uses two independent device IDs both
+reporting pointer 1. Their initial additions and later lifts now keep
+the count sequence 1, 2, 1, 0, with focal points and scale derived from
+both contacts. Previously adding the second device replaced the first
+contact. The arena also removes a rejected contact immediately, before
+a different device's motion can use its position. This host normalization
+check does not add an upstream registration.

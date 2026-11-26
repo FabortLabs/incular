@@ -72,19 +72,36 @@ impl ScaleUpdateDetails {
     }
 }
 
+/// Pointer IDs are unique within a device at Incular ingress, not
+/// necessarily across devices reporting to the same window.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ContactId {
+    device: u64,
+    pointer: u64,
+}
+
+impl From<&RawPointerEvent> for ContactId {
+    fn from(event: &RawPointerEvent) -> Self {
+        Self {
+            device: event.device,
+            pointer: event.pointer,
+        }
+    }
+}
+
 /// Flutter `_LineBetweenPointers`: the first two contacts in arrival order.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct LineBetweenPointers {
-    start_id: u64,
+    start_id: ContactId,
     start: Offset,
-    end_id: u64,
+    end_id: ContactId,
     end: Offset,
 }
 
 /// One tracked contact (`_pointerLocations`, `_velocityTrackers` and the
 /// device kind) in `_pointerQueue` order.
 struct Contact {
-    pointer: u64,
+    id: ContactId,
     position: Offset,
     kind: PointerDeviceKind,
     velocity: VelocityTracker,
@@ -276,7 +293,7 @@ impl ScaleGestureDetector {
             PointerPhase::Enter | PointerPhase::Exit => false,
             PointerPhase::Down => true,
             PointerPhase::Move | PointerPhase::Up | PointerPhase::Cancel => {
-                self.tracks(event.pointer)
+                self.tracks(ContactId::from(&event))
             }
         };
         let mut details = self.observe_raw(event);
@@ -309,6 +326,7 @@ impl ScaleGestureDetector {
         if !self.allows_device(event.kind) {
             return None;
         }
+        let id = ContactId::from(&event);
         let mut lifted = None;
         let (configuration_changed, should_start) = match event.phase {
             PointerPhase::Enter | PointerPhase::Exit => return None,
@@ -324,16 +342,12 @@ impl ScaleGestureDetector {
                     self.initial_vertical_span = 0.0;
                     self.current_vertical_span = 0.0;
                 }
-                match self
-                    .pointers
-                    .iter_mut()
-                    .find(|contact| contact.pointer == event.pointer)
-                {
+                match self.pointers.iter_mut().find(|contact| contact.id == id) {
                     Some(contact) => contact.position = event.position,
                     None => {
                         self.pending_contacts = true;
                         self.pointers.push(Contact {
-                            pointer: event.pointer,
+                            id,
                             position: event.position,
                             kind: event.kind,
                             velocity: VelocityTracker::default(),
@@ -343,10 +357,7 @@ impl ScaleGestureDetector {
                 (true, true)
             }
             PointerPhase::Move => {
-                let contact = self
-                    .pointers
-                    .iter_mut()
-                    .find(|contact| contact.pointer == event.pointer)?;
+                let contact = self.pointers.iter_mut().find(|contact| contact.id == id)?;
                 // Synthesized motion updates the contact geometry but is
                 // not a physical velocity sample.
                 if !event.synthesized {
@@ -356,10 +367,7 @@ impl ScaleGestureDetector {
                 (false, true)
             }
             PointerPhase::Up | PointerPhase::Cancel => {
-                let index = self
-                    .pointers
-                    .iter()
-                    .position(|contact| contact.pointer == event.pointer)?;
+                let index = self.pointers.iter().position(|contact| contact.id == id)?;
                 lifted = Some(self.pointers.remove(index));
                 (true, false)
             }
@@ -425,13 +433,25 @@ impl ScaleGestureDetector {
     /// Flutter `rejectGesture`: another recognizer won this pointer's arena,
     /// so the scale stops tracking it without reconfiguring.
     pub fn reject_pointer(&mut self, pointer: u64) {
-        let Some(index) = self
+        if let Some(index) = self
             .pointers
             .iter()
-            .position(|contact| contact.pointer == pointer)
-        else {
-            return;
-        };
+            .position(|contact| contact.id.pointer == pointer)
+        {
+            self.remove_rejected_contact(index);
+        }
+    }
+
+    /// Rejects only the contact from the specified device and pointer.
+    /// Retained arenas use this rather than comparing pointer IDs alone.
+    pub fn reject_device_pointer(&mut self, device: u64, pointer: u64) {
+        let id = ContactId { device, pointer };
+        if let Some(index) = self.pointers.iter().position(|contact| contact.id == id) {
+            self.remove_rejected_contact(index);
+        }
+    }
+
+    fn remove_rejected_contact(&mut self, index: usize) {
         self.pointers.remove(index);
         if self.pointers.is_empty() {
             self.state = ScaleState::Ready;
@@ -449,10 +469,8 @@ impl ScaleGestureDetector {
         }
     }
 
-    fn tracks(&self, pointer: u64) -> bool {
-        self.pointers
-            .iter()
-            .any(|contact| contact.pointer == pointer)
+    fn tracks(&self, id: ContactId) -> bool {
+        self.pointers.iter().any(|contact| contact.id == id)
     }
 
     /// Flutter `_updateLines`: the line between the first two contacts.
@@ -462,15 +480,13 @@ impl ScaleGestureDetector {
             return;
         };
         let line = LineBetweenPointers {
-            start_id: first.pointer,
+            start_id: first.id,
             start: first.position,
-            end_id: second.pointer,
+            end_id: second.id,
             end: second.position,
         };
         match self.initial_line {
-            Some(initial)
-                if initial.start_id == first.pointer && initial.end_id == second.pointer =>
-            {
+            Some(initial) if initial.start_id == first.id && initial.end_id == second.id => {
                 self.current_line = Some(line);
             }
             _ => {
