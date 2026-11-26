@@ -964,3 +964,48 @@ fn static_barrier_default_is_unpainted_and_explicit_color_paints_the_full_veil()
     );
     assert_eq!(stats.active_animations, 0);
 }
+
+#[test]
+fn locked_barriers_request_one_host_alert_only_after_a_stable_release() {
+    use incular_platform::SystemSoundType;
+
+    for kind in [BarrierKind::Static, BarrierKind::Animated] {
+        let requests = Rc::new(RefCell::new(Vec::new()));
+        let mut runtime = Runtime::new(kind.plain(false)).unwrap();
+        let service = runtime.system_sound();
+        service.bind_host({
+            let requests = requests.clone();
+            move |sound| requests.borrow_mut().push(sound)
+        });
+        let now = Instant::now();
+        runtime.run_frame_at(bounds(), now).unwrap();
+        for (pointer, millis, phase) in [
+            (1, 2, PointerPhase::Down),
+            (1, 4, PointerPhase::Cancel),
+            (2, 6, PointerPhase::Down),
+        ] {
+            send_touch(
+                &mut runtime,
+                now + Duration::from_millis(millis),
+                pointer,
+                phase,
+                BARRIER_CENTER,
+                PRIMARY_POINTER_BUTTON,
+            );
+        }
+        assert!(requests.borrow().is_empty(), "{kind:?}");
+        send_touch(
+            &mut runtime,
+            now + Duration::from_millis(8),
+            2,
+            PointerPhase::Up,
+            BARRIER_CENTER,
+            PRIMARY_POINTER_BUTTON,
+        );
+        assert_eq!(&*requests.borrow(), &[SystemSoundType::Alert], "{kind:?}");
+
+        runtime.shutdown();
+        service.play(SystemSoundType::Alert);
+        assert_eq!(&*requests.borrow(), &[SystemSoundType::Alert]);
+    }
+}

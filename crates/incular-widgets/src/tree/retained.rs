@@ -85,6 +85,12 @@ impl WidgetTree {
         }
     }
 
+    /// Installs a window's platform sound service before mounting widgets.
+    #[doc(hidden)]
+    pub fn install_system_sound(&mut self, system_sound: incular_platform::SystemSound) {
+        self.dependency_root.insert(system_sound);
+    }
+
     /// Whether a value a build read (an inherited value or another tracked
     /// dependency such as a `UiFuture`) changed since the last layout: the
     /// next layout rebuilds its readers.

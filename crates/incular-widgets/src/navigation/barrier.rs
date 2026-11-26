@@ -375,22 +375,30 @@ impl ModalBarrier {
             Some(fill) => Container::new().color(fill).into(),
             None => Container::new().into(),
         };
+        // MouseRegion owns hover hit testing independently of pointer
+        // gesture competition, as in Flutter's barrier.
+        veil = crate::MouseRegion::new(veil)
+            .cursor(crate::MouseCursor::Basic)
+            .into();
         let dismiss = self.dismissal_callback(context);
-        if self.dismissible {
-            // Join the same arena as translucent siblings; a stable
-            // contact dismisses only if it wins on release.
-            let dismiss = dismiss.clone();
-            veil = GestureDetector::new(veil)
-                .behavior(HitTestBehavior::Opaque)
-                .on_any_pointer_tap(move || {
-                    if let Some(dismiss) = &dismiss {
-                        dismiss();
-                    }
-                })
-                .into();
+        // Join the same arena as translucent siblings. Only a winning
+        // stable contact dismisses the barrier or requests a locked alert.
+        let on_tap = if self.dismissible {
+            dismiss.clone()
         } else {
-            veil = Widget::absorb_pointer(true, veil);
-        }
+            context.system_sound().map(|service| {
+                Rc::new(move || service.play(incular_platform::SystemSoundType::Alert))
+                    as Rc<dyn Fn()>
+            })
+        };
+        veil = GestureDetector::new(veil)
+            .behavior(HitTestBehavior::Opaque)
+            .on_any_pointer_tap(move || {
+                if let Some(on_tap) = &on_tap {
+                    on_tap();
+                }
+            })
+            .into();
 
         // Retain a supplied label when native semantic dismissal is
         // disabled. Pointer blocking is independent of semantic policy.

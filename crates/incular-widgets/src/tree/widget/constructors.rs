@@ -989,17 +989,6 @@ impl Widget {
             semantics: None,
         })
     }
-    /// Intercepts pointer hit testing at this boundary. Descendants do not
-    /// receive ordinary retained interaction while painting and semantics are
-    /// preserved.
-    #[must_use]
-    pub(crate) fn absorb_pointer(absorbing: bool, child: Self) -> Self {
-        Self::from_node(WidgetNode {
-            key: None,
-            kind: WidgetKind::AbsorbPointer { absorbing, child },
-            semantics: None,
-        })
-    }
     #[must_use]
     pub(crate) fn layout_builder(
         builder: impl for<'a> Fn(&BuildContext<'a>, Constraints) -> Self + 'static,

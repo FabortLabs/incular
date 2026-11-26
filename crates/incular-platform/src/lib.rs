@@ -24,6 +24,7 @@ mod pointer;
 mod semantics_messages;
 mod spell_check;
 mod system_environment;
+mod system_sound;
 mod system_ui_overlay_style;
 mod undo_manager;
 mod window_control;
@@ -93,6 +94,7 @@ pub use system_environment::{
     MemorySystemEnvironmentProvider, SystemEnvironmentPreferences, SystemEnvironmentProvider,
     canonicalize_system_locales,
 };
+pub use system_sound::{SystemSound, SystemSoundType};
 pub use system_ui_overlay_style::SystemUiOverlayStyle;
 pub use undo_manager::{UndoDirection, UndoManagerCommand};
 pub use window_control::{

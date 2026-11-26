@@ -1514,6 +1514,16 @@ impl Application {
         .unwrap_or(false)
     }
 
+    /// Returns the window's service so a native host can bind playback.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn window_system_sound(&self, window_id: WindowId) -> Option<incular_platform::SystemSound> {
+        self.registry
+            .borrow()
+            .get(window_id)
+            .map(|record| record.runtime.system_sound())
+    }
+
     /// Installs a platform clipboard for one window's input/editing bridge.
     /// The clipboard service itself may be application-wide; the runtime keeps
     /// the mutable adapter at the window input boundary.

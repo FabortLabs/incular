@@ -275,6 +275,12 @@ impl<'a> BuildContext<'a> {
             .all_inherited_filtered::<crate::environment::TickerModeScope, _>(|scope| scope.0)
     }
 
+    /// The window's operating-system sound service, when mounted in a runtime.
+    #[must_use]
+    pub fn system_sound(&self) -> Option<incular_platform::SystemSound> {
+        self.find()
+    }
+
     /// Current logical viewport from the native/runtime environment. This is
     /// independent of inherited `MediaQuery` overrides and subscribes only to
     /// viewport changes in the owning retained window.

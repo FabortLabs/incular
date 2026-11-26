@@ -131,6 +131,7 @@ struct ParkedFocus {
 /// Retained application execution, input dispatch and frame coordination.
 pub struct Runtime {
     pub(crate) tree: WidgetTree,
+    system_sound: incular_platform::SystemSound,
     /// Input-dispatch time accumulated since the last frame consumed it.
     pub(crate) pending_event_processing_us: u32,
     /// The time stamped on input events, when a test drives the clock
@@ -350,6 +351,8 @@ impl Runtime {
         };
         Self::set_focus_highlight_platform_default(highlight_platform);
         let mut tree = WidgetTree::new();
+        let system_sound = incular_platform::SystemSound::default();
+        tree.install_system_sound(system_sound.clone());
         tree.enable_hosted_focus();
         let mut handlers = HashMap::new();
         root.bind_callbacks(&mut |callback| {
@@ -365,6 +368,7 @@ impl Runtime {
             pending_event_processing_us: 0,
             input_clock: None,
             tree,
+            system_sound,
             pending: HashMap::new(),
             order: VecDeque::new(),
             reactive,
@@ -869,6 +873,7 @@ impl Runtime {
     /// touching retained state. Native runners should call this before their
     /// renderer/window teardown.
     pub fn shutdown(&mut self) {
+        self.system_sound.unbind_host();
         if self.focused.is_some() {
             self.set_focus(None);
         } else {
@@ -896,6 +901,7 @@ impl Runtime {
     /// stopping the shared application scheduler. `Application` calls this
     /// before dropping a closed retained root.
     pub(crate) fn dispose_window(&mut self) {
+        self.system_sound.unbind_host();
         if self.focused.is_some() {
             self.set_focus(None);
         } else {
@@ -934,6 +940,12 @@ impl Runtime {
         self.hovered_button = None;
         self.pressed_button = None;
     }
+    /// System sound requests for this runtime's window.
+    #[must_use]
+    pub fn system_sound(&self) -> incular_platform::SystemSound {
+        self.system_sound.clone()
+    }
+
     #[must_use]
     pub fn tree(&self) -> &WidgetTree {
         &self.tree

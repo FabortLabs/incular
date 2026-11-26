@@ -115,10 +115,8 @@ partial parity: native label retention and platform eligibility differ,
 and AccessKit projects Activate to Click but has no separate Dismiss
 action to project.
 
-Pinned :630 passed: a tap on a locked barrier submits the SystemSound
-alert service request. Incular still blocks that tap but has no paired
-alert service behavior. This upstream test observes the request, not
-whether a host audibly plays it.
+Pinned :630 verifies the platform alert request. See the later system
+sound comparison for the bound host seam and remaining playback gap.
 
 ### Rebuilding during a barrier contact
 
@@ -175,6 +173,22 @@ verify semantics-only invalidation. :466 remains partial: both explicit
 actions, typed direction and full-screen bounds match, but native
 platform gating and a separate AccessKit Dismiss projection do not.
 
-Pinned :159 and :409 passed upstream but remain open in Incular: the
-former requires forwarding the native system-alert request and the
-latter observes Flutter's gesture error-reporting context.
+Pinned :159 verifies the system-alert request; see the comparison below.
+:409 remains open for Flutter's gesture error-reporting context.
+
+### Window-bound system sound requests
+
+Pinned services/system_sound_test.dart:11 records one Click method-channel
+request. The native window service forwards one Click to its current bound
+host, likewise forwards Tick and Alert in order, and ignores requests when
+unbound. Tests replace and unbind the host through the same service handle,
+including a reentrant unbind.
+
+Pinned modal :159/:630 and the authored contact probe see one Alert after
+a locked veil wins a stable tap on release, never on press or cancel. The
+mounted runtime now delivers that Alert to its bound service for both
+static and animated veils. An explicit Basic MouseRegion still prevents
+hover from leaking behind the veil while allowing the front drag to
+compete in the same gesture arena. This is partial platform parity: the
+tests observe request dispatch, not audio, and first-party native host
+playback is not yet wired. Unsupported hosts never play a substitute.

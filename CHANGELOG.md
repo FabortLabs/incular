@@ -7,6 +7,10 @@ a version and date when publishing.
 
 ### Added
 
+- A runtime window can bind a system sound host for click, tick and alert
+  requests. Locked modal barriers request an alert on a completed tap.
+  Unbound hosts ignore sound requests.
+
 - `widgets::ModalBarrier` provides a transparent-by-default static veil, shared
   gesture handling with `AnimatedModalBarrier`, and guarded dismissal through
   the nearest route outlet. Both barrier types accept a notifier for
