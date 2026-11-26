@@ -14,3 +14,10 @@ leaking labels, and the same retained child returns with current bounds.
 Hiding the branch containing a zero-size child does not accidentally
 put it back into the semantic tree. These comparisons use the framework's
 semantic tree, not a physical screen reader.
+
+The remaining reference at line 162 passed. A retained leaf becomes
+dirty while its whole branch leaves the semantics tree. Removing the
+replacement branch and changing an ancestor's transform returns the
+same mounted leaf at (20, 30), never at its stale (0, 0) world position.
+The native comparison checks public world bounds; Flutter stores the
+corresponding local transform in the node.

@@ -177,3 +177,50 @@ fn a_zero_size_child_can_be_dropped_with_its_dirty_parent() {
     assert!(node(&tree, "old child").is_none());
     assert_eq!(tree.element_with_key(&LEAF), Some(element));
 }
+
+#[test]
+fn a_rejoining_semantics_leaf_uses_its_new_ancestor_transform() {
+    use incular_widgets::Transform;
+
+    let view = |label, offset, covered| {
+        let child = boundary(
+            "parent",
+            Transform::translation(
+                offset,
+                boundary("transform", box_at_origin(leaf(label, 100.))),
+            ),
+        );
+        let mut branches = vec![Widget::from(boundary("container", child)).with_key(BACK)];
+        if covered {
+            branches.push(boundary("new child", SizedBox::square(20.)).into());
+        }
+        boundary(
+            "root",
+            IndexedStack::new(branches)
+                .index(usize::from(covered))
+                .text_direction(TextDirection::Ltr),
+        )
+    };
+    let (mut tree, root) = mount(view("initial leaf", Offset::ZERO, false));
+    let original = tree.element_with_key(&LEAF).unwrap();
+    assert_eq!(child_count(&tree), 1);
+    assert_eq!(
+        node(&tree, "initial leaf").unwrap().bounds.origin,
+        Offset::ZERO
+    );
+
+    update(&mut tree, root, view("dirty leaf", Offset::ZERO, true));
+    assert_eq!(child_count(&tree), 1);
+    assert!(node(&tree, "container").is_none());
+    assert!(node(&tree, "dirty leaf").is_none());
+    assert!(node(&tree, "new child").is_some());
+
+    let translation = Offset::new(20., 30.);
+    update(&mut tree, root, view("dirty leaf", translation, false));
+    assert_eq!(tree.element_with_key(&LEAF), Some(original));
+    assert_eq!(child_count(&tree), 1);
+    assert!(node(&tree, "new child").is_none());
+    let restored = node(&tree, "dirty leaf").unwrap();
+    assert_eq!(restored.bounds.origin, translation);
+    assert_eq!(restored.bounds.size, Size::new(100., 100.));
+}

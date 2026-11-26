@@ -2187,3 +2187,4 @@ packages/flutter/test/rendering/semantics_layout_sized_test.dart	38	semantics bl
 packages/flutter/test/rendering/semantics_layout_sized_test.dart	67	semantics size updates to zero size	paired-match	upstream-semantics-layout-size.md
 packages/flutter/test/rendering/semantics_layout_sized_test.dart	87	semantics updates when child changes in RenderTestLastChildSemanticsMultiChildParent	paired-match	upstream-semantics-layout-size.md
 packages/flutter/test/rendering/semantics_layout_sized_test.dart	127	Skip update for invisible child being dropped from tree	paired-match	upstream-semantics-layout-size.md
+packages/flutter/test/rendering/semantics_layout_sized_test.dart	162	semantics geometry updates when dropped child with dirty parent data rejoins the semantics tree	paired-match	upstream-semantics-layout-size.md
