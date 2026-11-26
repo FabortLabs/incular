@@ -119,7 +119,7 @@ impl std::fmt::Debug for WidgetKind {
                 blend_mode,
             } => f
                 .debug_struct("Image")
-                .field("id", &image.id())
+                .field("id", &image.as_ref().map(incular_image::ImageHandle::id))
                 .field("width", width)
                 .field("height", height)
                 .field("scale", scale)

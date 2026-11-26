@@ -359,7 +359,9 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
             sampling,
             ..
         } => {
-            out.push(prop("imageId", DebugValue::Uint(image.id().0)));
+            if let Some(image) = image {
+                out.push(prop("imageId", DebugValue::Uint(image.id().0)));
+            }
             if let Some(width) = width {
                 out.push(prop("width", DebugValue::Float(f64::from(*width))));
             }

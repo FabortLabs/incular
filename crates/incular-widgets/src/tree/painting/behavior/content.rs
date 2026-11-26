@@ -87,8 +87,9 @@ impl WidgetTree {
             | RenderKind::SelectionListener
             | RenderKind::IndexedSemantics
             | RenderKind::SemanticsDebugger { .. } => {}
+            RenderKind::Image { image: None, .. } => {}
             RenderKind::Image {
-                ref image,
+                image: Some(ref image),
                 scale,
                 fit,
                 repeat,

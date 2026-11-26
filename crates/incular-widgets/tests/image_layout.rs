@@ -296,7 +296,7 @@ fn raw_image_lowering_matches_direct_image() {
         .repeat(ImageRepeat::RepeatX);
     assert_eq!(Widget::from(built), Widget::from(direct));
 
-    // An absent handle lowers to a fixed empty box, not an image.
+    // A retained image without pixels still measures from explicit dimensions.
     let empty = Widget::from(RawImage::new().width(12.).height(9.));
     let (tree, root) = layout(|| empty, Constraints::loose(Size::new(100., 100.)));
     assert_eq!(bounds(&tree, root), (0., 0., 12., 9.));
@@ -846,5 +846,122 @@ fn repeating_image_clips_partial_tiles_and_elides_an_unneeded_clip() {
                 );
             }
         }
+    }
+}
+
+fn frame_raw_image(tree: &mut WidgetTree) -> DisplayList {
+    tree.layout(Constraints::tight(Size::new(10., 10.)))
+        .expect("layout");
+    tree.update_compositor(incular_core::time::Instant::now())
+        .expect("composite");
+    tree.paint()
+}
+
+// Pinned rendering/image_test.dart:229 and :246. Flutter counts its two
+// native handle wrappers; Rust's weak handle observes actual image lifetime.
+#[test]
+fn raw_image_same_asset_preserves_retention_and_clear_releases_its_handle() {
+    use incular_widgets::RawImage;
+
+    let image = handle(10, 10);
+    let weak = image.downgrade();
+    let mut tree = WidgetTree::new();
+    let id = tree
+        .mount(RawImage::new().image(image.clone()).into())
+        .expect("mount");
+    let render = tree.render_id(id).expect("image render");
+    let initial = frame_raw_image(&mut tree);
+    assert_eq!(image_commands(&initial).len(), 1);
+    let before = tree.diagnostics();
+
+    // A fresh declarative clone of the same decoded resource, then the very
+    // same configuration object offered twice.
+    let equal: Widget = RawImage::new().image(image.clone()).into();
+    for reused in [equal.clone(), equal] {
+        tree.update(id, reused).expect("reapply image");
+        assert!(initial.shares_buffer(&frame_raw_image(&mut tree)));
+        assert_eq!(tree.render_id(id), Some(render));
+        assert_eq!(tree.diagnostics().layouts, before.layouts);
+        assert_eq!(tree.diagnostics().paints, before.paints);
+    }
+    drop(initial);
+    tree.update(id, RawImage::new().into())
+        .expect("clear image");
+    assert_eq!(tree.render_id(id), Some(render));
+    assert!(image_commands(&frame_raw_image(&mut tree)).is_empty());
+    assert!(!weak.is_dropped(), "caller still owns an image handle");
+    drop(image);
+    assert!(
+        weak.is_dropped(),
+        "neither the tree nor its cached picture may hold the cleared image"
+    );
+}
+
+// Pinned rendering/image_test.dart:264. A caller's independent display list
+// would own its own strong handle; this is solely the tree's lifetime.
+#[test]
+fn raw_image_tree_disposal_releases_retained_pixels() {
+    use incular_widgets::RawImage;
+
+    let image = handle(10, 10);
+    let weak = image.downgrade();
+    let mut tree = WidgetTree::new();
+    tree.mount(RawImage::new().image(image.clone()).into())
+        .expect("mount");
+    assert_eq!(image_commands(&frame_raw_image(&mut tree)).len(), 1);
+    drop(image);
+    assert!(!weak.is_dropped());
+    drop(tree);
+    assert!(weak.is_dropped());
+}
+
+#[test]
+fn raw_image_no_handle_tightens_only_the_specified_axes() {
+    use incular_widgets::RawImage;
+    for (width, height, limit, expected) in [
+        (None, None, 100., Size::new(25., 25.)),
+        (Some(50.), None, 100., Size::new(50., 25.)),
+        (None, Some(50.), 100., Size::new(25., 50.)),
+        (Some(100.), Some(100.), 75., Size::new(75., 75.)),
+    ] {
+        let mut image = RawImage::new();
+        if let Some(width) = width {
+            image = image.width(width);
+        }
+        if let Some(height) = height {
+            image = image.height(height);
+        }
+        let (mut tree, id) = layout(|| image.into(), Constraints::new(25., limit, 25., limit));
+        let render = tree.render_id(id).expect("render image");
+        assert_eq!(tree.render_size(render), Some(expected));
+        assert!(image_commands(&tree.paint()).is_empty());
+    }
+}
+
+#[test]
+fn raw_image_keeps_aspect_ratio_until_parent_limits_conflict() {
+    use incular_widgets::RawImage;
+    for ((width, height), limits, expected) in [
+        ((10, 10), [25., 100., 25., 100.], (25., 25.)),
+        ((20, 10), [5., 100., 30., 100.], (60., 30.)),
+        ((10, 20), [50., 75., 5., 75.], (50., 75.)),
+        ((20, 10), [5., 100., 5., 100.], (20., 10.)),
+        ((20, 10), [5., 16., 5., 16.], (16., 8.)),
+        ((10, 20), [5., 16., 5., 16.], (8., 16.)),
+        ((10, 10), [4., 8., 4., 8.], (8., 8.)),
+        ((20, 10), [20., 30., 20., 30.], (30., 20.)),
+        ((10, 20), [20., 30., 20., 30.], (20., 30.)),
+    ] {
+        let [min_width, max_width, min_height, max_height] = limits;
+        let constraints = Constraints::new(min_width, max_width, min_height, max_height);
+        let (tree, id) = layout(
+            || RawImage::new().image(handle(width, height)).into(),
+            constraints,
+        );
+        let render = tree.render_id(id).expect("render image");
+        assert_eq!(
+            tree.render_size(render),
+            Some(Size::new(expected.0, expected.1))
+        );
     }
 }

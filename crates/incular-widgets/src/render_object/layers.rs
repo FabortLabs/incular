@@ -128,7 +128,9 @@ impl LayerSpec {
             }
             WidgetKind::ColorFiltered { .. } => AttachmentSpec::ColorFilter,
             WidgetKind::Blend { isolate: true, .. } => AttachmentSpec::Blend,
-            WidgetKind::Image { blend_mode, .. } if *blend_mode != BlendMode::SrcOver => {
+            WidgetKind::Image { image: Some(_), blend_mode, .. }
+                if *blend_mode != BlendMode::SrcOver =>
+            {
                 AttachmentSpec::Blend
             }
             WidgetKind::ShaderMask { .. } => AttachmentSpec::ShaderMask,
@@ -394,7 +396,9 @@ impl RenderLayers {
                 compositor.set_children(root, vec![layer]);
                 LayerAttachment::ColorFilter { layer }
             }
-            WidgetKind::Image { blend_mode, .. } if *blend_mode != BlendMode::SrcOver => {
+            WidgetKind::Image { image: Some(_), blend_mode, .. }
+                if *blend_mode != BlendMode::SrcOver =>
+            {
                 let layer = compositor.create_blend(*blend_mode);
                 compositor.set_children(layer, picture.into_iter().collect());
                 compositor.set_children(root, vec![layer]);
@@ -557,10 +561,10 @@ impl RenderLayers {
             return false;
         }
 
-        if let WidgetKind::Image { blend_mode, .. } = widget {
+        if let WidgetKind::Image { image, blend_mode, .. } = widget {
             // Only the optional blend stage changes. Keep the existing
             // image picture attached across source-over toggles.
-            self.attachment = if *blend_mode == BlendMode::SrcOver {
+            self.attachment = if image.is_none() || *blend_mode == BlendMode::SrcOver {
                 if let Some(layer) = self.blend() {
                     compositor.remove(layer);
                 }

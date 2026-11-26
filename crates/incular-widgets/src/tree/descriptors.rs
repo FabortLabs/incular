@@ -253,7 +253,7 @@ impl From<Image> for Widget {
             .into();
         }
         Widget::image(
-            image,
+            Some(image),
             options.width,
             options.height,
             options.scale,

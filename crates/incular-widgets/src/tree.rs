@@ -863,7 +863,7 @@ pub enum RenderKind {
         max_nodes: usize,
     },
     Image {
-        image: ImageHandle,
+        image: Option<ImageHandle>,
         width: Option<f32>,
         height: Option<f32>,
         scale: f32,

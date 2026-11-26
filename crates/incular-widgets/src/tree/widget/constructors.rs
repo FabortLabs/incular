@@ -893,8 +893,8 @@ impl Widget {
         clippy::too_many_arguments,
         reason = "image lowering passes every image field explicitly"
     )]
-    pub(in crate::tree) fn image(
-        image: ImageHandle,
+    pub(crate) fn image(
+        image: Option<ImageHandle>,
         width: Option<f32>,
         height: Option<f32>,
         scale: f32,

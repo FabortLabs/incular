@@ -264,10 +264,20 @@ impl From<RawImage> for Widget {
                 };
                 Widget::image_blend(value.blend_mode, image)
             }
-            None => crate::layout::SizedBox::new()
-                .width(value.width.unwrap_or(0.0))
-                .height(value.height.unwrap_or(0.0))
-                .into(),
+            None => Widget::image(
+                None,
+                value.width,
+                value.height,
+                value.scale,
+                value.fit.unwrap_or(ImageFit::ScaleDown),
+                value.repeat,
+                value.alignment,
+                value.filter_quality.map_or(
+                    incular_rendering::ImageSampling::Linear,
+                    FilterQuality::sampling,
+                ),
+                value.blend_mode,
+            ),
         }
     }
 }
