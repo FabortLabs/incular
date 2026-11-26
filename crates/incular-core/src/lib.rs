@@ -7,6 +7,7 @@ mod caching_iterable;
 mod change_notifier;
 pub mod collections;
 pub mod debug_double;
+pub mod debug_instrumentation;
 pub mod matrix4;
 pub mod debug_print;
 mod context;
@@ -41,6 +42,9 @@ pub use bit_field::{BitField, K_MAX_UNSIGNED_SMI};
 pub use caching_iterable::{CachingCursor, CachingIndexError, CachingIterable};
 pub use change_notifier::{ChangeNotifier, ChangeNotifierSubscription};
 pub use debug_double::{debug_double_precision, debug_format_double, set_debug_double_precision};
+pub use debug_instrumentation::{
+    debug_instrument_action, debug_instrumentation_enabled, set_debug_instrumentation_enabled,
+};
 pub use debug_print::{DebugPrintBuffer, debug_print_synchronously, debug_word_wrap};
 pub use context::{BuildContext, ConsumerId, ContextGuard, DependencySnapshot};
 pub use geometry::{
