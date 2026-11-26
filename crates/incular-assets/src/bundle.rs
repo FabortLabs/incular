@@ -31,7 +31,10 @@ pub enum AssetError {
 impl fmt::Display for AssetError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::NotFound(key) => write!(f, "Unable to load asset: \"{key}\"."),
+            Self::NotFound(key) => write!(
+                f,
+                "Unable to load asset: \"{key}\".\nThe asset does not exist or has empty data."
+            ),
             Self::InvalidUtf8(key) => write!(f, "Asset \"{key}\" is not UTF-8."),
             Self::Io { key, message } => write!(f, "Unable to load asset \"{key}\": {message}"),
             Self::Parse { key, message } => write!(f, "Unable to parse asset \"{key}\": {message}"),

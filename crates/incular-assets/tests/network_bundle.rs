@@ -167,3 +167,24 @@ fn other_bundles_load_asynchronously_through_their_synchronous_load() {
         Some(Ok(Arc::from(&b"v"[..])))
     );
 }
+
+#[test]
+fn display_uses_the_bundle_identity_and_base_url_without_fetching() {
+    let fetcher = Deferred::default();
+    let expected_url = "http://example.org/path";
+    let bundle = NetworkAssetBundle::new(expected_url, fetcher.clone());
+    let description = bundle.to_string();
+    let suffix = format!("({expected_url})");
+    let hash = description
+        .strip_prefix("NetworkAssetBundle#")
+        .and_then(|rest| rest.strip_suffix(&suffix))
+        .expect("single-line Flutter bundle description");
+    assert_eq!(hash.len(), 5);
+    assert!(hash.bytes().all(|ch| ch.is_ascii_hexdigit()));
+    assert_eq!(bundle.clone().to_string(), description);
+    assert_ne!(
+        NetworkAssetBundle::new(expected_url, fetcher.clone()).to_string(),
+        description
+    );
+    assert!(fetcher.pending.lock().unwrap().is_empty());
+}

@@ -68,6 +68,7 @@ pub trait AssetFetcher: Send + Sync + 'static {
 /// [`AssetFetcher::fetch_blocking`], and fails otherwise.
 #[derive(Clone)]
 pub struct NetworkAssetBundle {
+    identity: u64,
     base_url: String,
     fetcher: Arc<dyn AssetFetcher>,
 }
@@ -85,7 +86,9 @@ impl NetworkAssetBundle {
         base_url: impl Into<String>,
         fetcher: Arc<dyn AssetFetcher>,
     ) -> Self {
+        static IDS: incular_core::IdGenerator = incular_core::IdGenerator::new();
         Self {
+            identity: IDS.next(),
             base_url: base_url.into(),
             fetcher,
         }
@@ -140,6 +143,12 @@ impl AssetBundle for NetworkAssetBundle {
             &self.url_for(key),
             Box::new(move |response| done(asset_from_response(&owned, response))),
         );
+    }
+}
+
+impl fmt::Display for NetworkAssetBundle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "NetworkAssetBundle#{:05x}({})", self.identity & 0x000f_ffff, self.base_url)
     }
 }
 

@@ -25,7 +25,7 @@ fn memory_bundle_loads_bytes_and_strings() {
     );
     assert_eq!(
         bundle.load("missing").unwrap_err().to_string(),
-        "Unable to load asset: \"missing\"."
+        "Unable to load asset: \"missing\".\nThe asset does not exist or has empty data."
     );
     assert_eq!(
         bundle.load_string("bad.bin", false).unwrap_err(),
@@ -131,4 +131,22 @@ fn directory_bundle_reads_files_under_its_root_only() {
         );
     }
     std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn root_asset_missing_error_keeps_the_key_and_explanation() {
+    use incular_assets::{replace_root_asset_bundle, root_asset_bundle};
+    let old = replace_root_asset_bundle(None);
+    let error = root_asset_bundle().load("not-exists").unwrap_err();
+    assert_eq!(error, AssetError::NotFound("not-exists".into()));
+    assert_eq!(
+        error.to_string(),
+        "Unable to load asset: \"not-exists\".\nThe asset does not exist or has empty data."
+    );
+    // The diagnostic describes a missing platform response. An explicit
+    // zero-length byte response is not the same thing as missing.
+    let bundle = MemoryAssetBundle::new().with("empty", Arc::<[u8]>::default());
+    replace_root_asset_bundle(Some(Arc::new(bundle)));
+    assert!(root_asset_bundle().load("empty").unwrap().is_empty());
+    replace_root_asset_bundle(old);
 }
