@@ -273,3 +273,78 @@ fn viewport_pane_lifetime_keeps_the_outer_id_and_rejects_stale_scroll_requests()
     assert_ne!(replacement, pane);
     assert!(runtime.dispatch_semantic_action(replacement, jump()));
 }
+
+#[test]
+fn nested_shrink_wrapped_viewport_panes_stay_aligned_during_semantic_reveals() {
+    use incular_semantics::SemanticAction;
+    use incular_widgets::{
+        Directionality, ListView, ScrollController, SingleChildScrollView, TextDirection,
+    };
+
+    let controller = ScrollController::new();
+    let list = ListView::builder(50, |i| {
+        Semantics::new(SizedBox::new().height(16.)).label(i.to_string())
+    })
+    .item_extent(16.)
+    .shrink_wrap(true);
+    let mut runtime = Runtime::new(
+        Directionality::new(
+            TextDirection::Ltr,
+            SingleChildScrollView::new(list).controller(controller.clone()),
+        )
+        .into(),
+    )
+    .unwrap();
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    runtime.run_frame(bounds).unwrap();
+
+    let (boundary, pane, targets) = {
+        let tree = runtime.tree().semantics();
+        let scroller = tree.node(tree.root().unwrap()).unwrap();
+        let pane = tree
+            .iter()
+            .map(|(_, node)| node)
+            .find(|node| {
+                node.role == Role::ScrollView
+                    && node
+                        .state
+                        .scroll_metrics
+                        .is_some_and(|metrics| metrics.maximum == 0.)
+            })
+            .unwrap();
+        let boundary = tree.node(scroller.children[0]).unwrap();
+        assert_eq!(boundary.children, [pane.id]);
+        assert_eq!(boundary.bounds, pane.bounds);
+        let mut hidden = pane
+            .children
+            .iter()
+            .copied()
+            .filter(|id| tree.node(*id).is_some_and(|node| node.state.hidden))
+            .collect::<Vec<_>>();
+        assert!(hidden.len() >= 3);
+        let middle = hidden[hidden.len() / 2];
+        let last = hidden.pop().unwrap();
+        let first_hidden = hidden[0];
+        let start = pane.children[0];
+        (boundary.id, pane.id, [last, first_hidden, start, middle])
+    };
+
+    let mut former = controller.offset();
+    for (index, target) in targets.into_iter().enumerate() {
+        assert!(runtime.dispatch_semantic_action(target, SemanticAction::ShowOnScreen));
+        runtime.run_frame(bounds).unwrap();
+        let tree = runtime.tree().semantics();
+        let boundary = tree.node(boundary).unwrap();
+        let pane = tree.node(pane).unwrap();
+        assert_eq!(boundary.children, [pane.id]);
+        assert_eq!(boundary.bounds, pane.bounds);
+        assert_eq!(pane.bounds.origin.y, -controller.offset());
+        assert!(!tree.node(target).unwrap().state.hidden);
+        match index {
+            0 | 3 => assert!(controller.offset() > former),
+            2 => assert!(controller.offset() < former),
+            _ => assert_eq!(controller.offset(), former),
+        }
+        former = controller.offset();
+    }
+}

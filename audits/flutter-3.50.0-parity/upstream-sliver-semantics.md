@@ -43,8 +43,8 @@ The pinned line 682 and 735 cases also passed, but their outer/inner
 scroll graph assertions remain open. The original pinned-header tag
 transition (`pinned_header_sliver_test.dart:250`) and nested-pane
 transform (`scrollable_semantics_test.dart:814`) passed on the reference;
-their retained pinned migration and nested reveal checks are still
-open. The empty-viewport transition is covered by the focused pinned
+retained pinned migration remains open. The nested reveal case is
+paired below. The empty-viewport transition is covered by the focused pinned
 Flutter probe `sliver_semantic_viewport_panes_test.dart` and retained
 `flutter350_semantics_tags`: attaching a semantic child splits the
 viewport, keeps the outer ID, and only the inner pane accepts
@@ -253,3 +253,18 @@ change the native tree; removing them rejects previously advertised
 requests and does not publish a bare unbound action. The existing
 keyboard-focus suite still passes (31 focused Rust checks in total).
 This tests portable requests, not actual screen-reader event delivery.
+
+### Nested viewport pane transforms
+
+The pinned `scrollable_semantics_test.dart:814` original and
+`nested_shrink_wrapped_viewport_panes_stay_aligned_during_semantic_reveals`
+both compare the inner and outer pane's world rectangles through a
+series of accessibility reveals inside a shrink-wrapped list. Incular
+had failed to mark rows clipped by the outer box scroller as hidden,
+and sent reveal requests to the zero-range inner list. The outer clip
+now propagates to the nested semantic nodes, and a zero-range
+viewport passes implicit reveal to an eligible scrolling ancestor.
+The retained check exercises moving to the end, leaving an already
+visible row stationary, moving back to the start, and moving forward
+again; the requested row is not hidden after any reveal. All 25
+focused runtime regressions passed.

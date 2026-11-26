@@ -1015,6 +1015,18 @@ impl WidgetTree {
             // same world-space window throughout the subtree.
             _ => sliver_window,
         };
+        let child_viewport_clip = match render.object.kind() {
+            RenderKind::Scroll { clip_behavior, .. }
+                if *clip_behavior != incular_config::Clip::None =>
+            {
+                let bounds =
+                    world.transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, render.size));
+                Some(viewport_clip.map_or(bounds, |outer| {
+                    outer.intersection(bounds).unwrap_or_default()
+                }))
+            }
+            _ => viewport_clip,
+        };
         let locale_scope = entry
             .widget
             .semantic_properties()
@@ -1114,7 +1126,7 @@ impl WidgetTree {
                             subtree_focus_blocked: child_focus_blocked,
                             parent_text_merge: child_text_merge,
                             merges_focus_labels: child_merges_focus_labels,
-                            viewport_clip,
+                            viewport_clip: child_viewport_clip,
                             sliver_window: if index < entry.children.len() {
                                 child_sliver_window
                             } else {
@@ -1162,7 +1174,7 @@ impl WidgetTree {
                         subtree_focus_blocked: child_focus_blocked,
                         parent_text_merge: child_text_merge,
                         merges_focus_labels: child_merges_focus_labels,
-                        viewport_clip,
+                        viewport_clip: child_viewport_clip,
                         sliver_window: if index < entry.children.len() {
                             child_sliver_window
                         } else {
@@ -1703,7 +1715,7 @@ impl WidgetTree {
                     subtree_focus_blocked: child_focus_blocked,
                     parent_text_merge: child_text_merge,
                     merges_focus_labels: child_merges_focus_labels,
-                    viewport_clip,
+                    viewport_clip: child_viewport_clip,
                     sliver_window: if index < entry.children.len() {
                         child_sliver_window
                     } else {
@@ -1922,12 +1934,22 @@ impl WidgetTree {
     }
 
     fn reveal_semantic_bounds(&self, element: ElementId, bounds: Rect) -> bool {
-        let Some((viewport, controller, axis, reverse, _)) = self
-            .scrollable_viewport_chain(element)
+        let chain = self.scrollable_viewport_chain(element);
+        let mut candidates = chain
             .into_iter()
-            .find(|(_, _, _, _, physics)| physics.allows_implicit_scrolling())
-        else {
+            .filter(|(_, _, _, _, physics)| physics.allows_implicit_scrolling());
+        let Some(first) = candidates.next() else {
             return false;
+        };
+        // A shrink-wrapped inner list can allow implicit scrolling but have
+        // nowhere to scroll. Continue outward to a viewport that can reveal
+        // its content instead of treating the inner list as the only target.
+        let (viewport, controller, axis, reverse, _) = if first.1.max_offset() > first.1.min_offset() {
+            first
+        } else {
+            candidates
+                .find(|(_, controller, _, _, _)| controller.max_offset() > controller.min_offset())
+                .unwrap_or(first)
         };
         let Some(view) = self
             .semantic_ids

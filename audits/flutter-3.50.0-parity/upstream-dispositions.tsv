@@ -1192,7 +1192,7 @@ packages/flutter/test/widgets/scrollable_semantics_test.dart	101	Vertical scroll
 packages/flutter/test/widgets/scrollable_semantics_test.dart	132	Horizontal scrollable responds to scrollToOffset	paired-match	upstream-semantic-scroll-offsets.md
 packages/flutter/test/widgets/scrollable_semantics_test.dart	164	Unscrollable scrollable does not respond to scrollToOffset	paired-match	upstream-semantic-scroll-offsets.md
 packages/flutter/test/widgets/scrollable_semantics_test.dart	210	scrollToOffset respects implicit scrolling configuration	paired-match	upstream-semantic-scroll-offsets.md
-packages/flutter/test/widgets/scrollable_semantics_test.dart	814	transform of inner node from useTwoPaneSemantics scrolls correctly with nested scrollables	reference-ran-incular-open	upstream-sliver-semantics.md#viewport-tag-scope
+packages/flutter/test/widgets/scrollable_semantics_test.dart	814	transform of inner node from useTwoPaneSemantics scrolls correctly with nested scrollables	paired-match	upstream-sliver-semantics.md#nested-viewport-pane-transforms
 packages/flutter/test/widgets/list_view_semantics_test.dart	17	forward vertical	paired-match	upstream-semantic-scroll-offsets.md#directional-actions-and-edge-availability
 packages/flutter/test/widgets/list_view_semantics_test.dart	55	reverse vertical	paired-match	upstream-semantic-scroll-offsets.md#directional-actions-and-edge-availability
 packages/flutter/test/widgets/list_view_semantics_test.dart	94	forward horizontal	paired-match	upstream-semantic-scroll-offsets.md#directional-actions-and-edge-availability
