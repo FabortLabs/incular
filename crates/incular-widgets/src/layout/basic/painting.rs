@@ -206,6 +206,9 @@ impl From<CustomPaint> for Widget {
             .into()
         };
         let has_child = child.is_some();
+        // RenderCustomPaint introduces one accessibility boundary only when
+        // at least one of its painters supplies regions.
+        let has_region_boundary = background_semantics.is_some() || foreground_semantics.is_some();
         let mut children: Vec<Widget> = Vec::new();
         if painter.is_some() || !display_list.is_empty() {
             children.push(layer(painter, display_list, false));
@@ -220,6 +223,11 @@ impl From<CustomPaint> for Widget {
             .fit(StackFit::Passthrough)
             .clip_behavior(Clip::None)
             .into();
+        let stack = if has_region_boundary {
+            Widget::from(crate::Semantics::new(stack).container(true)).with_semantic_child_order()
+        } else {
+            stack
+        };
         match size {
             Some(size) if !has_child => SizedBox::new()
                 .width(size.width)

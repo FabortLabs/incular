@@ -263,11 +263,13 @@ impl CustomPainter for IndependentPolicy {
         let label = self.label;
         Some(Rc::new(move |size| {
             regions.borrow_mut().push(size);
-            vec![CustomPainterSemantics::new(
-                Rect::from_origin_size(Offset::ZERO, Size::new(size.width / 2., 20.)),
-                Semantics::builder().label(label).build(),
-            )
-            .key(41_u64)]
+            vec![
+                CustomPainterSemantics::new(
+                    Rect::from_origin_size(Offset::ZERO, Size::new(size.width / 2., 20.)),
+                    Semantics::builder().label(label).build(),
+                )
+                .key(41_u64),
+            ]
         }))
     }
 }
@@ -277,18 +279,22 @@ fn painter_semantic_rebuilds_are_independent_of_repainting_and_preserve_keys() {
     let paints = Rc::new(std::cell::RefCell::new(Vec::new()));
     let regions = Rc::new(std::cell::RefCell::new(Vec::new()));
     let widget = |label, width, repaint, rebuild_semantics| {
-        Widget::from(
-            CustomPaint::from_painter(Size::new(width, 40.), IndependentPolicy {
-                label, repaint, rebuild_semantics,
+        Widget::from(CustomPaint::from_painter(
+            Size::new(width, 40.),
+            IndependentPolicy {
+                label,
+                repaint,
+                rebuild_semantics,
                 paints: paints.clone(),
                 regions: regions.clone(),
-            }),
-        )
+            },
+        ))
     };
     let mut tree = WidgetTree::new();
     let root = tree.mount(widget("old", 100., true, false)).unwrap();
     let frame = |tree: &mut WidgetTree| {
-        tree.layout(Constraints::loose(Size::new(600., 400.))).unwrap();
+        tree.layout(Constraints::loose(Size::new(600., 400.)))
+            .unwrap();
         let _ = tree.paint();
         tree.update_semantics();
     };
@@ -296,23 +302,142 @@ fn painter_semantic_rebuilds_are_independent_of_repainting_and_preserve_keys() {
     let id = labelled(&tree, "old").unwrap().id;
     assert_eq!(*regions.borrow(), [Size::new(100., 40.)]);
 
-    tree.update(root, widget("pending", 100., true, false)).unwrap();
+    tree.update(root, widget("pending", 100., true, false))
+        .unwrap();
     frame(&mut tree);
     assert_eq!(labelled(&tree, "old").unwrap().id, id);
     assert_eq!(paints.borrow().last(), Some(&"pending"));
     assert_eq!(*regions.borrow(), [Size::new(100., 40.)]);
 
-    tree.update(root, widget("pending", 120., true, false)).unwrap();
+    tree.update(root, widget("pending", 120., true, false))
+        .unwrap();
     frame(&mut tree);
     let resized = labelled(&tree, "pending").unwrap();
     assert_eq!(resized.id, id);
     assert_eq!(resized.bounds.size, Size::new(60., 20.));
-    assert_eq!(*regions.borrow(), [Size::new(100., 40.), Size::new(120., 40.)]);
+    assert_eq!(
+        *regions.borrow(),
+        [Size::new(100., 40.), Size::new(120., 40.)]
+    );
 
     let paint_count = paints.borrow().len();
-    tree.update(root, widget("fresh", 120., false, true)).unwrap();
+    tree.update(root, widget("fresh", 120., false, true))
+        .unwrap();
     frame(&mut tree);
     assert_eq!(labelled(&tree, "fresh").unwrap().id, id);
     assert_eq!(paints.borrow().len(), paint_count);
-    assert_eq!(*regions.borrow(), [Size::new(100., 40.), Size::new(120., 40.), Size::new(120., 40.)]);
+    assert_eq!(
+        *regions.borrow(),
+        [
+            Size::new(100., 40.),
+            Size::new(120., 40.),
+            Size::new(120., 40.)
+        ]
+    );
+}
+
+struct FixedRegion(&'static str);
+
+impl CustomPainter for FixedRegion {
+    fn paint(&self, _: Size) -> DisplayList {
+        DisplayList::default()
+    }
+
+    fn should_repaint(&self, _: &Self) -> bool {
+        false
+    }
+
+    fn semantics_builder(&self) -> Option<SemanticsBuilder> {
+        let label = self.0;
+        Some(Rc::new(move |_| {
+            vec![CustomPainterSemantics::new(
+                Rect::from_origin_size(Offset::new(1., 1.), Size::new(1., 1.)),
+                Semantics::builder()
+                    .label(label)
+                    .build()
+                    .text_direction(incular_config::TextDirection::Rtl),
+            )]
+        }))
+    }
+}
+
+fn custom_paint_semantic_frame(widget: impl Into<Widget>) -> WidgetTree {
+    let mut tree = WidgetTree::new();
+    tree.mount(
+        incular_widgets::Directionality::new(incular_config::TextDirection::Ltr, widget).into(),
+    )
+    .unwrap();
+    tree.layout(Constraints::tight(Size::new(800., 600.)))
+        .unwrap();
+    tree.update_semantics();
+    tree
+}
+
+#[test]
+fn one_automatic_semantic_boundary_contains_either_painters_region() {
+    for foreground in [false, true] {
+        let name = if foreground {
+            "foreground"
+        } else {
+            "background"
+        };
+        let paint = CustomPaint::new(Size::ZERO, DisplayList::default());
+        let paint = if foreground {
+            paint.foreground_painter(FixedRegion(name))
+        } else {
+            paint.painter(FixedRegion(name))
+        };
+        let tree = custom_paint_semantic_frame(paint);
+        assert_eq!(tree.semantics().roots().len(), 1);
+        let boundary = tree
+            .semantics()
+            .node(tree.semantics().root().unwrap())
+            .unwrap();
+        assert_eq!(boundary.label, None);
+        assert_eq!(
+            boundary.bounds,
+            Rect::from_origin_size(Offset::ZERO, Size::new(800., 600.))
+        );
+        assert_eq!(boundary.children.len(), 1);
+        let region = tree.semantics().node(boundary.children[0]).unwrap();
+        assert_eq!(region.label.as_deref(), Some(name));
+        assert_eq!(
+            region.bounds,
+            Rect::from_origin_size(Offset::new(1., 1.), Size::new(1., 1.))
+        );
+        assert_eq!(
+            region.state.text_direction,
+            Some(incular_config::TextDirection::Rtl)
+        );
+        assert_eq!(tree.semantics().iter().count(), 2);
+    }
+}
+
+#[test]
+fn automatic_boundary_orders_background_child_foreground() {
+    let tree = custom_paint_semantic_frame(
+        CustomPaint::new(Size::ZERO, DisplayList::default())
+            .painter(FixedRegion("background"))
+            .foreground_painter(FixedRegion("foreground"))
+            .child(Semantics::new(incular_widgets::Text::new("Hello")).container(true)),
+    );
+    let boundary = tree
+        .semantics()
+        .node(tree.semantics().root().unwrap())
+        .unwrap();
+    assert_eq!(boundary.children.len(), 3);
+    let child_labels: Vec<_> = boundary
+        .children
+        .iter()
+        .map(|id| {
+            tree.semantics()
+                .node(*id)
+                .unwrap()
+                .label
+                .as_deref()
+                .unwrap()
+        })
+        .collect();
+    assert_eq!(child_labels, ["background", "Hello", "foreground"]);
+    assert_eq!(tree.semantics().iter().count(), 4);
 }

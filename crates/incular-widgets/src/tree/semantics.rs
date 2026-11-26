@@ -1891,6 +1891,9 @@ impl WidgetTree {
             if end - start > 1 {
                 if let Some(parent) = builds.get(parent as usize).map(Collected::element)
                     && let Some(direction) = self.semantic_reading_direction(parent)
+                    && !self.elements.get(parent.0).is_some_and(|entry| {
+                        entry.widget.semantic_properties().preserves_semantic_child_order
+                    })
                 {
                     self.sort_by_reading_order(
                         parent,

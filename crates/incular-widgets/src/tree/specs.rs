@@ -266,6 +266,7 @@ pub(crate) struct SemanticProperties {
     /// viewport's scrolling pane. Unlike paint pinning this can change
     /// before or after the first pixel of overlap.
     pub(super) sliver_scroll_excluded: bool,
+    pub(super) preserves_semantic_child_order: bool,
     // Private sliver parent data, transferred to the retained render
     // before comparing the declarative child. Never part of its identity.
     pub(super) sliver_clip_placements: Option<Rc<[crate::scrolling::sliver_clip::SliverClipPlacement]>>,

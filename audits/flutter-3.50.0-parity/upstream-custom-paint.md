@@ -35,3 +35,15 @@ the behavior and region-builder gate match, but its extra assertion
 on the number of times Flutter reads the semanticsBuilder getter is
 not a Rust API contract. Incular retains the callback on each delegate.
 All 13 focused native paint, hit, and semantics tests passed.
+
+## Pinned custom painter semantics structure
+
+Four original `widgets/custom_painter_test.dart` scenes pair:
+:27 has no semantic node when neither painter supplies regions;
+:37 and :75 expose a single 1×1 region at (1,1) within the full
+800×600 paint boundary, including its RTL metadata. :113 groups the
+background region, actual text child, then foreground region. The
+retained paint's grouping preserves that order rather than letting
+a geometric reading-order pass move both small regions ahead of the
+text. All 35 focused native tests passed, including neighboring
+sliver reading-order regressions that are intentionally unchanged.

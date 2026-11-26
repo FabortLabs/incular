@@ -2340,3 +2340,7 @@ packages/flutter/test/widgets/sliver_clip_rect_test.dart	495	respects half-heigh
 packages/flutter/test/widgets/sliver_clip_rrect_test.dart	73	hit test respects border radius	paired-match	upstream-sliver-clipping.md#custom-boundaries-and-rounded-hit-edges
 packages/flutter/test/widgets/sliver_clip_rrect_test.dart	361	custom clipper boundaries are not incorrectly expanded during overlap	paired-match	upstream-sliver-clipping.md#custom-boundaries-and-rounded-hit-edges
 packages/flutter/test/widgets/custom_painter_test.dart	795	does not rebuild when shouldRebuildSemantics is false	partial-match	upstream-custom-paint.md#independent-paint-and-accessibility-invalidation
+packages/flutter/test/widgets/custom_painter_test.dart	27	builds no semantics by default	paired-match	upstream-custom-paint.md#pinned-custom-painter-semantics-structure
+packages/flutter/test/widgets/custom_painter_test.dart	37	provides foreground semantics	paired-match	upstream-custom-paint.md#pinned-custom-painter-semantics-structure
+packages/flutter/test/widgets/custom_painter_test.dart	75	provides background semantics	paired-match	upstream-custom-paint.md#pinned-custom-painter-semantics-structure
+packages/flutter/test/widgets/custom_painter_test.dart	113	combines background, child and foreground semantics	paired-match	upstream-custom-paint.md#pinned-custom-painter-semantics-structure

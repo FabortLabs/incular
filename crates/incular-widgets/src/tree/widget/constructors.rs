@@ -304,6 +304,11 @@ impl Widget {
         self
     }
 
+    pub(crate) fn with_semantic_child_order(mut self) -> Self {
+        self.semantic_properties_mut().preserves_semantic_child_order = true;
+        self
+    }
+
     pub(crate) fn with_ensured_sliver_semantics(mut self) -> Self {
         if !self.semantic_properties().ensures_sliver_semantics {
             self.semantic_properties_mut().ensures_sliver_semantics = true;
