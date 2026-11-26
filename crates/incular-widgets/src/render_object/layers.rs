@@ -1082,6 +1082,9 @@ fn cached_clip<'a>(
 
 impl RenderLayers {
     pub(crate) fn accepts_clip_hit(&self, kind: &RenderKind, size: Size, local: Offset) -> bool {
+        if matches!(kind, RenderKind::ClipPath { clipper: Some(delegate), .. } if !delegate.clips_hit_tests()) {
+            return true;
+        }
         // RenderClipRect and RenderClipRRect only narrow their normal box
         // with an explicit clipper. Oval always tests its ellipse; Incular's
         // explicit ClipPath shape corresponds to Flutter's path clipper.

@@ -241,3 +241,83 @@ fn shape_decoration_paints_its_image_between_fill_and_border() {
         Rect::from_origin_size(Offset::new(30., 10.), Size::new(40., 20.))
     );
 }
+
+#[test]
+fn superellipse_clip_uses_actual_loose_child_and_inherited_direction() {
+    use incular_rendering::FillRule;
+    use incular_widgets::{
+        BorderRadiusDirectional, ClipRSuperellipse, Directionality, Radius, TextDirection,
+    };
+    let build = |direction, clip| -> Widget {
+        Directionality::new(
+            direction,
+            ClipRSuperellipse::new(0., Widget::box_(Size::new(60., 30.), RED))
+                .border_radius(BorderRadiusDirectional::only(
+                    Radius::elliptical(20., 14.),
+                    Radius::ZERO,
+                    Radius::ZERO,
+                    Radius::ZERO,
+                ))
+                .clip_behavior(clip),
+        )
+        .into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(build(TextDirection::Ltr, Clip::AntiAlias))
+        .unwrap();
+    let loose = Constraints::loose(Size::new(300., 300.));
+    for (direction, left_visible) in [(TextDirection::Ltr, false), (TextDirection::Rtl, true)] {
+        if direction == TextDirection::Rtl {
+            tree.update(root, build(direction, Clip::AntiAlias))
+                .unwrap();
+        }
+        tree.layout(loose).unwrap();
+        let list = tree.paint();
+        let path = list
+            .commands()
+            .iter()
+            .find_map(|command| match command {
+                PaintCommand::PushClipPath { path, .. } => Some(path),
+                _ => None,
+            })
+            .expect("actual retained clip");
+        assert_eq!(
+            path.bounds().map(rounded),
+            Some(Rect::from_origin_size(Offset::ZERO, Size::new(60., 30.)))
+        );
+        assert_eq!(
+            path.contains(Offset::new(1., 1.), FillRule::NonZero),
+            left_visible
+        );
+        assert_eq!(
+            path.contains(Offset::new(59., 1.), FillRule::NonZero),
+            !left_visible
+        );
+        assert!(tree.hit_test(Offset::new(1., 1.)).is_some());
+        assert!(tree.hit_test(Offset::new(59., 1.)).is_some());
+        assert!(tree.hit_test(Offset::new(61., 1.)).is_none());
+    }
+    tree.update(root, build(TextDirection::Rtl, Clip::None))
+        .unwrap();
+    tree.layout(loose).unwrap();
+    assert!(
+        !tree
+            .paint()
+            .commands()
+            .iter()
+            .any(|cmd| matches!(cmd, PaintCommand::PushClipPath { .. }))
+    );
+}
+
+#[test]
+fn zero_area_superellipse_clip_keeps_a_zero_layout_without_panicking() {
+    use incular_widgets::ClipRSuperellipse;
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(ClipRSuperellipse::new(8., Widget::box_(Size::new(20., 20.), RED)).into())
+        .unwrap();
+    tree.layout(Constraints::tight(Size::ZERO)).unwrap();
+    assert_eq!(tree.element_bounds(root).unwrap().size, Size::ZERO);
+    let _ = tree.paint();
+}

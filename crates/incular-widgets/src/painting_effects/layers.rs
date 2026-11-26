@@ -1,15 +1,15 @@
 //! Retained layer, clipping, physical-model, and grid descriptors.
 
-use std::sync::Arc;
+use std::{rc::Rc, sync::Arc};
 
 use incular_config::Clip;
-use incular_core::{Color, Offset, Rect};
+use incular_core::{Color, Offset};
 use incular_rendering::{Canvas, CornerRadii, FillRule, Path};
 use typed_builder::TypedBuilder;
 
-use super::decoration::{BoxDecoration, BoxShape};
+use super::{BorderRadiusGeometry, RoundedSuperellipseBorder, decoration::{BorderSide, BoxDecoration, BoxShape}};
 use crate::{
-    ClipOval, ClipPath, ClipRRect, CustomPaint, DecoratedBox, DropShadow, LayoutBuilder,
+    ClipOval, ClipPath, ClipRRect, CustomPaint, DecoratedBox, DropShadow,
     Positioned, Stack, StackFit, Widget,
 };
 
@@ -43,6 +43,8 @@ pub struct ClipRSuperellipse {
         setter(transform = |radius: f32| radius.max(0.0))
     )]
     pub(super) radius: f32,
+    #[builder(default, setter(strip_option, into))]
+    border_radius: Option<BorderRadiusGeometry>,
     #[builder(default = Clip::AntiAlias)]
     pub(super) clip_behavior: Clip,
     #[builder(setter(into))]
@@ -54,9 +56,18 @@ impl ClipRSuperellipse {
     pub fn new(radius: f32, child: impl Into<Widget>) -> Self {
         Self {
             radius: radius.max(0.0),
+            border_radius: None,
             clip_behavior: Clip::AntiAlias,
             child: child.into(),
         }
+    }
+
+    /// Replaces the uniform radius with physical, directional or mixed
+    /// corners, preserving both axes.
+    #[must_use]
+    pub fn border_radius(mut self, radius: impl Into<BorderRadiusGeometry>) -> Self {
+        self.border_radius = Some(radius.into());
+        self
     }
 
     #[must_use]
@@ -67,26 +78,20 @@ impl ClipRSuperellipse {
 }
 
 impl From<ClipRSuperellipse> for Widget {
-    /// Flutter `RenderClipRSuperellipse`: the child is clipped to the
-    /// rounded-superellipse outline (the squircle profile of
-    /// `Path.addRSuperellipse`), not to circular arcs. The outline is built
-    /// for the largest size the constraints allow, as [`ClipPath::shape`]
-    /// does, so it matches the child under tight constraints.
     fn from(value: ClipRSuperellipse) -> Self {
-        let ClipRSuperellipse {
-            radius,
-            clip_behavior,
-            child,
-        } = value;
-        LayoutBuilder::new(move |_, constraints| {
-            let rect = Rect::from_origin_size(Offset::ZERO, constraints.biggest());
-            let mut builder = Path::builder();
-            builder.rounded_superellipse(rect, CornerRadii::uniform(radius));
-            ClipPath::new(Arc::new(builder.build()), child.clone())
-                .clip_behavior(clip_behavior)
-                .into()
-        })
-        .into()
+        let radius = value.border_radius
+            .unwrap_or_else(|| BorderRadiusGeometry::circular(value.radius));
+        // The clipper is evaluated for the child's actual layout size, not
+        // the maximum incoming constraints. The shared outline also retains
+        // its identity between ordinary rebuilds.
+        // Flutter does not narrow a default superellipse's box hit test
+        // to the painted corner curve.
+        ClipPath::shape_with_hit_policy(
+            Rc::new(RoundedSuperellipseBorder::new(BorderSide::NONE, radius)),
+            value.clip_behavior,
+            Some(value.child),
+            false,
+        )
     }
 }
 

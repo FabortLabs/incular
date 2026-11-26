@@ -251,17 +251,25 @@ impl ClipPath {
         clip_behavior: Clip,
         child: Option<Widget>,
     ) -> Widget {
+        Self::shape_with_hit_policy(shape, clip_behavior, child, true)
+    }
+
+    pub(crate) fn shape_with_hit_policy(
+        shape: Rc<dyn ShapeBorder>,
+        clip_behavior: Clip,
+        child: Option<Widget>,
+        clip_hit_tests: bool,
+    ) -> Widget {
         Builder::new(move |context| {
-            let clip = Self::builder().clip_behavior(clip_behavior);
-            let clip = match &child {
-                Some(child) => clip.child(child.clone()).build(),
-                None => clip.build(),
-            };
-            clip.custom_clipper(ShapeBorderClipper::new(
+            let delegate = crate::layout::ClipDelegate::new(ShapeBorderClipper::new(
                 shape.clone(),
                 context.text_direction(),
-            ))
-            .into()
+            )).with_hit_testing(clip_hit_tests);
+            let clip = Self::builder().clip_behavior(clip_behavior).clipper(delegate);
+            match &child {
+                Some(child) => clip.child(child.clone()).build().into(),
+                None => clip.build().into(),
+            }
         })
         .into()
     }

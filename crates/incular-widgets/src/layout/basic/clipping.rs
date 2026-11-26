@@ -118,6 +118,7 @@ pub struct ClipDelegate {
     should_reclip: fn(&dyn Any, &dyn Any) -> bool,
     reclip: Option<ClipReclip>,
     reclip_revision: u64,
+    clip_hit_tests: bool,
 }
 
 impl ClipDelegate {
@@ -131,6 +132,7 @@ impl ClipDelegate {
             should_reclip: should_reclip_erased::<C>,
             reclip,
             reclip_revision: 0,
+            clip_hit_tests: true,
         }
     }
 
@@ -138,6 +140,15 @@ impl ClipDelegate {
     #[must_use]
     pub fn from_fn(get_clip: impl Fn(Size) -> ClipShape + 'static) -> Self {
         Self::new(FnClipper(get_clip))
+    }
+
+    pub(crate) fn with_hit_testing(mut self, clip_hit_tests: bool) -> Self {
+        self.clip_hit_tests = clip_hit_tests;
+        self
+    }
+
+    pub(crate) fn clips_hit_tests(&self) -> bool {
+        self.clip_hit_tests
     }
 
     /// Resolves the clip for `size`.
@@ -162,7 +173,8 @@ impl ClipDelegate {
             .as_ref()
             .zip(old.reclip.as_ref())
             .is_some_and(|(new, old)| Rc::ptr_eq(&new.0, &old.0));
-        (same_source && self.reclip_revision != old.reclip_revision)
+        self.clip_hit_tests != old.clip_hit_tests
+            || (same_source && self.reclip_revision != old.reclip_revision)
             || (self.should_reclip)(&*self.clipper, &*old.clipper)
     }
 }
@@ -175,7 +187,9 @@ impl std::fmt::Debug for ClipDelegate {
 
 impl PartialEq for ClipDelegate {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.clipper, &other.clipper) && self.reclip_revision == other.reclip_revision
+        Rc::ptr_eq(&self.clipper, &other.clipper)
+            && self.reclip_revision == other.reclip_revision
+            && self.clip_hit_tests == other.clip_hit_tests
     }
 }
 

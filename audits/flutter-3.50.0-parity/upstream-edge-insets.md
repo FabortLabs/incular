@@ -151,3 +151,14 @@ control compares four sets of radii on a 120×300 shape, including
 corners with a flat top-right. All 56 containment decisions and the
 bounds match. The golden image registrations remain separate. Two
 pinned originals, one authored control, and 32 focused Rust cases passed.
+
+## Superellipse clips use the final child size
+
+The pinned `widgets/clip_test.dart:947` zero-area case pairs. A second
+pinned control places a 60×30 child under loose constraints and checks
+the retained clip's paint geometry and actual taps. Logical elliptical
+corners mirror on direction change, but a default ClipRSuperellipse
+does not exclude taps in the clipped corners: its input boundary
+remains the layout box. Clip.none emits no clip. Native compares both
+paint contours and live hit testing, including a miss outside the box.
+The exact original, authored control and 34 focused Rust cases passed.

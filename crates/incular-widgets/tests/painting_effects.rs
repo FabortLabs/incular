@@ -65,8 +65,8 @@ fn composition_builders_accept_arbitrary_widgets_and_keep_lowering_inputs() {
         .child(Text::new("clip"))
         .build();
     let clip: Widget = clip.into();
-    // The superellipse outline is sized at layout, so it lowers through a
-    // LayoutBuilder into a ClipPath, not a ClipRRect.
+    // The direction-aware Builder lowers to LayoutBuilder and retains
+    // a ClipPath delegate that resolves against the final child size.
     assert_eq!(clip.debug_type_name(), "LayoutBuilder");
 
     let physical = PhysicalModel::builder()
