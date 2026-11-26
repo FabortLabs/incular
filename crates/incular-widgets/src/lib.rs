@@ -354,7 +354,7 @@ pub use raw_input::{
     TapRegionGroupId, TapRegionSurface, TextFieldTapRegion,
 };
 pub use raw_menu_anchor::{
-    DismissMenuAction, MenuCloseRequested, MenuController, MenuOpenRequested, RawMenuAnchor,
+    DismissIntent, DismissMenuAction, MenuCloseRequested, MenuController, MenuOpenRequested, RawMenuAnchor,
     RawMenuAnchorChildBuilder, RawMenuAnchorGroup, RawMenuAnchorOverlayBuilder, RawMenuOverlayInfo,
 };
 pub use raw_tooltip::{

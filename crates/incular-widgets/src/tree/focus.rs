@@ -525,6 +525,42 @@ impl WidgetTree {
         self.route_keyboard_with_lock_modes(focused, event, lock_modes) == KeyEventResult::Handled
     }
 
+    /// Invokes the closest action registered above a live element, without
+    /// synthesizing a key event. A found but disabled action shadows a farther
+    /// handler; `None` means no ancestor registered the intent.
+    #[must_use]
+    pub fn invoke_action_at<C: incular_gestures::CommandId>(
+        &self,
+        element: ElementId,
+        intent: &incular_gestures::Intent<C>,
+    ) -> Option<incular_gestures::ActionResult> {
+        let intent = incular_gestures::ErasedIntent::from_intent(intent);
+        let dismiss = intent.downcast_command::<crate::DismissIntent>().is_some();
+        let mut current = Some(element);
+        while let Some(id) = current {
+            let entry = self.elements.get(id.0)?;
+            if let WidgetKind::Gesture { callbacks, .. } = entry.widget.kind()
+                && let Some(result) = callbacks
+                    .action_scope
+                    .as_ref()
+                    .and_then(|scope| scope.invoke(&intent))
+            {
+                return Some(result);
+            }
+            if dismiss
+                && entry
+                    .environment_override
+                    .as_ref()
+                    .and_then(|scope| scope.value.downcast_ref::<crate::raw_menu_anchor::AnchorScope>())
+                    .is_some_and(crate::raw_menu_anchor::AnchorScope::dismiss_if_open)
+            {
+                return Some(incular_gestures::ActionResult::Handled);
+            }
+            current = entry.parent;
+        }
+        None
+    }
+
     /// Routes keyboard input while preserving a Focus handler's request
     /// to stop framework handling without consuming the native event.
     #[must_use]
@@ -578,7 +614,7 @@ impl WidgetTree {
                     .and_then(|scope| {
                         scope.value.downcast_ref::<crate::raw_menu_anchor::AnchorScope>()
                     })
-                    .is_some_and(crate::raw_menu_anchor::AnchorScope::dismiss_from_escape)
+                    .is_some_and(crate::raw_menu_anchor::AnchorScope::dismiss_if_open)
             {
                 return KeyEventResult::Handled;
             }

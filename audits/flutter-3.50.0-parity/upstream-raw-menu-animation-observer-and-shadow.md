@@ -337,3 +337,16 @@ Pinned `:1981` and `:2023` pair with default close behavior, not a
 custom close-request handler. A view resize or a jump beyond an
 ancestor's zero scroll extent produces the onClose notification once
 without replaying onOpen, and the overlay visibly disappears.
+
+### Programmatic inherited actions
+
+Pinned `:1147` now pairs using actual scoped invocation rather than
+only key events. A focused closed anchor forwards directional up,
+next, previous, and dismiss commands to the application in order.
+When the same menu is open its nearest dismissal handles the intent.
+
+Pinned `:1340` pairs using two different callback payloads sent to
+the same inherited action from the mounted anchor and panel contexts.
+Each callback executes once, and neither invocation closes the menu.
+The Rust typed command selects the registry entry by identity and
+preserves each invocation's callback through type erasure.

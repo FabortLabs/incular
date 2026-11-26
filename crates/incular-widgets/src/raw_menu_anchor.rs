@@ -445,6 +445,10 @@ impl MenuController {
     }
 }
 
+/// The standard command for dismissing the current scoped UI.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct DismissIntent;
+
 /// Flutter's `DismissMenuAction`: dismisses the entire menu tree of the
 /// supplied controller, even when it belongs to a nested submenu.
 #[derive(Clone)]
@@ -491,7 +495,7 @@ pub(crate) struct AnchorScope {
 }
 
 impl AnchorScope {
-    pub(crate) fn dismiss_from_escape(&self) -> bool {
+    pub(crate) fn dismiss_if_open(&self) -> bool {
         if !self.open || self.node.controller.borrow().is_none() {
             return false;
         }

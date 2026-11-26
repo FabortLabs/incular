@@ -1719,7 +1719,7 @@ packages/flutter/test/widgets/raw_menu_anchor_test.dart	600	MenuController.maybe
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	865	MenuController.maybeOf does not notify dependents when MenuController changes	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#inherited-menu-state-and-anchor-builders
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	2174	Menu builder rebuilds when isOpen state changes	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#inherited-menu-state-and-anchor-builders
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	1081	Escape key closes menus	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#escape-routing-and-unrelated-focus
-packages/flutter/test/widgets/raw_menu_anchor_test.dart	1147	Intents are not blocked by closed anchor	partial-match	upstream-raw-menu-animation-observer-and-shadow.md#escape-routing-and-unrelated-focus
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	1147	Intents are not blocked by closed anchor	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#programmatic-inherited-actions
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	1051	[Default] MenuOverlayPosition.anchorRect applies transformations to panel	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#anchor-and-overlay-geometry
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	1470	[Default] Overlay builder is passed anchor rect	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#anchor-and-overlay-geometry
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	1491	[Default] Overlay contents can be positioned	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#anchor-and-overlay-geometry
@@ -1757,3 +1757,4 @@ packages/flutter/test/widgets/raw_menu_anchor_test.dart	1881	Tab traversal is no
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	1445	[Group] Menu panel builder	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#group-panel-geometry-and-default-root-closure
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	1981	Menu closes on view size change	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#group-panel-geometry-and-default-root-closure
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	2023	Menu closes on ancestor scroll	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#group-panel-geometry-and-default-root-closure
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	1340	Actions that wrap Menu are invoked by both anchor and overlay	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#programmatic-inherited-actions

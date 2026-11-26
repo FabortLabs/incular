@@ -2725,6 +2725,20 @@ impl Runtime {
         self.keyboard_event_debug_listener = None;
     }
 
+    /// Invokes an inherited action from a live element (Flutter's
+    /// `Actions.invoke`), without sending key events to unrelated handlers.
+    pub fn invoke_action_at<C: incular_widgets::CommandId>(
+        &mut self,
+        element: ElementId,
+        intent: &incular_widgets::Intent<C>,
+    ) -> Option<incular_widgets::ActionResult> {
+        let result = self.tree.invoke_action_at(element, intent);
+        if result == Some(incular_widgets::ActionResult::Handled) {
+            self.frame_requested = true;
+        }
+        result
+    }
+
     /// Dispatches a portable key event and returns whether it was handled.
     pub fn dispatch_keyboard_event(&mut self, event: KeyboardEvent) -> bool {
         FocusHighlightManager::new().note_keyboard_input();

@@ -172,3 +172,146 @@ fn a_raw_anchor_does_not_override_application_focus_shortcuts() {
 fn a_raw_group_leaves_tab_traversal_to_the_application_in_anchor_and_panel() {
     check_actions(true);
 }
+
+#[test]
+fn a_closed_anchor_does_not_shadow_programmatically_invoked_application_intents() {
+    use incular_widgets::{ActionResult, DismissIntent, FocusableActionDetector, Intent};
+
+    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+    enum Traversal {
+        Up,
+        Next,
+        Previous,
+    }
+
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let mut navigation = Actions::<Traversal>::typed();
+    for (intent, label) in [
+        (Traversal::Up, "up"),
+        (Traversal::Next, "next"),
+        (Traversal::Previous, "previous"),
+    ] {
+        let log = log.clone();
+        navigation.register(intent, move || log.borrow_mut().push(label));
+    }
+    let mut dismiss = Actions::<DismissIntent>::typed();
+    dismiss.register(DismissIntent, {
+        let log = log.clone();
+        move || log.borrow_mut().push("dismiss")
+    });
+    let focus = FocusNode::new();
+    let menu = MenuController::new();
+    let anchor = RawMenuAnchor::new(menu.clone(), |_, _| {
+        Widget::box_(Size::new(70., 30.), Color::WHITE)
+    })
+    .child(Focus::new(Widget::box_(Size::new(100., 30.), Color::WHITE)).node(focus.clone()));
+    let scene = FocusableActionDetector::new(
+        FocusableActionDetector::new(RawMenuAnchorGroup::new(MenuController::new(), anchor))
+            .actions(Rc::new(dismiss)),
+    )
+    .actions(Rc::new(navigation));
+    let mut runtime = Runtime::new(Center::new(scene).into()).unwrap();
+    frame(&mut runtime);
+    focus.request_focus();
+    frame(&mut runtime);
+    assert!(focus.has_primary_focus());
+    let id = runtime.focused_element().unwrap();
+
+    for command in [Traversal::Up, Traversal::Next, Traversal::Previous] {
+        assert_eq!(
+            runtime.invoke_action_at(id, &Intent::<Traversal>::new(command)),
+            Some(ActionResult::Handled),
+        );
+    }
+    assert_eq!(
+        runtime.invoke_action_at(id, &Intent::<DismissIntent>::new(DismissIntent)),
+        Some(ActionResult::Handled),
+    );
+    assert_eq!(*log.borrow(), ["up", "next", "previous", "dismiss"]);
+
+    menu.open(None);
+    frame(&mut runtime);
+    assert!(menu.is_open());
+    assert_eq!(
+        runtime.invoke_action_at(id, &Intent::<DismissIntent>::new(DismissIntent)),
+        Some(ActionResult::Handled),
+    );
+    frame(&mut runtime);
+    assert!(!menu.is_open());
+    assert_eq!(*log.borrow(), ["up", "next", "previous", "dismiss"]);
+}
+
+#[test]
+fn anchor_and_panel_can_invoke_the_same_inherited_action_with_distinct_payloads() {
+    use incular_widgets::{Action, ActionResult, FocusableActionDetector, Intent};
+    use std::{
+        cell::Cell,
+        hash::{Hash, Hasher},
+    };
+
+    // The command type identifies the action. Each invocation supplies a
+    // different callback payload, like Flutter's VoidCallbackIntent.
+    #[derive(Clone)]
+    struct Callback(Rc<dyn Fn()>);
+    impl PartialEq for Callback {
+        fn eq(&self, _: &Self) -> bool {
+            true
+        }
+    }
+    impl Eq for Callback {}
+    impl Hash for Callback {
+        fn hash<H: Hasher>(&self, state: &mut H) {
+            0_u8.hash(state);
+        }
+    }
+    let mut actions = Actions::<Callback>::typed();
+    actions.register_action(Action::with_handler(Callback(Rc::new(|| {})), |intent| {
+        (intent.command().0)();
+        ActionResult::Handled
+    }));
+
+    let anchor_node = FocusNode::new();
+    let popup_node = FocusNode::new();
+    let menu = MenuController::new();
+    let popup = focus_box(&popup_node);
+    let anchor = RawMenuAnchor::new(menu.clone(), move |_, info| {
+        let rect = info.anchor_rect;
+        Stack::new([Widget::from(
+            Positioned::new(popup.clone())
+                .left(rect.origin.x)
+                .top(rect.origin.y + rect.size.height),
+        )])
+        .into()
+    })
+    .child(
+        Widget::from(GestureDetector::new(focus_box(&anchor_node)).on_tap({
+            let menu = menu.clone();
+            move || menu.open(None)
+        }))
+        .with_key(Key::from("anchor")),
+    );
+    let scene = FocusableActionDetector::new(anchor).actions(Rc::new(actions));
+    let mut runtime = Runtime::new(Center::new(scene).into()).unwrap();
+    frame(&mut runtime);
+    click_anchor(&mut runtime);
+    assert!(menu.is_open());
+
+    let mut observed = Vec::new();
+    for node in [anchor_node, popup_node] {
+        node.request_focus();
+        frame(&mut runtime);
+        assert!(node.has_primary_focus());
+        let invoked = Rc::new(Cell::new(0));
+        let intent = Intent::<Callback>::new(Callback({
+            let count = invoked.clone();
+            Rc::new(move || count.set(count.get() + 1))
+        }));
+        assert_eq!(
+            runtime.invoke_action_at(runtime.focused_element().unwrap(), &intent),
+            Some(ActionResult::Handled),
+        );
+        assert!(menu.is_open());
+        observed.push(invoked);
+    }
+    assert_eq!([observed[0].get(), observed[1].get()], [1, 1]);
+}
