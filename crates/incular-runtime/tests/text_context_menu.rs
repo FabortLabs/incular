@@ -241,3 +241,38 @@ fn selection_area_right_click_on_macos_selects_the_word_to_copy() {
         ]
     );
 }
+
+#[test]
+fn right_click_focus_keeps_the_hit_word_or_caret_and_preserves_both_selection_orders() {
+    for (platform, word_on_first_click) in [
+        (TextShortcutPlatform::Ios, true),
+        (TextShortcutPlatform::MacOs, true),
+        (TextShortcutPlatform::Android, false),
+        (TextShortcutPlatform::Linux, false),
+        (TextShortcutPlatform::Windows, false),
+    ] {
+        let (mut runtime, controller, _) = mount("one two three four five", platform);
+        let field = runtime.tree().text_field_at(Offset::new(20., 10.)).unwrap();
+        controller.set_selection(TextSelection::collapsed(10));
+        runtime.run_frame(bounds()).unwrap();
+        let glyph = runtime.tree().text_field_input_geometry(field).unwrap().caret_rect;
+        let pos = Offset::new(glyph.origin.x, glyph.origin.y + glyph.size.height / 2.0);
+        controller.set_selection(TextSelection::collapsed(0));
+        runtime.run_frame(bounds()).unwrap();
+
+        secondary_click(&mut runtime, pos);
+        assert_eq!(runtime.focused_element(), Some(field), "{platform:?}");
+        let selection = controller.selection();
+        if word_on_first_click {
+            assert_eq!(selection.range().as_range(), 8..13, "{platform:?}");
+        } else {
+            assert_eq!(selection, TextSelection::collapsed(10), "{platform:?}");
+        }
+
+        for selection in [TextSelection::new(3, 20), TextSelection::new(20, 3)] {
+            controller.set_selection(selection);
+            secondary_click(&mut runtime, pos);
+            assert_eq!(controller.selection(), selection, "{platform:?}");
+        }
+    }
+}

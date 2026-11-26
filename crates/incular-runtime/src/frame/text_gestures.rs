@@ -139,7 +139,9 @@ impl Runtime {
                 !press.menu_was_showing
             }
         };
-        self.set_focus(Some(field));
+        // Like Flutter requestKeyboard, this is internal focus: it must
+        // not replace the selection made by the right-click with select-all.
+        self.set_focus_with_external_selection(Some(field), false);
         if let Some(menu) = self.tree.text_field_context_menu(field) {
             if show {
                 let items = self.text_field_context_menu_items(field);
