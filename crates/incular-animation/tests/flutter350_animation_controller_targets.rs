@@ -176,3 +176,85 @@ fn a_projected_endpoint_does_not_replace_the_real_completion_bound() {
     assert_eq!(controller.value_f64(), 1.);
     assert!(finish.is_complete());
 }
+
+#[test]
+fn directional_from_setters_publish_the_assigned_value_and_direction_before_the_run() {
+    use AnimationStatus::*;
+    for reverse_first in [false, true] {
+        let controller = AnimationController::new(ms(100));
+        let statuses = observe_status(&controller);
+        let values = Rc::new(RefCell::new(Vec::new()));
+        controller.add_listener({
+            let values = values.clone();
+            move |value| values.borrow_mut().push(value)
+        });
+        let now = Instant::now();
+        let active = if reverse_first {
+            controller.reverse_from(now, 0.2)
+        } else {
+            controller.forward_from(now, 0.2)
+        };
+        assert_eq!(
+            &*statuses.borrow(),
+            &[if reverse_first { Reverse } else { Forward }]
+        );
+        assert_eq!(&*values.borrow(), &[0.2]);
+        assert_eq!(controller.value(), 0.2);
+        if reverse_first {
+            statuses.borrow_mut().clear();
+            values.borrow_mut().clear();
+            assert!(!controller.forward_from(now, 0.).is_complete());
+            assert!(active.is_canceled());
+            assert_eq!(&*statuses.borrow(), &[Dismissed, Forward]);
+            assert_eq!(&*values.borrow(), &[0.]);
+            assert_eq!(controller.value(), 0.);
+        }
+    }
+}
+
+#[test]
+fn toggle_honors_unequal_durations_and_switches_an_active_forward_run() {
+    use AnimationStatus::*;
+    let start = Instant::now();
+    for (forward, reverse, samples, reverse_samples) in [
+        (
+            100,
+            50,
+            vec![(20, 0.2), (50, 0.5), (80, 0.8), (110, 1.)],
+            vec![(10, 0.8), (20, 0.6), (30, 0.4), (50, 0.)],
+        ),
+        (
+            50,
+            100,
+            vec![(20, 0.4), (50, 1.), (80, 1.)],
+            vec![(10, 0.9), (20, 0.8), (30, 0.7), (50, 0.5), (100, 0.)],
+        ),
+    ] {
+        let controller = AnimationController::new(ms(forward)).with_reverse_duration(ms(reverse));
+        controller.toggle(start);
+        assert!(controller.is_forward_or_completed());
+        for (at, value) in samples {
+            let _ = controller.tick(start + ms(at));
+            assert!((controller.value() - value).abs() < 1e-6);
+        }
+        controller.stop();
+        let start_reverse = start + ms(210);
+        controller.toggle(start_reverse);
+        assert!(!controller.is_forward_or_completed());
+        for (at, value) in reverse_samples {
+            let _ = controller.tick(start_reverse + ms(at));
+            assert!((controller.value() - value).abs() < 1e-6);
+        }
+    }
+    let controller = AnimationController::new(ms(100)).with_reverse_duration(ms(100));
+    controller.forward(start);
+    assert_eq!(controller.status(), Forward);
+    let _ = controller.tick(start + ms(50));
+    assert_eq!(controller.value(), 0.5);
+    assert!(controller.is_forward_or_completed());
+    controller.toggle(start + ms(50));
+    assert_eq!(controller.status(), Reverse);
+    assert!(!controller.is_forward_or_completed());
+    let _ = controller.tick(start + ms(150));
+    assert_eq!((controller.value(), controller.status()), (0., Dismissed));
+}

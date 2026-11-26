@@ -654,6 +654,28 @@ impl AnimationController {
         self.reverse_at(None)
     }
 
+    /// Flutter `forward(from:)`: publishes the assigned value and status
+    /// before animating the remaining distance to the upper bound.
+    pub fn forward_from(&self, now: Instant, from: f32) -> TickerFuture {
+        self.start_direction_from(Some(now), from, true)
+    }
+
+    /// Flutter `reverse(from:)`: publishes the assigned value and status
+    /// before animating the remaining distance to the lower bound.
+    pub fn reverse_from(&self, now: Instant, from: f32) -> TickerFuture {
+        self.start_direction_from(Some(now), from, false)
+    }
+
+    /// Starts from an assigned value on the next tick, going forward.
+    pub fn forward_from_on_next_tick(&self, from: f32) -> TickerFuture {
+        self.start_direction_from(None, from, true)
+    }
+
+    /// Starts from an assigned value on the next tick, going backward.
+    pub fn reverse_from_on_next_tick(&self, from: f32) -> TickerFuture {
+        self.start_direction_from(None, from, false)
+    }
+
     /// Flutter `toggle()`: reverses a controller that is running forward or
     /// completed, and runs any other forward.
     pub fn toggle(&self, now: Instant) -> TickerFuture {
@@ -1061,6 +1083,19 @@ impl AnimationController {
     fn reverse_at(&self, now: Option<Instant>) -> TickerFuture {
         let lower = self.inner.borrow().state.lower_bound;
         self.animate_to_internal(now, lower, None, None, false)
+    }
+
+    fn start_direction_from(&self, now: Option<Instant>, from: f32, forward: bool) -> TickerFuture {
+        // The direction also applies to interpreting the assigned value.
+        // Observers of an interior assignment therefore see the requested
+        // direction immediately, without two opposing status events.
+        self.inner.borrow_mut().state.forward = forward;
+        self.set_value(from);
+        if forward {
+            self.forward_at(now)
+        } else {
+            self.reverse_at(now)
+        }
     }
 
     fn toggle_at(&self, now: Option<Instant>) -> TickerFuture {

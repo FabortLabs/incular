@@ -45,3 +45,15 @@ exact status sequences. An `animate_to` run reports Forward then
 Completed regardless of numeric direction or which operation preceded
 it. Ten original and two authored pinned Flutter cases passed,
 alongside 33 focused Rust cases.
+
+## Assigning a value before forward or reverse
+
+Four additional pinned originals pair. `forward_from` and
+`reverse_from` apply the requested direction before publishing the
+assigned value and status. An interior reverse assignment at 0.2 emits
+Reverse, not a transient Forward. A subsequent forward assignment to
+zero emits Dismissed then Forward and cancels the former run. The
+next-tick variants use the same ordered assignment. The toggle probes
+verify each sampled value for 100 ms / 50 ms and 50 ms / 100 ms
+durations, and the direction change halfway through a running
+forward animation. Four Flutter and 19 focused Rust cases passed.

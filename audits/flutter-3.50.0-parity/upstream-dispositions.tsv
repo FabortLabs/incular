@@ -2059,3 +2059,7 @@ packages/flutter/test/animation/animation_controller_test.dart	661	resetting ani
 packages/flutter/test/animation/animation_controller_test.dart	750	animateTo sets correct status	paired-match	upstream-animation-controller-comparisons.md#current-targets-immediate-completion-and-reset
 packages/flutter/test/animation/animation_controller_test.dart	807	after a reverse call animateTo sets correct status	paired-match	upstream-animation-controller-comparisons.md#current-targets-immediate-completion-and-reset
 packages/flutter/test/animation/animation_controller_test.dart	840	after a forward call animateTo sets correct status	paired-match	upstream-animation-controller-comparisons.md#current-targets-immediate-completion-and-reset
+packages/flutter/test/animation/animation_controller_test.dart	154	Forward and reverse from values	paired-match	upstream-animation-controller-comparisons.md#assigning-a-value-before-forward-or-reverse
+packages/flutter/test/animation/animation_controller_test.dart	250	toggle() with different durations	paired-match	upstream-animation-controller-comparisons.md#assigning-a-value-before-forward-or-reverse
+packages/flutter/test/animation/animation_controller_test.dart	316	toggle() acts correctly based on the animation state	paired-match	upstream-animation-controller-comparisons.md#assigning-a-value-before-forward-or-reverse
+packages/flutter/test/animation/animation_controller_test.dart	342	Forward only from value	paired-match	upstream-animation-controller-comparisons.md#assigning-a-value-before-forward-or-reverse
