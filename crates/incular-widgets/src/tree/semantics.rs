@@ -173,6 +173,16 @@ impl ChildTagScope {
         }
     }
 
+    fn for_children(outer: Option<Rc<Self>>, entry: &Element) -> Option<Rc<Self>> {
+        let viewport_tag = matches!(entry.widget.kind(), WidgetKind::SliverViewport { .. })
+            .then(crate::Viewport::use_two_pane_semantics_tag);
+        let outer = Self::extend(outer, viewport_tag);
+        Self::extend(
+            outer,
+            entry.widget.semantic_properties().tag_for_children.as_ref(),
+        )
+    }
+
     fn apply(&self, state: &mut SemanticState) {
         let mut stack = Vec::new();
         let mut scope = Some(self);
@@ -1049,10 +1059,9 @@ impl WidgetTree {
         let joins_focus_annotation =
             merges_focus_labels && !self.focus_semantics_boundary(element, entry);
         let child_merges_focus_labels = focus_annotation.is_some() || joins_focus_annotation;
-        let tag_for_children = entry.widget.semantic_properties().tag_for_children.as_ref();
         let retained = retained_id.is_some();
         if !scope.content && retained && !outside_sliver_cache {
-            let next_tag_scope = ChildTagScope::extend(None, tag_for_children);
+            let next_tag_scope = ChildTagScope::for_children(None, entry);
             // Nothing but geometry changed here or below, so the retained
             // node keeps its role, text, state and actions. A node with a
             // retained id always emitted a node, so its descendants inherit
@@ -1654,10 +1663,8 @@ impl WidgetTree {
         // A Button deliberately merges its visual label/icon subtree into the
         // one control node. Other containers preserve logical child order.
         let child_collection = role.is_none().then_some(collection).flatten();
-        let next_tag_scope = ChildTagScope::extend(
-            if role.is_none() { inherited_tags } else { None },
-            tag_for_children,
-        );
+        let next_tag_scope =
+            ChildTagScope::for_children(if role.is_none() { inherited_tags } else { None }, entry);
         let regroups = self.regroups_sliver_semantics(entry);
         // Below a retained child list a clean child has nothing to lend.
         let only_marked = this_parent == RETAINED_LIST

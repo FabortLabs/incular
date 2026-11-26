@@ -23,10 +23,27 @@ The ten pinned Flutter originals at `widgets/sliver_semantics_widget_test.dart:
   The native host stays idle once the update is presented.
 
 Incular currently projects one scroll semantic node per viewport; it
-does not split Flutter's scrolling and non-scrolling panes or install
-the internal `RenderViewport.twoPane` tag. The direct viewport tag
-constraint at line 73 remains reference-only. The use of the renderer's
-reserved anchor IDs changes neither leaf child IDs nor paint/hit routing.
+does not yet split Flutter's scrolling and non-scrolling panes. The use
+of the renderer's reserved anchor IDs changes neither leaf child IDs
+nor paint/hit routing.
+
+## Viewport tag scope
+
+Pinned line 73 and its matching Incular target exercise a main-axis
+group with a non-semantic spacer and a text sliver. The implicit scroller
+does not tag itself, but its immediate semantic child carries the shared
+renderer tag. That stays true across an idle frame without ID or
+revision churn. A more specific Flutter/Incular probe checks that
+`RenderViewport.twoPane` crosses a layout-only padding wrapper and stops
+at the first semantic boundary, while an application tag declared on
+that boundary goes only to its own child. A separately constructed
+same-name tag is not the framework tag.
+
+The pinned line 682 and 735 cases also passed, but their outer/inner
+scroll graph assertions remain open. The original pinned-header tag
+transition (`pinned_header_sliver_test.dart:250`) and nested-pane
+transform (`scrollable_semantics_test.dart:814`) passed on the reference;
+their retained migration and two-pane geometry still need equivalents.
 
 ## Merging a hint and a value without merging competing values
 

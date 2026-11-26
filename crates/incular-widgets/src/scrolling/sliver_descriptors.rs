@@ -833,6 +833,15 @@ impl Default for Viewport {
 }
 
 impl Viewport {
+    /// The framework tag marking the immediate semantic children of a sliver
+    /// viewport. Transparent layout wrappers carry it to the next node.
+    #[must_use]
+    pub fn use_two_pane_semantics_tag() -> &'static incular_semantics::SemanticsTag {
+        static TAG: std::sync::OnceLock<incular_semantics::SemanticsTag> =
+            std::sync::OnceLock::new();
+        TAG.get_or_init(|| incular_semantics::SemanticsTag::new("RenderViewport.twoPane"))
+    }
+
     #[must_use]
     pub fn new(slivers: impl IntoIterator<Item = Box<dyn Sliver>>) -> Self {
         Self {

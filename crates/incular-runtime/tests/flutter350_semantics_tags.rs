@@ -78,3 +78,128 @@ fn merged_tags_are_the_union_of_live_descendant_tags() {
     runtime.run_frame(bounds).unwrap();
     assert_eq!(merged(&runtime), (id, vec![one, two]));
 }
+
+#[test]
+fn framework_viewport_tag_crosses_layout_wrappers_but_stops_at_semantic_boundaries() {
+    use incular_widgets::{
+        CustomScrollView, Directionality, Padding, Sliver, SliverSemantics, SliverToBoxAdapter,
+        Text, TextDirection, Viewport,
+    };
+
+    let custom = SemanticsTag::new("custom");
+    let custom_for_annotation = custom.clone();
+    let coincident_name = SemanticsTag::new("RenderViewport.twoPane");
+    let viewport_tag = Viewport::use_two_pane_semantics_tag();
+    let direct = Box::new(SliverToBoxAdapter::new(Padding::all(
+        10.,
+        Text::new("direct"),
+    )));
+    let boundary = Box::new(SliverSemantics::new(
+        move || {
+            Semantics::default()
+                .container(true)
+                .label("boundary")
+                .explicit_child_nodes(true)
+                .tag_for_children(custom_for_annotation.clone())
+        },
+        SliverToBoxAdapter::new(
+            Semantics::new(SizedBox::new().height(20.))
+                .container(true)
+                .label("inside"),
+        ),
+    ));
+    let slivers: [Box<dyn Sliver>; 2] = [direct, boundary];
+    let mut runtime = Runtime::new(
+        Directionality::new(TextDirection::Ltr, CustomScrollView::new(slivers)).into(),
+    )
+    .unwrap();
+    let size = Constraints::tight(Size::new(800., 600.));
+
+    let shape = |runtime: &Runtime| {
+        let tree = runtime.tree().semantics();
+        let node = |label| {
+            tree.iter()
+                .map(|(_, node)| node)
+                .find(|node| node.label.as_deref() == Some(label))
+                .unwrap()
+        };
+        let direct = node("direct");
+        let boundary = node("boundary");
+        let inside = node("inside");
+        let scroll = tree
+            .iter()
+            .map(|(_, node)| node)
+            .find(|node| node.state.has_implicit_scrolling)
+            .unwrap();
+        assert!(scroll.children.contains(&direct.id));
+        assert!(scroll.children.contains(&boundary.id));
+        assert_eq!(&boundary.children, &[inside.id]);
+        assert!(!scroll.is_tagged(viewport_tag));
+        assert!(direct.is_tagged(viewport_tag));
+        assert!(boundary.is_tagged(viewport_tag));
+        assert!(!boundary.is_tagged(&custom));
+        assert!(!inside.is_tagged(viewport_tag));
+        assert!(inside.is_tagged(&custom));
+        assert!(!direct.is_tagged(&coincident_name));
+        (
+            scroll.id,
+            direct.id,
+            boundary.id,
+            inside.id,
+            tree.revision(),
+        )
+    };
+
+    runtime.run_frame(size).unwrap();
+    let before = shape(&runtime);
+    runtime.run_frame(size).unwrap();
+    assert_eq!(shape(&runtime), before);
+}
+
+#[test]
+fn a_sliver_axis_group_does_not_mark_the_implicit_scroller_itself() {
+    use incular_widgets::{
+        CustomScrollView, Directionality, Padding, Sliver, SliverMainAxisGroup, SliverToBoxAdapter,
+        Text, TextDirection, Viewport,
+    };
+
+    let group: [Box<dyn Sliver>; 2] = [
+        Box::new(SliverToBoxAdapter::new(Padding::new(
+            incular_config::EdgeInsets::only(0., 20., 0., 0.),
+            SizedBox::shrink(),
+        ))),
+        Box::new(SliverToBoxAdapter::new(Text::new("label"))),
+    ];
+    let slivers: [Box<dyn Sliver>; 1] = [Box::new(SliverMainAxisGroup::new(group))];
+    let mut runtime = Runtime::new(
+        Directionality::new(TextDirection::Ltr, CustomScrollView::new(slivers)).into(),
+    )
+    .unwrap();
+    let constraints = Constraints::tight(Size::new(800., 600.));
+    let tag = Viewport::use_two_pane_semantics_tag();
+    let snapshot = |runtime: &Runtime| {
+        let tree = runtime.tree().semantics();
+        let scroll = tree
+            .iter()
+            .map(|(_, node)| node)
+            .find(|node| node.state.has_implicit_scrolling)
+            .expect("implicit scroller is actually present");
+        assert!(
+            !tree
+                .iter()
+                .any(|(_, node)| node.state.has_implicit_scrolling && node.is_tagged(tag))
+        );
+        let text = tree
+            .iter()
+            .map(|(_, node)| node)
+            .find(|node| node.label.as_deref() == Some("label"))
+            .unwrap();
+        assert!(text.is_tagged(tag));
+        assert!(scroll.children.contains(&text.id));
+        (scroll.id, text.id, tree.revision())
+    };
+    runtime.run_frame(constraints).unwrap();
+    let before = snapshot(&runtime);
+    runtime.run_frame(constraints).unwrap();
+    assert_eq!(snapshot(&runtime), before);
+}
