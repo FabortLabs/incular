@@ -2143,3 +2143,8 @@ packages/flutter/test/rendering/aspect_ratio_test.dart	97	RenderAspectRatio: Unb
 packages/flutter/test/rendering/aspect_ratio_test.dart	125	RenderAspectRatio: Sizing	paired-match	upstream-render-aspect-ratio.md
 packages/flutter/test/widgets/annotated_region_test.dart	10	provides a value to the layer tree	paired-match	upstream-layer-annotations.md#annotatedregion-widget-lowering
 packages/flutter/test/widgets/annotated_region_test.dart	19	provides a value to the layer tree in a particular region	paired-match	upstream-layer-annotations.md#annotatedregion-widget-lowering
+packages/flutter/test/rendering/stack_test.dart	13	StackParentData basic test	paired-match	upstream-render-stack.md
+packages/flutter/test/rendering/stack_test.dart	64	Stack can layout with top, right, bottom, left 0.0	paired-match	upstream-render-stack.md
+packages/flutter/test/rendering/stack_test.dart	101	Stack can layout with no children	paired-match	upstream-render-stack.md
+packages/flutter/test/rendering/stack_test.dart	110	Stack has correct clipBehavior	paired-match	upstream-render-stack.md
+packages/flutter/test/rendering/stack_test.dart	233	Stack in Flex can layout with no children	paired-match	upstream-render-stack.md

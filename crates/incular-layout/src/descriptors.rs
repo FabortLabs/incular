@@ -628,6 +628,16 @@ impl Positioned {
         }
     }
 
+    /// Flutter `StackParentData.positionedChildConstraints`: opposing edges
+    /// take precedence, an explicit negative extent tightens to zero, and
+    /// an unspecified axis remains unbounded.
+    #[must_use]
+    pub fn positioned_child_constraints(self, stack_size: incular_core::Size) -> Constraints {
+        let width = crate::positioned_axis_size(stack_size.width, self.left, self.right, self.width);
+        let height = crate::positioned_axis_size(stack_size.height, self.top, self.bottom, self.height);
+        Constraints::tight_for(width, height)
+    }
+
     /// An empty set of insets and extents participates in non-positioned
     /// Stack sizing, like Flutter's `StackParentData.isPositioned`.
     #[must_use]

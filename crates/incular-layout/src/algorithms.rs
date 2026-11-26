@@ -698,9 +698,17 @@ pub fn stack_size(
     has_non_positioned: bool,
     child_count: usize,
 ) -> Size {
-    // Flutter `RenderStack._computeSize`: without a non-positioned child the
+    // An empty stack expands only when both axes have finite maxima.
+    if child_count == 0 {
+        return if constraints.is_width_bounded() && constraints.is_height_bounded() {
+            constraints.biggest()
+        } else {
+            constraints.smallest()
+        };
+    }
+    // Flutter `RenderStack._computeSize`: with only positioned children the
     // stack takes the biggest size its constraints allow.
-    let desired = if !has_non_positioned && child_count > 0 {
+    let desired = if !has_non_positioned {
         constraints.biggest()
     } else if matches!(config.fit, StackFit::Expand) {
         Size::new(
@@ -1064,8 +1072,8 @@ struct WrapRun {
 /// explicit size applies only when the opposing edge is absent; otherwise
 /// the axis is unset and the caller measures the child loosely. `start`/
 /// `end` are offsets and may be negative (meaningful overflow); `size` is a
-/// dimension and invalid (non-finite or negative) values are dropped as
-/// unset rather than clamped.
+/// dimension: negative finite dimensions tighten to zero as in Flutter,
+/// while non-finite inputs remain unset in Incular's finite size model.
 #[must_use]
 pub fn positioned_axis_size(
     parent: f32,
@@ -1074,8 +1082,11 @@ pub fn positioned_axis_size(
     size: Option<f32>,
 ) -> Option<f32> {
     match (finite_offset(start), finite_offset(end)) {
-        (Some(start), Some(end)) => Some((parent - start - end).max(0.0)),
-        _ => finite_dimension(size),
+        (Some(start), Some(end)) => {
+            let extent = f64::from(parent) - f64::from(end) - f64::from(start);
+            Some(extent.clamp(0., f64::from(f32::MAX)) as f32)
+        }
+        _ => size.filter(|value| value.is_finite()).map(|value| value.max(0.)),
     }
 }
 
@@ -1193,13 +1204,6 @@ fn finite_factor(value: f32) -> Option<f32> {
 /// A usable offset: any finite value, including negative overflow.
 fn finite_offset(value: Option<f32>) -> Option<f32> {
     value.filter(|value| value.is_finite())
-}
-
-/// A usable dimension: finite and nonnegative. Invalid dimensions are
-/// dropped as unset rather than clamped, so they never silently become
-/// zero-sized content.
-fn finite_dimension(value: Option<f32>) -> Option<f32> {
-    value.and_then(finite_factor)
 }
 
 fn safe_add(left: f32, right: f32) -> f32 {

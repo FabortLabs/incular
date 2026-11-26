@@ -1,11 +1,10 @@
 //! Stack, Positioned, and IndexedStack layout contracts.
 //!
 //! Conflict policy (owned by `incular-layout`, pinned here): left
-//! wins over right and top wins over bottom; a single edge bounds
-//! measurement loosely while opposing edges derive the algorithm
-//! size; the child keeps its measured size, so drawing may differ
-//! from the algorithm size; non-finite edges are dropped as unset
-//! and negative edges are meaningful offsets, not invalid dimensions.
+//! wins over right and top wins over bottom; a single edge positions
+//! the child while opposing edges tighten its extent. Unspecified axes
+//! stay unbounded. Non-finite edges are dropped as unset,
+//! negative edges remain offsets, and negative dimensions tighten to zero.
 //! Clip behavior is covered by the clip ledger and not re-tested here.
 
 use incular_config::{Alignment, Constraints, StackFit};
@@ -156,8 +155,7 @@ fn positioned_negative_edges_are_meaningful_offsets() {
     let second = tree.children(kids[1]).expect("child")[0];
     assert_eq!(bounds_of(&tree, second).0, -5.);
 
-    // A negative width is invalid and dropped, so the child measures its
-    // intrinsic size instead.
+    // Unlike a negative offset, a negative explicit width tightens to zero.
     let mut tree = WidgetTree::new();
     let root = tree
         .mount(
@@ -170,7 +168,7 @@ fn positioned_negative_edges_are_meaningful_offsets() {
     layout_tight(&mut tree, 200., 200.);
     let child = stack_kids(&tree, root)[0];
     let inner = tree.children(child).expect("child")[0];
-    assert_eq!(bounds_of(&tree, inner).2, 25.);
+    assert_eq!(bounds_of(&tree, inner).2, 0.);
 }
 
 #[test]
@@ -462,7 +460,7 @@ fn indexed_stack_clip_layers_follow_clip_behavior() {
         clip_rects(&tree.paint()).is_empty(),
         "Clip::None paints none"
     );
-    assert_eq!(tree.diagnostics().layouts, layouts + 1);
+    assert_eq!(tree.diagnostics().layouts, layouts, "clip-only updates must not revisit layout");
     assert_eq!(bounds_of(&tree, stack_kids(&tree, root)[1]).2, 80.);
 
     tree.update(root, build(Clip::HardEdge).into())

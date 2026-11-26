@@ -612,19 +612,6 @@ impl WidgetTree {
                         .collect(),
                 )
             }
-            RenderKind::Stack { .. } | RenderKind::IndexedStack { .. } if children.is_empty() => {
-                // Flutter stack.dart: a childless stack takes the biggest size
-                // its constraints allow, or the smallest when unbounded.
-                let size = if constraints.is_width_bounded() && constraints.is_height_bounded() {
-                    constraints.biggest()
-                } else {
-                    constraints.smallest()
-                };
-                self.set_layout_overflow(id, false);
-                self.render_live_mut(id, "retained render must remain live")
-                    .baseline = None;
-                (size, ChildOffsets::default())
-            }
             RenderKind::Stack { .. } | RenderKind::IndexedStack { .. } => {
                 // Both stacks lay out every child. Plain Stack reports the
                 // highest actual baseline; IndexedStack reads only its selection.
@@ -667,15 +654,6 @@ impl WidgetTree {
                         max_non_pos_h = max_non_pos_h.max(size.height);
                     }
                 }
-                // Flutter stack.dart: with no non-positioned child the stack
-                // takes constraints.biggest, which positioned children see too.
-                let stack_size = constraints.constrain(
-                    if matches!(stack.fit, StackFit::Expand) || !has_non_positioned {
-                        constraints.biggest()
-                    } else {
-                        Size::new(max_non_pos_w, max_non_pos_h)
-                    },
-                );
                 let final_size = incular_layout::stack_size(
                     constraints,
                     &stack,
@@ -690,44 +668,26 @@ impl WidgetTree {
                 for child in children {
                     let position = self.stack_positioned(*child, constraints)?;
                     if let Some(pos) = position {
-                        let incular_layout::Positioned {
-                            left,
-                            top,
-                            right,
-                            bottom,
-                            width,
-                            height,
-                        } = pos;
-                        // Share the positioning policy: a configured axis
-                        // (explicit size or opposing edges) tightens the
-                        // child, so the size it adopts equals the size the
-                        // algorithm anchors with and right/bottom insets are
-                        // exact. Unconfigured axes are unbounded, as
-                        // Flutter's `RenderStack.layoutPositionedChild`
-                        // starts from `BoxConstraints()`.
-                        let child_w = incular_layout::positioned_axis_size(
-                            stack_size.width,
-                            left,
-                            right,
-                            width,
-                        );
-                        let child_h = incular_layout::positioned_axis_size(
-                            stack_size.height,
-                            top,
-                            bottom,
-                            height,
-                        );
-                        // An `OverlayPortal` popup is laid out against the
-                        // overlay by the placement pass; here it stays within
-                        // the stack.
-                        let (free_w, free_h) = if self.is_transient_popup(*child) {
-                            (stack_size.width, stack_size.height)
-                        } else {
-                            (f32::INFINITY, f32::INFINITY)
-                        };
-                        let (min_w, max_w) = child_w.map_or((0.0, free_w), |w| (w, w));
-                        let (min_h, max_h) = child_h.map_or((0.0, free_h), |h| (h, h));
-                        self.layout_render(*child, Constraints::new(min_w, max_w, min_h, max_h))?;
+                        let mut child_constraints = pos.positioned_child_constraints(final_size);
+                        // A portal stays within the stack on its unspecified
+                        // axes until its actual overlay placement pass.
+                        if self.is_transient_popup(*child) {
+                            child_constraints = Constraints::new(
+                                child_constraints.min_width(),
+                                if child_constraints.is_width_bounded() {
+                                    child_constraints.max_width()
+                                } else {
+                                    final_size.width
+                                },
+                                child_constraints.min_height(),
+                                if child_constraints.is_height_bounded() {
+                                    child_constraints.max_height()
+                                } else {
+                                    final_size.height
+                                },
+                            );
+                        }
+                        self.layout_render(*child, child_constraints)?;
                     }
                     let child_node = self.render_live(child, "retained render must remain live");
                     let size = child_node.size;
