@@ -738,6 +738,8 @@ pub(crate) enum WidgetKind {
         alignment: Alignment,
         sampling: ImageSampling,
         blend_mode: BlendMode,
+        center_slice: Option<Rect>,
+        match_text_direction: bool,
     },
     TextField(Box<TextFieldSpec>),
     Padding {

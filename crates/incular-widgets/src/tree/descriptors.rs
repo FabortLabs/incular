@@ -223,46 +223,7 @@ impl From<Image> for Widget {
             );
             return crate::ColorFiltered::new(filter, Image::with_options(image, options)).into();
         }
-        if options.center_slice.is_some() || options.match_text_direction {
-            return crate::Builder::new(move |context| {
-                let flip = options.match_text_direction
-                    && context.text_direction() == Some(TextDirection::Rtl);
-                let plain = ImageOptions {
-                    center_slice: None,
-                    match_text_direction: false,
-                    ..options.clone()
-                };
-                if options.center_slice.is_none() && !flip {
-                    return Image::with_options(image.clone(), plain).into();
-                }
-                let sizing: Widget = Image::with_options(image.clone(), plain).into();
-                crate::painting_effects::painted_image(
-                    crate::painting_effects::ImagePaint {
-                        image: image.clone(),
-                        scale: options.scale,
-                        fit: options.fit,
-                        alignment: options.alignment,
-                        center_slice: options.center_slice,
-                        repeat: options.repeat,
-                        flip_horizontally: flip,
-                        sampling: options.sampling,
-                    },
-                    Some(sizing),
-                )
-            })
-            .into();
-        }
-        Widget::image(
-            Some(image),
-            options.width,
-            options.height,
-            options.scale,
-            options.fit.unwrap_or(ImageFit::ScaleDown),
-            options.repeat,
-            options.alignment,
-            options.sampling,
-            options.destination_blend_mode,
-        )
+        Widget::image(Some(image), options)
     }
 }
 

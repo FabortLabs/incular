@@ -1640,14 +1640,25 @@ fn image_picture_bounds(commands: &[PaintCommand]) -> Rect {
         [PaintCommand::PushClip { rect }, images @ .., PaintCommand::PopClip] => (images, Some(*rect)),
         _ => (commands, None),
     };
+    let (images, transform) = match images {
+        [PaintCommand::PushTransform { transform }, images @ .., PaintCommand::PopTransform] => {
+            (images, Some(*transform))
+        }
+        _ => (images, None),
+    };
     images
         .iter()
         .filter_map(|command| match command {
-            PaintCommand::Image { destination, .. } => match clip {
-                Some(clip) => destination.intersection(clip),
-                None => Some(*destination),
+            PaintCommand::Image { destination, .. } => {
+                let destination = transform.map_or(*destination, |transform| {
+                    transform.transform_rect_bbox(*destination)
+                });
+                match clip {
+                    Some(clip) => destination.intersection(clip),
+                    None => Some(destination),
+                }
+                .filter(|rect| rect.size.width > 0.0 && rect.size.height > 0.0)
             }
-            .filter(|rect| rect.size.width > 0.0 && rect.size.height > 0.0),
             _ => None,
         })
         .reduce(|a, b| {

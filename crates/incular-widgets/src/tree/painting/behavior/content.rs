@@ -95,14 +95,35 @@ impl WidgetTree {
                 repeat,
                 alignment,
                 sampling,
+                center_slice,
+                flip_horizontally,
                 ..
             } => {
+                let bounds = Rect::from_origin_size(Offset::ZERO, size);
+                if size.width <= 0.0 || size.height <= 0.0 {
+                    return;
+                }
+                if center_slice.is_some() || flip_horizontally {
+                    cache.extend_from(&crate::painting_effects::paint_image(
+                        &crate::painting_effects::ImagePaint {
+                            image: image.clone(),
+                            scale,
+                            fit: Some(fit),
+                            alignment,
+                            center_slice,
+                            repeat,
+                            flip_horizontally,
+                            sampling,
+                        },
+                        bounds,
+                    ));
+                    return;
+                }
                 let intrinsic = image.decoded();
                 let source = Rect::from_origin_size(
                     Offset::ZERO,
                     Size::new(intrinsic.width() as f32, intrinsic.height() as f32),
                 );
-                let bounds = Rect::from_origin_size(Offset::ZERO, size);
                 let (source, destination) =
                     image_fit_rects_scaled(source, bounds, fit, alignment, scale);
                 if repeat == ImageRepeat::NoRepeat || destination.size == bounds.size {

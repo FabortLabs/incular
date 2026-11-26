@@ -14,29 +14,50 @@ Future<(Pixel, Pixel)> _sample(
   ui.Color? tint,
   bool invert = false,
   double opacity = 1,
+  TextDirection? direction,
 }) async {
   final recorder = ui.PictureRecorder();
-  ui.Canvas(recorder).drawColor(const ui.Color(0xffffffff), ui.BlendMode.src);
+  final canvas = ui.Canvas(recorder);
+  if (direction == null) {
+    canvas.drawColor(const ui.Color(0xffffffff), ui.BlendMode.src);
+  } else {
+    canvas.drawRect(
+      const ui.Rect.fromLTWH(0, 0, 1, 2),
+      ui.Paint()..color = const ui.Color(0xffff0000),
+    );
+    canvas.drawRect(
+      const ui.Rect.fromLTWH(1, 0, 1, 2),
+      ui.Paint()..color = const ui.Color(0xff0000ff),
+    );
+  }
   final picture = recorder.endRecording();
   final source = picture.toImageSync(2, 2);
   picture.dispose();
   addTearDown(source.dispose);
   final boundary = GlobalKey();
   await tester.pumpWidget(
-    Center(
-      child: RepaintBoundary(
-        key: boundary,
-        child: ColoredBox(
-          color: background,
-          child: SizedBox(
-            width: 6,
-            height: 4,
-            child: RawImage(
-              image: source,
-              blendMode: blend,
-              color: tint,
-              invertColors: invert,
-              opacity: AlwaysStoppedAnimation<double>(opacity),
+    Directionality(
+      textDirection: direction ?? TextDirection.ltr,
+      child: Center(
+        child: RepaintBoundary(
+          key: boundary,
+          child: ColoredBox(
+            color: background,
+            child: SizedBox(
+              width: 6,
+              height: 4,
+              child: RawImage(
+                image: source,
+                blendMode: blend,
+                color: tint,
+                invertColors: invert,
+                opacity: AlwaysStoppedAnimation<double>(opacity),
+                alignment: direction == null
+                    ? Alignment.center
+                    : Alignment.topLeft,
+                matchTextDirection: direction != null,
+                filterQuality: ui.FilterQuality.none,
+              ),
             ),
           ),
         ),
@@ -62,7 +83,9 @@ Future<(Pixel, Pixel)> _sample(
         );
       }
 
-      return (pixel(3, 2), pixel(0, 2));
+      return direction == null
+          ? (pixel(3, 2), pixel(0, 2))
+          : (pixel(0, 0), pixel(2, 0));
     } finally {
       image.dispose();
     }
@@ -105,6 +128,36 @@ void main() {
         opacity: 0,
       ),
       ((255, 0, 0, 255), (255, 0, 0, 255)),
+    );
+  });
+
+  testWidgets(
+    'RawImage mirrors source pixels without moving physical alignment or widening Src',
+    (tester) async {
+      for (final (direction, inside) in [
+        (TextDirection.ltr, (255, 0, 0, 255)),
+        (TextDirection.rtl, (0, 0, 255, 255)),
+      ]) {
+        expect(
+          await _sample(
+            tester,
+            blend: ui.BlendMode.src,
+            background: const ui.Color(0xff00ff00),
+            direction: direction,
+          ),
+          (inside, (0, 255, 0, 255)),
+        );
+      }
+    },
+  );
+
+  testWidgets('RawImage matchTextDirection requires Directionality', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const RawImage(matchTextDirection: true));
+    expect(
+      tester.takeException().toString(),
+      contains('No Directionality widget found'),
     );
   });
 }

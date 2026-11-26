@@ -883,3 +883,106 @@ fn raw_image_zero_opacity_preserves_coverage_only_for_destructive_blends() {
         }
     }
 }
+
+#[test]
+fn raw_image_nine_slice_and_mirroring_keep_blends_inside_the_painted_raster() {
+    use incular_config::Alignment;
+    let source = handle(30, 30);
+    let slice = rect(10., 10., 10., 10.);
+    let boundary = rect(0., 0., 100., 60.);
+    let clone = || {
+        RawImage::new()
+            .image(source.clone())
+            .blend_mode(BlendMode::Src)
+    };
+    for (raw, expected, count) in [
+        (clone().center_slice(slice), boundary, 9),
+        (
+            clone().center_slice(slice).fit(BoxFit::ScaleDown),
+            rect(35., 15., 30., 30.),
+            9,
+        ),
+        (
+            clone()
+                .match_text_direction(true)
+                .alignment(Alignment::TOP_LEFT),
+            rect(0., 0., 30., 30.),
+            1,
+        ),
+        (
+            clone()
+                .center_slice(slice)
+                .fit(BoxFit::ScaleDown)
+                .match_text_direction(true)
+                .alignment(Alignment::BOTTOM_RIGHT),
+            rect(70., 30., 30., 30.),
+            9,
+        ),
+    ] {
+        let display = painted(
+            Directionality::new(TextDirection::Rtl, raw).into(),
+            boundary.size,
+        );
+        assert_eq!(images(&display).len(), count);
+        assert_eq!(
+            raw_image_destination_blend(&display).expect("blend").2,
+            expected
+        );
+    }
+}
+
+#[test]
+fn raw_image_reacts_to_direction_changes_without_replacing_its_render() {
+    let image = handle(10, 10);
+    let raw = || {
+        RawImage::new()
+            .image(image.clone())
+            .match_text_direction(true)
+    };
+    let mut tree = WidgetTree::new();
+    assert!(matches!(
+        tree.mount(raw().into()),
+        Err(
+            incular_widgets::internal::TreeError::MissingDirectionality {
+                widget: "RawImage",
+                ..
+            }
+        ),
+    ));
+
+    let root = tree
+        .mount(Directionality::new(TextDirection::Ltr, raw()).into())
+        .expect("mount");
+    let constraints = Constraints::tight(Size::new(20., 15.));
+    tree.layout(constraints).expect("build initial scope");
+    let child = tree.children(root).expect("inherited scope child")[0];
+    let render = tree.render_id(child).expect("image render");
+    let mut before = None;
+    for direction in [TextDirection::Ltr, TextDirection::Rtl, TextDirection::Ltr] {
+        if before.is_some() {
+            tree.update(root, Directionality::new(direction, raw()).into())
+                .expect("change direction");
+        }
+        tree.layout(constraints).expect("layout");
+        tree.update_compositor(incular_core::time::Instant::now())
+            .expect("composite");
+        let display = tree.paint();
+        assert_eq!(tree.render_id(child), Some(render));
+        assert_eq!(tree.render_size(render), Some(Size::new(20., 15.)));
+        assert_eq!(images(display.commands()).len(), 1);
+        let flipped = display.commands().iter().any(|command| {
+            matches!(
+                command,
+                PaintCommand::PushTransform { transform } if transform.coefficients()[0] < 0.
+            )
+        });
+        assert_eq!(flipped, direction == TextDirection::Rtl);
+        let layouts = tree.diagnostics().layouts;
+        if let Some(last) = before {
+            // The inherited scope itself may be visited again. The
+            // image changes paint only and keeps its measured size.
+            assert!(layouts <= last + 1);
+        }
+        before = Some(layouts);
+    }
+}

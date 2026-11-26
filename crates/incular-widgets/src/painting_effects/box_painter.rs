@@ -430,7 +430,6 @@ fn resolved_decoration_image(image: &DecorationImage, direction: Option<TextDire
                 flip_horizontally: flip,
                 sampling: image.filter_quality.sampling(),
             },
-            None,
         )
     } else {
         Image::new(image.image.clone())
@@ -1258,11 +1257,9 @@ pub(crate) fn paint_image(paint: &ImagePaint, rect: Rect) -> DisplayList {
     canvas.finish()
 }
 
-/// An image widget painted by [`paint_image`] at the size of its box. The
-/// image's own layout is kept by `sizing`, which lays out but paints
-/// nothing.
-pub(crate) fn painted_image(paint: ImagePaint, sizing: Option<Widget>) -> Widget {
-    let painted: Widget = LayoutBuilder::new(move |_, constraints| {
+/// Paint a decoration's image over its allocated box.
+fn painted_image(paint: ImagePaint) -> Widget {
+    LayoutBuilder::new(move |_, constraints| {
         let size = constraints.biggest();
         CustomPaint::new(
             size,
@@ -1270,22 +1267,7 @@ pub(crate) fn painted_image(paint: ImagePaint, sizing: Option<Widget>) -> Widget
         )
         .into()
     })
-    .into();
-    match sizing {
-        None => painted,
-        Some(sizing) => Stack::new([
-            Widget::from(
-                crate::Visibility::new(sizing)
-                    .visible(false)
-                    .maintain_state(true)
-                    .maintain_size(true),
-            ),
-            Widget::from(Positioned::fill(painted)),
-        ])
-        .fit(StackFit::Passthrough)
-        .clip_behavior(Clip::None)
-        .into(),
-    }
+    .into()
 }
 
 /// `BoxShadow.toPaint`'s `MaskFilter.blur(blurStyle, sigma)`. The

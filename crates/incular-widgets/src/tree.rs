@@ -872,6 +872,8 @@ pub enum RenderKind {
         alignment: Alignment,
         sampling: ImageSampling,
         blend_mode: BlendMode,
+        center_slice: Option<Rect>,
+        flip_horizontally: bool,
     },
     /// Boxed: text fields are rare and this is the largest payload.
     TextField(Box<TextFieldRender>),

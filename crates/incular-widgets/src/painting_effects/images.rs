@@ -8,7 +8,7 @@ use incular_rendering::{
 };
 use typed_builder::TypedBuilder;
 
-use crate::tree::ImageFit;
+use crate::tree::{ImageFit, ImageOptions};
 use crate::{Blur, BlurController, ColorFiltered, Image, ImageRepeat, Opacity, Widget};
 
 // These modes change an existing destination even when the source is
@@ -235,11 +235,8 @@ impl From<RawImage> for Widget {
                 if let Some(quality) = value.filter_quality {
                     img = img.filter_quality(quality);
                 }
-                let has_source_effects = value.color.is_some()
-                    || value.invert_colors
-                    || value.opacity < 1.0
-                    || value.center_slice.is_some()
-                    || value.match_text_direction;
+                let has_source_effects =
+                    value.color.is_some() || value.invert_colors || value.opacity < 1.0;
                 if !has_source_effects {
                     return img.destination_blend_mode(value.blend_mode).into();
                 }
@@ -278,17 +275,22 @@ impl From<RawImage> for Widget {
             }
             None => Widget::image(
                 None,
-                value.width,
-                value.height,
-                value.scale,
-                value.fit.unwrap_or(ImageFit::ScaleDown),
-                value.repeat,
-                value.alignment,
-                value.filter_quality.map_or(
-                    incular_rendering::ImageSampling::Linear,
-                    FilterQuality::sampling,
-                ),
-                value.blend_mode,
+                ImageOptions {
+                    width: value.width,
+                    height: value.height,
+                    scale: value.scale,
+                    fit: value.fit,
+                    repeat: value.repeat,
+                    alignment: value.alignment,
+                    sampling: value.filter_quality.map_or(
+                        incular_rendering::ImageSampling::Linear,
+                        FilterQuality::sampling,
+                    ),
+                    center_slice: value.center_slice,
+                    match_text_direction: value.match_text_direction,
+                    destination_blend_mode: value.blend_mode,
+                    ..ImageOptions::default()
+                },
             ),
         }
     }

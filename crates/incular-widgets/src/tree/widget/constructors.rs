@@ -889,33 +889,26 @@ impl Widget {
         }
     }
     #[must_use]
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "image lowering passes every image field explicitly"
-    )]
-    pub(crate) fn image(
-        image: Option<ImageHandle>,
-        width: Option<f32>,
-        height: Option<f32>,
-        scale: f32,
-        fit: ImageFit,
-        repeat: ImageRepeat,
-        alignment: Alignment,
-        sampling: ImageSampling,
-        blend_mode: BlendMode,
-    ) -> Self {
+    pub(crate) fn image(image: Option<ImageHandle>, options: ImageOptions) -> Self {
+        let fit = options.fit.unwrap_or(if options.center_slice.is_some() {
+            ImageFit::Fill
+        } else {
+            ImageFit::ScaleDown
+        });
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::Image {
                 image,
-                width,
-                height,
-                scale,
+                width: options.width,
+                height: options.height,
+                scale: options.scale,
                 fit,
-                repeat,
-                alignment,
-                sampling,
-                blend_mode,
+                repeat: options.repeat,
+                alignment: options.alignment,
+                sampling: options.sampling,
+                blend_mode: options.destination_blend_mode,
+                center_slice: options.center_slice,
+                match_text_direction: options.match_text_direction,
             },
             semantics: None,
         })

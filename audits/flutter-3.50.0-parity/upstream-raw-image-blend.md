@@ -37,3 +37,22 @@ the ordinary SrcOver path and non-destructive controls do not emit the
 raster. The native checks execute the captured filters and verify effect
 bounds for those modes. Forty-six native cases passed; these two authored
 reference cases do not change the upstream registration total.
+
+## Nine-slice and direction-aware raster geometry
+
+Nine-slicing and ambient mirroring now record on the existing image
+render object rather than through an extra builder, stack and custom
+paint subtree. Source-replacement scope comes from the actual nine
+patches, in their transformed coordinates, bounded by the repeat
+clip. This keeps the unpainted space around an explicitly scaled-down
+slice or an edge-aligned RTL image out of the blend. The native tests
+check full-fit and smaller slice bounds, physical left/right alignment,
+LTR → RTL → LTR with a stable render identity, and the required
+Directionality error. The pinned authored Flutter pixels show the first
+source column changing red to blue while the physical left edge and the
+outside green pixels stay put.
+
+The four pinned source-effect controls and 51 focused native image,
+painting and neighboring decoration tests passed. This verifies native
+rendered commands and source color math; offscreen wgpu pixel readback
+and transformed fractional coverage remain unverified.

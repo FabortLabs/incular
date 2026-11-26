@@ -117,6 +117,8 @@ impl std::fmt::Debug for WidgetKind {
                 alignment,
                 sampling: _,
                 blend_mode,
+                center_slice,
+                match_text_direction,
             } => f
                 .debug_struct("Image")
                 .field("id", &image.as_ref().map(incular_image::ImageHandle::id))
@@ -127,6 +129,8 @@ impl std::fmt::Debug for WidgetKind {
                 .field("repeat", repeat)
                 .field("alignment", alignment)
                 .field("blend_mode", blend_mode)
+                .field("center_slice", center_slice)
+                .field("match_text_direction", match_text_direction)
                 .finish(),
             Self::TextField(spec) => f
                 .debug_struct("TextField")
@@ -1161,6 +1165,8 @@ impl PartialEq for WidgetKind {
                     alignment: k,
                     sampling: m,
                     blend_mode: o,
+                    center_slice: q,
+                    match_text_direction: u,
                 },
                 Self::Image {
                     image: f,
@@ -1172,6 +1178,8 @@ impl PartialEq for WidgetKind {
                     alignment: l,
                     sampling: n,
                     blend_mode: p,
+                    center_slice: r,
+                    match_text_direction: v,
                 },
             ) => {
                 a == f
@@ -1183,6 +1191,8 @@ impl PartialEq for WidgetKind {
                     && k == l
                     && m == n
                     && o == p
+                    && q == r
+                    && u == v
             }
             (Self::TextField(left), Self::TextField(right)) => left == right,
             (

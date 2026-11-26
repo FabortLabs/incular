@@ -20,7 +20,7 @@ mod table_border;
 pub use table_border::TableBorder;
 
 pub use box_painter::DecorationPosition;
-pub(crate) use box_painter::{ImagePaint, decorated, painted_image};
+pub(crate) use box_painter::{ImagePaint, decorated, paint_image};
 pub use custom_paint::{CustomPainter, CustomPainterSemantics, SemanticsBuilder};
 pub use decoration::{
     BlurStyle, Border, BorderDirectional, BorderSide, BorderStyle, BoxBorder, BoxDecoration,
