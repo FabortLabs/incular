@@ -1116,3 +1116,126 @@ fn declared_semantic_input_focus_does_not_create_or_move_keyboard_focus() {
         old_flags = Some(expected);
     }
 }
+
+#[test]
+fn independent_sliver_annotation_flags_survive_primary_role_changes() {
+    use incular_semantics::{CheckedState, SemanticAnnotationFlag as Flag, SemanticRole};
+
+    let build = |active| {
+        scene(move || {
+            let annotations = Semantics::default()
+                .container(true)
+                .explicit_child_nodes(true)
+                .label("flags")
+                .button(active)
+                .slider(active)
+                .keyboard_key(active)
+                .link(active)
+                .text_field(active)
+                .in_mutually_exclusive_group(active)
+                .header(active)
+                .image(active)
+                .scopes_route(active)
+                .names_route(active)
+                .expanded(active);
+            if active {
+                annotations.checked(CheckedState::Indeterminate)
+            } else {
+                annotations.toggled(true)
+            }
+        })
+    };
+    let mut runtime = Runtime::new(build(true)).unwrap();
+    frame(&mut runtime);
+    let root = runtime.tree().root().unwrap();
+    let id = node(&runtime, "flags").id;
+    let mut mobile = MobileAccessibilityProjection::new();
+    let declared = [
+        Flag::Button,
+        Flag::Slider,
+        Flag::KeyboardKey,
+        Flag::Link,
+        Flag::TextField,
+        Flag::MutuallyExclusiveGroup,
+        Flag::Header,
+        Flag::Image,
+        Flag::ScopesRoute,
+        Flag::NamesRoute,
+    ];
+
+    for active in [true, false, true] {
+        runtime.schedule_update(root, build(active)).unwrap();
+        frame(&mut runtime);
+        let retained = node(&runtime, "flags");
+        assert_eq!(retained.id, id);
+        assert_eq!(
+            retained.role,
+            if active {
+                SemanticRole::Image
+            } else {
+                SemanticRole::GenericContainer
+            },
+        );
+        for flag in declared {
+            assert_eq!(
+                retained.state.annotation_flags.get(flag),
+                Some(active),
+                "{flag:?}"
+            );
+        }
+        assert_eq!(retained.state.expanded, Some(active));
+        assert_eq!(
+            retained.state.checked,
+            active.then_some(CheckedState::Indeterminate)
+        );
+        assert_eq!(retained.state.toggled, (!active).then_some(true));
+        let update = mobile.sync(runtime.tree().semantics()).unwrap();
+        let native = update
+            .nodes
+            .iter()
+            .find(|entry| entry.semantic.id == id)
+            .unwrap();
+        assert_eq!(
+            native.semantic.state.annotation_flags,
+            retained.state.annotation_flags
+        );
+        assert_eq!(native.semantic.state.expanded, retained.state.expanded);
+    }
+}
+
+#[test]
+#[cfg(debug_assertions)]
+#[should_panic(expected = "explicit_child_nodes must be true if scopes_route is true")]
+fn a_semantic_route_scope_requires_explicit_children() {
+    let _ = Semantics::new(SizedBox::square(10.))
+        .scopes_route(true)
+        .explicit();
+}
+
+#[test]
+fn merging_annotations_unions_independent_flags_without_reassigning_them() {
+    use incular_semantics::SemanticAnnotationFlag as Flag;
+    use incular_widgets::{Column, MergeSemantics};
+
+    let a = Semantics::new(SizedBox::square(10.))
+        .label("a")
+        .button(true);
+    let b = Semantics::new(SizedBox::square(10.))
+        .label("b")
+        .button(false)
+        .keyboard_key(true);
+    let mut runtime = Runtime::new(MergeSemantics::new(Column::new([a, b])).into()).unwrap();
+    frame(&mut runtime);
+    let tree = runtime.tree().semantics();
+    let merged = tree
+        .iter()
+        .map(|(_, node)| node)
+        .find(|node| node.label.as_deref() == Some("a\nb"))
+        .unwrap();
+    assert_eq!(merged.state.annotation_flags.get(Flag::Button), Some(true));
+    assert_eq!(
+        merged.state.annotation_flags.get(Flag::KeyboardKey),
+        Some(true)
+    );
+    assert_eq!(merged.state.annotation_flags.get(Flag::Image), None);
+}

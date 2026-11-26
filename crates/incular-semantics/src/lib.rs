@@ -400,6 +400,72 @@ impl SemanticValidationResult {
     }
 }
 
+/// Independent annotations that cannot be represented by a single native
+/// accessibility role. Flutter allows several of these on the same node.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SemanticAnnotationFlag {
+    Button,
+    Slider,
+    KeyboardKey,
+    Link,
+    TextField,
+    Header,
+    Image,
+    MutuallyExclusiveGroup,
+    ScopesRoute,
+    NamesRoute,
+}
+
+impl SemanticAnnotationFlag {
+    const fn bit(self) -> u16 {
+        1 << self as u16
+    }
+}
+
+/// Compact annotation flags, including explicit false where supplied.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SemanticAnnotationFlags {
+    specified: u16,
+    enabled: u16,
+}
+
+impl SemanticAnnotationFlags {
+    #[must_use]
+    pub const fn get(self, flag: SemanticAnnotationFlag) -> Option<bool> {
+        let bit = flag.bit();
+        if self.specified & bit == 0 {
+            None
+        } else {
+            Some(self.enabled & bit != 0)
+        }
+    }
+
+    pub fn set(&mut self, flag: SemanticAnnotationFlag, value: bool) {
+        let bit = flag.bit();
+        self.specified |= bit;
+        if value {
+            self.enabled |= bit;
+        } else {
+            self.enabled &= !bit;
+        }
+    }
+
+    /// Applies explicit values without overwriting unspecified flags.
+    pub fn overlay(&mut self, other: Self) {
+        self.specified |= other.specified;
+        self.enabled = (self.enabled & !other.specified) | other.enabled;
+    }
+
+    /// Unions independent flags when descendant annotations are absorbed.
+    #[must_use]
+    pub const fn merge(self, other: Self) -> Self {
+        Self {
+            specified: self.specified | other.specified,
+            enabled: self.enabled | other.enabled,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct SemanticState {
     /// Whether the node accepts input. Flutter's default is "unspecified",
@@ -423,6 +489,9 @@ pub struct SemanticState {
     pub selected: bool,
     pub checked: Option<CheckedState>,
     pub expanded: Option<bool>,
+    /// Independent Flutter annotation flags; a bridge can still choose
+    /// one primary platform role from the semantic node.
+    pub annotation_flags: SemanticAnnotationFlags,
     pub read_only: bool,
     pub editable: bool,
     /// Whether a text field's value is visually obscured (for example a
@@ -570,6 +639,7 @@ impl Default for SemanticState {
             selected: false,
             checked: None,
             expanded: None,
+            annotation_flags: SemanticAnnotationFlags::default(),
             read_only: false,
             editable: false,
             obscured: false,

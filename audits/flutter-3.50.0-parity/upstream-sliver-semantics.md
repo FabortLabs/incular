@@ -343,3 +343,17 @@ target or makes an unbound Focus action executable. The projected
 values follow through the portable mobile adapter. All 37 targeted
 Rust checks passed. The upstream combined role and route flags are
 not yet completely covered.
+
+### Independent role and route annotations
+
+The pinned authored flag fixture and retained/runtime projection
+exercise ten independently settable flags on one semantic node.
+Button, slider, link, keyboard key, text field, header, image, route
+scope, route name, and exclusive group state survive alongside the
+single primary role used by platform projections. Rebuilds withdraw
+the flags without replacing the node. Expanded false remains explicit,
+and an indeterminate check is distinct from the toggled-only state.
+Merged annotations union their independent flags. Route scope requires
+explicit child nodes in debug, matching the reference precondition.
+All 50 selected Rust regressions passed. Platform role dispatch and
+route announcements still have separate verification work.

@@ -2,7 +2,8 @@
 
 use incular_semantics::{
     AccessibilityFocusBlockType, AttributedString, CustomSemanticsAction, SemanticAction,
-    SemanticActionKind, SemanticRole, SemanticState, SemanticTextAttributes, TextSelection,
+    SemanticActionKind, SemanticAnnotationFlag, SemanticRole, SemanticState,
+    SemanticTextAttributes, TextSelection,
 };
 use smart_default::SmartDefault;
 use std::{rc::Rc, sync::Arc};
@@ -525,6 +526,9 @@ impl Semantics {
 
     #[must_use]
     pub fn header(mut self, is_header: bool) -> Self {
+        self.state
+            .annotation_flags
+            .set(SemanticAnnotationFlag::Header, is_header);
         if is_header {
             self.role = Some(SemanticRole::Heading);
         }
@@ -533,6 +537,9 @@ impl Semantics {
 
     #[must_use]
     pub fn button(mut self, is_button: bool) -> Self {
+        self.state
+            .annotation_flags
+            .set(SemanticAnnotationFlag::Button, is_button);
         if is_button {
             self.role = Some(SemanticRole::Button);
         }
@@ -541,6 +548,9 @@ impl Semantics {
 
     #[must_use]
     pub fn slider(mut self, is_slider: bool) -> Self {
+        self.state
+            .annotation_flags
+            .set(SemanticAnnotationFlag::Slider, is_slider);
         if is_slider {
             self.role = Some(SemanticRole::Slider);
         }
@@ -549,6 +559,9 @@ impl Semantics {
 
     #[must_use]
     pub fn link(mut self, is_link: bool) -> Self {
+        self.state
+            .annotation_flags
+            .set(SemanticAnnotationFlag::Link, is_link);
         if is_link {
             self.role = Some(SemanticRole::Link);
         }
@@ -557,9 +570,62 @@ impl Semantics {
 
     #[must_use]
     pub fn image(mut self, is_image: bool) -> Self {
+        self.state
+            .annotation_flags
+            .set(SemanticAnnotationFlag::Image, is_image);
         if is_image {
             self.role = Some(SemanticRole::Image);
         }
+        self
+    }
+
+    /// Declares an editable-text role flag without creating an editor.
+    #[must_use]
+    pub fn text_field(mut self, is_text_field: bool) -> Self {
+        self.state
+            .annotation_flags
+            .set(SemanticAnnotationFlag::TextField, is_text_field);
+        if is_text_field {
+            self.role = Some(SemanticRole::TextField);
+        }
+        self
+    }
+
+    #[must_use]
+    pub fn keyboard_key(mut self, is_key: bool) -> Self {
+        self.state
+            .annotation_flags
+            .set(SemanticAnnotationFlag::KeyboardKey, is_key);
+        self
+    }
+
+    #[must_use]
+    pub fn in_mutually_exclusive_group(mut self, exclusive: bool) -> Self {
+        self.state
+            .annotation_flags
+            .set(SemanticAnnotationFlag::MutuallyExclusiveGroup, exclusive);
+        self
+    }
+
+    #[must_use]
+    pub fn scopes_route(mut self, scopes: bool) -> Self {
+        self.state
+            .annotation_flags
+            .set(SemanticAnnotationFlag::ScopesRoute, scopes);
+        self
+    }
+
+    #[must_use]
+    pub fn names_route(mut self, names: bool) -> Self {
+        self.state
+            .annotation_flags
+            .set(SemanticAnnotationFlag::NamesRoute, names);
+        self
+    }
+
+    #[must_use]
+    pub fn expanded(mut self, expanded: bool) -> Self {
+        self.state.expanded = Some(expanded);
         self
     }
 
@@ -786,6 +852,11 @@ impl Semantics {
     #[doc(hidden)]
     #[must_use]
     pub fn explicit(&self) -> Option<crate::ExplicitSemantics> {
+        debug_assert!(
+            self.state.annotation_flags.get(SemanticAnnotationFlag::ScopesRoute) != Some(true)
+                || self.state.explicit_child_nodes,
+            "explicit_child_nodes must be true if scopes_route is true",
+        );
         let has_metadata = self.role.is_some()
             || self.locale_for_subtree.is_some()
             || self.label.is_some()

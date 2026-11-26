@@ -12,7 +12,7 @@
 use super::*;
 use incular_semantics::{
     AccessibilityFocusBlockType, CustomSemanticsAction, CustomSemanticsActionId, SemanticAction,
-    SemanticValidationResult, SemanticsHitTestBehavior, StringAttribute,
+    SemanticAnnotationFlags, SemanticValidationResult, SemanticsHitTestBehavior, StringAttribute,
 };
 use std::{borrow::Cow, rc::Rc};
 
@@ -54,6 +54,7 @@ struct MergedSemanticSummary {
     direction: Option<TextDirection>,
     heading: Option<u8>,
     validation: SemanticValidationResult,
+    annotation_flags: SemanticAnnotationFlags,
     focus_block: AccessibilityFocusBlockType,
     custom_actions: Vec<CustomSemanticsActionId>,
     has_custom_callback: bool,
@@ -1585,6 +1586,7 @@ impl WidgetTree {
         }
         state.heading_level = state.heading_level.or(merged.heading);
         state.validation_result = state.validation_result.merge(merged.validation);
+        state.annotation_flags = state.annotation_flags.merge(merged.annotation_flags);
         state.accessibility_focus_block_type = own_focus_block.merge(merged.focus_block);
         if state.heading_level.is_some() && role == Some(SemanticRole::GenericContainer) {
             role = Some(SemanticRole::Heading);
@@ -2561,6 +2563,7 @@ impl WidgetTree {
             merged.validation = merged
                 .validation
                 .merge(explicit.state.effective_validation_result());
+            merged.annotation_flags = merged.annotation_flags.merge(explicit.state.annotation_flags);
             merged.add_tags(&explicit.state.tags);
             if merged.hit_test == SemanticsHitTestBehavior::Defer {
                 merged.hit_test = explicit.state.hit_test_behavior;
@@ -3167,6 +3170,7 @@ fn overlay_semantic_state(base: &mut SemanticState, overlay: &SemanticState) {
         base.set_enabled_state(Some(enabled));
     }
     base.validation_result = base.validation_result.merge(overlay.validation_result);
+    base.annotation_flags.overlay(overlay.annotation_flags);
     if !overlay.tags.is_empty() {
         base.tags.clone_from(&overlay.tags);
     }
