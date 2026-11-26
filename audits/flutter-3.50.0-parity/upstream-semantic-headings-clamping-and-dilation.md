@@ -85,3 +85,14 @@ and returns when area is restored without replacing the render object.
 All 44 selected layout, semantics and custom-paint tests pass.
 The Flutter root's debug transform accessor remains a distinct surface,
 so this recheck does not add an original pair.
+
+## Double-precision clamping simulation
+
+The pinned initial-condition and ballistic-restart cases now pair using
+the public ClampingScrollSimulation. It reuses the runtime's f64 motion
+equations without first rounding the caller's inputs or samples to f32.
+All nine initial positions and velocities, and every restarted position
+and velocity along the 90Hz trajectory, agree within 1e-10. The runtime's
+existing f32 scrolling/layout boundary is unchanged. Native controls
+also verify that a zero-velocity simulation is finite and increased
+friction shortens travel.

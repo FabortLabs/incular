@@ -421,8 +421,12 @@ struct ClampingMotion {
 
 impl ClampingMotion {
     fn new(position: f64, velocity: f64) -> Self {
+        Self::with_friction(position, velocity, CLAMPING_FRICTION)
+    }
+
+    fn with_friction(position: f64, velocity: f64, friction: f64) -> Self {
         let rate = Self::deceleration_rate();
-        let reference = CLAMPING_FRICTION * CLAMPING_PHYSICAL_COEFF / CLAMPING_INFLEXION;
+        let reference = friction * CLAMPING_PHYSICAL_COEFF / CLAMPING_INFLEXION;
         let android = (velocity.abs() / reference).powf(1.0 / (rate - 1.0));
         let duration = rate * CLAMPING_INFLEXION * android;
         Self {
@@ -439,14 +443,87 @@ impl ClampingMotion {
         0.78f64.ln() / 0.9f64.ln()
     }
 
+    fn progress(&self, time: f64) -> f64 {
+        let ratio = time / self.duration;
+        // Flutter clampDouble places NaN at the upper bound, including
+        // time zero for a simulation that began at rest.
+        if ratio.is_nan() { 1.0 } else { ratio.clamp(0., 1.) }
+    }
+
     fn x(&self, time: f64) -> f64 {
-        let t = (time / self.duration).clamp(0., 1.);
+        let t = self.progress(time);
         self.position + self.distance * (1.0 - (1.0 - t).powf(self.rate))
     }
 
     fn dx(&self, time: f64) -> f64 {
-        let t = (time / self.duration).clamp(0., 1.);
+        let t = self.progress(time);
         self.velocity * (1.0 - t).powf(self.rate - 1.0)
+    }
+}
+
+/// Flutter's `ClampingScrollSimulation` over double-precision motion.
+///
+/// This exposes the same clamping model used by the runtime. Use it for
+/// physics calculations and restarts that must not round to the renderer's
+/// f32 coordinate boundary.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ClampingScrollSimulation {
+    motion: ClampingMotion,
+    friction: f64,
+}
+
+impl ClampingScrollSimulation {
+    /// Starts at logical `position` with `velocity` in pixels per second.
+    #[must_use]
+    pub fn new(position: f64, velocity: f64) -> Self {
+        Self { motion: ClampingMotion::new(position, velocity), friction: CLAMPING_FRICTION }
+    }
+
+    /// Changes the fling friction, recalculating its duration and distance.
+    #[must_use]
+    pub fn with_friction(mut self, friction: f64) -> Self {
+        debug_assert!(friction.is_finite() && friction > 0.0, "fling friction must be positive");
+        self.motion = ClampingMotion::with_friction(
+            self.motion.position, self.motion.velocity, friction,
+        );
+        self.friction = friction;
+        self
+    }
+
+    /// Initial position in logical pixels.
+    #[must_use]
+    pub const fn position(&self) -> f64 {
+        self.motion.position
+    }
+
+    /// Initial velocity in logical pixels per second.
+    #[must_use]
+    pub const fn velocity(&self) -> f64 {
+        self.motion.velocity
+    }
+
+    /// Friction used to calculate the trajectory.
+    #[must_use]
+    pub const fn friction(&self) -> f64 {
+        self.friction
+    }
+
+    /// Position in logical pixels at elapsed `seconds`.
+    #[must_use]
+    pub fn x(&self, seconds: f64) -> f64 {
+        self.motion.x(seconds)
+    }
+
+    /// Velocity in logical pixels per second at elapsed `seconds`.
+    #[must_use]
+    pub fn dx(&self, seconds: f64) -> f64 {
+        self.motion.dx(seconds)
+    }
+
+    /// Whether the motion is finished at elapsed `seconds`.
+    #[must_use]
+    pub fn is_done(&self, seconds: f64) -> bool {
+        seconds >= self.motion.duration
     }
 }
 
