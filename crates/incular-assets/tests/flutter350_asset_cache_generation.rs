@@ -32,7 +32,7 @@ impl AssetBundle for DeferredBundle {
     }
 }
 
-fn exercise(structured: bool, all: bool) {
+fn exercise(mode: u8, all: bool) {
     let reads = Arc::new(AtomicUsize::new(0));
     let (first_started, wait_for_read) = mpsc::sync_channel(0);
     let (finish_first, worker_gate) = mpsc::sync_channel(0);
@@ -41,14 +41,16 @@ fn exercise(structured: bool, all: bool) {
         first_started,
         finish_first: Mutex::new(worker_gate),
     }));
-    let get_asset = move |bundle: &CachingAssetBundle<DeferredBundle>| {
-        if structured {
-            bundle
-                .load_structured_data("fixture", |text| Ok::<_, Infallible>(text.to_owned()))
-                .unwrap()
-        } else {
-            bundle.load_string("fixture", true).unwrap().to_string()
-        }
+    let get_asset = move |bundle: &CachingAssetBundle<DeferredBundle>| match mode {
+        1 => bundle
+            .load_structured_data("fixture", |text| Ok::<_, Infallible>(text.to_owned()))
+            .unwrap(),
+        2 => bundle
+            .load_structured_binary_data("fixture", |bytes| {
+                Ok::<_, Infallible>(std::str::from_utf8(bytes).unwrap().to_owned())
+            })
+            .unwrap(),
+        _ => bundle.load_string("fixture", true).unwrap().to_string(),
     };
     let worker = thread::spawn({
         let root = root.clone();
@@ -77,12 +79,14 @@ fn exercise(structured: bool, all: bool) {
 
 #[test]
 fn clearing_cannot_be_undone_by_in_flight_string_or_structured_reads() {
-    exercise(false, true);
-    exercise(true, true);
+    for mode in 0..3 {
+        exercise(mode, true);
+    }
 }
 
 #[test]
 fn evicting_cannot_be_undone_by_in_flight_string_or_structured_reads() {
-    exercise(false, false);
-    exercise(true, false);
+    for mode in 0..3 {
+        exercise(mode, false);
+    }
 }

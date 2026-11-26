@@ -331,8 +331,8 @@ packages/flutter/test/widgets/custom_single_child_layout_test.dart	100	Control t
 packages/flutter/test/widgets/custom_single_child_layout_test.dart	121	Test SingleChildDelegate shouldRelayout method	paired-match	upstream-custom-layout-and-asset-invalidation.md#current-replacement-delegate-direction
 packages/flutter/test/widgets/custom_single_child_layout_test.dart	144	Delegate can change size	paired-match	upstream-custom-layout-and-asset-invalidation.md
 packages/flutter/test/widgets/custom_single_child_layout_test.dart	172	CustomSingleChildLayout does not crash at zero area	partial-match	upstream-custom-layout-and-asset-invalidation.md
-packages/flutter/test/services/asset_bundle_test.dart	116	clear clears all cached values'	partial-match	upstream-custom-layout-and-asset-invalidation.md
-packages/flutter/test/services/asset_bundle_test.dart	147	evict evicts a particular key from the cache	partial-match	upstream-custom-layout-and-asset-invalidation.md
+packages/flutter/test/services/asset_bundle_test.dart	116	clear clears all cached values'	paired-match	upstream-structured-binary-assets.md
+packages/flutter/test/services/asset_bundle_test.dart	147	evict evicts a particular key from the cache	paired-match	upstream-structured-binary-assets.md
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	474	Submenus call onClose before their parents	partial-mismatch	upstream-raw-menu-animation-observer-and-shadow.md
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	513	[Group] Submenus call onClose before their parents	partial-match	upstream-raw-menu-animation-observer-and-shadow.md
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	953	Detached MenuController does not throw when calling close	paired-match	upstream-raw-menu-animation-observer-and-shadow.md
@@ -1562,3 +1562,7 @@ packages/flutter/test/animation/curves_test.dart	126	Elastic overshoots its boun
 packages/flutter/test/animation/curves_test.dart	143	Back overshoots its bounds	paired-match	upstream-curve-lifetimes-and-shapes.md
 packages/flutter/test/animation/curves_test.dart	160	Decelerate does so	paired-match	upstream-curve-lifetimes-and-shapes.md
 packages/flutter/test/services/binding_test.dart	101	didHaveMemoryPressure clears asset caches	paired-match	upstream-root-asset-memory-pressure.md
+packages/flutter/test/services/asset_bundle_test.dart	82	caches results for loadString, loadStructuredData, and loadBinaryStructuredData	paired-match	upstream-structured-binary-assets.md
+packages/flutter/test/services/asset_bundle_test.dart	189	for a given key, subsequent loadStructuredBinaryData calls are synchronous after the first call resolves	paired-match	upstream-structured-binary-assets.md
+packages/flutter/test/services/asset_bundle_test.dart	210	loadStructuredBinaryData handles exceptions correctly	paired-match	upstream-structured-binary-assets.md
+packages/flutter/test/services/asset_bundle_test.dart	277	loadStructuredBinaryData correctly loads ByteData	paired-match	upstream-structured-binary-assets.md

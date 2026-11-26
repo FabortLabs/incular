@@ -104,6 +104,20 @@ impl dyn AssetBundle {
             message: error.to_string(),
         })
     }
+
+    /// Parses a named asset from its raw bytes, without caching the value.
+    ///
+    /// # Errors
+    ///
+    /// As [AssetBundle::load], or the binary parser's error.
+    pub fn load_structured_binary_data<T, E: fmt::Display>(
+        &self,
+        key: &str,
+        parser: impl FnOnce(&[u8]) -> Result<T, E>,
+    ) -> Result<T, AssetError> {
+        let data = self.load(key)?;
+        parser(&data).map_err(|error| parse_error(key, error))
+    }
 }
 
 /// A bundle held in memory, for bundled `include_bytes!` data and tests.
@@ -186,13 +200,43 @@ impl AssetBundle for DirectoryAssetBundle {
     }
 }
 
+fn parse_error(key: &str, error: impl fmt::Display) -> AssetError {
+    AssetError::Parse {
+        key: key.to_owned(),
+        message: error.to_string(),
+    }
+}
+
 type StructuredCache = HashMap<String, Arc<dyn Any + Send + Sync>>;
+
+#[derive(Clone, Copy)]
+enum StructuredKind {
+    Text,
+    Binary,
+}
 
 #[derive(Default)]
 struct CachedAssets {
     strings: HashMap<String, Arc<str>>,
     structured: StructuredCache,
+    binary: StructuredCache,
     generation: u64,
+}
+
+impl CachedAssets {
+    fn structured_cache(&self, kind: StructuredKind) -> &StructuredCache {
+        match kind {
+            StructuredKind::Text => &self.structured,
+            StructuredKind::Binary => &self.binary,
+        }
+    }
+
+    fn structured_cache_mut(&mut self, kind: StructuredKind) -> &mut StructuredCache {
+        match kind {
+            StructuredKind::Text => &mut self.structured,
+            StructuredKind::Binary => &mut self.binary,
+        }
+    }
 }
 
 /// Flutter's `CachingAssetBundle`: keeps strings, and parsed structured
@@ -223,9 +267,41 @@ impl<B: AssetBundle> CachingAssetBundle<B> {
         key: &str,
         parser: impl FnOnce(&str) -> Result<T, E>,
     ) -> Result<T, AssetError> {
+        self.load_cached_structured(key, StructuredKind::Text, || {
+            let text = self.load_string(key, false)?;
+            parser(&text).map_err(|error| parse_error(key, error))
+        })
+    }
+
+    /// Parses a binary asset once per cache generation. Text, parsed text
+    /// and parsed binary assets each have a separate cache namespace.
+    ///
+    /// # Errors
+    ///
+    /// As [AssetBundle::load], a parser error, or a cached type mismatch.
+    pub fn load_structured_binary_data<T: Clone + Send + Sync + 'static, E: fmt::Display>(
+        &self,
+        key: &str,
+        parser: impl FnOnce(&[u8]) -> Result<T, E>,
+    ) -> Result<T, AssetError> {
+        self.load_cached_structured(key, StructuredKind::Binary, || {
+            let bytes = self.load(key)?;
+            parser(&bytes).map_err(|error| parse_error(key, error))
+        })
+    }
+
+    fn load_cached_structured<T: Clone + Send + Sync + 'static>(
+        &self,
+        key: &str,
+        kind: StructuredKind,
+        fetch_and_parse: impl FnOnce() -> Result<T, AssetError>,
+    ) -> Result<T, AssetError> {
         let (cached, generation) = {
             let cache = self.cache.lock().unwrap_or_else(PoisonError::into_inner);
-            (cache.structured.get(key).cloned(), cache.generation)
+            (
+                cache.structured_cache(kind).get(key).cloned(),
+                cache.generation,
+            )
         };
         if let Some(value) = cached {
             return value
@@ -235,16 +311,14 @@ impl<B: AssetBundle> CachingAssetBundle<B> {
                     key: key.to_owned(),
                 });
         }
-        let text = self.load_string(key, false)?;
-        let value = parser(&text).map_err(|error| AssetError::Parse {
-            key: key.to_owned(),
-            message: error.to_string(),
-        })?;
+        let value = fetch_and_parse()?;
         let shared = Arc::new(value.clone());
         let previous = {
             let mut cache = self.cache.lock().unwrap_or_else(PoisonError::into_inner);
             if cache.generation == generation {
-                cache.structured.insert(key.to_owned(), shared)
+                cache
+                    .structured_cache_mut(kind)
+                    .insert(key.to_owned(), shared)
             } else {
                 None
             }
@@ -295,7 +369,11 @@ impl<B: AssetBundle> AssetBundle for CachingAssetBundle<B> {
         let removed = {
             let mut cache = self.cache.lock().unwrap_or_else(PoisonError::into_inner);
             cache.generation = cache.generation.wrapping_add(1);
-            (cache.strings.remove(key), cache.structured.remove(key))
+            (
+                cache.strings.remove(key),
+                cache.structured.remove(key),
+                cache.binary.remove(key),
+            )
         };
         drop(removed);
         self.inner.evict(key);
