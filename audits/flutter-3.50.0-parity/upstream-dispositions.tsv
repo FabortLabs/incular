@@ -189,6 +189,7 @@ packages/flutter/test/widgets/aspect_ratio_test.dart	54	AspectRatio does not cra
 packages/flutter/test/gestures/long_press_test.dart	61	Should recognize long press	paired-match	upstream-current-route-aspect-and-long-press.md#direct-long-press-arena-checkpoints
 packages/flutter/test/gestures/long_press_test.dart	106	Moving before accept cancels	paired-match	upstream-current-route-aspect-and-long-press.md#direct-long-press-arena-checkpoints
 packages/flutter/test/gestures/long_press_test.dart	124	Moving after accept is ok	paired-match	upstream-long-press-release.md
+packages/flutter/test/gestures/long_press_test.dart	142	Should recognize both tap down and long press	paired-match	upstream-long-press-release.md#tap-down-before-a-competing-hold
 packages/flutter/test/gestures/long_press_test.dart	188	Should recognize long press up	paired-match	upstream-long-press-release.md
 packages/flutter/test/gestures/long_press_test.dart	365	Moving after accept does not cancel	paired-match	upstream-current-route-aspect-and-long-press.md#direct-long-press-arena-checkpoints
 packages/flutter/test/gestures/long_press_test.dart	427	Buttons change before acceptance should not prevent the next long press	paired-match	upstream-current-route-aspect-and-long-press.md#current-disposition-of-button-mask-regression
