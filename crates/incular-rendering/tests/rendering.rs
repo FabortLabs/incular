@@ -2029,10 +2029,9 @@ fn clip_path_identity_stable_across_flattens() {
 }
 
 #[test]
-fn annotation_lookup_uses_conservative_clip_bounds() {
-    // Annotation traversal resolves the new clip variants through the
-    // same conservative bounds as culling: lookup follows paint order
-    // and bounding boxes, never the exact fallback shape.
+fn annotation_lookup_uses_the_exact_transformed_clip() {
+    // Culling accepts the conservative bounding box but annotation lookup
+    // must first invert the placed clip and respect its actual corners.
     let mut tree = LayerTree::new();
     let region = tree.create_annotated_region(Annotation::new(7u32), true, Size::new(10., 10.));
     let picture = tree.create_picture(
@@ -2054,6 +2053,7 @@ fn annotation_lookup_uses_conservative_clip_bounds() {
     // The 10x10 region at the clip-local origin lands near (0,7) after
     // the 45-degree rotation.
     assert_eq!(tree.find_annotation::<u32>(Offset::new(0., 7.)), Some(7));
+    assert_eq!(tree.find_annotation::<u32>(Offset::new(0., 1.)), None);
     assert_eq!(tree.find_annotation::<u32>(Offset::new(500., 500.)), None);
 }
 

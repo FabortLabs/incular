@@ -1,5 +1,8 @@
-use incular_core::{Offset, Size, Transform};
-use incular_rendering::{Annotation, AnnotationEntry, AnnotationSearchOptions, LayerId, LayerTree};
+use incular_core::{Offset, Rect, Size, Transform};
+use incular_rendering::{
+    Annotation, AnnotationEntry, AnnotationSearchOptions, FillRule, LayerId, LayerTree, Path, RRect,
+};
+use std::sync::Arc;
 
 fn annotated(tree: &mut LayerTree, value: i32, opaque: bool) -> LayerId {
     let layer = tree.create_annotated_region(Annotation::new(value), false, Size::ZERO);
@@ -135,4 +138,137 @@ fn annotation_offset_sets_local_position_without_translating_children_or_includi
     assert_eq!(tree.find_annotations::<i32>(Offset::new(160., 110.)), [2]);
     assert_eq!(tree.find_annotations::<i32>(Offset::new(150., 120.)), [2]);
     assert_eq!(tree.find_annotations::<i32>(Offset::new(60., 20.)), [2]);
+}
+
+fn rect(x: f32, y: f32, width: f32, height: f32) -> Rect {
+    Rect::from_origin_size(Offset::new(x, y), Size::new(width, height))
+}
+
+fn clip_stack(make_clip: impl FnOnce(&mut LayerTree) -> LayerId) -> LayerTree {
+    let mut tree = LayerTree::new();
+    let root = tree.create_transform(Transform::IDENTITY);
+    let background = annotated(&mut tree, 1000, false);
+    let clip = make_clip(&mut tree);
+    // Flutter's test-only annotated layer uses its own size and offset for
+    // containment but reports the unadjusted point. A covering native layer
+    // keeps those positions while isolating the requested clip.
+    let foreground =
+        tree.create_annotated_region(Annotation::new(1_i32), true, Size::new(20., 20.));
+    assert!(tree.set_annotation_search_options(
+        foreground,
+        AnnotationSearchOptions {
+            opaque: true,
+            ..Default::default()
+        }
+    ));
+    tree.set_children(root, vec![background, clip]);
+    tree.set_children(clip, vec![foreground]);
+    tree.set_root(root);
+    let _ = tree.flatten();
+    tree
+}
+
+#[test]
+fn offset_layer_hits_use_its_child_local_coordinates() {
+    let mut tree = LayerTree::new();
+    let root = tree.create_transform(Transform::IDENTITY);
+    let background = annotated(&mut tree, 1000, false);
+    let shifted = tree.create_transform(Transform::translation(Offset::new(-10., 0.)));
+    let foreground =
+        tree.create_annotated_region(Annotation::new(1_i32), true, Size::new(10., 10.));
+    let _ = tree.set_annotation_search_options(
+        foreground,
+        AnnotationSearchOptions {
+            opaque: true,
+            ..Default::default()
+        },
+    );
+    tree.set_children(root, vec![background, shifted]);
+    tree.set_children(shifted, vec![foreground]);
+    tree.set_root(root);
+    let _ = tree.flatten();
+    assert_eq!(
+        tree.find_annotation_entries(Offset::new(-5., 5.)),
+        [entry(1, Offset::new(5., 5.))]
+    );
+    assert_eq!(
+        tree.find_annotation_entries(Offset::new(5., 5.)),
+        [entry(1000, Offset::new(5., 5.))]
+    );
+}
+
+#[test]
+fn rectangular_clips_exclude_points_outside_and_on_the_trailing_edge() {
+    let tree = clip_stack(|tree| tree.create_clip_rect(rect(10., 10., 5., 5.)));
+    for (position, expected) in [
+        (Offset::new(11., 11.), 1),
+        (Offset::new(19., 19.), 1000),
+        (Offset::new(15., 12.), 1000),
+        (Offset::new(12., 15.), 1000),
+        (Offset::new(10., 10.), 1),
+    ] {
+        assert_eq!(
+            tree.find_annotation_entries(position),
+            [entry(expected, position)]
+        );
+    }
+}
+
+#[test]
+fn rounded_clip_does_not_let_a_corner_hide_background_metadata() {
+    let tree =
+        clip_stack(|tree| tree.create_clip_rrect(RRect::uniform(rect(10., 10., 10., 10.), 4.)));
+    for (position, expected) in [(Offset::new(12., 12.), 1), (Offset::new(11., 11.), 1000)] {
+        assert_eq!(
+            tree.find_annotation_entries(position),
+            [entry(expected, position)]
+        );
+    }
+}
+
+#[test]
+fn triangular_clip_uses_the_path_and_keeps_its_diagonal_boundary() {
+    let mut path = Path::builder();
+    path.move_to(Offset::new(10., 10.));
+    path.line_to(Offset::new(12., 10.));
+    path.line_to(Offset::new(10., 12.));
+    path.close();
+    let tree = clip_stack(|tree| tree.create_clip_path(Arc::new(path.build()), FillRule::NonZero));
+    for (position, expected) in [
+        (Offset::new(11., 11.), 1),
+        (Offset::new(12., 12.), 1000),
+        (Offset::new(11.5, 11.5), 1000),
+        (Offset::new(10.5, 10.5), 1),
+    ] {
+        assert_eq!(
+            tree.find_annotation_entries(position),
+            [entry(expected, position)]
+        );
+    }
+}
+
+#[test]
+fn singular_transform_does_not_capture_annotations() {
+    let tree = clip_stack(|tree| tree.create_transform(Transform::scale_non_uniform(1., 0.)));
+    assert_eq!(
+        tree.find_annotation_entries(Offset::ZERO),
+        [entry(1000, Offset::ZERO)]
+    );
+}
+
+#[test]
+fn an_exact_polygon_edge_is_a_hit_but_a_retraced_ray_does_not_become_fill() {
+    let mut path = Path::builder();
+    path.move_to(Offset::ZERO);
+    path.line_to(Offset::new(2., 0.));
+    path.line_to(Offset::new(3., 1.));
+    path.line_to(Offset::new(2., 0.));
+    path.line_to(Offset::new(0., 2.));
+    path.close();
+    let polygon = path.build();
+    for rule in [FillRule::NonZero, FillRule::EvenOdd] {
+        assert!(polygon.contains(Offset::new(1., 1.), rule));
+        assert!(!polygon.contains(Offset::new(2.5, 0.5), rule));
+        assert!(!polygon.contains(Offset::new(1., 1.01), rule));
+    }
 }

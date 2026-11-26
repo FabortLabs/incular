@@ -1,7 +1,7 @@
 use crate::geometry::CornerRadii;
 use crate::paint::FillRule;
 use incular_core::{IdGenerator, Offset, Rect, Size, Transform};
-use kurbo::{BezPath, Ellipse, PathEl, Point, RoundedRect, RoundedRectRadii, Shape, Vec2};
+use kurbo::{BezPath, Ellipse, PathEl, PathSeg, Point, RoundedRect, RoundedRectRadii, Shape, Vec2};
 use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hasher};
 use std::sync::{Arc, LazyLock, Mutex, OnceLock, PoisonError, Weak};
@@ -145,6 +145,31 @@ fn tight_path_bounds(path: &BezPath) -> Option<Rect> {
     (!path.is_empty() && path.is_finite()).then(|| as_rect(path.bounding_box()))
 }
 
+// Exact edge fallback for a single closed line contour. Repeated segments
+// and intersections are left to winding; one isolated edge is the boundary
+// between a filled and an unfilled side for either fill rule.
+fn on_single_polygon_edge(path: &BezPath, point: Point) -> bool {
+    let [PathEl::MoveTo(_), edges @ .., PathEl::ClosePath] = path.elements() else {
+        return false;
+    };
+    if edges.len() < 2 || edges.iter().any(|edge| !matches!(edge, PathEl::LineTo(_))) {
+        return false;
+    }
+    path.segments()
+        .filter(|segment| {
+            let PathSeg::Line(line) = segment else {
+                return false;
+            };
+            let direction = line.p1 - line.p0;
+            let offset = point - line.p0;
+            let distance = offset.dot(direction);
+            direction.cross(offset) == 0. && distance > 0. && distance < direction.hypot2()
+        })
+        .take(2)
+        .count()
+        == 1
+}
+
 impl Path {
     #[must_use]
     pub fn builder() -> PathBuilder {
@@ -174,7 +199,8 @@ impl Path {
     }
     /// Renderer-neutral filled-path containment. Single rectangular edges
     /// and extremal joins of a lone filled contour are inclusive as in
-    /// Flutter; all other points use the segment winding calculation.
+    /// Flutter; other closed polygon edges are inclusive when they separate
+    /// filled and unfilled regions.
     #[must_use]
     pub fn contains(&self, point: Offset, rule: FillRule) -> bool {
         let offset = point;
@@ -214,13 +240,16 @@ impl Path {
         let Some(bounds) = self.tight_bounds() else {
             return false;
         };
-        if bounds.size.width == 0.
-            || bounds.size.height == 0.
-            || !bounds.contains(offset)
-            || !(offset.x == bounds.origin.x
-                || offset.x == bounds.origin.x + bounds.size.width
-                || offset.y == bounds.origin.y
-                || offset.y == bounds.origin.y + bounds.size.height)
+        if bounds.size.width <= 0. || bounds.size.height <= 0. || !bounds.contains(offset) {
+            return false;
+        }
+        if on_single_polygon_edge(self.bez_path(), point) {
+            return true;
+        }
+        if !(offset.x == bounds.origin.x
+            || offset.x == bounds.origin.x + bounds.size.width
+            || offset.y == bounds.origin.y
+            || offset.y == bounds.origin.y + bounds.size.height)
         {
             return false;
         }

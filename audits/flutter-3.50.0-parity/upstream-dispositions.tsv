@@ -2115,3 +2115,8 @@ packages/flutter/test/rendering/layer_annotations_test.dart	32	ContainerLayer.fi
 packages/flutter/test/rendering/layer_annotations_test.dart	46	ContainerLayer.findAllAnnotations returns empty result when finding nothing	paired-match	upstream-layer-annotations.md#frontmost-and-opaque-results
 packages/flutter/test/rendering/layer_annotations_test.dart	59	ContainerLayer.find returns null when finding nothing	paired-match	upstream-layer-annotations.md#frontmost-and-opaque-results
 packages/flutter/test/rendering/layer_annotations_test.dart	72	ContainerLayer.findAllAnnotations stops at the first opaque child	paired-match	upstream-layer-annotations.md#frontmost-and-opaque-results
+packages/flutter/test/rendering/layer_annotations_test.dart	137	OffsetLayer.findAllAnnotations respects offset	paired-match	upstream-layer-annotations.md#exact-clips-and-inverse-transforms
+packages/flutter/test/rendering/layer_annotations_test.dart	163	ClipRectLayer.findAllAnnotations respects clipRect	paired-match	upstream-layer-annotations.md#exact-clips-and-inverse-transforms
+packages/flutter/test/rendering/layer_annotations_test.dart	196	ClipRRectLayer.findAllAnnotations respects clipRRect	paired-match	upstream-layer-annotations.md#exact-clips-and-inverse-transforms
+packages/flutter/test/rendering/layer_annotations_test.dart	236	ClipPathLayer.findAllAnnotations respects clipPath	paired-match	upstream-layer-annotations.md#exact-clips-and-inverse-transforms
+packages/flutter/test/rendering/layer_annotations_test.dart	399	TransformLayer.findAllAnnotations skips when transform is irreversible	paired-match	upstream-layer-annotations.md#exact-clips-and-inverse-transforms

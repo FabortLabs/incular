@@ -16,3 +16,22 @@ One pass records entries in hit order with a direct jump to each enclosing
 annotation. It does not scan every retained layer when querying a point.
 Ancestor clipping still uses conservative world bounds in this batch; exact
 curved clip hit tests are tracked separately.
+
+### Exact clips and inverse transforms
+
+Five pinned cases passed for `OffsetLayer` (137), `ClipRectLayer` (163),
+`ClipRRectLayer` (196), `ClipPathLayer` (236), and a singular
+`TransformLayer` (399). The Rust fixture tests the same points and local
+positions using real retained layers. To isolate the requested clip, it
+uses a covering native annotated layer in place of Flutter's test-only
+annotation override; the layer's own offset is independently covered above.
+
+An annotation no longer intercepts a point through a rounded corner or
+outside a polygon while inside its bounding box. The query maps into
+each ancestor clip's local space and checks the actual shape. AABB
+geometry remains a quick rejection and rendering culling remains unchanged.
+The triangle's exact diagonal is included; an authored control verifies
+that a retraced line does not become a filled edge. Further native
+controls cover rounded clips under rotation and half-open rectangular
+edges. Singular transforms do not participate, including for unsized
+annotations. Perspective transforms are not covered by this batch.

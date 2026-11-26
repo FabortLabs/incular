@@ -387,9 +387,41 @@ struct AnnotationPlacement {
     world_to_local: Transform,
     region: Option<Rect>,
     options: AnnotationSearchOptions,
+    clip: Option<usize>,
     // Index in the temporary pre-order site list; its value is the
     // post-order index of the next enclosing annotation to check.
     parent_site: Option<usize>,
+}
+
+struct AnnotationClip {
+    world_to_local: Transform,
+    shape: AnnotationClipShape,
+    parent: Option<usize>,
+}
+
+enum AnnotationClipShape {
+    Rect(Rect),
+    RRect(RRect),
+    Oval(Rect),
+    Path(Arc<Path>, FillRule),
+}
+
+impl AnnotationClipShape {
+    fn contains(&self, point: Offset) -> bool {
+        match self {
+            Self::Rect(rect) => annotation_rect_contains(*rect, point),
+            Self::RRect(rrect) => {
+                annotation_rect_contains(rrect.rect, point) && rrect.contains(point)
+            }
+            Self::Oval(rect) => {
+                let local = point - rect.origin;
+                let x = 2. * local.x / rect.size.width - 1.;
+                let y = 2. * local.y / rect.size.height - 1.;
+                x * x + y * y <= 1.
+            }
+            Self::Path(path, rule) => path.contains(point, *rule),
+        }
+    }
 }
 
 fn annotation_rect_contains(rect: Rect, point: Offset) -> bool {
@@ -544,6 +576,7 @@ pub struct LayerTree {
     flattened_pictures: Vec<FlattenedPicture>,
     flattened_annotations: Vec<FlattenedAnnotation>,
     annotation_placements: Vec<AnnotationPlacement>,
+    annotation_clips: Vec<AnnotationClip>,
     annotation_sites: Vec<usize>,
     annotation_options: HashMap<LayerId, AnnotationSearchOptions>,
     next_generation: u64,
@@ -609,6 +642,7 @@ impl LayerTree {
             flattened_pictures: Vec::new(),
             flattened_annotations: Vec::new(),
             annotation_placements: Vec::new(),
+            annotation_clips: Vec::new(),
             annotation_sites: Vec::new(),
             annotation_options: HashMap::new(),
             next_generation: 1,
@@ -1626,6 +1660,20 @@ impl LayerTree {
     pub fn flattened_annotations(&self) -> &[FlattenedAnnotation] {
         &self.flattened_annotations
     }
+    fn annotations_hit_clips(&self, mut clip: Option<usize>, point: Offset) -> bool {
+        while let Some(index) = clip {
+            let current = &self.annotation_clips[index];
+            if !current
+                .shape
+                .contains(current.world_to_local.transform_point(point))
+            {
+                return false;
+            }
+            clip = current.parent;
+        }
+        true
+    }
+
     fn annotations_at<T: Any>(&self, point: Offset) -> impl Iterator<Item = (&T, Offset)> {
         let mut index = Some(0);
         let mut only_ancestors = false;
@@ -1640,6 +1688,7 @@ impl LayerTree {
                         entry
                             .world_bounds
                             .is_none_or(|bounds| bounds.contains(point))
+                            && self.annotations_hit_clips(placement.clip, point)
                     })
                     .and_then(|value| {
                         let local = placement.world_to_local.transform_point(point);
@@ -1733,6 +1782,7 @@ impl LayerTree {
         self.flattened_pictures.clear();
         self.flattened_annotations.clear();
         self.annotation_placements.clear();
+        self.annotation_clips.clear();
         self.annotation_sites.clear();
         if let Some(root) = self.root {
             // Leader publication runs as its own pass before any follower
@@ -2550,7 +2600,7 @@ impl LayerTree {
         &mut self,
         id: LayerId,
         world_transform: Transform,
-        clip: Option<Rect>,
+        clip: Option<(Rect, usize)>,
         parent_site: Option<usize>,
     ) {
         let Some(kind) = self.layers.get(id.0).map(|layer| layer.kind.clone()) else {
@@ -2563,34 +2613,49 @@ impl LayerTree {
                     tree.collect_annotations(child, next, clip, parent_site)
                 });
             }
-            LayerKind::ClipRect { rect, .. } => {
-                let world = world_transform.transform_rect_bbox(rect);
-                let next_clip = match clip {
-                    Some(current) => current.intersection(world),
-                    None => Some(world),
-                };
-                if next_clip.is_none() {
-                    return;
-                }
-                self.visit_children(id, true, |tree, child| {
-                    tree.collect_annotations(child, world_transform, next_clip, parent_site)
-                });
-            }
-            LayerKind::ClipRRect { .. }
+            LayerKind::ClipRect { .. }
+            | LayerKind::ClipRRect { .. }
             | LayerKind::ClipOval { .. }
             | LayerKind::ClipPath { .. } => {
-                let Some(world) = clip_world_bounds(&kind, world_transform) else {
+                let Some(world_to_local) = world_transform.inverse() else {
                     return;
                 };
-                let next_clip = match clip {
-                    Some(current) => current.intersection(world),
-                    None => Some(world),
+                let Some(world_bounds) = clip_world_bounds(&kind, world_transform) else {
+                    return;
                 };
-                if next_clip.is_none() {
+                let (bounds, parent) = if let Some((active, parent)) = clip {
+                    let Some(bounds) = active.intersection(world_bounds) else {
+                        return;
+                    };
+                    (bounds, Some(parent))
+                } else {
+                    (world_bounds, None)
+                };
+                if !(bounds.size.width > 0. && bounds.size.height > 0.) {
                     return;
                 }
+                let shape = match kind {
+                    LayerKind::ClipRect { rect, .. } => AnnotationClipShape::Rect(rect),
+                    LayerKind::ClipRRect { rrect, .. } => AnnotationClipShape::RRect(rrect),
+                    LayerKind::ClipOval { rect, .. } => AnnotationClipShape::Oval(rect),
+                    LayerKind::ClipPath {
+                        path, fill_rule, ..
+                    } => AnnotationClipShape::Path(path, fill_rule),
+                    _ => unreachable!("this branch only visits clip layers"),
+                };
+                let index = self.annotation_clips.len();
+                self.annotation_clips.push(AnnotationClip {
+                    world_to_local,
+                    shape,
+                    parent,
+                });
                 self.visit_children(id, true, |tree, child| {
-                    tree.collect_annotations(child, world_transform, next_clip, parent_site)
+                    tree.collect_annotations(
+                        child,
+                        world_transform,
+                        Some((bounds, index)),
+                        parent_site,
+                    )
                 });
             }
             LayerKind::Follower(follower) => {
@@ -2616,11 +2681,11 @@ impl LayerTree {
                     let world_bounds = if let Some(region) = region {
                         let world = world_transform.transform_rect_bbox(region);
                         match clip {
-                            Some(active) => Some(active.intersection(world)?),
+                            Some((active, _)) => Some(active.intersection(world)?),
                             None => Some(world),
                         }
                     } else {
-                        clip
+                        clip.map(|(bounds, _)| bounds)
                     };
                     (options.offset.x.is_finite()
                         && options.offset.y.is_finite()
@@ -2648,6 +2713,7 @@ impl LayerTree {
                         world_to_local,
                         region,
                         options,
+                        clip: clip.map(|(_, index)| index),
                         parent_site,
                     });
                 }
