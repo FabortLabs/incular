@@ -167,6 +167,7 @@ impl WidgetTree {
                     cursor_radius,
                     cursor_opacity_animates,
                     show_cursor,
+                    paint_cursor_above_text,
                     cursor_color,
                     selection_color,
                     spell_check_selection_color,
@@ -328,15 +329,17 @@ impl WidgetTree {
                             });
                         }
                     }
-                    // The caret paints below the glyph runs, as Flutter does
-                    // unless paintCursorAboveText is set (editable.dart). It
-                    // shows only for a collapsed selection: Flutter's
-                    // `_showBlinkingCursor` requires `selection.isCollapsed`.
+                    // Flutter's cursor painter only paints a valid, collapsed
+                    // selection, below the glyphs by default.
                     let caret_opacity =
                         controller.caret_opacity(Instant::now(), cursor_opacity_animates);
-                    if focused && show_cursor && selection.is_empty() && caret_opacity > 0.0 {
-                        // Flutter's `_cursorColor`: the colour's own opacity,
-                        // capped by the blink opacity.
+                    let mut caret_command = None;
+                    if focused
+                        && show_cursor
+                        && selection.is_empty()
+                        && controller.selection_if_set().is_some()
+                        && caret_opacity > 0.0
+                    {
                         let alpha = f32::from(cursor_color.alpha).min(caret_opacity * 255.0);
                         let cursor_color = Color {
                             alpha: alpha.round() as u8,
@@ -349,17 +352,22 @@ impl WidgetTree {
                             Offset::new(caret - active_scroll_x + content_padding.left, y),
                             Size::new(cursor_width.max(0.0), height),
                         );
-                        if cursor_radius > 0.0 {
-                            cache.push(PaintCommand::RRect {
-                                rrect: RRect::uniform(rect, cursor_radius),
-                                brush: cursor_color.into(),
-                            });
-                        } else if rect.size.width > 0.0 && rect.size.height > 0.0 {
-                            cache.push(PaintCommand::Rect {
-                                rect,
-                                color: cursor_color,
+                        if rect.size.width > 0.0 && rect.size.height > 0.0 {
+                            caret_command = Some(if cursor_radius > 0.0 {
+                                PaintCommand::RRect {
+                                    rrect: RRect::uniform(rect, cursor_radius),
+                                    brush: cursor_color.into(),
+                                }
+                            } else {
+                                PaintCommand::Rect {
+                                    rect,
+                                    color: cursor_color,
+                                }
                             });
                         }
+                    }
+                    if !paint_cursor_above_text && let Some(command) = caret_command.take() {
+                        cache.push(command);
                     }
                     cache.push(PaintCommand::PushTransform {
                         transform: CoreTransform::translation(Offset::new(
@@ -405,6 +413,9 @@ impl WidgetTree {
                         }
                     }
                     cache.push(PaintCommand::PopTransform);
+                    if let Some(command) = caret_command {
+                        cache.push(command);
+                    }
                     if clip.is_some() {
                         cache.push(PaintCommand::PopClip);
                     }

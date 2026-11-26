@@ -2563,3 +2563,6 @@ packages/flutter/test/widgets/box_decoration_test.dart	55	DecoratedBox handles l
 packages/flutter/test/widgets/box_decoration_test.dart	77	Moving a DecoratedBox	paired-match	upstream-async-decoration-image.md
 packages/flutter/test/widgets/editable_text_test.dart	1395	EditableText does not derive selection color from DefaultSelectionStyle	paired-match	upstream-editable-defaults.md
 packages/flutter/test/widgets/editable_text_test.dart	1344	selection persists when unfocused	paired-match	upstream-editable-defaults.md#logical-selection-on-focus-and-blur
+packages/flutter/test/rendering/editable_test.dart	457	text is painted above selection	paired-match	upstream-editable-defaults.md#caret-and-selection-paint-order
+packages/flutter/test/rendering/editable_test.dart	490	cursor can paint above or below the text	paired-match	upstream-editable-defaults.md#caret-and-selection-paint-order
+packages/flutter/test/rendering/editable_test.dart	534	does not paint the caret when selection is null or invalid	paired-match	upstream-editable-defaults.md#caret-and-selection-paint-order

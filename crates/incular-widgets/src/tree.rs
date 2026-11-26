@@ -639,6 +639,7 @@ pub struct TextFieldRender {
     pub(crate) cursor_radius: f32,
     pub(crate) cursor_opacity_animates: bool,
     pub(crate) show_cursor: bool,
+    pub(crate) paint_cursor_above_text: bool,
     pub(crate) cursor_color: Color,
     pub(crate) selection_color: Option<Color>,
     pub(crate) spell_check_selection_color: Option<Color>,

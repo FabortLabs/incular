@@ -50,3 +50,18 @@ single-line LTR. Native tests inspect painted rectangles and
 verify Bidi, pointer, placeholder, and scroll regressions.
 All 72 focused native checks passed. This authored control does
 not increase the upstream count.
+
+## Caret and selection paint order
+
+Three exact originals from `rendering/editable_test.dart` passed.
+A noncollapsed selection draws exactly one highlight behind the
+text. A retained cursor can switch between below and above glyph
+paint; this changes command order but not the selection. Clearing
+the selection, or setting the text to its invalid-selection state,
+does not paint the caret or suppress the text. Restoring a valid
+collapsed selection brings the caret back.
+
+The native fixture compares the actual retained display-list order
+and the number and color of rectangles. All 33 focused native
+checks passed. The raw editor still defaults to painting its caret
+below the text, and the renderer remains wgpu.

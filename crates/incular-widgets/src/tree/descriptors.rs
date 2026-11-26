@@ -1017,6 +1017,7 @@ pub struct EditableText {
     /// `None` resolves to `!read_only` when the field is lowered, as in
     /// Flutter's `showCursor ?? !readOnly`.
     show_cursor: Option<bool>,
+    paint_cursor_above_text: bool,
     cursor_color: Color,
     selection_color: Option<Color>,
     input_type: Option<TextInputTypeHint>,
@@ -1083,6 +1084,7 @@ impl EditableText {
             cursor_height: None,
             cursor_radius: 0.0,
             show_cursor: None,
+            paint_cursor_above_text: false,
             cursor_color: Color::WHITE,
             selection_color: None,
             input_type: None,
@@ -1398,6 +1400,13 @@ impl EditableText {
     #[must_use]
     pub fn show_cursor(mut self, show: bool) -> Self {
         self.show_cursor = Some(show);
+        self
+    }
+
+    /// Chooses whether the caret paints above the glyphs instead of behind them.
+    #[must_use]
+    pub fn paint_cursor_above_text(mut self, above: bool) -> Self {
+        self.paint_cursor_above_text = above;
         self
     }
 
@@ -1788,6 +1797,7 @@ impl From<EditableText> for Widget {
             cursor_height: value.cursor_height,
             cursor_radius: value.cursor_radius,
             show_cursor: value.show_cursor.unwrap_or(!value.read_only),
+            paint_cursor_above_text: value.paint_cursor_above_text,
             cursor_color: value.cursor_color,
             selection_color: value.selection_color,
             text_direction: value.text_direction,
