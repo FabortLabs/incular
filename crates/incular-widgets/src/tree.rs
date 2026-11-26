@@ -1377,6 +1377,7 @@ pub struct WidgetTree {
     root: Option<ElementId>,
     diagnostics: Diagnostics,
     unmounted: Vec<ElementId>,
+    autofill_context_completions: Vec<incular_platform::autofill::AutofillContextAction>,
     /// Live elements keyed by a [`GlobalKey`], those parked for a move,
     /// and the keys claimed by the running reconciliation.
     global_keys: global_keys::GlobalKeyRegistry,

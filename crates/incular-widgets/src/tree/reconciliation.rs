@@ -2475,8 +2475,8 @@ impl WidgetTree {
     }
     pub(super) fn unmount_element(&mut self, id: ElementId) {
         enum UnmountWork {
-            Enter(ElementId),
-            Exit(ElementId, RenderObjectId),
+            Enter(ElementId, bool),
+            Exit(ElementId, RenderObjectId, Option<incular_platform::autofill::AutofillContextAction>),
         }
 
         // Attachments whose viewports go away below: an app-driven
@@ -2489,10 +2489,12 @@ impl WidgetTree {
         // and released after the work loop so no listener observes a
         // half-removed tree.
         let mut detached: Vec<MetricAttachment> = Vec::new();
-        let mut work = vec![UnmountWork::Enter(id)];
+        let outside_parent = self.parent(id);
+        let mut outside_group = None;
+        let mut work = vec![UnmountWork::Enter(id, false)];
         while let Some(next) = work.pop() {
             match next {
-                UnmountWork::Enter(id) => {
+                UnmountWork::Enter(id, ancestor_group_removed) => {
                     self.raw_input_unmounted(id);
                     if !self.departures.active.is_empty() {
                         self.departures.active.remove(&id);
@@ -2504,6 +2506,14 @@ impl WidgetTree {
                     let Some(element) = self.elements.remove(id.0) else {
                         continue;
                     };
+                    let group = element.widget.autofill_action();
+                    let completion = group.filter(|_| {
+                        !ancestor_group_removed
+                            && !*outside_group.get_or_insert_with(|| {
+                                outside_parent.and_then(|parent| self.autofill_scope(parent)).is_some()
+                            })
+                    });
+                    let nested = ancestor_group_removed || group.is_some();
                     self.tracked.untrack(id, element.tracked);
                     self.focus_change_bindings.remove(&id);
                     if let Some(nodes) = &mut self.standalone_focus_geometry {
@@ -2593,10 +2603,13 @@ impl WidgetTree {
                         .retain(|_, target| *target != id);
                     self.input.scale_gestures.remove(&id);
 
-                    work.push(UnmountWork::Exit(id, render));
-                    work.extend(element.children.into_iter().rev().map(UnmountWork::Enter));
+                    work.push(UnmountWork::Exit(id, render, completion));
+                    work.extend(element.children.into_iter().rev().map(|child| UnmountWork::Enter(child, nested)));
                 }
-                UnmountWork::Exit(id, render_id) => {
+                UnmountWork::Exit(id, render_id, autofill) => {
+                    if let Some(action) = autofill {
+                        self.autofill_context_completions.push(action);
+                    }
                     if let Some(render) = self.renders.remove(render_id.0) {
                         render.object.layers.remove(&mut self.compositor);
                     }

@@ -96,6 +96,9 @@ pub(crate) fn apply(window: &winit::window::Window, command: &TextInputCommand) 
                 focus(&element);
             }
         }
+        // The browser controls when to save a form; there is no explicit
+        // native autofill commit/cancel for the hidden IME input.
+        TextInputCommand::FinishAutofillContext { .. } => {}
         TextInputCommand::Hide { .. } | TextInputCommand::Clear { .. } => {
             if active_element(window.id()).is_some() {
                 deactivate();

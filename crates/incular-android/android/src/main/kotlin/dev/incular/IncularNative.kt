@@ -3,7 +3,9 @@ package dev.incular
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.os.Build
 import android.view.Surface
+import android.view.autofill.AutofillManager
 
 /**
  * JNI entry points implemented by `incular-android` (`src/shell.rs`), and the static methods
@@ -104,6 +106,12 @@ internal object IncularNative {
 
     @JvmStatic fun hideTextInput(detach: Boolean) {
         input?.hide(detach)
+    }
+
+    @JvmStatic fun finishAutofillContext(shouldSave: Boolean) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val manager = activity?.getSystemService(AutofillManager::class.java) ?: return
+        if (shouldSave) manager.commit() else manager.cancel()
     }
 
     private fun clipboard(): ClipboardManager? = context?.getSystemService(ClipboardManager::class.java)

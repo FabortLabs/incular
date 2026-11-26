@@ -1137,10 +1137,12 @@ impl From<AutocompleteHighlightedOption> for Widget {
     }
 }
 
-/// Coordinates autofill context across text input descendants.
+/// Flutter's autofill context for its mounted text input descendants. A
+/// nested group starts its own scope rather than joining the outer group.
 #[derive(Clone, Debug, PartialEq)]
 pub struct AutofillGroup {
     child: Widget,
+    action: incular_platform::autofill::AutofillContextAction,
 }
 
 impl AutofillGroup {
@@ -1148,13 +1150,23 @@ impl AutofillGroup {
     pub fn new(child: impl Into<Widget>) -> Self {
         Self {
             child: child.into(),
+            action: incular_platform::autofill::AutofillContextAction::Commit,
         }
+    }
+
+    /// Controls whether the outermost context is saved or cancelled when
+    /// the group is removed. Defaults to commit.
+    #[must_use]
+    pub fn on_dispose_action(mut self, action: incular_platform::autofill::AutofillContextAction) -> Self {
+        self.action = action;
+        self
     }
 }
 
 impl From<AutofillGroup> for Widget {
     fn from(value: AutofillGroup) -> Self {
-        value.child
+        struct GroupScope;
+        Widget::environment_scope(GroupScope, value.child).with_autofill_group(value.action)
     }
 }
 

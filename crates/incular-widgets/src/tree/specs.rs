@@ -232,6 +232,7 @@ pub(crate) struct SemanticProperties {
     pub(super) exclude_focus: bool,
     pub(super) exclude_focus_traversal: bool,
     pub(super) undo_history_max_entries: Option<usize>,
+    pub(super) autofill_group: Option<incular_platform::autofill::AutofillContextAction>,
     pub(super) focus_scope_autofocus: bool,
     pub(super) text_input_type: Option<TextInputTypeHint>,
     pub(super) text_input_action: Option<TextInputActionHint>,

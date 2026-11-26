@@ -510,7 +510,15 @@ impl Runtime {
     /// event-loop turn. A desktop runner applies these to Winit; mobile hosts
     /// can translate the same data to their platform text services.
     pub fn take_text_input_commands(&mut self) -> Vec<TextInputCommand> {
+        self.collect_autofill_context_completions();
         self.text_input_commands.drain(..).collect()
+    }
+
+    fn collect_autofill_context_completions(&mut self) {
+        self.text_input_commands.extend(
+            self.tree.take_autofill_context_completions().into_iter()
+                .map(|action| TextInputCommand::FinishAutofillContext { action }),
+        );
     }
 
     /// Drains the platform view commands for this window: each mounted
@@ -2481,6 +2489,7 @@ impl Runtime {
     }
 
     fn sync_text_input_client_for_host(&mut self, resend_client: bool) {
+        self.collect_autofill_context_completions();
         // This runs every frame. While the focused field still holds the
         // value last sent to the input client, that state is reused instead
         // of copying the field's text again, which matters for a long

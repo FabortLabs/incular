@@ -694,6 +694,11 @@ pub enum TextInputCommand {
     Show {
         client: TextInputClientId,
     },
+    /// Finishes the outermost retained autofill scope. Hosts without an
+    /// explicit password-manager session may leave this command unhandled.
+    FinishAutofillContext {
+        action: autofill::AutofillContextAction,
+    },
     Hide {
         client: TextInputClientId,
     },

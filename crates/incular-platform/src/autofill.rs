@@ -9,6 +9,21 @@ use crate::{
     message_codecs::{JsonMethodCodec, JsonMethodCodecError, MethodCall},
 };
 
+/// The action when the outermost retained autofill group is disposed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum AutofillContextAction {
+    #[default]
+    Commit,
+    Cancel,
+}
+
+impl AutofillContextAction {
+    #[must_use]
+    pub const fn should_save(self) -> bool {
+        matches!(self, Self::Commit)
+    }
+}
+
 /// The Flutter wire affinity of a UTF-16 text selection.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum AutofillSelectionAffinity {

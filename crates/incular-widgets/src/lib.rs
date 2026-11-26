@@ -260,6 +260,7 @@ pub use incular_image::{
     ImageChunkEvent, ImageConfiguration, ImageLoadState, ImageProvider, ImageResizeOptions,
     ImageStream, ImageStreamCompleter, MemoryImage, ResizeImage, ResizeImageKey, ResizeImagePolicy,
 };
+pub use incular_platform::autofill::AutofillContextAction;
 pub use incular_platform::{
     BackGestureEvent, DefaultSpellCheckService, PlatformViewCommand, PlatformViewCompositing,
     PlatformViewId, PlatformViewPointerEvent, PredictiveBackEvent, SpellCheckCallback,

@@ -1664,3 +1664,7 @@ packages/flutter/test/services/autofill_test.dart	28	Does not throw if the hint 
 packages/flutter/test/services/autofill_test.dart	43	AutofillClients send the correct configuration to the platform and responds to updateEditingStateWithTag method correctly	paired-match	upstream-autofill-wire.md
 packages/flutter/test/services/autofill_test.dart	117	equality operator works correctly	paired-match	upstream-autofill-wire.md
 packages/flutter/test/services/autofill_test.dart	135	hashCode works correctly	paired-match	upstream-autofill-wire.md
+packages/flutter/test/widgets/autofill_group_test.dart	14	AutofillGroup has the right clients	paired-match	upstream-autofill-groups.md
+packages/flutter/test/widgets/autofill_group_test.dart	53	new clients can be added & removed to a scope	paired-match	upstream-autofill-groups.md
+packages/flutter/test/widgets/autofill_group_test.dart	107	AutofillGroup has the right clients after reparenting	paired-match	upstream-autofill-groups.md
+packages/flutter/test/widgets/autofill_group_test.dart	174	disposing AutofillGroups	paired-match	upstream-autofill-groups.md

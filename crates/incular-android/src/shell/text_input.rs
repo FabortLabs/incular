@@ -80,6 +80,9 @@ pub(super) fn apply(commands: Vec<TextInputCommand>) {
                 }
             }
             TextInputCommand::SetCaretRect { .. } => {}
+            TextInputCommand::FinishAutofillContext { action } => {
+                java::call_void(c"finishAutofillContext", c"(Z)V", &[Arg::Bool(action.should_save())]);
+            }
             TextInputCommand::Hide { .. } => hide(false),
             TextInputCommand::Clear { .. } => {
                 EDITABLE_CLIENT.set(false);

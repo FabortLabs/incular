@@ -322,6 +322,15 @@ impl Widget {
     /// The runtime consumes this metadata without making Widgets depend on
     /// the runtime crate.
     #[doc(hidden)]
+    pub(crate) fn autofill_action(&self) -> Option<incular_platform::autofill::AutofillContextAction> {
+        self.node().semantics.as_deref().and_then(|properties| properties.autofill_group)
+    }
+
+    pub(crate) fn with_autofill_group(mut self, action: incular_platform::autofill::AutofillContextAction) -> Self {
+        self.semantic_properties_mut().autofill_group = Some(action);
+        self
+    }
+
     pub(crate) fn with_undo_history_max_entries(mut self, max_entries: usize) -> Self {
         self.semantic_properties_mut().undo_history_max_entries = Some(max_entries);
         self
@@ -1832,7 +1841,11 @@ impl Widget {
     /// Flutter's `Widget.canUpdate`: the same widget type and key, so an
     /// element can take the other descriptor.
     pub(crate) fn can_update(&self, other: &Self) -> bool {
-        self.type_() == other.type_() && self.key() == other.key()
+        let ty = self.type_();
+        ty == other.type_()
+            && self.key() == other.key()
+            && (ty != WidgetType::LayoutBuilder
+                || self.autofill_action().is_some() == other.autofill_action().is_some())
     }
     pub(in crate::tree) fn type_(&self) -> WidgetType {
         self.kind().structure().widget_type

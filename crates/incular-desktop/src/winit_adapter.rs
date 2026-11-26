@@ -52,6 +52,8 @@ pub fn apply_text_input_command(window: &winit::window::Window, command: &TextIn
                 ),
             );
         }
+        // Winit does not expose an autofill session lifecycle.
+        TextInputCommand::FinishAutofillContext { .. } => {}
         TextInputCommand::Hide { .. } | TextInputCommand::Clear { .. } => {
             window.set_ime_allowed(false);
         }

@@ -13,10 +13,10 @@ batch before applying any values. The value's diagnostic formatter
 redacts editing text. Save/commit and cancel have the pinned boolean
 wire format.
 
-This is the optional Flutter-compatible channel contract. It does not
-yet make the retained widget tree register clients, send group-dispose
-events to native password managers, or route platform callbacks into
-mounted editors. Those are separate cases in the widget scope batch.
+This is the optional Flutter-compatible channel contract. The retained
+widget tree and group-dispose events are covered in
+[the widget scope batch](upstream-autofill-groups.md); routing the
+channel into mounted editors is separate.
 
 ```sh
 cargo test --locked -j 1 -p incular-platform --test flutter350_autofill --test flutter350_json_method_codec -- --test-threads=1
