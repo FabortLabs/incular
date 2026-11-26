@@ -137,6 +137,7 @@ pub struct MetricAttachment {
     id: u64,
     tree: u64,
     announced: Cell<bool>,
+    page_view: Cell<bool>,
 }
 
 impl Drop for MetricAttachment {
@@ -160,12 +161,13 @@ impl std::fmt::Debug for MetricAttachment {
 }
 
 impl MetricAttachment {
-    pub(crate) fn new(controller: ScrollController, id: u64, tree: u64) -> Self {
+    pub(crate) fn new(controller: ScrollController, stored: StoredAttachment) -> Self {
         Self {
             controller,
-            id,
-            tree,
+            id: stored.id,
+            tree: stored.tree,
             announced: Cell::new(false),
+            page_view: Cell::new(stored.page_view),
         }
     }
 
@@ -189,6 +191,24 @@ impl MetricAttachment {
         &self.controller
     }
 
+    /// Updates the kind of a reused viewport. The ordinary same-kind
+    /// path needs no controller borrow.
+    #[doc(hidden)]
+    pub fn set_page_viewport(&self, page_position: Option<bool>) {
+        if self.page_view.get() == page_position.is_some() {
+            return;
+        }
+        let mut state = self.controller.state.borrow_mut();
+        if let Some(live) = state.metric_attachment.as_mut()
+            && live.id == self.id
+        {
+            live.page_view = page_position.is_some();
+            live.pending_page_dimensions = page_position.unwrap_or(false);
+            live.viewport_published = false;
+            self.page_view.set(live.page_view);
+        }
+    }
+
     /// Publishes one viewport's complete metrics through this
     /// attachment: geometry and axis context commit together. Succeeds
     /// only while this handle is still the live owner; a stale handle
@@ -201,8 +221,9 @@ impl MetricAttachment {
     pub fn update_extents(&self, update: ViewportMetricsUpdate) -> Result<(), MetricWriteError> {
         let publication = {
             let mut state = self.controller.state.borrow_mut();
-            match state.metric_attachment {
+            match state.metric_attachment.as_mut() {
                 Some(live) if live.id == self.id => {
+                    live.viewport_published = true;
                     ScrollController::commit_extent_state(&mut state, update)
                 }
                 _ => return Err(MetricWriteError::StaleAttachment),
@@ -518,15 +539,19 @@ fn commit_extent_pair(
 pub(crate) struct StoredAttachment {
     pub(crate) id: u64,
     pub(crate) tree: u64,
+    pub(crate) page_view: bool,
+    pub(crate) viewport_published: bool,
     pub(crate) pending_page_dimensions: bool,
 }
 
 impl StoredAttachment {
-    pub(crate) fn mint(tree: u64, pending_page_dimensions: bool) -> Self {
+    pub(crate) fn mint(tree: u64, page_position: Option<bool>) -> Self {
         Self {
             id: ATTACHMENT_SEQUENCE.next(),
             tree,
-            pending_page_dimensions,
+            page_view: page_position.is_some(),
+            viewport_published: false,
+            pending_page_dimensions: page_position.unwrap_or(false),
         }
     }
 }

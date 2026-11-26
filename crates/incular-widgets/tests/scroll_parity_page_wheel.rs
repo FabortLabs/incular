@@ -4,10 +4,12 @@
 
 use std::{cell::Cell, rc::Rc};
 
+use incular_config::{Constraints, TextDirection};
 use incular_core::Size;
 use incular_scroll::ScrollController;
 use incular_widgets::{
-    ChangeReportingBehavior, ListWheelViewport, PageController, WheelChildDelegate, Widget,
+    ChangeReportingBehavior, Directionality, ListView, ListWheelViewport, PageController, PageView,
+    WheelChildDelegate, Widget, internal::WidgetTree,
 };
 
 fn numbered(count: usize) -> Vec<Widget> {
@@ -33,27 +35,78 @@ fn initial_page_places_the_position_on_first_publication() {
 #[test]
 fn jump_to_page_uses_viewport_fraction() {
     let page = PageController::new().with_viewport_fraction(0.5);
-    page.update_extents(4000., 800.)
-        .expect("free controller publishes");
+    let mut tree = WidgetTree::new();
+    tree.mount(
+        Directionality::new(
+            TextDirection::Ltr,
+            PageView::new(numbered(10)).controller(page.clone()),
+        )
+        .into(),
+    )
+    .unwrap();
+    tree.layout(Constraints::tight(Size::new(800., 600.)))
+        .unwrap();
 
     assert!(page.jump_to_page(2));
-
     assert_eq!(page.offset(), 800.);
     assert_eq!(page.page(), Some(2.));
 }
 
-/// Flutter applies `jumpToPage` before the viewport exists by storing the page
-/// and resolving it on the first layout (`_pageToUseOnStartup`).
 #[test]
-fn jump_to_page_before_layout_is_applied_on_first_publication() {
+fn an_explicit_initial_queue_works_without_pretending_a_view_is_attached() {
     let page = PageController::new();
     assert_eq!(page.page(), None);
-    assert!(page.jump_to_page(1));
+    assert!(!page.jump_to_page(2));
+    assert!(page.queue_initial_page(1));
 
     page.update_extents(3000., 600.)
         .expect("free controller publishes");
-
     assert_eq!(page.offset(), 600.);
+}
+
+#[test]
+fn changing_viewport_kind_cannot_send_page_commands_into_an_unrelated_list() {
+    let scroll = ScrollController::new();
+    let page = PageController::from(scroll.clone());
+    let mut tree = WidgetTree::new();
+    let list = || {
+        let items = (0..20).map(|_| incular_widgets::SizedBox::new().height(100.));
+        Widget::from(Directionality::new(
+            TextDirection::Ltr,
+            ListView::new(items).controller(scroll.clone()),
+        ))
+    };
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let root = tree.mount(list()).unwrap();
+    tree.layout(bounds).unwrap();
+
+    assert!(scroll.has_clients());
+    assert!(!page.jump_to_page(2));
+    assert!(!page.animate_to_page(
+        2,
+        std::time::Duration::from_millis(300),
+        incular_animation::Curve::Ease
+    ));
+    assert_eq!(scroll.offset(), 0.);
+
+    tree.update(
+        root,
+        Directionality::new(
+            TextDirection::Ltr,
+            PageView::new(numbered(10)).controller(page.clone()),
+        )
+        .into(),
+    )
+    .unwrap();
+    tree.layout(bounds).unwrap();
+    assert!(page.jump_to_page(1));
+    assert_eq!(page.page(), Some(1.));
+
+    tree.update(root, list()).unwrap();
+    tree.layout(bounds).unwrap();
+    let list_offset = scroll.offset();
+    assert!(!page.jump_to_page(0));
+    assert_eq!(scroll.offset(), list_offset);
 }
 
 /// Flutter `page` is `null` until the position has a viewport.

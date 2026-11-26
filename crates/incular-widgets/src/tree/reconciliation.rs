@@ -2293,7 +2293,7 @@ impl WidgetTree {
         &mut self,
         element: ElementId,
         controller: &ScrollController,
-        pending_page_dimensions: bool,
+        page_position: Option<bool>,
     ) -> Result<(), TreeError> {
         // Fast path: this element already drives this controller,
         // including same-controller reuse across updates. The stored
@@ -2303,6 +2303,7 @@ impl WidgetTree {
             && let [lease] = leases.as_slice()
             && lease.controller() == controller
         {
+            lease.set_page_viewport(page_position);
             return Ok(());
         }
         // Replacement: this element previously drove a different
@@ -2312,7 +2313,7 @@ impl WidgetTree {
         // activity, and metrics exactly as they were.
         if self.scroll_attachments.contains_key(&element) {
             let replacement = match controller
-                .try_attach_viewport(MetricOwner::of_tree(self.tree_id), pending_page_dimensions)
+                .try_attach_position(MetricOwner::of_tree(self.tree_id), page_position)
             {
                 Ok(attachment) => attachment,
                 Err(conflict) => {
@@ -2340,9 +2341,7 @@ impl WidgetTree {
             return Ok(());
         }
         // Fresh attach: this element held no lease.
-        match controller
-            .try_attach_viewport(MetricOwner::of_tree(self.tree_id), pending_page_dimensions)
-        {
+        match controller.try_attach_position(MetricOwner::of_tree(self.tree_id), page_position) {
             Ok(attachment) => {
                 self.scroll_attachments.insert(element, vec![attachment]);
                 self.announce_viewport_attachments(element);

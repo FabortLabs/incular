@@ -237,10 +237,10 @@ fn storage_restores_the_logical_page_after_width_and_fraction_change() {
     frame(&mut runtime);
     assert_eq!(bucket.read_state(&key).unwrap().as_f64(), Some(2.));
 
-    // Incular's explicit pre-layout command is an extension over Flutter.
+    // Incular's explicitly queued initial page is an extension over Flutter.
     replace(&mut runtime, build(None, 500.));
     let queued = PageController::new().with_viewport_fraction(0.5);
-    assert!(queued.jump_to_page(3));
+    assert!(queued.queue_initial_page(3));
     replace(&mut runtime, build(Some(&queued), 500.));
     assert_eq!((queued.page(), queued.offset()), (Some(3.), 750.));
 }

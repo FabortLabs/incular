@@ -565,6 +565,30 @@ impl ScrollController {
         self.state.borrow().metric_attachment.is_some()
     }
 
+    /// Whether the active metric writer is a PageView rather than a
+    /// different scrollable reusing this underlying controller.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn has_page_client(&self) -> bool {
+        self.state
+            .borrow()
+            .metric_attachment
+            .is_some_and(|attachment| attachment.page_view)
+    }
+
+    /// The live PageView's usable viewport extent. Fresh and zero-sized
+    /// positions defer page commands instead of using an older viewport.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn live_page_viewport_extent(&self) -> Option<f32> {
+        let state = self.state.borrow();
+        state
+            .metric_attachment
+            .filter(|attachment| attachment.page_view && attachment.viewport_published)
+            .map(|_| state.viewport_extent)
+            .filter(|extent| *extent > 0.0)
+    }
+
     pub(crate) fn notify_viewport_lifecycle(&self, attached: bool) {
         if let Some(lifecycle) = &self.lifecycle {
             let callback = if attached {
@@ -598,13 +622,25 @@ impl ScrollController {
         owner: MetricOwner,
         pending_page_dimensions: bool,
     ) -> Result<MetricAttachment, AttachmentConflict> {
+        self.try_attach_position(owner, pending_page_dimensions.then_some(true))
+    }
+
+    /// Claims a regular viewport, or a PageView with the given pending
+    /// content-dimensions flag. A page handoff can already know its page
+    /// without having published the replacement viewport's geometry.
+    #[doc(hidden)]
+    pub fn try_attach_position(
+        &self,
+        owner: MetricOwner,
+        page_position: Option<bool>,
+    ) -> Result<MetricAttachment, AttachmentConflict> {
         let mut state = self.state.borrow_mut();
         if let Some(live) = state.metric_attachment {
             return Err(AttachmentConflict::for_owner(live));
         }
-        let stored = StoredAttachment::mint(owner.tree(), pending_page_dimensions);
+        let stored = StoredAttachment::mint(owner.tree(), page_position);
         state.metric_attachment = Some(stored);
-        Ok(MetricAttachment::new(self.clone(), stored.id, stored.tree))
+        Ok(MetricAttachment::new(self.clone(), stored))
     }
 
     /// Returns the widget-tree id currently owning metric publication,

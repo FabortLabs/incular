@@ -346,7 +346,7 @@ impl WidgetTree {
                     self.claim_scroll_viewport(
                         viewport,
                         &config.controller,
-                        uses_page_geometry && handoff.is_none(),
+                        uses_page_geometry.then_some(handoff.is_none()),
                     )?;
                 }
                 let mut last_published: Option<PublishedViewportAttempt> = None;

@@ -29,7 +29,7 @@ impl WidgetTree {
                     // and publishes context-free.
                     let viewport_element = self.element_for_render(id);
                     if let Some(viewport) = viewport_element {
-                        self.claim_scroll_viewport(viewport, controller, false)?;
+                        self.claim_scroll_viewport(viewport, controller, None)?;
                     }
                     self.publish_scroll_extents(
                         viewport_element,

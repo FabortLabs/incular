@@ -111,3 +111,28 @@ replacement, and remounting starts from the controller's initial page.
 The native lease test covers duplicate claims, stale detach, and
 intentional silent tree teardown. The Rust callback receives its
 ScrollController handle; it does not expose a Dart ScrollPosition.
+
+
+## Page commands require a live client
+
+Both pinned exact detached-controller originals (:1515 and :1548)
+now pair at the command boundary. A detached controller rejects both
+operations and cannot move another viewport or change its own initial
+selection on later attachment. Once a PageView attaches, the same
+commands work and land on page 2. Flutter's debug API asserts;
+Incular's existing boolean API returns false without mutating state.
+
+The attachment records whether it drives page geometry independently
+of whether the new viewport has published a usable extent. Commands
+issued by the actual attach callback before initial metrics still
+select the first laid-out target, and an attached zero-width view
+still retains the latest target for resize. A shared ScrollController
+driving a ListView does not become a page client. Handoffs, changes of
+viewport kind, and prior metric ownership are covered by focused tests.
+
+Incular keeps an opt-in `queue_initial_page` for intentional pre-attach
+configuration and precedence over PageStorage. Use `with_initial_page`
+for a regular initial default. The pre-layout Flutter originals
+:1624/:1650 remain partial because they use a covered Navigator page;
+the Rust fixture now makes the calls before metrics, but after real
+attachment. Four pinned originals and 77 focused Rust cases passed.

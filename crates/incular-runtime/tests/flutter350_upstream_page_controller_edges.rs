@@ -187,21 +187,36 @@ fn page_getter_is_readable_from_a_child_builder_before_content_metrics_exist() {
 }
 
 #[test]
-fn jump_and_animate_calls_before_the_first_layout_are_safe_and_apply_page() {
+fn jump_and_animate_after_attachment_but_before_first_metrics_apply_page() {
+    use std::cell::Cell;
+
     let actual = [false, true].map(|animated| {
-        let c = PageController::new();
+        let attempted = Rc::new(Cell::new(None));
+        let c = PageController::new().with_on_attach({
+            let attempted = attempted.clone();
+            move |position| {
+                let page = PageController::from(position.clone());
+                assert!(position.has_clients());
+                assert_eq!(page.page(), None);
+                let accepted = if animated {
+                    page.animate_to_page(1, Duration::from_millis(50), Curve::EaseInBounce)
+                } else {
+                    page.jump_to_page(1)
+                };
+                attempted.set(Some(accepted));
+            }
+        });
         let mut r = Runtime::new(show(Some(&c))).unwrap();
-        let requested = if animated {
-            c.animate_to_page(1, Duration::from_millis(50), Curve::EaseInBounce)
-        } else {
-            c.jump_to_page(1)
-        };
+        assert_eq!(attempted.get(), None);
         frame(&mut r);
-        (requested, visible(&r), c.page())
+        (attempted.get(), visible(&r), c.page())
     });
     assert_eq!(
         actual,
-        [(true, vec![1], Some(1.)), (true, vec![1], Some(1.))]
+        [
+            (Some(true), vec![1], Some(1.)),
+            (Some(true), vec![1], Some(1.))
+        ]
     );
 }
 
@@ -253,9 +268,7 @@ fn reject_commands_while_unattached_and_allow_the_same_actions_when_attached() {
     let observations = [false, true].map(|animated| {
         let c = PageController::new();
         let mut r = mounted(None);
-        let accepted =
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| issue(&c, animated)))
-                .unwrap_or(false);
+        let accepted = issue(&c, animated);
         assert_eq!(
             visible(&r),
             [0],
@@ -263,7 +276,7 @@ fn reject_commands_while_unattached_and_allow_the_same_actions_when_attached() {
         );
         replace(&mut r, show(Some(&c)));
         let before = c.page();
-        let _ = issue(&c, animated);
+        assert!(issue(&c, animated));
         let now = Instant::now();
         for i in 0..40 {
             r.run_frame_at(

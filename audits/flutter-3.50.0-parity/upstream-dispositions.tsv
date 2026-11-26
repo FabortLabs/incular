@@ -636,8 +636,8 @@ packages/flutter/test/widgets/page_view_test.dart	1624	Does not crash when calli
 packages/flutter/test/widgets/page_view_test.dart	1650	Does not crash when calling animateToPage before layout	partial-match	upstream-page-view-boundaries.md
 packages/flutter/test/widgets/page_view_test.dart	1463	animateToPage assertion is working properly when pageController is attached to multiple PageViews	partial-match	upstream-page-view-boundaries.md
 packages/flutter/test/widgets/page_view_test.dart	1490	jumpToPage assertion is working properly when pageController is attached to multiple PageViews	partial-match	upstream-page-view-boundaries.md
-packages/flutter/test/widgets/page_view_test.dart	1515	Assert behavior of animateToPage works properly	partial-mismatch	upstream-page-view-boundaries.md
-packages/flutter/test/widgets/page_view_test.dart	1548	Assert behavior of jumpToPage works properly	partial-mismatch	upstream-page-view-boundaries.md
+packages/flutter/test/widgets/page_view_test.dart	1515	Assert behavior of animateToPage works properly	paired-match	upstream-page-view-boundaries.md#page-commands-require-a-live-client
+packages/flutter/test/widgets/page_view_test.dart	1548	Assert behavior of jumpToPage works properly	paired-match	upstream-page-view-boundaries.md#page-commands-require-a-live-client
 packages/flutter/test/widgets/page_view_test.dart	1678	PageView respects scrollCacheExtent	paired-match	upstream-page-view-boundaries.md#opt-in-cache-and-implicit-reveal
 packages/flutter/test/widgets/page_view_test.dart	1701	PageView scrollCacheExtent defaults to allowImplicitScrolling behavior	paired-match	upstream-page-view-boundaries.md#opt-in-cache-and-implicit-reveal
 packages/flutter/test/widgets/page_view_test.dart	1730	PageView updates scrollCacheExtent dynamically	paired-match	upstream-page-view-boundaries.md#opt-in-cache-and-implicit-reveal

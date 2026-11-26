@@ -662,9 +662,8 @@ fn list_view_widget(value: ListView) -> Widget {
             // main-axis extent is exact, not a lazy measurement estimate.
             // Preserve an explicitly supplied extent, prototype, or builder.
             let item_extent = if item_extent_builder.is_none() && prototype_item.is_none() {
-                item_extent.or_else(|| {
-                    uniform_explicit_item_extent(&children, value.scroll_direction)
-                })
+                item_extent
+                    .or_else(|| uniform_explicit_item_extent(&children, value.scroll_direction))
             } else {
                 item_extent
             };
@@ -1237,40 +1236,52 @@ impl PageController {
         self.scroll.page_for_controller(self.viewport_fraction())
     }
 
-    /// Flutter `jumpToPage`: moves to `page` without animation. Before the
-    /// view has a viewport the page is applied on its first layout.
+    /// Explicitly queues the initial selection for a future PageView.
+    /// This Incular extension can override saved PageStorage state. The
+    /// Flutter-style movement methods instead require a live attachment.
+    pub fn queue_initial_page(&self, page: usize) -> bool {
+        self.scroll
+            .defer_page(page as f32, self.viewport_fraction())
+    }
+
+    /// Flutter `jumpToPage`: moves to `page` without animation. Returns
+    /// false without changing state if no PageView is attached. An
+    /// attached position with no viewport dimensions defers the request.
     pub fn jump_to_page(&self, page: usize) -> bool {
-        let viewport = self.scroll.viewport_extent();
-        if viewport > 0. {
+        if !self.scroll.has_page_client() {
+            return false;
+        }
+        if let Some(viewport) = self.scroll.live_page_viewport_extent() {
             self.scroll.jump_to(incular_scroll::pixels_for_page(
                 page as f32,
                 viewport,
                 self.viewport_fraction(),
             ))
         } else {
-            self.scroll
-                .defer_page(page as f32, self.viewport_fraction())
+            self.queue_initial_page(page)
         }
     }
 
-    /// Flutter `animateToPage`: animates to `page`. Before the view has a
-    /// viewport the page is applied on its first layout, as Flutter does.
+    /// Flutter `animateToPage`: animates to `page` on a live PageView.
+    /// Returns false without changing state when detached. An attached
+    /// position can defer the target until it has viewport dimensions.
     pub fn animate_to_page(
         &self,
         page: usize,
         duration: std::time::Duration,
         curve: incular_animation::Curve,
     ) -> bool {
-        let viewport = self.scroll.viewport_extent();
-        if viewport > 0. {
+        if !self.scroll.has_page_client() {
+            return false;
+        }
+        if let Some(viewport) = self.scroll.live_page_viewport_extent() {
             self.scroll.animate_to(
                 incular_scroll::pixels_for_page(page as f32, viewport, self.viewport_fraction()),
                 duration,
                 curve,
             )
         } else {
-            self.scroll
-                .defer_page(page as f32, self.viewport_fraction())
+            self.queue_initial_page(page)
         }
     }
 
