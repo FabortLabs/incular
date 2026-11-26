@@ -274,3 +274,11 @@ receive the event before unhandled events fall back to editing or traversal.
 
 `Runtime::set_keyboard_event_debug_listener` enables diagnostics for delivered
 key events, including pressed state before/after and irregular transitions.
+
+## Accessibility demand
+
+Native hosts request semantics per window. An application or inspector can
+call `Application::ensure_semantics(window)` and keep the returned handle to
+request the same tree. Dropping one handle does not override another handle or
+a native request. `on_semantics_enabled_changed` reports transitions of the
+combined state. The next accessibility frame publishes or releases nodes.

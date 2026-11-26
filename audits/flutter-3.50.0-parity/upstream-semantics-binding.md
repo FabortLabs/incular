@@ -118,3 +118,24 @@ not false. The action remains registered and executable. In the retained
 transition controls, removing the block publishes true or false according
 to the declaration, and reapplying the block restores the absent state.
 This is distinct from clearing an actual keyboard FocusNode.
+
+## Independent platform and application demand
+
+Pinned `semantics/semantics_binding_test.dart:11,50,78` passed. A native
+window now combines its platform accessibility request with scoped
+application handles. The two original listener sequences pair:
+the first handle enables semantics, the second and platform toggles
+do not duplicate notifications, and the last release disables it.
+If the native host already requested semantics, taking and releasing
+a handle does not disable it.
+
+The native tests read actual published semantic nodes. The first
+handle schedules a frame which adds the labeled node. Dropping the
+last handle wakes the UI owner and releases the projected node on
+the next frame. A handle surviving window closure cannot affect a
+new window in the same slot. The owner lifetime original :78 remains
+partial: Flutter creates and destroys a Dart owner synchronously,
+while Incular retains its owner and rebuilds or releases its nodes
+on the frame boundary.
+
+All 21 focused native accessibility activation, owner and restart checks passed.

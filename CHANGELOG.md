@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- A window can retain accessibility semantics independently of its native
+  host, with listeners for effective enable and disable transitions.
+
 - Retained editors can report their scroll extent, including wrapped lines
   below the viewport and the horizontal caret reservation.
 

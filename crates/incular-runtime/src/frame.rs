@@ -268,6 +268,7 @@ pub struct Runtime {
     pub(crate) frame_requested: bool,
     warm_up_frame: Option<incular_animation::scheduler::WarmUpFrame>,
     pub(crate) scheduler: Rc<RefCell<tasks::TaskScheduler>>,
+    semantics_activation: Option<Rc<crate::semantics_activation::SemanticsActivation>>,
     pub(crate) environment: Rc<RefCell<RuntimeEnvironment>>,
     lifecycle: ApplicationLifecycle,
     frame_availability: incular_animation::scheduler::FrameAvailability,
@@ -487,6 +488,7 @@ impl Runtime {
             editing_diagnostics: EditingDiagnostics::default(),
             text_shortcut_platform: TextShortcutPlatform::current(),
             frame_requested: true,
+            semantics_activation: None,
             warm_up_frame: None,
             scheduler,
             environment: Rc::new(RefCell::new(RuntimeEnvironment::default())),
@@ -571,6 +573,64 @@ impl Runtime {
     }
 
     /// Marks only this retained root for a future presentation.
+    /// Whether either the platform or an application handle needs the
+    /// window's retained accessibility tree.
+    #[must_use]
+    pub fn semantics_enabled(&self) -> bool {
+        self.semantics_activation.as_ref().map_or_else(
+            || self.tree.semantics_enabled(),
+            |state| state.enabled(),
+        )
+    }
+
+    /// Retains accessibility semantics independently of native screen-reader demand.
+    pub fn ensure_semantics(&mut self) -> crate::SemanticsHandle {
+        let handle = self.semantics_activation().acquire();
+        self.sync_semantics_activation();
+        handle
+    }
+
+    /// Observes effective enable/disable transitions, not individual requests.
+    pub fn on_semantics_enabled_changed(
+        &mut self,
+        listener: impl Fn(bool) + 'static,
+    ) -> crate::SemanticsEnabledSubscription {
+        self.semantics_activation().listen(listener)
+    }
+
+    /// Changes the native accessibility host's request without overriding
+    /// outstanding application handles.
+    pub fn set_platform_semantics_enabled(&mut self, enabled: bool) {
+        if let Some(state) = self.semantics_activation.as_ref() {
+            state.set_platform(enabled);
+            self.sync_semantics_activation();
+        } else {
+            self.apply_semantics_enabled(enabled);
+        }
+    }
+
+    fn semantics_activation(&mut self) -> &Rc<crate::semantics_activation::SemanticsActivation> {
+        self.semantics_activation.get_or_insert_with(|| {
+            Rc::new(crate::semantics_activation::SemanticsActivation::new(
+                self.tree.semantics_enabled(),
+                self.scheduler.borrow().dispatcher_for(self.window_id),
+            ))
+        })
+    }
+
+    pub(crate) fn sync_semantics_activation(&mut self) {
+        if let Some(state) = self.semantics_activation.as_ref() {
+            self.apply_semantics_enabled(state.enabled());
+        }
+    }
+
+    fn apply_semantics_enabled(&mut self, enabled: bool) {
+        if self.tree.semantics_enabled() != enabled {
+            self.tree.set_semantics_enabled(enabled);
+            self.request_frame();
+        }
+    }
+
     pub fn request_frame(&mut self) {
         self.frame_requested = true;
     }
@@ -1611,6 +1671,7 @@ impl Runtime {
             return false;
         }
         self.frame_requested
+            || self.semantics_enabled() != self.tree.semantics_enabled()
             || self.reactive.borrow().has_work()
             || self.tree.has_dirty_dependencies()
             || self.tree.has_pending_application_fonts()
@@ -3993,6 +4054,7 @@ impl Runtime {
         self.sync_text_selection_handles();
         let _semantics_guard = tracing::info_span!("incular.semantics").entered();
         let semantics_span = profiling::PhaseSpan::start();
+        self.sync_semantics_activation();
         self.tree.update_semantics();
         let semantics = semantics_span.elapsed_us();
         drop(_semantics_guard);

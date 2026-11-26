@@ -1875,14 +1875,33 @@ impl Application {
     /// schedules a frame so the first native update is complete.
     pub fn set_semantics_enabled(&mut self, window_id: WindowId, enabled: bool) {
         let _ = self.with_window_mut(window_id, |record| {
-            let runtime = &mut record.runtime;
-            if runtime.tree().semantics_enabled() != enabled {
-                runtime.tree_mut().set_semantics_enabled(enabled);
-                if enabled {
-                    runtime.request_frame();
-                }
-            }
+            record.runtime.set_platform_semantics_enabled(enabled);
         });
+    }
+
+    /// Keeps this window's semantics available independently of the native host.
+    pub fn ensure_semantics(&mut self, window_id: WindowId) -> Option<crate::SemanticsHandle> {
+        self.with_window_mut(window_id, |record| record.runtime.ensure_semantics())
+    }
+
+    /// Whether there is platform or application demand for this window's semantics.
+    #[must_use]
+    pub fn semantics_enabled(&self, window_id: WindowId) -> Option<bool> {
+        self.registry
+            .borrow()
+            .get(window_id)
+            .map(|record| record.runtime.semantics_enabled())
+    }
+
+    /// Observes changes to this window's effective semantics state.
+    pub fn on_semantics_enabled_changed(
+        &mut self,
+        window_id: WindowId,
+        listener: impl Fn(bool) + 'static,
+    ) -> Option<crate::SemanticsEnabledSubscription> {
+        self.with_window_mut(window_id, |record| {
+            record.runtime.on_semantics_enabled_changed(listener)
+        })
     }
 
     /// Updates one window's value-free bridge diagnostics after a lifecycle or

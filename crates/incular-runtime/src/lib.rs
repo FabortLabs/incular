@@ -25,6 +25,7 @@ mod restoration;
 mod route_focus;
 mod route_outlet;
 mod route_tasks;
+mod semantics_activation;
 mod simulation;
 mod system_assets;
 mod tasks;
@@ -66,6 +67,7 @@ pub use file_dialogs::{
 pub use flutter_text_input::{
     FlutterDeltaTextInputConnection, FlutterDeltaTextInputError, FlutterTextInputLifecycleError,
 };
+pub use semantics_activation::{SemanticsEnabledSubscription, SemanticsHandle};
 pub use focus_keys::FocusKeySubscription;
 pub use frame::{
     EditingDiagnostics, EventTarget, FocusDiagnostics, FrameStats, HardwareKeyHandlerError,

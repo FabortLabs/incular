@@ -71,3 +71,8 @@ The mobile bridge receives the metadata; native speech support is separate.
 `is_checked()`, `From<bool>`, displays `"false"` / `"true"` / `"mixed"`.
 
 Related: [`Desktop`](/docs/api/platform/desktop).
+
+Applications that inspect a window’s accessibility tree can keep an
+`Application::ensure_semantics(window)` handle. Native screen-reader requests
+and other handles remain independent, and effective transitions can be
+observed with `on_semantics_enabled_changed`. Node updates arrive after layout.

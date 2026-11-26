@@ -41,6 +41,9 @@ packages/flutter/test/foundation/change_notifier_test.dart	564	Remove Listeners 
 packages/flutter/test/physics/newton_test.dart	242	test_kinetic_scroll	paired-match	upstream-physics-comparisons.md#explicit-bouncing-scroll-simulations
 packages/flutter/test/physics/newton_test.dart	270	scroll_with_inf_edge_ends	paired-match	upstream-foundation-scroll-comparisons.md
 packages/flutter/test/physics/newton_test.dart	296	over/under scroll spring	paired-match	upstream-physics-comparisons.md#explicit-bouncing-scroll-simulations
+packages/flutter/test/semantics/semantics_binding_test.dart	11	Listeners are called when semantics are turned on with ensureSemantics	paired-match	upstream-semantics-binding.md#independent-platform-and-application-demand
+packages/flutter/test/semantics/semantics_binding_test.dart	50	Listeners are called when semantics are turned on by platform	paired-match	upstream-semantics-binding.md#independent-platform-and-application-demand
+packages/flutter/test/semantics/semantics_binding_test.dart	78	SemanticsBinding.ensureSemantics triggers creation of semantics owner.	partial-match	upstream-semantics-binding.md#independent-platform-and-application-demand
 packages/flutter/test/semantics/semantics_binding_test.dart	135	getRectOfSemanticsNodeInViewCoordinates returns transformed logical rect	paired-match	upstream-semantics-binding.md
 packages/flutter/test/semantics/semantics_owner_test.dart	12	Performing SemanticsAction.showOnScreen does not crash if node no longer exist	paired-match	upstream-semantics-binding.md
 packages/flutter/test/semantics/semantics_test.dart	453	updateWith marks node as dirty when role changes	paired-match	upstream-semantic-native-updates.md
