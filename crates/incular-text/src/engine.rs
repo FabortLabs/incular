@@ -1881,7 +1881,15 @@ impl TextEngine {
                     continue;
                 };
                 let run = parley_run.run();
-                let font = self.font_handle_for(run.font());
+                let coords = run.normalized_coords();
+                let mut font = self.font_handle_for(run.font());
+                if coords.iter().any(|&coord| coord.to_bits() != 0) {
+                    let bits: smallvec::SmallVec<[i16; 4]> =
+                        coords.iter().map(|coord| coord.to_bits()).collect();
+                    font = font.with_location(
+                        incular_assets::FontLocation::from_normalized_coordinates(&bits),
+                    );
+                }
                 let font_id = font.id();
                 if Some(font_id) != primary {
                     self.diagnostics.fallback_runs += 1;

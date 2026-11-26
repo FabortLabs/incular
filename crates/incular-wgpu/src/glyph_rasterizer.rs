@@ -11,8 +11,8 @@
 use std::sync::Mutex;
 
 use ab_glyph_rasterizer::{Point, Rasterizer, point};
-use incular_assets::FontBytes;
-use skrifa::instance::{LocationRef, Size};
+use incular_assets::{FontBytes, FontLocation};
+use skrifa::instance::{LocationRef, NormalizedCoord, Size};
 use skrifa::outline::{
     DrawSettings, Engine, HintingInstance, HintingOptions, OutlinePen, SmoothMode, Target,
 };
@@ -28,10 +28,25 @@ self_cell::self_cell! {
 
 pub(crate) struct RasterFont {
     font: SharedFont,
-    /// Hinting instances by device ppem (bits), most recently used last.
-    hinters: Mutex<Vec<(u32, Option<HintingInstance>)>>,
+    /// Bounded hinting state by device size and normalized location.
+    hinters: Mutex<Vec<RetainedHinter>>,
     /// Outline segment buffer reused across glyph rasterizations.
     scratch: Mutex<Vec<Segment>>,
+}
+
+struct RetainedHinter {
+    ppem_bits: u32,
+    location: FontLocation,
+    instance: Option<HintingInstance>,
+}
+
+fn normalized_coords(location: &FontLocation) -> Vec<NormalizedCoord> {
+    location
+        .coordinates()
+        .iter()
+        .copied()
+        .map(NormalizedCoord::from_bits)
+        .collect()
 }
 
 /// Point samples per pixel along each axis for grayscale glyph coverage.
@@ -136,7 +151,13 @@ impl RasterFont {
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = segments;
     }
 
-    fn outline(&self, glyph: u16, ppem: f32, pen: &mut SegmentPen) -> Option<()> {
+    fn outline(
+        &self,
+        glyph: u16,
+        ppem: f32,
+        location: &FontLocation,
+        pen: &mut SegmentPen,
+    ) -> Option<()> {
         let font = self.font.borrow_dependent();
         let outlines = font.outline_glyphs();
         let outline = outlines.get(GlyphId::new(u32::from(glyph)))?;
@@ -144,8 +165,11 @@ impl RasterFont {
             .hinters
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let key = ppem.to_bits();
-        let index = match hinters.iter().position(|(size, _)| *size == key) {
+        let ppem_bits = ppem.to_bits();
+        let index = match hinters
+            .iter()
+            .position(|hinter| hinter.ppem_bits == ppem_bits && &hinter.location == location)
+        {
             Some(index) => index,
             None => {
                 if hinters.len() >= MAX_HINTERS {
@@ -159,19 +183,24 @@ impl RasterFont {
                         preserve_linear_metrics: true,
                     },
                 };
+                let coordinates = normalized_coords(location);
                 let instance = HintingInstance::new(
                     &outlines,
                     Size::new(ppem),
-                    LocationRef::default(),
+                    LocationRef::new(&coordinates),
                     options,
                 )
                 .ok();
-                hinters.push((key, instance));
+                hinters.push(RetainedHinter {
+                    ppem_bits,
+                    location: location.clone(),
+                    instance,
+                });
                 hinters.len() - 1
             }
         };
         let entry = hinters.remove(index);
-        let drawn = match &entry.1 {
+        let drawn = match &entry.instance {
             Some(instance) => outline
                 .draw(DrawSettings::hinted(instance, false), pen)
                 .is_ok(),
@@ -181,9 +210,10 @@ impl RasterFont {
         drop(hinters);
         if !drawn {
             pen.segments.clear();
+            let coordinates = normalized_coords(location);
             outline
                 .draw(
-                    DrawSettings::unhinted(Size::new(ppem), LocationRef::default()),
+                    DrawSettings::unhinted(Size::new(ppem), LocationRef::new(&coordinates)),
                     pen,
                 )
                 .ok()?;
@@ -196,6 +226,7 @@ impl RasterFont {
         glyph: u16,
         ppem: f32,
         phase: [u8; 2],
+        location: &FontLocation,
     ) -> Option<(RasterMetrics, Vec<u8>)> {
         let mut pen = SegmentPen {
             dx: f32::from(phase[0]) / 4.,
@@ -205,7 +236,7 @@ impl RasterFont {
             current: point(0., 0.),
         };
         let rasterized = self
-            .outline(glyph, ppem, &mut pen)
+            .outline(glyph, ppem, location, &mut pen)
             .and_then(|()| Self::rasterize_segments(&pen.segments));
         self.put_scratch(pen.segments);
         rasterized

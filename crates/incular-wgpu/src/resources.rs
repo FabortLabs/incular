@@ -1,5 +1,6 @@
 use super::prelude::*;
 use super::*;
+use crate::glyphs::GlyphInstanceMap;
 #[cfg(incular_d3d11)]
 use crate::d3d11 as wgpu;
 use std::collections::BTreeMap;
@@ -25,7 +26,7 @@ impl SharedGpuResourceId {
 pub struct SharedGpuResourceRegistry {
     next_identity: u64,
     images: HashMap<ImageId, SharedGpuResourceId>,
-    glyphs: crate::fast_hash::FastHashMap<GlyphCacheKey, SharedGpuResourceId>,
+    glyphs: GlyphInstanceMap<SharedGpuResourceId>,
 }
 impl SharedGpuResourceRegistry {
     fn allocate(&mut self) -> SharedGpuResourceId {
@@ -47,6 +48,10 @@ impl SharedGpuResourceRegistry {
     /// Returns the one context-local identity allocated for this DPI-specific
     /// glyph raster key.
     pub fn glyph_identity(&mut self, glyph: GlyphCacheKey) -> SharedGpuResourceId {
+        self.glyph_instance_identity(glyph.into())
+    }
+
+    pub fn glyph_instance_identity(&mut self, glyph: GlyphInstanceKey) -> SharedGpuResourceId {
         if let Some(identity) = self.glyphs.get(&glyph) {
             return *identity;
         }
@@ -70,7 +75,11 @@ impl SharedGpuResourceRegistry {
     /// placement. Re-resolution re-registers the same key idempotently; a
     /// fresh identity is only allocated when the key was actually absent.
     pub fn remove_glyph(&mut self, glyph: GlyphCacheKey) -> bool {
-        self.glyphs.remove(&glyph).is_some()
+        self.remove_glyph_instance(&glyph.into())
+    }
+
+    pub fn remove_glyph_instance(&mut self, glyph: &GlyphInstanceKey) -> bool {
+        self.glyphs.remove(glyph).is_some()
     }
     pub fn remove_image(&mut self, image: ImageId) -> bool {
         self.images.remove(&image).is_some()
@@ -1359,13 +1368,21 @@ impl SharedGpuContext {
     }
     #[must_use]
     pub fn glyph_resource_identity(&self, glyph: GlyphCacheKey) -> Option<SharedGpuResourceId> {
+        self.glyph_instance_resource_identity(&glyph.into())
+    }
+
+    #[must_use]
+    pub fn glyph_instance_resource_identity(
+        &self,
+        glyph: &GlyphInstanceKey,
+    ) -> Option<SharedGpuResourceId> {
         self.inner
             .resources
             .lock()
             .expect("shared resource lock")
             .registry
             .glyphs
-            .get(&glyph)
+            .get(glyph)
             .copied()
     }
     pub(crate) fn create_surface(
@@ -1545,7 +1562,6 @@ impl SharedGpuContext {
             run,
             // A run's glyphs share one font, size and scale.
             request: GlyphRasterRequest::new(run.font_size, scale),
-            font: run.font.id(),
             pinned_page: None,
         }
     }
@@ -1699,8 +1715,8 @@ pub fn retire_glyph_page_resources<T>(
     slots: &mut [Option<T>],
     last_revision: &mut u64,
 ) -> usize {
-    for key in atlas.take_retired_keys() {
-        registry.remove_glyph(key);
+    for key in atlas.take_retired_instance_keys() {
+        registry.remove_glyph_instance(&key);
     }
     if *last_revision == atlas.eviction_revision() {
         return 0;
@@ -1716,7 +1732,6 @@ pub(crate) struct GlyphRunResolver<'a> {
     resources: std::sync::MutexGuard<'a, SharedGpuResources>,
     run: &'a GlyphRun,
     request: GlyphRasterRequest,
-    font: FontId,
     /// The page the run pinned last. A run's glyphs nearly always share one
     /// atlas page, so this skips the protection set for all but the first.
     pinned_page: Option<u16>,
@@ -1754,9 +1769,12 @@ impl GlyphRunResolver<'_> {
         resources.retire_glyph_resources();
         let raster = raster?;
         if !served_from_cache {
-            resources
-                .registry
-                .glyph_identity(self.request.cache_key(self.font, glyph, phase));
+            resources.registry.glyph_instance_identity(GlyphInstanceKey::for_run(
+                self.request,
+                self.run,
+                glyph,
+                phase,
+            ));
         }
         let fresh = raster.bitmap.is_some();
         if let Some(bitmap) = &raster.bitmap {

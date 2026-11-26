@@ -1,6 +1,9 @@
 use super::prelude::*;
 use super::*;
+use crate::fast_hash::FastHashMap;
+use incular_assets::FontLocation;
 
+/// Raster key for a font face at its default axis location.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct GlyphCacheKey {
     pub font: FontId,
@@ -11,6 +14,107 @@ pub struct GlyphCacheKey {
     /// Fractional device origin in quarter pixels (each component is 0..=3).
     pub phase: [u8; 2],
 }
+/// Exact raster identity for a glyph at a shaped font location. The base key
+/// remains available for callers that only work with default-face instances.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct GlyphInstanceKey {
+    base: GlyphCacheKey,
+    location: FontLocation,
+}
+
+impl GlyphInstanceKey {
+    #[must_use]
+    pub fn for_run(
+        request: GlyphRasterRequest,
+        run: &GlyphRun,
+        glyph: u16,
+        phase: [u8; 2],
+    ) -> Self {
+        Self {
+            base: request.cache_key(run.font.id(), glyph, phase),
+            location: run.font.location().clone(),
+        }
+    }
+
+    #[must_use]
+    pub const fn location(&self) -> &FontLocation {
+        &self.location
+    }
+}
+
+impl From<GlyphCacheKey> for GlyphInstanceKey {
+    fn from(base: GlyphCacheKey) -> Self {
+        Self {
+            base,
+            location: FontLocation::default(),
+        }
+    }
+}
+
+// Keep the key and hashing of ordinary text unchanged. Only non-default
+// instances carry a variable-length coordinate key in the atlas/registry.
+#[derive(Debug)]
+pub(crate) struct GlyphInstanceMap<V> {
+    default_instances: FastHashMap<GlyphCacheKey, V>,
+    varied_instances: FastHashMap<GlyphInstanceKey, V>,
+}
+
+impl<V> Default for GlyphInstanceMap<V> {
+    fn default() -> Self {
+        Self {
+            default_instances: FastHashMap::default(),
+            varied_instances: FastHashMap::default(),
+        }
+    }
+}
+
+impl<V> GlyphInstanceMap<V> {
+    pub(crate) fn get(&self, key: &GlyphInstanceKey) -> Option<&V> {
+        if key.location.is_default() {
+            self.default_instances.get(&key.base)
+        } else {
+            self.varied_instances.get(key)
+        }
+    }
+
+    pub(crate) fn insert(&mut self, key: GlyphInstanceKey, value: V) {
+        if key.location.is_default() {
+            self.default_instances.insert(key.base, value);
+        } else {
+            self.varied_instances.insert(key, value);
+        }
+    }
+
+    pub(crate) fn remove(&mut self, key: &GlyphInstanceKey) -> Option<V> {
+        if key.location.is_default() {
+            self.default_instances.remove(&key.base)
+        } else {
+            self.varied_instances.remove(key)
+        }
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.default_instances.len() + self.varied_instances.len()
+    }
+
+    fn retire_where(&mut self, dropping: impl Fn(&V) -> bool, retired: &mut Vec<GlyphInstanceKey>) {
+        self.default_instances.retain(|&key, value| {
+            let remove = dropping(value);
+            if remove {
+                retired.push(key.into());
+            }
+            !remove
+        });
+        self.varied_instances.retain(|key, value| {
+            let remove = dropping(value);
+            if remove {
+                retired.push(key.clone());
+            }
+            !remove
+        });
+    }
+}
+
 /// Physical-pixel class used to select and explain raster behavior.  These
 /// bounds are intentionally expressed in ppem, never logical widget pixels.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -242,7 +346,7 @@ struct ParsedFont {
 /// instead of sampling whatever replaced them.
 pub struct GlyphAtlas {
     pages: Vec<AtlasPage>,
-    entries: crate::fast_hash::FastHashMap<GlyphCacheKey, AtlasEntry>,
+    entries: GlyphInstanceMap<AtlasEntry>,
     /// Parsed rasterizer objects by stable font identity
     /// (the parser's face index preserves TTC/OTC faces, and the
     /// `FontId` itself hashes the face index, so faces never alias).
@@ -274,7 +378,7 @@ pub struct GlyphAtlas {
     /// the shared-context resolve path, which drops their registry
     /// identities; kept as an explicit buffer (rather than returned from
     /// allocation) so the allocation signature stays total.
-    retired_keys: Vec<GlyphCacheKey>,
+    retired_keys: Vec<GlyphInstanceKey>,
 }
 impl Default for GlyphAtlas {
     fn default() -> Self {
@@ -374,7 +478,7 @@ impl GlyphAtlas {
     /// submission, even if no further text is resolved. Retired
     /// slots go vacant in place — indices never compact — with a bumped
     /// generation, dropped placements (reported through
-    /// [`Self::take_retired_keys`]), and an advanced
+    /// [`Self::take_retired_instance_keys`]), and an advanced
     /// [`Self::eviction_revision`] so host maintenance reclaims idle
     /// renderer bindings. A zero budget retires everything unprotected
     /// and admits no new placements.
@@ -424,7 +528,16 @@ impl GlyphAtlas {
     pub(crate) const fn cache_hits(&self) -> u64 {
         self.counters.glyph_cache_hits
     }
+    /// Drains retired default-instance placements. Call
+    /// [Self::take_retired_instance_keys] instead when tracking all instances.
     pub fn take_retired_keys(&mut self) -> Vec<GlyphCacheKey> {
+        self.take_retired_instance_keys()
+            .into_iter()
+            .filter_map(|key| key.location.is_default().then_some(key.base))
+            .collect()
+    }
+
+    pub fn take_retired_instance_keys(&mut self) -> Vec<GlyphInstanceKey> {
         std::mem::take(&mut self.retired_keys)
     }
     #[must_use]
@@ -449,7 +562,12 @@ impl GlyphAtlas {
     }
     #[must_use]
     pub fn entry(&self, key: GlyphCacheKey) -> Option<AtlasEntry> {
-        self.entries.get(&key).copied()
+        self.instance_entry(&key.into())
+    }
+
+    #[must_use]
+    pub fn instance_entry(&self, key: &GlyphInstanceKey) -> Option<AtlasEntry> {
+        self.entries.get(key).copied()
     }
     /// Live-residency accounting: vacant slots hold no content and back no
     /// texture, so only resident pages count toward pages, bytes, and
@@ -533,7 +651,7 @@ impl GlyphAtlas {
             self.counters.glyphs_skipped += 1;
             return None;
         }
-        let key = request.cache_key(run.font.id(), glyph, phase);
+        let key = GlyphInstanceKey::for_run(request, run, glyph, phase);
         if let Some(entry) = self.entries.get(&key).copied() {
             // Generation validation: the slot may have been evicted and
             // reused for different content since this placement resolved. A
@@ -553,11 +671,11 @@ impl GlyphAtlas {
                 // glyph never parses its font merely to be served. If the
                 // font is still retained its recency refreshes; if it was
                 // evicted earlier, nothing happens and the hit still serves.
-                if self.newest_font != Some(key.font) {
-                    if let Some(parsed) = self.fonts.get_mut(&key.font) {
+                if self.newest_font != Some(key.base.font) {
+                    if let Some(parsed) = self.fonts.get_mut(&key.base.font) {
                         parsed.last_use = tick;
                     }
-                    self.newest_font = Some(key.font);
+                    self.newest_font = Some(key.base.font);
                 }
                 self.counters.glyph_cache_hits += 1;
                 if entry.atlas_class == GlyphAtlasClass::Oversize {
@@ -583,7 +701,7 @@ impl GlyphAtlas {
             unretained = Some(parsed);
             unretained.as_ref().expect("parsed font just stored")
         } else {
-            let inserted = match self.fonts.entry(key.font) {
+            let inserted = match self.fonts.entry(key.base.font) {
                 Entry::Occupied(slot) => {
                     self.counters.font_parser_cache_hits += 1;
                     self.tick = self.tick.saturating_add(1);
@@ -603,7 +721,7 @@ impl GlyphAtlas {
                     true
                 }
             };
-            self.newest_font = Some(key.font);
+            self.newest_font = Some(key.base.font);
             if inserted {
                 // The fresh entry holds the newest stamp, so it can never
                 // be its own eviction victim below.
@@ -611,12 +729,17 @@ impl GlyphAtlas {
             }
             &self
                 .fonts
-                .get(&key.font)
+                .get(&key.base.font)
                 .expect("parsed font just ensured")
                 .font
         };
         let started = Instant::now();
-        let (metrics, bitmap) = font.rasterize_indexed(key.glyph, request.ppem(), key.phase)?;
+        let (metrics, bitmap) = font.rasterize_indexed(
+            key.base.glyph,
+            request.ppem(),
+            key.base.phase,
+            key.location(),
+        )?;
         self.counters.raster_time_total = self
             .counters
             .raster_time_total
@@ -678,7 +801,7 @@ impl GlyphAtlas {
     #[must_use]
     pub fn debug_glyph(&self, run: &GlyphRun, glyph: u16, scale: f64) -> Option<GlyphRasterDebug> {
         let request = GlyphRasterRequest::new(run.font_size, scale);
-        let entry = self.entry(request.cache_key(run.font.id(), glyph, [0, 0]))?;
+        let entry = self.instance_entry(&GlyphInstanceKey::for_run(request, run, glyph, [0, 0]))?;
         Some(GlyphRasterDebug {
             font: run.font.id(),
             glyph,
@@ -880,15 +1003,10 @@ impl GlyphAtlas {
     /// maintenance. Shared by in-place eviction reuse and vacancy
     /// retirement; the caller sets the slot's resulting state.
     fn drop_page_placements(&mut self, index: usize) {
-        let retired_keys = &mut self.retired_keys;
-        self.entries.retain(|key, entry| {
-            if usize::from(entry.page) == index {
-                retired_keys.push(*key);
-                false
-            } else {
-                true
-            }
-        });
+        self.entries.retire_where(
+            |entry| usize::from(entry.page) == index,
+            &mut self.retired_keys,
+        );
         self.eviction_revision = self
             .eviction_revision
             .checked_add(1)
@@ -920,7 +1038,7 @@ impl GlyphAtlas {
     }
 
     /// Retires the least-recently-used unprotected page: drops its
-    /// placements (reported through [`Self::take_retired_keys`] for
+    /// placements (reported through [`Self::take_retired_instance_keys`] for
     /// identity cleanup), bumps its generation so no stale placement can
     /// name the replacement content, and resets its allocator cursor.
     /// Returns `None` — a counted pressure skip, never a loop — when every

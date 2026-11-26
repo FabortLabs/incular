@@ -71,6 +71,32 @@ impl<const N: usize> From<[u8; N]> for FontBytes {
     }
 }
 
+/// OpenType variation coordinates in the face's axis order, after the face's
+/// axis normalization and mapping. Values store the exact signed 2.14 bits.
+///
+/// Trailing zero coordinates are implicit. An empty location is the default
+/// instance and needs no allocation.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct FontLocation(Option<Arc<[i16]>>);
+
+impl FontLocation {
+    #[must_use]
+    pub fn from_normalized_coordinates(coordinates: &[i16]) -> Self {
+        let end = coordinates.iter().rposition(|&value| value != 0);
+        Self(end.map(|end| Arc::from(&coordinates[..=end])))
+    }
+
+    #[must_use]
+    pub fn coordinates(&self) -> &[i16] {
+        self.0.as_deref().unwrap_or_default()
+    }
+
+    #[must_use]
+    pub const fn is_default(&self) -> bool {
+        self.0.is_none()
+    }
+}
+
 /// Font bytes and their stable identity. Paths are deliberately not part of
 /// the public identity: system discovery and bundled assets both produce this
 /// same handle.
@@ -79,6 +105,7 @@ pub struct FontHandle {
     id: FontId,
     bytes: FontBytes,
     face_index: u32,
+    location: FontLocation,
 }
 impl FontHandle {
     #[must_use]
@@ -93,7 +120,19 @@ impl FontHandle {
             id,
             bytes: bytes.into(),
             face_index,
+            location: FontLocation::default(),
         }
+    }
+    /// Selects the shaped instance without changing the face identity used
+    /// to retain and share parsed font tables.
+    #[must_use]
+    pub fn with_location(mut self, location: FontLocation) -> Self {
+        self.location = location;
+        self
+    }
+    #[must_use]
+    pub const fn location(&self) -> &FontLocation {
+        &self.location
     }
     #[must_use]
     pub const fn id(&self) -> FontId {
@@ -113,6 +152,7 @@ impl fmt::Debug for FontHandle {
         f.debug_struct("FontHandle")
             .field("id", &self.id)
             .field("face_index", &self.face_index)
+            .field("location", &self.location)
             .finish_non_exhaustive()
     }
 }

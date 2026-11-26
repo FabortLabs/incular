@@ -76,8 +76,8 @@ pub use diagnostics::{
 pub use geometry::{PathMesh, tessellate_path};
 pub use glyphs::{
     AtlasEntry, CoverageHistogram, GLYPH_ATLAS_PADDING, GlyphAtlas, GlyphAtlasClass,
-    GlyphAtlasMemory, GlyphCacheKey, GlyphRasterDebug, GlyphRasterRequest, GlyphSizeClass,
-    RasterizedGlyph, RendererGlyphPages, coverage_histogram,
+    GlyphAtlasMemory, GlyphCacheKey, GlyphInstanceKey, GlyphRasterDebug, GlyphRasterRequest,
+    GlyphSizeClass, RasterizedGlyph, RendererGlyphPages, coverage_histogram,
 };
 pub use memory_report::{GpuAllocatorSummary, GpuMemoryEntry, live_decoded_images};
 pub use renderer::WgpuRenderer;

@@ -89,3 +89,38 @@ cargo test --locked -j 1 -p incular-text --test font_variations --test style -- 
 export INCULAR_FLUTTER_VARIABLE_FONT="$PWD/.tmp/flutter/engine/src/flutter/testing/resources/RobotoSlab-VariableFont_wght.ttf"
 bash audits/flutter-3.50.0-parity/run-reference-linux.sh probe font_variation_tween_test.dart
 ```
+
+### Variable glyph masks and retained atlas entries
+
+The layout fix revealed a second drift: Parley shaped the requested
+face location, but Incular rasterized its default outlines and let
+other weights alias those masks. The shaped run now carries the
+face-normalized coordinates through paint to hinted and unhinted
+wgpu glyph rasterization. Hinting state is bounded and includes the
+axis location; the underlying parsed face is still shared. Varied
+mask keys are exact, and the default instance uses the previous
+compact key. Page eviction retires both kinds of identity.
+
+The native fixture compares separate light, midpoint and heavy
+masks for the same glyph at 56 ppem and the same subpixel phase.
+Ink coverage increases at each sampled weight, the midpoint and an
+explicit weight 500 share one entry, and the implicit and explicit
+default weight share one entry. Warm requests reuse the masks,
+parse the face only once, and retire and regenerate the correct
+mask under budget pressure. The authored Flutter image test checks
+the same coverage ordering and identical pixels between the
+midpoint and explicit weight 500 in Flutter. This does not claim
+identical antialiasing between the two engines.
+
+Twenty-five focused native checks and the authored Flutter pixel
+test passed. The pre-existing system-font mask comparison
+`on_demand_masks_preserve_em_scale_baseline_and_antialiased_coverage`
+also was run separately; it fails at the same glyph 135 coverage at
+1× on the unmodified baseline `4bf4a279` and with this repair.
+That comparison has not been weakened or counted as passing.
+
+```sh
+cargo test --locked -j 1 -p incular-wgpu --test variable_glyphs -- --include-ignored --test-threads=1
+export INCULAR_FLUTTER_VARIABLE_FONT="$PWD/.tmp/flutter/engine/src/flutter/testing/resources/RobotoSlab-VariableFont_wght.ttf"
+bash audits/flutter-3.50.0-parity/run-reference-linux.sh probe font_variation_pixels_test.dart
+```
