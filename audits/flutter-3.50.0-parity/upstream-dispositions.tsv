@@ -2497,3 +2497,6 @@ packages/flutter/test/services/haptic_feedback_test.dart	11	Haptic feedback cont
 packages/flutter/test/services/haptic_feedback_test.dart	28	Haptic feedback variation tests	paired-match	upstream-haptic-feedback.md
 packages/flutter/test/services/system_navigator_test.dart	20	System navigator control test - platform messages	paired-match	upstream-system-platform-commands.md
 packages/flutter/test/services/system_navigator_test.dart	39	System navigator control test - navigation messages	paired-match	upstream-system-platform-commands.md
+packages/flutter/test/services/process_text_test.dart	11	ProcessTextService.queryTextActions emits correct method call	paired-match	upstream-process-text-service.md
+packages/flutter/test/services/process_text_test.dart	29	ProcessTextService.processTextAction emits correct method call	paired-match	upstream-process-text-service.md
+packages/flutter/test/services/process_text_test.dart	55	ProcessTextService handles engine answers over the channel	paired-match	upstream-process-text-service.md

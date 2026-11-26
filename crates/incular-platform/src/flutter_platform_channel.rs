@@ -1,4 +1,4 @@
-//! Shared transport for Flutter's optional JSON platform channels.
+//! Shared transport for Flutter's optional platform channels.
 
 use std::future::Future;
 
@@ -7,7 +7,7 @@ use serde_json::Value;
 use crate::message_codecs::{JsonMethodCodec, JsonMethodCodecError, MethodCall};
 
 /// Transport for optional Flutter-compatible channels. A missing handler
-/// returns `Ok(None)`; successful and failed handlers return JSON envelopes.
+/// returns `Ok(None)`; handlers return envelopes for the selected channel codec.
 pub trait FlutterPlatformMessenger {
     type Error;
 

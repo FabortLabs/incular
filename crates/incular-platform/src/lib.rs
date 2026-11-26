@@ -26,6 +26,7 @@ pub mod message_codecs;
 mod operation;
 mod platform_view;
 mod pointer;
+mod process_text;
 mod semantics_messages;
 mod spell_check;
 mod system_chrome;
@@ -80,6 +81,9 @@ pub use file_dialog::{
 };
 pub use flutter_platform_channel::{FlutterPlatformChannelError, FlutterPlatformMessenger};
 pub use haptic_feedback::{HapticFeedback, HapticFeedbackError, HapticFeedbackType};
+pub use process_text::{
+    DefaultProcessTextService, ProcessTextAction, ProcessTextError, ProcessTextService,
+};
 pub use semantics_messages::{
     AccessibilityMessenger, Assertiveness, SemanticsAnnouncement, SemanticsEvent,
     SemanticsMessageError, SemanticsNodeErrorReport, SemanticsService,
