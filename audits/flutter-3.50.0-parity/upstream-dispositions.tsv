@@ -2267,3 +2267,6 @@ packages/flutter/test/painting/shape_decoration_test.dart	62	ShapeDecoration.ler
 packages/flutter/test/painting/shape_decoration_test.dart	68	ShapeDecoration.lerp null a,b	paired-match	upstream-shape-decoration-hit-and-clip.md#nullable-and-identical-decorations
 packages/flutter/test/painting/shape_decoration_test.dart	16	ShapeDecoration constructor	paired-match	upstream-shape-decoration-hit-and-clip.md#box-to-shape-conversion
 packages/flutter/test/painting/gradient_test.dart	177	LinearGradient.lerp identical a,b	paired-match	upstream-gradient-identity.md
+packages/flutter/test/widgets/editable_text_test.dart	11647	Preserves composing range if cursor moves within that range	paired-match	upstream-text-input-reattach.md#moving-outside-composition
+packages/flutter/test/widgets/editable_text_test.dart	11670	Clears composing range if cursor moves outside that range	paired-match	upstream-text-input-reattach.md#moving-outside-composition
+packages/flutter/test/widgets/editable_text_test.dart	11719	Clears composing range if cursor moves outside that range - case two	paired-match	upstream-text-input-reattach.md#moving-outside-composition

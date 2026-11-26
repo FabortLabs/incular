@@ -1229,6 +1229,11 @@ impl TextEditingController {
             apply(value);
             value.selection = value.selection.clamp_to(&value.text);
             value.composing = value.composing.map(|range| range.clamp_to(&value.text));
+            if sets_selection && value.composing.is_some_and(|range| {
+                value.selection.start() < range.start || value.selection.end() > range.end
+            }) {
+                value.composing = None;
+            }
             if (value.selection, value.composing) == before && !was_unset {
                 return;
             }

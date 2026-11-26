@@ -565,3 +565,44 @@ fn closing_or_switching_keyboard_clients_never_replays_stale_composition() {
             if configuration.client != active && state.composing.is_none() && state.selection_end == 3)
     }));
 }
+
+#[test]
+fn selection_updates_send_the_correct_composing_range_to_the_existing_client() {
+    use incular_platform::TextInputState;
+    use incular_text::TextSelection;
+
+    let controller = TextEditingController::new();
+    let node = FocusNode::new();
+    let mut runtime = Runtime::new(field(&controller, &node, true).into()).unwrap();
+    frame(&mut runtime);
+    let client = attached(&mut runtime);
+    let _ = runtime.handle_platform_event(PlatformEvent::TextEditingState(TextInputState {
+        text: "foo composing bar".into(),
+        selection_start: 4,
+        selection_end: 4,
+        composing: Some((4, 12)),
+    }));
+    frame(&mut runtime);
+    runtime.take_text_input_commands();
+    for (selection, composing) in [
+        (TextSelection::new(7, 5), Some((4, 12))),
+        (TextSelection::new(14, 7), None),
+    ] {
+        controller.set_selection(selection);
+        frame(&mut runtime);
+        let commands = runtime.take_text_input_commands();
+        assert!(node.has_primary_focus());
+        assert!(
+            commands.iter().any(|command| {
+                matches!(command, TextInputCommand::Update { client: id, state }
+                if *id == client && state.selection_start == selection.base
+                    && state.selection_end == selection.extent && state.composing == composing)
+            }),
+            "{commands:?}"
+        );
+        assert!(!commands.iter().any(|command| matches!(
+            command,
+            TextInputCommand::SetClient { .. } | TextInputCommand::Show { .. }
+        )));
+    }
+}

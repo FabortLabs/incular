@@ -128,3 +128,18 @@ do not notify when there was nothing to clear. Twenty runtime/host
 tests and ten controller/state tests passed; these authored cases
 do not add pinned registrations. The shared-FocusNode fixture above
 still has a separate ownership difference.
+
+## Moving outside composition
+
+Pinned `widgets/editable_text_test.dart:11647,11670,11719` pass. The
+controller formerly kept composition even when the caret or selection
+left it. A moved or explicitly assigned selection now preserves the
+range only when both endpoints are inside it, including exact
+boundaries and backward selections. Moving outside changes neither
+the text nor the selected offsets.
+
+Native checks preserve all pinned inside/before/after positions, add
+backward and partially overlapping selections, and verify the same
+mounted client receives its updated selection and composing range
+without a new attachment or keyboard show. Thirteen focused text
+tests and 21 runtime/host tests passed.
