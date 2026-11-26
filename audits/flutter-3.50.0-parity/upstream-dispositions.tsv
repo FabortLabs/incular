@@ -2016,3 +2016,13 @@ packages/flutter/test/painting/text_painter_test.dart	536	trailing newlines	refe
 packages/flutter/test/painting/text_painter_test.dart	561	End of text caret when the text ends with +1 bidi level	partial-match	upstream-text-painter.md#caret-affinity-and-grapheme-edges
 packages/flutter/test/painting/text_painter_test.dart	579	handles newlines properly	paired-match	upstream-text-painter.md#caret-affinity-and-grapheme-edges
 packages/flutter/test/painting/text_painter_test.dart	2034	getOffsetForCaret does not crash on decomposed characters	paired-match	upstream-text-painter.md#caret-affinity-and-grapheme-edges
+packages/flutter/test/painting/text_painter_test.dart	504	TextPainter caret height and line height	paired-match	upstream-text-painter.md#scaled-text-and-caret-height
+packages/flutter/test/painting/text_painter_test.dart	860	caret height reflects run height if strut is disabled	paired-match	upstream-text-painter.md#scaled-text-and-caret-height
+packages/flutter/test/painting/text_painter_test.dart	910	getFullHeightForCaret handles degenerate layout without crashing	paired-match	upstream-text-painter.md#scaled-text-and-caret-height
+packages/flutter/test/painting/text_painter_test.dart	953	TextPainter size test	paired-match	upstream-text-painter.md#scaled-text-and-caret-height
+packages/flutter/test/painting/text_painter_test.dart	963	TextPainter textScaler test	paired-match	upstream-text-painter.md#scaled-text-and-caret-height
+packages/flutter/test/painting/text_painter_test.dart	974	TextPainter textScaler null style test	paired-match	upstream-text-painter.md#scaled-text-and-caret-height
+packages/flutter/test/painting/text_painter_test.dart	985	TextPainter default text height is 14 pixels	paired-match	upstream-text-painter.md#scaled-text-and-caret-height
+packages/flutter/test/painting/text_painter_test.dart	996	TextPainter sets paragraph size from root	paired-match	upstream-text-painter.md#scaled-text-and-caret-height
+packages/flutter/test/painting/text_painter_test.dart	1731	TextPainter computeWidth	paired-match	upstream-text-painter.md#scaled-text-and-caret-height
+packages/flutter/test/painting/text_painter_test.dart	1746	TextPainter computeMaxIntrinsicWidth	paired-match	upstream-text-painter.md#scaled-text-and-caret-height

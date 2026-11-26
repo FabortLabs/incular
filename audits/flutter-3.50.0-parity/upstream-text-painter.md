@@ -47,3 +47,22 @@ Ahem fixture. What pairs there is the direction-sensitive caret-width
 subtraction at the run boundary and the base-direction terminal
 caret. The exact trailing-space/RTL registration ran only on Flutter.
 All eight selected Flutter and 24 focused Rust cases passed.
+
+## Scaled text and caret height
+
+Ten additional pinned registrations pair. Plain and explicitly styled
+spans scale once after inheritance; the painter preserves a distinct
+explicit paragraph root size even when every visible character comes
+from a differently styled child. With the pinned Ahem font, the default
+14 px text height, 2× scaling, and 100 px root template agree. The 14 px
+comparison selects Ahem in the Rust default style explicitly; it does
+not require both platforms to ship the same system default font.
+Static width and max intrinsic width use the same calculations as a
+live painter under both finite and unbounded constraints.
+
+At a run boundary, upstream and downstream affinity select the actual
+run's caret height: 128→32 and 32→64 px. End-of-text returns to the
+128 px root template under downstream affinity. A resolved 50 px strut
+controls caret height without changing the source style, and an empty
+zero-font paragraph still yields a finite template height. Ten Flutter
+and 25 focused Rust cases passed (18 painter, 3 scaler, 4 line height).

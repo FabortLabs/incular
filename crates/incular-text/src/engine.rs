@@ -149,6 +149,8 @@ pub struct FontRunDebug {
     pub range: std::ops::Range<usize>,
     pub font: FontId,
     pub direction: &'static str,
+    /// Tight font height in logical pixels, before strut or paragraph leading.
+    pub caret_height: f32,
 }
 
 /// A visual insertion point emitted by the shaping engine.
@@ -1983,6 +1985,7 @@ impl TextEngine {
                     range: run.text_range(),
                     font: font_id,
                     direction: if run.is_rtl() { "rtl" } else { "ltr" },
+                    caret_height: (run.font_metrics().ascent + run.font_metrics().descent).max(0.),
                 });
             }
             // Every merged cluster, including zero-advance ones that only

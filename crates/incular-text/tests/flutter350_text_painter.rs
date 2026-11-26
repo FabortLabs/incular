@@ -417,3 +417,149 @@ fn bidi_run_leading_edge_accounts_for_caret_width_without_moving_terminal_caret(
         visual_end
     );
 }
+
+#[test]
+fn ahem_sizes_and_scaler_follow_the_root_or_inherited_style() {
+    use incular_text::TextScaler;
+    let Ok(path) = std::env::var("INCULAR_FLUTTER_AHEM_PATH") else {
+        return;
+    };
+    let mut engine = TextEngine::new();
+    assert!(engine.register_font_bytes_as("Ahem Painter", std::fs::read(path).unwrap()));
+    let default = TextStyle::default().font_family("Ahem Painter");
+    let mut p = painter(TextSpan::new("x"), TextDirection::Ltr);
+    p.set_default_style(default.clone());
+    p.layout_with_engine(&mut engine, 0., f32::INFINITY)
+        .unwrap();
+    assert_eq!(p.preferred_line_height(), Ok(14.));
+    assert_eq!(p.size(), Ok(Size::new(14., 14.)));
+
+    p.set_text_scaler(TextScaler::linear(2.));
+    p.layout_with_engine(&mut engine, 0., f32::INFINITY)
+        .unwrap();
+    assert_eq!(p.size(), Ok(Size::new(28., 28.)));
+
+    p.set_text(Some(
+        TextSpan::new("X").style(default.clone().font_size(10.)),
+    ));
+    p.layout_with_engine(&mut engine, 0., f32::INFINITY)
+        .unwrap();
+    assert_eq!(p.size(), Ok(Size::new(20., 20.)));
+
+    p.set_text_scaler(TextScaler::NO_SCALING);
+    p.set_text(Some(TextSpan::new("X").style(default.font_size(123.))));
+    p.layout_with_engine(&mut engine, 0., f32::INFINITY)
+        .unwrap();
+    assert_eq!(p.size(), Ok(Size::new(123., 123.)));
+    p.set_text(Some(
+        TextSpan::new("x").style(
+            TextStyle::default()
+                .font_family("Ahem Painter")
+                .font_size(100.),
+        ),
+    ));
+    p.layout_with_engine(&mut engine, 0., f32::INFINITY)
+        .unwrap();
+    assert_eq!(p.preferred_line_height(), Ok(100.));
+    assert_eq!(p.size(), Ok(Size::new(100., 100.)));
+}
+
+#[test]
+fn adjacent_run_heights_depend_on_affinity_and_terminal_caret_uses_the_template() {
+    use incular_text::TextAffinity::{Downstream, Upstream};
+    let Ok(path) = std::env::var("INCULAR_FLUTTER_AHEM_PATH") else {
+        return;
+    };
+    let mut engine = TextEngine::new();
+    assert!(engine.register_font_bytes_as("Ahem Height", std::fs::read(path).unwrap()));
+    let span = |size: f32| {
+        TextSpan::new("M").style(
+            TextStyle::default()
+                .font_family("Ahem Height")
+                .font_size(size),
+        )
+    };
+    let mut p = painter(
+        span(128.).children([span(32.), span(64.)]),
+        TextDirection::Ltr,
+    );
+    p.layout_with_engine(&mut engine, 0., f32::INFINITY)
+        .unwrap();
+    for (byte, upstream, downstream) in [
+        (0, 128., 128.),
+        (1, 128., 32.),
+        (2, 32., 64.),
+        (3, 64., 128.),
+    ] {
+        assert_eq!(p.full_height_for_caret(byte, Upstream), Ok(upstream));
+        assert_eq!(p.full_height_for_caret(byte, Downstream), Ok(downstream));
+        // Alternate affinity at the same position so a cache cannot reuse
+        // the other run's measurement due to a byte-only cache key.
+        assert_eq!(p.full_height_for_caret(byte, Upstream), Ok(upstream));
+    }
+}
+
+#[test]
+fn strut_sets_caret_height_even_when_the_glyph_uses_a_smaller_font() {
+    use incular_text::{StrutStyle, TextAffinity::Downstream};
+    let Ok(path) = std::env::var("INCULAR_FLUTTER_AHEM_PATH") else {
+        return;
+    };
+    let mut engine = TextEngine::new();
+    assert!(engine.register_font_bytes_as("Ahem Strut", std::fs::read(path).unwrap()));
+    let mut p = painter(
+        TextSpan::new("A").style(
+            TextStyle::default()
+                .font_family("Ahem Strut")
+                .height(Some(1.)),
+        ),
+        TextDirection::Ltr,
+    );
+    p.set_strut_style(Some(
+        StrutStyle::new().font_family("Ahem Strut").font_size(50.),
+    ));
+    p.layout_with_engine(&mut engine, 0., f32::INFINITY)
+        .unwrap();
+    assert_eq!(p.full_height_for_caret(0, Downstream), Ok(50.));
+}
+
+#[test]
+fn empty_zero_size_text_returns_the_preferred_height() {
+    use incular_text::TextAffinity::Downstream;
+    let mut p = painter(
+        TextSpan::empty().style(TextStyle::default().font_size(0.).height(Some(1.))),
+        TextDirection::Ltr,
+    );
+    p.layout(0., f32::INFINITY).unwrap();
+    assert_eq!(
+        p.full_height_for_caret(0, Downstream),
+        p.preferred_line_height()
+    );
+    assert!(p.preferred_line_height().unwrap().is_finite());
+}
+
+#[test]
+fn static_measurement_matches_the_live_width_and_unconstrained_intrinsic() {
+    let span = TextSpan::new("foobar");
+    let mut p = TextPainter::with_span(span.clone(), TextDirection::Ltr);
+    p.layout(0., f32::INFINITY).unwrap();
+    let intrinsic = p.max_intrinsic_width().unwrap();
+    for minimum in [0., 500.] {
+        p.layout(minimum, f32::INFINITY).unwrap();
+        assert_eq!(
+            p.size().unwrap().width,
+            TextPainter::compute_width(span.clone(), TextDirection::Ltr, minimum, f32::INFINITY)
+                .unwrap()
+        );
+        assert_eq!(
+            p.max_intrinsic_width(),
+            TextPainter::compute_max_intrinsic_width(
+                span.clone(),
+                TextDirection::Ltr,
+                minimum,
+                f32::INFINITY
+            )
+        );
+        assert_eq!(p.max_intrinsic_width(), Ok(intrinsic));
+    }
+}

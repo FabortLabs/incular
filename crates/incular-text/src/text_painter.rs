@@ -9,8 +9,8 @@ use incular_config::TextDirection;
 use incular_core::{Offset, Size};
 
 use crate::{
-    TextAffinity, TextAlign, TextEngine, TextLayout, TextLayoutOptions, TextOverflow, TextRange,
-    TextSpan, TextStyle, TextWidthBasis, word_boundary_at,
+    StrutStyle, TextAffinity, TextAlign, TextEngine, TextLayout, TextLayoutOptions, TextOverflow,
+    TextRange, TextScaler, TextSpan, TextStrut, TextStyle, TextWidthBasis, word_boundary_at,
 };
 
 /// A layout request or query that cannot be satisfied yet.
@@ -50,6 +50,13 @@ pub struct TextPainterLine {
     pub baseline: f32,
 }
 
+#[derive(Clone, Copy)]
+struct RunHeight {
+    start: usize,
+    end: usize,
+    height: f32,
+}
+
 struct MeasuredText {
     min: f32,
     max: f32,
@@ -58,6 +65,9 @@ struct MeasuredText {
     shaped: Arc<TextLayout>,
     size: Size,
     max_intrinsic_width: f32,
+    preferred_line_height: f32,
+    strut: Option<TextStrut>,
+    run_heights: OnceLock<Vec<RunHeight>>,
     paint_offset: Offset,
     lines: OnceLock<Arc<[TextPainterLine]>>,
 }
@@ -72,6 +82,9 @@ pub struct TextPainter {
     direction: Option<TextDirection>,
     alignment: TextAlign,
     width_basis: TextWidthBasis,
+    default_style: TextStyle,
+    scaler: TextScaler,
+    strut_style: Option<StrutStyle>,
     measured: Option<MeasuredText>,
     disposed: bool,
 }
@@ -80,6 +93,39 @@ impl TextPainter {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Creates a painter with its paragraph source and direction set.
+    #[must_use]
+    pub fn with_span(text: TextSpan, direction: TextDirection) -> Self {
+        let mut painter = Self::new();
+        painter.set_text(Some(text));
+        painter.set_text_direction(Some(direction));
+        painter
+    }
+
+    /// Measures content width with the default scaling and width basis.
+    pub fn compute_width(
+        text: TextSpan,
+        direction: TextDirection,
+        min_width: f32,
+        max_width: f32,
+    ) -> Result<f32, TextPainterError> {
+        let mut painter = Self::with_span(text, direction);
+        painter.layout(min_width, max_width)?;
+        Ok(painter.size()?.width)
+    }
+
+    /// Measures natural width independently of the resulting paint width.
+    pub fn compute_max_intrinsic_width(
+        text: TextSpan,
+        direction: TextDirection,
+        min_width: f32,
+        max_width: f32,
+    ) -> Result<f32, TextPainterError> {
+        let mut painter = Self::with_span(text, direction);
+        painter.layout(min_width, max_width)?;
+        painter.max_intrinsic_width()
     }
 
     /// Replaces the span and invalidates its measurement.
@@ -108,6 +154,30 @@ impl TextPainter {
     pub fn set_text_width_basis(&mut self, basis: TextWidthBasis) {
         if self.width_basis != basis {
             self.width_basis = basis;
+            self.measured = None;
+        }
+    }
+
+    /// Sets the inherited style for spans that do not specify their own.
+    pub fn set_default_style(&mut self, style: TextStyle) {
+        if self.default_style != style {
+            self.default_style = style;
+            self.measured = None;
+        }
+    }
+
+    /// Changes font scaling without changing the source span's logical sizes.
+    pub fn set_text_scaler(&mut self, scaler: TextScaler) {
+        if self.scaler != scaler {
+            self.scaler = scaler;
+            self.measured = None;
+        }
+    }
+
+    /// Sets the paragraph's minimum (or forced) line metrics.
+    pub fn set_strut_style(&mut self, strut: Option<StrutStyle>) {
+        if self.strut_style != strut {
+            self.strut_style = strut;
             self.measured = None;
         }
     }
@@ -150,17 +220,48 @@ impl TextPainter {
         if reusable.is_some_and(|last| last.min == min_width && last.max == max_width) {
             return Ok(());
         }
-        let runs = text.flatten(&TextStyle::default());
+        let inherited = &self.default_style;
+        let base = text
+            .style
+            .as_ref()
+            .map_or_else(|| inherited.clone(), |style| inherited.merge(style))
+            .scaled(self.scaler);
+        let mut runs = text.flatten(inherited);
+        for run in &mut runs {
+            run.style = run.style.scaled(self.scaler);
+        }
         let placeholders = text.placeholders();
+        let strut = reusable.map_or_else(
+            || {
+                let mut style = self.strut_style.clone()?;
+                style.font_size = style.font_size.map(|size| self.scaler.scale(size));
+                (style.font_size != Some(0.)).then(|| engine.resolve_strut(&style, &base))
+            },
+            |last| last.strut,
+        );
+        let preferred_line_height = reusable.map_or_else(
+            || {
+                engine
+                    .layout_with_options(
+                        " ",
+                        &base,
+                        TextLayoutOptions::new(None, TextAlign::Start).strut(strut),
+                    )
+                    .metrics
+                    .line_height
+            },
+            |last| last.preferred_line_height,
+        );
         let measure = |engine: &mut TextEngine, width| {
-            engine.layout_rich_with_options(
-                &self.plain,
-                &runs,
-                &placeholders,
-                TextLayoutOptions::new(width, self.alignment)
-                    .text_direction(direction)
-                    .overflow(TextOverflow::Visible),
-            )
+            let options = TextLayoutOptions::new(width, self.alignment)
+                .text_direction(direction)
+                .overflow(TextOverflow::Visible)
+                .strut(strut);
+            if runs.is_empty() && placeholders.is_empty() {
+                engine.layout_with_options(&self.plain, &base, options)
+            } else {
+                engine.layout_rich_with_options(&self.plain, &runs, &placeholders, options)
+            }
         };
         let (intrinsic, shaped, shaping_width) = if max_width.is_finite() {
             let intrinsic = reusable.map_or_else(
@@ -193,6 +294,9 @@ impl TextPainter {
             size: Size::new(measured_width, shaped.metrics.size.height),
             shaped,
             max_intrinsic_width: intrinsic,
+            preferred_line_height,
+            strut,
+            run_heights: OnceLock::new(),
             paint_offset: Offset::new(fraction * (measured_width - shaping_width), 0.),
             lines: OnceLock::new(),
         });
@@ -361,6 +465,60 @@ impl TextPainter {
             (x - advance + measured.paint_offset.x).clamp(0., measured.size.width),
             line.top,
         ))
+    }
+
+    /// Height of a line using the root style as its text template.
+    pub fn preferred_line_height(&self) -> Result<f32, TextPainterError> {
+        Ok(self.measured()?.preferred_line_height)
+    }
+
+    /// Height at a UTF-8 caret position. Without a strut, affinity
+    /// chooses the adjacent shaped run's tight font height. The downstream
+    /// text end and degenerate layouts use the root line template.
+    pub fn full_height_for_caret(
+        &self,
+        byte: usize,
+        affinity: TextAffinity,
+    ) -> Result<f32, TextPainterError> {
+        let measured = self.measured()?;
+        if let Some(strut) = measured.strut {
+            let height = strut.ascent + strut.descent;
+            return Ok(if height > 0. {
+                height
+            } else {
+                measured.preferred_line_height
+            });
+        }
+        let source = self.plain.as_bytes();
+        let byte = byte.min(source.len());
+        let anchor = if byte > 0
+            && affinity == TextAffinity::Upstream
+            && !matches!(source[byte - 1], b'\n' | b'\r')
+        {
+            byte - 1
+        } else {
+            byte
+        };
+        let runs = measured.run_heights.get_or_init(|| {
+            let mut runs: Vec<_> = measured
+                .shaped
+                .font_runs
+                .iter()
+                .map(|run| RunHeight {
+                    start: run.range.start,
+                    end: run.range.end,
+                    height: run.caret_height,
+                })
+                .collect();
+            runs.sort_unstable_by_key(|run| run.start);
+            runs
+        });
+        Ok(runs
+            .partition_point(|run| run.start <= anchor)
+            .checked_sub(1)
+            .and_then(|index| runs.get(index))
+            .filter(|run| anchor < run.end)
+            .map_or(measured.preferred_line_height, |run| run.height))
     }
 
     /// Asks for the same caret using a Flutter/IME UTF-16 code-unit offset.
