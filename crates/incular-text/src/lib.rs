@@ -29,7 +29,7 @@ pub use spans::{
 pub use style::{
     FontFamily, FontFeature, FontStyle, FontVariation, FontWeight, IconData, LineHeight,
     StrutStyle, TextAlign, TextBaseline, TextDecoration, TextDecorationStyle, TextHeightBehavior,
-    TextLeadingDistribution, TextOverflow, TextScaler, TextScalerKind, TextShadow, TextStyle,
+    TextLeadingDistribution, TextOverflow, TextScaleBoundsError, TextScaler, TextScalerKind, TextShadow, TextStyle,
     TextWidthBasis,
 };
 

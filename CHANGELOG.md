@@ -7,6 +7,8 @@ a version and date when publishing.
 
 ### Added
 
+- Linear text scalers can be clamped with validated bounds.
+
 - Predictive back can decode Flutter-compatible standard method messages.
   Invalid progress or swipe edges return typed errors.
 

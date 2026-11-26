@@ -60,3 +60,22 @@ fn changing_the_environment_text_scale_relayouts_mounted_text() {
     assert!(after.height > before.height, "{after:?} vs {before:?}");
     assert!(after.width > before.width, "{after:?} vs {before:?}");
 }
+
+#[test]
+fn retained_text_uses_the_clamped_factor_and_can_reroute_to_new_bounds() {
+    let original = TextScaler::linear(5.);
+    let clamped = original.try_clamp(0., 3.).unwrap();
+    let (mut tree, measured) = mounted(2., label().text_scaler(clamped));
+    let (_, direct) = mounted(2., label().text_scaler(TextScaler::linear(3.)));
+    assert_eq!(measured, direct);
+
+    let leaf = tree.root().unwrap();
+    let render = tree.render_id(leaf);
+    let next = clamped.try_clamp(4., 6.).unwrap();
+    tree.update(leaf, label().text_scaler(next).into()).unwrap();
+    let renewed = laid_out(&mut tree);
+    let (_, direct_next) = mounted(2., label().text_scaler(TextScaler::linear(4.)));
+    assert_eq!(renewed, direct_next);
+    assert_eq!(tree.render_id(leaf), render);
+    assert!(renewed.width > measured.width && renewed.height > measured.height);
+}

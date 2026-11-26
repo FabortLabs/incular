@@ -9,7 +9,7 @@ pub use fonts::{FontFamily, FontFeature, FontVariation, FontWeight};
 pub use icons::IconData;
 pub use text::{
     FontStyle, LineHeight, StrutStyle, TextAlign, TextBaseline, TextDecoration,
-    TextDecorationStyle, TextHeightBehavior, TextLeadingDistribution, TextOverflow, TextScaler,
+    TextDecorationStyle, TextHeightBehavior, TextLeadingDistribution, TextOverflow, TextScaleBoundsError, TextScaler,
     TextScalerKind, TextShadow, TextWidthBasis,
 };
 pub use text_style::TextStyle;

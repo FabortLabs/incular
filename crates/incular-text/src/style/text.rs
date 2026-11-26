@@ -197,7 +197,7 @@ pub enum TextOverflow {
 }
 
 /// Text scaling policy applied after a style's logical font size is chosen.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug)]
 pub struct TextScaler {
     kind: TextScalerKind,
     factor: f32,
@@ -207,6 +207,36 @@ pub struct TextScaler {
 pub enum TextScalerKind {
     Linear,
     NoScaling,
+}
+
+/// Invalid lower or upper bound supplied to a scaler clamp.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TextScaleBoundsError {
+    /// The upper bound cannot be below the lower bound or NaN.
+    InvalidMaximum,
+    /// The lower bound must be finite.
+    NonFiniteMinimum,
+    /// The lower bound must be at least zero.
+    NegativeMinimum,
+}
+
+impl std::fmt::Display for TextScaleBoundsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::InvalidMaximum => "maxScaleFactor >= minScaleFactor",
+            Self::NonFiniteMinimum => "minScaleFactor.isFinite",
+            Self::NegativeMinimum => "minScaleFactor >= 0",
+        })
+    }
+}
+
+impl std::error::Error for TextScaleBoundsError {}
+
+impl PartialEq for TextScaler {
+    fn eq(&self, other: &Self) -> bool {
+        // Flutter's noScaling is the same scaling policy as linear(1).
+        self.factor == other.factor
+    }
 }
 
 impl TextScaler {
@@ -238,19 +268,43 @@ impl TextScaler {
         self.kind
     }
 
-    #[must_use]
-    pub fn scale(self, font_size: f32) -> f32 {
-        let factor = if self.factor.is_finite() && self.factor >= 0.0 {
+    fn effective_factor(self) -> f32 {
+        if self.factor.is_finite() && self.factor >= 0.0 {
             self.factor
         } else {
             1.0
-        };
-        (font_size.max(0.0) * factor).max(0.0)
+        }
+    }
+
+    #[must_use]
+    pub fn scale(self, font_size: f32) -> f32 {
+        (font_size.max(0.0) * self.effective_factor()).max(0.0)
+    }
+
+    /// Restricts scaled size to between these two multiples of the input.
+    /// A minimum of zero and maximum of infinity leave a valid policy
+    /// unchanged. Successive linear clamps act on the current factor.
+    pub fn try_clamp(self, min: f32, max: f32) -> Result<Self, TextScaleBoundsError> {
+        if min.is_nan() || max.is_nan() || max < min {
+            return Err(TextScaleBoundsError::InvalidMaximum);
+        }
+        if !min.is_finite() {
+            return Err(TextScaleBoundsError::NonFiniteMinimum);
+        }
+        if min < 0.0 {
+            return Err(TextScaleBoundsError::NegativeMinimum);
+        }
+        let factor = self.effective_factor().clamp(min, max);
+        Ok(if factor == self.factor {
+            self
+        } else {
+            Self::linear(factor)
+        })
     }
 
     #[must_use]
     pub fn is_no_scaling(self) -> bool {
-        self.kind == TextScalerKind::NoScaling
+        self.factor == 1.0
     }
 }
 

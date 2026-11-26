@@ -54,3 +54,7 @@ Parley after grapheme-safe truncation, including mixed-direction text.
 Use `TextEditingDelta::try_apply` or `TextEditingController::try_apply_delta`
 when malformed offsets need to be reported. A reversed, out-of-range, or
 misaligned UTF-8 replacement range does not edit the value or run formatters.
+
+Use `TextScaler::try_clamp(min, max)` to cap or floor a linear scale before
+laying out text. Invalid bounds return `TextScaleBoundsError`. No scaling
+and a linear factor of one are equal as scaling policies.
