@@ -1020,6 +1020,21 @@ impl WidgetTree {
         None
     }
 
+    /// The concrete mounted child immediately under a sliver viewport.
+    pub(crate) fn viewport_sliver_child(
+        &self,
+        viewport: ElementId,
+        target: ElementId,
+    ) -> Option<(ElementId, crate::scrolling::SliverChildId)> {
+        let child = self.viewport_child_containing(viewport, target)?;
+        let entry = self.elements.get(viewport.0)?;
+        let slot = entry
+            .children
+            .iter()
+            .position(|&element| element == child)?;
+        Some((child, *entry.sliver_child_ids().get(slot)?))
+    }
+
     /// Looks up geometry from the viewport's last laid-out sliver run
     /// rather than inferring an obstruction from currently painted pixels.
     pub(crate) fn sliver_reveal_geometry(
@@ -1033,14 +1048,10 @@ impl WidgetTree {
         else {
             return crate::scrolling::SliverRevealGeometry::default();
         };
-        if let Some(child) = self.viewport_child_containing(viewport, target)
-            && let Some(entry) = self.elements.get(viewport.0)
-            && let Some(slot) = entry.children.iter().position(|&element| element == child)
-            && let Some(&id) = entry.sliver_child_ids().get(slot)
-        {
-            return config.delegate.reveal_geometry(id);
-        }
-        crate::scrolling::SliverRevealGeometry::default()
+        self.viewport_sliver_child(viewport, target)
+            .map_or_else(Default::default, |(_, id)| {
+                config.delegate.reveal_geometry(id)
+            })
     }
 
     /// Records why an element is about to rebuild (DevTools builds only).

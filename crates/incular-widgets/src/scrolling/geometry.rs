@@ -170,6 +170,19 @@ impl SliverLayout {
 pub trait RenderSliver {
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout;
 
+    /// Lets a sliver adjust a reveal request in its mounted child's
+    /// coordinate space and schedule any required presentation change.
+    /// The default leaves the target rectangle unchanged.
+    #[doc(hidden)]
+    fn reveal_child(
+        &mut self,
+        _child: SliverChildId,
+        _rect: Rect,
+        _options: &ShowOnScreen,
+    ) -> Option<Rect> {
+        None
+    }
+
     /// Identifies when scrolling invalidates retained child geometry.
     /// Override for headers or custom slivers whose placement changes inside
     /// an already materialized cache window.
@@ -277,6 +290,12 @@ pub(crate) trait SliverViewportDelegate {
     fn reveal_geometry(&self, _child: SliverChildId) -> SliverRevealGeometry {
         SliverRevealGeometry::default()
     }
+    fn reveal_child(
+        &self,
+        child: SliverChildId,
+        rect: Rect,
+        options: &ShowOnScreen,
+    ) -> Option<Rect>;
     fn revision(&self) -> u64;
     fn sliver_count(&self) -> usize;
     fn child_count(&self) -> Option<usize>;

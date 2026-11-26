@@ -1590,6 +1590,16 @@ impl CrossAxisGroupRenderSliver {
 }
 
 impl RenderSliver for CrossAxisGroupRenderSliver {
+    fn reveal_child(
+        &mut self,
+        child: SliverChildId,
+        rect: Rect,
+        options: &ShowOnScreen,
+    ) -> Option<Rect> {
+        let (sliver, _) = self.children.get_mut(child.scope())?;
+        sliver.reveal_child(child.local(), rect, options)
+    }
+
     fn scroll_layout_dependency(&self) -> SliverScrollDependency {
         self.children
             .iter()
@@ -2547,6 +2557,50 @@ pub enum SliverHeaderOverscrollBehavior {
     Stretch,
 }
 
+/// Additional expansion bounds for a floating persistent header's
+/// show-on-screen request. The header never shrinks to satisfy these bounds.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PersistentHeaderShowOnScreenConfiguration {
+    min_extent: f32,
+    max_extent: f32,
+}
+
+impl Default for PersistentHeaderShowOnScreenConfiguration {
+    fn default() -> Self {
+        Self::new(f32::NEG_INFINITY, f32::INFINITY)
+    }
+}
+
+impl PersistentHeaderShowOnScreenConfiguration {
+    /// Values may be infinite; the header's own extents still limit expansion.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either bound is NaN or the minimum exceeds the maximum.
+    #[must_use]
+    pub const fn new(min_show_on_screen_extent: f32, max_show_on_screen_extent: f32) -> Self {
+        assert!(min_show_on_screen_extent <= max_show_on_screen_extent);
+        Self {
+            min_extent: min_show_on_screen_extent,
+            max_extent: max_show_on_screen_extent,
+        }
+    }
+
+    #[must_use]
+    pub const fn min_show_on_screen_extent(self) -> f32 {
+        self.min_extent
+    }
+
+    #[must_use]
+    pub const fn max_show_on_screen_extent(self) -> f32 {
+        self.max_extent
+    }
+
+    pub(super) fn limit(self, requested: f32) -> f32 {
+        requested.clamp(self.min_extent, self.max_extent)
+    }
+}
+
 /// Header that shrinks from its maximum to minimum extent while scrolling.
 /// The default scroll behavior pins the collapsed header.
 /// Negative and non-finite bounds become zero; the effective maximum is at
@@ -2571,6 +2625,8 @@ pub struct SliverResizingHeader {
     overscroll_behavior: SliverHeaderOverscrollBehavior,
     #[builder(default)]
     snap: bool,
+    #[builder(default, setter(strip_option))]
+    show_on_screen_configuration: Option<PersistentHeaderShowOnScreenConfiguration>,
     /// Flutter `SliverPersistentHeaderDelegate.build(context, shrinkOffset,
     /// overlapsContent)`: builds the child for each layout.
     #[builder(default, setter(skip))]
@@ -2595,6 +2651,7 @@ impl SliverResizingHeader {
             scroll_behavior: SliverHeaderScrollBehavior::Pinned,
             overscroll_behavior: SliverHeaderOverscrollBehavior::Translate,
             snap: false,
+            show_on_screen_configuration: None,
             delegate: None,
         }
     }
@@ -2639,6 +2696,17 @@ impl SliverResizingHeader {
     #[must_use]
     pub fn snap(mut self, value: bool) -> Self {
         self.snap = value;
+        self
+    }
+
+    /// Lets a floating header expand to show a descendant's requested rect.
+    /// Without this opt-in, requests only reveal through the viewport.
+    #[must_use]
+    pub fn show_on_screen_configuration(
+        mut self,
+        configuration: PersistentHeaderShowOnScreenConfiguration,
+    ) -> Self {
+        self.show_on_screen_configuration = Some(configuration);
         self
     }
 
@@ -2688,8 +2756,11 @@ impl Sliver for SliverResizingHeader {
             self.scroll_behavior,
             SliverHeaderScrollBehavior::Floating | SliverHeaderScrollBehavior::FloatingPinned
         );
-        let (snap_activity, snap_subscription) =
-            snap_activity_subscription(controller, self.snap && floating);
+        let reveal_configuration = self.show_on_screen_configuration.filter(|_| floating);
+        let (snap_activity, snap_subscription) = snap_activity_subscription(
+            controller,
+            floating && (self.snap || reveal_configuration.is_some()),
+        );
         Box::new(ResizingHeaderRenderSliver {
             child: self.child.clone(),
             delegate: self.delegate.clone(),
@@ -2699,6 +2770,11 @@ impl Sliver for SliverResizingHeader {
             overscroll_behavior: self.overscroll_behavior,
             scroll_state: HeaderScrollState::default(),
             snap: self.snap,
+            persistent_controller: (floating
+                && (self.delegate.is_some() || reveal_configuration.is_some()))
+            .then(|| controller.clone()),
+            reveal_configuration,
+            reveal_frame: None,
             reduced_motion: Cell::new(false),
             snap_frame: Cell::new(HeaderSnapFrame::default()),
             snap_activity,

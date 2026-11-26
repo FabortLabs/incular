@@ -8,7 +8,7 @@ use std::{
 
 use incular_animation::{AnimationController, Curve, Tween};
 use incular_config::{Axis, Clip, Constraints, EdgeInsets, WidgetDefaults};
-use incular_core::{DragStartBehavior, Size};
+use incular_core::{DragStartBehavior, Rect, Size};
 use incular_scroll::{
     MeasuredExtentIndex, ScrollController, ScrollNotification, ScrollNotificationSubscription,
     ScrollNotificationType, ScrollPhysics, SliverConstraints, SliverGeometry, SliverGrowthDirection,

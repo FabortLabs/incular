@@ -99,8 +99,8 @@ impl EnsureVisible {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ShowOnScreen {
     rect: Option<Rect>,
-    duration: Duration,
-    curve: Curve,
+    pub(super) duration: Duration,
+    pub(super) curve: Curve,
 }
 
 impl Default for ShowOnScreen {
@@ -196,6 +196,29 @@ impl WidgetTree {
                 .then(target_world)
                 .transform_rect_bbox(rect),
         )
+    }
+
+    /// Gives the owning sliver first refusal on a descendant reveal (e.g.
+    /// a floating header can expand). Return its trimmed rectangle in
+    /// viewport-local coordinates for ordinary reveal to continue.
+    fn reveal_in_sliver(
+        &self,
+        viewport: ElementId,
+        target: ElementId,
+        rect: Rect,
+        options: &ShowOnScreen,
+    ) -> Option<Rect> {
+        let RenderKind::SliverViewport { config } =
+            self.render_object_kind(self.render_id(viewport)?)?
+        else {
+            return None;
+        };
+        let (child, child_id) = self.viewport_sliver_child(viewport, target)?;
+        let child_rect = self.rect_in_viewport(target, rect, child)?;
+        let trimmed = config
+            .delegate
+            .reveal_child(child_id, child_rect, options)?;
+        self.rect_in_viewport(child, trimmed, viewport)
     }
 
     fn reveal_sliver_for_rect(
@@ -346,7 +369,8 @@ impl Scrollable {
     ///
     /// Call after layout. For nested standard viewports, each outer viewport
     /// receives the inner viewport's projected target rectangle. Returns
-    /// the number of viewports asked to move; wheel and two-dimensional
+    /// the number of viewports asked to move; a floating header can also
+    /// expand without moving its viewport. Wheel and two-dimensional
     /// viewports are not handled by this method.
     pub fn show_on_screen(tree: &WidgetTree, target: ElementId, options: ShowOnScreen) -> usize {
         let Some((_, size)) = tree.element_geometry(target) else {
@@ -361,13 +385,20 @@ impl Scrollable {
 
         while let Some(viewport) = tree.enclosing_viewport(ancestor_cursor) {
             ancestor_cursor = viewport.element;
+            let sliver_rect = tree.reveal_in_sliver(viewport.element, object, request, &options);
             if !viewport.physics.allows_implicit_scrolling() {
+                if let Some(rect) = sliver_rect {
+                    object = viewport.element;
+                    request = rect;
+                }
                 continue;
             }
             let Some((_, size)) = tree.element_geometry(viewport.element) else {
                 break;
             };
-            let Some(rect) = tree.rect_in_viewport(object, request, viewport.element) else {
+            let Some(rect) =
+                sliver_rect.or_else(|| tree.rect_in_viewport(object, request, viewport.element))
+            else {
                 break;
             };
             let pixels = viewport.controller.offset();

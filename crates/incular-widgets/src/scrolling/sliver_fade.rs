@@ -100,6 +100,15 @@ struct AnimatedFadeRenderSliver {
 }
 
 impl RenderSliver for AnimatedFadeRenderSliver {
+    fn reveal_child(
+        &mut self,
+        child: SliverChildId,
+        rect: Rect,
+        options: &ShowOnScreen,
+    ) -> Option<Rect> {
+        self.inner.get_mut().reveal_child(child, rect, options)
+    }
+
     fn scroll_layout_dependency(&self) -> SliverScrollDependency {
         self.inner.borrow().scroll_layout_dependency()
     }
@@ -251,6 +260,15 @@ impl AnimatedOpacityRenderSliver {
 }
 
 impl RenderSliver for AnimatedOpacityRenderSliver {
+    fn reveal_child(
+        &mut self,
+        child: SliverChildId,
+        rect: Rect,
+        options: &ShowOnScreen,
+    ) -> Option<Rect> {
+        self.inner.get_mut().reveal_child(child, rect, options)
+    }
+
     fn scroll_layout_dependency(&self) -> SliverScrollDependency {
         self.inner.borrow().scroll_layout_dependency()
     }

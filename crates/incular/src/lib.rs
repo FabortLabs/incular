@@ -30,7 +30,9 @@ pub use incular_widgets::widget_previews;
 /// are implementation details of the widget/runtime boundary and are kept
 /// out of the application facade.
 pub mod scroll {
-    pub use incular_widgets::{RevealedOffset, ShowOnScreen};
+    pub use incular_widgets::{
+        PersistentHeaderShowOnScreenConfiguration, RevealedOffset, ShowOnScreen,
+    };
     pub use incular_scroll::{
         BoundaryPhysics, ClampingScrollPhysics, DragStartBehavior, PageMetrics, PageMetricsUpdate,
         ScrollAnimation,
@@ -322,7 +324,8 @@ pub mod prelude {
         OverflowBox, OverlayPortal, Padding, PageController, PageMetrics, PageMetricsUpdate, PageStorage,
         PageStorageBucket,
         PageStorageIdentifier, PageStorageKey, PageView, PanAxis, PathView, PerformanceOverlay,
-        PhysicalModel, PhysicalShape, PinnedHeaderSliver, Placeholder, PointerSignalResolver,
+        PersistentHeaderShowOnScreenConfiguration, PhysicalModel, PhysicalShape, PinnedHeaderSliver,
+        Placeholder, PointerSignalResolver,
         PopAttempt, PopScope, PopScopeController, Positioned, PositionedDirectional,
         PositionedTransition, PreferredSize, PrimaryScrollController, ProviderImage, RadioGroup,
         Radius, RawAutocomplete, RawGestureDetector, RawImage, RawMenuAnchor, RawMenuAnchorGroup,

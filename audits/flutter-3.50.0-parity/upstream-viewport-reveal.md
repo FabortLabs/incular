@@ -264,3 +264,29 @@ measurement now informs sizing without being published as the actual
 viewport dimensions. The native test compares paint commands and exact
 geometry, not Flutter's raster golden; these two cases are partial.
 The existing shrink-wrap convergence and grid regressions passed.
+
+## Floating persistent header expansion on reveal
+
+All ten pinned Flutter executions for the five registrations at
+`rendering/viewport_test.dart:1589,1640,1690,1735,1803` passed (vertical
+and horizontal). Incular's `flutter350_floating_header_show_on_screen`
+verifies native descendant requests for the four paired registrations:
+
+- Opting into `PersistentHeaderShowOnScreenConfiguration` allows a
+  collapsed 100 px header to expand to 300 px without changing the 4500 px
+  scroll offset. A requested rectangle starting at −1 is trimmed at the
+  growth-leading edge, so it does not move the viewport.
+- A 3-second 100-to-150 px animation reaches its measured one-third
+  frame and then 150 px. A second request for 300 px cannot retarget it
+  while it is running. An unconfigured header does not expand.
+- A 200 px cap or floor limits expansion, but never contracts a 250 px
+  child. An idle programmatic jump to 3050 gives the natural 250 px
+  extent; a held user drag can float the header before its layout slot.
+- A request from a descendant with 10 px of padding inside a
+  sliver-opacity wrapper expands the 100 px header to 150 px for a
+  140 px descendant rectangle. It schedules a frame with no scroll move.
+
+Flutter line 1690 addresses the sliver render object itself, without a
+descendant. Incular only exposes the mounted box child as a reveal
+target, so the corresponding presentation is verified but that direct
+render-sliver entry point is partial.

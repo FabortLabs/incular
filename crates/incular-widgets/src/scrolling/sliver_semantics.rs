@@ -85,6 +85,15 @@ impl super::layout::SingleInnerSliver for SemanticsRenderSliver {
 }
 
 impl RenderSliver for SemanticsRenderSliver {
+    fn reveal_child(
+        &mut self,
+        child: SliverChildId,
+        rect: Rect,
+        options: &ShowOnScreen,
+    ) -> Option<Rect> {
+        self.inner.get_mut().reveal_child(child, rect, options)
+    }
+
     fn set_child_keep_alive(
         &mut self,
         child: SliverChildId,

@@ -189,6 +189,15 @@ impl ScrollController {
         true
     }
 
+    /// Logical user-scroll direction, not the most recent programmatic offset
+    /// change: -1 toward the leading edge, 1 toward the trailing edge, 0 idle.
+    /// Used by floating slivers to decide whether a scroll may expose them.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn user_scroll_direction_sign(&self) -> i8 {
+        self.state.borrow().activity_user_direction
+    }
+
     /// Publishes a changed drag direction before its offset/overscroll.
     /// Returns false if a notification listener replaced the current owner.
     pub(crate) fn update_activity_user_direction(&self, delta: f32) -> bool {

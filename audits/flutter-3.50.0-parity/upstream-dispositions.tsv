@@ -1881,3 +1881,8 @@ packages/flutter/test/rendering/viewport_test.dart	2670	Handles infinite constra
 packages/flutter/test/rendering/viewport_test.dart	1871	RenderViewportBase.showOnScreen should not scroll if the rect is already visible, even if it does not scroll linearly (reversed order version)	paired-match	upstream-viewport-reveal.md#reverse-growing-floating-pinned-header
 packages/flutter/test/rendering/viewport_test.dart	2423	constrained viewport correctly clips overflow	partial-match	upstream-viewport-reveal.md#shrink-wrap-overscroll-clips-the-translated-content
 packages/flutter/test/rendering/viewport_test.dart	2452	correctly clips overflow without constraints	partial-match	upstream-viewport-reveal.md#shrink-wrap-overscroll-clips-the-translated-content
+packages/flutter/test/rendering/viewport_test.dart	1589	RenderViewportBase.showOnScreen	paired-match	upstream-viewport-reveal.md#floating-persistent-header-expansion-on-reveal
+packages/flutter/test/rendering/viewport_test.dart	1640	RenderViewportBase.showOnScreen twice almost instantly	paired-match	upstream-viewport-reveal.md#floating-persistent-header-expansion-on-reveal
+packages/flutter/test/rendering/viewport_test.dart	1690	RenderViewportBase.showOnScreen but no child	partial-match	upstream-viewport-reveal.md#floating-persistent-header-expansion-on-reveal
+packages/flutter/test/rendering/viewport_test.dart	1735	RenderViewportBase.showOnScreen with maxShowOnScreenExtent 	paired-match	upstream-viewport-reveal.md#floating-persistent-header-expansion-on-reveal
+packages/flutter/test/rendering/viewport_test.dart	1803	RenderViewportBase.showOnScreen with minShowOnScreenExtent 	paired-match	upstream-viewport-reveal.md#floating-persistent-header-expansion-on-reveal

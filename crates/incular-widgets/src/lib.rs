@@ -384,6 +384,7 @@ pub use scrolling::{
     SliverChildListDelegate, SliverConstrainedCrossAxis, SliverCrossAxisExpanded,
     SliverCrossAxisGroup, SliverEnsureSemantics, SliverFadeTransition, SliverFillRemaining,
     SliverFillViewport, SliverFixedExtentList, SliverFloatingHeader, SliverGrid,
+    PersistentHeaderShowOnScreenConfiguration,
     SliverGridDelegate, SliverHeaderOverscrollBehavior, SliverHeaderScrollBehavior,
     SliverIgnorePointer, SliverLayout, SliverLayoutBuilder, SliverList, SliverMainAxisGroup,
     SliverNaturalHeader, SliverOffstage, SliverOpacity, SliverOverlapAbsorber, SliverOverlapHandle,

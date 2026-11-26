@@ -1094,6 +1094,15 @@ pub(super) struct HeaderScrollState {
 
 impl HeaderScrollState {
     fn update(&mut self, scroll_offset: f32, extent: f32) -> f32 {
+        self.update_with_floating_expansion(scroll_offset, extent, true)
+    }
+
+    fn update_with_floating_expansion(
+        &mut self,
+        scroll_offset: f32,
+        extent: f32,
+        allow_floating_expansion: bool,
+    ) -> f32 {
         if let Some(previous) = self.last_scroll_offset {
             if scroll_offset != previous {
                 // New scroll movement interrupts a running snap; the
@@ -1103,8 +1112,13 @@ impl HeaderScrollState {
             }
             // Hidden distance stops at the header extent. Accumulating the
             // rest of the document would delay revealing it on reversal.
-            self.effective_scroll_offset = (self.effective_scroll_offset
-                + (scroll_offset - previous))
+            let delta = scroll_offset - previous;
+            let delta = if allow_floating_expansion {
+                delta
+            } else {
+                delta.max(0.)
+            };
+            self.effective_scroll_offset = (self.effective_scroll_offset + delta)
                 .clamp(0., extent)
                 .min(scroll_offset);
         } else {
@@ -1142,6 +1156,25 @@ impl HeaderScrollState {
             self.snap,
             HeaderSnapProgress::Running(_) | HeaderSnapProgress::Settling
         )
+    }
+
+    /// Expands a floating header toward a reveal target. Flutter uses the
+    /// same presentation animation for snapping and revealing; an in-flight
+    /// animation is not retargeted by another show-on-screen request.
+    fn request_reveal(&mut self, target: f32, options: &ShowOnScreen) -> bool {
+        if target >= self.effective_scroll_offset
+            || matches!(self.snap, HeaderSnapProgress::Running(_))
+        {
+            return false;
+        }
+        self.snap = HeaderSnapProgress::Running(HeaderSnapRun {
+            from: self.effective_scroll_offset,
+            target,
+            started_at: None,
+            duration: options.duration,
+            curve: options.curve.clone(),
+        });
+        true
     }
 
     /// Consumes pending scroll activity and advances snap presentation.
@@ -1210,21 +1243,26 @@ impl HeaderScrollState {
                 self.snap = HeaderSnapProgress::Running(HeaderSnapRun {
                     from,
                     target,
-                    started_at: now,
+                    started_at: Some(now),
                     duration: spec.duration,
                     curve: spec.curve,
                 });
             }
         }
-        let HeaderSnapProgress::Running(run) = &self.snap else {
+        let HeaderSnapProgress::Running(run) = &mut self.snap else {
             if matches!(self.snap, HeaderSnapProgress::Settling) {
                 self.snap = HeaderSnapProgress::Idle;
             }
             return false;
         };
         let target = run.target.clamp(0., range);
-        let elapsed = now.saturating_duration_since(run.started_at);
-        let progress = (elapsed.as_secs_f32() / run.duration.as_secs_f32()).clamp(0., 1.);
+        let started_at = *run.started_at.get_or_insert(now);
+        let elapsed = now.saturating_duration_since(started_at);
+        let progress = if run.duration.is_zero() {
+            1.
+        } else {
+            (elapsed.as_secs_f32() / run.duration.as_secs_f32()).clamp(0., 1.)
+        };
         let value = if progress >= 1. {
             target
         } else {
@@ -1286,7 +1324,7 @@ pub(super) enum HeaderSnapProgress {
 pub(super) struct HeaderSnapRun {
     from: f32,
     target: f32,
-    started_at: Instant,
+    started_at: Option<Instant>,
     duration: Duration,
     curve: Curve,
 }
@@ -1505,6 +1543,14 @@ impl RenderSliver for HeaderRenderSliver {
     }
 }
 
+/// Last mounted child size and orientation at the header's paint edge.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct HeaderRevealFrame {
+    axis: Axis,
+    reverse: bool,
+    extent: f32,
+}
+
 pub(super) struct ResizingHeaderRenderSliver {
     pub(super) child: Widget,
     pub(super) delegate: Option<crate::scrolling::PersistentHeaderBuilder>,
@@ -1514,6 +1560,11 @@ pub(super) struct ResizingHeaderRenderSliver {
     pub(super) overscroll_behavior: SliverHeaderOverscrollBehavior,
     pub(super) scroll_state: HeaderScrollState,
     pub(super) snap: bool,
+    /// Flutter persistent headers float during user scrolling, not just
+    /// because a programmatic jump moves closer to the header.
+    pub(super) persistent_controller: Option<ScrollController>,
+    pub(super) reveal_configuration: Option<PersistentHeaderShowOnScreenConfiguration>,
+    pub(super) reveal_frame: Option<HeaderRevealFrame>,
     /// Last reduced-motion policy stamped by the owning delegate. The tree
     /// pushes the retained environment value before every tick, so fresh
     /// render slivers observe the current policy on their first decision
@@ -1924,6 +1975,51 @@ impl RenderSliver for ViewportExtentRenderSliver {
 }
 
 impl RenderSliver for ResizingHeaderRenderSliver {
+    fn reveal_child(
+        &mut self,
+        child: SliverChildId,
+        rect: Rect,
+        options: &ShowOnScreen,
+    ) -> Option<Rect> {
+        let config = self.reveal_configuration?;
+        let frame = self.reveal_frame?;
+        if child != SliverChildId(0) {
+            return None;
+        }
+        let (start, cross) = match frame.axis {
+            Axis::Vertical => (rect.origin.y, rect.origin.x),
+            Axis::Horizontal => (rect.origin.x, rect.origin.y),
+        };
+        let end = start + frame.axis.main_extent(rect.size);
+        if !start.is_finite() || !end.is_finite() || !cross.is_finite() {
+            return None;
+        }
+        // Ignore the portion outside the header's growth-leading edge.
+        // An explicit rectangle may still extend further into the header
+        // than it currently measures; that is what requests its expansion.
+        let (start, end, requested) = if frame.reverse {
+            (start, end.min(frame.extent), frame.extent - start)
+        } else {
+            (start.max(0.), end, end)
+        };
+        let extent = config
+            .limit(requested)
+            .clamp(frame.extent, self.max_extent.max(frame.extent));
+        let target_offset = self.max_extent - extent;
+        if extent > frame.extent && self.scroll_state.request_reveal(target_offset, options) {
+            // An activity notification already queued before this request
+            // must not overwrite the newer reveal.
+            let _ = self.snap_activity.take();
+            incular_animation::schedule_frame();
+        }
+        Some(Rect::from_origin_size(
+            frame.axis.offset(start, cross),
+            frame
+                .axis
+                .size((end - start).max(0.), frame.axis.cross_extent(rect.size)),
+        ))
+    }
+
     fn scroll_layout_dependency(&self) -> SliverScrollDependency {
         SliverScrollDependency::ScrollOffset
     }
@@ -1931,13 +2027,29 @@ impl RenderSliver for ResizingHeaderRenderSliver {
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout {
         let range = self.max_extent - self.min_extent;
         let scroll_offset = constraints.scroll_offset;
+        let allow_floating_expansion =
+            self.persistent_controller
+                .as_ref()
+                .is_none_or(|controller| {
+                    let leading = if constraints.growth_direction == SliverGrowthDirection::Reverse
+                    {
+                        1
+                    } else {
+                        -1
+                    };
+                    controller.user_scroll_direction_sign() == leading
+                });
         let effective_offset = match self.scroll_behavior {
             SliverHeaderScrollBehavior::Floating => {
-                self.scroll_state.update(scroll_offset, self.max_extent)
+                self.scroll_state.update_with_floating_expansion(
+                    scroll_offset,
+                    self.max_extent,
+                    allow_floating_expansion,
+                )
             }
-            SliverHeaderScrollBehavior::FloatingPinned => {
-                self.scroll_state.update(scroll_offset, range)
-            }
+            SliverHeaderScrollBehavior::FloatingPinned => self
+                .scroll_state
+                .update_with_floating_expansion(scroll_offset, range, allow_floating_expansion),
             _ => scroll_offset,
         };
         let stretch = match self.overscroll_behavior {
@@ -1952,6 +2064,14 @@ impl RenderSliver for ResizingHeaderRenderSliver {
             .clamp(self.min_extent, self.max_extent)
             + stretch)
             .min(f32::MAX);
+        if self.reveal_configuration.is_some() {
+            self.reveal_frame = Some(HeaderRevealFrame {
+                axis: constraints.axis,
+                reverse: constraints.reverse
+                    ^ (constraints.growth_direction == SliverGrowthDirection::Reverse),
+                extent: current,
+            });
+        }
         if stretch > 0. {
             // Stretch owns presentation during leading overscroll; a running
             // snap yields to it and the next scroll end decides again.
@@ -2339,6 +2459,15 @@ pub(super) struct PaddingRenderSliver {
 }
 
 impl RenderSliver for PaddingRenderSliver {
+    fn reveal_child(
+        &mut self,
+        child: SliverChildId,
+        rect: Rect,
+        options: &ShowOnScreen,
+    ) -> Option<Rect> {
+        self.inner.get_mut().reveal_child(child, rect, options)
+    }
+
     fn set_child_keep_alive(
         &mut self,
         child: SliverChildId,
@@ -2611,6 +2740,15 @@ pub(super) struct OverlapAbsorberRenderSliver {
 }
 
 impl RenderSliver for OverlapAbsorberRenderSliver {
+    fn reveal_child(
+        &mut self,
+        child: SliverChildId,
+        rect: Rect,
+        options: &ShowOnScreen,
+    ) -> Option<Rect> {
+        self.inner.get_mut().reveal_child(child, rect, options)
+    }
+
     fn set_child_keep_alive(
         &mut self,
         child: SliverChildId,
@@ -2673,6 +2811,15 @@ impl RenderSliver for OverlapInjectorRenderSliver {
 }
 
 impl RenderSliver for WidgetWrapRenderSliver {
+    fn reveal_child(
+        &mut self,
+        child: SliverChildId,
+        rect: Rect,
+        options: &ShowOnScreen,
+    ) -> Option<Rect> {
+        self.inner.get_mut().reveal_child(child, rect, options)
+    }
+
     fn set_child_keep_alive(
         &mut self,
         child: SliverChildId,
@@ -2883,6 +3030,18 @@ impl SequenceRenderSliver {
 }
 
 impl RenderSliver for SequenceRenderSliver {
+    fn reveal_child(
+        &mut self,
+        child: SliverChildId,
+        rect: Rect,
+        options: &ShowOnScreen,
+    ) -> Option<Rect> {
+        self.children
+            .get_mut(child.scope())?
+            .get_mut()
+            .reveal_child(child.local(), rect, options)
+    }
+
     fn set_child_keep_alive(
         &mut self,
         child: SliverChildId,
@@ -3616,6 +3775,18 @@ impl SliverViewportDelegate for SequenceViewportDelegate {
             .get(child.scope())
             .copied()
             .unwrap_or_default()
+    }
+
+    fn reveal_child(
+        &self,
+        child: SliverChildId,
+        rect: Rect,
+        options: &ShowOnScreen,
+    ) -> Option<Rect> {
+        self.sequence
+            .try_borrow_mut()
+            .ok()?
+            .reveal_child(child, rect, options)
     }
 
     fn revision(&self) -> u64 {
