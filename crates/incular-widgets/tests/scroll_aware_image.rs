@@ -262,3 +262,257 @@ fn the_nearest_scroll_view_answers_for_its_descendants() {
         ScrollAwareImageProvider::new(disposed, provider).resolve(&ImageConfiguration::new());
     assert_eq!(stream.state(), ImageLoadState::Loading(None));
 }
+
+struct Captured {
+    _tree: WidgetTree,
+    context: ScrollAwareContext,
+    base: Instant,
+}
+
+impl Captured {
+    fn moving_to(destination: f32, duration: Duration) -> Self {
+        Self::with_motion(Some((destination, duration)))
+    }
+
+    fn with_motion(motion: Option<(f32, Duration)>) -> Self {
+        let controller = ScrollController::new();
+        let captured = Rc::new(std::cell::RefCell::new(None));
+        let probe = Builder::new({
+            let captured = captured.clone();
+            move |context| {
+                *captured.borrow_mut() = Some(ScrollAwareContext::of(context));
+                Widget::box_(Size::new(100.0, 2000.0), Color::WHITE)
+            }
+        });
+        let mut tree = WidgetTree::new();
+        tree.set_environment(environment());
+        tree.mount(
+            SingleChildScrollView::new(probe)
+                .controller(controller.clone())
+                .into(),
+        )
+        .unwrap();
+        tree.layout(Constraints::tight(Size::new(200.0, 100.0)))
+            .unwrap();
+        let base = Instant::now();
+        if let Some((destination, duration)) = motion {
+            assert!(controller.animate_to(destination, duration, Curve::Linear));
+            tree.pump_scroll_flings(base, false);
+            tree.pump_scroll_flings(base + Duration::from_millis(16), false);
+        }
+        let context = captured.borrow_mut().take().unwrap();
+        Self {
+            _tree: tree,
+            context,
+            base,
+        }
+    }
+
+    fn fast() -> Self {
+        let scope = Self::moving_to(1500.0, Duration::from_millis(400));
+        assert!(scope.context.recommend_deferred_loading());
+        scope
+    }
+}
+
+#[test]
+fn slow_scrolling_does_not_delay_a_cold_provider() {
+    let scroll = Captured::moving_to(50.0, Duration::from_secs(1));
+    assert!(!scroll.context.recommend_deferred_loading());
+    let raw = counted(5);
+    let provider =
+        ScrollAwareImageProvider::new(scroll.context, AnyImageProvider::new(raw.clone()));
+    assert!(matches!(
+        provider.resolve(&ImageConfiguration::new()).state(),
+        ImageLoadState::Ready(_)
+    ));
+    assert_eq!(raw.resolutions.get(), 1);
+}
+
+#[test]
+fn scroll_provider_equality_uses_both_context_and_provider() {
+    let context = ScrollAwareContext::detached();
+    let image = counted(1);
+    let a = ScrollAwareImageProvider::new(context.clone(), AnyImageProvider::new(image.clone()));
+    let b = ScrollAwareImageProvider::new(context.clone(), AnyImageProvider::new(counted(2)));
+    let c =
+        ScrollAwareImageProvider::new(ScrollAwareContext::detached(), AnyImageProvider::new(image));
+    assert_eq!(a.clone(), a);
+    assert_ne!(a, b);
+    assert_ne!(a, c);
+}
+
+const PNG: &[u8] = include_bytes!(
+    "../../../audits/flutter-3.50.0-parity/reference-probes/fixtures/decode_cache_8x8.png"
+);
+
+#[test]
+fn warm_image_resolves_while_scrolling_fast_and_promotes_lru_even_after_disposal() {
+    use incular_assets::{AssetBundle, AssetError};
+    use incular_image::{ExactAssetImage, ImageCacheLimits, shared_bundle_image_cache};
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    #[derive(Clone, Default)]
+    struct Counts(Arc<AtomicUsize>);
+    impl AssetBundle for Counts {
+        fn load(&self, _: &str) -> Result<Arc<[u8]>, AssetError> {
+            self.0.fetch_add(1, Ordering::Relaxed);
+            Ok(Arc::from(PNG))
+        }
+    }
+    let counts = Counts::default();
+    let bundle = Arc::new(counts.clone());
+    let image = |name| ExactAssetImage::new(name).bundle(bundle.clone());
+    let cache = shared_bundle_image_cache();
+    let initial = cache.limits();
+    cache.clear();
+    cache.set_limits(ImageCacheLimits::new(2, 1024));
+    let configuration = ImageConfiguration::new();
+
+    let a = image("a");
+    let b = image("b");
+    let hot = a.load().unwrap();
+    b.load().unwrap();
+    let scroll = Captured::fast();
+    let provider =
+        ScrollAwareImageProvider::new(scroll.context.clone(), AnyImageProvider::new(a.clone()));
+    assert_eq!(
+        provider.resolve(&configuration).state(),
+        ImageLoadState::Ready(hot.clone())
+    );
+    assert_eq!(counts.0.load(Ordering::Relaxed), 2);
+
+    scroll.context.dispose();
+    let c = image("c");
+    let cold =
+        ScrollAwareImageProvider::new(scroll.context.clone(), AnyImageProvider::new(c.clone()));
+    assert_eq!(
+        cold.resolve(&configuration).state(),
+        ImageLoadState::Loading(None)
+    );
+    assert_eq!(
+        provider.resolve(&configuration).state(),
+        ImageLoadState::Ready(hot)
+    );
+    c.load().unwrap();
+    assert!(cache.contains_key(&a.obtain_key(&configuration)));
+    assert!(!cache.contains_key(&b.obtain_key(&configuration)));
+    assert!(cache.contains_key(&c.obtain_key(&configuration)));
+    assert_eq!(counts.0.load(Ordering::Relaxed), 3);
+    cache.clear();
+    cache.set_limits(initial);
+}
+
+#[test]
+fn deferred_image_becoming_warm_is_attached_once_on_the_next_frame() {
+    use incular_assets::MemoryAssetBundle;
+    use incular_image::ExactAssetImage;
+    use std::sync::Arc;
+    let asset = ExactAssetImage::new("warm.png")
+        .bundle(Arc::new(MemoryAssetBundle::new().with("warm.png", PNG)));
+    let scroll = Captured::fast();
+    let provider =
+        ScrollAwareImageProvider::new(scroll.context.clone(), AnyImageProvider::new(asset.clone()));
+    let stream = provider.resolve(&ImageConfiguration::new());
+    assert_eq!(stream.state(), ImageLoadState::Loading(None));
+    let preloaded = asset.load().unwrap();
+    assert_eq!(
+        stream.state(),
+        ImageLoadState::Loading(None),
+        "preloading alone does not run the scheduled frame callback"
+    );
+    assert!(scroll.context.recommend_deferred_loading());
+    let time = scroll.base + Duration::from_millis(32);
+    scheduler::begin_frame(time);
+    assert_eq!(stream.state(), ImageLoadState::Ready(preloaded));
+    scheduler::end_frame(time);
+}
+
+#[test]
+fn a_pending_asset_is_joined_while_scrolling_instead_of_starting_another_read() {
+    use incular_assets::{AssetBundle, AssetError, AssetLoadCallback};
+    use incular_image::ExactAssetImage;
+    use std::sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    #[derive(Default)]
+    struct AsyncSource {
+        read: AtomicUsize,
+        callback: Mutex<Option<AssetLoadCallback>>,
+    }
+    impl AssetBundle for AsyncSource {
+        fn load(&self, _: &str) -> Result<Arc<[u8]>, AssetError> {
+            panic!("callback-only test source")
+        }
+        fn load_async(&self, _: &str, done: AssetLoadCallback) {
+            self.read.fetch_add(1, Ordering::Relaxed);
+            assert!(self.callback.lock().unwrap().replace(done).is_none());
+        }
+    }
+    let bundle = Arc::new(AsyncSource::default());
+    let raw = ExactAssetImage::new("image.png").bundle(bundle.clone());
+    let cfg = ImageConfiguration::new();
+    let first = raw.resolve(&cfg);
+    let scroll = Captured::fast();
+    let second =
+        ScrollAwareImageProvider::new(scroll.context, AnyImageProvider::new(raw)).resolve(&cfg);
+    assert_eq!(first.state(), ImageLoadState::Loading(None));
+    assert_eq!(second.state(), ImageLoadState::Loading(None));
+    assert_eq!(bundle.read.load(Ordering::Relaxed), 1);
+    let done = bundle.callback.lock().unwrap().take().unwrap();
+    done(Ok(Arc::from(PNG)));
+    while scheduler::run_one_scheduled_task() {}
+    assert!(matches!(first.state(), ImageLoadState::Ready(_)));
+    assert_eq!(first.state(), second.state());
+    assert_eq!(bundle.read.load(Ordering::Relaxed), 1);
+}
+
+#[test]
+fn unscrolled_idle_and_slow_contexts_start_io_before_the_first_frame() {
+    use incular_assets::{AssetBundle, AssetError, AssetLoadCallback};
+    use incular_image::{ExactAssetImage, shared_bundle_image_cache};
+    use std::sync::{Arc, Mutex};
+
+    struct Deferred(Mutex<Option<AssetLoadCallback>>);
+    impl AssetBundle for Deferred {
+        fn load(&self, _: &str) -> Result<Arc<[u8]>, AssetError> {
+            panic!("unexpected blocking load")
+        }
+        fn load_async(&self, key: &str, done: AssetLoadCallback) {
+            assert_eq!(key, "deferred.png");
+            assert!(self.0.lock().unwrap().replace(done).is_none());
+        }
+    }
+    let idle = Captured::with_motion(None);
+    let slow = Captured::moving_to(50.0, Duration::from_secs(1));
+    let configuration = ImageConfiguration::empty();
+    let cache = shared_bundle_image_cache();
+    for context in [ScrollAwareContext::detached(), idle.context, slow.context] {
+        assert!(!context.recommend_deferred_loading());
+        cache.clear();
+        let bytes = Arc::new(Deferred(Mutex::new(None)));
+        let image = ExactAssetImage::new("deferred.png").bundle(bytes.clone());
+        let key = image.obtain_key(&configuration);
+        assert!(!cache.contains_key(&key));
+        let stream = ScrollAwareImageProvider::new(context, AnyImageProvider::new(image))
+            .resolve(&configuration);
+        assert_eq!(stream.state(), ImageLoadState::Loading(None));
+        assert!(cache.contains_key(&key));
+        assert_eq!(cache.retained(), (0, 0));
+        let done = bytes
+            .0
+            .lock()
+            .unwrap()
+            .take()
+            .expect("read must already have started");
+        done(Ok(Arc::from(PNG)));
+        while scheduler::run_one_scheduled_task() {}
+        assert!(matches!(stream.state(), ImageLoadState::Ready(_)));
+        assert_eq!(cache.retained(), (1, 256));
+    }
+}

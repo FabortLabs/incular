@@ -1650,3 +1650,13 @@ packages/flutter/test/painting/image_provider_resize_image_test.dart	46	Differen
 packages/flutter/test/painting/image_provider_resize_image_test.dart	54	Reflexivity: instance should be equal to itself	paired-match	upstream-resized-cache-identity.md
 packages/flutter/test/painting/image_provider_resize_image_test.dart	151	produces equal keys when effective dimensions match across configurations	paired-match	upstream-resized-cache-identity.md
 packages/flutter/test/painting/image_provider_resize_image_test.dart	169	produces different keys when devicePixelRatio differs	paired-match	upstream-resized-cache-identity.md
+packages/flutter/test/widgets/scroll_aware_image_provider_test.dart	76	ScrollAwareImageProvider instances with same context but different images should not be equal	paired-match	upstream-scroll-aware-warm-images.md
+packages/flutter/test/widgets/scroll_aware_image_provider_test.dart	107	ScrollAwareImageProvider instance should be equal to itself	paired-match	upstream-scroll-aware-warm-images.md
+packages/flutter/test/widgets/scroll_aware_image_provider_test.dart	126	ScrollAwareImageProvider instances with different contexts should not be equal	paired-match	upstream-scroll-aware-warm-images.md
+packages/flutter/test/widgets/scroll_aware_image_provider_test.dart	157	ScrollAwareImageProvider does not delay if widget is not in scrollable	paired-match	upstream-scroll-aware-warm-images.md
+packages/flutter/test/widgets/scroll_aware_image_provider_test.dart	187	ScrollAwareImageProvider does not delay if in scrollable that is not scrolling	paired-match	upstream-scroll-aware-warm-images.md
+packages/flutter/test/widgets/scroll_aware_image_provider_test.dart	223	ScrollAwareImageProvider does not delay if in scrollable that is scrolling slowly	paired-match	upstream-scroll-aware-warm-images.md
+packages/flutter/test/widgets/scroll_aware_image_provider_test.dart	286	ScrollAwareImageProvider delays if in scrollable that is scrolling fast	paired-match	upstream-scroll-aware-warm-images.md
+packages/flutter/test/widgets/scroll_aware_image_provider_test.dart	359	ScrollAwareImageProvider delays if in scrollable that is scrolling fast and fizzles if disposed	paired-match	upstream-scroll-aware-warm-images.md
+packages/flutter/test/widgets/scroll_aware_image_provider_test.dart	435	ScrollAwareImageProvider resolves from ImageCache and does not set completer twice	partial-match	upstream-scroll-aware-warm-images.md
+packages/flutter/test/widgets/scroll_aware_image_provider_test.dart	496	ScrollAwareImageProvider does not block LRU updates to image cache	partial-match	upstream-scroll-aware-warm-images.md

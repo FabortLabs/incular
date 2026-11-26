@@ -72,6 +72,11 @@ pub trait AssetBundle: Send + Sync + 'static {
         done(self.load(key));
     }
 
+    /// Returns only an already cached manifest, without fetching or parsing.
+    fn cached_asset_manifest(&self, _format: AssetManifestFormat) -> Option<AssetManifest> {
+        None
+    }
+
     /// Reads a manifest immediately from a synchronous bundle. Applications
     /// with a callback-only transport use [Self::load_asset_manifest].
     fn read_asset_manifest(
@@ -373,6 +378,17 @@ impl<B: AssetBundle> AssetBundle for CachingAssetBundle<B> {
 
     fn load_async(&self, key: &str, done: crate::AssetLoadCallback) {
         self.inner.load_async(key, done);
+    }
+
+    fn cached_asset_manifest(&self, format: AssetManifestFormat) -> Option<AssetManifest> {
+        let key = format.asset_key();
+        self.cache
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .structured_cache(manifest_kind(format))
+            .get(key)
+            .and_then(|value| value.downcast_ref::<AssetManifest>())
+            .cloned()
     }
 
     fn read_asset_manifest(

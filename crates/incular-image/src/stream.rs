@@ -327,6 +327,7 @@ pub struct AnyImageProvider {
         &ImageConfiguration,
         Option<ImageResizeOptions>,
     ) -> Result<ImageHandle, ImageError>,
+    cached: fn(&dyn Any, &ImageConfiguration, Option<ImageResizeOptions>) -> Option<ImageStream>,
     debug: fn(&dyn Any, &mut fmt::Formatter<'_>) -> fmt::Result,
 }
 
@@ -365,6 +366,16 @@ fn load_erased<P: ImageProvider + 'static>(
     )
 }
 
+fn cached_erased<P: ImageProvider + 'static>(
+    provider: &dyn Any,
+    configuration: &ImageConfiguration,
+    resize: Option<ImageResizeOptions>,
+) -> Option<ImageStream> {
+    provider
+        .downcast_ref::<P>()?
+        .resolve_cached(configuration, resize)
+}
+
 fn debug_erased<P: ImageProvider + 'static>(
     provider: &dyn Any,
     formatter: &mut fmt::Formatter<'_>,
@@ -384,6 +395,7 @@ impl AnyImageProvider {
             eq: eq_erased::<P>,
             resolve: resolve_erased::<P>,
             load: load_erased::<P>,
+            cached: cached_erased::<P>,
             debug: debug_erased::<P>,
         }
     }
@@ -399,6 +411,20 @@ impl AnyImageProvider {
     /// [`ImageProvider::load_with`]).
     pub fn load_with(&self, configuration: &ImageConfiguration) -> Result<ImageHandle, ImageError> {
         (self.load)(&*self.provider, configuration, None)
+    }
+
+    /// Returns a warm or already-started image without initiating a load.
+    #[must_use]
+    pub fn resolve_cached(&self, configuration: &ImageConfiguration) -> Option<ImageStream> {
+        self.resolve_cached_with_bounds(configuration, None)
+    }
+
+    pub(crate) fn resolve_cached_with_bounds(
+        &self,
+        configuration: &ImageConfiguration,
+        resize: Option<ImageResizeOptions>,
+    ) -> Option<ImageStream> {
+        (self.cached)(&*self.provider, configuration, resize)
     }
 
     pub(crate) fn resolve_resized(

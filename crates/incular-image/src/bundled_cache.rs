@@ -10,10 +10,29 @@ use lru::LruCache;
 
 use crate::{
     AssetBundleImageKey, ImageCacheLimits, ImageConfiguration, ImageError, ImageHandle,
-    ImageLoadCallback, ImageResizeOptions,
+    ImageLoadCallback, ImageResizeOptions, ImageStream,
 };
 
-type Pending = Arc<Mutex<Vec<ImageLoadCallback>>>;
+type Pending = Arc<Mutex<PendingImage>>;
+
+enum PendingImage {
+    Loading(Vec<ImageLoadCallback>),
+    Completed(Result<ImageHandle, ImageError>),
+}
+
+fn attach(pending: &Pending, done: ImageLoadCallback) {
+    let completed = {
+        let mut pending = pending.lock().unwrap_or_else(PoisonError::into_inner);
+        match &mut *pending {
+            PendingImage::Loading(waiters) => {
+                waiters.push(done);
+                return;
+            }
+            PendingImage::Completed(result) => result.clone(),
+        }
+    };
+    done(completed);
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct BundleDecodeKey {
@@ -242,6 +261,26 @@ impl BundleImageCache {
         Ok(image)
     }
 
+    /// Reuses retained pixels or joins the already-started load for a
+    /// selected key. This never starts I/O on a cache miss.
+    pub(crate) fn resolve_cached(
+        &self,
+        asset: AssetBundleImageKey,
+        resize: Option<ImageResizeOptions>,
+    ) -> Option<ImageStream> {
+        let key = BundleDecodeKey { asset, resize };
+        let pending = {
+            let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+            if let Some(image) = state.ready.get(&key) {
+                return Some(ImageStream::ready(image.clone()));
+            }
+            state.pending.get(&key).cloned()?
+        };
+        Some(ImageStream::from_load_callback(|done| {
+            attach(&pending, done)
+        }))
+    }
+
     /// Joins an already pending load for the exact key, or starts one. A
     /// warm result is returned immediately. No bundle code or user callback
     /// is called while the cache lock is held.
@@ -270,15 +309,13 @@ impl BundleImageCache {
             }
             match state.pending.entry(key.clone()) {
                 Entry::Occupied(entry) => {
-                    entry
-                        .get()
-                        .lock()
-                        .unwrap_or_else(PoisonError::into_inner)
-                        .push(done);
+                    let pending = entry.get().clone();
+                    drop(state);
+                    attach(&pending, done);
                     return;
                 }
                 Entry::Vacant(entry) => {
-                    let pending = Arc::new(Mutex::new(vec![done]));
+                    let pending = Arc::new(Mutex::new(PendingImage::Loading(vec![done])));
                     entry.insert(pending.clone());
                     pending
                 }
@@ -303,10 +340,14 @@ impl BundleImageCache {
                 }
             }
             drop((detached, removed));
-            let callbacks =
-                std::mem::take(&mut *pending.lock().unwrap_or_else(PoisonError::into_inner));
-            for callback in callbacks {
-                callback(result.clone());
+            let previous = {
+                let mut pending = pending.lock().unwrap_or_else(PoisonError::into_inner);
+                std::mem::replace(&mut *pending, PendingImage::Completed(result.clone()))
+            };
+            if let PendingImage::Loading(callbacks) = previous {
+                for callback in callbacks {
+                    callback(result.clone());
+                }
             }
         }));
     }

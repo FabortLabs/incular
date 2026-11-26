@@ -259,6 +259,20 @@ impl ResizeImage {
 }
 
 impl ImageProvider for ResizeImage {
+    fn resolve_cached(
+        &self,
+        configuration: &ImageConfiguration,
+        resize: Option<ImageResizeOptions>,
+    ) -> Option<ImageStream> {
+        if resize.is_some() {
+            // Nested resizing composes two transforms, rather than reusing
+            // a cache item with only one of the effective bounds.
+            return None;
+        }
+        self.image_provider
+            .resolve_cached_with_bounds(configuration, Some(self.options.physical(configuration)))
+    }
+
     fn load(&self) -> Result<ImageHandle, ImageError> {
         self.load_with(&ImageConfiguration::empty())
     }

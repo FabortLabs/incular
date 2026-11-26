@@ -361,6 +361,27 @@ impl ImageProvider for AssetImage {
         )
     }
 
+    fn resolve_cached(
+        &self,
+        config: &ImageConfiguration,
+        resize: Option<ImageResizeOptions>,
+    ) -> Option<ImageStream> {
+        let bundle = self.available_bundle(config)?;
+        let manifest = bundle
+            .0
+            .cached_asset_manifest(AssetManifestFormat::current_platform())?;
+        let logical = self.key_name()?.into_owned();
+        let key = resolve_key(
+            bundle,
+            logical,
+            config.target_device_pixel_ratio(),
+            &manifest,
+        )
+        .ok()?;
+        shared_bundle_image_cache()
+            .resolve_cached(key, resize.map(|options| options.physical(config)))
+    }
+
     fn load_resized(
         &self,
         config: &ImageConfiguration,
@@ -459,6 +480,17 @@ impl ImageProvider for ExactAssetImage {
 
     fn resolve(&self, configuration: &ImageConfiguration) -> ImageStream {
         ImageStream::from_load_callback(|done| self.obtain_key(configuration).load_async(done))
+    }
+
+    fn resolve_cached(
+        &self,
+        config: &ImageConfiguration,
+        resize: Option<ImageResizeOptions>,
+    ) -> Option<ImageStream> {
+        shared_bundle_image_cache().resolve_cached(
+            self.obtain_key(config),
+            resize.map(|options| options.physical(config)),
+        )
     }
 
     fn load_resized(

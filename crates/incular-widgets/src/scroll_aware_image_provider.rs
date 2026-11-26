@@ -141,10 +141,9 @@ impl fmt::Debug for ScrollAwareContext {
 ///
 /// [`ProviderImage`](crate::ProviderImage), and so
 /// [`FadeInImage`](crate::FadeInImage), wraps every provider it resolves in
-/// one, as Flutter's `Image` does. Incular has no provider-keyed image
-/// cache, so Flutter's shortcut for cached keys does not apply; an image
-/// widget that keeps an equal provider keeps its stream and does not
-/// resolve again.
+/// one, as Flutter's `Image` does. Warm or already-pending bundled
+/// images are reused before checking scroll speed or disposal, and
+/// touching a warm image refreshes its LRU position.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ScrollAwareImageProvider {
     context: ScrollAwareContext,
@@ -182,6 +181,10 @@ impl ScrollAwareImageProvider {
         completer: incular_image::ImageStreamCompleter,
     ) {
         incular_animation::scheduler::schedule_frame_callback(move |_| {
+            if let Some(cached) = self.image_provider.resolve_cached(&configuration) {
+                completer.follow(&cached);
+                return;
+            }
             if self.context.is_disposed() {
                 return;
             }
@@ -205,6 +208,9 @@ impl ImageProvider for ScrollAwareImageProvider {
 
     /// Flutter `resolveStreamForKey`.
     fn resolve(&self, configuration: &ImageConfiguration) -> ImageStream {
+        if let Some(cached) = self.image_provider.resolve_cached(configuration) {
+            return cached;
+        }
         if self.context.is_disposed() {
             // Flutter returns without a completer: the stream never loads.
             return ImageStream::loading().0;

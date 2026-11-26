@@ -174,6 +174,16 @@ pub trait ImageProvider: Clone + fmt::Debug + PartialEq + Eq {
         self.load()
     }
 
+    /// Returns shared pending or decoded work without loading a cold source.
+    /// Scroll-aware widgets use this even when deferred loading is active.
+    fn resolve_cached(
+        &self,
+        _configuration: &ImageConfiguration,
+        _resize: Option<ImageResizeOptions>,
+    ) -> Option<ImageStream> {
+        None
+    }
+
     /// Loads a resized frame immediately. Built-in asset providers use
     /// the selected asset and effective resize parameters as a cache key.
     fn load_resized(
