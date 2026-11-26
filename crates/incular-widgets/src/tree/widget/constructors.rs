@@ -1502,6 +1502,7 @@ impl Widget {
                     hit_test_behavior,
                     paint_order: Default::default(),
                     delegate,
+                    semantic_child_count: None,
                     inherit_physics: None,
                     behavior: Default::default(),
                 }),
@@ -1509,6 +1510,13 @@ impl Widget {
             semantics: None,
         })
     }
+    pub(crate) fn with_sliver_semantic_child_count(mut self, count: Option<usize>) -> Self {
+        if let WidgetKind::SliverViewport { config } = self.kind_mut() {
+            Rc::make_mut(config).semantic_child_count = count;
+        }
+        self
+    }
+
     pub(crate) fn with_exact_sliver_cache_window(mut self) -> Self {
         if let WidgetKind::SliverViewport { config } = self.kind_mut() {
             Rc::make_mut(config).evict_outside_cache = true;

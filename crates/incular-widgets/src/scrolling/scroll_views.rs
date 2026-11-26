@@ -698,6 +698,7 @@ fn list_view_widget(value: ListView) -> Widget {
             safe_padding: None,
         });
     }
+    let semantic_child_count = sliver.child_count();
     single_sliver_viewport_with_options(
         SliverViewportOptions {
             controller,
@@ -713,6 +714,7 @@ fn list_view_widget(value: ListView) -> Widget {
         sliver,
     )
     .with_ambient_sliver_axis()
+    .with_sliver_semantic_child_count(semantic_child_count)
 }
 
 fn uniform_explicit_item_extent(children: &[Widget], axis: Axis) -> Option<f32> {
@@ -1062,6 +1064,7 @@ fn grid_view_widget(value: GridView) -> Widget {
             safe_padding: None,
         });
     }
+    let semantic_child_count = sliver.child_count();
     single_sliver_viewport_with_options(
         SliverViewportOptions {
             controller,
@@ -1077,6 +1080,7 @@ fn grid_view_widget(value: GridView) -> Widget {
         sliver,
     )
     .with_ambient_sliver_axis()
+    .with_sliver_semantic_child_count(semantic_child_count)
 }
 
 /// Controller for paged views (Flutter `PageController`).

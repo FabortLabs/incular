@@ -52,9 +52,14 @@ impl SliverChildId {
     }
 
     pub(crate) fn item_index(self) -> Option<usize> {
-        self.0
+        if is_semantics_anchor(self) {
+            return None;
+        }
+        // The scope bits must not borrow into a zero leaf ID. Box and
+        // header slivers use local ID zero, which has no collection index.
+        (self.0 & u32::MAX as u64)
             .checked_sub(1)
-            .and_then(|index| usize::try_from(index & u32::MAX as u64).ok())
+            .and_then(|index| usize::try_from(index).ok())
     }
 
     pub(super) fn scoped(sliver: usize, child: Self) -> Self {
@@ -403,6 +408,7 @@ pub struct SliverViewportConfig {
     /// Flutter `Viewport.paintOrder`; [`SliverPaintOrder::FirstIsTop`] by default.
     pub(crate) paint_order: SliverPaintOrder,
     pub(crate) delegate: Rc<dyn SliverViewportDelegate>,
+    pub(crate) semantic_child_count: Option<usize>,
     /// `Some(page)` when the view set no physics: lowering takes the ambient
     /// `ScrollBehavior`'s, with page snapping on top for `page`.
     pub(crate) inherit_physics: Option<bool>,
@@ -443,6 +449,7 @@ impl PartialEq for SliverViewportConfig {
             && self.drag_start_behavior == other.drag_start_behavior
             && self.hit_test_behavior == other.hit_test_behavior
             && self.paint_order == other.paint_order
+            && self.semantic_child_count == other.semantic_child_count
             && self.inherit_physics == other.inherit_physics
             && self.behavior == other.behavior
             && Rc::ptr_eq(&self.delegate, &other.delegate)

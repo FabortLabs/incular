@@ -284,3 +284,22 @@ The upstream case checks a separately tagged render wrapper above
 the text node. The portable graph attaches the tag to the first
 projected node instead of generating that extra wrapper, so the
 case is recorded as partial.
+
+### Scroll collection size and position
+
+The pinned `sliver_semantic_scroll_collection_test.dart` and retained
+tests verify that the scrolling pane exposes the full collection size
+and first visible indexed child, while the outer boundary exposes
+neither. In a 50-item, 50-pixel list, a cached hidden row retains its
+node ID as the reported index changes 0 → 1 → 2 → 1 → 0. Pinned
+headers do not contribute an index. The same child and collection
+metadata reaches the mobile projection without changing its native
+scrolling-pane ID.
+
+The GridView comparison reports 31 tiles rather than 11 physical
+rows. Scrolling 300 pixels advances its first visible item from 0
+to 3, not 1. Scoped ID zero no longer turns headers and other
+unindexed sliver boxes into index 4,294,967,295. The 23 focused
+Rust regressions passed. These are authored tests, not new upstream
+registration sites. Operating-system scroll-event delivery is not
+verified.

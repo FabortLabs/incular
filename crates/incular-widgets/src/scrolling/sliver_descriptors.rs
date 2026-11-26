@@ -448,6 +448,9 @@ pub struct CustomScrollView {
     slivers: Vec<Box<dyn Sliver>>,
     #[builder(default, setter(strip_option))]
     controller: Option<ScrollController>,
+    /// Total indexed children in the semantic collection, when supplied.
+    #[builder(default, setter(strip_option))]
+    semantic_child_count: Option<usize>,
     #[builder(default = WidgetDefaults::DEFAULT.scroll_direction)]
     scroll_direction: Axis,
     #[builder(default = false)]
@@ -494,6 +497,7 @@ impl CustomScrollView {
         Self {
             slivers: slivers.into_iter().collect(),
             controller: None,
+            semantic_child_count: None,
             scroll_direction: WidgetDefaults::DEFAULT.scroll_direction,
             reverse: false,
             physics: None,
@@ -512,6 +516,13 @@ impl CustomScrollView {
     #[must_use]
     pub fn controller(mut self, controller: ScrollController) -> Self {
         self.controller = Some(controller);
+        self
+    }
+
+    /// Sets the total indexed child count reported to assistive technology.
+    #[must_use]
+    pub fn semantic_child_count(mut self, count: usize) -> Self {
+        self.semantic_child_count = Some(count);
         self
     }
 
@@ -687,6 +698,7 @@ fn custom_scroll_view_widget(value: CustomScrollView, ambient_horizontal_axis: b
     if let WidgetKind::SliverViewport { config } = widget.kind_mut() {
         let config = Rc::make_mut(config);
         config.paint_order = value.paint_order;
+        config.semantic_child_count = value.semantic_child_count;
         config.axis_resolution = axis_resolution;
     }
     widget

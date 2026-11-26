@@ -295,6 +295,8 @@ pub(super) struct SemanticsScratch {
     attached: Vec<SemanticNodeId>,
     /// Layout-only nodes created while assembling semantic table rows.
     table_changes: table::TableSemanticChanges,
+    /// Pane-relevant state changes from the current collection pass.
+    changed_viewport_children: FastHashMap<SemanticNodeId, viewport::PaneChild>,
     /// Nodes dropped from a re-collected child list.
     detached: Vec<SemanticNodeId>,
     /// Scroll nodes re-collected after a scroll offset change.
@@ -726,6 +728,7 @@ impl WidgetTree {
             traversal_items,
             attached,
             table_changes,
+            changed_viewport_children,
             detached,
             ..
         } = scratch;
@@ -733,27 +736,37 @@ impl WidgetTree {
         // a parent's child list can name children collected after it. Native
         // accessibility must receive a coherent tree on the same frame a
         // transient opens, not one semantic pass later.
-        // Parents are visited before their children. Record changed
-        // exclusion bits so the parent partitions on this frame's tags.
+        // A viewport parent is assembled before changed descendants.
+        // Snapshot their pane-relevant metadata from this frame's builds.
         let exclude_tag = crate::Viewport::exclude_from_scrolling_tag();
-        let mut changed_viewport_exclusions = FastHashMap::default();
+        changed_viewport_children.clear();
         #[cfg(feature = "devtools")]
         let mut inserted = HashSet::new();
         for build in builds.iter() {
-            let Collected::Full(build) = build else {
-                continue;
-            };
-            if let Some(&id) = self.semantic_ids.get(&build.element) {
-                let excluded = build.state.tags.contains(exclude_tag);
-                let previously_excluded = self
-                    .semantics
-                    .node(id)
-                    .is_some_and(|node| node.is_tagged(exclude_tag));
-                if excluded != previously_excluded {
-                    changed_viewport_exclusions.insert(id, excluded);
+            if let Some(&id) = self.semantic_ids.get(&build.element())
+                && let Some(old) = self.semantics.node(id)
+            {
+                let before = viewport::PaneChild::from_state(&old.state, exclude_tag);
+                let now = match build {
+                    Collected::Full(build) => {
+                        viewport::PaneChild::from_state(&build.state, exclude_tag)
+                    }
+                    Collected::Bounds { hidden: Some(hidden), .. } => viewport::PaneChild {
+                        visible_index: if *hidden {
+                            None
+                        } else {
+                            old.state.item_index
+                        },
+                        ..before
+                    },
+                    _ => before,
+                };
+                if now != before {
+                    changed_viewport_children.insert(id, now);
                 }
                 continue;
             }
+            let Collected::Full(build) = build else { continue };
             let id = self.semantics.insert(SemanticNode {
                 id: SemanticNodeId(ArenaId::from_parts(0, 0)),
                 role: build.role,
@@ -845,7 +858,7 @@ impl WidgetTree {
                     id,
                     build,
                     child_ids,
-                    &changed_viewport_exclusions,
+                    changed_viewport_children,
                     detached,
                 );
             } else {
@@ -1221,9 +1234,16 @@ impl WidgetTree {
         // wins over an automatically supplied sliver index and is carried
         // through transparent wrappers until the first semantic node emits.
         let mut collection = collection;
-        if let WidgetKind::IndexedSemantics { index, .. } = entry.widget.kind() {
+        let explicit_index = match (entry.widget.kind(), entry.widget.key()) {
+            (WidgetKind::IndexedSemantics { index, .. }, _) => Some(*index),
+            // Grid rows are only a materialization detail. Each retained
+            // tile boundary already carries its absolute logical index.
+            (_, Some(Key::GridCell(index))) if collection.is_some() => Some(*index),
+            _ => None,
+        };
+        if let Some(index) = explicit_index {
             collection = Some(SemanticCollectionContext {
-                item_index: Some(*index),
+                item_index: Some(index),
                 set_size: collection.and_then(|context| context.set_size),
             });
         } else if collection.is_none()
@@ -2776,14 +2796,19 @@ fn actions_with_room(actions: &[SemanticActionKind]) -> Vec<SemanticActionKind> 
 
 fn semantic_scroll_state(kind: &RenderKind) -> SemanticState {
     use incular_semantics::{SemanticScrollAxis, SemanticScrollMetrics};
-    let (controller, axis, reverse) = match kind {
+    let (controller, axis, reverse, child_count) = match kind {
         RenderKind::Scroll {
             controller,
             axis,
             reverse,
             ..
-        } => (controller, *axis, *reverse),
-        RenderKind::SliverViewport { config } => (&config.controller, config.axis, config.reverse),
+        } => (controller, *axis, *reverse, None),
+        RenderKind::SliverViewport { config } => (
+            &config.controller,
+            config.axis,
+            config.reverse,
+            config.semantic_child_count,
+        ),
         _ => return SemanticState::default(),
     };
     SemanticState {
@@ -2797,6 +2822,8 @@ fn semantic_scroll_state(kind: &RenderKind) -> SemanticState {
             offset: f64::from(controller.offset()),
             minimum: f64::from(controller.min_offset()),
             maximum: f64::from(controller.max_offset()),
+            child_count,
+            first_visible_index: None,
         }),
         ..SemanticState::default()
     }

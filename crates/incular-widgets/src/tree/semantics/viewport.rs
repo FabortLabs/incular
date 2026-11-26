@@ -1,5 +1,23 @@
 use super::*;
 
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub(super) struct PaneChild {
+    pub(super) visible_index: Option<usize>,
+    pub(super) excluded: bool,
+}
+
+impl PaneChild {
+    pub(super) fn from_state(
+        state: &SemanticState,
+        exclude_tag: &incular_semantics::SemanticsTag,
+    ) -> Self {
+        Self {
+            visible_index: if state.hidden { None } else { state.item_index },
+            excluded: state.tags.contains(exclude_tag),
+        }
+    }
+}
+
 impl WidgetTree {
     /// Assemble the viewport boundary separately from its scrolling pane.
     /// The outer ID stays attached to the parent; the inner ID serves
@@ -10,7 +28,7 @@ impl WidgetTree {
         outer: SemanticNodeId,
         build: Collected,
         children: &[SemanticNodeId],
-        changed_exclusions: &FastHashMap<SemanticNodeId, bool>,
+        changed_children: &FastHashMap<SemanticNodeId, PaneChild>,
         detached: &mut Vec<SemanticNodeId>,
     ) {
         let old_inner = self.viewport_semantic_panes.get(&element).copied();
@@ -23,13 +41,15 @@ impl WidgetTree {
         // this viewport. An empty viewport falls back to a single node.
         let split = role == SemanticRole::ScrollView && !children.is_empty();
         let exclude_tag = crate::Viewport::exclude_from_scrolling_tag();
-        let is_excluded = |id: SemanticNodeId| {
-            changed_exclusions.get(&id).copied().unwrap_or_else(|| {
+        let pane_child = |id: SemanticNodeId| {
+            changed_children.get(&id).copied().unwrap_or_else(|| {
                 self.semantics
                     .node(id)
-                    .is_some_and(|node| node.is_tagged(exclude_tag))
+                    .map(|node| PaneChild::from_state(&node.state, exclude_tag))
+                    .unwrap_or_default()
             })
         };
+        let is_excluded = |id| pane_child(id).excluded;
         let mut excluded = Vec::new();
         let mut included = Vec::new();
         let children = if split && children.iter().copied().any(is_excluded) {
@@ -43,6 +63,11 @@ impl WidgetTree {
             &included
         } else {
             children
+        };
+        let first_visible_index = if split {
+            children.iter().find_map(|&id| pane_child(id).visible_index)
+        } else {
+            None
         };
         if let Some(old) = old_inner.and_then(|id| self.semantics.node(id)) {
             // The normal attachment sweep only examines the outer node.
@@ -62,7 +87,12 @@ impl WidgetTree {
                 children: children.to_vec(),
             },
             Collected::Bounds { bounds, hidden, .. } => {
-                if split == old_inner.is_some() {
+                let old_index = self
+                    .semantics
+                    .node(old_content)
+                    .and_then(|node| node.state.scroll_metrics)
+                    .and_then(|metrics| metrics.first_visible_index);
+                if split == old_inner.is_some() && old_index == first_visible_index {
                     self.semantics.update_geometry_and_visibility(
                         old_content,
                         bounds,
@@ -95,6 +125,9 @@ impl WidgetTree {
                 node
             }
         };
+        if let Some(metrics) = &mut content.state.scroll_metrics {
+            metrics.first_visible_index = first_visible_index;
+        }
         if !split {
             if let Some(inner) = self.viewport_semantic_panes.remove(&element) {
                 detached.push(inner);

@@ -315,6 +315,7 @@ fn nested_shrink_wrapped_viewport_panes_stay_aligned_during_semantic_reveals() {
         let boundary = tree.node(scroller.children[0]).unwrap();
         assert_eq!(boundary.children, [pane.id]);
         assert_eq!(boundary.bounds, pane.bounds);
+        assert_eq!(pane.state.scroll_metrics.unwrap().child_count, Some(50));
         let mut hidden = pane
             .children
             .iter()
@@ -430,5 +431,112 @@ fn pinned_header_switches_semantic_panes_only_after_losing_layout_extent() {
             .unwrap();
         assert_eq!(snapshot(&runtime, offset), initial);
         runtime.run_frame(surface).unwrap();
+    }
+}
+
+#[test]
+fn viewport_reports_total_count_and_first_visible_index_on_the_scroll_pane_only() {
+    use incular_accessibility::MobileAccessibilityProjection;
+    use incular_widgets::{
+        CustomScrollView, PinnedHeaderSliver, ScrollController, Sliver, SliverFixedExtentList,
+    };
+
+    let controller = ScrollController::new();
+    let slivers: [Box<dyn Sliver>; 2] = [
+        Box::new(PinnedHeaderSliver::new(
+            Semantics::new(SizedBox::new().height(20.))
+                .container(true)
+                .label("pinned"),
+        )),
+        Box::new(SliverFixedExtentList::new(50, 50., |i| {
+            Semantics::new(SizedBox::new().height(50.))
+                .container(true)
+                .label(format!("row {i}"))
+        })),
+    ];
+    let mut runtime = Runtime::new(
+        CustomScrollView::new(slivers)
+            .controller(controller.clone())
+            .semantic_child_count(50)
+            .into(),
+    )
+    .unwrap();
+    let surface = Constraints::tight(Size::new(800., 600.));
+    runtime.run_frame(surface).unwrap();
+    let tree = runtime.tree().semantics();
+    let outer = tree.root().unwrap();
+    let pane = tree.node(outer).unwrap().children[0];
+    let first = tree
+        .iter()
+        .map(|(_, node)| node)
+        .find(|node| node.state.item_index == Some(0))
+        .unwrap()
+        .id;
+    let mut projection = MobileAccessibilityProjection::new();
+    let mut native_pane = None;
+    for (offset, index) in [(0., 0), (70., 1), (120., 2), (70., 1), (0., 0)] {
+        let _ = controller.jump_to(offset);
+        runtime.run_frame(surface).unwrap();
+        let tree = runtime.tree().semantics();
+        assert_eq!(tree.root(), Some(outer));
+        let outside = tree.node(outer).unwrap();
+        assert!(outside.state.scroll_metrics.is_none());
+        assert!(outside.state.item_index.is_none());
+        assert_eq!(outside.children[0], pane);
+        let header = tree
+            .iter()
+            .map(|(_, node)| node)
+            .find(|node| node.label.as_deref() == Some("pinned"))
+            .unwrap();
+        assert_eq!(header.state.item_index, None);
+        let contents = tree.node(pane).unwrap();
+        let metrics = contents.state.scroll_metrics.unwrap();
+        assert_eq!(metrics.child_count, Some(50));
+        assert_eq!(metrics.first_visible_index, Some(index));
+        let row = tree
+            .node(first)
+            .expect("cached indexed row stays materialized");
+        assert_eq!(row.state.item_index, Some(0));
+        assert_eq!(row.state.hidden, index > 0);
+        let update = projection
+            .sync(tree)
+            .expect("a scroll frame publishes changed metrics");
+        let record = update
+            .nodes
+            .iter()
+            .find(|node| node.semantic.id == pane)
+            .unwrap();
+        assert_eq!(record.semantic.state.scroll_metrics, Some(metrics));
+        if let Some(native_pane) = native_pane {
+            assert_eq!(record.native_id, native_pane);
+        }
+        native_pane = Some(record.native_id);
+    }
+}
+
+#[test]
+fn grid_scroll_count_counts_tiles_not_materialized_rows() {
+    use incular_widgets::{
+        Directionality, GridView, ScrollController, SliverGridDelegate, TextDirection,
+    };
+
+    let controller = ScrollController::new();
+    let grid = GridView::builder(31, SliverGridDelegate::fixed_cross_axis_count(3), |i| {
+        Semantics::new(SizedBox::shrink()).label(format!("tile {i}"))
+    })
+    .controller(controller.clone());
+    let mut runtime = Runtime::new(Directionality::new(TextDirection::Ltr, grid).into()).unwrap();
+    let surface = Constraints::tight(Size::new(800., 600.));
+    runtime.run_frame(surface).unwrap();
+    for (offset, first) in [(0., 0), (300., 3)] {
+        let _ = controller.jump_to(offset);
+        runtime.run_frame(surface).unwrap();
+        let tree = runtime.tree().semantics();
+        let metrics = tree
+            .iter()
+            .find_map(|(_, node)| node.state.scroll_metrics)
+            .unwrap();
+        assert_eq!(metrics.child_count, Some(31));
+        assert_eq!(metrics.first_visible_index, Some(first));
     }
 }

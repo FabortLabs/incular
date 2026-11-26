@@ -358,6 +358,11 @@ pub struct SemanticScrollMetrics {
     pub offset: f64,
     pub minimum: f64,
     pub maximum: f64,
+    /// Total indexed children in this scroller, when known. This is not
+    /// the number of nodes retained in the current semantic cache.
+    pub child_count: Option<usize>,
+    /// The first visible indexed child, excluding pinned content.
+    pub first_visible_index: Option<usize>,
 }
 
 /// Platform semantic hit testing, independent of ordinary widget pointers.
