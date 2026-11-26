@@ -11,7 +11,7 @@ use std::{
 use incular_core::Size;
 use incular_image::{
     AnyImageProvider, ImageChunkEvent, ImageConfiguration, ImageError, ImageHandle, ImageLoadState,
-    ImageProvider, ImageStream,
+    ImageProvider, ImageResizeOptions, ImageStream, ResizeImage,
 };
 
 use crate::scroll_aware_image_provider::{ScrollAwareContext, ScrollAwareImageProvider};
@@ -53,6 +53,7 @@ pub type ImageErrorBuilder = Rc<dyn for<'a> Fn(&BuildContext<'a>, &ImageError) -
 pub struct ProviderImage {
     provider: AnyImageProvider,
     options: ImageOptions,
+    cache_resize: ImageResizeOptions,
     frame_builder: Option<ImageFrameBuilder>,
     loading_builder: Option<ImageLoadingBuilder>,
     error_builder: Option<ImageErrorBuilder>,
@@ -67,6 +68,7 @@ impl std::fmt::Debug for ProviderImage {
             .debug_struct("ProviderImage")
             .field("provider", &self.provider)
             .field("options", &self.options)
+            .field("cache_resize", &self.cache_resize)
             .field("gapless_playback", &self.gapless_playback)
             .field("semantic_label", &self.semantic_label)
             .finish_non_exhaustive()
@@ -92,6 +94,7 @@ impl ProviderImage {
         Self {
             provider,
             options: ImageOptions::default(),
+            cache_resize: ImageResizeOptions::default(),
             frame_builder: None,
             loading_builder: None,
             error_builder: None,
@@ -107,6 +110,28 @@ impl ProviderImage {
     }
 
     image_option_setters!();
+
+    /// Requests a decoded width independently of the layout width.
+    #[must_use]
+    pub fn cache_width(mut self, width: u32) -> Self {
+        self.cache_resize.width = Some(width);
+        self
+    }
+
+    /// Requests a decoded height independently of the layout height.
+    #[must_use]
+    pub fn cache_height(mut self, height: u32) -> Self {
+        self.cache_resize.height = Some(height);
+        self
+    }
+
+    /// Interprets cache dimensions as logical pixels, rather than the
+    /// default physical pixels. Uses the active MediaQuery density.
+    #[must_use]
+    pub fn use_logical_cache_size(mut self, use_logical: bool) -> Self {
+        self.cache_resize.use_logical_size = use_logical;
+        self
+    }
 
     /// Flutter `frameBuilder`.
     #[must_use]
@@ -222,7 +247,7 @@ impl ProviderImage {
 #[derive(Default)]
 struct ProviderImageState {
     /// The provider and configuration of the current stream.
-    resolved: RefCell<Option<(AnyImageProvider, ImageConfiguration)>>,
+    resolved: RefCell<Option<(AnyImageProvider, ImageConfiguration, ImageResizeOptions)>>,
     stream: RefCell<Option<ImageStream>>,
     /// `_imageInfo`: the image last shown, kept across providers when the
     /// playback is gapless.
@@ -263,13 +288,15 @@ impl ProviderImageState {
     ) -> ImageStream {
         let mut resolved = self.resolved.borrow_mut();
         let mut stream = self.stream.borrow_mut();
-        if let (Some((provider, current)), Some(stream)) = (resolved.as_ref(), stream.as_ref())
+        if let (Some((provider, current, resize)), Some(stream)) =
+            (resolved.as_ref(), stream.as_ref())
             && provider == &config.provider
             && *current == configuration
+            && *resize == config.cache_resize
         {
             return stream.clone();
         }
-        let key = (config.provider.clone(), configuration);
+        let key = (config.provider.clone(), configuration, config.cache_resize);
         // `_updateSourceStream`: without gapless playback the old image goes
         // at once.
         if !config.gapless_playback {
@@ -288,8 +315,16 @@ impl ProviderImageState {
         {
             previous.dispose();
         }
-        let next =
-            ScrollAwareImageProvider::new(scroll_context, config.provider.clone()).resolve(&key.1);
+        let provider =
+            if config.cache_resize.width.is_some() || config.cache_resize.height.is_some() {
+                AnyImageProvider::new(ResizeImage {
+                    image_provider: config.provider.clone(),
+                    options: config.cache_resize,
+                })
+            } else {
+                config.provider.clone()
+            };
+        let next = ScrollAwareImageProvider::new(scroll_context, provider).resolve(&key.1);
         self.complete_on_subscribe.set(next.is_completed());
         *resolved = Some(key);
         *stream = Some(next.clone());

@@ -192,6 +192,12 @@ impl Image {
         Self::provider(crate::AssetImage::new(path))
     }
 
+    /// Decodes encoded image bytes through a memory image provider.
+    #[must_use]
+    pub fn memory(bytes: impl Into<std::sync::Arc<[u8]>>) -> crate::ProviderImage {
+        Self::provider(crate::MemoryImage::new(bytes))
+    }
+
     pub(crate) fn with_options(image: ImageHandle, options: ImageOptions) -> Self {
         Self { image, options }
     }

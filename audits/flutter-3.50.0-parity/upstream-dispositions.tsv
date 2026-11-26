@@ -1642,3 +1642,7 @@ packages/flutter/test/painting/image_provider_resize_image_test.dart	537	constra
 packages/flutter/test/painting/image_provider_resize_image_test.dart	550	constrains landscape image to bounded width	paired-match	upstream-resize-image.md
 packages/flutter/test/painting/image_provider_resize_image_test.dart	562	constrains landscape image to bounded height	paired-match	upstream-resize-image.md
 packages/flutter/test/painting/image_provider_resize_image_test.dart	574	shrinks image if constraints are smaller than image	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	589	does not resize when no size is passed	paired-match	upstream-image-cache-layout.md
+packages/flutter/test/widgets/image_resolution_test.dart	286	Image cache resize upscale display 5	paired-match	upstream-image-cache-layout.md
+packages/flutter/test/widgets/image_resolution_test.dart	292	Image cache resize upscale display 50	paired-match	upstream-image-cache-layout.md
+packages/flutter/test/widgets/image_resolution_test.dart	298	Image cache resize downscale display 5	paired-match	upstream-image-cache-layout.md
