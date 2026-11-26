@@ -10,6 +10,7 @@ use std::{fmt, path::PathBuf};
 
 mod application_activation;
 mod application_shell;
+pub mod autofill;
 mod back_gesture;
 mod capabilities;
 mod content_sensitivity;

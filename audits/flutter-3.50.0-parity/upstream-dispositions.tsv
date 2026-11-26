@@ -1660,3 +1660,7 @@ packages/flutter/test/widgets/scroll_aware_image_provider_test.dart	286	ScrollAw
 packages/flutter/test/widgets/scroll_aware_image_provider_test.dart	359	ScrollAwareImageProvider delays if in scrollable that is scrolling fast and fizzles if disposed	paired-match	upstream-scroll-aware-warm-images.md
 packages/flutter/test/widgets/scroll_aware_image_provider_test.dart	435	ScrollAwareImageProvider resolves from ImageCache and does not set completer twice	partial-match	upstream-scroll-aware-warm-images.md
 packages/flutter/test/widgets/scroll_aware_image_provider_test.dart	496	ScrollAwareImageProvider does not block LRU updates to image cache	partial-match	upstream-scroll-aware-warm-images.md
+packages/flutter/test/services/autofill_test.dart	28	Does not throw if the hint list is empty	paired-match	upstream-autofill-wire.md
+packages/flutter/test/services/autofill_test.dart	43	AutofillClients send the correct configuration to the platform and responds to updateEditingStateWithTag method correctly	paired-match	upstream-autofill-wire.md
+packages/flutter/test/services/autofill_test.dart	117	equality operator works correctly	paired-match	upstream-autofill-wire.md
+packages/flutter/test/services/autofill_test.dart	135	hashCode works correctly	paired-match	upstream-autofill-wire.md
