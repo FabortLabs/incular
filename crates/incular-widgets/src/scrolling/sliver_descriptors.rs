@@ -1610,12 +1610,7 @@ pub(super) struct CrossAxisGroupRenderSliver {
 
 impl CrossAxisGroupRenderSliver {
     fn new(children: Vec<(Box<dyn RenderSliver>, usize)>) -> Self {
-        Self {
-            children: children
-                .into_iter()
-                .map(|(child, flex)| (child, flex.max(1)))
-                .collect(),
-        }
+        Self { children }
     }
 
     pub(super) fn adopt_compatible_state(
@@ -1655,34 +1650,44 @@ impl RenderSliver for CrossAxisGroupRenderSliver {
     }
 
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout {
-        let total_flex = self
-            .children
-            .iter()
-            .map(|(_, flex)| *flex as f32)
-            .sum::<f32>()
-            .max(1.);
+        // Flutter lays out fixed lanes first, subtracting the width that
+        // each actually reports. Only remaining space is divided by flex.
+        let mut fixed = Vec::new();
+        let mut total_flex = 0usize;
+        let mut remaining = constraints.cross_axis_extent;
+        for (sliver, flex) in &mut self.children {
+            if *flex != 0 {
+                total_flex = total_flex.saturating_add(*flex);
+                continue;
+            }
+            let layout = sliver.perform_layout(SliverConstraints {
+                cross_axis_extent: remaining,
+                ..constraints
+            });
+            let reported = sliver.reported_cross_axis_extent();
+            debug_assert!(reported.is_some(), "a zero-flex sliver must report its cross extent");
+            let extent = reported.unwrap_or(remaining).clamp(0., remaining);
+            remaining -= extent;
+            fixed.push((layout, extent));
+        }
+        let extent_per_flex = remaining / total_flex.max(1) as f32;
+        let mut fixed = fixed.into_iter();
         let mut cross_offset = 0.;
         let mut scroll_extent: f32 = 0.;
         let mut absorbed_overlap: f32 = 0.;
         let mut children = Vec::with_capacity(self.children.len());
         for (lane, (sliver, flex)) in self.children.iter_mut().enumerate() {
-            let lane_extent = constraints.cross_axis_extent * (*flex as f32 / total_flex);
-            let mut lane_constraints = SliverConstraints::new(
-                constraints.axis,
-                constraints.reverse,
-                constraints.scroll_offset,
-                constraints.preceding_scroll_extent,
-                constraints.overlap,
-                constraints.remaining_paint_extent,
-                lane_extent,
-                constraints.viewport_main_axis_extent,
-                constraints.remaining_cache_extent,
-                constraints.cache_origin,
-            );
-            lane_constraints.text_direction = constraints.text_direction;
-            lane_constraints.growth_direction = constraints.growth_direction;
-            lane_constraints.safe_insets = constraints.safe_insets;
-            let layout = sliver.perform_layout(lane_constraints);
+            let (layout, lane_extent) = if *flex == 0 {
+                fixed.next().expect("every fixed lane was already laid out")
+            } else {
+                let extent = extent_per_flex * *flex as f32;
+                let layout = sliver.perform_layout(SliverConstraints {
+                    cross_axis_extent: extent,
+                    ..constraints
+                });
+                let reported = sliver.reported_cross_axis_extent().unwrap_or(extent);
+                (layout, reported.clamp(0., extent))
+            };
             let geometry = layout.geometry.normalized();
             scroll_extent = scroll_extent.max(geometry.scroll_extent);
             absorbed_overlap = absorbed_overlap.max(layout.absorbed_overlap);
@@ -1803,14 +1808,23 @@ impl SliverConstrainedCrossAxis {
 
 impl Sliver for SliverConstrainedCrossAxis {
     fn build(&self, controller: &ScrollController) -> Widget {
+        self.build_with_config(controller, Axis::Vertical, false)
+    }
+
+    fn build_with_config(&self, controller: &ScrollController, axis: Axis, reverse: bool) -> Widget {
+        let bounds = if axis.is_vertical() {
+            Size::new(self.max_extent, f32::INFINITY)
+        } else {
+            Size::new(f32::INFINITY, self.max_extent)
+        };
         crate::layout::ConstrainedBox::new(
-            incular_config::Constraints::loose(incular_core::Size::new(
-                self.max_extent,
-                f32::INFINITY,
-            )),
-            self.sliver.build(controller),
-        )
-        .into()
+            Constraints::loose(bounds),
+            self.sliver.build_with_config(controller, axis, reverse),
+        ).into()
+    }
+
+    fn cross_axis_flex(&self) -> Option<usize> {
+        Some(0)
     }
 
     fn create_render_sliver(
@@ -1819,23 +1833,9 @@ impl Sliver for SliverConstrainedCrossAxis {
         axis: Axis,
         reverse: bool,
     ) -> Box<dyn RenderSliver> {
-        let max_extent = self.max_extent;
-        let inner = self.sliver.create_render_sliver(controller, axis, reverse);
-        Box::new(WidgetWrapRenderSliver {
-            inner: RefCell::new(inner),
-            hidden: false,
-            wrap: Rc::new(move |widget| {
-                crate::layout::ConstrainedBox::new(
-                    if axis.is_vertical() {
-                        Constraints::new(0., max_extent, 0., f32::INFINITY)
-                    } else {
-                        Constraints::new(0., f32::INFINITY, 0., max_extent)
-                    },
-                    widget,
-                )
-                .into()
-            }),
-        })
+        Box::new(super::layout::ConstrainedCrossAxisRenderSliver::new(
+            self.sliver.create_render_sliver(controller, axis, reverse), self.max_extent,
+        ))
     }
 }
 

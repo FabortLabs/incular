@@ -469,3 +469,53 @@ fn infinite_max_paint_extent_stops_at_the_live_bottom_cache() {
         "the paint box must not materialize off-cache rows"
     );
 }
+
+#[test]
+fn constrained_cross_axis_sets_the_child_and_decoration_size_in_both_wrapper_orders() {
+    use incular_widgets::{SizedBox, SliverConstrainedCrossAxis};
+    for axis in [Axis::Vertical, Axis::Horizontal] {
+        for constraint_inside in [true, false] {
+            let key = GlobalKey::new();
+            let leaf = Widget::from(SizedBox::new().width(100.).height(100.)).with_key(key);
+            let child = SliverToBoxAdapter::new(leaf);
+            let sliver: Box<dyn Sliver> = if constraint_inside {
+                Box::new(DecoratedSliver::new(
+                    native_decoration(),
+                    SliverConstrainedCrossAxis::new(120., child),
+                ))
+            } else {
+                Box::new(SliverConstrainedCrossAxis::new(
+                    120.,
+                    DecoratedSliver::new(native_decoration(), child),
+                ))
+            };
+            let size = Size::new(300., 300.);
+            let scene = Directionality::new(
+                TextDirection::Ltr,
+                CustomScrollView::new(vec![sliver]).scroll_direction(axis),
+            );
+            let mut tree = WidgetTree::new();
+            tree.mount(scene.into()).unwrap();
+            tree.layout(Constraints::tight(size)).unwrap();
+            tree.update_compositor(Instant::now()).unwrap();
+            let child = tree.element_with_key(&key.into()).unwrap();
+            let expected = if axis.is_vertical() {
+                Size::new(120., 100.)
+            } else {
+                Size::new(100., 120.)
+            };
+            assert_eq!(
+                tree.element_bounds(child).unwrap(),
+                Rect::from_origin_size(Offset::ZERO, expected)
+            );
+            assert_eq!(
+                border_rects(&tree.paint()),
+                [Rect::from_origin_size(
+                    Offset::new(0.5, 0.5),
+                    Size::new(expected.width - 1., expected.height - 1.)
+                )],
+                "{axis:?}, constraint_inside={constraint_inside}"
+            );
+        }
+    }
+}

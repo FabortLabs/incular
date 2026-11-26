@@ -83,3 +83,19 @@ not eagerly build the delegate. This checks the unbounded paint
 extent branch without claiming a public unlimited SliverList.
 
 Eleven focused native tests passed.
+
+## Respecting the constrained cross axis
+
+Five pinned SliverConstrainedCrossAxis cases pair: a 50 px cap, a live
+update to 80 px, a cap larger than the viewport, a horizontal cap, and
+parent-data flex zero. Real child measurement confirms that the cross
+cap does not reduce the 100 px main paint or scroll extent. The keyed
+child stays mounted through the live updates. The pinned cross-axis
+group's two fixed lanes also pair: widths 60 and 120 at x=0 and x=60.
+A mixed native control checks that only the remaining width feeds flex.
+
+The Flutter reference probe and the native compositor agree in both
+wrapper orders and axes: a capped 120 px child in a 300 px viewport
+has one centered border around its actual cross extent. Before this
+fix the native child and border could both use the full viewport.
+Fifteen focused native tests passed across the three affected targets.

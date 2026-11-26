@@ -176,6 +176,12 @@ impl SliverLayout {
 pub trait RenderSliver {
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout;
 
+    /// An explicit cross-axis extent reported by the most recent layout.
+    /// When absent, consumers keep the incoming cross-axis extent.
+    fn reported_cross_axis_extent(&self) -> Option<f32> {
+        None
+    }
+
     /// Annotation metadata from the most recent layout. Unannotated
     /// slivers and slivers that have never laid out return None.
     fn semantic_annotation_metadata(&self) -> Option<incular_semantics::SemanticAnnotationMetadata> {

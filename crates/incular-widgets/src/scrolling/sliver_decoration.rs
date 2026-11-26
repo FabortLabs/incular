@@ -134,7 +134,7 @@ impl RenderSliver for DecoratedRenderSliver {
         }
         let max_leading = (geometry.scroll_extent - geometry.max_scroll_obstruction_extent).max(0.);
         let leading = constraints.scroll_offset.min(max_leading).max(0.);
-        let cross = constraints.cross_axis_extent;
+        let cross = self.reported_cross_axis_extent().unwrap_or(constraints.cross_axis_extent);
         let size = if constraints.axis.is_vertical() {
             Size::new(cross, extent)
         } else {
@@ -170,6 +170,10 @@ impl RenderSliver for DecoratedRenderSliver {
             DecorationPosition::Foreground => layout.children.push(layer),
         }
         layout
+    }
+
+    fn reported_cross_axis_extent(&self) -> Option<f32> {
+        self.inner.borrow().reported_cross_axis_extent()
     }
 
     fn semantic_annotation_metadata(

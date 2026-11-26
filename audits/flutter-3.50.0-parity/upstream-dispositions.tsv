@@ -2294,3 +2294,9 @@ packages/flutter/test/widgets/decorated_sliver_test.dart	558	DecoratedSliver wor
 packages/flutter/test/widgets/decorated_sliver_test.dart	15	DecoratedSliver creates, paints, and disposes BoxPainter	paired-match	upstream-decorated-sliver.md#retained-custom-painter-lifecycle
 packages/flutter/test/widgets/decorated_sliver_test.dart	43	DecoratedSliver can update box painter	paired-match	upstream-decorated-sliver.md#retained-custom-painter-lifecycle
 packages/flutter/test/widgets/decorated_sliver_test.dart	81	DecoratedSliver can update DecorationPosition	paired-match	upstream-decorated-sliver.md#retained-custom-painter-lifecycle
+packages/flutter/test/widgets/sliver_constrained_cross_axis_test.dart	13	SliverConstrainedCrossAxis basic test	paired-match	upstream-decorated-sliver.md#respecting-the-constrained-cross-axis
+packages/flutter/test/widgets/sliver_constrained_cross_axis_test.dart	24	SliverConstrainedCrossAxis updates correctly	paired-match	upstream-decorated-sliver.md#respecting-the-constrained-cross-axis
+packages/flutter/test/widgets/sliver_constrained_cross_axis_test.dart	38	SliverConstrainedCrossAxis uses parent extent if maxExtent is greater	paired-match	upstream-decorated-sliver.md#respecting-the-constrained-cross-axis
+packages/flutter/test/widgets/sliver_constrained_cross_axis_test.dart	48	SliverConstrainedCrossAxis constrains the height when direction is horizontal	paired-match	upstream-decorated-sliver.md#respecting-the-constrained-cross-axis
+packages/flutter/test/widgets/sliver_constrained_cross_axis_test.dart	59	SliverConstrainedCrossAxis sets its own flex to 0	paired-match	upstream-decorated-sliver.md#respecting-the-constrained-cross-axis
+packages/flutter/test/widgets/sliver_cross_axis_group_test.dart	131	SliverConstrainedCrossAxis is laid out properly	paired-match	upstream-decorated-sliver.md#respecting-the-constrained-cross-axis

@@ -2734,6 +2734,66 @@ impl RenderSliver for PaddingRenderSliver {
     }
 }
 
+/// Changes the sliver constraints themselves, before tight box children
+/// receive cross-axis constraints. A box wrapper after layout is too late.
+pub(super) struct ConstrainedCrossAxisRenderSliver {
+    pub(super) inner: RefCell<Box<dyn RenderSliver>>,
+    max_extent: f32,
+    last_extent: Option<f32>,
+}
+
+impl ConstrainedCrossAxisRenderSliver {
+    pub(super) fn new(inner: Box<dyn RenderSliver>, max_extent: f32) -> Self {
+        Self { inner: RefCell::new(inner), max_extent, last_extent: None }
+    }
+}
+
+impl RenderSliver for ConstrainedCrossAxisRenderSliver {
+    fn perform_layout(&mut self, mut constraints: SliverConstraints) -> SliverLayout {
+        constraints.cross_axis_extent = constraints.cross_axis_extent.min(self.max_extent);
+        self.last_extent = Some(constraints.cross_axis_extent);
+        self.inner.get_mut().perform_layout(constraints)
+    }
+
+    fn reported_cross_axis_extent(&self) -> Option<f32> { self.last_extent }
+
+    fn semantic_annotation_metadata(&self) -> Option<incular_semantics::SemanticAnnotationMetadata> {
+        self.inner.borrow().semantic_annotation_metadata()
+    }
+
+    fn reveal_child(&mut self, child: SliverChildId, rect: Rect, options: &ShowOnScreen) -> Option<Rect> {
+        self.inner.get_mut().reveal_child(child, rect, options)
+    }
+
+    fn scroll_layout_dependency(&self) -> SliverScrollDependency {
+        self.inner.borrow().scroll_layout_dependency()
+    }
+
+    fn child_count(&self) -> Option<usize> { self.inner.borrow().child_count() }
+
+    fn set_child_extent(&mut self, child: SliverChildId, extent: f32) -> bool {
+        self.inner.get_mut().set_child_extent(child, extent)
+    }
+
+    fn invalidate_child_measurement(&mut self, child: SliverChildId) {
+        self.inner.get_mut().invalidate_child_measurement(child);
+    }
+
+    fn set_child_keep_alive(&mut self, child: SliverChildId, tile: Option<usize>, keep: bool) -> bool {
+        self.inner.get_mut().set_child_keep_alive(child, tile, keep)
+    }
+
+    fn set_child_focus_keep_alive(&mut self, child: SliverChildId, tile: Option<usize>, keep: bool) -> bool {
+        self.inner.get_mut().set_child_focus_keep_alive(child, tile, keep)
+    }
+
+    fn revision(&self) -> u64 { self.inner.borrow().revision() }
+    fn tick(&mut self, now: Instant) -> bool { self.inner.get_mut().tick(now) }
+    fn is_animating(&self) -> bool { self.inner.borrow().is_animating() }
+    fn set_reduced_motion(&mut self, reduced: bool) { self.inner.get_mut().set_reduced_motion(reduced); }
+    fn as_any_mut(&mut self) -> Option<&mut dyn Any> { Some(self) }
+}
+
 pub(super) struct WidgetWrapRenderSliver {
     pub(super) inner: RefCell<Box<dyn RenderSliver>>,
     pub(super) wrap: Rc<dyn Fn(Widget) -> Widget>,
@@ -2902,6 +2962,10 @@ impl RenderSliver for OverlapInjectorRenderSliver {
 }
 
 impl RenderSliver for WidgetWrapRenderSliver {
+    fn reported_cross_axis_extent(&self) -> Option<f32> {
+        (!self.hidden).then(|| self.inner.borrow().reported_cross_axis_extent()).flatten()
+    }
+
     fn reveal_child(
         &mut self,
         child: SliverChildId,
@@ -3329,6 +3393,9 @@ pub(crate) fn transfer_retained_sliver_state(
     transfer_single_inner_sliver_state::<super::sliver_decoration::DecoratedRenderSliver>(
         fresh, retained, probes, preserve_anchor,
     );
+    transfer_single_inner_sliver_state::<ConstrainedCrossAxisRenderSliver>(
+        fresh, retained, probes, preserve_anchor,
+    );
     transfer_single_inner_sliver_state::<WidgetWrapRenderSliver>(
         fresh,
         retained,
@@ -3576,6 +3643,11 @@ fn variable_slot_for_child(
             });
         }
         if let Some(wrapper) = sliver.as_any_mut()
+            .and_then(|any| any.downcast_mut::<ConstrainedCrossAxisRenderSliver>())
+        {
+            return slot_in_sliver(&mut **wrapper.inner.borrow_mut(), child);
+        }
+        if let Some(wrapper) = sliver.as_any_mut()
             .and_then(|any| any.downcast_mut::<super::sliver_decoration::DecoratedRenderSliver>())
         {
             let child = super::sliver_decoration::DecoratedRenderSliver::content_id(child)?;
@@ -3704,6 +3776,12 @@ pub(super) trait SingleInnerSliver {
     fn adopt_outer_state(&mut self, _old: &mut Self) {}
 
     fn inner_cell(&mut self) -> &RefCell<Box<dyn RenderSliver>>;
+}
+
+impl SingleInnerSliver for ConstrainedCrossAxisRenderSliver {
+    fn inner_cell(&mut self) -> &RefCell<Box<dyn RenderSliver>> {
+        &self.inner
+    }
 }
 
 impl SingleInnerSliver for PaddingRenderSliver {
