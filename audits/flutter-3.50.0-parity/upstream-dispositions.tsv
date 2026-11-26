@@ -2211,3 +2211,8 @@ packages/flutter/test/widgets/basic_test.dart	1179	ColoredBox - debugFillPropert
 packages/flutter/test/widgets/basic_test.dart	1187	ColoredBox - default isAntiAlias	paired-match	upstream-colored-box.md
 packages/flutter/test/widgets/basic_test.dart	1196	ColoredBox - passing isAntiAlias = false	paired-match	upstream-colored-box.md
 packages/flutter/test/widgets/basic_test.dart	1944	ColoredBox does not crash at zero area	paired-match	upstream-colored-box.md
+packages/flutter/test/widgets/basic_test.dart	164	hit test - entirely inside the bounding box	paired-match	upstream-fractional-translation.md
+packages/flutter/test/widgets/basic_test.dart	191	hit test - partially inside the bounding box	paired-match	upstream-fractional-translation.md
+packages/flutter/test/widgets/basic_test.dart	218	hit test - completely outside the bounding box	paired-match	upstream-fractional-translation.md
+packages/flutter/test/widgets/basic_test.dart	245	semantics bounds are updated	paired-match	upstream-fractional-translation.md
+packages/flutter/test/widgets/basic_test.dart	327	FractionalTranslation does not crash at zero area	paired-match	upstream-fractional-translation.md
