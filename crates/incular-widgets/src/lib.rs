@@ -263,7 +263,8 @@ pub use incular_image::{
 pub use incular_platform::autofill::AutofillContextAction;
 pub use incular_platform::{
     BackGestureEvent, DefaultSpellCheckService, PlatformViewCommand, PlatformViewCompositing,
-    PlatformViewId, PlatformViewPointerEvent, PredictiveBackEvent, SpellCheckCallback,
+    PlatformViewId, PlatformViewPointerEvent, PredictiveBackEvent, SmartDashesType,
+    SmartQuotesType, SpellCheckCallback,
     SpellCheckResults, SpellCheckService, SuggestionSpan, SwipeEdge, SystemUiOverlayStyle,
 };
 pub use incular_rendering::{

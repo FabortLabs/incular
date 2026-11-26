@@ -30,6 +30,30 @@ impl Runtime {
         Some((focused, self.tree.autofill_scope(focused)?))
     }
 
+    /// Encodes the focused editor's Flutter `TextInput.setClient` message.
+    /// Grouped editors include the registered fields; ordinary editors do
+    /// not carry an empty scope. Returns nothing without a mounted client.
+    pub fn encode_flutter_text_input_client(
+        &self,
+        input_options: Map<String, Value>,
+    ) -> Result<Option<Vec<u8>>, AutofillMessageError> {
+        if self.mounted_autofill_scope().is_some() {
+            return self.encode_flutter_scoped_autofill_client(input_options);
+        }
+        let Some((field, client)) = self.focused.zip(self.text_input_client) else {
+            return Ok(None);
+        };
+        if self.tree.text_field_client_id(field) != Some(client.get()) {
+            return Ok(None);
+        }
+        let view_id = input_options.get("viewId").cloned().unwrap_or(Value::Null);
+        let Some(mut trigger) = self.flutter_autofill_field(field, &view_id) else {
+            return Ok(None);
+        };
+        trigger.input.extend(input_options);
+        trigger.encode_set_client(client).map(Some)
+    }
+
     /// Encodes a Flutter `TextInput.setClient` message for the mounted group
     /// of the active editor. An embedder can supply additional options for
     /// that editor (for example its platform view ID or delta preference).
@@ -259,7 +283,6 @@ fn field_input(field: &TextFieldInputSnapshot, view_id: &Value) -> Map<String, V
         incular_config::Brightness::Light => "Brightness.light",
         incular_config::Brightness::Dark => "Brightness.dark",
     };
-    let smart = if field.obscure_text { "0" } else { "1" };
     let hint_locales = field.traits.hint_locales.as_ref().map(|locales| {
         locales.iter().map(ToString::to_string).collect::<Vec<_>>()
     });
@@ -267,13 +290,15 @@ fn field_input(field: &TextFieldInputSnapshot, view_id: &Value) -> Map<String, V
         "viewId": view_id,
         "inputType":{"name":field.input_type.flutter_name(),"signed":signed,"decimal":decimal,"password":password},
         "readOnly":field.read_only, "obscureText":field.obscure_text,
-        "autocorrect":field.traits.autocorrect, "smartDashesType":smart, "smartQuotesType":smart,
+        "autocorrect":field.traits.autocorrect,
+        "smartDashesType":field.traits.smart_dashes_type.flutter_index(),
+        "smartQuotesType":field.traits.smart_quotes_type.flutter_index(),
         "enableSuggestions":field.traits.enable_suggestions,
         "enableInteractiveSelection":field.traits.enable_interactive_selection,
         "actionLabel":Value::Null, "inputAction":format!("TextInputAction.{action}"),
         "textCapitalization":format!("TextCapitalization.{capitalization}"), "keyboardAppearance":keyboard,
         "enableIMEPersonalizedLearning":field.traits.enable_ime_personalized_learning,
         "contentCommitMimeTypes":[], "enableDeltaModel":false, "hintLocales":hint_locales,
-        "enableInlinePrediction":true,
+        "enableInlinePrediction":field.traits.enable_inline_prediction,
     }).as_object().expect("text input options object").clone()
 }

@@ -1692,3 +1692,9 @@ packages/flutter/test/widgets/editable_text_test.dart	16997	tapping on a misspel
 packages/flutter/test/widgets/text_selection_test.dart	959	Touch drag moves the cursor	paired-match	upstream-android-touch-caret.md
 packages/flutter/test/widgets/editable_text_test.dart	1527	hintLocales is sent to the engine	paired-match	upstream-ime-hint-locales.md
 packages/flutter/test/widgets/editable_text_test.dart	16448	Spell check disabled when spell check configuration specified but no default spell check service available	partial-match	upstream-default-spell-provider.md
+packages/flutter/test/services/text_input_test.dart	593	enableInlinePrediction serializes to JSON	paired-match	upstream-smart-keyboard-options.md
+packages/flutter/test/widgets/editable_text_test.dart	1561	enableInlinePrediction is sent to the engine properly	paired-match	upstream-smart-keyboard-options.md
+packages/flutter/test/widgets/editable_text_test.dart	1589	enableInlinePrediction defaults to null in engine args	paired-match	upstream-smart-keyboard-options.md
+packages/flutter/test/widgets/editable_text_test.dart	1619	sent to the engine properly	paired-match	upstream-smart-keyboard-options.md
+packages/flutter/test/widgets/editable_text_test.dart	1657	default to true when obscureText is false	paired-match	upstream-smart-keyboard-options.md
+packages/flutter/test/widgets/editable_text_test.dart	1685	default to false when obscureText is true	paired-match	upstream-smart-keyboard-options.md

@@ -359,6 +359,20 @@ pub struct AutofillFieldConfiguration {
 }
 
 impl AutofillFieldConfiguration {
+    /// Encodes a plain `TextInput.setClient` without a scoped field list.
+    pub fn encode_set_client(
+        &self,
+        client: TextInputClientId,
+    ) -> Result<Vec<u8>, AutofillMessageError> {
+        let mut config = self.to_json()?;
+        config.remove("fields");
+        Ok(JsonMethodCodec::encode_method_call(&MethodCall {
+            method: "TextInput.setClient".into(),
+            arguments: json!([client.get(), config]),
+        })?)
+    }
+
+
     fn to_json(&self) -> Result<Map<String, Value>, AutofillMessageError> {
         let mut cfg = self.input.clone();
         if let Some(autofill) = self.autofill.to_json()? {

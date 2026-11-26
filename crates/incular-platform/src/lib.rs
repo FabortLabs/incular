@@ -646,12 +646,54 @@ pub enum TextCapitalization {
     None,
 }
 
+/// Flutter's keyboard substitution policy for straight dashes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SmartDashesType {
+    Disabled,
+    #[default]
+    Enabled,
+}
+
+/// Flutter's keyboard substitution policy for straight quotes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SmartQuotesType {
+    Disabled,
+    #[default]
+    Enabled,
+}
+
+impl SmartDashesType {
+    /// Flutter's wire index is a decimal string.
+    #[must_use]
+    pub const fn flutter_index(self) -> &'static str {
+        match self {
+            Self::Disabled => "0",
+            Self::Enabled => "1",
+        }
+    }
+}
+
+impl SmartQuotesType {
+    /// Flutter's wire index is a decimal string.
+    #[must_use]
+    pub const fn flutter_index(self) -> &'static str {
+        match self {
+            Self::Disabled => "0",
+            Self::Enabled => "1",
+        }
+    }
+}
+
 /// The keyboard hints of Flutter's `TextInputConfiguration` beyond the
 /// input type and action. The defaults are Flutter's.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TextInputTraits {
     /// Whether the platform corrects spelling as the user types.
     pub autocorrect: bool,
+    pub smart_dashes_type: SmartDashesType,
+    pub smart_quotes_type: SmartQuotesType,
+    /// When absent, the embedder supplies its own inline prediction behavior.
+    pub enable_inline_prediction: Option<bool>,
     /// Whether the keyboard shows suggestions.
     pub enable_suggestions: bool,
     /// Whether the user may move the selection and use the clipboard.
@@ -675,6 +717,9 @@ impl Default for TextInputTraits {
     fn default() -> Self {
         Self {
             autocorrect: true,
+            smart_dashes_type: SmartDashesType::Enabled,
+            smart_quotes_type: SmartQuotesType::Enabled,
+            enable_inline_prediction: None,
             enable_suggestions: true,
             enable_interactive_selection: true,
             text_capitalization: TextCapitalization::None,

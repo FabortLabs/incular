@@ -1067,6 +1067,9 @@ pub struct EditableText {
     paragraph_layout: bool,
     /// `None` resolves like Flutter's `_inferAutocorrect`.
     autocorrect: Option<bool>,
+    smart_dashes_type: Option<crate::SmartDashesType>,
+    smart_quotes_type: Option<crate::SmartQuotesType>,
+    enable_inline_prediction: Option<bool>,
     enable_suggestions: bool,
     /// `None` resolves to `!read_only || !obscure_text`.
     enable_interactive_selection: Option<bool>,
@@ -1128,6 +1131,9 @@ impl EditableText {
             locale: None,
             paragraph_layout: false,
             autocorrect: None,
+            smart_dashes_type: None,
+            smart_quotes_type: None,
+            enable_inline_prediction: None,
             enable_suggestions: true,
             enable_interactive_selection: None,
             text_capitalization: incular_platform::TextCapitalization::None,
@@ -1609,6 +1615,30 @@ impl EditableText {
         self
     }
 
+    /// Flutter's `smartDashesType`. By default it is off for obscured text
+    /// and on for other editors.
+    #[must_use]
+    pub fn smart_dashes_type(mut self, policy: crate::SmartDashesType) -> Self {
+        self.smart_dashes_type = Some(policy);
+        self
+    }
+
+    /// Flutter's `smartQuotesType`. By default it is off for obscured text
+    /// and on for other editors.
+    #[must_use]
+    pub fn smart_quotes_type(mut self, policy: crate::SmartQuotesType) -> Self {
+        self.smart_quotes_type = Some(policy);
+        self
+    }
+
+    /// Flutter's optional `enableInlinePrediction`. Leaving it unset is
+    /// different from explicitly enabling or disabling the host feature.
+    #[must_use]
+    pub fn enable_inline_prediction(mut self, enabled: impl Into<Option<bool>>) -> Self {
+        self.enable_inline_prediction = enabled.into();
+        self
+    }
+
     /// Flutter's `hintLocales`: the requested languages for the soft keyboard.
     /// These do not change the editor's own locale. `None` leaves it up to the
     /// keyboard; an empty list explicitly requests no language hints.
@@ -1789,6 +1819,17 @@ impl From<EditableText> for Widget {
                 autocorrect: value
                     .autocorrect
                     .unwrap_or_else(|| infer_autocorrect(value.autofill_hints.as_deref())),
+                smart_dashes_type: value.smart_dashes_type.unwrap_or(if value.obscure_text {
+                    crate::SmartDashesType::Disabled
+                } else {
+                    crate::SmartDashesType::Enabled
+                }),
+                smart_quotes_type: value.smart_quotes_type.unwrap_or(if value.obscure_text {
+                    crate::SmartQuotesType::Disabled
+                } else {
+                    crate::SmartQuotesType::Enabled
+                }),
+                enable_inline_prediction: value.enable_inline_prediction,
                 enable_suggestions: value.enable_suggestions,
                 enable_interactive_selection: keyboard_selection_enabled && can_select_with_pointer,
                 text_capitalization: value.text_capitalization,
