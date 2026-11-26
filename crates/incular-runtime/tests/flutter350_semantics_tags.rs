@@ -574,3 +574,73 @@ fn grid_scroll_count_counts_tiles_not_materialized_rows() {
         assert_eq!(metrics.first_visible_index, Some(first));
     }
 }
+
+#[test]
+fn resizing_and_persistent_headers_have_distinct_scroll_exclusion_rules() {
+    use incular_widgets::{
+        CustomScrollView, Directionality, ScrollController, Sliver, SliverHeaderScrollBehavior,
+        SliverPersistentHeader, SliverResizingHeader, SliverToBoxAdapter, TextDirection, Viewport,
+    };
+
+    for variant in 0..3 {
+        let persistent = variant != 0;
+        let controller = ScrollController::new();
+        let label = || {
+            Semantics::new(SizedBox::new().height(300.))
+                .container(true)
+                .label("header")
+        };
+        let header: Box<dyn Sliver> = match variant {
+            0 => Box::new(SliverResizingHeader::new(300., 300., label())),
+            1 => Box::new(SliverPersistentHeader::new(300., label()).pinned(true)),
+            _ => Box::new(
+                SliverResizingHeader::with_delegate(300., 300., move |_, _| label())
+                    .scroll_behavior(SliverHeaderScrollBehavior::Pinned),
+            ),
+        };
+        let slivers: [Box<dyn Sliver>; 3] = [
+            Box::new(SliverToBoxAdapter::new(SizedBox::new().height(100.))),
+            header,
+            Box::new(SliverToBoxAdapter::new(
+                Semantics::new(SizedBox::new().height(1600.)).label("content"),
+            )),
+        ];
+        let mut runtime = Runtime::new(
+            Directionality::new(
+                TextDirection::Ltr,
+                CustomScrollView::new(slivers).controller(controller.clone()),
+            )
+            .into(),
+        )
+        .unwrap();
+        let surface = Constraints::tight(Size::new(800., 600.));
+        runtime.run_frame(surface).unwrap();
+        let mut retained_id = None;
+        for offset in [0_f32, 99., 100., 101., 400., 100., 0.] {
+            let _ = controller.jump_to(offset);
+            runtime.run_frame(surface).unwrap();
+            let tree = runtime.tree().semantics();
+            let outer = tree.node(tree.root().unwrap()).unwrap();
+            let pane = tree.node(outer.children[0]).unwrap();
+            let header = tree
+                .iter()
+                .map(|(_, node)| node)
+                .find(|node| node.label.as_deref() == Some("header"))
+                .unwrap();
+            let excluded = persistent || offset > 100.;
+            assert_eq!(header.bounds.origin.y, (100. - offset).max(0.));
+            assert_eq!(header.bounds.size, Size::new(800., 300.));
+            assert!(header.is_tagged(Viewport::use_two_pane_semantics_tag()));
+            assert_eq!(
+                header.is_tagged(Viewport::exclude_from_scrolling_tag()),
+                excluded
+            );
+            assert_eq!(outer.children.contains(&header.id), excluded);
+            assert_eq!(pane.children.contains(&header.id), !excluded);
+            if let Some(id) = retained_id {
+                assert_eq!(header.id, id);
+            }
+            retained_id = Some(header.id);
+        }
+    }
+}

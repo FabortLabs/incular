@@ -1536,7 +1536,7 @@ impl RenderSliver for HeaderRenderSliver {
             geometry,
             children: vec![SliverChildLayout {
                 id: SliverChildId(0),
-                widget: self.child.clone(),
+                widget: self.child.clone().with_sliver_scroll_exclusion(self.pinned),
                 semantic_index: None,
                 offset: 0.,
                 cross_offset: 0.,
@@ -2141,6 +2141,12 @@ impl RenderSliver for ResizingHeaderRenderSliver {
             }
             None => self.child.clone(),
         };
+        // A pinned persistent delegate is always outside the scroll pane.
+        // SliverResizingHeader itself is excluded only once pinned paint
+        // outlives its scrolling layout extent.
+        let excluded = self.scroll_behavior == SliverHeaderScrollBehavior::Pinned
+            && (self.delegate.is_some() || geometry.layout_extent < current);
+        let widget = widget.with_sliver_scroll_exclusion(excluded);
         SliverLayout {
             geometry,
             children: vec![SliverChildLayout {

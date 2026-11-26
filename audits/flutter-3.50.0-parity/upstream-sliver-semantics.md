@@ -316,3 +316,16 @@ extent in viewport coordinates, rather than the single viewport-wide
 rectangle. The scroll index uses the pre-sort child order: a reversed
 viewport can have a different reading order without reporting its
 last visible item as its first. All 21 focused Rust tests passed.
+
+### Resizing and persistent header policies
+
+The pinned upstream `sliver_resizing_header_test.dart:401`, paired
+authored header probe, and retained tests use a 300-pixel header
+after a 100-pixel spacer. The resizing renderer stays in the
+scrolling pane at offsets 99 and 100, then moves out at 101 while
+keeping the same node ID and 800×300 rectangle. Scrolling back
+restores it. A pinned persistent header is excluded even at
+offset zero. Incular checks both its fixed and delegate-based
+persistent header forms. The 18 focused Rust cases passed.
+The upstream resizing case is partial because it additionally
+asserts Flutter's separately tagged render wrapper.
