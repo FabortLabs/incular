@@ -10,7 +10,7 @@ pub use incular_gestures::{
     FocusHighlightStrategy, ForcePressDetails, ForcePressGestureRecognizer, GestureAction,
     GestureArena, GestureArenaEntry, GestureArenaKey, GestureArenaMember, GestureCallbacks,
     GestureDecision, GestureDisposition, GestureRecognizer, LongPressDownDetails,
-    LongPressEndDetails, LongPressMoveUpdateDetails, LongPressStartDetails, PointerButtonClass,
+    LongPressEndDetails, LongPressGestureRecognizer, LongPressMoveUpdateDetails, LongPressStartDetails, PointerButtonClass,
     PointerDeviceKind, PointerEvent, PointerGestureRecognizer, ScaleEndDetails,
     ScaleGestureDetector, ScaleStartDetails, ScaleUpdateDetails, ShortcutKey, ShortcutMatch,
     Shortcuts, TapDownDetails, TapMoveDetails, TapUpDetails, Velocity,

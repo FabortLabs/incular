@@ -129,3 +129,17 @@ The exact :427 registration passed again on the pinned SDK. The mounted
 runtime test reruns the whole rejecting stream, then starts and ends the next
 accepted press on the same detector; it passed with the five other focused
 long-press controls. The historic failure is no longer the current ledger value.
+
+## Direct long-press arena checkpoints
+
+Six pinned originals now pair with the standalone Rust recognizer:
+`gestures/long_press_test.dart:61,75,91,106,204,365`. Registration
+and closing the pointer's arena are independently silent. Routing
+the actual down reports Down, and only the deadline can start the
+hold. The 100 ms override, early release, pre-accept slop, unsupported
+chord, and post-accept 100 × 200 move/release each match at every
+checkpoint. Dispose reports no synthetic event.
+
+Six direct tests, 18 timing/tap controls and six mounted long-press
+regressions passed. This compares the direct single-recognizer
+lifecycle; it does not claim a new raw multi-member-arena adapter.
