@@ -349,6 +349,7 @@ impl TextStyle {
     pub fn with_font_size(&self, size: f32) -> Self {
         let mut s = self.clone();
         s.size = size.max(0.0);
+        s.has_explicit_size = true;
         s
     }
 
@@ -356,6 +357,7 @@ impl TextStyle {
     pub fn with_font_weight(&self, weight: FontWeight) -> Self {
         let mut s = self.clone();
         s.weight = weight;
+        s.has_explicit_weight = true;
         s
     }
 
@@ -574,70 +576,118 @@ impl TextStyle {
 
 impl Lerp for TextStyle {
     fn lerp(&self, other: &Self, t: f32) -> Self {
+        if std::ptr::eq(self, other) {
+            return self.clone();
+        }
         let font_variations = lerp_font_variation_settings(
             self.font_variations.as_ref(),
             other.font_variations.as_ref(),
             t,
         );
+        let mix = |left: f32, right: f32| left.lerp(&right, t);
+        let mix_optional = |left: Option<f32>, right: Option<f32>| match (left, right) {
+            (Some(left), Some(right)) => Some(mix(left, right)),
+            (left, right) => left.or(right),
+        };
         let t = t.clamp(0.0, 1.0);
-        let mix = |left: f32, right: f32| left + (right - left) * t;
+        let endpoint = if t < 0.5 { self } else { other };
+        let size = |style: &Self| {
+            // Direct struct initializers are also supported by Incular.
+            (style.has_explicit_size || style.size != WidgetDefaults::DEFAULT.text_size)
+                .then_some(style.size)
+        };
+        let spacing = |style: &Self| {
+            (style.has_explicit_letter_spacing || style.letter_spacing != 0.0)
+                .then_some(style.letter_spacing)
+        };
+        let plain_color = |style: &Self| {
+            (style.has_explicit_color || style.color != Color::WHITE).then_some(style.color)
+        };
         // Flutter switches Paint objects at the midpoint. When mixing paint
         // and simple color, the simple endpoint is promoted to solid paint.
-        let foreground = (self.foreground.is_some() || other.foreground.is_some()).then(|| {
-            let endpoint = if t < 0.5 { self } else { other };
-            endpoint.effective_foreground_color()
-        });
+        let foreground = (self.foreground.is_some() || other.foreground.is_some())
+            .then(|| endpoint.effective_foreground_color());
         let uses_background_paint = self.background.is_some() || other.background.is_some();
-        let background = if uses_background_paint {
-            let endpoint = if t < 0.5 { self } else { other };
-            endpoint.effective_background_color()
-        } else {
-            None
-        };
+        let background = uses_background_paint
+            .then(|| endpoint.effective_background_color())
+            .flatten();
         let fade = |color: Color, amount: f32| Color {
             alpha: (f32::from(color.alpha) * amount).round() as u8,
             ..color
         };
+        let mix_color = |left: Option<Color>, right: Option<Color>| match (left, right) {
+            (Some(left), Some(right)) => Some(left.lerp(&right, t)),
+            (Some(left), None) => Some(fade(left, 1.0 - t)),
+            (None, Some(right)) => Some(fade(right, t)),
+            (None, None) => None,
+        };
+        let color = foreground
+            .is_none()
+            .then(|| mix_color(plain_color(self), plain_color(other)))
+            .flatten();
+        let size = mix_optional(size(self), size(other));
+        let letter_spacing = mix_optional(spacing(self), spacing(other));
+        #[cfg(debug_assertions)]
+        if self.inherit != other.inherit {
+            let fields = [
+                ("color", foreground.is_none() && color.is_none()),
+                (
+                    "backgroundColor",
+                    !uses_background_paint
+                        && self.background_color.is_none()
+                        && other.background_color.is_none(),
+                ),
+                ("fontSize", size.is_none()),
+                ("letterSpacing", letter_spacing.is_none()),
+                (
+                    "wordSpacing",
+                    self.word_spacing.is_none() && other.word_spacing.is_none(),
+                ),
+                (
+                    "height",
+                    self.line_height.is_none() && other.line_height.is_none(),
+                ),
+                (
+                    "decorationColor",
+                    self.decoration_color.is_none() && other.decoration_color.is_none(),
+                ),
+                (
+                    "decorationThickness",
+                    self.decoration_thickness.is_none() && other.decoration_thickness.is_none(),
+                ),
+            ];
+            if fields.iter().any(|&(_, missing)| missing) {
+                let unspecified: Vec<_> = fields
+                    .into_iter()
+                    .filter_map(|(name, missing)| missing.then_some(name))
+                    .collect();
+                panic!(
+                    "Failed to interpolate TextStyles with different inherit values. \
+                     Unspecified in both TextStyles: {}.",
+                    unspecified.join(", "),
+                );
+            }
+        }
         Self {
-            inherit: if t < 0.5 { self.inherit } else { other.inherit },
-            has_explicit_color: foreground.is_none()
-                && (self.has_explicit_color || other.has_explicit_color),
-            has_explicit_size: self.has_explicit_size || other.has_explicit_size,
+            inherit: endpoint.inherit,
+            has_explicit_color: foreground.is_none() && color.is_some(),
+            has_explicit_size: size.is_some(),
             has_explicit_weight: self.has_explicit_weight || other.has_explicit_weight,
-            has_explicit_style: self.has_explicit_style || other.has_explicit_style,
-            has_explicit_family: self.has_explicit_family || other.has_explicit_family,
-            has_explicit_fallback_families: if t < 0.5 {
-                self.has_explicit_fallback_families || !self.fallback_families.is_empty()
-            } else {
-                other.has_explicit_fallback_families || !other.fallback_families.is_empty()
-            },
-            has_explicit_letter_spacing: self.has_explicit_letter_spacing
-                || other.has_explicit_letter_spacing
-                || self.letter_spacing != 0.0
-                || other.letter_spacing != 0.0,
-            family: if t < 0.5 {
-                self.family.clone()
-            } else {
-                other.family.clone()
-            },
-            fallback_families: if t < 0.5 {
-                self.fallback_families.clone()
-            } else {
-                other.fallback_families.clone()
-            },
-            size: mix(self.size, other.size),
+            has_explicit_style: endpoint.has_explicit_style,
+            has_explicit_family: endpoint.has_explicit_family,
+            has_explicit_fallback_families: endpoint.has_explicit_fallback_families
+                || !endpoint.fallback_families.is_empty(),
+            has_explicit_letter_spacing: letter_spacing.is_some(),
+            family: endpoint.family.clone(),
+            fallback_families: endpoint.fallback_families.clone(),
+            size: size.unwrap_or(WidgetDefaults::DEFAULT.text_size),
             weight: self.weight.lerp(&other.weight, t),
-            style: if t < 0.5 { self.style } else { other.style },
-            color: foreground.unwrap_or_else(|| self.color.lerp(&other.color, t)),
+            style: endpoint.style,
+            color: foreground.or(color).unwrap_or(Color::WHITE),
             background_color: if uses_background_paint {
                 None
             } else {
-                match (self.background_color, other.background_color) {
-                    (Some(a), Some(b)) => Some(a.lerp(&b, t)),
-                    (Some(a), None) => Some(fade(a, 1. - t)),
-                    (None, Some(b)) => Some(fade(b, t)),
-                    (None, None) => None,
-                }
+                mix_color(self.background_color, other.background_color)
             },
             line_height: match (self.line_height, other.line_height) {
                 (Some(LineHeight::Multiplier(a)), Some(LineHeight::Multiplier(b))) => {
@@ -653,29 +703,10 @@ impl Lerp for TextStyle {
                         Some(b)
                     }
                 }
-                (Some(a), None) => {
-                    if t < 0.5 {
-                        Some(a)
-                    } else {
-                        None
-                    }
-                }
-                (None, Some(b)) => {
-                    if t >= 0.5 {
-                        Some(b)
-                    } else {
-                        None
-                    }
-                }
-                (None, None) => None,
+                (a, b) => a.or(b),
             },
-            letter_spacing: mix(self.letter_spacing, other.letter_spacing),
-            word_spacing: match (self.word_spacing, other.word_spacing) {
-                (Some(left), Some(right)) => Some(mix(left, right)),
-                (Some(left), None) => Some(mix(left, 0.0)),
-                (None, Some(right)) => Some(mix(0.0, right)),
-                (None, None) => None,
-            },
+            letter_spacing: letter_spacing.unwrap_or(0.0),
+            word_spacing: mix_optional(self.word_spacing, other.word_spacing),
             text_baseline: if t < 0.5 {
                 self.text_baseline
             } else {
@@ -709,35 +740,16 @@ impl Lerp for TextStyle {
             } else {
                 other.decoration
             },
-            decoration_color: match (self.decoration_color, other.decoration_color) {
-                (Some(a), Some(b)) => Some(a.lerp(&b, t)),
-                (Some(a), None) => {
-                    if t < 0.5 {
-                        Some(a)
-                    } else {
-                        None
-                    }
-                }
-                (None, Some(b)) => {
-                    if t >= 0.5 {
-                        Some(b)
-                    } else {
-                        None
-                    }
-                }
-                (None, None) => None,
-            },
+            decoration_color: mix_color(self.decoration_color, other.decoration_color),
             decoration_style: if t < 0.5 {
                 self.decoration_style
             } else {
                 other.decoration_style
             },
-            decoration_thickness: match (self.decoration_thickness, other.decoration_thickness) {
-                (Some(a), Some(b)) => Some(mix(a, b)),
-                (Some(a), None) => Some(mix(a, 0.0)),
-                (None, Some(b)) => Some(mix(0.0, b)),
-                (None, None) => None,
-            },
+            decoration_thickness: mix_optional(
+                self.decoration_thickness,
+                other.decoration_thickness,
+            ),
             debug_label: if t < 0.5 {
                 self.debug_label.clone()
             } else {

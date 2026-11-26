@@ -1518,3 +1518,6 @@ packages/flutter/test/painting/text_style_test.dart	506	TextStyle foreground and
 packages/flutter/test/painting/text_style_test.dart	547	backgroundColor	partial-match	upstream-text-paint.md#solid-run-backgrounds
 packages/flutter/test/painting/text_style_test.dart	562	TextStyle background and backgroundColor combos	paired-match	upstream-text-paint.md#solid-run-backgrounds
 packages/flutter/test/painting/text_style_test.dart	743	lerpFontVariations	paired-match	upstream-text-paint.md#variable-font-axes-during-animation
+packages/flutter/test/painting/text_style_test.dart	711	TextStyle.lerp identical a,b	partial-match	upstream-text-style-tween.md
+packages/flutter/test/painting/text_style_test.dart	717	Throws when lerping between inherit:true and inherit:false with unspecified fields	paired-match	upstream-text-style-tween.md
+packages/flutter/test/painting/text_style_test.dart	724	Does not throw when lerping between inherit:true and inherit:false but fully specified styles	paired-match	upstream-text-style-tween.md
