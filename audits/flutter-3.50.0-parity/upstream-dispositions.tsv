@@ -89,7 +89,7 @@ packages/flutter/test/widgets/wrap_test.dart	1045	Wrap does not crash at zero ar
 packages/flutter/test/painting/alignment_test.dart	117	AlignmentGeometry.resolve()	paired-match	upstream-geometry-input-gestures.md
 packages/flutter/test/painting/alignment_test.dart	338	AlignmentGeometry factories	partial-match	upstream-geometry-input-gestures.md
 packages/flutter/test/painting/alignment_test.dart	343	AlignmentGeometry static members	partial-match	upstream-geometry-input-gestures.md
-packages/flutter/test/painting/edge_insets_test.dart	12	EdgeInsets constructors	partial-match	upstream-geometry-input-gestures.md
+packages/flutter/test/painting/edge_insets_test.dart	12	EdgeInsets constructors	paired-match	upstream-edge-insets.md
 packages/flutter/test/painting/edge_insets_test.dart	41	EdgeInsetsDirectional constructors	paired-match	upstream-geometry-input-gestures.md
 packages/flutter/test/painting/edge_insets_test.dart	134	EdgeInsets.resolve()	paired-match	upstream-geometry-input-gestures.md
 packages/flutter/test/services/text_input_test.dart	55	reversed selection deletion	paired-match	upstream-geometry-input-gestures.md
@@ -1973,3 +1973,9 @@ packages/flutter_tools/test/commands.shard/hermetic/widget_preview/lsp_preview_d
 packages/flutter/test/foundation/change_notifier_test.dart	64	ChangeNotifier can not dispose in callback	paired-match	upstream-opacity-hover-flex-notifier-futures.md#notifier-disposal-diagnostics-and-composition
 packages/flutter/test/foundation/change_notifier_test.dart	415	Listenable.merge toString	partial-match	upstream-opacity-hover-flex-notifier-futures.md#notifier-disposal-diagnostics-and-composition
 packages/flutter/test/foundation/change_notifier_test.dart	480	ChangeNotifier as a mixin	partial-match	upstream-opacity-hover-flex-notifier-futures.md#notifier-disposal-diagnostics-and-composition
+packages/flutter/test/painting/edge_insets_test.dart	80	EdgeInsets control test	partial-match	upstream-edge-insets.md
+packages/flutter/test/painting/edge_insets_test.dart	115	EdgeInsets.lerp()	paired-match	upstream-edge-insets.md
+packages/flutter/test/painting/edge_insets_test.dart	228	EdgeInsets copyWith	paired-match	upstream-edge-insets.md
+packages/flutter/test/painting/edge_insets_test.dart	358	EdgeInsets operators	paired-match	upstream-edge-insets.md
+packages/flutter/test/painting/edge_insets_test.dart	370	EdgeInsetsDirectional operators	paired-match	upstream-edge-insets.md
+packages/flutter/test/painting/edge_insets_test.dart	423	EdgeInsetsDirectional copyWith	paired-match	upstream-edge-insets.md

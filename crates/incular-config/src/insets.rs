@@ -1,5 +1,5 @@
-use incular_core::finite_non_negative;
-use std::ops::{Add, AddAssign, Sub, SubAssign};
+use incular_core::{Lerp, Offset, Rect, Size, finite_non_negative};
+use std::ops::{Add, AddAssign, Rem, Sub, SubAssign};
 
 /// Insets on the four physical edges of a rectangle.
 ///
@@ -76,6 +76,128 @@ impl EdgeInsets {
     #[must_use]
     pub const fn from_ltrb(left: f32, top: f32, right: f32, bottom: f32) -> Self {
         Self::only(left, top, right, bottom)
+    }
+
+    /// Physical edges are independent of the reading direction.
+    #[must_use]
+    pub const fn resolve(self, _direction: crate::TextDirection) -> Self {
+        self
+    }
+
+    /// Copies the insets, replacing only the supplied physical edges.
+    #[must_use]
+    pub fn copy_with(
+        self,
+        left: Option<f32>,
+        top: Option<f32>,
+        right: Option<f32>,
+        bottom: Option<f32>,
+    ) -> Self {
+        Self::from_ltrb(
+            left.unwrap_or(self.left),
+            top.unwrap_or(self.top),
+            right.unwrap_or(self.right),
+            bottom.unwrap_or(self.bottom),
+        )
+    }
+
+    /// Interpolates missing endpoints from zero.
+    #[must_use]
+    pub fn lerp_optional(begin: Option<Self>, end: Option<Self>, t: f32) -> Option<Self> {
+        lerp_insets(begin, end, t)
+    }
+
+    #[must_use]
+    pub const fn top_left(self) -> Offset {
+        Offset::new(self.left, self.top)
+    }
+
+    #[must_use]
+    pub const fn top_right(self) -> Offset {
+        Offset::new(-self.right, self.top)
+    }
+
+    #[must_use]
+    pub const fn bottom_left(self) -> Offset {
+        Offset::new(self.left, -self.bottom)
+    }
+
+    #[must_use]
+    pub const fn bottom_right(self) -> Offset {
+        Offset::new(-self.right, -self.bottom)
+    }
+
+    /// Total insets along the selected axis.
+    #[must_use]
+    pub const fn along(self, axis: crate::Axis) -> f32 {
+        match axis {
+            crate::Axis::Horizontal => self.horizontal(),
+            crate::Axis::Vertical => self.vertical(),
+        }
+    }
+
+    /// Exchanges both pairs of opposite edges.
+    #[must_use]
+    pub const fn flipped(self) -> Self {
+        Self::from_ltrb(self.right, self.bottom, self.left, self.top)
+    }
+
+    /// Total horizontal and vertical insets as a valid render size.
+    #[must_use]
+    pub fn collapsed_size(self) -> Option<Size> {
+        Size::maybe_new(self.horizontal(), self.vertical())
+    }
+
+    /// Adds the inset totals to a size, rejecting invalid render extents.
+    #[must_use]
+    pub fn inflate_size(self, size: Size) -> Option<Size> {
+        Size::maybe_new(
+            size.width + self.horizontal(),
+            size.height + self.vertical(),
+        )
+    }
+
+    /// Removes the inset totals from a size, rejecting invalid render extents.
+    #[must_use]
+    pub fn deflate_size(self, size: Size) -> Option<Size> {
+        (-self).inflate_size(size)
+    }
+
+    /// Expands a rectangle outwards by each corresponding physical edge.
+    /// A result with negative or non-finite extents is not a render rectangle.
+    #[must_use]
+    pub fn inflate_rect(self, rect: Rect) -> Option<Rect> {
+        let origin = Offset::new(rect.origin.x - self.left, rect.origin.y - self.top);
+        let end = Offset::new(
+            rect.origin.x + rect.size.width + self.right,
+            rect.origin.y + rect.size.height + self.bottom,
+        );
+        if !origin.x.is_finite() || !origin.y.is_finite() {
+            return None;
+        }
+        let size = Size::maybe_new(end.x - origin.x, end.y - origin.y)?;
+        Some(Rect::from_origin_size(origin, size))
+    }
+
+    /// Moves each physical edge inward, rejecting invalid render extents.
+    #[must_use]
+    pub fn deflate_rect(self, rect: Rect) -> Option<Rect> {
+        (-self).inflate_rect(rect)
+    }
+
+    /// Divides each edge and truncates toward zero (Flutter's integer division).
+    ///
+    /// # Panics
+    /// Panics if any quotient is non-finite.
+    #[must_use]
+    pub fn truncating_div(self, divisor: f32) -> Self {
+        let div = |edge| truncate_edge_quotient(edge, divisor);
+        Self::from_ltrb(
+            div(self.left),
+            div(self.top),
+            div(self.right),
+            div(self.bottom),
+        )
     }
 
     #[must_use]
@@ -216,6 +338,19 @@ impl std::ops::Div<f32> for EdgeInsets {
     }
 }
 
+impl Rem<f32> for EdgeInsets {
+    type Output = Self;
+
+    fn rem(self, rhs: f32) -> Self {
+        Self::from_ltrb(
+            self.left.rem_euclid(rhs),
+            self.top.rem_euclid(rhs),
+            self.right.rem_euclid(rhs),
+            self.bottom.rem_euclid(rhs),
+        )
+    }
+}
+
 impl std::ops::Neg for EdgeInsets {
     type Output = Self;
 
@@ -296,6 +431,50 @@ impl EdgeInsetsDirectional {
         Self::only(start, top, end, bottom)
     }
 
+    /// Creates insets in start, top, end, bottom order.
+    #[must_use]
+    pub const fn from_steb(start: f32, top: f32, end: f32, bottom: f32) -> Self {
+        Self::only(start, top, end, bottom)
+    }
+
+    /// Copies the insets, replacing only the supplied directional edges.
+    #[must_use]
+    pub fn copy_with(
+        self,
+        start: Option<f32>,
+        top: Option<f32>,
+        end: Option<f32>,
+        bottom: Option<f32>,
+    ) -> Self {
+        Self::from_steb(
+            start.unwrap_or(self.start),
+            top.unwrap_or(self.top),
+            end.unwrap_or(self.end),
+            bottom.unwrap_or(self.bottom),
+        )
+    }
+
+    /// Divides each edge and truncates toward zero (Flutter's integer division).
+    ///
+    /// # Panics
+    /// Panics if any quotient is non-finite.
+    #[must_use]
+    pub fn truncating_div(self, divisor: f32) -> Self {
+        let div = |edge| truncate_edge_quotient(edge, divisor);
+        Self::from_steb(
+            div(self.start),
+            div(self.top),
+            div(self.end),
+            div(self.bottom),
+        )
+    }
+
+    /// Interpolates missing endpoints from zero.
+    #[must_use]
+    pub fn lerp_optional(begin: Option<Self>, end: Option<Self>, t: f32) -> Option<Self> {
+        lerp_insets(begin, end, t)
+    }
+
     #[must_use]
     pub const fn resolve(self, direction: crate::TextDirection) -> EdgeInsets {
         match direction {
@@ -371,6 +550,27 @@ impl std::ops::Div<f32> for EdgeInsetsDirectional {
     }
 }
 
+impl Rem<f32> for EdgeInsetsDirectional {
+    type Output = Self;
+
+    fn rem(self, rhs: f32) -> Self {
+        Self::from_steb(
+            self.start.rem_euclid(rhs),
+            self.top.rem_euclid(rhs),
+            self.end.rem_euclid(rhs),
+            self.bottom.rem_euclid(rhs),
+        )
+    }
+}
+
+impl std::ops::Neg for EdgeInsetsDirectional {
+    type Output = Self;
+
+    fn neg(self) -> Self {
+        Self::from_steb(-self.start, -self.top, -self.end, -self.bottom)
+    }
+}
+
 /// Flutter `EdgeInsetsDirectional.lerp`: unclamped like [`EdgeInsets`].
 impl incular_core::Lerp for EdgeInsetsDirectional {
     fn lerp(&self, other: &Self, t: f32) -> Self {
@@ -382,4 +582,23 @@ impl incular_core::Lerp for EdgeInsetsDirectional {
             mix(self.bottom, other.bottom),
         )
     }
+}
+
+fn lerp_insets<T: Lerp + std::ops::Mul<f32, Output = T>>(
+    begin: Option<T>,
+    end: Option<T>,
+    t: f32,
+) -> Option<T> {
+    match (begin, end) {
+        (None, None) => None,
+        (Some(a), None) => Some(a * (1.0 - t)),
+        (None, Some(b)) => Some(b * t),
+        (Some(a), Some(b)) => Some(a.lerp(&b, t)),
+    }
+}
+
+fn truncate_edge_quotient(edge: f32, divisor: f32) -> f32 {
+    let quotient = edge / divisor;
+    assert!(quotient.is_finite(), "non-finite inset division");
+    quotient.trunc()
 }
