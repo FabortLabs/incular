@@ -38,23 +38,23 @@ impl PartialEq for CustomActionBinding {
     }
 }
 
-pub(crate) type SemanticPayloadCallback = Rc<dyn Fn(SemanticAction) + 'static>;
+pub(crate) type BoundSemanticCallback = Rc<dyn Fn(SemanticAction) + 'static>;
 
 #[derive(Clone)]
-pub(crate) struct SemanticPayloadBinding {
+pub(crate) struct BoundSemanticAction {
     pub(crate) kind: SemanticActionKind,
-    pub(crate) callback: SemanticPayloadCallback,
+    pub(crate) callback: BoundSemanticCallback,
 }
 
-impl std::fmt::Debug for SemanticPayloadBinding {
+impl std::fmt::Debug for BoundSemanticAction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("SemanticPayloadBinding")
+        f.debug_tuple("BoundSemanticAction")
             .field(&self.kind)
             .finish()
     }
 }
 
-impl PartialEq for SemanticPayloadBinding {
+impl PartialEq for BoundSemanticAction {
     fn eq(&self, other: &Self) -> bool {
         self.kind == other.kind && Rc::ptr_eq(&self.callback, &other.callback)
     }
@@ -76,7 +76,7 @@ pub struct Semantics {
     #[builder(default, setter(skip))]
     custom_actions: Vec<CustomActionBinding>,
     #[builder(default, setter(skip))]
-    payload_callbacks: Vec<SemanticPayloadBinding>,
+    bound_callbacks: Vec<BoundSemanticAction>,
     #[builder(default)]
     on_tap: Option<Rc<dyn Fn() + 'static>>,
     #[builder(default)]
@@ -149,7 +149,7 @@ impl Semantics {
             description: None,
             actions: Vec::new(),
             custom_actions: Vec::new(),
-            payload_callbacks: Vec::new(),
+            bound_callbacks: Vec::new(),
             on_tap: None,
             on_increase: None,
             on_decrease: None,
@@ -589,7 +589,7 @@ impl Semantics {
     /// This handler does not require or mutate an editable child.
     #[must_use]
     pub fn on_set_text(self, callback: impl Fn(String) + 'static) -> Self {
-        self.with_payload_callback(SemanticAction::SetText(String::new()), move |action| {
+        self.with_bound_callback(SemanticAction::SetText(String::new()), move |action| {
             if let SemanticAction::SetText(text) = action {
                 callback(text);
             }
@@ -599,7 +599,7 @@ impl Semantics {
     /// Receives the requested selection in the original base/extent order.
     #[must_use]
     pub fn on_set_selection(self, callback: impl Fn(TextSelection) + 'static) -> Self {
-        self.with_payload_callback(
+        self.with_bound_callback(
             SemanticAction::SetSelection { base: 0, extent: 0 },
             move |action| {
                 if let SemanticAction::SetSelection { base, extent } = action {
@@ -609,15 +609,45 @@ impl Semantics {
         )
     }
 
-    fn with_payload_callback(
+    /// Registers a callback for an accessibility copy request.
+    #[must_use]
+    pub fn on_copy(self, callback: impl Fn() + 'static) -> Self {
+        self.with_bound_callback(SemanticAction::Copy, move |_| callback())
+    }
+
+    /// Registers a callback for an accessibility cut request.
+    #[must_use]
+    pub fn on_cut(self, callback: impl Fn() + 'static) -> Self {
+        self.with_bound_callback(SemanticAction::Cut, move |_| callback())
+    }
+
+    /// Registers a callback for an accessibility paste request.
+    #[must_use]
+    pub fn on_paste(self, callback: impl Fn() + 'static) -> Self {
+        self.with_bound_callback(SemanticAction::Paste, move |_| callback())
+    }
+
+    /// Registers a callback for an accessibility expand request.
+    #[must_use]
+    pub fn on_expand(self, callback: impl Fn() + 'static) -> Self {
+        self.with_bound_callback(SemanticAction::Expand, move |_| callback())
+    }
+
+    /// Registers a callback for an accessibility collapse request.
+    #[must_use]
+    pub fn on_collapse(self, callback: impl Fn() + 'static) -> Self {
+        self.with_bound_callback(SemanticAction::Collapse, move |_| callback())
+    }
+
+    fn with_bound_callback(
         mut self,
         action: SemanticAction,
         callback: impl Fn(SemanticAction) + 'static,
     ) -> Self {
         let kind = action.kind();
-        self.payload_callbacks
+        self.bound_callbacks
             .retain(|binding| binding.kind != kind);
-        self.payload_callbacks.push(SemanticPayloadBinding {
+        self.bound_callbacks.push(BoundSemanticAction {
             kind,
             callback: Rc::new(callback),
         });
@@ -823,8 +853,8 @@ impl From<Semantics> for Widget {
                 widget = widget.with_semantic_callback(action, callback);
             }
         }
-        if !value.payload_callbacks.is_empty() {
-            widget = widget.with_semantic_payload_callbacks(value.payload_callbacks);
+        if !value.bound_callbacks.is_empty() {
+            widget = widget.with_semantic_bound_callbacks(value.bound_callbacks);
         }
         if !value.custom_actions.is_empty() {
             widget = widget.with_custom_semantic_actions(value.custom_actions);

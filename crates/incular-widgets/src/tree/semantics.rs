@@ -2101,7 +2101,7 @@ impl WidgetTree {
             || properties.locale_for_subtree.is_some()
             || properties.description.is_some()
             || !properties.callbacks.custom.is_empty()
-            || !properties.callbacks.payload.is_empty()
+            || !properties.callbacks.bound.is_empty()
             || matches!(entry.widget.kind(), WidgetKind::IndexedSemantics { .. })
         {
             return None;
@@ -3148,9 +3148,14 @@ pub(super) fn semantic_action_is_executable(
         return true;
     }
     match action {
-        SemanticActionKind::Focus | SemanticActionKind::Custom | SemanticActionKind::Dismiss => {
-            false
-        }
+        SemanticActionKind::Focus
+        | SemanticActionKind::Custom
+        | SemanticActionKind::Dismiss
+        | SemanticActionKind::Copy
+        | SemanticActionKind::Cut
+        | SemanticActionKind::Paste
+        | SemanticActionKind::Expand
+        | SemanticActionKind::Collapse => false,
         // Advertised only inside a viewport; the dispatch reports whether a
         // viewport actually moved.
         SemanticActionKind::ShowOnScreen => true,

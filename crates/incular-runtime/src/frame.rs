@@ -1103,10 +1103,16 @@ impl Runtime {
         self.tree.note_semantic_action();
         if matches!(
             action,
-            SemanticAction::SetText(_) | SemanticAction::SetSelection { .. }
+            SemanticAction::SetText(_)
+                | SemanticAction::SetSelection { .. }
+                | SemanticAction::Copy
+                | SemanticAction::Cut
+                | SemanticAction::Paste
+                | SemanticAction::Expand
+                | SemanticAction::Collapse
         ) {
             let kind = action.kind();
-            if let Some(callback) = self.tree.semantic_payload_callback(element, kind) {
+            if let Some(callback) = self.tree.semantic_bound_callback(element, kind) {
                 if !self
                     .tree
                     .semantics()
@@ -1259,6 +1265,11 @@ impl Runtime {
                     true
                 })
                 .unwrap_or(false),
+            SemanticAction::Copy
+            | SemanticAction::Cut
+            | SemanticAction::Paste
+            | SemanticAction::Expand
+            | SemanticAction::Collapse => false,
             SemanticAction::ShowOnScreen => self.tree.semantic_show_on_screen(element),
             SemanticAction::Custom(id) => self
                 .tree

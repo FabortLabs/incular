@@ -392,6 +392,11 @@ impl Widget {
             SemanticActionKind::Focus
             | SemanticActionKind::SetText
             | SemanticActionKind::SetSelection
+            | SemanticActionKind::Copy
+            | SemanticActionKind::Cut
+            | SemanticActionKind::Paste
+            | SemanticActionKind::Expand
+            | SemanticActionKind::Collapse
             | SemanticActionKind::ScrollToOffset
             | SemanticActionKind::ShowOnScreen
             | SemanticActionKind::Custom => {}
@@ -403,17 +408,17 @@ impl Widget {
         self
     }
 
-    pub(crate) fn with_semantic_payload_callbacks(
+    pub(crate) fn with_semantic_bound_callbacks(
         mut self,
-        bindings: Vec<crate::semantics::SemanticPayloadBinding>,
+        bindings: Vec<crate::semantics::BoundSemanticAction>,
     ) -> Self {
-        let payload = &mut self.semantic_properties_mut().callbacks.payload;
-        if payload.is_empty() {
-            *payload = bindings;
+        let bound = &mut self.semantic_properties_mut().callbacks.bound;
+        if bound.is_empty() {
+            *bound = bindings;
         } else {
             for binding in bindings {
-                payload.retain(|existing| existing.kind != binding.kind);
-                payload.push(binding);
+                bound.retain(|existing| existing.kind != binding.kind);
+                bound.push(binding);
             }
         }
         self

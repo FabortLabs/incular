@@ -149,6 +149,11 @@ pub enum SemanticActionKind {
     Custom,
     /// Flutter's `SemanticsAction.dismiss`: dismiss the current surface.
     Dismiss,
+    Copy,
+    Cut,
+    Paste,
+    Expand,
+    Collapse,
 }
 
 impl SemanticActionKind {
@@ -191,6 +196,11 @@ pub enum SemanticAction {
     ShowOnScreen,
     Custom(CustomSemanticsActionId),
     Dismiss,
+    Copy,
+    Cut,
+    Paste,
+    Expand,
+    Collapse,
 }
 
 impl SemanticAction {
@@ -214,6 +224,11 @@ impl SemanticAction {
             Self::ShowOnScreen => SemanticActionKind::ShowOnScreen,
             Self::Custom(_) => SemanticActionKind::Custom,
             Self::Dismiss => SemanticActionKind::Dismiss,
+            Self::Copy => SemanticActionKind::Copy,
+            Self::Cut => SemanticActionKind::Cut,
+            Self::Paste => SemanticActionKind::Paste,
+            Self::Expand => SemanticActionKind::Expand,
+            Self::Collapse => SemanticActionKind::Collapse,
         }
     }
 }

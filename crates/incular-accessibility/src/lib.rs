@@ -933,6 +933,12 @@ impl AccessKitProjection {
             Action::Decrement if supports(&projected.semantic, SemanticActionKind::Decrement) => {
                 Some(SemanticAction::Decrement)
             }
+            Action::Expand if supports(&projected.semantic, SemanticActionKind::Expand) => {
+                Some(SemanticAction::Expand)
+            }
+            Action::Collapse if supports(&projected.semantic, SemanticActionKind::Collapse) => {
+                Some(SemanticAction::Collapse)
+            }
             Action::ScrollIntoView
                 if supports(&projected.semantic, SemanticActionKind::ShowOnScreen) =>
             {
@@ -1263,11 +1269,16 @@ fn map_action(action: SemanticActionKind) -> Option<Action> {
         SemanticActionKind::ScrollDown => Some(Action::ScrollDown),
         SemanticActionKind::ScrollToOffset => Some(Action::SetScrollOffset),
         SemanticActionKind::ShowOnScreen => Some(Action::ScrollIntoView),
-        // AccessKit has neither long-press nor a distinct dismiss action.
+        SemanticActionKind::Expand => Some(Action::Expand),
+        SemanticActionKind::Collapse => Some(Action::Collapse),
+        // AccessKit has no clipboard, long-press, or distinct dismiss action.
         // A modal's separate Activate still projects to Click. Parameterized
         // custom actions are advertised only with native descriptions.
         SemanticActionKind::LongPress
         | SemanticActionKind::Dismiss
+        | SemanticActionKind::Copy
+        | SemanticActionKind::Cut
+        | SemanticActionKind::Paste
         | SemanticActionKind::Custom => None,
     }
 }

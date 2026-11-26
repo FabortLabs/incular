@@ -732,3 +732,153 @@ fn sliver_text_payloads_are_delivered_unchanged_to_current_handlers() {
         assert_eq!(calls.borrow().len(), 4);
     }
 }
+
+#[test]
+fn clipboard_and_expansion_callbacks_are_independent_and_withdrawn_when_blocked() {
+    let calls = Rc::new(RefCell::new(Vec::new()));
+    let build = |marker: &'static str, active: bool, blocked: bool| {
+        let calls = calls.clone();
+        scene(move || {
+            let sem = Semantics::default()
+                .container(true)
+                .label("commands")
+                .block_user_actions(blocked);
+            if !active {
+                return sem;
+            }
+            let log = |action| {
+                let calls = calls.clone();
+                move || calls.borrow_mut().push((marker, action))
+            };
+            sem.on_copy(log("copy"))
+                .on_cut(log("cut"))
+                .on_paste(log("paste"))
+                .on_expand(log("expand"))
+                .on_collapse(log("collapse"))
+        })
+    };
+    let actions = [
+        (SemanticAction::Copy, "copy"),
+        (SemanticAction::Cut, "cut"),
+        (SemanticAction::Paste, "paste"),
+        (SemanticAction::Expand, "expand"),
+        (SemanticAction::Collapse, "collapse"),
+    ];
+    let mut runtime = Runtime::new(build("first", true, false)).unwrap();
+    frame(&mut runtime);
+    let root = runtime.tree().root().unwrap();
+    let id = node(&runtime, "commands").id;
+    let revision = runtime.tree().semantics().revision();
+    let mut projection = MobileAccessibilityProjection::new();
+    let mobile_id = projection
+        .sync(runtime.tree().semantics())
+        .unwrap()
+        .nodes
+        .into_iter()
+        .find(|native| native.semantic.id == id)
+        .unwrap()
+        .native_id;
+    for marker in ["first", "second"] {
+        runtime
+            .schedule_update(root, build(marker, true, false))
+            .unwrap();
+        frame(&mut runtime);
+        assert_eq!(node(&runtime, "commands").id, id);
+        assert_eq!(runtime.tree().semantics().revision(), revision);
+        assert!(projection.sync(runtime.tree().semantics()).is_none());
+        for (action, _) in &actions {
+            let mapped = projection
+                .translate_action(mobile_id, action.clone())
+                .unwrap();
+            assert!(runtime.dispatch_semantic_action(mapped.node, mapped.action));
+        }
+        assert_eq!(
+            calls.borrow_mut().drain(..).collect::<Vec<_>>(),
+            actions
+                .iter()
+                .map(|(_, name)| (marker, *name))
+                .collect::<Vec<_>>(),
+        );
+    }
+    for (active, blocked) in [(true, true), (false, false)] {
+        runtime
+            .schedule_update(root, build("ignored", active, blocked))
+            .unwrap();
+        frame(&mut runtime);
+        projection.sync(runtime.tree().semantics());
+        assert_eq!(node(&runtime, "commands").id, id);
+        for (action, _) in &actions {
+            assert!(!node(&runtime, "commands").actions.contains(&action.kind()));
+            assert!(
+                projection
+                    .translate_action(mobile_id, action.clone())
+                    .is_none()
+            );
+            assert!(!runtime.dispatch_semantic_action(id, action.clone()));
+        }
+        assert!(calls.borrow().is_empty());
+    }
+}
+
+#[test]
+fn accesskit_expand_and_collapse_requests_reach_the_matching_callback() {
+    use accesskit::{Action, ActionRequest, NodeId, TreeId};
+    use incular_accessibility::AccessKitProjection;
+
+    let calls = Rc::new(RefCell::new(Vec::new()));
+    let build = |expand: bool| {
+        let calls = calls.clone();
+        scene(move || {
+            let calls = calls.clone();
+            let sem = Semantics::default().container(true).label("disclosure");
+            if expand {
+                sem.on_expand(move || calls.borrow_mut().push("expand"))
+            } else {
+                sem.on_collapse(move || calls.borrow_mut().push("collapse"))
+            }
+        })
+    };
+    let mut runtime = Runtime::new(build(true)).unwrap();
+    frame(&mut runtime);
+    let id = node(&runtime, "disclosure").id;
+    let mut bridge = AccessKitProjection::new();
+    let initial = bridge
+        .sync(runtime.tree().semantics(), 1.0)
+        .unwrap()
+        .into_accesskit();
+    let native = NodeId(bridge.native_node_id(id).unwrap());
+    let emitted = initial.nodes.iter().find(|(id, _)| *id == native).unwrap();
+    assert!(emitted.1.supports_action(Action::Expand));
+    assert!(!emitted.1.supports_action(Action::Collapse));
+
+    let request = |action| ActionRequest {
+        action,
+        target_tree: TreeId::ROOT,
+        target_node: native,
+        data: None,
+    };
+    let expand = bridge.translate_action(&request(Action::Expand)).unwrap();
+    assert!(
+        bridge
+            .translate_action(&request(Action::Collapse))
+            .is_none()
+    );
+    assert!(runtime.dispatch_semantic_action(expand.node, expand.action.clone()));
+    runtime
+        .schedule_update(runtime.tree().root().unwrap(), build(false))
+        .unwrap();
+    frame(&mut runtime);
+    assert_eq!(node(&runtime, "disclosure").id, id);
+    assert!(!runtime.dispatch_semantic_action(expand.node, expand.action));
+    let update = bridge
+        .sync(runtime.tree().semantics(), 1.0)
+        .unwrap()
+        .into_accesskit();
+    let emitted = update.nodes.iter().find(|(id, _)| *id == native).unwrap();
+    assert!(!emitted.1.supports_action(Action::Expand));
+    assert!(emitted.1.supports_action(Action::Collapse));
+    assert!(bridge.translate_action(&request(Action::Expand)).is_none());
+    let collapse = bridge.translate_action(&request(Action::Collapse)).unwrap();
+    assert!(runtime.dispatch_semantic_action(collapse.node, collapse.action));
+    assert_eq!(&*calls.borrow(), &["expand", "collapse"]);
+}

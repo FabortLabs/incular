@@ -1469,10 +1469,10 @@ impl WidgetTree {
                 .or_else(|| self.merged_sliver_action_callback(id, action))
         })
     }
-    /// Returns the current bound handler for an action with a payload.
+    /// Returns the current bound handler for an explicitly bound semantic action.
     #[doc(hidden)]
     #[must_use]
-    pub fn semantic_payload_callback(
+    pub fn semantic_bound_callback(
         &self,
         id: ElementId,
         action: SemanticActionKind,
@@ -1485,7 +1485,7 @@ impl WidgetTree {
             .widget
             .semantic_properties()
             .callbacks
-            .payload_callback(action)
+            .bound_callback(action)
     }
 
     #[must_use]

@@ -183,5 +183,23 @@ a blocked callback or an unbound payload kind is not advertised.
 
 All 27 targeted Rust tests passed, including the existing formatter,
 on-change, and disabled-field behavior. The all-actions case remains
-partial: it also requires clipboard, cursor, focus lifecycle, expand
-and collapse callbacks and Flutter's two-pane tags.
+partial: the clipboard and expansion cases are described below;
+cursor and focus lifecycle callbacks and Flutter's two-pane tags
+remain open.
+
+### Clipboard and expansion callbacks
+
+The pinned `sliver_semantic_clipboard_expansion_test.dart` probe and
+the retained/mobile-projection fixture verify that Copy, Cut, Paste,
+Expand, and Collapse invoke only their own registered callbacks.
+Replacing handlers retains the native ID without a tree revision;
+blocking or removing the actions withdraws their advertisement.
+Flutter's low-level `SemanticsOwner.performAction` still invokes a
+blocked handler when given an exact ID directly. Incular instead
+rejects the stale request at both runtime and adapter validation.
+
+The AccessKit fixture also verifies that switching from Expand to
+Collapse preserves the native ID, withdraws Expand, and dispatches
+only Collapse. Clipboard actions are verified through the portable
+mobile projection, not host clipboard or assistive-technology
+integration. The 29 focused Rust checks passed.
