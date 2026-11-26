@@ -645,7 +645,7 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut JavaVM, _reserved: *mut c_void
         ),
         method(
             c"nativeKey",
-            c"(ZIIIZ)Z",
+            c"(ZIIIZII)Z",
             text_input::native_key as *mut c_void,
         ),
         method(

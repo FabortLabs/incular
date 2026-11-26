@@ -1375,6 +1375,7 @@ impl Application {
             WindowEventKind::Platform(
                 event @ (PlatformEvent::Input(_)
                 | PlatformEvent::InputAt { .. }
+                | PlatformEvent::KeyboardInput { .. }
                 | PlatformEvent::HoverDevice(_)),
             ) => {
                 let _ = self.with_window_mut(window_id, |record| {

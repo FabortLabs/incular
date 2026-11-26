@@ -32,7 +32,7 @@ use incular_core::{
 use incular_platform::{
     BackGestureEvent, Clipboard, ClipboardCapabilities, ClipboardError, ClipboardWriteReport,
     DataTransfer, ExternalDragEvent, ExternalDragResponse, HoverDeviceChange, HoverDeviceEvent,
-    MemoryClipboard, PlatformEvent, PlatformLifecycle, PlatformViewCommand, PlatformViewId,
+    KeyboardInputSource, MemoryClipboard, PlatformEvent, PlatformLifecycle, PlatformViewCommand, PlatformViewId,
     SystemUiOverlayStyle, TextInputAction, TextInputClientId, TextInputCommand,
     TextInputConfiguration, TextInputState, TextInputType, TransferReadRequest, UndoDirection,
     UndoManagerCommand, WindowId, WindowMetrics, WindowOperation, WindowOptions,
@@ -1421,6 +1421,10 @@ impl Runtime {
     pub fn handle_platform_event(&mut self, event: PlatformEvent) -> Option<EventTarget> {
         match event {
             PlatformEvent::Input(input) => self.handle_input(input),
+            PlatformEvent::KeyboardInput { event, source } => {
+                self.dispatch_keyboard_event_from(event, source);
+                None
+            }
             PlatformEvent::InputAt { input, time } => self.handle_input_at(input, time),
             PlatformEvent::HoverDevice(event) => {
                 self.handle_hover_device_event(event);
@@ -3020,7 +3024,17 @@ impl Runtime {
 
     /// Dispatches a portable key event and returns whether it was handled.
     pub fn dispatch_keyboard_event(&mut self, event: KeyboardEvent) -> bool {
-        FocusHighlightManager::new().note_keyboard_input();
+        self.dispatch_keyboard_event_from(event, KeyboardInputSource::Physical)
+    }
+
+    fn dispatch_keyboard_event_from(
+        &mut self,
+        event: KeyboardEvent,
+        source: KeyboardInputSource,
+    ) -> bool {
+        if source == KeyboardInputSource::Physical {
+            FocusHighlightManager::new().note_keyboard_input();
+        }
         if let Some(debug) = &self.keyboard_event_debug_listener {
             debug(&format!("KEYBOARD: Key event received: {event:?}"));
             debug(&format!(

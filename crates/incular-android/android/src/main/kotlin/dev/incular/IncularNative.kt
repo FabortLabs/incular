@@ -82,7 +82,10 @@ internal object IncularNative {
     @JvmStatic external fun nativeEditorAction(action: Int)
 
     /** A hardware key; returns whether Incular took it. */
-    @JvmStatic external fun nativeKey(down: Boolean, keyCode: Int, unicode: Int, metaState: Int, repeat: Boolean): Boolean
+    @JvmStatic external fun nativeKey(
+        down: Boolean, keyCode: Int, unicode: Int, metaState: Int, repeat: Boolean,
+        flags: Int, deviceId: Int,
+    ): Boolean
 
     /** The back button; returns false when the app did not use it and the activity should finish. */
     @JvmStatic external fun nativeBack(): Boolean

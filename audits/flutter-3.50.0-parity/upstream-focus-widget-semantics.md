@@ -147,3 +147,19 @@ child by default; a stale native fixture was looking for a separate
 Text node. The corrected check still requires both semantic IDs and
 element identities to survive, the left node to preserve primary
 focus and its label, and the right node to publish only its new label.
+
+## Virtual Android keys keep touch highlights
+
+Pinned `widgets/focus_manager_test.dart:1528` passes on the Android
+test variant. The portable runtime previously treated every raw key
+as physical input. Android now forwards the raw soft-keyboard flag and
+device ID; either indicator classifies the event as virtual. Virtual
+keys still follow ordinary routing and edit the active field, but
+they do not switch automatic focus highlights out of touch mode.
+
+The native fixture checks the exact virtual Backspace with both
+indicators, each indicator alone, and the positive hardware-key
+control. Nine focused highlight and key-routing tests passed. The
+crate compiled on Linux and the Kotlin/JNI signatures were checked
+against each other; there was no Android SDK or Android device run.
+The pairing is at the normalized runtime boundary.

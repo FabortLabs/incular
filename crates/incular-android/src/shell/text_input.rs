@@ -14,7 +14,7 @@ use incular_core::{Code, InputEvent, KeyState, KeyboardEvent, KeyboardKey, Modif
 use incular_mobile::text_offsets::{utf8_offset, utf16_offset};
 use incular_platform::{
     CapabilitySupport, Clipboard, ClipboardCapabilities, ClipboardError, ClipboardWriteReport,
-    DataTransfer, PlatformEvent, TextCapitalization, TextInputAction, TextInputCommand,
+    DataTransfer, KeyboardInputSource, PlatformEvent, TextCapitalization, TextInputAction, TextInputCommand,
     TextInputConfiguration, TextInputState, TextInputType, TransferData, TransferFormat,
     TransferFormatCapabilities, TransferReadRequest,
 };
@@ -274,6 +274,8 @@ pub(super) extern "system" fn native_key(
     unicode: jint,
     meta_state: jint,
     repeat: jboolean,
+    flags: jint,
+    device_id: jint,
 ) -> jboolean {
     let character = u32::try_from(unicode)
         .ok()
@@ -310,9 +312,10 @@ pub(super) extern "system" fn native_key(
             && !modifiers.intersects(Modifiers::CONTROL | Modifiers::ALT | Modifiers::META)
     });
     super::with_shell(|shell| {
-        shell
-            .engine
-            .platform_event(PlatformEvent::Input(InputEvent::Key(event)));
+        shell.engine.platform_event(PlatformEvent::KeyboardInput {
+            event,
+            source: KeyboardInputSource::from_android(flags, device_id),
+        });
         if let Some(character) = typed {
             shell
                 .engine

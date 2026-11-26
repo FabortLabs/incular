@@ -5,7 +5,7 @@
 
 use directories::ProjectDirs;
 use incular_config::ApplicationDefaults;
-use incular_core::{Color, InputEvent, Offset, Rect, Size};
+use incular_core::{Color, InputEvent, KeyboardEvent, Offset, Rect, Size};
 use std::{fmt, path::PathBuf};
 
 mod application_activation;
@@ -828,9 +828,38 @@ impl TextInputAdapter for MemoryTextInputAdapter {
     }
 }
 
+/// Whether a key press came from a physical keyboard or an input method
+/// emitting a key event. Both go through normal key routing.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum KeyboardInputSource {
+    #[default]
+    Physical,
+    Virtual,
+}
+
+impl KeyboardInputSource {
+    /// Classifies Android's KeyEvent flags and KeyCharacterMap device ID.
+    #[must_use]
+    pub const fn from_android(flags: i32, device_id: i32) -> Self {
+        const FLAG_SOFT_KEYBOARD: i32 = 0x0000_0002;
+        const VIRTUAL_KEYBOARD: i32 = -1;
+        if flags & FLAG_SOFT_KEYBOARD != 0 || device_id == VIRTUAL_KEYBOARD {
+            Self::Virtual
+        } else {
+            Self::Physical
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum PlatformEvent {
     Input(InputEvent),
+    /// Key event whose native origin is known. A virtual key does not
+    /// switch automatic focus highlights to traditional keyboard mode.
+    KeyboardInput {
+        event: KeyboardEvent,
+        source: KeyboardInputSource,
+    },
     /// Input with the time the platform recorded it. Velocity tracking and
     /// gesture timing use `time` instead of the delivery time, so a batch of
     /// historical samples delivered together keeps its real spacing.

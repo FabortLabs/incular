@@ -146,7 +146,10 @@ internal class IncularInputView(context: Context) : SurfaceView(context) {
     /** Hardware keys. Back stays with the activity, which asks Rust through `nativeBack`. */
     private fun forwardKey(event: KeyEvent, down: Boolean): Boolean {
         if (event.keyCode == KeyEvent.KEYCODE_BACK) return false
-        return IncularNative.nativeKey(down, event.keyCode, event.getUnicodeChar(event.metaState), event.metaState, event.repeatCount > 0)
+        return IncularNative.nativeKey(
+            down, event.keyCode, event.getUnicodeChar(event.metaState), event.metaState,
+            event.repeatCount > 0, event.flags, event.deviceId,
+        )
     }
 
     private class ComposingSpan

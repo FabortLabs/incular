@@ -122,3 +122,52 @@ fn a_real_keyboard_key_selects_traditional_on_each_platform() {
         .unwrap();
     }
 }
+
+#[test]
+fn virtual_android_keys_edit_without_switching_touch_focus_highlights() {
+    use FocusHighlightMode::{Touch, Traditional};
+    use incular_platform::{KeyboardInputSource, PlatformEvent};
+    use incular_text::{TextEditingController, TextSelection};
+    use incular_widgets::{EditableText, TextDirection};
+
+    let manager = FocusHighlightManager::new();
+    let controller = TextEditingController::with_text("abc");
+    let mut runtime = Runtime::new(
+        EditableText::new(controller.clone())
+            .autofocus(true)
+            .text_direction(TextDirection::Ltr)
+            .size(Size::new(40., 40.))
+            .into(),
+    )
+    .unwrap();
+    Runtime::set_focus_highlight_platform_default(incular_config::TargetPlatform::Android);
+    manager.set_strategy(FocusHighlightStrategy::Automatic);
+    runtime
+        .run_frame(Constraints::tight(Size::new(40., 40.)))
+        .unwrap();
+    touch(&mut runtime);
+    controller.set_selection(TextSelection::collapsed(3));
+    assert_eq!(manager.mode(), Touch);
+
+    for (flags, id, expected) in [(0x2, -1, "ab"), (0x2, 5, "a"), (0, -1, "")] {
+        let source = KeyboardInputSource::from_android(flags, id);
+        assert_eq!(source, KeyboardInputSource::Virtual);
+        let down =
+            KeyboardEvent::key_down(KeyboardKey::Named(NamedKey::Backspace), Code::Backspace);
+        let _ = runtime.handle_platform_event(PlatformEvent::KeyboardInput {
+            event: down.clone(),
+            source,
+        });
+        let mut up = down;
+        up.state = KeyState::Up;
+        let _ = runtime.handle_platform_event(PlatformEvent::KeyboardInput { event: up, source });
+        assert_eq!(manager.mode(), Touch);
+        assert_eq!(controller.text(), expected);
+    }
+
+    let source = KeyboardInputSource::from_android(0, 5);
+    assert_eq!(source, KeyboardInputSource::Physical);
+    let event = KeyboardEvent::key_down(KeyboardKey::Named(NamedKey::ArrowLeft), Code::ArrowLeft);
+    let _ = runtime.handle_platform_event(PlatformEvent::KeyboardInput { event, source });
+    assert_eq!(manager.mode(), Traditional);
+}
