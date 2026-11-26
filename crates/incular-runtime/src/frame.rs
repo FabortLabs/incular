@@ -2610,13 +2610,20 @@ impl Runtime {
         let Some(previous) = self.last_text_input_client.filter(|previous| previous.client == client) else {
             return false;
         };
-        if self.focused == Some(previous.target)
-            || !self.tree.is_text_field(previous.target)
-            || !self.tree.can_request_focus(previous.target)
+        self.request_text_input_focus_for(previous.target)
+    }
+
+    /// Delivers a focus request to a specific retained editor, including
+    /// one newly mounted by a lazy list and not yet attached to the host.
+    /// Use the connection-ID entry point for asynchronous channel events.
+    pub fn request_text_input_focus_for(&mut self, target: ElementId) -> bool {
+        if self.focused == Some(target)
+            || !self.tree.is_text_field(target)
+            || !self.tree.can_request_focus(target)
         {
             return false;
         }
-        self.set_focus(Some(previous.target));
+        self.set_focus(Some(target));
         true
     }
 

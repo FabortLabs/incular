@@ -163,3 +163,109 @@ fn a_delayed_host_message_does_not_steal_focus_from_another_editor() {
     assert!(!next_node.has_focus());
     assert!(runtime.take_text_input_commands().is_empty());
 }
+
+#[test]
+fn refocus_rejects_an_evicted_list_editor_but_accepts_the_new_mount() {
+    use incular_widgets::{ListView, ScrollController, internal::Key};
+    let controller = TextEditingController::with_text("draft");
+    let node = FocusNode::new();
+    let scroll = ScrollController::new();
+    let key = Key::from("virtual editor");
+    let list = ListView::builder(50, {
+        let (controller, node, key) = (controller.clone(), node.clone(), key.clone());
+        move |index| {
+            if index == 0 {
+                Widget::from(field(&controller, &node, false)).with_key(key.clone())
+            } else {
+                SizedBox::expand().into()
+            }
+        }
+    })
+    .item_extent(40.)
+    .controller(scroll.clone());
+    let mut runtime = Runtime::new(list.into()).unwrap();
+    frame(&mut runtime);
+    let original = runtime.tree().element_with_key(&key).unwrap();
+    assert!(runtime.request_text_input_focus_for(original));
+    frame(&mut runtime);
+    let old_client = attached(&mut runtime);
+    assert!(platform_call(
+        &mut runtime,
+        "onConnectionClosed",
+        old_client
+    ));
+    frame(&mut runtime);
+    assert!(!node.has_focus());
+    assert!(runtime.take_text_input_commands().is_empty());
+
+    assert!(scroll.jump_to(scroll.max_offset()));
+    frame(&mut runtime);
+    assert!(runtime.tree().element_with_key(&key).is_none());
+    assert!(!runtime.request_text_input_focus_for(original));
+    assert!(!platform_call(&mut runtime, "onFocusReceived", old_client));
+
+    assert!(scroll.jump_to(0.));
+    frame(&mut runtime);
+    let remounted = runtime.tree().element_with_key(&key).unwrap();
+    assert_ne!(original, remounted);
+    assert!(!platform_call(&mut runtime, "onFocusReceived", old_client));
+    assert!(runtime.request_text_input_focus_for(remounted));
+    frame(&mut runtime);
+    assert!(node.has_primary_focus());
+    assert_ne!(attached(&mut runtime), old_client);
+    assert_eq!(controller.text(), "draft");
+}
+
+#[test]
+fn user_taps_reopen_the_closed_connection_and_edit_the_selected_field() {
+    use incular_core::{InputEvent, Offset, PointerPhase};
+    for next_row in [false, true] {
+        let controller = TextEditingController::new();
+        let [first, second] = [FocusNode::new(), FocusNode::new()];
+        // The editable value is shared, but these are separate retained
+        // focus nodes; a focus attachment cannot own two retained fields.
+        let fields = Column::new([
+            Widget::from(field(&controller, &first, false)),
+            Widget::from(field(&controller, &second, false)),
+        ]);
+        let mut runtime = Runtime::new(fields.into()).unwrap();
+        frame(&mut runtime);
+        let tap = |runtime: &mut Runtime, y| {
+            for phase in [PointerPhase::Down, PointerPhase::Up] {
+                let _ = runtime.handle_input(InputEvent::Pointer {
+                    phase,
+                    position: Offset::new(15., y),
+                });
+            }
+            frame(runtime);
+        };
+        tap(&mut runtime, 20.);
+        let prior = attached(&mut runtime);
+        assert!(first.has_focus());
+        controller.set_text("test3");
+        frame(&mut runtime);
+        assert!(runtime.take_text_input_commands().iter().any(|command| {
+            matches!(command, TextInputCommand::Update { client, state }
+                if *client == prior && state.text == "test3")
+        }));
+
+        assert!(platform_call(&mut runtime, "onConnectionClosed", prior));
+        frame(&mut runtime);
+        assert!(!first.has_focus());
+        assert!(runtime.take_text_input_commands().is_empty());
+
+        tap(&mut runtime, if next_row { 60. } else { 20. });
+        let reopened = attached(&mut runtime);
+        assert_ne!(reopened, prior);
+        assert_eq!(first.has_primary_focus(), !next_row);
+        assert_eq!(second.has_primary_focus(), next_row);
+        let text = if next_row { "650123123" } else { "test2" };
+        controller.set_text(text);
+        frame(&mut runtime);
+        assert!(runtime.take_text_input_commands().iter().any(|command| {
+            matches!(command, TextInputCommand::Update { client, state }
+                if *client == reopened && state.text == text)
+        }));
+        assert!(!platform_call(&mut runtime, "onConnectionClosed", prior));
+    }
+}

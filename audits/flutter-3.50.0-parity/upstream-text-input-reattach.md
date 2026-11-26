@@ -21,8 +21,9 @@ native adapters' behavior upon OS-specific reconnects was not tested.
 
 ## Host closes the connection and requests focus again
 
-Five original `widgets/editable_text_test.dart` registrations pair at
-the runtime/host boundary. Closing the current host connection also
+Four original `widgets/editable_text_test.dart` registrations pair at
+the runtime/host boundary, with one partial because automatic keep-alive
+lifecycle is not yet paired. Closing the current host connection also
 ends the editor's focus. It does not submit, complete editing, change
 committed text, or send Hide/Clear back to a host that already closed
 the connection. An eligible mounted editor can regain focus on a
@@ -40,3 +41,20 @@ generates these events for the same native interactions.
 
 Five pinned Flutter and 32 targeted Rust cases passed, including
 autofill, editing/IME gating, and client-state replay controls.
+
+## Reopened connections after a tap or viewport eviction
+
+The lazy-list original pairs. Once the host closes the connection, the
+unfocused row can be evicted. Neither its old element ID nor the old host
+connection can refocus it, even after it remounts. A direct focus request
+for the new mounted editor succeeds and attaches a fresh client without
+losing the draft.
+
+Both tap-to-reopen originals ran. Incular matches the active input
+client, focus, and editing-value transitions, but does not yet claim
+Flutter's focus-driven automatic keep-alive policy. Flutter's
+second-field fixture also shares one FocusNode between both fields;
+the native control uses separate retained focus nodes and a shared
+editing controller. These two cases and the previous close case that
+asserts `wantKeepAlive` are therefore partial. Three pinned Flutter and
+seven targeted Rust cases passed.
