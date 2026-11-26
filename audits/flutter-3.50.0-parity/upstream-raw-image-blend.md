@@ -20,7 +20,20 @@ background outside it stays red. The Incular counterpart verifies
 the actual native display-list destination and group bounds; no
 headless wgpu pixel readback was available for this pair.
 
-Full per-draw pixel equivalence is open for nine-sliced or transformed
-images, globally transparent sources with destructive blend modes,
-and combinations of color inversion and tint. The independent fit-default fix is
+Full native pixel equivalence remains open, especially for nine-sliced
+or transformed images and fractional coverage. The independent fit-default fix is
 [reported separately](upstream-tap-absorber-delta-and-raw-image.md#resolved-rawimage-fit-default).
+
+## Tint, inversion, and fully transparent source coverage
+
+The authored pinned Flutter pixel tests confirmed that fully inverting a
+red SrcIn tint produces cyan, and that zero-opacity Src replaces pixels
+inside the fitted source with transparent pixels without touching the
+outside background. Zero-opacity SrcOver leaves the whole background
+unchanged. Incular applies inversion after tint in one retained filter
+rather than isolating twice. At exactly zero opacity the modes that erase
+the destination still emit the fitted coverage with transparent color;
+the ordinary SrcOver path and non-destructive controls do not emit the
+raster. The native checks execute the captured filters and verify effect
+bounds for those modes. Forty-six native cases passed; these two authored
+reference cases do not change the upstream registration total.

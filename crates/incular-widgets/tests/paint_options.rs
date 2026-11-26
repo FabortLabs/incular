@@ -801,3 +801,85 @@ fn raw_image_defaults_to_fill_only_when_center_slice_is_set() {
         );
     }
 }
+
+#[test]
+fn raw_image_inverts_tinted_pixels_in_a_single_retained_filter() {
+    let red = Color::rgba(255, 0, 0, 255);
+    for (tint_mode, expected, transparent) in [
+        (BlendMode::SrcIn, [0., 1., 1., 1.], [0.; 4]),
+        (BlendMode::Screen, [0., 0., 0., 1.], [0., 1., 1., 1.]),
+    ] {
+        let commands = painted(
+            RawImage::new()
+                .image(handle(2, 2))
+                .color(red)
+                .color_blend_mode(tint_mode)
+                .invert_colors(true)
+                .blend_mode(BlendMode::Src)
+                .into(),
+            Size::new(6., 4.),
+        );
+        let [filter] = commands
+            .iter()
+            .filter_map(|command| match command {
+                PaintCommand::PushColorFilter { filter, .. } => Some(*filter),
+                _ => None,
+            })
+            .collect::<Vec<_>>()[..]
+        else {
+            panic!("one filter should retain tint and the post-tint inversion");
+        };
+        assert_eq!(filter.apply([1., 1., 1., 1.]), expected);
+        assert_eq!(filter.apply([1., 1., 1., 0.]), transparent);
+        assert_eq!(
+            raw_image_destination_blend(&commands).expect("blend").2,
+            rect(2., 1., 2., 2.)
+        );
+    }
+}
+
+#[test]
+fn raw_image_zero_opacity_preserves_coverage_only_for_destructive_blends() {
+    let background = [1., 0., 0., 1.];
+    for mode in [
+        BlendMode::Clear,
+        BlendMode::Src,
+        BlendMode::SrcIn,
+        BlendMode::DstIn,
+        BlendMode::SrcOut,
+        BlendMode::DstAtop,
+        BlendMode::Modulate,
+        BlendMode::SrcOver,
+        BlendMode::DstOut,
+        BlendMode::Plus,
+        BlendMode::Multiply,
+    ] {
+        let commands = painted(
+            RawImage::new()
+                .image(handle(2, 2))
+                .opacity(0.)
+                .blend_mode(mode)
+                .into(),
+            Size::new(6., 4.),
+        );
+        let on_transparent = incular_rendering::blend_premultiplied(mode, [0.; 4], background);
+        if on_transparent == background {
+            assert!(images(&commands).is_empty(), "{mode:?}: {commands:#?}");
+        } else {
+            assert_eq!(on_transparent, [0.; 4]);
+            assert_eq!(
+                raw_image_destination_blend(&commands).expect("blend").2,
+                rect(2., 1., 2., 2.),
+                "{mode:?}"
+            );
+            assert_eq!(images(&commands).len(), 1);
+            let Some(filter) = commands.iter().find_map(|command| match command {
+                PaintCommand::PushColorFilter { filter, .. } => Some(*filter),
+                _ => None,
+            }) else {
+                panic!("{mode:?} must feed a transparent source to the blend stage")
+            };
+            assert_eq!(filter.apply([1., 1., 1., 1.]), [0.; 4]);
+        }
+    }
+}

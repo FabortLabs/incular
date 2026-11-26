@@ -11,11 +11,20 @@ use typed_builder::TypedBuilder;
 use crate::tree::ImageFit;
 use crate::{Blur, BlurController, ColorFiltered, Image, ImageRepeat, Opacity, Widget};
 
-/// Flutter `RawImage`'s `invertColors` matrix: each channel becomes `255 - c`,
-/// alpha unchanged. Written in Flutter's 0..255 bias units.
-const INVERT_COLORS: [f32; 20] = [
-    -1., 0., 0., 0., 255., 0., -1., 0., 0., 255., 0., 0., -1., 0., 255., 0., 0., 0., 1., 0.,
-];
+// These modes change an existing destination even when the source is
+// fully transparent. They must retain the raster's coverage at alpha zero.
+fn transparent_source_erases_destination(mode: BlendMode) -> bool {
+    matches!(
+        mode,
+        BlendMode::Clear
+            | BlendMode::Src
+            | BlendMode::SrcIn
+            | BlendMode::DstIn
+            | BlendMode::SrcOut
+            | BlendMode::DstAtop
+            | BlendMode::Modulate
+    )
+}
 
 /// Renders a raw raster image buffer directly without asset caching.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
@@ -235,33 +244,36 @@ impl From<RawImage> for Widget {
                     return img.destination_blend_mode(value.blend_mode).into();
                 }
                 let mut image: Widget = img.into();
-                // Flutter applies `invertColors` to the decoded pixels before
-                // the `color` tint, and `opacity` to the finished image.
-                if value.invert_colors {
-                    image = ColorFiltered::new(ColorFilter::flutter_matrix(INVERT_COLORS), image)
-                        .into();
-                }
-                // Tint contract: a flat constant-color recolor of the decoded
-                // source (opaque white, black, or colored art all flatten to
-                // the tint; coverage follows source alpha times tint alpha).
-                // It reuses the retained color-matrix layer, so the decoded
-                // handle is unchanged and no second image is built.
-                let image = match value.color {
-                    Some(color) => crate::ColorFiltered::new(
-                        value.color_blend_mode.map_or_else(
-                            || ColorFilter::tint(color),
-                            |mode| ColorFilter::blend(color, mode),
-                        ),
-                        image,
-                    )
-                    .into(),
-                    None => image,
-                };
-                let image = if value.opacity < 1.0 {
-                    Opacity::new(value.opacity, image).into()
+                if value.opacity == 0.0 && transparent_source_erases_destination(value.blend_mode) {
+                    // A zero-alpha group is culled, whereas Flutter draws a
+                    // transparent source across the fitted image. Keep those
+                    // pixels' coverage but skip tint and inversion at alpha zero.
+                    image = ColorFiltered::new(ColorFilter::opacity(0.0), image).into();
                 } else {
-                    image
-                };
+                    let tint = value.color.map(|color| {
+                        ColorFilter::blend(
+                            color,
+                            value.color_blend_mode.unwrap_or(BlendMode::SrcIn),
+                        )
+                    });
+                    // Flutter applies invertColors after tint, before opacity
+                    // and destination blending. The RGB-only inversion can
+                    // share the tint's filter, even with a non-affine tint stage.
+                    let filter = if value.invert_colors {
+                        Some(
+                            tint.unwrap_or_else(ColorFilter::identity)
+                                .then(ColorFilter::invert(1.0)),
+                        )
+                    } else {
+                        tint
+                    };
+                    if let Some(filter) = filter {
+                        image = ColorFiltered::new(filter, image).into();
+                    }
+                    if value.opacity < 1.0 {
+                        image = Opacity::new(value.opacity, image).into();
+                    }
+                }
                 Widget::image_blend(value.blend_mode, image)
             }
             None => Widget::image(
