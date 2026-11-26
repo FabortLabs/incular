@@ -414,3 +414,19 @@ fn changing_scroll_direction_reroutes_subsequent_drag_motion() {
         assert_eq!(controller.offset(), expected, "{phase:?} at ({x},{y})");
     }
 }
+
+#[test]
+fn an_empty_viewport_can_lay_out_at_zero_area() {
+    use incular_widgets::{Center, Viewport};
+
+    let controller = ScrollController::new().with_initial_scroll_offset(100.);
+    let viewport = Widget::from(Viewport::default().controller(controller)).with_key("viewport");
+    let scene = Directionality::new(TextDirection::Ltr, Center::new(viewport));
+    let mut runtime = Runtime::new(scene.into()).unwrap();
+    runtime.run_frame(Constraints::tight(Size::ZERO)).unwrap();
+    let viewport = runtime.tree().element_with_key(&"viewport".into()).unwrap();
+    assert_eq!(
+        runtime.tree().element_bounds(viewport).unwrap().size,
+        Size::ZERO
+    );
+}

@@ -1850,3 +1850,4 @@ packages/flutter/test/rendering/viewport_test.dart	1284	inner shown in outer, bu
 packages/flutter/test/rendering/viewport_test.dart	1300	inner half shown in outer, item only visible in inner	paired-match	upstream-viewport-reveal.md#automatic-reveal-across-multiple-viewports
 packages/flutter/test/rendering/viewport_test.dart	51	Scrollable widget scrollDirection update test	paired-match	upstream-viewport-reveal.md#runtime-axis-change-and-an-offstage-negative-item
 packages/flutter/test/rendering/viewport_test.dart	1188	Reverse List showOnScreen	paired-match	upstream-viewport-reveal.md#runtime-axis-change-and-an-offstage-negative-item
+packages/flutter/test/rendering/viewport_test.dart	2860	Viewport does not crash at zero area	paired-match	upstream-viewport-reveal.md#empty-viewport-at-zero-area

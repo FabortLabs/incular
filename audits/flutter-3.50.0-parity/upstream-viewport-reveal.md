@@ -126,3 +126,11 @@ cached. A one-second ShowOnScreen request moves the controller in
 the negative direction and the item's retained bounds enter the
 viewport. This exercises the offstage target rather than the
 already-visible center.
+
+## Empty viewport at zero area
+
+Pinned :2860 and the native mounted Viewport both lay out an empty
+viewport at a zero-sized root, with a nonzero initial-offset request,
+without failing. The laid-out viewport size is exactly zero. The
+comparison does not assert that the native scroll controller preserves
+an out-of-range offset for an empty viewport.
