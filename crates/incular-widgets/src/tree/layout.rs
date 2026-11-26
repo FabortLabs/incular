@@ -555,7 +555,7 @@ impl WidgetTree {
             false
         };
         let layers = node.object.layers.clone();
-        layers.apply_fitted_clip(&mut self.compositor, bounds, clip_behavior, overflows);
+        layers.apply_overflow_clip_with_coverage(&mut self.compositor, bounds, clip_behavior, overflows);
     }
     /// Measured child size for fraction resolution: the fraction is
     /// documented against the child's size, which differs from the
@@ -572,6 +572,12 @@ impl WidgetTree {
         let Some(node) = self.renders.get(id.0) else {
             return;
         };
+        let RenderKind::Scroll { clip_behavior, .. } = *node.object.kind() else {
+            return;
+        };
+        if clip_behavior == Clip::None {
+            return;
+        }
         let overflow = node
             .children
             .first()
@@ -585,7 +591,7 @@ impl WidgetTree {
             });
         node.object
             .layers
-            .apply_overflow_rect_clip(&mut self.compositor, node.size, overflow);
+            .apply_overflow_clip_with_coverage(&mut self.compositor, node.size, clip_behavior, overflow);
     }
 
     pub(super) fn child_content_transform(&self, id: RenderObjectId) -> CoreTransform {

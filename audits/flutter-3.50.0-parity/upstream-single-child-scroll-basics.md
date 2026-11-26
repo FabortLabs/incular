@@ -37,3 +37,15 @@ viewport; identical pixels produced by an overflowing layout child
 are clipped. Clip.none keeps the same content visible and re-enabling
 HardEdge clips again. The four named Windows wgpu targets also cover
 existing Stack, IndexedStack and invisible-border controls.
+
+### Retained clip coverage
+
+The exact pinned :52 and :111 originals and all six focused native
+tests pass. The native default checks the actual retained HardEdge
+setting, no clip on exact-fit layout, and one HardEdge viewport rect
+on 0.1 px overflow along each axis. The same retained render object
+updates from HardEdge to AntiAlias; its recorded clip coverage now
+updates with it instead of silently remaining HardEdge. The Flutter
+Scrollable and its private viewport expose separate descriptors;
+the native equivalent uses one retained scrolling/render setting
+and verifies both that setting and its submitted draw clip.

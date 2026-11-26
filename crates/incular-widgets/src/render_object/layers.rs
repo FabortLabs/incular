@@ -1147,7 +1147,7 @@ impl RenderLayers {
         }
     }
 
-    pub(crate) fn apply_fitted_clip(
+    pub(crate) fn apply_overflow_clip_with_coverage(
         &self,
         compositor: &mut LayerTree,
         size: Size,
@@ -1168,18 +1168,18 @@ impl RenderLayers {
         if let RenderKind::CustomLayout { delegate } = kind
             && let Some(behavior) = delegate.overflow_clip()
         {
-            self.apply_fitted_clip(compositor, size, behavior, self.layout_overflow.get());
+            self.apply_overflow_clip_with_coverage(compositor, size, behavior, self.layout_overflow.get());
             return;
         }
         if let RenderKind::Flex { clip_behavior, .. }
         | RenderKind::Wrap { clip_behavior, .. }
         | RenderKind::Unconstrained { clip_behavior, .. } = *kind
         {
-            self.apply_fitted_clip(compositor, size, clip_behavior, self.layout_overflow.get());
+            self.apply_overflow_clip_with_coverage(compositor, size, clip_behavior, self.layout_overflow.get());
             return;
         }
         if let RenderKind::SliverViewport { config } = kind {
-            self.apply_fitted_clip(
+            self.apply_overflow_clip_with_coverage(
                 compositor,
                 size,
                 config.clip_behavior,

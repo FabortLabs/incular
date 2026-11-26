@@ -1,15 +1,16 @@
 //! Runtime behavior from the pinned SingleChildScrollView originals.
-use incular_config::{Axis, Constraints};
+use incular_config::{Axis, Clip, Constraints};
 use incular_core::{
     Color, InputEvent, Offset, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase,
-    PointerSampleMetadata, Size, time::Instant,
+    PointerSampleMetadata, Rect, Size, time::Instant,
 };
-use incular_rendering::PaintCommand;
+use incular_rendering::{ClipCoverage, PaintCommand};
 use incular_runtime::Runtime;
 use incular_scroll::ScrollController;
 use incular_widgets::{
     Center, Directionality, LayoutBuilder, Placeholder, SingleChildScrollView, SizedBox,
-    TextDirection, Widget, internal::Key,
+    TextDirection, Widget,
+    internal::{Key, RenderKind},
 };
 
 const VIEW: Size = Size {
@@ -34,27 +35,95 @@ fn child_origin(runtime: &Runtime, key: &Key) -> Offset {
     runtime.tree().element_bounds(child).unwrap().origin
 }
 
+fn viewport_clip(runtime: &Runtime, key: &Key) -> (impl Copy + Eq + std::fmt::Debug + use<>, Clip) {
+    let tree = runtime.tree();
+    let mut element = tree
+        .element_with_key(key)
+        .expect("scroll content is mounted");
+    while let Some(parent) = tree.parent(element) {
+        let render = tree.render_id(parent).unwrap();
+        if let Some(RenderKind::Scroll { clip_behavior, .. }) = tree.render_object_kind(render) {
+            return (render, *clip_behavior);
+        }
+        element = parent;
+    }
+    panic!("missing retained single-child viewport")
+}
+
+fn recorded_clips(list: &incular_rendering::DisplayList) -> Vec<(Rect, ClipCoverage)> {
+    list.commands()
+        .iter()
+        .filter_map(|command| match command {
+            PaintCommand::PushClip { rect } => Some((*rect, ClipCoverage::HardEdge)),
+            PaintCommand::PushClipRRect {
+                rrect, coverage, ..
+            } => Some((rrect.rect, *coverage)),
+            _ => None,
+        })
+        .collect()
+}
+
 #[test]
 fn default_scroller_clips_only_when_children_overflow() {
     let key = Key::Value(1);
-    let mut actual = Vec::new();
+    let viewport_rect = Rect::from_origin_size(Offset::ZERO, VIEW);
     for axis in [Axis::Vertical, Axis::Horizontal] {
         let fit = axis.main_extent(VIEW);
         let mut runtime = Runtime::new(scroll(axis, fit, None, key.clone())).unwrap();
-        for size in [fit, fit + 0.1] {
+        let mut retained = None;
+        for (size, overflows) in [(fit, false), (fit + 0.1, true)] {
             let root = runtime.tree().root().unwrap();
             runtime
                 .schedule_update(root, scroll(axis, size, None, key.clone()))
                 .unwrap();
             let (list, _) = runtime.run_frame(Constraints::tight(VIEW)).unwrap();
-            actual.push(
-                list.commands()
-                    .iter()
-                    .any(|command| matches!(command, PaintCommand::PushClip { .. })),
-            );
+            let (id, mode) = viewport_clip(&runtime, &key);
+            assert_eq!(mode, Clip::HardEdge);
+            let old = retained.replace(id);
+            assert!(old.is_none_or(|old| old == id));
+            let expected = if overflows {
+                &[(viewport_rect, ClipCoverage::HardEdge)][..]
+            } else {
+                &[][..]
+            };
+            assert_eq!(recorded_clips(&list), expected, "{axis:?} extent {size}");
         }
     }
-    assert_eq!(actual, [false, true, false, true]);
+}
+
+#[test]
+fn changing_scroll_clip_coverage_updates_the_same_retained_viewport() {
+    let key = Key::Value(19);
+    let build = |clip| {
+        let scroller = SingleChildScrollView::new(
+            Widget::box_(Size::new(VIEW.width, 2000.), Color::WHITE).with_key(key.clone()),
+        );
+        let scroller = match clip {
+            None => scroller,
+            Some(clip) => scroller.clip_behavior(clip),
+        };
+        Widget::from(Directionality::new(TextDirection::Ltr, scroller))
+    };
+    let mut runtime = Runtime::new(build(None)).unwrap();
+    let (before, _) = runtime.run_frame(Constraints::tight(VIEW)).unwrap();
+    let (id, mode) = viewport_clip(&runtime, &key);
+    let expected = Rect::from_origin_size(Offset::ZERO, VIEW);
+    assert_eq!(mode, Clip::HardEdge);
+    assert_eq!(
+        recorded_clips(&before),
+        [(expected, ClipCoverage::HardEdge)]
+    );
+
+    let root = runtime.tree().root().unwrap();
+    runtime
+        .schedule_update(root, build(Some(Clip::AntiAlias)))
+        .unwrap();
+    let (after, _) = runtime.run_frame(Constraints::tight(VIEW)).unwrap();
+    assert_eq!(viewport_clip(&runtime, &key), (id, Clip::AntiAlias));
+    assert_eq!(
+        recorded_clips(&after),
+        [(expected, ClipCoverage::AntiAlias)]
+    );
 }
 
 #[test]

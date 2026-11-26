@@ -724,7 +724,7 @@ packages/flutter/test/gestures/tap_and_drag_test.dart	933	Defaults to drag when 
 packages/flutter/test/gestures/tap_and_drag_test.dart	954	Fires cancel and resets for PointerCancelEvent	paired-match	upstream-tap-and-drag.md
 packages/flutter/test/gestures/tap_and_drag_test.dart	975	Does not call onDragEnd if not provided	partial-match	upstream-tap-and-drag.md
 packages/flutter/test/gestures/tap_and_drag_test.dart	1013	Contains correct positions in the drag end details	paired-match	upstream-tap-and-drag.md
-packages/flutter/test/widgets/single_child_scroll_view_test.dart	52	SingleChildScrollView overflow and clipRect test	partial-mismatch	upstream-single-child-scroll-basics.md
+packages/flutter/test/widgets/single_child_scroll_view_test.dart	52	SingleChildScrollView overflow and clipRect test	paired-match	upstream-single-child-scroll-basics.md#retained-clip-coverage
 packages/flutter/test/widgets/single_child_scroll_view_test.dart	146	SingleChildScrollView control test	paired-match	upstream-single-child-scroll-basics.md
 packages/flutter/test/widgets/single_child_scroll_view_test.dart	159	Changing controllers changes scroll position	partial-match	upstream-single-child-scroll-basics.md
 packages/flutter/test/widgets/single_child_scroll_view_test.dart	195	Changing scroll controller inside dirty layout builder does not assert	paired-match	upstream-single-child-scroll-basics.md
@@ -1762,3 +1762,4 @@ packages/flutter/test/widgets/raw_menu_anchor_test.dart	1805	[Default] diagnosti
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	1830	[Group] diagnostics	reference-ran-incular-open	upstream-raw-menu-animation-observer-and-shadow.md#remaining-raw-menu-registration-gaps
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	1847	Surface clip behavior	reference-ran-incular-open	upstream-raw-menu-animation-observer-and-shadow.md#remaining-raw-menu-registration-gaps
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	3138	MenuController can be overridden after removing final modifier	reference-ran-incular-open	upstream-raw-menu-animation-observer-and-shadow.md#remaining-raw-menu-registration-gaps
+packages/flutter/test/widgets/single_child_scroll_view_test.dart	111	SingleChildScrollView respects clipBehavior	paired-match	upstream-single-child-scroll-basics.md#retained-clip-coverage
