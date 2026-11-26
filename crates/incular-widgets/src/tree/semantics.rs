@@ -30,7 +30,7 @@ pub(super) struct SemanticCollectionContext {
 enum SemanticTextMerge {
     #[default]
     None,
-    BlockedLabels,
+    CompatibleLabels,
     HintAndValue {
         take_value: bool,
     },
@@ -914,8 +914,10 @@ impl WidgetTree {
             && self.can_merge_text_fragment(element, entry, parent_text_merge);
         let own_text_merge = if joins_text_merge {
             SemanticTextMerge::None
-        } else if can_own_blocked_labels(entry, own_focus_block) {
-            SemanticTextMerge::BlockedLabels
+        } else if can_own_blocked_labels(entry, own_focus_block)
+            || self.is_sliver_heading_label_owner(element, entry)
+        {
+            SemanticTextMerge::CompatibleLabels
         } else if can_own_hint_value(entry, own_focus_block) {
             let owns_value = entry
                 .widget
@@ -1284,7 +1286,7 @@ impl WidgetTree {
             role = None;
         }
         let explicitly_merges = absorbs_descendant_semantics(entry);
-        if (explicitly_merges || own_text_merge == SemanticTextMerge::BlockedLabels)
+        if (explicitly_merges || own_text_merge == SemanticTextMerge::CompatibleLabels)
             && focus_annotation.is_none()
         {
             if let Some(own) = element_own_label(entry) {
@@ -1305,7 +1307,7 @@ impl WidgetTree {
                 if explicitly_merges {
                     self.push_merged_semantics(child, &mut merged);
                 } else {
-                    self.push_compatible_blocked_labels(child, &mut merged);
+                    self.push_compatible_labels(child, &mut merged);
                 }
             }
         }
@@ -1923,6 +1925,26 @@ impl WidgetTree {
         });
     }
 
+    /// A heading annotation on a sliver owns its compatible text label,
+    /// but not independent child nodes (buttons, fields, explicit boundaries).
+    fn is_sliver_heading_label_owner(&self, element: ElementId, entry: &Element) -> bool {
+        entry
+            .widget
+            .semantic_properties()
+            .explicit
+            .as_ref()
+            .is_some_and(|annotation| {
+                annotation.role == SemanticRole::Heading && !annotation.state.explicit_child_nodes
+            })
+            && entry.parent.is_some_and(|viewport| {
+                self.elements.get(viewport.0).is_some_and(|parent| {
+                    matches!(parent.widget.kind(), WidgetKind::SliverViewport { .. })
+                }) && self
+                    .viewport_sliver_child(viewport, element)
+                    .is_some_and(|(_, id)| crate::scrolling::is_semantics_anchor(id))
+            })
+    }
+
     fn can_merge_text_fragment(
         &self,
         element: ElementId,
@@ -1947,7 +1969,7 @@ impl WidgetTree {
                 let state = &explicit.state;
                 let text_is_compatible = match policy {
                     SemanticTextMerge::None => false,
-                    SemanticTextMerge::BlockedLabels => {
+                    SemanticTextMerge::CompatibleLabels => {
                         explicit.label.is_some()
                             && explicit.value.is_none()
                             && explicit.description.is_none()
@@ -2001,15 +2023,11 @@ impl WidgetTree {
         }
     }
 
-    fn push_compatible_blocked_labels(
-        &self,
-        element: ElementId,
-        merged: &mut MergedSemanticSummary,
-    ) {
+    fn push_compatible_labels(&self, element: ElementId, merged: &mut MergedSemanticSummary) {
         let Some(entry) = self.elements.get(element.0) else {
             return;
         };
-        if !self.can_merge_text_fragment(element, entry, SemanticTextMerge::BlockedLabels) {
+        if !self.can_merge_text_fragment(element, entry, SemanticTextMerge::CompatibleLabels) {
             return;
         }
         if let Some(label) = element_own_label(entry) {
@@ -2021,7 +2039,7 @@ impl WidgetTree {
         }
         with_recursive_tree_stack(|| {
             for &child in self.visible_semantic_children(element, entry).iter() {
-                self.push_compatible_blocked_labels(child, merged);
+                self.push_compatible_labels(child, merged);
             }
         });
     }

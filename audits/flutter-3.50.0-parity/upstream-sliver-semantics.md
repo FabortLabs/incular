@@ -68,3 +68,19 @@ Its default reveal uses a callback without advertising an extra action,
 whereas Incular's portable projection exposes `ShowOnScreen` directly.
 The tested callback and annotation behavior matches; these broader
 dispositions remain partial.
+
+## Heading annotation on a sliver's text
+
+Pinned lines 2672, 2702 and 2773 passed. A sliver configured as a heading
+previously created an unlabeled heading node while its text appeared on
+a plain child. The `sliver_semantics` tests now verify the actual six
+labeled heading nodes (levels 1–6) and a non-heading sibling, including
+the semantic role. The heading consumes compatible text, not independent
+actions: a descendant button remains a separate actionable node.
+
+The same tests reject signed values −1, 0, 7, 8 and 9 in debug builds.
+The `flutter350_semantics_heading_geometry` target passed all nine
+parent/descendant level combinations in a merged retained graph.
+The Dart tests also examine the descriptor directly and call its
+render configuration's `absorb` method. Those direct APIs are partial;
+the rendered heading-node case is paired.

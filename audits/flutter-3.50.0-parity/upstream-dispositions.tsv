@@ -1937,3 +1937,6 @@ packages/flutter/test/widgets/sliver_semantics_widget_test.dart	1393	SliverSeman
 packages/flutter/test/widgets/sliver_semantics_widget_test.dart	1423	SliverSemantics increased/decreased values are annotated	partial-match	upstream-sliver-semantics.md#action-replacement-descriptions-and-exclusion
 packages/flutter/test/widgets/sliver_semantics_widget_test.dart	1474	SliverSemantics excludeSemantics ignores children	partial-match	upstream-sliver-semantics.md#action-replacement-descriptions-and-exclusion
 packages/flutter/test/widgets/sliver_semantics_widget_test.dart	1715	SliverSemantics Can change handlers	partial-match	upstream-sliver-semantics.md#action-replacement-descriptions-and-exclusion
+packages/flutter/test/widgets/sliver_semantics_widget_test.dart	2672	SliverSemantics supports heading levels	partial-match	upstream-sliver-semantics.md#heading-annotation-on-a-slivers-text
+packages/flutter/test/widgets/sliver_semantics_widget_test.dart	2702	SliverSemantics parent heading level takes precedence when it absorbs a child	partial-match	upstream-sliver-semantics.md#heading-annotation-on-a-slivers-text
+packages/flutter/test/widgets/sliver_semantics_widget_test.dart	2773	SliverSemantics applies heading semantics to semantics tree	paired-match	upstream-sliver-semantics.md#heading-annotation-on-a-slivers-text

@@ -368,3 +368,71 @@ fn compatible_hint_and_value_merge_for_sliver_and_box_annotations() {
         );
     }
 }
+
+#[test]
+fn headings_on_slivers_annotate_their_text_nodes_without_turning_siblings_into_headings() {
+    let mut slivers = (1u8..=6)
+        .map(|level| -> Box<dyn Sliver> {
+            Box::new(SliverSemantics::new(
+                move || Semantics::default().heading_level(level),
+                SliverToBoxAdapter::new(row(&format!("Heading level {level}"))),
+            ))
+        })
+        .collect::<Vec<_>>();
+    slivers.push(Box::new(SliverToBoxAdapter::new(row(
+        "This is not a heading",
+    ))));
+    let scene = semantic_view(
+        TextDirection::Ltr,
+        incular_widgets::SliverMainAxisGroup::new(slivers),
+    );
+    let mut tree = WidgetTree::new();
+    tree.mount(scene).unwrap();
+    layout(&mut tree);
+    for level in 1u8..=6 {
+        let node = find(&tree, &format!("Heading level {level}"));
+        assert_eq!(node.state.heading_level, Some(level));
+        assert_eq!(node.role, SemanticRole::Heading);
+    }
+    let normal = find(&tree, "This is not a heading");
+    assert_eq!(normal.state.heading_level, None);
+    assert_ne!(normal.role, SemanticRole::Heading);
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn heading_annotation_rejects_values_outside_one_through_six() {
+    for invalid in [-1, 0, 7, 8, 9] {
+        assert!(std::panic::catch_unwind(|| Semantics::default().heading_level(invalid)).is_err());
+    }
+}
+
+#[test]
+fn a_sliver_heading_collects_plain_text_without_absorbing_an_independent_action() {
+    use incular_semantics::SemanticActionKind;
+
+    let children: [Box<dyn Sliver>; 2] = [
+        Box::new(SliverToBoxAdapter::new(row("Category"))),
+        Box::new(SliverToBoxAdapter::new(
+            Semantics::new(SizedBox::new().height(10.))
+                .label("Reveal items")
+                .button(true)
+                .on_tap(|| {}),
+        )),
+    ];
+    let heading = SliverSemantics::new(
+        || Semantics::default().heading_level(2),
+        incular_widgets::SliverMainAxisGroup::new(children),
+    );
+    let mut tree = WidgetTree::new();
+    tree.mount(semantic_view(TextDirection::Ltr, heading))
+        .unwrap();
+    layout(&mut tree);
+    let title = find(&tree, "Category");
+    assert_eq!(title.state.heading_level, Some(2));
+    assert!(!title.actions.contains(&SemanticActionKind::Activate));
+    let action = find(&tree, "Reveal items");
+    assert_eq!(action.role, SemanticRole::Button);
+    assert!(action.actions.contains(&SemanticActionKind::Activate));
+    assert_eq!(title.children, [action.id]);
+}
