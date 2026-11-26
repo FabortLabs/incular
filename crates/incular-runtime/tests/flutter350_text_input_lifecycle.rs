@@ -317,3 +317,83 @@ fn focused_off_cache_editor_releases_only_its_automatic_keep_alive() {
         assert_eq!(text.text(), "draft");
     }
 }
+
+#[test]
+fn a_focused_keyed_editor_survives_rebuild_and_skipped_layout_after_a_preceding_row() {
+    use incular_text::{TextAffinity, TextAlign, TextSelection};
+    use incular_widgets::{ListView, ScrollController, internal::Key};
+
+    for fixed in [false, true] {
+        let text = TextEditingController::with_text("draft");
+        let focus = FocusNode::new();
+        let scroll = ScrollController::new();
+        let key = Key::from("keyed editor");
+        let build = |prepend| -> Widget {
+            let editor = field(&text, &focus, true)
+                .multiline(true)
+                .text_align(if prepend {
+                    TextAlign::Right
+                } else {
+                    TextAlign::Left
+                })
+                .show_cursor(prepend);
+            let mut items = Vec::new();
+            if prepend {
+                items.extend((0..if fixed { 150 } else { 1 }).map(|_| {
+                    Widget::from(SizedBox::from_dimensions(
+                        None,
+                        Some(if fixed { 40. } else { 6000. }),
+                        None::<Widget>,
+                    ))
+                }));
+            }
+            items.push(Widget::from(editor).with_key(key.clone()));
+            let view = ListView::new(items).controller(scroll.clone());
+            if fixed {
+                view.item_extent(40.).into()
+            } else {
+                view.into()
+            }
+        };
+        let mut runtime = Runtime::new(build(false)).unwrap();
+        frame(&mut runtime);
+        let client = attached(&mut runtime);
+        let editor = runtime.tree().element_with_key(&key).unwrap();
+        assert!(focus.has_primary_focus());
+        let root = runtime.tree().root().unwrap();
+        runtime.schedule_update(root, build(true)).unwrap();
+        frame(&mut runtime);
+        assert_eq!(
+            runtime.tree().element_with_key(&key),
+            Some(editor),
+            "fixed {fixed}"
+        );
+        assert_eq!(runtime.focused_element(), Some(editor), "fixed {fixed}");
+        assert!(focus.has_primary_focus());
+        assert_eq!(scroll.offset(), 0.);
+        assert_eq!(text.text(), "draft");
+        assert!(!runtime.take_text_input_commands().iter().any(|command| {
+            matches!(
+                command,
+                TextInputCommand::SetClient { .. } | TextInputCommand::Clear { .. }
+            )
+        }));
+
+        assert!(scroll.jump_to(scroll.max_offset()));
+        frame(&mut runtime);
+        assert_eq!(runtime.tree().element_with_key(&key), Some(editor));
+        text.set_selection(TextSelection::collapsed(text.text().len()));
+        frame(&mut runtime);
+        let caret = runtime
+            .tree()
+            .text_field_offset_rect(editor, text.text().len(), TextAffinity::Downstream)
+            .unwrap();
+        assert!(
+            caret.origin.x > 120.,
+            "the updated right alignment applies on reentry: {caret:?}"
+        );
+        assert!(platform_call(&mut runtime, "onConnectionClosed", client));
+        frame(&mut runtime);
+        assert!(!focus.has_focus());
+    }
+}

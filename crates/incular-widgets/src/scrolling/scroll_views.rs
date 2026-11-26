@@ -668,6 +668,20 @@ fn list_view_widget(value: ListView) -> Widget {
                 item_extent
             };
             let children = Rc::new(children);
+            let find_child_index: FindChildIndex = {
+                let children = children.clone();
+                let lookup = std::cell::OnceCell::new();
+                Rc::new(move |key| {
+                    let index = lookup.get_or_init(|| {
+                        children
+                            .iter()
+                            .enumerate()
+                            .filter_map(|(index, widget)| Some((widget.key()?.clone(), index)))
+                            .collect::<HashMap<_, _>>()
+                    });
+                    index.get(key).copied()
+                })
+            };
             build_list_render_sliver(
                 children.len(),
                 Rc::new(move |index| children[index].clone()),
@@ -675,6 +689,7 @@ fn list_view_widget(value: ListView) -> Widget {
                 item_extent,
                 item_extent_builder,
                 prototype_item,
+                Some(find_child_index),
             )
         }
         ListViewStrategy::Builder {
@@ -687,6 +702,7 @@ fn list_view_widget(value: ListView) -> Widget {
             item_extent,
             item_extent_builder,
             prototype_item,
+            None,
         ),
     };
 
@@ -748,15 +764,20 @@ fn build_list_render_sliver(
     item_extent: Option<f32>,
     item_extent_builder: Option<Rc<dyn Fn(usize) -> f32>>,
     prototype_item: Option<Widget>,
+    find_child_index: Option<FindChildIndex>,
 ) -> Box<dyn RenderSliver> {
     if let Some(extent) = item_extent {
-        return Box::new(FixedExtentRenderSliver::new(item_count, extent, builder));
+        let mut sliver = FixedExtentRenderSliver::new(item_count, extent, builder);
+        sliver.find_child_index = find_child_index;
+        return Box::new(sliver);
     }
     if let Some(prototype) = prototype_item {
         let extent = widget_main_extent_hint(&prototype, axis)
             .unwrap_or(DEFAULT_LAZY_ITEM_EXTENT)
             .max(1.);
-        return Box::new(FixedExtentRenderSliver::new(item_count, extent, builder));
+        let mut sliver = FixedExtentRenderSliver::new(item_count, extent, builder);
+        sliver.find_child_index = find_child_index;
+        return Box::new(sliver);
     }
     let index = if let Some(extent_builder) = item_extent_builder {
         MeasuredExtentIndex::with_estimates(item_count, DEFAULT_LAZY_ITEM_EXTENT, move |index| {
@@ -765,7 +786,9 @@ fn build_list_render_sliver(
     } else {
         MeasuredExtentIndex::new(item_count, DEFAULT_LAZY_ITEM_EXTENT)
     };
-    Box::new(VariableExtentRenderSliver::new(index, builder))
+    let mut sliver = VariableExtentRenderSliver::new(index, builder);
+    sliver.find_child_index = find_child_index;
+    Box::new(sliver)
 }
 
 /// Content strategy for [`GridView`].

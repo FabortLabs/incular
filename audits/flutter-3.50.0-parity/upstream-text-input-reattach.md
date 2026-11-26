@@ -77,3 +77,20 @@ still uses a shared FocusNode across two fields and remains partial.
 The original that inserts a large item before a kept keyed editor
 passed on Flutter only; keyed remapping plus offscreen repaint is still
 a distinct comparison.
+
+## Keyed editor rebuild with skipped layout
+
+The previously open `editable_text_test.dart:2514` now pairs. The
+pinned original and an additional Flutter control insert 6,000 px of
+content before a focused keyed editor while changing alignment and
+cursor visibility. The editor keeps its original state and focus
+without changing the scroll offset or draft. The native regression
+also checks the same input attachment persists and right alignment
+takes effect when the editor returns to view.
+
+Explicit ListView children now resolve a kept key's new index on
+delegate replacement. The key map is built only if a kept keyed child
+actually needs lookup. Both fixed and measured row paths carry the
+automatic retention request only to the matching widget. The original
+Flutter case, one authored Flutter case, and 18 focused Rust cases
+passed. Builder callbacks for arbitrary lazy data remaps are separate.

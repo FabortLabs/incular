@@ -244,6 +244,7 @@ pub(super) struct FixedExtentRenderSliver {
     pub(super) item_extent: f32,
     pub(super) builder: Rc<dyn Fn(usize) -> Widget>,
     pub(super) widgets: HashMap<usize, Widget>,
+    pub(super) find_child_index: Option<FindChildIndex>,
 }
 
 impl FixedExtentRenderSliver {
@@ -257,6 +258,7 @@ impl FixedExtentRenderSliver {
             item_extent: finite_non_negative(item_extent),
             builder,
             widgets: HashMap::new(),
+            find_child_index: None,
         }
     }
 
@@ -504,6 +506,7 @@ pub(super) struct VariableExtentRenderSliver {
     pub(super) index: MeasuredExtentIndex,
     pub(super) builder: Rc<dyn Fn(usize) -> Widget>,
     pub(super) widgets: HashMap<usize, Widget>,
+    pub(super) find_child_index: Option<FindChildIndex>,
     /// Slots the last compatible-state transfer wrote without
     /// established identity. Reconciliation reads this set to tell
     /// transferred guesses apart from explicit seeds; entries belong
@@ -543,6 +546,7 @@ impl VariableExtentRenderSliver {
             index,
             builder,
             widgets: HashMap::new(),
+            find_child_index: None,
             transferred: Rc::new(RefCell::new(HashSet::new())),
             tight_main_extent: false,
             kept: Vec::new(),
@@ -3363,35 +3367,43 @@ fn adopt_natural_header_state(
 /// the global fallback. No row correspondence is implied: explicit seeds win,
 /// reused elements establish identity, and fresh elements invalidate guesses.
 /// Offscreen totals remain estimates until those rows are materialized.
-/// Rebuild only the formerly kept entries with the new delegate. A slot
-/// can stay parked only if its new descriptor requests it and identifies
-/// the same child. Unrelated off-cache slots are never probed or built.
+/// Rebuild only the formerly kept entries with the new delegate. A
+/// matching descriptor keeps its focus request, but its explicit request
+/// always comes from the new widget. If the static list can resolve keys,
+/// remap a parked child by key instead of pinning it to its prior index.
+/// Unrelated off-cache widgets are never built.
 fn transfer_keep_alives(
     retained: &HashMap<usize, Widget>,
     fresh: &mut HashMap<usize, Widget>,
     count: usize,
     build: impl Fn(usize) -> Widget,
+    find_child_index: Option<&FindChildIndex>,
     probes: &mut u64,
 ) {
     let mut indices: Vec<_> = retained
         .iter()
-        .filter_map(|(&index, widget)| {
-            (index < count && widget.keep_alive_request()).then_some(index)
-        })
+        .filter_map(|(&index, widget)| widget.keep_alive_request().then_some(index))
         .collect();
     indices.sort_unstable();
     for index in indices {
-        *probes += 1;
         let old = &retained[&index];
-        if fresh.contains_key(&index) {
+        let destination = match (old.key(), find_child_index) {
+            (Some(key), Some(find)) => {
+                let Some(found) = find(key) else { continue };
+                found
+            }
+            _ => index,
+        };
+        if destination >= count || fresh.contains_key(&destination) {
             continue;
         }
-        let new = build(index);
+        *probes += 1;
+        let new = build(destination);
         let same_child = old.key() == new.key()
             && std::mem::discriminant(old.kind()) == std::mem::discriminant(new.kind());
         if !new.keep_alive_request() || same_child {
             fresh.insert(
-                index,
+                destination,
                 new.with_focus_keep_alive_request(same_child && old.focus_keep_alive_request()),
             );
         }
@@ -3416,6 +3428,7 @@ fn adopt_indexed_keep_alives(
             &mut fresh.widgets,
             fresh.item_count,
             |index| (fresh.builder)(index),
+            fresh.find_child_index.as_ref(),
             probes,
         );
         return true;
@@ -3445,6 +3458,7 @@ fn adopt_indexed_keep_alives(
                     .or_else(|| builder.map(|builder| builder(index)))
                     .unwrap_or_else(|| SizedBox::shrink().into())
             },
+            None,
             probes,
         );
         return true;
@@ -3462,6 +3476,7 @@ fn adopt_indexed_keep_alives(
             &mut fresh.widgets,
             fresh.item_count,
             |index| (fresh.builder)(index),
+            None,
             probes,
         );
         return true;
@@ -3491,6 +3506,14 @@ fn adopt_variable_extent_measurements(
     // tell transferred guesses apart from explicit seeds. This
     // transfer only shields totals and first paint; per-row truth is
     // established post-mapping below.
+    transfer_keep_alives(
+        &retained.widgets,
+        &mut fresh.widgets,
+        fresh.index.len(),
+        |index| (fresh.builder)(index),
+        fresh.find_child_index.as_ref(),
+        probes,
+    );
     let fresh_len = fresh.index.len();
     if preserve_anchor && !fresh.tight_main_extent && !retained.tight_main_extent {
         fresh.leading_anchor = retained
