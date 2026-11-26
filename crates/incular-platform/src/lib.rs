@@ -28,6 +28,7 @@ mod platform_view;
 mod pointer;
 mod semantics_messages;
 mod spell_check;
+mod system_chrome;
 mod system_environment;
 mod system_navigator;
 mod system_sound;
@@ -99,6 +100,10 @@ pub use pointer::{
 pub use spell_check::{
     DefaultSpellCheckService, FLUTTER_SPELL_CHECK_CHANNEL, FlutterSpellCheckReply,
     SpellCheckCallback, SpellCheckResults, SpellCheckService, SuggestionSpan,
+};
+pub use system_chrome::{
+    ApplicationSwitcherDescription, DeviceOrientation, SystemChrome, SystemUiChangeCallback,
+    SystemUiChangeMessageError, SystemUiMode, SystemUiOverlay,
 };
 pub use system_environment::{
     MemorySystemEnvironmentProvider, SystemEnvironmentPreferences, SystemEnvironmentProvider,

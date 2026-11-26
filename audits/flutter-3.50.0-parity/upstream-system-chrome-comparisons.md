@@ -45,3 +45,22 @@ typed delivery does not verify the asynchronous error callback.
 
 Ten focused Rust runtime controls passed. No native bar pixels, Android
 phone, or iOS view controller were exercised.
+
+## System chrome JSON commands
+
+Seven previously open originals now pair: `:88, :111, :136,
+:154, :174, :189, :215`. The service sends one JSON command to
+flutter/platform with the ordered orientation enum strings,
+nullable task-switcher metadata and unsigned ARGB, or the
+specific mode/overlay arguments. Missing optional-platform plugins
+complete successfully. A manual mode with an absent overlay list
+is rejected before transport; an empty but supplied list is legal.
+Clearing the visibility callback sends nothing; installing one
+sends the one listener-registration command.
+
+Native controls also decode real inbound visibility messages,
+check both booleans and a malformed payload, and make sure a
+removed callback no longer sees messages. All 19 selected native
+checks passed. These are host messages, not proof of OS-level
+orientation or bar drawing. Deferred overlay style and its
+error-reporting original `:393` are separate from this command set.
