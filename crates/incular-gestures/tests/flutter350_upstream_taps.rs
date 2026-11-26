@@ -302,12 +302,28 @@ fn unrelated_move_and_cancel_do_not_clear_the_primary_tap() {
 
 #[test]
 fn tap_diagonal_motion_outside_slop_cancels_once() {
+    use incular_gestures::{GestureArena, GestureArenaKey, GestureDisposition};
+
     let mut t = Tap::primary();
+    let mut arena = GestureArena::new();
+    let key = GestureArenaKey::pointer(0, 3);
+    let member = arena.add(key, false);
     t.event(0, 3, Down, A);
     t.expect(&[]);
+    let result = arena.close_sole_member(key);
+    assert!(result.iter().any(|entry| {
+        entry.member == member && entry.disposition == GestureDisposition::Accepted
+    }));
+    assert!(t.g.accept_tap_on_arena_close(3));
+    assert!(!t.g.accept_tap_on_arena_close(3), "no duplicated down");
+    assert!(arena.close_sole_member(key).is_empty());
+    t.expect(&[]);
+
     t.event(0, 3, Move, (25., 25.));
     t.expect(&["cancel"]);
     t.event(0, 3, Up, (25., 25.));
+    t.expect(&[]);
+    let _ = arena.cancel(key);
     t.expect(&[]);
 }
 

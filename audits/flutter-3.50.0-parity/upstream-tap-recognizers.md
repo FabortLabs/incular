@@ -94,3 +94,15 @@ native overlapping-release orders passed: releasing pointer 2 before
 pointer 1 emits nothing for pointer 2 and still recognizes pointer 1 once.
 This closes the old ledger mismatch; it does not change the separate
 partial arena-close comparison for outside-slop cancellation.
+
+## Tap cancellation after the sole arena member wins
+
+Pinned `Distance cancels tap` and its short-move control both passed.
+Incular's recognizer test now explicitly registers and closes the
+sole-member arena, delivers acceptance to the tap, and checks the
+entire Down, Move, Up, and sweep trace. A move outside the circular
+slop produces exactly one cancellation and no tap; repeating the
+close cannot deliver a second down. A separate arena control waits
+while there are two contenders and awards the survivor once.
+This verifies the direct recognizer protocol; retained pointer
+adapters can use it without changing their competing tap claims.

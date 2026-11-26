@@ -1,6 +1,6 @@
 //! Post-registration equivalents of Flutter 3.50.0 arena resolution cases.
-//! Incular exposes dispositions instead of callbacks and has no close
-//! operation; these tests do not cover Flutter's registration lifecycle.
+//! Incular exposes dispositions rather than callbacks; sole-member closure
+//! is supported here without modeling the entire binding lifecycle.
 
 use incular_gestures::{
     GestureArena, GestureArenaEntry, GestureArenaKey, GestureArenaMember,
@@ -103,4 +103,18 @@ fn pending_simultaneous_members_can_still_reject_and_full_streams_can_cancel() {
             .all(|entry| entry.disposition == incular_gestures::GestureDisposition::Cancelled)
     );
     assert!(arena.entries(KEY).is_empty());
+}
+
+#[test]
+fn closing_waits_for_contenders_and_only_publishes_a_default_win_once() {
+    let mut arena = GestureArena::new();
+    let key = GestureArenaKey::pointer(0, 77);
+    let first = arena.add(key, false);
+    let second = arena.add(key, false);
+    assert!(arena.close_sole_member(key).is_empty());
+    arena.reject(key, second);
+    assert!(arena.close_sole_member(key).iter().any(|entry| {
+        entry.member == first && entry.disposition == Accepted
+    }));
+    assert!(arena.close_sole_member(key).is_empty());
 }

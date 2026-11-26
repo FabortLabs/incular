@@ -691,7 +691,7 @@ packages/flutter/test/gestures/tap_test.dart	64	Should recognize tap	paired-matc
 packages/flutter/test/gestures/tap_test.dart	186	No duplicate tap events	paired-match	upstream-tap-recognizers.md
 packages/flutter/test/gestures/tap_test.dart	219	Should not recognize two overlapping taps (FIFO)	paired-match	upstream-tap-recognizers.md
 packages/flutter/test/gestures/tap_test.dart	252	Should not recognize two overlapping taps (FILO)	paired-match	upstream-tap-recognizers.md#current-overlapping-release-order
-packages/flutter/test/gestures/tap_test.dart	285	Distance cancels tap	partial-mismatch	upstream-tap-recognizers.md
+packages/flutter/test/gestures/tap_test.dart	285	Distance cancels tap	paired-match	upstream-tap-recognizers.md#tap-cancellation-after-the-sole-arena-member-wins
 packages/flutter/test/gestures/tap_test.dart	318	Short distance does not cancel tap	paired-match	upstream-tap-recognizers.md
 packages/flutter/test/gestures/tap_test.dart	351	Timeout does not cancel tap	paired-match	upstream-tap-recognizers.md
 packages/flutter/test/gestures/tap_test.dart	988	A primary tap should trigger primary callbacks	paired-match	upstream-tap-recognizers.md

@@ -377,6 +377,18 @@ impl PointerGestureRecognizer {
     pub fn take_start_update(&mut self) -> Option<GestureAction> {
         self.start_update.take()
     }
+    /// Delivers the tap's arena acceptance for the tracked pointer.
+    /// Flutter reports TapDown by the earlier of acceptance and the press
+    /// timeout; this keeps a later slop rejection observable as TapCancel.
+    /// Returns whether it newly delivered the down notification.
+    pub fn accept_tap_on_arena_close(&mut self, pointer: u64) -> bool {
+        if self.down.is_none_or(|down| down.pointer != pointer) || self.pending_tap_down.is_none() {
+            return false;
+        }
+        self.flush_tap_down();
+        true
+    }
+
     /// Reports `onTapDown` once, for the press in progress.
     fn flush_tap_down(&mut self) {
         if let Some(details) = self.pending_tap_down.take() {
