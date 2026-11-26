@@ -2459,3 +2459,5 @@ packages/flutter/test/foundation/reassemble_test.dart	21	Pointer events are lock
 packages/flutter/test/widgets/reassemble_test.dart	11	reassemble does not crash	paired-match	upstream-reassemble-pointer-queue.md
 packages/flutter/test/foundation/platform_web_test.dart	20	returns what ui_web says	paired-match	upstream-browser-target-platform.md
 packages/flutter/test/foundation/platform_web_test.dart	27	defaults `unknown` to android	paired-match	upstream-browser-target-platform.md
+packages/flutter/test/widgets/semantics_clipping_test.dart	11	SemanticNode.rect is clipped	partial-match	upstream-flex-semantics-clipping.md
+packages/flutter/test/widgets/semantics_clipping_test.dart	62	SemanticsNode is not removed if out of bounds and merged into something within bounds	partial-match	upstream-flex-semantics-clipping.md

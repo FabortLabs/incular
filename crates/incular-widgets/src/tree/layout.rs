@@ -1249,10 +1249,11 @@ impl WidgetTree {
             };
             (n.object.shared_kind(), children)
         };
+        let previous = self.render_live(id, "retained render must remain live");
         let geometry_before = (
-            self.render_live(id, "retained render must remain live")
-                .size,
+            previous.size,
             self.content_transform(id),
+            previous.object.layers.has_semantic_overflow_clip(&kind),
         );
         let (size, offsets) = self.layout_kind(id, &kind, children, constraints)?;
         for (&child, offset) in children.iter().zip(offsets) {
@@ -1272,12 +1273,16 @@ impl WidgetTree {
             self.compositor
                 .update_transform(layer, CoreTransform::translation(offset));
         }
-        let (layer, node_offset) = {
+        let (layer, node_offset, overflow_clip_active) = {
             let node = self.render_live_mut(id, "retained render must remain live");
             node.size = size;
             node.constraints = Some(constraints);
             node.dirty.remove(DirtyFlags::LAYOUT);
-            (node.object.layers.root, node.offset)
+            (
+                node.object.layers.root,
+                node.offset,
+                node.object.layers.has_semantic_overflow_clip(&kind),
+            )
         };
         self.render_live_mut(id, "retained render must remain live")
             .dirty
@@ -1305,7 +1310,13 @@ impl WidgetTree {
         // above, and whoever places this node marks it. A new size changes
         // this node's bounds alone; a new content transform moves everything
         // below it.
-        if matches!(kind.as_ref(), RenderKind::FittedBox { .. })
+        if overflow_clip_active != geometry_before.2
+            || (overflow_clip_active && size != geometry_before.0)
+        {
+            // Descendants can enter or leave the accessibility clip even
+            // when their own layout size and offset remain unchanged.
+            self.mark_render_semantics(id, SemanticsDirty::Subtree);
+        } else if matches!(kind.as_ref(), RenderKind::FittedBox { .. })
             && geometry_before.1.and_then(CoreTransform::inverse).is_some()
                 != transform.and_then(CoreTransform::inverse).is_some()
         {

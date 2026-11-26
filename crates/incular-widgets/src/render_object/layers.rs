@@ -1292,6 +1292,14 @@ impl RenderLayers {
         self.layout_overflow.set(overflow);
     }
 
+    /// Flutter RenderFlex's approximate semantic clip is active only
+    /// when its paint would actually apply the configured overflow clip.
+    #[must_use]
+    pub(crate) fn has_semantic_overflow_clip(&self, kind: &RenderKind) -> bool {
+        matches!(kind, RenderKind::Flex { clip_behavior, .. } if *clip_behavior != Clip::None)
+            && self.layout_overflow.get()
+    }
+
     /// Keep the child's content and clip stage available, but bypass the
     /// stage when the layout reports no visual overflow.
     pub(crate) fn apply_overflow_rect_clip(

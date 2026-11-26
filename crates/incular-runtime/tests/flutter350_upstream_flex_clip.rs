@@ -192,3 +192,127 @@ fn fractional_flex_allocations_do_not_activate_an_overflow_clip() {
     }
     assert_eq!(clip(&list), []);
 }
+
+#[test]
+fn hard_edge_flex_clips_separate_semantics_and_keeps_labels_merged_inside() {
+    use incular_widgets::{Center, Directionality, MergeSemantics, Text};
+
+    let child = |label| {
+        SizedBox::new()
+            .width(75.)
+            .height(14.)
+            .child(Text::new(label))
+    };
+    for merge in [false, true] {
+        let row = if merge {
+            Flex::horizontal([
+                Widget::from(child("1")),
+                MergeSemantics::new(Flex::horizontal([child("2"), child("3")])).into(),
+            ])
+        } else {
+            Flex::horizontal([child("1"), child("2"), child("3")])
+        }
+        .clip_behavior(Clip::HardEdge);
+        let screen = Directionality::new(
+            TextDirection::Ltr,
+            Center::new(SizedBox::new().width(100.).child(row)),
+        );
+        let mut runtime = Runtime::new(screen.into()).unwrap();
+        runtime
+            .run_frame(Constraints::tight(Size::new(800., 600.)))
+            .unwrap();
+        let semantics = runtime.tree().semantics();
+        let actual = semantics
+            .iter()
+            .filter_map(|(_, node)| node.label.as_deref().map(|label| (label, node.bounds)))
+            .collect::<Vec<_>>();
+        let expected_label = if merge { "2\n3" } else { "2" };
+        assert_eq!(
+            actual,
+            [
+                (
+                    "1",
+                    Rect::from_origin_size(Offset::new(350., 293.), Size::new(75., 14.))
+                ),
+                (
+                    expected_label,
+                    Rect::from_origin_size(Offset::new(425., 293.), Size::new(25., 14.))
+                ),
+            ],
+            "merge={merge}"
+        );
+    }
+}
+
+#[test]
+fn retained_semantic_bounds_follow_flex_resize_and_clip_policy_changes() {
+    use incular_widgets::Text;
+
+    let make = |mode| {
+        Flex::horizontal(["1", "2", "3"].map(|label| {
+            SizedBox::new()
+                .width(75.)
+                .height(14.)
+                .child(Text::new(label).text_direction(TextDirection::Ltr))
+        }))
+        .text_direction(TextDirection::Ltr)
+        .clip_behavior(mode)
+        .into()
+    };
+    let mut runtime = Runtime::new(make(Clip::HardEdge)).unwrap();
+    let frame = |runtime: &mut Runtime, width| {
+        runtime
+            .run_frame(Constraints::tight(Size::new(width, 14.)))
+            .unwrap();
+    };
+    let observed = |runtime: &Runtime| {
+        let semantics = runtime.tree().semantics();
+        semantics
+            .iter()
+            .filter_map(|(id, node)| {
+                node.label
+                    .as_ref()
+                    .map(|label| (id, label.clone(), node.bounds.size.width))
+            })
+            .collect::<Vec<_>>()
+    };
+    let widths = |runtime: &Runtime| {
+        observed(runtime)
+            .into_iter()
+            .map(|(_, _, width)| width)
+            .collect::<Vec<_>>()
+    };
+
+    frame(&mut runtime, 100.);
+    assert_eq!(widths(&runtime), [75., 25.]);
+    let first = observed(&runtime)[0].0;
+    frame(&mut runtime, 130.);
+    assert_eq!(
+        widths(&runtime),
+        [75., 55.],
+        "an unchanged child follows its ancestor clip"
+    );
+    frame(&mut runtime, 150.);
+    assert_eq!(
+        widths(&runtime),
+        [75., 75.],
+        "touching the edge does not publish item 3"
+    );
+    frame(&mut runtime, 225.);
+    assert_eq!(widths(&runtime), [75., 75., 75.]);
+    frame(&mut runtime, 100.);
+    assert_eq!(widths(&runtime), [75., 25.]);
+
+    let root = runtime.tree().root().unwrap();
+    runtime.schedule_update(root, make(Clip::None)).unwrap();
+    frame(&mut runtime, 100.);
+    assert_eq!(widths(&runtime), [75., 75., 75.]);
+    runtime.schedule_update(root, make(Clip::HardEdge)).unwrap();
+    frame(&mut runtime, 100.);
+    assert_eq!(widths(&runtime), [75., 25.]);
+    assert_eq!(
+        observed(&runtime)[0].0,
+        first,
+        "the visible node keeps identity"
+    );
+}
