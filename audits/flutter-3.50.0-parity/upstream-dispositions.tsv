@@ -2444,3 +2444,5 @@ packages/flutter/test/foundation/debug_test.dart	87	debugMaybeDispatchDisposed	p
 packages/flutter/test/services/asset_bundle_test.dart	254	toString works as intended	paired-match	upstream-asset-diagnostics.md
 packages/flutter/test/services/asset_bundle_test.dart	261	Throws expected exceptions when loading not exists asset	paired-match	upstream-asset-diagnostics.md
 packages/flutter/test/services/asset_bundle_test.dart	226	AssetImage.obtainKey succeeds with ImageConfiguration.empty	paired-match	upstream-asset-image-keys.md#empty-image-configuration
+packages/flutter/test/widgets/scrollable_dispose_test.dart	11	simultaneously dispose a widget and end the scroll animation	paired-match	upstream-scrollable-disposal.md
+packages/flutter/test/widgets/scrollable_dispose_test.dart	31	Disposing a (nested) Scrollable while holding in overscroll does not crash	paired-match	upstream-scrollable-disposal.md
