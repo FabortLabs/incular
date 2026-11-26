@@ -477,6 +477,11 @@ impl WidgetTree {
         // Arena slots are reused and are not necessarily in mount order.
         // Keep already linked siblings in place; append only the changes.
         changed_parents.sort_unstable_by_key(|(sequence, _, _)| *sequence);
+        // Remove the outgoing edges first. Reversing a valid edge must
+        // not be rejected as a cycle through the stale opposite link.
+        for &(_, node, _) in &changed_parents {
+            node.set_host_parent(None);
+        }
         for (_, node, parent) in changed_parents {
             node.set_host_parent(parent);
         }

@@ -1363,3 +1363,59 @@ fn reparenting_the_active_leaf_forgets_the_old_scope_child_and_appends_to_the_ne
     assert_eq!(parent2.children(), [child3, child4, child1]);
     assert_eq!(runtime.focused_element(), mounted);
 }
+
+#[test]
+fn public_focus_permissions_follow_the_logical_non_scope_ancestor() {
+    use incular_widgets::Column;
+
+    let alternate = FocusNode::new();
+    let visual = FocusNode::new();
+    let leaf = FocusNode::new();
+    visual.set_descendants_are_focusable(false);
+    visual.set_descendants_are_traversable(false);
+    let scene = |parent: Option<FocusNode>| {
+        FocusScope::new(Column::new([
+            Widget::from(Focus::with_external_focus_node(SizedBox::shrink(), alternate.clone())),
+            Focus::with_external_focus_node(
+                Focus::with_external_focus_node(SizedBox::shrink(), leaf.clone())
+                    .parent_node(parent),
+                visual.clone(),
+            )
+            .into(),
+        ]))
+        .into()
+    };
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let mut runtime = Runtime::new(scene(Some(alternate.clone()))).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert!(leaf.can_request_focus());
+    assert!(!leaf.skip_traversal());
+
+    alternate.set_descendants_are_traversable(false);
+    assert!(leaf.skip_traversal());
+    assert!(leaf.can_request_focus());
+    leaf.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    assert!(leaf.has_primary_focus());
+
+    alternate.set_descendants_are_focusable(false);
+    assert!(!leaf.can_request_focus());
+    alternate.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    leaf.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    assert!(alternate.has_primary_focus());
+    assert!(!leaf.has_primary_focus());
+
+    alternate.set_descendants_are_focusable(true);
+    alternate.set_descendants_are_traversable(true);
+    assert!(leaf.can_request_focus());
+    assert!(!leaf.skip_traversal());
+    runtime.run_frame(bounds).unwrap();
+    assert!(alternate.has_primary_focus());
+
+    runtime.schedule_update(runtime.tree().root().unwrap(), scene(None)).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert!(!leaf.can_request_focus());
+    assert!(leaf.skip_traversal());
+}

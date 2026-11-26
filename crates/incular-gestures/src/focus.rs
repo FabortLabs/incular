@@ -547,6 +547,11 @@ impl FocusNode {
         if previous.as_ref() == parent {
             return;
         }
+        // The host resolves element cycles first. Also reject a cycle
+        // involving separate elements that alias the same FocusNode.
+        if parent.is_some_and(|parent| parent == self || parent.ancestor_iter().any(|ancestor| ancestor == *self)) {
+            return;
+        }
         let weak_self = Rc::downgrade(&self.state);
         if let Some(previous) = previous {
             previous
@@ -672,27 +677,8 @@ impl FocusNode {
 
     #[must_use]
     pub fn can_request_focus(&self) -> bool {
-        if !self.locally_can_request_focus() {
-            return false;
-        }
-        let mut scope = self.host_enclosing_scope();
-        let mut visited = Vec::new();
-        while let Some(current) = scope {
-            if visited.contains(&current) {
-                return false;
-            }
-            let Some(anchor) = current.mounted_anchor() else {
-                break;
-            };
-            if !anchor.locally_can_request_focus() || !anchor.state.descendants_are_focusable.get() {
-                return false;
-            }
-            scope = anchor.host_enclosing_scope();
-            if scope.is_some() {
-                visited.push(current);
-            }
-        }
-        true
+        self.locally_can_request_focus()
+            && self.ancestor_iter().all(|ancestor| ancestor.descendants_are_focusable())
     }
 
     /// Enables or disables this hosted focus node without overwriting its
@@ -718,6 +704,7 @@ impl FocusNode {
     #[must_use]
     pub fn skip_traversal(&self) -> bool {
         self.state.skip_traversal.get()
+            || self.ancestor_iter().any(|ancestor| !ancestor.descendants_are_traversable())
     }
     pub fn set_descendants_are_focusable(&self, focusable: bool) {
         if self.state.descendants_are_focusable.replace(focusable) != focusable {

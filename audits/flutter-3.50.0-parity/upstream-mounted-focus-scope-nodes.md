@@ -156,3 +156,17 @@ lists match. The native fixture provides explicit equivalents of the
 Flutter test binding's root, traversal group and view nodes; it verifies
 the topology behavior, not implicit Flutter binding initialization.
 All 34 targeted focus and lifecycle tests passed.
+
+## Inherited permissions on a logical focus branch
+
+The authored pinned `explicit_focus_ancestor_permissions_test.dart`
+checks ordinary Focus parents, not just scopes. The public node's
+effective focus request and traversal settings follow the assigned
+parent. A traversal-only restriction does not prevent a direct
+request. A denied request does not reappear when the permission
+is restored. Clearing the override restores both inherited values
+from the physical parent's focus node. This regression reproduced
+the old native getter error before the fix. The mounted ancestor
+walk no longer allocates a separate list to check scope permissions.
+All 45 targeted focus tests passed. This probe adds no original
+registration credit.
