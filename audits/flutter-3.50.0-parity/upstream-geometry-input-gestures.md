@@ -295,6 +295,15 @@ the incremental (0, −5) move and one end. No outer pan starts.
 The two mixed touch/trackpad drag-tenure cases :2583 and :2671 passed on
 the reference and are recorded separately from mixed **scale** support.
 
+Pinned :2583 and :2671 now pair at the direct mono-drag recognizer
+boundary, using two real competitors and separate managed arena
+registrations for each physical or absolute contact. Touch can join
+trackpad drag, and trackpad can join touch drag without waiting for
+slop again; the combined interaction has one start and ends only when
+the last contact leaves. The previous active pointer resumes from its
+own last sample if the latest contact lifts. This direct evidence does
+not by itself verify mixed drag on the mounted widget routes.
+
 ### Drag before scale and signed rotations
 
 The authored Flutter and native mounted probes also reverse the route

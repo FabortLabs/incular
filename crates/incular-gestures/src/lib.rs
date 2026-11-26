@@ -75,8 +75,8 @@ pub use multitap::{
     SerialTapGestureRecognizer, SerialTapUpDetails,
 };
 pub use pointer::{
-    DragGestureDetector, FlingLimits, GestureDetector, PointerGestureRecognizer, TapMemory,
-    TrackpadDragAxis, TrackpadDragRecognizer,
+    DragAxis, DragGestureDetector, FlingLimits, GestureDetector, MonodragGestureRecognizer,
+    PointerGestureRecognizer, TapMemory, TrackpadDragAxis, TrackpadDragRecognizer,
 };
 pub use signal::{PointerSignalError, PointerSignalEvent, PointerSignalResolver};
 pub use pointer_resampler::PointerEventResampler;
