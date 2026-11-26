@@ -520,6 +520,53 @@ impl PartialEq for AnimationController {
     }
 }
 
+enum MissingDuration {
+    Forward,
+    Reverse,
+    AnimateTo,
+    AnimateBack,
+}
+
+impl MissingDuration {
+    #[cold]
+    #[track_caller]
+    fn reject(self) -> ! {
+        // The diagnostic body follows the pinned Flutter controller. Rust's
+        // panic mechanism supplies the surrounding error type and location.
+        let body = match self {
+            Self::Forward => concat!(
+                "   AnimationController.forward() called with no default duration.\n",
+                "   The \"duration\" property should be set, either in the constructor\n",
+                "   or later, before calling the forward() function.\n",
+            ),
+            Self::Reverse => concat!(
+                "   AnimationController.reverse() called with no default duration or\n",
+                "   reverseDuration.\n",
+                "   The \"duration\" or \"reverseDuration\" property should be set,\n",
+                "   either in the constructor or later, before calling the reverse()\n",
+                "   function.\n",
+            ),
+            Self::AnimateTo => concat!(
+                "   AnimationController.animateTo() called with no explicit duration\n",
+                "   and no default duration.\n",
+                "   Either the \"duration\" argument to the animateTo() method should\n",
+                "   be provided, or the \"duration\" property should be set, either in\n",
+                "   the constructor or later, before calling the animateTo()\n",
+                "   function.\n",
+            ),
+            Self::AnimateBack => concat!(
+                "   AnimationController.animateBack() called with no explicit\n",
+                "   duration and no default duration or reverseDuration.\n",
+                "   Either the \"duration\" argument to the animateBack() method should\n",
+                "   be provided, or the \"duration\" or \"reverseDuration\" property\n",
+                "   should be set, either in the constructor or later, before calling\n",
+                "   the animateBack() function.\n",
+            ),
+        };
+        panic!("{body}");
+    }
+}
+
 impl AnimationController {
     #[track_caller]
     fn live_inner_mut(&self) -> RefMut<'_, ControllerState> {
@@ -1334,9 +1381,9 @@ impl AnimationController {
         self.assert_live();
         if self.inner.borrow().state.duration_for(forward).is_none() {
             if forward {
-                panic!("AnimationController.forward() called with no default duration");
+                MissingDuration::Forward.reject();
             } else {
-                panic!("AnimationController.reverse() called with no default duration or reverseDuration");
+                MissingDuration::Reverse.reject();
             }
         }
     }
@@ -1395,9 +1442,9 @@ impl AnimationController {
             None => {
                 let base = state.duration_for(forward).unwrap_or_else(|| {
                     if forward {
-                        panic!("AnimationController.animateTo() called with no explicit duration and no default duration");
+                        MissingDuration::AnimateTo.reject()
                     } else {
-                        panic!("AnimationController.animateBack() called with no explicit duration and no default duration or reverseDuration");
+                        MissingDuration::AnimateBack.reject()
                     }
                 });
                 base.mul_f64(remaining_fraction(

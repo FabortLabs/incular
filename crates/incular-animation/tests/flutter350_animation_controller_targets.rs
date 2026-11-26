@@ -503,3 +503,57 @@ fn all_original_ticker_operations_reject_a_disposed_controller() {
     assert!(other_handle.is_disposed() && !other_handle.is_animating());
     assert_eq!(other_handle.value(), 0.);
 }
+
+#[test]
+fn missing_duration_diagnostics_include_the_complete_pinned_remediation() {
+    let controller = AnimationController::without_duration();
+    let now = Instant::now();
+    let cases = [
+        (
+            panic_text(|| { let _ = controller.forward(now); }),
+            [
+                "   AnimationController.forward() called with no default duration.",
+                "   The \"duration\" property should be set, either in the constructor",
+                "   or later, before calling the forward() function.",
+            ].as_slice(),
+        ),
+        (
+            panic_text(|| { let _ = controller.reverse(now); }),
+            [
+                "   AnimationController.reverse() called with no default duration or",
+                "   reverseDuration.",
+                "   The \"duration\" or \"reverseDuration\" property should be set,",
+                "   either in the constructor or later, before calling the reverse()",
+                "   function.",
+            ].as_slice(),
+        ),
+        (
+            panic_text(|| { let _ = controller.animate_to(now, 0.8); }),
+            [
+                "   AnimationController.animateTo() called with no explicit duration",
+                "   and no default duration.",
+                "   Either the \"duration\" argument to the animateTo() method should",
+                "   be provided, or the \"duration\" property should be set, either in",
+                "   the constructor or later, before calling the animateTo()",
+                "   function.",
+            ].as_slice(),
+        ),
+        (
+            panic_text(|| { let _ = controller.animate_back(now, 0.8); }),
+            [
+                "   AnimationController.animateBack() called with no explicit",
+                "   duration and no default duration or reverseDuration.",
+                "   Either the \"duration\" argument to the animateBack() method should",
+                "   be provided, or the \"duration\" or \"reverseDuration\" property",
+                "   should be set, either in the constructor or later, before calling",
+                "   the animateBack() function.",
+            ].as_slice(),
+        ),
+    ];
+    for (actual, expected) in cases {
+        assert_eq!(actual, expected.join("\n") + "\n");
+    }
+    assert_eq!(controller.value(), 0.);
+    assert!(!controller.is_animating());
+    assert_eq!(controller.status(), AnimationStatus::Dismissed);
+}

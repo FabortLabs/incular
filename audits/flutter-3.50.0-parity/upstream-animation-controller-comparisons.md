@@ -81,10 +81,13 @@ value or canceling an active run. Explicit timing still works. A
 reverse-only duration successfully drives AnimateBack to 0.8 with
 Reverse then Dismissed, and does not admit Forward.
 
-The reverse-only and missing-repeat cases pair. Four error cases remain
-partial: Incular reports the matching failed operation and absent
-configuration, but not Dart's exact multiline FlutterError formatting.
-Six pinned Flutter and 41 focused Rust cases passed.
+The reverse-only and missing-repeat cases pair. The four missing-duration
+registrations now also pair: each native operation rejects with the complete
+multiline diagnostic body and remediation from its pinned Flutter original.
+The error transport remains Rust panic versus Dart FlutterError, so the typed
+framework envelope is different. The tests also check that rejection leaves
+the value, status, and inactive state unchanged. All four pinned originals
+and 29 focused controller and simulation tests passed for this backfill.
 
 ## Vsync replacement, mixed-sign repeat, and allocation events
 
