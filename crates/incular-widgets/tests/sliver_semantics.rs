@@ -467,6 +467,27 @@ fn keyed_anchor(index: u8, order: f64, named: bool) -> Box<dyn Sliver> {
     ))
 }
 
+fn assert_sorted_viewport_graph(tree: &WidgetTree, expected_nodes: usize) {
+    let semantics = tree.semantics();
+    assert_eq!(semantics.roots().len(), 1);
+    assert_eq!(semantics.iter().count(), expected_nodes);
+    let boundary = semantics.node(semantics.root().unwrap()).unwrap();
+    assert_eq!(boundary.children.len(), 1);
+    let pane = scroll_node(tree);
+    assert_eq!(boundary.children, [pane.id]);
+    assert!(!boundary.state.has_implicit_scrolling && pane.state.has_implicit_scrolling);
+    assert!(boundary.tags().is_empty() && pane.tags().is_empty());
+    for (_, node) in semantics.iter() {
+        assert!(node.actions.is_empty());
+        assert!(node.value.is_none() && node.description.is_none());
+        assert!(!node.state.hidden && !node.state.focusable && !node.state.has_enabled_state);
+        if node.label.is_some() {
+            assert_eq!(node.state.text_direction, Some(TextDirection::Ltr));
+            assert!(node.children.is_empty());
+        }
+    }
+}
+
 #[test]
 fn sort_keys_reorder_labeled_slivers_within_a_cross_axis_group() {
     use incular_widgets::SliverCrossAxisGroup;
@@ -479,6 +500,7 @@ fn sort_keys_reorder_labeled_slivers_within_a_cross_axis_group() {
     tree.mount(semantic_view(TextDirection::Ltr, group))
         .unwrap();
     layout(&mut tree);
+    assert_sorted_viewport_graph(&tree, 5);
     assert_eq!(
         labeled_scroll_children(&tree, scroll_node(&tree)),
         [
@@ -520,9 +542,11 @@ fn nested_sort_keys_reorder_both_groups_without_flattening_explicit_child_nodes(
     tree.mount(semantic_view(TextDirection::Ltr, outer))
         .unwrap();
     layout(&mut tree);
+    assert_sorted_viewport_graph(&tree, 9);
     let root = scroll_node(&tree);
     assert_eq!(root.children.len(), 1);
     let group = tree.semantics().node(root.children[0]).unwrap();
+    assert!(group.is_tagged(incular_widgets::Viewport::use_two_pane_semantics_tag()));
     assert_eq!(
         labeled_scroll_children(&tree, group),
         [None, Some("Label 2".into()), Some("Label 1".into())]

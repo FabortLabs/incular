@@ -12,26 +12,36 @@ use incular_widgets::{
     SliverToBoxAdapter,
 };
 
+fn restart_scene() -> incular_widgets::Widget {
+    let slivers: [Box<dyn Sliver>; 1] = [Box::new(SliverSemantics::new(
+        || {
+            Semantics::default()
+                .label("test1")
+                .text_direction(TextDirection::Ltr)
+        },
+        SliverToBoxAdapter::new(SizedBox::new().height(10.)),
+    ))];
+    Directionality::new(TextDirection::Ltr, CustomScrollView::new(slivers)).into()
+}
+
 #[test]
 fn semantics_restart_schedules_one_frame_and_recreates_the_sliver_label() {
-    let mut app = Application::new(|_| {
-        let slivers: [Box<dyn Sliver>; 1] = [Box::new(SliverSemantics::new(
-            || {
-                Semantics::default()
-                    .label("test1")
-                    .text_direction(TextDirection::Ltr)
-            },
-            SliverToBoxAdapter::new(SizedBox::new().height(10.)),
-        ))];
-        Directionality::new(TextDirection::Ltr, CustomScrollView::new(slivers)).into()
-    })
-    .unwrap();
+    let mut app = Application::new(|_| restart_scene()).unwrap();
     let window = app.primary_window();
     let constraints = Constraints::tight(Size::new(800., 600.));
     let now = Instant::now();
     let mut projection = MobileAccessibilityProjection::new();
 
     let label_in = |update: MobileAccessibilityUpdate| {
+        assert_eq!(update.nodes.len(), 3);
+        assert_eq!(update.roots.len(), 1);
+        let outer = update
+            .nodes
+            .iter()
+            .find(|node| node.native_id == update.roots[0])
+            .unwrap();
+        assert_eq!(outer.children.len(), 1);
+        assert!(!outer.semantic.state.has_implicit_scrolling);
         let label = update
             .nodes
             .iter()
@@ -47,6 +57,17 @@ fn semantics_restart_schedules_one_frame_and_recreates_the_sliver_label() {
             .find(|node| node.semantic.role == SemanticRole::ScrollView)
             .expect("scrolling semantic ancestor");
         assert!(scroll.semantic.state.has_implicit_scrolling);
+        assert_eq!(outer.children, [scroll.native_id]);
+        assert!(outer.semantic.tags().is_empty());
+        assert!(scroll.semantic.tags().is_empty());
+        // Viewport tags stay in the framework graph, not the native payload.
+        assert!(label.semantic.tags().is_empty());
+        assert!(label.children.is_empty());
+        for node in &update.nodes {
+            assert!(node.semantic.actions.is_empty());
+            assert!(node.semantic.value.is_none() && node.semantic.description.is_none());
+            assert!(!node.semantic.state.hidden && !node.semantic.state.focusable);
+        }
         assert_eq!(scroll.children, [label.native_id]);
         label.native_id
     };
@@ -67,6 +88,7 @@ fn semantics_restart_schedules_one_frame_and_recreates_the_sliver_label() {
         .unwrap();
     assert!(cleared.nodes.is_empty());
     assert!(cleared.removed.contains(&old));
+    assert_eq!(cleared.removed.len(), 3);
 
     app.set_semantics_enabled(window, true);
     assert!(app.frame_requested(window));
@@ -79,6 +101,36 @@ fn semantics_restart_schedules_one_frame_and_recreates_the_sliver_label() {
     );
     assert_ne!(old, new, "detached accessibility nodes are not reused");
     assert!(!app.frame_requested(window));
+}
+
+#[test]
+fn sliver_framework_tag_is_rebuilt_after_semantics_restart() {
+    let mut runtime = incular_runtime::Runtime::new(restart_scene()).unwrap();
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let mut previous = None;
+    for enabled in [true, false, true] {
+        runtime.tree_mut().set_semantics_enabled(enabled);
+        runtime.run_frame(bounds).unwrap();
+        let tree = runtime.tree().semantics();
+        if !enabled {
+            assert!(tree.roots().is_empty());
+            assert_eq!(tree.iter().count(), 0);
+            continue;
+        }
+        assert_eq!(tree.iter().count(), 3);
+        let outer = tree.node(tree.root().unwrap()).unwrap();
+        let pane = tree.node(outer.children[0]).unwrap();
+        let label = tree.node(pane.children[0]).unwrap();
+        assert_eq!(label.label.as_deref(), Some("test1"));
+        assert_eq!(
+            label.tags(),
+            &[incular_widgets::Viewport::use_two_pane_semantics_tag().clone()]
+        );
+        if let Some(previous) = previous {
+            assert_ne!(label.id, previous);
+        }
+        previous = Some(label.id);
+    }
 }
 
 fn sliver_scene(slivers: Vec<Box<dyn Sliver>>) -> incular_widgets::Widget {
@@ -166,10 +218,14 @@ fn transformed_sliver_text_is_sorted_and_dropped_or_hidden_by_its_actual_bounds(
     let mut runtime = Runtime::new(scene(0.)).unwrap();
     let bounds = Constraints::tight(Size::new(800., 600.));
     runtime.run_frame(bounds).unwrap();
+    let mut projection = MobileAccessibilityProjection::new();
     for i in 0..2 {
         let tree = runtime.tree().semantics();
+        assert_eq!(tree.iter().count(), 6);
+        assert_eq!(tree.roots().len(), 1);
         let viewport = tree.node(tree.root().unwrap()).unwrap();
         assert_eq!(viewport.children.len(), 1);
+        assert!(!viewport.state.has_implicit_scrolling);
         let pane = tree.node(viewport.children[0]).unwrap();
         assert!(pane.state.has_implicit_scrolling);
         assert_eq!(pane.bounds, viewport.bounds);
@@ -178,6 +234,8 @@ fn transformed_sliver_text_is_sorted_and_dropped_or_hidden_by_its_actual_bounds(
             .iter()
             .map(|id| {
                 let node = tree.node(*id).unwrap();
+                assert!(node.children.is_empty());
+                assert!(!node.state.has_implicit_scrolling);
                 (
                     node.label.as_deref().unwrap(),
                     node.state.hidden,
@@ -195,6 +253,15 @@ fn transformed_sliver_text_is_sorted_and_dropped_or_hidden_by_its_actual_bounds(
             ],
             "frame {i}"
         );
+        for (_, node) in tree.iter() {
+            assert!(node.actions.is_empty());
+            assert!(node.value.is_none() && node.description.is_none());
+        }
+        if i == 0 {
+            assert_eq!(projection.sync(tree).unwrap().nodes.len(), 6);
+        } else {
+            assert!(projection.sync(tree).is_none());
+        }
         let revision = tree.revision();
         runtime.run_frame(bounds).unwrap();
         assert_eq!(runtime.tree().semantics().revision(), revision);

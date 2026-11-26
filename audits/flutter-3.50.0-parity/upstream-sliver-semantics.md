@@ -122,8 +122,8 @@ The rotated-label case uses the reference Ahem geometry. Labels 1 and 2
 are visible; 4 and 5 are cache-only and hidden. Label 3 is outside the
 cache and absent, not just hidden. Translating the subtree 30 px brings
 label 3 into the cache as a hidden node, then removes it again while
-labels 4 and 5 keep their IDs. The original's two-pane shell still
-differs, so that registration is partial.
+labels 4 and 5 keep their IDs. The two-pane shell, empty explicit
+actions and stable idle projection are now verified as well.
 
 Incular had checked the cache at direct sliver children but not their
 transformed descendants. The shared window now follows the subtree.
@@ -144,8 +144,8 @@ flattening the explicit child-node boundaries. Updating the keys changes
 the order without replacing the existing labeled nodes.
 
 Incular's named `OrdinalSortKey` represents the key group in the native
-fixtures; Dart subclass sort-key identity and the two-pane wrapper
-are still open. The unkeyed behavioral comparison is paired.
+fixtures. The ordered two-pane graphs are paired, with arena IDs
+normalized. Dart subclass identity itself is not a Rust API.
 
 ## Validation result and precedence
 
@@ -453,3 +453,20 @@ label in the two-pane graph when a nested sliver annotation is
 excluded. The companion visual/input test confirms exclusion does
 not remove drawing or pointer handling. All five cases are paired.
 The 48 focused Rust tests passed.
+
+### Complete graphs for restart and sorting
+
+Pinned line 18 is paired after checking the complete two-pane
+projection before and after accessibility shuts down. Disabling
+removes all three native records; reenabling requests exactly one
+frame. The raw graph restores the viewport tag, which the mobile
+adapter intentionally strips from the native payload.
+
+Pinned line 2857 has the exact original visible and hidden label
+order and two-pane structure, with one first projection and no idle
+update. Pinned lines 1519 and 1606 compare the full sorted geometry
+graphs, not only text order: the nested group stays distinct and
+ordered [5, 4, 3], followed by 2 and 1, and the cross-axis group is
+ordered 2, 3, 1. Native arena IDs and Flutter test counters use
+different representations; the visible edges and fields are paired.
+All 34 focused retained, runtime and projection checks passed.
