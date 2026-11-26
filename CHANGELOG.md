@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- Mono-drag recognizers support latest-contact, summed, and frame-based
+  boundary or averaged multi-touch movement.
+
 - Standalone long-press recognizers can join an external gesture arena.
 
 - A window can retain accessibility semantics independently of its native

@@ -1,4 +1,7 @@
 use super::*;
+pub use aggregation::MultitouchDragStrategy;
+
+mod aggregation;
 use crate::{
     GestureArenaKey, GestureArenaSource, PointerPanZoomEvent, PointerPanZoomPhase, RawPointerEvent,
 };
@@ -44,7 +47,7 @@ struct Contact {
     kind: PointerDeviceKind,
     previous: Offset,
     velocity: VelocityTracker,
-    accepted: bool,
+    acceptance_order: u64,
 }
 
 /// One drag tenure shared by physical pointers and absolute trackpad streams.
@@ -57,6 +60,9 @@ pub struct MonodragGestureRecognizer {
     contacts: Vec<Contact>,
     first: Option<PointerEvent>,
     active: Option<Stream>,
+    last_acceptance: u64,
+    strategy: MultitouchDragStrategy,
+    boundary: Option<Box<aggregation::BoundaryFrame>>,
     observed: Option<Stream>,
     wants_acceptance: bool,
     on_down: Option<Rc<dyn Fn(DragDownDetails)>>,
@@ -101,6 +107,9 @@ impl MonodragGestureRecognizer {
             contacts: Vec::new(),
             first: None,
             active: None,
+            last_acceptance: 0,
+            strategy: MultitouchDragStrategy::LatestPointer,
+            boundary: None,
             observed: None,
             wants_acceptance: false,
             on_down: None,
@@ -112,6 +121,29 @@ impl MonodragGestureRecognizer {
     pub fn with_drag_start_behavior(mut self, behavior: DragStartBehavior) -> Self {
         self.recognizer.callbacks.drag_start_behavior = behavior;
         self
+    }
+
+    #[must_use]
+    pub fn with_multitouch_drag_strategy(mut self, strategy: MultitouchDragStrategy) -> Self {
+        self.set_multitouch_drag_strategy(strategy);
+        self
+    }
+
+    pub fn set_multitouch_drag_strategy(&mut self, strategy: MultitouchDragStrategy) {
+        if strategy == self.strategy {
+            return;
+        }
+        self.strategy = strategy;
+        self.boundary = (strategy == MultitouchDragStrategy::AverageBoundaryPointers)
+            .then(Box::<aggregation::BoundaryFrame>::default);
+    }
+
+    /// Identifies the current system frame. A host calls this when its frame
+    /// timestamp changes, not for every native pointer timestamp.
+    pub fn set_multitouch_frame_time(&mut self, stamp: Instant) {
+        if let Some(frame) = &mut self.boundary {
+            frame.begin(stamp);
+        }
     }
 
     /// Sets the callbacks for the first contact and for losing before acceptance.
@@ -198,6 +230,9 @@ impl MonodragGestureRecognizer {
     fn observing(&mut self, stream: Stream) {
         self.observed = Some(stream);
         self.wants_acceptance = false;
+        if let Some(frame) = &mut self.boundary {
+            frame.clear_crossing();
+        }
     }
 
     fn begin(
@@ -243,7 +278,7 @@ impl MonodragGestureRecognizer {
             kind,
             previous: motion,
             velocity,
-            accepted: false,
+            acceptance_order: 0,
         });
         self.wants_acceptance = inner.pan_started;
         true
@@ -277,16 +312,28 @@ impl MonodragGestureRecognizer {
         contact.previous = motion;
         let local_step = inner.local_delta(step);
         if inner.pan_started {
-            if !contact.accepted {
+            if contact.acceptance_order == 0 {
                 self.wants_acceptance = true;
                 return true;
             }
-            if self.active == Some(stream) {
-                inner.kind = contact.kind;
+            let kind = contact.kind;
+            if self.strategy != MultitouchDragStrategy::LatestPointer || self.active == Some(stream)
+            {
+                let resolved_step = if let Some(frame) = &mut self.boundary {
+                    let accepted = self
+                        .contacts
+                        .iter()
+                        .filter(|contact| contact.acceptance_order != 0)
+                        .count();
+                    frame.update(self.axis, stream, local_step, accepted)
+                } else {
+                    local_step
+                };
+                inner.kind = kind;
                 inner.drag.last_position = position;
                 let update = inner.drag_update_local(
                     self.axis,
-                    local_step,
+                    resolved_step,
                     position,
                     inner.local(position),
                     time,
@@ -317,6 +364,11 @@ impl MonodragGestureRecognizer {
             }
         };
         self.wants_acceptance = distance > f64::from(slop);
+        if self.wants_acceptance
+            && let Some(frame) = &mut self.boundary
+        {
+            frame.threshold_crossing(stream, local_step);
+        }
         true
     }
 
@@ -329,17 +381,22 @@ impl MonodragGestureRecognizer {
             return false;
         };
         let contact = self.contacts.remove(index);
+        if let Some(frame) = &mut self.boundary {
+            frame.remove(stream);
+        }
         if self.active == Some(stream) {
             self.active = self
                 .contacts
                 .iter()
-                .find(|contact| contact.accepted)
+                .filter(|contact| contact.acceptance_order != 0)
+                .min_by_key(|contact| contact.acceptance_order)
                 .map(|contact| contact.stream);
         }
         if !self.contacts.is_empty() {
             return true;
         }
         self.first = None;
+        self.last_acceptance = 0;
         let inner = &mut self.recognizer;
         if !inner.pan_started {
             if let Some(cancel) = &self.on_cancel {
@@ -393,10 +450,14 @@ impl MonodragGestureRecognizer {
         else {
             return;
         };
-        if contact.accepted {
+        if contact.acceptance_order != 0 {
             return;
         }
-        contact.accepted = true;
+        self.last_acceptance = self
+            .last_acceptance
+            .checked_add(1)
+            .expect("drag acceptance IDs exhausted");
+        contact.acceptance_order = self.last_acceptance;
         self.active = Some(stream);
         let inner = &mut self.recognizer;
         if !inner.pan_started
@@ -412,6 +473,9 @@ impl MonodragGestureRecognizer {
             inner.dispatch(start);
             if let Some(update) = inner.take_start_update() {
                 inner.dispatch(update);
+            }
+            if let Some(frame) = &mut self.boundary {
+                frame.accepted(stream);
             }
         }
     }

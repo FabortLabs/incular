@@ -19,16 +19,7 @@ pub const TOUCH_LIKE_DEVICE_KINDS: [PointerDeviceKind; 5] = [
     PointerDeviceKind::Unknown,
 ];
 
-/// Flutter's `MultitouchDragStrategy`: how a drag combines several pointers.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum MultitouchDragStrategy {
-    /// Only the latest active pointer moves the scroll view.
-    LatestPointer,
-    /// The extreme movements of all pointers in each direction combine.
-    AverageBoundaryPointers,
-    /// All pointers' movements add up.
-    SumAllPointers,
-}
+pub use incular_gestures::MultitouchDragStrategy;
 
 /// Flutter's `AndroidOverscrollIndicator`: the indicator shown when an
 /// Android scroll view is pulled past its edge.

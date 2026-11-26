@@ -49,3 +49,9 @@ A standalone `LongPressGestureRecognizer` can use an external arena.
 The hold still waits for its deadline and an arena award; disposing a
 pending hold withdraws that member. In `GestureArenaManager`, a survivor
 then resolves at the deferred-resolution boundary, not during disposal.
+
+`MonodragGestureRecognizer` defaults to the most recently accepted contact.
+Use `with_multitouch_drag_strategy` to sum contacts or compute directional
+boundaries for axis drags and average free pans. A host using frame-based
+averaging supplies the current system-frame timestamp through
+`set_multitouch_frame_time`; pointer timestamps do not reset the frame.

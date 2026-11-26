@@ -164,3 +164,8 @@ For a lower-level host, `LongPressGestureRecognizer::with_external_arena`
 provides explicit arbitration. A hold needs both a deadline and an arena award.
 Disposing a pending hold withdraws it without starting the surviving drag on
 the disposal stack.
+
+Low-level mono-drag hosts can choose how accepted contacts combine:
+latest pointer, sum, or frame-based boundary averaging. Axis drags follow
+the cumulative boundary in each direction; free pans average accepted
+contacts. Pass the system-frame time, not the pointer-event time.
