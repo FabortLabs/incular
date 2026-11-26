@@ -157,17 +157,26 @@ pub(crate) trait ArenaMember {
     /// before its arena closes. The member wins at the close, so no arena
     /// is left for a release to sweep.
     fn drive(&mut self, event: RawPointerEvent) {
+        self.drive_with(event, Self::member_add_pointer, Self::member_handle_event);
+    }
+
+    fn drive_with(
+        &mut self,
+        event: RawPointerEvent,
+        add: impl FnOnce(&mut Self, RawPointerEvent),
+        handle: impl FnOnce(&mut Self, RawPointerEvent),
+    ) {
         self.member_poll(event.time);
         match event.phase {
             PointerPhase::Enter | PointerPhase::Exit => {}
             PointerPhase::Down => {
-                self.member_add_pointer(event);
-                self.member_handle_event(event);
+                add(self, event);
+                handle(self, event);
                 let decided = self.link().close(event.pointer);
                 self.apply(event.pointer, decided);
             }
             PointerPhase::Move | PointerPhase::Up | PointerPhase::Cancel => {
-                self.member_handle_event(event);
+                handle(self, event);
             }
         }
     }

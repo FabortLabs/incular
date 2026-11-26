@@ -56,7 +56,9 @@ pub use focus::{
     ReadingOrderTraversalPolicy, TraversalDirection, WidgetOrderTraversalPolicy,
     directional_focus_index, focus_epoch, reading_order_by,
 };
-pub use force_press::{ForceInterpolation, ForcePressDetails, ForcePressGestureRecognizer};
+pub use force_press::{
+    ForceInterpolation, ForcePressDetails, ForcePressGestureRecognizer, ForcePressureSample,
+};
 pub use incular_core::DeviceGestureSettings;
 pub use keyboard::{
     Action, ActionInvocationPhase, ActionInvocationSubscription, ActionListenerSubscription,

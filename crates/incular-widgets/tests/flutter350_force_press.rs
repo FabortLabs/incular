@@ -8,7 +8,8 @@ use incular_core::{
     Color, NormalizedPressure, Offset, PointerPhase, PointerSampleMetadata, Size, time::Instant,
 };
 use incular_gestures::{
-    ForcePressDetails, ForcePressGestureRecognizer, PointerDeviceKind, RawPointerEvent,
+    ForcePressDetails, ForcePressGestureRecognizer, ForcePressureSample, PointerDeviceKind,
+    RawPointerEvent,
 };
 use incular_widgets::{GestureDetector, Widget, internal::WidgetTree};
 
@@ -180,15 +181,47 @@ fn a_nonfinite_sample_after_peak_does_not_dispatch_an_update_or_prevent_release(
     assert_eq!(counts(&log), [1, 1, 1, 1]);
 }
 
+fn device_raw(
+    force: &mut ForcePressGestureRecognizer,
+    time: Instant,
+    step: u64,
+    phase: PointerPhase,
+    sample: ForcePressureSample,
+) {
+    // No normalized value: this adapter supplies only physical device units.
+    force.handle_device_sample(input(time, step, phase, ORIGIN, None), sample);
+}
+
 #[test]
-fn an_ease_in_interpolator_delays_start_and_peak_by_the_expected_amount() {
-    let log = Log::default();
-    let mut force = recognizer(&log).interpolation(|min, max, value| {
-        assert_eq!((min, max), (0., 1.), "adapters pass normalized bounds");
-        Curve::EaseIn.apply((value - min) / (max - min))
-    });
-    let t = Instant::now();
-    raw(&mut force, t, 0, PointerPhase::Down, Some(0.));
+fn invalid_device_pressure_ranges_never_join_the_arena() {
+    for maximum in [0., 1., -1., 0.5] {
+        let log = Log::default();
+        let mut force = recognizer(&log)
+            .interpolation(|_, _, _| panic!("a device without pressure sensing entered the arena"));
+        let t = Instant::now();
+        for (step, phase, value) in [
+            (0, PointerPhase::Down, 0.),
+            (1, PointerPhase::Move, 10.),
+            (2, PointerPhase::Up, 1.),
+        ] {
+            device_raw(
+                &mut force,
+                t,
+                step,
+                phase,
+                ForcePressureSample {
+                    min: 0.,
+                    max: maximum,
+                    value,
+                },
+            );
+            assert_eq!(counts(&log), [0; 4], "device maximum {maximum}");
+        }
+    }
+}
+
+#[test]
+fn an_ease_in_interpolator_receives_its_source_bounds_and_matches_thresholds() {
     let samples = [2.5, 2.8, 3.3, 4., 5., 1., 6., 3.3, 4., 6.5, 1.];
     let expected = [
         [0, 0, 0, 0],
@@ -203,19 +236,52 @@ fn an_ease_in_interpolator_delays_start_and_peak_by_the_expected_amount() {
         [1, 1, 7, 0],
         [1, 1, 8, 0],
     ];
-    for (i, (pressure, expectation)) in samples.into_iter().zip(expected).enumerate() {
-        raw(
-            &mut force,
-            t,
-            i as u64 + 1,
-            PointerPhase::Move,
-            Some(pressure),
+    for uncooked in [false, true] {
+        let log = Log::default();
+        let seen = Rc::new(RefCell::new(Vec::<f32>::new()));
+        let mut force = recognizer(&log).interpolation({
+            let seen = seen.clone();
+            move |min, max, value| {
+                assert_eq!((min, max), (0., if uncooked { MAX as f32 } else { 1. }));
+                seen.borrow_mut().push(value);
+                Curve::EaseIn.apply((value - min) / (max - min))
+            }
+        });
+        let t = Instant::now();
+        let mut send = |step, phase, value: f64| {
+            if uncooked {
+                device_raw(
+                    &mut force,
+                    t,
+                    step,
+                    phase,
+                    ForcePressureSample {
+                        min: 0.,
+                        max: MAX as f32,
+                        value: value as f32,
+                    },
+                );
+            } else {
+                raw(&mut force, t, step, phase, Some(value));
+            }
+        };
+        send(0, PointerPhase::Down, 0.);
+        for (i, (pressure, expectation)) in samples.into_iter().zip(expected).enumerate() {
+            send(i as u64 + 1, PointerPhase::Move, pressure);
+            assert_eq!(counts(&log), expectation, "device pressure {pressure}");
+        }
+        send(20, PointerPhase::Up, 1.);
+        assert_eq!(counts(&log), [1, 1, 8, 1]);
+        assert_eq!(log.borrow()[0].1.global_position, ORIGIN);
+        let values = seen.borrow();
+        assert_eq!(
+            values.len(),
+            12,
+            "one interpolation per down/move, none for up"
         );
-        assert_eq!(counts(&log), expectation, "device pressure {pressure}");
+        assert_eq!(values[1], if uncooked { 2.5 } else { (2.5 / MAX) as f32 });
+        assert_eq!(values[10], if uncooked { 6.5 } else { (6.5 / MAX) as f32 });
     }
-    raw(&mut force, t, 20, PointerPhase::Up, None);
-    assert_eq!(counts(&log), [1, 1, 8, 1]);
-    assert_eq!(log.borrow()[0].1.global_position, ORIGIN);
 }
 
 #[test]

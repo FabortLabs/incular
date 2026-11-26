@@ -22,6 +22,17 @@ pub struct ForcePressDetails {
 /// pressure)` to the 0–1 range the thresholds compare against.
 pub type ForceInterpolation = Rc<dyn Fn(f32, f32, f32) -> f32>;
 
+/// An unnormalized pressure sample for a force recognizer fed directly by
+/// a device. Keep the raw value and range so custom interpolators can use
+/// device units. The ordinary native event path still uses normalized
+/// metadata and does not need this additional payload.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ForcePressureSample {
+    pub min: f32,
+    pub max: f32,
+    pub value: f32,
+}
+
 type ForcePressCallback = Rc<dyn Fn(ForcePressDetails)>;
 
 /// Flutter `_ForceState`.
@@ -42,7 +53,8 @@ enum ForceState {
 /// own range, so the interpolation receives a minimum of 0 and a maximum
 /// of 1; a device without pressure sensing reports none, which Flutter
 /// detects as `pressureMax <= 1.0`, and the recognizer stays out of its
-/// arena.
+/// arena. Hosts with unnormalized device samples may use
+/// [`Self::handle_device_sample`] or its arena-managed counterparts.
 pub struct ForcePressGestureRecognizer {
     start_pressure: f32,
     peak_pressure: f32,
@@ -192,6 +204,20 @@ impl ForcePressGestureRecognizer {
 
     /// Flutter `addPointer` for a press.
     pub fn add_pointer(&mut self, event: RawPointerEvent) {
+        self.add_pressure_pointer(event, event.sample.pressure.is_some());
+    }
+
+    /// Adds a press with the physical device's raw range. A raw maximum
+    /// of 1 or less is Flutter's marker for a device without force sensing.
+    pub fn add_pointer_with_device_pressure(
+        &mut self,
+        event: RawPointerEvent,
+        sample: ForcePressureSample,
+    ) {
+        self.add_pressure_pointer(event, sample.max > 1.0 || sample.max.is_nan());
+    }
+
+    fn add_pressure_pointer(&mut self, event: RawPointerEvent, senses_pressure: bool) {
         let allowed = self
             .supported_devices
             .as_ref()
@@ -201,7 +227,7 @@ impl ForcePressGestureRecognizer {
         }
         // `addAllowedPointer`: a device without pressure sensing does not
         // take part.
-        if event.sample.pressure.is_none() {
+        if !senses_pressure {
             self.resolve(GestureDisposition::Rejected);
             return;
         }
@@ -214,19 +240,45 @@ impl ForcePressGestureRecognizer {
 
     /// Flutter `handleEvent` for a routed event.
     pub fn handle_event(&mut self, event: RawPointerEvent) {
+        self.handle_pressure_event(
+            event,
+            ForcePressureSample {
+                min: 0.0,
+                max: 1.0,
+                value: event
+                    .sample
+                    .pressure
+                    .map_or(f32::NAN, |pressure| pressure.get()),
+            },
+        );
+    }
+
+    /// Routes an event with raw device pressure in an external arena.
+    /// The interpolator receives exactly this sample's range and value.
+    pub fn handle_event_with_device_pressure(
+        &mut self,
+        event: RawPointerEvent,
+        sample: ForcePressureSample,
+    ) {
+        self.handle_pressure_event(event, sample);
+    }
+
+    /// Drives a raw device sample with this recognizer alone in the arena.
+    pub fn handle_device_sample(&mut self, event: RawPointerEvent, sample: ForcePressureSample) {
+        self.drive_with(
+            event,
+            |this, event| this.add_pointer_with_device_pressure(event, sample),
+            |this, event| this.handle_event_with_device_pressure(event, sample),
+        );
+    }
+
+    fn handle_pressure_event(&mut self, event: RawPointerEvent, sample: ForcePressureSample) {
         let event = self.link.with_deltas(event);
         if !self.tracked.contains(&event.pointer) {
             return;
         }
         if matches!(event.phase, PointerPhase::Move | PointerPhase::Down) {
-            let pressure = (self.interpolation)(
-                0.0,
-                1.0,
-                event
-                    .sample
-                    .pressure
-                    .map_or(f32::NAN, |pressure| pressure.get()),
-            );
+            let pressure = (self.interpolation)(sample.min, sample.max, sample.value);
             self.last_position = (event.position, event.local_position);
             self.last_pressure = pressure;
             if self.state == ForceState::Possible {

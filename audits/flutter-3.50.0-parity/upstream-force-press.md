@@ -1,7 +1,7 @@
 # Force-press recognition and arena settlement
 
 All nine pinned `gestures/force_press_test.dart` registrations ran.
-Seven pair with the mounted/native regressions:
+All nine now pair with the mounted/native regressions:
 
 - :14 starts once at 2.8/6.66, peaks once at 6.0/6.66, emits ten
   updates (including after a fall in pressure), and ends once at
@@ -26,12 +26,18 @@ move for its start position; an explicit slop requirement still
 controls when a default-winning drag starts. Tap, trackpad and basic
 force controls passed alongside the exact replay (18 focused cases).
 
-Two signatures remain partial at this point. :200 supplies raw device
-range limits 0, 1, -1 and 0.5 and expects the recognizer not to join.
-Native devices with no sensing are already excluded, but normalized
-reports intentionally do not use a physical maximum of 1 as a
-capability flag. :554 passes the original ease-in curve and the
-exact callback sequence in native tests, but the user interpolator
-receives the normalized range 0–1 rather than the device's raw
-0–6.66 bounds. The two different source boundaries are not counted
-as paired for those cases.
+The remaining two direct-recognizer signatures also pair:
+
+- :200 supplies raw range limits 0, 1, -1 and 0.5. None of those
+  devices joins the arena, even when a later raw move reports 10.
+- :554 passes a 0–6.66 raw range and each original device value
+  to a custom ease-in interpolator. It starts at 4.0, peaks at 6.5,
+  emits eight updates, and ends once. A second input path replays
+  the same behavior through normalized 0–1 values.
+
+`ForcePressureSample` is an additive direct-recognizer input. It
+accepts physical min/max/value before interpolation, with equivalent
+interfaces for standalone and arena-managed calls. Platform adapters
+that already normalize keep their existing behavior and pointer
+event representation; a normalized 1.0 is not mistaken for a physical
+maximum of 1.0. Both focused widget targets passed (11 tests).
