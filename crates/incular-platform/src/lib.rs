@@ -97,7 +97,10 @@ pub use system_environment::{
 };
 pub use system_sound::{SystemSound, SystemSoundType};
 pub use system_ui_overlay_style::SystemUiOverlayStyle;
-pub use undo_manager::{UndoDirection, UndoManagerCommand};
+pub use undo_manager::{
+    UndoDirection, UndoManager, UndoManagerClient, UndoManagerCommand, UndoManagerErrorReport,
+    UndoManagerInvocationError, UndoManagerMessenger, UndoManagerSendError,
+};
 pub use window_control::{
     LogicalSizeLimits, LogicalSizeLimitsError, UserAttentionType, WindowIcon, WindowIconError,
     WindowLevel, WindowObservedState, WindowRequestedState,

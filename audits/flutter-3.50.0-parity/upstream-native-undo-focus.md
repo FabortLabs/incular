@@ -1,11 +1,14 @@
 # Native undo when focus moves
 
 The pinned `services/undo_manager_test.dart` dispatch and channel-error
-registrations (lines 15 and 49) both passed. Incular's editor receives native
-undo and redo through typed platform events. It does not yet expose an
-arbitrary client registered on Flutter's JSON channel or report a failing
-outbound channel through a framework error callback. Those gaps remain
-separate from the fixed editor behavior.
+registrations (lines 15 and 49) passed on both sides. A Flutter-compatible
+embedder can register its current undo client, dispatch the same JSON
+undo and redo messages, and send the two state flags over
+`flutter/undomanager`. An asynchronous transport failure emits exactly
+one report containing the original error, the services library, and
+the `UndoManager.setUndoState` delivery context. The reporter is scoped
+to the Rust service; the caller also receives the typed error.
+The native editor can continue using typed platform events.
 
 The paired authored reference `native_undo_focus_handoff_test.dart` seeded
 two independent editors, changed both, then requested focus for the first.
@@ -20,6 +23,7 @@ rendered focus and changed the outgoing editor from `beta` to `alpha`.
 It now adopts pending focus on native input just as it does on a keyboard
 dispatch. The native test verifies both text values, the reported iOS
 undo state, and the symmetric focus handoff for redo. No physical iOS
-hardware, native iOS undo manager adapter, or Flutter channel failure
-handling is asserted by this native runtime test. This authored scenario
+hardware or native iOS undo manager adapter is asserted by this
+runtime test. Channel failures are verified independently as described
+above. This authored scenario
 does not add to the upstream registration count.
