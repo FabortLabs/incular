@@ -996,9 +996,73 @@ struct SignalResolution {
     claim: Option<SignalClaim>,
 }
 
+#[derive(Default)]
+struct SignalSessions {
+    // Keep the normal, non-nested wheel path allocation-free.
+    root: Option<SignalResolution>,
+    nested: Vec<SignalResolution>,
+}
+
+impl SignalSessions {
+    fn push(&mut self, resolution: SignalResolution) {
+        if self.root.is_none() {
+            self.root = Some(resolution);
+        } else {
+            self.nested.push(resolution);
+        }
+    }
+
+    fn current(&mut self) -> Option<&mut SignalResolution> {
+        self.nested.last_mut().or(self.root.as_mut())
+    }
+
+    fn pop(&mut self) -> SignalResolution {
+        self.nested.pop().or_else(|| self.root.take()).expect("active signal session")
+    }
+}
+
 thread_local! {
-    static SIGNAL_RESOLUTION: std::cell::RefCell<SignalResolution> =
-        std::cell::RefCell::new(SignalResolution::default());
+    static SIGNAL_RESOLUTION: std::cell::RefCell<SignalSessions> =
+        std::cell::RefCell::new(SignalSessions::default());
+}
+
+pub(crate) struct SignalSession {
+    open: bool,
+}
+
+impl SignalSession {
+    fn new(active: bool) -> Self {
+        SIGNAL_RESOLUTION.with(|sessions| {
+            sessions.borrow_mut().push(SignalResolution {
+                active,
+                ..SignalResolution::default()
+            });
+        });
+        Self { open: true }
+    }
+
+    pub(crate) fn finish(mut self) -> Option<SignalWinner> {
+        self.open = false;
+        let claim = SIGNAL_RESOLUTION.with(|sessions| sessions.borrow_mut().pop().claim)?;
+        let SignalClaim { listener, callback, event } = claim;
+        Some((listener, Box::new(move || {
+            // The winning callback no longer dispatches a listener event.
+            // Mask an outer session before invoking it, while still allowing
+            // the application to start a fresh nested dispatch.
+            let _resolved = SignalSession::new(false);
+            callback(event);
+        })))
+    }
+}
+
+impl Drop for SignalSession {
+    fn drop(&mut self) {
+        if self.open {
+            SIGNAL_RESOLUTION.with(|sessions| {
+                sessions.borrow_mut().pop();
+            });
+        }
+    }
 }
 
 impl PointerSignalResolver {
@@ -1008,11 +1072,12 @@ impl PointerSignalResolver {
     /// it. Outside a pointer-signal dispatch the callback runs right away.
     pub fn register(event: &RawPointerEvent, callback: impl FnOnce(RawPointerEvent) + 'static) {
         let event = *event;
-        let pending = SIGNAL_RESOLUTION.with(|resolution| {
-            let mut resolution = resolution.borrow_mut();
-            if !resolution.active {
+        let pending = SIGNAL_RESOLUTION.with(|sessions| {
+            let mut sessions = sessions.borrow_mut();
+            let Some(resolution) = sessions.current().filter(|resolution| resolution.active)
+            else {
                 return Some(callback);
-            }
+            };
             if resolution.claim.is_none() {
                 let listener = resolution.listener;
                 resolution.claim = Some(SignalClaim {
@@ -1028,33 +1093,16 @@ impl PointerSignalResolver {
         }
     }
 
-    pub(crate) fn begin() {
-        SIGNAL_RESOLUTION.with(|resolution| {
-            *resolution.borrow_mut() = SignalResolution {
-                active: true,
-                ..SignalResolution::default()
-            };
-        });
+    pub(crate) fn begin() -> SignalSession {
+        SignalSession::new(true)
     }
 
     pub(crate) fn set_listener(listener: Option<crate::tree::ElementId>) {
-        SIGNAL_RESOLUTION.with(|resolution| resolution.borrow_mut().listener = listener);
+        SIGNAL_RESOLUTION.with(|sessions| {
+            if let Some(resolution) = sessions.borrow_mut().current() {
+                resolution.listener = listener;
+            }
+        });
     }
 
-    /// Ends the dispatch and returns the winning registration: the listener
-    /// that made it, and the callback bound to its event.
-    pub(crate) fn finish() -> Option<SignalWinner> {
-        SIGNAL_RESOLUTION.with(|resolution| {
-            let claim = std::mem::take(&mut *resolution.borrow_mut()).claim?;
-            let SignalClaim {
-                listener,
-                callback,
-                event,
-            } = claim;
-            Some((
-                listener,
-                Box::new(move || callback(event)) as Box<dyn FnOnce()>,
-            ))
-        })
-    }
 }

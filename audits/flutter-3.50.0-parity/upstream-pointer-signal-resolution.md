@@ -33,3 +33,15 @@ reuse after an error are covered separately.
 Three direct native tests and nine retained wheel controls passed.
 The mounted wheel path retains its lightweight event values; it does
 not pay for the optional shared handles.
+
+## Nested retained pointer signal dispatch
+
+An authored Rust regression reproduced an outer listener losing its
+wheel claim when it synchronously dispatched a second wheel event to
+another tree. The outer wheel was incorrectly allowed to reach the
+platform default. Each dispatch now owns a scoped resolution, so
+inner and outer winners receive only their own deltas. A winner can
+also run a standalone handler without claiming an outer event.
+An unwinding nested listener restores the correctly pending outer
+session. Two nested and nine ordinary wheel tests passed. The common
+single-dispatch storage remains inline. No pinned registration was added.

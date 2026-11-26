@@ -3913,9 +3913,9 @@ impl WidgetTree {
     ) -> (bool, bool) {
         // Flutter dispatches the `PointerScrollEvent` to every listener on
         // the hit path; scrollables then claim it through the resolver.
-        crate::raw_input::PointerSignalResolver::begin();
+        let signal = crate::raw_input::PointerSignalResolver::begin();
         let signaled = self.dispatch_pointer_signal(point, delta);
-        let claim = crate::raw_input::PointerSignalResolver::finish();
+        let claim = signal.finish();
         let delta = if flip_axes {
             Offset::new(delta.y, delta.x)
         } else {
