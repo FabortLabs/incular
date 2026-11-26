@@ -1181,15 +1181,21 @@ impl WidgetTree {
     pub fn external_focus_change(&self, current: Option<ElementId>) -> Option<Option<ElementId>> {
         if let Some(hosted) = &self.hosted_focus_nodes {
             let epoch = self.focus_epoch();
-            let requested = hosted
+            let mut requests: Vec<_> = hosted
                 .iter()
                 .filter_map(|(&id, binding)| {
                     let order = binding.node().focus_request_order()?;
                     self.can_request_focus(id)
                         .then_some((epoch.wrapping_sub(order), id))
                 })
-                .min()
-                .map(|(_, id)| id);
+                .collect();
+            // The last eligible request owns primary focus; earlier
+            // requests still update the scopes they touched.
+            requests.sort_unstable_by_key(|(age, _)| std::cmp::Reverse(*age));
+            for &(_, target) in &requests {
+                self.record_hosted_focus_history(target);
+            }
+            let requested = requests.last().map(|&(_, target)| target);
             // Consume rejected requests as well. A branch that was hidden
             // at this boundary must not steal focus when it becomes visible.
             for binding in hosted.values() {
@@ -1318,6 +1324,28 @@ impl WidgetTree {
         })
     }
 
+    /// Remembers a focus request in its scopes without granting primary
+    /// focus to that node or notifying its focus listeners.
+    fn record_hosted_focus_history(&self, target: ElementId) {
+        let Some(hosted) = &self.hosted_focus_nodes else {
+            return;
+        };
+        let Some(mut child) = hosted.get(&target).map(|binding| binding.node()) else {
+            return;
+        };
+        let mut current = self.parent(target);
+        while let Some(id) = current {
+            if let Some(anchor) = hosted.get(&id).map(|binding| binding.node())
+                && anchor != child
+                && let Some(scope) = anchor.scope_owner()
+            {
+                scope.record_host_focused_child(child);
+                child = anchor;
+            }
+            current = self.parent(id);
+        }
+    }
+
     /// Earlier eligible requests fill their scope and its ancestors before
     /// the next request is tried.
     #[doc(hidden)]
@@ -1332,12 +1360,11 @@ impl WidgetTree {
                 .find_map(|(&id, attachment)| (attachment.node() == node).then_some(id))
         };
         let mut chosen = None;
-        let mut filled = Vec::new();
         for (scope, node) in pending {
             let Some(owner) = find(&scope.scope_focus_node()) else {
                 continue;
             };
-            if scope.focused_child().is_some() || filled.contains(&owner) {
+            if scope.focused_child().is_some() {
                 continue;
             }
             let Some(target) = find(&node).filter(|&id| {
@@ -1348,17 +1375,8 @@ impl WidgetTree {
             let target = node.scope_owner().map_or(target, |child_scope| {
                 self.restore_scope_history(target, child_scope, None)
             });
+            self.record_hosted_focus_history(target);
             chosen = Some(target);
-            let mut ancestor = self.parent(target);
-            while let Some(element) = ancestor {
-                if hosted
-                    .get(&element)
-                    .is_some_and(|attachment| attachment.node().scope_owner().is_some())
-                {
-                    filled.push(element);
-                }
-                ancestor = self.parent(element);
-            }
         }
         chosen
     }

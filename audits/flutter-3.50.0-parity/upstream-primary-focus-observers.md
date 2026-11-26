@@ -32,3 +32,22 @@ focus, moving between the sibling scopes, and a pair of requests
 whose final state is unchanged. A shared ancestor is not notified
 just because its active branch changes. All 29 selected native
 observer, scope and key-routing checks passed.
+
+## Competing requests across sibling scopes
+
+Four authored pinned Flutter variants verify two distinct effects of
+requests submitted within one focus boundary. An explicit request and
+an eligible autofocus in a sibling scope produce only one primary
+notification, to the autofocus winner, regardless of submission order.
+The inactive scope still remembers the explicit leaf. Also, an earlier
+explicit request in one scope survives a newer request in a different
+scope, with or without a competing autofocus in the earlier scope.
+Returning to that scope restores the earlier leaf.
+
+Incular previously notified a transient primary leaf before applying
+the queued autofocus. It also discarded the earlier direct request
+entirely, leaving its scope apparently empty. The host now records
+eligible scope history in request order and applies just the final
+primary focus for the boundary. All 48 related native checks passed
+after reproducing both issues. These authored variants add no
+upstream registrations.

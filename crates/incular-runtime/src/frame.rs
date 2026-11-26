@@ -2608,27 +2608,29 @@ impl Runtime {
     /// node becomes the runtime's focus (releasing the previous one), and an
     /// unfocused current node clears it.
     fn adopt_external_focus_change(&mut self) {
+        if let Some(next) = self.take_external_focus_change() {
+            self.set_focus(next);
+        }
+    }
+
+    fn take_external_focus_change(&mut self) -> Option<Option<ElementId>> {
         self.tree.refresh_hosted_scope_membership();
         // Scanning focusable elements allocates, so only look when some
         // focus node changed since the last check.
         let epoch = self.tree.focus_epoch();
         let replaced = self.primary_focus_node_replaced();
         if !replaced && self.adopted_focus_epoch == Some(epoch) {
-            return;
+            return None;
         }
         let current = if replaced { None } else { self.focused };
-        if let Some(next) = self.tree.external_focus_change(current) {
-            self.set_focus(next);
-        } else if replaced {
-            // Do not transfer focus to a different node reusing the
-            // element. Only a real pending request can outrank restoring
-            // the old scope's last eligible child (or the scope itself).
-            let fallback = self.tree.focus_fallback_after_node_detached();
-            self.set_focus(fallback);
-        }
         // Focus observers can queue another request while a transition is
         // being delivered. Do not acknowledge that newer request here.
         self.adopted_focus_epoch = Some(epoch);
+        self.tree.external_focus_change(current).or_else(|| {
+            // A different node reusing the element does not inherit focus.
+            // Without a real request, restore the old scope or its history.
+            replaced.then(|| self.tree.focus_fallback_after_node_detached())
+        })
     }
 
     fn settle_scope_autofocus(&mut self, before_build: bool) {
@@ -2636,9 +2638,11 @@ impl Runtime {
         if pending.is_empty() {
             return;
         }
-        self.adopt_external_focus_change();
+        let direct = self.take_external_focus_change();
         if let Some(next) = self.tree.finish_hosted_scope_autofocus(pending) {
             self.set_focus_with_external_selection(Some(next), false);
+        } else if let Some(next) = direct {
+            self.set_focus(next);
         }
     }
 

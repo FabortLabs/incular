@@ -163,3 +163,96 @@ fn only_changed_ancestors_and_primary_nodes_receive_focus_notifications() {
     frame(&mut runtime);
     expect([0; 5], [false; 5]);
 }
+
+#[test]
+fn sibling_scope_autofocus_and_explicit_request_notify_only_the_final_focus() {
+    use incular_widgets::{FocusScope, FocusScopeNode, SizedBox};
+
+    for autofocus_first in [true, false] {
+        let a = FocusNode::new();
+        let b = FocusNode::new();
+        let left = FocusScopeNode::new();
+        let right = FocusScopeNode::new();
+        let scene = Column::new([
+            FocusScope::new(Focus::new(SizedBox::shrink()).node(a.clone())).node(left.clone()),
+            FocusScope::new(Focus::new(SizedBox::shrink()).node(b.clone())).node(right.clone()),
+        ]);
+        let mut runtime = Runtime::new(scene.into()).unwrap();
+        frame(&mut runtime);
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let a_events = Rc::new(RefCell::new(Vec::new()));
+        let _manager = runtime.observe_primary_focus({
+            let (a, b, log) = (a.clone(), b.clone(), log.clone());
+            move || log.borrow_mut().push((a.has_primary_focus(), b.has_primary_focus()))
+        });
+        let _a_listener = a.observe({
+            let (a, log) = (a.clone(), a_events.clone());
+            move || log.borrow_mut().push(a.has_focus())
+        });
+
+        if autofocus_first {
+            assert!(right.autofocus(&b));
+            a.request_focus();
+        } else {
+            a.request_focus();
+            assert!(right.autofocus(&b));
+        }
+        assert!(log.borrow().is_empty());
+        frame(&mut runtime);
+        assert_eq!(log.take(), [(false, true)]);
+        assert!(a_events.borrow().is_empty());
+        assert!(b.has_primary_focus());
+        assert_eq!(left.focused_child(), Some(a));
+        assert_eq!(right.focused_child(), Some(b));
+    }
+}
+
+#[test]
+fn losing_the_primary_request_does_not_erase_an_inactive_scopes_history() {
+    use incular_widgets::{FocusScope, FocusScopeNode, SizedBox};
+
+    for queue_autofocus in [false, true] {
+        let a1 = FocusNode::new();
+        let a2 = FocusNode::new();
+        let b = FocusNode::new();
+        let left = FocusScopeNode::new();
+        let right = FocusScopeNode::new();
+        let scene = Column::new([
+            FocusScope::new(Column::new([
+                Focus::new(SizedBox::shrink()).node(a1.clone()),
+                Focus::new(SizedBox::shrink()).node(a2.clone()),
+            ]))
+            .node(left.clone()),
+            FocusScope::new(Focus::new(SizedBox::shrink()).node(b.clone())).node(right.clone()),
+        ]);
+        let mut runtime = Runtime::new(scene.into()).unwrap();
+        frame(&mut runtime);
+
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let _manager = runtime.observe_primary_focus({
+            let (a1, a2, b, log) = (a1.clone(), a2.clone(), b.clone(), log.clone());
+            move || {
+                log.borrow_mut().push((
+                    a1.has_primary_focus(),
+                    a2.has_primary_focus(),
+                    b.has_primary_focus(),
+                ))
+            }
+        });
+        a1.request_focus();
+        b.request_focus();
+        if queue_autofocus {
+            assert!(left.autofocus(&a2));
+        }
+        assert!(log.borrow().is_empty());
+        frame(&mut runtime);
+        assert_eq!(log.take(), [(false, false, true)]);
+        assert_eq!(left.focused_child(), Some(a1.clone()));
+        assert_eq!(right.focused_child(), Some(b));
+
+        assert!(left.request_focus_in_scope());
+        frame(&mut runtime);
+        assert_eq!(log.take(), [(true, false, false)]);
+        assert!(a1.has_primary_focus());
+    }
+}
