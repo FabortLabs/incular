@@ -17,13 +17,12 @@ use incular_text::{TextDecoration, TextEditingValue, TextSpan, TextStyle};
 /// service leaves checking off, as Flutter does when
 /// `nativeSpellCheckServiceDefined` is false.
 ///
-/// Flutter's `misspelledSelectionColor` and
-/// `spellCheckSuggestionsToolbarBuilder` belong to the suggestions toolbar,
-/// which is not ported.
+/// A custom toolbar builder can display suggestions without choosing a design system.
 #[derive(Clone, Default)]
 pub struct SpellCheckConfiguration {
     spell_check_service: Option<Rc<dyn SpellCheckService>>,
     misspelled_text_style: Option<TextStyle>,
+    toolbar_builder: Option<crate::EditableTextContextMenuBuilder>,
     enabled: bool,
 }
 
@@ -62,6 +61,24 @@ impl SpellCheckConfiguration {
     pub fn misspelled_text_style(mut self, style: TextStyle) -> Self {
         self.misspelled_text_style = Some(style);
         self
+    }
+
+    /// Flutter `spellCheckSuggestionsToolbarBuilder`: renders the custom
+    /// menu for the current misspelling and its available replacements.
+    #[must_use]
+    pub fn spell_check_suggestions_toolbar_builder(
+        mut self,
+        builder: impl for<'a> Fn(&crate::BuildContext<'a>, &crate::TextContextMenu) -> crate::Widget
+        + 'static,
+    ) -> Self {
+        self.toolbar_builder = Some(Rc::new(builder));
+        self
+    }
+
+    /// The toolbar builder, if configured.
+    #[must_use]
+    pub fn suggestions_toolbar_builder(&self) -> Option<&crate::EditableTextContextMenuBuilder> {
+        self.toolbar_builder.as_ref()
     }
 
     /// Flutter `spellCheckEnabled`: false only for
@@ -105,6 +122,7 @@ impl PartialEq for SpellCheckConfiguration {
         };
         same_service
             && self.misspelled_text_style == other.misspelled_text_style
+            && crate::util::same_rc(&self.toolbar_builder, &other.toolbar_builder)
             && self.enabled == other.enabled
     }
 }
@@ -115,6 +133,7 @@ impl fmt::Debug for SpellCheckConfiguration {
             .field("enabled", &self.enabled)
             .field("service", &self.spell_check_service.is_some())
             .field("misspelled_text_style", &self.misspelled_text_style)
+            .field("toolbar_builder", &self.toolbar_builder.is_some())
             .finish()
     }
 }

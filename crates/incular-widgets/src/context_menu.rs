@@ -155,6 +155,7 @@ impl TextSelectionToolbarAnchors {
 pub struct TextContextMenu {
     pub anchors: TextSelectionToolbarAnchors,
     pub button_items: Vec<ContextMenuButtonItem>,
+    spell_check_span: Option<incular_platform::SuggestionSpan>,
     hide: Rc<dyn Fn()>,
 }
 
@@ -169,8 +170,15 @@ impl TextContextMenu {
         Self {
             anchors,
             button_items,
+            spell_check_span: None,
             hide,
         }
+    }
+
+    /// The misspelled range and replacements for a suggestions toolbar.
+    #[must_use]
+    pub fn spell_check_span(&self) -> Option<&incular_platform::SuggestionSpan> {
+        self.spell_check_span.as_ref()
     }
 
     /// Closes the menu (`EditableTextState.hideToolbar`).
@@ -201,6 +209,7 @@ pub type EditableTextContextMenuBuilder =
 pub struct TextContextMenuState {
     menu: RefCell<Option<Rc<TextContextMenu>>>,
     revision: RefCell<Rc<Cell<u64>>>,
+    incarnation: Cell<u64>,
 }
 
 impl RetainedState for TextContextMenuState {
@@ -214,6 +223,7 @@ impl TextContextMenuState {
         Self {
             menu: RefCell::new(None),
             revision: RefCell::new(revision),
+            incarnation: Cell::new(0),
         }
     }
 
@@ -239,10 +249,43 @@ impl TextContextMenuState {
         if button_items.is_empty() {
             return self.hide();
         }
+        self.show_menu(anchors, button_items, None)
+    }
+
+    /// Shows a spell-check toolbar using the same retained selection portal.
+    pub fn show_spell_check(
+        self: &Rc<Self>,
+        anchors: TextSelectionToolbarAnchors,
+        button_items: Vec<ContextMenuButtonItem>,
+        span: incular_platform::SuggestionSpan,
+    ) -> bool {
+        self.show_menu(anchors, button_items, Some(span))
+    }
+
+    /// Whether the open toolbar is for spelling rather than editing commands.
+    #[must_use]
+    pub fn is_spell_check_showing(&self) -> bool {
+        self.menu.borrow().as_ref().is_some_and(|menu| menu.spell_check_span.is_some())
+    }
+
+    fn show_menu(
+        self: &Rc<Self>,
+        anchors: TextSelectionToolbarAnchors,
+        button_items: Vec<ContextMenuButtonItem>,
+        spell_check_span: Option<incular_platform::SuggestionSpan>,
+    ) -> bool {
+        let incarnation = self.incarnation.get().wrapping_add(1);
+        self.incarnation.set(incarnation);
+        let spelling = spell_check_span.is_some();
         let weak = Rc::downgrade(self);
-        let hide: Rc<dyn Fn()> = Rc::new(move || {
-            if let Some(state) = weak.upgrade() {
-                state.hide();
+        let hide: Rc<dyn Fn()> = Rc::new({
+            let weak = weak.clone();
+            move || {
+                if let Some(state) = weak.upgrade()
+                    && (!spelling || state.incarnation.get() == incarnation)
+                {
+                    state.hide();
+                }
             }
         });
         let button_items = button_items
@@ -252,8 +295,16 @@ impl TextContextMenuState {
                     return item;
                 };
                 let hide = hide.clone();
+                let weak = weak.clone();
                 ContextMenuButtonItem {
                     on_pressed: Some(Rc::new(move || {
+                        // A retained suggestion can outlive the menu, but a
+                        // dismissed overlay must not edit the field.
+                        if spelling && !weak.upgrade().is_some_and(|state| {
+                            state.incarnation.get() == incarnation && state.is_spell_check_showing()
+                        }) {
+                            return;
+                        }
                         hide();
                         on_pressed();
                     })),
@@ -261,7 +312,12 @@ impl TextContextMenuState {
                 }
             })
             .collect();
-        *self.menu.borrow_mut() = Some(Rc::new(TextContextMenu::new(anchors, button_items, hide)));
+        *self.menu.borrow_mut() = Some(Rc::new(TextContextMenu {
+            anchors,
+            button_items,
+            spell_check_span,
+            hide,
+        }));
         self.bump();
         true
     }
@@ -290,18 +346,32 @@ pub(crate) fn with_text_context_menu(
     child: impl Fn(Rc<TextContextMenuState>) -> Widget + 'static,
     builder: EditableTextContextMenuBuilder,
 ) -> Widget {
+    with_editable_toolbars(child, Some(builder), None)
+}
+
+pub(crate) fn with_editable_toolbars(
+    child: impl Fn(Rc<TextContextMenuState>) -> Widget + 'static,
+    context_builder: Option<EditableTextContextMenuBuilder>,
+    spell_builder: Option<EditableTextContextMenuBuilder>,
+) -> Widget {
     Widget::retained_builder(
         TextContextMenuState::new,
         move |state, _, _| {
-            let menu = state.menu.borrow().clone();
+            let menu_and_builder = state.menu.borrow().clone().and_then(|menu| {
+                let builder = if menu.spell_check_span.is_some() {
+                    spell_builder.as_ref()
+                } else {
+                    context_builder.as_ref()
+                };
+                builder.map(|builder| (menu, builder.clone()))
+            });
             let mut portal = OverlayPortal::new(SizedBox::shrink())
                 .role(TransientRole::ContextMenu)
-                .show(menu.is_some());
+                .show(menu_and_builder.is_some());
             // The dismiss hook and overlay are only needed while the menu
             // shows; a hidden menu costs a field no closures per build.
-            if let Some(menu) = menu {
+            if let Some((menu, builder)) = menu_and_builder {
                 let weak = Rc::downgrade(state);
-                let builder = builder.clone();
                 portal = portal
                     .on_dismiss(move |_| {
                         if let Some(state) = weak.upgrade() {

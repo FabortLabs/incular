@@ -32,7 +32,7 @@ impl Runtime {
     /// field under `position` is open.
     pub(super) fn text_menu_open_at(&self, position: Offset) -> bool {
         let menu = match self.tree.text_field_at(position) {
-            Some(field) => self.tree.text_field_context_menu(field),
+            Some(field) => self.tree.text_field_toolbar_state(field),
             None => self
                 .tree
                 .selectable_text_at(position)
@@ -388,11 +388,56 @@ impl Runtime {
         self.frame_requested = true;
     }
 
+    /// Presents the configured spell-check suggestion toolbar for the
+    /// caret in a focused editor. This does not impose Material or Cupertino
+    /// styling. A retained button cannot apply after the value changes.
+    #[must_use]
+    pub fn show_spell_check_suggestions_toolbar(&mut self, field: ElementId) -> bool {
+        if self.focused != Some(field) || cfg!(target_arch = "wasm32") {
+            return false;
+        }
+        let Some(menu) = self.tree.text_field_spell_check_toolbar(field) else {
+            return false;
+        };
+        let Some(controller) = self.tree.text_controller(field) else {
+            return false;
+        };
+        let Some(selection) = controller.selection_if_set() else {
+            return false;
+        };
+        let Some(span) = self.tree.text_field_suggestion_span_at_cursor_index(field, selection.extent)
+        else {
+            return false;
+        };
+        let range = TextRange::new(span.range.start, span.range.end);
+        if range.is_empty() || !controller.with_value(|value| range.is_valid_for(&value.text)) {
+            return false;
+        }
+        let Some(snapshot) = self.tree.text_field_input_geometry(field) else {
+            return false;
+        };
+        let content_revision = controller.revisions().0;
+        let buttons = span.suggestions.iter().map(|suggestion| {
+            let suggestion = suggestion.clone();
+            let controller = controller.clone();
+            ContextMenuButtonItem::custom(suggestion.clone(), move || {
+                if controller.revisions().0 == content_revision
+                    && controller.selection_if_set() == Some(selection)
+                {
+                    let _ = controller.replace_range_as_user_edit(range, &suggestion);
+                }
+            })
+        }).collect();
+        let anchors = self.text_field_menu_anchors(field, snapshot.caret_rect.origin);
+        self.frame_requested = true;
+        menu.show_spell_check(anchors, buttons, span)
+    }
+
     /// Closes the field's touch toolbar and selection handles, as Flutter's
     /// keyboard edits do through `hideToolbar`, and a mouse press does.
     pub(super) fn hide_text_field_overlays(&mut self, field: ElementId) {
         self.hide_text_field_handles(field);
-        if let Some(menu) = self.tree.text_field_context_menu(field)
+        if let Some(menu) = self.tree.text_field_toolbar_state(field)
             && menu.hide()
         {
             self.frame_requested = true;
@@ -1349,7 +1394,7 @@ impl Runtime {
     fn text_field_toggle_toolbar(&mut self, field: ElementId, position: Offset) {
         let showing = self
             .tree
-            .text_field_context_menu(field)
+            .text_field_toolbar_state(field)
             .is_some_and(|menu| menu.is_showing());
         if showing {
             self.hide_text_field_overlays(field);

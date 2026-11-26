@@ -476,11 +476,27 @@ pub struct TextFieldSpec {
     /// Flutter `spellCheckConfiguration`.
     pub(crate) spell_check: Option<crate::SpellCheckConfiguration>,
     pub(crate) spell_check_suppressed: bool,
-    /// The field's context menu, present when it has a menu builder.
+    pub(crate) has_context_menu_builder: bool,
+    /// A shared portal for the ordinary and spell-check builders.
     pub(crate) context_menu: Option<Rc<crate::context_menu::TextContextMenuState>>,
     /// The field's selection handles, present when it has a handles builder.
     pub(crate) selection_handles:
         Option<Rc<crate::text_selection_handles::TextSelectionHandlesState>>,
+}
+
+impl TextFieldSpec {
+    pub(crate) fn allows_spell_check_toolbar(&self) -> bool {
+        self.enabled
+            && !self.read_only
+            && !self.spell_check_suppressed
+            && (self.has_context_menu_builder || self.selection_handles.is_some())
+            && self.spell_check.as_ref().is_some_and(|config| {
+                config.spell_check_enabled()
+                    && config.service().is_some()
+                    && config.misspelled_style().is_some()
+                    && config.suggestions_toolbar_builder().is_some()
+            })
+    }
 }
 
 /// Child layouts that transform the incoming constraints or the child size before

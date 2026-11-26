@@ -2265,7 +2265,7 @@ impl Runtime {
         if let Some(previous) = self.focused {
             self.tree.set_keyboard_focus(previous, false);
             let _ = self.tree.set_focused(previous, false, self.input_now());
-            self.hide_text_field_handles(previous);
+            self.hide_text_field_overlays(previous);
         }
         self.focused = next;
         self.primary_focus_node = next_node;

@@ -1707,6 +1707,11 @@ impl From<EditableText> for Widget {
             value.autofill_hints.as_deref(),
         );
         let context_menu_builder = value.context_menu_builder.clone();
+        let spell_toolbar_builder = value
+            .spell_check
+            .as_ref()
+            .and_then(crate::SpellCheckConfiguration::suggestions_toolbar_builder)
+            .cloned();
         let selection_handles_builder = value.selection_handles_builder.clone();
         let edit_transform = compose_edit_transform(
             value.max_lines == Some(1),
@@ -1721,6 +1726,7 @@ impl From<EditableText> for Widget {
             .unwrap_or(can_select_with_pointer);
         let spec = TextFieldSpec {
             context_menu: None,
+            has_context_menu_builder: context_menu_builder.is_some(),
             selection_handles: None,
             spell_check: value.spell_check,
             spell_check_suppressed,
@@ -1775,16 +1781,19 @@ impl From<EditableText> for Widget {
             Widget::from_kind(WidgetKind::TextField(Box::new(spec)))
                 .with_text_input_hints(input_type, input_action)
         };
-        let with_menu = move |spec: TextFieldSpec| match context_menu_builder.clone() {
-            Some(builder) => crate::context_menu::with_text_context_menu(
+        let with_menu = move |spec: TextFieldSpec| {
+            if context_menu_builder.is_none() && spell_toolbar_builder.is_none() {
+                return field(spec);
+            }
+            crate::context_menu::with_editable_toolbars(
                 move |state| {
                     let mut spec = spec.clone();
                     spec.context_menu = Some(state);
                     field(spec)
                 },
-                builder,
-            ),
-            None => field(spec),
+                context_menu_builder.clone(),
+                spell_toolbar_builder.clone(),
+            )
         };
         match selection_handles_builder {
             Some(builder) => crate::text_selection_handles::with_text_selection_handles(

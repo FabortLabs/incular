@@ -724,10 +724,40 @@ impl WidgetTree {
         self.elements
             .get(id.0)
             .and_then(|element| match element.widget.kind() {
-                WidgetKind::TextField(spec) => spec.context_menu.clone(),
+                WidgetKind::TextField(spec) if spec.has_context_menu_builder => {
+                    spec.context_menu.clone()
+                }
                 _ => None,
             })
     }
+    /// The shared toolbar overlay, including a currently open suggestions menu.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn text_field_toolbar_state(
+        &self,
+        id: ElementId,
+    ) -> Option<Rc<crate::context_menu::TextContextMenuState>> {
+        match self.elements.get(id.0)?.widget.kind() {
+            WidgetKind::TextField(spec) => spec.context_menu.clone(),
+            _ => None,
+        }
+    }
+
+    /// The overlay to which an enabled spell checker can present suggestions.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn text_field_spell_check_toolbar(
+        &self,
+        id: ElementId,
+    ) -> Option<Rc<crate::context_menu::TextContextMenuState>> {
+        match self.elements.get(id.0)?.widget.kind() {
+            WidgetKind::TextField(spec) if spec.allows_spell_check_toolbar() => {
+                spec.context_menu.clone()
+            }
+            _ => None,
+        }
+    }
+
     /// Returns the selectable label under `point`, if it belongs to a selection area.
     #[must_use]
     pub fn selectable_text_at(&self, point: Offset) -> Option<ElementId> {

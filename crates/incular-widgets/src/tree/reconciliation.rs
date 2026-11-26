@@ -158,6 +158,12 @@ impl WidgetTree {
         let WidgetKind::TextField(spec) = element.widget.kind() else {
             return;
         };
+        if let Some(menu) = &spec.context_menu
+            && ((!spec.allows_spell_check_toolbar() && menu.is_spell_check_showing())
+                || (!spec.has_context_menu_builder && !menu.is_spell_check_showing()))
+        {
+            menu.hide();
+        }
         if spec.spell_check_suppressed && spec.spell_check.is_some() {
             let auxiliary = element.auxiliary_state_mut();
             auxiliary.spell_check_refresh_on_enable = true;
