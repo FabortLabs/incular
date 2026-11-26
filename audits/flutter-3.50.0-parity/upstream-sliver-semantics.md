@@ -84,3 +84,26 @@ parent/descendant level combinations in a merged retained graph.
 The Dart tests also examine the descriptor directly and call its
 render configuration's `absorb` method. Those direct APIs are partial;
 the rendered heading-node case is paired.
+
+## Transformed descendants at the viewport's semantics cache
+
+Pinned Flutter lines 2808 and 2857 passed. The native
+`flutter350_sliver_semantics_restart` fixture verifies the actual graph:
+a singular fitted sliver removes its nested scroll node but leaves the
+800×600 outer viewport untouched. Restoring a positive height creates
+the child again, and returning to zero removes it.
+
+The rotated-label case uses the reference Ahem geometry. Labels 1 and 2
+are visible; 4 and 5 are cache-only and hidden. Label 3 is outside the
+cache and absent, not just hidden. Translating the subtree 30 px brings
+label 3 into the cache as a hidden node, then removes it again while
+labels 4 and 5 keep their IDs. The original's two-pane shell still
+differs, so that registration is partial.
+
+Incular had checked the cache at direct sliver children but not their
+transformed descendants. The shared window now follows the subtree.
+It prunes projected nodes rather than cutting off traversal at a
+roleless wrapper. A separate Flutter/Rust comparison with opposite
+500 px translations and an intermediate padding box verifies that a
+descendant restored to (2, 2) is still exposed. Existing ensured-sliver
+and off-cache regressions also pass.

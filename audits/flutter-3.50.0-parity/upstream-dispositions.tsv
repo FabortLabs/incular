@@ -1940,3 +1940,5 @@ packages/flutter/test/widgets/sliver_semantics_widget_test.dart	1715	SliverSeman
 packages/flutter/test/widgets/sliver_semantics_widget_test.dart	2672	SliverSemantics supports heading levels	partial-match	upstream-sliver-semantics.md#heading-annotation-on-a-slivers-text
 packages/flutter/test/widgets/sliver_semantics_widget_test.dart	2702	SliverSemantics parent heading level takes precedence when it absorbs a child	partial-match	upstream-sliver-semantics.md#heading-annotation-on-a-slivers-text
 packages/flutter/test/widgets/sliver_semantics_widget_test.dart	2773	SliverSemantics applies heading semantics to semantics tree	paired-match	upstream-sliver-semantics.md#heading-annotation-on-a-slivers-text
+packages/flutter/test/widgets/sliver_semantics_widget_test.dart	2808	SliverSemantics sliver with zero transform gets dropped	paired-match	upstream-sliver-semantics.md#transformed-descendants-at-the-viewports-semantics-cache
+packages/flutter/test/widgets/sliver_semantics_widget_test.dart	2857	SliverSemantics slivers that are transformed are sorted properly	partial-match	upstream-sliver-semantics.md#transformed-descendants-at-the-viewports-semantics-cache
