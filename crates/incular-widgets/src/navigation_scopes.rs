@@ -57,15 +57,25 @@ impl OverlayPortal {
     /// pointer hits. Before the first placement the info is the default.
     #[must_use]
     pub fn overlay_child_layout_builder(
-        mut self,
+        self,
         builder: impl for<'a> Fn(&crate::BuildContext<'a>, crate::OverlayChildLayoutInfo) -> Widget
+        + 'static,
+    ) -> Self {
+        self.overlay_child_geometry_builder(move |context, geometry| {
+            builder(context, geometry.unwrap_or_default().info)
+        })
+    }
+
+    pub(crate) fn overlay_child_geometry_builder(
+        mut self,
+        builder: impl for<'a> Fn(&crate::BuildContext<'a>, Option<crate::transient::OverlayLayoutGeometry>) -> Widget
         + 'static,
     ) -> Self {
         let slot = crate::transient::OverlayLayoutSlot::default();
         let info = slot.info.clone();
         self.overlay_child = Some(Widget::stateful_builder(
             slot.revision.clone(),
-            move |context| builder(context, info.get().unwrap_or_default()),
+            move |context| builder(context, info.get()),
         ));
         self.layout_slot = Some(slot);
         self

@@ -2474,3 +2474,11 @@ packages/flutter/test/widgets/focus_traversal_test.dart	3733	Doesn't introduce a
 packages/flutter/test/animation/animation_controller_test.dart	493	Disposed AnimationController toString works	paired-match	upstream-animation-controller-disposal.md
 packages/flutter/test/animation/animation_controller_listener_test.dart	9	Disposing controller removes listeners to avoid memory leaks	paired-match	upstream-animation-controller-disposal.md
 packages/flutter/test/painting/geometry_test.dart	9	positionDependentBox	paired-match	upstream-dependent-box.md
+packages/flutter/test/widgets/raw_tooltip_test.dart	24	Does tooltip end up in the right place - center	paired-match	upstream-dependent-box.md#mounted-raw-tooltip-placement
+packages/flutter/test/widgets/raw_tooltip_test.dart	80	Does tooltip end up in the right place - top left	paired-match	upstream-dependent-box.md#mounted-raw-tooltip-placement
+packages/flutter/test/widgets/raw_tooltip_test.dart	138	Does tooltip end up in the right place - center prefer above fits	paired-match	upstream-dependent-box.md#mounted-raw-tooltip-placement
+packages/flutter/test/widgets/raw_tooltip_test.dart	203	Does tooltip end up in the right place - center prefer above does not fit	paired-match	upstream-dependent-box.md#mounted-raw-tooltip-placement
+packages/flutter/test/widgets/raw_tooltip_test.dart	278	Does tooltip end up in the right place - center prefer below fits	paired-match	upstream-dependent-box.md#mounted-raw-tooltip-placement
+packages/flutter/test/widgets/raw_tooltip_test.dart	336	Does tooltip end up in the right place - way off to the right	paired-match	upstream-dependent-box.md#mounted-raw-tooltip-placement
+packages/flutter/test/widgets/raw_tooltip_test.dart	399	Does tooltip end up in the right place - near the edge	paired-match	upstream-dependent-box.md#mounted-raw-tooltip-placement
+packages/flutter/test/widgets/raw_tooltip_test.dart	2660	Custom tooltip positioning - positionDelegate parameter	paired-match	upstream-dependent-box.md#mounted-raw-tooltip-placement

@@ -269,15 +269,31 @@ impl WidgetTree {
                 continue;
             };
             if let Some(slot) = &marker.layout_slot {
-                let Some(anchor_rect) = marker
-                    .anchor_override
-                    .or_else(|| self.element_bounds(anchor))
-                else {
-                    continue;
+                let local_center = |size: Size| Offset::new(size.width / 2.0, size.height / 2.0);
+                let (anchor_rect, anchor_center, anchor_size) = if let Some(rect) = marker.anchor_override {
+                    (rect, rect.origin + local_center(rect.size), rect.size)
+                } else {
+                    let Some(render) = self.render_id(anchor) else {
+                        continue;
+                    };
+                    let Some(node) = self.renders.get(render.0) else {
+                        continue;
+                    };
+                    let size = node.size;
+                    let world = self.render_world_transform(render);
+                    (
+                        world.transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, size)),
+                        world.transform_point(local_center(size)),
+                        size,
+                    )
                 };
-                if slot.publish(crate::OverlayChildLayoutInfo {
-                    anchor_rect,
-                    overlay_size: viewport_size,
+                if slot.publish(crate::transient::OverlayLayoutGeometry {
+                    info: crate::OverlayChildLayoutInfo {
+                        anchor_rect,
+                        overlay_size: viewport_size,
+                    },
+                    anchor_center,
+                    anchor_size,
                 }) {
                     self.refresh_stateful_layout_builders();
                 }

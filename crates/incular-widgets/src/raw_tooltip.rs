@@ -33,8 +33,8 @@ use std::fmt;
 use std::rc::{Rc, Weak};
 use std::time::Duration;
 
-use incular_config::Alignment;
-use incular_core::Offset;
+use incular_config::{Alignment, Constraints, TransientPresentation};
+use incular_core::{Offset, Size};
 use incular_gestures::PointerDeviceKind;
 use incular_rendering::LayerLink;
 use incular_semantics::SemanticRole;
@@ -782,6 +782,69 @@ enum SemanticsOverride {
     Set(String),
 }
 
+/// Measured geometry passed to a tooltip position delegate. Coordinates are
+/// relative to the owning overlay; target size is measured before transforms.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TooltipPositionContext {
+    pub target: Offset,
+    pub target_size: Size,
+    pub tooltip_size: Size,
+    pub overlay_size: Size,
+    pub prefer_below: bool,
+    pub vertical_offset: f32,
+}
+
+/// Computes the top-left of a measured tooltip in the owning overlay.
+pub type TooltipPositionDelegate = Rc<dyn Fn(TooltipPositionContext) -> Offset>;
+
+struct ViewportTooltipLayout {
+    overlay_size: Size,
+    target: Offset,
+    target_size: Size,
+    prefer_below: bool,
+    vertical_offset: f32,
+    custom: Option<TooltipPositionDelegate>,
+}
+
+impl crate::SingleChildLayoutDelegate for ViewportTooltipLayout {
+    fn get_size(&self, _constraints: Constraints) -> Size {
+        self.overlay_size
+    }
+
+    fn get_constraints_for_child(&self, _constraints: Constraints) -> Constraints {
+        Constraints::loose(self.overlay_size)
+    }
+
+    fn get_position_for_child(&self, _size: Size, child: Size) -> Offset {
+        let size = self.overlay_size;
+        if let Some(custom) = &self.custom {
+            custom(TooltipPositionContext {
+                target: self.target,
+                target_size: self.target_size,
+                tooltip_size: child,
+                overlay_size: size,
+                prefer_below: self.prefer_below,
+                vertical_offset: self.vertical_offset,
+            })
+        } else {
+            crate::position_dependent_box(size, child, self.target, self.prefer_below, self.vertical_offset, 10.0)
+        }
+    }
+
+    fn should_relayout(&self, old: &Self) -> bool {
+        self.overlay_size != old.overlay_size
+            || self.target != old.target
+            || self.target_size != old.target_size
+            || self.prefer_below != old.prefer_below
+            || self.vertical_offset != old.vertical_offset
+            || match (&self.custom, &old.custom) {
+                (Some(a), Some(b)) => !Rc::ptr_eq(a, b),
+                (None, None) => false,
+                _ => true,
+            }
+    }
+}
+
 /// A retained, unthemed tooltip descriptor.
 #[derive(Clone)]
 pub struct RawTooltip {
@@ -806,6 +869,8 @@ pub struct RawTooltip {
     follower_anchor: Option<Alignment>,
     offset: Option<Offset>,
     layer_link: LayerLink,
+    explicit_layer_link: bool,
+    position_delegate: Option<TooltipPositionDelegate>,
     last_pointer_time: Rc<Cell<Instant>>,
 }
 
@@ -860,6 +925,8 @@ impl RawTooltip {
             follower_anchor: None,
             offset: None,
             layer_link: LayerLink::default(),
+            explicit_layer_link: false,
+            position_delegate: None,
             last_pointer_time: Rc::new(Cell::new(Instant::now())),
         }
     }
@@ -1134,6 +1201,14 @@ impl RawTooltip {
         self
     }
 
+    /// Overrides the default, viewport-constrained tooltip placement.
+    /// A position delegate takes precedence over Incular's anchor options.
+    #[must_use]
+    pub fn position_delegate(mut self, delegate: impl Fn(TooltipPositionContext) -> Offset + 'static) -> Self {
+        self.position_delegate = Some(Rc::new(delegate));
+        self
+    }
+
     #[must_use]
     pub fn target_anchor(mut self, anchor: Alignment) -> Self {
         self.target_anchor = Some(anchor);
@@ -1168,6 +1243,7 @@ impl RawTooltip {
     #[must_use]
     pub fn layer_link(mut self, link: LayerLink) -> Self {
         self.layer_link = link;
+        self.explicit_layer_link = true;
         self
     }
 
@@ -1372,6 +1448,47 @@ impl RawTooltip {
             .ignoring(self.ignore_pointer)
             .into();
 
+        let dismiss_controller = controller.clone();
+        let portal = OverlayPortal::new(anchor)
+            .role(crate::TransientRole::Tooltip)
+            .dismiss_policy(crate::TransientDismissPolicy {
+                escape: true,
+                ..crate::TransientDismissPolicy::tooltip()
+            })
+            .on_dismiss(move |_| dismiss_controller.hide())
+            .tooltip_timer(controller.clone())
+            .show(controller.is_visible());
+
+        if self.position_delegate.is_some() || !(self.explicit_layer_link
+            || self.target_anchor.is_some()
+            || self.follower_anchor.is_some()
+            || self.offset.is_some())
+        {
+            let custom = self.position_delegate.clone();
+            let prefer_below = self.prefer_below;
+            let vertical_offset = self.vertical_offset;
+            return portal
+                .presentation(TransientPresentation::Overlay)
+                .overlay_child_geometry_builder(move |_, geometry| {
+                    let Some(geometry) = geometry else {
+                        return crate::SizedBox::shrink().into();
+                    };
+                    crate::CustomSingleChildLayout::new(
+                        ViewportTooltipLayout {
+                            overlay_size: geometry.info.overlay_size,
+                            target: geometry.anchor_center,
+                            target_size: geometry.anchor_size,
+                            prefer_below,
+                            vertical_offset,
+                            custom: custom.clone(),
+                        },
+                        popup.clone(),
+                    )
+                    .into()
+                })
+                .into();
+        }
+
         let target_anchor = self.target_anchor.unwrap_or(if self.prefer_below {
             Alignment::BOTTOM_CENTER
         } else {
@@ -1396,18 +1513,7 @@ impl RawTooltip {
             .follower_anchor(follower_anchor)
             .offset(popup_offset);
 
-        let dismiss_controller = controller.clone();
-        OverlayPortal::new(anchor)
-            .overlay_child(follower)
-            .role(crate::TransientRole::Tooltip)
-            .dismiss_policy(crate::TransientDismissPolicy {
-                escape: true,
-                ..crate::TransientDismissPolicy::tooltip()
-            })
-            .on_dismiss(move |_| dismiss_controller.hide())
-            .tooltip_timer(controller.clone())
-            .show(controller.is_visible())
-            .into()
+        portal.overlay_child(follower).into()
     }
 }
 

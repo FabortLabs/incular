@@ -593,17 +593,24 @@ pub struct OverlayChildLayoutInfo {
     pub overlay_size: Size,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct OverlayLayoutGeometry {
+    pub info: OverlayChildLayoutInfo,
+    pub anchor_center: Offset,
+    pub anchor_size: Size,
+}
+
 /// The geometry a layout-built overlay reads, written by the transient
 /// placement pass; bumping `revision` rebuilds the overlay.
 #[derive(Clone, Default)]
 pub(crate) struct OverlayLayoutSlot {
-    pub info: Rc<std::cell::Cell<Option<OverlayChildLayoutInfo>>>,
+    pub info: Rc<std::cell::Cell<Option<OverlayLayoutGeometry>>>,
     pub revision: Rc<std::cell::Cell<u64>>,
 }
 
 impl OverlayLayoutSlot {
     /// Stores `info`; returns whether it changed.
-    pub(crate) fn publish(&self, info: OverlayChildLayoutInfo) -> bool {
+    pub(crate) fn publish(&self, info: OverlayLayoutGeometry) -> bool {
         if self.info.get() == Some(info) {
             return false;
         }

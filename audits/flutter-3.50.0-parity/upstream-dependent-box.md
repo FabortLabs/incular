@@ -11,3 +11,22 @@ NaN target selecting the upper clamp bound. Both implementations
 passed those seven variants. Fourteen focused native checks passed.
 This registers the geometry helper only, not tooltip placement or
 a design-system tooltip.
+
+## Mounted RawTooltip placement
+
+Eight pinned `widgets/raw_tooltip_test.dart` originals passed:
+`:24, :80, :138, :203, :278, :336, :399, :2660`. The mounted
+native tooltip places the measured bubble in owning-overlay
+coordinates, using the target center and Flutter's default ten-pixel
+horizontal margin. The center, top-left, preferred above/below and
+both right-edge cases have the original bounds. A long press also
+opens custom positioning with the original target and tooltip
+sizes, and the delegate's offset determines painted layout.
+
+The default path uses the actual overlay viewport, not the anchor's
+local constraints. Explicit Incular anchor/link options still use
+the original composited follower; a native control verifies its
+offset. The position callback is held until measured geometry is
+available. The 14 focused native checks include Escape, hover, tap,
+long press, and all placement variants. This is RawTooltip rather
+than a Material or Cupertino tooltip.
