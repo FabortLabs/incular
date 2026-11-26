@@ -1,5 +1,9 @@
 use super::*;
 use crate::{
+    compositor::{
+        commands_have_destination_blend, destination_composition_scope,
+        destination_hairline_fixture,
+    },
     geometry::tessellate_hairline,
     pipelines::{path_instance_layout, path_vertex_layout},
 };
@@ -115,21 +119,40 @@ fn hairline_path_shader_readback_keeps_the_same_single_pixel_coverage_under_scal
     let mut path = Path::builder();
     path.move_to(Offset::new(6., 0.))
         .line_to(Offset::new(40., 0.));
-    let path = path.build();
+    let path = Arc::new(path.build());
     let stroke = Stroke {
         width: 0.,
         ..Stroke::default()
     };
 
-    for (transform, scale) in [
+    let placements = [
         (Transform::translation(Offset::new(0., 32.25)), 1.),
         (
             Transform::translation(Offset::new(0., 16.125))
                 .then(Transform::scale_non_uniform(2., 8.)),
             2.,
         ),
-    ] {
-        let placement = PathPlacement { transform, scale };
+    ];
+    for ((transform, scale), promoted) in placements
+        .into_iter()
+        .flat_map(|placement| [false, true].map(|promoted| (placement, promoted)))
+    {
+        let list = destination_hairline_fixture(path.clone(), transform);
+        assert!(commands_have_destination_blend(list.commands()));
+        let (origin, width, height) = if promoted {
+            destination_composition_scope(&list, scale, SIDE, SIDE)
+        } else {
+            (Offset::ZERO, SIDE, SIDE)
+        };
+        // The promoted compositor lowers into the smaller target with
+        // its origin subtracted. Match that placement and viewport, while
+        // keeping the same aligned backing texture for the readback.
+        let target_transform =
+            Transform::translation(Offset::new(-origin.x, -origin.y)).then(transform);
+        let placement = PathPlacement {
+            transform: target_transform,
+            scale,
+        };
         let kind = stroke_mesh_kind(stroke, placement).expect("visible stroke");
         let PathMeshKind::Stroke {
             device_linear: Some(linear),
@@ -143,7 +166,7 @@ fn hairline_path_shader_readback_keeps_the_same_single_pixel_coverage_under_scal
             &Brush::Solid(Color::WHITE),
             kind,
             placement,
-            [SIDE as f32; 2],
+            [width as f32, height as f32],
         );
         let buffer = |bytes: &[u8], usage| {
             device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -176,6 +199,8 @@ fn hairline_path_shader_readback_keeps_the_same_single_pixel_coverage_under_scal
                 ..Default::default()
             });
             pass.set_pipeline(&pipeline);
+            pass.set_viewport(0., 0., width as f32, height as f32, 0., 1.);
+            pass.set_scissor_rect(0, 0, width, height);
             pass.set_bind_group(0, &bindings, &[]);
             pass.set_vertex_buffer(0, vertices.slice(..));
             pass.set_vertex_buffer(1, instances.slice(..));
@@ -212,13 +237,16 @@ fn hairline_path_shader_readback_keeps_the_same_single_pixel_coverage_under_scal
             .unwrap()
             .unwrap();
         let mapped = readback.slice(..).get_mapped_range().unwrap();
-        let alpha = [30, 31, 32, 33].map(|y| mapped[((y * SIDE + 32) * 4 + 3) as usize]);
+        let col = 32 - (origin.x * scale).round() as u32;
+        let first_row = 30 - (origin.y * scale).round() as u32;
+        let alpha =
+            [0, 1, 2, 3].map(|dy| mapped[(((first_row + dy) * SIDE + col) * 4 + 3) as usize]);
         drop(mapped);
         readback.unmap();
         for (actual, expected) in alpha.into_iter().zip([0, 64, 191, 0]) {
             assert!(
                 actual.abs_diff(expected) <= 1,
-                "{transform:?} {scale}: {alpha:?}"
+                "{transform:?} {scale} promoted={promoted}: {alpha:?}"
             );
         }
     }

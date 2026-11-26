@@ -7,7 +7,7 @@ const FLATTEN_TOLERANCE: f64 = 0.05;
 /// Accuracy of the stroke-to-outline expansion, in path units.
 const STROKE_TOLERANCE: f64 = 0.01;
 /// Longest antialiasing miter, in half-pixels, at a sharp outline corner.
-const MAX_FRINGE_MITER: f32 = 4.;
+pub(crate) const MAX_FRINGE_MITER: f32 = 4.;
 
 /// CPU tessellation output. It deliberately contains no GPU objects so the
 /// renderer may cache/upload it independently of Incular's Path type.

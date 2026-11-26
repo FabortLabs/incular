@@ -284,6 +284,19 @@ pub(crate) fn oval_path(rect: Rect) -> Path {
         .close();
     builder.build()
 }
+/// Maximum distance from a stroke center line as a factor of its half-width.
+pub(crate) fn stroke_reach_factor(cap: LineCap, join: LineJoin, miter_limit: f32) -> f32 {
+    let join_reach = match join {
+        LineJoin::Miter => miter_limit.max(1.01),
+        LineJoin::Round | LineJoin::Bevel => 1.,
+    };
+    let cap_reach = match cap {
+        LineCap::Square => std::f32::consts::SQRT_2,
+        LineCap::Butt | LineCap::Round => 1.,
+    };
+    join_reach.max(cap_reach)
+}
+
 /// How far a mesh of `kind` reaches past its path's geometric bounds, in
 /// path units. A stroke covers half its width on each side, more at miter
 /// joins and square caps; culling the raw bounds would drop a straight
@@ -306,15 +319,7 @@ pub(crate) fn mesh_bounds_outset(kind: PathMeshKind) -> f32 {
             } else {
                 f32::from_bits(width) * 0.5
             };
-            let join_reach = match join {
-                LineJoin::Miter => f32::from_bits(miter_limit).max(1.),
-                LineJoin::Round | LineJoin::Bevel => 1.,
-            };
-            let cap_reach = match cap {
-                LineCap::Square => std::f32::consts::SQRT_2,
-                LineCap::Butt | LineCap::Round => 1.,
-            };
-            half * join_reach.max(cap_reach)
+            half * stroke_reach_factor(cap, join, f32::from_bits(miter_limit))
         }
     }
 }

@@ -171,6 +171,59 @@ pub(crate) fn add_composition_bounds(bounds: &mut Option<Rect>, candidate: Rect)
     });
 }
 
+fn outset(rect: Rect, by: Offset) -> Rect {
+    Rect::from_origin_size(
+        rect.origin - by,
+        Size {
+            width: rect.size.width + by.x * 2.,
+            height: rect.size.height + by.y * 2.,
+        },
+    )
+}
+
+fn uniform_outset(rect: Rect, by: f32) -> Rect {
+    outset(rect, Offset::new(by, by))
+}
+
+/// Outward displacement performed by the path vertex shader. Ordinary
+/// meshes move along their transformed contour miter; hairline meshes
+/// instead carry a miter already normalized in device space.
+fn path_fringe_reach(transform: Transform, scale: f32) -> Offset {
+    let ([a, b, c, d], _) = physical_affine(transform, scale);
+    let normalized_area = (a * d - b * c).abs().max(1e-12).sqrt();
+    let reach = 0.5 * crate::geometry::MAX_FRINGE_MITER / (normalized_area * scale);
+    Offset::new(a.hypot(c) * reach, b.hypot(d) * reach)
+}
+
+fn path_composition_bounds(
+    path: &Path,
+    stroke: Option<Stroke>,
+    transform: Transform,
+    scale: f32,
+) -> Option<Rect> {
+    let mut local = path.tight_bounds()?;
+    if let Some(stroke) = stroke {
+        if !stroke.width.is_finite() || stroke.width < 0. {
+            return None;
+        }
+        let half_width_reach =
+            0.5 * stroke_reach_factor(stroke.cap, stroke.join, stroke.miter_limit);
+        if stroke.width == 0. {
+            transform.inverse()?;
+            let device_reach = half_width_reach + 0.5 * crate::geometry::MAX_FRINGE_MITER;
+            return Some(uniform_outset(
+                transform.transform_rect_bbox(local),
+                device_reach / scale,
+            ));
+        }
+        local = uniform_outset(local, half_width_reach * stroke.width);
+    }
+    Some(outset(
+        transform.transform_rect_bbox(local),
+        path_fringe_reach(transform, scale),
+    ))
+}
+
 /// Computes a conservative logical scene scope for destination promotion. It
 /// deliberately includes every visible command (and expanded blur/shadow
 /// bounds), so presenting a tight target cannot omit content outside a small
@@ -179,66 +232,65 @@ pub(crate) fn display_list_composition_bounds(
     commands: &[PaintCommand],
     scale: f32,
 ) -> Option<Rect> {
-    let mut transforms = vec![Offset::ZERO];
+    let mut transforms = vec![Transform::IDENTITY];
     let mut bounds = None;
     for command in commands {
-        let translation = *transforms.last().expect("root transform");
+        let transform = *transforms.last().expect("root transform");
         match command {
-            PaintCommand::Rect { rect, .. }
-            | PaintCommand::HardEdgeRect { rect, .. }
+            PaintCommand::Rect { rect, .. } => {
+                let world = transform.transform_rect_bbox(*rect);
+                let candidate = if !transform.is_translation() {
+                    outset(world, path_fringe_reach(transform, scale))
+                } else if !device_pixel_aligned(world, scale) {
+                    uniform_outset(world, 1. / scale)
+                } else {
+                    world
+                };
+                add_composition_bounds(&mut bounds, candidate);
+            }
+            PaintCommand::HardEdgeRect { rect, .. }
             | PaintCommand::Image {
                 destination: rect, ..
-            } => add_composition_bounds(&mut bounds, translated_rect(*rect, translation)),
+            } => add_composition_bounds(&mut bounds, transform.transform_rect_bbox(*rect)),
             PaintCommand::RRect { rrect, .. } | PaintCommand::Border { rrect, .. } => {
-                add_composition_bounds(&mut bounds, translated_rect(rrect.rect, translation));
+                // The analytic quad extends one pixel along each transformed
+                // basis vector, at most two pixels along a world axis.
+                let world = transform.transform_rect_bbox(rrect.rect);
+                add_composition_bounds(&mut bounds, uniform_outset(world, 2. / scale));
             }
-            PaintCommand::FillPath { path, .. } | PaintCommand::StrokePath { path, .. } => {
-                if let Some(path_bounds) = path.tight_bounds() {
-                    let margin = match command {
-                        PaintCommand::StrokePath { stroke, .. } if stroke.width == 0. => {
-                            (0.5 * stroke.miter_limit.max(1.) + 1.) / scale
-                        }
-                        PaintCommand::StrokePath { stroke, .. } => {
-                            (stroke.width.max(0.) * 0.5 * stroke.miter_limit.max(1.)).max(0.)
-                        }
-                        _ => 0.,
-                    };
-                    add_composition_bounds(
-                        &mut bounds,
-                        Rect::from_origin_size(
-                            Offset::new(
-                                path_bounds.origin.x - margin + translation.x,
-                                path_bounds.origin.y - margin + translation.y,
-                            ),
-                            Size::new(
-                                path_bounds.size.width + margin * 2.,
-                                path_bounds.size.height + margin * 2.,
-                            ),
-                        ),
-                    );
+            PaintCommand::FillPath { path, .. } => {
+                if let Some(candidate) = path_composition_bounds(path, None, transform, scale) {
+                    add_composition_bounds(&mut bounds, candidate);
+                }
+            }
+            PaintCommand::StrokePath { path, stroke, .. } => {
+                if let Some(candidate) =
+                    path_composition_bounds(path, Some(*stroke), transform, scale)
+                {
+                    add_composition_bounds(&mut bounds, candidate);
                 }
             }
             PaintCommand::GlyphRun { run, .. } => {
-                if let Some((left, right)) = run
+                if let Some((left, top, right, bottom)) = run
                     .glyphs
                     .iter()
-                    .map(|glyph| (glyph.offset.x, glyph.offset.x + glyph.advance.max(0.)))
-                    .reduce(|(left, right), (next_left, next_right)| {
-                        (left.min(next_left), right.max(next_right))
+                    .map(|glyph| {
+                        let x = run.origin.x + glyph.offset.x;
+                        let y = run.origin.y - glyph.offset.y;
+                        let end = x + glyph.advance;
+                        (x.min(end), y, x.max(end), y)
+                    })
+                    .reduce(|(left, top, right, bottom), (l, t, r, b)| {
+                        (left.min(l), top.min(t), right.max(r), bottom.max(b))
                     })
                 {
-                    let font_size = run.font_size.abs().max(1.);
-                    let x_margin = font_size * 0.25;
-                    add_composition_bounds(
-                        &mut bounds,
-                        Rect::from_origin_size(
-                            Offset::new(
-                                run.origin.x + left - x_margin + translation.x,
-                                run.origin.y - font_size * 1.35 + translation.y,
-                            ),
-                            Size::new((right - left + x_margin * 2.).max(1.), font_size * 1.7),
-                        ),
+                    let pens = Rect::from_origin_size(
+                        Offset::new(left, top),
+                        Size::new(right - left, bottom - top),
                     );
+                    let pad = run.font_size.abs() * 2. + 1. / scale;
+                    let candidate = transform.transform_rect_bbox(uniform_outset(pens, pad));
+                    add_composition_bounds(&mut bounds, candidate);
                 }
             }
             // Effect bounds emitted by LayerTree are already in the current
@@ -285,8 +337,8 @@ pub(crate) fn display_list_composition_bounds(
                 };
                 add_composition_bounds(&mut bounds, candidate);
             }
-            PaintCommand::PushTransform { transform } => {
-                transforms.push(translation + transform.translation_offset());
+            PaintCommand::PushTransform { transform: local } => {
+                transforms.push(transform.then(*local));
             }
             PaintCommand::PopTransform => {
                 if transforms.len() > 1 {
@@ -418,4 +470,90 @@ pub(crate) fn backdrop_filter_blur_reach(filter: &incular_painting::ImageFilter)
             incular_painting::ImageFilter::Blur(blur) => (x + blur.sigma_x, y + blur.sigma_y),
             _ => (x, y),
         })
+}
+
+#[cfg(test)]
+pub(crate) fn destination_hairline_fixture(path: Arc<Path>, transform: Transform) -> DisplayList {
+    let mut line = DisplayList::new();
+    let line_bounds = path.tight_bounds().expect("line bounds");
+    line.push(PaintCommand::StrokePath {
+        path,
+        brush: Brush::Solid(Color::WHITE),
+        stroke: Stroke {
+            width: 0.,
+            ..Stroke::default()
+        },
+    });
+
+    let blend_rect = Rect::from_origin_size(Offset::new(4., 4.), Size::new(4., 4.));
+    let mut square = DisplayList::new();
+    square.push(PaintCommand::Rect {
+        rect: blend_rect,
+        color: Color::WHITE,
+    });
+    let mut tree = incular_rendering::LayerTree::new();
+    let root = tree.create_transform(Transform::IDENTITY);
+    let transformed = tree.create_transform(transform);
+    let line_picture = tree.create_picture(line, line_bounds);
+    let blend = tree.create_blend(BlendMode::Multiply);
+    let blend_picture = tree.create_picture(square, blend_rect);
+    tree.set_children(transformed, vec![line_picture]);
+    tree.set_children(blend, vec![blend_picture]);
+    tree.set_children(root, vec![transformed, blend]);
+    tree.set_root(root);
+    tree.flatten()
+}
+
+#[cfg(test)]
+mod destination_scope_tests {
+    use super::*;
+
+    #[test]
+    fn transparent_destination_scope_keeps_a_scaled_hairline_outside_a_blend_group() {
+        let mut path = Path::builder();
+        path.move_to(Offset::new(8., 8.))
+            .line_to(Offset::new(24., 8.));
+        let list = destination_hairline_fixture(Arc::new(path.build()), Transform::scale(2.));
+
+        assert!(commands_have_destination_blend(list.commands()));
+        for scale in [1., 2.] {
+            let side = (64. * scale) as u32;
+            let (origin, width, height) = destination_composition_scope(&list, scale, side, side);
+            assert_eq!(origin, Offset::new(4., 4.));
+            assert_eq!(
+                (width, height),
+                ((44. * scale + 4.) as u32, (12. * scale + 4.) as u32)
+            );
+        }
+    }
+
+    #[test]
+    fn destination_scope_uses_nested_affines_in_draw_order_and_restores_after_pop() {
+        let positioned = Transform::translation(Offset::new(30., 20.));
+        let rotated_and_scaled = Transform::from_coefficients([0., 2., -3., 0., 0., 0.]);
+        let rect = |x, y, w, h| PaintCommand::HardEdgeRect {
+            rect: Rect::from_origin_size(Offset::new(x, y), Size::new(w, h)),
+            color: Color::WHITE,
+        };
+        let commands = [
+            PaintCommand::PushTransform {
+                transform: positioned,
+            },
+            PaintCommand::PushTransform {
+                transform: rotated_and_scaled,
+            },
+            // (1..5, 2..7) maps to (9..24, 22..30).
+            rect(1., 2., 4., 5.),
+            PaintCommand::PopTransform,
+            PaintCommand::PopTransform,
+            rect(35., 2., 2., 2.),
+        ];
+        assert_eq!(
+            display_list_composition_bounds(&commands, 1.),
+            Some(Rect::from_origin_size(
+                Offset::new(9., 2.),
+                Size::new(28., 28.)
+            ))
+        );
+    }
 }
