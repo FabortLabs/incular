@@ -261,6 +261,7 @@ pub use incular_image::{
     ImageStream, ImageStreamCompleter, MemoryImage, ResizeImage, ResizeImageKey, ResizeImagePolicy,
 };
 pub use incular_platform::autofill::AutofillContextAction;
+pub use incular_platform::{SystemSound, SystemSoundType};
 pub use incular_platform::{
     BackGestureEvent, DefaultSpellCheckService, PlatformViewCommand, PlatformViewCompositing,
     PlatformViewId, PlatformViewPointerEvent, PredictiveBackEvent, SmartDashesType,
