@@ -25,3 +25,16 @@ These checks compare actual generated paint, not engine-specific
 stroke commands or Flutter's golden image pixels. Generic external
 BoxPainter lifecycle, infinite scroll, and pinned-header variants
 remain outside this batch.
+
+## Pinned header outline
+
+Pinned :502 now pairs. A real 50 px pinned header in a 300 × 100
+viewport emits exactly one 299 × 49 centered outline at (0.5, 0.5)
+both before scroll and after jumping to 200 px. The border still
+paints after the content scrolling beneath it. The full focused
+DecoratedSliver native target passed.
+
+Pinned :446 and :558 also passed on Flutter and are recorded as
+reference-only. The finite cached layer and basic pinned case do
+not certify unbounded lazy lists or the bounced, stretched size
+and stroke alignment of the original overscroll gesture.

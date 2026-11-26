@@ -2288,3 +2288,6 @@ packages/flutter/test/widgets/decorated_sliver_test.dart	271	DecoratedSliver pai
 packages/flutter/test/widgets/decorated_sliver_test.dart	314	DecoratedSliver paints its border correctly horizontally reverse	paired-match	upstream-decorated-sliver.md
 packages/flutter/test/widgets/decorated_sliver_test.dart	358	DecoratedSliver works with SliverMainAxisGroup	paired-match	upstream-decorated-sliver.md
 packages/flutter/test/widgets/decorated_sliver_test.dart	402	DecoratedSliver works with SliverCrossAxisGroup	paired-match	upstream-decorated-sliver.md
+packages/flutter/test/widgets/decorated_sliver_test.dart	446	DecoratedSliver draws only up to the bottom cache when sliver has infinite scroll extent	reference-ran-incular-open	upstream-decorated-sliver.md#pinned-header-outline
+packages/flutter/test/widgets/decorated_sliver_test.dart	502	DecoratedSliver works with PinnedHeaderSliver basic scroll	paired-match	upstream-decorated-sliver.md#pinned-header-outline
+packages/flutter/test/widgets/decorated_sliver_test.dart	558	DecoratedSliver works with PinnedHeaderSliver overscroll	reference-ran-incular-open	upstream-decorated-sliver.md#pinned-header-outline

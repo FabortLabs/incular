@@ -236,3 +236,51 @@ fn cached_decoration_enters_the_view_with_the_sliver_on_scroll() {
         )]
     );
 }
+
+#[test]
+fn decorated_pinned_header_keeps_its_outline_at_the_viewport_edge() {
+    let controller = ScrollController::new();
+    let view = Size::new(300., 100.);
+    let header = incular_widgets::internal::PinnedHeaderSliver::new(
+        incular_widgets::SizedBox::new().width(300.).height(50.),
+    );
+    let decorated = DecoratedSliver::new(native_decoration(), header);
+    let content = SliverToBoxAdapter::new(Widget::box_(Size::new(300., 1000.), CHILD));
+    let viewport = CustomScrollView::new(vec![
+        Box::new(decorated) as Box<dyn Sliver>,
+        Box::new(content),
+    ])
+    .controller(controller.clone());
+    let mut tree = WidgetTree::new();
+    tree.mount(Directionality::new(TextDirection::Ltr, viewport).into())
+        .unwrap();
+    for scroll in [0., 200.] {
+        if scroll > 0. {
+            assert!(controller.jump_to(scroll));
+        }
+        tree.layout(Constraints::tight(view)).unwrap();
+        tree.update_compositor(Instant::now()).unwrap();
+        let list = tree.paint();
+        assert_eq!(
+            border_rects(&list),
+            [Rect::from_origin_size(
+                Offset::new(0.5, 0.5),
+                Size::new(299., 49.)
+            )],
+        );
+        let border = list.commands().iter().position(|command| {
+            matches!(command, PaintCommand::Border { border, .. } if border.color == EDGE)
+        }).unwrap();
+        let content = list
+            .commands()
+            .iter()
+            .position(
+                |command| matches!(command, PaintCommand::Rect { color, .. } if *color == CHILD),
+            )
+            .unwrap();
+        assert!(
+            border > content,
+            "the scrolling content must not cover the pinned outline"
+        );
+    }
+}
