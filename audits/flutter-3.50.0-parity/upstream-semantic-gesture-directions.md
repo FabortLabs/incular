@@ -78,3 +78,14 @@ the selection/text payloads. Its declarative focus callback does not
 steal runtime keyboard focus. This comparison is to the ordinary
 widget, not the separate SliverSemantics fixture. One targeted Rust
 case and the pinned original passed.
+
+## Full ordinary Semantics flag inventory
+
+Pinned `widgets/semantics_test.dart:579` and the native ordinary
+widget counterpart both cover the four original snapshots: all
+combinable flags with checked true, a plain container with no flag,
+a toggled-only node, and the complete flag set with mixed checked
+state. The native fixture checks one bounded leaf, no spurious
+actions or inherited flags, and no transfer of real keyboard focus
+when focus is only declared in the semantics. Both native ordinary
+Semantics tests passed.
