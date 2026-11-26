@@ -159,7 +159,7 @@ fn alignment_modes_space_short_single_line() {
 #[test]
 fn alignment_start_end_follow_text_direction() {
     let width = 200.;
-    let avail = width - 16.;
+    let avail = width - 16. - 3.;
     // Left-to-right: start is left, end is right.
     let ltr_start = field_edges(
         TextEditingController::with_text("hi"),

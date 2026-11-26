@@ -189,17 +189,13 @@ impl WidgetTree {
                 } else {
                     260.0
                 };
-                let width_for_text = if !multiline && text_direction == TextDirection::Ltr {
-                    let width =
-                        intrinsic_width.clamp(constraints.min_width(), constraints.max_width());
-                    // RenderEditable removes this tail from the text painter's
-                    // alignment width; the caret stays inside even when the
-                    // line is right-aligned and no scrolling is needed.
-                    let margin = crate::tree::text::editable_caret_margin(field);
-                    (width - content_padding.horizontal() - margin).max(0.)
-                } else {
-                    (intrinsic_width - content_padding.horizontal()).max(0.)
-                };
+                // RenderEditable subtracts the cursor width
+                // and one-pixel caret gap for alignment and wrapping in both
+                // text directions and line modes.
+                let width =
+                    intrinsic_width.clamp(constraints.min_width(), constraints.max_width());
+                let margin = crate::tree::text::editable_caret_margin(field);
+                let width_for_text = (width - content_padding.horizontal() - margin).max(0.);
                 let options = TextLayoutOptions::new(
                     Some(width_for_text),
                     rendering::physical_text_align(text_align, text_direction),

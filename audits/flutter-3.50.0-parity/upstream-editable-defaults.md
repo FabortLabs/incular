@@ -31,3 +31,22 @@ and the native port both pass. The initially unfocused editor keeps
 the (5, 7) range and upstream affinity, then keeps them both while
 focused and after blur. The comparison uses the original's native
 branch; its conditional web select-all path is not newly verified here.
+
+## Caret space in both directions and line modes
+
+The authored pinned Flutter probe uses an empty editor so no font
+advance affects the result. For width 200 and a two-pixel cursor
+with one pixel of caret gap, the actual left, center, and right
+caret positions are 0, 98.5, and 197 at device-pixel ratio 2.
+Both line modes and both text directions match. At device-pixel
+ratio 3 Flutter additionally snaps the midpoint to a device pixel;
+that separate snapping rule is not part of this probe.
+
+Before the native fix, both multiline modes and single-line RTL
+used the full width and placed the center at 100 and right at 200.
+The real layout width now reserves the cursor's requested width
+and gap when aligning or wrapping, rather than special-casing
+single-line LTR. Native tests inspect painted rectangles and
+verify Bidi, pointer, placeholder, and scroll regressions.
+All 72 focused native checks passed. This authored control does
+not increase the upstream count.

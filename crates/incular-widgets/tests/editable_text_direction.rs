@@ -24,7 +24,7 @@ const HEIGHT: f32 = 32.0;
 const LEFT_EDGE: f32 = 8.0;
 const RIGHT_EDGE: f32 = WIDTH - 8.0;
 // RenderEditable reserves a two-pixel cursor and one-pixel caret gap.
-const LTR_RIGHT_TEXT_EDGE: f32 = RIGHT_EDGE - 3.;
+const RIGHT_TEXT_EDGE: f32 = RIGHT_EDGE - 3.;
 const TOLERANCE: f32 = 1.5;
 
 fn glyph_bounds(list: &incular_rendering::DisplayList) -> (f32, f32) {
@@ -89,7 +89,7 @@ fn assert_left(bounds: (f32, f32), message: &str) {
 }
 
 fn assert_right(bounds: (f32, f32), message: &str) {
-    assert_right_at(bounds, RIGHT_EDGE, message);
+    assert_right_at(bounds, RIGHT_TEXT_EDGE, message);
 }
 
 fn assert_right_at(bounds: (f32, f32), edge: f32, message: &str) {
@@ -167,7 +167,7 @@ fn start_and_end_follow_the_explicit_direction() {
     );
     assert_right_at(
         directed("hi", TextAlign::End, TextDirection::Ltr),
-        LTR_RIGHT_TEXT_EDGE,
+        RIGHT_TEXT_EDGE,
         "ltr + end",
     );
     assert_left(
@@ -183,13 +183,8 @@ fn left_and_right_ignore_the_direction() {
             directed("hi", TextAlign::Left, direction),
             "TextAlign.left is physical",
         );
-        let edge = match direction {
-            TextDirection::Ltr => LTR_RIGHT_TEXT_EDGE,
-            TextDirection::Rtl => RIGHT_EDGE,
-        };
-        assert_right_at(
+        assert_right(
             directed("hi", TextAlign::Right, direction),
-            edge,
             "TextAlign.right is physical",
         );
     }
@@ -461,7 +456,7 @@ fn arabic_hebrew_and_neutral_text_use_the_resolved_field_direction() {
         );
         let rtl = directed(text, TextAlign::Start, TextDirection::Rtl);
         assert!(
-            (rtl.1 - RIGHT_EDGE).abs() < TOLERANCE,
+            (rtl.1 - RIGHT_TEXT_EDGE).abs() < TOLERANCE,
             "Flutter 3.41.7 packages/flutter/lib/src/widgets/editable_text.dart:1138-1142 and packages/flutter/lib/src/painting/text_painter.dart:856-859 resolve {label} TextAlign.start against the RTL field direction: {rtl:?}"
         );
     }
@@ -567,7 +562,7 @@ fn empty_placeholder_and_caret_follow_start_direction() {
                 - if direction == TextDirection::Ltr {
                     LEFT_EDGE
                 } else {
-                    RIGHT_EDGE
+                    RIGHT_TEXT_EDGE
                 })
             .abs()
                 < TOLERANCE,

@@ -101,7 +101,7 @@ fn rtl_logical_edges_map_to_visual_edges() {
     // Pure RTL: logical start sits at the visual right, logical end at
     // the visual left, under every alignment.
     let width = 300.;
-    let avail = width - 16.;
+    let avail = width - 16. - 3.;
     for align in [TextAlign::Start, TextAlign::Center, TextAlign::End] {
         let controller = TextEditingController::with_text("שלום");
         let (mut tree, root) = mount_field(controller.clone(), |field| {
