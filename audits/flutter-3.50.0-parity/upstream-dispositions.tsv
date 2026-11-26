@@ -2594,3 +2594,4 @@ packages/flutter/test/rendering/table_test.dart	212	Table border painting	paired
 packages/flutter/test/rendering/table_test.dart	320	Table paints a borderRadius	paired-match	upstream-table-border.md#explicit-borders-on-a-zero-height-grid
 packages/flutter/test/widgets/focus_manager_test.dart	886	Can move node between scopes and lose scope focus	paired-match	upstream-mounted-focus-scope-nodes.md#moving-active-subtrees-between-scopes
 packages/flutter/test/widgets/focus_manager_test.dart	932	ancestors and descendants are computed and recomputed properly	paired-match	upstream-mounted-focus-scope-nodes.md#moving-active-subtrees-between-scopes
+packages/flutter/test/painting/border_rtl_test.dart	971	BorderDirectional hashCode	paired-match	upstream-border-constraints-formatters.md#directional-border-hash-behavior

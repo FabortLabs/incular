@@ -251,7 +251,7 @@ impl incular_core::Lerp for BorderSide {
 /// A box border configuration specifying stroke properties on all four sides.
 ///
 /// All sides default to [`BorderSide::NONE`].
-#[derive(Clone, Copy, Debug, PartialEq, TypedBuilder)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, TypedBuilder)]
 pub struct Border {
     #[builder(default = BorderSide::NONE)]
     pub top: BorderSide,
@@ -428,7 +428,7 @@ impl From<Border> for incular_rendering::Border {
 }
 
 /// Directional border with start and end sides. Omitted sides do not paint.
-#[derive(Clone, Copy, Debug, PartialEq, TypedBuilder, SmartDefault)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, TypedBuilder, SmartDefault)]
 pub struct BorderDirectional {
     #[builder(default = BorderSide::NONE)]
     #[default(BorderSide::NONE)]

@@ -351,3 +351,37 @@ fn mixed_add_merges_compatible_edges_and_preserves_both_layer_orders() {
         }
     }
 }
+
+#[test]
+fn border_hashes_follow_the_painted_edge_instead_of_only_the_side_contents() {
+    use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher};
+    let hasher = BuildHasherDefault::<DefaultHasher>::default();
+    let make_top = || BorderDirectional {
+        top: BorderSide::solid(Color::BLACK, 2.),
+        ..BorderDirectional::default()
+    };
+    let top = make_top();
+    let bottom = BorderDirectional { bottom: top.top, ..BorderDirectional::default() };
+    assert_eq!(top, make_top());
+    assert_eq!(hasher.hash_one(top), hasher.hash_one(make_top()));
+    assert_ne!(hasher.hash_one(top), hasher.hash_one(bottom));
+    assert_ne!(
+        hasher.hash_one(Border { top: top.top, ..Border::default() }),
+        hasher.hash_one(Border { bottom: bottom.bottom, ..Border::default() })
+    );
+
+    for direction in [TextDirection::Ltr, TextDirection::Rtl] {
+        for (border, upper, lower) in [(top, true, false), (bottom, false, true)] {
+            let mut canvas = Canvas::default();
+            BoxBorderStack::from(border).paint_with_direction(&mut canvas, rect(), Some(direction));
+            let list = canvas.finish();
+            let [PaintCommand::FillPath { path, brush: Brush::Solid(Color::BLACK), fill_rule }] =
+                list.commands()
+            else {
+                panic!("expected just one painted edge: {list:?}");
+            };
+            assert_eq!(path.contains(Offset::new(150., 15.5), *fill_rule), upper);
+            assert_eq!(path.contains(Offset::new(150., 174.5), *fill_rule), lower);
+        }
+    }
+}

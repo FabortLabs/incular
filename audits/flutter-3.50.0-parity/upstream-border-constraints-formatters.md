@@ -352,3 +352,13 @@ Direct border values now use the same stable display formatting as
 compound borders. The compound description reflects operand order
 while painting retains the independently verified outside-first order.
 All six focused border-stack tests passed.
+
+## Directional border hash behavior
+
+Pinned `painting/border_rtl_test.dart:971` passed. Two independently
+constructed two-pixel top borders compare and hash the same; moving
+the identical side to the bottom changes both the hash and actual
+paint coverage. Painting either direction produces exactly one edge
+with an unchanged physical top or bottom. The physical Border value
+has the same keyed-edge behavior. All 19 focused border tests passed;
+the numeric hash itself is Rust-specific.
