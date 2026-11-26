@@ -309,3 +309,22 @@ frame constraints and the inherited MediaQuery, and checks that
 onClose can mutate an application signal without hitting the pure
 build guard. The group and child both close and the next scene no
 longer contains the panel.
+
+### Controller moves and open/close notifications
+
+Pinned `:701` swaps both controllers without disturbing the visible
+panel; only the new pair reports open and can close it. Pinned `:759`
+and `:811` move the same handle onto a newly keyed group or anchor.
+The old open state is discarded, but the retained replacement accepts
+a real anchor tap and is closed by the original handle. Pinned
+`:1734` and `:1766` verify the exact open/close callback sequence
+from both anchor taps and programmatic calls, without replaying
+onOpen during close or onClose during open.
+
+### Focus traversal keeps application shortcuts
+
+Pinned `:1215` and `:1881` send actual key events from focused
+anchor and panel controls. The custom traversal actions get the same
+left/next/previous sequences (and the grouped next/previous sequence
+both before and after opening). The original node stays primary.
+Home and End don't cause built-in raw menu focus movement.

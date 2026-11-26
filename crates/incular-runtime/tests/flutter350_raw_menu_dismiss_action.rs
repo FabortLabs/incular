@@ -474,18 +474,35 @@ fn alive(runtime: &Runtime, key: u64) -> bool {
 #[test]
 fn toggling_a_menu_by_its_anchor_tracks_actual_overlay_visibility() {
     let controller = MenuController::new();
+    let callbacks = Rc::new(RefCell::new(Vec::new()));
     let menu = RawMenuAnchor::new(controller.clone(), |_, info| {
         positioned_below(info.anchor_rect, tagged_panel(11))
     })
-    .child(toggle(1, &controller));
+    .child(toggle(1, &controller))
+    .on_open({
+        let callbacks = callbacks.clone();
+        move || callbacks.borrow_mut().push("open")
+    })
+    .on_close({
+        let callbacks = callbacks.clone();
+        move || callbacks.borrow_mut().push("close")
+    });
     let mut runtime = Runtime::new(Center::new(menu).into()).unwrap();
     assert!(!frame(&mut runtime));
     tap(&mut runtime, Key::Value(1));
     assert!(frame(&mut runtime));
     assert!(controller.is_open() && alive(&runtime, 11));
+    assert_eq!(*callbacks.borrow(), ["open"]);
     tap(&mut runtime, Key::Value(1));
     assert!(!frame(&mut runtime));
     assert!(!controller.is_open() && !alive(&runtime, 11));
+    assert_eq!(*callbacks.borrow(), ["open", "close"]);
+    controller.open(None);
+    assert!(frame(&mut runtime));
+    assert_eq!(*callbacks.borrow(), ["open", "close", "open"]);
+    controller.close();
+    assert!(!frame(&mut runtime));
+    assert_eq!(*callbacks.borrow(), ["open", "close", "open", "close"]);
 }
 
 #[test]
@@ -609,4 +626,86 @@ fn a_context_menu_button_can_itself_contain_another_context_menu() {
     tap(&mut runtime, Key::Value(2));
     frame(&mut runtime);
     assert!(second.is_open() && alive(&runtime, 12));
+}
+
+fn mounted_group(
+    group: &MenuController,
+    menu: &MenuController,
+    group_key: u64,
+    menu_key: u64,
+) -> Widget {
+    use incular_widgets::RawMenuAnchorGroup;
+    let anchor = Widget::from(
+        RawMenuAnchor::new(menu.clone(), |_, info| {
+            positioned_below(info.anchor_rect, tagged_panel(11))
+        })
+        .child(toggle(1, menu)),
+    )
+    .with_key(Key::Value(menu_key));
+    Widget::from(RawMenuAnchorGroup::new(group.clone(), anchor)).with_key(Key::Value(group_key))
+}
+
+#[test]
+fn replacing_group_and_anchor_controllers_does_not_hide_the_open_panel() {
+    let (old_group, old_menu) = (MenuController::new(), MenuController::new());
+    let (group, menu) = (MenuController::new(), MenuController::new());
+    let mut runtime =
+        Runtime::new(Center::new(mounted_group(&old_group, &old_menu, 100, 101)).into()).unwrap();
+    frame(&mut runtime);
+    tap(&mut runtime, Key::Value(1));
+    assert!(frame(&mut runtime));
+    assert!(old_group.is_open() && old_menu.is_open());
+    assert!(!group.is_open() && !menu.is_open());
+
+    let root = runtime.tree().root().unwrap();
+    runtime
+        .schedule_update(
+            root,
+            Center::new(mounted_group(&group, &menu, 100, 101)).into(),
+        )
+        .unwrap();
+    assert!(frame(&mut runtime));
+    assert!(!old_group.is_open() && !old_menu.is_open());
+    assert!(group.is_open() && menu.is_open());
+    group.close();
+    assert!(!frame(&mut runtime));
+    assert!(!group.is_open() && !menu.is_open());
+}
+
+#[test]
+fn a_controller_can_move_to_a_newly_keyed_group_or_menu_without_keeping_old_state() {
+    for replace_group in [false, true] {
+        let (group, menu) = (MenuController::new(), MenuController::new());
+        let old_widget = Center::new(mounted_group(&group, &menu, 100, 101));
+        let mut runtime = Runtime::new(old_widget.into()).unwrap();
+        frame(&mut runtime);
+        tap(&mut runtime, Key::Value(1));
+        assert!(frame(&mut runtime));
+        assert!(group.is_open() && menu.is_open());
+
+        let (group_key, menu_key) = if replace_group {
+            (102, 101)
+        } else {
+            (100, 102)
+        };
+        let root = runtime.tree().root().unwrap();
+        runtime
+            .schedule_update(
+                root,
+                Center::new(mounted_group(&group, &menu, group_key, menu_key)).into(),
+            )
+            .unwrap();
+        assert!(!frame(&mut runtime));
+        assert!(!group.is_open() && !menu.is_open());
+        tap(&mut runtime, Key::Value(1));
+        assert!(frame(&mut runtime));
+        assert!(group.is_open() && menu.is_open());
+        if replace_group {
+            group.close()
+        } else {
+            menu.close()
+        }
+        assert!(!frame(&mut runtime));
+        assert!(!group.is_open() && !menu.is_open());
+    }
 }
