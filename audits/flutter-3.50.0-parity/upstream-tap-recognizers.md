@@ -149,3 +149,20 @@ use their own cancellation rules.
 The retained runtime fixture confirms no TapMove, TapUp or click
 comes through after a mouse chord changes. All five pinned Flutter
 originals and 35 focused native checks passed.
+
+## Tap movement and acceptance
+
+Three more originals pair: mouse kind on down/up (:159), a pointer
+cancel after the reported down (:568), and unbounded post-accept
+movement with the original two position/delta pairs (:1105).
+
+Tap recognizers now distinguish pre-accept and post-accept distance
+limits, including an explicit unlimited policy. Reporting TapDown at
+the deadline is not itself acceptance. Default tap distance is the
+view's touch slop (18 logical pixels absent a setting), even for a
+mouse; this does not change the precise slops of drags or multi-taps.
+Before the fix a 2 px desktop mouse drift produced a cancellation.
+The pinned authored and native retained probes both accept 2 and
+18 px and cancel at 18.25 px. Native controls also exercise a
+configured 4 px tolerance. All 44 focused native checks, the three
+Flutter originals, and the authored Flutter probe passed.

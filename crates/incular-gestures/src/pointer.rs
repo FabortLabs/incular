@@ -69,6 +69,28 @@ impl GestureCallbacks {
     }
 }
 
+/// How far a tap may move from its original position.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum TapSlopTolerance {
+    /// Use the view's touch slop, defaulting to 18 logical pixels.
+    #[default]
+    Default,
+    /// Maximum global distance in logical pixels.
+    Distance(f32),
+    /// Do not reject a tap based on movement.
+    Unlimited,
+}
+
+impl TapSlopTolerance {
+    fn exceeded(self, distance: f32, default: f32) -> bool {
+        match self {
+            Self::Default => distance > default,
+            Self::Distance(tolerance) => distance > tolerance,
+            Self::Unlimited => false,
+        }
+    }
+}
+
 /// A reusable recognizer for tap, double-tap, long-press, and pan.
 pub struct PointerGestureRecognizer {
     callbacks: GestureCallbacks,
@@ -92,6 +114,9 @@ pub struct PointerGestureRecognizer {
     /// Flutter's `_sentTapDown`: `onTapCancel` follows only a reported
     /// `onTapDown`.
     tap_down_sent: bool,
+    tap_accepted: bool,
+    pre_accept_tap_slop: TapSlopTolerance,
+    post_accept_tap_slop: TapSlopTolerance,
     /// Global-to-local transform of the receiving widget; `None` reports
     /// local values equal to global ones.
     local_transform: Option<incular_core::Transform>,
@@ -230,6 +255,9 @@ impl PointerGestureRecognizer {
             double_tap_moved: false,
             pending_tap_down: None,
             tap_down_sent: false,
+            tap_accepted: false,
+            pre_accept_tap_slop: TapSlopTolerance::Default,
+            post_accept_tap_slop: TapSlopTolerance::Default,
             local_transform: None,
             world_axis_scale: [1., 1.],
             pan_started: false,
@@ -261,6 +289,20 @@ impl PointerGestureRecognizer {
     /// Filters new raw pointer presses by device category.
     pub fn set_supported_devices(&mut self, kinds: impl IntoIterator<Item = PointerDeviceKind>) {
         self.callbacks.set_supported_devices(kinds);
+    }
+
+    /// Overrides the tap's maximum movement before and after it wins its
+    /// arena. Other recognizers in this member still use their own slops.
+    pub fn set_tap_slop_tolerances(
+        &mut self,
+        before_acceptance: TapSlopTolerance,
+        after_acceptance: TapSlopTolerance,
+    ) {
+        for tolerance in [before_acceptance, after_acceptance] {
+            debug_assert!(!matches!(tolerance, TapSlopTolerance::Distance(distance) if distance.is_nan() || distance < 0.));
+        }
+        self.pre_accept_tap_slop = before_acceptance;
+        self.post_accept_tap_slop = after_acceptance;
     }
 
     /// The platform slop overrides in effect.
@@ -427,11 +469,16 @@ impl PointerGestureRecognizer {
     /// timeout; this keeps a later slop rejection observable as TapCancel.
     /// Returns whether it newly delivered the down notification.
     pub fn accept_tap_on_arena_close(&mut self, pointer: u64) -> bool {
-        if self.down.is_none_or(|down| down.pointer != pointer) || self.pending_tap_down.is_none() {
+        if self.down.is_none_or(|down| down.pointer != pointer)
+            || !self.has_tap_callbacks()
+            || self.tap_rejected
+        {
             return false;
         }
+        self.tap_accepted = true;
+        let announced = self.pending_tap_down.is_some();
         self.flush_tap_down();
-        true
+        announced
     }
 
     /// Reports `onTapDown` once, for the press in progress.
@@ -496,6 +543,7 @@ impl PointerGestureRecognizer {
     /// The recognizer lost its gesture arena (Flutter `rejectGesture`): a
     /// tap that already reported `onTapDown` is cancelled.
     pub fn reject(&mut self) {
+        self.tap_rejected = true;
         self.tap_cancel();
         self.long_press_cancel();
         self.cancel_pending_drag();
@@ -1025,6 +1073,7 @@ impl PointerGestureRecognizer {
                 // Flutter's `TapGestureRecognizer` reports `onTapDown` only
                 // after `kPressTimeout`, or when the tap is accepted first.
                 self.tap_down_sent = false;
+                self.tap_accepted = false;
                 self.pending_tap_down = self.has_tap_callbacks().then_some(TapDownDetails {
                     global_position: event.position,
                     local_position: self.local(event.position),
@@ -1061,14 +1110,28 @@ impl PointerGestureRecognizer {
                     self.velocity
                         .add_position(event.time, self.local(event.position));
                 }
-                if delta.x.hypot(delta.y) > compute_hit_slop(self.kind, self.gesture_settings)
-                    && !self.tap_rejected
+                let distance = delta.x.hypot(delta.y);
+                if !self.long_press_started
+                    && !self.long_press_rejected
+                    && distance > compute_hit_slop(self.kind, self.gesture_settings)
+                {
+                    self.long_press_rejected = true;
+                    self.long_press_cancel();
+                }
+                let tap_slop = if self.tap_accepted {
+                    self.post_accept_tap_slop
+                } else {
+                    self.pre_accept_tap_slop
+                };
+                let default_tap_slop = self
+                    .gesture_settings
+                    .touch_slop
+                    .unwrap_or(crate::constants::TOUCH_SLOP);
+                if !self.tap_rejected
+                    && self.has_tap_callbacks()
+                    && tap_slop.exceeded(distance, default_tap_slop)
                 {
                     self.tap_rejected = true;
-                    if !self.long_press_started {
-                        self.long_press_rejected = true;
-                        self.long_press_cancel();
-                    }
                     // Past the press deadline Flutter had already reported
                     // `onTapDown`, so the rejection cancels the tap; before
                     // it, the tap never reported anything.
@@ -1079,7 +1142,7 @@ impl PointerGestureRecognizer {
                     }
                     self.tap_cancel();
                 }
-                if delta.x.hypot(delta.y) > DOUBLE_TAP_TOUCH_SLOP {
+                if distance > DOUBLE_TAP_TOUCH_SLOP {
                     self.double_tap_moved = true;
                 }
                 if event.time.saturating_duration_since(down.time) >= PRESS_TIMEOUT

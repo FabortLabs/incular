@@ -2418,3 +2418,6 @@ packages/flutter/test/gestures/tap_test.dart	745	changing buttons before TapDown
 packages/flutter/test/gestures/tap_test.dart	764	changing buttons before TapDown should not prevent the next tap	paired-match	upstream-tap-recognizers.md#button-changes-in-one-press
 packages/flutter/test/gestures/tap_test.dart	784	changing buttons after TapDown should cancel gesture and send cancel	paired-match	upstream-tap-recognizers.md#button-changes-in-one-press
 packages/flutter/test/gestures/tap_test.dart	805	changing buttons after TapDown should not prevent the next tap	paired-match	upstream-tap-recognizers.md#button-changes-in-one-press
+packages/flutter/test/gestures/tap_test.dart	159	Details contain the correct device kind	paired-match	upstream-tap-recognizers.md#tap-movement-and-acceptance
+packages/flutter/test/gestures/tap_test.dart	568	PointerCancelEvent cancels tap	paired-match	upstream-tap-recognizers.md#tap-movement-and-acceptance
+packages/flutter/test/gestures/tap_test.dart	1105	onTapMove works	paired-match	upstream-tap-recognizers.md#tap-movement-and-acceptance
