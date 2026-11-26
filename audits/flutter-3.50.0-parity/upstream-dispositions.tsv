@@ -2390,3 +2390,7 @@ packages/flutter/test/animation/animations_test.dart	500	'$CurvedAnimation dispa
 packages/flutter/test/animation/animation_from_listener_test.dart	9	Animation created from ValueListenable	paired-match	upstream-curve-animation-lifecycle.md#value-listenable-backed-animations
 packages/flutter/test/animation/animation_from_listener_test.dart	38	Animation created from ValueListenable can transform value	paired-match	upstream-curve-animation-lifecycle.md#value-listenable-backed-animations
 packages/flutter/test/animation/animation_from_listener_test.dart	55	Animation created from ValueListenable can be transformed via drive	paired-match	upstream-curve-animation-lifecycle.md#value-listenable-backed-animations
+packages/flutter/test/animation/iteration_patterns_test.dart	14	AnimationController with mutating listener	paired-match	upstream-curve-animation-lifecycle.md#controller-listener-mutation-and-error-isolation
+packages/flutter/test/animation/iteration_patterns_test.dart	56	AnimationController with mutating status listener	paired-match	upstream-curve-animation-lifecycle.md#controller-listener-mutation-and-error-isolation
+packages/flutter/test/animation/iteration_patterns_test.dart	100	AnimationController with throwing listener	paired-match	upstream-curve-animation-lifecycle.md#controller-listener-mutation-and-error-isolation
+packages/flutter/test/animation/iteration_patterns_test.dart	130	AnimationController with throwing status listener	paired-match	upstream-curve-animation-lifecycle.md#controller-listener-mutation-and-error-isolation

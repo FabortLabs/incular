@@ -25,8 +25,8 @@ pub use animations::{
     animation_min,
 };
 pub use controller::{
-    AnimationBehavior, AnimationController, AnimationStatus, RepeatOptions, disable_animations,
-    set_disable_animations,
+    AnimationBehavior, AnimationController, AnimationListenerChannel, AnimationListenerError,
+    AnimationStatus, RepeatOptions, disable_animations, set_disable_animations,
 };
 pub use curve2d::{
     CatmullRomCurve, CatmullRomSpline, CatmullRomSplineError, Curve2D, Curve2DSample,

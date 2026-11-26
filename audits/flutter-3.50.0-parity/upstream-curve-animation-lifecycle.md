@@ -49,3 +49,20 @@ uses the notifier's own dependency source. Native subscriptions
 see changed values and stop on removal; an equal notifier replacement
 and a nonchanging status do not emit callbacks. All three original
 Flutter and 19 focused native tests passed.
+
+## Controller listener mutation and error isolation
+
+All four original `animation/iteration_patterns_test.dart` registrations
+pair (:14, :56, :100, :130). A listener removed before its turn does not
+run, and one added during dispatch begins with the next dispatch.
+Repeated registration of the same shared value callback invokes it
+once per dispatch until every registration is removed. Shared status
+callback registrations remain separate and invoke in insertion order.
+
+A panicking value or status callback is reported with its original
+payload and channel, while later live callbacks still run. A value
+callback failure also does not prevent the subsequent status update.
+With unwinding enabled, hosts may install a listener-error handler;
+Rust still calls its panic hook. This comparison covers the manual
+controller listener API, not every reactive subscriber in the graph.
+All four original Flutter and 19 focused native tests passed.

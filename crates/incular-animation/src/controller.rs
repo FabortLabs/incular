@@ -21,8 +21,10 @@ use crate::{
 use incular_core::finite_or_zero;
 use incular_core::time::Instant;
 use std::{
+    any::Any,
     cell::{Cell, RefCell},
     fmt,
+    panic::{AssertUnwindSafe, catch_unwind},
     rc::{Rc, Weak},
     time::Duration,
 };
@@ -361,17 +363,43 @@ impl State {
 struct ListenerRegistration<F: ?Sized> {
     id: usize,
     active: Cell<bool>,
+    shared: Option<Box<SharedListenerIdentity>>,
     callback: F,
+}
+
+struct SharedListenerIdentity {
+    key: *const (),
+    registrations: Cell<usize>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AnimationListenerChannel {
+    Value,
+    Status,
+}
+
+/// A failure from one manual animation listener. Other active listeners
+/// continue to run in both value and status channels.
+pub struct AnimationListenerError {
+    pub channel: AnimationListenerChannel,
+    pub payload: Box<dyn Any + Send + 'static>,
 }
 
 type Listener = Rc<ListenerRegistration<dyn Fn(f32)>>;
 type StatusListener = Rc<ListenerRegistration<dyn Fn(AnimationStatus)>>;
+type ListenerErrorHandler = Rc<dyn Fn(AnimationListenerError)>;
 
 fn remove_registration<F: ?Sized>(
     listeners: &mut Vec<Rc<ListenerRegistration<F>>>,
     id: usize,
 ) -> Option<Rc<ListenerRegistration<F>>> {
     let index = listeners.iter().position(|record| record.id == id)?;
+    if let Some(shared) = &listeners[index].shared
+        && shared.registrations.get() > 1
+    {
+        shared.registrations.set(shared.registrations.get() - 1);
+        return Some(listeners[index].clone());
+    }
     let removed = listeners.remove(index);
     removed.active.set(false);
     Some(removed)
@@ -382,6 +410,7 @@ struct ControllerState {
     run: Option<Run>,
     listeners: Vec<Listener>,
     status_listeners: Vec<StatusListener>,
+    listener_error_handler: Option<ListenerErrorHandler>,
     next_listener: usize,
     /// The frame-scheduler ticker of a [`AnimationController::with_vsync`]
     /// controller.
@@ -399,6 +428,7 @@ impl ControllerState {
             run: None,
             listeners: Vec::new(),
             status_listeners: Vec::new(),
+            listener_error_handler: None,
             next_listener: 0,
             ticker: None,
             future: None,
@@ -1102,7 +1132,41 @@ impl AnimationController {
         controller.listeners.push(Rc::new(ListenerRegistration {
             id,
             active: Cell::new(true),
+            shared: None,
             callback: listener,
+        }));
+        id
+    }
+
+    /// Registers the same shared value callback only once per dispatch.
+    /// Repeated adds using the same `Rc` return its existing ID. Remove
+    /// that ID once for each add to release all registrations.
+    pub fn add_shared_listener(&self, listener: Rc<dyn Fn(f32)>) -> usize {
+        let key = Rc::as_ptr(&listener).cast::<()>();
+        let mut controller = self.inner.borrow_mut();
+        for entry in &controller.listeners {
+            if let Some(shared) = &entry.shared
+                && shared.key == key
+            {
+                shared.registrations.set(
+                    shared
+                        .registrations
+                        .get()
+                        .checked_add(1)
+                        .expect("too many shared listeners"),
+                );
+                return entry.id;
+            }
+        }
+        let id = next_listener_id(&mut controller);
+        controller.listeners.push(Rc::new(ListenerRegistration {
+            id,
+            active: Cell::new(true),
+            shared: Some(Box::new(SharedListenerIdentity {
+                key,
+                registrations: Cell::new(1),
+            })),
+            callback: move |value| listener(value),
         }));
         id
     }
@@ -1121,9 +1185,34 @@ impl AnimationController {
             .push(Rc::new(ListenerRegistration {
                 id,
                 active: Cell::new(true),
+                shared: None,
                 callback: listener,
             }));
         id
+    }
+
+    /// Shared status callbacks retain distinct registrations, so adding
+    /// the same callback twice delivers the status to it twice.
+    pub fn add_shared_status_listener(&self, listener: Rc<dyn Fn(AnimationStatus)>) -> usize {
+        self.add_status_listener(move |status| listener(status))
+    }
+
+    /// Receives caught manual-listener failures. The panic hook is still
+    /// called by Rust; a handler lets an embedder present the original
+    /// payload and whether it came from a value or status observer.
+    /// Like other unwind recovery, this is not available with panic=abort.
+    pub fn set_listener_error_handler(&self, handler: impl Fn(AnimationListenerError) + 'static) {
+        let previous = self
+            .inner
+            .borrow_mut()
+            .listener_error_handler
+            .replace(Rc::new(handler));
+        drop(previous);
+    }
+
+    pub fn clear_listener_error_handler(&self) {
+        let previous = self.inner.borrow_mut().listener_error_handler.take();
+        drop(previous);
     }
 
     /// Flutter `removeStatusListener`.
@@ -1405,8 +1494,10 @@ impl AnimationController {
             (controller.listeners.clone(), controller.state.value as f32)
         };
         for listener in listeners {
-            if listener.active.get() {
-                (listener.callback)(value);
+            if listener.active.get()
+                && let Err(payload) = catch_unwind(AssertUnwindSafe(|| (listener.callback)(value)))
+            {
+                self.report_listener_error(AnimationListenerChannel::Value, payload);
             }
         }
         if changed {
@@ -1432,9 +1523,22 @@ impl AnimationController {
         // Reactive readers are invalidated by the caller's value-or-status
         // change, so they are not notified twice here.
         for listener in listeners {
-            if listener.active.get() {
-                (listener.callback)(status);
+            if listener.active.get()
+                && let Err(payload) = catch_unwind(AssertUnwindSafe(|| (listener.callback)(status)))
+            {
+                self.report_listener_error(AnimationListenerChannel::Status, payload);
             }
+        }
+    }
+
+    fn report_listener_error(
+        &self,
+        channel: AnimationListenerChannel,
+        payload: Box<dyn Any + Send + 'static>,
+    ) {
+        let handler = self.inner.borrow().listener_error_handler.clone();
+        if let Some(handler) = handler {
+            handler(AnimationListenerError { channel, payload });
         }
     }
 
