@@ -472,7 +472,9 @@ impl WidgetTree {
                 self.element_live(visit.element, "semantic traversal element must remain live");
             let block = effective_focus_block(entry, visit.subtree_focus_blocked);
             let can_own_hints = can_own_hint_value(entry, block);
+            let can_own_sliver_labels = self.sliver_label_annotation_candidate(visit.element, entry);
             let merges_child_text = can_own_hints
+                || can_own_sliver_labels
                 || can_own_blocked_labels(entry, block)
                 || super::focus::annotated_focus_node(entry.widget.kind()).is_some();
             let render = entry.render;
@@ -495,7 +497,7 @@ impl WidgetTree {
                 subtree_content: visit.force_content
                     || dirty.subtree_content()
                     // A value becoming conflicting affects clean siblings as well.
-                    || can_own_hints && dirty.has_descendant_content(),
+                    || (can_own_hints || can_own_sliver_labels) && dirty.has_descendant_content(),
                 own_bounds: visit.force_bounds || dirty.own_bounds(),
                 bounds_below: visit.force_bounds || dirty.bounds_below(),
                 descendant_bounds: dirty.has_descendant_bounds(),
@@ -2178,27 +2180,60 @@ impl WidgetTree {
     /// A heading, ordered, or validating sliver annotation owns compatible
     /// text. This keeps the label on the node with its semantic properties
     /// without absorbing independent actions or explicit child nodes.
+    fn sliver_label_annotation_candidate(&self, element: ElementId, entry: &Element) -> bool {
+        let properties = entry.widget.semantic_properties();
+        properties.explicit.as_ref().is_some_and(|annotation| {
+            !annotation.state.explicit_child_nodes
+                && (annotation.role == SemanticRole::Heading
+                    || (annotation.role == SemanticRole::GenericContainer
+                        && (annotation.state.sort_key.is_some()
+                            || annotation.state.effective_validation_result()
+                                != SemanticValidationResult::None
+                            || (annotation.state.container
+                                && annotation.label.is_none()
+                                && annotation.value.is_none()
+                                && annotation.description.is_none()
+                                && properties.tag_for_children.is_none()
+                                && properties.locale_for_subtree.is_none()))))
+        }) && entry.parent.is_some_and(|viewport| {
+            self.elements.get(viewport.0).is_some_and(|parent| {
+                matches!(parent.widget.kind(), WidgetKind::SliverViewport { .. })
+            }) && self
+                .viewport_sliver_child(viewport, element)
+                .is_some_and(|(_, id)| crate::scrolling::is_semantics_anchor(id))
+        })
+    }
+
     fn is_sliver_label_annotation_owner(&self, element: ElementId, entry: &Element) -> bool {
-        entry
-            .widget
-            .semantic_properties()
-            .explicit
-            .as_ref()
-            .is_some_and(|annotation| {
-                !annotation.state.explicit_child_nodes
-                    && (annotation.role == SemanticRole::Heading
-                        || (annotation.role == SemanticRole::GenericContainer
-                            && (annotation.state.sort_key.is_some()
-                                || annotation.state.effective_validation_result()
-                                    != SemanticValidationResult::None)))
-            })
-            && entry.parent.is_some_and(|viewport| {
-                self.elements.get(viewport.0).is_some_and(|parent| {
-                    matches!(parent.widget.kind(), WidgetKind::SliverViewport { .. })
-                }) && self
-                    .viewport_sliver_child(viewport, element)
-                    .is_some_and(|(_, id)| crate::scrolling::is_semantics_anchor(id))
-            })
+        if !self.sliver_label_annotation_candidate(element, entry) {
+            return false;
+        }
+        let annotation = entry.widget.semantic_properties().explicit.as_ref().unwrap();
+        if annotation.role == SemanticRole::Heading
+            || annotation.state.sort_key.is_some()
+            || annotation.state.effective_validation_result() != SemanticValidationResult::None
+        {
+            return true;
+        }
+        // A plain sliver boundary absorbs compatible Text, but that must
+        // not prevent a different boundary from merging hint/value only.
+        self.visible_semantic_children(element, entry)
+            .iter()
+            .any(|&child| self.has_compatible_label(child))
+    }
+
+    fn has_compatible_label(&self, element: ElementId) -> bool {
+        let Some(entry) = self.elements.get(element.0) else {
+            return false;
+        };
+        if !self.can_merge_text_fragment(element, entry, SemanticTextMerge::CompatibleLabels) {
+            return false;
+        }
+        element_own_label(entry).is_some() || with_recursive_tree_stack(|| {
+            self.visible_semantic_children(element, entry)
+                .iter()
+                .any(|&child| self.has_compatible_label(child))
+        })
     }
 
     /// Forms a merge only from a sliver's simple annotation fragments.

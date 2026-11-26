@@ -644,3 +644,134 @@ fn resizing_and_persistent_headers_have_distinct_scroll_exclusion_rules() {
         }
     }
 }
+
+#[test]
+fn immediate_viewport_tag_stops_at_nested_sliver_and_lazy_box_containers() {
+    use incular_widgets::{
+        CustomScrollView, Directionality, Sliver, SliverList, SliverMainAxisGroup, SliverSemantics,
+        SliverToBoxAdapter, Text, TextDirection, Viewport,
+    };
+
+    for lazy_box in [false, true] {
+        let group = if lazy_box {
+            SliverSemantics::new(
+                || Semantics::default().container(true),
+                SliverList::builder(2, |i| {
+                    Semantics::new(Text::new(format!("child {}", i + 1))).container(true)
+                }),
+            )
+        } else {
+            let slivers: [Box<dyn Sliver>; 2] = ["child 1", "child 2"].map(|label| {
+                Box::new(SliverSemantics::new(
+                    || Semantics::default().container(true),
+                    SliverToBoxAdapter::new(Text::new(label)),
+                )) as Box<dyn Sliver>
+            });
+            SliverSemantics::new(
+                || Semantics::default().container(true),
+                SliverMainAxisGroup::new(slivers),
+            )
+        };
+        let slivers: [Box<dyn Sliver>; 1] = [Box::new(group)];
+        let mut runtime = Runtime::new(
+            Directionality::new(TextDirection::Ltr, CustomScrollView::new(slivers)).into(),
+        )
+        .unwrap();
+        let bounds = Constraints::tight(Size::new(800., 600.));
+        runtime.run_frame(bounds).unwrap();
+        let shape = |runtime: &Runtime| {
+            let tree = runtime.tree().semantics();
+            let outer = tree.node(tree.root().unwrap()).unwrap();
+            assert_eq!(outer.children.len(), 1);
+            let pane = tree.node(outer.children[0]).unwrap();
+            assert!(pane.state.has_implicit_scrolling);
+            assert_eq!(pane.children.len(), 1);
+            let group = tree.node(pane.children[0]).unwrap();
+            assert!(group.label.is_none());
+            let tag = Viewport::use_two_pane_semantics_tag();
+            assert!(group.is_tagged(tag));
+            assert_eq!(group.children.len(), 2);
+            for (&id, label) in group.children.iter().zip(["child 1", "child 2"]) {
+                let child = tree.node(id).unwrap();
+                assert_eq!(
+                    child.label.as_deref(),
+                    Some(label),
+                    "lazy_box={lazy_box}\n{}",
+                    runtime.tree().semantics_debug_dump(),
+                );
+                assert_eq!(child.state.text_direction, Some(TextDirection::Ltr));
+                assert!(!child.is_tagged(tag));
+                assert!(child.children.is_empty());
+            }
+            (
+                outer.id,
+                pane.id,
+                group.id,
+                group.children.clone(),
+                tree.revision(),
+            )
+        };
+        let before = shape(&runtime);
+        runtime.run_frame(bounds).unwrap();
+        assert_eq!(shape(&runtime), before);
+    }
+}
+
+#[test]
+fn sliver_container_rebuilds_its_absorbed_label_and_can_release_it_as_an_explicit_child() {
+    use incular_widgets::{
+        CustomScrollView, Directionality, Sliver, SliverSemantics, SliverToBoxAdapter, Text,
+        TextDirection,
+    };
+
+    let build = |text: &'static str, explicit_children| {
+        let slivers: [Box<dyn Sliver>; 1] = [Box::new(SliverSemantics::new(
+            move || {
+                Semantics::default()
+                    .container(true)
+                    .explicit_child_nodes(explicit_children)
+            },
+            SliverToBoxAdapter::new(Text::new(text)),
+        ))];
+        Directionality::new(TextDirection::Ltr, CustomScrollView::new(slivers)).into()
+    };
+    let mut runtime = Runtime::new(build("initial", false)).unwrap();
+    let surface = Constraints::tight(Size::new(800., 600.));
+    runtime.run_frame(surface).unwrap();
+    let root = runtime.tree().root().unwrap();
+    let anchor_id = |runtime: &Runtime| {
+        let tree = runtime.tree().semantics();
+        let outer = tree.node(tree.root().unwrap()).unwrap();
+        let inner = tree.node(outer.children[0]).unwrap();
+        inner.children[0]
+    };
+    let id = anchor_id(&runtime);
+    let mut external_child = None;
+    for (text, explicit) in [
+        ("initial", false),
+        ("changed", false),
+        ("standalone", true),
+        ("absorbed", false),
+    ] {
+        runtime
+            .schedule_update(root, build(text, explicit))
+            .unwrap();
+        runtime.run_frame(surface).unwrap();
+        assert_eq!(anchor_id(&runtime), id);
+        let tree = runtime.tree().semantics();
+        let anchor = tree.node(id).unwrap();
+        if explicit {
+            assert_eq!(anchor.label, None);
+            assert_eq!(anchor.children.len(), 1);
+            let child = tree.node(anchor.children[0]).unwrap();
+            assert_eq!(child.label.as_deref(), Some(text));
+            external_child = Some(child.id);
+        } else {
+            assert_eq!(anchor.label.as_deref(), Some(text));
+            assert!(anchor.children.is_empty());
+            if let Some(previous_child) = external_child {
+                assert!(tree.node(previous_child).is_none());
+            }
+        }
+    }
+}

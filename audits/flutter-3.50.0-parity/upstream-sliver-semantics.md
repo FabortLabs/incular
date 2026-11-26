@@ -39,8 +39,8 @@ at the first semantic boundary, while an application tag declared on
 that boundary goes only to its own child. A separately constructed
 same-name tag is not the framework tag.
 
-The pinned line 682 and 735 cases also passed, but their outer/inner
-scroll graph assertions remain open. The original pinned-header tag
+The pinned line 682 and 735 cases also passed. The retained topology
+comparison is described under nested container labels. The original pinned-header tag
 transition (`pinned_header_sliver_test.dart:250`) and nested-pane
 transform (`scrollable_semantics_test.dart:814`) passed on the reference;
 pinned transition and nested reveal results are described below. The empty-viewport transition is covered by the focused pinned
@@ -357,3 +357,19 @@ Merged annotations union their independent flags. Route scope requires
 explicit child nodes in debug, matching the reference precondition.
 All 50 selected Rust regressions passed. Platform role dispatch and
 route announcements still have separate verification work.
+
+### Nested container labels
+
+The originally unported tag cases at lines 682 and 735 now have
+native fixtures for both nested SliverSemantics and box annotations
+in a lazy SliverList. The scrolling pane has one tagged parent
+with two untagged, labeled leaf children in reading order. A plain
+sliver boundary absorbs its compatible label instead of creating an
+unlabeled wrapper and a redundant text node. Explicit child nodes
+remain separate. The pinned authored probe and native regression
+also verify text replacement, release as an explicit child, and
+reabsorption with the same parent ID and stale leaf removal.
+
+All 51 focused Rust tests passed. The upstream cases remain partial
+because Incular still exposes its portable default ShowOnScreen
+action and legacy numeric scroll value in that graph.

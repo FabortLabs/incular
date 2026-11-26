@@ -1931,8 +1931,8 @@ packages/flutter/test/widgets/sliver_semantics_widget_test.dart	482	SliverSemant
 packages/flutter/test/widgets/sliver_semantics_widget_test.dart	535	SliverSemantics values do not merge with Semantics widget	partial-match	upstream-sliver-semantics.md#merging-a-hint-and-a-value-without-merging-competing-values
 packages/flutter/test/widgets/sliver_semantics_widget_test.dart	584	SliverSemantics value and hint can merge	partial-match	upstream-sliver-semantics.md#merging-a-hint-and-a-value-without-merging-competing-values
 packages/flutter/test/widgets/sliver_semantics_widget_test.dart	635	SliverSemantics value and hint can merge with Semantics widget	partial-match	upstream-sliver-semantics.md#merging-a-hint-and-a-value-without-merging-competing-values
-packages/flutter/test/widgets/sliver_semantics_widget_test.dart	682	SliverSemantics tagForChildren works	reference-ran-incular-open	upstream-sliver-semantics.md#viewport-tag-scope
-packages/flutter/test/widgets/sliver_semantics_widget_test.dart	735	SliverSemantics tagForChildren works with Semantics widget	reference-ran-incular-open	upstream-sliver-semantics.md#viewport-tag-scope
+packages/flutter/test/widgets/sliver_semantics_widget_test.dart	682	SliverSemantics tagForChildren works	partial-match	upstream-sliver-semantics.md#nested-container-labels
+packages/flutter/test/widgets/sliver_semantics_widget_test.dart	735	SliverSemantics tagForChildren works with Semantics widget	partial-match	upstream-sliver-semantics.md#nested-container-labels
 packages/flutter/test/widgets/sliver_semantics_widget_test.dart	784	SliverSemantics supports all actions	partial-match	upstream-sliver-semantics.md#typed-text-action-payloads
 packages/flutter/test/widgets/sliver_semantics_widget_test.dart	934	SliverSemantics supports all flags	partial-match	upstream-sliver-semantics.md#declared-flags-and-actual-input-focus
 packages/flutter/test/widgets/sliver_semantics_widget_test.dart	1170	SliverSemantics supports tooltip	partial-match	upstream-sliver-semantics.md#action-replacement-descriptions-and-exclusion
