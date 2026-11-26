@@ -333,8 +333,8 @@ pub use overscroll_indicator::{
 pub use painting_effects::{
     AlignedShapeGradient, BeveledRectangleBorder, BlurStyle, Border, BorderComposition, BorderDirectional, BorderRadius,
     BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxBorderLayer, BoxBorderStack,
-    BoxDecoration, BoxLinearGradient, BoxRadialGradient, BoxShadow, BoxShape, BoxSweepGradient,
-    CircleBorder, ClipRSuperellipse, CompoundBorder, ContinuousRectangleBorder, CustomPainter,
+    BoxBorderValue, BoxDecoration, BoxLinearGradient, BoxRadialGradient, BoxShadow, BoxShape, BoxSweepGradient,
+    CircleBorder, ClipRSuperellipse, CompoundBorder, ContinuousRectangleBorder, CustomBoxBorder, CustomBoxBorderHandle, CustomPainter,
     CustomPainterSemantics, DecoratedShapeBox, DecorationImage, DecorationPosition, GridPaper,
     EllipticalRoundedRect, ImageFiltered, ImageIcon, LinearBorder, LinearBorderEdge, OvalBorder,
     PhysicalModel, PhysicalShape, Radius, RawImage, RoundedCircleOutline, RoundedRectangleBorder, RoundedSuperellipseBorder,

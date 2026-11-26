@@ -504,7 +504,7 @@ impl Decoration {
             (None, Some(value)) | (Some(value), None) => {
                 let factor = if a.is_none() { t } else { 1. - t };
                 match value {
-                    Self::Box(value) => Some(Cow::Owned(Self::Box(value.scaled(factor)))),
+                    Self::Box(value) => Some(Cow::Owned(Self::Box(value.scale(factor)))),
                     Self::Shape(value) => Some(Cow::Owned(Self::Shape(value.scaled(factor)))),
                 }
             }

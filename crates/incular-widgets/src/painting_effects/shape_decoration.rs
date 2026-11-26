@@ -10,7 +10,7 @@ use incular_core::{Color, Lerp, Offset, Rect, Size};
 use incular_rendering::{Brush, Canvas, CornerRadii, DisplayList, FillRule, GradientStops};
 
 use super::decoration::{
-    Border, BorderSide, BoxDecoration, BoxLinearGradient, BoxRadialGradient, BoxShadow, BoxShape,
+    BorderSide, BoxDecoration, BoxLinearGradient, BoxRadialGradient, BoxShadow, BoxShape,
     BoxSweepGradient, DecorationImage, faded_brush, faded_decoration_image,
 };
 use super::geometry::BorderRadiusGeometry;
@@ -116,13 +116,15 @@ impl ShapeDecoration {
     /// and a shape's solid color and gradient are mutually exclusive.
     #[must_use]
     pub fn from_box_decoration(source: &BoxDecoration) -> Self {
+        let custom = source.custom_border.as_ref();
         let logical = source.directional_border.as_deref();
-        let uniform = logical.map_or_else(
+        let uniform = custom.map_or_else(|| logical.map_or_else(
             || source.border.is_none_or(|border| border.is_uniform()),
             |border| border.is_uniform(),
-        );
-        let side = logical
-            .map(|border| border.top)
+        ), |border| border.behavior().is_uniform());
+        let side = custom
+            .map(|border| border.behavior().top())
+            .or_else(|| logical.map(|border| border.top))
             .or_else(|| source.border.map(|border| border.top))
             .unwrap_or(BorderSide::NONE);
         let radius = match (
@@ -146,10 +148,15 @@ impl ShapeDecoration {
                 debug_assert!(uniform, "a rounded shape needs a uniform border");
                 Rc::new(RoundedRectangleBorder::new(side, radius))
             }
-            (BoxShape::Rectangle, None) => match logical {
-                Some(border) => Rc::new(*border),
-                None => Rc::new(source.border.unwrap_or(Border::default())),
-            },
+            (BoxShape::Rectangle, None) => {
+                if let Some(border) = custom {
+                    Rc::new(border.clone())
+                } else if let Some(border) = logical {
+                    Rc::new(*border)
+                } else {
+                    Rc::new(source.border.unwrap_or_default())
+                }
+            }
         };
         let aligned_gradient = source
             .aligned_gradient

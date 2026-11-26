@@ -4,8 +4,10 @@ mod box_painter;
 mod box_border_stack;
 pub use box_border_stack::{BoxBorderLayer, BoxBorderStack};
 mod custom_paint;
+mod custom_box_border;
 
 pub use custom_paint::PainterDelegate;
+pub use custom_box_border::{BoxBorderValue, CustomBoxBorder, CustomBoxBorderHandle};
 mod decoration;
 mod geometry;
 mod images;

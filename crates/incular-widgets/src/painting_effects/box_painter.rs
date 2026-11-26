@@ -42,6 +42,7 @@ impl BoxDecoration {
             || self.background_blend_mode.is_some()
             || self.has_aligned_gradient()
             || self.directional_border.is_some()
+            || self.custom_border.is_some()
             || self.shape == BoxShape::Circle
             || self.image.is_some()
             || self.has_elliptical_corners()
@@ -53,6 +54,9 @@ impl BoxDecoration {
     /// Flutter `BoxDecoration.padding`: the border's `dimensions`.
     #[must_use]
     pub(crate) fn padding(&self) -> EdgeInsets {
+        if let Some(border) = &self.custom_border {
+            return border.dimensions(None);
+        }
         self.border
             .map_or(EdgeInsets::ZERO, |border| border.stroke_insets())
     }
@@ -105,7 +109,7 @@ impl BoxDecoration {
         let brush = aligned
             .or_else(|| self.gradient.clone())
             .or_else(|| self.color.map(Brush::Solid))?;
-        let adjusted = match self.border {
+        let adjusted = match self.border.filter(|_| self.custom_border.is_none()) {
             Some(border) => {
                 let adjusted_side = |side: BorderSide| {
                     if side.color.alpha == 255 && side.style == BorderStyle::Solid {
@@ -151,7 +155,9 @@ impl BoxDecoration {
         let rect = Rect::from_origin_size(Offset::ZERO, size);
         let radius = self.effective_radius(direction.unwrap_or(TextDirection::Ltr));
         let mut canvas = Canvas::default();
-        let painted = if let Some(border) = self.directional_border.as_deref() {
+        let painted = if let Some(border) = &self.custom_border {
+            border.paint(&mut canvas, rect, direction, self.shape, radius)
+        } else if let Some(border) = self.directional_border.as_deref() {
             border.paint(&mut canvas, rect, direction, self.shape, radius)
         } else {
             self.border?.paint(&mut canvas, rect, self.shape, radius)
@@ -567,7 +573,7 @@ fn decorated_with_source(
             }
             layers.push(Positioned::fill(painted).into());
         }
-        let border = if source.directional_border.is_some() {
+        let border = if source.directional_border.is_some() || source.custom_border.is_some() {
             source.paint_border_for_direction(size, context.text_direction())
         } else {
             decoration.paint_border(size)

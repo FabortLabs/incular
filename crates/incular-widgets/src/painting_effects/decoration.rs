@@ -10,6 +10,7 @@ use incular_rendering::{
 use smart_default::SmartDefault;
 use typed_builder::TypedBuilder;
 
+use super::custom_box_border::{BoxBorderValue, CustomBoxBorder, CustomBoxBorderHandle};
 use super::geometry::{BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry};
 use crate::{
     AlignmentGeometry,
@@ -1302,6 +1303,10 @@ pub struct BoxDecoration {
     /// the physical border; when both fields are set, this one takes precedence.
     #[builder(default, setter(transform = |border: BorderDirectional| Some(Arc::new(border))))]
     pub directional_border: Option<Arc<BorderDirectional>>,
+    /// A custom border takes precedence if a struct literal supplies
+    /// more than one border kind.
+    #[builder(default, setter(strip_option))]
+    pub custom_border: Option<CustomBoxBorderHandle>,
 
     #[builder(default, setter(strip_option))]
     pub border_radius: Option<BorderRadius>,
@@ -1334,13 +1339,16 @@ pub struct BoxDecoration {
 }
 
 impl BoxDecoration {
-    pub(crate) fn scaled(&self, factor: f32) -> Self {
+    /// Scales all paint values against an empty decoration.
+    #[must_use]
+    pub fn scale(&self, factor: f32) -> Self {
         Self {
             color: lerp_color(None, self.color, factor),
             image: faded_decoration_image(self.image.as_ref(), factor),
             border: self.border.map(|border| border.scale(factor)),
             directional_border: self.directional_border.as_deref()
                 .map(|border| Arc::new(border.scale(factor))),
+            custom_border: self.custom_border.as_ref().map(|border| border.scale(factor)),
             border_radius: self.border_radius.map(|radius| radius * factor),
             directional_border_radius: self.directional_border_radius.as_deref()
                 .map(|radius| Arc::new(*radius * factor)),
@@ -1354,6 +1362,24 @@ impl BoxDecoration {
                 .map(|gradient| Arc::new(gradient.scale(factor))),
             background_blend_mode: None,
             shape: self.shape,
+        }
+    }
+
+    /// Optional interpolation that keeps a borrowed identity at matching
+    /// endpoints, as Flutter returns the original object.
+    #[must_use]
+    pub fn lerp_optional<'a>(
+        a: Option<&'a Self>,
+        b: Option<&'a Self>,
+        t: f32,
+    ) -> Option<Cow<'a, Self>> {
+        match (a, b) {
+            (None, None) => None,
+            (Some(a), Some(b)) if std::ptr::eq(a, b) || t == 0. => Some(Cow::Borrowed(a)),
+            (Some(_), Some(b)) if t == 1. => Some(Cow::Borrowed(b)),
+            (Some(a), Some(b)) => Some(Cow::Owned(a.lerp(b, t))),
+            (None, Some(b)) => Some(Cow::Owned(b.scale(t))),
+            (Some(a), None) => Some(Cow::Owned(a.scale(1. - t))),
         }
     }
 
@@ -1372,8 +1398,14 @@ impl BoxDecoration {
                 Some(&DirectionRequirement { widget: "DecoratedBox", reason: Self::DIRECTIONAL_RADIUS_NEEDS_DIRECTION })
             };
         }
-        self.directional_border.as_deref()
-            .filter(|border| layout || border.needs_direction_to_paint())?;
+        let needs_border_direction = self.custom_border.as_ref()
+            .map_or_else(
+                || self.directional_border.as_deref().is_some_and(|border| layout || border.needs_direction_to_paint()),
+                CustomBoxBorderHandle::needs_resolution,
+            );
+        if !needs_border_direction {
+            return None;
+        }
         if layout {
             Some(&DirectionRequirement { widget: "Container", reason: Self::LOGICAL_BORDER_NEEDS_DIRECTION })
         } else {
@@ -1404,6 +1436,7 @@ impl BoxDecoration {
     pub fn border(mut self, border: Border) -> Self {
         self.border = Some(border);
         self.directional_border = None;
+        self.custom_border = None;
         self
     }
 
@@ -1412,7 +1445,28 @@ impl BoxDecoration {
     pub fn directional_border(mut self, border: BorderDirectional) -> Self {
         self.directional_border = Some(Arc::new(border));
         self.border = None;
+        self.custom_border = None;
         self
+    }
+
+    /// Installs a custom BoxBorder without replacing the color, radius or shape.
+    #[must_use]
+    pub fn custom_border(self, border: impl CustomBoxBorder) -> Self {
+        self.with_custom_border(CustomBoxBorderHandle::new(border))
+    }
+
+    #[must_use]
+    pub fn with_custom_border(mut self, border: CustomBoxBorderHandle) -> Self {
+        self.custom_border = Some(border);
+        self.border = None;
+        self.directional_border = None;
+        self
+    }
+
+    fn border_value(&self) -> Option<BoxBorderValue<'_>> {
+        self.custom_border.as_ref().map(|border| BoxBorderValue::Custom(border.behavior()))
+            .or_else(|| self.directional_border.as_deref().copied().map(BoxBorderValue::Directional))
+            .or_else(|| self.border.map(BoxBorderValue::Physical))
     }
 
     #[must_use]
@@ -1452,7 +1506,11 @@ impl BoxDecoration {
     /// or hit testing. Widgets resolve them from their nearest Directionality.
     #[must_use]
     pub fn resolved_for_direction(mut self, direction: TextDirection) -> Self {
-        if let Some(border) = self.directional_border.take() {
+        if let Some(border) = self.custom_border.take() {
+            self.custom_border = Some(border.resolved_for_direction(direction));
+            self.directional_border = None;
+            self.border = None;
+        } else if let Some(border) = self.directional_border.take() {
             self.border = Some(border.resolve(direction));
         }
         if self.directional_border_radius.is_some() {
@@ -1587,7 +1645,11 @@ impl BoxDecoration {
         if self == other {
             return incular_core::ChangeImpact::None;
         }
-        if self.border != other.border || self.shape != other.shape {
+        if self.border != other.border
+            || self.directional_border != other.directional_border
+            || self.custom_border != other.custom_border
+            || self.shape != other.shape
+        {
             incular_core::ChangeImpact::Layout
         } else {
             incular_core::ChangeImpact::Paint
@@ -1599,7 +1661,11 @@ impl BoxDecoration {
         if self == other {
             return incular_core::Invalidation::NONE;
         }
-        if self.border != other.border || self.shape != other.shape {
+        if self.border != other.border
+            || self.directional_border != other.directional_border
+            || self.custom_border != other.custom_border
+            || self.shape != other.shape
+        {
             incular_core::Invalidation::LAYOUT | incular_core::Invalidation::PAINT
         } else {
             incular_core::Invalidation::PAINT
@@ -1624,6 +1690,40 @@ fn lerp_decoration_border(
         (Some(a), Some(b)) => (None, Some(Arc::new(a.lerp(b, t)))),
         (None, Some(logical)) => lerp_physical_and_directional(a.border, *logical, t),
         (Some(logical), None) => lerp_physical_and_directional(b.border, *logical, 1. - t),
+    }
+}
+
+fn lerp_custom_border(
+    a: &BoxDecoration,
+    b: &BoxDecoration,
+    t: f32,
+) -> (Option<Border>, Option<Arc<BorderDirectional>>, Option<CustomBoxBorderHandle>) {
+    use BoxBorderValue::Custom;
+    if let (Some(from), Some(to)) = (&a.custom_border, &b.custom_border)
+        && from.same_instance(to)
+        && from == to
+    {
+        return (None, None, Some(from.clone()));
+    }
+    let from = a.border_value();
+    let to = b.border_value();
+    let result = to
+        .and_then(|to| match to {
+            Custom(border) => border.lerp_from(from, t),
+            _ => None,
+        })
+        .or_else(|| from.and_then(|from| match from {
+            Custom(border) => border.lerp_to(to, t),
+            _ => None,
+        }));
+    if let Some(result) = result {
+        return (None, None, Some(result));
+    }
+    let endpoint = if t < 0.5 { a } else { b };
+    if let Some(custom) = &endpoint.custom_border {
+        (None, None, Some(custom.clone()))
+    } else {
+        (endpoint.border, endpoint.directional_border.clone(), None)
     }
 }
 
@@ -1714,12 +1814,19 @@ impl incular_core::Lerp for BoxDecoration {
                     .map(Arc::new),
                 )
             };
-        let (border, directional_border) = lerp_decoration_border(self, other, t);
+        let (border, directional_border, custom_border) =
+            if self.custom_border.is_some() || other.custom_border.is_some() {
+                lerp_custom_border(self, other, t)
+            } else {
+                let (physical, logical) = lerp_decoration_border(self, other, t);
+                (physical, logical, None)
+            };
         Self {
             color: lerp_color(self.color, other.color, t),
             image: DecorationImage::lerp_optional(self.image.as_ref(), other.image.as_ref(), t),
             border,
             directional_border,
+            custom_border,
             border_radius: BorderRadius::lerp_optional(self.border_radius, other.border_radius, t),
             directional_border_radius: BorderRadiusDirectional::lerp_optional(
                 self.directional_border_radius.as_deref().copied(),
