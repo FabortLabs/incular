@@ -10,7 +10,7 @@
 use std::any::Any;
 
 use super::*;
-use crate::Semantics;
+use crate::{Semantics, tree::Key};
 
 /// Reserve high local ids for annotation anchors, independent of the
 /// sliver path in the high half. Depth zero keeps the existing identity;
@@ -56,6 +56,7 @@ pub(crate) fn in_semantics_group(anchor: SliverChildId, child: SliverChildId) ->
 pub struct SliverSemantics {
     semantics: Rc<dyn Fn() -> Semantics>,
     sliver: Box<dyn Sliver>,
+    key: Option<Key>,
     exclude_semantics: bool,
 }
 
@@ -65,8 +66,17 @@ impl SliverSemantics {
         Self {
             semantics: Rc::new(semantics),
             sliver: Box::new(sliver),
+            key: None,
             exclude_semantics: false,
         }
+    }
+
+    /// Gives a retained identity to the semantic boundary, including
+    /// when it moves in or out of another sliver annotation.
+    #[must_use]
+    pub fn key(mut self, key: impl Into<Key>) -> Self {
+        self.key = Some(key.into());
+        self
     }
 
     /// Keep the sliver's own annotation but omit all descendant annotations,
@@ -86,7 +96,12 @@ impl Sliver for SliverSemantics {
         } else {
             child
         };
-        (self.semantics)().with_child(child).into()
+        let widget: Widget = (self.semantics)().with_child(child).into();
+        if let Some(key) = &self.key {
+            widget.with_key(key.clone())
+        } else {
+            widget
+        }
     }
 
     fn create_render_sliver(
@@ -98,6 +113,7 @@ impl Sliver for SliverSemantics {
         Box::new(SemanticsRenderSliver {
             inner: RefCell::new(self.sliver.create_render_sliver(controller, axis, reverse)),
             semantics: self.semantics.clone(),
+            key: self.key.clone(),
             exclude_semantics: self.exclude_semantics,
         })
     }
@@ -106,6 +122,7 @@ impl Sliver for SliverSemantics {
 pub(super) struct SemanticsRenderSliver {
     inner: RefCell<Box<dyn RenderSliver>>,
     semantics: Rc<dyn Fn() -> Semantics>,
+    key: Option<Key>,
     exclude_semantics: bool,
 }
 
@@ -167,13 +184,17 @@ impl RenderSliver for SemanticsRenderSliver {
                 child.id.0 -= 1;
             }
         }
+        let mut anchor: Widget = semantics.with_child(crate::SizedBox::expand()).into();
+        if let Some(key) = &self.key {
+            anchor = anchor.with_key(key.clone());
+        }
         // The anchor covers the whole sliver behind its children, so its
         // bounds are the sliver's and it neither paints nor takes hits.
         layout.children.insert(
             0,
             SliverChildLayout {
                 id: SliverChildId(ANCHOR),
-                widget: semantics.with_child(crate::SizedBox::expand()).into(),
+                widget: anchor,
                 semantic_index: None,
                 offset: 0.,
                 cross_offset: 0.,

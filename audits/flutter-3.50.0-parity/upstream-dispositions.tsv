@@ -1919,7 +1919,7 @@ packages/flutter/test/rendering/sliver_cache_test.dart	1346	when initially in vi
 packages/flutter/test/rendering/sliver_cache_test.dart	1480	when scrolled into view	paired-match	upstream-sliver-cache-geometry.md#filling-the-remaining-viewport-paint-and-cache-are-separate-budgets
 packages/flutter/test/widgets/sliver_semantics_widget_test.dart	18	SliverSemantics Semantics shutdown and restart	paired-match	upstream-sliver-semantics.md#complete-graphs-for-restart-and-sorting
 packages/flutter/test/widgets/sliver_semantics_widget_test.dart	73	SliverSemantics tag only applies to immediate child	paired-match	upstream-sliver-semantics.md#viewport-tag-scope
-packages/flutter/test/widgets/sliver_semantics_widget_test.dart	114	SliverSemantics Detach and reattach assert	partial-match	upstream-sliver-semantics.md
+packages/flutter/test/widgets/sliver_semantics_widget_test.dart	114	SliverSemantics Detach and reattach assert	paired-match	upstream-sliver-semantics.md#a-globalkey-survives-a-nested-sliver-move
 packages/flutter/test/widgets/sliver_semantics_widget_test.dart	210	SliverSemantics Semantics and Directionality - RTL	paired-match	upstream-sliver-semantics.md
 packages/flutter/test/widgets/sliver_semantics_widget_test.dart	232	SliverSemantics Semantics and Directionality - LTR	paired-match	upstream-sliver-semantics.md
 packages/flutter/test/widgets/sliver_semantics_widget_test.dart	251	SliverSemantics Semantics and Directionality - cannot override RTL with LTR	paired-match	upstream-sliver-semantics.md#complete-graphs-for-flags-and-annotation-values

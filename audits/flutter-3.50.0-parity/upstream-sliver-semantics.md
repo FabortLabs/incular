@@ -9,10 +9,9 @@ The ten pinned Flutter originals at `widgets/sliver_semantics_widget_test.dart:
   test names. All four cases are paired, including the explicit
   directions' two-pane topology and default fields.
 - **Reparenting (114).** Two annotations on one sliver previously collided
-  on the same generated child ID, rejecting layout. The native test inserts
-  and removes a nested container and verifies exact edges, stale node
-  removal, and a stable outer node. The native fixture does not model
-  Flutter's GlobalKey-based render-object move or two-pane graph.
+  on the same generated child ID. The GlobalKey fixture now verifies the
+  full two-pane graph and retained node through insertion and removal of
+  a nested annotation boundary.
 - **Annotation content (342, 386, 437).** The native graph includes label,
   hint, and current value on one node. Independent hints merge in order
   with one newline for both sliver and box annotations. The single
@@ -470,3 +469,14 @@ ordered [5, 4, 3], followed by 2 and 1, and the cross-axis group is
 ordered 2, 3, 1. Native arena IDs and Flutter test counters use
 different representations; the visible edges and fields are paired.
 All 34 focused retained, runtime and projection checks passed.
+
+### A GlobalKey survives a nested sliver move
+
+The pinned line 114 and retained fixture move the keyed annotation
+from under "test1" to under the new "middle" boundary and update its
+label from "test2a" to "test2b". The reverse transition removes the
+middle node again. A key belongs to the generated semantic anchor,
+so both the logical element and semantic node keep their IDs across
+the move. The expected tagged two-pane graph, default actions, and
+retained tree invariants hold after each transition. All 18 focused
+Rust tests passed and the case is paired.

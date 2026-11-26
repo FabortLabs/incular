@@ -316,3 +316,79 @@ fn roleless_wrapper_outside_the_cache_does_not_hide_a_child_translated_back_insi
     assert!(!node.state.hidden);
     assert_eq!(node.bounds.origin, Offset::new(2., 2.));
 }
+
+#[test]
+fn a_globally_keyed_sliver_annotation_reattaches_beneath_a_new_semantic_parent() {
+    use incular_widgets::{GlobalKey, internal::Key};
+
+    let key = GlobalKey::new();
+    let build = |inside_middle| {
+        let child = SliverSemantics::new(
+            move || {
+                Semantics::default()
+                    .container(true)
+                    .label(if inside_middle { "test2b" } else { "test2a" })
+            },
+            SliverToBoxAdapter::new(SizedBox::new().height(10.)),
+        )
+        .key(key);
+        let child = if inside_middle {
+            SliverSemantics::new(
+                || Semantics::default().container(true).label("middle"),
+                child,
+            )
+        } else {
+            child
+        };
+        let slivers: [Box<dyn Sliver>; 1] = [Box::new(SliverSemantics::new(
+            || Semantics::default().label("test1"),
+            child,
+        ))];
+        Directionality::new(TextDirection::Ltr, CustomScrollView::new(slivers)).into()
+    };
+
+    let mut runtime = incular_runtime::Runtime::new(build(false)).unwrap();
+    let constraints = Constraints::tight(Size::new(800., 600.));
+    runtime.run_frame(constraints).unwrap();
+    let root = runtime.tree().root().unwrap();
+    let element = runtime.tree().element_with_key(&Key::Global(key)).unwrap();
+    let retained_id = runtime.tree().semantic_node_for_element(element).unwrap();
+    for nested in [false, true, false] {
+        runtime.schedule_update(root, build(nested)).unwrap();
+        runtime.run_frame(constraints).unwrap();
+        let tree = runtime.tree().semantics();
+        let outer = tree.node(tree.root().unwrap()).unwrap();
+        let pane = tree.node(outer.children[0]).unwrap();
+        assert!(pane.state.has_implicit_scrolling);
+        assert_eq!(pane.children.len(), 1);
+        let annotation = tree.node(pane.children[0]).unwrap();
+        assert_eq!(annotation.label.as_deref(), Some("test1"));
+        assert!(annotation.is_tagged(incular_widgets::Viewport::use_two_pane_semantics_tag()));
+        assert_eq!(annotation.children.len(), 1);
+        let target = if nested {
+            let middle = tree.node(annotation.children[0]).unwrap();
+            assert_eq!(middle.label.as_deref(), Some("middle"));
+            assert_eq!(middle.children.len(), 1);
+            middle.children[0]
+        } else {
+            annotation.children[0]
+        };
+        let label = tree.node(target).unwrap();
+        assert_eq!(
+            label.label.as_deref(),
+            Some(if nested { "test2b" } else { "test2a" })
+        );
+        assert_eq!(label.id, retained_id);
+        assert_eq!(
+            runtime.tree().element_with_key(&Key::Global(key)),
+            Some(element)
+        );
+        assert!(label.children.is_empty());
+        assert_eq!(tree.iter().count(), if nested { 5 } else { 4 });
+        for (_, node) in tree.iter() {
+            assert!(node.actions.is_empty());
+            assert!(node.value.is_none() && node.description.is_none());
+        }
+        runtime.tree().verify_invariants().unwrap();
+    }
+}
