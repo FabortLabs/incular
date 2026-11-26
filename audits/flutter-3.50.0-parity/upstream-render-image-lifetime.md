@@ -26,3 +26,18 @@ Pinned Flutter 3.50.0 `packages/flutter/test/rendering/image_test.dart`.
 The native `image_layout` and `paint_options` targets passed 44
 tests. The lifetime probes use real decoded resource ownership, not
 only whether image commands disappear.
+
+## Source replacement invalidation and image hit edges
+
+Replacing a source with another of the same decoded dimensions repaints
+without changing layout. Changing dimensions still remeasures an image
+with intrinsic sizing; two explicit widget dimensions keep their size
+when replacing, clearing, or restoring the source. In the pinned
+authored case these are the actual RenderImage layout and paint flags.
+The native case checks real paint handles, render identity, and phase
+counts before and after each frame.
+
+An image owns the half-open layout box, even if no pixels are loaded.
+The right and bottom edges and zero-size boxes are not image hits.
+The authored Flutter and native hit-test probes exercise those edges;
+no extra upstream registration is counted for either authored case.

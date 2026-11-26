@@ -231,7 +231,7 @@ fn alignment_moves_fitted_image_after_cached_paint() {
         .expect("layout");
     let bottom_right = image_commands(&tree.paint())[0].1;
     assert_eq!(bottom_right.origin, Offset::new(0., 50.));
-    assert_eq!(tree.diagnostics().layouts, layouts + 1);
+    assert_eq!(tree.diagnostics().layouts, layouts);
 }
 
 #[test]
@@ -963,5 +963,98 @@ fn raw_image_keeps_aspect_ratio_until_parent_limits_conflict() {
             tree.render_size(render),
             Some(Size::new(expected.0, expected.1))
         );
+    }
+}
+
+#[test]
+fn raw_image_only_remeasures_source_replacements_that_can_change_size() {
+    use incular_widgets::RawImage;
+    let a = handle(10, 10);
+    let same = handle(10, 10);
+    let different = handle(20, 10);
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(RawImage::new().image(a.clone()).into())
+        .expect("mount");
+    let id = tree.render_id(root).expect("raw image render");
+    let constraints = Constraints::loose(Size::new(100., 100.));
+    let commit_frame = |tree: &mut WidgetTree, expected: Option<&ImageHandle>, size, remeasure| {
+        let before = tree.diagnostics();
+        tree.layout(constraints).expect("layout");
+        tree.update_compositor(incular_core::time::Instant::now())
+            .expect("composite");
+        let display = tree.paint();
+        let painted: Vec<_> = display
+            .commands()
+            .iter()
+            .filter_map(|command| match command {
+                PaintCommand::Image { image, .. } => Some(image.id()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            painted,
+            expected
+                .map(ImageHandle::id)
+                .into_iter()
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(tree.render_id(root), Some(id));
+        assert_eq!(tree.render_size(id), Some(size));
+        assert_eq!(tree.diagnostics().layouts - before.layouts, remeasure);
+        assert_eq!(tree.diagnostics().paints - before.paints, 1);
+    };
+    commit_frame(&mut tree, Some(&a), Size::new(10., 10.), 1);
+
+    tree.update(root, RawImage::new().image(same.clone()).into())
+        .expect("same-size update");
+    commit_frame(&mut tree, Some(&same), Size::new(10., 10.), 0);
+
+    tree.update(root, RawImage::new().image(different.clone()).into())
+        .expect("different-sized update");
+    commit_frame(&mut tree, Some(&different), Size::new(20., 10.), 1);
+
+    let fixed = || RawImage::new().width(24.).height(18.);
+    tree.update(root, fixed().image(a.clone()).into())
+        .expect("explicit size");
+    commit_frame(&mut tree, Some(&a), Size::new(24., 18.), 1);
+
+    tree.update(root, fixed().image(different.clone()).into())
+        .expect("fixed-size image update");
+    commit_frame(&mut tree, Some(&different), Size::new(24., 18.), 0);
+    tree.update(root, fixed().into())
+        .expect("clear fixed-size image");
+    commit_frame(&mut tree, None, Size::new(24., 18.), 0);
+    tree.update(root, fixed().image(a.clone()).into())
+        .expect("restore fixed-size image");
+    commit_frame(&mut tree, Some(&a), Size::new(24., 18.), 0);
+}
+
+#[test]
+fn raw_image_hits_the_half_open_layout_box_even_when_it_has_no_pixels() {
+    use incular_widgets::RawImage;
+    for image in [None, Some(handle(4, 4))] {
+        let raw = |width| {
+            let raw = RawImage::new().width(width).height(10.);
+            if let Some(image) = &image {
+                raw.image(image.clone())
+            } else {
+                raw
+            }
+        };
+        let (mut tree, root) = layout(
+            || raw(20.).into(),
+            Constraints::loose(Size::new(100., 100.)),
+        );
+        let id = tree.render_id(root).expect("raw image render");
+        assert_eq!(tree.hit_test(Offset::ZERO), Some(id));
+        assert_eq!(tree.hit_test(Offset::new(19.999, 9.999)), Some(id));
+        assert_eq!(tree.hit_test(Offset::new(20., 5.)), None);
+        assert_eq!(tree.hit_test(Offset::new(5., 10.)), None);
+        assert_eq!(tree.hit_test(Offset::new(-0.001, 5.)), None);
+        tree.update(root, raw(0.).into()).expect("zero width");
+        tree.layout(Constraints::loose(Size::new(100., 100.)))
+            .expect("layout zero width");
+        assert_eq!(tree.hit_test(Offset::new(0., 5.)), None);
     }
 }

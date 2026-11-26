@@ -142,6 +142,12 @@ fn image_composite_only_change(old: &RenderKind, new: &RenderKind) -> bool {
 }
 
 fn image_paint_only_change(old: &RenderKind, new: &RenderKind) -> bool {
+    fn dimensions(image: &Option<incular_image::ImageHandle>) -> Option<(u32, u32)> {
+        image.as_ref().map(|handle| {
+            let decoded = handle.decoded();
+            (decoded.width(), decoded.height())
+        })
+    }
     matches!(
         (old, new),
         (
@@ -159,10 +165,11 @@ fn image_paint_only_change(old: &RenderKind, new: &RenderKind) -> bool {
                 scale: new_scale,
                 ..
             }
-        ) if old_image == new_image
-            && old_width == new_width
+        ) if old_width == new_width
             && old_height == new_height
             && old_scale == new_scale
+            && (old_width.is_some() && old_height.is_some()
+                || dimensions(old_image) == dimensions(new_image))
     )
 }
 

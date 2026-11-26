@@ -155,9 +155,12 @@ fn absorb_pointer_hit(size: Size, local: Offset) -> bool {
 }
 
 fn hit_box_contains(kind: &RenderKind, size: Size, origin: Offset, point: Offset) -> bool {
-    if matches!(kind, RenderKind::Colored { .. } | RenderKind::CustomPaint { .. }) {
-        // Like Flutter's RenderProxyBoxWithHitTestBehavior, the colored
-        // surface claims only the half-open box, even with a transparent fill.
+    if matches!(
+        kind,
+        RenderKind::Colored { .. } | RenderKind::CustomPaint { .. } | RenderKind::Image { .. }
+    ) {
+        // Flutter's RenderBox covers its half-open layout box, even if
+        // its fill is transparent or the image has no decoded source.
         absorb_pointer_hit(size, point - origin)
     } else {
         Rect::from_origin_size(origin, size).contains(point)
