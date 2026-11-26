@@ -367,3 +367,104 @@ fn unweighted_lanes_share_cross_extent_and_jump_to_the_longer_lanes_end() {
     );
     assert!(!visible(&tree, b[19]));
 }
+
+#[test]
+fn pinned_lane_recedes_at_its_groups_trailing_edge() {
+    for (min, checks) in [
+        (60., [(560., -20.), (540., 0.)]),
+        (40., [(570., -10.), (550., 0.)]),
+    ] {
+        for reverse in [false, true] {
+            let key = GlobalKey::new();
+            let header =
+                incular_widgets::SliverPersistentHeader::with_delegate(min, 60., move |_, _| {
+                    Widget::from(SizedBox::new().height(60.)).with_key(key)
+                })
+                .scroll_behavior(incular_widgets::SliverHeaderScrollBehavior::Pinned);
+            let (mut tree, controller) = directional_group(
+                Axis::Vertical,
+                reverse,
+                vec![
+                    Box::new(SliverToBoxAdapter::new(SizedBox::new().height(600.))),
+                    Box::new(header),
+                ],
+                vec![Box::new(SliverToBoxAdapter::new(
+                    SizedBox::new().height(2400.),
+                ))],
+            );
+            assert_eq!(controller.content_extent(), 3000.);
+            for (scroll, logical) in checks {
+                assert!(controller.jump_to(scroll));
+                layout_group(&mut tree);
+                assert_eq!(controller.offset(), scroll);
+                let y = if reverse { scroll + logical } else { logical };
+                assert_eq!(
+                    bounds(&tree, key),
+                    Rect::from_origin_size(Offset::new(150., y), Size::new(150., min)),
+                    "min={min}, reverse={reverse}, scroll={scroll}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn pinned_neighbors_do_not_stack_and_exit_together() {
+    let left = GlobalKey::new();
+    let right = GlobalKey::new();
+    let lane = |key, height| {
+        incular_widgets::SliverPersistentHeader::with_delegate(height, height, move |_, _| {
+            Widget::from(SizedBox::new().height(height)).with_key(key)
+        })
+        .scroll_behavior(incular_widgets::SliverHeaderScrollBehavior::Pinned)
+    };
+    let (mut tree, controller) = directional_group(
+        Axis::Vertical,
+        false,
+        vec![
+            Box::new(SliverToBoxAdapter::new(SizedBox::new().height(600.))),
+            Box::new(lane(left, 60.)),
+            Box::new(lane(right, 40.)),
+        ],
+        vec![Box::new(SliverToBoxAdapter::new(
+            SizedBox::new().height(2400.),
+        ))],
+    );
+    for (scroll, left_y, right_y) in [(200., 0., 0.), (580., -40., -20.)] {
+        assert!(controller.jump_to(scroll));
+        layout_group(&mut tree);
+        assert_eq!(
+            bounds(&tree, left),
+            Rect::from_origin_size(Offset::new(100., left_y), Size::new(100., 60.))
+        );
+        assert_eq!(
+            bounds(&tree, right),
+            Rect::from_origin_size(Offset::new(200., right_y), Size::new(100., 40.))
+        );
+    }
+}
+
+#[test]
+fn each_lanes_transform_contains_its_cross_offset() {
+    let keys = [GlobalKey::new(), GlobalKey::new()];
+    let (tree, _) = directional_group(
+        Axis::Vertical,
+        false,
+        keys.into_iter()
+            .map(|key| {
+                Box::new(SliverToBoxAdapter::new(
+                    Widget::from(SizedBox::new().height(50.)).with_key(key),
+                )) as Box<dyn Sliver>
+            })
+            .collect(),
+        vec![],
+    );
+    for (key, x) in keys.into_iter().zip([0., 150.]) {
+        let id = tree.element_with_key(&key.into()).unwrap();
+        assert_eq!(
+            tree.element_local_to_global(id, Offset::ZERO, None)
+                .unwrap(),
+            Offset::new(x, 0.)
+        );
+    }
+}

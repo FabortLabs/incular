@@ -29,3 +29,23 @@ with an unmeasured, nonuniform prefix are not established by this probe.
 
 29 focused native tests passed across the group, sliver delegates, padding
 corrections, neighboring sliver behavior, and centered viewports.
+
+## Pins and physical transforms
+
+Paired :673 (local origins transform to (0, 0) and (150, 0)),
+:691 (60 px pin pushed back by 20 px at scroll 560), and :749
+(40 px collapsed pin pushed back 10 px at 570, but not at 550).
+The original registrations passed on pinned Flutter. Native
+uses real persistent-header delegates and retained child geometry.
+
+An authored pinned reference establishes that the reverse-axis
+parent offset is physical, not a mirrored logical offset. At scroll
+570 the 40 px header starts at y=560, at scroll 550 it starts at
+y=550. Two side-by-side pinned headers share y=0 at scroll 200
+rather than stacking. At scroll 580 their top coordinates are
+−40 and −20, so both end exactly at the group's last 20 px.
+
+The viewport keeps using the geometry of the longest lane, while
+the group independently offsets each lane and its pin before painting.
+29 focused native tests and the two authored Flutter controls passed.
+Other floating-header gesture and paint-visibility cases remain separate.

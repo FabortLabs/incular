@@ -2307,3 +2307,6 @@ packages/flutter/test/widgets/sliver_cross_axis_group_test.dart	240	Mix of slive
 packages/flutter/test/widgets/sliver_cross_axis_group_test.dart	302	Mix of slivers is laid out properly when reversed horizontal	paired-match	upstream-sliver-cross-axis-group.md#plain-weighted-and-capped-lanes
 packages/flutter/test/widgets/sliver_cross_axis_group_test.dart	367	Mix of slivers is laid out properly when reversed vertical	paired-match	upstream-sliver-cross-axis-group.md#plain-weighted-and-capped-lanes
 packages/flutter/test/widgets/sliver_cross_axis_group_test.dart	537	Constrained sliver takes up remaining space	paired-match	upstream-sliver-cross-axis-group.md#plain-weighted-and-capped-lanes
+packages/flutter/test/widgets/sliver_cross_axis_group_test.dart	673	applyPaintTransform is implemented properly	paired-match	upstream-sliver-cross-axis-group.md#pins-and-physical-transforms
+packages/flutter/test/widgets/sliver_cross_axis_group_test.dart	691	SliverPinnedPersistentHeader is painted within bounds of SliverCrossAxisGroup	paired-match	upstream-sliver-cross-axis-group.md#pins-and-physical-transforms
+packages/flutter/test/widgets/sliver_cross_axis_group_test.dart	749	SliverPinnedPersistentHeader is painted within bounds of SliverCrossAxisGroup with different minExtent/maxExtent	paired-match	upstream-sliver-cross-axis-group.md#pins-and-physical-transforms

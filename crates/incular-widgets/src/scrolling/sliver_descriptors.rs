@@ -1675,9 +1675,9 @@ impl RenderSliver for CrossAxisGroupRenderSliver {
         let extent_per_flex = remaining / total_flex.max(1) as f32;
         let mut fixed = fixed.into_iter();
         let mut cross_offset = 0.;
-        let mut scroll_extent: f32 = 0.;
-        let mut absorbed_overlap: f32 = 0.;
-        let mut children = Vec::with_capacity(self.children.len());
+        let mut geometry = SliverGeometry::ZERO;
+        let mut absorbed_overlap = 0.;
+        let mut lanes = Vec::with_capacity(self.children.len());
         for (lane, (sliver, flex)) in self.children.iter_mut().enumerate() {
             let (layout, lane_extent) = if *flex == 0 {
                 fixed.next().expect("every fixed lane was already laid out")
@@ -1690,18 +1690,48 @@ impl RenderSliver for CrossAxisGroupRenderSliver {
                 let reported = sliver.reported_cross_axis_extent().unwrap_or(extent);
                 (layout, reported.clamp(0., extent))
             };
-            let geometry = layout.geometry.normalized();
-            scroll_extent = scroll_extent.max(geometry.scroll_extent);
-            absorbed_overlap = absorbed_overlap.max(layout.absorbed_overlap);
-            for mut child in layout.children {
-                child.id = SliverChildId::scoped(lane, child.id);
-                child.cross_offset += cross_offset;
-                children.push(child);
+            let lane_geometry = layout.geometry.normalized();
+            if lane_geometry.scroll_offset_correction.is_some() {
+                return SliverLayout::empty(lane_geometry);
             }
+            if lane_geometry.scroll_extent > geometry.scroll_extent {
+                geometry = lane_geometry;
+                absorbed_overlap = layout.absorbed_overlap;
+            }
+            lanes.push((lane, cross_offset, lane_geometry, layout.children));
             cross_offset += lane_extent;
         }
+
+        // Pin independently in each lane, then push its paint back inside
+        // the group's trailing edge. A viewport-wide pin stack would make
+        // neighboring lanes obstruct each other or pin over the next sliver.
+        let remaining_main = geometry.scroll_extent - constraints.scroll_offset;
+        let reverse =
+            constraints.reverse ^ (constraints.growth_direction == SliverGrowthDirection::Reverse);
+        let mut children = Vec::with_capacity(lanes.iter().map(|lane| lane.3.len()).sum());
+        for (lane, cross, lane_geometry, placements) in lanes {
+            let correction = (lane_geometry.paint_extent - remaining_main).max(0.);
+            // Flutter sets the lane's physical paint offset even when the
+            // main axis runs backwards. Translate from the group's physical
+            // paint origin into the viewport's logical scroll coordinates.
+            let main_adjustment = if reverse {
+                geometry.paint_extent - lane_geometry.paint_extent + correction
+            } else {
+                -correction
+            };
+            for mut child in placements {
+                child.id = SliverChildId::scoped(lane, child.id);
+                child.cross_offset += cross;
+                if child.placement == SliverChildPlacement::Pinned {
+                    child.offset = child.offset.max(constraints.scroll_offset);
+                    child.placement = SliverChildPlacement::Floating;
+                }
+                child.offset += main_adjustment;
+                children.push(child);
+            }
+        }
         SliverLayout {
-            geometry: SliverGeometry::from_scroll_extent(constraints, scroll_extent),
+            geometry,
             children,
             absorbed_overlap,
         }
