@@ -2282,3 +2282,9 @@ packages/flutter/test/gestures/drag_test.dart	2671	Touch drags should allow poin
 packages/flutter/test/gestures/scale_test.dart	15	Should recognize scale gestures	paired-match	upstream-geometry-input-gestures.md#full-scale-lifecycle-and-device-kind
 packages/flutter/test/widgets/focus_scope_test.dart	1749	Focus doesn't update the focusNode attributes when the widget updates if withExternalFocusNode is used	paired-match	upstream-focus-widget-semantics.md#typed-and-deprecated-raw-callbacks-on-the-same-node
 packages/flutter/test/widgets/focus_scope_test.dart	997	FocusScope doesn't update the focusNode attributes when the widget updates if withExternalFocusNode is used	paired-match	upstream-focus-widget-semantics.md#external-scope-callbacks-and-mount-only-permissions
+packages/flutter/test/widgets/decorated_sliver_test.dart	186	DecoratedSliver paints its border correctly vertically	paired-match	upstream-decorated-sliver.md
+packages/flutter/test/widgets/decorated_sliver_test.dart	228	DecoratedSliver paints its border correctly vertically reverse	paired-match	upstream-decorated-sliver.md
+packages/flutter/test/widgets/decorated_sliver_test.dart	271	DecoratedSliver paints its border correctly horizontally	paired-match	upstream-decorated-sliver.md
+packages/flutter/test/widgets/decorated_sliver_test.dart	314	DecoratedSliver paints its border correctly horizontally reverse	paired-match	upstream-decorated-sliver.md
+packages/flutter/test/widgets/decorated_sliver_test.dart	358	DecoratedSliver works with SliverMainAxisGroup	paired-match	upstream-decorated-sliver.md
+packages/flutter/test/widgets/decorated_sliver_test.dart	402	DecoratedSliver works with SliverCrossAxisGroup	paired-match	upstream-decorated-sliver.md

@@ -3326,6 +3326,9 @@ pub(crate) fn transfer_retained_sliver_state(
         probes,
         preserve_anchor,
     );
+    transfer_single_inner_sliver_state::<super::sliver_decoration::DecoratedRenderSliver>(
+        fresh, retained, probes, preserve_anchor,
+    );
     transfer_single_inner_sliver_state::<WidgetWrapRenderSliver>(
         fresh,
         retained,
@@ -3561,44 +3564,46 @@ fn variable_slot_for_child(
     delegate: &dyn SliverViewportDelegate,
     child: SliverChildId,
 ) -> Option<VariableSlot> {
-    fn slot_in_sliver(sliver: &mut dyn RenderSliver, local: usize) -> Option<VariableSlot> {
+    fn slot_in_sliver(sliver: &mut dyn RenderSliver, child: SliverChildId) -> Option<VariableSlot> {
         if let Some(variable) = sliver
             .as_any_mut()
             .and_then(|any| any.downcast_mut::<VariableExtentRenderSliver>())
         {
             return Some(VariableSlot {
                 index: variable.index.clone(),
-                local,
+                local: usize::try_from(child.0.checked_sub(1)?).ok()?,
                 transferred: variable.transferred.clone(),
             });
         }
-        if let Some(wrapper) = sliver
-            .as_any_mut()
+        if let Some(wrapper) = sliver.as_any_mut()
+            .and_then(|any| any.downcast_mut::<super::sliver_decoration::DecoratedRenderSliver>())
+        {
+            let child = super::sliver_decoration::DecoratedRenderSliver::content_id(child)?;
+            return slot_in_sliver(&mut **wrapper.inner.borrow_mut(), child);
+        }
+        if let Some(wrapper) = sliver.as_any_mut()
             .and_then(|any| any.downcast_mut::<PaddingRenderSliver>())
         {
-            return slot_in_sliver(&mut **wrapper.inner.borrow_mut(), local);
+            return slot_in_sliver(&mut **wrapper.inner.borrow_mut(), child);
         }
-        if let Some(wrapper) = sliver
-            .as_any_mut()
+        if let Some(wrapper) = sliver.as_any_mut()
             .and_then(|any| any.downcast_mut::<WidgetWrapRenderSliver>())
         {
-            return slot_in_sliver(&mut **wrapper.inner.borrow_mut(), local);
+            return slot_in_sliver(&mut **wrapper.inner.borrow_mut(), child);
         }
-        if let Some(wrapper) = sliver
-            .as_any_mut()
+        if let Some(wrapper) = sliver.as_any_mut()
             .and_then(|any| any.downcast_mut::<OverlapAbsorberRenderSliver>())
         {
-            return slot_in_sliver(&mut **wrapper.inner.borrow_mut(), local);
+            return slot_in_sliver(&mut **wrapper.inner.borrow_mut(), child);
         }
         None
     }
-    let local = usize::try_from(child.local().0.checked_sub(1)?).ok()?;
     let sequence = delegate
         .as_any()?
         .downcast_ref::<SequenceViewportDelegate>()?;
     let sequence = sequence.sequence.borrow();
     let sliver = sequence.children.get(child.scope())?;
-    slot_in_sliver(&mut **sliver.borrow_mut(), local)
+    slot_in_sliver(&mut **sliver.borrow_mut(), child.local())
 }
 
 /// Records an identity-established measurement after element

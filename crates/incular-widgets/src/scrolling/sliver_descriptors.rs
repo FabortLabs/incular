@@ -1839,10 +1839,15 @@ impl Sliver for SliverConstrainedCrossAxis {
     }
 }
 
-/// Paints decoration behind a sliver.
+/// Paints one decoration behind or in front of an entire sliver.
 #[derive(TypedBuilder)]
 pub struct DecoratedSliver {
+    #[builder(default)]
     decoration: incular_rendering::Decoration,
+    #[builder(default, setter(strip_option))]
+    box_decoration: Option<crate::BoxDecoration>,
+    #[builder(default)]
+    position: crate::DecorationPosition,
     #[builder(setter(transform = |sliver: impl Sliver + 'static| {
         Box::new(sliver) as Box<dyn Sliver>
     }))]
@@ -1854,25 +1859,68 @@ impl DecoratedSliver {
     pub fn new(decoration: incular_rendering::Decoration, sliver: impl Sliver + 'static) -> Self {
         Self {
             decoration,
+            box_decoration: None,
+            position: crate::DecorationPosition::Background,
             sliver: Box::new(sliver),
         }
     }
 
+    /// Uses the same BoxDecoration painter as a mounted DecoratedBox.
+    #[must_use]
+    pub fn new_box(decoration: crate::BoxDecoration, sliver: impl Sliver + 'static) -> Self {
+        Self {
+            box_decoration: Some(decoration),
+            ..Self::new(incular_rendering::Decoration::default(), sliver)
+        }
+    }
+
+    #[must_use]
+    pub fn position(mut self, position: crate::DecorationPosition) -> Self {
+        self.position = position;
+        self
+    }
+
+    /// The rendering data from the low-level constructor.
     #[must_use]
     pub fn decoration(&self) -> &incular_rendering::Decoration {
         &self.decoration
+    }
+
+    #[must_use]
+    pub fn box_decoration(&self) -> Option<&crate::BoxDecoration> {
+        self.box_decoration.as_ref()
+    }
+
+    fn decorator(&self) -> Rc<dyn Fn(Widget) -> Widget> {
+        if let Some(decoration) = &self.box_decoration {
+            let decoration = decoration.clone();
+            let position = self.position;
+            return Rc::new(move |child| {
+                crate::painting_effects::decorated(decoration.clone(), position, child)
+            });
+        }
+        let decoration = self.decoration.clone();
+        Rc::new(move |child| {
+            Widget::decorated(
+                None, decoration.background.clone(), decoration.border,
+                decoration.border_radius, child,
+            )
+        })
     }
 }
 
 impl Sliver for DecoratedSliver {
     fn build(&self, controller: &ScrollController) -> Widget {
-        Widget::decorated(
-            None,
-            self.decoration.background.clone(),
-            self.decoration.border,
-            self.decoration.border_radius,
-            self.sliver.build(controller),
-        )
+        let child = self.sliver.build(controller);
+        let decorate = self.decorator();
+        if self.box_decoration.is_none() && self.position == crate::DecorationPosition::Foreground {
+            let decoration = crate::IgnorePointer::new(crate::ExcludeSemantics::new(
+                decorate(crate::SizedBox::shrink().into()),
+            ));
+            crate::Stack::new([child, crate::Positioned::fill(decoration).into()]).into()
+        } else {
+            decorate(child)
+        }
     }
 
     fn create_render_sliver(
@@ -1881,21 +1929,10 @@ impl Sliver for DecoratedSliver {
         axis: Axis,
         reverse: bool,
     ) -> Box<dyn RenderSliver> {
-        let decoration = self.decoration.clone();
         let inner = self.sliver.create_render_sliver(controller, axis, reverse);
-        Box::new(WidgetWrapRenderSliver {
-            inner: RefCell::new(inner),
-            hidden: false,
-            wrap: Rc::new(move |widget| {
-                Widget::decorated(
-                    None,
-                    decoration.background.clone(),
-                    decoration.border,
-                    decoration.border_radius,
-                    widget,
-                )
-            }),
-        })
+        Box::new(super::sliver_decoration::DecoratedRenderSliver::new(
+            inner, self.decorator(), self.position,
+        ))
     }
 }
 

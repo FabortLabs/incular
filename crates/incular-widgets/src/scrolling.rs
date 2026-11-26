@@ -40,6 +40,7 @@ mod notifications;
 mod reorderable;
 mod scroll_views;
 mod sliver_descriptors;
+mod sliver_decoration;
 mod sliver_fade;
 mod sliver_lists;
 mod sliver_semantics;
