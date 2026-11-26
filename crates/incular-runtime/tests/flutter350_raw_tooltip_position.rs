@@ -318,3 +318,44 @@ fn a_singular_anchor_has_no_overlay_content_until_it_can_be_projected_again() {
     frame(&mut runtime, start + Duration::from_millis(300));
     assert!(runtime.tree().element_with_key(&"measured tooltip".into()).is_some());
 }
+
+#[test]
+fn host_keyboard_insets_reposition_an_open_widgets_app_tooltip() {
+    use incular_config::{EdgeInsets, RuntimeEnvironment};
+    let controller = RawTooltipController::new();
+    let anchor = Positioned::builder()
+        .left(400.)
+        .top(380.)
+        .child(
+            RawTooltip::with_builder(SizedBox::shrink(), tooltip_builder(40.))
+                .controller(controller.clone()),
+        )
+        .build();
+    let mut runtime = Runtime::new(WidgetsApp::new(Stack::new([anchor])).into()).unwrap();
+    let now = Instant::now();
+    let set_inset = |runtime: &mut Runtime, bottom: f32| {
+        let data = RuntimeEnvironment {
+            viewport: Size::new(800., 600.),
+            view_insets: EdgeInsets::only(0., 0., 0., bottom),
+            ..RuntimeEnvironment::default()
+        };
+        assert!(runtime.set_environment(data));
+    };
+    let expected = |y| Rect::from_origin_size(Offset::new(350., y), Size::new(100., 40.));
+    set_inset(&mut runtime, 0.);
+    frame(&mut runtime, now);
+    assert!(controller.ensure_visible_at(now + Duration::from_millis(10)));
+    frame(&mut runtime, now + Duration::from_millis(10));
+    assert_eq!(tooltip_bounds(&runtime), expected(380.));
+    let bubble = runtime.tree().element_with_key(&"measured tooltip".into()).unwrap();
+
+    set_inset(&mut runtime, 200.);
+    frame(&mut runtime, now + Duration::from_millis(20));
+    assert_eq!(tooltip_bounds(&runtime), expected(340.));
+    assert_eq!(runtime.tree().element_with_key(&"measured tooltip".into()), Some(bubble));
+
+    set_inset(&mut runtime, 0.);
+    frame(&mut runtime, now + Duration::from_millis(30));
+    assert_eq!(tooltip_bounds(&runtime), expected(380.));
+    assert!(controller.is_visible());
+}

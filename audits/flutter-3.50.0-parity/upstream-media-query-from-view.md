@@ -21,3 +21,20 @@ typography defaults. It adds no upstream credit. The isolated native
 run passed 22 cases, including positioning and window environment
 regressions. This does not claim complete platform notification or
 display-feature parity for every host.
+
+## Host-provided keyboard insets in WidgetsApp
+
+The authored pinned Flutter control changes the actual test view's
+physical insets, scaled by device pixel ratio, while one tooltip stays
+open. The inherited logical inset changes from 0 to 200 and back, and
+the measured popup moves from y=380 to y=340 and back. No synthetic
+MediaQuery wrapper is inserted into the Flutter fixture.
+
+Incular reproduced the stale position with a default WidgetsApp:
+its root installed an immutable MediaQuery that masked new host
+metrics. The default now follows the retained view and the same
+mounted popup moves when the host updates its environment. An
+explicitly supplied app environment remains a fixed override. The
+native comparison verifies the element identity does not change.
+All 75 targeted native checks passed across app shell, environment,
+and popup behavior. The authored controls add no upstream credit.

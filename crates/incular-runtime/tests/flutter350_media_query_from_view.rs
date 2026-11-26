@@ -169,3 +169,28 @@ fn static_projection_keeps_view_insets_and_only_overrides_platform_fields() {
         NavigationMode::Traditional,
     );
 }
+
+#[test]
+fn widgets_app_explicit_media_snapshot_does_not_follow_host_metrics() {
+    use incular_widgets::WidgetsApp;
+    let (reads, child) = observe();
+    let app = WidgetsApp::new(child).environment(RuntimeEnvironment {
+        viewport: Size::new(640., 450.),
+        view_insets: EdgeInsets::only(0., 0., 0., 80.),
+        ..RuntimeEnvironment::default()
+    });
+    let mut runtime = Runtime::new(app.into()).unwrap();
+    frame(&mut runtime);
+    assert_eq!(reads.borrow().last().unwrap().view_insets.bottom, 80.);
+    assert!(runtime.set_environment(RuntimeEnvironment {
+        viewport: Size::new(800., 600.),
+        view_insets: EdgeInsets::only(0., 0., 0., 200.),
+        ..RuntimeEnvironment::default()
+    }));
+    frame(&mut runtime);
+    assert_eq!(reads.borrow().last().unwrap().view_insets.bottom, 80.);
+    assert_eq!(
+        reads.borrow().last().unwrap().viewport,
+        Size::new(640., 450.)
+    );
+}

@@ -56,6 +56,15 @@ impl MediaQuery {
         })
     }
 
+    /// Installs the media scope for an application hosted by the retained
+    /// runtime's current view. A native View scope can already supply it.
+    pub(crate) fn from_runtime_view(child: Widget) -> Widget {
+        Builder::new(move |context| {
+            Self::new(context.effective_media_query(), child.clone()).into()
+        })
+        .into()
+    }
+
     /// Snapshots the metrics of one view using an optional explicit source
     /// for platform preferences (Flutter's `MediaQueryData.fromView`).
     #[must_use]

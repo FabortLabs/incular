@@ -676,7 +676,7 @@ pub struct WidgetsAppData {
 #[derive(Clone)]
 pub struct WidgetsApp {
     controller: WidgetsAppController,
-    environment: RuntimeEnvironment,
+    environment: Option<RuntimeEnvironment>,
     title: String,
     generated_title: Option<GeneratedTitle>,
     title_controller: TitleController,
@@ -712,7 +712,7 @@ impl WidgetsApp {
         controller.set_home_widget(home.into());
         Self {
             controller,
-            environment: RuntimeEnvironment::default(),
+            environment: None,
             title: defaults.window_title.to_owned(),
             generated_title: None,
             title_controller: TitleController::new(defaults.window_title, Color::BLACK),
@@ -823,9 +823,10 @@ impl WidgetsApp {
         self
     }
 
+    /// Sets an explicit environment rather than following the retained view.
     #[must_use]
     pub fn environment(mut self, environment: RuntimeEnvironment) -> Self {
-        self.environment = environment.normalized();
+        self.environment = Some(environment.normalized());
         self
     }
 
@@ -878,6 +879,14 @@ impl WidgetsApp {
     /// Builds the complete root with an explicit runtime environment.
     #[must_use]
     pub fn build_with_environment(&self, environment: RuntimeEnvironment) -> Widget {
+        self.build_with_media_query(environment, false)
+    }
+
+    fn build_with_media_query(
+        &self,
+        environment: RuntimeEnvironment,
+        follow_runtime: bool,
+    ) -> Widget {
         let environment = environment.normalized();
         let locale = resolve_app_locale(&environment, &self.supported_locales);
         let title = locale
@@ -912,7 +921,11 @@ impl WidgetsApp {
             .as_ref()
             .map_or(environment.text_direction, LocaleResolver::text_direction);
         child = Directionality::new(direction, child).into();
-        child = MediaQuery::new(environment.clone(), child).into();
+        child = if follow_runtime {
+            MediaQuery::from_runtime_view(child)
+        } else {
+            MediaQuery::new(environment, child).into()
+        };
         child = Title::simple(title, child)
             .with_controller(self.title_controller.clone())
             .into_widget();
@@ -922,10 +935,14 @@ impl WidgetsApp {
         child
     }
 
-    /// Builds using the app's retained environment.
+    /// Builds with the retained view's live media data, or with the explicit
+    /// snapshot supplied through [`Self::environment`].
     #[must_use]
     pub fn into_widget(self) -> Widget {
-        self.build_with_environment(self.environment.clone())
+        self.build_with_media_query(
+            self.environment.clone().unwrap_or_default(),
+            self.environment.is_none(),
+        )
     }
 
     /// Alias for [`Self::into_widget`].
@@ -937,12 +954,13 @@ impl WidgetsApp {
     /// Produces the spec consumed by a runtime bootstrap adapter.
     #[must_use]
     pub fn bootstrap_spec(&self) -> ApplicationBootstrapSpec {
-        let mut environment = self.environment.clone().normalized();
+        let mut environment = self.environment.clone().unwrap_or_default().normalized();
         let options = ApplicationBootstrapOptions::default();
         if environment.viewport == Size::ZERO {
             environment.viewport = options.initial_size;
         }
-        let root = self.build_with_environment(environment.clone());
+        let root =
+            self.build_with_media_query(environment.clone(), self.environment.is_none());
         let options = ApplicationBootstrapOptions {
             title: self.title_controller.title(),
             ..options
