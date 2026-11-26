@@ -104,3 +104,9 @@ region instead of treating a rejected child as a hit.
 cargo test --locked -j 1 -p incular-widgets --test flutter350_mouse_region_overlap --test pointer_hit_test --test pointer_hover --test pointer_event_fields --test flutter350_absorb_pointer_upstream_parity -- --test-threads=1
 bash audits/flutter-3.50.0-parity/run-reference-linux.sh probe mouse_region_overlap_test.dart
 ```
+
+Strict existing frame rechecks after the overlap repair also match:
+`focus_input__listener_pointer_lifecycle` (4 frames),
+`focus_input__absorb_pointer_blocks_sibling` (2), and
+`focus_input__ignore_pointer_falls_through` (2). These are
+rechecks of previously accounted registrations.

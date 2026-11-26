@@ -1561,4 +1561,4 @@ packages/flutter/test/animation/curves_test.dart	19	Curve flipped control test	p
 packages/flutter/test/animation/curves_test.dart	126	Elastic overshoots its bounds	paired-match	upstream-curve-lifetimes-and-shapes.md
 packages/flutter/test/animation/curves_test.dart	143	Back overshoots its bounds	paired-match	upstream-curve-lifetimes-and-shapes.md
 packages/flutter/test/animation/curves_test.dart	160	Decelerate does so	paired-match	upstream-curve-lifetimes-and-shapes.md
-packages/flutter/test/services/binding_test.dart	99	didHaveMemoryPressure clears asset caches	paired-match	upstream-root-asset-memory-pressure.md
+packages/flutter/test/services/binding_test.dart	101	didHaveMemoryPressure clears asset caches	paired-match	upstream-root-asset-memory-pressure.md

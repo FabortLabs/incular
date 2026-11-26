@@ -1,6 +1,6 @@
 # Root asset cache memory pressure
 
-Pinned original `services/binding_test.dart:99` pairs. The native
+Pinned original `services/binding_test.dart:101` pairs. The native
 test drives the same `flutter/system` JSON memory-pressure
 notification and observes two cached loads, two refetches after
 the warning and no further backend reads once the cache is warm
