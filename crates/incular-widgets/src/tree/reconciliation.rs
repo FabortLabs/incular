@@ -987,7 +987,17 @@ impl WidgetTree {
             }),
             _ => None,
         };
-        if before_mouse != after_mouse || control_cursor(old.kind()) != control_cursor(widget.kind()) {
+        let resize_cursor = |kind: &WidgetKind| match kind {
+            WidgetKind::RawInput { kind, .. } => match kind.as_ref() {
+                RawInputKind::WindowResizeRegion { direction } => Some(*direction),
+                _ => None,
+            },
+            _ => None,
+        };
+        if before_mouse != after_mouse
+            || control_cursor(old.kind()) != control_cursor(widget.kind())
+            || resize_cursor(old.kind()) != resize_cursor(widget.kind())
+        {
             // A still pointer also needs a new cursor for config-only updates.
             self.input.hover_hit_revision = self.input.hover_hit_revision.wrapping_add(1);
         }

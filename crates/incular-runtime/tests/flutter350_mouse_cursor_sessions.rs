@@ -9,7 +9,7 @@ use incular_runtime::{MouseCursorUpdate, Runtime};
 use incular_widgets::{MouseCursor, MouseRegion, Positioned, SizedBox, Stack, Widget};
 
 const VIEW: Size = Size {
-    width: 128.,
+    width: 310.,
     height: 80.,
 };
 type Activations = Rc<RefCell<Vec<MouseCursorUpdate>>>;
@@ -157,4 +157,96 @@ fn all_deferring_annotations_in_front_are_skipped() {
     expect(&trace, &[(0, MouseCursor::Grabbing)]);
     place(&mut runtime, 0, 5., HoverDeviceChange::Removed);
     expect(&trace, &[]);
+}
+
+#[test]
+fn cursor_selection_is_safe_when_the_host_has_no_cursor_callback() {
+    let mut runtime = Runtime::new(one_annotation(MouseCursor::Grabbing, 0.).into()).unwrap();
+    frame(&mut runtime);
+    place(&mut runtime, 0, 0., HoverDeviceChange::Added);
+    assert_eq!(runtime.effective_mouse_cursor(), MouseCursor::Grabbing);
+    place(&mut runtime, 0, 0., HoverDeviceChange::Removed);
+    assert_eq!(runtime.effective_mouse_cursor(), MouseCursor::Basic);
+}
+
+#[test]
+fn explicit_basic_and_no_annotation_are_the_same_activation() {
+    let (mut runtime, trace) = mount(one_annotation(MouseCursor::Basic, 5.));
+    place(&mut runtime, 0, 0., HoverDeviceChange::Added);
+    expect(&trace, &[(0, MouseCursor::Basic)]);
+    hover(&mut runtime, 0, 5.);
+    expect(&trace, &[]);
+    hover(&mut runtime, 0, 0.);
+    expect(&trace, &[]);
+    place(&mut runtime, 0, 0., HoverDeviceChange::Removed);
+    expect(&trace, &[]);
+}
+
+#[test]
+fn adding_a_removed_device_starts_a_fresh_session_with_basic() {
+    let (mut runtime, trace) = mount(one_annotation(MouseCursor::Click, 5.));
+    place(&mut runtime, 0, 5., HoverDeviceChange::Added);
+    hover(&mut runtime, 0, 6.);
+    expect(&trace, &[(0, MouseCursor::Click)]);
+    place(&mut runtime, 0, 6., HoverDeviceChange::Removed);
+    expect(&trace, &[]);
+    place(&mut runtime, 0, 0., HoverDeviceChange::Added);
+    expect(&trace, &[(0, MouseCursor::Basic)]);
+    assert_eq!(
+        runtime.mouse_cursor_for_device(0, 1),
+        Some(MouseCursor::Basic)
+    );
+}
+
+#[test]
+fn two_devices_activate_and_keep_their_cursors_independently() {
+    let layer = |x, cursor| {
+        Positioned::new(MouseRegion::new(SizedBox::square(100.)).cursor(cursor))
+            .left(x)
+            .top(0.)
+    };
+    let (mut runtime, trace) = mount(
+        Stack::new([
+            layer(100.5, MouseCursor::Click),
+            layer(200.5, MouseCursor::NotAllowed),
+        ])
+        .text_direction(TextDirection::Ltr),
+    );
+    place(&mut runtime, 1, 0., HoverDeviceChange::Added);
+    place(&mut runtime, 2, 0., HoverDeviceChange::Added);
+    expect(&trace, &[(1, MouseCursor::Basic), (2, MouseCursor::Basic)]);
+    hover(&mut runtime, 1, 101.);
+    expect(&trace, &[(1, MouseCursor::Click)]);
+    hover(&mut runtime, 2, 102.);
+    expect(&trace, &[(2, MouseCursor::Click)]);
+    hover(&mut runtime, 2, 202.);
+    expect(&trace, &[(2, MouseCursor::NotAllowed)]);
+    assert_eq!(
+        runtime.mouse_cursor_for_device(1, 100),
+        Some(MouseCursor::Click)
+    );
+    assert_eq!(
+        runtime.mouse_cursor_for_device(2, 100),
+        Some(MouseCursor::NotAllowed)
+    );
+    assert_eq!(runtime.effective_mouse_cursor(), MouseCursor::NotAllowed);
+    place(&mut runtime, 2, 202., HoverDeviceChange::Removed);
+    expect(&trace, &[]);
+    assert_eq!(runtime.effective_mouse_cursor(), MouseCursor::Click);
+}
+
+#[test]
+fn changing_resize_direction_reactivates_the_cursor_under_a_still_pointer() {
+    use incular_core::WindowResizeDirection;
+    use incular_widgets::WindowResizeRegion;
+    let region = |direction| WindowResizeRegion::new(direction, SizedBox::expand());
+    let (mut runtime, trace) = mount(region(WindowResizeDirection::East));
+    place(&mut runtime, 0, 0., HoverDeviceChange::Added);
+    expect(&trace, &[(0, MouseCursor::ResizeHorizontal)]);
+    let root = runtime.tree().root().unwrap();
+    runtime
+        .schedule_update(root, region(WindowResizeDirection::North).into())
+        .unwrap();
+    frame(&mut runtime);
+    expect(&trace, &[(0, MouseCursor::ResizeVertical)]);
 }
