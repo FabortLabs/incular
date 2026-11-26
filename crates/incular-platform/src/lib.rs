@@ -18,6 +18,8 @@ mod content_sensitivity;
 mod data_transfer;
 mod display;
 mod file_dialog;
+mod flutter_text_input_config;
+pub use flutter_text_input_config::FlutterTextInputConfiguration;
 pub mod message_codecs;
 mod operation;
 mod platform_view;

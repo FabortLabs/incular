@@ -127,3 +127,21 @@ fn negative_wildcard_id_is_debug_only() {
     assert_eq!(handled, cfg!(debug_assertions));
     assert_eq!(called, handled);
 }
+
+#[test]
+fn typed_configuration_reaches_the_channel_with_delta_model_enabled() {
+    use incular_platform::{FlutterTextInputConfiguration, TextInputType};
+    let config = FlutterTextInputConfiguration {
+        input_type: TextInputType::number_password(false, false),
+        action_label: Some("Unlock".into()),
+        ..FlutterTextInputConfiguration::default()
+    };
+    let bytes = connection().encode_set_client_with_config(&config).unwrap();
+    let call = JsonMethodCodec::decode_method_call(&bytes).unwrap();
+    assert_eq!(call.method, "TextInput.setClient");
+    assert_eq!(call.arguments[0], json!(1));
+    assert_eq!(call.arguments[1]["actionLabel"], json!("Unlock"));
+    assert_eq!(call.arguments[1]["inputType"]["password"], json!(true));
+    assert_eq!(call.arguments[1]["enableDeltaModel"], json!(true));
+    assert!(!config.enable_delta_model, "the attach does not modify caller configuration");
+}

@@ -2403,3 +2403,7 @@ packages/flutter/test/services/restoration_bucket_test.dart	305	cleans up raw da
 packages/flutter/test/services/restoration_bucket_test.dart	325	dispose deletes data	partial-match	upstream-restoration-scope-ownership.md#explicit-disposal-and-empty-storage
 packages/flutter/test/services/text_input_test.dart	17	The invalid selection is a singleton	paired-match	upstream-text-selection-identity.md
 packages/flutter/test/services/text_input_test.dart	28	TextAffinity does not affect equivalence when the selection is not collapsed	paired-match	upstream-text-selection-identity.md
+packages/flutter/test/services/text_input_test.dart	559	sets expected defaults	paired-match	upstream-text-input-configuration.md
+packages/flutter/test/services/text_input_test.dart	572	text serializes to JSON	paired-match	upstream-text-input-configuration.md
+packages/flutter/test/services/text_input_test.dart	607	number serializes to JSON	paired-match	upstream-text-input-configuration.md
+packages/flutter/test/services/text_input_test.dart	627	numeric password serializes to JSON	paired-match	upstream-text-input-configuration.md

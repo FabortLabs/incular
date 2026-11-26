@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use incular_platform::{
-    TextCapitalization, TextInputState,
+    FlutterTextInputConfiguration, TextInputState,
     autofill::{
         AutofillConfiguration, AutofillEditingValue, AutofillFieldConfiguration,
         AutofillMessageError, AutofillSelectionAffinity, FlutterAutofillScope,
@@ -13,12 +13,10 @@ use incular_text::{
     TextAffinity, TextEditingController, TextEditingValue, TextRange, TextSelection,
     byte_offset_at_utf16_boundary,
 };
-use incular_widgets::{
-    TextFieldInputSnapshot, TextInputActionHint, TextInputTypeHint, internal::ElementId,
-};
-use serde_json::{Map, Value, json};
+use incular_widgets::{TextFieldInputSnapshot, internal::ElementId};
+use serde_json::{Map, Value};
 
-use super::Runtime;
+use super::{Runtime, resolve_text_input_action};
 
 impl Runtime {
     fn mounted_autofill_scope(&self) -> Option<(ElementId, ElementId)> {
@@ -255,52 +253,26 @@ fn editor_wire(
 }
 
 fn field_input(field: &TextFieldInputSnapshot, view_id: &Value) -> Map<String, Value> {
-    let (signed, decimal, password) = match field.input_type {
-        TextInputTypeHint::Number { signed, decimal } => (Some(signed), Some(decimal), Some(false)),
-        TextInputTypeHint::NumberPassword { signed, decimal } => {
-            (Some(signed), Some(decimal), Some(true))
-        }
-        _ => (None, None, None),
-    };
-    let action = match field.input_action {
-        TextInputActionHint::Unspecified if field.multiline => "newline",
-        TextInputActionHint::Unspecified | TextInputActionHint::Done => "done",
-        TextInputActionHint::None => "none",
-        TextInputActionHint::Go => "go",
-        TextInputActionHint::Search => "search",
-        TextInputActionHint::Send => "send",
-        TextInputActionHint::Next => "next",
-        TextInputActionHint::Previous => "previous",
-        TextInputActionHint::Newline => "newline",
-    };
-    let capitalization = match field.traits.text_capitalization {
-        TextCapitalization::None => "none",
-        TextCapitalization::Characters => "characters",
-        TextCapitalization::Words => "words",
-        TextCapitalization::Sentences => "sentences",
-    };
-    let keyboard = match field.traits.keyboard_appearance {
-        incular_config::Brightness::Light => "Brightness.light",
-        incular_config::Brightness::Dark => "Brightness.dark",
-    };
-    let hint_locales = field
-        .traits
-        .hint_locales
-        .as_ref()
-        .map(|locales| locales.iter().map(ToString::to_string).collect::<Vec<_>>());
-    json!({
-        "viewId": view_id,
-        "inputType":{"name":field.input_type.flutter_name(),"signed":signed,"decimal":decimal,"password":password},
-        "readOnly":field.read_only, "obscureText":field.obscure_text,
-        "autocorrect":field.traits.autocorrect,
-        "smartDashesType":field.traits.smart_dashes_type.flutter_index(),
-        "smartQuotesType":field.traits.smart_quotes_type.flutter_index(),
-        "enableSuggestions":field.traits.enable_suggestions,
-        "enableInteractiveSelection":field.traits.enable_interactive_selection,
-        "actionLabel":Value::Null, "inputAction":format!("TextInputAction.{action}"),
-        "textCapitalization":format!("TextCapitalization.{capitalization}"), "keyboardAppearance":keyboard,
-        "enableIMEPersonalizedLearning":field.traits.enable_ime_personalized_learning,
-        "contentCommitMimeTypes":[], "enableDeltaModel":false, "hintLocales":hint_locales,
-        "enableInlinePrediction":field.traits.enable_inline_prediction,
-    }).as_object().expect("text input options object").clone()
+    let input_action = resolve_text_input_action(field.input_action, field.multiline);
+    let mut fields = FlutterTextInputConfiguration {
+        input_type: field.input_type,
+        read_only: field.read_only,
+        obscure_text: field.obscure_text,
+        autocorrect: field.traits.autocorrect,
+        smart_dashes_type: Some(field.traits.smart_dashes_type),
+        smart_quotes_type: Some(field.traits.smart_quotes_type),
+        enable_suggestions: field.traits.enable_suggestions,
+        enable_interactive_selection: field.traits.enable_interactive_selection,
+        input_action,
+        text_capitalization: field.traits.text_capitalization,
+        keyboard_appearance: field.traits.keyboard_appearance,
+        enable_ime_personalized_learning: field.traits.enable_ime_personalized_learning,
+        hint_locales: field.traits.hint_locales.clone(),
+        enable_inline_prediction: field.traits.enable_inline_prediction,
+        ..FlutterTextInputConfiguration::default()
+    }
+    .to_json();
+    // Retain the original channel identifier supplied by this embedder.
+    fields.insert("viewId".into(), view_id.clone());
+    fields
 }

@@ -158,6 +158,20 @@ pub struct HardwareKeyHandlerError {
     pub payload: Box<dyn Any + Send + 'static>,
 }
 
+fn resolve_text_input_action(hint: TextInputActionHint, multiline: bool) -> TextInputAction {
+    match hint {
+        TextInputActionHint::Unspecified if multiline => TextInputAction::Newline,
+        TextInputActionHint::Unspecified | TextInputActionHint::Done => TextInputAction::Done,
+        TextInputActionHint::None => TextInputAction::None,
+        TextInputActionHint::Go => TextInputAction::Go,
+        TextInputActionHint::Search => TextInputAction::Search,
+        TextInputActionHint::Send => TextInputAction::Send,
+        TextInputActionHint::Next => TextInputAction::Next,
+        TextInputActionHint::Previous => TextInputAction::Previous,
+        TextInputActionHint::Newline => TextInputAction::Newline,
+    }
+}
+
 /// Retained application execution, input dispatch and frame coordination.
 pub struct Runtime {
     pub(crate) tree: WidgetTree,
@@ -2865,23 +2879,7 @@ impl Runtime {
         });
         let client = connection.client;
         let input_type = snapshot.input_type;
-        let action = match snapshot.input_action {
-            TextInputActionHint::Unspecified => {
-                if snapshot.multiline {
-                    TextInputAction::Newline
-                } else {
-                    TextInputAction::Done
-                }
-            }
-            TextInputActionHint::None => TextInputAction::None,
-            TextInputActionHint::Done => TextInputAction::Done,
-            TextInputActionHint::Go => TextInputAction::Go,
-            TextInputActionHint::Search => TextInputAction::Search,
-            TextInputActionHint::Send => TextInputAction::Send,
-            TextInputActionHint::Next => TextInputAction::Next,
-            TextInputActionHint::Previous => TextInputAction::Previous,
-            TextInputActionHint::Newline => TextInputAction::Newline,
-        };
+        let action = resolve_text_input_action(snapshot.input_action, snapshot.multiline);
         let configuration = TextInputConfiguration {
             client,
             input_type: if snapshot.obscure_text && input_type == TextInputType::Text {

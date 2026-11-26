@@ -2,7 +2,7 @@
 //! Flutter's JSON method protocol instead of Incular's native IME events.
 
 use incular_platform::{
-    TextInputClientId,
+    FlutterTextInputConfiguration, TextInputClientId,
     message_codecs::{JsonMethodCodec, JsonMethodCodecError, MethodCall},
 };
 use incular_text::{FlutterTextDeltaError, FlutterTextEditingDelta};
@@ -49,6 +49,14 @@ impl FlutterDeltaTextInputConnection {
             method: "TextInput.setClient".into(),
             arguments: json!([self.client.get(), configuration]),
         })
+    }
+
+    /// Sends the typed Flutter configuration, opting this client into deltas.
+    pub fn encode_set_client_with_config(
+        self,
+        configuration: &FlutterTextInputConfiguration,
+    ) -> Result<Vec<u8>, JsonMethodCodecError> {
+        self.encode_set_client(configuration.to_json())
     }
 
     /// Delivers a fully decoded batch to the attached client. Other methods
