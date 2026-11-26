@@ -19,7 +19,7 @@ use futures_channel::oneshot;
 use incular_animation::scheduler::{Priority, schedule_async_task};
 use incular_core::reactivity::DependencySource;
 
-use crate::{ImageConfiguration, ImageError, ImageHandle, ImageProvider};
+use crate::{ImageConfiguration, ImageError, ImageHandle, ImageProvider, ImageResizeOptions};
 
 /// Flutter's `ImageChunkEvent`: progress of an image still loading.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -321,8 +321,12 @@ impl ImageStreamCompleter {
 pub struct AnyImageProvider {
     provider: Rc<dyn Any>,
     eq: fn(&dyn Any, &dyn Any) -> bool,
-    resolve: fn(&dyn Any, &ImageConfiguration) -> ImageStream,
-    load: fn(&dyn Any, &ImageConfiguration) -> Result<ImageHandle, ImageError>,
+    resolve: fn(&dyn Any, &ImageConfiguration, Option<ImageResizeOptions>) -> ImageStream,
+    load: fn(
+        &dyn Any,
+        &ImageConfiguration,
+        Option<ImageResizeOptions>,
+    ) -> Result<ImageHandle, ImageError>,
     debug: fn(&dyn Any, &mut fmt::Formatter<'_>) -> fmt::Result,
 }
 
@@ -336,20 +340,28 @@ fn eq_erased<P: ImageProvider + 'static>(left: &dyn Any, right: &dyn Any) -> boo
 fn resolve_erased<P: ImageProvider + 'static>(
     provider: &dyn Any,
     configuration: &ImageConfiguration,
+    resize: Option<ImageResizeOptions>,
 ) -> ImageStream {
     provider.downcast_ref::<P>().map_or_else(
         || ImageStream::failed(ImageError::Io("image provider type mismatch".into())),
-        |provider| provider.resolve(configuration),
+        |provider| match resize {
+            Some(options) => provider.resolve_resized(configuration, options),
+            None => provider.resolve(configuration),
+        },
     )
 }
 
 fn load_erased<P: ImageProvider + 'static>(
     provider: &dyn Any,
     configuration: &ImageConfiguration,
+    resize: Option<ImageResizeOptions>,
 ) -> Result<ImageHandle, ImageError> {
     provider.downcast_ref::<P>().map_or_else(
         || Err(ImageError::Io("image provider type mismatch".into())),
-        |provider| provider.load_with(configuration),
+        |provider| match resize {
+            Some(options) => provider.load_resized(configuration, options),
+            None => provider.load_with(configuration),
+        },
     )
 }
 
@@ -380,13 +392,29 @@ impl AnyImageProvider {
     /// `ImageProvider.resolve`).
     #[must_use]
     pub fn resolve(&self, configuration: &ImageConfiguration) -> ImageStream {
-        (self.resolve)(&*self.provider, configuration)
+        (self.resolve)(&*self.provider, configuration, None)
     }
 
     /// Loads the provider synchronously for `configuration` (its
     /// [`ImageProvider::load_with`]).
     pub fn load_with(&self, configuration: &ImageConfiguration) -> Result<ImageHandle, ImageError> {
-        (self.load)(&*self.provider, configuration)
+        (self.load)(&*self.provider, configuration, None)
+    }
+
+    pub(crate) fn resolve_resized(
+        &self,
+        configuration: &ImageConfiguration,
+        options: ImageResizeOptions,
+    ) -> ImageStream {
+        (self.resolve)(&*self.provider, configuration, Some(options))
+    }
+
+    pub(crate) fn load_resized(
+        &self,
+        configuration: &ImageConfiguration,
+        options: ImageResizeOptions,
+    ) -> Result<ImageHandle, ImageError> {
+        (self.load)(&*self.provider, configuration, Some(options))
     }
 
     /// The provider, when it has type `P`.

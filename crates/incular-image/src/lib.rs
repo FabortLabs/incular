@@ -17,7 +17,7 @@ pub use bundled_cache::{
     BundleImageCache, clear_shared_bundle_image_cache, shared_bundle_image_cache,
 };
 
-pub use resize::{ImageResizeOptions, ResizeImage, ResizeImagePolicy};
+pub use resize::{ImageResizeOptions, ResizeImage, ResizeImageKey, ResizeImagePolicy};
 
 pub use stream::{
     AnyImageProvider, ImageChunkEvent, ImageLoadState, ImageStream, ImageStreamCompleter,
@@ -174,6 +174,28 @@ pub trait ImageProvider: Clone + fmt::Debug + PartialEq + Eq {
         self.load()
     }
 
+    /// Loads a resized frame immediately. Built-in asset providers use
+    /// the selected asset and effective resize parameters as a cache key.
+    fn load_resized(
+        &self,
+        configuration: &ImageConfiguration,
+        options: ImageResizeOptions,
+    ) -> Result<ImageHandle, ImageError> {
+        options.resize(self.load_with(configuration)?, configuration)
+    }
+
+    /// Resolves a resized stream, preserving any underlying delayed
+    /// delivery. Custom providers may override for native decoder scaling.
+    fn resolve_resized(
+        &self,
+        configuration: &ImageConfiguration,
+        options: ImageResizeOptions,
+    ) -> ImageStream {
+        let options = options.physical(configuration);
+        self.resolve(configuration)
+            .map_image(move |frame| options.resize(frame, &ImageConfiguration::empty()))
+    }
+
     /// Flutter `ImageProvider.resolve`: the loading state of this provider
     /// for `configuration`. The default loads synchronously through
     /// [`Self::load_with`] and returns a completed stream. A provider that
@@ -185,7 +207,7 @@ pub trait ImageProvider: Clone + fmt::Debug + PartialEq + Eq {
 }
 
 /// Loads an image from encoded in-memory bytes.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MemoryImage(Arc<[u8]>);
 
 impl MemoryImage {

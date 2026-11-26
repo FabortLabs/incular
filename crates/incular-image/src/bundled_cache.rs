@@ -8,9 +8,45 @@ use std::{
 
 use lru::LruCache;
 
-use crate::{AssetBundleImageKey, ImageCacheLimits, ImageError, ImageHandle, ImageLoadCallback};
+use crate::{
+    AssetBundleImageKey, ImageCacheLimits, ImageConfiguration, ImageError, ImageHandle,
+    ImageLoadCallback, ImageResizeOptions,
+};
 
 type Pending = Arc<Mutex<Vec<ImageLoadCallback>>>;
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct BundleDecodeKey {
+    asset: AssetBundleImageKey,
+    resize: Option<ImageResizeOptions>,
+}
+
+impl BundleDecodeKey {
+    fn plain(asset: AssetBundleImageKey) -> Self {
+        Self {
+            asset,
+            resize: None,
+        }
+    }
+
+    fn read_uncached(&self) -> Result<ImageHandle, ImageError> {
+        let image = self.asset.read_uncached()?;
+        match self.resize {
+            Some(size) => size.resize(image, &ImageConfiguration::empty()),
+            None => Ok(image),
+        }
+    }
+
+    fn read_uncached_async(self, done: ImageLoadCallback) {
+        let Self { asset, resize } = self;
+        match resize {
+            None => asset.read_uncached_async(done),
+            Some(size) => asset.read_uncached_async(Box::new(move |outcome| {
+                done(outcome.and_then(|image| size.resize(image, &ImageConfiguration::empty())));
+            })),
+        }
+    }
+}
 
 thread_local! {
     static SHARED: OnceCell<BundleImageCache> = const { OnceCell::new() };
@@ -41,8 +77,8 @@ pub struct BundleImageCache(Arc<Mutex<State>>);
 
 struct State {
     limits: ImageCacheLimits,
-    pending: HashMap<AssetBundleImageKey, Pending>,
-    ready: LruCache<AssetBundleImageKey, ImageHandle>,
+    pending: HashMap<BundleDecodeKey, Pending>,
+    ready: LruCache<BundleDecodeKey, ImageHandle>,
     bytes: usize,
     generation: u64,
 }
@@ -52,7 +88,7 @@ impl State {
         self.limits.max_entries != 0 && self.limits.max_bytes != 0 && bytes <= self.limits.max_bytes
     }
 
-    fn evict_excess(&mut self, removed: &mut Vec<(AssetBundleImageKey, ImageHandle)>) {
+    fn evict_excess(&mut self, removed: &mut Vec<(BundleDecodeKey, ImageHandle)>) {
         while self.ready.len() > self.limits.max_entries || self.bytes > self.limits.max_bytes {
             let Some((key, image)) = self.ready.pop_lru() else {
                 break;
@@ -64,9 +100,9 @@ impl State {
 
     fn admit(
         &mut self,
-        key: AssetBundleImageKey,
+        key: BundleDecodeKey,
         image: &ImageHandle,
-        removed: &mut Vec<(AssetBundleImageKey, ImageHandle)>,
+        removed: &mut Vec<(BundleDecodeKey, ImageHandle)>,
     ) -> ImageHandle {
         if let Some(warm) = self.ready.get(&key) {
             // A separate synchronous read might have finished while the
@@ -139,16 +175,18 @@ impl BundleImageCache {
     #[must_use]
     pub fn contains_key(&self, key: &AssetBundleImageKey) -> bool {
         let state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
-        state.ready.contains(key) || state.pending.contains_key(key)
+        let key = BundleDecodeKey::plain(key.clone());
+        state.ready.contains(&key) || state.pending.contains_key(&key)
     }
 
     /// Detaches an individual pending decode and/or releases its retained
     /// image. Existing waiters still receive the original outcome.
     pub fn evict(&self, key: &AssetBundleImageKey) -> bool {
+        let key = BundleDecodeKey::plain(key.clone());
         let (removed, detached) = {
             let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
-            let removed = state.ready.pop_entry(key);
-            let detached = state.pending.remove_entry(key);
+            let removed = state.ready.pop_entry(&key);
+            let detached = state.pending.remove_entry(&key);
             state.generation = state.generation.wrapping_add(1);
             if let Some((_, image)) = &removed {
                 state.bytes -= image.decoded().byte_len();
@@ -174,9 +212,18 @@ impl BundleImageCache {
 
     /// Loads the key synchronously when the bundle can block.
     pub fn load(&self, key: &AssetBundleImageKey) -> Result<ImageHandle, ImageError> {
+        self.load_with_size(key.clone(), None)
+    }
+
+    pub(crate) fn load_with_size(
+        &self,
+        asset: AssetBundleImageKey,
+        resize: Option<ImageResizeOptions>,
+    ) -> Result<ImageHandle, ImageError> {
+        let key = BundleDecodeKey { asset, resize };
         let generation = {
             let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
-            if let Some(image) = state.ready.get(key) {
+            if let Some(image) = state.ready.get(&key) {
                 return Ok(image.clone());
             }
             state.generation
@@ -186,7 +233,7 @@ impl BundleImageCache {
         let image = {
             let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
             if state.generation == generation {
-                state.admit(key.clone(), &image, &mut removed)
+                state.admit(key, &image, &mut removed)
             } else {
                 image
             }
@@ -199,6 +246,16 @@ impl BundleImageCache {
     /// warm result is returned immediately. No bundle code or user callback
     /// is called while the cache lock is held.
     pub fn load_async(&self, key: AssetBundleImageKey, done: ImageLoadCallback) {
+        self.load_async_with_size(key, None, done);
+    }
+
+    pub(crate) fn load_async_with_size(
+        &self,
+        asset: AssetBundleImageKey,
+        resize: Option<ImageResizeOptions>,
+        done: ImageLoadCallback,
+    ) {
+        let key = BundleDecodeKey { asset, resize };
         let pending = {
             let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
             if let Some(image) = state.ready.get(&key).cloned() {

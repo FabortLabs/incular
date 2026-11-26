@@ -258,7 +258,7 @@ pub use incular_gestures::{FocusHighlightManager, FocusHighlightMode, FocusHighl
 pub use incular_image::{
     AnyImageProvider, AssetBundleImageKey, AssetImage, ExactAssetImage, FileImage, ImageAssetBundle,
     ImageChunkEvent, ImageConfiguration, ImageLoadState, ImageProvider, ImageResizeOptions,
-    ImageStream, ImageStreamCompleter, MemoryImage, ResizeImage, ResizeImagePolicy,
+    ImageStream, ImageStreamCompleter, MemoryImage, ResizeImage, ResizeImageKey, ResizeImagePolicy,
 };
 pub use incular_platform::{
     BackGestureEvent, DefaultSpellCheckService, PlatformViewCommand, PlatformViewCompositing,

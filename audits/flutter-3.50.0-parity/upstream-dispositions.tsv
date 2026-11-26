@@ -1646,3 +1646,7 @@ packages/flutter/test/painting/image_provider_resize_image_test.dart	589	does no
 packages/flutter/test/widgets/image_resolution_test.dart	286	Image cache resize upscale display 5	paired-match	upstream-image-cache-layout.md
 packages/flutter/test/widgets/image_resolution_test.dart	292	Image cache resize upscale display 50	paired-match	upstream-image-cache-layout.md
 packages/flutter/test/widgets/image_resolution_test.dart	298	Image cache resize downscale display 5	paired-match	upstream-image-cache-layout.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	46	Different ResizeImage instances should not be equal	paired-match	upstream-resized-cache-identity.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	54	Reflexivity: instance should be equal to itself	paired-match	upstream-resized-cache-identity.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	151	produces equal keys when effective dimensions match across configurations	paired-match	upstream-resized-cache-identity.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	169	produces different keys when devicePixelRatio differs	paired-match	upstream-resized-cache-identity.md

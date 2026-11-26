@@ -44,6 +44,19 @@ impl ImageResizeOptions {
         )
     }
 
+    /// Canonical cache dimensions. Two requests that resolve to the same
+    /// physical bounds have the same settings for cache identity.
+    #[must_use]
+    pub fn physical(self, configuration: &ImageConfiguration) -> Self {
+        let (width, height) = self.physical_size(configuration);
+        Self {
+            width,
+            height,
+            use_logical_size: false,
+            ..self
+        }
+    }
+
     /// The target raster size for the requested bounds and source aspect.
     ///
     /// # Errors
@@ -145,6 +158,26 @@ impl ImageResizeOptions {
     }
 }
 
+/// Identifies a resized variant by the resolved source key, effective
+/// physical dimensions, policy and upscaling permission.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ResizeImageKey<K> {
+    provider_key: K,
+    options: ImageResizeOptions,
+}
+
+impl<K> ResizeImageKey<K> {
+    #[must_use]
+    pub fn provider_key(&self) -> &K {
+        &self.provider_key
+    }
+
+    #[must_use]
+    pub fn options(&self) -> ImageResizeOptions {
+        self.options
+    }
+}
+
 /// Flutter's resizing provider. It wraps any Incular provider, including
 /// ones whose first image is delivered asynchronously.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -192,6 +225,21 @@ impl ResizeImage {
         self
     }
 
+    /// Combines a source provider's resolved key with this request's
+    /// physical dimensions. For an AssetImage, pass its resolved key,
+    /// not the logical name, so resolution variants stay independent.
+    #[must_use]
+    pub fn key_for<K>(
+        &self,
+        provider_key: K,
+        configuration: &ImageConfiguration,
+    ) -> ResizeImageKey<K> {
+        ResizeImageKey {
+            provider_key,
+            options: self.options.physical(configuration),
+        }
+    }
+
     /// Returns the original provider when neither cache dimension is set.
     #[must_use]
     pub fn resize_if_needed(
@@ -216,15 +264,13 @@ impl ImageProvider for ResizeImage {
     }
 
     fn load_with(&self, configuration: &ImageConfiguration) -> Result<ImageHandle, ImageError> {
-        self.options
-            .resize(self.image_provider.load_with(configuration)?, configuration)
+        self.image_provider
+            .load_resized(configuration, self.options.physical(configuration))
     }
 
     fn resolve(&self, configuration: &ImageConfiguration) -> ImageStream {
-        let options = self.options;
-        let stream = self.image_provider.resolve(configuration);
-        let configuration = configuration.clone();
-        stream.map_image(move |frame| options.resize(frame, &configuration))
+        self.image_provider
+            .resolve_resized(configuration, self.options.physical(configuration))
     }
 }
 

@@ -15,11 +15,10 @@ use incular_assets::{
 };
 
 use crate::{
-    ImageConfiguration, ImageError, ImageHandle, ImageLoadCallback, ImageProvider, ImageSource,
-    ImageStream, finite_positive_or_one,
+    ImageConfiguration, ImageError, ImageHandle, ImageLoadCallback, ImageProvider,
+    ImageResizeOptions, ImageSource, ImageStream, finite_positive_or_one,
+    shared_bundle_image_cache,
 };
-
-use crate::shared_bundle_image_cache;
 
 /// A shared bundle with identity-based equality. Two distinct bundles can
 /// each own an asset of the same name and density without aliasing.
@@ -250,18 +249,38 @@ impl AssetImage {
         &self,
         config: &ImageConfiguration,
         bundle: ImageAssetBundle,
+        resize: Option<ImageResizeOptions>,
     ) -> Result<ImageHandle, ImageError> {
         let logical = self.key_name().ok_or_else(non_utf8_asset)?.into_owned();
         let manifest = bundle
             .0
             .read_asset_manifest(AssetManifestFormat::current_platform())?;
-        resolve_key(
+        let key = resolve_key(
             bundle,
             logical,
             config.target_device_pixel_ratio(),
             &manifest,
-        )?
-        .load()
+        )?;
+        shared_bundle_image_cache().load_with_size(key, resize)
+    }
+
+    fn bundled_resolve(
+        &self,
+        config: &ImageConfiguration,
+        bundle: ImageAssetBundle,
+        resize: Option<ImageResizeOptions>,
+    ) -> ImageStream {
+        let cache = shared_bundle_image_cache();
+        ImageStream::from_load_callback(|done| {
+            self.obtain_key_from_bundle(
+                bundle,
+                config,
+                Box::new(move |key| match key {
+                    Ok(key) => cache.load_async_with_size(key, resize, done),
+                    Err(error) => done(Err(error)),
+                }),
+            );
+        })
     }
 
     /// The path chosen by the explicit filesystem-only adapter.
@@ -324,7 +343,7 @@ impl ImageProvider for AssetImage {
 
     fn load_with(&self, config: &ImageConfiguration) -> Result<ImageHandle, ImageError> {
         if let Some(bundle) = self.available_bundle(config) {
-            return self.bundled_load(config, bundle);
+            return self.bundled_load(config, bundle, None);
         }
         let (path, scale) = config.target_device_pixel_ratio().map_or_else(
             || (self.path.clone(), 1.0),
@@ -336,20 +355,32 @@ impl ImageProvider for AssetImage {
     }
 
     fn resolve(&self, config: &ImageConfiguration) -> ImageStream {
-        let Some(bundle) = self.available_bundle(config) else {
-            return ImageStream::from_result(self.load_with(config));
-        };
-        let cache = shared_bundle_image_cache();
-        ImageStream::from_load_callback(|done| {
-            self.obtain_key_from_bundle(
-                bundle,
-                config,
-                Box::new(move |key| match key {
-                    Ok(key) => cache.load_async(key, done),
-                    Err(error) => done(Err(error)),
-                }),
-            );
-        })
+        self.available_bundle(config).map_or_else(
+            || ImageStream::from_result(self.load_with(config)),
+            |bundle| self.bundled_resolve(config, bundle, None),
+        )
+    }
+
+    fn load_resized(
+        &self,
+        config: &ImageConfiguration,
+        options: ImageResizeOptions,
+    ) -> Result<ImageHandle, ImageError> {
+        if let Some(bundle) = self.available_bundle(config) {
+            return self.bundled_load(config, bundle, Some(options.physical(config)));
+        }
+        options.resize(self.load_with(config)?, config)
+    }
+
+    fn resolve_resized(
+        &self,
+        config: &ImageConfiguration,
+        options: ImageResizeOptions,
+    ) -> ImageStream {
+        self.available_bundle(config).map_or_else(
+            || ImageStream::from_result(self.load_resized(config, options)),
+            |bundle| self.bundled_resolve(config, bundle, Some(options.physical(config))),
+        )
     }
 }
 
@@ -428,6 +459,27 @@ impl ImageProvider for ExactAssetImage {
 
     fn resolve(&self, configuration: &ImageConfiguration) -> ImageStream {
         ImageStream::from_load_callback(|done| self.obtain_key(configuration).load_async(done))
+    }
+
+    fn load_resized(
+        &self,
+        config: &ImageConfiguration,
+        options: ImageResizeOptions,
+    ) -> Result<ImageHandle, ImageError> {
+        shared_bundle_image_cache()
+            .load_with_size(self.obtain_key(config), Some(options.physical(config)))
+    }
+
+    fn resolve_resized(
+        &self,
+        config: &ImageConfiguration,
+        options: ImageResizeOptions,
+    ) -> ImageStream {
+        let key = self.obtain_key(config);
+        let cache = shared_bundle_image_cache();
+        ImageStream::from_load_callback(|done| {
+            cache.load_async_with_size(key, Some(options.physical(config)), done)
+        })
     }
 }
 
