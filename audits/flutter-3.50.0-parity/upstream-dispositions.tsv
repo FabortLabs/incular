@@ -1831,3 +1831,9 @@ packages/flutter/test/rendering/viewport_test.dart	314	Viewport getOffsetToRevea
 packages/flutter/test/rendering/viewport_test.dart	363	Viewport getOffsetToReveal Sliver - right	paired-match	upstream-viewport-reveal.md#padded-box-sliver-geometry
 packages/flutter/test/rendering/viewport_test.dart	413	Viewport getOffsetToReveal Sliver - up	paired-match	upstream-viewport-reveal.md#padded-box-sliver-geometry
 packages/flutter/test/rendering/viewport_test.dart	567	Viewport getOffsetToReveal Sliver - left	paired-match	upstream-viewport-reveal.md#padded-box-sliver-geometry
+packages/flutter/test/rendering/viewport_test.dart	464	Viewport getOffsetToReveal Sliver - up - reverse growth	paired-match	upstream-viewport-reveal.md#reverse-growth-uses-the-combined-padding-direction
+packages/flutter/test/rendering/viewport_test.dart	515	Viewport getOffsetToReveal Sliver - left - reverse growth	paired-match	upstream-viewport-reveal.md#reverse-growth-uses-the-combined-padding-direction
+packages/flutter/test/rendering/viewport_test.dart	619	down, forward growth	paired-match	upstream-viewport-reveal.md#pinned-headers-in-forward-growth
+packages/flutter/test/rendering/viewport_test.dart	679	up, forward growth	paired-match	upstream-viewport-reveal.md#pinned-headers-in-forward-growth
+packages/flutter/test/rendering/viewport_test.dart	740	right, forward growth	paired-match	upstream-viewport-reveal.md#pinned-headers-in-forward-growth
+packages/flutter/test/rendering/viewport_test.dart	801	left, forward growth	paired-match	upstream-viewport-reveal.md#pinned-headers-in-forward-growth

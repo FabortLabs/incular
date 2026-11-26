@@ -2385,7 +2385,10 @@ impl RenderSliver for PaddingRenderSliver {
         );
         let physical_start = main_before(constraints.axis, padding);
         let physical_end = main_after(constraints.axis, padding);
-        let (before, after) = if constraints.reverse {
+        // Flutter's applyGrowthDirectionToAxisDirection composes the
+        // viewport direction with the side of the center this sliver grows on.
+        let reverse_growth = constraints.growth_direction == SliverGrowthDirection::Reverse;
+        let (before, after) = if constraints.reverse ^ reverse_growth {
             (physical_end, physical_start)
         } else {
             (physical_start, physical_end)

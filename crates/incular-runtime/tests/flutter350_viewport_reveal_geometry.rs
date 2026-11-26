@@ -190,3 +190,122 @@ fn padded_box_slivers_reveal_at_the_correct_logical_edge() {
         }
     }
 }
+
+#[test]
+fn centered_reverse_growth_keeps_negative_reveal_offsets_unclamped() {
+    use incular_config::EdgeInsets;
+    use incular_widgets::{CustomScrollView, Sliver, SliverPadding, SliverToBoxAdapter};
+
+    for (axis, reverse) in [
+        (Axis::Vertical, false),
+        (Axis::Vertical, true),
+        (Axis::Horizontal, false),
+        (Axis::Horizontal, true),
+    ] {
+        let ctl = ScrollController::new();
+        let (tile_w, tile_h, padding) = match axis {
+            Axis::Vertical => (300., 100., EdgeInsets::only(0., 22., 0., 23.)),
+            Axis::Horizontal => (100., 200., EdgeInsets::only(22., 0., 23., 0.)),
+        };
+        let slivers = ["lower", "center"]
+            .into_iter()
+            .map(|key| -> Box<dyn Sliver> {
+                let leaf = Widget::from(SizedBox::new().width(tile_w).height(tile_h)).with_key(key);
+                Box::new(SliverPadding::new(padding, SliverToBoxAdapter::new(leaf)))
+            });
+        let viewport = CustomScrollView::new(slivers)
+            .controller(ctl.clone())
+            .center(1)
+            .scroll_direction(axis)
+            .reverse(reverse);
+        let mut runtime =
+            Runtime::new(Directionality::new(TextDirection::Ltr, viewport).into()).unwrap();
+        runtime
+            .run_frame(Constraints::tight(Size::new(300., 200.)))
+            .unwrap();
+        let tree = runtime.tree();
+        let target = tree
+            .element_with_key(&"lower".into())
+            .expect("the reverse-growth box is cached before the center");
+        let subrect = Some(rect(1., 2., 2., 2.));
+        let expected = match (axis, reverse) {
+            (Axis::Vertical, false) => [-123., -223., -121., -319.],
+            (Axis::Vertical, true) => [-122., -222., -26., -224.],
+            (Axis::Horizontal, false) => [-123., -323., -122., -420.],
+            (Axis::Horizontal, true) => [-122., -322., -25., -323.],
+        };
+        for ((alignment, subrect), expected) in
+            [(0., None), (1., None), (0., subrect), (1., subrect)]
+                .into_iter()
+                .zip(expected)
+        {
+            assert_eq!(
+                Scrollable::get_offset_to_reveal(tree, target, alignment, subrect)
+                    .unwrap()
+                    .offset,
+                expected,
+                "{axis:?}, reverse={reverse}, alignment={alignment}, subrect={subrect:?}"
+            );
+        }
+        assert_eq!(ctl.offset(), 0.);
+    }
+}
+
+#[test]
+fn a_pinned_header_reveals_at_its_current_scroll_offset_once_pinned() {
+    use incular_widgets::{
+        CustomScrollView, Sliver, SliverList, SliverPersistentHeader, SliverToBoxAdapter,
+    };
+
+    for axis in [Axis::Vertical, Axis::Horizontal] {
+        for reverse in [false, true] {
+            let ctl = ScrollController::new();
+            let (width, height, header_w, header_h, before_w, before_h) = match axis {
+                Axis::Vertical => (300., 400., 300., 50., 300., 300.),
+                Axis::Horizontal => (400., 300., 50., 300., 300., 300.),
+            };
+            let header = Widget::from(SizedBox::new().width(header_w).height(header_h))
+                .with_key("pinned header");
+            let preceding = SizedBox::new().width(before_w).height(before_h);
+            let slivers: [Box<dyn Sliver>; 3] = [
+                Box::new(SliverToBoxAdapter::new(preceding)),
+                Box::new(SliverPersistentHeader::new(50., header).pinned(true)),
+                Box::new(SliverList::builder(20, move |_| {
+                    SizedBox::new().width(header_w).height(header_h)
+                })),
+            ];
+            let viewport = CustomScrollView::new(slivers)
+                .controller(ctl.clone())
+                .scroll_direction(axis)
+                .reverse(reverse);
+            let scene = Directionality::new(TextDirection::Ltr, viewport);
+            let bounds = Constraints::tight(Size::new(width, height));
+            let mut runtime = Runtime::new(scene.into()).unwrap();
+            runtime.run_frame(bounds).unwrap();
+            let rect = match (axis, reverse) {
+                (Axis::Vertical, false) => rect(0., 0., 300., 50.),
+                (Axis::Vertical, true) => rect(0., 350., 300., 50.),
+                (Axis::Horizontal, false) => rect(0., 0., 50., 300.),
+                (Axis::Horizontal, true) => rect(350., 0., 50., 300.),
+            };
+            let query = |runtime: &Runtime| {
+                let tree = runtime.tree();
+                let header = tree.element_with_key(&"pinned header".into()).unwrap();
+                Scrollable::get_offset_to_reveal(tree, header, 0., None)
+            };
+            assert_eq!(
+                query(&runtime),
+                Some(RevealedOffset { offset: 300., rect }),
+                "{axis:?} reverse={reverse} before pinning"
+            );
+            assert!(ctl.jump_to(500.));
+            runtime.run_frame(bounds).unwrap();
+            assert_eq!(
+                query(&runtime),
+                Some(RevealedOffset { offset: 500., rect }),
+                "{axis:?} reverse={reverse} after pinning"
+            );
+            assert_eq!(ctl.offset(), 500.);
+        }
+    }
+}

@@ -36,9 +36,30 @@ the minimal facade check passed.
 
 Pinned :314/:363/:413/:567 and the native CustomScrollView fixtures
 use 100 px box adapters with 22 px physical leading-side padding and
-23 px on the opposite side. The fifth adapter's mounted box has the
+23 px on the opposite side. The adapter at index five's mounted box has the
 same bounds as the one-box Flutter sliver. The query returns 747/647
 down and right, and 748/648 up and left, for the whole box. A local
 (1,2,2,2) subrectangle matches all eight pinned offsets, including
 the reversed edges. None of the queries moves the controller.
 The separate reverse-growth center case is still under comparison.
+
+## Reverse growth uses the combined padding direction
+
+Pinned :464/:515 place a padded box before the viewport center, where
+growth opposes the viewport. Before the fix the native leading offset
+was −123 rather than −122: padding selected the physical edge using
+the viewport direction alone and ignored the sliver's growth. The
+padding now uses their combined direction, matching all whole-box and
+subrectangle offsets for up and left, including negative results
+beyond the scroll range. The authored Flutter/native mirror also
+checks down and right viewports with a reverse-growing box.
+
+## Pinned headers in forward growth
+
+Pinned :619/:679/:740/:801 and the native fixed-height header fixtures
+return offset 300 before the header sticks. After jumping to 500,
+the reveal query returns the current offset of 500, not its original
+scroll origin. The 50 px header's projected rectangle remains against
+the viewport's logical leading edge, physically y/x=0 or 350 according
+to direction. The test uses a lazy list of twenty 50 px trailing rows
+and checks the actual viewport position and rect.
