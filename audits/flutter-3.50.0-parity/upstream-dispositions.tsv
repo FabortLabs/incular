@@ -2566,3 +2566,5 @@ packages/flutter/test/widgets/editable_text_test.dart	1344	selection persists wh
 packages/flutter/test/rendering/editable_test.dart	457	text is painted above selection	paired-match	upstream-editable-defaults.md#caret-and-selection-paint-order
 packages/flutter/test/rendering/editable_test.dart	490	cursor can paint above or below the text	paired-match	upstream-editable-defaults.md#caret-and-selection-paint-order
 packages/flutter/test/rendering/editable_test.dart	534	does not paint the caret when selection is null or invalid	paired-match	upstream-editable-defaults.md#caret-and-selection-paint-order
+packages/flutter/test/widgets/editable_text_test.dart	12174	onEditingComplete can throw errors	paired-match	upstream-editable-action-focus.md#completion-and-submission-errors
+packages/flutter/test/widgets/editable_text_test.dart	12207	onSubmitted can throw errors	paired-match	upstream-editable-action-focus.md#completion-and-submission-errors

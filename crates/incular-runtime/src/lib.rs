@@ -109,6 +109,7 @@ pub use tasks::{
     AsyncState, AsyncValue, RuntimeDiagnostics, RuntimeSpawner, RuntimeWake, Task, TaskFailure,
     TaskHandle, TaskScope, UiDispatcher,
 };
+pub use incular_widgets::{TextEditingCallback, TextEditingCallbackError};
 pub use text_shortcuts::TextShortcutPlatform;
 pub use timing_callbacks::{
     FrameTimelineEvent, FrameTimingCallbackError, FrameTimingCallbacks, FrameTimingSubscription,

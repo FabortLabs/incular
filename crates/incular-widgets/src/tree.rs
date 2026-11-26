@@ -117,6 +117,7 @@ pub(crate) use retained_state::RetainedState;
 mod semantics;
 mod specs;
 mod text;
+pub use text::{TextEditingCallback, TextEditingCallbackError};
 mod values;
 mod widget;
 

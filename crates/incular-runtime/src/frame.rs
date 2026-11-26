@@ -273,6 +273,7 @@ pub struct Runtime {
     frame_availability: incular_animation::scheduler::FrameAvailability,
     pub(crate) lifecycle_observers: Vec<Rc<dyn Fn(LifecycleTransition)>>,
     pub(crate) error_observers: Vec<Rc<dyn Fn(RuntimeErrorReport)>>,
+    editing_error_observers: Vec<Rc<dyn Fn(&incular_widgets::TextEditingCallbackError)>>,
     pub(crate) environment_generation: u64,
     pub(crate) environment_dependencies: Rc<Cell<EnvironmentFields>>,
     pub(crate) application_root: Option<ElementId>,
@@ -493,6 +494,7 @@ impl Runtime {
             frame_availability,
             lifecycle_observers: Vec::new(),
             error_observers: Vec::new(),
+            editing_error_observers: Vec::new(),
             environment_generation: 0,
             environment_dependencies: Rc::new(Cell::new(EnvironmentFields::empty())),
             application_root: None,
@@ -931,6 +933,16 @@ impl Runtime {
     pub fn observe_runtime_error(&mut self, observer: impl Fn(RuntimeErrorReport) + 'static) {
         self.error_observers.push(Rc::new(observer));
     }
+    /// Observes caught errors from editing-complete and submitted callbacks.
+    /// Their panic messages are reported instead of escaping the native input
+    /// loop. Only builds that unwind can catch a panic.
+    pub fn observe_text_editing_error(
+        &mut self,
+        observer: impl Fn(&incular_widgets::TextEditingCallbackError) + 'static,
+    ) {
+        self.editing_error_observers.push(Rc::new(observer));
+    }
+
     /// Cancels runtime-owned work and prevents later queued callbacks from
     /// touching retained state. Native runners should call this before their
     /// renderer/window teardown.
@@ -3546,7 +3558,16 @@ impl Runtime {
                 }
             }
         }
-        let handled = self.tree.submit_text_field(field);
+        let mut callback_errors = Vec::new();
+        let handled = self.tree.submit_text_field_with_errors(field, |error| callback_errors.push(error));
+        for error in callback_errors {
+            if self.editing_error_observers.is_empty() {
+                tracing::error!(callback = ?error.callback, message = %error.message, "editable text callback failed");
+            }
+            for observer in &self.editing_error_observers {
+                observer(&error);
+            }
+        }
         if should_move_focus {
             let refocus_requested = focus_node.as_ref().is_some_and(|node| {
                 node.has_pending_focus_request() && self.tree.can_request_focus(field)

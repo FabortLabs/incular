@@ -283,3 +283,72 @@ fn each_keyboard_action_retains_releases_or_traverses_focus_like_flutter() {
         );
     }
 }
+
+#[test]
+fn an_editing_complete_error_is_reported_and_submission_still_runs() {
+    use incular_runtime::TextEditingCallback;
+    let node = FocusNode::new();
+    let labels = Rc::new(RefCell::new(Vec::new()));
+    let sent = labels.clone();
+    let mut runtime = mount(
+        editable(
+            &node,
+            &TextEditingController::with_text("flutter is the best!"),
+        )
+        .on_editing_complete(|| panic!("editing fixture rejected completion"))
+        .on_submit(move |value| sent.borrow_mut().push(value))
+        .into(),
+    );
+    let failures = Rc::new(RefCell::new(Vec::new()));
+    let observed = failures.clone();
+    runtime.observe_text_editing_error(move |error| observed.borrow_mut().push(error.clone()));
+    assert!(runtime.handle_text_input_action(TextInputAction::Done));
+    assert_eq!(failures.borrow().len(), 1);
+    assert_eq!(
+        failures.borrow()[0].callback,
+        TextEditingCallback::EditingComplete
+    );
+    assert_eq!(
+        failures.borrow()[0].message,
+        "editing fixture rejected completion"
+    );
+    assert_eq!(*labels.borrow(), ["flutter is the best!"]);
+    assert!(node.has_primary_focus());
+}
+
+#[test]
+fn an_on_submitted_error_is_reported_without_preventing_default_blur() {
+    use incular_runtime::TextEditingCallback;
+    let node = FocusNode::new();
+    let mut runtime = mount(
+        editable(
+            &node,
+            &TextEditingController::with_text("flutter is the best!"),
+        )
+        .on_submit(|_| panic!("submission fixture failed"))
+        .into(),
+    );
+    runtime.take_text_input_commands();
+    let failures = Rc::new(RefCell::new(Vec::new()));
+    let observed = failures.clone();
+    runtime.observe_text_editing_error(move |error| observed.borrow_mut().push(error.clone()));
+    assert!(runtime.handle_text_input_action(TextInputAction::Done));
+    assert_eq!(failures.borrow().len(), 1);
+    assert_eq!(
+        failures.borrow()[0].callback,
+        TextEditingCallback::Submitted
+    );
+    assert_eq!(failures.borrow()[0].message, "submission fixture failed");
+    assert!(!node.has_focus());
+    let commands = runtime.take_text_input_commands();
+    assert!(
+        commands
+            .iter()
+            .any(|c| matches!(c, TextInputCommand::Clear { .. }))
+    );
+    assert!(
+        !commands
+            .iter()
+            .any(|c| matches!(c, TextInputCommand::SetClient { .. }))
+    );
+}

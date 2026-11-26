@@ -6,6 +6,37 @@ use crate::selection::{
 };
 use incular_text::{LineBoundary, TextGeometry};
 
+/// The application callback that failed while finalizing an edit.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TextEditingCallback {
+    EditingComplete,
+    Submitted,
+}
+
+/// A caught Rust panic from an editor callback, preserving its message.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TextEditingCallbackError {
+    pub callback: TextEditingCallback,
+    pub message: String,
+}
+
+fn run_editing_callback(
+    kind: TextEditingCallback,
+    callback: impl FnOnce(),
+    report: &mut impl FnMut(TextEditingCallbackError),
+) {
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+    if let Err(payload) = catch_unwind(AssertUnwindSafe(callback)) {
+        let message = payload
+            .downcast_ref::<&str>()
+            .copied()
+            .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+            .unwrap_or("non-string panic payload")
+            .to_owned();
+        report(TextEditingCallbackError { callback: kind, message });
+    }
+}
+
 /// The cursor and the one-pixel gap after it are part of the paragraph's
 /// scrollable tail, but not its alignment width.
 pub(super) fn editable_caret_margin(field: &TextFieldRender) -> f32 {
@@ -1818,10 +1849,21 @@ impl WidgetTree {
         })
     }
     /// Completes editing in a field: `on_editing_complete` runs first, then
-    /// `on_submit` with the committed text (Flutter's `_finalizeEditing`
-    /// order). Focus is the caller's to release when no completion callback
-    /// is set; the frame does that for completion actions.
+    /// `on_submit` with the committed text. Focus is owned by the caller.
     pub fn submit_text_field(&self, id: ElementId) -> bool {
+        self.submit_text_field_with_errors(id, |error| {
+            eprintln!("Editable text callback {:?} failed: {}", error.callback, error.message);
+        })
+    }
+
+    /// Reports application callback failures without skipping the next
+    /// callback or unwinding into the host's input loop.
+    #[doc(hidden)]
+    pub fn submit_text_field_with_errors(
+        &self,
+        id: ElementId,
+        mut report: impl FnMut(TextEditingCallbackError),
+    ) -> bool {
         let Some(element) = self.elements.get(id.0) else {
             return false;
         };
@@ -1829,10 +1871,14 @@ impl WidgetTree {
             return false;
         };
         if let Some(callback) = &spec.on_editing_complete {
-            callback();
+            run_editing_callback(TextEditingCallback::EditingComplete, || callback(), &mut report);
         }
         if let Some(callback) = &spec.on_submit {
-            callback(spec.controller.text());
+            run_editing_callback(
+                TextEditingCallback::Submitted,
+                || callback(spec.controller.text()),
+                &mut report,
+            );
         }
         true
     }

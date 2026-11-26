@@ -53,3 +53,17 @@ a second textarea. All 40 focused native cases and the isolated Chrome
 probe passed. The full Web crate is not verified by this run: offline
 resolution is missing ab_glyph 0.2.32. No physical Android or iOS
 keyboard was involved.
+
+## Completion and submission errors
+
+The pinned `editable_text_test.dart` callback-error registrations
+12174 and 12207 pass. The native runtime observes a structured
+error with the original message and callback stage, rather than
+unwinding into its input loop. A completion error does not suppress
+the subsequent submission. A submission error does not prevent
+the default blur and retirement of the native client. All 29
+focused native action and text-input lifecycle controls passed.
+
+This boundary applies to builds that unwind Rust panics. It does
+not claim parity for the separately registered change, selection,
+or formatter callback errors.
