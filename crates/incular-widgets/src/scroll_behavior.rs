@@ -165,7 +165,7 @@ impl ScrollBehavior {
     /// Flutter's `getPlatform`: the override, else `defaultTargetPlatform`.
     #[must_use]
     pub fn get_platform(&self) -> TargetPlatform {
-        self.platform.unwrap_or_else(TargetPlatform::host)
+        self.platform.unwrap_or_else(TargetPlatform::current)
     }
 
     /// Flutter's `dragDevices`.

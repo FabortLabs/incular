@@ -1,0 +1,41 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Incular browser platform parity</title>
+<pre id="results">running</pre>
+<script type="module">
+  const output = document.getElementById("results");
+  const hints = (platform, userAgent, maxTouchPoints) => {
+    for (const [property, value] of Object.entries({platform, userAgent, maxTouchPoints})) {
+      Object.defineProperty(navigator, property, {value, configurable: true});
+    }
+  };
+  const cases = [
+    ["MacIntel", "Safari Desktop", 2, "MacOs"],
+    ["MacIntel", "Safari Desktop", 3, "Ios"],
+    ["IPHONE", "Safari Mobile", 1, "Ios"],
+    ["Linux armv8l", "Chrome Android", 5, "Android"],
+    ["Linux x86_64", "Chrome Desktop", 0, "Linux"],
+    ["Win32", "Microsoft Edge", 0, "Windows"],
+    ["unrecognized", "Unknown system", 0, "Android"],
+  ];
+  try {
+    const wasm = await (await fetch("browser_platform_bg.wasm")).arrayBuffer();
+    const lines = [];
+    for (const [index, [platform, agent, touches, expected]] of cases.entries()) {
+      // A fresh module instance makes this the first adaptive platform lookup.
+      hints(platform, agent, touches);
+      const {default: init, adaptive_platform} = await import(`./browser_platform.js?case=${index}`);
+      await init({module_or_path: wasm});
+      const actual = adaptive_platform();
+      if (actual !== expected) throw Error(`${platform}: ${actual}; expected ${expected}`);
+      hints("unrelated", "", 0);
+      if (adaptive_platform() !== actual) throw Error(`${platform}: did not keep its cached default`);
+      lines.push(`${platform} / ${touches} → ${actual}`);
+    }
+    output.textContent = ["PASS", ...lines].join("\n");
+  } catch (error) {
+    output.textContent = `FAIL: ${error}`;
+  } finally {
+    await fetch("/result", {method: "POST", body: output.textContent});
+  }
+</script>

@@ -2137,7 +2137,9 @@ dependencies = [
  "icu_plurals",
  "icu_provider",
  "incular-core",
+ "js-sys",
  "thiserror 2.0.20",
+ "wasm-bindgen",
 ]
 
 [[package]]

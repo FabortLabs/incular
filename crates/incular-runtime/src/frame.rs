@@ -393,7 +393,7 @@ impl Runtime {
         frame_availability.set_enabled(lifecycle.allows_frames());
 
         #[cfg(not(target_arch = "wasm32"))]
-        let highlight_platform = TargetPlatform::host();
+        let highlight_platform = TargetPlatform::current();
         #[cfg(target_arch = "wasm32")]
         let highlight_platform = match TextShortcutPlatform::current() {
             TextShortcutPlatform::Android => TargetPlatform::Android,

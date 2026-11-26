@@ -7,6 +7,7 @@
 //! documents, and adds Emacs-style Control bindings. Activators match their
 //! modifiers exactly, so a chord not listed here edits nothing.
 
+use incular_config::TargetPlatform;
 use incular_core::{Code, Modifiers};
 
 /// The platform whose `DefaultTextEditingShortcuts` table applies to text
@@ -21,67 +22,16 @@ pub enum TextShortcutPlatform {
 }
 
 impl TextShortcutPlatform {
-    /// The platform this build targets. In a browser it is the operating
-    /// system the browser runs on, so a Mac uses Command shortcuts.
+    /// The OS supported by the shared adaptive platform selector, including
+    /// the browser OS on web builds.
     #[must_use]
     pub fn current() -> Self {
-        #[cfg(target_arch = "wasm32")]
-        if let Some(platform) = Self::browser() {
-            return platform;
-        }
-        if cfg!(target_os = "macos") {
-            Self::MacOs
-        } else if cfg!(target_os = "ios") {
-            Self::Ios
-        } else if cfg!(target_os = "android") {
-            Self::Android
-        } else if cfg!(target_os = "linux") {
-            Self::Linux
-        } else {
-            Self::Windows
-        }
-    }
-
-    /// Reads `navigator.userAgentData.platform` where available, then the
-    /// legacy `navigator.platform` and user agent strings.
-    #[cfg(target_arch = "wasm32")]
-    fn browser() -> Option<Self> {
-        use wasm_bindgen::JsValue;
-
-        let get = |target: &JsValue, key: &str| {
-            js_sys::Reflect::get(target, &JsValue::from_str(key))
-                .ok()
-                .filter(|value| !value.is_undefined() && !value.is_null())
-        };
-        let navigator = get(&js_sys::global(), "navigator")?;
-        let described = [
-            get(&navigator, "userAgentData").and_then(|data| get(&data, "platform")),
-            get(&navigator, "platform"),
-            get(&navigator, "userAgent"),
-        ]
-        .into_iter()
-        .flatten()
-        .filter_map(|value| value.as_string())
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_ascii_lowercase();
-        // Android user agents also mention Linux. iPadOS reports itself as a
-        // Mac, whose table it shares.
-        if described.contains("android") {
-            Some(Self::Android)
-        } else if ["iphone", "ipad", "ipod", "ios"]
-            .iter()
-            .any(|name| described.contains(name))
-        {
-            Some(Self::Ios)
-        } else if described.contains("mac") {
-            Some(Self::MacOs)
-        } else if described.contains("win") {
-            Some(Self::Windows)
-        } else if described.contains("linux") || described.contains("cros") {
-            Some(Self::Linux)
-        } else {
-            None
+        match TargetPlatform::current() {
+            TargetPlatform::Android | TargetPlatform::Fuchsia => Self::Android,
+            TargetPlatform::Ios => Self::Ios,
+            TargetPlatform::Linux => Self::Linux,
+            TargetPlatform::MacOs => Self::MacOs,
+            TargetPlatform::Windows => Self::Windows,
         }
     }
 

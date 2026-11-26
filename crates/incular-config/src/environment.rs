@@ -30,9 +30,8 @@ pub enum TargetPlatform {
 }
 
 impl TargetPlatform {
-    /// Flutter's `defaultTargetPlatform` for the operating system this build
-    /// targets. Platforms Flutter does not name fall back to Android, as
-    /// Flutter's own default does.
+    /// The OS this build targets, with Android as the fallback for unknown
+    /// targets. For adaptive UI in a browser use [`Self::current`].
     #[must_use]
     pub const fn host() -> Self {
         if cfg!(target_os = "ios") {
@@ -50,6 +49,22 @@ impl TargetPlatform {
         }
     }
 
+    /// Flutter's `defaultTargetPlatform`: native OS conventions, or the
+    /// browser's reported OS when running on the web.
+    #[must_use]
+    pub fn current() -> Self {
+        #[cfg(target_arch = "wasm32")]
+        {
+            thread_local! {
+                static PLATFORM: std::cell::LazyCell<TargetPlatform> =
+                    std::cell::LazyCell::new(read_browser_target_platform);
+            }
+            PLATFORM.with(|platform| **platform)
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        Self::host()
+    }
+
     /// Whether this is macOS or iOS.
     #[must_use]
     pub const fn is_apple(self) -> bool {
@@ -65,7 +80,77 @@ impl TargetPlatform {
 
 impl Default for TargetPlatform {
     fn default() -> Self {
-        Self::host()
+        Self::current()
+    }
+}
+
+#[cfg(any(test, target_arch = "wasm32"))]
+fn browser_target_platform(platform: &str, user_agent: &str, max_touch_points: u32) -> TargetPlatform {
+    // iPadOS can ask for the desktop site and report a Mac. Android can
+    // report a Linux platform; in that case Flutter consults its user agent.
+    if platform.starts_with("Mac") {
+        if max_touch_points > 2 {
+            return TargetPlatform::Ios;
+        }
+        return TargetPlatform::MacOs;
+    }
+    let lower = platform.to_ascii_lowercase();
+    if ["iphone", "ipad", "ipod"].iter().any(|name| lower.contains(name)) {
+        TargetPlatform::Ios
+    } else if user_agent.contains("Android") {
+        TargetPlatform::Android
+    } else if platform.starts_with("Linux") {
+        TargetPlatform::Linux
+    } else if platform.starts_with("Win") {
+        TargetPlatform::Windows
+    } else {
+        TargetPlatform::Android
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn read_browser_target_platform() -> TargetPlatform {
+    use wasm_bindgen::JsValue;
+
+    let get = |target: &JsValue, property: &str| {
+        js_sys::Reflect::get(target, &JsValue::from_str(property)).unwrap_or(JsValue::UNDEFINED)
+    };
+    let navigator = get(js_sys::global().as_ref(), "navigator");
+    browser_target_platform(
+        &get(&navigator, "platform").as_string().unwrap_or_default(),
+        &get(&navigator, "userAgent").as_string().unwrap_or_default(),
+        get(&navigator, "maxTouchPoints").as_f64().unwrap_or_default() as u32,
+    )
+}
+
+#[cfg(test)]
+mod target_platform_tests {
+    use super::*;
+
+    #[test]
+    fn browser_platform_prefers_ios_and_android_before_desktop_fallbacks() {
+        for (property, agent, touches, expected) in [
+            ("MacIntel", "Desktop Chrome", 0, TargetPlatform::MacOs),
+            ("MacIntel", "Desktop Safari", 2, TargetPlatform::MacOs),
+            ("MacIntel", "Desktop Safari", 3, TargetPlatform::Ios),
+            ("IPHONE", "Mobile Safari", 1, TargetPlatform::Ios),
+            ("iPad", "", 0, TargetPlatform::Ios),
+            ("iPod", "", 0, TargetPlatform::Ios),
+            ("Linux armv8l", "Mozilla Android 16", 5, TargetPlatform::Android),
+            ("Linux x86_64", "Desktop Chrome", 4, TargetPlatform::Linux),
+            ("Win32", "Desktop Edge", 8, TargetPlatform::Windows),
+            ("Unrecognized", "No hints", 0, TargetPlatform::Android),
+            ("", "", 0, TargetPlatform::Android),
+        ] {
+            assert_eq!(browser_target_platform(property, agent, touches), expected, "{property}");
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn native_adaptive_default_remains_the_compile_time_platform() {
+        assert_eq!(TargetPlatform::current(), TargetPlatform::host());
+        assert_eq!(TargetPlatform::default(), TargetPlatform::host());
     }
 }
 

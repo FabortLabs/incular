@@ -359,7 +359,7 @@ impl WidgetTree {
             Some(style),
             misspelled,
             &results,
-            incular_config::TargetPlatform::host(),
+            incular_config::TargetPlatform::current(),
         );
         let runs = span.flatten(style);
         (revision, Some((value.text, runs)))
