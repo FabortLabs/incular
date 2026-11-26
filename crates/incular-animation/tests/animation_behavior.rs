@@ -92,3 +92,99 @@ fn next_tick_starts_time_the_run_from_the_first_tick() {
     controller.tick(first_frame + Duration::from_millis(1_116));
     assert_eq!(controller.status(), AnimationStatus::Dismissed);
 }
+
+#[test]
+fn bounded_and_unbounded_constructors_choose_their_exact_motion_defaults() {
+    let duration = Duration::from_millis(100);
+    assert_eq!(
+        AnimationController::new(duration).animation_behavior(),
+        AnimationBehavior::Normal
+    );
+    assert_eq!(
+        AnimationController::unbounded().animation_behavior(),
+        AnimationBehavior::Preserve
+    );
+}
+
+#[test]
+fn explicit_animate_to_obeys_preserve_and_normal_reduced_motion_timing() {
+    use incular_animation::Curve;
+    let _disabled = Disabled::new();
+    let now = Instant::now();
+    let duration = Some(Duration::from_millis(100));
+    for (behavior, half_us, done_us) in [
+        (AnimationBehavior::Preserve, 50_000, 150_000),
+        (AnimationBehavior::Normal, 2_500, 6_000),
+    ] {
+        let controller = AnimationController::new(Duration::ZERO).with_animation_behavior(behavior);
+        assert_eq!(
+            (controller.value(), controller.status()),
+            (0., AnimationStatus::Dismissed)
+        );
+        let active = controller.animate_to_curved(now, 1., duration, Curve::Linear);
+        let _ = controller.tick(now);
+        let _ = controller.tick(now + Duration::from_micros(half_us));
+        assert_eq!(
+            (controller.value(), controller.status()),
+            (0.5, AnimationStatus::Forward)
+        );
+        assert!(!active.is_complete());
+        let _ = controller.tick(now + Duration::from_micros(done_us));
+        assert_eq!(
+            (controller.value(), controller.status()),
+            (1., AnimationStatus::Completed)
+        );
+        assert!(active.is_complete());
+    }
+}
+
+#[test]
+fn a_normal_fling_goes_further_than_a_preserved_fling_with_reduced_motion() {
+    let _disabled = Disabled::new();
+    let [preserved, accelerated] = [
+        AnimationController::new(Duration::ZERO),
+        AnimationController::new(Duration::ZERO),
+    ];
+    let now = Instant::now();
+    preserved.fling_with(now, 1., None, Some(AnimationBehavior::Preserve));
+    accelerated.fling_with(now, 1., None, Some(AnimationBehavior::Normal));
+    let time = now + Duration::from_millis(50);
+    let _ = preserved.tick(time);
+    let _ = accelerated.tick(time);
+    assert!(preserved.value() < accelerated.value());
+}
+
+#[test]
+fn default_and_custom_fling_springs_respect_large_bounds_and_speed() {
+    use incular_animation::SpringDescription;
+    let now = Instant::now();
+    let controller = AnimationController::new(Duration::from_millis(100));
+    controller.fling(now, 1.);
+    let _ = controller.tick(now + Duration::from_secs(1));
+    assert_eq!(controller.value(), 1.);
+    controller.stop();
+
+    let large = AnimationController::with_bounds(Duration::from_millis(100), -30., 45.);
+    large.fling(now, 1.);
+    let _ = large.tick(now + Duration::from_secs(1));
+    assert_eq!(large.value(), 45.);
+    large.fling(now + Duration::from_secs(2), -1.);
+    let _ = large.tick(now + Duration::from_secs(3));
+    assert_eq!(large.value(), -30.);
+
+    let [default, custom] = [
+        AnimationController::new(Duration::ZERO),
+        AnimationController::new(Duration::ZERO),
+    ];
+    default.fling(now, 1.);
+    custom.fling_with(
+        now,
+        1.,
+        Some(SpringDescription::with_damping_ratio(0.01, 10., 2.)),
+        None,
+    );
+    let time = now + Duration::from_millis(50);
+    let _ = default.tick(time);
+    let _ = custom.tick(time);
+    assert!(custom.value() < default.value());
+}

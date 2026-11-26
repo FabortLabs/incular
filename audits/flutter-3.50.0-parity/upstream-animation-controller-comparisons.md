@@ -57,3 +57,16 @@ next-tick variants use the same ordered assignment. The toggle probes
 verify each sampled value for 100 ms / 50 ms and 50 ms / 100 ms
 durations, and the direction change halfway through a running
 forward animation. Four Flutter and 19 focused Rust cases passed.
+
+## Reduced-motion durations and fling springs
+
+Six pinned originals now have executable focused counterparts.
+Bounded controllers default to Normal and unbounded ones to Preserve.
+With animations disabled, Preserve samples a 100 ms explicit run at
+50 ms, while Normal reaches the identical halfway value at 2.5 ms
+and completes after its 5 ms boundary. A Normal fling advances further
+than a Preserve fling at 50 ms. The default spring reaches the exact
+bounds 1, 45, and −30; the original custom overdamped spring advances
+less than the default at 50 ms. Six pinned Flutter and 49 targeted
+Rust cases passed. This tranche adds backfill tests, not new motion
+policy or platform integration.
