@@ -141,6 +141,7 @@ pub struct ScaleGestureDetector {
     /// Flutter `GestureRecognizer.gestureSettings`, used for the focal-point
     /// pan slop.
     gesture_settings: DeviceGestureSettings,
+    supported_devices: Option<Box<[PointerDeviceKind]>>,
     on_update: Option<Rc<dyn Fn(ScaleUpdateDetails)>>,
     on_start: Option<Rc<dyn Fn(ScaleStartDetails)>>,
     on_end: Option<Rc<dyn Fn(ScaleEndDetails)>>,
@@ -181,6 +182,7 @@ impl ScaleGestureDetector {
             // Flutter `ScaleGestureRecognizer.dragStartBehavior` default.
             drag_start_behavior: DragStartBehavior::Down,
             gesture_settings: DeviceGestureSettings::default(),
+            supported_devices: None,
             on_update,
             on_start,
             on_end,
@@ -219,6 +221,29 @@ impl ScaleGestureDetector {
         self.drag_start_behavior
     }
 
+    /// Flutter's supportedDevices: only contacts of these kinds enter or
+    /// reconfigure the recognition state. The default accepts all kinds.
+    #[must_use]
+    pub fn with_supported_devices(
+        mut self,
+        devices: impl IntoIterator<Item = PointerDeviceKind>,
+    ) -> Self {
+        self.supported_devices = Some(devices.into_iter().collect());
+        self
+    }
+
+    fn allows_device(&self, kind: PointerDeviceKind) -> bool {
+        self.supported_devices
+            .as_ref()
+            .is_none_or(|devices| devices.contains(&kind))
+    }
+
+    /// Number of currently tracked pointer contacts.
+    #[must_use]
+    pub fn pointer_count(&self) -> usize {
+        self.pointers.len()
+    }
+
     /// Sets the global-to-local transform used for the details' local
     /// focal points; retained adapters pass the widget's inverse transform.
     pub fn set_local_transform(&mut self, transform: Transform) {
@@ -241,6 +266,9 @@ impl ScaleGestureDetector {
 
     /// [`Self::handle`] for an event whose device kind is known.
     pub fn handle_raw(&mut self, event: RawPointerEvent) -> bool {
+        if !self.allows_device(event.kind) {
+            return false;
+        }
         let handled = match event.phase {
             PointerPhase::Enter | PointerPhase::Exit => false,
             PointerPhase::Down => true,
@@ -275,7 +303,9 @@ impl ScaleGestureDetector {
     /// resolves its arena and calls [`Self::accept`].
     pub fn observe_raw(&mut self, event: RawPointerEvent) -> Option<ScaleUpdateDetails> {
         self.wants_acceptance = false;
-        self.last_event_time = Some(event.time);
+        if !self.allows_device(event.kind) {
+            return None;
+        }
         let mut lifted = None;
         let (configuration_changed, should_start) = match event.phase {
             PointerPhase::Enter | PointerPhase::Exit => return None,
@@ -328,6 +358,7 @@ impl ScaleGestureDetector {
                 (true, false)
             }
         };
+        self.last_event_time = Some(event.time);
         self.update_lines();
         self.update();
         let mut details = None;

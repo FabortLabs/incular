@@ -126,3 +126,26 @@ member can reject separately, and canceling the live stream still
 clears it. Eight focused Rust checks and the pinned authored probe
 passed. Flutter's separate close/sweep/hold lifecycle remains outside
 this authored repair, so this does not change the upstream case count.
+
+### Scale contact eligibility and callback details
+
+Pinned scale_test.dart :278/:312 compare with the standalone scale
+recognizer's supported-device set. A rejected mouse cannot participate
+before a touch starts or add, move, end, or change the pointer count of
+an active touch scale. The sequence checks start at (0,0), first movement
+to (20,30), and the final genuine touch release. Rejected device events
+also leave the last valid event timestamp unchanged.
+
+Pinned :722 pairs start/update/end pointer counts after changing from
+one contact to two, back to one, and finally zero. Adding a finger sends
+an End with the new count; its first move starts a new segment. This
+uses the recognizer's actual `accept` API for the sole arena member.
+
+Pinned :1506 verifies source timestamps on the first of one, two, and
+three contact segments, including repeat timestamps and continued
+one-finger panning. The native trace checks the same start, update, end,
+span and focal delta checkpoints, but this comparison is partial until
+the mounted tap competitor is included. Pinned :1832 is partial: native
+start details report touch, mouse, stylus, inverted stylus, and unknown.
+Flutter also uses a raw pan/zoom trackpad contact; Incular's aggregate
+trackpad route remains distinct from this scale recognizer.

@@ -1795,3 +1795,8 @@ packages/flutter/test/widgets/modal_barrier_test.dart	456	Undismissible ModalBar
 packages/flutter/test/widgets/modal_barrier_test.dart	466	Dismissible ModalBarrier includes button in semantic tree on iOS, macOS and android	partial-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md#non-animated-modalbarrier
 packages/flutter/test/widgets/modal_barrier_test.dart	499	ModalBarrier does not crash at zero area	paired-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md#non-animated-modalbarrier
 packages/flutter/test/services/system_sound_test.dart	11	System sound control test	partial-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md#window-bound-system-sound-requests
+packages/flutter/test/gestures/scale_test.dart	278	Rejects scale gestures from unallowed device kinds	paired-match	upstream-geometry-input-gestures.md#scale-contact-eligibility-and-callback-details
+packages/flutter/test/gestures/scale_test.dart	312	Scale gestures starting from allowed device kinds cannot be ended from unallowed devices	paired-match	upstream-geometry-input-gestures.md#scale-contact-eligibility-and-callback-details
+packages/flutter/test/gestures/scale_test.dart	722	Scale gestures pointer count test	paired-match	upstream-geometry-input-gestures.md#scale-contact-eligibility-and-callback-details
+packages/flutter/test/gestures/scale_test.dart	1506	ScaleStartDetails and ScaleUpdateDetails callbacks should contain their event.timestamp	partial-match	upstream-geometry-input-gestures.md#scale-contact-eligibility-and-callback-details
+packages/flutter/test/gestures/scale_test.dart	1832	ScaleStartDetails should contain the correct PointerDeviceKind	partial-match	upstream-geometry-input-gestures.md#scale-contact-eligibility-and-callback-details
