@@ -2101,3 +2101,5 @@ packages/flutter/test/painting/shape_border_test.dart	153	Compound borders	paire
 packages/flutter/test/painting/star_border_test.dart	40	StarBorder defaults	paired-match	upstream-edge-insets.md#star-border-values-and-empty-layout
 packages/flutter/test/painting/star_border_test.dart	57	StarBorder copyWith, ==, hashCode	paired-match	upstream-edge-insets.md#star-border-values-and-empty-layout
 packages/flutter/test/painting/star_border_test.dart	221	StarBorder doesn't try to scale an infinite scale matrix	paired-match	upstream-edge-insets.md#star-border-values-and-empty-layout
+packages/flutter/test/services/undo_manager_test.dart	15	UndoManagerClient handleUndo	partial-match	upstream-native-undo-focus.md
+packages/flutter/test/services/undo_manager_test.dart	49	UndoManager.setUndoState reports error when channel fails	reference-ran-incular-open	upstream-native-undo-focus.md

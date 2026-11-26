@@ -8,7 +8,7 @@ use incular_core::{InputEvent, Offset, PointerPhase, Size};
 use incular_platform::{PlatformEvent, UndoDirection, UndoManagerCommand};
 use incular_runtime::{Runtime, TextShortcutPlatform};
 use incular_text::{TextEditingValue, TextSelection};
-use incular_widgets::{Column, EditableText, Widget, internal::TextEditingController};
+use incular_widgets::{Column, EditableText, FocusNode, Widget, internal::TextEditingController};
 use std::time::{Duration, Instant};
 
 fn constraints() -> Constraints {
@@ -128,4 +128,64 @@ fn on_ios_the_focused_field_reports_its_undo_state() {
     // The other field becomes the client and reports its own history.
     tap(&mut runtime, 40., now);
     assert_eq!(runtime.take_undo_manager_commands(), [state(false, false)]);
+}
+
+#[test]
+fn native_undo_targets_the_latest_focus_request_before_the_next_frame() {
+    let first = TextEditingController::with_text("one");
+    let second = TextEditingController::with_text("alpha");
+    let first_focus = FocusNode::new();
+    let second_focus = FocusNode::new();
+    let mut runtime = Runtime::new(Widget::from(Column::new([
+        field(&first).focus_node(first_focus.clone()),
+        field(&second).focus_node(second_focus.clone()),
+    ])))
+    .unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Ios);
+    let now = Instant::now();
+    runtime.run_frame_at(constraints(), now).unwrap();
+    first_focus.request_focus();
+    runtime.run_frame_at(constraints(), now).unwrap();
+    let now = now + Duration::from_millis(600);
+    runtime.run_frame_at(constraints(), now).unwrap();
+    let now = commit_edit(&mut runtime, &first, "two", now);
+    assert_eq!(
+        runtime.take_undo_manager_commands().last(),
+        Some(&state(true, false))
+    );
+
+    second_focus.request_focus();
+    runtime.run_frame_at(constraints(), now).unwrap();
+    let now = now + Duration::from_millis(600);
+    runtime.run_frame_at(constraints(), now).unwrap();
+    let now = commit_edit(&mut runtime, &second, "beta", now);
+    assert!(second_focus.has_primary_focus());
+    assert_eq!(
+        runtime.take_undo_manager_commands().last(),
+        Some(&state(true, false))
+    );
+
+    // The request arrives directly from a focus node and native undo can
+    // arrive immediately, without a key event or intervening frame.
+    first_focus.request_focus();
+    let _ = runtime.handle_platform_event(PlatformEvent::Undo(UndoDirection::Undo));
+    assert_eq!(
+        second.text(),
+        "beta",
+        "native undo edited the outgoing field"
+    );
+    assert_eq!(first.text(), "one");
+    assert!(first_focus.has_primary_focus());
+    runtime.run_frame_at(constraints(), now).unwrap();
+    assert_eq!(
+        runtime.take_undo_manager_commands().last(),
+        Some(&state(false, true))
+    );
+
+    // Moving the focus back must not apply the outgoing field's redo.
+    second_focus.request_focus();
+    let _ = runtime.handle_platform_event(PlatformEvent::Undo(UndoDirection::Redo));
+    assert!(second_focus.has_primary_focus());
+    assert_eq!(second.text(), "beta");
+    assert_eq!(first.text(), "one");
 }

@@ -3048,6 +3048,9 @@ impl Runtime {
     /// Returns whether the history moved; without a focused text field
     /// nothing happens.
     pub fn handle_platform_undo(&mut self, direction: UndoDirection) -> bool {
+        // Like keyboard dispatch, resolve pending programmatic focus before
+        // choosing the recipient. Native events need not wait for a frame.
+        self.adopt_external_focus_change();
         self.advance_text_history_clock(self.input_now());
         let Some(field) = self.focused.filter(|id| self.tree.is_text_field(*id)) else {
             return false;
