@@ -1281,6 +1281,8 @@ fn map_action(action: SemanticActionKind) -> Option<Action> {
         | SemanticActionKind::Paste
         | SemanticActionKind::MoveCursorForwardByCharacter
         | SemanticActionKind::MoveCursorBackwardByCharacter
+        | SemanticActionKind::DidGainAccessibilityFocus
+        | SemanticActionKind::DidLoseAccessibilityFocus
         | SemanticActionKind::Custom => None,
     }
 }

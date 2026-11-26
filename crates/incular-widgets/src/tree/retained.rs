@@ -1477,7 +1477,7 @@ impl WidgetTree {
         id: ElementId,
         action: SemanticActionKind,
     ) -> Option<Rc<dyn Fn(incular_semantics::SemanticAction) + 'static>> {
-        if self.pointer_actions_blocked(id) {
+        if !action.is_accessibility_focus_notification() && self.pointer_actions_blocked(id) {
             return None;
         }
         self.elements

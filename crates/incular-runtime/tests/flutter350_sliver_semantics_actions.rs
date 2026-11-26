@@ -960,3 +960,98 @@ fn cursor_callbacks_preserve_direction_and_selection_extension_without_an_editor
     }
     assert!(calls.borrow().is_empty());
 }
+
+#[test]
+fn accessibility_focus_notifications_survive_user_action_blocking_without_stealing_input_focus() {
+    let calls = Rc::new(RefCell::new(Vec::new()));
+    let build = |marker: &'static str, handlers: bool, blocked: bool| {
+        let calls = calls.clone();
+        scene(move || {
+            let sem = Semantics::default()
+                .container(true)
+                .label("focus controls")
+                .block_user_actions(blocked);
+            if !handlers {
+                return sem.action(SemanticAction::DidGainAccessibilityFocus);
+            }
+            let log = |name| {
+                let calls = calls.clone();
+                move || calls.borrow_mut().push((marker, name))
+            };
+            sem.on_focus(log("request"))
+                .on_did_gain_accessibility_focus(log("gained"))
+                .on_did_lose_accessibility_focus(log("lost"))
+        })
+    };
+    let mut runtime = Runtime::new(build("initial", true, false)).unwrap();
+    frame(&mut runtime);
+    let root = runtime.tree().root().unwrap();
+    let id = node(&runtime, "focus controls").id;
+    let input_focus = runtime.focused_element();
+    let original_revision = runtime.tree().semantics().revision();
+    let mut mobile = MobileAccessibilityProjection::new();
+    let native = mobile
+        .sync(runtime.tree().semantics())
+        .unwrap()
+        .nodes
+        .into_iter()
+        .find(|native| native.semantic.id == id)
+        .unwrap()
+        .native_id;
+    let lifecycle = [
+        SemanticAction::DidGainAccessibilityFocus,
+        SemanticAction::DidLoseAccessibilityFocus,
+    ];
+
+    for (marker, blocked) in [
+        ("initial", false),
+        ("replacement", false),
+        ("blocked", true),
+    ] {
+        runtime
+            .schedule_update(root, build(marker, true, blocked))
+            .unwrap();
+        frame(&mut runtime);
+        let update = mobile.sync(runtime.tree().semantics());
+        if blocked {
+            assert!(update.is_some());
+        } else {
+            assert!(update.is_none());
+            assert_eq!(runtime.tree().semantics().revision(), original_revision);
+        }
+        let projected = node(&runtime, "focus controls");
+        assert_eq!(projected.id, id);
+        assert!(!projected.state.focusable);
+        assert_eq!(
+            projected.actions.contains(&SemanticActionKind::Focus),
+            !blocked
+        );
+        for action in &lifecycle {
+            let request = mobile.translate_action(native, action.clone()).unwrap();
+            assert!(runtime.dispatch_semantic_action(request.node, request.action));
+        }
+        assert_eq!(
+            runtime.dispatch_semantic_action(id, SemanticAction::Focus),
+            !blocked
+        );
+        let mut expected = vec![(marker, "gained"), (marker, "lost")];
+        if !blocked {
+            expected.push((marker, "request"));
+        }
+        assert_eq!(&*calls.borrow(), &expected);
+        calls.borrow_mut().clear();
+        assert_eq!(runtime.focused_element(), input_focus);
+    }
+
+    runtime
+        .schedule_update(root, build("removed", false, true))
+        .unwrap();
+    frame(&mut runtime);
+    mobile.sync(runtime.tree().semantics());
+    assert_eq!(node(&runtime, "focus controls").id, id);
+    for action in lifecycle.into_iter().chain([SemanticAction::Focus]) {
+        assert!(mobile.translate_action(native, action.clone()).is_none());
+        assert!(!runtime.dispatch_semantic_action(id, action));
+    }
+    assert!(calls.borrow().is_empty());
+}

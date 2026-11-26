@@ -673,6 +673,25 @@ impl Semantics {
         )
     }
 
+    /// Registers a request to set input focus. The handler decides how to
+    /// do that; this annotation does not make its child keyboard-focusable.
+    #[must_use]
+    pub fn on_focus(self, callback: impl Fn() + 'static) -> Self {
+        self.with_bound_callback(SemanticAction::Focus, move |_| callback())
+    }
+
+    /// Notifies the handler when assistive technology focuses this node.
+    #[must_use]
+    pub fn on_did_gain_accessibility_focus(self, callback: impl Fn() + 'static) -> Self {
+        self.with_bound_callback(SemanticAction::DidGainAccessibilityFocus, move |_| callback())
+    }
+
+    /// Notifies the handler when assistive technology leaves this node.
+    #[must_use]
+    pub fn on_did_lose_accessibility_focus(self, callback: impl Fn() + 'static) -> Self {
+        self.with_bound_callback(SemanticAction::DidLoseAccessibilityFocus, move |_| callback())
+    }
+
     fn with_bound_callback(
         mut self,
         action: SemanticAction,

@@ -399,6 +399,8 @@ impl Widget {
             | SemanticActionKind::Collapse
             | SemanticActionKind::MoveCursorForwardByCharacter
             | SemanticActionKind::MoveCursorBackwardByCharacter
+            | SemanticActionKind::DidGainAccessibilityFocus
+            | SemanticActionKind::DidLoseAccessibilityFocus
             | SemanticActionKind::ScrollToOffset
             | SemanticActionKind::ShowOnScreen
             | SemanticActionKind::Custom => {}

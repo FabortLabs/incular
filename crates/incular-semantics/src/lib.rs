@@ -156,9 +156,18 @@ pub enum SemanticActionKind {
     Collapse,
     MoveCursorForwardByCharacter,
     MoveCursorBackwardByCharacter,
+    DidGainAccessibilityFocus,
+    DidLoseAccessibilityFocus,
 }
 
 impl SemanticActionKind {
+    /// Accessibility focus notifications are separate from requests to
+    /// change input focus and survive a block of user actions.
+    #[must_use]
+    pub const fn is_accessibility_focus_notification(self) -> bool {
+        matches!(self, Self::DidGainAccessibilityFocus | Self::DidLoseAccessibilityFocus)
+    }
+
     /// Whether this action requests a physical rather than logical scroll.
     #[must_use]
     pub const fn is_directional_scroll(self) -> bool {
@@ -205,12 +214,16 @@ pub enum SemanticAction {
     Collapse,
     MoveCursorForwardByCharacter { extend_selection: bool },
     MoveCursorBackwardByCharacter { extend_selection: bool },
+    DidGainAccessibilityFocus,
+    DidLoseAccessibilityFocus,
 }
 
 impl SemanticAction {
     #[must_use]
     pub const fn kind(&self) -> SemanticActionKind {
         match self {
+            Self::DidGainAccessibilityFocus => SemanticActionKind::DidGainAccessibilityFocus,
+            Self::DidLoseAccessibilityFocus => SemanticActionKind::DidLoseAccessibilityFocus,
             Self::Focus => SemanticActionKind::Focus,
             Self::Activate => SemanticActionKind::Activate,
             Self::SetText(_) => SemanticActionKind::SetText,

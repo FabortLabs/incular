@@ -1089,7 +1089,8 @@ impl Runtime {
         // A native adapter may still hold a node ID announced before the
         // mask changed. Reject that request without invoking callbacks or
         // synthesizing a TapRegion event.
-        if self.tree.pointer_actions_blocked(element) {
+        let kind = action.kind();
+        if !kind.is_accessibility_focus_notification() && self.tree.pointer_actions_blocked(element) {
             return false;
         }
         if matches!(action, SemanticAction::Activate | SemanticAction::LongPress)
@@ -1103,7 +1104,10 @@ impl Runtime {
         self.tree.note_semantic_action();
         if matches!(
             action,
-            SemanticAction::SetText(_)
+            SemanticAction::Focus
+                | SemanticAction::DidGainAccessibilityFocus
+                | SemanticAction::DidLoseAccessibilityFocus
+                | SemanticAction::SetText(_)
                 | SemanticAction::SetSelection { .. }
                 | SemanticAction::Copy
                 | SemanticAction::Cut
@@ -1113,7 +1117,6 @@ impl Runtime {
                 | SemanticAction::MoveCursorForwardByCharacter { .. }
                 | SemanticAction::MoveCursorBackwardByCharacter { .. }
         ) {
-            let kind = action.kind();
             if let Some(callback) = self.tree.semantic_bound_callback(element, kind) {
                 if !self
                     .tree
@@ -1273,7 +1276,9 @@ impl Runtime {
             | SemanticAction::Expand
             | SemanticAction::Collapse
             | SemanticAction::MoveCursorForwardByCharacter { .. }
-            | SemanticAction::MoveCursorBackwardByCharacter { .. } => false,
+            | SemanticAction::MoveCursorBackwardByCharacter { .. }
+            | SemanticAction::DidGainAccessibilityFocus
+            | SemanticAction::DidLoseAccessibilityFocus => false,
             SemanticAction::ShowOnScreen => self.tree.semantic_show_on_screen(element),
             SemanticAction::Custom(id) => self
                 .tree

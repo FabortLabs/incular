@@ -184,8 +184,8 @@ a blocked callback or an unbound payload kind is not advertised.
 All 27 targeted Rust tests passed, including the existing formatter,
 on-change, and disabled-field behavior. The all-actions case remains
 partial: the clipboard and expansion cases are described below;
-cursor callbacks are covered below; focus lifecycle and Flutter's
-two-pane tags remain open.
+cursor and focus callbacks are covered below. Flutter's two-pane
+tags and host-specific event routing remain open.
 
 ### Clipboard and expansion callbacks
 
@@ -214,3 +214,16 @@ native update; removal withdraws the two action bits and rejects stale
 requests. The 30 targeted Rust tests passed. Host assistive-technology
 routing and movement by word are not covered by this slice; neither
 word callback is publicly configured by Flutter's SliverSemantics.
+
+### Accessibility focus lifecycle
+
+The pinned `sliver_semantic_focus_callbacks_test.dart` and retained
+mobile projection tests distinguish requests for input focus from
+assistive technology's gain/loss notifications. The plain annotation
+runs the current callback without becoming keyboard-focusable or
+moving existing input focus. A user-action block withdraws Focus but
+retains both lifecycle notifications. Replacing handlers does not
+change the native tree; removing them rejects previously advertised
+requests and does not publish a bare unbound action. The existing
+keyboard-focus suite still passes (31 focused Rust checks in total).
+This tests portable requests, not actual screen-reader event delivery.

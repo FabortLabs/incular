@@ -1541,8 +1541,10 @@ impl WidgetTree {
             state.focused = false;
         }
         state.focusable = focusable;
-        let focus_action =
-            focusable && (focus_annotation.is_none() || self.focus_semantic_actions_enabled);
+        let bound_focus = !focus_blocked
+            && entry.widget.semantic_properties().callbacks.supports(SemanticActionKind::Focus);
+        let focus_action = bound_focus
+            || (focusable && (focus_annotation.is_none() || self.focus_semantic_actions_enabled));
         let has_user_actions = focus_action
             || !actions.is_empty()
             || merged.standard_actions != 0
@@ -1552,7 +1554,10 @@ impl WidgetTree {
             // Flutter's blocking configuration masks user actions, not the
             // node or its focusable/focused flags. Accessibility focus
             // lifecycle notifications are separate from our user actions.
-            actions.clear();
+            actions.retain(|action| {
+                action.is_accessibility_focus_notification()
+                    && entry.widget.semantic_properties().callbacks.supports(*action)
+            });
             state.custom_actions = Box::default();
         } else {
             if focus_action && !actions.contains(&SemanticActionKind::Focus) {
@@ -3157,7 +3162,9 @@ pub(super) fn semantic_action_is_executable(
         | SemanticActionKind::Expand
         | SemanticActionKind::Collapse
         | SemanticActionKind::MoveCursorForwardByCharacter
-        | SemanticActionKind::MoveCursorBackwardByCharacter => false,
+        | SemanticActionKind::MoveCursorBackwardByCharacter
+        | SemanticActionKind::DidGainAccessibilityFocus
+        | SemanticActionKind::DidLoseAccessibilityFocus => false,
         // Advertised only inside a viewport; the dispatch reports whether a
         // viewport actually moved.
         SemanticActionKind::ShowOnScreen => true,
