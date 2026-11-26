@@ -145,8 +145,8 @@ both active and queued requests.
 All six reference and 17 focused native tests passed. These are
 pairs at the watcher/analysis boundary, where Flutter's tests also
 inject the watcher and analysis services. Incular returns a local
-timing result rather than transmitting Flutter analytics. Native filesystem integration is checked above. IDE transport and
-existing-DTD initialization are still separate work.
+timing result rather than transmitting Flutter analytics. Native filesystem integration and readiness on a connected transport
+are checked separately below.
 
 
 ## Shared readiness on an existing IDE connection
@@ -172,3 +172,18 @@ IDE discovery remain unverified.
 ```sh
 cargo test --locked --offline -j1 -p incular-devtools --test flutter350_preview_ide -- --test-threads=1
 ```
+
+
+### Reloading through the existing connection
+
+The pinned detector's existing-connection case at
+`lsp_preview_detector_test.dart:204` also passed. The retained
+`PreviewIdeReloadHost` connects the readiness adapter to the reload
+coordinator and the same already-connected analysis service handles
+both an explicit barrier and a source reload. Construction issues
+no analysis request. The explicit call issues one, a file change
+issues a second, and only its document is looked up and published.
+A real Cargo.toml edit then updates the durable manifest hashes
+without another IDE request. All 24 focused Rust IDE, reload, and
+watcher tests passed. This pairs the injected service contract,
+not a real LSP daemon or browser preview scaffold.

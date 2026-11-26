@@ -224,3 +224,84 @@ impl<T: PreviewIdeTransport> PreviewIde<T> {
         Ok(())
     }
 }
+
+/// Publication or dependency-refresh errors from an IDE-backed reload.
+#[derive(Debug, thiserror::Error)]
+pub enum PreviewIdeReloadError<I, P>
+where
+    I: std::error::Error + 'static,
+    P: std::error::Error + 'static,
+{
+    /// The connected IDE could not complete analysis or document lookup.
+    #[error(transparent)]
+    Ide(#[from] PreviewIdeError<I>),
+    /// The destination rejected the new preview snapshot.
+    #[error("preview publication failed: {0}")]
+    Publication(#[source] P),
+    /// Refreshed manifest hashes could not be written.
+    #[error(transparent)]
+    Manifest(#[from] crate::preview_manifest::PreviewManifestError),
+}
+
+/// An existing IDE connection feeding source reloads and an output callback.
+///
+/// Source events wait for analysis and then request previews for the changed
+/// document. Manifest events refresh project hashes without any IDE request.
+pub struct PreviewIdeReloadHost<T: PreviewIdeTransport, Publish> {
+    ide: PreviewIde<T>,
+    manifest: crate::preview_manifest::PreviewManifest,
+    publish: Publish,
+}
+
+impl<T: PreviewIdeTransport, Publish> PreviewIdeReloadHost<T, Publish> {
+    /// Binds a connected IDE, project manifest and nonblocking publication
+    /// callback. Construction does not start or wait for analysis.
+    pub fn new(
+        ide: PreviewIde<T>,
+        manifest: crate::preview_manifest::PreviewManifest,
+        publish: Publish,
+    ) -> Self {
+        Self {
+            ide,
+            manifest,
+            publish,
+        }
+    }
+
+    /// Gives access to the same IDE client used by source reloads.
+    pub fn ide(&self) -> &PreviewIde<T> {
+        &self.ide
+    }
+}
+
+impl<T, Publish, E> crate::preview_reload::PreviewReloadHost for PreviewIdeReloadHost<T, Publish>
+where
+    T: PreviewIdeTransport,
+    T::Previews: Send + Sync,
+    Publish: FnMut(&Path, &T::Previews) -> Result<(), E> + Send,
+    E: std::error::Error + Send + Sync + 'static,
+{
+    type Previews = T::Previews;
+    type Error = PreviewIdeReloadError<T::Error, E>;
+
+    async fn wait_for_analysis(&mut self) -> Result<(), Self::Error> {
+        Ok(self.ide.wait_for_analysis().await?)
+    }
+
+    async fn load_previews(&mut self, source: &Path) -> Result<Self::Previews, Self::Error> {
+        Ok(self.ide.document_previews(source).await?)
+    }
+
+    async fn publish_previews(
+        &mut self,
+        source: &Path,
+        previews: &Self::Previews,
+    ) -> Result<(), Self::Error> {
+        (self.publish)(source, previews).map_err(PreviewIdeReloadError::Publication)
+    }
+
+    async fn refresh_manifest(&mut self, _manifest: &Path) -> Result<(), Self::Error> {
+        self.manifest.update_project_hashes()?;
+        Ok(())
+    }
+}

@@ -23,6 +23,7 @@ struct Trace {
     registry_queries: usize,
     registry: Vec<Cap>,
     requested_documents: Vec<Option<PathBuf>>,
+    preview_result: Vec<PathBuf>,
     barriers: usize,
     already_subscribed: bool,
     refuse_subscribe: bool,
@@ -111,12 +112,9 @@ impl PreviewIdeTransport for Connection {
     }
 
     async fn previews(&self, document: Option<&Path>) -> io::Result<Self::Previews> {
-        self.0
-            .lock()
-            .unwrap()
-            .requested_documents
-            .push(document.map(Path::to_owned));
-        Ok(Vec::new())
+        let mut trace = self.0.lock().unwrap();
+        trace.requested_documents.push(document.map(Path::to_owned));
+        Ok(trace.preview_result.clone())
     }
 
     async fn analysis_complete(&self) -> io::Result<()> {
@@ -258,4 +256,67 @@ async fn initialization_deadline_releases_the_listener_and_does_not_issue_previe
     ));
     assert!(!connection.listener_is_attached());
     assert!(connection.0.lock().unwrap().requested_documents.is_empty());
+}
+
+#[tokio::test]
+async fn connected_ide_supplies_both_an_explicit_barrier_and_a_source_reload() {
+    use incular_devtools::{
+        preview_ide::PreviewIdeReloadHost,
+        preview_manifest::{PreviewManifest, PreviewRegeneration},
+        preview_reload::{PreviewReload, PreviewReloadCoordinator},
+    };
+
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let cargo = root.join("Cargo.toml");
+    let source = root.join("src/lib.rs");
+    std::fs::create_dir(root.join("src")).unwrap();
+    std::fs::write(&cargo, "[package]\nname='preview'\nversion='0.1.0'").unwrap();
+    let manifest = PreviewManifest::new(root.join("preview-out"), "pinned", &cargo);
+    manifest.generate().unwrap();
+
+    let connection = Connection::ready();
+    connection.0.lock().unwrap().preview_result = vec![root.join("preview-out/sample.rs")];
+    let results = Arc::new(Mutex::new(Vec::new()));
+    let snapshot = results.clone();
+    let host = PreviewIdeReloadHost::new(
+        PreviewIde::new(connection.clone()),
+        manifest.clone(),
+        move |source: &Path, previews: &Vec<PathBuf>| {
+            snapshot
+                .lock()
+                .unwrap()
+                .push((source.to_owned(), previews.clone()));
+            Ok::<(), io::Error>(())
+        },
+    );
+
+    assert_eq!(connection.request_counts(), (0, 0));
+    assert_eq!(connection.0.lock().unwrap().barriers, 0);
+    host.ide()
+        .wait_for_analysis_after(Duration::ZERO)
+        .await
+        .unwrap();
+    assert_eq!(connection.0.lock().unwrap().barriers, 1);
+
+    let coordinator = PreviewReloadCoordinator::new(manifest.change_router().unwrap(), host);
+    std::fs::write(&source, "fn preview() {}").unwrap();
+    let result = coordinator.handle(&source).await.unwrap();
+    let expected = vec![root.join("preview-out/sample.rs")];
+    assert!(
+        matches!(result, PreviewReload::Reloaded { source: seen, previews, .. } if seen == source && previews == expected)
+    );
+    assert_eq!(*results.lock().unwrap(), [(source.clone(), expected)]);
+    assert_eq!(connection.0.lock().unwrap().barriers, 2);
+
+    std::fs::write(&cargo, "[package]\nname='preview'\nversion='0.2.0'").unwrap();
+    assert_eq!(
+        coordinator.handle(&cargo).await.unwrap(),
+        PreviewReload::ManifestRefreshed(cargo)
+    );
+    assert_eq!(manifest.regeneration().unwrap(), PreviewRegeneration::None);
+    let trace = connection.0.lock().unwrap();
+    assert_eq!(trace.barriers, 2);
+    assert_eq!(trace.requested_documents, [Some(source)]);
+    assert_eq!((trace.subscriptions, trace.registry_queries), (1, 1));
 }
