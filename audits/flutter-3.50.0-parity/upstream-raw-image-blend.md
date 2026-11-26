@@ -56,3 +56,27 @@ The four pinned source-effect controls and 51 focused native image,
 painting and neighboring decoration tests passed. This verifies native
 rendered commands and source color math; offscreen wgpu pixel readback
 and transformed fractional coverage remain unverified.
+
+## Retaining the source effects with the render object
+
+Tint, inversion, opacity, and destination blending now update a
+single retained image. The default image owns no effect stages.
+Adding or removing one selected stage does not replace the other
+stages, remeasure image layout, or re-record its picture. Clearing
+the image removes all its effect stages without replacing the image
+render object. The focused test checks stable IDs, evaluated tint
+colors, stage order, and the tree's layer-ownership invariants.
+
+Flutter's original `widgets/basic_test.dart:24` is a partial match:
+the Flutter case checks exact public properties. The native probe
+runs its default-to-replacement configuration and matches identity,
+image, dimensions, scale, placement, repetition, slice, and invisible
+source-over paint. Flutter's diagnostic label and specific sampler
+quality, antialiasing, and animation-backed opacity are not matched.
+
+Flutter's `rendering/image_test.dart:210` is also partial: native
+paint applies independent tint modes to the actual source image and
+does not treat that field as the destination blend. The Dart setter
+getter round-trip is not part of the exposed Rust renderer API.
+
+Both selected upstream cases and 53 focused native tests passed.

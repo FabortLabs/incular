@@ -9,21 +9,66 @@ use incular_rendering::{
 use typed_builder::TypedBuilder;
 
 use crate::tree::{ImageFit, ImageOptions};
-use crate::{Blur, BlurController, ColorFiltered, Image, ImageRepeat, Opacity, Widget};
+use crate::{Blur, BlurController, ColorFiltered, Image, ImageRepeat, Widget};
 
-// These modes change an existing destination even when the source is
-// fully transparent. They must retain the raster's coverage at alpha zero.
-fn transparent_source_erases_destination(mode: BlendMode) -> bool {
-    matches!(
-        mode,
-        BlendMode::Clear
-            | BlendMode::Src
-            | BlendMode::SrcIn
-            | BlendMode::DstIn
-            | BlendMode::SrcOut
-            | BlendMode::DstAtop
-            | BlendMode::Modulate
-    )
+/// A source filter and group opacity that are ready for the retained image.
+pub(crate) struct RasterPaintSources {
+    pub(crate) blend: Option<BlendMode>,
+    pub(crate) filter: Option<ColorFilter>,
+    pub(crate) opacity: Option<f32>,
+}
+
+impl crate::tree::RasterSourceEffects {
+    pub(crate) fn raster_paint_sources(self, mode: BlendMode) -> RasterPaintSources {
+        let blend = (mode != BlendMode::SrcOver).then_some(mode);
+        let alpha = if self.opacity.is_nan() {
+            1.0
+        } else {
+            self.opacity
+        };
+        let preserve_coverage = matches!(
+            mode,
+            BlendMode::Clear
+                | BlendMode::Src
+                | BlendMode::SrcIn
+                | BlendMode::DstIn
+                | BlendMode::SrcOut
+                | BlendMode::DstAtop
+                | BlendMode::Modulate
+        ) && incular_rendering::opacity_is_transparent(alpha);
+        if preserve_coverage && alpha == 0.0 {
+            // A zero-alpha opacity group is culled, whereas Flutter draws
+            // transparent source pixels when the mode erases the destination.
+            return RasterPaintSources {
+                blend,
+                filter: Some(ColorFilter::opacity(0.0)),
+                opacity: None,
+            };
+        }
+        let mut filter = self.color.map(|color| {
+            ColorFilter::blend(color, self.color_blend_mode.unwrap_or(BlendMode::SrcIn))
+        });
+        // Inversion follows tint, without building a second isolation.
+        if self.invert_colors {
+            filter = Some(
+                filter
+                    .unwrap_or_else(ColorFilter::identity)
+                    .then(ColorFilter::invert(1.0)),
+            );
+        }
+        if preserve_coverage {
+            filter = Some(
+                filter
+                    .unwrap_or_else(ColorFilter::identity)
+                    .then(ColorFilter::opacity(alpha)),
+            );
+        }
+        RasterPaintSources {
+            blend,
+            filter,
+            opacity: (alpha < 1.0 && !preserve_coverage).then_some(alpha),
+        }
+    }
 }
 
 /// Renders a raw raster image buffer directly without asset caching.
@@ -213,86 +258,32 @@ impl RawImage {
 
 impl From<RawImage> for Widget {
     fn from(value: RawImage) -> Self {
-        match value.image {
-            Some(handle) => {
-                let mut img = Image::new(handle)
-                    .scale(value.scale)
-                    .repeat(value.repeat)
-                    .alignment(value.alignment)
-                    .match_text_direction(value.match_text_direction);
-                if let Some(fit) = value.fit {
-                    img = img.fit(fit);
-                }
-                if let Some(slice) = value.center_slice {
-                    img = img.center_slice(slice);
-                }
-                if let Some(w) = value.width {
-                    img = img.width(w);
-                }
-                if let Some(h) = value.height {
-                    img = img.height(h);
-                }
-                if let Some(quality) = value.filter_quality {
-                    img = img.filter_quality(quality);
-                }
-                let has_source_effects =
-                    value.color.is_some() || value.invert_colors || value.opacity < 1.0;
-                if !has_source_effects {
-                    return img.destination_blend_mode(value.blend_mode).into();
-                }
-                let mut image: Widget = img.into();
-                if value.opacity == 0.0 && transparent_source_erases_destination(value.blend_mode) {
-                    // A zero-alpha group is culled, whereas Flutter draws a
-                    // transparent source across the fitted image. Keep those
-                    // pixels' coverage but skip tint and inversion at alpha zero.
-                    image = ColorFiltered::new(ColorFilter::opacity(0.0), image).into();
+        Widget::image(
+            value.image,
+            ImageOptions {
+                width: value.width,
+                height: value.height,
+                scale: if value.scale.is_finite() {
+                    value.scale
                 } else {
-                    let tint = value.color.map(|color| {
-                        ColorFilter::blend(
-                            color,
-                            value.color_blend_mode.unwrap_or(BlendMode::SrcIn),
-                        )
-                    });
-                    // Flutter applies invertColors after tint, before opacity
-                    // and destination blending. The RGB-only inversion can
-                    // share the tint's filter, even with a non-affine tint stage.
-                    let filter = if value.invert_colors {
-                        Some(
-                            tint.unwrap_or_else(ColorFilter::identity)
-                                .then(ColorFilter::invert(1.0)),
-                        )
-                    } else {
-                        tint
-                    };
-                    if let Some(filter) = filter {
-                        image = ColorFiltered::new(filter, image).into();
-                    }
-                    if value.opacity < 1.0 {
-                        image = Opacity::new(value.opacity, image).into();
-                    }
-                }
-                Widget::image_blend(value.blend_mode, image)
-            }
-            None => Widget::image(
-                None,
-                ImageOptions {
-                    width: value.width,
-                    height: value.height,
-                    scale: value.scale,
-                    fit: value.fit,
-                    repeat: value.repeat,
-                    alignment: value.alignment,
-                    sampling: value.filter_quality.map_or(
-                        incular_rendering::ImageSampling::Linear,
-                        FilterQuality::sampling,
-                    ),
-                    center_slice: value.center_slice,
-                    match_text_direction: value.match_text_direction,
-                    destination_blend_mode: value.blend_mode,
-                    ..ImageOptions::default()
+                    1.0
                 },
-            ),
-        }
+                fit: value.fit,
+                repeat: value.repeat,
+                alignment: value.alignment,
+                sampling: value.filter_quality.map_or(
+                    incular_rendering::ImageSampling::Linear,
+                    FilterQuality::sampling,
+                ),
+                center_slice: value.center_slice,
+                match_text_direction: value.match_text_direction,
+                destination_blend_mode: value.blend_mode,
+                color: value.color,
+                color_blend_mode: value.color_blend_mode,
+                invert_colors: value.invert_colors,
+                opacity: value.opacity,
+            },
+        )
     }
 }
 

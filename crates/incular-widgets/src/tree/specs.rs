@@ -36,6 +36,26 @@ impl AnimationRetargetBridge {
     }
 }
 
+/// Source-side image effects, separate from the destination blend.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RasterSourceEffects {
+    pub(crate) color: Option<Color>,
+    pub(crate) color_blend_mode: Option<BlendMode>,
+    pub(crate) invert_colors: bool,
+    pub(crate) opacity: f32,
+}
+
+impl Default for RasterSourceEffects {
+    fn default() -> Self {
+        Self {
+            color: None,
+            color_blend_mode: None,
+            invert_colors: false,
+            opacity: 1.0,
+        }
+    }
+}
+
 /// Retained per-frame work ticked on the tree's animation clock (time
 /// scale and `TickerMode` muting included) before the build and again in
 /// the compositor pass.
@@ -740,6 +760,7 @@ pub(crate) enum WidgetKind {
         blend_mode: BlendMode,
         center_slice: Option<Rect>,
         match_text_direction: bool,
+        source_effects: RasterSourceEffects,
     },
     TextField(Box<TextFieldSpec>),
     Padding {
@@ -1115,7 +1136,6 @@ pub(crate) enum WidgetKind {
     },
     Blend {
         mode: BlendMode,
-        isolate: bool,
         child: Widget,
     },
     ShaderMask {

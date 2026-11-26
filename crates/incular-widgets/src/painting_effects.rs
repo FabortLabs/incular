@@ -30,6 +30,7 @@ pub use decoration::{
 pub use geometry::{
     BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, EllipticalRoundedRect, Radius,
 };
+pub(crate) use images::RasterPaintSources;
 pub use images::{ImageFiltered, ImageIcon, RawImage};
 pub use layers::{ClipRSuperellipse, GridPaper, PhysicalModel, PhysicalShape, SnapshotWidget};
 pub use shape_borders::{

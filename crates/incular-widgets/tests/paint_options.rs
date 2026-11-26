@@ -986,3 +986,225 @@ fn raw_image_reacts_to_direction_changes_without_replacing_its_render() {
         before = Some(layouts);
     }
 }
+
+#[test]
+fn raw_image_tint_opacity_and_blend_edit_the_same_render_and_keep_existing_stages() {
+    let source = handle(10, 10);
+    let blue = Color::rgba(0, 0, 255, 255);
+    let green = Color::rgba(0, 255, 0, 255);
+    let raw = || RawImage::new().image(source.clone());
+    let mut tree = WidgetTree::new();
+    let id = tree.mount(raw().into()).expect("mount");
+    let render = tree.render_id(id).expect("image render");
+    let constraints = Constraints::tight(Size::new(20., 20.));
+    tree.layout(constraints).expect("initial layout");
+    tree.update_compositor(incular_core::time::Instant::now())
+        .expect("composite");
+    let _ = tree.paint();
+    let before = tree.diagnostics();
+    let mut retained = (None, None, None);
+
+    for (image, expected, rgba) in [
+        (raw().color(blue), [true, false, false], [0., 0., 1., 1.]),
+        (
+            raw().color(blue).opacity(0.5),
+            [true, true, false],
+            [0., 0., 1., 1.],
+        ),
+        (
+            raw().color(blue).opacity(0.5).blend_mode(BlendMode::Src),
+            [true, true, true],
+            [0., 0., 1., 1.],
+        ),
+        (
+            raw().color(green).opacity(0.5).blend_mode(BlendMode::Src),
+            [true, true, true],
+            [0., 1., 0., 1.],
+        ),
+        (
+            raw().color(green).blend_mode(BlendMode::Src),
+            [true, false, true],
+            [0., 1., 0., 1.],
+        ),
+        (
+            raw().blend_mode(BlendMode::Src),
+            [false, false, true],
+            [1.; 4],
+        ),
+        (raw(), [false, false, false], [1.; 4]),
+    ] {
+        tree.update(id, image.into()).expect("change image paint");
+        tree.layout(constraints).expect("layout");
+        tree.update_compositor(incular_core::time::Instant::now())
+            .expect("composite");
+        let display = tree.paint();
+        tree.verify_invariants().expect("raster layer ownership");
+        assert_eq!(tree.render_id(id), Some(render));
+        assert_eq!(images(display.commands()).len(), 1);
+        let filter = display.commands().iter().find_map(|command| match command {
+            PaintCommand::PushColorFilter { layer, filter, .. } => {
+                assert_eq!(filter.apply([1.; 4]), rgba);
+                Some(*layer)
+            }
+            _ => None,
+        });
+        let opacity = display.commands().iter().find_map(|command| match command {
+            PaintCommand::PushOpacity { layer, alpha, .. } => {
+                assert_eq!(*alpha, 0.5);
+                Some(*layer)
+            }
+            _ => None,
+        });
+        let blend = raw_image_destination_blend(display.commands()).map(|(layer, mode, _)| {
+            assert_eq!(mode, BlendMode::Src);
+            layer
+        });
+        assert_eq!(
+            [filter.is_some(), opacity.is_some(), blend.is_some()],
+            expected
+        );
+        for (old, new) in [
+            (retained.0, filter),
+            (retained.1, opacity),
+            (retained.2, blend),
+        ] {
+            if let (Some(old), Some(new)) = (old, new) {
+                assert_eq!(old, new, "an existing raster stage must not be replaced");
+            }
+        }
+        retained = (filter, opacity, blend);
+        let after = tree.diagnostics();
+        assert_eq!(after.layouts, before.layouts);
+        assert_eq!(after.paints, before.paints);
+    }
+
+    tree.update(
+        id,
+        RawImage::new()
+            .color(green)
+            .opacity(0.5)
+            .blend_mode(BlendMode::Src)
+            .into(),
+    )
+    .expect("clear the styled image");
+    tree.layout(constraints).expect("layout");
+    tree.update_compositor(incular_core::time::Instant::now())
+        .expect("composite");
+    let display = tree.paint();
+    assert_eq!(tree.render_id(id), Some(render));
+    assert!(images(display.commands()).is_empty());
+    assert!(!display.commands().iter().any(|command| matches!(
+        command,
+        PaintCommand::PushColorFilter { .. }
+            | PaintCommand::PushOpacity { .. }
+            | PaintCommand::PushBlend { .. }
+    )));
+    tree.verify_invariants()
+        .expect("no raster layers after clear");
+}
+
+#[test]
+fn raw_image_updates_loaded_configuration_on_the_original_render() {
+    use incular_config::Alignment;
+    use incular_widgets::internal::RenderKind;
+    let original_image = handle(10, 10);
+    let replacement = handle(2, 2);
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(
+            Directionality::new(
+                TextDirection::Ltr,
+                RawImage::new().image(original_image.clone()),
+            )
+            .into(),
+        )
+        .expect("mount");
+    tree.layout(Constraints::loose(Size::new(20., 20.)))
+        .expect("initial layout");
+    let id = tree.children(root).expect("direction scope")[0];
+    let render = tree.render_id(id).expect("image render");
+    let config = |kind: Option<&RenderKind>| match kind {
+        Some(RenderKind::Image {
+            image,
+            width,
+            height,
+            scale,
+            fit,
+            alignment,
+            repeat,
+            center_slice,
+            flip_horizontally,
+            sampling,
+            ..
+        }) => (
+            image.as_ref().map(ImageHandle::id),
+            *width,
+            *height,
+            *scale,
+            *fit,
+            *alignment,
+            *repeat,
+            *center_slice,
+            *flip_horizontally,
+            *sampling,
+        ),
+        _ => panic!("expected the original render to remain an image"),
+    };
+    assert_eq!(
+        config(tree.render_object_kind(render)),
+        (
+            Some(original_image.id()),
+            None,
+            None,
+            1.0,
+            BoxFit::ScaleDown,
+            Alignment::CENTER,
+            ImageRepeat::NoRepeat,
+            None,
+            false,
+            ImageSampling::Linear,
+        )
+    );
+
+    let center_slice = rect(0., 0., 1., 1.);
+    let changed = RawImage::new()
+        .image(replacement.clone())
+        .width(1.)
+        .height(1.)
+        .scale(2.)
+        .color(Color::BLACK)
+        .opacity(0.)
+        .color_blend_mode(BlendMode::Difference)
+        .fit(BoxFit::Contain)
+        .alignment(Alignment::TOP_CENTER)
+        .repeat(ImageRepeat::Repeat)
+        .center_slice(center_slice)
+        .match_text_direction(true)
+        .invert_colors(true)
+        .filter_quality(incular_rendering::FilterQuality::High);
+    tree.update(id, changed.into())
+        .expect("update raster configuration");
+    tree.layout(Constraints::loose(Size::new(20., 20.)))
+        .expect("updated layout");
+    assert_eq!(tree.render_id(id), Some(render));
+    assert_eq!(tree.render_size(render), Some(Size::new(1., 1.)));
+    assert_eq!(
+        config(tree.render_object_kind(render)),
+        (
+            Some(replacement.id()),
+            Some(1.),
+            Some(1.),
+            2.,
+            BoxFit::Contain,
+            Alignment::TOP_CENTER,
+            ImageRepeat::Repeat,
+            Some(center_slice),
+            false,
+            ImageSampling::Linear,
+        )
+    );
+    assert!(
+        images(tree.paint().commands()).is_empty(),
+        "zero opacity paints no image under SrcOver"
+    );
+}

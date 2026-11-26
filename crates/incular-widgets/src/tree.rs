@@ -136,7 +136,7 @@ pub use descriptors::*;
 pub(crate) use specs::WidgetKind;
 pub use specs::{
     AnimationRetargetBridge, ButtonSpec, ExplicitSemantics, FrameDelegate, FrameGeometry,
-    FrameTick, TextFieldSpec,
+    FrameTick, RasterSourceEffects, TextFieldSpec,
 };
 pub(crate) use specs::{ChildLayoutMode, DecorationHitGeometry, DirectionRequirement, GestureSemanticPolicy};
 use specs::{SemanticCallbacks, SemanticProperties};
@@ -874,6 +874,7 @@ pub enum RenderKind {
         blend_mode: BlendMode,
         center_slice: Option<Rect>,
         flip_horizontally: bool,
+        source_effects: RasterSourceEffects,
     },
     /// Boxed: text fields are rare and this is the largest payload.
     TextField(Box<TextFieldRender>),

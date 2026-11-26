@@ -909,6 +909,12 @@ impl Widget {
                 blend_mode: options.destination_blend_mode,
                 center_slice: options.center_slice,
                 match_text_direction: options.match_text_direction,
+                source_effects: RasterSourceEffects {
+                    color: options.color,
+                    color_blend_mode: options.color_blend_mode,
+                    invert_colors: options.invert_colors,
+                    opacity: options.opacity,
+                },
             },
             semantics: None,
         })
@@ -1867,19 +1873,9 @@ impl Widget {
     }
     #[must_use]
     pub(crate) fn blend(mode: BlendMode, child: Self) -> Self {
-        Self::blend_with_isolation(mode, true, child)
-    }
-    pub(crate) fn image_blend(mode: BlendMode, child: Self) -> Self {
-        Self::blend_with_isolation(mode, mode != BlendMode::SrcOver, child)
-    }
-    fn blend_with_isolation(mode: BlendMode, isolate: bool, child: Self) -> Self {
         Self::from_node(WidgetNode {
             key: None,
-            kind: WidgetKind::Blend {
-                mode,
-                isolate,
-                child,
-            },
+            kind: WidgetKind::Blend { mode, child },
             semantics: None,
         })
     }

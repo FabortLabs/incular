@@ -166,6 +166,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             blend_mode,
             center_slice,
             match_text_direction,
+            source_effects,
         } => RenderKind::Image {
             image: image.clone(),
             width: *width,
@@ -179,6 +180,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             center_slice: *center_slice,
             flip_horizontally: *match_text_direction
                 && context.depend::<TextDirection>() == Some(TextDirection::Rtl),
+            source_effects: *source_effects,
         },
         WidgetKind::TextField(spec) => {
             let direction = spec

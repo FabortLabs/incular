@@ -48,7 +48,7 @@ impl RenderObjectPayload {
 fn invalidation_for_change(old: &RenderKind, new: &RenderKind) -> Invalidation {
     use Invalidation as I;
 
-    if image_blend_only_change(old, new) {
+    if image_composite_only_change(old, new) {
         return I::COMPOSITE;
     }
     if same_compositor_family(old, new) {
@@ -109,28 +109,36 @@ fn visual_paint_only_change(old: &RenderKind, new: &RenderKind) -> bool {
     }
 }
 
-fn image_blend_only_change(old: &RenderKind, new: &RenderKind) -> bool {
+fn image_composite_only_change(old: &RenderKind, new: &RenderKind) -> bool {
     let (
         RenderKind::Image {
-            blend_mode: old_mode,
+            blend_mode: old_blend,
+            source_effects: old_sources,
             ..
         },
         RenderKind::Image {
-            blend_mode: new_mode,
+            blend_mode: new_blend,
+            source_effects: new_sources,
             ..
         },
     ) = (old, new)
     else {
         return false;
     };
-    if old_mode == new_mode {
+    if old_blend == new_blend && old_sources == new_sources {
         return false;
     }
-    let mut without_blend_change = new.clone();
-    if let RenderKind::Image { blend_mode, .. } = &mut without_blend_change {
-        *blend_mode = *old_mode;
+    let mut normalized = new.clone();
+    if let RenderKind::Image {
+        blend_mode,
+        source_effects,
+        ..
+    } = &mut normalized
+    {
+        *blend_mode = *old_blend;
+        *source_effects = *old_sources;
     }
-    *old == without_blend_change
+    *old == normalized
 }
 
 fn image_paint_only_change(old: &RenderKind, new: &RenderKind) -> bool {

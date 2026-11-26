@@ -49,6 +49,8 @@ pub(crate) struct ImageOptions {
     /// Flutter `colorBlendMode`; `None` is Flutter's `srcIn`.
     pub(crate) color_blend_mode: Option<BlendMode>,
     pub(crate) destination_blend_mode: BlendMode,
+    pub(crate) invert_colors: bool,
+    pub(crate) opacity: f32,
 }
 
 impl Default for ImageOptions {
@@ -66,6 +68,8 @@ impl Default for ImageOptions {
             color: None,
             color_blend_mode: None,
             destination_blend_mode: BlendMode::SrcOver,
+            invert_colors: false,
+            opacity: 1.0,
         }
     }
 }
@@ -204,26 +208,11 @@ impl Image {
         Self { image, options }
     }
 
-    pub(crate) fn destination_blend_mode(mut self, mode: BlendMode) -> Self {
-        self.options.destination_blend_mode = mode;
-        self
-    }
-
     image_option_setters!();
 }
 impl From<Image> for Widget {
     fn from(value: Image) -> Self {
-        let Image { image, mut options } = value;
-        // Flutter `RenderImage` paints `color` over the image with
-        // `colorBlendMode` (`srcIn` by default), as `RawImage` does here.
-        if let Some(color) = options.color.take() {
-            let filter = options.color_blend_mode.take().map_or_else(
-                || ColorFilter::tint(color),
-                |mode| ColorFilter::blend(color, mode),
-            );
-            return crate::ColorFiltered::new(filter, Image::with_options(image, options)).into();
-        }
-        Widget::image(Some(image), options)
+        Widget::image(Some(value.image), value.options)
     }
 }
 

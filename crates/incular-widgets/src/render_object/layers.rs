@@ -1,8 +1,8 @@
 use incular_config::Clip;
 use incular_core::{Color, Offset, Rect, Size, Transform as CoreTransform};
 use incular_rendering::{
-    BlendMode, Brush, CornerRadii, DisplayList, DropShadowEffect, FillRule, FollowerLayer,
-    GaussianBlur, LayerId, LayerTree, Path, RRect,
+    Brush, CornerRadii, DisplayList, DropShadowEffect, FillRule, FollowerLayer, GaussianBlur,
+    LayerId, LayerTree, Path, RRect,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -13,6 +13,7 @@ use std::{
 use crate::layout::ClipDelegate;
 
 use crate::layout::ClipShape;
+use crate::painting_effects::RasterPaintSources;
 use crate::tree::{RenderKind, WidgetKind};
 
 /// Whether a widget clips raster output through a compositor clip layer.
@@ -68,6 +69,7 @@ enum AttachmentSpec {
     DropShadow,
     ColorFilter,
     Blend,
+    RasterEffects(u8),
     ShaderMask,
     BackdropFilter,
     Annotation,
@@ -127,12 +129,13 @@ impl LayerSpec {
                 AttachmentSpec::DropShadow
             }
             WidgetKind::ColorFiltered { .. } => AttachmentSpec::ColorFilter,
-            WidgetKind::Blend { isolate: true, .. } => AttachmentSpec::Blend,
-            WidgetKind::Image { image: Some(_), blend_mode, .. }
-                if *blend_mode != BlendMode::SrcOver =>
-            {
-                AttachmentSpec::Blend
-            }
+            WidgetKind::Blend { .. } => AttachmentSpec::Blend,
+            WidgetKind::Image {
+                image: Some(_),
+                blend_mode,
+                source_effects,
+                ..
+            } => raster_attachment_spec(source_effects.raster_paint_sources(*blend_mode)),
             WidgetKind::ShaderMask { .. } => AttachmentSpec::ShaderMask,
             WidgetKind::BackdropFilter { .. } => AttachmentSpec::BackdropFilter,
             WidgetKind::AnnotatedRegion { .. } => AttachmentSpec::Annotation,
@@ -144,6 +147,101 @@ impl LayerSpec {
             picture: needs_picture(widget),
             foreground_picture,
             attachment,
+        }
+    }
+}
+
+fn raster_attachment_spec(source: RasterPaintSources) -> AttachmentSpec {
+    let stages = raster_stage_bits(
+        source.filter.is_some(),
+        source.opacity.is_some(),
+        source.blend.is_some(),
+    );
+    if stages == 0 {
+        AttachmentSpec::Direct
+    } else {
+        AttachmentSpec::RasterEffects(stages)
+    }
+}
+
+fn raster_stage_bits(filter: bool, opacity: bool, blend: bool) -> u8 {
+    u8::from(filter) | (u8::from(opacity) << 1) | (u8::from(blend) << 2)
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct RasterEffectLayers {
+    filter: Option<LayerId>,
+    opacity: Option<LayerId>,
+    blend: Option<LayerId>,
+}
+
+impl RasterEffectLayers {
+    fn ids(&self) -> [Option<LayerId>; 3] {
+        [self.filter, self.opacity, self.blend]
+    }
+
+    fn flags(&self) -> u8 {
+        raster_stage_bits(
+            self.filter.is_some(),
+            self.opacity.is_some(),
+            self.blend.is_some(),
+        )
+    }
+
+    fn attach(&self, compositor: &mut LayerTree, root: LayerId, picture: Option<LayerId>) {
+        let mut child = picture;
+        for stage in self.ids().into_iter().flatten() {
+            compositor.set_children(stage, child.into_iter().collect());
+            child = Some(stage);
+        }
+        compositor.set_children(root, child.into_iter().collect());
+    }
+
+    fn reconcile(&mut self, compositor: &mut LayerTree, source: RasterPaintSources) {
+        fn stage<T>(
+            id: &mut Option<LayerId>,
+            desired: Option<T>,
+            compositor: &mut LayerTree,
+            create: impl FnOnce(&mut LayerTree, T) -> LayerId,
+        ) {
+            match (*id, desired) {
+                (None, Some(value)) => *id = Some(create(compositor, value)),
+                (Some(old), None) => {
+                    compositor.remove(old);
+                    *id = None;
+                }
+                _ => {}
+            }
+        }
+        stage(
+            &mut self.filter,
+            source.filter,
+            compositor,
+            LayerTree::create_color_filter,
+        );
+        stage(
+            &mut self.opacity,
+            source.opacity,
+            compositor,
+            LayerTree::create_opacity,
+        );
+        stage(
+            &mut self.blend,
+            source.blend,
+            compositor,
+            LayerTree::create_blend,
+        );
+    }
+
+    fn update(&self, compositor: &mut LayerTree, source: RasterPaintSources) {
+        if let (Some(layer), Some(filter)) = (self.filter, source.filter) {
+            compositor.update_color_filter(layer, filter);
+        }
+        if let (Some(layer), Some(opacity)) = (self.opacity, source.opacity) {
+            compositor.update_opacity(layer, opacity);
+        }
+        if let (Some(layer), Some(blend)) = (self.blend, source.blend) {
+            compositor.update_blend(layer, blend);
         }
     }
 }
@@ -174,6 +272,7 @@ pub(crate) enum LayerAttachment {
     Blend {
         layer: LayerId,
     },
+    RasterEffects(Rc<RasterEffectLayers>),
     ShaderMask {
         layer: LayerId,
     },
@@ -195,6 +294,7 @@ impl LayerAttachment {
     fn primary_layer(&self) -> Option<LayerId> {
         match self {
             Self::Direct => None,
+            Self::RasterEffects(layers) => layers.blend.or(layers.opacity).or(layers.filter),
             Self::Transform { layer }
             | Self::Opacity { layer }
             | Self::Blur { layer }
@@ -396,19 +496,17 @@ impl RenderLayers {
                 compositor.set_children(root, vec![layer]);
                 LayerAttachment::ColorFilter { layer }
             }
-            WidgetKind::Image { image: Some(_), blend_mode, .. }
-                if *blend_mode != BlendMode::SrcOver =>
-            {
-                let layer = compositor.create_blend(*blend_mode);
-                compositor.set_children(layer, picture.into_iter().collect());
-                compositor.set_children(root, vec![layer]);
-                LayerAttachment::Blend { layer }
-            }
-            WidgetKind::Blend {
-                mode,
-                isolate: true,
+            WidgetKind::Image {
+                blend_mode,
+                source_effects,
                 ..
-            } => {
+            } if matches!(spec.attachment, AttachmentSpec::RasterEffects(_)) => {
+                let mut raster = RasterEffectLayers::default();
+                raster.reconcile(compositor, source_effects.raster_paint_sources(*blend_mode));
+                raster.attach(compositor, root, picture);
+                LayerAttachment::RasterEffects(Rc::new(raster))
+            }
+            WidgetKind::Blend { mode, .. } => {
                 let layer = compositor.create_blend(*mode);
                 compositor.set_children(root, vec![layer]);
                 LayerAttachment::Blend { layer }
@@ -517,6 +615,9 @@ impl RenderLayers {
             LayerAttachment::DropShadow { .. } => AttachmentSpec::DropShadow,
             LayerAttachment::ColorFilter { .. } => AttachmentSpec::ColorFilter,
             LayerAttachment::Blend { .. } => AttachmentSpec::Blend,
+            LayerAttachment::RasterEffects(ref layers) => {
+                AttachmentSpec::RasterEffects(layers.flags())
+            }
             LayerAttachment::ShaderMask { .. } => AttachmentSpec::ShaderMask,
             LayerAttachment::BackdropFilter { .. } => AttachmentSpec::BackdropFilter,
             LayerAttachment::Annotation { .. } => AttachmentSpec::Annotation,
@@ -535,6 +636,15 @@ impl RenderLayers {
     }
 
     pub(crate) fn owned_ids(&self) -> [Option<LayerId>; 5] {
+        if let LayerAttachment::RasterEffects(layers) = &self.attachment {
+            return [
+                Some(self.root),
+                self.picture,
+                layers.filter,
+                layers.opacity,
+                layers.blend,
+            ];
+        }
         let (attachment_a, attachment_b) = match self.attachment {
             LayerAttachment::Direct => (None, None),
             LayerAttachment::Clip { clip, content, .. } => (Some(clip), Some(content)),
@@ -561,19 +671,33 @@ impl RenderLayers {
             return false;
         }
 
-        if let WidgetKind::Image { image, blend_mode, .. } = widget {
-            // Only the optional blend stage changes. Keep the existing
-            // image picture attached across source-over toggles.
-            self.attachment = if image.is_none() || *blend_mode == BlendMode::SrcOver {
-                if let Some(layer) = self.blend() {
-                    compositor.remove(layer);
-                }
-                LayerAttachment::Direct
+        if let WidgetKind::Image {
+            image,
+            blend_mode,
+            source_effects,
+            ..
+        } = widget
+        {
+            // Keep the picture and unchanged stages by identity even when
+            // a new tint, opacity, or blend stage must be inserted.
+            let mut raster = match std::mem::replace(&mut self.attachment, LayerAttachment::Direct)
+            {
+                LayerAttachment::RasterEffects(layers) => layers,
+                _ => Rc::new(RasterEffectLayers::default()),
+            };
+            let source = if image.is_some() {
+                source_effects.raster_paint_sources(*blend_mode)
             } else {
-                LayerAttachment::Blend {
-                    layer: compositor.create_blend(*blend_mode),
+                RasterPaintSources {
+                    blend: None,
+                    filter: None,
+                    opacity: None,
                 }
             };
+            Rc::make_mut(&mut raster).reconcile(compositor, source);
+            if raster.flags() != 0 {
+                self.attachment = LayerAttachment::RasterEffects(raster);
+            }
             return true;
         }
         self.remove_owned_except_root(compositor);
@@ -608,6 +732,11 @@ impl RenderLayers {
             LayerAttachment::Clip { clip, content, .. } => {
                 compositor.remove(content);
                 compositor.remove(clip);
+            }
+            LayerAttachment::RasterEffects(layers) => {
+                for stage in layers.ids().into_iter().flatten() {
+                    compositor.remove(stage);
+                }
             }
             attachment => {
                 compositor.remove(attachment.primary_layer().expect("attachment layer"));
@@ -734,15 +863,17 @@ impl RenderLayers {
             (LayerAttachment::ColorFilter { layer }, RenderKind::ColorFiltered { filter, .. }) => {
                 compositor.update_color_filter(*layer, **filter);
             }
-            (
-                LayerAttachment::Blend { layer },
-                RenderKind::Blend { mode }
-                | RenderKind::Image {
-                    blend_mode: mode, ..
-                },
-            ) => {
+            (LayerAttachment::Blend { layer }, RenderKind::Blend { mode }) => {
                 compositor.update_blend(*layer, *mode);
             }
+            (
+                LayerAttachment::RasterEffects(layers),
+                RenderKind::Image {
+                    blend_mode,
+                    source_effects,
+                    ..
+                },
+            ) => layers.update(compositor, source_effects.raster_paint_sources(*blend_mode)),
             (
                 LayerAttachment::ShaderMask { layer },
                 RenderKind::ShaderMask { shader, blend_mode },
@@ -909,10 +1040,9 @@ impl RenderLayers {
             | LayerAttachment::Transform { layer: content } => {
                 compositor.set_children(content, child_layers);
             }
-            LayerAttachment::Blend { layer } => {
-                child_layers.extend(self.picture);
-                compositor.set_children(layer, child_layers);
-                compositor.set_children(self.root, vec![layer]);
+            LayerAttachment::RasterEffects(ref layers) => {
+                debug_assert!(child_layers.is_empty(), "retained image is a leaf");
+                layers.attach(compositor, self.root, self.picture);
             }
             _ => {
                 let layer = self

@@ -2363,3 +2363,5 @@ packages/flutter/test/rendering/image_test.dart	154	Null image sizing	paired-mat
 packages/flutter/test/rendering/image_test.dart	229	RenderImage disposes its image	partial-match	upstream-render-image-lifetime.md
 packages/flutter/test/rendering/image_test.dart	246	RenderImage does not dispose its image if setting the same image twice	partial-match	upstream-render-image-lifetime.md
 packages/flutter/test/rendering/image_test.dart	264	Render image disposes its image when it is disposed	partial-match	upstream-render-image-lifetime.md
+packages/flutter/test/widgets/basic_test.dart	24	properties	partial-match	upstream-raw-image-blend.md#retaining-the-source-effects-with-the-render-object
+packages/flutter/test/rendering/image_test.dart	210	update image colorBlendMode	partial-match	upstream-raw-image-blend.md#retaining-the-source-effects-with-the-render-object
