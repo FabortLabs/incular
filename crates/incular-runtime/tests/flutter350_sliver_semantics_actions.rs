@@ -524,3 +524,114 @@ fn tap_action_conflict_stays_separate_even_if_one_annotation_blocks_it() {
         assert_eq!(&*semantic.borrow(), &[1]);
     }
 }
+
+fn disjoint_actions_scene(
+    boxed: bool,
+    block_tap: bool,
+    second_is_tap: bool,
+    marker: &'static str,
+    trace: Rc<RefCell<Vec<&'static str>>>,
+) -> Widget {
+    use incular_widgets::{SliverList, SliverMainAxisGroup};
+
+    let annotation = move |index, child: Widget| {
+        let trace = trace.clone();
+        let sem = Semantics::new(child).label(if index == 0 { "label1" } else { "label2" });
+        if index == 0 {
+            sem.block_user_actions(block_tap)
+                .on_tap(move || trace.borrow_mut().push("tap"))
+        } else if second_is_tap {
+            sem.on_tap(move || trace.borrow_mut().push(marker))
+        } else {
+            sem.on_long_press(move || trace.borrow_mut().push(marker))
+        }
+    };
+    let group: Box<dyn Sliver> = if boxed {
+        Box::new(SliverList::builder(2, move |i| {
+            annotation(i, SizedBox::new().height(10.).into())
+        }))
+    } else {
+        Box::new(SliverMainAxisGroup::new((0..2).map(
+            |i| -> Box<dyn Sliver> {
+                let annotation = annotation.clone();
+                Box::new(SliverSemantics::new(
+                    move || annotation(i, SizedBox::shrink().into()),
+                    SliverToBoxAdapter::new(SizedBox::new().height(10.)),
+                ))
+            },
+        )))
+    };
+    let slivers: [Box<dyn Sliver>; 1] = [Box::new(SliverSemantics::new(
+        || Semantics::default().container(true),
+        BoxedSliver(group),
+    ))];
+    Directionality::new(TextDirection::Ltr, CustomScrollView::new(slivers)).into()
+}
+
+#[test]
+fn blocked_tap_merges_its_label_with_a_long_press_but_not_its_callback() {
+    for boxed in [false, true] {
+        let trace = Rc::new(RefCell::new(Vec::new()));
+        let build =
+            |block, marker| disjoint_actions_scene(boxed, block, false, marker, trace.clone());
+        let mut runtime = Runtime::new(build(true, "long")).unwrap();
+        frame(&mut runtime);
+        let merged = node(&runtime, "label1\nlabel2");
+        let id = merged.id;
+        assert!(merged.children.is_empty());
+        assert!(!merged.actions.contains(&SemanticActionKind::Activate));
+        assert!(merged.actions.contains(&SemanticActionKind::LongPress));
+        assert!(!runtime.dispatch_semantic_action(id, SemanticAction::Activate));
+        assert!(runtime.dispatch_semantic_action(id, SemanticAction::LongPress));
+        assert_eq!(&*trace.borrow(), &["long"]);
+
+        let root = runtime.tree().root().unwrap();
+        let revision = runtime.tree().semantics().revision();
+        runtime
+            .schedule_update(root, build(true, "replacement"))
+            .unwrap();
+        frame(&mut runtime);
+        assert_eq!(node(&runtime, "label1\nlabel2").id, id);
+        assert_eq!(runtime.tree().semantics().revision(), revision);
+        assert!(runtime.dispatch_semantic_action(id, SemanticAction::LongPress));
+        assert_eq!(&*trace.borrow(), &["long", "replacement"]);
+
+        runtime
+            .schedule_update(root, build(false, "replacement"))
+            .unwrap();
+        frame(&mut runtime);
+        let merged = node(&runtime, "label1\nlabel2");
+        assert_eq!(merged.id, id);
+        assert!(merged.actions.contains(&SemanticActionKind::Activate));
+        assert!(runtime.dispatch_semantic_action(id, SemanticAction::Activate));
+        assert_eq!(&*trace.borrow(), &["long", "replacement", "tap"]);
+    }
+}
+
+#[test]
+fn declarative_tap_conflict_is_not_removed_by_blocking_one_callback() {
+    for boxed in [false, true] {
+        let trace = Rc::new(RefCell::new(Vec::new()));
+        let mut runtime = Runtime::new(disjoint_actions_scene(
+            boxed,
+            true,
+            true,
+            "second tap",
+            trace.clone(),
+        ))
+        .unwrap();
+        frame(&mut runtime);
+        let first = node(&runtime, "label1").id;
+        let second = node(&runtime, "label2").id;
+        assert!(
+            runtime
+                .tree()
+                .semantics()
+                .iter()
+                .any(|(_, parent)| parent.children == [first, second])
+        );
+        assert!(!runtime.dispatch_semantic_action(first, SemanticAction::Activate));
+        assert!(runtime.dispatch_semantic_action(second, SemanticAction::Activate));
+        assert_eq!(&*trace.borrow(), &["second tap"]);
+    }
+}

@@ -1466,6 +1466,7 @@ impl WidgetTree {
                 .callbacks
                 .callback(action)
                 .or_else(|| self.gesture_semantic_callback(element, action))
+                .or_else(|| self.merged_sliver_action_callback(id, action))
         })
     }
     #[must_use]

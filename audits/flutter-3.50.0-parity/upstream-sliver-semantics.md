@@ -156,9 +156,15 @@ tests confirm that:
   Only the unblocked node can invoke its handler. The explicit/action
   contract matches; Incular's portable reveal action may appear on
   surrounding unblocked nodes.
-- Automatic merging of *disjoint* child actions beneath a sliver
-  container (the blocked tap plus unblocked long-press cases) remains
-  open. It is different from merely filtering the blocked callback.
+- When a blocked tap and an unblocked long press have compatible
+  annotations, their labels merge in traversal order on the sliver
+  node. The blocked tap is not advertised or dispatched. The live
+  long-press handler can be replaced without a native tree update, and
+  unblocking restores tap dispatch on the same merged node.
+- Action conflicts are assessed before filtering blocked handlers. Two
+  declared taps still prevent merging even if one cannot execute.
 
-Both the eight focused action tests and the fifteen existing runtime
-action/keyboard focus regressions passed.
+The ten focused action tests and fifteen runtime action/keyboard focus
+regressions passed. The merged cases are partial matches because
+Incular exposes its portable `ShowOnScreen` action on the node,
+whereas Flutter uses a separate fallback rather than an action bit.

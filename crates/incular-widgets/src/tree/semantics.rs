@@ -31,6 +31,7 @@ enum SemanticTextMerge {
     #[default]
     None,
     CompatibleLabels,
+    CompatibleActions,
     HintAndValue {
         take_value: bool,
     },
@@ -55,10 +56,26 @@ struct MergedSemanticSummary {
     focus_block: AccessibilityFocusBlockType,
     custom_actions: Vec<CustomSemanticsActionId>,
     has_custom_callback: bool,
+    standard_actions: u16,
     enabled: Option<bool>,
     hit_test: SemanticsHitTestBehavior,
     tags: Vec<incular_semantics::SemanticsTag>,
 }
+
+// Stable bit positions for explicitly supplied, argumentless widget callbacks.
+const MERGEABLE_SEMANTIC_ACTIONS: [SemanticActionKind; 11] = [
+    SemanticActionKind::Activate,
+    SemanticActionKind::LongPress,
+    SemanticActionKind::Dismiss,
+    SemanticActionKind::Increment,
+    SemanticActionKind::Decrement,
+    SemanticActionKind::ScrollForward,
+    SemanticActionKind::ScrollBackward,
+    SemanticActionKind::ScrollLeft,
+    SemanticActionKind::ScrollRight,
+    SemanticActionKind::ScrollUp,
+    SemanticActionKind::ScrollDown,
+];
 
 impl MergedSemanticSummary {
     fn add_label(
@@ -985,8 +1002,15 @@ impl WidgetTree {
         let retained_id = self.semantic_ids.get(&element).copied();
         let joins_text_merge = parent_text_merge != SemanticTextMerge::None
             && self.can_merge_text_fragment(element, entry, parent_text_merge);
+        let action_fragments = if joins_text_merge || outside_sliver_cache {
+            None
+        } else {
+            self.sliver_action_fragments(element, entry)
+        };
         let own_text_merge = if joins_text_merge || outside_sliver_cache {
             SemanticTextMerge::None
+        } else if action_fragments.is_some() {
+            SemanticTextMerge::CompatibleActions
         } else if can_own_blocked_labels(entry, own_focus_block)
             || self.is_sliver_label_annotation_owner(element, entry)
         {
@@ -1345,6 +1369,29 @@ impl WidgetTree {
                 }
             }
         }
+        if let Some(fragments) = action_fragments {
+            if let Some(own) = element_own_label(entry) {
+                merged.add_label(
+                    &own,
+                    self.semantic_label_direction(element, entry),
+                    element_label_attributes(entry),
+                );
+            }
+            for (child, mask) in fragments {
+                let source =
+                    self.element_live(child, "compatible action fragment must remain live");
+                if let Some(label) = element_own_label(source) {
+                    merged.add_label(
+                        &label,
+                        self.semantic_label_direction(child, source),
+                        element_label_attributes(source),
+                    );
+                }
+                if !self.pointer_actions_blocked(child) {
+                    merged.standard_actions |= mask;
+                }
+            }
+        }
         let merged_label = (!merged.label.is_empty()).then_some(merged.label);
         if let Some(explicit) = &entry.widget.semantic_properties().explicit {
             if explicit.role == SemanticRole::GenericContainer && role.is_some() {
@@ -1496,6 +1543,7 @@ impl WidgetTree {
             focusable && (focus_annotation.is_none() || self.focus_semantic_actions_enabled);
         let has_user_actions = focus_action
             || !actions.is_empty()
+            || merged.standard_actions != 0
             || !merged.custom_actions.is_empty()
             || absorbs_descendant_semantics(entry);
         if has_user_actions && self.pointer_actions_blocked(element) {
@@ -1523,6 +1571,11 @@ impl WidgetTree {
                 && self.semantic_activation_target(element).is_some()
             {
                 actions.push(SemanticActionKind::Activate);
+            }
+            for (bit, kind) in MERGEABLE_SEMANTIC_ACTIONS.into_iter().enumerate() {
+                if merged.standard_actions & (1 << bit) != 0 && !actions.contains(&kind) {
+                    actions.push(kind);
+                }
             }
             merged.custom_actions.sort_unstable_by_key(|id| id.0);
             merged.custom_actions.dedup();
@@ -1987,12 +2040,156 @@ impl WidgetTree {
             })
     }
 
+    /// Forms a merge only from a sliver's simple annotation fragments.
+    /// Count the declared actions before suppression: two tap handlers
+    /// conflict even if one is currently blocked from accessibility.
+    fn sliver_action_fragments(
+        &self,
+        element: ElementId,
+        entry: &Element,
+    ) -> Option<Vec<(ElementId, u16)>> {
+        let properties = entry.widget.semantic_properties();
+        let explicit = properties.explicit.as_ref()?;
+        if explicit.role != SemanticRole::GenericContainer
+            || !explicit.state.container
+            || explicit.state.explicit_child_nodes
+            || properties.merge_descendants
+            || properties.callbacks != SemanticCallbacks::default()
+            || !self
+                .viewport_sliver_child(entry.parent?, element)
+                .is_some_and(|(_, id)| crate::scrolling::is_semantics_anchor(id))
+        {
+            return None;
+        }
+
+        let mut work = self.visible_semantic_children(element, entry).into_owned();
+        work.reverse();
+        let mut fragments = Vec::new();
+        let mut actions = 0;
+        let mut labels = 0;
+        while let Some(child) = work.pop() {
+            let source = self.elements.get(child.0)?;
+            if !self.can_contribute_merged_semantics(source) {
+                continue;
+            }
+            let mask = self.sliver_action_fragment_mask(child, source)?;
+            if actions & mask != 0 {
+                return None;
+            }
+            actions |= mask;
+            if element_own_label(source).is_some() {
+                labels += 1;
+                fragments.push((child, mask));
+            }
+            work.extend(
+                self.visible_semantic_children(child, source)
+                    .iter()
+                    .rev()
+                    .copied(),
+            );
+        }
+        (labels >= 2 && actions != 0).then_some(fragments)
+    }
+
+    fn sliver_action_fragment_mask(&self, element: ElementId, entry: &Element) -> Option<u16> {
+        let properties = entry.widget.semantic_properties();
+        if !self.can_contribute_merged_semantics(entry)
+            || properties.merge_descendants
+            || properties.tag_for_children.is_some()
+            || properties.locale_for_subtree.is_some()
+            || properties.description.is_some()
+            || !properties.callbacks.custom.is_empty()
+            || matches!(entry.widget.kind(), WidgetKind::IndexedSemantics { .. })
+        {
+            return None;
+        }
+        let Some(explicit) = properties.explicit.as_deref() else {
+            return (!self.focus_semantics_boundary(element, entry)).then_some(0);
+        };
+        if explicit.role != SemanticRole::GenericContainer
+            || explicit.label.is_none()
+            || explicit.value.is_some()
+            || explicit.description.is_some()
+            || explicit.actions.iter().any(|action| {
+                !MERGEABLE_SEMANTIC_ACTIONS.contains(action)
+                    || !properties.callbacks.supports(*action)
+            })
+            || explicit.state
+                != (SemanticState {
+                    text_direction: explicit.state.text_direction,
+                    text_attributes: explicit.state.text_attributes.clone(),
+                    ..SemanticState::default()
+                })
+            || matches!(
+                entry.widget.kind(),
+                WidgetKind::Button(_)
+                    | WidgetKind::Image { .. }
+                    | WidgetKind::Gesture { .. }
+                    | WidgetKind::RawInput { .. }
+                    | WidgetKind::TextField(_)
+                    | WidgetKind::SelectableText { .. }
+                    | WidgetKind::Scroll { .. }
+                    | WidgetKind::SliverViewport { .. }
+                    | WidgetKind::Table { .. }
+            )
+        {
+            return None;
+        }
+        Some(
+            MERGEABLE_SEMANTIC_ACTIONS
+                .into_iter()
+                .enumerate()
+                .fold(0, |mask, (bit, action)| {
+                    mask | if properties.callbacks.supports(action) {
+                        1 << bit
+                    } else {
+                        0
+                    }
+                }),
+        )
+    }
+
+    fn merged_sliver_action_source(
+        &self,
+        element: ElementId,
+        action: SemanticActionKind,
+    ) -> Option<ElementId> {
+        let bit = MERGEABLE_SEMANTIC_ACTIONS
+            .iter()
+            .position(|&candidate| candidate == action)?;
+        let entry = self.elements.get(element.0)?;
+        self.sliver_action_fragments(element, entry)?
+            .into_iter()
+            .find_map(|(child, mask)| {
+                (mask & (1 << bit) != 0 && !self.pointer_actions_blocked(child)).then_some(child)
+            })
+    }
+
+    /// Resolve the current mounted callback rather than caching its pointer
+    /// in the projected node. Handler-only replacements remain graph no-ops.
+    pub(super) fn merged_sliver_action_callback(
+        &self,
+        element: ElementId,
+        action: SemanticActionKind,
+    ) -> Option<Rc<dyn Fn() + 'static>> {
+        let child = self.merged_sliver_action_source(element, action)?;
+        self.elements
+            .get(child.0)?
+            .widget
+            .semantic_properties()
+            .callbacks
+            .callback(action)
+    }
+
     fn can_merge_text_fragment(
         &self,
         element: ElementId,
         entry: &Element,
         policy: SemanticTextMerge,
     ) -> bool {
+        if policy == SemanticTextMerge::CompatibleActions {
+            return self.sliver_action_fragment_mask(element, entry).is_some();
+        }
         let properties = entry.widget.semantic_properties();
         if !self.can_contribute_merged_semantics(entry)
             || properties.merge_descendants
@@ -2012,7 +2209,7 @@ impl WidgetTree {
                 let merges_validation = policy == SemanticTextMerge::CompatibleLabels;
                 let validation = state.effective_validation_result();
                 let text_is_compatible = match policy {
-                    SemanticTextMerge::None => false,
+                    SemanticTextMerge::None | SemanticTextMerge::CompatibleActions => false,
                     SemanticTextMerge::CompatibleLabels => {
                         (explicit.label.is_some() || validation != SemanticValidationResult::None)
                             && explicit.value.is_none()
@@ -2259,6 +2456,7 @@ impl WidgetTree {
     pub fn semantic_activation_target(&self, element: ElementId) -> Option<ElementId> {
         let entry = self.elements.get(element.0)?;
         self.find_semantic_activation_target(element, absorbs_descendant_semantics(entry))
+            .or_else(|| self.merged_sliver_action_source(element, SemanticActionKind::Activate))
     }
 
     fn find_semantic_activation_target(
