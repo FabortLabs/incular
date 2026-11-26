@@ -52,6 +52,7 @@ struct AnchorNode {
     open: Cell<bool>,
     position: Cell<Option<Offset>>,
     parent: RefCell<Weak<AnchorNode>>,
+    controller: RefCell<Option<MenuController>>,
     children: RefCell<Vec<Weak<AnchorNode>>>,
     callbacks: RefCell<Callbacks>,
     /// `childFocusNode`: focused when a root overlay anchor opens.
@@ -70,6 +71,7 @@ impl AnchorNode {
             open: Cell::new(false),
             position: Cell::new(None),
             parent: RefCell::new(Weak::new()),
+            controller: RefCell::new(None),
             children: RefCell::new(Vec::new()),
             callbacks: RefCell::new(Callbacks::default()),
             child_focus_node: RefCell::new(None),
@@ -135,9 +137,32 @@ impl AnchorNode {
         *self.parent.borrow_mut() = parent.as_ref().map_or_else(Weak::new, Rc::downgrade);
     }
 
-    /// `closeChildren`: asks each submenu to close, through its
-    /// `onCloseRequested`.
+    /// Replaces the controller's ownership without replacing the retained
+    /// menu. Detaching a node must not clear a controller another node owns.
+    fn bind_controller(self: &Rc<Self>, controller: &MenuController) {
+        let mut bound = self.controller.borrow_mut();
+        if bound.as_ref().is_some_and(|old| Rc::ptr_eq(&old.anchor, &controller.anchor)) {
+            return;
+        }
+        if let Some(old) = bound.replace(controller.clone()) {
+            let mut anchor = old.anchor.borrow_mut();
+            if std::ptr::eq(anchor.as_ptr(), Rc::as_ptr(self)) {
+                *anchor = Weak::new();
+            }
+        }
+        *controller.anchor.borrow_mut() = Rc::downgrade(self);
+    }
+
+    /// An actual close hides every descendant, regardless of whether it
+    /// would defer a direct close request.
     fn close_children(&self) {
+        for child in self.live_children() {
+            child.close();
+        }
+    }
+
+    /// Asks each child to run its own close sequence.
+    fn request_children_close(&self) {
         for child in self.live_children() {
             child.request_close();
         }
@@ -169,7 +194,7 @@ impl AnchorNode {
             self.close();
         }
         if let Some(parent) = self.parent() {
-            parent.close_children();
+            parent.request_children_close();
         }
         self.position.set(position);
         self.open.set(true);
@@ -231,7 +256,7 @@ impl AnchorNode {
     /// Flutter's does from a [`TapRegion`] in `tapRegionGroupId`.
     fn handle_outside_tap(&self) {
         if self.is_open() {
-            self.close_children();
+            self.request_children_close();
         }
     }
 
@@ -250,7 +275,7 @@ impl AnchorNode {
     /// `requestClose`, through `onCloseRequested` as for opening.
     fn request_close(self: &Rc<Self>) {
         if self.is_group {
-            self.close();
+            self.request_children_close();
             return;
         }
         let requested = self.callbacks.borrow().on_close_requested.clone();
@@ -265,6 +290,8 @@ impl AnchorNode {
             }
             None => self.close(),
         }
+        // A deferred parent's request still reaches its existing children.
+        self.request_children_close();
     }
 }
 
@@ -308,8 +335,10 @@ impl MenuController {
 
     /// Closes the submenus and leaves this menu open.
     pub fn close_children(&self) {
-        if let Some(node) = self.node() {
-            node.close_children();
+        let node = self.node();
+        debug_assert!(node.is_some(), "MenuController must be attached (_anchor != null)");
+        if let Some(node) = node {
+            node.request_children_close();
         }
     }
 
@@ -317,9 +346,8 @@ impl MenuController {
     /// anchor or group.
     #[must_use]
     pub fn maybe_of(context: &BuildContext<'_>) -> Option<Self> {
-        context.depend_on::<AnchorScope>().map(|scope| Self {
-            anchor: Rc::new(RefCell::new(Rc::downgrade(&scope.0))),
-        })
+        context.depend_on::<AnchorScope>()
+            .and_then(|scope| scope.0.controller.borrow().clone())
     }
 }
 
@@ -466,7 +494,7 @@ impl RawMenuAnchor {
 
     fn build(&self, node: &Rc<AnchorNode>, context: &BuildContext<'_>) -> Widget {
         node.attach(context.depend_on::<AnchorScope>().map(|scope| scope.0));
-        *self.controller.anchor.borrow_mut() = Rc::downgrade(node);
+        node.bind_controller(&self.controller);
         node.child_focus_node.replace(self.child_focus_node.clone());
         *node.callbacks.borrow_mut() = Callbacks {
             on_open: self.callbacks.on_open.clone(),
@@ -564,7 +592,7 @@ impl From<RawMenuAnchorGroup> for Widget {
             move |state, context, _| {
                 let node = &state.0;
                 node.attach(context.depend_on::<AnchorScope>().map(|scope| scope.0));
-                *value.controller.anchor.borrow_mut() = Rc::downgrade(node);
+                node.bind_controller(&value.controller);
                 node.track_view_size(context.viewport());
                 let root = node.root();
                 // A tap outside the tree closes the group's menus.

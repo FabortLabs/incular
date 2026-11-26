@@ -61,3 +61,23 @@ first. The pending, uncrossed train does not replay an unchanged value;
 the departed train stops notifying immediately. The reference explicitly
 sets the initial controller value before registration to compare states
 without its first unrelated status report.
+
+## Raw menu controller and close lifecycle
+
+Six pinned originals and their focused Incular counterparts now pair.
+Replacing the controller for either an anchor or a group detaches the
+old handle without changing whether the retained menu is open. Disposal
+detaches both kinds as well. The detached handle reports closed, close
+is safe, and closeChildren produces the expected debug attachment
+diagnostic. Handles obtained from a descendant share that ownership.
+
+The native close-order cases open the child using actual retained
+pointer events. Both forms close children before their parent even if
+a child defers requests. The authored reference also verifies that a
+deferred parent's **request** reaches each child, but invoking the
+parent's hide callback then forcibly closes children first.
+
+Five separate legacy RawMenuAnchor fixture failures were reproduced
+with the production patch reverted. They are not covered by this
+lifecycle repair; focus adoption and outside interaction remain separate
+checks.
