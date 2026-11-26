@@ -147,3 +147,28 @@ pairs at the watcher/analysis boundary, where Flutter's tests also
 inject the watcher and analysis services. Incular returns a local
 timing result rather than transmitting Flutter analytics. Native filesystem integration is checked above. IDE transport and
 existing-DTD initialization are still separate work.
+
+
+## Shared readiness on an existing IDE connection
+
+All seven pinned `dtd_services_test.dart` registrations passed. The
+Incular pair uses `PreviewIde` with controlled connection events, as
+the Flutter originals inject fake DTD. Concurrent workspace and
+document requests share exactly one listener, one stream request,
+and one registry query. The client attaches locally before
+subscribing, accepts an already-subscribed stream, waits if any of
+the three analysis methods are missing, and does not wait for an
+event when all methods are present. The workspace barrier uses that
+same connection. A failed subscription drops the listener before
+the next attempt; the native controls also cover cancellation, a
+bounded initialization timeout, and unrelated events.
+
+Nine focused Rust tests passed. The readiness adapter assumes an
+already-connected transport. It never starts an analysis server,
+but does not itself open an IDE socket or define a cross-language
+wire protocol. Service launch, scaffold registration and end-to-end
+IDE discovery remain unverified.
+
+```sh
+cargo test --locked --offline -j1 -p incular-devtools --test flutter350_preview_ide -- --test-threads=1
+```

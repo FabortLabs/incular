@@ -30,9 +30,9 @@ Pinned Flutter 3.50.0 `ab2912035e`; unchanged Incular `c647cb85`.
 - Four original preview DTD registrations pass on pinned Flutter
   offline (concurrent preview requests, wait for initialized event,
   already-ready LSP, and cancellation on failed subscription).
-  Incular has no analogous public tool service. This exercised
-  hermetic fake DTD and memory files only, not an actual daemon or
-  network; four reference-only results.
+  Those were reference-only at the time. They now pair at the
+  connected transport boundary; see
+  [preview IDE readiness](upstream-widget-previews-runtime.md#shared-readiness-on-an-existing-ide-connection).
 
 ## Mounted Focus callbacks and permissions
 
