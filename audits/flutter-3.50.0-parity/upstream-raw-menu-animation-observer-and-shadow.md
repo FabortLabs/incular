@@ -219,3 +219,16 @@ removed. The retained menu stays open and the overlay builder
 gets the new rectangle. Pinned `:3212` and `:3228` confirm a
 zero-area root can open safely and a zero-area group remains closed
 after its controller's no-op open call.
+
+### Outside activation consumption and groups
+
+Pinned `:1576`/`:1654` pair with real native pointer streams:
+a closed menu does not consume the outside button, and an outside
+tap closes the open tree descendant first regardless of consumption.
+Only an open tree with consumption enabled prevents the outside
+button's selection.
+
+Pinned `:1522` pairs with a panel positioned away from its anchor:
+the same anchor tap is inside while the panel joins the anchor's
+TapRegion group, but outside after the reopened panel omits the
+group ID. The test asserts mounting and both callback results.
