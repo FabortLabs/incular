@@ -1718,3 +1718,5 @@ packages/flutter/test/widgets/raw_menu_anchor_test.dart	2921	DismissMenuAction t
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	600	MenuController.maybeIsOpenOf notifies dependents when isOpen changes	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#inherited-menu-state-and-anchor-builders
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	865	MenuController.maybeOf does not notify dependents when MenuController changes	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#inherited-menu-state-and-anchor-builders
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	2174	Menu builder rebuilds when isOpen state changes	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#inherited-menu-state-and-anchor-builders
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	1081	Escape key closes menus	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#escape-routing-and-unrelated-focus
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	1147	Intents are not blocked by closed anchor	partial-match	upstream-raw-menu-animation-observer-and-shadow.md#escape-routing-and-unrelated-focus

@@ -142,3 +142,190 @@ fn dismissing_from_the_focused_submenu_closes_all_ancestors() {
 fn dismissing_from_the_focused_submenu_delivers_every_deferred_request() {
     exercise_dismiss_action(true);
 }
+
+fn send_key(
+    runtime: &mut Runtime,
+    logical: incular_core::NamedKey,
+    code: incular_core::Code,
+) -> bool {
+    use incular_core::{KeyboardEvent, KeyboardKey};
+    let key = KeyboardKey::Named(logical);
+    let handled = runtime.dispatch_keyboard_event(KeyboardEvent::key_down(key.clone(), code));
+    let _ = runtime.dispatch_keyboard_event(KeyboardEvent::key_up(key, code));
+    handled
+}
+
+fn positioned_below(bounds: incular_core::Rect, child: Widget) -> Widget {
+    use incular_widgets::{Positioned, Stack};
+    Stack::new([Widget::from(
+        Positioned::new(child)
+            .left(bounds.origin.x)
+            .top(bounds.origin.y + bounds.size.height),
+    )])
+    .into()
+}
+
+#[test]
+fn escape_from_a_sibling_panel_or_from_a_nested_button_dismisses_the_group() {
+    use incular_core::{Code, NamedKey};
+    use incular_widgets::{Directionality, RawMenuAnchorGroup, Row, TextDirection};
+    let group = MenuController::new();
+    let root = MenuController::new();
+    let child = MenuController::new();
+    let sibling_focus = FocusNode::new();
+    let deep_focus = FocusNode::new();
+    let popup: Widget = Focus::new(Widget::box_(Size::new(100., 40.), PANEL))
+        .node(deep_focus.clone())
+        .into();
+    let submenu = RawMenuAnchor::new(child.clone(), move |_, info| {
+        positioned_below(info.anchor_rect, popup.clone())
+    })
+    .child(
+        Widget::from(
+            GestureDetector::new(Widget::box_(Size::new(100., 40.), PANEL)).on_tap({
+                let child = child.clone();
+                move || child.open(None)
+            }),
+        )
+        .with_key(Key::Value(4)),
+    );
+    let submenu: Widget = submenu.into();
+    let scene = RawMenuAnchorGroup::new(
+        group.clone(),
+        Row::new([
+            Widget::from(
+                Focus::new(Widget::box_(Size::new(100., 30.), Color::WHITE))
+                    .node(sibling_focus.clone()),
+            ),
+            RawMenuAnchor::new(root.clone(), move |_, info| {
+                positioned_below(info.anchor_rect, submenu.clone())
+            })
+            .child(
+                Widget::from(
+                    GestureDetector::new(Widget::box_(Size::new(100., 30.), Color::WHITE)).on_tap(
+                        {
+                            let root = root.clone();
+                            move || root.open(None)
+                        },
+                    ),
+                )
+                .with_key(Key::Value(3)),
+            )
+            .into(),
+        ]),
+    );
+    let mut runtime =
+        Runtime::new(Directionality::new(TextDirection::Ltr, Center::new(scene)).into()).unwrap();
+    assert!(!frame(&mut runtime));
+    root.open(None);
+    assert!(frame(&mut runtime));
+    sibling_focus.request_focus();
+    assert!(frame(&mut runtime));
+    assert!(sibling_focus.has_primary_focus());
+    assert!(send_key(&mut runtime, NamedKey::Escape, Code::Escape));
+    assert!(!frame(&mut runtime));
+    assert!(!group.is_open());
+
+    tap(&mut runtime, Key::Value(3));
+    assert!(frame(&mut runtime));
+    tap(&mut runtime, Key::Value(4));
+    assert!(frame(&mut runtime));
+    deep_focus.request_focus();
+    assert!(frame(&mut runtime));
+    assert!(deep_focus.has_primary_focus());
+    assert!(group.is_open() && child.is_open());
+    assert!(send_key(&mut runtime, NamedKey::Escape, Code::Escape));
+    assert!(!frame(&mut runtime));
+    assert!(!group.is_open() && !child.is_open());
+}
+
+#[test]
+fn the_open_menu_gets_one_escape_request_but_closed_and_unrelated_focus_route_outward() {
+    use incular_core::{Code, KeyboardKey, Modifiers, NamedKey};
+    use incular_widgets::{CallbackShortcuts, Column, SingleActivator};
+    let controller = MenuController::new();
+    let nested = MenuController::new();
+    let anchor_focus = FocusNode::new();
+    let outside_focus = FocusNode::new();
+    let shortcut_log = Rc::new(RefCell::new(Vec::new()));
+    let menu_log = Rc::new(RefCell::new(Vec::new()));
+    let nested_menu: Widget = RawMenuAnchor::new(nested.clone(), |_, _| {
+        Widget::box_(Size::new(80., 30.), PANEL)
+    })
+    .child(Widget::box_(Size::new(100., 30.), Color::WHITE))
+    .on_close_requested({
+        let log = menu_log.clone();
+        move |_| log.borrow_mut().push("nested")
+    })
+    .into();
+    let root = RawMenuAnchor::new(controller.clone(), move |_, info| {
+        positioned_below(info.anchor_rect, nested_menu.clone())
+    })
+    .child(Focus::new(Widget::box_(Size::new(100., 30.), Color::WHITE)).node(anchor_focus.clone()))
+    .on_close_requested({
+        let log = menu_log.clone();
+        move |_| log.borrow_mut().push("root")
+    });
+    let scene = Column::new([
+        Widget::from(root),
+        Focus::new(Widget::box_(Size::new(100., 30.), Color::WHITE))
+            .node(outside_focus.clone())
+            .into(),
+    ]);
+    let mut shortcuts = CallbackShortcuts::new(scene);
+    for key in [
+        NamedKey::ArrowUp,
+        NamedKey::Tab,
+        NamedKey::ArrowLeft,
+        NamedKey::Escape,
+    ] {
+        let log = shortcut_log.clone();
+        shortcuts = shortcuts.shortcut(
+            SingleActivator::new(KeyboardKey::Named(key), Modifiers::empty()),
+            move || log.borrow_mut().push(key),
+        );
+    }
+    let mut runtime = Runtime::new(Center::new(shortcuts).into()).unwrap();
+    assert!(!frame(&mut runtime));
+    anchor_focus.request_focus();
+    assert!(!frame(&mut runtime));
+    assert!(anchor_focus.has_primary_focus());
+    for (key, code) in [
+        (NamedKey::ArrowUp, Code::ArrowUp),
+        (NamedKey::Tab, Code::Tab),
+        (NamedKey::ArrowLeft, Code::ArrowLeft),
+        (NamedKey::Escape, Code::Escape),
+    ] {
+        assert!(send_key(&mut runtime, key, code));
+    }
+    assert_eq!(
+        *shortcut_log.borrow(),
+        [
+            NamedKey::ArrowUp,
+            NamedKey::Tab,
+            NamedKey::ArrowLeft,
+            NamedKey::Escape
+        ]
+    );
+    shortcut_log.borrow_mut().clear();
+    assert!(menu_log.borrow().is_empty());
+
+    controller.open(None);
+    frame(&mut runtime);
+    nested.open(None);
+    frame(&mut runtime);
+    assert!(controller.is_open() && nested.is_open());
+    menu_log.borrow_mut().clear();
+    assert!(send_key(&mut runtime, NamedKey::Escape, Code::Escape));
+    assert_eq!(*menu_log.borrow(), ["root", "nested"]);
+    assert!(shortcut_log.borrow().is_empty());
+    assert!(controller.is_open() && nested.is_open());
+
+    outside_focus.request_focus();
+    frame(&mut runtime);
+    assert!(outside_focus.has_primary_focus());
+    assert!(send_key(&mut runtime, NamedKey::Escape, Code::Escape));
+    assert_eq!(*shortcut_log.borrow(), [NamedKey::Escape]);
+    assert_eq!(*menu_log.borrow(), ["root", "nested"]);
+    assert!(controller.is_open() && nested.is_open());
+}

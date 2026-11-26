@@ -188,3 +188,18 @@ closed painting and calls onOpen and onClose once each. Its builder
 runs under its own menu scope, so the lookup and explicit controller
 argument resolve the same handle. The test positions the panel
 below the anchor as the pinned original does.
+
+### Escape routing and unrelated focus
+
+Pinned `:1081` pairs: an actual Escape event from the group's
+sibling focus target or the deeply nested panel closes the whole
+menu tree. The authored Flutter probe and mounted native case also
+agree that one Escape delivers one deferred request per member and
+does not reach an enclosing handler when the focused menu is open.
+Closed menus and focus unrelated to the open menu route to the
+enclosing handler instead of dismissing every transient in the
+window. The existing early-tooltip and focus-stage tests still pass.
+
+The closed-anchor intent original (`:1147`) is partial: the native
+test covers ordinary outward shortcut routing and Escape, not
+direct dispatch of every Flutter focus-traversal intent type.

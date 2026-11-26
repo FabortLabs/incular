@@ -14,7 +14,7 @@ use incular_scroll::ScrollController;
 
 use crate::{
     BuildContext, Builder, FocusNode, MediaQuery, OverlayChildLayoutInfo, OverlayPortal, TapRegion,
-    TapRegionGroupId, TransientDismissPolicy, TransientDismissReason, TransientRole, Widget,
+    TapRegionGroupId, TransientDismissPolicy, TransientRole, Widget,
 };
 use crate::{scroll_aware_image_provider::ScrollableScope, tree::RetainedState};
 
@@ -458,9 +458,19 @@ impl DismissMenuAction {
 }
 
 /// The anchor identity and the open state visible to its descendants.
-struct AnchorScope {
+pub(crate) struct AnchorScope {
     node: Rc<AnchorNode>,
     open: bool,
+}
+
+impl AnchorScope {
+    pub(crate) fn dismiss_from_escape(&self) -> bool {
+        if !self.open || self.node.controller.borrow().is_none() {
+            return false;
+        }
+        self.node.root().request_close();
+        true
+    }
 }
 
 struct AnchorState {
@@ -690,23 +700,17 @@ impl RawMenuAnchor {
         let overlay_builder = self.overlay_builder.clone();
         let position = node.position.get();
         let overlay_group = group.clone();
-        let escape_root = Rc::downgrade(&root);
         let portal = OverlayPortal::new(anchor)
             .show(node.open.get())
             .role(TransientRole::Menu)
             .root_overlay(self.use_root_overlay)
             .dismiss_policy(TransientDismissPolicy {
                 outside_pointer: false,
-                escape: true,
+                // Escape resolves the nearest open menu in the focus
+                // route, rather than closing every window transient.
+                escape: false,
                 focus_loss: false,
                 parent_deactivation: true,
-            })
-            .on_dismiss(move |reason| {
-                if reason == TransientDismissReason::Escape
-                    && let Some(root) = escape_root.upgrade()
-                {
-                    root.request_close();
-                }
             })
             .overlay_child_layout_builder(move |context, layout: OverlayChildLayoutInfo| {
                 let info = RawMenuOverlayInfo {

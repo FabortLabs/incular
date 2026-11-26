@@ -551,10 +551,18 @@ impl WidgetTree {
         mut serve: impl FnMut(&incular_gestures::GestureCallbacks) -> bool,
     ) -> KeyEventResult {
         self.notify_key_observers(focused, &event);
+        let menu_escape = event.key == KeyboardKey::Named(NamedKey::Escape)
+            && incular_gestures::SingleActivator::new(
+                KeyboardKey::Named(NamedKey::Escape),
+                incular_core::Modifiers::empty(),
+            )
+            .accepts_with_lock_modes(&event, lock_modes);
         let mut current = focused;
         while let Some(id) = current {
-            if let Some(element) = self.elements.get(id.0)
-                && let WidgetKind::Gesture { callbacks, .. } = element.widget.kind()
+            let Some(element) = self.elements.get(id.0) else {
+                break;
+            };
+            if let WidgetKind::Gesture { callbacks, .. } = element.widget.kind()
                 && callbacks.has_keyboard_listener()
                 && serve(callbacks)
             {
@@ -563,7 +571,18 @@ impl WidgetTree {
                     return result;
                 }
             }
-            current = self.parent(id);
+            if menu_escape
+                && element
+                    .environment_override
+                    .as_ref()
+                    .and_then(|scope| {
+                        scope.value.downcast_ref::<crate::raw_menu_anchor::AnchorScope>()
+                    })
+                    .is_some_and(crate::raw_menu_anchor::AnchorScope::dismiss_from_escape)
+            {
+                return KeyEventResult::Handled;
+            }
+            current = element.parent;
         }
         KeyEventResult::Ignored
     }
