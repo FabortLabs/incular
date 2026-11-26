@@ -324,11 +324,14 @@ impl TextContextMenuState {
 
     /// Closes the menu. Returns whether one was showing.
     pub fn hide(&self) -> bool {
-        let was_showing = self.menu.borrow_mut().take().is_some();
-        if was_showing {
+        let menu = self.menu.borrow_mut().take();
+        if let Some(menu) = &menu {
             self.bump();
+            if menu.spell_check_span.is_some() {
+                incular_animation::scheduler::schedule_frame();
+            }
         }
-        was_showing
+        menu.is_some()
     }
 
     /// The open menu.

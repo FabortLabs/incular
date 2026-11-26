@@ -143,6 +143,7 @@ impl WidgetTree {
                     show_cursor,
                     cursor_color,
                     selection_color,
+                    spell_check_selection_color,
                     ..
                 } = **field;
                 let (layout, focused, scroll_x, scroll_y, revealed, decorations) = {
@@ -157,6 +158,11 @@ impl WidgetTree {
                         state.decorations.clone(),
                     )
                 };
+                let alternate_selection_color = spell_check_selection_color.filter(|_| {
+                    self.element_for_render(id)
+                        .is_some_and(|element| self.text_field_spell_check_menu_visible(element))
+                });
+                let selection_color = alternate_selection_color.unwrap_or(selection_color);
                 let (value_selection, value_empty) =
                     controller.with_value(|value| (value.selection, value.text.is_empty()));
                 let reveal_key = (controller.revisions().0, value_selection, focused, size);
@@ -344,6 +350,7 @@ impl WidgetTree {
                     });
                 }
                 let state = self.text_field_state_live_mut(id);
+                state.spell_selection_visible = alternate_selection_color.is_some();
                 state.scroll_x = active_scroll_x;
                 state.scroll_y = active_scroll_y;
                 if has_layout {

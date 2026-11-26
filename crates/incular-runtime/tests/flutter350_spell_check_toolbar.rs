@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use incular_config::{Constraints, Locale};
-use incular_core::{Offset, Size};
+use incular_core::{Color, Offset, Rect, Size};
 use incular_runtime::{Runtime, TextShortcutPlatform};
 use incular_text::{TextDecoration, TextEditingController, TextRange, TextSelection, TextStyle};
 use incular_widgets::{
@@ -23,6 +23,9 @@ impl SpellCheckService for Checker {
     }
 }
 
+const NORMAL_SELECTION: Color = Color::rgba(17, 70, 176, 190);
+const SUGGESTION_SELECTION: Color = Color::rgba(212, 36, 87, 183);
+
 type BuiltMenus = Rc<RefCell<Vec<TextContextMenu>>>;
 
 fn input(
@@ -36,6 +39,7 @@ fn input(
         .size(Size::new(260.0, 30.0))
         .text_direction(TextDirection::Ltr)
         .focus_node(focus.clone())
+        .selection_color(NORMAL_SELECTION)
         .read_only(read_only)
         .obscure_text(obscure)
         .context_menu_builder(|_, _| SizedBox::shrink().into())
@@ -43,6 +47,7 @@ fn input(
             SpellCheckConfiguration::new()
                 .spell_check_service(Checker)
                 .misspelled_text_style(TextStyle::new().decoration(TextDecoration::UNDERLINE))
+                .misspelled_selection_color(SUGGESTION_SELECTION)
                 .spell_check_suggestions_toolbar_builder({
                     let shown = shown.clone();
                     move |_, menu| {
@@ -185,4 +190,51 @@ fn a_span_with_no_replacements_still_builds_the_custom_toolbar() {
     let menu = last_menu(&shown);
     assert!(menu.spell_check_span().is_some());
     assert!(menu.button_items.is_empty());
+}
+
+fn draw_selections(runtime: &mut Runtime) -> (Vec<Rect>, Vec<Rect>) {
+    use incular_rendering::PaintCommand;
+    let (list, _) = runtime
+        .run_frame(Constraints::tight(Size::new(300., 40.)))
+        .unwrap();
+    let mut defaults = Vec::new();
+    let mut suggestions = Vec::new();
+    for command in list.commands() {
+        if let PaintCommand::Rect { rect, color } = command {
+            match *color {
+                NORMAL_SELECTION => defaults.push(*rect),
+                SUGGESTION_SELECTION => suggestions.push(*rect),
+                _ => {}
+            }
+        }
+    }
+    (defaults, suggestions)
+}
+
+#[test]
+fn suggestion_selection_color_repaints_and_restores_the_same_rectangles() {
+    let controller = TextEditingController::with_text("tset here");
+    let focus = FocusNode::new();
+    let shown = BuiltMenus::default();
+    let mut runtime = Runtime::new(input(&controller, &focus, &shown, false, false)).unwrap();
+    layout(&mut runtime);
+    focus.request_focus();
+    layout(&mut runtime);
+    let field = runtime.focused_element().unwrap();
+    controller.move_end(false);
+    controller.insert_text("!");
+    controller.set_selection(TextSelection::new(0, 2));
+    let (normal, special) = draw_selections(&mut runtime);
+    assert!(!normal.is_empty());
+    assert!(special.is_empty());
+
+    assert!(runtime.show_spell_check_suggestions_toolbar(field));
+    let (default_during, special_during) = draw_selections(&mut runtime);
+    assert!(default_during.is_empty());
+    assert_eq!(special_during, normal);
+    last_menu(&shown).hide();
+    let (default_after, special_after) = draw_selections(&mut runtime);
+    assert_eq!(default_after, normal);
+    assert!(special_after.is_empty());
+    assert_eq!(controller.selection(), TextSelection::new(0, 2));
 }

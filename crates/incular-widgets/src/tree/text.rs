@@ -743,6 +743,15 @@ impl WidgetTree {
         }
     }
 
+    pub(super) fn text_field_spell_check_menu_visible(&self, id: ElementId) -> bool {
+        self.elements.get(id.0).is_some_and(|element| {
+            let WidgetKind::TextField(spec) = element.widget.kind() else {
+                return false;
+            };
+            spec.context_menu.as_ref().is_some_and(|menu| menu.is_spell_check_showing())
+        })
+    }
+
     /// The overlay to which an enabled spell checker can present suggestions.
     #[doc(hidden)]
     #[must_use]

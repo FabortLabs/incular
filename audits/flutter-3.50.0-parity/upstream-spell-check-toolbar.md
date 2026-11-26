@@ -18,3 +18,15 @@ they assert Material/Cupertino widgets and labels, and one also has a
 web variant of its behavior which was not run in a browser. No design
 system toolbar, automatic gesture policy or alternate selection paint is
 claimed here.
+
+## Alternate selection paint
+
+The neutral Flutter fixture inspects the actual RenderEditable selection
+color after rebuilding the open and then dismissed toolbar. It uses the
+alternate ARGB value only while the spell-check toolbar is visible.
+The Incular focused display-list test compares the same selection
+rectangles before, during, and after the toolbar. Only their color
+changes; the range, geometry, and original highlight are preserved.
+The Incular visibility transition invalidates selection paint without
+requesting editor layout on its own. This authored control does not add
+an upstream registration.

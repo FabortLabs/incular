@@ -143,6 +143,7 @@ pub(crate) struct RenderTextFieldState {
     pub(crate) revealed: Option<(u64, incular_text::TextSelection, bool, incular_core::Size)>,
     /// The spell check answer the layout was built from.
     pub(crate) spell_revision: u64,
+    pub(crate) spell_selection_visible: bool,
     /// Styled runs of the laid-out text that carry a decoration, painted
     /// over the glyphs (misspelled words and a decorated field style).
     pub(crate) decorations: Arc<[incular_text::StyledTextRun]>,

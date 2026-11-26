@@ -203,6 +203,11 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                 show_cursor: spec.show_cursor,
                 cursor_color: spec.cursor_color,
                 selection_color: spec.selection_color,
+                spell_check_selection_color: spec
+                    .spell_check
+                    .as_ref()
+                    .filter(|_| !spec.spell_check_suppressed)
+                    .and_then(crate::SpellCheckConfiguration::suggestions_selection_color),
                 misspelled_text_style: spec
                     .spell_check
                     .as_ref()

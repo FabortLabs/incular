@@ -22,6 +22,7 @@ use incular_text::{TextDecoration, TextEditingValue, TextSpan, TextStyle};
 pub struct SpellCheckConfiguration {
     spell_check_service: Option<Rc<dyn SpellCheckService>>,
     misspelled_text_style: Option<TextStyle>,
+    misspelled_selection_color: Option<incular_core::Color>,
     toolbar_builder: Option<crate::EditableTextContextMenuBuilder>,
     enabled: bool,
 }
@@ -61,6 +62,19 @@ impl SpellCheckConfiguration {
     pub fn misspelled_text_style(mut self, style: TextStyle) -> Self {
         self.misspelled_text_style = Some(style);
         self
+    }
+
+    /// The selection highlight while the suggestions toolbar is visible.
+    #[must_use]
+    pub fn misspelled_selection_color(mut self, color: incular_core::Color) -> Self {
+        self.misspelled_selection_color = Some(color);
+        self
+    }
+
+    /// The alternate highlight, if supplied.
+    #[must_use]
+    pub fn suggestions_selection_color(&self) -> Option<incular_core::Color> {
+        self.misspelled_selection_color
     }
 
     /// Flutter `spellCheckSuggestionsToolbarBuilder`: renders the custom
@@ -122,6 +136,7 @@ impl PartialEq for SpellCheckConfiguration {
         };
         same_service
             && self.misspelled_text_style == other.misspelled_text_style
+            && self.misspelled_selection_color == other.misspelled_selection_color
             && crate::util::same_rc(&self.toolbar_builder, &other.toolbar_builder)
             && self.enabled == other.enabled
     }
@@ -133,6 +148,7 @@ impl fmt::Debug for SpellCheckConfiguration {
             .field("enabled", &self.enabled)
             .field("service", &self.spell_check_service.is_some())
             .field("misspelled_text_style", &self.misspelled_text_style)
+            .field("misspelled_selection_color", &self.misspelled_selection_color)
             .field("toolbar_builder", &self.toolbar_builder.is_some())
             .finish()
     }

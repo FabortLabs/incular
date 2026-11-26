@@ -172,12 +172,13 @@ impl WidgetTree {
     /// is valid. Non-semantic layout widgets merge their descendants into the
     /// closest meaningful semantic ancestor.
     pub(super) fn refresh_text_fields(&mut self) {
-        let pending: Vec<(RenderObjectId, bool)> = self
+        let pending: Vec<(RenderObjectId, DirtyFlags, bool)> = self
             .tracked
             .text_fields
             .iter()
             .filter_map(|id| {
-                let raw = self.elements.get(id.0)?.render.0;
+                let element = self.elements.get(id.0)?;
+                let raw = element.render.0;
                 let render = self.renders.get(raw)?;
                 let RenderKind::TextField(field) = render.object.kind() else {
                     return None;
@@ -189,20 +190,29 @@ impl WidgetTree {
                 // A spell check answer restyles the text (Flutter sets
                 // `renderEditable.text` when results arrive).
                 let spell_changed = field.misspelled_text_style.is_some()
-                    && self
-                        .elements
-                        .get(id.0)?
+                    && element
                         .auxiliary_state
                         .as_ref()
                         .and_then(|auxiliary| auxiliary.spell_check_session.as_ref())
                         .is_some_and(|session| session.revision() != state.spell_revision);
-                (content_changed || spell_changed || visual != state.visual_revision)
-                    .then_some((RenderObjectId(raw), content_changed || spell_changed))
+                let layout_changed = content_changed || spell_changed || visual != state.visual_revision;
+                let selection_changed = field.spell_check_selection_color.is_some()
+                    && state.spell_selection_visible
+                        != self.text_field_spell_check_menu_visible(*id);
+                let dirty = if layout_changed {
+                    DirtyFlags::LAYOUT | DirtyFlags::PAINT
+                } else if selection_changed {
+                    DirtyFlags::PAINT
+                } else {
+                    return None;
+                };
+                Some((RenderObjectId(raw), dirty, content_changed || spell_changed))
             })
             .collect::<Vec<_>>();
-        for (render, content_changed) in pending {
+        for (render, dirty, content_changed) in pending {
             // Text width can change the size seen by an unconstrained parent.
-            self.mark_render_dirty(render, DirtyFlags::LAYOUT | DirtyFlags::PAINT, true);
+            // A toolbar visibility change affects only the selection paint.
+            self.mark_render_dirty(render, dirty, true);
             // Content (not caret/selection) changes may alter intrinsic size:
             // route through the enclosing-sliver invalidation channel so a
             // natural header revalidates unbounded instead of retaining

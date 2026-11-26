@@ -17,7 +17,10 @@ void main() {
     final controller = TextEditingController(text: 'tset again');
     final focus = FocusNode();
     final changes = <String>[];
+    const normal = Color(0xBE1146B0);
+    const alternate = Color(0xB7D42457);
     final configuration = SpellCheckConfiguration(
+      misspelledSelectionColor: alternate,
       spellCheckService: _Checker(),
       misspelledTextStyle: const TextStyle(
         decoration: TextDecoration.underline,
@@ -44,31 +47,29 @@ void main() {
     );
     addTearDown(controller.dispose);
     addTearDown(focus.dispose);
+    final editorEntry = OverlayEntry(
+      builder: (_) => Align(
+        alignment: Alignment.topLeft,
+        child: EditableText(
+          controller: controller,
+          focusNode: focus,
+          style: const TextStyle(),
+          cursorColor: const Color(0xFF000000),
+          backgroundCursorColor: const Color(0xFF000000),
+          selectionColor: normal,
+          contextMenuBuilder: (_, _) => const SizedBox.shrink(),
+          onChanged: changes.add,
+          locale: const Locale('en'),
+          spellCheckConfiguration: configuration,
+        ),
+      ),
+    );
     await tester.pumpWidget(
       Directionality(
         textDirection: TextDirection.ltr,
         child: MediaQuery(
           data: const MediaQueryData(),
-          child: Overlay(
-            initialEntries: [
-              OverlayEntry(
-                builder: (_) => Align(
-                  alignment: Alignment.topLeft,
-                  child: EditableText(
-                    controller: controller,
-                    focusNode: focus,
-                    style: const TextStyle(),
-                    cursorColor: const Color(0xFF000000),
-                    backgroundCursorColor: const Color(0xFF000000),
-                    contextMenuBuilder: (_, _) => const SizedBox.shrink(),
-                    onChanged: changes.add,
-                    locale: const Locale('en'),
-                    spellCheckConfiguration: configuration,
-                  ),
-                ),
-              ),
-            ],
-          ),
+          child: Overlay(initialEntries: [editorEntry]),
         ),
       ),
     );
@@ -90,8 +91,11 @@ void main() {
       composing: const TextRange(start: 0, end: 4),
     );
     await tester.pump();
+    expect(state.renderEditable.selectionColor, normal);
     expect(state.showSpellCheckSuggestionsToolbar(), isTrue);
+    editorEntry.markNeedsBuild();
     await tester.pump();
+    expect(state.renderEditable.selectionColor, alternate);
     expect(find.text('test'), findsOneWidget);
     await tester.tap(find.text('test'));
     await tester.pump();
@@ -100,6 +104,9 @@ void main() {
     expect(controller.value.composing, const TextRange(start: 0, end: 4));
     expect(changes, ['test again']);
     expect(find.text('test'), findsNothing);
+    editorEntry.markNeedsBuild();
+    await tester.pump();
+    expect(state.renderEditable.selectionColor, normal);
     expect(focus.hasFocus, isTrue);
   });
 }
