@@ -1,6 +1,6 @@
 //! Focus traversal counterparts from Flutter 3.50.0.
-//! The originals invoke FocusNode.nextFocus/previousFocus. Incular drives
-//! the equivalent traversal intent through normalized Tab/Shift+Tab.
+//! Checks exercise retained programmatic traversal and normalized
+//! Tab/Shift+Tab, with exact focus identity at each boundary.
 
 use incular_config::Constraints;
 use incular_core::{Code, InputEvent, KeyboardEvent, KeyboardKey, Modifiers, NamedKey, Size};
@@ -138,11 +138,12 @@ fn mount_with_excluded_focus() -> (Host, [FocusNode; 4]) {
 /// focus_traversal_test.dart:3691. Both the excluded Focus and its nested
 /// Focus are skipped by traversal.
 #[test]
-fn tab_skips_excluded_focus_and_its_descendant() {
+fn programmatic_traversal_skips_excluded_focus_and_its_descendant() {
     let (mut host, nodes) = mount_with_excluded_focus();
     assert_eq!(primary(&nodes), [0]);
 
-    host.tab(false);
+    assert!(host.runtime.next_focus());
+    host.frame();
     assert_eq!(primary(&nodes), [3]);
 }
 
@@ -213,7 +214,7 @@ fn skip_traversal_still_allows_a_direct_node_request() {
     assert_eq!(primary(&nodes), [0]);
 }
 
-/// Behavior of focus_traversal_test.dart:3505 and :3539 through Tab.
+/// focus_traversal_test.dart:3505 and :3539: direct focus is not traversal.
 #[test]
 fn all_traversal_excluded_nodes_leave_the_direct_focus_unchanged() {
     for group_exclusion in [true, false] {
@@ -234,6 +235,8 @@ fn all_traversal_excluded_nodes_leave_the_direct_focus_unchanged() {
         host.frame();
         assert_eq!(primary(&nodes), [0]);
         let focused = host.runtime.focused_element().expect("direct focus");
+        assert!(!host.runtime.next_focus());
+        assert!(!host.runtime.previous_focus());
         for reverse in [false, true] {
             host.tab(reverse);
             assert_eq!(host.runtime.focused_element(), Some(focused));
@@ -242,28 +245,58 @@ fn all_traversal_excluded_nodes_leave_the_direct_focus_unchanged() {
     }
 }
 
-/// Behavior of focus_traversal_test.dart:3572 through retained nodes.
+/// focus_traversal_test.dart:3374 and :3572, mounted context and callbacks.
 #[test]
-fn nested_unfocusable_group_refuses_traversal_and_direct_requests() {
-    let nodes: [FocusNode; 3] = std::array::from_fn(|_| FocusNode::new());
-    let inner =
-        FocusTraversalGroup::new(Focus::new(focus_target(&nodes[2])).node(nodes[1].clone()))
-            .descendants_are_focusable(false);
-    let group = FocusTraversalGroup::new(Column::new(vec![
-        Widget::from(focus_target(&nodes[0]).autofocus(true)),
-        inner.into(),
-    ]));
-    let mut host = Host::mount(group.into());
-    host.tab(false);
-    assert_eq!(primary(&nodes), [0]);
-    nodes[2].request_focus();
-    host.frame();
-    assert_eq!(primary(&nodes), [0]);
-    assert!(!nodes[1].has_focus());
-    assert!(!nodes[2].has_focus());
+fn plain_and_nested_unfocusable_groups_refuse_traversal_and_direct_requests() {
+    use std::{cell::Cell, rc::Rc};
+
+    for nested in [false, true] {
+        let active = FocusNode::new();
+        let child = FocusNode::new();
+        let callback = Rc::new(Cell::new(None));
+        let content = Widget::from(SizedBox::shrink()).with_key("blocked content");
+        let inner_focus = Widget::from(Focus::new(content).node(child.clone()))
+            .with_key("blocked focus");
+        let blocked = FocusTraversalGroup::new(Focus::new(inner_focus).on_focus_change({
+            let callback = callback.clone();
+            move |focused| callback.set(Some(focused))
+        }))
+        .descendants_are_focusable(false);
+        let scene = if nested {
+            FocusTraversalGroup::new(Column::new([
+                Widget::from(focus_target(&active).autofocus(true)),
+                blocked.into(),
+            ]))
+            .into()
+        } else {
+            blocked.into()
+        };
+        let mut host = Host::mount(scene);
+        let tree = host.runtime.tree();
+        let context = |name: &str| tree.element_with_key(&name.into()).unwrap();
+        let parent = Focus::of(tree, context("blocked focus"), false);
+        let actual_child = Focus::of(tree, context("blocked content"), false);
+        assert_eq!(actual_child, child);
+        assert_ne!(parent, actual_child);
+
+        if nested {
+            assert!(active.has_primary_focus());
+            assert!(!host.runtime.next_focus());
+            host.frame();
+            assert_eq!(callback.get(), None);
+            assert!(!parent.has_focus() && !child.has_focus());
+        }
+        for candidate in [parent.clone(), child.clone()] {
+            candidate.request_focus();
+            host.frame();
+            assert_eq!(callback.get(), None);
+            assert!(!parent.has_focus() && !child.has_focus());
+            assert_eq!(active.has_primary_focus(), nested);
+        }
+    }
 }
 
-/// Behavior of focus_traversal_test.dart:3622 through Tab.
+/// focus_traversal_test.dart:3622: an empty nested group remains harmless.
 #[test]
 fn an_empty_nested_rtl_group_keeps_the_only_focused_node() {
     let node = FocusNode::new();
@@ -275,7 +308,8 @@ fn an_empty_nested_rtl_group_keeps_the_only_focused_node() {
     let mut host =
         Host::mount(FocusTraversalGroup::new(Directionality::new(TextDirection::Rtl, row)).into());
     let initial = host.runtime.focused_element().expect("autofocus");
-    host.tab(false);
+    assert!(!host.runtime.next_focus());
+    host.frame();
     assert_eq!(host.runtime.focused_element(), Some(initial));
     assert!(node.has_primary_focus());
 }
@@ -317,4 +351,20 @@ fn focus_without_a_supplied_node_tabulates_and_keeps_focus_on_rebuild() {
     assert_eq!(host.runtime.focused_element(), Some(own));
     host.tab(false);
     assert!(after.has_primary_focus());
+}
+
+#[test]
+fn focus_traversal_wrappers_do_not_introduce_semantics() {
+    let baseline = Host::mount(SizedBox::shrink().into());
+    let root = baseline.runtime.tree().semantics();
+    for wrapper in [
+        Widget::from(FocusTraversalGroup::new(SizedBox::shrink())),
+        Widget::from(ExcludeFocusTraversal::new(SizedBox::shrink())),
+    ] {
+        let wrapped = Host::mount(wrapper);
+        let semantics = wrapped.runtime.tree().semantics();
+        assert_eq!(semantics.roots(), root.roots());
+        assert_eq!(semantics.len(), root.len());
+        assert!(semantics.is_empty());
+    }
 }

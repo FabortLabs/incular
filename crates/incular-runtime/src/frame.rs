@@ -2956,10 +2956,24 @@ impl Runtime {
         self.text_input_state = Some(state);
         self.text_input_caret_rect = Some(snapshot.caret_rect);
     }
-    fn focus_next(&mut self, reverse: bool) {
+    /// Moves to the next focus target in the window's Tab order.
+    ///
+    /// Returns false when no different target can be reached.
+    pub fn next_focus(&mut self) -> bool {
+        self.focus_next(false)
+    }
+
+    /// Moves to the previous focus target in the window's Tab order.
+    ///
+    /// Returns false when no different target can be reached.
+    pub fn previous_focus(&mut self) -> bool {
+        self.focus_next(true)
+    }
+
+    fn focus_next(&mut self, reverse: bool) -> bool {
         let fields = self.tree.focus_traversal_elements(self.focused);
         if fields.is_empty() {
-            return;
+            return false;
         }
         let index = self
             .focused
@@ -2970,7 +2984,9 @@ impl Runtime {
             None if reverse => *fields.last().expect("not empty"),
             None => fields[0],
         };
+        let previous = self.focused;
         self.set_focus(Some(next));
+        self.focused != previous
     }
     /// Flutter's native `WidgetsApp` defaults: unmodified arrows traverse
     /// focus, the platform's modifier with an arrow scrolls by a line, and

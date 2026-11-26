@@ -157,3 +157,21 @@ it stays partial because Incular does not expose Flutter's debug-owner
 metadata. At the time of this check the separate live-lease handoff
 failed; [the later ownership audit](upstream-restoration-scope-ownership.md)
 records the explicit staged replacement that now passes.
+
+### Programmatic focus group parity
+
+Eight pinned originals now have matched native fixtures:
+`focus_traversal_test.dart:3364, :3374, :3505, :3539, :3572,
+:3622, :3691, :3733`. Mounted traversal groups and
+ExcludeFocusTraversal introduce no accessibility node on an empty
+scene. A plain or nested unfocusable group denies explicit requests
+from both focus nodes found through their mounted contexts, without
+calling onFocusChange. Its eligible sibling keeps primary focus.
+
+The runtime now exposes programmatic next/previous traversal and
+reports whether primary focus moved. All-excluded groups and an
+empty RTL group do not move focus; an exclusion between eligible
+targets is bypassed. The native API uses the window's current
+primary focus (the initiating node in these originals), not every
+possible FocusNode-relative traversal policy. Forty-four related
+native tests passed, including keyboard input and editor selection.
