@@ -365,48 +365,68 @@ impl fmt::Display for SideDescription {
     }
 }
 
+fn format_edges(
+    f: &mut fmt::Formatter<'_>,
+    kind: &str,
+    sides: [(&str, BorderSide); 4],
+) -> fmt::Result {
+    write!(f, "{kind}(")?;
+    for (index, (edge, side)) in sides
+        .into_iter()
+        .filter(|(_, side)| *side != BorderSide::NONE)
+        .enumerate()
+    {
+        if index != 0 {
+            f.write_str(", ")?;
+        }
+        write!(f, "{edge}: {}", SideDescription(side))?;
+    }
+    f.write_str(")")
+}
+
+impl fmt::Display for Border {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_uniform() {
+            return write!(f, "Border.all({})", SideDescription(self.top));
+        }
+        format_edges(
+            f,
+            "Border",
+            [
+                ("top", self.top),
+                ("right", self.right),
+                ("bottom", self.bottom),
+                ("left", self.left),
+            ],
+        )
+    }
+}
+
+impl fmt::Display for BorderDirectional {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        format_edges(
+            f,
+            "BorderDirectional",
+            [
+                ("top", self.top),
+                ("start", self.start),
+                ("end", self.end),
+                ("bottom", self.bottom),
+            ],
+        )
+    }
+}
+
 impl fmt::Display for BoxBorderStack {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for (index, layer) in self.layers.iter().rev().enumerate() {
             if index != 0 {
                 f.write_str(" + ")?;
             }
-            let (kind, sides) = match *layer {
-                BoxBorderLayer::Physical(b) if b.is_uniform() => {
-                    write!(f, "Border.all({})", SideDescription(b.top))?;
-                    continue;
-                }
-                BoxBorderLayer::Physical(b) => (
-                    "Border",
-                    [
-                        ("top", b.top),
-                        ("right", b.right),
-                        ("bottom", b.bottom),
-                        ("left", b.left),
-                    ],
-                ),
-                BoxBorderLayer::Directional(b) => (
-                    "BorderDirectional",
-                    [
-                        ("top", b.top),
-                        ("start", b.start),
-                        ("end", b.end),
-                        ("bottom", b.bottom),
-                    ],
-                ),
-            };
-            write!(f, "{kind}(")?;
-            for (index, (edge, side)) in sides
-                .into_iter()
-                .filter(|(_, side)| *side != BorderSide::NONE)
-                .enumerate()
-            {
-                if index != 0 {
-                    f.write_str(", ")?;
-                }
-                write!(f, "{edge}: {}", SideDescription(side))?;
+            match layer {
+                BoxBorderLayer::Physical(border) => border.fmt(f)?,
+                BoxBorderLayer::Directional(border) => border.fmt(f)?,
             }
-            f.write_str(")")?;
         }
         Ok(())
     }

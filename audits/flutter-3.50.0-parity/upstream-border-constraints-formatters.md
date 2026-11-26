@@ -333,3 +333,19 @@ port both pass. The native control dispatches all nine actual tap
 coordinates: the center and four interior corner samples fire; the
 four square corner points outside the round arcs do not. All 13
 focused runtime and widgets controls passed.
+
+## Combining directional and physical box borders
+
+Pinned `painting/border_rtl_test.dart:676` and `:710` passed by exact
+name. The native cases verify that compatible sides add their widths,
+inactive sides normalize to no border, and different colors remain
+separate layers. All four forms of same-edge conflict remain two
+layers. The mixed physical and logical side matrix tests both operand
+orders and both text directions: physical sides stay put, logical
+sides flip, and only unambiguous combinations merge. Empty results
+actually emit no paint commands in either direction.
+
+Direct border values now use the same stable display formatting as
+compound borders. The compound description reflects operand order
+while painting retains the independently verified outside-first order.
+All six focused border-stack tests passed.

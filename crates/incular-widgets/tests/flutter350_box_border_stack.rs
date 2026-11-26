@@ -209,3 +209,145 @@ fn mixed_borders_merge_only_if_they_do_not_compete_for_horizontal_edges() {
     );
     assert_eq!((left + start).layers().len(), 2);
 }
+
+#[test]
+fn directional_add_normalizes_empty_sides_and_layers_conflicting_colors() {
+    use incular_widgets::{BoxBorderLayer, BorderStyle};
+
+    let magenta = BorderSide::solid(Color::rgba(255, 0, 255, 255), 3.);
+    let double = BorderSide::solid(magenta.color, 6.);
+    let yellow = BorderSide::solid(Color::rgba(255, 255, 0, 255), 2.);
+    let inactive = BorderSide::new(yellow.color, 0., BorderStyle::None);
+    let zero = BorderDirectional::default();
+    let directional = |top, start, end, bottom| BorderDirectional::only(top, start, end, bottom);
+    let top = |top| BorderDirectional { top, ..zero };
+    let start = |start| BorderDirectional { start, ..zero };
+    let end = |end| BorderDirectional { end, ..zero };
+    let bottom = |bottom| BorderDirectional { bottom, ..zero };
+    let none = BorderSide::NONE;
+    let assert_merged = |actual: BoxBorderStack, expected| {
+        assert_eq!(actual.layers(), &[BoxBorderLayer::Directional(expected)]);
+    };
+    assert_merged(top(yellow) + end(magenta), directional(yellow, none, magenta, none));
+    assert_merged(bottom(magenta) + bottom(magenta), bottom(double));
+    assert_merged(
+        directional(none, magenta, inactive, none) + end(yellow),
+        directional(none, magenta, yellow, none),
+    );
+    assert_merged(zero + zero, zero);
+    assert_eq!(
+        (start(magenta) + start(yellow)).layers(),
+        &[
+            BoxBorderLayer::Directional(start(yellow)),
+            BoxBorderLayer::Directional(start(magenta)),
+        ]
+    );
+    assert_merged(top(magenta) + top(magenta), top(double));
+    for actual in [top(inactive) + top(inactive), zero + zero, top(inactive) + zero, zero + top(inactive)] {
+        assert_merged(actual.clone(), zero);
+        assert_paint(&actual, Some(TextDirection::Ltr), &[]);
+        assert_paint(&actual, Some(TextDirection::Rtl), &[]);
+    }
+}
+
+#[test]
+fn mixed_add_merges_compatible_edges_and_preserves_both_layer_orders() {
+    use incular_widgets::BoxBorderLayer;
+
+    let side1 = BorderSide::solid(Color::rgba(17, 17, 17, 17), 1.);
+    let side2 = BorderSide::solid(Color::rgba(34, 34, 34, 34), 1.);
+    let double1 = BorderSide::solid(side1.color, 2.);
+    let double2 = BorderSide::solid(side2.color, 2.);
+    let blank = BorderSide::NONE;
+    let physical = |top, right, bottom, left| Border::only(top, right, bottom, left);
+    let logical = |top, start, end, bottom| BorderDirectional::only(top, start, end, bottom);
+    let single = |actual: BoxBorderStack, expected| assert_eq!(actual.layers(), &[expected]);
+    let b_left = physical(blank, blank, blank, side1);
+    let d_top = logical(side2, blank, blank, blank);
+    let b_top = physical(side2, blank, blank, blank);
+    let d_start = logical(blank, side1, blank, blank);
+    assert_eq!(physical(blank, blank, blank, blank).to_string(),
+        "Border.all(BorderSide(width: 0.0, style: none))");
+    assert_eq!(logical(blank, blank, blank, blank).to_string(), "BorderDirectional()");
+    for actual in [b_left + d_top, d_top + b_left] {
+        single(actual, BoxBorderLayer::Physical(physical(side2, blank, blank, side1)));
+    }
+    for actual in [d_start + b_top, b_top + d_start] {
+        single(actual, BoxBorderLayer::Directional(logical(side2, side1, blank, blank)));
+    }
+
+    for (b_conflict, d_conflict, b_match, d_match, doubled) in [
+        (
+            physical(side1, blank, blank, blank),
+            logical(side2, blank, blank, blank),
+            physical(side1, blank, blank, blank),
+            logical(side1, blank, blank, blank),
+            physical(double1, blank, blank, blank),
+        ),
+        (
+            physical(blank, blank, side1, blank),
+            logical(blank, blank, blank, side2),
+            physical(blank, blank, side1, blank),
+            logical(blank, blank, blank, side1),
+            physical(blank, blank, double1, blank),
+        ),
+    ] {
+        for actual in [b_conflict + d_conflict, d_conflict + b_conflict] {
+            assert_eq!(actual.layers().len(), 2);
+            assert!(actual.to_string().contains(" + "));
+        }
+        for actual in [b_match + d_match, d_match + b_match] {
+            single(actual, BoxBorderLayer::Physical(doubled));
+        }
+    }
+
+    for (left, right) in [(side1, blank), (blank, side1), (blank, blank)] {
+        for (start, end) in [(side1, blank), (blank, side1), (blank, blank)] {
+            let physical = physical(side2, right, side2, left);
+            let directional = logical(side2, start, end, side2);
+            let lhs = physical + directional;
+            let rhs = directional + physical;
+            if (left != blank || right != blank) && (start != blank || end != blank) {
+                assert_eq!(
+                    lhs.layers(),
+                    [BoxBorderLayer::Directional(directional), BoxBorderLayer::Physical(physical)]
+                );
+                assert_eq!(
+                    rhs.layers(),
+                    [BoxBorderLayer::Physical(physical), BoxBorderLayer::Directional(directional)]
+                );
+                assert_eq!(lhs.to_string(), format!("{physical} + {directional}"));
+                assert_eq!(rhs.to_string(), format!("{directional} + {physical}"));
+            } else {
+                let expected = if start == blank && end == blank {
+                    BoxBorderLayer::Physical(Border { top: double2, bottom: double2, ..physical })
+                } else {
+                    BoxBorderLayer::Directional(BorderDirectional {
+                        top: double2,
+                        bottom: double2,
+                        ..directional
+                    })
+                };
+                assert_eq!(lhs.layers(), [expected]);
+                assert_eq!(rhs.layers(), [expected]);
+                let expected_description = match expected {
+                    BoxBorderLayer::Physical(value) => value.to_string(),
+                    BoxBorderLayer::Directional(value) => value.to_string(),
+                };
+                assert_eq!(lhs.to_string(), expected_description);
+                assert_eq!(rhs.to_string(), expected_description);
+            }
+
+            for (direction, logical_left, logical_right) in [
+                (TextDirection::Ltr, start, end),
+                (TextDirection::Rtl, end, start),
+            ] {
+                let dimensions = EdgeInsets::only(
+                    left.width + logical_left.width, 2., right.width + logical_right.width, 2.,
+                );
+                assert_eq!(lhs.dimensions(Some(direction)), dimensions);
+                assert_eq!(rhs.dimensions(Some(direction)), dimensions);
+            }
+        }
+    }
+}
