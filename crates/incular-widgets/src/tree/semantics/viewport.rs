@@ -10,6 +10,7 @@ impl WidgetTree {
         outer: SemanticNodeId,
         build: Collected,
         children: &[SemanticNodeId],
+        changed_exclusions: &FastHashMap<SemanticNodeId, bool>,
         detached: &mut Vec<SemanticNodeId>,
     ) {
         let old_inner = self.viewport_semantic_panes.get(&element).copied();
@@ -21,6 +22,28 @@ impl WidgetTree {
         // ChildTagScope marks the first projected semantic node(s) under
         // this viewport. An empty viewport falls back to a single node.
         let split = role == SemanticRole::ScrollView && !children.is_empty();
+        let exclude_tag = crate::Viewport::exclude_from_scrolling_tag();
+        let is_excluded = |id: SemanticNodeId| {
+            changed_exclusions.get(&id).copied().unwrap_or_else(|| {
+                self.semantics
+                    .node(id)
+                    .is_some_and(|node| node.is_tagged(exclude_tag))
+            })
+        };
+        let mut excluded = Vec::new();
+        let mut included = Vec::new();
+        let children = if split && children.iter().copied().any(is_excluded) {
+            for &id in children {
+                if is_excluded(id) {
+                    excluded.push(id);
+                } else {
+                    included.push(id);
+                }
+            }
+            &included
+        } else {
+            children
+        };
         if let Some(old) = old_inner.and_then(|id| self.semantics.node(id)) {
             // The normal attachment sweep only examines the outer node.
             // An old inner descendant can move, or leave the graph.
@@ -47,10 +70,12 @@ impl WidgetTree {
                         hidden,
                     );
                     if let Some(inner) = old_inner {
+                        let mut outer_children = vec![inner];
+                        outer_children.extend(excluded);
                         self.semantics.update_geometry_and_visibility(
                             outer,
                             bounds,
-                            &[inner],
+                            &outer_children,
                             hidden,
                         );
                     }
@@ -95,6 +120,8 @@ impl WidgetTree {
             self.viewport_semantic_panes.insert(element, inner);
             inner
         };
+        let mut outer_children = vec![inner];
+        outer_children.extend(excluded);
         self.semantics.update(
             outer,
             SemanticNode {
@@ -106,7 +133,7 @@ impl WidgetTree {
                 bounds,
                 state: outer_state,
                 actions: Vec::new(),
-                children: vec![inner],
+                children: outer_children,
             },
         );
     }

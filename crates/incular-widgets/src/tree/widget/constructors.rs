@@ -270,6 +270,13 @@ impl Widget {
     /// Attaches the `KeepAlive` parent-data request to a transparent wrapper.
     /// Sliver materializers read it to retain the child outside the cache window.
     #[doc(hidden)]
+    pub(crate) fn with_sliver_scroll_exclusion(mut self, excluded: bool) -> Self {
+        if self.semantic_properties().sliver_scroll_excluded != excluded {
+            self.semantic_properties_mut().sliver_scroll_excluded = excluded;
+        }
+        self
+    }
+
     pub(crate) fn with_ensured_sliver_semantics(mut self) -> Self {
         if !self.semantic_properties().ensures_sliver_semantics {
             self.semantic_properties_mut().ensures_sliver_semantics = true;

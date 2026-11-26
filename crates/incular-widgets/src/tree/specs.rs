@@ -261,6 +261,10 @@ pub(crate) struct SemanticProperties {
     pub(super) keep_alive: bool,
     /// Keep this sliver child in accessibility outside its viewport cache.
     pub(super) ensures_sliver_semantics: bool,
+    /// A rendered sliver child's current geometry keeps it outside the
+    /// viewport's scrolling pane. Unlike paint pinning this can change
+    /// before or after the first pixel of overlap.
+    pub(super) sliver_scroll_excluded: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

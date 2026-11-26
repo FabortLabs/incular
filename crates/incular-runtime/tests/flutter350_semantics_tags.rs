@@ -348,3 +348,87 @@ fn nested_shrink_wrapped_viewport_panes_stay_aligned_during_semantic_reveals() {
         former = controller.offset();
     }
 }
+
+#[test]
+fn pinned_header_switches_semantic_panes_only_after_losing_layout_extent() {
+    use incular_semantics::SemanticActionKind;
+    use incular_widgets::{
+        CustomScrollView, Directionality, PinnedHeaderSliver, ScrollController, Sliver,
+        SliverToBoxAdapter, TextDirection, Viewport,
+    };
+
+    let controller = ScrollController::new();
+    let slivers: [Box<dyn Sliver>; 3] = [
+        Box::new(SliverToBoxAdapter::new(SizedBox::new().height(100.))),
+        Box::new(PinnedHeaderSliver::new(
+            Semantics::new(SizedBox::new().height(40.))
+                .label("pinned header")
+                .container(true),
+        )),
+        Box::new(SliverToBoxAdapter::new(
+            Semantics::new(SizedBox::new().height(1200.))
+                .label("scrolling content")
+                .container(true),
+        )),
+    ];
+    let mut runtime = Runtime::new(
+        Directionality::new(
+            TextDirection::Ltr,
+            CustomScrollView::new(slivers).controller(controller.clone()),
+        )
+        .into(),
+    )
+    .unwrap();
+    let surface = Constraints::tight(Size::new(800., 600.));
+    runtime.run_frame(surface).unwrap();
+    let snapshot = |runtime: &Runtime, offset: f32| {
+        let tree = runtime.tree().semantics();
+        let node = |label| {
+            tree.iter()
+                .map(|(_, node)| node)
+                .find(|node| node.label.as_deref() == Some(label))
+                .unwrap()
+        };
+        let header = node("pinned header");
+        let body = node("scrolling content");
+        let outer = tree.node(tree.root().unwrap()).unwrap();
+        let pane = tree.node(outer.children[0]).unwrap();
+        let outside = offset > 100.;
+        let viewport_tag = Viewport::use_two_pane_semantics_tag();
+        let exclude_tag = Viewport::exclude_from_scrolling_tag();
+
+        assert_eq!(header.bounds.origin.y, (100. - offset).max(0.));
+        assert!(!header.state.hidden);
+        let tagged_header = if header.is_tagged(viewport_tag) {
+            header
+        } else {
+            tree.iter()
+                .map(|(_, node)| node)
+                .find(|node| node.children.contains(&header.id))
+                .unwrap()
+        };
+        assert!(tagged_header.is_tagged(viewport_tag));
+        assert_eq!(tagged_header.is_tagged(exclude_tag), outside);
+        assert!(!body.is_tagged(exclude_tag));
+        assert_eq!(outer.children.contains(&tagged_header.id), outside);
+        assert_eq!(pane.children.contains(&tagged_header.id), !outside);
+        assert!(pane.children.contains(&body.id));
+        assert_eq!(pane.bounds, outer.bounds);
+        assert_eq!(pane.state.scroll_metrics.unwrap().offset, f64::from(offset));
+        assert!(pane.actions.contains(&SemanticActionKind::ScrollToOffset));
+        assert!(!outer.actions.contains(&SemanticActionKind::ScrollToOffset));
+        (header.id, body.id, outer.id, pane.id)
+    };
+    let initial = snapshot(&runtime, 0.);
+    for offset in [99., 100., 101., 130., 100., 0.] {
+        assert!(controller.jump_to(offset));
+        runtime.run_frame(surface).unwrap();
+        assert_eq!(snapshot(&runtime, offset), initial);
+        // Resize with no application rebuild, including while excluded.
+        runtime
+            .run_frame(Constraints::tight(Size::new(800., 640.)))
+            .unwrap();
+        assert_eq!(snapshot(&runtime, offset), initial);
+        runtime.run_frame(surface).unwrap();
+    }
+}

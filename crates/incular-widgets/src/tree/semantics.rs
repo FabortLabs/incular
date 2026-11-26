@@ -174,10 +174,19 @@ impl ChildTagScope {
         }
     }
 
-    fn for_children(outer: Option<Rc<Self>>, entry: &Element) -> Option<Rc<Self>> {
+    fn for_children(
+        outer: Option<Rc<Self>>,
+        entry: &Element,
+        emitted_node: bool,
+    ) -> Option<Rc<Self>> {
         let viewport_tag = matches!(entry.widget.kind(), WidgetKind::SliverViewport { .. })
             .then(crate::Viewport::use_two_pane_semantics_tag);
         let outer = Self::extend(outer, viewport_tag);
+        let outer = Self::extend(
+            outer,
+            (!emitted_node && entry.widget.semantic_properties().sliver_scroll_excluded)
+                .then(crate::Viewport::exclude_from_scrolling_tag),
+        );
         Self::extend(
             outer,
             entry.widget.semantic_properties().tag_for_children.as_ref(),
@@ -724,13 +733,25 @@ impl WidgetTree {
         // a parent's child list can name children collected after it. Native
         // accessibility must receive a coherent tree on the same frame a
         // transient opens, not one semantic pass later.
+        // Parents are visited before their children. Record changed
+        // exclusion bits so the parent partitions on this frame's tags.
+        let exclude_tag = crate::Viewport::exclude_from_scrolling_tag();
+        let mut changed_viewport_exclusions = FastHashMap::default();
         #[cfg(feature = "devtools")]
         let mut inserted = HashSet::new();
         for build in builds.iter() {
             let Collected::Full(build) = build else {
                 continue;
             };
-            if self.semantic_ids.contains_key(&build.element) {
+            if let Some(&id) = self.semantic_ids.get(&build.element) {
+                let excluded = build.state.tags.contains(exclude_tag);
+                let previously_excluded = self
+                    .semantics
+                    .node(id)
+                    .is_some_and(|node| node.is_tagged(exclude_tag));
+                if excluded != previously_excluded {
+                    changed_viewport_exclusions.insert(id, excluded);
+                }
                 continue;
             }
             let id = self.semantics.insert(SemanticNode {
@@ -819,7 +840,14 @@ impl WidgetTree {
                 self.element_live(element, "semantic element remains live").widget.kind(),
                 WidgetKind::SliverViewport { .. }
             ) {
-                self.assemble_viewport_semantic_panes(element, id, build, child_ids, detached);
+                self.assemble_viewport_semantic_panes(
+                    element,
+                    id,
+                    build,
+                    child_ids,
+                    &changed_viewport_exclusions,
+                    detached,
+                );
             } else {
                 match build {
                     Collected::Full(build) => {
@@ -1088,7 +1116,7 @@ impl WidgetTree {
         let child_merges_focus_labels = focus_annotation.is_some() || joins_focus_annotation;
         let retained = retained_id.is_some();
         if !scope.content && retained && !outside_sliver_cache {
-            let next_tag_scope = ChildTagScope::for_children(None, entry);
+            let next_tag_scope = ChildTagScope::for_children(None, entry, true);
             // Nothing but geometry changed here or below, so the retained
             // node keeps its role, text, state and actions. A node with a
             // retained id always emitted a node, so its descendants inherit
@@ -1641,6 +1669,9 @@ impl WidgetTree {
             if let Some(tags) = inherited_tags.as_deref() {
                 tags.apply(&mut state);
             }
+            if entry.widget.semantic_properties().sliver_scroll_excluded {
+                state.add_tag(crate::Viewport::exclude_from_scrolling_tag().clone());
+            }
             if let Some(scope) = locale_scope {
                 state.locale.clone_from(
                     &self
@@ -1690,8 +1721,11 @@ impl WidgetTree {
         // A Button deliberately merges its visual label/icon subtree into the
         // one control node. Other containers preserve logical child order.
         let child_collection = role.is_none().then_some(collection).flatten();
-        let next_tag_scope =
-            ChildTagScope::for_children(if role.is_none() { inherited_tags } else { None }, entry);
+        let next_tag_scope = ChildTagScope::for_children(
+            if role.is_none() { inherited_tags } else { None },
+            entry,
+            role.is_some(),
+        );
         let regroups = self.regroups_sliver_semantics(entry);
         // Below a retained child list a clean child has nothing to lend.
         let only_marked = this_parent == RETAINED_LIST

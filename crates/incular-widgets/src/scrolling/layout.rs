@@ -94,7 +94,9 @@ impl RenderSliver for BoxRenderSliver {
             geometry,
             children: vec![SliverChildLayout {
                 id: SliverChildId(0),
-                widget: self.child.clone(),
+                widget: self.child.clone().with_sliver_scroll_exclusion(
+                    self.pinned && geometry.layout_extent < extent,
+                ),
                 semantic_index: None,
                 offset: 0.,
                 cross_offset: 0.,

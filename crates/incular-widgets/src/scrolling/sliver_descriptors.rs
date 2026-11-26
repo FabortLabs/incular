@@ -842,6 +842,15 @@ impl Viewport {
         TAG.get_or_init(|| incular_semantics::SemanticsTag::new("RenderViewport.twoPane"))
     }
 
+    /// The framework tag for immediate semantic children that stay outside
+    /// the scrolling pane (for example a pinned header at the viewport edge).
+    #[must_use]
+    pub fn exclude_from_scrolling_tag() -> &'static incular_semantics::SemanticsTag {
+        static TAG: std::sync::OnceLock<incular_semantics::SemanticsTag> =
+            std::sync::OnceLock::new();
+        TAG.get_or_init(|| incular_semantics::SemanticsTag::new("RenderViewport.excludeFromScrolling"))
+    }
+
     #[must_use]
     pub fn new(slivers: impl IntoIterator<Item = Box<dyn Sliver>>) -> Self {
         Self {

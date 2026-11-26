@@ -43,8 +43,7 @@ The pinned line 682 and 735 cases also passed, but their outer/inner
 scroll graph assertions remain open. The original pinned-header tag
 transition (`pinned_header_sliver_test.dart:250`) and nested-pane
 transform (`scrollable_semantics_test.dart:814`) passed on the reference;
-retained pinned migration remains open. The nested reveal case is
-paired below. The empty-viewport transition is covered by the focused pinned
+pinned transition and nested reveal results are described below. The empty-viewport transition is covered by the focused pinned
 Flutter probe `sliver_semantic_viewport_panes_test.dart` and retained
 `flutter350_semantics_tags`: attaching a semantic child splits the
 viewport, keeps the outer ID, and only the inner pane accepts
@@ -268,3 +267,20 @@ The retained check exercises moving to the end, leaving an already
 visible row stationary, moving back to the start, and moving forward
 again; the requested row is not hidden after any reveal. All 25
 focused runtime regressions passed.
+
+### PinnedHeaderSliver pane migration
+
+The pinned upstream case at `pinned_header_sliver_test.dart:250`
+and the authored Flutter/Rust pane fixtures compare the header
+before, at, and beyond its pin boundary. At offsets 99 and 100 the
+header stays in the scrolling pane. At 101 and 130 it is pinned at
+y=0, carries the framework exclusion tag, and becomes a child of
+the outer pane. Scrolling back to 100 restores its original pane.
+The native header, body, and both pane IDs survive every transition,
+including a viewport resize while pinned. Scroll actions and range
+stay on the inner pane. All 19 focused Rust cases passed.
+
+The upstream case checks a separately tagged render wrapper above
+the text node. The portable graph attaches the tag to the first
+projected node instead of generating that extra wrapper, so the
+case is recorded as partial.
