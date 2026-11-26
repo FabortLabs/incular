@@ -207,3 +207,77 @@ fn a_zero_area_group_cannot_open_itself_and_remains_safe() {
     runtime.run_frame(zero).unwrap();
     assert!(!menu.is_open());
 }
+
+#[test]
+fn nested_menu_surface_uses_the_roots_overlay_choice_instead_of_its_own() {
+    for root_uses_root_overlay in [false, true] {
+        let root = MenuController::new();
+        let child = MenuController::new();
+        let content: Widget = RawMenuAnchor::new(child.clone(), |_, _| {
+            Widget::box_(Size::new(70., 30.), PANEL)
+        })
+        .use_root_overlay(!root_uses_root_overlay)
+        .child(Widget::box_(ANCHOR_SIZE, Color::WHITE))
+        .into();
+        let main = RawMenuAnchor::new(root.clone(), move |_, _| content.clone())
+            .use_root_overlay(root_uses_root_overlay)
+            .child(Widget::box_(ANCHOR_SIZE, Color::WHITE));
+        let mut runtime = Runtime::new(Center::new(main).into()).unwrap();
+        frame(&mut runtime);
+        root.open(None);
+        frame(&mut runtime);
+        let first = runtime.tree().transient_surfaces()[0].id;
+        child.open(None);
+        frame(&mut runtime);
+        let surfaces = runtime.tree().transient_surfaces();
+        assert_eq!(surfaces.len(), 2);
+        let nested = surfaces.iter().find(|entry| entry.id != first).unwrap();
+        assert_eq!(
+            nested.parent,
+            (!root_uses_root_overlay).then_some(first),
+            "root uses root overlay: {root_uses_root_overlay}"
+        );
+    }
+}
+
+#[test]
+fn an_open_nested_surface_retargets_when_its_root_changes_overlay_choice() {
+    let root = MenuController::new();
+    let child = MenuController::new();
+    let panel: Widget = RawMenuAnchor::new(child.clone(), |_, _| {
+        Widget::box_(Size::new(50., 20.), PANEL)
+    })
+    .child(Widget::box_(ANCHOR_SIZE, Color::WHITE))
+    .into();
+    let scene = |use_root_overlay| {
+        let panel = panel.clone();
+        Widget::from(Center::new(
+            RawMenuAnchor::new(root.clone(), move |_, _| panel.clone())
+                .use_root_overlay(use_root_overlay)
+                .child(Widget::box_(ANCHOR_SIZE, Color::WHITE)),
+        ))
+    };
+    let mut runtime = Runtime::new(scene(false)).unwrap();
+    frame(&mut runtime);
+    root.open(None);
+    frame(&mut runtime);
+    child.open(None);
+    frame(&mut runtime);
+    let initial = runtime.tree().transient_surfaces();
+    assert_eq!(initial.len(), 2);
+    assert_eq!(
+        initial
+            .iter()
+            .filter(|entry| entry.parent.is_some())
+            .count(),
+        1
+    );
+
+    let widget_root = runtime.tree().root().unwrap();
+    runtime.schedule_update(widget_root, scene(true)).unwrap();
+    frame(&mut runtime);
+    let updated = runtime.tree().transient_surfaces();
+    assert!(root.is_open() && child.is_open());
+    assert_eq!(updated.len(), 2);
+    assert!(updated.iter().all(|entry| entry.parent.is_none()));
+}

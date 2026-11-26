@@ -8,7 +8,9 @@ use std::{
 };
 
 use incular_animation::scheduler::{add_post_frame_callback, schedule_frame};
-use incular_core::{ChangeNotifierSubscription, IdGenerator, Offset, Rect, Size};
+use incular_core::{
+    ChangeNotifierSubscription, IdGenerator, Offset, Rect, Size, reactivity::DependencySource,
+};
 use incular_gestures::{Action, ActionResult, CommandId, Intent};
 use incular_scroll::ScrollController;
 
@@ -62,6 +64,8 @@ struct AnchorNode {
     child_focus_node: RefCell<Option<FocusNode>>,
     /// The view size a root saw at its last build; a change closes it.
     view_size: Cell<Option<Size>>,
+    root_overlay: Cell<bool>,
+    overlay_changes: RefCell<Option<DependencySource>>,
     scrolling: RefCell<Option<(ScrollController, ChangeNotifierSubscription)>>,
     group_id: u64,
     revision: RefCell<Rc<Cell<u64>>>,
@@ -80,6 +84,8 @@ impl AnchorNode {
             callbacks: RefCell::new(Callbacks::default()),
             child_focus_node: RefCell::new(None),
             view_size: Cell::new(None),
+            root_overlay: Cell::new(false),
+            overlay_changes: RefCell::new(None),
             scrolling: RefCell::new(None),
             group_id: NEXT.next(),
             revision: RefCell::new(revision),
@@ -107,6 +113,27 @@ impl AnchorNode {
         let mut children = self.children.borrow_mut();
         children.retain(|child| child.strong_count() > 0);
         children.iter().filter_map(Weak::upgrade).collect()
+    }
+
+    fn resolve_overlay(&self, requested: bool) -> bool {
+        let effective =
+            self.parent()
+                .filter(|parent| !parent.is_group)
+                .map_or(requested, |parent| {
+                    parent
+                        .overlay_changes
+                        .borrow_mut()
+                        .get_or_insert_with(DependencySource::default)
+                        .track();
+                    parent.root_overlay.get()
+                });
+        if self.root_overlay.replace(effective) != effective {
+            let current = self.overlay_changes.borrow().clone();
+            if let Some(changes) = current {
+                changes.notify();
+            }
+        }
+        effective
     }
 
     /// A group is open while any of its menus is.
@@ -703,7 +730,7 @@ impl RawMenuAnchor {
         let portal = OverlayPortal::new(anchor)
             .show(node.open.get())
             .role(TransientRole::Menu)
-            .root_overlay(self.use_root_overlay)
+            .root_overlay(node.resolve_overlay(self.use_root_overlay))
             .dismiss_policy(TransientDismissPolicy {
                 outside_pointer: false,
                 // Escape resolves the nearest open menu in the focus

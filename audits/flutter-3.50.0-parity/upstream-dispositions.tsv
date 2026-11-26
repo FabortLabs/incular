@@ -1734,3 +1734,5 @@ packages/flutter/test/widgets/raw_menu_anchor_test.dart	2432	Is passed a positio
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	2467	showOverlay triggers onOpen	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#delayed-opening-position-and-disposal
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	2520	showOverlay shows the menu at a position	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#delayed-opening-position-and-disposal
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	2563	showOverlay does nothing after the menu is disposed	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#delayed-opening-position-and-disposal
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	2227	Content is shown in the root overlay when useRootOverlay is true	partial-match	upstream-raw-menu-animation-observer-and-shadow.md#nested-overlay-selection
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	2297	Content is shown in the nearest ancestor overlay when useRootOverlay is false	partial-match	upstream-raw-menu-animation-observer-and-shadow.md#nested-overlay-selection

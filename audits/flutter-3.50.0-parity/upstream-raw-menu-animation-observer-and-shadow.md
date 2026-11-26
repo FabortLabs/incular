@@ -243,3 +243,19 @@ Pinned `:2520`: after the application's 100 ms delay, the native
 retained panel appears at (0,0), then moves to (50,50) only after the
 second request's delay. Pinned `:2563`: calling the saved show after
 the anchor has unmounted neither paints a panel nor fires onOpen.
+
+### Nested overlay selection
+
+Pinned originals `:2227` and `:2297` pass on Flutter. The native
+menu previously chose an overlay independently for each submenu:
+opposite settings produced a detached child surface in the retained
+fixture. Now submenus inherit the root menu's choice, including
+retargeting an already open submenu when the root choice changes.
+The retained surface tests verify both opposite settings and the
+live update.
+
+These remain partial. The Flutter originals inspect the actual
+nearest versus outer Overlay theater when two Overlay hosts are
+present. Incular's layout portal still uses the owning view as its
+layout coordinate space, and the retained parent-surface observation
+does not prove separate Overlay hosts, clipping, or relative bounds.
