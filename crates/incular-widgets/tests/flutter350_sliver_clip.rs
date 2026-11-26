@@ -253,3 +253,57 @@ fn rounded_preserve_shape_uses_the_straight_span_and_physical_axis() {
         );
     }
 }
+
+#[test]
+fn overlap_hit_testing_respects_policy_in_both_paint_directions() {
+    use ClipOverlapBehavior::{FollowEdge, None, PreserveShape};
+    let cases = [
+        (FollowEdge, Axis::Vertical, false, false),
+        (None, Axis::Vertical, false, true),
+        (PreserveShape, Axis::Vertical, false, false),
+        (FollowEdge, Axis::Horizontal, false, false),
+        (None, Axis::Horizontal, false, true),
+        (None, Axis::Vertical, true, true),
+        (FollowEdge, Axis::Horizontal, true, false),
+    ];
+    for rounded in [false, true] {
+        for (policy, axis, reverse, overlaps) in cases {
+            let controller = ScrollController::new();
+            let key = GlobalKey::new();
+            let child =
+                SliverToBoxAdapter::new(Widget::box_(axis.size(100., 100.), FILL).with_key(key));
+            let sliver: Box<dyn Sliver> = if rounded {
+                Box::new(
+                    SliverClipRRect::new(child)
+                        .border_radius(BorderRadiusGeometry::circular(8.))
+                        .clip_overlap(policy),
+                )
+            } else {
+                Box::new(SliverClipRect::new(child).clip_overlap(policy))
+            };
+            let mut tree = WidgetTree::new();
+            tree.mount(scene(&controller, sliver, axis, reverse, true))
+                .unwrap();
+            layout(&mut tree);
+            controller.jump_to(50.);
+            layout(&mut tree);
+            let logical = |main| {
+                let physical = if reverse {
+                    axis.main_extent(VIEW) - 50. - main
+                } else {
+                    50. + main
+                };
+                axis.offset(physical, 100.)
+            };
+            assert_eq!(
+                hit(&tree, key, logical(25.)),
+                overlaps,
+                "{axis:?}, reverse={reverse}, {policy:?}, rounded={rounded}"
+            );
+            assert!(
+                hit(&tree, key, logical(75.)),
+                "{axis:?}, reverse={reverse}, {policy:?}, rounded={rounded}"
+            );
+        }
+    }
+}

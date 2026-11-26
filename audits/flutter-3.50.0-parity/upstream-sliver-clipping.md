@@ -15,7 +15,7 @@ Five original SliverClipRect registrations ran on the pinned Flutter
 checkout: custom bounds must not expand at small overlaps, followEdge
 rejects overlapped hits in vertical and reversed horizontal viewports,
 Clip.none allows overlap hits, and a leading clip stays pinned until its
-inside extent is consumed. The overlap hit-test matrix is verified on the reference side and still needs a complete native fixture.
+inside extent is consumed. The complete paired overlap hit-test matrix is documented below.
 
 ## Retained rectangle and rounded-rectangle clipping
 
@@ -41,3 +41,15 @@ Approximate semantic clipping, clipper-driven reclip callbacks,
 elliptical radii, and the rest of the nested and overlap edge cases
 remain open. No physical GPU pixel readback was required to compare
 these exact retained clip commands and input targets.
+
+## Overlapping-header hit matrix
+
+Both dynamic registrations now pair: rectangle :384 and rounded
+rectangle :489. Each runs all seven axis, reverse, and overlap-mode
+variants. At a 50 px overlap, real hit testing at logical main
+positions 25 and 75 agrees with pinned Flutter: none allows the
+covered hit, and followEdge and preserveShape block it without
+blocking the uncovered content. The native fixture makes the
+overlapping header itself transparent to hit testing so it observes
+the clip's decision rather than the header's paint order. Fourteen
+expanded fixtures represent two upstream registration sites.

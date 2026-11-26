@@ -2325,3 +2325,5 @@ packages/flutter/test/widgets/sliver_clip_rect_test.dart	548	leading clip stays 
 packages/flutter/test/widgets/sliver_clip_rrect_test.dart	684	shifts clip origin and preserves corners (vertical)	paired-match	upstream-sliver-clipping.md#retained-rectangle-and-rounded-rectangle-clipping
 packages/flutter/test/widgets/sliver_clip_rrect_test.dart	720	shifts clip origin (horizontal)	paired-match	upstream-sliver-clipping.md#retained-rectangle-and-rounded-rectangle-clipping
 packages/flutter/test/widgets/sliver_clip_rrect_test.dart	751	shifts clip origin (vertical reverse)	paired-match	upstream-sliver-clipping.md#retained-rectangle-and-rounded-rectangle-clipping
+packages/flutter/test/widgets/sliver_clip_rect_test.dart	384	testCase.name	paired-match	upstream-sliver-clipping.md#overlapping-header-hit-matrix
+packages/flutter/test/widgets/sliver_clip_rrect_test.dart	489	testCase.name	paired-match	upstream-sliver-clipping.md#overlapping-header-hit-matrix
