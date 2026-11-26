@@ -37,3 +37,34 @@ in reading order. A hint and one current value merge onto the same
 node, both with LTR reading direction. These are exact annotation
 checks within the subtree; the original assertions also include the
 Flutter-only two-pane ancestor described above.
+
+## Action replacement, descriptions, and exclusion
+
+All seven pinned Flutter registrations at lines 1170, 1210, 1351, 1393,
+1423, 1474 and 1715 passed. The native
+`flutter350_sliver_semantics_actions` tests dispatch through Runtime, not
+the descriptor closures alone:
+
+- Replacing tap's callback runs the newer function on the same node ID.
+  It does not change the semantic revision or republish a native update.
+  Adding or removing long press publishes one projection; the removed
+  action cannot invoke the stale handler.
+- Tap/long-press hints annotate the appropriate standard action without
+  exposing an additional invokable custom action. Two named custom
+  actions have distinct IDs and invoke only their own callbacks.
+- Tooltip, current value, increased value, and decreased value stay
+  separate. The increase/decrease actions remain present.
+- `SliverSemantics::exclude_semantics(true)` keeps the parent annotation
+  and removes descendant semantics only. The box still paints at its
+  original 10 px height and receives real pointer input. Toggling the
+  option restores the child beneath the same parent node.
+- Each of the nine currently supported callback kinds is added, invoked,
+  removed, and checked for stale dispatch. Independent copy/cut/paste,
+  accessibility focus gain/loss, and set-selection handlers on an
+  arbitrary sliver remain open; editor-specific capabilities are separate.
+
+The original complete-tree checks also include Flutter's two-pane graph.
+Its default reveal uses a callback without advertising an extra action,
+whereas Incular's portable projection exposes `ShowOnScreen` directly.
+The tested callback and annotation behavior matches; these broader
+dispositions remain partial.

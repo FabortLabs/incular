@@ -56,6 +56,7 @@ pub(crate) fn in_semantics_group(anchor: SliverChildId, child: SliverChildId) ->
 pub struct SliverSemantics {
     semantics: Rc<dyn Fn() -> Semantics>,
     sliver: Box<dyn Sliver>,
+    exclude_semantics: bool,
 }
 
 impl SliverSemantics {
@@ -64,15 +65,28 @@ impl SliverSemantics {
         Self {
             semantics: Rc::new(semantics),
             sliver: Box::new(sliver),
+            exclude_semantics: false,
         }
+    }
+
+    /// Keep the sliver's own annotation but omit all descendant annotations,
+    /// without changing layout, paint, or pointer dispatch.
+    #[must_use]
+    pub fn exclude_semantics(mut self, exclude: bool) -> Self {
+        self.exclude_semantics = exclude;
+        self
     }
 }
 
 impl Sliver for SliverSemantics {
     fn build(&self, controller: &ScrollController) -> Widget {
-        (self.semantics)()
-            .with_child(self.sliver.build(controller))
-            .into()
+        let child = self.sliver.build(controller);
+        let child = if self.exclude_semantics {
+            child.exclude_semantics()
+        } else {
+            child
+        };
+        (self.semantics)().with_child(child).into()
     }
 
     fn create_render_sliver(
@@ -84,6 +98,7 @@ impl Sliver for SliverSemantics {
         Box::new(SemanticsRenderSliver {
             inner: RefCell::new(self.sliver.create_render_sliver(controller, axis, reverse)),
             semantics: self.semantics.clone(),
+            exclude_semantics: self.exclude_semantics,
         })
     }
 }
@@ -91,6 +106,7 @@ impl Sliver for SliverSemantics {
 pub(super) struct SemanticsRenderSliver {
     inner: RefCell<Box<dyn RenderSliver>>,
     semantics: Rc<dyn Fn() -> Semantics>,
+    exclude_semantics: bool,
 }
 
 impl super::layout::SingleInnerSliver for SemanticsRenderSliver {
@@ -130,6 +146,9 @@ impl RenderSliver for SemanticsRenderSliver {
         let mut layout = self.inner.borrow_mut().perform_layout(constraints);
         let extent = layout.geometry.scroll_extent.max(0.);
         for child in &mut layout.children {
+            if self.exclude_semantics {
+                child.widget = child.widget.clone().exclude_semantics();
+            }
             if child.id.0 >> 32 == 0 && is_semantics_anchor(child.id) {
                 // Proxies can nest without introducing an indexed sliver
                 // scope. Shift only those direct anchor ids: regular box

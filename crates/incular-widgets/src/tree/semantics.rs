@@ -1437,9 +1437,10 @@ impl WidgetTree {
                 actions.push(action);
             }
         }
-        // Flutter advertises showOnScreen on every node inside a viewport.
-        // Only nodes with a role are emitted, so role-less elements skip it
-        // (and the per-element allocation it would cost).
+        // Flutter's semantics owner can reveal a node via its default
+        // showOnScreen callback even when the action isn't advertised.
+        // Incular exposes that ability to portable bridges as an action.
+        // Role-less elements skip the allocation because they emit no node.
         if role.is_some()
             && !actions.contains(&SemanticActionKind::ShowOnScreen)
             && self.has_scroll_ancestor(element)
