@@ -7,6 +7,7 @@ pub use incular_config as config;
 #[cfg(feature = "controls")]
 pub use incular_controls as controls;
 pub use incular_core as core;
+pub use incular_core::licenses;
 /// Clocks that work on every target; identical to `std::time` natively.
 pub use incular_core::time;
 pub use incular_gestures as gestures;
@@ -110,8 +111,8 @@ pub mod prelude {
     pub use incular_core::{
         BACK_POINTER_BUTTON, ChangeImpact, ChangeNotifier, ChangeNotifierSubscription, Code, Color,
         DebugPrintBuffer, DirtyFlags, FORWARD_POINTER_BUTTON, HslColor, HsvColor, ImeEvent, InputEvent,
-        Invalidation, Key, KeyState, KeyboardEvent, KeyboardKey, Lerp, LicenseEntry, LicenseParagraph,
-        LicenseRegistry, LicenseStream, LocalKey, Location, Modifiers, NamedKey,
+        Invalidation, Key, KeyState, KeyboardEvent, KeyboardKey, Lerp, LocalKey, Location,
+        Modifiers, NamedKey,
         NormalizedPressure, Offset, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase,
         PointerSampleMetadata, Rect, RestorationKey, RestorationKeyError, RestorationScope,
         SECONDARY_POINTER_BUTTON, Size, StylusMetadata, StylusOrientation, TERTIARY_POINTER_BUTTON,

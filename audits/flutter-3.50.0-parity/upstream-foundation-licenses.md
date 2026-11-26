@@ -26,3 +26,11 @@ bundles from services.
 cargo test --locked -j 1 -p incular-core --test flutter350_licenses -- --test-threads=1
 bash audits/flutter-3.50.0-parity/run-reference-linux.sh probe license_collectors_test.dart
 ```
+
+The neutral API lives at `incular::licenses` and
+`incular::core::licenses`. A Material-feature facade probe reproduced
+Rust E0659 when the neutral types shared the generic prelude with
+existing Material glob imports. The names are scoped now; the same
+test verifies the existing imports still work and that the neutral
+entry remains usable under its own namespace. No design-system
+behavior changed.
