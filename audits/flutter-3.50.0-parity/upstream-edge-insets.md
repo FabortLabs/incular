@@ -58,3 +58,20 @@ LTR→RTL→LTR moves the same child across x=16,22,16 with y=22 and
 unchanged 58×50 size. The Rust checks also cover existing sliver
 corrections and implicit animations. All 15 focused configuration and
 39 widget checks passed, and the public Incular facade compiles.
+
+### Running padding and margin animations survive a direction change
+
+The pinned `animated_insets_direction_test.dart` checks AnimatedPadding,
+AnimatedContainer padding and AnimatedContainer margin, changing direction
+at the same timestamp a quarter of the way through each run. Incular
+previously kept the left inset at 15px rather than immediately resolving
+it to the pinned 9px. The tween now retains physical and directional
+components, and the current frame resolves them without changing the
+animation target or clock. Exact subsequent insets and measured child
+rectangles match, the element stays mounted, and completion fires once
+at the original deadline. An additional overshoot probe confirms that
+AnimatedPadding clamps each unresolved component before combining it
+(16.25px left and 3.25px right, not zero).
+
+All four authored Flutter cases and 42 focused native implicit-animation
+tests passed. These authored cases do not create new upstream rows.

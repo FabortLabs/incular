@@ -609,11 +609,11 @@ impl AnimatedContainer {
 #[derive(Default)]
 pub(crate) struct ContainerTweens {
     alignment: Option<PropertyTween<Alignment>>,
-    padding: Option<PropertyTween<EdgeInsets>>,
+    padding: Option<PropertyTween<EdgeInsetsGeometry>>,
     decoration: Option<PropertyTween<BoxDecoration>>,
     foreground_decoration: Option<PropertyTween<BoxDecoration>>,
     constraints: Option<PropertyTween<Constraints>>,
-    margin: Option<PropertyTween<EdgeInsets>>,
+    margin: Option<PropertyTween<EdgeInsetsGeometry>>,
     transform: Option<PropertyTween<CoreTransform>>,
     transform_alignment: Option<PropertyTween<Alignment>>,
 }
@@ -629,8 +629,7 @@ impl ImplicitlyAnimated for AnimatedContainer {
         let direction = pass.direction();
         let alignment = self.alignment.map(|value| value.resolve(direction));
         visit(pass, &mut tweens.alignment, alignment.as_ref());
-        let padding = self.padding.map(|value| value.resolve(direction));
-        visit(pass, &mut tweens.padding, padding.as_ref());
+        visit(pass, &mut tweens.padding, self.padding.as_ref());
         visit(
             pass,
             &mut tweens.decoration,
@@ -646,8 +645,7 @@ impl ImplicitlyAnimated for AnimatedContainer {
             &mut tweens.constraints,
             self.effective_constraints().as_ref(),
         );
-        let margin = self.margin.map(|value| value.resolve(direction));
-        visit(pass, &mut tweens.margin, margin.as_ref());
+        visit(pass, &mut tweens.margin, self.margin.as_ref());
         visit(pass, &mut tweens.transform, self.transform.as_ref());
         let transform_alignment = self
             .transform_alignment
@@ -659,12 +657,13 @@ impl ImplicitlyAnimated for AnimatedContainer {
         );
     }
 
-    fn build(&self, tweens: &ContainerTweens, t: f32, _: &BuildContext<'_>) -> Widget {
+    fn build(&self, tweens: &ContainerTweens, t: f32, context: &BuildContext<'_>) -> Widget {
+        let resolve = |value| resolve_animated_insets(value, context);
         let mut container = Container {
             child: self.child.clone(),
             alignment: evaluate(&tweens.alignment, t),
-            padding: evaluate(&tweens.padding, t),
-            margin: evaluate(&tweens.margin, t),
+            padding: evaluate(&tweens.padding, t).map(resolve),
+            margin: evaluate(&tweens.margin, t).map(resolve),
             constraints: evaluate(&tweens.constraints, t),
             clip_behavior: self.clip_behavior,
             ..Container::default()
@@ -690,6 +689,13 @@ impl ImplicitlyAnimated for AnimatedContainer {
 impl From<AnimatedContainer> for Widget {
     fn from(value: AnimatedContainer) -> Self {
         implicitly_animated(value)
+    }
+}
+
+fn resolve_animated_insets(value: EdgeInsetsGeometry, context: &BuildContext<'_>) -> EdgeInsets {
+    match value {
+        EdgeInsetsGeometry::Physical(insets) => insets,
+        _ => value.resolve(context.text_direction().unwrap_or(TextDirection::Ltr)),
     }
 }
 
@@ -721,27 +727,21 @@ impl AnimatedPadding {
 }
 
 impl ImplicitlyAnimated for AnimatedPadding {
-    type Tweens = Option<PropertyTween<EdgeInsets>>;
+    type Tweens = Option<PropertyTween<EdgeInsetsGeometry>>;
 
     fn timing(&self) -> &ImplicitTiming {
         &self.timing
     }
 
     fn for_each_tween(&self, tween: &mut Self::Tweens, pass: &mut TweenPass) {
-        let padding = self.padding.resolve(pass.direction());
-        visit(pass, tween, Some(&padding));
+        visit(pass, tween, Some(&self.padding));
     }
 
     fn build(&self, tween: &Self::Tweens, t: f32, context: &BuildContext<'_>) -> Widget {
-        // Overshooting curves can push the insets negative: Flutter clamps
-        // them to `EdgeInsets.zero` and above.
-        let padding = evaluate(tween, t)
-            .unwrap_or_else(|| {
-                self.padding
-                    .resolve(context.text_direction().unwrap_or(TextDirection::Ltr))
-            })
-            .clamp(0., f32::INFINITY);
-        Padding::new(padding, self.child.clone()).into()
+        // Clamp each unresolved component before combining physical and
+        // directional sides; the current direction is not a tween target.
+        let padding = evaluate(tween, t).unwrap_or(self.padding).non_negative();
+        Padding::new(resolve_animated_insets(padding, context), self.child.clone()).into()
     }
 }
 

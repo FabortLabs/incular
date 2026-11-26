@@ -122,6 +122,13 @@ impl EdgeInsetsGeometry {
         }
     }
 
+    /// Floors each unresolved edge at zero before physical and logical
+    /// components are combined, as in Flutter's AnimatedPadding.
+    #[must_use]
+    pub fn non_negative(self) -> Self {
+        self.map(|edge| edge.max(0.0))
+    }
+
     /// Divides all populated sides and truncates each quotient toward zero.
     ///
     /// # Panics

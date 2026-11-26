@@ -667,3 +667,103 @@ fn animated_padding_resolves_directional_insets_with_the_text_direction() {
     let mut rtl = Harness::new(padded(TextDirection::Rtl));
     assert_eq!(rtl.rects()[0].origin.x, 0.);
 }
+
+#[test]
+fn changing_text_direction_does_not_restart_the_padding_or_margin_tween() {
+    use incular_widgets::EdgeInsetsGeometry;
+
+    for variant in ["padding", "container padding", "container margin"] {
+        let ends = Rc::new(Cell::new(0));
+        let key = Key::from("animated inset child");
+        let child = Widget::box_(Size::ZERO, Color::WHITE).with_key(key.clone());
+        let build = |direction, padding| {
+            let ends = ends.clone();
+            let on_end = move || ends.set(ends.get() + 1);
+            let animation: Widget = match variant {
+                "padding" => AnimatedPadding::new(padding, DURATION, child.clone())
+                    .on_end(on_end)
+                    .into(),
+                "container padding" => AnimatedContainer::new(DURATION)
+                    .child(child.clone())
+                    .padding(padding)
+                    .on_end(on_end)
+                    .into(),
+                _ => AnimatedContainer::new(DURATION)
+                    .child(child.clone())
+                    .margin(padding)
+                    .on_end(on_end)
+                    .into(),
+            };
+            Directionality::new(direction, animation).into()
+        };
+        let start = EdgeInsetsGeometry::only(10., 0., 2., 0.);
+        let target = EdgeInsetsGeometry::directional(30., 0., 6., 0.);
+        let mut h = Harness::with_constraints(
+            build(TextDirection::Ltr, start),
+            Constraints::tight(Size::new(200., 60.)),
+        );
+        let element = h.tree.element_with_key(&key).unwrap();
+        let verify = |h: &Harness, left, right| {
+            assert_eq!(h.tree.element_with_key(&key), Some(element));
+            assert_eq!(
+                h.tree.element_bounds(element),
+                Some(Rect::from_origin_size(
+                    Offset::new(left, 0.),
+                    Size::new(200. - left - right, 60.)
+                )),
+                "{variant}",
+            );
+        };
+        verify(&h, 10., 2.);
+        h.update(build(TextDirection::Ltr, target), 1_000);
+        h.frame(1_050);
+        verify(&h, 15., 3.);
+        h.update(build(TextDirection::Rtl, target), 1_050);
+        verify(&h, 9., 9.);
+        h.frame(1_100);
+        verify(&h, 8., 16.);
+        h.frame(1_200);
+        verify(&h, 6., 30.);
+        assert_eq!(ends.get(), 0);
+        h.frame(1_201);
+        assert_eq!(ends.get(), 1);
+        h.update(build(TextDirection::Ltr, target), 1_201);
+        verify(&h, 30., 6.);
+        h.frame(1_450);
+        assert_eq!(ends.get(), 1);
+    }
+}
+
+#[test]
+fn animated_padding_clamps_overshooting_components_before_resolving_them() {
+    use incular_widgets::EdgeInsetsGeometry as G;
+
+    let key = Key::from("overshoot child");
+    let child = Widget::box_(Size::ZERO, Color::WHITE).with_key(key.clone());
+    let curve = Curve::CubicBezier {
+        x1: 1. / 3.,
+        y1: -1.,
+        x2: 2. / 3.,
+        y2: -1.,
+    };
+    let build = |padding| {
+        Directionality::new(
+            TextDirection::Ltr,
+            AnimatedPadding::new(padding, DURATION, child.clone()).curve(curve.clone()),
+        )
+        .into()
+    };
+    let mut h = Harness::with_constraints(
+        build(G::only(10., 0., 2., 0.)),
+        Constraints::tight(Size::new(200., 60.)),
+    );
+    h.update(build(G::directional(30., 0., 6., 0.)), 1_000);
+    h.frame(1_100);
+    let child = h
+        .tree
+        .element_bounds(h.tree.element_with_key(&key).unwrap())
+        .unwrap();
+    let right = 200. - child.origin.x - child.size.width;
+    assert!((child.origin.x - 16.25).abs() < 0.001, "{child:?}");
+    assert!((right - 3.25).abs() < 0.001, "{child:?}");
+}
