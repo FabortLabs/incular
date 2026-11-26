@@ -160,6 +160,11 @@ impl<'a> TextLineRef<'a> {
     }
 
     #[must_use]
+    pub fn top(&self) -> f32 {
+        self.line.top + self.y
+    }
+
+    #[must_use]
     pub fn baseline(&self) -> f32 {
         self.line.baseline + self.y
     }

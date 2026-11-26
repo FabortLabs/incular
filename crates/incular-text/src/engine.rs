@@ -134,6 +134,8 @@ pub struct TextLine {
     /// x positions must add this to `width` instead of re-deriving the
     /// alignment.
     pub offset: f32,
+    /// Snapped top of the line box, in layout coordinates.
+    pub top: f32,
     pub baseline: f32,
     pub start: usize,
     /// End of selectable/caret text on this visual line. This excludes a
@@ -1324,6 +1326,7 @@ impl TextEngine {
                         .collect(),
                     width: line.width,
                     offset: line.offset,
+                    top: line.top + height,
                     baseline: line.baseline + height,
                     start: line.start + byte_start,
                     caret_end: line.caret_end + byte_start,
@@ -1343,6 +1346,7 @@ impl TextEngine {
                 clusters: Arc::new([]),
                 width: 0.,
                 offset: 0.,
+                top: 0.,
                 baseline: 0.,
                 start: 0,
                 caret_end: 0,
@@ -2008,6 +2012,7 @@ impl TextEngine {
                 clusters: cluster_spans,
                 width: metrics.advance,
                 offset: metrics.offset,
+                top: metrics.block_min_coord,
                 baseline: metrics.baseline,
                 start: range.start,
                 caret_end,
@@ -2023,6 +2028,7 @@ impl TextEngine {
                 clusters: Arc::new([]),
                 width: 0.0,
                 offset: 0.0,
+                top: 0.0,
                 baseline: 0.0,
                 start: 0,
                 caret_end: 0,
@@ -2538,12 +2544,12 @@ fn snap_line_boxes(translated: &mut TextLayout, boxes: &[LineBox]) {
     if boxes.len() != translated.lines.len() || boxes.is_empty() {
         return;
     }
-    // (reported baseline, glyph paint baseline) per line, computed on the
+    // (line top, reported baseline, glyph paint baseline) per line, computed on the
     // fly so a steady-state relayout allocates no per-line scratch.
     let shifts = || {
         boxes.iter().scan(0.0_f32, |top, line_box| {
             let ascent = line_box.baseline - line_box.top;
-            let shift = (*top + ascent, *top + ascent.round());
+            let shift = (*top, *top + ascent, *top + ascent.round());
             *top += (line_box.bottom - line_box.top).max(0.).round();
             Some(shift)
         })
@@ -2558,7 +2564,7 @@ fn snap_line_boxes(translated: &mut TextLayout, boxes: &[LineBox]) {
         let mut shifts = shifts().enumerate().peekable();
         for placed in Arc::make_mut(&mut translated.placeholders) {
             while shifts.next_if(|(index, _)| *index < placed.line).is_some() {}
-            if let (Some(line), Some(&(_, (baseline, _)))) = (
+            if let (Some(line), Some(&(_, (_, baseline, _)))) = (
                 lines.get(placed.line),
                 shifts.peek().filter(|(index, _)| *index == placed.line),
             ) {
@@ -2566,12 +2572,13 @@ fn snap_line_boxes(translated: &mut TextLayout, boxes: &[LineBox]) {
             }
         }
     }
-    for (line, (baseline, paint_baseline)) in Arc::make_mut(&mut translated.lines)
+    for (line, (line_top, baseline, paint_baseline)) in Arc::make_mut(&mut translated.lines)
         .iter_mut()
         .zip(shifts())
     {
         // Parley placed the glyphs on its own unrounded baseline.
         let shift = paint_baseline - line.baseline;
+        line.top = line_top;
         line.baseline = baseline;
         if shift == 0. {
             continue;

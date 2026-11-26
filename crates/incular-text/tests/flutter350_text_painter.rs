@@ -207,3 +207,213 @@ fn flutter_ahem_line_metrics_when_the_pinned_font_is_available() {
     assert_eq!(p.line_metrics().unwrap().len(), 1);
     assert_eq!(p.line_metrics().unwrap()[0].width, 6.25);
 }
+
+#[test]
+fn the_same_line_ltr_caret_has_the_same_offset_for_both_affinities() {
+    use incular_text::TextAffinity::{Downstream, Upstream};
+    let (mut engine, style) = inter();
+    let mut p = painter(TextSpan::new("aa").style(style), TextDirection::Ltr);
+    p.layout_with_engine(&mut engine, 0., f32::INFINITY)
+        .unwrap();
+    assert_eq!(
+        p.caret_offset(1, Downstream, 5.),
+        p.caret_offset(1, Upstream, 5.)
+    );
+}
+
+#[test]
+fn decomposed_korean_remains_queryable_at_a_degenerate_wrap_width() {
+    use incular_text::TextAffinity::Downstream;
+    let mut p = painter(
+        TextSpan::new("각").style(TextStyle::default().font_size(10.)),
+        TextDirection::Ltr,
+    );
+    p.layout(0., 1.).unwrap();
+    let caret = p.caret_offset(0, Downstream, 0.).unwrap();
+    assert!(caret.x.is_finite() && caret.y.is_finite());
+}
+
+#[test]
+fn hard_line_breaks_do_not_use_affinity_but_soft_wraps_do() {
+    use incular_core::Offset;
+    use incular_text::TextAffinity::{Downstream, Upstream};
+    let Ok(path) = std::env::var("INCULAR_FLUTTER_AHEM_PATH") else {
+        return;
+    };
+    let mut engine = TextEngine::new();
+    assert!(engine.register_font_bytes_as("Ahem Caret", std::fs::read(path).unwrap()));
+    let make = |text: &str| {
+        TextSpan::new(text).style(
+            TextStyle::default()
+                .font_family("Ahem Caret")
+                .font_size(14.),
+        )
+    };
+    let mut p = painter(make("aaa"), TextDirection::Ltr);
+    for (source, samples) in [
+        (
+            "aaa",
+            &[(0, 0., 0.), (1, 14., 0.), (2, 28., 0.), (3, 42., 0.)][..],
+        ),
+        ("\n\n", &[(0, 0., 0.), (1, 0., 14.), (2, 0., 28.)][..]),
+        ("\naaa", &[(0, 0., 0.), (1, 0., 14.)][..]),
+        ("aaa\n", &[(3, 42., 0.), (4, 0., 14.)][..]),
+        ("aaa\naaa", &[(4, 0., 14.)][..]),
+        (
+            "aaa\n\n\n",
+            &[(3, 42., 0.), (4, 0., 14.), (5, 0., 28.), (6, 0., 42.)][..],
+        ),
+        (
+            "\n\n\naaa",
+            &[(0, 0., 0.), (1, 0., 14.), (2, 0., 28.), (3, 0., 42.)][..],
+        ),
+    ] {
+        p.set_text(Some(make(source)));
+        p.layout_with_engine(&mut engine, 0., f32::INFINITY)
+            .unwrap();
+        for &(byte, x, y) in samples {
+            for affinity in [Downstream, Upstream] {
+                assert_eq!(
+                    p.caret_offset(byte, affinity, 0.).unwrap(),
+                    Offset::new(x, y),
+                    "{source:?} at {byte} {affinity:?}"
+                );
+            }
+        }
+    }
+    p.set_text(Some(make("aaaaaaaa")));
+    p.layout_with_engine(&mut engine, 0., 100.).unwrap();
+    assert_eq!(
+        p.caret_offset(7, Downstream, 0.).unwrap(),
+        Offset::new(0., 14.)
+    );
+    assert_eq!(
+        p.caret_offset(7, Upstream, 0.).unwrap(),
+        Offset::new(98., 0.)
+    );
+
+    p.set_text_align(TextAlign::Right);
+    p.set_text(Some(make("aaa")));
+    p.layout_with_engine(&mut engine, 0., f32::INFINITY)
+        .unwrap();
+    assert_eq!(p.caret_offset(0, Downstream, 0.).unwrap(), Offset::ZERO);
+}
+
+#[test]
+fn grapheme_internal_utf16_positions_share_a_real_cluster_end() {
+    use incular_text::TextAffinity::{Downstream, Upstream};
+    let (mut engine, style) = inter();
+    for emoji in [
+        "👩‍🚀",
+        "👩‍❤️‍💋‍👩",
+        "👨‍👩‍👦‍👦",
+        "👨🏾‍🤝‍👨🏻",
+        "👨‍👦",
+        "👩‍👦",
+        "🏌🏿‍♀️",
+        "🏊‍♀️",
+        "🏄🏻‍♂️",
+        "🇺🇳",
+        "👩‍❤️‍👨",
+    ] {
+        for prefix in ["", "a", "ab", "abc", "abcd"] {
+            let source = format!("{prefix}{emoji}");
+            let n = source.encode_utf16().count();
+            let mut p = painter(
+                TextSpan::new(source).style(style.clone()),
+                TextDirection::Ltr,
+            );
+            p.layout_with_engine(&mut engine, 0., f32::INFINITY)
+                .unwrap();
+            let end = p.caret_offset_utf16(n, Downstream, 0.).unwrap();
+            let start = p.caret_offset_utf16(prefix.len(), Downstream, 0.).unwrap();
+            let mut first = 0.;
+            for byte in 0..=prefix.len() {
+                let mut before = painter(
+                    TextSpan::new(&prefix[..byte]).style(style.clone()),
+                    TextDirection::Ltr,
+                );
+                before
+                    .layout_with_engine(&mut engine, 0., f32::INFINITY)
+                    .unwrap();
+                let x = p.caret_offset_utf16(byte, Downstream, 0.).unwrap().x;
+                assert!(
+                    (x - before.size().unwrap().width).abs() < 0.001,
+                    "{prefix}{emoji} at {byte}"
+                );
+                assert!(x >= first - 0.001);
+                first = x;
+            }
+            assert!((end.x - p.size().unwrap().width).abs() < 0.001);
+            assert!(
+                end.x > start.x,
+                "{prefix}{emoji} must give the cluster some advance"
+            );
+            for affinity in [Downstream, Upstream] {
+                for index in prefix.len() + 1..n {
+                    assert_eq!(
+                        p.caret_offset_utf16(index, affinity, 0.).unwrap(),
+                        end,
+                        "{prefix}{emoji} at {index} {affinity:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn a_span_with_only_children_can_be_measured_and_then_cleared() {
+    use incular_core::Offset;
+    use incular_text::TextAffinity::Downstream;
+    let Ok(path) = std::env::var("INCULAR_FLUTTER_AHEM_PATH") else {
+        return;
+    };
+    let mut engine = TextEngine::new();
+    assert!(engine.register_font_bytes_as("Ahem Caret", std::fs::read(path).unwrap()));
+    let root = |children: Vec<TextSpan>| {
+        TextSpan::empty()
+            .style(
+                TextStyle::default()
+                    .font_family("Ahem Caret")
+                    .font_size(14.),
+            )
+            .children(children)
+    };
+    let mut p = painter(
+        root(vec![TextSpan::new("B"), TextSpan::new("C")]),
+        TextDirection::Ltr,
+    );
+    p.layout_with_engine(&mut engine, 0., f32::INFINITY)
+        .unwrap();
+    let width = p.size().unwrap().width;
+    assert_eq!(p.caret_offset(0, Downstream, 0.).unwrap().x, 0.);
+    assert_eq!(p.caret_offset(1, Downstream, 0.).unwrap().x, width / 2.);
+    assert_eq!(p.caret_offset(2, Downstream, 0.).unwrap().x, width);
+    p.set_text(Some(root(Vec::new())));
+    p.layout_with_engine(&mut engine, 0., f32::INFINITY)
+        .unwrap();
+    for offset in 0..=1 {
+        assert_eq!(
+            p.caret_offset(offset, Downstream, 0.).unwrap(),
+            Offset::ZERO
+        );
+    }
+}
+
+#[test]
+fn bidi_run_leading_edge_accounts_for_caret_width_without_moving_terminal_caret() {
+    use incular_text::TextAffinity::{Downstream, Upstream};
+    let (mut engine, style) = inter();
+    let mut p = painter(TextSpan::new("aل").style(style), TextDirection::Ltr);
+    p.layout_with_engine(&mut engine, 1000., 1000.).unwrap();
+    let visual_end = p.line_metrics().unwrap()[0].width;
+    assert_eq!(p.caret_offset_utf16(0, Downstream, 5.).unwrap().x, 0.);
+    let at_run_boundary = p.caret_offset_utf16(1, Downstream, 5.).unwrap().x;
+    assert!((at_run_boundary - (visual_end - 5.)).abs() < 0.001);
+    assert!(p.caret_offset_utf16(1, Upstream, 5.).unwrap().x < visual_end);
+    assert_eq!(
+        p.caret_offset_utf16(2, Downstream, 5.).unwrap().x,
+        visual_end
+    );
+}

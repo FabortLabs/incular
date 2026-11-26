@@ -9,8 +9,8 @@ use incular_config::TextDirection;
 use incular_core::{Offset, Size};
 
 use crate::{
-    TextAlign, TextEngine, TextLayout, TextLayoutOptions, TextOverflow, TextRange, TextSpan,
-    TextStyle, TextWidthBasis, word_boundary_at,
+    TextAffinity, TextAlign, TextEngine, TextLayout, TextLayoutOptions, TextOverflow, TextRange,
+    TextSpan, TextStyle, TextWidthBasis, word_boundary_at,
 };
 
 /// A layout request or query that cannot be satisfied yet.
@@ -45,6 +45,7 @@ pub struct TextPainterLine {
     pub end: usize,
     pub hard_break: bool,
     pub left: f32,
+    pub top: f32,
     pub width: f32,
     pub baseline: f32,
 }
@@ -234,13 +235,154 @@ impl TextPainter {
                     line_number: i,
                     start: line.start,
                     end: line.end,
-                    hard_break: line.caret_end < line.end || i + 1 == lines.len(),
+                    hard_break: line.caret_end < line.end
+                        || matches!(
+                            self.plain.as_bytes().get(line.caret_end),
+                            Some(b'\n' | b'\r')
+                        )
+                        || i + 1 == lines.len(),
                     left: line.offset + measured.paint_offset.x,
+                    top: line.top,
                     width: line.width,
                     baseline: line.baseline,
                 })
                 .collect()
         }))
+    }
+
+    /// Locates a caret at a UTF-8 byte position. Affinity chooses the
+    /// trailing or leading edge on a soft-wrap or bidi boundary. At an
+    /// explicit newline the source position takes precedence.
+    pub fn caret_offset(
+        &self,
+        byte: usize,
+        affinity: TextAffinity,
+        caret_width: f32,
+    ) -> Result<Offset, TextPainterError> {
+        let measured = self.measured()?;
+        let source = &self.plain;
+        let lines = &measured.shaped.lines;
+        if lines.is_empty() {
+            return Ok(Offset::ZERO);
+        }
+        let line_at = |byte| {
+            lines
+                .partition_point(|line| line.start <= byte)
+                .saturating_sub(1)
+        };
+        let mut byte = byte.min(source.len());
+        let mut index = line_at(byte);
+        if byte < lines[index].caret_end
+            && !measured
+                .shaped
+                .line_caret_positions(index)
+                .iter()
+                .any(|stop| stop.offset == byte)
+        {
+            // A rare inside-cluster query may not have a shaped stop.
+            // Search only its visual line; ordinary caret moves do not
+            // scan preceding text or allocate a segmentation vector.
+            let start = lines[index].start;
+            let end = lines[index].caret_end.min(source.len());
+            if let Some(line_text) = source.get(start..end) {
+                let relative = byte - start;
+                if let Some(next) = icu_segmenter::GraphemeClusterSegmenter::new()
+                    .segment_str(line_text)
+                    .find(|boundary| *boundary >= relative)
+                {
+                    byte = start + next;
+                    index = line_at(byte);
+                }
+            }
+        }
+
+        let after_break = byte
+            .checked_sub(1)
+            .is_some_and(|prev| matches!(source.as_bytes().get(prev), Some(b'\n' | b'\r')));
+        let use_leading = byte == 0 || after_break || affinity == TextAffinity::Downstream;
+        if !use_leading && index > 0 && lines[index].start == byte {
+            index -= 1;
+        }
+        let line = &lines[index];
+        let stops = measured.shaped.line_caret_positions(index);
+        let paragraph_rtl = self.direction == Some(TextDirection::Rtl);
+        let (x, rtl) = if byte == source.len() && use_leading && !line.clusters.is_empty() {
+            // For downstream end-of-text, anchor to the paragraph's visual
+            // trailing edge, even if its last glyph has the other direction.
+            let edge = if paragraph_rtl {
+                stops.first()
+            } else {
+                stops.last()
+            };
+            (edge.map_or(line.offset, |stop| stop.x), paragraph_rtl)
+        } else {
+            let wanted = if use_leading {
+                TextAffinity::Downstream
+            } else {
+                TextAffinity::Upstream
+            };
+            let stop = stops
+                .iter()
+                .find(|stop| stop.offset == byte && stop.affinity == wanted)
+                .or_else(|| stops.iter().find(|stop| stop.offset == byte));
+            let direction = line
+                .clusters
+                .iter()
+                .find(|cluster| {
+                    if use_leading {
+                        cluster.range().start == byte
+                    } else {
+                        cluster.range().end == byte
+                    }
+                })
+                .map_or(paragraph_rtl && !line.clusters.is_empty(), |cluster| {
+                    cluster.rtl
+                });
+            (
+                stop.map_or_else(
+                    || {
+                        if byte >= line.caret_end && !paragraph_rtl {
+                            line.offset + line.width
+                        } else {
+                            line.offset
+                        }
+                    },
+                    |stop| stop.x,
+                ),
+                direction,
+            )
+        };
+        let advance = if rtl && caret_width.is_finite() {
+            caret_width.max(0.)
+        } else {
+            0.
+        };
+        Ok(Offset::new(
+            (x - advance + measured.paint_offset.x).clamp(0., measured.size.width),
+            line.top,
+        ))
+    }
+
+    /// Asks for the same caret using a Flutter/IME UTF-16 code-unit offset.
+    /// A position inside a surrogate pair resolves at the containing
+    /// grapheme boundary, not a split UTF-8 scalar.
+    pub fn caret_offset_utf16(
+        &self,
+        position: usize,
+        affinity: TextAffinity,
+        caret_width: f32,
+    ) -> Result<Offset, TextPainterError> {
+        let mut units = 0;
+        for (byte, character) in self.plain.char_indices() {
+            if units == position {
+                return self.caret_offset(byte, affinity, caret_width);
+            }
+            units += character.len_utf16();
+            if units > position {
+                return self.caret_offset(byte + character.len_utf8(), affinity, caret_width);
+            }
+        }
+        self.caret_offset(self.plain.len(), affinity, caret_width)
     }
 
     /// Looks up the word segment containing the given UTF-8 byte position.

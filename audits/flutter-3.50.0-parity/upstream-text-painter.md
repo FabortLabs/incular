@@ -26,3 +26,24 @@ coordinates, not a complete Flutter TextPainter API or GPU pixel parity.
 INCULAR_FLUTTER_AHEM_PATH="$PWD/.tmp/flutter/packages/flutter_tools/static/Ahem.ttf" \
   cargo test --locked --offline -j1 -p incular-text --test flutter350_text_painter --test flutter350_text_boundaries --test inline_placeholders -- --test-threads=1
 ```
+
+## Caret affinity and grapheme edges
+
+Six further upstream cases pair. The painter retains the snapped top
+of each measured line. At an explicit newline, the logical source
+position wins under both affinities; only a soft wrap disambiguates
+the two sides of the same offset. The Ahem fixture sees the expected
+positions at 0, 14, 28, and 42 px, and places the two carets on either
+side of the 98 px wrap. A span with only children and then no text
+has the pinned caret coordinates, including a clamped invalid offset.
+
+The UTF-16 entry point uses the shape's measured grapheme boundaries
+for family, skin-tone, flag, and other joined emoji. Internal UTF-16
+positions do not become extra caret stops; the visible prefixes and
+terminal offset agree with separately measured text. A deliberately
+narrow Korean jamo layout remains queryable. The bidi-width regression
+is partial because native Arabic fallback advances differ from the
+Ahem fixture. What pairs there is the direction-sensitive caret-width
+subtraction at the run boundary and the base-direction terminal
+caret. The exact trailing-space/RTL registration ran only on Flutter.
+All eight selected Flutter and 24 focused Rust cases passed.

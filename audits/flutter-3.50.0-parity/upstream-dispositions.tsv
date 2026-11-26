@@ -2008,3 +2008,11 @@ packages/flutter/test/painting/text_painter_test.dart	1768	TextPainter.getWordBo
 packages/flutter/test/painting/text_painter_test.dart	1814	TextPainter plainText getter	paired-match	upstream-text-painter.md
 packages/flutter/test/painting/text_painter_test.dart	1916	LongestLine TextPainter properly relayout when maxWidth changes.	paired-match	upstream-text-painter.md
 packages/flutter/test/painting/text_painter_test.dart	1934	TextPainter line breaking does not round to integers	paired-match	upstream-text-painter.md
+packages/flutter/test/painting/text_painter_test.dart	248	TextPainter null text test	paired-match	upstream-text-painter.md#caret-affinity-and-grapheme-edges
+packages/flutter/test/painting/text_painter_test.dart	350	TextPainter caret emoji tests: single, long emoji	paired-match	upstream-text-painter.md#caret-affinity-and-grapheme-edges
+packages/flutter/test/painting/text_painter_test.dart	368	TextPainter caret emoji test: letters, then 1 emoji of 5 code units	paired-match	upstream-text-painter.md#caret-affinity-and-grapheme-edges
+packages/flutter/test/painting/text_painter_test.dart	521	upstream downstream makes no difference in the same line within the same bidi run	paired-match	upstream-text-painter.md#caret-affinity-and-grapheme-edges
+packages/flutter/test/painting/text_painter_test.dart	536	trailing newlines	reference-ran-incular-open	upstream-text-painter.md#caret-affinity-and-grapheme-edges
+packages/flutter/test/painting/text_painter_test.dart	561	End of text caret when the text ends with +1 bidi level	partial-match	upstream-text-painter.md#caret-affinity-and-grapheme-edges
+packages/flutter/test/painting/text_painter_test.dart	579	handles newlines properly	paired-match	upstream-text-painter.md#caret-affinity-and-grapheme-edges
+packages/flutter/test/painting/text_painter_test.dart	2034	getOffsetForCaret does not crash on decomposed characters	paired-match	upstream-text-painter.md#caret-affinity-and-grapheme-edges
