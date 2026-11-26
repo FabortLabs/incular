@@ -2146,9 +2146,22 @@ impl RenderSliver for ResizingHeaderRenderSliver {
                     allow_floating_expansion,
                 )
             }
-            SliverHeaderScrollBehavior::FloatingPinned => self
-                .scroll_state
-                .update_with_floating_expansion(scroll_offset, range, allow_floating_expansion),
+            SliverHeaderScrollBehavior::FloatingPinned => {
+                // Flutter's persistent delegate tracks how far the entire
+                // header has scrolled, even while minExtent remains pinned.
+                // The separate Incular resizing widget reveals from its
+                // collapsed span without that initial dead distance.
+                let reveal_extent = if self.delegate.is_some() {
+                    self.max_extent
+                } else {
+                    range
+                };
+                self.scroll_state.update_with_floating_expansion(
+                    scroll_offset,
+                    reveal_extent,
+                    allow_floating_expansion,
+                )
+            }
             _ => scroll_offset,
         };
         let stretch = match self.overscroll_behavior {

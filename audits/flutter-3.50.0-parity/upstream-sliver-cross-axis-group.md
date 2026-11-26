@@ -78,3 +78,22 @@ Incular previously dropped the active text-input client on the first
 jump. The group now forwards the focus keep-alive request using the
 individual lane's child ID. This is an authored regression, not an
 additional upstream registration.
+
+## Floating headers during touch and programmatic scrolling
+
+Paired :718, :782, :821, :864, and :981. Three real upward-scroll
+gesture traces start at offset 600 and record inner sliver paint extent
+and retained box bounds after each touch move. An ordinary floating
+header shows 40 px after a 40 px move, and a variable header shows
+30 then 50 px. A pin with a 40 px minimum must stay at 40 px after
+the first 30 px movement and clear its −10 px parent correction on
+the next move, growing to 50 px. Incular previously expanded it all
+the way to 60 px on that first move. Programmatic jumps do not reveal
+either ordinary scrolling or floating headers.
+
+Delegate-backed persistent headers now track the full extent before
+floating back into view. The separate Incular resizing-header behavior
+is unchanged. The cross-axis and obstruction targets passed. Two
+adjacent resizing-header tests still fail their no-rebuild assertions
+(2 rather than 0); both failures reproduce identically on the previous
+published revision and are a separate performance issue.
