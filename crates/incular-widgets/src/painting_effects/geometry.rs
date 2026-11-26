@@ -2,7 +2,7 @@
 
 use std::{
     hash::{Hash, Hasher},
-    ops::{Add, Mul, Sub},
+    ops::{Add, Div, Mul, Neg, Rem, Sub},
 };
 
 use incular_config::EdgeInsets;
@@ -38,6 +38,15 @@ impl Radius {
     #[must_use]
     pub const fn zero() -> Self {
         Self::ZERO
+    }
+
+    /// Flutter's truncating division: divides the two axes toward zero.
+    #[must_use]
+    pub fn trunc_div(self, rhs: f32) -> Self {
+        let x = self.x / rhs;
+        let y = self.y / rhs;
+        assert!(x.is_finite() && y.is_finite(), "radius quotient must be finite");
+        Self::elliptical(x.trunc(), y.trunc())
     }
 
     /// Interpolates absent endpoints from zero, returning `None` only if
@@ -85,6 +94,30 @@ impl Mul<f32> for Radius {
 
     fn mul(self, rhs: f32) -> Self {
         Self::elliptical(self.x * rhs, self.y * rhs)
+    }
+}
+
+impl Neg for Radius {
+    type Output = Self;
+
+    fn neg(self) -> Self {
+        Self::elliptical(-self.x, -self.y)
+    }
+}
+
+impl Div<f32> for Radius {
+    type Output = Self;
+
+    fn div(self, rhs: f32) -> Self {
+        Self::elliptical(self.x / rhs, self.y / rhs)
+    }
+}
+
+impl Rem<f32> for Radius {
+    type Output = Self;
+
+    fn rem(self, rhs: f32) -> Self {
+        Self::elliptical(self.x.rem_euclid(rhs), self.y.rem_euclid(rhs))
     }
 }
 
@@ -394,6 +427,12 @@ impl BorderRadiusDirectional {
 macro_rules! impl_corner_arithmetic {
     ($type:ty, $($corner:ident),+ $(,)?) => {
         impl $type {
+            /// Truncates each corner quotient toward zero.
+            #[must_use]
+            pub fn trunc_div(self, rhs: f32) -> Self {
+                Self { $($corner: self.$corner.trunc_div(rhs)),+ }
+            }
+
             /// Interpolates absent endpoints from zero, returning `None` only
             /// if both endpoints are absent.
             #[must_use]
@@ -434,6 +473,30 @@ macro_rules! impl_corner_arithmetic {
                 Self { $($corner: self.$corner * rhs),+ }
             }
         }
+
+        impl Neg for $type {
+            type Output = Self;
+
+            fn neg(self) -> Self {
+                Self { $($corner: -self.$corner),+ }
+            }
+        }
+
+        impl Div<f32> for $type {
+            type Output = Self;
+
+            fn div(self, rhs: f32) -> Self {
+                Self { $($corner: self.$corner / rhs),+ }
+            }
+        }
+
+        impl Rem<f32> for $type {
+            type Output = Self;
+
+            fn rem(self, rhs: f32) -> Self {
+                Self { $($corner: self.$corner % rhs),+ }
+            }
+        }
     };
 }
 
@@ -472,6 +535,72 @@ impl BorderRadiusGeometry {
     #[must_use]
     pub const fn circular(radius: f32) -> Self {
         Self::all(Radius::circular(radius))
+    }
+
+    /// Creates a physical or logical horizontal radius. Missing sides
+    /// default to zero. Do not combine left/right with start/end.
+    ///
+    /// # Panics
+    /// Panics if both physical and logical sides are supplied.
+    #[must_use]
+    pub fn horizontal(
+        left: Option<Radius>,
+        right: Option<Radius>,
+        start: Option<Radius>,
+        end: Option<Radius>,
+    ) -> Self {
+        let logical = start.is_some() || end.is_some();
+        assert!(
+            !logical || (left.is_none() && right.is_none()),
+            "The left and right values cannot be used in conjunction with start and end."
+        );
+        if logical {
+            Self::Directional(BorderRadiusDirectional::horizontal(
+                start.unwrap_or(Radius::ZERO),
+                end.unwrap_or(Radius::ZERO),
+            ))
+        } else {
+            Self::Physical(BorderRadius::horizontal(
+                left.unwrap_or(Radius::ZERO),
+                right.unwrap_or(Radius::ZERO),
+            ))
+        }
+    }
+
+    #[must_use]
+    pub const fn only(top_left: Radius, top_right: Radius, bottom_right: Radius, bottom_left: Radius) -> Self {
+        Self::Physical(BorderRadius::only(top_left, top_right, bottom_right, bottom_left))
+    }
+
+    #[must_use]
+    pub const fn directional(top_start: Radius, top_end: Radius, bottom_end: Radius, bottom_start: Radius) -> Self {
+        Self::Directional(BorderRadiusDirectional::only(top_start, top_end, bottom_end, bottom_start))
+    }
+
+    #[must_use]
+    pub const fn vertical(top: Radius, bottom: Radius) -> Self {
+        Self::Physical(BorderRadius::vertical(top, bottom))
+    }
+
+    /// Truncates each stored corner quotient before direction resolution.
+    #[must_use]
+    pub fn trunc_div(self, rhs: f32) -> Self {
+        self.map_components(|r| r.trunc_div(rhs), |r| r.trunc_div(rhs))
+    }
+
+    fn map_components(
+        self,
+        physical: impl FnOnce(BorderRadius) -> BorderRadius,
+        directional: impl FnOnce(BorderRadiusDirectional) -> BorderRadiusDirectional,
+    ) -> Self {
+        match self {
+            Self::Physical(r) => Self::Physical(physical(r)),
+            Self::Directional(r) => Self::Directional(directional(r)),
+            Self::Mixed { physical: p, directional: d } => Self::Mixed {
+                physical: physical(p),
+                directional: directional(d),
+            },
+        }
     }
 
     #[must_use]
@@ -573,17 +702,31 @@ impl Mul<f32> for BorderRadiusGeometry {
     type Output = Self;
 
     fn mul(self, rhs: f32) -> Self {
-        match self {
-            Self::Physical(value) => Self::Physical(value * rhs),
-            Self::Directional(value) => Self::Directional(value * rhs),
-            Self::Mixed {
-                physical,
-                directional,
-            } => Self::Mixed {
-                physical: physical * rhs,
-                directional: directional * rhs,
-            },
-        }
+        self.map_components(|r| r * rhs, |r| r * rhs)
+    }
+}
+
+impl Neg for BorderRadiusGeometry {
+    type Output = Self;
+
+    fn neg(self) -> Self {
+        self.map_components(|r| -r, |r| -r)
+    }
+}
+
+impl Div<f32> for BorderRadiusGeometry {
+    type Output = Self;
+
+    fn div(self, rhs: f32) -> Self {
+        self.map_components(|r| r / rhs, |r| r / rhs)
+    }
+}
+
+impl Rem<f32> for BorderRadiusGeometry {
+    type Output = Self;
+
+    fn rem(self, rhs: f32) -> Self {
+        self.map_components(|r| r % rhs, |r| r % rhs)
     }
 }
 

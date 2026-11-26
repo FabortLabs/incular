@@ -175,3 +175,18 @@ painted centerline is inset 2 px and the layout dimension only 4 px.
 Those are distinct Flutter behaviors, not three ways to report the
 same border inset. One pinned original, one authored reference and
 37 targeted Rust cases passed.
+
+## Corner-radius factories and signed arithmetic
+
+Four pinned `border_radius_test.dart` registrations pair. Physical
+and logical factories retain the original x/y values in raw rounded
+rectangles, even when the geometry will clamp at paint time. Logical
+corners resolve consistently in both directions. Horizontal factories
+choose one coordinate system and reject ambiguous mixed arguments.
+Copying with omitted overrides preserves equality and hashing.
+
+Negation, ordinary division, truncating division, and Euclidean
+remainder operate on each stored corner. They do not normalize values
+to zero, substitute a circular radius, or resolve the logical part
+of a mixed radius before applying arithmetic. Four exact Flutter
+and 30 focused Rust cases passed.
