@@ -1708,3 +1708,8 @@ packages/flutter/test/widgets/raw_menu_anchor_test.dart	3027	View size change tr
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	3076	Ancestor scroll triggers onCloseRequested on open menu	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#nearest-ancestor-scroll-activity
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	2066	Menus do not close on root menu internal scroll	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#scrolling-the-panel-and-listener-teardown
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	2137	Ancestor scroll listener is removed on dispose	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#scrolling-the-panel-and-listener-teardown
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	2632	hideOverlay triggers onClose	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#delayed-hiding-and-outside-input
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	2669	hideOverlay hides the menu overlay	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#delayed-hiding-and-outside-input
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	2751	onCloseRequested is called on descendants before parent	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#delayed-hiding-and-outside-input
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	2811	Async onClose is called on descendants before parent	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#delayed-hiding-and-outside-input
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	2986	Outside tap triggers onCloseRequested	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#delayed-hiding-and-outside-input

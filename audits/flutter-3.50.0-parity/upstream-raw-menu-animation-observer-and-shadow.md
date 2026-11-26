@@ -133,3 +133,25 @@ then closes both, reporting the submenu before the root. Pinned
 `:2137`: a mounted root registers on its scroll position, and removal
 unsubscribes. The native fixture also swaps positions while open,
 verifying that only the current scroll position can close the menu.
+
+### Delayed hiding and outside input
+
+Pinned `:2632` and `:2669` keep the panel and withhold onClose at
+the request and at 99 ms; the supplied hide removes the panel and
+reports one close by 101 ms. The Rust fixture uses an application
+timer queue and drives the supplied callback, not the controller's
+direct visibility setter. The authored pinned Dart and native probes
+also verify that a repeat request reaches a still-attached hidden
+anchor but cannot report another actual close.
+
+Pinned `:2751` explicitly expects close *requests* from parent
+to deepest child despite the registration's title. Pinned `:2811`
+checks the opposite order for each subtree's actual close after
+scheduled callbacks: depth order [3,2] at 11 and 34 ms, then
+[3,2,1,0] at 36 ms; no new callback at 56 ms. The native test opens
+the three child menus via real pointer routes and checks the panel
+and each retained controller as well as the event order.
+
+Pinned `:2986` and the retained surface test both open via a real
+anchor tap. One outside tap reaches the panel's TapRegion handler,
+requests one close, and removes the visible overlay.

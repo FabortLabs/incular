@@ -400,3 +400,42 @@ fn a_view_size_change_closes_the_open_menus() {
     harness.frame();
     assert!(!controller.is_open());
 }
+
+#[test]
+fn outside_tap_requests_one_close_and_removes_the_overlay() {
+    let controller = MenuController::new();
+    let requests = Rc::new(Cell::new(0));
+    let anchor = RawMenuAnchor::new(controller.clone(), |context, info| {
+        let controller = MenuController::maybe_of(context).expect("overlay anchor controller");
+        let border = info.anchor_rect;
+        Stack::new([Widget::from(
+            Positioned::new(
+                TapRegion::new(Widget::box_(Size::new(50., 50.), MENU))
+                    .group_id(info.tap_region_group_id.clone())
+                    .on_tap_outside(move |_| controller.close()),
+            )
+            .left(border.origin.x)
+            .top(border.origin.y + border.size.height),
+        )])
+        .into()
+    })
+    .child(incular_widgets::GestureDetector::new(anchor_box()).on_tap({
+        let controller = controller.clone();
+        move || controller.open(None)
+    }))
+    .on_close_requested({
+        let requests = requests.clone();
+        move |hide| {
+            requests.set(requests.get() + 1);
+            hide();
+        }
+    });
+    let mut harness = Harness::new(anchor.into());
+    harness.tap(Offset::new(5., 5.));
+    assert!(controller.is_open());
+    assert_eq!(harness.menus(MENU).len(), 1);
+    assert_eq!(requests.get(), 0);
+    harness.tap(Offset::new(150., 150.));
+    assert_eq!(requests.get(), 1);
+    assert!(harness.menus(MENU).is_empty());
+}
