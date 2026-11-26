@@ -103,7 +103,7 @@ pub struct PointerGestureRecognizer {
     long_press_started: bool,
     long_press_duration: Duration,
     velocity: VelocityTracker,
-    tap_moved_beyond_slop: bool,
+    tap_rejected: bool,
     drag: DragProgress,
     /// `GestureRecognizer.minFlingVelocity`, `maxFlingVelocity` and
     /// `minFlingDistance` overrides (a scrollable's physics set them).
@@ -237,7 +237,7 @@ impl PointerGestureRecognizer {
             long_press_started: false,
             long_press_duration: Self::LONG_PRESS_TIMEOUT,
             velocity: VelocityTracker::default(),
-            tap_moved_beyond_slop: false,
+            tap_rejected: false,
             drag: DragProgress::at(Offset::ZERO),
             fling: FlingLimits::default(),
             start_update: None,
@@ -386,7 +386,7 @@ impl PointerGestureRecognizer {
             || self.delayed_drag.is_some()
             || self.callbacks.only_accept_drag_on_threshold
             || !self.has_tap_callbacks()
-            || !self.tap_moved_beyond_slop
+            || !self.tap_rejected
             || self.has_long_press_callbacks()
             || self.callbacks.on_double_tap.is_some()
             || self.callbacks.on_double_tap_down.is_some()
@@ -882,6 +882,18 @@ impl PointerGestureRecognizer {
                     .zip(buttons)
                     .is_some_and(|(down, now)| down != now)
             {
+                // A tap belongs to the mask of the original press, even
+                // when the pointer has not moved. A competing long press
+                // or double tap keeps its own state in the combined member.
+                let tap_only = self.has_tap_callbacks()
+                    && !self.has_long_press_callbacks()
+                    && self.callbacks.on_double_tap.is_none()
+                    && self.callbacks.on_double_tap_down.is_none()
+                    && self.callbacks.on_double_tap_cancel.is_none();
+                if self.has_tap_callbacks() {
+                    self.tap_rejected = true;
+                    self.tap_cancel();
+                }
                 if !self.long_press_started
                     && (self.pan_started
                         || self.has_horizontal_drag_callbacks()
@@ -905,6 +917,8 @@ impl PointerGestureRecognizer {
                     // long press rejects the changed mask.
                     self.long_press_rejected = true;
                     self.long_press_cancel();
+                } else if tap_only {
+                    routed.phase = PointerPhase::Cancel;
                 }
             }
         }
@@ -980,7 +994,7 @@ impl PointerGestureRecognizer {
                     self.velocity
                         .add_position(event.time, self.local(event.position));
                 }
-                self.tap_moved_beyond_slop = false;
+                self.tap_rejected = false;
                 self.pan_started = false;
                 self.pan_action = None;
                 self.accepted_on_press = false;
@@ -1048,9 +1062,9 @@ impl PointerGestureRecognizer {
                         .add_position(event.time, self.local(event.position));
                 }
                 if delta.x.hypot(delta.y) > compute_hit_slop(self.kind, self.gesture_settings)
-                    && !self.tap_moved_beyond_slop
+                    && !self.tap_rejected
                 {
-                    self.tap_moved_beyond_slop = true;
+                    self.tap_rejected = true;
                     if !self.long_press_started {
                         self.long_press_rejected = true;
                         self.long_press_cancel();
@@ -1086,6 +1100,7 @@ impl PointerGestureRecognizer {
                     });
                 }
                 if !self.pan_started
+                    && !self.tap_rejected
                     && let Some(callback) = &self.callbacks.on_tap_move
                 {
                     callback(TapMoveDetails {
@@ -1244,9 +1259,9 @@ impl PointerGestureRecognizer {
                     self.last_tap = None;
                     self.last_tap_down = None;
                     GestureDecision::Accept(GestureAction::DoubleTap)
-                } else if self.tap_moved_beyond_slop {
-                    // Flutter cancels a tap once movement exceeds computeHitSlop,
-                    // which also breaks any double-tap sequence.
+                } else if self.tap_rejected {
+                    // A rejected tap cannot become a release or seed a new
+                    // double-tap sequence.
                     self.last_tap = None;
                     self.last_tap_down = None;
                     self.pending_tap_down = None;

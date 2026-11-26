@@ -130,3 +130,22 @@ All four authored references and 22 focused native tests passed
 double-tap competition and tap-region semantics). The original
 FIFO/FILO registrations were already counted; this live backfill is
 not counted twice.
+
+## Button changes in one press
+
+Pinned `gestures/tap_test.dart:87, :745, :764, :784, :805` now
+pair. Touch is rejected by a mouse/stylus allowlist, even when the
+subsequent permitted streams reuse the same pointer ID.
+
+Raw taps also now reject the original press as soon as its button
+mask changes, including when the position is stationary. The old
+path accepted the release and could click an unintended target. A
+change before TapDown produces no callbacks; after TapDown it
+produces exactly one cancellation. Restoring the mask or releasing
+the rejected contact does not revive it, and the next genuine tap
+works normally. Combined long-press and drag members continue to
+use their own cancellation rules.
+
+The retained runtime fixture confirms no TapMove, TapUp or click
+comes through after a mouse chord changes. All five pinned Flutter
+originals and 35 focused native checks passed.
