@@ -56,3 +56,21 @@ geometry stamp. The native probe disables semantic collection and
 verifies the result both with and without a focus attachment. The move
 uses no layout or repaint. These authored cases do not add upstream
 registration sites.
+
+### Retained proxy layer identity on repaint
+
+Pinned rendering/proxy_box_test.dart :437/:451/:460/:471/:482/:493/:504/:516
+and the native retained scenes exercise shader mask, backdrop filter,
+rectangle, rounded rectangle, oval, path, physical model and physical
+shape. Each starts at a tight 10×10 size and forces another paint, then
+reads the real effect layer identifier and its resolved paint output.
+All eight retain the same layer ID, visit paint again without layout,
+and keep the corresponding display list unchanged. Native oval clips
+use an analytic oval layer instead of Flutter's internal path layer.
+This comparison establishes layer lifetime, not pixel equivalence.
+
+Pinned :529 uses a 3D X-axis rotation to force composition. Native
+affine rotation retains its real transform layer across the same forced
+paint; that is partial rather than 3D projection parity. The proxy
+suite, five physical-model controls, and fifteen shader/backdrop
+controls passed.

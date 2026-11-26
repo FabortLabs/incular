@@ -1814,3 +1814,12 @@ packages/flutter/test/rendering/proxy_box_test.dart	631	RenderFollowerLayer hit 
 packages/flutter/test/rendering/proxy_box_test.dart	641	RenderFollowerLayer hit test without a leader layer and the showWhenUnlinked is false	paired-match	upstream-hit-transforms.md#proxy-follower-hit-gating-and-semantic-translation
 packages/flutter/test/rendering/proxy_box_test.dart	652	RenderFollowerLayer hit test with a leader layer and the showWhenUnlinked is true	paired-match	upstream-hit-transforms.md#proxy-follower-hit-gating-and-semantic-translation
 packages/flutter/test/rendering/proxy_box_test.dart	664	RenderFollowerLayer hit test with a leader layer and the showWhenUnlinked is false	paired-match	upstream-hit-transforms.md#proxy-follower-hit-gating-and-semantic-translation
+packages/flutter/test/rendering/proxy_box_test.dart	437	RenderShaderMask reuses its layer	paired-match	upstream-hit-transforms.md#retained-proxy-layer-identity-on-repaint
+packages/flutter/test/rendering/proxy_box_test.dart	451	RenderBackdropFilter reuses its layer	paired-match	upstream-hit-transforms.md#retained-proxy-layer-identity-on-repaint
+packages/flutter/test/rendering/proxy_box_test.dart	460	RenderClipRect reuses its layer	paired-match	upstream-hit-transforms.md#retained-proxy-layer-identity-on-repaint
+packages/flutter/test/rendering/proxy_box_test.dart	471	RenderClipRRect reuses its layer	paired-match	upstream-hit-transforms.md#retained-proxy-layer-identity-on-repaint
+packages/flutter/test/rendering/proxy_box_test.dart	482	RenderClipOval reuses its layer	paired-match	upstream-hit-transforms.md#retained-proxy-layer-identity-on-repaint
+packages/flutter/test/rendering/proxy_box_test.dart	493	RenderClipPath reuses its layer	paired-match	upstream-hit-transforms.md#retained-proxy-layer-identity-on-repaint
+packages/flutter/test/rendering/proxy_box_test.dart	504	RenderPhysicalModel reuses its layer	paired-match	upstream-hit-transforms.md#retained-proxy-layer-identity-on-repaint
+packages/flutter/test/rendering/proxy_box_test.dart	516	RenderPhysicalShape reuses its layer	paired-match	upstream-hit-transforms.md#retained-proxy-layer-identity-on-repaint
+packages/flutter/test/rendering/proxy_box_test.dart	529	RenderTransform reuses its layer	partial-match	upstream-hit-transforms.md#retained-proxy-layer-identity-on-repaint
