@@ -190,6 +190,17 @@ impl BundleImageCache {
         (state.ready.len(), state.bytes)
     }
 
+    /// Number of cached decode jobs still waiting for an outcome. Joining
+    /// an existing key does not add another job.
+    #[must_use]
+    pub fn pending_image_count(&self) -> usize {
+        self.0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .pending
+            .len()
+    }
+
     /// Whether a key is pending or has a retained decoded image.
     #[must_use]
     pub fn contains_key(&self, key: &AssetBundleImageKey) -> bool {

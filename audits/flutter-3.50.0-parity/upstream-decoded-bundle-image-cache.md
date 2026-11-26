@@ -27,3 +27,13 @@ No widget state is mutated from a loader thread.
 ```sh
 cargo test --locked -j 1 -p incular-image --test flutter350_bundle_image_cache --test flutter350_asset_image_keys -p incular-runtime --test flutter350_root_asset_pressure -p incular-widgets --test flutter350_async_bundled_image -- --test-threads=1
 ```
+
+## Failed exact asset resolution
+
+Pinned `painting/image_provider_and_image_cache_test.dart:48` passed on
+Linux. The native fixture resolves a missing name through `ExactAssetImage`
+and observes the exact selected bundle key in the shared cache. The pending
+count changes from zero to one, then back to zero before the stream exposes
+the original not-found error. The failure leaves no retained entry.
+A fresh resolution after correcting the fixture decodes once and is
+retained under the same key. All eight focused bundle cache tests passed.

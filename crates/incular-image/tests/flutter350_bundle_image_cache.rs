@@ -10,8 +10,9 @@ use std::{
 
 use incular_assets::{AssetBundle, AssetError, AssetLoadCallback};
 use incular_image::{
-    AssetBundleImageKey, BundleImageCache, ImageAssetBundle, ImageCacheLimits, ImageError,
-    ImageHandle, ImageId,
+    AssetBundleImageKey, BundleImageCache, ExactAssetImage, ImageAssetBundle, ImageCacheLimits,
+    ImageConfiguration, ImageError, ImageHandle, ImageId, ImageLoadState, ImageProvider,
+    clear_shared_bundle_image_cache, shared_bundle_image_cache,
 };
 
 const IMAGE: &[u8] = include_bytes!(
@@ -277,4 +278,47 @@ fn same_names_from_distinct_bundles_or_scales_do_not_share_and_failures_retry() 
         assert!(!cache.contains_key(&missing));
     }
     assert_eq!(one.0.load(Ordering::Relaxed), 4);
+}
+
+
+#[test]
+fn a_failed_asset_provider_resolution_is_removed_from_the_pending_cache() {
+    clear_shared_bundle_image_cache();
+    let cache = shared_bundle_image_cache();
+    let bundle = Deferred::default();
+    let provider = ExactAssetImage::new("does-not-exist").bundle(Arc::new(bundle.clone()));
+    let configuration = ImageConfiguration::empty();
+    let key = provider.obtain_key(&configuration);
+    assert!(!cache.contains_key(&key));
+    assert_eq!(cache.pending_image_count(), 0);
+
+    let stream = provider.resolve(&configuration);
+    assert!(matches!(stream.state(), ImageLoadState::Loading(None)));
+    assert!(cache.contains_key(&key));
+    assert_eq!(cache.pending_image_count(), 1);
+
+    let finish = bundle.take("does-not-exist");
+    finish(Err(AssetError::NotFound("does-not-exist".into())));
+    let _ = incular_animation::scheduler::run_one_scheduled_task();
+    assert!(matches!(
+        stream.state(),
+        ImageLoadState::Failed(ImageError::Asset(AssetError::NotFound(_)))
+    ));
+    assert!(!cache.contains_key(&key));
+    assert_eq!(cache.pending_image_count(), 0);
+    assert_eq!(cache.retained(), (0, 0));
+
+    // Correcting the source retries rather than reusing a cached failure.
+    let retry = provider.resolve(&configuration);
+    assert_eq!(cache.pending_image_count(), 1);
+    bundle.take("does-not-exist")(Ok(Arc::from(IMAGE)));
+    let _ = incular_animation::scheduler::run_one_scheduled_task();
+    let ImageLoadState::Ready(decoded) = retry.state() else {
+        panic!("the corrected asset must complete")
+    };
+    assert_eq!(decoded.decoded().pixels().len(), BYTES);
+    assert!(cache.contains_key(&key));
+    assert_eq!(cache.pending_image_count(), 0);
+    assert_eq!(cache.retained(), (1, BYTES));
+    clear_shared_bundle_image_cache();
 }
