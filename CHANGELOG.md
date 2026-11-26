@@ -331,6 +331,8 @@ a version and date when publishing.
 
 ### Fixed
 
+- Shaping and retained text caches now honor word spacing.
+
 - Text and rich spans draw their background behind the measured glyph runs.
   Background paint takes precedence over plain background color.
 

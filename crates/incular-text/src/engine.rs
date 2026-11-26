@@ -504,6 +504,7 @@ struct LayoutKey<'a> {
     style: FontStyle,
     line_height: Option<(u8, u32)>,
     letter_spacing: u32,
+    word_spacing: u32,
     font_variations: Option<Arc<str>>,
     font_features: Option<Arc<str>>,
     has_background: bool,
@@ -534,6 +535,7 @@ impl<'a> LayoutKey<'a> {
                 crate::LineHeight::Absolute(a) => (2, a.to_bits()),
             }),
             letter_spacing: style.letter_spacing.to_bits(),
+            word_spacing: effective_word_spacing(style).to_bits(),
             font_variations: style.font_variations.clone(),
             font_features: style.font_features.clone(),
             has_background: style.effective_background_color().is_some(),
@@ -560,6 +562,7 @@ impl<'a> LayoutKey<'a> {
             style: self.style,
             line_height: self.line_height,
             letter_spacing: self.letter_spacing,
+            word_spacing: self.word_spacing,
             font_variations: self.font_variations,
             font_features: self.font_features,
             has_background: self.has_background,
@@ -2071,6 +2074,13 @@ impl TextEngine {
     }
 }
 
+fn effective_word_spacing(style: &TextStyle) -> f32 {
+    style
+        .word_spacing
+        .filter(|value| value.is_finite() && *value != 0.)
+        .unwrap_or(0.)
+}
+
 /// The shaping properties of one style, applied to the whole paragraph or to
 /// one styled byte range.
 fn for_each_style_property(style: &TextStyle, mut push: impl FnMut(StyleProperty<'static, ()>)) {
@@ -2084,6 +2094,7 @@ fn for_each_style_property(style: &TextStyle, mut push: impl FnMut(StyleProperty
         FontStyle::Italic => parley::FontStyle::Italic,
     }));
     push(StyleProperty::LetterSpacing(style.letter_spacing));
+    push(StyleProperty::WordSpacing(effective_word_spacing(style)));
     if let Some(settings) = &style.font_variations {
         push(StyleProperty::FontVariations(
             parley::FontVariations::Source(Cow::Owned(settings.to_string())),

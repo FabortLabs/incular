@@ -122,3 +122,18 @@ fn full_enforced_field_rejects_middle_insert_without_losing_suffix(){
     assert_eq!((got.text,got.selection.extent),(old.text,old.selection.extent));
 }
 ```
+
+## C28 word spacing repair
+
+The original pinned reference still measures widths 60, 66 and 72
+for base, letter spacing 2 and word spacing 12. Incular now forwards
+word spacing into shaping and includes the effective spacing in
+layout, width-reuse, and document cache identities. The already
+committed regression passes on both a warm and fresh engine.
+
+A second paired authored probe measures hard-break lines after
+changing spacing to +9, −3, 0 and +17. Both engines apply the
+change once per internal space on each line. Native checks also
+alternate the styles on one warm engine and restore the original
+width. Eight focused Rust tests passed. These are authored probes,
+not additional upstream registration credit.

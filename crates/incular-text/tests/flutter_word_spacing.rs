@@ -26,3 +26,21 @@ fn word_spacing_adds_once_for_one_space_even_on_a_warm_cache() {
         "one space should add 12 px; warm delta {warm_delta}, cold delta {cold_delta}"
     );
 }
+
+#[test]
+fn changing_spacing_does_not_reuse_a_single_line_or_document_from_another_style() {
+    let mut engine = TextEngine::new();
+    let plain = TextStyle::default();
+    let base = width(&mut engine, &plain);
+    for spacing in [9., -3., 0., 17.] {
+        let adjusted = plain.clone().word_spacing(Some(spacing));
+        let single = width(&mut engine, &adjusted);
+        assert!((single - base - spacing).abs() < 0.01);
+        let layout = engine.layout("a a\na a", &adjusted, Some(240.), TextAlign::Start);
+        assert_eq!(layout.lines.len(), 2);
+        for line in layout.lines.iter() {
+            assert!((line.width - base - spacing).abs() < 0.01);
+        }
+    }
+    assert_eq!(width(&mut engine, &plain), base);
+}
