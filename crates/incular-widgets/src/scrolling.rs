@@ -20,6 +20,12 @@ use crate::tree::{Key as WidgetKey, WidgetKind};
 use crate::{Column, Draggable, Padding, Row, SizedBox, Widget};
 
 type FindChildIndex = Rc<dyn Fn(&WidgetKey) -> Option<usize>>;
+struct ListIndexLookup {
+    index: FindChildIndex,
+    // An application callback observes all previously materialized keys.
+    // A static list needs the map only to remap children it will park.
+    include_active: bool,
+}
 
 type SliverLayoutBuilderFn = Rc<dyn Fn(SliverConstraints) -> Widget>;
 

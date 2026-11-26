@@ -94,3 +94,20 @@ actually needs lookup. Both fixed and measured row paths carry the
 automatic retention request only to the matching widget. The original
 Flutter case, one authored Flutter case, and 18 focused Rust cases
 passed. Builder callbacks for arbitrary lazy data remaps are separate.
+
+## Lazy ListView key and item index lookups
+
+The pinned `list_view_test.dart:81,115` originals pair for builder and
+separated lists. The supplied callback receives the previous live key
+when the delegate is replaced, even when the row is not kept alive and
+the callback returns no new index. It does not run on initial layout
+or normal scrolling. Native callbacks use the immutable keyed widget's
+original key. The compatibility child-index hook counts separators;
+the item-index hook maps item indices to the even child slots.
+
+An authored Flutter control moves a focused editor from item 0 to 90
+while the viewport stays at zero. The callback preserves its state,
+text, and focus even though it now needs to park outside the viewport.
+Closing the host connection releases the kept row. Both originals,
+the authored control, and 20 focused Rust tests passed. This does not
+claim that all sliver classes expose these ListView hooks.

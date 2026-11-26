@@ -361,6 +361,7 @@ enum ListViewStrategy {
     Builder {
         item_count: usize,
         builder: Rc<dyn Fn(usize) -> Widget>,
+        separated: bool,
     },
 }
 
@@ -380,6 +381,8 @@ pub struct ListView {
     item_extent_builder: Option<Rc<dyn Fn(usize) -> f32>>,
     #[builder(default, setter(skip))]
     prototype_item: Option<Widget>,
+    #[builder(default, setter(skip))]
+    find_child_index: Option<FindChildIndex>,
     #[builder(default = WidgetDefaults::DEFAULT.scroll_direction)]
     scroll_direction: Axis,
     #[builder(default = false)]
@@ -425,6 +428,7 @@ impl ListView {
             item_extent: None,
             item_extent_builder: None,
             prototype_item: None,
+            find_child_index: None,
             scroll_direction: WidgetDefaults::DEFAULT.scroll_direction,
             reverse: false,
             shrink_wrap: false,
@@ -450,10 +454,12 @@ impl ListView {
             strategy: Some(ListViewStrategy::Builder {
                 item_count,
                 builder: Rc::new(move |i| builder(i).into()),
+                separated: false,
             }),
             item_extent: None,
             item_extent_builder: None,
             prototype_item: None,
+            find_child_index: None,
             scroll_direction: WidgetDefaults::DEFAULT.scroll_direction,
             reverse: false,
             shrink_wrap: false,
@@ -490,6 +496,7 @@ impl ListView {
             children: Vec::new(),
             strategy: Some(ListViewStrategy::Builder {
                 item_count: total_count,
+                separated: true,
                 builder: Rc::new(move |index| {
                     if index % 2 == 0 {
                         item_builder(index / 2)
@@ -501,6 +508,7 @@ impl ListView {
             item_extent: None,
             item_extent_builder: None,
             prototype_item: None,
+            find_child_index: None,
             scroll_direction: WidgetDefaults::DEFAULT.scroll_direction,
             reverse: false,
             shrink_wrap: false,
@@ -513,6 +521,33 @@ impl ListView {
             hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
             page_storage_key: None,
         }
+    }
+
+    /// Supplies the new sliver child index for a key when a lazy
+    /// delegate is rebuilt. Separated lists count their separators here.
+    /// The callback is not called on initial layout or ordinary scrolling.
+    #[must_use]
+    pub fn find_child_index_callback(
+        mut self,
+        callback: impl Fn(&WidgetKey) -> Option<usize> + 'static,
+    ) -> Self {
+        self.find_child_index = Some(Rc::new(callback));
+        self
+    }
+
+    /// Supplies the new item index without counting separators.
+    #[must_use]
+    pub fn find_item_index_callback(
+        mut self,
+        callback: impl Fn(&WidgetKey) -> Option<usize> + 'static,
+    ) -> Self {
+        let stride = if matches!(self.strategy, Some(ListViewStrategy::Builder { separated: true, .. })) {
+            2
+        } else {
+            1
+        };
+        self.find_child_index = Some(Rc::new(move |key| callback(key)?.checked_mul(stride)));
+        self
     }
 
     /// Sets the scroll controller.
@@ -689,12 +724,16 @@ fn list_view_widget(value: ListView) -> Widget {
                 item_extent,
                 item_extent_builder,
                 prototype_item,
-                Some(find_child_index),
+                Some(ListIndexLookup {
+                    index: find_child_index,
+                    include_active: false,
+                }),
             )
         }
         ListViewStrategy::Builder {
             item_count,
             builder,
+            ..
         } => build_list_render_sliver(
             item_count,
             builder,
@@ -702,7 +741,10 @@ fn list_view_widget(value: ListView) -> Widget {
             item_extent,
             item_extent_builder,
             prototype_item,
-            None,
+            value.find_child_index.map(|index| ListIndexLookup {
+                index,
+                include_active: true,
+            }),
         ),
     };
 
@@ -764,7 +806,7 @@ fn build_list_render_sliver(
     item_extent: Option<f32>,
     item_extent_builder: Option<Rc<dyn Fn(usize) -> f32>>,
     prototype_item: Option<Widget>,
-    find_child_index: Option<FindChildIndex>,
+    find_child_index: Option<ListIndexLookup>,
 ) -> Box<dyn RenderSliver> {
     if let Some(extent) = item_extent {
         let mut sliver = FixedExtentRenderSliver::new(item_count, extent, builder);

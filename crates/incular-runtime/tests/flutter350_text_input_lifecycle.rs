@@ -397,3 +397,89 @@ fn a_focused_keyed_editor_survives_rebuild_and_skipped_layout_after_a_preceding_
         assert!(!focus.has_focus());
     }
 }
+
+#[test]
+fn list_builder_and_separated_key_finders_observe_only_retained_items_on_rebuild() {
+    use incular_widgets::{ListView, ScrollController, internal::Key};
+    for separated in [false, true] {
+        let calls = Rc::new(Cell::new(0));
+        let scroll = ScrollController::new();
+        let build = |count| -> Widget {
+            let large_item = |index: usize| {
+                Widget::from(SizedBox::from_dimensions(None, Some(2000.), None::<Widget>))
+                    .with_key(Key::String(index.to_string()))
+            };
+            let list = if separated {
+                ListView::separated(count, large_item, |_| SizedBox::shrink())
+            } else {
+                ListView::builder(count, large_item)
+            };
+            list.controller(scroll.clone())
+                .find_child_index_callback({
+                    let calls = calls.clone();
+                    move |key| {
+                        assert_eq!(key, &Key::from("0"));
+                        calls.set(calls.get() + 1);
+                        None
+                    }
+                })
+                .into()
+        };
+        let mut runtime = Runtime::new(build(7)).unwrap();
+        frame(&mut runtime);
+        assert_eq!(calls.get(), 0);
+        let root = runtime.tree().root().unwrap();
+        runtime.schedule_update(root, build(77)).unwrap();
+        frame(&mut runtime);
+        assert_eq!(calls.get(), 1);
+        assert!(runtime.tree().element_with_key(&Key::from("0")).is_some());
+        assert!(scroll.jump_to(16.));
+        frame(&mut runtime);
+        assert_eq!(calls.get(), 1);
+    }
+}
+
+#[test]
+fn separated_item_lookup_excludes_separators_when_reattributing_a_parked_editor() {
+    use incular_widgets::{ListView, ScrollController, internal::Key};
+    let controller = TextEditingController::with_text("draft");
+    let focus = FocusNode::new();
+    let scroll = ScrollController::new();
+    let key = Key::from("focused");
+    let build = |slot| {
+        ListView::separated(
+            100,
+            {
+                let (controller, focus, key) = (controller.clone(), focus.clone(), key.clone());
+                move |index| {
+                    if index == slot {
+                        Widget::from(field(&controller, &focus, true)).with_key(key.clone())
+                    } else {
+                        SizedBox::from_dimensions(None, Some(40.), None::<Widget>).into()
+                    }
+                }
+            },
+            |_| SizedBox::from_dimensions(None, Some(2.), None::<Widget>),
+        )
+        .find_item_index_callback({
+            let key = key.clone();
+            move |candidate| (candidate == &key).then_some(slot)
+        })
+        .controller(scroll.clone())
+        .into()
+    };
+    let mut runtime = Runtime::new(build(0)).unwrap();
+    frame(&mut runtime);
+    let original = runtime.tree().element_with_key(&key).unwrap();
+    let client = attached(&mut runtime);
+    let root = runtime.tree().root().unwrap();
+    runtime.schedule_update(root, build(90)).unwrap();
+    frame(&mut runtime);
+    assert_eq!(runtime.tree().element_with_key(&key), Some(original));
+    assert_eq!(runtime.focused_element(), Some(original));
+    assert_eq!(scroll.offset(), 0.);
+    assert_eq!(controller.text(), "draft");
+    assert!(platform_call(&mut runtime, "onConnectionClosed", client));
+    frame(&mut runtime);
+    assert!(runtime.tree().element_with_key(&key).is_none());
+}

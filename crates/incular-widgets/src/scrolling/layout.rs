@@ -244,7 +244,7 @@ pub(super) struct FixedExtentRenderSliver {
     pub(super) item_extent: f32,
     pub(super) builder: Rc<dyn Fn(usize) -> Widget>,
     pub(super) widgets: HashMap<usize, Widget>,
-    pub(super) find_child_index: Option<FindChildIndex>,
+    pub(super) find_child_index: Option<ListIndexLookup>,
 }
 
 impl FixedExtentRenderSliver {
@@ -506,7 +506,7 @@ pub(super) struct VariableExtentRenderSliver {
     pub(super) index: MeasuredExtentIndex,
     pub(super) builder: Rc<dyn Fn(usize) -> Widget>,
     pub(super) widgets: HashMap<usize, Widget>,
-    pub(super) find_child_index: Option<FindChildIndex>,
+    pub(super) find_child_index: Option<ListIndexLookup>,
     /// Slots the last compatible-state transfer wrote without
     /// established identity. Reconciliation reads this set to tell
     /// transferred guesses apart from explicit seeds; entries belong
@@ -3377,24 +3377,25 @@ fn transfer_keep_alives(
     fresh: &mut HashMap<usize, Widget>,
     count: usize,
     build: impl Fn(usize) -> Widget,
-    find_child_index: Option<&FindChildIndex>,
+    find_child_index: Option<&ListIndexLookup>,
     probes: &mut u64,
 ) {
     let mut indices: Vec<_> = retained
         .iter()
-        .filter_map(|(&index, widget)| widget.keep_alive_request().then_some(index))
+        .filter_map(|(&index, widget)| {
+            (widget.keep_alive_request()
+                || (widget.key().is_some() && find_child_index.is_some_and(|lookup| lookup.include_active)))
+                .then_some(index)
+        })
         .collect();
     indices.sort_unstable();
     for index in indices {
         let old = &retained[&index];
         let destination = match (old.key(), find_child_index) {
-            (Some(key), Some(find)) => {
-                let Some(found) = find(key) else { continue };
-                found
-            }
+            (Some(key), Some(lookup)) => (lookup.index)(key).unwrap_or(index),
             _ => index,
         };
-        if destination >= count || fresh.contains_key(&destination) {
+        if !old.keep_alive_request() || destination >= count || fresh.contains_key(&destination) {
             continue;
         }
         *probes += 1;
