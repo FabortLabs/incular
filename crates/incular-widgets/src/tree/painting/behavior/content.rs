@@ -1,7 +1,7 @@
 use super::super::*;
 use crate::tree::text::{
-    editable_content_clip, editable_horizontal_max_scroll, editable_vertical_max_scroll,
-    reveal_horizontal_caret,
+    editable_content_clip, editable_cursor_rect, editable_horizontal_max_scroll,
+    editable_vertical_max_scroll, reveal_horizontal_caret,
 };
 use incular_rendering::{ClipCoverage, ClipIsolation};
 use incular_text::TextGeometry;
@@ -164,7 +164,6 @@ impl WidgetTree {
                     obscure_text,
                     obscuring_character,
                     cursor_width,
-                    cursor_height,
                     cursor_radius,
                     cursor_opacity_animates,
                     show_cursor,
@@ -346,12 +345,13 @@ impl WidgetTree {
                             alpha: alpha.round() as u8,
                             ..cursor_color
                         };
-                        let height = cursor_height.unwrap_or(caret_height).max(0.0);
-                        let y = top + caret_y - active_scroll_y
-                            + (caret_height - height).max(0.0) * 0.5;
-                        let rect = Rect::from_origin_size(
-                            Offset::new(caret - active_scroll_x + content_padding.left, y),
-                            Size::new(cursor_width.max(0.0), height),
+                        let rect = editable_cursor_rect(
+                            field,
+                            Offset::new(
+                                caret - active_scroll_x + content_padding.left,
+                                top + caret_y - active_scroll_y,
+                            ),
+                            caret_height,
                         );
                         if rect.size.width > 0.0 && rect.size.height > 0.0 {
                             caret_command = Some(if cursor_radius > 0.0 {

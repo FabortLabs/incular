@@ -2886,13 +2886,9 @@ impl Runtime {
                 )
             })
         });
-        let snapshot = self.focused.and_then(|id| {
-            if unchanged {
-                self.tree.text_field_input_geometry(id)
-            } else {
-                self.tree.text_field_input_snapshot(id)
-            }
-        });
+        let snapshot = self
+            .focused
+            .and_then(|id| self.tree.text_field_ime_snapshot(id, !unchanged));
         let Some((target, snapshot)) = self.focused.zip(snapshot) else {
             if let Some(MountedTextInputConnection { client, .. }) = self.text_input_client.take() {
                 self.text_input_commands

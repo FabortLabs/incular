@@ -354,6 +354,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- Native text input anchors the IME at the logical selection start in either
+  direction and uses the editor’s actual cursor size.
+
 - Centered viewports respect both axis and growth direction in sliver
   padding. Reveal queries account for the edge of a pinned header.
 

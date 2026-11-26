@@ -6,6 +6,12 @@ use crate::selection::{
 };
 use incular_text::{LineBoundary, TextGeometry};
 
+#[derive(Clone, Copy)]
+enum EditableCaret {
+    Visual,
+    ImeAnchor,
+}
+
 /// The application callback that failed while finalizing an edit.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TextEditingCallback {
@@ -52,6 +58,17 @@ pub(super) fn editable_horizontal_max_scroll(
 ) -> f32 {
     let width = layout.get_line(0).map_or(0., |line| line.width());
     (width + editable_caret_margin(field) - viewport).max(0.)
+}
+
+/// The cursor's painted size and vertical alignment. The IME anchor also
+/// uses these dimensions, even when the visual caret is not painted.
+pub(super) fn editable_cursor_rect(field: &TextFieldRender, origin: Offset, line_height: f32) -> Rect {
+    let height = field.cursor_height.unwrap_or(line_height).max(0.);
+    let top = origin.y + (line_height - height).max(0.) * 0.5;
+    Rect::from_origin_size(
+        Offset::new(origin.x, top),
+        Size::new(field.cursor_width.max(0.), height),
+    )
 }
 
 pub(super) fn editable_vertical_max_scroll(layout: &impl TextGeometry, viewport: f32) -> f32 {
@@ -1696,7 +1713,7 @@ impl WidgetTree {
     /// the retained tree.
     #[must_use]
     pub fn text_field_input_snapshot(&self, id: ElementId) -> Option<TextFieldInputSnapshot> {
-        self.text_field_input_snapshot_with(id, true)
+        self.text_field_input_snapshot_with(id, true, EditableCaret::Visual)
     }
 
     /// [`Self::text_field_input_snapshot`] with an empty `text`: everything a
@@ -1704,7 +1721,20 @@ impl WidgetTree {
     /// a copy of the field's whole content.
     #[must_use]
     pub fn text_field_input_geometry(&self, id: ElementId) -> Option<TextFieldInputSnapshot> {
-        self.text_field_input_snapshot_with(id, false)
+        self.text_field_input_snapshot_with(id, false, EditableCaret::Visual)
+    }
+
+    /// Snapshot for the native input bridge. The candidate window starts at
+    /// the logical start of a selection, not the active (visual) endpoint.
+    /// Pass false for `with_text` when the committed value is unchanged.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn text_field_ime_snapshot(
+        &self,
+        id: ElementId,
+        with_text: bool,
+    ) -> Option<TextFieldInputSnapshot> {
+        self.text_field_input_snapshot_with(id, with_text, EditableCaret::ImeAnchor)
     }
 
     /// Whether the field's committed value is exactly this text, selection
@@ -1798,6 +1828,16 @@ impl WidgetTree {
         offset: usize,
         affinity: incular_text::TextAffinity,
     ) -> Option<Rect> {
+        self.text_field_offset_rect_with(id, offset, affinity, EditableCaret::Visual)
+    }
+
+    fn text_field_offset_rect_with(
+        &self,
+        id: ElementId,
+        offset: usize,
+        affinity: incular_text::TextAffinity,
+        mode: EditableCaret,
+    ) -> Option<Rect> {
         let element = self.elements.get(id.0)?;
         let WidgetKind::TextField(spec) = element.widget.kind() else {
             return None;
@@ -1818,16 +1858,15 @@ impl WidgetTree {
             height,
             field.content_padding,
         );
-        Some(
-            self.render_world_transform(render)
-                .transform_rect_bbox(Rect::from_origin_size(
-                    Offset::new(
-                        x - state.scroll_x + field.content_padding.left,
-                        y - state.scroll_y + top,
-                    ),
-                    Size::new(1.0, height.max(1.0)),
-                )),
-        )
+        let local = Offset::new(
+            x - state.scroll_x + field.content_padding.left,
+            y - state.scroll_y + top,
+        );
+        let rect = match mode {
+            EditableCaret::Visual => Rect::from_origin_size(local, Size::new(1., height.max(1.))),
+            EditableCaret::ImeAnchor => editable_cursor_rect(field, local, height),
+        };
+        Some(self.render_world_transform(render).transform_rect_bbox(rect))
     }
 
     /// Returns the local bounds of the shaped text in a composing range.
@@ -1884,6 +1923,7 @@ impl WidgetTree {
         &self,
         id: ElementId,
         with_text: bool,
+        caret: EditableCaret,
     ) -> Option<TextFieldInputSnapshot> {
         let element = self.elements.get(id.0)?;
         let WidgetKind::TextField(spec) = element.widget.kind() else {
@@ -1901,8 +1941,14 @@ impl WidgetTree {
                 composing: value.composing,
             });
         let bounds = self.element_bounds(id).unwrap_or_default();
+        let (offset, affinity) = match caret {
+            EditableCaret::Visual => (value.selection.extent, spec.controller.caret_affinity()),
+            EditableCaret::ImeAnchor => {
+                (value.selection.range().start, incular_text::TextAffinity::Downstream)
+            }
+        };
         let caret_rect = self
-            .text_field_offset_rect(id, value.selection.extent, spec.controller.caret_affinity())
+            .text_field_offset_rect_with(id, offset, affinity, caret)
             .unwrap_or(bounds);
         Some(TextFieldInputSnapshot {
             client_id: (u64::from(id.0.generation()) << 32) | u64::from(id.0.index()),

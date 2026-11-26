@@ -886,6 +886,10 @@ packages/flutter/test/gestures/pointer_signal_resolver_test.dart	45	Resolving wi
 packages/flutter/test/gestures/pointer_signal_resolver_test.dart	61	First entry should always win	paired-match	upstream-pointer-signal-resolution.md
 packages/flutter/test/gestures/pointer_signal_resolver_test.dart	70	Re-use after resolve should work	paired-match	upstream-pointer-signal-resolution.md
 packages/flutter/test/gestures/pointer_signal_resolver_test.dart	86	works with transformed events	paired-match	upstream-pointer-signal-resolution.md#standalone-transformed-signal-identity
+packages/flutter/test/widgets/editable_text_test.dart	6593	called with proper coordinates	paired-match	upstream-editable-ime-caret.md
+packages/flutter/test/widgets/editable_text_test.dart	6635	only send updates when necessary	paired-match	upstream-editable-ime-caret.md
+packages/flutter/test/widgets/editable_text_test.dart	6653	set to selection start on forward selection	paired-match	upstream-editable-ime-caret.md
+packages/flutter/test/widgets/editable_text_test.dart	6673	set to selection start on reversed selection	paired-match	upstream-editable-ime-caret.md
 packages/flutter/test/widgets/editable_text_test.dart	17330	tabbing between fields	paired-match	upstream-editable-focus-selection.md
 packages/flutter/test/widgets/editable_text_test.dart	17552	when selectAllOnFocus is turned off	paired-match	upstream-editable-focus-selection.md
 packages/flutter/test/widgets/editable_text_test.dart	17581	when selectAllOnFocus is turned on	paired-match	upstream-editable-focus-selection.md
