@@ -13,6 +13,7 @@ mod application_shell;
 pub mod autofill;
 mod back_gesture;
 mod capabilities;
+mod clipboard_channel;
 mod content_sensitivity;
 mod data_transfer;
 mod display;
@@ -48,6 +49,7 @@ pub use capabilities::{
     DataTransferCapabilities, DisplayPlacementCapabilities, NativeMenuCapabilities,
     PlatformCapabilities, TransientSurfaceCapabilities, WindowControlCapabilities,
 };
+pub use clipboard_channel::{ClipboardChannelError, FlutterClipboardCodec};
 pub use content_sensitivity::{
     ContentSensitivityBackend, ContentSensitivityCapability, ContentSensitivityNoOpReason,
     ContentSensitivityOutcome, MemoryContentSensitivityBackend, NoopContentSensitivityBackend,

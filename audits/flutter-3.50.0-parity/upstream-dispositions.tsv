@@ -2188,3 +2188,5 @@ packages/flutter/test/rendering/semantics_layout_sized_test.dart	67	semantics si
 packages/flutter/test/rendering/semantics_layout_sized_test.dart	87	semantics updates when child changes in RenderTestLastChildSemanticsMultiChildParent	paired-match	upstream-semantics-layout-size.md
 packages/flutter/test/rendering/semantics_layout_sized_test.dart	127	Skip update for invisible child being dropped from tree	paired-match	upstream-semantics-layout-size.md
 packages/flutter/test/rendering/semantics_layout_sized_test.dart	162	semantics geometry updates when dropped child with dirty parent data rejoins the semantics tree	paired-match	upstream-semantics-layout-size.md
+packages/flutter/test/services/clipboard_test.dart	34	Clipboard.getData throws if text is missing	paired-match	upstream-clipboard-channel.md
+packages/flutter/test/services/clipboard_test.dart	40	Clipboard.getData throws if text is null	paired-match	upstream-clipboard-channel.md
