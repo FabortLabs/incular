@@ -111,3 +111,13 @@ property is claimed.
 
 All 39 focused native painter, adjacent semantic, and desktop
 projection tests passed.
+
+## Raw painted-region flags
+
+The pinned :540 case pairs. Both raw flag combinations retain their
+checked and toggled state, selection presence, independent focus
+annotation, text/editing flags, and role and route flags on the same
+portable nodes. Declaring accessibility focus does not move keyboard
+focus. This comparison targets the portable semantics graph; desktop
+AccessKit exposes one checked/toggled property rather than two.
+All 15 focused native painter semantics tests passed.

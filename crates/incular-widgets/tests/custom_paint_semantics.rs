@@ -880,3 +880,97 @@ fn painted_region_exports_field_lengths_tags_and_optional_metadata() {
                 && hint.hint() == Some("long"))
     );
 }
+
+#[test]
+fn painted_regions_preserve_the_full_raw_flutter_flag_sets() {
+    use incular_semantics::{CheckedState, SemanticAnnotationFlag as Flag};
+    let build = |mixed| {
+        let semantics = Semantics::default()
+            .explicit_child_nodes(true)
+            .enabled(true)
+            .checked(if mixed {
+                CheckedState::Indeterminate
+            } else {
+                CheckedState::Checked
+            })
+            .selected(true)
+            .hidden(true)
+            .button(true)
+            .slider(true)
+            .keyboard_key(true)
+            .link(true)
+            .text_field(true)
+            .read_only(true)
+            .focused(true)
+            .focusable(true)
+            .in_mutually_exclusive_group(true)
+            .header(true)
+            .obscured(true)
+            .multiline(true)
+            .scopes_route(true)
+            .names_route(true)
+            .image(true)
+            .live_region(true)
+            .toggled(true)
+            .expanded(true)
+            .required(true);
+        Widget::from(CustomPaint::from_painter(
+            Size::ZERO,
+            PositionedProperties {
+                rect: Rect::from_origin_size(Offset::new(1., 2.), Size::new(2., 2.)),
+                semantics,
+            },
+        ))
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(build(false)).unwrap();
+    let mut original = None;
+    for mixed in [false, true] {
+        if mixed {
+            tree.update(root, build(true)).unwrap();
+        }
+        tree.layout(Constraints::tight(Size::new(800., 600.)))
+            .unwrap();
+        tree.update_semantics();
+        let sem = tree.semantics();
+        assert_eq!(sem.iter().count(), 2);
+        let region = sem
+            .node(sem.node(sem.root().unwrap()).unwrap().children[0])
+            .unwrap();
+        if let Some(id) = original {
+            assert_eq!(region.id, id);
+        }
+        original = Some(region.id);
+        let s = &region.state;
+        assert!(s.enabled && s.has_enabled_state);
+        assert!(s.hidden && s.selected && s.focused && s.focusable);
+        assert_eq!(s.declared_selected(), Some(true));
+        assert_eq!(
+            s.checked,
+            Some(if mixed {
+                CheckedState::Indeterminate
+            } else {
+                CheckedState::Checked
+            })
+        );
+        assert_eq!(s.toggled, Some(true));
+        assert_eq!(s.expanded, Some(true));
+        assert!(s.read_only && s.obscured && s.multiline && s.live_region && s.required);
+        assert!(!s.has_implicit_scrolling && region.actions.is_empty());
+        for flag in [
+            Flag::Button,
+            Flag::Slider,
+            Flag::KeyboardKey,
+            Flag::Link,
+            Flag::TextField,
+            Flag::MutuallyExclusiveGroup,
+            Flag::Header,
+            Flag::ScopesRoute,
+            Flag::NamesRoute,
+            Flag::Image,
+        ] {
+            assert_eq!(s.annotation_flags.get(flag), Some(true), "{flag:?}");
+        }
+        assert!(tree.focused_keyboard_element().is_none());
+    }
+}

@@ -2353,3 +2353,4 @@ packages/flutter/test/widgets/custom_painter_test.dart	828	description	paired-ma
 packages/flutter/test/widgets/custom_painter_test.dart	425	Supports all actions	paired-match	upstream-custom-paint.md#dispatching-a-painted-regions-accessibility-actions
 packages/flutter/test/widgets/custom_painter_test.dart	171	'applies $SemanticsProperties'	paired-match	upstream-custom-paint.md#painter-property-replacement
 packages/flutter/test/widgets/custom_painter_test.dart	652	semantics properties	paired-match	upstream-custom-paint.md#full-painted-region-metadata
+packages/flutter/test/widgets/custom_painter_test.dart	540	Supports all flags	paired-match	upstream-custom-paint.md#raw-painted-region-flags
