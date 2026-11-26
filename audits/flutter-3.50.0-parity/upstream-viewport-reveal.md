@@ -205,3 +205,16 @@ The direct `RenderViewport` and `RenderShrinkWrappingViewport` intrinsic
 diagnostic (line 2212) passed in Flutter only. Incular has no corresponding
 direct render intrinsic query, and its intrinsic wrapper measurements remain
 a separate comparison.
+
+## Viewport layout correction budget
+
+The pinned `rendering/viewport_test.dart:2822` and Incular's
+`flutter350_sliver_viewport_correction` accept five offset corrections
+from each of 30 top-level slivers in one frame, and reject a single sliver
+that still requests corrections after the tenth layout. Previously the
+viewport limited the whole sequence to ten corrections and allowed an
+eleventh attempt even for a single sliver. The new limit scales with the
+number of top-level slivers and counts the attempt that must accept the
+offset. The extra one-sliver checks verify success with nine corrections,
+failure with ten, and no publication of an unvalidated controller offset.
+The separate shrink-wrap measurement guard was not changed.

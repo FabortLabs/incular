@@ -270,28 +270,36 @@ impl WidgetTree {
                     sliver
                 };
                 let explicit_corrections = std::cell::Cell::new(0u64);
+                // Flutter RenderViewport permits ten layout attempts per
+                // top-level sliver, including the final successful attempt.
+                // Shrink-wrap retains Incular's separate convergence guard.
+                let max_corrections = if config.shrink_wrap {
+                    10
+                } else {
+                    (config.delegate.sliver_count().max(1) as u64)
+                        .saturating_mul(10)
+                        .saturating_sub(1)
+                };
                 let perform_layout = |offset, viewport| {
                     let starting_offset = config.controller.offset();
-                    let mut layout = config
-                        .delegate
-                        .perform_layout(make_constraints(offset, viewport));
-                    // A correction is a request to retry, not valid content
-                    // geometry. Publishing it would clamp against the empty
-                    // range that accompanies the correction.
-                    for _ in 0..10 {
+                    let mut candidate_offset = offset;
+                    loop {
+                        let layout = config
+                            .delegate
+                            .perform_layout(make_constraints(candidate_offset, viewport));
+                        // A correction is a request to retry, not valid content
+                        // geometry. Publishing it would clamp against the empty
+                        // range that accompanies the correction.
                         let Some(delta) = layout.geometry.scroll_offset_correction else {
                             return Ok(layout);
                         };
-                        if !config.controller.apply_layout_correction_by(delta) {
+                        if explicit_corrections.get() >= max_corrections
+                            || !config.controller.apply_layout_correction_by(delta)
+                        {
                             break;
                         }
                         explicit_corrections.set(explicit_corrections.get() + 1);
-                        layout = config
-                            .delegate
-                            .perform_layout(make_constraints(config.controller.offset(), viewport));
-                    }
-                    if layout.geometry.scroll_offset_correction.is_none() {
-                        return Ok(layout);
+                        candidate_offset = config.controller.offset();
                     }
                     // Do not leave the controller at an unvalidated attempt
                     // if a custom sliver keeps returning corrections.

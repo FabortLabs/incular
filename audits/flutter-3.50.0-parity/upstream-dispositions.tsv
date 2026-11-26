@@ -1872,3 +1872,4 @@ packages/flutter/test/rendering/viewport_test.dart	2176	Vertical viewport was gi
 packages/flutter/test/rendering/viewport_test.dart	2190	Vertical viewport was given unbounded height	paired-match	upstream-viewport-reveal.md#unbounded-viewport-constraints
 packages/flutter/test/rendering/viewport_test.dart	2212	Viewport debugThrowIfNotCheckingIntrinsics() control test	reference-ran-incular-open	upstream-viewport-reveal.md#unbounded-viewport-constraints
 packages/flutter/test/rendering/viewport_test.dart	2751	Shrinkwrapping viewport asserts bounded cross axis	paired-match	upstream-viewport-reveal.md#unbounded-viewport-constraints
+packages/flutter/test/rendering/viewport_test.dart	2822	RenderViewport maxLayoutCycles depends on the number of children	paired-match	upstream-viewport-reveal.md#viewport-layout-correction-budget
