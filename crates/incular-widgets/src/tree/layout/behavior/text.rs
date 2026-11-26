@@ -194,7 +194,9 @@ impl WidgetTree {
                 )
                 .text_direction(text_direction)
                 .soft_wrap(multiline)
-                .max_lines(max_lines);
+                // A multiline height cap belongs to the viewport, not
+                // the paragraph: lines below it must remain scrollable.
+                .max_lines(if multiline { None } else { max_lines });
                 let mask = obscure_text.then_some(obscuring_character);
                 let (metrics, layout, document) =
                     with_text_field_display(controller, placeholder, mask, |display| {
@@ -240,7 +242,15 @@ impl WidgetTree {
                 } else if expands && constraints.is_height_bounded() {
                     constraints.max_height()
                 } else {
-                    metrics.size.height.max(line_height) + content_padding.vertical()
+                    let content_height = metrics.size.height.max(line_height);
+                    let preferred_height = if multiline {
+                        max_lines.map_or(content_height, |lines| {
+                            content_height.min(line_height * lines as f32)
+                        })
+                    } else {
+                        content_height
+                    };
+                    preferred_height + content_padding.vertical()
                 };
                 let size = constraints.constrain(Size::new(
                     intrinsic_width,

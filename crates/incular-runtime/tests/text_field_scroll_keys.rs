@@ -108,3 +108,60 @@ fn page_keys_jump_a_single_line_field_to_its_scroll_extent() {
     assert_eq!(scroll(&runtime).x, 0.);
     assert_eq!(controller.selection(), TextSelection::collapsed(0));
 }
+
+#[test]
+fn apple_page_keys_scroll_beyond_the_visible_line_cap() {
+    use incular_text::{TextAffinity, TextAlign, TextStyle};
+
+    // The same four logical lines as the pinned Flutter case. Width is
+    // ample even with alignment to the right, so none soft-wraps.
+    let text = "Now is the time for\nall good people\nto come to the aid\nof their country.";
+    let bounds = Constraints::new(400., 400., 0., 400.);
+    for platform in [TextShortcutPlatform::Ios, TextShortcutPlatform::MacOs] {
+        let controller = TextEditingController::with_text(text);
+        let selection = TextSelection::collapsed(0);
+        controller.set_selection_with_affinity(selection, TextAffinity::Upstream);
+        let mut runtime = Runtime::new(
+            EditableText::new(controller.clone())
+                .autofocus(true)
+                .max_lines(Some(2))
+                .min_lines(Some(2))
+                .text_align(TextAlign::Right)
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .style(TextStyle::new().font_size(14.).line_height_absolute(20.))
+                .into(),
+        )
+        .unwrap();
+        runtime.set_text_shortcut_platform(platform);
+        runtime.run_frame(bounds).unwrap();
+        let field = runtime.focused_element().expect("autofocused editor");
+        let height = runtime.tree().element_bounds(field).unwrap().size.height;
+        assert_eq!(height, 40.);
+        assert_eq!(controller.selection(), selection);
+        assert_eq!(scroll(&runtime), Offset::ZERO);
+
+        for (key, expected) in [
+            (Code::PageUp, 0.),
+            (Code::PageDown, height * 0.8),
+            (Code::PageDown, height),
+            (Code::PageUp, height - height * 0.8),
+            (Code::PageUp, 0.),
+        ] {
+            let event = KeyboardEvent::key_down(KeyboardKey::Named(NamedKey::Unidentified), key);
+            let _ = runtime.handle_input(InputEvent::Key(event));
+            runtime.run_frame(bounds).unwrap();
+            let actual = scroll(&runtime).y;
+            assert!(
+                (actual - expected).abs() < 0.01,
+                "{platform:?} {key:?}: {actual} != {expected}"
+            );
+            assert_eq!(controller.selection(), selection);
+        }
+        controller.set_selection(TextSelection::collapsed(text.len()));
+        runtime.run_frame(bounds).unwrap();
+        assert!((scroll(&runtime).y - height).abs() < 0.01, "{platform:?}");
+        controller.set_text("short");
+        runtime.run_frame(bounds).unwrap();
+        assert_eq!(scroll(&runtime), Offset::ZERO);
+    }
+}
