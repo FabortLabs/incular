@@ -1034,6 +1034,7 @@ packages/flutter/test/gestures/monodrag_test.dart	102	DragGestureRecognizer shou
 packages/flutter/test/gestures/drag_test.dart	85	Should report most recent point to onStart by default	paired-match	upstream-monodrag-arena-threshold.md#start-down-and-event-timestamps
 packages/flutter/test/gestures/drag_test.dart	107	Should report most recent point to onStart with a start configuration	paired-match	upstream-monodrag-arena-threshold.md#start-down-and-event-timestamps
 packages/flutter/test/gestures/drag_test.dart	137	Should recognize drag	paired-match	upstream-monodrag-arena-threshold.md#start-down-and-event-timestamps
+packages/flutter/test/gestures/drag_test.dart	293	DragGestureRecognizer.onStart behavior test	paired-match	upstream-drag-start-policy.md
 packages/flutter/test/gestures/drag_test.dart	423	Should report original timestamps	paired-match	upstream-monodrag-arena-threshold.md#start-down-and-event-timestamps
 packages/flutter/test/gestures/drag_test.dart	460	Should report initial down point to onStart with a down configuration	paired-match	upstream-monodrag-arena-threshold.md#start-down-and-event-timestamps
 packages/flutter/test/gestures/drag_test.dart	1603	Should recognize drag	paired-match	upstream-monodrag-arena-threshold.md#start-down-and-event-timestamps
