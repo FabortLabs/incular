@@ -179,3 +179,21 @@ fn a_combined_button_mask_does_not_register_or_emit_even_when_down_is_routed() {
     press.reject_gesture(5);
     assert_eq!(*log.borrow(), [Down, Cancel]);
 }
+
+#[test]
+fn a_recognized_hold_notifies_up_exactly_once_without_movement() {
+    let (mut press, log) = setup();
+    let at = Instant::now();
+    begin(&mut press, &log, at);
+    press.poll(at + Duration::from_millis(300));
+    assert_eq!(*log.borrow(), [Down]);
+    press.poll(at + Duration::from_secs(1));
+    assert_eq!(*log.borrow(), [Down, Start]);
+    press.handle_event(raw(at, 1000, PointerPhase::Up, 11., 9.));
+    assert_eq!(*log.borrow(), [Down, Start, End]);
+    // A duplicate release and later deadline must not synthesize an end.
+    press.handle_event(raw(at, 1001, PointerPhase::Up, 11., 9.));
+    press.poll(at + Duration::from_millis(1300));
+    press.dispose();
+    assert_eq!(*log.borrow(), [Down, Start, End]);
+}
