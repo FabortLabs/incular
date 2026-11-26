@@ -1603,3 +1603,42 @@ packages/flutter/test/painting/image_cache_test.dart	211	already pending image i
 packages/flutter/test/painting/image_cache_test.dart	267	pending image is removed when image is evicted	paired-match	upstream-decoded-bundle-image-cache.md
 packages/flutter/test/painting/image_cache_test.dart	311	containsKey - pending	partial-match	upstream-decoded-bundle-image-cache.md
 packages/flutter/test/painting/image_cache_test.dart	326	containsKey - completed	paired-match	upstream-decoded-bundle-image-cache.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	63	upscales to the correct dimensions	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	84	downscales to the correct dimensions	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	106	useLogicalSize accounts for devicePixelRatio when decoding	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	126	useLogicalSize does not upscale beyond intrinsic size by default	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	141	without useLogicalSize ignores devicePixelRatio	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	186	useLogicalSize with policy=fit constrains by effective dimensions	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	200	refuses upscaling when allowUpscaling=false	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	221	constrains square image to bounded portrait rect	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	233	constrains square image to bounded landscape rect	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	245	constrains square image to bounded square	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	257	constrains square image to bounded width	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	264	constrains square image to bounded height	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	271	constrains portrait image to bounded portrait rect	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	283	constrains portrait image to bounded landscape rect	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	295	constrains portrait image to bounded square	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	307	constrains portrait image to bounded width	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	314	constrains portrait image to bounded height	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	321	constrains landscape image to bounded portrait rect	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	333	constrains landscape image to bounded landscape rect	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	345	constrains landscape image to bounded square	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	357	constrains landscape image to bounded width	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	364	constrains landscape image to bounded height	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	371	leaves image as-is if constraints are bigger than image	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	385	constrains square image to bounded portrait rect	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	398	constrains square image to bounded landscape rect	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	411	constrains square image to bounded square	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	424	constrains square image to bounded width	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	436	constrains square image to bounded height	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	448	constrains portrait image to bounded portrait rect	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	461	constrains portrait image to bounded landscape rect	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	474	constrains portrait image to bounded square	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	487	constrains portrait image to bounded width	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	499	constrains portrait image to bounded height	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	511	constrains landscape image to bounded portrait rect	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	524	constrains landscape image to bounded landscape rect	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	537	constrains landscape image to bounded square	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	550	constrains landscape image to bounded width	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	562	constrains landscape image to bounded height	paired-match	upstream-resize-image.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	574	shrinks image if constraints are smaller than image	paired-match	upstream-resize-image.md

@@ -127,8 +127,8 @@ pub mod prelude {
     pub use incular_image::{
         AnyImageProvider, AssetBundleImageKey, AssetImage, DecodedImage, ExactAssetImage, FileImage,
         ImageAssetBundle, ImageCache, ImageCacheDiagnostics, ImageChunkEvent, ImageConfiguration,
-        ImageError, ImageHandle, ImageId, ImageLoadState,
-        ImageProvider, ImageSource, ImageStream, ImageStreamCompleter, MemoryImage,
+        ImageError, ImageHandle, ImageId, ImageLoadState, ImageProvider, ImageResizeOptions,
+        ImageSource, ImageStream, ImageStreamCompleter, MemoryImage, ResizeImage, ResizeImagePolicy,
     };
     pub use incular_navigation::{
         BackDispatchReport, BackDispatcher, BottomSheet, Dialog, HeroController, ModalBarrier,

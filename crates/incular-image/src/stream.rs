@@ -52,12 +52,15 @@ pub enum ImageLoadState {
     Failed(ImageError),
 }
 
+type FrameMap = Box<dyn FnOnce(ImageHandle) -> Result<ImageHandle, ImageError>>;
+
 struct StreamCell {
     state: RefCell<ImageLoadState>,
     changes: DependencySource,
     completed: Cell<bool>,
     /// The stream this one follows after [`ImageStreamCompleter::follow`].
     source: RefCell<Option<ImageStream>>,
+    map: RefCell<Option<FrameMap>>,
 }
 
 /// One provider resolution's loading state (Flutter `ImageStream`). Clones
@@ -73,6 +76,8 @@ impl PartialEq for ImageStream {
         Rc::ptr_eq(&self.cell, &other.cell)
     }
 }
+
+impl Eq for ImageStream {}
 
 impl fmt::Debug for ImageStream {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -92,6 +97,7 @@ impl ImageStream {
                 changes: DependencySource::default(),
                 completed: Cell::new(completed),
                 source: RefCell::new(None),
+                map: RefCell::new(None),
             }),
         }
     }
@@ -165,13 +171,53 @@ impl ImageStream {
         stream
     }
 
+    /// Transforms a single decoded frame on the receiving UI thread.
+    /// Pending progress and source failures are preserved. A ready frame
+    /// is mapped once, even if several widget builds read this stream.
+    #[must_use]
+    pub fn map_image(
+        self,
+        map: impl FnOnce(ImageHandle) -> Result<ImageHandle, ImageError> + 'static,
+    ) -> Self {
+        if self.is_completed() {
+            return match self.state() {
+                ImageLoadState::Ready(image) => Self::from_result(map(image)),
+                ImageLoadState::Failed(error) => Self::failed(error),
+                ImageLoadState::Loading(_) => unreachable!("complete stream has an outcome"),
+            };
+        }
+        let mapped = Self::with(ImageLoadState::Loading(None));
+        *mapped.cell.source.borrow_mut() = Some(self);
+        *mapped.cell.map.borrow_mut() = Some(Box::new(map));
+        mapped
+    }
+
     /// The current state. Reading it inside a build makes the build depend
     /// on this stream.
     #[must_use]
     pub fn state(&self) -> ImageLoadState {
         self.cell.changes.track();
         if let Some(source) = self.source() {
-            return source.state();
+            let outcome = source.state();
+            let map = if matches!(outcome, ImageLoadState::Loading(_)) {
+                None
+            } else {
+                self.cell.map.borrow_mut().take()
+            };
+            if let Some(map) = map {
+                let outcome = match outcome {
+                    ImageLoadState::Ready(image) => match map(image) {
+                        Ok(image) => ImageLoadState::Ready(image),
+                        Err(error) => ImageLoadState::Failed(error),
+                    },
+                    other => other,
+                };
+                self.cell.completed.set(true);
+                *self.cell.source.borrow_mut() = None;
+                *self.cell.state.borrow_mut() = outcome.clone();
+                return outcome;
+            }
+            return outcome;
         }
         self.cell.state.borrow().clone()
     }

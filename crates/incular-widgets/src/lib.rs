@@ -257,7 +257,8 @@ pub use incular_core::{Color, Key, LocalKey, Offset, Rect, Size, UniqueKey, Valu
 pub use incular_gestures::{FocusHighlightManager, FocusHighlightMode, FocusHighlightStrategy};
 pub use incular_image::{
     AnyImageProvider, AssetBundleImageKey, AssetImage, ExactAssetImage, FileImage, ImageAssetBundle,
-    ImageChunkEvent, ImageConfiguration, ImageLoadState, ImageProvider, ImageStream, ImageStreamCompleter, MemoryImage,
+    ImageChunkEvent, ImageConfiguration, ImageLoadState, ImageProvider, ImageResizeOptions,
+    ImageStream, ImageStreamCompleter, MemoryImage, ResizeImage, ResizeImagePolicy,
 };
 pub use incular_platform::{
     BackGestureEvent, DefaultSpellCheckService, PlatformViewCommand, PlatformViewCompositing,
