@@ -203,3 +203,19 @@ window. The existing early-tooltip and focus-stage tests still pass.
 The closed-anchor intent original (`:1147`) is partial: the native
 test covers ordinary outward shortcut routing and Escape, not
 direct dispatch of every Flutter focus-traversal intent type.
+
+### Anchor and overlay geometry
+
+Pinned `:1470` and `:1491` pair with the routed anchor tap, the
+mounted position returned to its overlay builder, and the actual
+200 by 200 panel at the anchor's top-left. The builder receives
+the full 800 by 600 viewport. Pinned `:1051` and the additional
+numeric reference agree on a scaled/translated 100 by 20 anchor
+at (300,340) with size 120 by 24 (native f32 tolerance 0.0002).
+
+Pinned `:3168` and the numeric control both measure the open
+anchor moving upward by 100 pixels when a leading sibling is
+removed. The retained menu stays open and the overlay builder
+gets the new rectangle. Pinned `:3212` and `:3228` confirm a
+zero-area root can open safely and a zero-area group remains closed
+after its controller's no-op open call.
