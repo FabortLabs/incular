@@ -16,6 +16,22 @@ impl WidgetTree {
                 *spacing,
                 Constraints::at_most(f32::INFINITY, f32::INFINITY),
             ),
+            // Flutter RenderWrap's parallel maximum intrinsic is the
+            // sum of unconstrained child maxima, without inter-item
+            // spacing. The perpendicular query uses the run layout.
+            RenderKind::Wrap { wrap, .. } if wrap.direction == dimension => (
+                true,
+                0.0,
+                Constraints::at_most(f32::INFINITY, f32::INFINITY),
+            ),
+            RenderKind::Decorated { desired: None, .. } => {
+                let Some(&grandchild) = node.children.first() else {
+                    return Ok(0.0);
+                };
+                return with_recursive_tree_stack(|| {
+                    self.probe_intrinsic_extent(grandchild, dimension, probe)
+                });
+            }
             // Flutter sums child intrinsics in a horizontal ListBody and takes
             // their maximum in a vertical one, for both queries. Probing the
             // body itself would supply invalid unbounded cross-axis constraints.
@@ -203,7 +219,10 @@ impl WidgetTree {
                         .size;
                     (constraints.constrain(size), ChildOffsets::One(Offset::ZERO))
                 } else {
-                    (child_constraints.constrain(Size::ZERO), ChildOffsets::default())
+                    (
+                        child_constraints.constrain(Size::ZERO),
+                        ChildOffsets::default(),
+                    )
                 }
             }
             RenderKind::Overflow {

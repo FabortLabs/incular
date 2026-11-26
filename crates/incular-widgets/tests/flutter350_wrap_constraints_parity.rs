@@ -225,16 +225,73 @@ fn vertical_intrinsic_width_sums_three_columns() {
     // measured width as fixed box inputs without changing the font stack.
     let ahem_box = |width| SizedBox::new().width(width).height(16.);
     let w = Wrap::new([
-        Widget::from(ahem_box(80.)),
-        Widget::from(Column::new([SizedBox::new().width(60.).height(40.)])),
-        Widget::from(ahem_box(48.)),
+        Widget::from(ahem_box(80.)).with_key(Key::Value(0)),
+        Widget::from(Column::new([SizedBox::new().width(60.).height(40.)])).with_key(Key::Value(1)),
+        Widget::from(ahem_box(48.)).with_key(Key::Value(2)),
     ])
     .direction(incular_config::Axis::Vertical);
     let tree = mount(Directionality::new(
         TextDirection::Ltr,
         Center::new(Widget::from(IntrinsicWidth::new(w)).with_key(Key::Value(WRAP))),
     ));
-    assert_eq!(bounds(&tree, WRAP).size.width, 188.);
+    let outer = bounds(&tree, WRAP);
+    assert_eq!(outer.size, Size::new(188., 600.));
+    for (index, width, height, x) in [(0, 80., 16., 0.), (1, 60., 600., 80.), (2, 48., 16., 140.)] {
+        let child = bounds(&tree, index);
+        assert_eq!(child.size, Size::new(width, height));
+        assert_eq!(child.origin - outer.origin, Offset::new(x, 0.));
+    }
+}
+
+#[test]
+fn parallel_intrinsics_exclude_spacing_but_real_runs_keep_run_spacing() {
+    use incular_config::Axis;
+    use incular_widgets::{Container, IntrinsicWidth};
+
+    for axis in [Axis::Horizontal, Axis::Vertical] {
+        let horizontal = axis == Axis::Horizontal;
+        let dimensions = if horizontal {
+            [(20., 5.), (30., 9.)]
+        } else {
+            [(5., 20.), (9., 30.)]
+        };
+        for decorated in [false, true] {
+            let mut child = key(wrap(&dimensions)
+                .direction(axis)
+                .spacing(7.)
+                .run_spacing(4.));
+            if decorated {
+                child = Container::new().color(Color::BLACK).child(child).into();
+            }
+            let intrinsic = if horizontal {
+                Widget::from(IntrinsicWidth::new(child))
+            } else {
+                Widget::from(IntrinsicHeight::new(child))
+            };
+            let tree = mount(Directionality::new(
+                TextDirection::Ltr,
+                Center::new(intrinsic),
+            ));
+            let wrap = bounds(&tree, WRAP);
+            assert_eq!(
+                wrap.size,
+                if horizontal {
+                    Size::new(50., 18.)
+                } else {
+                    Size::new(18., 50.)
+                }
+            );
+            assert_eq!(bounds(&tree, 0).origin - wrap.origin, Offset::ZERO);
+            assert_eq!(
+                bounds(&tree, 1).origin - wrap.origin,
+                if horizontal {
+                    Offset::new(0., 9.)
+                } else {
+                    Offset::new(9., 0.)
+                }
+            );
+        }
+    }
 }
 
 fn basic(reversed: bool) {

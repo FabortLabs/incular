@@ -435,7 +435,7 @@ packages/flutter/test/widgets/wrap_test.dart	256	Wrap alignment (LTR)	paired-mat
 packages/flutter/test/widgets/wrap_test.dart	342	Wrap alignment (RTL)	paired-match	upstream-wrap-run-axes-and-vertical-intrinsics.md
 packages/flutter/test/widgets/wrap_test.dart	428	Wrap runAlignment (DOWN)	paired-match	upstream-wrap-run-axes-and-vertical-intrinsics.md
 packages/flutter/test/widgets/wrap_test.dart	534	Wrap runAlignment (UP)	paired-match	upstream-wrap-run-axes-and-vertical-intrinsics.md
-packages/flutter/test/widgets/wrap_test.dart	1001	Vertical wrap - IntrinsicsWidth	partial-mismatch	upstream-wrap-run-axes-and-vertical-intrinsics.md
+packages/flutter/test/widgets/wrap_test.dart	1001	Vertical wrap - IntrinsicsWidth	partial-match	upstream-wrap-run-axes-and-vertical-intrinsics.md#current-intrinsic-sizing
 packages/flutter/test/widgets/wrap_test.dart	20	Basic Wrap test (LTR)	paired-match	upstream-wrap-baseline-and-final-references.md
 packages/flutter/test/widgets/wrap_test.dart	134	Basic Wrap test (RTL)	paired-match	upstream-wrap-baseline-and-final-references.md
 packages/flutter/test/widgets/wrap_test.dart	251	Empty wrap	paired-match	upstream-wrap-baseline-and-final-references.md
