@@ -723,7 +723,10 @@ impl Runtime {
             self.tree.text_field_set_caret(field, position, true, now);
             return;
         };
-        if run.shift && self.is_desktop_text_platform() {
+        if run.shift
+            && (self.is_desktop_text_platform()
+                || self.text_shortcut_platform == TextShortcutPlatform::Android)
+        {
             // Shift-drag keeps the selection's base and moves its extent.
             self.tree.text_field_set_caret(field, position, true, now);
             return;
@@ -734,7 +737,11 @@ impl Runtime {
                 self.text_field_select_boundaries_in_range(field, run.down_position, position, now)
             }
             _ => {
-                self.tree.text_field_set_caret(field, position, true, now);
+                // Android tracks a finger with a collapsed caret. A precise
+                // pointer or stylus instead extends a text selection.
+                let extend = self.text_shortcut_platform != TextShortcutPlatform::Android
+                    || !matches!(kind, PointerDeviceKind::Touch | PointerDeviceKind::Unknown);
+                self.tree.text_field_set_caret(field, position, extend, now);
             }
         }
     }
@@ -1142,6 +1149,7 @@ impl Runtime {
         let touch = matches!(
             kind,
             PointerDeviceKind::Touch
+                | PointerDeviceKind::Unknown
                 | PointerDeviceKind::Stylus
                 | PointerDeviceKind::InvertedStylus
         );

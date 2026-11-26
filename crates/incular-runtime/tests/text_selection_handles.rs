@@ -5,8 +5,8 @@
 //! a typed edit or losing focus closes them.
 //!
 //! Touch drags follow `TextSelectionGestureDetectorBuilder`: iOS never selects
-//! on a touch drag, and Android selects only from a field that already had
-//! focus.
+//! on a touch drag, and Android moves a collapsed caret only in a field
+//! that already had focus.
 
 use incular_config::Constraints;
 use incular_core::{
@@ -210,35 +210,42 @@ fn ios_touch_drag_does_not_change_the_selection() {
 }
 
 #[test]
-fn android_touch_drag_selects_only_from_a_focused_field() {
-    let (mut runtime, controller) = mount("hello world", TextShortcutPlatform::Android);
-    let start = Instant::now();
-    drag(
-        &mut runtime,
-        Offset::new(12., 10.),
-        Offset::new(150., 10.),
-        PointerDeviceKind::Touch,
-        start,
-    );
-    let selection = controller.selection();
-    assert_eq!(
-        selection.base, selection.extent,
-        "an unfocused field does not drag-select"
-    );
+fn android_touch_drag_moves_a_collapsed_caret_only_in_a_focused_field() {
+    let (mut runtime, controller) = mount("I love flutter!", TextShortcutPlatform::Android);
+    let field = runtime.tree().text_field_at(Offset::new(12., 10.)).unwrap();
+    let mut point = |offset| {
+        controller.set_selection(TextSelection::collapsed(offset));
+        runtime.run_frame(bounds()).unwrap();
+        let caret = runtime.tree().text_field_input_geometry(field).unwrap().caret_rect;
+        Offset::new(caret.origin.x, caret.origin.y + caret.size.height / 2.0)
+    };
+    let from = point(4);
+    let to = point(10);
+    controller.set_text("I love flutter!");
+    runtime.run_frame(bounds()).unwrap();
+    assert!(controller.selection_if_set().is_none());
 
-    // The field has focus now, so the same drag selects.
+    let start = Instant::now();
+    drag(&mut runtime, from, to, PointerDeviceKind::Touch, start);
+    assert!(runtime.focused_element().is_none());
+    assert!(controller.selection_if_set().is_none());
+
+    tap(
+        &mut runtime,
+        from,
+        PointerDeviceKind::Touch,
+        start + Duration::from_secs(1),
+    );
+    assert_eq!(runtime.focused_element(), Some(field));
+    assert_eq!(controller.selection(), TextSelection::collapsed(4));
     drag(
         &mut runtime,
-        Offset::new(12., 10.),
-        Offset::new(150., 10.),
+        from,
+        to,
         PointerDeviceKind::Touch,
         start + Duration::from_secs(2),
     );
-    let selection = controller.selection();
-    assert_ne!(
-        selection.base, selection.extent,
-        "a focused field drag-selects"
-    );
+    assert_eq!(controller.selection(), TextSelection::collapsed(10));
 }
 
 /// Like [`mount`], with a touch toolbar installed so a handle tap can open it.
