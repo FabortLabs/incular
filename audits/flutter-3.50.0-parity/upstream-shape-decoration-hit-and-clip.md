@@ -58,8 +58,7 @@ The old box and circle hit tests wrongly included the right edge in the
 paired fixtures. The native tests also cover an ellipse boundary and a
 nearby outside point, degenerate frames and the same scaled logical
 radius in both text directions. Thirty-four prior shape regressions
-passed. This does not count the pinned primitive-matrix registration,
-which also requires superellipse and heterogeneous border interpolation.
+passed. The full pinned primitive matrix is covered separately below.
 
 ## Directional decoration images
 
@@ -92,5 +91,20 @@ Both native counterparts passed. They check every pinned sample point,
 the reverse morph, equality of paint and clip contours, and the
 intermediate side width. Four existing nested outline cases, two
 gradient transition cases and 14 mounted transition cases also passed.
-The separate primitive-matrix registration still needs the stadium
-morphs; incompatible families still use the existing endpoint fallback.
+The separate primitive matrix below adds the stadium morphs. Incompatible
+families still use the endpoint fallback.
+
+## Primitive shape matrix and stadium morphs
+
+Pinned `painting/shape_decoration_test.dart:120` passes. The port checks
+all 112 shape/point combinations both against the expected Flutter
+truth table recorded by the authored probe and against Incular's
+actual outer path. The missing stadium-to-circle transition previously
+rejected the pinned point (11, 35) by switching straight to the circle.
+
+A stadium now morphs to a fitted circle or ellipse by changing its
+frame, and to a rounded rectangle by changing its radii without
+resizing its frame. Hit testing, painting and clipping evaluate the
+same fitted shape. Both Flutter and Incular show a stadium-to-rectangle
+midpoint whose edge is distinct from either endpoint. Five primitive
+native cases and 28 existing shape and outline cases passed.

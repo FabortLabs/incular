@@ -425,6 +425,10 @@ impl StadiumBorder {
 }
 
 impl ShapeBorder for StadiumBorder {
+    fn rounded_circle_outline(&self) -> Option<RoundedCircleOutline> {
+        Some((*self).into())
+    }
+
     fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
         EdgeInsets::all(self.side.stroke_inset().max(0.))
     }

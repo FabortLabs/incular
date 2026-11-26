@@ -10,8 +10,9 @@ use incular_core::{Lerp, Offset, Rect, Size};
 use incular_rendering::{Canvas, FillRule, Paint, Path};
 
 use super::{
-    BorderRadius, BorderRadiusGeometry, BorderSide, BorderStyle, CircleBorder, Radius,
-    RoundedRectangleBorder, RoundedSuperellipseBorder, ShapeBorder,
+    BorderRadius, BorderRadiusGeometry, BorderSide, BorderStyle, CircleBorder,
+    EllipticalRoundedRect, Radius, RoundedRectangleBorder, RoundedSuperellipseBorder, ShapeBorder,
+    StadiumBorder,
 };
 
 /// A rounded rectangle, rounded superellipse, circle, or transition to
@@ -26,6 +27,8 @@ enum Outline {
     Rounded(RoundedRectangleBorder<BorderRadiusGeometry>),
     Superellipse(RoundedSuperellipseBorder<BorderRadiusGeometry>),
     Circle(CircleBorder),
+    Stadium(StadiumBorder),
+    StadiumMorph(StadiumMorph),
     Morph(Morph),
 }
 
@@ -36,6 +39,19 @@ struct Morph {
     radius: BorderRadiusGeometry,
     circularity: f64,
     eccentricity: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct StadiumMorph {
+    side: BorderSide,
+    fraction: f64,
+    target: StadiumTarget,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum StadiumTarget {
+    Circle { eccentricity: f32 },
+    Rounded { radius: BorderRadiusGeometry },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Hash)]
@@ -66,6 +82,12 @@ impl From<CircleBorder> for RoundedCircleOutline {
     }
 }
 
+impl From<StadiumBorder> for RoundedCircleOutline {
+    fn from(value: StadiumBorder) -> Self {
+        Self(Outline::Stadium(value))
+    }
+}
+
 impl RoundedCircleOutline {
     #[must_use]
     pub fn side(self) -> BorderSide {
@@ -73,6 +95,8 @@ impl RoundedCircleOutline {
             Outline::Rounded(shape) => shape.side,
             Outline::Superellipse(shape) => shape.side,
             Outline::Circle(shape) => shape.side,
+            Outline::Stadium(shape) => shape.side,
+            Outline::StadiumMorph(shape) => shape.side,
             Outline::Morph(shape) => shape.side,
         }
     }
@@ -84,6 +108,12 @@ impl RoundedCircleOutline {
             Outline::Rounded(_) | Outline::Superellipse(_) => 0.,
             Outline::Circle(_) => 1.,
             Outline::Morph(shape) => shape.circularity,
+            Outline::StadiumMorph(StadiumMorph {
+                target: StadiumTarget::Circle { .. },
+                fraction,
+                ..
+            }) => fraction,
+            Outline::Stadium(_) | Outline::StadiumMorph(_) => 0.,
         }
     }
 
@@ -91,7 +121,7 @@ impl RoundedCircleOutline {
         match self.0 {
             Outline::Rounded(shape) => Some(shape.border_radius),
             Outline::Superellipse(shape) => Some(shape.border_radius),
-            Outline::Circle(_) => None,
+            Outline::Circle(_) | Outline::Stadium(_) | Outline::StadiumMorph(_) => None,
             Outline::Morph(shape) => Some(shape.radius),
         }
     }
@@ -100,16 +130,88 @@ impl RoundedCircleOutline {
         match self.0 {
             Outline::Rounded(_) => Some(CornerFamily::Rounded),
             Outline::Superellipse(_) => Some(CornerFamily::Superellipse),
-            Outline::Circle(_) => None,
+            Outline::Circle(_) | Outline::Stadium(_) | Outline::StadiumMorph(_) => None,
             Outline::Morph(shape) => Some(shape.family),
         }
     }
 
     pub(crate) fn try_interpolate(self, other: Self, t: f32) -> Option<Self> {
-        match (self.family(), other.family()) {
-            (Some(a), Some(b)) if a != b => None,
-            _ => Some(self.lerp(&other, t)),
+        self.interpolate_supported(other, f64::from(t))
+    }
+
+    fn has_stadium(self) -> bool {
+        matches!(self.0, Outline::Stadium(_) | Outline::StadiumMorph(_))
+    }
+
+    fn stadium_target(self) -> Option<(StadiumTarget, f64)> {
+        match self.0 {
+            Outline::Circle(circle) => Some((
+                StadiumTarget::Circle {
+                    eccentricity: circle.eccentricity(),
+                },
+                1.,
+            )),
+            Outline::Rounded(rounded) => Some((
+                StadiumTarget::Rounded {
+                    radius: rounded.border_radius,
+                },
+                1.,
+            )),
+            Outline::StadiumMorph(morph) => Some((morph.target, morph.fraction)),
+            _ => None,
         }
+    }
+
+    fn interpolate_stadium(self, other: Self, t: f64) -> Option<Self> {
+        let side = self.side().lerp(&other.side(), t as f32);
+        let (target, fraction) = match (self.0, other.0) {
+            (Outline::Stadium(_), Outline::Stadium(_)) => {
+                return Some(StadiumBorder::new(side).into());
+            }
+            (Outline::Stadium(_), _) => {
+                let (target, fraction) = other.stadium_target()?;
+                (target, fraction * t)
+            }
+            (_, Outline::Stadium(_)) => {
+                let (target, fraction) = self.stadium_target()?;
+                (target, fraction * (1. - t))
+            }
+            _ => {
+                let (a, from) = self.stadium_target()?;
+                let (b, to) = other.stadium_target()?;
+                let target = match (a, b) {
+                    (
+                        StadiumTarget::Circle { eccentricity: a },
+                        StadiumTarget::Circle { eccentricity: b },
+                    ) => {
+                        let eccentricity = match (self.0, other.0) {
+                            (Outline::Circle(_), _) => a,
+                            (_, Outline::Circle(_)) => b,
+                            _ => a.lerp(&b, t as f32),
+                        };
+                        StadiumTarget::Circle { eccentricity }
+                    }
+                    (
+                        StadiumTarget::Rounded { radius: a },
+                        StadiumTarget::Rounded { radius: b },
+                    ) => {
+                        let radius = match (self.0, other.0) {
+                            (Outline::Rounded(_), _) => b,
+                            (_, Outline::Rounded(_)) => a,
+                            _ => a.lerp(&b, t as f32),
+                        };
+                        StadiumTarget::Rounded { radius }
+                    }
+                    _ => return None,
+                };
+                (target, from * (1. - t) + to * t)
+            }
+        };
+        Some(Self(Outline::StadiumMorph(StadiumMorph {
+            side,
+            target,
+            fraction,
+        })))
     }
 
     /// Interpolates the unfitted geometry at double precision. In particular,
@@ -117,23 +219,31 @@ impl RoundedCircleOutline {
     /// to a circle: it is blended against the circle fitted to the paint box.
     #[must_use]
     pub fn interpolate(self, other: Self, t: f64) -> Self {
+        self.interpolate_supported(other, t)
+            .unwrap_or(if t < 0.5 { self } else { other })
+    }
+
+    fn interpolate_supported(self, other: Self, t: f64) -> Option<Self> {
+        if self.has_stadium() || other.has_stadium() {
+            return self.interpolate_stadium(other, t);
+        }
         match (self.0, other.0) {
             (Outline::Rounded(a), Outline::Rounded(b)) => {
-                return Self(Outline::Rounded(a.lerp(&b, t as f32)));
+                return Some(Self(Outline::Rounded(a.lerp(&b, t as f32))));
             }
             (Outline::Superellipse(a), Outline::Superellipse(b)) => {
-                return Self(Outline::Superellipse(a.lerp(&b, t as f32)));
+                return Some(Self(Outline::Superellipse(a.lerp(&b, t as f32))));
             }
             (Outline::Circle(a), Outline::Circle(b)) => {
-                return Self(Outline::Circle(a.lerp(&b, t as f32)));
+                return Some(Self(Outline::Circle(a.lerp(&b, t as f32))));
             }
             _ => {}
         }
         if self == other {
-            return self;
+            return Some(self);
         }
         let family = match (self.family(), other.family()) {
-            (Some(a), Some(b)) if a != b => return if t < 0.5 { self } else { other },
+            (Some(a), Some(b)) if a != b => return None,
             (Some(family), _) | (_, Some(family)) => family,
             (None, None) => unreachable!("two circles are handled above"),
         };
@@ -154,13 +264,13 @@ impl RoundedCircleOutline {
             (Some(radius), None) | (None, Some(radius)) => radius,
             (None, None) => unreachable!("two circles are handled above"),
         };
-        Self(Outline::Morph(Morph {
+        Some(Self(Outline::Morph(Morph {
             family,
             side: self.side().lerp(&other.side(), t as f32),
             radius,
             circularity,
             eccentricity,
-        }))
+        })))
     }
 }
 
@@ -181,7 +291,17 @@ impl Hash for RoundedCircleOutline {
         match self.0 {
             Outline::Circle(shape) => canonical_bits(f64::from(shape.eccentricity())).hash(state),
             Outline::Morph(shape) => canonical_bits(f64::from(shape.eccentricity)).hash(state),
-            Outline::Rounded(_) | Outline::Superellipse(_) => {}
+            Outline::StadiumMorph(morph) => {
+                canonical_bits(morph.fraction).hash(state);
+                std::mem::discriminant(&morph.target).hash(state);
+                match morph.target {
+                    StadiumTarget::Circle { eccentricity } => {
+                        canonical_bits(f64::from(eccentricity)).hash(state);
+                    }
+                    StadiumTarget::Rounded { radius } => radius.hash(state),
+                }
+            }
+            Outline::Rounded(_) | Outline::Superellipse(_) | Outline::Stadium(_) => {}
         }
     }
 }
@@ -238,6 +358,51 @@ impl Morph {
     }
 }
 
+impl StadiumMorph {
+    fn geometry(
+        self,
+        rect: Rect,
+        direction: Option<TextDirection>,
+    ) -> Option<EllipticalRoundedRect> {
+        let stadium = BorderRadius::circular(rect.size.width.min(rect.size.height) / 2.);
+        match self.target {
+            StadiumTarget::Circle { eccentricity } => {
+                let morph = Morph {
+                    family: CornerFamily::Rounded,
+                    side: self.side,
+                    radius: stadium.into(),
+                    circularity: self.fraction,
+                    eccentricity,
+                };
+                let (rect, radius) = morph.geometry(rect, direction)?;
+                Some(radius.to_rounded_rect(rect))
+            }
+            StadiumTarget::Rounded { radius } => {
+                let resolved = radius.resolve(direction.unwrap_or(TextDirection::Ltr));
+                Some(
+                    stadium
+                        .lerp(&resolved, self.fraction as f32)
+                        .to_rounded_rect(rect),
+                )
+            }
+        }
+    }
+
+    fn inner_inset(self) -> f32 {
+        match self.target {
+            StadiumTarget::Circle { .. } => self.side.stroke_inset(),
+            StadiumTarget::Rounded { .. } => self.side.width * (1. - self.side.stroke_align),
+        }
+    }
+
+    fn path(self, rect: Rect, direction: Option<TextDirection>, inflation: f32) -> Path {
+        self.geometry(rect, direction).map_or_else(
+            || Path::builder().build(),
+            |rounded| rounded.inflated_paint_path(EdgeInsets::all(inflation)),
+        )
+    }
+}
+
 impl ShapeBorder for RoundedCircleOutline {
     fn rounded_circle_outline(&self) -> Option<Self> {
         Some(*self)
@@ -248,6 +413,10 @@ impl ShapeBorder for RoundedCircleOutline {
             Outline::Rounded(shape) => shape.hit_test(rect, position, direction),
             Outline::Superellipse(shape) => shape.hit_test(rect, position, direction),
             Outline::Circle(shape) => shape.hit_test(rect, position, direction),
+            Outline::Stadium(shape) => shape.hit_test(rect, position, direction),
+            Outline::StadiumMorph(shape) => shape
+                .geometry(rect, direction)
+                .is_some_and(|shape| shape.contains(position)),
             Outline::Morph(shape) if shape.family == CornerFamily::Rounded => shape
                 .geometry(rect, direction)
                 .is_some_and(|(rect, radius)| radius.to_rounded_rect(rect).contains(position)),
@@ -270,6 +439,8 @@ impl ShapeBorder for RoundedCircleOutline {
             Outline::Rounded(shape) => shape.outer_path_with_direction(rect, direction),
             Outline::Superellipse(shape) => shape.outer_path_with_direction(rect, direction),
             Outline::Circle(shape) => shape.outer_path(rect),
+            Outline::Stadium(shape) => shape.outer_path(rect),
+            Outline::StadiumMorph(shape) => shape.path(rect, direction, 0.),
             Outline::Morph(shape) => shape.path(rect, direction, 0.),
         }
     }
@@ -283,6 +454,8 @@ impl ShapeBorder for RoundedCircleOutline {
             Outline::Rounded(shape) => shape.inner_path_with_direction(rect, direction),
             Outline::Superellipse(shape) => shape.inner_path_with_direction(rect, direction),
             Outline::Circle(shape) => shape.inner_path(rect),
+            Outline::Stadium(shape) => shape.inner_path(rect),
+            Outline::StadiumMorph(shape) => shape.path(rect, direction, -shape.inner_inset()),
             Outline::Morph(shape) => {
                 // Flutter's transitional shape uses the raw alignment in
                 // this interpolation, unlike the ordinary outline inset.
@@ -309,6 +482,12 @@ impl ShapeBorder for RoundedCircleOutline {
             Outline::Rounded(shape) => shape.paint_with_direction(canvas, rect, direction),
             Outline::Superellipse(shape) => shape.paint_with_direction(canvas, rect, direction),
             Outline::Circle(shape) => shape.paint(canvas, rect),
+            Outline::Stadium(shape) => shape.paint(canvas, rect),
+            Outline::StadiumMorph(shape) if shape.side.style == BorderStyle::Solid => {
+                let path = shape.path(rect, direction, shape.side.stroke_offset() / 2.);
+                canvas.draw_path(Arc::new(path), &shape.side.to_paint(), FillRule::NonZero);
+            }
+            Outline::StadiumMorph(_) => {}
             Outline::Morph(shape) if shape.side.style == BorderStyle::Solid => {
                 let path = shape.path(rect, direction, shape.side.stroke_offset() / 2.);
                 canvas.draw_path(Arc::new(path), &shape.side.to_paint(), FillRule::NonZero);
