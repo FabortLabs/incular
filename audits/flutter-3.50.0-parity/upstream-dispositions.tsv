@@ -2434,6 +2434,6 @@ packages/flutter/test/widgets/physical_model_test.dart	19	PhysicalModel updates 
 packages/flutter/test/widgets/physical_model_test.dart	39	PhysicalShape updates clipBehavior in updateRenderObject	paired-match	upstream-physical-surfaces.md#changing-a-physical-clip
 packages/flutter/test/widgets/box_decoration_test.dart	105	Circles can have uniform borders	paired-match	upstream-mounted-box-borders.md
 packages/flutter/test/widgets/box_decoration_test.dart	118	Bordered Container insets its child	paired-match	upstream-mounted-box-borders.md
-packages/flutter/test/widgets/box_decoration_test.dart	132	BoxDecoration paints its border correctly	partial-match	upstream-mounted-box-borders.md
+packages/flutter/test/widgets/box_decoration_test.dart	132	BoxDecoration paints its border correctly	paired-match	upstream-mounted-box-borders.md#device-pixel-hairline
 packages/flutter/test/widgets/box_decoration_test.dart	191	BoxDecoration paints its border correctly	paired-match	upstream-mounted-box-borders.md
 packages/flutter/test/widgets/box_decoration_test.dart	558	BoxDecoration doesn't crash with BorderRadiusDirectional	paired-match	upstream-mounted-box-borders.md

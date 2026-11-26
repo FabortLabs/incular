@@ -12,7 +12,7 @@ impl WgpuRenderer {
         brush: &Brush,
         placement: PathPlacement,
     ) {
-        if clip == ClipState::Empty || !path_visible(path, kind, placement.transform, clip) {
+        if clip == ClipState::Empty || !path_visible(path, kind, placement, clip) {
             return;
         }
         let key = PathMeshKey {
@@ -23,21 +23,16 @@ impl WgpuRenderer {
             return;
         }
         let gradient_id = self.ensure_gradient(brush);
-        let (color, gradient, options, gradient_ext) = path_paint(brush);
-        let (affine, translation) = physical_affine(placement.transform, placement.scale);
         batches.push(DrawBatch::Path {
             clip,
             key,
             gradient: gradient_id,
-            instance: GpuPathInstance {
-                affine,
-                translation,
-                surface: [self.target_width as f32, self.target_height as f32, 0., 0.],
-                color: incular_painting::working_rgba(color),
-                gradient,
-                options,
-                gradient_ext,
-            },
+            instance: path_instance(
+                brush,
+                kind,
+                placement,
+                [self.target_width as f32, self.target_height as f32],
+            ),
         });
     }
     /// The retained path of a rectangle or oval of `size` at the origin.
@@ -84,18 +79,24 @@ impl WgpuRenderer {
                         cap,
                         join,
                         miter_limit,
+                        device_linear,
                     } => {
                         self.counters.path_stroke_tessellations += 1;
-                        tessellate_path(
-                            path,
-                            FillRule::NonZero,
-                            Some(Stroke {
-                                width: f32::from_bits(width),
-                                cap,
-                                join,
-                                miter_limit: f32::from_bits(miter_limit),
-                            }),
-                        )
+                        let stroke = Stroke {
+                            width: f32::from_bits(width),
+                            cap,
+                            join,
+                            miter_limit: f32::from_bits(miter_limit),
+                        };
+                        if let Some(matrix) = device_linear {
+                            crate::geometry::tessellate_hairline(
+                                path,
+                                stroke,
+                                hairline_transform(matrix),
+                            )
+                        } else {
+                            tessellate_path(path, FillRule::NonZero, Some(stroke))
+                        }
                     }
                 };
                 let Some(mesh) = mesh else {

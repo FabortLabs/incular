@@ -192,6 +192,9 @@ pub(crate) enum PathMeshKind {
         cap: LineCap,
         join: LineJoin,
         miter_limit: u32,
+        // Linear local-to-device transform for one-pixel hairlines.
+        // Translation cannot change the stroke mesh.
+        device_linear: Option<[u64; 4]>,
     },
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

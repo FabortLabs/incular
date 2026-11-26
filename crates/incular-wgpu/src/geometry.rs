@@ -87,8 +87,36 @@ pub fn tessellate_path(
         ),
         None => (Cow::Borrowed(path.bez_path()), fill_rule),
     };
+    tessellate_outline(&outline, fill_rule)
+}
+
+pub(crate) fn tessellate_hairline(
+    path: &incular_painting::Path,
+    stroke: incular_painting::Stroke,
+    local_to_device: Transform,
+) -> Option<PathMesh> {
+    let device_to_local = local_to_device.inverse()?;
+    let mut device_path = path.bez_path().clone();
+    device_path.apply_affine(local_to_device.to_kurbo());
+    let outline = stroke_outline(&device_path, Stroke { width: 1., ..stroke })?;
+    let mut mesh = tessellate_outline(&outline, FillRule::NonZero)?;
+    // Compute the antialias fringe in device space too: an average
+    // affine scale is not enough for one-pixel coverage under shear.
+    // Cache back in path space so gradients and scrolling keep working.
+    for vertex in &mut mesh.vertices {
+        let local = device_to_local.transform_point(Offset::new(vertex[0], vertex[1]));
+        *vertex = [local.x, local.y];
+    }
+    for extrusion in &mut mesh.extrusions {
+        let local = device_to_local.transform_vector(Offset::new(extrusion[0], extrusion[1]));
+        *extrusion = [local.x, local.y];
+    }
+    Some(mesh)
+}
+
+fn tessellate_outline(outline: &BezPath, fill_rule: FillRule) -> Option<PathMesh> {
     let even_odd = fill_rule == FillRule::EvenOdd;
-    let contours = flatten_contours(&outline);
+    let contours = flatten_contours(outline);
     if contours.is_empty() {
         return None;
     }
@@ -340,5 +368,43 @@ mod hard_edge_rect_tests {
         assert_eq!(mesh.indices, [0, 1, 2, 0, 2, 3]);
         assert_eq!(mesh.extrusions, [[0.; 2]; 4]);
         assert_eq!(mesh.coverage, [1.; 4]);
+    }
+}
+
+#[cfg(test)]
+mod hairline_tests {
+    use super::*;
+
+    #[test]
+    fn hairline_outline_is_one_device_pixel_under_anisotropic_scale_and_shear() {
+        let mut builder = Path::builder();
+        let start = Offset::new(3., 5.);
+        let end = Offset::new(52., 19.);
+        builder.move_to(start).line_to(end);
+        let path = builder.build();
+        let stroke = Stroke { width: 0., ..Stroke::default() };
+        for device in [
+            Transform::IDENTITY,
+            Transform::scale(2.),
+            Transform::scale_non_uniform(3., 0.75),
+            Transform::from_coefficients([1.2, 0.3, -0.4, 1.8, 0., 0.]),
+        ] {
+            let mesh = tessellate_hairline(&path, stroke, device).expect("visible hairline");
+            let start = device.transform_point(start);
+            let end = device.transform_point(end);
+            let tangent = end - start;
+            let length = tangent.x.hypot(tangent.y);
+            let normal = Offset::new(-tangent.y / length, tangent.x / length);
+            let (low, high) = mesh.vertices.iter().fold(
+                (f32::INFINITY, f32::NEG_INFINITY),
+                |(low, high), &[x, y]| {
+                    let point = device.transform_point(Offset::new(x, y)) - start;
+                    let distance = point.x * normal.x + point.y * normal.y;
+                    (low.min(distance), high.max(distance))
+                },
+            );
+            assert!((low + 0.5).abs() < 1e-4, "{device:?}: {low}");
+            assert!((high - 0.5).abs() < 1e-4, "{device:?}: {high}");
+        }
     }
 }

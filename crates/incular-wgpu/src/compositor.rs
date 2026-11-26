@@ -175,7 +175,10 @@ pub(crate) fn add_composition_bounds(bounds: &mut Option<Rect>, candidate: Rect)
 /// deliberately includes every visible command (and expanded blur/shadow
 /// bounds), so presenting a tight target cannot omit content outside a small
 /// blend group. The ordinary direct path still uses the complete surface.
-pub(crate) fn display_list_composition_bounds(commands: &[PaintCommand]) -> Option<Rect> {
+pub(crate) fn display_list_composition_bounds(
+    commands: &[PaintCommand],
+    scale: f32,
+) -> Option<Rect> {
     let mut transforms = vec![Offset::ZERO];
     let mut bounds = None;
     for command in commands {
@@ -192,6 +195,9 @@ pub(crate) fn display_list_composition_bounds(commands: &[PaintCommand]) -> Opti
             PaintCommand::FillPath { path, .. } | PaintCommand::StrokePath { path, .. } => {
                 if let Some(path_bounds) = path.tight_bounds() {
                     let margin = match command {
+                        PaintCommand::StrokePath { stroke, .. } if stroke.width == 0. => {
+                            (0.5 * stroke.miter_limit.max(1.) + 1.) / scale
+                        }
                         PaintCommand::StrokePath { stroke, .. } => {
                             (stroke.width.max(0.) * 0.5 * stroke.miter_limit.max(1.)).max(0.)
                         }
@@ -311,7 +317,7 @@ pub(crate) fn destination_composition_scope(
         Offset::ZERO,
         Size::new(surface_width as f32 / scale, surface_height as f32 / scale),
     );
-    let scope = display_list_composition_bounds(list.commands())
+    let scope = display_list_composition_bounds(list.commands(), scale)
         .and_then(|bounds| intersect_rect(bounds, full))
         .unwrap_or(full);
     let left = (scope.origin.x * scale).floor().max(0.) as u32;

@@ -17,3 +17,21 @@ The widget now emits the intentional width-zero path stroke instead.
 The remaining renderer check is that such a stroke rasterizes at
 one device pixel; the current stroke tessellator rejects that width.
 This commit does not claim rendered-pixel parity for the hairline.
+
+## Device-pixel hairline
+
+:132 now pairs. wgpu expands the width-zero stroke once in device
+space, including its antialias fringe, then stores the mesh in the
+original path coordinates. This keeps the stroke one physical pixel
+wide under zoom, unequal scaling and shear, without moving its
+gradient. Device scaling participates in the mesh cache key;
+scrolling and translation do not. A zero-width raw analytic border
+no longer becomes a solid fill.
+
+The production path shader was exercised through headless wgpu
+readback on llvmpipe. The same fractional-pixel phase produced alpha
+[0, 64, 191, 0] across four rows with and without combined zoom and
+nonuniform scaling. CPU mesh geometry also verified the width under
+shear. Nearby nonzero strokes and the existing gradient readback
+passed. This compares pixel coverage of the hairline, not a full
+cross-renderer golden of the widget.

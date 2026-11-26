@@ -212,14 +212,33 @@ pub(crate) struct PathPlacement {
     pub(crate) transform: Transform,
     pub(crate) scale: f32,
 }
-pub(crate) fn stroke_mesh_kind(stroke: Stroke) -> PathMeshKind {
-    PathMeshKind::Stroke {
-        width: stroke.width.max(0.).to_bits(),
+pub(crate) fn stroke_mesh_kind(stroke: Stroke, placement: PathPlacement) -> Option<PathMeshKind> {
+    if !stroke.width.is_finite() || stroke.width < 0. {
+        return None;
+    }
+    let device_linear = if stroke.width == 0. {
+        let [a, b, c, d, _, _] = placement.transform.coefficients();
+        let scale = f64::from(placement.scale);
+        let matrix = [a * scale, b * scale, c * scale, d * scale];
+        hairline_transform(matrix.map(f64::to_bits)).inverse()?;
+        Some(matrix.map(|value| if value == 0. { 0 } else { value.to_bits() }))
+    } else {
+        None
+    };
+    Some(PathMeshKind::Stroke {
+        width: if stroke.width == 0. { 0 } else { stroke.width.to_bits() },
         cap: stroke.cap,
         join: stroke.join,
         miter_limit: stroke.miter_limit.max(1.01).to_bits(),
-    }
+        device_linear,
+    })
 }
+
+pub(crate) fn hairline_transform(bits: [u64; 4]) -> Transform {
+    let [a, b, c, d] = bits.map(f64::from_bits);
+    Transform::from_coefficients([a, b, c, d, 0., 0.])
+}
+
 pub(crate) fn rect_path(rect: Rect) -> Path {
     let mut builder = Path::builder();
     builder
@@ -277,8 +296,16 @@ pub(crate) fn mesh_bounds_outset(kind: PathMeshKind) -> f32 {
             cap,
             join,
             miter_limit,
+            device_linear,
         } => {
-            let half = f32::from_bits(width).max(0.) * 0.5;
+            let half = if let Some(matrix) = device_linear {
+                hairline_transform(matrix).inverse().map_or(0., |inverse| {
+                    let [a, b, c, d, _, _] = inverse.coefficients();
+                    ((a.abs() + c.abs()).max(b.abs() + d.abs()) * 0.5) as f32
+                })
+            } else {
+                f32::from_bits(width) * 0.5
+            };
             let join_reach = match join {
                 LineJoin::Miter => f32::from_bits(miter_limit).max(1.),
                 LineJoin::Round | LineJoin::Bevel => 1.,
@@ -297,25 +324,36 @@ pub(crate) fn mesh_bounds_outset(kind: PathMeshKind) -> f32 {
 pub(crate) fn path_visible(
     path: &Path,
     kind: PathMeshKind,
-    transform: Transform,
+    placement: PathPlacement,
     clip: ClipState,
 ) -> bool {
     let Some(bounds) = path.tight_bounds() else {
         return false;
     };
     let outset = mesh_bounds_outset(kind);
+    let Some(expanded) = Size::maybe_new(
+        bounds.size.width + outset * 2.,
+        bounds.size.height + outset * 2.,
+    ) else {
+        // An extreme transform still cannot be rejected on raw path bounds.
+        return clip != ClipState::Empty;
+    };
     let bounds = Rect::from_origin_size(
         Offset::new(bounds.origin.x - outset, bounds.origin.y - outset),
-        Size::new(
-            bounds.size.width + outset * 2.,
-            bounds.size.height + outset * 2.,
-        ),
+        expanded,
     );
-    let mut world = transform.transform_rect_bbox(bounds);
-    world.origin.x -= 1.;
-    world.origin.y -= 1.;
-    world.size.width += 2.;
-    world.size.height += 2.;
+    let mut world = placement.transform.transform_rect_bbox(bounds);
+    let fringe = if matches!(kind, PathMeshKind::Stroke { device_linear: Some(_), .. }) {
+        // Under a fractional device scale a hairline's fringe can extend
+        // past one logical pixel, including inside a clipped offscreen group.
+        1. / placement.scale
+    } else {
+        1.
+    };
+    world.origin.x -= fringe;
+    world.origin.y -= fringe;
+    world.size.width += fringe * 2.;
+    world.size.height += fringe * 2.;
     match clip {
         ClipState::Unbounded => true,
         ClipState::Rect(clip) => intersect_rect(world, clip.rect).is_some(),
@@ -823,6 +861,29 @@ pub(crate) fn clip_path_instance(
     }
 }
 
+pub(crate) fn path_instance(
+    brush: &Brush,
+    kind: PathMeshKind,
+    placement: PathPlacement,
+    surface: [f32; 2],
+) -> GpuPathInstance {
+    let (color, gradient, mut options, gradient_ext) = path_paint(brush);
+    if matches!(kind, PathMeshKind::Stroke { device_linear: Some(_), .. }) {
+        // The cached hairline extrusion already maps to physical pixels.
+        options[1] = 1.;
+    }
+    let (affine, translation) = physical_affine(placement.transform, placement.scale);
+    GpuPathInstance {
+        affine,
+        translation,
+        surface: [surface[0], surface[1], 0., 0.],
+        color: incular_painting::working_rgba(color),
+        gradient,
+        options,
+        gradient_ext,
+    }
+}
+
 pub(crate) fn physical_affine(transform: Transform, scale: f32) -> ([f32; 4], [f32; 4]) {
     let [a, b, c, d, e, f] = transform.to_kurbo().as_coeffs();
     (
@@ -1215,3 +1276,31 @@ pub(crate) fn blend_instance(
 #[cfg(test)]
 #[path = "sweep_sector_test.rs"]
 mod sweep_sector_test;
+
+#[cfg(test)]
+mod hairline_tests {
+    use super::*;
+
+    #[test]
+    fn hairline_cache_keys_include_device_scaling_but_not_translation() {
+        let kind = |width, transform, scale| {
+            stroke_mesh_kind(
+                Stroke { width, ..Stroke::default() },
+                PathPlacement { transform, scale },
+            )
+        };
+        let translated = Transform::translation(Offset::new(213., -17.));
+        let stretched = Transform::scale_non_uniform(2., 3.);
+        assert_eq!(kind(0., Transform::IDENTITY, 1.), kind(0., translated, 1.));
+        assert_eq!(kind(-0., Transform::IDENTITY, 1.), kind(0., Transform::IDENTITY, 1.));
+        assert_ne!(kind(0., Transform::IDENTITY, 1.), kind(0., Transform::IDENTITY, 2.));
+        assert_ne!(kind(0., Transform::IDENTITY, 1.), kind(0., stretched, 1.));
+        assert_eq!(kind(2., Transform::IDENTITY, 1.), kind(2., stretched, 2.));
+        assert!(kind(0., Transform::scale(0.), 1.).is_none());
+        assert!(kind(-1., Transform::IDENTITY, 1.).is_none());
+    }
+}
+
+#[cfg(all(test, not(incular_d3d11)))]
+#[path = "hairline_readback_test.rs"]
+mod hairline_readback_test;

@@ -10,7 +10,8 @@ struct Out { @builtin(position) position: vec4<f32>, @location(0) local: vec2<f3
   // along their miter (out for the fringe edge, in for the interior), so
   // the fringe is one device pixel wide at any scale or rotation.
   let reach = vec2<f32>(affine.x * extrude.x + affine.z * extrude.y, affine.y * extrude.x + affine.w * extrude.y);
-  let scale = sqrt(max(abs(affine.x * affine.w - affine.y * affine.z), 1e-12));
+  // Hairline fringes are built in device space before being cached locally.
+  let scale = select(sqrt(max(abs(affine.x * affine.w - affine.y * affine.z), 1e-12)), 1., options.y != 0.);
   let physical = vec2<f32>(
     affine.x * local.x + affine.z * local.y + translation.x,
     affine.y * local.x + affine.w * local.y + translation.y,

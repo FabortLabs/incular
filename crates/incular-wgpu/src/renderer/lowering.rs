@@ -240,7 +240,7 @@ impl WgpuRenderer {
                         self.target_height as f32,
                     ),
                 ),
-                PaintCommand::Border { rrect, border } => {
+                PaintCommand::Border { rrect, border } if border.width > 0. => {
                     // Inside-aligned border: analytical shader discards the inset.
                     append_rrect(
                         batches,
@@ -256,6 +256,10 @@ impl WgpuRenderer {
                         ),
                     );
                 }
+                // The analytic shader reserves zero width for filled primitives.
+                // A width-zero analytic Border has no paint; a Flutter hairline
+                // is represented by StrokePath instead.
+                PaintCommand::Border { .. } => {}
                 PaintCommand::FillPath {
                     path,
                     brush,
@@ -272,14 +276,12 @@ impl WgpuRenderer {
                     path,
                     brush,
                     stroke,
-                } => self.append_path(
-                    batches,
-                    clip,
-                    path,
-                    stroke_mesh_kind(*stroke),
-                    brush,
-                    PathPlacement { transform, scale },
-                ),
+                } => {
+                    let placement = PathPlacement { transform, scale };
+                    if let Some(kind) = stroke_mesh_kind(*stroke, placement) {
+                        self.append_path(batches, clip, path, kind, brush, placement);
+                    }
+                }
                 PaintCommand::GlyphRun { run, color } => {
                     // Encoding discards a batch with an empty device scissor.
                     // Skip it before rasterizing glyphs or sizing instance buffers.
