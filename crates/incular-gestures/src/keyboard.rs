@@ -338,6 +338,7 @@ type ActionCallback<C> = Rc<dyn Fn(&Intent<C>) -> ActionResult>;
 pub struct Action<C: CommandId = Command> {
     intent: Intent<C>,
     enabled: Rc<Cell<bool>>,
+    enabled_when: Option<Rc<dyn Fn() -> bool>>,
     callback: ActionCallback<C>,
     listeners: Rc<ActionListenerState>,
     invocation_listeners: Rc<ActionInvocationListenerState>,
@@ -375,6 +376,7 @@ impl<C: CommandId> Action<C> {
         Self {
             intent: command.into(),
             enabled: Rc::new(Cell::new(true)),
+            enabled_when: None,
             callback: Rc::new(move |intent| callback(intent).into()),
             listeners: Rc::new(ActionListenerState {
                 listeners: RefCell::new(Vec::new()),
@@ -404,10 +406,23 @@ impl<C: CommandId> Action<C> {
         }
     }
 
+    /// Adds a live condition to the action's manual enabled flag. The
+    /// condition is queried at lookup and invocation. Its external state
+    /// does not itself send action-listener notifications.
+    #[must_use]
+    pub fn enabled_when(mut self, predicate: impl Fn() -> bool + 'static) -> Self {
+        self.enabled_when = Some(Rc::new(predicate));
+        self
+    }
+
     /// Returns whether the action can currently run.
     #[must_use]
     pub fn is_enabled(&self) -> bool {
         self.enabled.get()
+            && self
+                .enabled_when
+                .as_ref()
+                .is_none_or(|predicate| predicate())
     }
 
     /// Returns whether this action is enabled for the supplied intent.

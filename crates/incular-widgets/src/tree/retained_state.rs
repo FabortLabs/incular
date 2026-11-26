@@ -14,6 +14,12 @@ use std::{
 
 /// State kept by a retained builder across descriptor updates.
 pub(crate) trait RetainedState: Any {
+    /// Use only for state owning external registrations that must be
+    /// revoked when the element unmounts, not when cached widgets drop.
+    const DISPOSE_ON_UNMOUNT: bool = false;
+
+    fn dispose(&self) {}
+
     /// The builder now runs under `revision`: bump it to rebuild.
     fn rebind_revision(&self, revision: Rc<Cell<u64>>);
 }
@@ -27,6 +33,7 @@ pub(crate) struct RetainedSlot {
     allocation: RefCell<Option<Rc<incular_core::memory::allocations::ObjectLifetime>>>,
     revision: Rc<Cell<u64>>,
     rebind: fn(&Rc<dyn Any>, Rc<Cell<u64>>),
+    dispose: Option<fn(&dyn Any)>,
     factory: Option<Rc<BuilderFactory>>,
 }
 
@@ -38,6 +45,11 @@ impl RetainedSlot {
             #[cfg(debug_assertions)]
             allocation: RefCell::new(None),
             revision,
+            dispose: S::DISPOSE_ON_UNMOUNT.then_some(|value| {
+                if let Some(state) = value.downcast_ref::<S>() {
+                    state.dispose();
+                }
+            }),
             factory: None,
             rebind: |value, revision| {
                 if let Some(state) = value.downcast_ref::<S>() {
@@ -65,6 +77,7 @@ impl RetainedSlot {
             allocation: RefCell::new(None),
             revision: Rc::new(Cell::new(0)),
             rebind: self.rebind,
+            dispose: self.dispose,
             factory: Some(factory.clone()),
         });
         let builder = factory(slot.clone());
@@ -101,6 +114,15 @@ impl RetainedSlot {
             *self.allocation.borrow_mut() = Some(Rc::new(allocation));
         }
         state
+    }
+
+    pub(crate) fn dispose(&self) {
+        if let Some(dispose) = self.dispose {
+            let value = self.value.borrow_mut().take();
+            if let Some(value) = value {
+                dispose(&*value);
+            }
+        }
     }
 
     /// Takes over `previous`'s state when it is of the same type and this

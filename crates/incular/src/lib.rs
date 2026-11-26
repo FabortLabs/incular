@@ -285,7 +285,7 @@ pub mod prelude {
         DecoratedBoxTransition, DecoratedShapeBox, DecoratedSliver, DecorationImage,
         DecorationPosition, DefaultAssetBundle, DefaultSelectionStyle, DefaultTextHeightBehavior,
         DefaultTextStyle, DefaultTextStyleTransition, DiagonalDragBehavior, Directionality,
-        DismissDirection, DismissUpdateDetails, Dismissible, DisplayFeatureSubScreen,
+        DismissDirection, DismissMenuAction, DismissUpdateDetails, Dismissible, DisplayFeatureSubScreen,
         DragAnchorStrategy, DragBoundary, DragBoundaryDelegate, DragDropContext, DragEndDetails,
         DragStartDetails, DragTarget, DragUpdateDetails, Draggable, DraggableAnimationStep,
         DraggableDetails, DraggableNotificationSubscription, DraggableScrollableActuator,

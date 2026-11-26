@@ -155,3 +155,18 @@ and each retained controller as well as the event order.
 Pinned `:2986` and the retained surface test both open via a real
 anchor tap. One outside tap reaches the panel's TapRegion handler,
 requests one close, and removes the visible overlay.
+
+### Dismissal from a submenu
+
+Pinned `:1393` and `:2921` now have focused runtime counterparts.
+After three actual anchor taps and focus on the deepest button,
+the public DismissMenuAction requests closure from the root. The
+default path hides the entire overlay chain; deferred callbacks run
+in root-to-leaf request order and leave the visible panels in place.
+
+The authored pinned attachment case also matches. A mounted closed
+submenu enables dismissal; hiding its root unmounts the submenu and
+disables it. Native disposal revokes controller and scrolling access
+at element unmount, even if the retained builder still has a cached
+reference. The native command bridge rejects disabled invocations
+without announcing an action invocation.

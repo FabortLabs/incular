@@ -1713,3 +1713,5 @@ packages/flutter/test/widgets/raw_menu_anchor_test.dart	2669	hideOverlay hides t
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	2751	onCloseRequested is called on descendants before parent	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#delayed-hiding-and-outside-input
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	2811	Async onClose is called on descendants before parent	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#delayed-hiding-and-outside-input
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	2986	Outside tap triggers onCloseRequested	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#delayed-hiding-and-outside-input
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	1393	DismissMenuAction closes menus	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#dismissal-from-a-submenu
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	2921	DismissMenuAction triggers onCloseRequested	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#dismissal-from-a-submenu

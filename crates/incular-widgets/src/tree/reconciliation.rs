@@ -2583,6 +2583,12 @@ impl WidgetTree {
                     let Some(element) = self.elements.remove(id.0) else {
                         continue;
                     };
+                    if let WidgetKind::LayoutBuilder {
+                        retained: Some(slot), ..
+                    } = element.widget.kind()
+                    {
+                        slot.dispose();
+                    }
                     let group = element.widget.autofill_action();
                     let completion = group.filter(|_| {
                         !ancestor_group_removed

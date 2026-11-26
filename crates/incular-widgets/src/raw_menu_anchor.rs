@@ -9,6 +9,7 @@ use std::{
 
 use incular_animation::scheduler::{add_post_frame_callback, schedule_frame};
 use incular_core::{ChangeNotifierSubscription, IdGenerator, Offset, Rect, Size};
+use incular_gestures::{Action, ActionResult, CommandId, Intent};
 use incular_scroll::ScrollController;
 
 use crate::{
@@ -194,7 +195,7 @@ impl AnchorNode {
     /// opening closes the open siblings, and a root overlay anchor focuses
     /// its `childFocusNode`.
     fn open(&self, position: Option<Offset>) {
-        if self.is_group {
+        if self.is_group || self.controller.borrow().is_none() {
             return;
         }
         if self.open.get() {
@@ -399,6 +400,45 @@ impl MenuController {
     }
 }
 
+/// Flutter's `DismissMenuAction`: dismisses the entire menu tree of the
+/// supplied controller, even when it belongs to a nested submenu.
+#[derive(Clone)]
+pub struct DismissMenuAction {
+    controller: MenuController,
+}
+
+impl DismissMenuAction {
+    #[must_use]
+    pub fn new(controller: MenuController) -> Self {
+        Self { controller }
+    }
+
+    /// A mounted (even currently hidden) anchor enables the action.
+    #[must_use]
+    pub fn is_enabled(&self) -> bool {
+        self.controller.node().is_some()
+    }
+
+    /// Requests closure from the root, honoring delays through onCloseRequested.
+    #[must_use]
+    pub fn invoke(&self) -> ActionResult {
+        let Some(node) = self.controller.node() else {
+            return ActionResult::Ignored;
+        };
+        node.root().request_close();
+        ActionResult::Handled
+    }
+
+    /// Binds the menu to the application's dismissal command in an Actions
+    /// registry, without imposing a keyword or trapping its other shortcuts.
+    #[must_use]
+    pub fn into_action<C: CommandId>(self, intent: impl Into<Intent<C>>) -> Action<C> {
+        let check = self.clone();
+        Action::with_handler(intent, move |_| self.invoke())
+            .enabled_when(move || check.is_enabled())
+    }
+}
+
 /// The nearest anchor, for nested anchors to attach to.
 #[derive(Clone)]
 struct AnchorScope(Rc<AnchorNode>);
@@ -406,8 +446,29 @@ struct AnchorScope(Rc<AnchorNode>);
 struct AnchorState(Rc<AnchorNode>);
 
 impl RetainedState for AnchorState {
+    const DISPOSE_ON_UNMOUNT: bool = true;
+
     fn rebind_revision(&self, revision: Rc<Cell<u64>>) {
         *self.0.revision.borrow_mut() = revision;
+    }
+
+    fn dispose(&self) {
+        let node = &self.0;
+        node.open.set(false);
+        node.scrolling.borrow_mut().take();
+        if let Some(controller) = node.controller.borrow_mut().take() {
+            let mut anchor = controller.anchor.borrow_mut();
+            if std::ptr::eq(anchor.as_ptr(), Rc::as_ptr(node)) {
+                *anchor = Weak::new();
+            }
+        }
+        node.attach(None);
+    }
+}
+
+impl Drop for AnchorState {
+    fn drop(&mut self) {
+        self.dispose();
     }
 }
 
