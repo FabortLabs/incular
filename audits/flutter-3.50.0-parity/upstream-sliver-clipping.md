@@ -83,3 +83,17 @@ The same native test checks that it requires no rebuild or layout.
 
 58 focused native tests passed across sliver clips, resizing headers,
 and sliver semantics.
+
+## Retained clip property changes
+
+Pairs the pinned rectangle :143/:196/:431 and rounded rectangle
+:155/:234/:291/:536 registrations. As the header begins to overlap,
+the child keeps its 100 px size, but the visible clip shrinks by 50 px.
+Changing the overlap policy restores the full clip; disabling clipping
+removes the layer and makes the overlapped point hittable. Re-enabling
+clipping does not replace the child or reset the scroll offset.
+
+The rounded test also follows the physical radius as the configuration
+changes from a 10 px top-start corner in LTR, to a 20 px top-right
+corner, back to the logical radius, and then to RTL. The same child
+stays mounted throughout. All ten focused native tests passed.

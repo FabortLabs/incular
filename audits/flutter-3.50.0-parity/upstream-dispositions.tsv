@@ -2327,3 +2327,10 @@ packages/flutter/test/widgets/sliver_clip_rrect_test.dart	720	shifts clip origin
 packages/flutter/test/widgets/sliver_clip_rrect_test.dart	751	shifts clip origin (vertical reverse)	paired-match	upstream-sliver-clipping.md#retained-rectangle-and-rounded-rectangle-clipping
 packages/flutter/test/widgets/sliver_clip_rect_test.dart	384	testCase.name	paired-match	upstream-sliver-clipping.md#overlapping-header-hit-matrix
 packages/flutter/test/widgets/sliver_clip_rrect_test.dart	489	testCase.name	paired-match	upstream-sliver-clipping.md#overlapping-header-hit-matrix
+packages/flutter/test/widgets/sliver_clip_rect_test.dart	143	updates clip when overlap changes even if geometry is same	paired-match	upstream-sliver-clipping.md#retained-clip-property-changes
+packages/flutter/test/widgets/sliver_clip_rect_test.dart	196	changing clipBehavior or clipOverlap invalidates the cached clip	paired-match	upstream-sliver-clipping.md#retained-clip-property-changes
+packages/flutter/test/widgets/sliver_clip_rect_test.dart	431	clipBehavior of Clip.none allows overlap hits	paired-match	upstream-sliver-clipping.md#retained-clip-property-changes
+packages/flutter/test/widgets/sliver_clip_rrect_test.dart	155	changing borderRadius or textDirection invalidates the cached clip	paired-match	upstream-sliver-clipping.md#retained-clip-property-changes
+packages/flutter/test/widgets/sliver_clip_rrect_test.dart	234	updates clip when overlap changes even if geometry is same	paired-match	upstream-sliver-clipping.md#retained-clip-property-changes
+packages/flutter/test/widgets/sliver_clip_rrect_test.dart	291	changing clipBehavior or clipOverlap invalidates the cached clip	paired-match	upstream-sliver-clipping.md#retained-clip-property-changes
+packages/flutter/test/widgets/sliver_clip_rrect_test.dart	536	clipBehavior of Clip.none allows overlap hits	paired-match	upstream-sliver-clipping.md#retained-clip-property-changes
