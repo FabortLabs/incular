@@ -402,7 +402,9 @@ pub use shortcut_registry::{
     ShortcutRegistryEntry,
 };
 pub use size_changed::{SizeChangedLayoutNotification, SizeChangedLayoutNotifier};
-pub use spell_check::{SpellCheckConfiguration, build_text_span_with_spell_check_suggestions};
+pub use spell_check::{
+    DefaultSpellCheckProvider, SpellCheckConfiguration, build_text_span_with_spell_check_suggestions,
+};
 pub use text_selection_handles::{
     SELECTION_HANDLE_SIZE, TextSelectionHandle, TextSelectionHandles, TextSelectionHandlesBuilder,
     TextSelectionHandlesState,

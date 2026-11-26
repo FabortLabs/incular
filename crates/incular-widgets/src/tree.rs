@@ -394,6 +394,7 @@ struct ElementAuxiliaryState {
     /// The latest spell check results of a text field (Flutter's
     /// `EditableTextState.spellCheckResults`).
     spell_check_session: Option<Rc<crate::spell_check::SpellCheckSession>>,
+    native_spell_checker: Option<Rc<dyn incular_platform::SpellCheckService>>,
     spell_check_refresh_on_enable: bool,
     layout_builder_constraints: Option<Constraints>,
     layout_builder_revision: u64,
@@ -1390,6 +1391,7 @@ pub struct WidgetTree {
     /// Running `view_transition`s, painted above the scene.
     view_transitions: Vec<crate::dx::view_transition::Active>,
     text_engine: TextEngine,
+    default_spell_check_provider: Option<crate::DefaultSpellCheckProvider>,
     compositor: LayerTree,
     compositor_initialized: bool,
     /// Maps the platform's monotonic frame clock onto the animation-only

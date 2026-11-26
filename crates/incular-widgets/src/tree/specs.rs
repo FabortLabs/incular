@@ -493,7 +493,6 @@ impl TextFieldSpec {
             && (self.has_context_menu_builder || self.selection_handles.is_some())
             && self.spell_check.as_ref().is_some_and(|config| {
                 config.spell_check_enabled()
-                    && config.service().is_some()
                     && config.misspelled_style().is_some()
                     && config.suggestions_toolbar_builder().is_some()
             })

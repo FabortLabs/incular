@@ -194,7 +194,7 @@ impl WidgetTree {
                         .auxiliary_state
                         .as_ref()
                         .and_then(|auxiliary| auxiliary.spell_check_session.as_ref())
-                        .is_some_and(|session| session.revision() != state.spell_revision);
+                        .map_or(0, |session| session.revision()) != state.spell_revision;
                 let layout_changed = content_changed || spell_changed || visual != state.visual_revision;
                 let selection_changed = field.spell_check_selection_color.is_some()
                     && state.spell_selection_visible

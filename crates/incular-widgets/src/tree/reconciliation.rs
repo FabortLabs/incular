@@ -147,11 +147,47 @@ impl WidgetTree {
         self.sync_spell_check(id);
     }
 
+    /// Supplies the platform's default checker factory. EditableText uses it
+    /// only for enabled matching configurations without a custom service.
+    /// Replacing or removing the factory revokes existing default sessions.
+    pub fn set_default_spell_check_provider(
+        &mut self,
+        provider: Option<crate::DefaultSpellCheckProvider>,
+    ) {
+        if crate::util::same_rc(&self.default_spell_check_provider, &provider) {
+            return;
+        }
+        self.default_spell_check_provider = provider;
+        let affected: Vec<_> = self.tracked.text_fields.iter().copied().filter(|id| {
+            self.elements.get(id.0).is_some_and(|element| {
+                matches!(element.widget.kind(), WidgetKind::TextField(spec)
+                    if spec.spell_check.as_ref().is_some_and(|config|
+                        config.active_style().is_some() && config.service().is_none()
+                    ) && !spec.spell_check_suppressed)
+            })
+        }).collect();
+        for id in affected {
+            let element = self.element_live_mut(id, "mounted editor must remain live");
+            if let Some(auxiliary) = element.auxiliary_state.as_mut() {
+                auxiliary.native_spell_checker = None;
+                auxiliary.spell_check_session = None;
+            }
+            if let WidgetKind::TextField(spec) = element.widget.kind()
+                && let Some(menu) = &spec.context_menu
+                && menu.is_spell_check_showing()
+            {
+                menu.hide();
+            }
+            self.sync_spell_check(id);
+        }
+    }
+
     /// Flutter's spell check of user edits (`updateEditingValue` calling
     /// `_performSpellCheck` when the text changed and is not empty). The
     /// results survive widget updates; a disabled configuration drops them.
     fn sync_spell_check(&mut self, id: ElementId) {
-        let element = self.element_live_mut(id, "editing owner must remain live");
+        let fallback = self.default_spell_check_provider.as_ref();
+        let element = self.elements.get_mut(id.0).expect("editing owner must remain live");
         if let Some(auxiliary) = element.auxiliary_state.as_mut() {
             auxiliary.spell_check_subscription = None;
         }
@@ -168,18 +204,23 @@ impl WidgetTree {
             let auxiliary = element.auxiliary_state_mut();
             auxiliary.spell_check_refresh_on_enable = true;
             auxiliary.spell_check_session = None;
+            auxiliary.native_spell_checker = None;
             return;
         }
-        let Some((service, _)) = spec
-            .spell_check
-            .as_ref()
-            .and_then(crate::SpellCheckConfiguration::resolve)
-        else {
+        let configuration = spec.spell_check.as_ref().filter(|config| config.active_style().is_some());
+        let custom = configuration.and_then(crate::SpellCheckConfiguration::service);
+        let native = if configuration.is_some() && custom.is_none() { fallback } else { None };
+        if custom.is_none() && native.is_none() {
+            if let Some(menu) = &spec.context_menu && menu.is_spell_check_showing() {
+                menu.hide();
+            }
             if let Some(auxiliary) = element.auxiliary_state.as_mut() {
+                auxiliary.native_spell_checker = None;
                 auxiliary.spell_check_session = None;
             }
             return;
-        };
+        }
+        let custom = custom.cloned();
         let controller = spec.controller.clone();
         let explicit_locale = spec.locale.clone();
         let context = element.build_context.clone();
@@ -193,6 +234,13 @@ impl WidgetTree {
                 .unwrap_or(incular_config::Locale::UNKNOWN)
         };
         let auxiliary = element.auxiliary_state_mut();
+        let service = if let Some(custom) = custom {
+            auxiliary.native_spell_checker = None;
+            custom
+        } else {
+            let provider = native.expect("the active configuration has a native provider");
+            auxiliary.native_spell_checker.get_or_insert_with(|| provider()).clone()
+        };
         let refresh = std::mem::take(&mut auxiliary.spell_check_refresh_on_enable);
         let session = auxiliary
             .spell_check_session

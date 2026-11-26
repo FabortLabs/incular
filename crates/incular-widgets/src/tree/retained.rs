@@ -34,6 +34,7 @@ impl WidgetTree {
             global_keys: super::global_keys::GlobalKeyRegistry::default(),
             departures: super::departing::Departures::default(),
             view_transitions: Vec::new(),
+            default_spell_check_provider: None,
             text_engine: TextEngine::new(),
             compositor: LayerTree::new(),
             compositor_initialized: false,

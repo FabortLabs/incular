@@ -948,6 +948,16 @@ impl Runtime {
         &mut self.tree
     }
 
+    /// Registers an embedder's default spelling service for editors that
+    /// opt in without supplying their own service.
+    pub fn set_default_spell_check_provider(
+        &mut self,
+        provider: Option<incular_widgets::DefaultSpellCheckProvider>,
+    ) {
+        self.tree.set_default_spell_check_provider(provider);
+        self.frame_requested = true;
+    }
+
     /// Returns the effective capture-protection policy contributed by the
     /// mounted retained tree. The window/application boundary is responsible
     /// for forwarding changes to its native adapter.

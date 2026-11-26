@@ -759,7 +759,9 @@ impl WidgetTree {
         &self,
         id: ElementId,
     ) -> Option<Rc<crate::context_menu::TextContextMenuState>> {
-        match self.elements.get(id.0)?.widget.kind() {
+        let element = self.elements.get(id.0)?;
+        element.auxiliary_state.as_ref()?.spell_check_session.as_ref()?;
+        match element.widget.kind() {
             WidgetKind::TextField(spec) if spec.allows_spell_check_toolbar() => {
                 spec.context_menu.clone()
             }

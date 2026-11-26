@@ -222,8 +222,8 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                     .spell_check
                     .as_ref()
                     .filter(|_| !spec.spell_check_suppressed)
-                    .and_then(crate::SpellCheckConfiguration::resolve)
-                    .map(|(_, style)| resolve_field_style(&style)),
+                    .and_then(crate::SpellCheckConfiguration::active_style)
+                    .map(resolve_field_style),
                 paragraph_layout: spec.paragraph_layout,
             }))
         }

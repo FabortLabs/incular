@@ -8,14 +8,15 @@ use incular_config::TargetPlatform;
 use incular_platform::{SpellCheckResults, SpellCheckService, SuggestionSpan};
 use incular_text::{TextDecoration, TextEditingValue, TextSpan, TextStyle};
 
+/// Creates a field-specific checker for an embedder's native spelling service.
+pub type DefaultSpellCheckProvider = Rc<dyn Fn() -> Rc<dyn SpellCheckService>>;
+
 /// Flutter's `SpellCheckConfiguration`: whether an editable text checks its
 /// spelling, with which service, and how misspelled words look.
 ///
 /// Spell checking runs only with a service and a misspelled text style.
-/// Flutter falls back to the platform's native checker when no service is
-/// given; no Incular host provides one, so a configuration without a
-/// service leaves checking off, as Flutter does when
-/// `nativeSpellCheckServiceDefined` is false.
+/// When the embedder supplies a platform default, a configuration without
+/// a custom checker uses it. Otherwise that configuration stays off.
 ///
 /// A custom toolbar builder can display suggestions without choosing a design system.
 #[derive(Clone, Default)]
@@ -114,16 +115,12 @@ impl SpellCheckConfiguration {
         self.misspelled_text_style.as_ref()
     }
 
-    /// Flutter's `EditableTextState._inferSpellCheckConfiguration`: the
-    /// service and style spell checking runs with, or `None` when it is off.
-    pub(crate) fn resolve(&self) -> Option<(Rc<dyn SpellCheckService>, TextStyle)> {
-        if !self.enabled {
-            return None;
+    pub(crate) fn active_style(&self) -> Option<&TextStyle> {
+        if self.enabled {
+            self.misspelled_text_style.as_ref()
+        } else {
+            None
         }
-        Some((
-            self.spell_check_service.clone()?,
-            self.misspelled_text_style.clone()?,
-        ))
     }
 }
 
