@@ -85,3 +85,18 @@ The reverse-only and missing-repeat cases pair. Four error cases remain
 partial: Incular reports the matching failed operation and absent
 configuration, but not Dart's exact multiline FlutterError formatting.
 Six pinned Flutter and 41 focused Rust cases passed.
+
+## Vsync replacement, mixed-sign repeat, and allocation events
+
+Three original registrations pair. Replacing a controller's scheduler
+ticker before or after its first frame keeps the original run clock and
+future. The old callback is removed, only one replacement is queued,
+and observers see Forward then Completed once at the original
+deadline. Repeating from the same current value on either side of zero
+preserves the starting phase: 1→2 in a [1, 3] range, 0→1 in [−1, 3].
+
+Debug allocation observers receive one create and one dispose event for
+the same controller identity, not an event for each cloned handle.
+Rust's `Default` also remains an explicitly immediate controller;
+`without_duration` is the separate missing-duration constructor.
+Three pinned Flutter and 39 focused Rust cases passed.

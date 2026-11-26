@@ -311,7 +311,7 @@ impl Default for State {
         Self {
             value: 0.0,
             status: AnimationStatus::Dismissed,
-            duration: None,
+            duration: Some(Duration::ZERO),
             reverse_duration: None,
             forward: true,
             lower_bound: 0.0,
@@ -388,6 +388,8 @@ struct ControllerState {
     ticker: Option<Ticker>,
     /// The future of the current run (Flutter's `TickerFuture`).
     future: Option<TickerFuture>,
+    #[cfg(debug_assertions)]
+    allocation: Option<incular_core::memory::allocations::ObjectLifetime>,
 }
 
 impl ControllerState {
@@ -400,6 +402,11 @@ impl ControllerState {
             next_listener: 0,
             ticker: None,
             future: None,
+            #[cfg(debug_assertions)]
+            allocation: Some(incular_core::memory::allocations::ObjectLifetime::new(
+                "animation",
+                "AnimationController",
+            )),
         }
     }
 }
@@ -412,6 +419,8 @@ impl Default for ControllerState {
 
 impl Drop for ControllerState {
     fn drop(&mut self) {
+        #[cfg(debug_assertions)]
+        drop(self.allocation.take());
         // The controller has its own run future, independent of its optional
         // scheduler ticker. Dropping only the ticker would leave orCancel
         // waiters on the controller's run pending.
@@ -564,6 +573,18 @@ impl AnimationController {
     /// keeps the runtime producing frames until it stops.
     #[must_use]
     pub fn with_vsync(self) -> Self {
+        self.resync();
+        self
+    }
+
+    /// Replaces the scheduler ticker without interrupting the active run.
+    pub fn resync(&self) {
+        self.resync_with(|_| {});
+    }
+
+    /// Like `resync`, but configures the new ticker before it receives the
+    /// existing run. For example, an owning scope can set its muted policy.
+    pub fn resync_with(&self, configure: impl FnOnce(&Ticker)) {
         let weak = WeakController {
             changes: self.changes.clone(),
             inner: Rc::downgrade(&self.inner),
@@ -573,9 +594,16 @@ impl AnimationController {
                 controller.tick(now);
             }
         });
-        self.inner.borrow_mut().ticker = Some(ticker);
+        configure(&ticker);
+        assert!(!ticker.is_active(), "the replacement ticker must be inactive");
+        {
+            let mut owner = self.inner.borrow_mut();
+            if let Some(old) = owner.ticker.take() {
+                ticker.absorb_ticker(&old);
+            }
+            owner.ticker = Some(ticker);
+        }
         self.sync_ticker();
-        self
     }
 
     /// Whether the controller ticks itself from the frame scheduler.

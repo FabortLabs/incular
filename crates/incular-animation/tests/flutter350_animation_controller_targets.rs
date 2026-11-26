@@ -368,3 +368,96 @@ fn explicit_timing_and_explicit_zero_differ_from_an_absent_default() {
     assert_eq!(controller.value(), 1.);
     assert!(!controller.is_animating());
 }
+
+#[test]
+fn resync_before_or_during_an_active_tick_keeps_its_original_clock_and_future() {
+    for resync_midflight in [false, true] {
+        let controller = AnimationController::new(ms(100)).with_vsync();
+        let log = observe_status(&controller);
+        let start = Instant::now();
+        let original = controller.forward_on_next_tick();
+        if !resync_midflight {
+            controller.resync();
+        }
+        assert!(!original.is_canceled());
+        assert_eq!(scheduler::transient_callback_count(), 1);
+        scheduler::begin_frame(start);
+        scheduler::end_frame(start);
+        assert_eq!(controller.value(), 0.);
+        scheduler::begin_frame(start + ms(40));
+        scheduler::end_frame(start + ms(40));
+        assert_eq!(controller.value(), 0.4);
+        if resync_midflight {
+            controller.resync();
+        }
+        assert_eq!(scheduler::transient_callback_count(), 1);
+        scheduler::begin_frame(start + ms(70));
+        scheduler::end_frame(start + ms(70));
+        assert_eq!(controller.value(), 0.7);
+        scheduler::begin_frame(start + ms(101));
+        scheduler::end_frame(start + ms(101));
+        assert_eq!(controller.value(), 1.);
+        assert!(original.is_complete());
+        assert_eq!(
+            &*log.borrow(),
+            &[AnimationStatus::Forward, AnimationStatus::Completed]
+        );
+        assert_eq!(scheduler::transient_callback_count(), 0);
+    }
+}
+
+#[test]
+fn repeating_ranges_keep_the_initial_phase_on_either_side_of_zero() {
+    use incular_animation::RepeatOptions;
+    let controller = AnimationController::with_bounds(ms(100), -1., 3.).with_value(1.);
+    let now = Instant::now();
+    assert_eq!(controller.value(), 1.);
+    let first = controller.repeat_with(now, RepeatOptions::default().min(1.).max(3.));
+    let _ = controller.tick(now);
+    assert_eq!(controller.value(), 1.);
+    let _ = controller.tick(now + ms(50));
+    assert_eq!(controller.value(), 2.);
+    controller.reset();
+    assert!(first.is_canceled());
+    controller.set_value(0.);
+    controller.repeat_with(now, RepeatOptions::default().min(-1.).max(3.));
+    let _ = controller.tick(now);
+    assert_eq!(controller.value(), 0.);
+    let _ = controller.tick(now + ms(25));
+    assert_eq!(controller.value(), 1.);
+}
+
+#[test]
+fn rust_default_still_selects_an_explicit_immediate_duration() {
+    let controller = AnimationController::default();
+    assert_eq!(controller.optional_duration(), Some(Duration::ZERO));
+    let result = controller.forward(Instant::now());
+    assert!(result.is_complete());
+    assert_eq!(controller.value(), 1.);
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn a_controller_reports_one_shared_create_and_dispose_event() {
+    use incular_core::memory::allocations::{MemoryAllocations, ObjectEventKind};
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let _subscription = MemoryAllocations::current().add_listener({
+        let seen = seen.clone();
+        move |event| {
+            if event.class_name == "AnimationController" {
+                seen.borrow_mut().push(event);
+            }
+        }
+    });
+    let controller = AnimationController::new(ms(100)).with_vsync();
+    let holder = controller.clone();
+    drop(controller);
+    assert_eq!(seen.borrow().len(), 1);
+    assert_eq!(seen.borrow()[0].kind, ObjectEventKind::Created);
+    drop(holder);
+    let events = seen.borrow();
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0].id, events[1].id);
+    assert_eq!(events[1].kind, ObjectEventKind::Disposed);
+    assert_eq!(events[0].library, "animation");
+}
