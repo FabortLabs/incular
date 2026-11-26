@@ -1017,6 +1017,37 @@ impl WidgetTree {
     pub fn children(&self, id: ElementId) -> Option<&[ElementId]> {
         self.elements.get(id.0).map(|e| e.children.as_slice())
     }
+
+    /// Returns the viewport-local approximate paint clip for a laid-out
+    /// sliver child. This is a geometry query, not a painted layer: a
+    /// fitting viewport still reports its bounds with clipping enabled.
+    /// A detached child, an unclipped viewport, or a sliver expressly kept
+    /// in semantics outside both paint and cache has no clip.
+    #[must_use]
+    pub fn viewport_approximate_paint_clip(
+        &self,
+        viewport: ElementId,
+        child: ElementId,
+    ) -> Option<Rect> {
+        let entry = self.elements.get(viewport.0)?;
+        let render = self.renders.get(entry.render.0)?;
+        render.constraints?;
+        let RenderKind::SliverViewport { config } = render.object.kind() else {
+            return None;
+        };
+        if config.clip_behavior == incular_config::Clip::None {
+            return None;
+        }
+        let slot = entry.children.iter().position(|&id| id == child)?;
+        let geometry = config.delegate.reveal_geometry(*entry.sliver_child_ids().get(slot)?);
+        if geometry.outside_paint_and_cache
+            && self.elements.get(child.0)?.widget.semantic_properties().ensures_sliver_semantics
+        {
+            return None;
+        }
+        Some(geometry.local_paint_clip(config.axis, config.reverse, render.size))
+    }
+
     #[must_use]
     pub fn parent(&self, id: ElementId) -> Option<ElementId> {
         self.elements.get(id.0).and_then(|e| e.parent)

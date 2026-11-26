@@ -300,9 +300,21 @@ pub(crate) struct SliverRevealGeometry {
     /// Leading-edge adjustment to this sliver's approximate paint clip.
     /// Independent of the cache bounds used to retain offscreen semantics.
     pub(crate) semantic_clip_inset: f32,
+    pub(crate) outside_paint_and_cache: bool,
 }
 
 impl SliverRevealGeometry {
+    pub(crate) fn local_paint_clip(self, axis: Axis, reverse: bool, viewport: Size) -> Rect {
+        let inset = self.semantic_clip_inset;
+        let origin = if reverse ^ self.reverse_growth {
+            incular_core::Offset::ZERO
+        } else {
+            axis.offset(inset, 0.)
+        };
+        let main = (axis.main_extent(viewport) - inset).max(0.);
+        Rect::from_origin_size(origin, axis.size(main, axis.cross_extent(viewport)))
+    }
+
     /// Reserves the covered strip in logical scroll-direction coordinates.
     pub(crate) fn reserve(self, leading: f32, trailing: f32) -> (f32, f32) {
         let obstruction = self.obstruction_before.min((trailing - leading).max(0.));

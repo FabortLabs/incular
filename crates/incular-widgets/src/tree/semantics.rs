@@ -2060,18 +2060,9 @@ impl WidgetTree {
         }
         let unscroll = self.child_content_transform(viewport.render).inverse()?;
         let viewport_world = child_parent_world.then(unscroll);
-        let reverse = config.reverse ^ geometry.reverse_growth;
-        let origin = if reverse {
-            Offset::ZERO
-        } else {
-            config.axis.offset(inset, 0.)
-        };
-        let main = (config.axis.main_extent(render.size) - inset).max(0.);
-        let cross = config.axis.cross_extent(render.size);
-        Some(viewport_world.transform_rect_bbox(Rect::from_origin_size(
-            origin,
-            config.axis.size(main, cross),
-        )))
+        Some(viewport_world.transform_rect_bbox(
+            geometry.local_paint_clip(config.axis, config.reverse, render.size),
+        ))
     }
 
     /// Whether a visible `element` sits in a scroll viewport, so an

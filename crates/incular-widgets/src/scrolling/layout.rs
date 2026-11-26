@@ -3216,6 +3216,7 @@ impl SequenceRenderSliver {
                 obstruction_before: preceding_obstruction,
                 reverse_growth: constraints.growth_direction == SliverGrowthDirection::Reverse,
                 semantic_clip_inset,
+                outside_paint_and_cache: !geometry.visible && geometry.cache_extent <= 0.,
             };
             preceding_obstruction = (preceding_obstruction + geometry.max_scroll_obstruction_extent)
                 .min(f32::MAX);

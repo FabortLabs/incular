@@ -293,14 +293,21 @@ render-sliver entry point is partial.
 
 ## Approximate clip query versus painted clip
 
-Flutter's `rendering/viewport_test.dart:2709` passed. It queries an
-approximate clip for a fitting sliver: no result for `Clip.none`, and
-the viewport bounds for the default hard edge. Incular's
-`scrollable_options` verifies actual clip-layer installation: an
-overflowing viewport clips by default and does not with `Clip::None`;
-neither an empty nor a fitting viewport paints a redundant clip layer.
-It does not expose Flutter's per-sliver approximate paint-clip query,
-which stays open.
+Flutter's `rendering/viewport_test.dart:2709` now pairs. The retained
+`WidgetTree::viewport_approximate_paint_clip` returns no clip for
+`Clip::None` and viewport-local bounds for the default hard edge, even
+if the sliver fits and no clip layer is painted. Other enabled clip
+styles report the same bounds. Unknown children do not get a clip.
+
+The native query and semantics share the sliver's retained overlap
+adjustment, not a guess from the viewport-wide obstruction. Both
+reference and native tests move a 20 px pinned overlap to each
+physical leading edge (both axes, normal/reverse) and distinguish
+a sliver outside paint and cache from a cached sliver explicitly
+included in semantics. These authored tests add no registration
+credit. One original Flutter and two authored tests passed; four
+focused native targets passed all 35 tests, including paint order,
+semantics, and actual clip-layer installation.
 
 ## Concurrent sliver animation clocks
 
