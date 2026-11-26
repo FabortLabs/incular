@@ -11,6 +11,7 @@ pub mod commands;
 pub mod discovery;
 pub mod preview_changes;
 pub mod preview_manifest;
+pub mod preview_reload;
 pub mod session;
 
 use incular_devtools_protocol::{

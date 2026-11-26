@@ -115,3 +115,28 @@ not a running OS watcher, analyzer, or preview reload loop.
 cargo test --locked -j 1 -p incular-devtools --test flutter350_preview_changes --test flutter350_preview_manifest -- --test-threads=1
 bash audits/flutter-3.50.0-parity/run-reference-linux.sh tooling preview_detector/preview_detector_regression_178317_test.dart 'PreviewDetector regression test https://github.com/flutter/flutter/issues/178317'
 ```
+
+## Reload completion, retries, and timing
+
+Six pinned hermetic `lsp_preview_detector_test.dart` registrations
+cover source reloads, manifest-only updates, ignored files, ignored
+directories, lookup failure, and analysis failure. Incular now routes
+the same cases through `PreviewReloadCoordinator`. Source changes
+wait for analysis, load, and publish before returning elapsed time.
+In the native fixture, two actual file writes publish two different
+snapshots; dependency edits update the on-disk manifest without
+running analysis; ignored paths touch neither backend.
+
+The lookup budget matches Flutter: five attempts, a 200 ms delay
+before retrying, and a five-second deadline per attempt. Analysis
+failure does not start lookup. Failed, timed-out, rejected, or stopped
+requests produce no completed timing sample. A subsequent request
+restarts cleanly. The host calls are serialized and cancellation drops
+both active and queued requests.
+
+All six reference and 17 focused native tests passed. These are
+pairs at the watcher/analysis boundary, where Flutter's tests also
+inject the watcher and analysis services. Incular returns a local
+timing result rather than transmitting Flutter analytics. An OS
+watcher, IDE transport and existing-DTD initialization are still
+separate work.
