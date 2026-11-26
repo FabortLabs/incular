@@ -329,3 +329,122 @@ fn the_open_menu_gets_one_escape_request_but_closed_and_unrelated_focus_route_ou
     assert_eq!(*menu_log.borrow(), ["root", "nested"]);
     assert!(controller.is_open() && nested.is_open());
 }
+
+#[test]
+fn close_children_preserves_the_focused_submenu_anchor_and_the_parent() {
+    let parent = MenuController::new();
+    let child = MenuController::new();
+    let focus = FocusNode::new();
+    let submenu_button = Widget::from(
+        GestureDetector::new(Widget::box_(Size::new(100., 30.), Color::WHITE)).on_tap({
+            let child = child.clone();
+            move || child.open(None)
+        }),
+    )
+    .with_key(Key::Value(8));
+    let submenu: Widget = RawMenuAnchor::new(child.clone(), |_, info| {
+        positioned_below(info.anchor_rect, Widget::box_(Size::new(100., 30.), PANEL))
+    })
+    .child(Focus::new(submenu_button).node(focus.clone()))
+    .into();
+    let menu = RawMenuAnchor::new(parent.clone(), move |_, info| {
+        positioned_below(info.anchor_rect, submenu.clone())
+    })
+    .child(
+        Widget::from(
+            GestureDetector::new(Widget::box_(Size::new(100., 30.), Color::WHITE)).on_tap({
+                let parent = parent.clone();
+                move || parent.open(None)
+            }),
+        )
+        .with_key(Key::Value(7)),
+    );
+    let mut runtime = Runtime::new(Center::new(menu).into()).unwrap();
+    assert!(!frame(&mut runtime));
+    tap(&mut runtime, Key::Value(7));
+    assert!(!frame(&mut runtime));
+    tap(&mut runtime, Key::Value(8));
+    assert!(frame(&mut runtime));
+    focus.request_focus();
+    assert!(frame(&mut runtime));
+    assert!(focus.has_primary_focus());
+
+    parent.close_children();
+    assert!(!frame(&mut runtime));
+    assert!(parent.is_open() && !child.is_open());
+    assert!(runtime.tree().element_with_key(&Key::Value(8)).is_some());
+    assert!(focus.has_primary_focus());
+}
+
+#[test]
+fn a_groups_state_follows_padded_descendants_and_only_the_children_can_open_it() {
+    use incular_config::EdgeInsets;
+    use incular_widgets::{Directionality, Padding, RawMenuAnchorGroup, Row, TextDirection};
+    let group = MenuController::new();
+    let (a, b) = (MenuController::new(), MenuController::new());
+    let entry = |controller: &MenuController, button: u64, panel: u64| {
+        let anchor = RawMenuAnchor::new(controller.clone(), move |_, info| {
+            positioned_below(
+                info.anchor_rect,
+                Widget::box_(Size::new(60., 40.), PANEL).with_key(Key::Value(panel)),
+            )
+        })
+        .child(
+            Widget::from(
+                GestureDetector::new(Widget::box_(Size::new(60., 30.), Color::WHITE)).on_tap({
+                    let controller = controller.clone();
+                    move || {
+                        if controller.is_open() {
+                            controller.close()
+                        } else {
+                            controller.open(None)
+                        }
+                    }
+                }),
+            )
+            .with_key(Key::Value(button)),
+        );
+        Widget::from(anchor)
+    };
+    let scene = RawMenuAnchorGroup::new(
+        group.clone(),
+        Row::new([
+            entry(&a, 1, 11),
+            Padding::new(EdgeInsets::all(8.), entry(&b, 2, 12)).into(),
+        ]),
+    );
+    let mut runtime =
+        Runtime::new(Directionality::new(TextDirection::Ltr, Center::new(scene)).into()).unwrap();
+    let shows =
+        |runtime: &Runtime, key: u64| runtime.tree().element_with_key(&Key::Value(key)).is_some();
+    assert!(!frame(&mut runtime));
+    assert!(!group.is_open() && shows(&runtime, 1) && shows(&runtime, 2));
+
+    group.open(None);
+    assert!(!frame(&mut runtime));
+    assert!(!group.is_open() && !a.is_open() && !b.is_open());
+    assert!(shows(&runtime, 1) && shows(&runtime, 2));
+
+    tap(&mut runtime, Key::Value(1));
+    assert!(frame(&mut runtime));
+    assert!(group.is_open() && shows(&runtime, 11) && !shows(&runtime, 12));
+    tap(&mut runtime, Key::Value(2));
+    assert!(frame(&mut runtime));
+    assert!(group.is_open() && !shows(&runtime, 11) && shows(&runtime, 12));
+    tap(&mut runtime, Key::Value(2));
+    assert!(!frame(&mut runtime));
+    assert!(!group.is_open() && !shows(&runtime, 12));
+
+    a.open(None);
+    assert!(frame(&mut runtime));
+    assert!(group.is_open() && a.is_open() && shows(&runtime, 11));
+    group.close();
+    assert!(!frame(&mut runtime));
+    assert!(!group.is_open() && !a.is_open() && shows(&runtime, 1));
+    b.open(None);
+    assert!(frame(&mut runtime));
+    assert!(group.is_open() && b.is_open() && shows(&runtime, 12));
+    group.close_children();
+    assert!(!frame(&mut runtime));
+    assert!(!group.is_open() && !b.is_open() && shows(&runtime, 2));
+}

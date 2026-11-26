@@ -259,3 +259,16 @@ nearest versus outer Overlay theater when two Overlay hosts are
 present. Incular's layout portal still uses the owning view as its
 layout coordinate space, and the retained parent-surface observation
 does not prove separate Overlay hosts, clipping, or relative bounds.
+
+### Group state and focus after closeChildren
+
+Pinned `:186` closes the submenu popup, not the parent or the
+focused submenu anchor. The native runtime opens each by pointer,
+then verifies its explicit focus node remains primary after closing
+only the children.
+
+Pinned `:311`, `:362`, `:397`, and `:435` pair with the
+retained group: the group tracks whether either descendant is open,
+including one behind Padding; tapping switches the visible panel
+and retapping closes it. Group open does nothing, while both close
+methods clear the appropriate popup and leave its anchor mounted.
