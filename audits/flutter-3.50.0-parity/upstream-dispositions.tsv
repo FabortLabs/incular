@@ -2217,3 +2217,10 @@ packages/flutter/test/widgets/basic_test.dart	218	hit test - completely outside 
 packages/flutter/test/widgets/basic_test.dart	245	semantics bounds are updated	paired-match	upstream-fractional-translation.md
 packages/flutter/test/widgets/basic_test.dart	327	FractionalTranslation does not crash at zero area	paired-match	upstream-fractional-translation.md
 packages/flutter/test/widgets/basic_test.dart	1932	StatefulBuilder does not crash at zero area	paired-match	upstream-stateful-builder.md
+packages/flutter/test/gestures/transformed_tap_test.dart	12	gets local coordinates	paired-match	upstream-transformed-recognizer-coordinates.md
+packages/flutter/test/gestures/transformed_tap_test.dart	48	kTouchSlop is evaluated in the global coordinate space when scaled up	paired-match	upstream-transformed-recognizer-coordinates.md
+packages/flutter/test/gestures/transformed_tap_test.dart	108	kTouchSlop is evaluated in the global coordinate space when scaled down	paired-match	upstream-transformed-recognizer-coordinates.md
+packages/flutter/test/gestures/transformed_long_press_test.dart	12	gets local coordinates	paired-match	upstream-transformed-recognizer-coordinates.md
+packages/flutter/test/gestures/transformed_long_press_test.dart	53	scaled up	paired-match	upstream-transformed-recognizer-coordinates.md
+packages/flutter/test/gestures/transformed_long_press_test.dart	123	scaled down	paired-match	upstream-transformed-recognizer-coordinates.md
+packages/flutter/test/gestures/transformed_scale_test.dart	9	gets local coordinates	paired-match	upstream-transformed-recognizer-coordinates.md

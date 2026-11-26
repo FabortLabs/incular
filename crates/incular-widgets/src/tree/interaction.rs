@@ -2090,11 +2090,9 @@ impl WidgetTree {
         self.input.scale_gestures.get_mut(&element)?.accept().or(observed)
     }
     /// Flutter closes the arena after the hit test, and a sole member wins by
-    /// default. A drag-only or scale member that is alone in its stream
-    /// therefore wins at the press: its drag (or pinch) starts without waiting
-    /// for the slop, and its first movement is reported in full. Tap,
-    /// long-press and delayed members keep competing, since they decide
-    /// later.
+    /// default. An unopposed tap reports its down immediately, and drags
+    /// and pinches can start without waiting for slop. A combined pointer
+    /// member with several local recognizers is not an unopposed tap.
     fn accept_sole_press(&mut self, key: GestureArenaKey) {
         let Some(active) = self.input.active_gestures.get(&key) else {
             return;
@@ -2103,11 +2101,16 @@ impl WidgetTree {
             return;
         };
         let (member, element, kind) = (only.member, only.element, only.kind);
+        let accept_tap = only
+            .recognizer
+            .as_ref()
+            .is_some_and(|recognizer| recognizer.can_accept_tap_on_press())
+            && !self.input.raw_gesture_streams.contains_key(&key);
         let ready = match kind {
             RetainedGestureKind::Pointer => only
                 .recognizer
                 .as_ref()
-                .is_some_and(|recognizer| recognizer.can_accept_on_press()),
+                .is_some_and(|recognizer| accept_tap || recognizer.can_accept_on_press()),
             RetainedGestureKind::Scale => true,
             // The sole member wins at the arena close; a force press that
             // already claimed the arena on the press needs no second accept.
@@ -2134,7 +2137,18 @@ impl WidgetTree {
                             .find(|candidate| candidate.member == member)
                     })
                     .and_then(|candidate| candidate.recognizer.as_mut())
-                    .and_then(|recognizer| recognizer.accept_on_press());
+                    .and_then(|recognizer| {
+                        if accept_tap {
+                            if let incular_gestures::GestureArenaSource::Pointer { pointer, .. } =
+                                key.source
+                            {
+                                recognizer.accept_tap_on_arena_close(pointer);
+                            }
+                            None
+                        } else {
+                            recognizer.accept_on_press()
+                        }
+                    });
                 if let Some(action) = action {
                     self.dispatch_gesture_action(key, member, action);
                 }

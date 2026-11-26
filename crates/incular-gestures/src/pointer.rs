@@ -297,6 +297,22 @@ impl PointerGestureRecognizer {
             && self.callbacks.on_double_tap_cancel.is_none()
             && self.sole_drag_axis().is_some()
     }
+
+    /// Combined pointer members may represent multiple Flutter recognizers.
+    /// Only a tap without a local competitor can win at arena close.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn can_accept_tap_on_press(&self) -> bool {
+        self.pending_tap_down.is_some()
+            && self.delayed_drag.is_none()
+            && !self.has_long_press_callbacks()
+            && !self.has_pan_callbacks()
+            && !self.has_horizontal_drag_callbacks()
+            && !self.has_vertical_drag_callbacks()
+            && self.callbacks.on_double_tap.is_none()
+            && self.callbacks.on_double_tap_down.is_none()
+            && self.callbacks.on_double_tap_cancel.is_none()
+    }
     /// Sets Flutter's `onlyAcceptDragOnThreshold`. It controls when
     /// callbacks begin; it does not change arena eligibility.
     pub fn set_only_accept_drag_on_threshold(&mut self, value: bool) {
