@@ -28,8 +28,19 @@ two debug-owner names and a formatted parent identifier; the native
 typed error does not carry those labels. :13 is partial: native writes,
 overwrite, deletion, absence and persisted null are tested, but the
 raw map format and Flutter diagnostic owner do not match Incular's.
-:291's exact original passed; the explicit-disposal comparison is
-separate from the ordinary lease release, which intentionally retains
-data.
-
 All 36 focused native cases passed.
+
+## Explicit disposal and empty storage
+
+:291 now pairs. Explicitly disposing a live scope claim removes its
+snapshot data and schedules a save. A subsequent claim with the same
+stable key starts fresh. This is different from dropping a native
+lease, which releases ownership without deleting stored values.
+
+The persistence parts of :305 and :325 also match: disposal erases
+nested values and empty child metadata, preserves an unrelated sibling
+until it is separately disposed, and omits empty scope metadata on
+disk. They remain partial because Incular keeps an empty `state` map
+in its versioned wire format and applications release descendant
+leases explicitly rather than through Dart bucket-object lifetime.
+Three original Flutter and 14 focused native tests passed.

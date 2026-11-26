@@ -203,10 +203,45 @@ fn explicit_scope_removal_before_reclaim_keeps_the_other_scope_intact() {
     child.set_json(&foo, json!(22));
     other.set_json(&foo, json!(33));
 
-    drop(claim);
-    assert_eq!(handle.remove_scope(&child), 1);
+    let before = handle.diagnostics().save_requests;
+    assert_eq!(claim.dispose(), 1);
+    assert_eq!(handle.diagnostics().save_requests, before + 1);
     let rebound = root.child_unchecked(key("child1"));
     let _reclaimed = handle.claim_scope(&rebound).unwrap();
     assert_eq!(rebound.get_json(&foo), None);
     assert_eq!(other.get_json(&foo), Some(json!(33)));
+}
+
+#[test]
+fn disposing_a_scope_erases_nested_values_and_empty_bucket_metadata() {
+    use incular_runtime::RestorationStore;
+
+    let store = Arc::new(InMemoryRestorationStore::new());
+    let (mut application, root, handle) = open(store.clone());
+    let named = |name: &str| root.child_unchecked(key(name));
+    let parent = named("child1");
+    let nested = parent.child_unchecked(key("child1OfChild1"));
+    let nested_empty = parent.child_unchecked(key("child2OfChild1"));
+    let other = named("child2");
+    let parent_claim = handle.claim_scope(&parent).unwrap();
+    let descendant = handle.claim_scope(&nested).unwrap();
+    let empty = handle.claim_scope(&nested_empty).unwrap();
+    let other_claim = handle.claim_scope(&other).unwrap();
+    parent.set_json(&key("foo"), json!(22));
+    nested.set_json(&key("foo"), json!(44));
+    other.set_json(&key("bar"), json!(55));
+    let before = handle.diagnostics().save_requests;
+    let scopes_before = handle.diagnostics().restoration_scopes;
+    drop((descendant, empty)); // independent native leases
+    assert_eq!(parent_claim.dispose(), 2);
+    assert_eq!(handle.diagnostics().save_requests, before + 1);
+    assert_eq!(handle.diagnostics().restoration_scopes, scopes_before - 3);
+    assert_eq!(nested.get_json(&key("foo")), None);
+    assert_eq!(other.get_json(&key("bar")), Some(json!(55)));
+    assert_eq!(other_claim.dispose(), 1);
+    assert_eq!(handle.diagnostics().save_requests, before + 2);
+    application.shutdown();
+    let raw: Value = serde_json::from_slice(&store.load().unwrap().unwrap()).unwrap();
+    assert_eq!(raw["state"], json!({}));
+    assert!(raw.get("claimed_scopes").is_none());
 }

@@ -2398,3 +2398,6 @@ packages/flutter/test/services/restoration_bucket_test.dart	13	root bucket value
 packages/flutter/test/services/restoration_bucket_test.dart	200	claim child that is already claimed throws if not given up	partial-match	upstream-restoration-scope-ownership.md
 packages/flutter/test/services/restoration_bucket_test.dart	237	claim child that is already claimed does not throw if given up	paired-match	upstream-restoration-scope-ownership.md
 packages/flutter/test/services/restoration_bucket_test.dart	275	claiming a claimed child twice and only giving it up once throws	paired-match	upstream-restoration-scope-ownership.md
+packages/flutter/test/services/restoration_bucket_test.dart	291	unclaiming and then claiming same id gives fresh bucket	paired-match	upstream-restoration-scope-ownership.md#explicit-disposal-and-empty-storage
+packages/flutter/test/services/restoration_bucket_test.dart	305	cleans up raw data if last value/child is dropped	partial-match	upstream-restoration-scope-ownership.md#explicit-disposal-and-empty-storage
+packages/flutter/test/services/restoration_bucket_test.dart	325	dispose deletes data	partial-match	upstream-restoration-scope-ownership.md#explicit-disposal-and-empty-storage

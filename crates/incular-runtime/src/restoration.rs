@@ -570,6 +570,20 @@ pub struct ClaimedRestorationScope {
     _lease: ScopeLease,
 }
 
+impl ClaimedRestorationScope {
+    /// Explicitly releases this claim and deletes the persisted subtree.
+    /// Ordinary drop still releases ownership without deleting saved data.
+    /// Returns the number of removed values, excluding empty-scope metadata.
+    pub fn dispose(self) -> usize {
+        let manager = self._lease.manager.upgrade();
+        let path = self._lease.path.clone();
+        drop(self);
+        manager.map_or(0, |inner| {
+            RestorationManager { inner }.remove_encoded_scope(&path)
+        })
+    }
+}
+
 impl RestorationManager {
     pub(crate) fn load(config: RestorationConfig) -> Self {
         let mut diagnostics = RestorationDiagnostics::default();
@@ -684,9 +698,12 @@ impl RestorationManager {
     }
 
     pub(crate) fn remove_scope(&self, path: &[RestorationKey]) -> usize {
-        let prefix = encode_path(path);
+        self.remove_encoded_scope(&encode_path(path))
+    }
+
+    fn remove_encoded_scope(&self, prefix: &str) -> usize {
         let mut state = self.inner.state.borrow_mut();
-        let (removed, changed) = remove_snapshot_scope(&mut state, &prefix);
+        let (removed, changed) = remove_snapshot_scope(&mut state, prefix);
         if changed {
             refresh_counts(&mut state);
         }
