@@ -512,6 +512,13 @@ impl BorderDirectional {
             .is_uniform()
     }
 
+    pub(crate) fn needs_direction_to_paint(self) -> bool {
+        !self.is_uniform()
+            && [self.top, self.start, self.end, self.bottom]
+                .iter()
+                .any(|side| side.style != BorderStyle::None)
+    }
+
     #[must_use]
     pub const fn resolve(self, direction: incular_config::TextDirection) -> Border {
         match direction {
@@ -1257,6 +1264,11 @@ pub struct BoxDecoration {
     pub image: Option<DecorationImage>,
     #[builder(default, setter(strip_option))]
     pub border: Option<Border>,
+    /// A logical start/end border. Constructor setters keep it exclusive with
+    /// the physical border; when both fields are set, this one takes precedence.
+    #[builder(default, setter(transform = |border: BorderDirectional| Some(Arc::new(border))))]
+    pub directional_border: Option<Arc<BorderDirectional>>,
+
     #[builder(default, setter(strip_option))]
     pub border_radius: Option<BorderRadius>,
     /// Logical radii are resolved at paint and hit-test time. An interpolated
@@ -1293,6 +1305,8 @@ impl BoxDecoration {
             color: lerp_color(None, self.color, factor),
             image: faded_decoration_image(self.image.as_ref(), factor),
             border: self.border.map(|border| border.scale(factor)),
+            directional_border: self.directional_border.as_deref()
+                .map(|border| Arc::new(border.scale(factor))),
             border_radius: self.border_radius.map(|radius| radius * factor),
             directional_border_radius: self.directional_border_radius.as_deref()
                 .map(|radius| Arc::new(*radius * factor)),
@@ -1306,6 +1320,30 @@ impl BoxDecoration {
                 .map(|gradient| Arc::new(gradient.scale(factor))),
             background_blend_mode: None,
             shape: self.shape,
+        }
+    }
+
+    pub(crate) const LOGICAL_BORDER_NEEDS_DIRECTION: &'static str =
+        "No TextDirection found. BorderDirectional cannot resolve without a Directionality ancestor";
+
+    pub(crate) fn direction_requirement(
+        &self,
+        layout: bool,
+    ) -> Option<&'static crate::tree::DirectionRequirement> {
+        use crate::tree::DirectionRequirement;
+        if self.directional_border_radius.is_some() {
+            return if layout {
+                Some(&DirectionRequirement { widget: "Container", reason: Self::DIRECTIONAL_RADIUS_NEEDS_DIRECTION })
+            } else {
+                Some(&DirectionRequirement { widget: "DecoratedBox", reason: Self::DIRECTIONAL_RADIUS_NEEDS_DIRECTION })
+            };
+        }
+        self.directional_border.as_deref()
+            .filter(|border| layout || border.needs_direction_to_paint())?;
+        if layout {
+            Some(&DirectionRequirement { widget: "Container", reason: Self::LOGICAL_BORDER_NEEDS_DIRECTION })
+        } else {
+            Some(&DirectionRequirement { widget: "DecoratedBox", reason: Self::LOGICAL_BORDER_NEEDS_DIRECTION })
         }
     }
 
@@ -1331,6 +1369,15 @@ impl BoxDecoration {
     #[must_use]
     pub fn border(mut self, border: Border) -> Self {
         self.border = Some(border);
+        self.directional_border = None;
+        self
+    }
+
+    /// Sets a border with start/end sides measured in the ambient direction.
+    #[must_use]
+    pub fn directional_border(mut self, border: BorderDirectional) -> Self {
+        self.directional_border = Some(Arc::new(border));
+        self.border = None;
         self
     }
 
@@ -1371,6 +1418,9 @@ impl BoxDecoration {
     /// or hit testing. Widgets resolve them from their nearest Directionality.
     #[must_use]
     pub fn resolved_for_direction(mut self, direction: TextDirection) -> Self {
+        if let Some(border) = self.directional_border.take() {
+            self.border = Some(border.resolve(direction));
+        }
         if self.directional_border_radius.is_some() {
             self.border_radius = self.effective_radius(direction);
             self.directional_border_radius = None;
@@ -1530,6 +1580,49 @@ enum AlignedGradientKind {
     Sweep,
 }
 
+fn lerp_decoration_border(
+    a: &BoxDecoration,
+    b: &BoxDecoration,
+    t: f32,
+) -> (Option<Border>, Option<Arc<BorderDirectional>>) {
+    match (a.directional_border.as_deref(), b.directional_border.as_deref()) {
+        (None, None) => (Border::lerp_optional(a.border, b.border, t), None),
+        (Some(a), Some(b)) => (None, Some(Arc::new(a.lerp(b, t)))),
+        (None, Some(logical)) => lerp_physical_and_directional(a.border, *logical, t),
+        (Some(logical), None) => lerp_physical_and_directional(b.border, *logical, 1. - t),
+    }
+}
+
+fn lerp_physical_and_directional(
+    physical: Option<Border>,
+    logical: BorderDirectional,
+    t: f32,
+) -> (Option<Border>, Option<Arc<BorderDirectional>>) {
+    let Some(physical) = physical else {
+        return (None, Some(Arc::new(logical.scale(t))));
+    };
+    let absent = BorderSide::NONE;
+    let top = physical.top.lerp(&logical.top, t);
+    let bottom = physical.bottom.lerp(&logical.bottom, t);
+    let no_physical_sides = physical.left == absent && physical.right == absent;
+    let no_logical_sides = logical.start == absent && logical.end == absent;
+    if no_logical_sides || (!no_physical_sides && t < 0.5) {
+        let horizontal_t = if no_logical_sides { t } else { t * 2. };
+        return (Some(Border {
+            top, bottom,
+            left: physical.left.lerp(&absent, horizontal_t),
+            right: physical.right.lerp(&absent, horizontal_t),
+        }), None);
+    }
+    let horizontal_t = if no_physical_sides { t } else { (t - 0.5) * 2. };
+    (None, Some(Arc::new(BorderDirectional::only(
+        top,
+        absent.lerp(&logical.start, horizontal_t),
+        absent.lerp(&logical.end, horizontal_t),
+        bottom,
+    ))))
+}
+
 impl incular_core::Lerp for BoxDecoration {
     /// Flutter `BoxDecoration.lerp`: a part present on one side only
     /// scales in or out (`Color.lerp(null, c, t)`, `BoxBorder.lerp`,
@@ -1587,10 +1680,12 @@ impl incular_core::Lerp for BoxDecoration {
                     .map(Arc::new),
                 )
             };
+        let (border, directional_border) = lerp_decoration_border(self, other, t);
         Self {
             color: lerp_color(self.color, other.color, t),
             image: DecorationImage::lerp_optional(self.image.as_ref(), other.image.as_ref(), t),
-            border: Border::lerp_optional(self.border, other.border, t),
+            border,
+            directional_border,
             border_radius: BorderRadius::lerp_optional(self.border_radius, other.border_radius, t),
             directional_border_radius: BorderRadiusDirectional::lerp_optional(
                 self.directional_border_radius.as_deref().copied(),

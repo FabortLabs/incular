@@ -41,6 +41,7 @@ impl BoxDecoration {
         !self.box_shadow.is_empty()
             || self.background_blend_mode.is_some()
             || self.has_aligned_gradient()
+            || self.directional_border.is_some()
             || self.shape == BoxShape::Circle
             || self.image.is_some()
             || self.has_elliptical_corners()
@@ -87,7 +88,7 @@ impl BoxDecoration {
     ) -> Option<DisplayList> {
         let rect = Rect::from_origin_size(Offset::ZERO, size);
         let aligned = self.resolve_aligned_gradient(rect, direction);
-        if self.directional_border_radius.is_some() {
+        if self.directional_border_radius.is_some() || self.directional_border.is_some() {
             return self
                 .clone()
                 .resolved_for_direction(direction)
@@ -137,17 +138,25 @@ impl BoxDecoration {
     /// rectangular fallback cannot represent.
     #[must_use]
     pub fn paint_border(&self, size: Size) -> Option<DisplayList> {
-        let border = self.border?;
+        self.paint_border_for_direction(size, Some(TextDirection::Ltr))
+    }
+
+    /// Paints the original logical or physical stroke against this direction.
+    #[must_use]
+    pub fn paint_border_for_direction(
+        &self,
+        size: Size,
+        direction: Option<TextDirection>,
+    ) -> Option<DisplayList> {
         let rect = Rect::from_origin_size(Offset::ZERO, size);
+        let radius = self.effective_radius(direction.unwrap_or(TextDirection::Ltr));
         let mut canvas = Canvas::default();
-        border
-            .paint(
-                &mut canvas,
-                rect,
-                self.shape,
-                self.effective_radius(TextDirection::Ltr),
-            )
-            .then(|| canvas.finish())
+        let painted = if let Some(border) = self.directional_border.as_deref() {
+            border.paint(&mut canvas, rect, direction, self.shape, radius)
+        } else {
+            self.border?.paint(&mut canvas, rect, self.shape, radius)
+        };
+        painted.then(|| canvas.finish())
     }
 
     /// `_BoxDecorationPainter._paintBox`'s geometry: a circle inscribed in
@@ -489,7 +498,7 @@ fn decorated_with_source(
     position: DecorationPosition,
     child: Widget,
 ) -> Widget {
-    if decoration.directional_border_radius.is_some() {
+    if let Some(requirement) = decoration.direction_requirement(false) {
         return crate::Builder::new(move |context| {
             let direction = context
                 .text_direction()
@@ -506,12 +515,15 @@ fn decorated_with_source(
                 child.clone(),
             )
         })
-        .require_directionality(&crate::tree::DirectionRequirement {
-            widget: "DecoratedBox",
-            reason: BoxDecoration::DIRECTIONAL_RADIUS_NEEDS_DIRECTION,
-        })
+        .require_directionality(requirement)
         .into();
     }
+    // A uniform logical border does not require direction to paint.
+    let decoration = if decoration.directional_border.is_some() {
+        Rc::new(decoration.as_ref().clone().resolved_for_direction(TextDirection::Ltr))
+    } else {
+        decoration
+    };
     let hit_decoration = decoration.clone();
     // Filling the stack, which takes the child's size, the builder sees
     // tight constraints of exactly that size.
@@ -549,7 +561,12 @@ fn decorated_with_source(
             }
             layers.push(Positioned::fill(painted).into());
         }
-        if let Some(border) = decoration.paint_border(size) {
+        let border = if source.directional_border.is_some() {
+            source.paint_border_for_direction(size, context.text_direction())
+        } else {
+            decoration.paint_border(size)
+        };
+        if let Some(border) = border {
             layers.push(CustomPaint::new(size, border).into());
         }
         // Shadows extend past the box, and Flutter's decoration painter

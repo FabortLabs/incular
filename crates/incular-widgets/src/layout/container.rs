@@ -206,10 +206,10 @@ impl Container {
 
 impl From<Container> for Widget {
     fn from(value: Container) -> Self {
-        if value
+        if let Some(requirement) = value
             .decoration
             .as_ref()
-            .is_some_and(|decoration| decoration.directional_border_radius.is_some())
+            .and_then(|decoration| decoration.direction_requirement(true))
         {
             return crate::Builder::new(move |context| {
                 let direction = context
@@ -217,10 +217,7 @@ impl From<Container> for Widget {
                     .expect("validated directional Container");
                 Container::build_widget(value.clone(), Some(direction))
             })
-            .require_directionality(&crate::tree::DirectionRequirement {
-                widget: "Container",
-                reason: crate::BoxDecoration::DIRECTIONAL_RADIUS_NEEDS_DIRECTION,
-            })
+            .require_directionality(requirement)
             .into();
         }
         Container::build_widget(value, None)
@@ -234,7 +231,8 @@ impl Container {
         let logical_paint = if let Some(direction) = direction {
             let source = value.decoration.take().expect("directional decoration");
             value.decoration = Some(source.clone().resolved_for_direction(direction));
-            source.has_aligned_gradient().then_some(source)
+            (source.has_aligned_gradient() || source.directional_border.is_some())
+                .then_some(source)
         } else {
             None
         };
@@ -321,7 +319,10 @@ impl Container {
                 })
             });
         match value.decoration {
-            Some(decoration) if decoration.needs_full_painter() => {
+            Some(decoration)
+                if decoration.needs_full_painter()
+                    || logical_paint.as_ref().is_some_and(|source| source.directional_border.is_some()) =>
+            {
                 current = crate::painting_effects::decorated(
                     logical_paint.unwrap_or(decoration),
                     crate::DecorationPosition::Background,
