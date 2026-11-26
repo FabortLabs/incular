@@ -1421,19 +1421,19 @@ packages/flutter/test/widgets/heroes_test.dart	945	Popping on first frame does n
 packages/flutter/test/services/text_editing_delta_test.dart	13	Verify creation of insertion delta when inserting at a collapsed selection.	paired-match	upstream-text-editing-delta-wire.md
 packages/flutter/test/services/text_editing_delta_test.dart	40	Verify creation of insertion delta when inserting at end of composing region.	paired-match	upstream-text-editing-delta-wire.md
 packages/flutter/test/services/text_editing_delta_test.dart	68	Verify invalid TextEditingDeltaInsertion fails to apply	paired-match	upstream-text-editing-delta-wire.md
-packages/flutter/test/services/text_editing_delta_test.dart	82	Verify TextEditingDeltaInsertion debugFillProperties	reference-ran-incular-open	upstream-text-editing-delta-wire.md
+packages/flutter/test/services/text_editing_delta_test.dart	82	Verify TextEditingDeltaInsertion debugFillProperties	paired-match	upstream-text-editing-delta-wire.md#opt-in-diagnostics
 packages/flutter/test/services/text_editing_delta_test.dart	110	Verify creation of deletion delta when deleting.	paired-match	upstream-text-editing-delta-wire.md
 packages/flutter/test/services/text_editing_delta_test.dart	138	Verify creation of deletion delta when deleting at end of composing region.	paired-match	upstream-text-editing-delta-wire.md
 packages/flutter/test/services/text_editing_delta_test.dart	166	Verify invalid TextEditingDeltaDeletion fails to apply	paired-match	upstream-text-editing-delta-wire.md
-packages/flutter/test/services/text_editing_delta_test.dart	179	Verify TextEditingDeltaDeletion debugFillProperties	reference-ran-incular-open	upstream-text-editing-delta-wire.md
+packages/flutter/test/services/text_editing_delta_test.dart	179	Verify TextEditingDeltaDeletion debugFillProperties	paired-match	upstream-text-editing-delta-wire.md#opt-in-diagnostics
 packages/flutter/test/services/text_editing_delta_test.dart	206	Verify creation of replacement delta when replacing with longer.	paired-match	upstream-text-editing-delta-wire.md
 packages/flutter/test/services/text_editing_delta_test.dart	235	Verify creation of replacement delta when replacing with shorter.	paired-match	upstream-text-editing-delta-wire.md
 packages/flutter/test/services/text_editing_delta_test.dart	264	Verify creation of replacement delta when replacing with same.	paired-match	upstream-text-editing-delta-wire.md
 packages/flutter/test/services/text_editing_delta_test.dart	293	Verify invalid TextEditingDeltaReplacement fails to apply	paired-match	upstream-text-editing-delta-wire.md
-packages/flutter/test/services/text_editing_delta_test.dart	307	Verify TextEditingDeltaReplacement debugFillProperties	reference-ran-incular-open	upstream-text-editing-delta-wire.md
+packages/flutter/test/services/text_editing_delta_test.dart	307	Verify TextEditingDeltaReplacement debugFillProperties	paired-match	upstream-text-editing-delta-wire.md#opt-in-diagnostics
 packages/flutter/test/services/text_editing_delta_test.dart	336	Verify non text update delta created.	paired-match	upstream-text-editing-delta-wire.md
 packages/flutter/test/services/text_editing_delta_test.dart	361	Verify invalid TextEditingDeltaNonTextUpdate fails to apply	paired-match	upstream-text-editing-delta-wire.md
-packages/flutter/test/services/text_editing_delta_test.dart	373	Verify TextEditingDeltaNonTextUpdate debugFillProperties	reference-ran-incular-open	upstream-text-editing-delta-wire.md
+packages/flutter/test/services/text_editing_delta_test.dart	373	Verify TextEditingDeltaNonTextUpdate debugFillProperties	paired-match	upstream-text-editing-delta-wire.md#opt-in-diagnostics
 packages/flutter/test/services/delta_text_input_test.dart	29	DeltaTextInputClient send the correct configuration to the platform and responds to updateEditingValueWithDeltas method correctly	paired-match	upstream-delta-text-input-channel.md
 packages/flutter/test/services/delta_text_input_test.dart	65	Invalid TextRange fails loudly when being converted to JSON - NonTextUpdate	partial-match	upstream-delta-text-input-channel.md
 packages/flutter/test/services/delta_text_input_test.dart	115	Invalid TextRange fails loudly when being converted to JSON - Faulty deltaStart and deltaEnd	partial-match	upstream-delta-text-input-channel.md

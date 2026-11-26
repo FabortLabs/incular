@@ -158,6 +158,61 @@ impl FlutterTextEditingDelta {
         Ok(Some(&self.old_text[bytes]))
     }
 
+    /// Formats the visible diagnostic properties in Flutter's order,
+    /// retaining the original UTF-16 coordinates and selection orientation.
+    ///
+    /// This is opt-in: the lines contain raw editing text and must not be
+    /// logged or transmitted from a sensitive input.
+    ///
+    /// # Errors
+    /// Returns a typed error if a manually constructed deletion or
+    /// replacement has an invalid range in the old snapshot.
+    pub fn diagnostic_lines(&self) -> Result<Vec<String>, FlutterTextDeltaError> {
+        let mut fields = Vec::with_capacity(6);
+        fields.push(format!("oldText: {}", self.old_text));
+        match &self.edit {
+            FlutterTextEdit::Insertion { offset, text } => {
+                fields.push(format!("textInserted: {text}"));
+                fields.push(format!("insertionOffset: {offset}"));
+            }
+            FlutterTextEdit::Deletion { range } => {
+                if let Some(text) = self.removed_text()? {
+                    fields.push(format!("textDeleted: {text}"));
+                }
+                fields.push(format!("deletedRange: {}", diagnostic_range(Some(*range))));
+            }
+            FlutterTextEdit::Replacement { range, text } => {
+                if let Some(removed) = self.removed_text()? {
+                    fields.push(format!("textReplaced: {removed}"));
+                }
+                fields.push(format!("replacementText: {text}"));
+                fields.push(format!("replacedRange: {}", diagnostic_range(Some(*range))));
+            }
+            FlutterTextEdit::NonTextUpdate => {}
+        };
+        let directional = self.selection_is_directional;
+        let selection = match self.selection {
+            None => "TextSelection.invalid".into(),
+            Some(selection) if selection.base == selection.extent => {
+                let affinity = match self.selection_affinity {
+                    TextAffinity::Upstream => "upstream",
+                    TextAffinity::Downstream => "downstream",
+                };
+                format!(
+                    "TextSelection.collapsed(offset: {}, affinity: TextAffinity.{affinity}, isDirectional: {directional})",
+                    selection.base
+                )
+            }
+            Some(selection) => format!(
+                "TextSelection(baseOffset: {}, extentOffset: {}, isDirectional: {directional})",
+                selection.base, selection.extent
+            ),
+        };
+        fields.push(format!("selection: {selection}"));
+        fields.push(format!("composing: {}", diagnostic_range(self.composing)));
+        Ok(fields)
+    }
+
     /// Applies the platform snapshot and converts it to Incular UTF-8 byte
     /// offsets. An unspecified platform selection becomes an end caret;
     /// the original validity, affinity and direction remain on the envelope.
@@ -215,6 +270,13 @@ impl FlutterTextEditingDelta {
             .transpose()?;
         Ok((selection, composing))
     }
+}
+
+fn diagnostic_range(range: Option<TextRange>) -> String {
+    range.map_or_else(
+        || "TextRange(start: -1, end: -1)".into(),
+        |range| format!("TextRange(start: {}, end: {})", range.start, range.end),
+    )
 }
 
 fn byte_range(

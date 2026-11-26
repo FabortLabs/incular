@@ -30,3 +30,22 @@ The four original `debugFillProperties` tests passed only in Flutter.
 A Rust Debug derive is not a Flutter diagnostic-property builder. This
 slice does not claim opt-in `flutter/textinput` channel registration or
 native adapter delivery to a `DeltaTextInputClient`.
+
+
+## Opt-in diagnostics
+
+All four pinned diagnostic registrations now pair. The envelope's
+`diagnostic_lines` preserves the exact order, names, old and inserted
+or removed text, selection rendering, and composing sentinel. It
+derives a deletion/replacement slice from the saved UTF-16 span, not
+from the current local text. A selection-only envelope never reports
+text mutation properties.
+
+The authored UTF-16 comparison also checks that replacing one emoji
+renders the original two-code-unit range and preserves reversed
+selection direction, and that an unset selection reports invalid.
+The Rust control rejects a manually constructed split surrogate
+rather than slicing the wrong bytes. Diagnostic rendering is opt-in
+and never emits to logs on its own; it contains raw editing text.
+Four pinned originals, one authored Flutter test, and 24 focused
+Rust tests passed.

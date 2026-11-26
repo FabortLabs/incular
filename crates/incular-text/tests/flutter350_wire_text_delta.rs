@@ -222,3 +222,102 @@ fn defaults_are_unspecified_ranges_and_downstream_affinity() {
         TextEditingValue::new("a😀")
     );
 }
+
+#[test]
+fn insertion_diagnostics_preserve_flutter_property_names_and_order() {
+    let delta =
+        FlutterTextEditingDelta::from_json(&payload("hello worl", "d", (10, 10), 11, (-1, -1)))
+            .unwrap();
+    assert_eq!(
+        delta.diagnostic_lines().unwrap(),
+        [
+            "oldText: hello worl",
+            "textInserted: d",
+            "insertionOffset: 10",
+            "selection: TextSelection.collapsed(offset: 11, affinity: TextAffinity.downstream, isDirectional: false)",
+            "composing: TextRange(start: -1, end: -1)",
+        ],
+    );
+}
+
+#[test]
+fn deletion_diagnostics_read_deleted_text_from_the_platform_snapshot() {
+    let delta =
+        FlutterTextEditingDelta::from_json(&payload("hello world", "", (6, 10), 6, (-1, -1)))
+            .unwrap();
+    assert_eq!(
+        delta.diagnostic_lines().unwrap(),
+        [
+            "oldText: hello world",
+            "textDeleted: worl",
+            "deletedRange: TextRange(start: 6, end: 10)",
+            "selection: TextSelection.collapsed(offset: 6, affinity: TextAffinity.downstream, isDirectional: false)",
+            "composing: TextRange(start: -1, end: -1)",
+        ],
+    );
+}
+
+#[test]
+fn replacement_diagnostics_distinguish_old_text_new_text_and_composition() {
+    let delta =
+        FlutterTextEditingDelta::from_json(&payload("hello world", "h", (6, 11), 7, (6, 7)))
+            .unwrap();
+    assert_eq!(
+        delta.diagnostic_lines().unwrap(),
+        [
+            "oldText: hello world",
+            "textReplaced: world",
+            "replacementText: h",
+            "replacedRange: TextRange(start: 6, end: 11)",
+            "selection: TextSelection.collapsed(offset: 7, affinity: TextAffinity.downstream, isDirectional: false)",
+            "composing: TextRange(start: 6, end: 7)",
+        ],
+    );
+}
+
+#[test]
+fn selection_only_diagnostics_have_no_text_mutation_properties() {
+    let delta =
+        FlutterTextEditingDelta::from_json(&payload("hello world", "", (-1, -1), 7, (6, 7)))
+            .unwrap();
+    assert_eq!(
+        delta.diagnostic_lines().unwrap(),
+        [
+            "oldText: hello world",
+            "selection: TextSelection.collapsed(offset: 7, affinity: TextAffinity.downstream, isDirectional: false)",
+            "composing: TextRange(start: 6, end: 7)",
+        ],
+    );
+}
+
+#[test]
+fn diagnostics_use_utf16_backward_selection_invalid_selection_and_checked_ranges() {
+    let mut input = payload("A🙂B", "é", (1, 3), 2, (1, 2));
+    input["selectionExtent"] = json!(1);
+    input["selectionAffinity"] = json!("TextAffinity.upstream");
+    input["selectionIsDirectional"] = json!(true);
+    let mut delta = FlutterTextEditingDelta::from_json(&input).unwrap();
+    assert_eq!(
+        delta.diagnostic_lines().unwrap(),
+        [
+            "oldText: A🙂B",
+            "textReplaced: 🙂",
+            "replacementText: é",
+            "replacedRange: TextRange(start: 1, end: 3)",
+            "selection: TextSelection(baseOffset: 2, extentOffset: 1, isDirectional: true)",
+            "composing: TextRange(start: 1, end: 2)",
+        ],
+    );
+    delta.selection = None;
+    assert_eq!(
+        delta.diagnostic_lines().unwrap()[4],
+        "selection: TextSelection.invalid"
+    );
+    delta.edit = FlutterTextEdit::Deletion {
+        range: TextRange::new(2, 3),
+    };
+    assert_eq!(
+        delta.diagnostic_lines(),
+        Err(FlutterTextDeltaError::InvalidRange("replacement"))
+    );
+}
