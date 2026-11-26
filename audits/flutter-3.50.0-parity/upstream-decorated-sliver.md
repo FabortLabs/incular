@@ -49,3 +49,13 @@ path. Native paints one 300 × 225.1 outline from (0, 0), then one
 300 × 200 outline when reset, without extending logical scroll
 range. This controls the painter and placement, not whether Incular
 derives 25.1 px from the exact same pointer gesture.
+
+## Real stretch gesture
+
+Pinned :558 now pairs, not just at an injected geometry. The authored
+Flutter and native retained tests send the same touch down, 20 px
+move, 25 px move and up to the scrolling content. Both produce
+−1.1666667 after the first move and −25.079237 after the second.
+Release does not immediately change the offset. The actual centered
+one-pixel border then has its 300 × 225.079237 path at (0, 0).
+Seven focused Rust cases passed; the explicit-offset control remains.

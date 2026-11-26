@@ -285,16 +285,14 @@ fn decorated_pinned_header_keeps_its_outline_at_the_viewport_edge() {
     }
 }
 
-#[test]
-fn decorated_stretching_header_uses_the_current_paint_extent_without_growing_scroll_range() {
+fn mounted_stretching_header(controller: &ScrollController) -> WidgetTree {
     use incular_widgets::{
         Border, BorderSide, SliverHeaderOverscrollBehavior, SliverHeaderScrollBehavior,
     };
-    let controller = ScrollController::new();
     let view = Size::new(300., 500.);
     let header =
-        incular_widgets::internal::SliverPersistentHeader::with_delegate(100., 200., |_, _| {
-            incular_widgets::SizedBox::new().width(300.)
+        incular_widgets::internal::SliverPersistentHeader::with_delegate(0., 200., |_, _| {
+            incular_widgets::SizedBox::new().width(300.).height(200.)
         })
         .scroll_behavior(SliverHeaderScrollBehavior::Pinned)
         .overscroll_behavior(SliverHeaderOverscrollBehavior::Stretch);
@@ -314,44 +312,90 @@ fn decorated_stretching_header_uses_the_current_paint_extent_without_growing_scr
     tree.mount(Directionality::new(TextDirection::Ltr, viewport).into())
         .unwrap();
     tree.layout(Constraints::tight(view)).unwrap();
+    tree
+}
+
+fn assert_stretched_outline(tree: &mut WidgetTree, height: f32) {
+    let view = Size::new(300., 500.);
+    tree.layout(Constraints::tight(view)).unwrap();
+    tree.update_compositor(Instant::now()).unwrap();
+    let mut transforms = vec![Offset::ZERO];
+    let mut found = Vec::new();
+    for command in tree.paint().commands() {
+        match command {
+            PaintCommand::PushTransform { transform } => {
+                transforms
+                    .push(*transforms.last().unwrap() + transform.transform_point(Offset::ZERO));
+            }
+            PaintCommand::PopTransform => {
+                transforms.pop();
+            }
+            PaintCommand::StrokePath {
+                path,
+                brush: Brush::Solid(color),
+                stroke,
+            } if *color == EDGE => {
+                assert_eq!(stroke.width, 1.);
+                let mut bounds = path.bounds().unwrap();
+                bounds.origin = bounds.origin + *transforms.last().unwrap();
+                found.push(bounds);
+            }
+            _ => {}
+        }
+    }
+    assert_eq!(found.len(), 1);
+    let actual = found[0];
+    assert!(
+        actual.origin.x.abs() <= 0.03 && actual.origin.y.abs() <= 0.03,
+        "{actual:?}"
+    );
+    assert_eq!(actual.size.width, 300.);
+    assert!((actual.size.height - height).abs() <= 0.03, "{actual:?}");
+}
+
+#[test]
+fn decorated_stretching_header_uses_the_current_paint_extent_without_growing_scroll_range() {
+    let controller = ScrollController::new();
+    let mut tree = mounted_stretching_header(&controller);
     let range = controller.max_offset();
     for (offset, height) in [(-25.1, 225.1), (0., 200.)] {
         assert!(controller.jump_to(offset));
-        tree.layout(Constraints::tight(view)).unwrap();
-        tree.update_compositor(Instant::now()).unwrap();
+        assert_stretched_outline(&mut tree, height);
         assert_eq!(controller.max_offset(), range);
-        let mut transforms = vec![Offset::ZERO];
-        let mut found = Vec::new();
-        for command in tree.paint().commands() {
-            match command {
-                PaintCommand::PushTransform { transform } => {
-                    transforms.push(
-                        *transforms.last().unwrap() + transform.transform_point(Offset::ZERO),
-                    );
-                }
-                PaintCommand::PopTransform => {
-                    transforms.pop();
-                }
-                PaintCommand::StrokePath {
-                    path,
-                    brush: Brush::Solid(color),
-                    stroke,
-                } if *color == EDGE => {
-                    assert_eq!(stroke.width, 1.);
-                    let mut bounds = path.bounds().unwrap();
-                    bounds.origin = bounds.origin + *transforms.last().unwrap();
-                    found.push(bounds);
-                }
-                _ => {}
-            }
-        }
-        assert_eq!(found.len(), 1);
-        let actual = found[0];
-        assert!(
-            actual.origin.x.abs() <= 0.03 && actual.origin.y.abs() <= 0.03,
-            "{actual:?}"
-        );
-        assert_eq!(actual.size.width, 300.);
-        assert!((actual.size.height - height).abs() <= 0.03, "{actual:?}");
     }
+}
+
+#[test]
+fn decorated_stretching_header_receives_the_flutter_touch_drag() {
+    use incular_core::{PointerDeviceKind, PointerPhase};
+    use incular_gestures::PointerEvent;
+    let controller = ScrollController::new();
+    let mut tree = mounted_stretching_header(&controller);
+    let now = Instant::now();
+    tree.update_compositor(now).unwrap();
+    let mut offsets = Vec::new();
+    for (phase, y) in [
+        (PointerPhase::Down, 250.),
+        (PointerPhase::Move, 270.),
+        (PointerPhase::Move, 295.),
+        (PointerPhase::Up, 295.),
+    ] {
+        tree.dispatch_pointer_gesture_in_window(
+            0,
+            1,
+            PointerDeviceKind::Touch,
+            PointerEvent {
+                pointer: 1,
+                position: Offset::new(150., y),
+                phase,
+                time: now,
+            },
+        );
+        offsets.push(controller.offset());
+    }
+    assert_eq!(offsets[0], 0.);
+    assert!((offsets[1] + 3.5 / 3.).abs() <= 0.0001);
+    assert!((offsets[2] + 25.079_237).abs() <= 0.0001);
+    assert_eq!(offsets[3], offsets[2]);
+    assert_stretched_outline(&mut tree, 200. - offsets[2]);
 }
