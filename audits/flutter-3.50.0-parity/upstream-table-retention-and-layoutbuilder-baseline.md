@@ -82,3 +82,15 @@ Incular deliberately reveals the **current** bounds, reaching offset
 that the old synthetic ID cannot dispatch after removal. Existing
 PageView reveal tests still pass. This authored comparison does not
 alter the pinned original coverage count.
+
+## RenderTable sizes and flat-cell updates
+
+Pinned `rendering/table_test.dart:43,50,161,174,295` passed by exact name.
+The native retained table shrinks to zero under loose constraints, divides
+100 pixels among six actual cells, and detaches a removed last-row cell
+before another layout. Two updates move the same three keyed cells
+across the six slots without changing the table's own identity or its
+two-row, three-column geometry. The tight 800×600 RTL fixture also uses
+the original seven flex weights: 1 and six copies of 0.123. The measured
+cells remain finite, retain their 100-pixel height, and meet edge to edge
+without losing width. All five focused checks passed.
