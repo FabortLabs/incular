@@ -112,7 +112,7 @@ pub mod prelude {
         WrapCrossAlignment,
     };
     pub use incular_core::{
-        BACK_POINTER_BUTTON, ChangeImpact, ChangeNotifier, ChangeNotifierSubscription, Code, Color,
+        BACK_POINTER_BUTTON, BitField, ChangeImpact, ChangeNotifier, ChangeNotifierSubscription, Code, Color,
         DebugPrintBuffer, DirtyFlags, FORWARD_POINTER_BUTTON, HslColor, HsvColor, ImeEvent, InputEvent,
         Invalidation, Key, KeyState, KeyboardEvent, KeyboardKey, Lerp, LocalKey, Location,
         Modifiers, NamedKey,

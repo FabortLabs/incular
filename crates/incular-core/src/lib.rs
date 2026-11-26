@@ -1,6 +1,7 @@
 //! Renderer- and platform-independent primitives shared by Incular.
 
 mod arena;
+mod bit_field;
 mod caching_iterable;
 mod change_notifier;
 pub mod collections;
@@ -31,6 +32,7 @@ mod value_notifier;
 mod widget;
 
 pub use arena::{Arena, ArenaId};
+pub use bit_field::{BitField, K_MAX_UNSIGNED_SMI};
 pub use caching_iterable::{CachingCursor, CachingIndexError, CachingIterable};
 pub use change_notifier::{ChangeNotifier, ChangeNotifierSubscription};
 pub use debug_print::{DebugPrintBuffer, debug_print_synchronously, debug_word_wrap};
