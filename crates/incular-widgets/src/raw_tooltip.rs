@@ -40,7 +40,6 @@ use incular_config::{Alignment, Constraints, TransientPresentation};
 use incular_core::{Offset, Size};
 use incular_gestures::PointerDeviceKind;
 use incular_rendering::LayerLink;
-use incular_semantics::SemanticRole;
 use incular_text::RichText;
 use smart_default::SmartDefault;
 
@@ -1561,8 +1560,12 @@ impl RawTooltip {
         }
 
         let controller = self.controller.clone();
+        let anchor_child = self.semantic_value().map_or_else(
+            || self.child.clone(),
+            |tooltip| Semantics::new(self.child.clone()).tooltip(tooltip).into(),
+        );
         let mut anchor: Widget =
-            CompositedTransformTarget::new(self.layer_link.clone(), self.child.clone()).into();
+            CompositedTransformTarget::new(self.layer_link.clone(), anchor_child).into();
 
         // RawTooltip listens for hover on every trigger mode. The same device
         // set is used by the overlay region below so moving into the popup
@@ -1656,18 +1659,6 @@ impl RawTooltip {
                 .on_focus_change(move |focused| {
                     let _ = focus_controller.focus_changed_at(focused, Instant::now());
                 })
-                .into();
-        }
-
-        if let Some(semantics) = self.semantic_value() {
-            // The retained semantics collector only emits a wrapper when it
-            // has a role. A role-less `Semantics::tooltip` annotation is
-            // therefore transparent and its description never reaches the
-            // retained tree. GenericContainer is the renderer-neutral
-            // equivalent of Flutter's containerized tooltip annotation.
-            anchor = Semantics::new(anchor)
-                .role(SemanticRole::GenericContainer)
-                .tooltip(semantics)
                 .into();
         }
 

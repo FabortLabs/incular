@@ -2541,3 +2541,5 @@ packages/flutter/test/widgets/raw_tooltip_test.dart	2581	Tooltip does not initia
 packages/flutter/test/widgets/raw_tooltip_test.dart	2619	Tooltip does not crash when showing the tooltip but the OverlayPortal is unmounted, during dispose	paired-match	upstream-raw-tooltip-animation.md
 packages/flutter/test/widgets/raw_tooltip_test.dart	889	Tooltip shows without delay when the mouse moves from another tooltip	paired-match	upstream-raw-tooltip-hover.md
 packages/flutter/test/widgets/raw_tooltip_test.dart	952	Tooltip shows/hides when the mouse hovers, and then exits and re-enters in quick succession	paired-match	upstream-raw-tooltip-hover.md
+packages/flutter/test/widgets/raw_tooltip_test.dart	1539	Semantics included	paired-match	upstream-raw-tooltip-semantics.md
+packages/flutter/test/widgets/raw_tooltip_test.dart	1597	Semantics excluded	paired-match	upstream-raw-tooltip-semantics.md
