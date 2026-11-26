@@ -51,9 +51,9 @@ conflicts by changing production. Target `flutter_box_fit_paint_parity`.
 
 `animation/curves_test.dart:28,278,291,511` match Threshold, Split,
 five explicit-handle spline points, and CatmullRomCurve rejection
-samples. :318 is partial: short point lists and invalid tension
-reject on both, but non-finite points and endpoint handles return
-success in Rust. The invalid Rust sampler was not run.
+samples. The prior :318 failure on non-finite control points and
+handles was repaired and rerun in the
+[precomputation comparison](upstream-catmull-rom-precompute.md).
 Target `flutter350_upstream_curve_geometry`.
 
 `text_style_test.dart:480` expects component-wise shadow interpolation

@@ -44,9 +44,21 @@ pub trait Curve2D {
     /// `end`, denser where the curve bends, ending once each span is flat to
     /// within `tolerance` (Flutter's default is `1e-10`).
     fn generate_samples(&self, start: f64, end: f64, tolerance: f64) -> Vec<Curve2DSample> {
+        assert!(
+            0.0 <= start && start < end && end <= 1.0,
+            "curve sampling requires increasing bounds in [0, 1]",
+        );
+        assert!(
+            tolerance.is_finite() && tolerance > 0.0,
+            "curve sampling tolerance must be positive and finite"
+        );
         let mut random = DartRandom::new(self.sampling_seed());
         let sample_at = |t: f64| {
             let (x, y) = self.transform_xy(t);
+            assert!(
+                x.is_finite() && y.is_finite(),
+                "the curve returned a non-finite sample at {t}"
+            );
             Curve2DSample { t, x, y }
         };
         let first = sample_at(start);
@@ -58,10 +70,17 @@ pub trait Curve2D {
         let mut stack = vec![(first, last, force)];
         while let Some((p, q, force)) = stack.pop() {
             let t = p.t + (0.45 + 0.1 * random.next_double()) * (q.t - p.t);
+            // Even an extreme tolerance cannot subdivide a span once its
+            // endpoints are adjacent representable parameters.
+            if t <= p.t || t >= q.t {
+                samples.push(q);
+                continue;
+            }
             let r = sample_at(t);
             let (prx, pry) = (p.x - r.x, p.y - r.y);
             let (qrx, qry) = (q.x - r.x, q.y - r.y);
             let z = prx * qry - qrx * pry;
+            assert!(z.is_finite(), "non-finite curve sampling area");
             if !force && z * z < tolerance {
                 samples.push(q);
             } else {
@@ -174,6 +193,14 @@ pub enum CatmullRomSplineError {
     TensionOutOfRange(f32),
     /// Fewer than four control points were given.
     TooFewControlPoints(usize),
+    /// A control point contains NaN or infinity.
+    NonFiniteControlPoint(usize),
+    /// The explicit start handle contains NaN or infinity.
+    NonFiniteStartHandle,
+    /// The explicit end handle contains NaN or infinity.
+    NonFiniteEndHandle,
+    /// Coincident adjacent points or handles give a segment no finite tangent.
+    DegenerateSegment(usize),
 }
 
 impl std::fmt::Display for CatmullRomSplineError {
@@ -185,6 +212,16 @@ impl std::fmt::Display for CatmullRomSplineError {
             Self::TooFewControlPoints(_) => f.write_str(
                 "There must be at least four control points to create a CatmullRomSpline.",
             ),
+            Self::NonFiniteControlPoint(index) => {
+                write!(f, "CatmullRomSpline control point {index} must be finite")
+            }
+            Self::NonFiniteStartHandle => {
+                f.write_str("CatmullRomSpline start handle must be finite")
+            }
+            Self::NonFiniteEndHandle => f.write_str("CatmullRomSpline end handle must be finite"),
+            Self::DegenerateSegment(index) => {
+                write!(f, "CatmullRomSpline segment {index} has no finite tangent")
+            }
         }
     }
 }
@@ -212,6 +249,18 @@ impl CatmullRomSpline {
     #[must_use]
     pub fn new(control_points: &[Offset], tension: f32) -> Self {
         Self::with_handles(control_points, tension, None, None)
+    }
+
+    /// Precomputes the spline's segment coefficients and validates its data.
+    /// Rust also computes eagerly when using [Self::new] or [Self::with_handles].
+    #[must_use]
+    pub fn precompute(
+        control_points: &[Offset],
+        tension: f32,
+        start_handle: Option<Offset>,
+        end_handle: Option<Offset>,
+    ) -> Self {
+        Self::with_handles(control_points, tension, start_handle, end_handle)
     }
 
     /// [`Self::new`] with explicit start and end handles.
@@ -259,15 +308,31 @@ impl CatmullRomSpline {
                 control_points.len(),
             ));
         }
+        let finite = |offset: Offset| offset.x.is_finite() && offset.y.is_finite();
+        if start_handle.is_some_and(|handle| !finite(handle)) {
+            return Err(CatmullRomSplineError::NonFiniteStartHandle);
+        }
+        if end_handle.is_some_and(|handle| !finite(handle)) {
+            return Err(CatmullRomSplineError::NonFiniteEndHandle);
+        }
+        if let Some(index) = control_points.iter().position(|&point| !finite(point)) {
+            return Err(CatmullRomSplineError::NonFiniteControlPoint(index));
+        }
         let points: Vec<Point> = control_points.iter().copied().map(point).collect();
-        Ok(Self {
-            segments: compute_segments(
-                &points,
-                f64::from(tension),
-                start_handle.map(point),
-                end_handle.map(point),
-            ),
-        })
+        let segments = compute_segments(
+            &points,
+            f64::from(tension),
+            start_handle.map(point),
+            end_handle.map(point),
+        );
+        if let Some(index) = segments.iter().position(|segment| {
+            segment
+                .iter()
+                .any(|&(x, y)| !x.is_finite() || !y.is_finite())
+        }) {
+            return Err(CatmullRomSplineError::DegenerateSegment(index));
+        }
+        Ok(Self { segments })
     }
 
     fn from_points(points: &[Point], tension: f64) -> Self {
@@ -412,6 +477,12 @@ impl CatmullRomCurve {
         }
     }
 
+    /// Explicitly precomputes the samples used for fast seek and interpolation.
+    #[must_use]
+    pub fn precompute(control_points: &[Offset], tension: f32) -> Self {
+        Self::new(control_points, tension)
+    }
+
     #[must_use]
     pub fn control_points(&self) -> &[Offset] {
         &self.control_points
@@ -433,6 +504,17 @@ impl CatmullRomCurve {
         tension: f32,
     ) -> Result<(), Vec<String>> {
         let mut reasons = Vec::new();
+        if !(0.0..=1.0).contains(&tension) {
+            reasons.push(format!("Curve tension {tension} must be within [0, 1]."));
+            return Err(reasons);
+        }
+        if let Some(index) = control_points
+            .iter()
+            .position(|point| !point.x.is_finite() || !point.y.is_finite())
+        {
+            reasons.push(format!("Curve control point {index} must be finite."));
+            return Err(reasons);
+        }
         if control_points.len() < 2 {
             reasons
                 .push("There must be at least two points supplied to create a valid curve.".into());
@@ -468,6 +550,10 @@ impl CatmullRomCurve {
         let spline = CatmullRomSpline::from_points(&points, f64::from(tension));
         let start = spline.find_inverse(0.0);
         let end = spline.find_inverse(1.0);
+        if start >= end {
+            reasons.push("The resulting timing curve has no increasing sampled domain.".into());
+            return Err(reasons);
+        }
         let samples = spline.generate_samples(start, end, 1e-10);
         const TOLERANCE: f64 = 1e-3;
         let first = samples[0];
