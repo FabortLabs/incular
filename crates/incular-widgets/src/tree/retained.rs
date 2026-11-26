@@ -270,23 +270,26 @@ impl WidgetTree {
             };
             if let Some(slot) = &marker.layout_slot {
                 let local_center = |size: Size| Offset::new(size.width / 2.0, size.height / 2.0);
-                let (anchor_rect, anchor_center, anchor_size) = if let Some(rect) = marker.anchor_override {
-                    (rect, rect.origin + local_center(rect.size), rect.size)
-                } else {
-                    let Some(render) = self.render_id(anchor) else {
-                        continue;
+                let (anchor_rect, anchor_center, anchor_size, anchor_projectable) =
+                    if let Some(rect) = marker.anchor_override {
+                        (rect, rect.origin + local_center(rect.size), rect.size, true)
+                    } else {
+                        let Some(render) = self.render_id(anchor) else {
+                            continue;
+                        };
+                        let Some(node) = self.renders.get(render.0) else {
+                            continue;
+                        };
+                        let size = node.size;
+                        let world = self.render_world_transform(render);
+                        let determinant = world.to_kurbo().determinant();
+                        (
+                            world.transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, size)),
+                            world.transform_point(local_center(size)),
+                            size,
+                            determinant.is_finite() && determinant != 0.0,
+                        )
                     };
-                    let Some(node) = self.renders.get(render.0) else {
-                        continue;
-                    };
-                    let size = node.size;
-                    let world = self.render_world_transform(render);
-                    (
-                        world.transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, size)),
-                        world.transform_point(local_center(size)),
-                        size,
-                    )
-                };
                 if slot.publish(crate::transient::OverlayLayoutGeometry {
                     info: crate::OverlayChildLayoutInfo {
                         anchor_rect,
@@ -294,6 +297,7 @@ impl WidgetTree {
                     },
                     anchor_center,
                     anchor_size,
+                    anchor_projectable,
                 }) {
                     self.refresh_stateful_layout_builders();
                 }

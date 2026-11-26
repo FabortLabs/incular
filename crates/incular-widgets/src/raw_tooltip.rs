@@ -1469,13 +1469,20 @@ impl RawTooltip {
             let vertical_offset = self.vertical_offset;
             return portal
                 .presentation(TransientPresentation::Overlay)
-                .overlay_child_geometry_builder(move |_, geometry| {
-                    let Some(geometry) = geometry else {
+                .overlay_child_geometry_builder(move |context, geometry| {
+                    let Some(geometry) = geometry.filter(|geometry| geometry.anchor_projectable)
+                    else {
                         return crate::SizedBox::shrink().into();
                     };
+                    let viewport = geometry.info.overlay_size;
+                    let bottom_inset = context.media_query_view_insets().unwrap_or_default().bottom;
+                    let available = Size::new(
+                        viewport.width,
+                        (viewport.height - bottom_inset).max(0.0),
+                    );
                     crate::CustomSingleChildLayout::new(
                         ViewportTooltipLayout {
-                            overlay_size: geometry.info.overlay_size,
+                            overlay_size: available,
                             target: geometry.anchor_center,
                             target_size: geometry.anchor_size,
                             prefer_below,

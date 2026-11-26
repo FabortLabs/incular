@@ -41,3 +41,18 @@ mounted text-backed tooltip starts at zero viewport size and keeps
 its anchor at zero size. All five focused native placement checks
 passed; 17 additional overlay layout, raw menu and tooltip
 regressions also passed against the placement implementation.
+
+## Keyboard insets and singular anchors
+
+Two authored pinned Flutter controls pass. With an open tooltip
+near the lower edge, changing its ambient MediaQuery bottom inset
+from 0 to 200 moves the measured bubble from below the anchor
+(y=380) to above it (y=340). Removing the inset puts it back.
+A singular anchor transform produces no overlay content; the same
+tooltip appears when the already-open anchor becomes projectable.
+
+Incular originally failed both mounted checks. The inset now reduces
+the usable overlay height instead of moving the target. A zero or
+nonfinite determinant suppresses the content until the retained
+geometry changes. All 19 related native checks passed. These
+authored controls add no upstream registrations.

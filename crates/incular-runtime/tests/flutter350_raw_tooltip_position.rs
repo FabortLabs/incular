@@ -260,3 +260,61 @@ fn long_pressed_tooltip_paragraph_inherits_each_layout_direction() {
     press(&mut runtime, start + Duration::from_secs(11), 32);
     inspect(&runtime, TextDirection::Ltr);
 }
+
+#[test]
+fn an_open_tooltip_repositions_when_the_keyboard_reduces_its_usable_overlay() {
+    use incular_config::{EdgeInsets, RuntimeEnvironment};
+    use incular_widgets::MediaQuery;
+
+    let controller = RawTooltipController::new();
+    let tooltip = RawTooltip::with_builder(SizedBox::shrink(), tooltip_builder(40.))
+        .controller(controller.clone());
+    let anchor = Positioned::builder().left(400.).top(380.).child(tooltip).build();
+    let scene = |bottom| {
+        let data = RuntimeEnvironment {
+            viewport: VIEW,
+            view_insets: EdgeInsets { bottom, ..EdgeInsets::ZERO },
+            ..Default::default()
+        };
+        WidgetsApp::new(MediaQuery::new(data, Stack::new([anchor.clone()]))).into()
+    };
+    let mut runtime = Runtime::new(scene(0.)).unwrap();
+    let root = runtime.tree().root().unwrap();
+    let start = Instant::now();
+    frame(&mut runtime, start);
+    assert!(controller.show_at(start + Duration::from_millis(10)));
+    frame(&mut runtime, start + Duration::from_millis(200));
+    assert_eq!(tooltip_bounds(&runtime).origin, Offset::new(350., 380.));
+
+    runtime.schedule_update(root, scene(200.)).unwrap();
+    frame(&mut runtime, start + Duration::from_millis(300));
+    assert_eq!(tooltip_bounds(&runtime).origin, Offset::new(350., 340.));
+
+    runtime.schedule_update(root, scene(0.)).unwrap();
+    frame(&mut runtime, start + Duration::from_millis(400));
+    assert_eq!(tooltip_bounds(&runtime).origin, Offset::new(350., 380.));
+}
+
+#[test]
+fn a_singular_anchor_has_no_overlay_content_until_it_can_be_projected_again() {
+    use incular_core::Transform as Affine;
+    use incular_widgets::Transform;
+
+    let controller = RawTooltipController::new();
+    let scene = |scale| {
+        let tooltip = RawTooltip::with_builder(SizedBox::square(50.), tooltip_builder(40.))
+            .controller(controller.clone());
+        WidgetsApp::new(Center::new(Transform::new(Affine::scale(scale), tooltip))).into()
+    };
+    let mut runtime = Runtime::new(scene(0.)).unwrap();
+    let start = Instant::now();
+    frame(&mut runtime, start);
+    assert!(controller.show_at(start + Duration::from_millis(10)));
+    frame(&mut runtime, start + Duration::from_millis(200));
+    assert!(runtime.tree().element_with_key(&"measured tooltip".into()).is_none());
+
+    let root = runtime.tree().root().unwrap();
+    runtime.schedule_update(root, scene(1.)).unwrap();
+    frame(&mut runtime, start + Duration::from_millis(300));
+    assert!(runtime.tree().element_with_key(&"measured tooltip".into()).is_some());
+}

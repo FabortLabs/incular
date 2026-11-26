@@ -598,6 +598,7 @@ pub(crate) struct OverlayLayoutGeometry {
     pub info: OverlayChildLayoutInfo,
     pub anchor_center: Offset,
     pub anchor_size: Size,
+    pub anchor_projectable: bool,
 }
 
 /// The geometry a layout-built overlay reads, written by the transient
