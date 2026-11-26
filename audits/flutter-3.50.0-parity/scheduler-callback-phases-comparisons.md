@@ -263,3 +263,31 @@ microtask runs before persistent draw, and the single step increments
 both phase counters by exactly one even with a following tick queued.
 The retained root is not replaced. No workload timing benchmark is
 claimed from either behavioral fixture.
+
+### Native redraw arriving between warm-up phases
+
+The original `scheduler_test.dart:281` remains skipped by the pinned
+SDK and is not counted. The isolated authored Dart probe uses the real
+SchedulerBinding and records its two timers deterministically. A
+native begin/draw pair fired between those timers does not enter the
+framework, does not advance the warm-up phase and is not immediately
+rescheduled. The warm-up draw completes and requests just one normal
+frame. Delivering it clears the outstanding request.
+
+Incular previously exposed the blocked application redraw immediately,
+allowing a host to request it again before warm-up finished. A directly
+driven Runtime rejected the blocked invocation but did not retain
+the redraw if no other source requested one. Both paths now coalesce
+collisions, suppress competing host requests during the reservation,
+and retain exactly one retry when the owner finishes. Tests drive a
+real Application window and two directly driven Runtime instances,
+check the warm-up timestamp survives both collisions and that the
+following transient callback runs once. All 11 focused native cases,
+including hot reassembly, plus the authored Flutter case passed.
+A directly driven Runtime continues to report the existing
+`WarmUpFrameInProgress` error for the immediate blocked attempt.
+
+```sh
+cargo test --locked -j 1 -p incular-runtime --features hot-reload --test flutter350_scheduler_warm_up -- --test-threads=1
+bash audits/flutter-3.50.0-parity/run-reference-linux.sh probe scheduler_warm_up_interleave_test.dart
+```

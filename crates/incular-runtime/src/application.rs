@@ -1663,10 +1663,7 @@ impl Application {
                     scheduler_counters::FRAMES_SKIPPED.fetch_add(1, Ordering::Relaxed);
                     Ok(None)
                 } else {
-                    if incular_animation::scheduler::warm_up_frame_pending() {
-                        // Another directly driven Runtime may have split its
-                        // turn. Keep pending work for the next host redraw.
-                        record.runtime.frame_requested = true;
+                    if record.runtime.defer_native_frame_during_warm_up() {
                         return Ok(None);
                     }
                     if record.warm_up_requested {

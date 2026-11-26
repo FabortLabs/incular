@@ -322,3 +322,80 @@ fn a_single_benchmark_step_draws_once_even_with_follow_up_work() {
     assert_eq!(runtime.tree().element_with_key(&root_key), Some(element));
     ticker.stop();
 }
+
+#[test]
+fn redraws_from_another_runtime_are_coalesced_until_warm_up_draw() {
+    use incular_animation::scheduler::schedule_frame_callback_with_request;
+
+    let start = Instant::now();
+    let mut owner = runtime();
+    let mut other = runtime();
+    other.run_frame_at(constraints(), start).unwrap();
+    assert!(!other.frame_requested());
+
+    assert!(owner.schedule_warm_up_frame());
+    assert!(owner.begin_warm_up_frame_at(start + Duration::from_secs(1)));
+    let owner_time = current_frame_time();
+    let calls = Rc::new(Cell::new(0));
+    schedule_frame_callback_with_request(
+        {
+            let calls = calls.clone();
+            move |_| calls.set(calls.get() + 1)
+        },
+        false,
+    );
+    for offset in [2, 3] {
+        assert!(matches!(
+            other.run_frame_at(constraints(), start + Duration::from_secs(offset)),
+            Err(TreeError::WarmUpFrameInProgress)
+        ));
+        assert!(owner.frame_requested());
+        assert!(!other.frame_requested(), "don't spin the native host");
+        assert_eq!(calls.get(), 0);
+        assert_eq!(current_frame_time(), owner_time);
+        assert_eq!(current_system_frame_time(), Some(start));
+    }
+
+    owner.draw_warm_up_frame(constraints()).unwrap().unwrap();
+    assert!(!owner.frame_requested());
+    assert!(other.frame_requested());
+    assert_eq!(calls.get(), 0);
+    let retried_at = start + Duration::from_secs(4);
+    other.run_frame_at(constraints(), retried_at).unwrap();
+    assert_eq!(calls.get(), 1);
+    assert_eq!(current_system_frame_time(), Some(retried_at));
+    assert!(!other.frame_requested(), "one retry consumes coalesced demand");
+}
+
+#[test]
+fn application_only_exposes_a_deferred_native_redraw_after_warm_up() {
+    use incular_runtime::Application;
+
+    let size = Size::new(100., 100.);
+    let mut app = Application::new(move |_| Widget::box_(size, Color::WHITE)).unwrap();
+    let window = app.primary_window();
+    let start = Instant::now();
+    app.run_window_frame_at(window, constraints(), start)
+        .unwrap()
+        .unwrap();
+    assert!(!app.frame_requested(window));
+
+    let mut owner = runtime();
+    assert!(owner.schedule_warm_up_frame());
+    assert!(owner.begin_warm_up_frame_at(start + Duration::from_millis(1)));
+    for ms in [16, 32] {
+        app.note_frame_requested(window);
+        assert!(
+            app.run_window_frame_at(window, constraints(), start + Duration::from_millis(ms))
+                .unwrap()
+                .is_none()
+        );
+        assert!(!app.frame_requested(window));
+    }
+    owner.draw_warm_up_frame(constraints()).unwrap().unwrap();
+    assert!(app.frame_requested(window));
+    app.run_window_frame_at(window, constraints(), start + Duration::from_millis(48))
+        .unwrap()
+        .unwrap();
+    assert!(!app.frame_requested(window));
+}

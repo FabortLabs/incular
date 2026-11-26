@@ -1424,8 +1424,16 @@ impl Runtime {
     }
     #[must_use]
     pub fn frame_requested(&self) -> bool {
-        self.warm_up_frame.is_some()
-            || self.frame_requested
+        if self.warm_up_frame.is_some() {
+            return true;
+        }
+        // A warm-up owned elsewhere on the UI thread must complete before
+        // this runtime can admit a redraw. Keep demand, but do not make
+        // a native host spin requesting the same blocked event.
+        if incular_animation::scheduler::warm_up_frame_pending() {
+            return false;
+        }
+        self.frame_requested
             || self.reactive.borrow().has_work()
             || self.tree.has_dirty_dependencies()
             || self.tree.has_pending_application_fonts()
@@ -3289,10 +3297,21 @@ impl Runtime {
                 .draw_warm_up_frame(constraints)
                 .map(|frame| frame.expect("warm-up frame starts before draw"));
         }
-        if incular_animation::scheduler::warm_up_frame_pending() {
+        if self.defer_native_frame_during_warm_up() {
             return Err(TreeError::WarmUpFrameInProgress);
         }
         self.run_frame_mode(constraints, now, false)
+    }
+
+    /// Consumes a colliding host redraw without losing its demand. Repeated
+    /// collisions coalesce, and [Self::frame_requested] exposes the retry
+    /// only after the warm-up owner's draw releases the reservation.
+    pub(crate) fn defer_native_frame_during_warm_up(&mut self) -> bool {
+        if !incular_animation::scheduler::warm_up_frame_pending() {
+            return false;
+        }
+        self.frame_requested = true;
+        true
     }
 
     fn run_frame_mode(
