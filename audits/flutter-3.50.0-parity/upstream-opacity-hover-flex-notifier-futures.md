@@ -88,6 +88,26 @@ keeping the explicit disposal versus last-owner release distinction.
 :185 is partial: a completed ticker drives a normal generic Rust Future
 continuation, but the Dart-only asStream, timeout, and promise methods
 aren't reproduced. All four selected originals and the seven focused
-Rust ticker-future tests passed. The adjacent run-semantics target still
-exposes the separately documented f32 precision mismatch; it is not a
-failure of these future comparisons.
+Rust ticker-future tests passed. The adjacent run-semantics precision discrepancy was subsequently
+[repaired](upstream-animated-size-overflow-controller-and-navigation.md#double-precision-linear-controller-values).
+
+
+## Notifier disposal, diagnostics, and composition
+
+Four pinned ChangeNotifier originals passed (:64, :83, :415, :480).
+The disposal test pairs the observable debug assertion at the reporter
+boundary: disposing from the callback reports one failure, never
+returns to the following statement in that callback, and still allows
+ordinary disposal after dispatch. The new Rust collector returns the
+original payloads in notification order for an embedder's reporter; the
+ordinary Rust entry point still resumes the first failure. The broader
+:83 case stays partial because it uses Flutter's automatic global error
+reporting and removal by callback identity rather than Rust ownership.
+
+The merged-listenable diagnostic now preserves empty, absent, ordered
+and repeated source slots without moving absent entries into dispatch.
+It prints the Rust source type, not a Dart subclass instance name, so
+:415 is partial. The Rust composition control matches the notification
+and owner's state change in :480, but doesn't emulate Dart inheritance
+or mixin syntax. All 26 focused Rust notifier, observer and allocation
+tests passed.

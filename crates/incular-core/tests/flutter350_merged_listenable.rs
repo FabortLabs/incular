@@ -97,3 +97,29 @@ fn repeated_sources_register_each_occurrence() {
     drop(listener);
     assert_eq!(source.subscriber_count(), 0);
 }
+
+#[test]
+fn formatting_preserves_empty_absent_and_duplicate_source_slots() {
+    let a = DependencySource::default();
+    let b = DependencySource::default();
+    for (sources, expected) in [
+        (vec![], "Listenable.merge([])"),
+        (vec![None], "Listenable.merge([null])"),
+        (
+            vec![Some(a.clone())],
+            "Listenable.merge([DependencySource])",
+        ),
+        (
+            vec![Some(a.clone()), Some(b.clone())],
+            "Listenable.merge([DependencySource, DependencySource])",
+        ),
+        (
+            vec![None, Some(b), Some(a.clone()), Some(a)],
+            "Listenable.merge([null, DependencySource, DependencySource, DependencySource])",
+        ),
+    ] {
+        let merged = MergedListenable::new(sources);
+        assert_eq!(merged.to_string(), expected);
+        assert_eq!(format!("{merged:?}"), expected);
+    }
+}

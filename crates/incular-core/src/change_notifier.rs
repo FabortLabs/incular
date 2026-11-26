@@ -2,6 +2,7 @@
 
 use crate::reactivity::DependencySource;
 use std::{
+    any::Any,
     cell::RefCell,
     panic::{AssertUnwindSafe, catch_unwind, resume_unwind},
     rc::{Rc, Weak},
@@ -150,6 +151,20 @@ impl ChangeNotifier {
     /// # Panics
     /// Panics if the notifier is disposed, or if a listener panicked.
     pub fn notify_listeners(&self) {
+        if let Some(payload) = self.notify_listeners_collecting_panics().into_iter().next() {
+            resume_unwind(payload);
+        }
+    }
+
+    /// Delivers the same notification while collecting failure payloads
+    /// in dispatch order instead of resuming unwinding afterward. An
+    /// embedder can pass these to its UI error reporter; normal delivery
+    /// and deferred listener cleanup still finish.
+    ///
+    /// # Panics
+    /// Panics if the notifier has already been disposed. Callback panics
+    /// are recoverable only in unwinding builds.
+    pub fn notify_listeners_collecting_panics(&self) -> Vec<Box<dyn Any + Send + 'static>> {
         let (end, tracked) = {
             let mut state = self.0.borrow_mut();
             state.assert_alive();
@@ -159,34 +174,28 @@ impl ChangeNotifier {
                     .as_ref()
                     .is_none_or(|source| source.subscriber_count() == 0)
             {
-                return;
+                return Vec::new();
             }
             state.depth += 1;
             (state.listeners.len(), state.tracked.clone())
         };
         let guard = Notification(&self.0);
-        let mut first_panic = None;
+        let mut failures = Vec::new();
         for index in 0..end {
             let callback = self.0.borrow().listeners[index]
                 .as_ref()
                 .map(|listener| listener.callback.clone());
             if let Some(callback) = callback
                 && let Err(payload) = catch_unwind(AssertUnwindSafe(|| callback()))
-                && first_panic.is_none()
             {
-                first_panic = Some(payload);
+                failures.push(payload);
             }
         }
         if let Some(tracked) = tracked {
-            let failures = tracked.notify_collecting_panics();
-            if first_panic.is_none() {
-                first_panic = failures.into_iter().next();
-            }
+            failures.extend(tracked.notify_collecting_panics());
         }
         drop(guard);
-        if let Some(payload) = first_panic {
-            resume_unwind(payload);
-        }
+        failures
     }
 
     /// Closes the notifier and releases all callbacks immediately. It is

@@ -125,3 +125,116 @@ fn nested_notification_observes_removals_and_its_own_registration_boundary() {
     notifier.notify_listeners();
     assert_eq!(*log.borrow(), ['A', 'C', 'D']);
 }
+
+#[test]
+fn disposal_inside_a_callback_reports_error_before_returning_to_that_callback() {
+    let notifier = ChangeNotifier::new();
+    let attempted = notifier.clone();
+    let finished = Rc::new(Cell::new(false));
+    let _registration = notifier.add_listener({
+        let finished = finished.clone();
+        move || {
+            attempted.dispose();
+            finished.set(true);
+        }
+    });
+    let errors = notifier.notify_listeners_collecting_panics();
+    assert_eq!(errors.len(), 1);
+    let error = &errors[0];
+    let message = error
+        .downcast_ref::<String>()
+        .map(String::as_str)
+        .or_else(|| error.downcast_ref::<&'static str>().copied())
+        .unwrap();
+    assert!(message.contains("Cannot dispose a ChangeNotifier during notification."));
+    assert!(!finished.get());
+    assert!(notifier.has_listeners());
+    notifier.dispose();
+    assert!(!notifier.has_listeners());
+}
+
+#[test]
+fn one_reported_observer_failure_never_blocks_later_registrations() {
+    use std::{cell::RefCell, panic::panic_any};
+
+    let notifier = ChangeNotifier::new();
+    let trace = Rc::new(RefCell::new(Vec::new()));
+    let register = |label| {
+        let trace = trace.clone();
+        notifier.add_listener(move || trace.borrow_mut().push(label))
+    };
+    let one = register("listener");
+    let duplicate = register("listener");
+    assert!(notifier.notify_listeners_collecting_panics().is_empty());
+    assert_eq!(trace.take(), ["listener", "listener"]);
+    drop(duplicate);
+    assert!(notifier.notify_listeners_collecting_panics().is_empty());
+    assert_eq!(trace.take(), ["listener"]);
+    drop(one);
+    assert!(notifier.notify_listeners_collecting_panics().is_empty());
+    assert!(trace.take().is_empty());
+
+    let one = register("listener");
+    let two = register("listener1");
+    let three = register("listener2");
+    drop(two);
+    let moved = register("listener1");
+    let failing = notifier.add_listener({
+        let trace = trace.clone();
+        move || {
+            trace.borrow_mut().push("badListener");
+            panic_any(23_u8);
+        }
+    });
+    let errors = notifier.notify_listeners_collecting_panics();
+    assert_eq!(
+        trace.take(),
+        ["listener", "listener2", "listener1", "badListener"]
+    );
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0].downcast_ref::<u8>(), Some(&23));
+
+    let still_armed = register("listener1");
+    drop(one);
+    drop(moved);
+    drop(three);
+    let last = register("listener2");
+    let errors = notifier.notify_listeners_collecting_panics();
+    assert_eq!(trace.take(), ["badListener", "listener1", "listener2"]);
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0].downcast_ref::<u8>(), Some(&23));
+    drop((still_armed, last, failing));
+    notifier.dispose();
+}
+
+#[test]
+fn an_embedded_notifier_delivers_before_the_owner_finishes_its_operation() {
+    #[derive(Default)]
+    struct Owner {
+        notifications: ChangeNotifier,
+        result: Rc<Cell<bool>>,
+    }
+
+    impl Owner {
+        fn run(&self) {
+            self.notifications.notify_listeners();
+            self.result.set(true);
+        }
+    }
+
+    let owner = Owner::default();
+    let notifications = Rc::new(Cell::new(0));
+    let _listener = owner.notifications.add_listener({
+        let result = owner.result.clone();
+        let notifications = notifications.clone();
+        move || {
+            assert!(!result.get());
+            notifications.set(notifications.get() + 1);
+        }
+    });
+    assert!(!owner.result.get());
+    assert_eq!(notifications.get(), 0);
+    owner.run();
+    assert!(owner.result.get());
+    assert_eq!(notifications.get(), 1);
+}

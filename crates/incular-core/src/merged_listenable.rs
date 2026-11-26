@@ -1,6 +1,6 @@
 //! Owned subscriptions that listen to several dependency sources.
 
-use std::rc::Rc;
+use std::{fmt, rc::Rc};
 
 use crate::reactivity::{DependencySource, Subscription};
 
@@ -9,16 +9,17 @@ use crate::reactivity::{DependencySource, Subscription};
 /// each source, in source order, until its subscription is dropped.
 #[derive(Clone)]
 pub struct MergedListenable {
-    sources: Rc<[DependencySource]>,
+    sources: Rc<[Option<DependencySource>]>,
 }
 
 impl MergedListenable {
     /// Collects the sources without attaching listeners. Absent entries
-    /// are ignored, while repeated sources are retained.
+    /// are retained for diagnostics and ignored during dispatch; repeated
+    /// sources are retained in order.
     #[must_use]
     pub fn new(sources: impl IntoIterator<Item = Option<DependencySource>>) -> Self {
         Self {
-            sources: sources.into_iter().flatten().collect(),
+            sources: sources.into_iter().collect(),
         }
     }
 
@@ -30,7 +31,7 @@ impl MergedListenable {
 
     /// Tracks every constituent source in the active dependency scope.
     pub fn track(&self) {
-        for source in self.sources.iter() {
+        for source in self.sources.iter().flatten() {
             source.track();
         }
     }
@@ -41,6 +42,7 @@ impl MergedListenable {
         let subscriptions = self
             .sources
             .iter()
+            .flatten()
             .map(|source| {
                 let listener = listener.clone();
                 source.subscribe((), move || listener())
@@ -49,6 +51,29 @@ impl MergedListenable {
         MergedSubscription {
             _subscriptions: subscriptions,
         }
+    }
+}
+
+impl fmt::Display for MergedListenable {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("Listenable.merge([")?;
+        for (index, source) in self.sources.iter().enumerate() {
+            if index != 0 {
+                formatter.write_str(", ")?;
+            }
+            formatter.write_str(if source.is_some() {
+                "DependencySource"
+            } else {
+                "null"
+            })?;
+        }
+        formatter.write_str("])")
+    }
+}
+
+impl fmt::Debug for MergedListenable {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, formatter)
     }
 }
 
