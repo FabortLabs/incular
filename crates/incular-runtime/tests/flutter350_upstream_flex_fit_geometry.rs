@@ -134,10 +134,42 @@ fn min_loose_flex_survives_unbounded_to_bounded_layout() {
     }
 }
 
+#[cfg(debug_assertions)]
 #[test]
-fn unsupported_unbounded_flex_modes_use_documented_intrinsic_fallback() {
-    // The equivalent Flutter debug configurations emit a layout error.
-    // Incular keeps a finite intrinsic layout rather than failing the frame.
+fn invalid_unbounded_flex_reports_a_typed_error_and_recovers_under_finite_constraints() {
+    use incular_widgets::internal::TreeError;
+
+    for (main, fit) in [
+        (MainAxisSize::Min, FlexFit::Tight),
+        (MainAxisSize::Max, FlexFit::Loose),
+    ] {
+        let mut runtime = Runtime::new(in_overflow_box(f32::INFINITY, main, 1, fit)).unwrap();
+        let limits = Constraints::tight(Size::new(800., 600.));
+        let root = runtime.tree().root().unwrap();
+        let flex = runtime.tree().element_with_key(&Key::Value(20)).unwrap();
+        for _ in 0..2 {
+            let err = match runtime.run_frame(limits) {
+                Err(err) => err,
+                Ok(_) => panic!("an invalid flex should never paint an intrinsic substitute"),
+            };
+            assert!(matches!(
+                err,
+                TreeError::UnboundedFlex { dimension: "width", child_index: 1, .. }
+            ));
+            assert!(err.to_string().contains("non-zero flex"));
+            assert!(err.to_string().contains("width constraints are unbounded"));
+        }
+        runtime
+            .schedule_update(root, in_overflow_box(500., main, 1, fit))
+            .unwrap();
+        assert_eq!(measure_nested_flex(&mut runtime), Size::new(500., 100.));
+        assert_eq!(runtime.tree().element_with_key(&Key::Value(20)), Some(flex));
+    }
+}
+
+#[cfg(not(debug_assertions))]
+#[test]
+fn release_layout_keeps_the_intrinsic_fallback_for_unbounded_flex() {
     for (main, fit) in [
         (MainAxisSize::Min, FlexFit::Tight),
         (MainAxisSize::Max, FlexFit::Loose),

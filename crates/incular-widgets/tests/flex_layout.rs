@@ -1,8 +1,8 @@
 //! Row, Column, Flex, Expanded, and Flexible layout contracts.
 //!
 //! A flex factor of zero makes a child inflexible, as in Flutter; spacing is
-//! nonnegative and shared before flex allocation; unbounded main axes
-//! measure flex children intrinsically. Public Row/Column APIs stay
+//! nonnegative and shared before flex allocation; shrink-wrapped unbounded
+//! main axes measure loose flex children intrinsically. Row/Column APIs stay
 //! separate while sharing the retained Flex representation.
 
 use incular_config::{
@@ -68,15 +68,16 @@ fn finite_and_unbounded_main_axis_flex() {
     let kids = row_kids(&tree, root);
     assert_eq!(bounds_of(&tree, kids[1]).2, 170.);
 
-    // Unbounded: flex factors do not size children; everything measures
-    // intrinsically and the row wraps content.
+    // Unbounded: a min-size row with a loose flex child measures
+    // intrinsically and wraps its content.
     let mut tree = WidgetTree::new();
     let root = tree
         .mount(
             Row::new([
                 white_box(30., 20.),
-                Expanded::new(white_box(10., 10.)).into(),
+                Flexible::new(white_box(10., 10.)).into(),
             ])
+            .main_axis_size(MainAxisSize::Min)
             .text_direction(incular_widgets::TextDirection::Ltr)
             .into(),
         )
@@ -478,4 +479,22 @@ fn flex_builder_matches_fluent_construction() {
         .spacing(8.)
         .build();
     assert_eq!(Widget::from(fluent), Widget::from(built));
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn a_tight_flex_child_requires_bounded_height_in_a_column() {
+    use incular_widgets::internal::TreeError;
+
+    let mut tree = WidgetTree::new();
+    tree.mount(
+        Column::new([Expanded::new(white_box(20., 30.))])
+            .main_axis_size(MainAxisSize::Min)
+            .into(),
+    )
+    .unwrap();
+    assert!(matches!(
+        tree.layout(Constraints::new(0., 100., 0., f32::INFINITY)),
+        Err(TreeError::UnboundedFlex { dimension: "height", child_index: 0, .. })
+    ));
 }

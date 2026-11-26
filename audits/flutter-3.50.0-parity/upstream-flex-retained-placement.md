@@ -53,10 +53,13 @@ engines keep the same layout object and report widths
 [300,300,300,500,500,505] with a constant 100px height as the
 constraints and child fit change. The other two registrations
 exercise invalid unbounded configurations: tight/min and loose/max.
-Flutter reports a debug layout exception in each; Incular returns
-an intrinsic 300×100 layout in both. That is the documented retained
-fallback, and these cases record the mismatch rather than claiming
-diagnostic parity.
+Flutter reports a debug layout exception in each. Incular now reports
+a typed debug layout error rather than silently painting an intrinsic
+300×100 substitute. The test repeats the failure, then reuses the same
+retained flex under a finite width and verifies recovery. Release
+layout still contains the intrinsic fallback, as Flutter's normal
+release sizing algorithm does. A native vertical control verifies the
+same diagnostic names height when the vertical main axis is unbounded.
 
 ## Constrained overflow and rounding
 

@@ -77,6 +77,26 @@ impl WidgetTree {
                     })
                     .collect::<Vec<_>>();
 
+                // Flutter's RenderFlex rejects these configurations in
+                // debug builds, before laying out any child. Release keeps
+                // the intrinsic fallback, as Flutter's layout does.
+                if cfg!(debug_assertions)
+                    && !main_max.is_finite()
+                    && let Some(child_index) = flex_meta.iter().position(|(factor, fit)| {
+                        *factor > 0
+                            && (flex.main_axis_size == MainAxisSize::Max || *fit == FlexFit::Tight)
+                    })
+                {
+                    return Err(TreeError::UnboundedFlex {
+                        dimension: match flex.direction {
+                            Axis::Horizontal => "width",
+                            Axis::Vertical => "height",
+                        },
+                        render: id,
+                        child_index,
+                    });
+                }
+
                 let mut flex_children = Vec::with_capacity(children.len());
                 let spacing =
                     f64::from(flex.spacing.max(0.0)) * children.len().saturating_sub(1) as f64;

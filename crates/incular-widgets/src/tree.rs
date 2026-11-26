@@ -284,6 +284,17 @@ pub enum TreeError {
         widget: &'static str,
         reason: String,
     },
+    /// A debug Flex layout cannot distribute remaining space if its parent
+    /// leaves the main axis unbounded.
+    #[error(
+        "RenderFlex children have non-zero flex but incoming {dimension} constraints are unbounded; \
+         supply a finite {dimension}, or use MainAxisSize::Min with FlexFit::Loose"
+    )]
+    UnboundedFlex {
+        dimension: &'static str,
+        render: RenderObjectId,
+        child_index: usize,
+    },
     /// A widget needs a text direction but neither it nor any ancestor
     /// [`Directionality`](crate::Directionality) supplies one.
     ///
