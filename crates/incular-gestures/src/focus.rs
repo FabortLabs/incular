@@ -487,6 +487,16 @@ impl FocusNode {
             .map(|state| Self { state })
     }
 
+    /// Mounted focus ancestors, nearest first. The node itself is excluded.
+    #[must_use]
+    pub fn ancestors(&self) -> Vec<Self> {
+        self.ancestor_iter().collect()
+    }
+
+    fn ancestor_iter(&self) -> impl Iterator<Item = Self> {
+        std::iter::successors(self.parent(), Self::parent)
+    }
+
     /// Immediate mounted focus children in attachment order, irrespective
     /// of eligibility or traversal settings.
     #[must_use]

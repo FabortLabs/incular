@@ -1252,3 +1252,114 @@ fn mounted_focus_nodes_expose_depth_first_descendants_from_the_nearest_boundary(
     assert!(third_parent.parent().is_none() && third_parent.descendants().is_empty());
     assert!(order[4].parent().is_none() && order[5].parent().is_none());
 }
+
+#[test]
+fn focus_ancestors_and_postorder_are_recomputed_after_a_nested_scope_moves() {
+    use incular_widgets::Column;
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let root = FocusScopeNode::new();
+    let traversal = FocusNode::new();
+    let view = FocusScopeNode::new();
+    let scope1 = FocusScopeNode::new();
+    let scope2 = FocusScopeNode::new();
+    let parent1 = FocusNode::new();
+    let parent2 = FocusNode::new();
+    let [child1, child2, child3, child4] = std::array::from_fn(|_| FocusNode::new());
+    let leaf = |node: &FocusNode| {
+        Widget::from(Focus::with_external_focus_node(SizedBox::shrink(), node.clone()))
+    };
+    let scene = |move_scope: bool| {
+        let scope2_widget = FocusScope::with_external_focus_node(
+            Focus::with_external_focus_node(
+                Column::new([leaf(&child3), leaf(&child4)]),
+                parent2.clone(),
+            ),
+            scope2.clone(),
+        )
+        .parent_node(move_scope.then(|| child2.clone()));
+        let scope1_widget = FocusScope::with_external_focus_node(
+            Focus::with_external_focus_node(
+                Column::new([leaf(&child1), leaf(&child2)]),
+                parent1.clone(),
+            ),
+            scope1.clone(),
+        );
+        let preamble = Focus::with_external_focus_node(
+            FocusScope::with_external_focus_node(SizedBox::shrink(), view.clone()),
+            traversal.clone(),
+        );
+        FocusScope::with_external_focus_node(
+            Column::new([Widget::from(preamble), scope1_widget.into(), scope2_widget.into()]),
+            root.clone(),
+        )
+        .into()
+    };
+    let mut runtime = Runtime::new(scene(false)).unwrap();
+    child4.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    let root = root.scope_focus_node();
+    let scope1 = scope1.scope_focus_node();
+    let scope2 = scope2.scope_focus_node();
+    let view = view.scope_focus_node();
+    assert_eq!(child4.ancestors(), [parent2.clone(), scope2.clone(), root.clone()]);
+    assert_eq!(
+        root.descendants(),
+        [
+            view.clone(), traversal.clone(), child1.clone(), child2.clone(),
+            parent1.clone(), scope1.clone(), child3.clone(), child4.clone(),
+            parent2.clone(), scope2.clone(),
+        ]
+    );
+
+    runtime.schedule_update(runtime.tree().root().unwrap(), scene(true)).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert!(child4.has_primary_focus());
+    assert_eq!(
+        child4.ancestors(),
+        [parent2.clone(), scope2.clone(), child2.clone(), parent1.clone(), scope1.clone(), root.clone()]
+    );
+    assert_eq!(
+        root.descendants(),
+        [view, traversal, child1, child3, child4, parent2, scope2, child2, parent1, scope1]
+    );
+}
+
+#[test]
+fn reparenting_the_active_leaf_forgets_the_old_scope_child_and_appends_to_the_new_parent() {
+    use incular_widgets::Column;
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let left = FocusScopeNode::new();
+    let right = FocusScopeNode::new();
+    let parent1 = FocusNode::new();
+    let parent2 = FocusNode::new();
+    let [child1, child2, child3, child4] = std::array::from_fn(|_| FocusNode::new());
+    let leaf = |node: &FocusNode| Focus::with_external_focus_node(SizedBox::shrink(), node.clone());
+    let scene = |move_leaf: bool| {
+        let left_leaves = Column::new([
+            Widget::from(leaf(&child1).parent_node(move_leaf.then(|| parent2.clone()))),
+            Widget::from(leaf(&child2)),
+        ]);
+        let right_leaves = Column::new([Widget::from(leaf(&child3)), Widget::from(leaf(&child4))]);
+        Column::new([
+            Widget::from(FocusScope::with_external_focus_node(
+                Focus::with_external_focus_node(left_leaves, parent1.clone()), left.clone(),
+            )),
+            Widget::from(FocusScope::with_external_focus_node(
+                Focus::with_external_focus_node(right_leaves, parent2.clone()), right.clone(),
+            )),
+        ]).into()
+    };
+    let mut runtime = Runtime::new(scene(false)).unwrap();
+    child1.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(left.focused_child(), Some(child1.clone()));
+    assert!(!parent2.children().contains(&child1));
+
+    let mounted = runtime.focused_element();
+    runtime.schedule_update(runtime.tree().root().unwrap(), scene(true)).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(left.focused_child(), None);
+    assert_eq!(right.focused_child(), Some(child1.clone()));
+    assert_eq!(parent2.children(), [child3, child4, child1]);
+    assert_eq!(runtime.focused_element(), mounted);
+}

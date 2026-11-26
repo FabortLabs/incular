@@ -144,3 +144,15 @@ held handle. The runtime updates the links only when topology
 changes, keeping existing siblings in their attachment order.
 All 32 focused scope and primary-observer tests passed. The
 Flutter build owner's synthetic root scope is a separate contract.
+
+## Moving active subtrees between scopes
+
+Pinned `widgets/focus_manager_test.dart:886,932` passed. In the native
+mounted fixture, reparenting the active leaf clears its old scope history
+and appends the same node to the new parent without changing its primary
+focus or element. Moving a whole scope beneath a former sibling's leaf
+updates every ancestor of the active leaf, and both complete postorder
+lists match. The native fixture provides explicit equivalents of the
+Flutter test binding's root, traversal group and view nodes; it verifies
+the topology behavior, not implicit Flutter binding initialization.
+All 34 targeted focus and lifecycle tests passed.
