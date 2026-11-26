@@ -98,8 +98,8 @@ pub type TooltipVisibility = RawTooltipVisibility;
 /// Delays used by the raw tooltip state machine.
 ///
 /// `show_duration` is the touch/pen visibility window after a recognized tap
-/// or long press. It does not represent a paint animation; renderer-neutral
-/// show/hide animation is intentionally outside this module.
+/// or long press. It is independent of the presentation animation durations
+/// configured with [`RawTooltip::animation_style`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, SmartDefault)]
 pub struct RawTooltipDurations {
     pub wait_duration: Duration,
@@ -236,6 +236,7 @@ struct ControllerState {
     animation_style: Option<AnimationStyle>,
     presentation: Option<Rc<TooltipPresentation>>,
     hovering: HashSet<u64>,
+    last_hover_dismissal: Option<(u64, Instant)>,
     focused: bool,
     manual: bool,
     held: bool,
@@ -291,6 +292,7 @@ impl RawTooltipController {
                 animation_style: None,
                 presentation: None,
                 hovering: HashSet::new(),
+                last_hover_dismissal: None,
                 focused: false,
                 manual: false,
                 held: false,
@@ -464,9 +466,11 @@ impl RawTooltipController {
         if self.state.borrow().detached {
             return false;
         }
-        self.dismiss_other_hovered(now);
+        let handoff = self.dismiss_other_hovered(device, now);
+        let reopening = self.is_presenting();
         let changed = {
             let mut state = self.state.borrow_mut();
+            let same_packet = state.last_hover_dismissal.take() == Some((device, now));
             state.hovering.insert(device);
             if state.manual || state.focused {
                 false
@@ -476,7 +480,11 @@ impl RawTooltipController {
                     state.pending = None;
                 }
                 false
-            } else if state.durations.wait_duration.is_zero() {
+            } else if handoff
+                || reopening
+                || same_packet
+                || state.durations.wait_duration.is_zero()
+            {
                 state.pending = None;
                 set_visible(&mut state, true)
             } else {
@@ -508,6 +516,7 @@ impl RawTooltipController {
                 false
             } else if state.durations.exit_duration.is_zero() {
                 state.pending = None;
+                state.last_hover_dismissal = Some((device, now));
                 set_visible(&mut state, false)
             } else {
                 let exit_duration = state.durations.exit_duration;
@@ -751,6 +760,7 @@ impl RawTooltipController {
             state.visible = false;
             state.detached = true;
             state.hovering.clear();
+            state.last_hover_dismissal = None;
             state.focused = false;
             state.manual = false;
             state.held = false;
@@ -825,10 +835,11 @@ impl RawTooltipController {
         });
     }
 
-    fn dismiss_other_hovered(&self, now: Instant) {
+    fn dismiss_other_hovered(&self, device: u64, now: Instant) -> bool {
         OPEN_TOOLTIPS.with(|open| {
             let mut open = open.borrow_mut();
             open.retain(|weak| weak.strong_count() != 0);
+            let mut handoff = false;
             for weak in open.iter() {
                 let Some(state) = weak.upgrade() else {
                     continue;
@@ -837,11 +848,26 @@ impl RawTooltipController {
                     continue;
                 }
                 let controller = Self { state };
-                if !controller.is_kept_open() {
+                if controller.is_kept_open() {
+                    continue;
+                }
+                // MouseTracker sends exits before enters. A nonanimated
+                // tooltip can already be hidden by its exit from this packet.
+                let just_exited = {
+                    let mut peer = controller.state.borrow_mut();
+                    let just_exited = peer.last_hover_dismissal == Some((device, now));
+                    if just_exited {
+                        peer.last_hover_dismissal = None;
+                    }
+                    just_exited
+                };
+                if controller.is_presenting() || just_exited {
                     let _ = controller.hide_at(now);
+                    handoff = true;
                 }
             }
-        });
+            handoff
+        })
     }
 
     fn is_kept_open(&self) -> bool {
