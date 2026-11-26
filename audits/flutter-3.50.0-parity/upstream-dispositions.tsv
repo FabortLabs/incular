@@ -2421,3 +2421,5 @@ packages/flutter/test/gestures/tap_test.dart	805	changing buttons after TapDown 
 packages/flutter/test/gestures/tap_test.dart	159	Details contain the correct device kind	paired-match	upstream-tap-recognizers.md#tap-movement-and-acceptance
 packages/flutter/test/gestures/tap_test.dart	568	PointerCancelEvent cancels tap	paired-match	upstream-tap-recognizers.md#tap-movement-and-acceptance
 packages/flutter/test/gestures/tap_test.dart	1105	onTapMove works	paired-match	upstream-tap-recognizers.md#tap-movement-and-acceptance
+packages/flutter/test/gestures/tap_test.dart	432	Should log exceptions from callbacks	paired-match	upstream-tap-recognizers.md#tap-callback-failures
+packages/flutter/test/gestures/tap_test.dart	457	onTapCancel should show reason in the proper format	paired-match	upstream-tap-recognizers.md#tap-callback-failures

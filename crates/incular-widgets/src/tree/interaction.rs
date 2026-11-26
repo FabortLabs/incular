@@ -2054,7 +2054,7 @@ impl WidgetTree {
             memory.set(incular_gestures::TapMemory::default());
         }
         if let Some(callback) = self.mounted_tap_callback(tap.owner, tap.live_tap_buttons) {
-            callback();
+            incular_gestures::invoke_retained_tap(|| callback());
         }
     }
 
@@ -2521,7 +2521,7 @@ impl WidgetTree {
         if let Some((owner, buttons)) = live_tap
             && let Some(callback) = self.mounted_tap_callback(owner, Some(buttons))
         {
-            callback();
+            incular_gestures::invoke_retained_tap(|| callback());
         }
         if let GestureAction::ArenaAccepted { .. } = action
             && let Some(force_press) = self.input.active_gestures.get_mut(&key).and_then(|active| {

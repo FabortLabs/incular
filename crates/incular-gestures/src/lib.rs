@@ -28,6 +28,7 @@ mod scale;
 mod signal;
 mod slop;
 mod tap_and_drag;
+mod tap_callback_error;
 mod velocity;
 
 pub use arena_member::{ArenaGestureRecognizer, ArenaRecognizer, ArenaResolver};
@@ -75,6 +76,10 @@ pub use multidrag::{Drag, MultiDragGestureRecognizer, MultiDragStartCallback};
 pub use multitap::{
     MultiTapGestureRecognizer, SerialTapCancelDetails, SerialTapDownDetails,
     SerialTapGestureRecognizer, SerialTapUpDetails,
+};
+pub use tap_callback_error::{
+    TapCallbackError, TapCallbackErrorHandler, TapCallbackKind, TapCancelReason,
+    invoke_retained_tap, set_tap_callback_error_handler,
 };
 pub use pointer::{
     DragAxis, DragGestureDetector, FlingLimits, GestureDetector, MonodragGestureRecognizer,

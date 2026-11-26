@@ -166,3 +166,20 @@ The pinned authored and native retained probes both accept 2 and
 18 px and cancel at 18.25 px. Native controls also exercise a
 configured 4 px tolerance. All 44 focused native checks, the three
 Flutter originals, and the authored Flutter probe passed.
+
+## Tap callback failures
+
+Pinned `gestures/tap_test.dart:432` reports an error from onTap
+at release, not on press. The Rust callback preserves the original
+typed panic object rather than flattening it to text, and a later
+press still works. At :457 the winning tap withdrawn by a pointer
+cancel identifies the callback as "spontaneous onTapCancel".
+
+Each tap stage is isolated separately, so a failed onTapUp does not
+skip onTap. The retained deadline and live mounted callback paths
+use the same boundary. A focused retained test deliberately fails
+a callback delivered after a double-tap deadline and checks that
+the frame finishes and the error is not redelivered. This behavior
+requires an unwinding panic strategy.
+
+Both pinned originals and 28 focused native checks passed.

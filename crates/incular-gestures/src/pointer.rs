@@ -15,6 +15,7 @@ use crate::details::{
     TapDownDetails, TapMoveDetails, TapUpDetails, Velocity,
 };
 use crate::raw::GestureRecognizer;
+use crate::tap_callback_error::{TapCallbackKind, TapCancelReason, invoke as invoke_tap_callback};
 use crate::velocity::{VelocityEstimate, VelocityTracker, VelocityTrackerKind};
 
 use crate::constants::{
@@ -486,19 +487,27 @@ impl PointerGestureRecognizer {
         if let Some(details) = self.pending_tap_down.take() {
             self.tap_down_sent = true;
             if let Some(callback) = &self.callbacks.on_tap_down {
-                callback(details);
+                invoke_tap_callback(TapCallbackKind::Down, || callback(details));
             }
         }
     }
     /// Flutter's `_checkCancel`: a tap that loses after reporting
     /// `onTapDown` reports `onTapCancel`; one that never reported it stays
     /// silent.
-    fn tap_cancel(&mut self) {
+    fn tap_cancel(&mut self, reason: TapCancelReason) {
         self.pending_tap_down = None;
         if std::mem::take(&mut self.tap_down_sent)
             && let Some(callback) = &self.callbacks.on_tap_cancel
         {
-            callback();
+            invoke_tap_callback(TapCallbackKind::Cancel(reason), || callback());
+        }
+    }
+
+    fn tap_withdrawal_reason(&self, otherwise: TapCancelReason) -> TapCancelReason {
+        if self.tap_accepted {
+            TapCancelReason::Spontaneous
+        } else {
+            otherwise
         }
     }
     /// Sets the global-to-local transform for the details' local positions,
@@ -544,7 +553,7 @@ impl PointerGestureRecognizer {
     /// tap that already reported `onTapDown` is cancelled.
     pub fn reject(&mut self) {
         self.tap_rejected = true;
-        self.tap_cancel();
+        self.tap_cancel(TapCancelReason::Forced);
         self.long_press_cancel();
         self.cancel_pending_drag();
         self.drag.pending_time = None;
@@ -579,7 +588,7 @@ impl PointerGestureRecognizer {
         {
             self.long_press_started = true;
             // The long press wins the arena; the tap loses.
-            self.tap_cancel();
+            self.tap_cancel(TapCancelReason::Forced);
             let details = LongPressStartDetails {
                 global_position: down.position,
                 local_position: self.local(down.position),
@@ -811,7 +820,7 @@ impl PointerGestureRecognizer {
         self.pan_started = true;
         self.drag_cancel_pending = false;
         // The drag wins the arena; the tap loses.
-        self.tap_cancel();
+        self.tap_cancel(TapCancelReason::Forced);
         self.drag.pending = Offset::ZERO;
         self.drag.pending_local = Offset::ZERO;
         self.drag.pending_time = None;
@@ -940,7 +949,7 @@ impl PointerGestureRecognizer {
                     && self.callbacks.on_double_tap_cancel.is_none();
                 if self.has_tap_callbacks() {
                     self.tap_rejected = true;
-                    self.tap_cancel();
+                    self.tap_cancel(self.tap_withdrawal_reason(TapCancelReason::Forced));
                 }
                 if !self.long_press_started
                     && (self.pan_started
@@ -1140,7 +1149,7 @@ impl PointerGestureRecognizer {
                     {
                         self.flush_tap_down();
                     }
-                    self.tap_cancel();
+                    self.tap_cancel(self.tap_withdrawal_reason(TapCancelReason::Forced));
                 }
                 if distance > DOUBLE_TAP_TOUCH_SLOP {
                     self.double_tap_moved = true;
@@ -1166,12 +1175,13 @@ impl PointerGestureRecognizer {
                     && !self.tap_rejected
                     && let Some(callback) = &self.callbacks.on_tap_move
                 {
-                    callback(TapMoveDetails {
+                    let details = TapMoveDetails {
                         global_position: event.position,
                         local_position: self.local(event.position),
                         delta: event.position - self.drag.last_position,
                         kind: self.kind,
-                    });
+                    };
+                    invoke_tap_callback(TapCallbackKind::Move, || callback(details));
                 }
                 let step = event.position - self.drag.last_position;
                 self.drag.last_position = event.position;
@@ -1204,7 +1214,7 @@ impl PointerGestureRecognizer {
                     && event.time.saturating_duration_since(down.time) >= self.long_press_duration
                 {
                     self.long_press_started = true;
-                    self.tap_cancel();
+                    self.tap_cancel(TapCancelReason::Forced);
                     let details = LongPressStartDetails {
                         global_position: down.position,
                         local_position: self.local(down.position),
@@ -1282,7 +1292,7 @@ impl PointerGestureRecognizer {
                     self.long_press_cancel();
                 }
                 if long_press_taken {
-                    self.tap_cancel();
+                    self.tap_cancel(TapCancelReason::Forced);
                     let end = LongPressEndDetails {
                         global_position: event.position,
                         local_position: self.local(event.position),
@@ -1312,13 +1322,7 @@ impl PointerGestureRecognizer {
                     // `kDoubleTapTimeout` and `kDoubleTapSlop` of the first)
                     // and stayed within `kDoubleTapTouchSlop`.
                     self.flush_tap_down();
-                    if let Some(callback) = &self.callbacks.on_tap_up {
-                        callback(TapUpDetails {
-                            global_position: event.position,
-                            local_position: self.local(event.position),
-                            kind: self.kind,
-                        });
-                    }
+                    self.dispatch_tap_up(event);
                     self.last_tap = None;
                     self.last_tap_down = None;
                     GestureDecision::Accept(GestureAction::DoubleTap)
@@ -1334,13 +1338,7 @@ impl PointerGestureRecognizer {
                     // first, then `onTapUp`.
                     self.flush_tap_down();
                     self.tap_down_sent = false;
-                    if let Some(callback) = &self.callbacks.on_tap_up {
-                        callback(TapUpDetails {
-                            global_position: event.position,
-                            local_position: self.local(event.position),
-                            kind: self.kind,
-                        });
-                    }
+                    self.dispatch_tap_up(event);
                     if !self.double_tap_ignored {
                         self.last_tap = Some(event.time);
                         self.last_tap_down = Some((down.time, down.position));
@@ -1358,7 +1356,7 @@ impl PointerGestureRecognizer {
             }
             PointerPhase::Cancel => {
                 self.drag.pending_time = None;
-                self.tap_cancel();
+                self.tap_cancel(self.tap_withdrawal_reason(TapCancelReason::Pointer));
                 self.long_press_cancel();
                 if self.down.take().is_some() {
                     if self.pan_started {
@@ -1378,6 +1376,17 @@ impl PointerGestureRecognizer {
                     GestureDecision::Reject
                 }
             }
+        }
+    }
+
+    fn dispatch_tap_up(&self, event: PointerEvent) {
+        if let Some(callback) = &self.callbacks.on_tap_up {
+            let details = TapUpDetails {
+                global_position: event.position,
+                local_position: self.local(event.position),
+                kind: self.kind,
+            };
+            invoke_tap_callback(TapCallbackKind::Up, || callback(details));
         }
     }
 
@@ -1403,7 +1412,11 @@ impl PointerGestureRecognizer {
     /// accepted this recognizer.
     pub fn dispatch(&self, action: GestureAction) {
         match action {
-            GestureAction::Tap => self.callbacks.on_tap.as_ref().map(|callback| callback()),
+            GestureAction::Tap => self
+                .callbacks
+                .on_tap
+                .as_ref()
+                .map(|callback| invoke_tap_callback(TapCallbackKind::Tap, || callback())),
             GestureAction::DoubleTap => self
                 .callbacks
                 .on_double_tap
@@ -1484,7 +1497,7 @@ impl PointerGestureRecognizer {
     }
 
     pub fn cancel(&mut self) {
-        self.tap_cancel();
+        self.tap_cancel(self.tap_withdrawal_reason(TapCancelReason::Forced));
         self.long_press_cancel();
         if let Some(callback) = &self.callbacks.on_double_tap_cancel {
             callback();
