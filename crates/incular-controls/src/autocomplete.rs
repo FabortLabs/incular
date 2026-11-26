@@ -74,7 +74,8 @@ pub(crate) fn editable_query_surface(
     on_query_change: Option<Rc<dyn Fn(String) + 'static>>,
 ) -> Widget {
     let controller = TextEditingController::with_text(query);
-    let mut editor = EditableText::new(controller);
+    let mut editor =
+        EditableText::new(controller).selection_color(crate::EDITOR_SELECTION_COLOR);
     if let Some(callback) = on_query_change {
         editor = editor.on_changed(move |text: &str| callback(text.to_owned()));
     }

@@ -100,7 +100,9 @@ fn field_edges(
 #[test]
 fn alignment_modes_space_short_single_line() {
     let width = 200.;
-    let avail = width - 16.;
+    // Flutter RenderEditable reserves the 2 px EditableText cursor plus
+    // one pixel of caret gap before aligning against the available width.
+    let avail = width - 16. - 3.;
     let edges = field_edges(
         TextEditingController::with_text("hi"),
         width,
@@ -223,7 +225,7 @@ fn alignment_empty_text_and_placeholder() {
     let carets = selection_rects(&tree.paint(), cursor);
     assert_eq!(carets.len(), 1);
     assert!(
-        (carets[0].origin.x - (8. + (200. - 16.) / 2.)).abs() < 1.5,
+        (carets[0].origin.x - (8. + (200. - 16. - 3.) / 2.)).abs() < 1.5,
         "empty centered caret sits mid-area, got {}",
         carets[0].origin.x
     );

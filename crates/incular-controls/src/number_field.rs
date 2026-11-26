@@ -199,6 +199,7 @@ impl From<Input> for Widget {
             };
             let scope_for_edit = scope.clone();
             let editor: Widget = EditableText::new(scope.editor.clone())
+                .selection_color(crate::EDITOR_SELECTION_COLOR)
                 .on_changed(move |text: &str| {
                     if let Ok(number) = text.trim().parse::<f64>() {
                         scope_for_edit.commit(number);

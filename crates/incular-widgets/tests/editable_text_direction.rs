@@ -23,6 +23,8 @@ const HEIGHT: f32 = 32.0;
 /// Horizontal text inset of the editor: the text box spans `8..192`.
 const LEFT_EDGE: f32 = 8.0;
 const RIGHT_EDGE: f32 = WIDTH - 8.0;
+// RenderEditable reserves a two-pixel cursor and one-pixel caret gap.
+const LTR_RIGHT_TEXT_EDGE: f32 = RIGHT_EDGE - 3.;
 const TOLERANCE: f32 = 1.5;
 
 fn glyph_bounds(list: &incular_rendering::DisplayList) -> (f32, f32) {
@@ -87,9 +89,13 @@ fn assert_left(bounds: (f32, f32), message: &str) {
 }
 
 fn assert_right(bounds: (f32, f32), message: &str) {
+    assert_right_at(bounds, RIGHT_EDGE, message);
+}
+
+fn assert_right_at(bounds: (f32, f32), edge: f32, message: &str) {
     assert!(
-        (bounds.1 - RIGHT_EDGE).abs() < TOLERANCE,
-        "{message}: expected the text to end at the right edge {RIGHT_EDGE}, got {bounds:?}"
+        (bounds.1 - edge).abs() < TOLERANCE,
+        "{message}: expected the text to end at the right edge {edge}, got {bounds:?}"
     );
 }
 
@@ -159,8 +165,9 @@ fn start_and_end_follow_the_explicit_direction() {
         directed("hi", TextAlign::Start, TextDirection::Rtl),
         "rtl + start",
     );
-    assert_right(
+    assert_right_at(
         directed("hi", TextAlign::End, TextDirection::Ltr),
+        LTR_RIGHT_TEXT_EDGE,
         "ltr + end",
     );
     assert_left(
@@ -176,8 +183,13 @@ fn left_and_right_ignore_the_direction() {
             directed("hi", TextAlign::Left, direction),
             "TextAlign.left is physical",
         );
-        assert_right(
+        let edge = match direction {
+            TextDirection::Ltr => LTR_RIGHT_TEXT_EDGE,
+            TextDirection::Rtl => RIGHT_EDGE,
+        };
+        assert_right_at(
             directed("hi", TextAlign::Right, direction),
+            edge,
             "TextAlign.right is physical",
         );
     }

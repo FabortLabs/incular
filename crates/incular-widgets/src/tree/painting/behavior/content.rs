@@ -188,7 +188,7 @@ impl WidgetTree {
                     self.element_for_render(id)
                         .is_some_and(|element| self.text_field_spell_check_menu_visible(element))
                 });
-                let selection_color = alternate_selection_color.unwrap_or(selection_color);
+                let selection_color = alternate_selection_color.or(selection_color);
                 let (value_selection, value_empty) =
                     controller.with_value(|value| (value.selection, value.text.is_empty()));
                 let reveal_key = (controller.revisions().0, value_selection, focused, size);
@@ -307,7 +307,10 @@ impl WidgetTree {
                         }
                     }
                     let selection = value_selection.range();
-                    if focused && !selection.is_empty() {
+                    if focused
+                        && !selection.is_empty()
+                        && let Some(selection_color) = selection_color
+                    {
                         let selection = TextRange::new(
                             text_field_display_offset(controller, selection.start, mask),
                             text_field_display_offset(controller, selection.end, mask),

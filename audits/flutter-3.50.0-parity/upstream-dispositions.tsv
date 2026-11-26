@@ -2561,3 +2561,4 @@ packages/flutter/test/widgets/editable_text_test.dart	3950	Handles focus correct
 packages/flutter/test/widgets/box_decoration_test.dart	487	BoxDecoration rounded angles other corner works	paired-match	upstream-border-constraints-formatters.md#exact-fallback-error-and-all-rounded-corners
 packages/flutter/test/widgets/box_decoration_test.dart	55	DecoratedBox handles loading images	paired-match	upstream-async-decoration-image.md
 packages/flutter/test/widgets/box_decoration_test.dart	77	Moving a DecoratedBox	paired-match	upstream-async-decoration-image.md
+packages/flutter/test/widgets/editable_text_test.dart	1395	EditableText does not derive selection color from DefaultSelectionStyle	paired-match	upstream-editable-defaults.md

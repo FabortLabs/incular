@@ -56,6 +56,7 @@ impl From<Root> for Widget {
             MaxLengthEnforcement::Enforced,
         );
         let editor: Widget = EditableText::new(controller)
+            .selection_color(crate::EDITOR_SELECTION_COLOR)
             .obscure_text(value.masked)
             .edit_transform(move |old, next| limiter.format_edit_update(old, next))
             .into();

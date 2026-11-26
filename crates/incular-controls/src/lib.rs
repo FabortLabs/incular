@@ -80,3 +80,6 @@ pub use theme::{
     current_control_theme,
 };
 pub use toast::Root as Toast;
+
+
+const EDITOR_SELECTION_COLOR: incular_core::Color = incular_core::Color::rgba(72, 120, 220, 150);

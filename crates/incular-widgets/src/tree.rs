@@ -640,7 +640,7 @@ pub struct TextFieldRender {
     pub(crate) cursor_opacity_animates: bool,
     pub(crate) show_cursor: bool,
     pub(crate) cursor_color: Color,
-    pub(crate) selection_color: Color,
+    pub(crate) selection_color: Option<Color>,
     pub(crate) spell_check_selection_color: Option<Color>,
     /// The resolved misspelled style while spell checking runs (Flutter's
     /// `misspelledTextStyle` of an enabled configuration with a service).

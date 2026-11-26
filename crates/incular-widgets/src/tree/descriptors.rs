@@ -1018,7 +1018,7 @@ pub struct EditableText {
     /// Flutter's `showCursor ?? !readOnly`.
     show_cursor: Option<bool>,
     cursor_color: Color,
-    selection_color: Color,
+    selection_color: Option<Color>,
     input_type: Option<TextInputTypeHint>,
     input_action: TextInputActionHint,
     text_direction: Option<incular_config::TextDirection>,
@@ -1084,7 +1084,7 @@ impl EditableText {
             cursor_radius: 0.0,
             show_cursor: None,
             cursor_color: Color::WHITE,
-            selection_color: Color::rgba(72, 120, 220, 150),
+            selection_color: None,
             input_type: None,
             input_action: TextInputActionHint::Unspecified,
             text_direction: None,
@@ -1408,10 +1408,18 @@ impl EditableText {
         self
     }
 
-    /// Sets the selection highlight paint color.
+    /// Sets the selection highlight paint color. A raw editor does not
+    /// paint a selection highlight unless a color is supplied.
     #[must_use]
     pub fn selection_color(mut self, color: Color) -> Self {
-        self.selection_color = color;
+        self.selection_color = Some(color);
+        self
+    }
+
+    /// Suppresses the highlight without changing the logical selection.
+    #[must_use]
+    pub fn clear_selection_color(mut self) -> Self {
+        self.selection_color = None;
         self
     }
 

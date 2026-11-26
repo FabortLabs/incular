@@ -194,6 +194,7 @@ impl TextField {
         // The editor has no inset of its own (Flutter's `EditableText`);
         // the field keeps its 8 px text inset and 32 px minimum height.
         let mut raw = RawEditableText::new(self.controller.clone())
+            .selection_color(crate::EDITOR_SELECTION_COLOR)
             .size(self.size)
             .content_padding(EdgeInsets::all(FIELD_TEXT_INSET))
             .multiline(multiline)
