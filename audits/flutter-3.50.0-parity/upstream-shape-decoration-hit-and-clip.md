@@ -44,3 +44,19 @@ the actual gradient paint command, and preservation of radial and sweep
 geometry. Fourteen transition and seven ShapeDecoration controls also
 passed. Interpolation between two distinct gradient geometries, image
 interpolation, and heterogeneous border morphs remain separate gaps.
+
+## Exact primitive boundaries
+
+Three authored Flutter probes and their native counterparts match. Box,
+circle, oval, stadium and rounded rectangle hit tests now use analytic
+containment without constructing a path. Right and bottom bounds are
+excluded, while left and top can be included. Curved boundaries use
+the normalized ellipse, including eccentric circles and directional
+rounded rectangles whose adjacent radii require a shared reduction.
+
+The old box and circle hit tests wrongly included the right edge in the
+paired fixtures. The native tests also cover an ellipse boundary and a
+nearby outside point, degenerate frames and the same scaled logical
+radius in both text directions. Thirty-four prior shape regressions
+passed. This does not count the pinned primitive-matrix registration,
+which also requires superellipse and heterogeneous border interpolation.

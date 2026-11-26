@@ -255,9 +255,16 @@ impl From<BorderRadius> for CornerRadii {
     }
 }
 
+pub(super) fn contains_half_open(rect: Rect, point: Offset) -> bool {
+    point.x >= rect.origin.x
+        && point.x < rect.origin.x + rect.size.width
+        && point.y >= rect.origin.y
+        && point.y < rect.origin.y + rect.size.height
+}
+
 /// A rounded rectangle with independent horizontal and vertical corner
 /// radii. Unlike the renderer's circular fast path, it preserves the full
-/// authored geometry and normalizes only when creating a paint path.
+/// authored geometry and normalizes only when evaluating the shape.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EllipticalRoundedRect {
     pub rect: Rect,
@@ -316,6 +323,55 @@ impl EllipticalRoundedRect {
     #[must_use]
     pub fn deflate(self, insets: EdgeInsets) -> Option<Self> {
         self.inflate(-insets)
+    }
+
+    /// Tests the normalized corner ellipses without constructing a paint path.
+    /// Left and top edges are inclusive; right and bottom edges are exclusive.
+    #[must_use]
+    pub fn contains(self, point: Offset) -> bool {
+        if !contains_half_open(self.rect, point) {
+            return false;
+        }
+
+        // Use double precision for normalization and the curve check, even
+        // though the stored widget coordinates and radii are f32.
+        let width = f64::from(self.rect.size.width);
+        let height = f64::from(self.rect.size.height);
+        let x = f64::from(point.x) - f64::from(self.rect.origin.x);
+        let y = f64::from(point.y) - f64::from(self.rect.origin.y);
+        let corners = self.radii;
+        let [tl, tr, br, bl] = [
+            corners.top_left,
+            corners.top_right,
+            corners.bottom_right,
+            corners.bottom_left,
+        ]
+        .map(|r| (f64::from(r.x), f64::from(r.y)));
+        let mut scale: f64 = 1.;
+        for (sum, limit) in [
+            (bl.1 + tl.1, height),
+            (tl.0 + tr.0, width),
+            (tr.1 + br.1, height),
+            (br.0 + bl.0, width),
+        ] {
+            if sum > limit && sum != 0. {
+                scale = scale.min(limit / sum);
+            }
+        }
+        let [tl, tr, br, bl] = [tl, tr, br, bl].map(|(x, y)| (x * scale, y * scale));
+        let (dx, dy, rx, ry) = if x < tl.0 && y < tl.1 {
+            (x - tl.0, y - tl.1, tl.0, tl.1)
+        } else if x > width - tr.0 && y < tr.1 {
+            (x - width + tr.0, y - tr.1, tr.0, tr.1)
+        } else if x > width - br.0 && y > height - br.1 {
+            (x - width + br.0, y - height + br.1, br.0, br.1)
+        } else if x < bl.0 && y > height - bl.1 {
+            (x - bl.0, y - height + bl.1, bl.0, bl.1)
+        } else {
+            return true;
+        };
+        let (x, y) = (dx / rx, dy / ry);
+        x * x + y * y <= 1.
     }
 
     /// Creates a paint path using the same normalized quarter conics as

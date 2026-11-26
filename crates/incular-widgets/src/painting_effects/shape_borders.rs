@@ -16,7 +16,7 @@ use incular_rendering::{Brush, Canvas, CornerRadii, FillRule, Paint, PaintStyle,
 use smart_default::SmartDefault;
 
 use super::decoration::{Border, BorderSide, BorderStyle, BoxShape};
-use super::geometry::{BorderRadius, BorderRadiusGeometry, Radius};
+use super::geometry::{BorderRadius, BorderRadiusGeometry, Radius, contains_half_open};
 
 /// Flutter's `ShapeBorder` for the outlined shapes Incular paints itself:
 /// the shape's outline and the area inside its stroke, and the stroke.
@@ -204,6 +204,10 @@ impl ShapeBorder for Border {
 
     fn outer_path(&self, rect: Rect) -> Path {
         Border::outer_path(*self, rect)
+    }
+
+    fn hit_test(&self, rect: Rect, position: Offset, _: Option<TextDirection>) -> bool {
+        contains_half_open(rect, position)
     }
 
     fn inner_path(&self, rect: Rect) -> Path {
@@ -422,6 +426,12 @@ impl ShapeBorder for StadiumBorder {
         rounded_rect_path(rect, Self::radii(rect))
     }
 
+    fn hit_test(&self, rect: Rect, position: Offset, _: Option<TextDirection>) -> bool {
+        BorderRadius::circular(shortest_side(rect) / 2.)
+            .to_rounded_rect(rect)
+            .contains(position)
+    }
+
     fn inner_path(&self, rect: Rect) -> Path {
         let inset = self.side.stroke_inset();
         ordered_inflate(rect, -inset).map_or_else(
@@ -518,6 +528,18 @@ impl<R: Copy + Into<BorderRadiusGeometry>> ShapeBorder for RoundedRectangleBorde
 
     fn outer_path_with_direction(&self, rect: Rect, direction: Option<TextDirection>) -> Path {
         self.path(rect, 0., direction)
+    }
+
+    fn hit_test(&self, rect: Rect, position: Offset, direction: Option<TextDirection>) -> bool {
+        let radius = self
+            .border_radius
+            .into()
+            .resolve(direction.unwrap_or(TextDirection::Ltr));
+        if radius == BorderRadius::ZERO {
+            contains_half_open(rect, position)
+        } else {
+            radius.to_rounded_rect(rect).contains(position)
+        }
     }
 
     fn inner_path(&self, rect: Rect) -> Path {
@@ -792,6 +814,10 @@ impl ShapeBorder for CircleBorder {
         ellipse_path(self.fitted_rect(rect))
     }
 
+    fn hit_test(&self, rect: Rect, position: Offset, _: Option<TextDirection>) -> bool {
+        ellipse_contains(self.fitted_rect(rect), position)
+    }
+
     fn inner_path(&self, rect: Rect) -> Path {
         ordered_inflate(self.fitted_rect(rect), -self.side.stroke_inset())
             .map_or_else(|| Path::builder().build(), ellipse_path)
@@ -835,6 +861,17 @@ impl incular_core::Lerp for CircleBorder {
     }
 }
 
+fn ellipse_contains(rect: Rect, point: Offset) -> bool {
+    if !contains_half_open(rect, point) {
+        return false;
+    }
+    let rx = f64::from(rect.size.width) / 2.;
+    let ry = f64::from(rect.size.height) / 2.;
+    let x = (f64::from(point.x) - f64::from(rect.origin.x) - rx) / rx;
+    let y = (f64::from(point.y) - f64::from(rect.origin.y) - ry) / ry;
+    x * x + y * y <= 1.
+}
+
 /// Flutter's `OvalBorder`: an ellipse inscribed in the rectangle.
 #[derive(Clone, Copy, Debug, PartialEq, Hash, SmartDefault)]
 pub struct OvalBorder {
@@ -866,6 +903,10 @@ impl ShapeBorder for OvalBorder {
 
     fn outer_path(&self, rect: Rect) -> Path {
         ellipse_path(rect)
+    }
+
+    fn hit_test(&self, rect: Rect, position: Offset, _: Option<TextDirection>) -> bool {
+        ellipse_contains(rect, position)
     }
 
     fn inner_path(&self, rect: Rect) -> Path {
