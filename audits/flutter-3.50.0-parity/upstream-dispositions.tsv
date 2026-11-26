@@ -49,7 +49,7 @@ packages/flutter/test/semantics/semantics_test.dart	553	OrdinalSortKey compares 
 packages/flutter/test/semantics/traversal_order_test.dart	11	Traversal order handles touching elements	partial-match	upstream-semantics-binding.md#touching-traversal-grid
 packages/flutter/test/widgets/semantics_test.dart	875	AccessiblityFocusBlockType.blockSubtree is applied to the subtree,	paired-match	upstream-semantics-binding.md#label-absorption-in-blocked-subtrees
 packages/flutter/test/widgets/semantics_test.dart	940	AccessiblityFocusBlockType.blockNode is not applied to the subtree,	paired-match	upstream-semantics-binding.md#label-absorption-in-blocked-subtrees
-packages/flutter/test/widgets/semantics_test.dart	1149	accessibilityBlockType also blocks keyboard focus	partial-match	upstream-semantics-binding.md#accessibility-focus-blocking
+packages/flutter/test/widgets/semantics_test.dart	1149	accessibilityBlockType also blocks keyboard focus	paired-match	upstream-semantics-binding.md#blocked-input-focus-has-no-semantic-value
 packages/flutter/test/widgets/semantics_test.dart	1167	Updating accessibilityFocusBlockType on parent updates children semantics	paired-match	upstream-semantics-binding.md#accessibility-focus-blocking
 packages/flutter/test/scheduler/ticker_test.dart	154	Ticker stops ticking when application is paused	paired-match	upstream-lifecycle-clipboard-comparisons.md#suspension-remediation
 packages/flutter/test/scheduler/ticker_test.dart	178	Ticker can be created before application unpauses	paired-match	upstream-lifecycle-clipboard-comparisons.md#suspension-remediation

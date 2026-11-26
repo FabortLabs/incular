@@ -638,6 +638,19 @@ impl SemanticState {
         }
     }
 
+    /// Published input focus as a tri-state: `None` for a node that is not
+    /// focusable, `Some(false)` for a focusable node without focus, and
+    /// `Some(true)` for a focused node. Accessibility blocking can suppress
+    /// this semantic state without moving independent keyboard focus.
+    #[must_use]
+    pub const fn input_focus_state(&self) -> Option<bool> {
+        if self.focusable && !self.accessibility_focus_block_type.blocks_focus() {
+            Some(self.focused)
+        } else {
+            None
+        }
+    }
+
     /// Effective override of the input-focus flag. A focused declaration
     /// takes precedence over the legacy focusable declaration.
     #[must_use]

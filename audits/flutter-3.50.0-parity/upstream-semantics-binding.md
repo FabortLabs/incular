@@ -107,3 +107,14 @@ limits this implicit merge to compatible labels and preserves richer
 annotations, actions, explicit nodes and their child geometry. This
 is not a general port of Flutter's semantic conflict reducer or a
 native assistive-technology check. All 37 focused Rust tests passed.
+
+
+## Blocked input focus has no semantic value
+
+Pinned `widgets/semantics_test.dart:1149` pairs with the mounted
+explicit container, blocked subtree, focused declaration, and real
+custom action named `action1`. The published focus tri-state is absent,
+not false. The action remains registered and executable. In the retained
+transition controls, removing the block publishes true or false according
+to the declaration, and reapplying the block restores the absent state.
+This is distinct from clearing an actual keyboard FocusNode.
