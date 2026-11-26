@@ -2365,3 +2365,5 @@ packages/flutter/test/rendering/image_test.dart	246	RenderImage does not dispose
 packages/flutter/test/rendering/image_test.dart	264	Render image disposes its image when it is disposed	partial-match	upstream-render-image-lifetime.md
 packages/flutter/test/widgets/basic_test.dart	24	properties	partial-match	upstream-raw-image-blend.md#retaining-the-source-effects-with-the-render-object
 packages/flutter/test/rendering/image_test.dart	210	update image colorBlendMode	partial-match	upstream-raw-image-blend.md#retaining-the-source-effects-with-the-render-object
+packages/flutter/test/widgets/routes_test.dart	2051	requestFocus can be updated	paired-match	upstream-route-focus-scopes.md#explicit-route-and-dialog-focus
+packages/flutter/test/widgets/routes_test.dart	2776	requestFocus works correctly in showGeneralDialog.	paired-match	upstream-route-focus-scopes.md#explicit-route-and-dialog-focus

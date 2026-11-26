@@ -327,7 +327,7 @@ pub enum OutletAttachError {
 }
 
 #[derive(Clone)]
-struct PageRouteFocusScope {
+struct MountedRouteFocusScope {
     node: FocusScopeNode,
     key: Key,
 }
@@ -366,7 +366,7 @@ pub struct RouteOutlet {
     focus: RouteFocusState,
     bindings: HashMap<RouteId, RouteTaskBinding>,
     tags: Rc<RefCell<HashMap<RouteId, Key>>>,
-    page_focus_scopes: RefCell<HashMap<RouteId, PageRouteFocusScope>>,
+    route_focus_scopes: RefCell<HashMap<RouteId, MountedRouteFocusScope>>,
     /// Directly nested outlets, weakest first. Elements inside a nested
     /// outlet belong to it even when an outer tag sits above them;
     /// transitivity follows containment, so only direct children register.
@@ -419,6 +419,9 @@ pub struct RouteOutlet {
     /// currently focused route, keep only that route's focusability until
     /// focus moves or a subsequent stack mutation changes membership.
     focus_neutral_reorder: Option<(u64, Option<RouteId>)>,
+    /// The previous focus owner while the current route explicitly
+    /// declines automatic focus. A revision gates speculative reuse.
+    focus_neutral_activation: Option<(u64, RouteId)>,
     /// Live revision last scheduled for. Follow-up scheduling is
     /// edge-triggered per outlet: a stale revision flags exactly once no
     /// matter how many frames observe it, so unconsumable staleness
@@ -509,7 +512,7 @@ impl RouteOutlet {
             focus,
             bindings: HashMap::new(),
             tags,
-            page_focus_scopes: RefCell::default(),
+            route_focus_scopes: RefCell::default(),
             nested,
             modal_route_scopes: true,
             host_overlay_routes: true,
@@ -522,6 +525,7 @@ impl RouteOutlet {
             composing: RefCell::default(),
             consumed: None,
             focus_neutral_reorder: None,
+            focus_neutral_activation: None,
             signaled: Cell::new(0),
             animated: RefCell::default(),
             namespace,
@@ -961,9 +965,12 @@ impl RouteOutlet {
     fn compose(&self) -> (Widget, FrameAttempt) {
         let routes = self.navigator.routes();
         let attempt = FrameAttempt::of(self.navigator.revision(), &routes);
-        let retained_focus_owner = self.focus_neutral_reorder.and_then(|(revision, owner)| {
-            (attempt.revision == revision).then_some(owner).flatten()
-        });
+        let retained_focus_owner = self
+            .focus_neutral_activation
+            .and_then(|(revision, owner)| (attempt.revision == revision).then_some(owner))
+            .or_else(|| self.focus_neutral_reorder.and_then(|(revision, owner)| {
+                (attempt.revision == revision).then_some(owner).flatten()
+            }));
         // Building an incoming route is speculative. Preserve the live
         // focus of a retained outgoing route until the build is admitted:
         // a builder can navigate again, fail, or request an unsupported
@@ -1085,12 +1092,14 @@ impl RouteOutlet {
         } else {
             self.route_body(route)
         };
-        if self.modal_route_scopes && matches!(route.presentation, RoutePresentation::Page { .. }) {
+        if self.modal_route_scopes
+            && (matches!(route.presentation, RoutePresentation::Page { .. }) || route.request_focus.is_some())
+        {
             let scope = self
-                .page_focus_scopes
+                .route_focus_scopes
                 .borrow_mut()
                 .entry(route.id)
-                .or_insert_with(|| PageRouteFocusScope {
+                .or_insert_with(|| MountedRouteFocusScope {
                     node: FocusScopeNode::new(),
                     key: GlobalKey::new().into(),
                 })
@@ -1532,10 +1541,8 @@ impl RouteOutlet {
             self.capture_transition(runtime, Some(&pending));
             return false;
         }
-        let enters_page_scope = self.navigator.current().is_some_and(|route| {
-            matches!(route.presentation, RoutePresentation::Page { .. })
-        });
-        let release_staged_focus = enters_page_scope
+        let enters_requested_scope = self.navigator.current().is_some_and(|route| route.requests_focus());
+        let release_staged_focus = enters_requested_scope
             && pending.previous.is_some_and(|previous| {
                 pending.saved.is_some()
                     && runtime.focused_element() == pending.saved
@@ -1576,7 +1583,7 @@ impl RouteOutlet {
                     .any(|leaving| leaving.route.id == *id)
         });
         let tags = self.tags.borrow();
-        self.page_focus_scopes
+        self.route_focus_scopes
             .get_mut()
             .retain(|id, _| tags.contains_key(id));
     }
@@ -1605,9 +1612,13 @@ impl RouteOutlet {
     /// restore only when it cannot displace valid focus (deferred content
     /// may have mounted or enabled through ordinary invalidation since).
     fn restore_or_retry(&mut self, runtime: &mut Runtime, transitioned: bool) {
-        let Some(id) = self.navigator.current().map(|route| route.id) else {
+        let Some(route) = self.navigator.current() else {
             return;
         };
+        if route.request_focus == Some(false) {
+            return;
+        }
+        let id = route.id;
         if transitioned {
             if self.presented != Some(id) {
                 // A focus listener navigated after commitment. The new
@@ -1615,9 +1626,9 @@ impl RouteOutlet {
                 return;
             }
             self.focus.restore_saved(runtime, &self.navigator, id);
-            if runtime.focused_element().is_none() && !self.focus.has_saved_target(id) {
+            if route.requests_focus() && runtime.focused_element().is_none() && !self.focus.has_saved_target(id) {
                 let scope_element = self
-                    .page_focus_scopes
+                    .route_focus_scopes
                     .borrow()
                     .get(&id)
                     .and_then(|scope| runtime.tree().element_with_key(&scope.key));
@@ -1776,6 +1787,14 @@ impl RouteOutlet {
                 .expect("revision exhausted"),
         );
         self.capture_focus_neutral_reorder(runtime);
+        self.focus_neutral_activation = self.navigator.current().and_then(|route| {
+            if route.request_focus != Some(false) {
+                return None;
+            }
+            self.focus.current_owner(runtime)
+                .filter(|&owner| owner != route.id)
+                .map(|owner| (self.navigator.revision(), owner))
+        });
         self.capture_transition(runtime, None);
         for nested in self.live_nested() {
             nested.borrow_mut().begin_frame(runtime, now);

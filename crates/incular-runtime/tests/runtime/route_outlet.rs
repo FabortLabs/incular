@@ -6023,3 +6023,129 @@ fn rejected_route_keeps_the_committed_editor_receiving_keys_until_a_page_commits
         .handle_input(InputEvent::Text(" again".into()));
     assert_eq!(controller.text(), "held again");
 }
+
+#[test]
+fn flutter_350_dialog_request_focus_true_moves_focus_and_false_preserves_the_editor() {
+    use incular_widgets::{EditableText, FocusScope};
+
+    let navigator = Navigator::new();
+    let mut harness = harness(&navigator);
+    let controller = TextEditingController::with_text("");
+    let focus = FocusNode::new();
+    let editor_key = Key::from("requestFocus editor");
+    let dialog_key = Key::from("requestFocus dialog");
+    navigator.push_page(Page::new(
+        "editor",
+        Widget::from(
+            EditableText::new(controller.clone())
+                .text_direction(TextDirection::Ltr)
+                .focus_node(focus.clone()),
+        )
+        .with_key(editor_key.clone()),
+    ));
+    present(&mut harness);
+    focus.request_focus();
+    present(&mut harness);
+    let editor = harness
+        .runtime
+        .tree()
+        .element_with_key(&editor_key)
+        .unwrap();
+    assert!(focus.has_primary_focus());
+
+    let dialog = |request| {
+        Route::new(
+            "dialog",
+            Widget::box_(Size::new(40., 40.), Color::WHITE).with_key(dialog_key.clone()),
+        )
+        .dialog()
+        .request_focus(request)
+    };
+    let dialog_scope = |runtime: &Runtime| {
+        let tree = runtime.tree();
+        let page = tree.element_with_key(&dialog_key).expect("dialog");
+        FocusScope::maybe_of(tree, page).expect("explicit dialog scope")
+    };
+
+    navigator.push(dialog(true));
+    present(&mut harness);
+    let requested = dialog_scope(&harness.runtime);
+    assert!(requested.has_primary_focus());
+    assert!(!focus.has_focus());
+    let _ = harness
+        .runtime
+        .handle_input(InputEvent::Text("not the editor".into()));
+    assert_eq!(controller.text(), "");
+
+    navigator.pop();
+    present(&mut harness);
+    assert_eq!(harness.runtime.focused_element(), Some(editor));
+    assert!(focus.has_primary_focus());
+    assert!(!requested.has_focus());
+
+    navigator.push(dialog(false));
+    present(&mut harness);
+    let neutral = dialog_scope(&harness.runtime);
+    assert!(!neutral.has_focus());
+    assert_eq!(harness.runtime.focused_element(), Some(editor));
+    assert!(focus.has_primary_focus());
+    let _ = harness
+        .runtime
+        .handle_input(InputEvent::Text("still here".into()));
+    assert_eq!(controller.text(), "still here");
+    present(&mut harness);
+    assert!(
+        focus.has_primary_focus(),
+        "later presentation is still neutral"
+    );
+}
+
+#[test]
+fn flutter_350_modal_route_reports_default_and_explicit_request_focus() {
+    use incular_navigation::{ModalRoute, PageRouteBuilder};
+
+    let navigator = Navigator::new();
+    let mut harness = harness(&navigator);
+    navigator.push_page(plain_page("home"));
+    present(&mut harness);
+    for requested in [None, Some(false)] {
+        let seen = Rc::new(Cell::new(None));
+        let builder = PageRouteBuilder::new(
+            "page2",
+            LayoutBuilder::new({
+                let seen = seen.clone();
+                move |context, _| {
+                    seen.set(ModalRoute::of(context).map(|route| route.request_focus()));
+                    Widget::box_(Size::new(20., 20.), BLUE)
+                }
+            }),
+        )
+        .transition(RouteTransition::None);
+        navigator.push(match requested {
+            Some(value) => builder.request_focus(value).build(),
+            None => builder.build(),
+        });
+        present(&mut harness);
+        assert_eq!(seen.get(), Some(requested.unwrap_or(true)));
+        navigator.pop();
+        present(&mut harness);
+    }
+}
+
+#[test]
+fn an_opaque_page_can_decline_automatic_focus_without_restoring_text_focus_to_it() {
+    let navigator = Navigator::new();
+    let mut harness = harness(&navigator);
+    let owner = FocusNode::new();
+    navigator.push_page(focus_page("committed", &owner));
+    present(&mut harness);
+    owner.request_focus();
+    present(&mut harness);
+    let old = harness.runtime.focused_element().unwrap();
+    navigator.push_page(plain_page("opt-out").request_focus(false));
+    present(&mut harness);
+    assert_eq!(harness.runtime.focused_element(), Some(old));
+    present(&mut harness);
+    assert_eq!(harness.runtime.focused_element(), Some(old));
+    assert!(owner.has_primary_focus());
+}

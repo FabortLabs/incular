@@ -73,6 +73,12 @@ impl ModalRoute {
         &self.navigator
     }
 
+    /// Flutter's `ModalRoute.requestFocus`: the resolved activation policy.
+    #[must_use]
+    pub fn request_focus(&self) -> bool {
+        self.route.requests_focus()
+    }
+
     /// Flutter's `Route.isCurrent`: this route is the navigator's top route.
     #[must_use]
     pub fn is_current(&self) -> bool {

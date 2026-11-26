@@ -605,6 +605,7 @@ impl Navigator {
             child: page.child,
             transition: page.transition,
             presentation: page.presentation,
+            request_focus: page.request_focus,
             heroes: RouteHeroes::new(),
         };
         self.push_entry(pushed, Some(route), key)
@@ -628,6 +629,7 @@ impl Navigator {
                         child: page.child,
                         transition: page.transition,
                         presentation: page.presentation,
+                        request_focus: page.request_focus,
                         heroes: RouteHeroes::new(),
                     },
                     restorable: Some(route),
@@ -667,6 +669,7 @@ impl Navigator {
                         child: page.child,
                         transition: RouteTransition::None,
                         presentation: RoutePresentation::default(),
+                        request_focus: page.request_focus,
                         heroes: RouteHeroes::new(),
                     },
                     restorable: None,
@@ -853,6 +856,7 @@ impl Navigator {
                     entry.page_based = true;
                     entry.route.name = page.name.clone();
                     entry.route.settings.rename(page.name.clone());
+                    entry.route.request_focus = page.request_focus;
                     retired_children.push(std::mem::replace(&mut entry.route.child, page.child));
                     let old_transition =
                         std::mem::replace(&mut entry.route.transition, page.transition);
@@ -872,6 +876,7 @@ impl Navigator {
                             child: page.child,
                             transition: page.transition,
                             presentation: page.presentation,
+                            request_focus: page.request_focus,
                             heroes: RouteHeroes::new(),
                         },
                         restorable: None,

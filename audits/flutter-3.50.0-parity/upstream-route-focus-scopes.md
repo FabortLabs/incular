@@ -48,3 +48,19 @@ it; it still verifies detached outlets do not schedule work.
 All 103 tests in the focused route-outlet filter passed. The additional
 recovery checks are native regression coverage, not new upstream
 registrations.
+
+## Explicit route and dialog focus
+
+Pinned :2051 and :2776 now pair. `ModalRoute.request_focus()` reports the
+resolved default true on a page and false on an explicit opt-out.
+An opt-in dialog takes primary focus in its own scope, stops editor
+keyboard delivery, and returns focus to the same editor when popped.
+An opt-out dialog leaves that editor focused and its own scope
+unfocused. The native route uses `Route::dialog().request_focus(..)`
+rather than Flutter's `showGeneralDialog` function.
+
+An authored Flutter control and native test also verify that an
+opaque page can decline focus while its prior retained page still
+owns the focus. The native default for an unspecified popup stays
+focus-neutral; the new behavior is opt-in for dialogs. The
+focused route target passed all 106 tests.

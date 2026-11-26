@@ -40,6 +40,9 @@ pub struct Page {
     /// Transition wrapping the presented child.
     #[builder(default = RouteTransition::None)]
     pub transition: RouteTransition,
+    /// Overrides the activation focus policy for this page.
+    #[builder(default, setter(strip_option))]
+    pub request_focus: Option<bool>,
 }
 
 /// Rust-native route presentation composition.
@@ -206,6 +209,7 @@ impl Page {
             key: None,
             presentation: RoutePresentation::default(),
             transition: RouteTransition::None,
+            request_focus: None,
         }
     }
 
@@ -222,6 +226,13 @@ impl Page {
     #[must_use]
     pub fn presentation(mut self, presentation: RoutePresentation) -> Self {
         self.presentation = presentation;
+        self
+    }
+
+    /// Whether activating this page should request its own focus.
+    #[must_use]
+    pub fn request_focus(mut self, request: bool) -> Self {
+        self.request_focus = Some(request);
         self
     }
 
@@ -252,6 +263,9 @@ pub struct Route {
     pub settings: RouteSettings,
     #[builder(default)]
     pub presentation: RoutePresentation,
+    /// Explicit override for automatic focus when this route activates.
+    #[builder(default, setter(strip_option))]
+    pub request_focus: Option<bool>,
     /// The route's heroes, shared by its clones.
     #[builder(default, setter(skip))]
     pub(crate) heroes: RouteHeroes,
@@ -268,6 +282,7 @@ impl Route {
             child: child.into(),
             transition: RouteTransition::None,
             presentation: RoutePresentation::default(),
+            request_focus: None,
             heroes: RouteHeroes::new(),
         }
     }
@@ -283,6 +298,21 @@ impl Route {
     pub fn presentation(mut self, presentation: RoutePresentation) -> Self {
         self.presentation = presentation;
         self
+    }
+
+    /// Overrides automatic focus at activation. Ordinary pages request
+    /// focus by default; an unspecified native popup remains focus-neutral.
+    #[must_use]
+    pub fn request_focus(mut self, request: bool) -> Self {
+        self.request_focus = Some(request);
+        self
+    }
+
+    /// Resolved automatic focus policy of this presentation.
+    #[must_use]
+    pub fn requests_focus(&self) -> bool {
+        self.request_focus
+            .unwrap_or(matches!(self.presentation, RoutePresentation::Page { .. }))
     }
 
     #[must_use]
@@ -347,6 +377,8 @@ pub struct PageRouteBuilder {
     transition: Option<RouteTransition>,
     #[builder(default)]
     presentation: RoutePresentation,
+    #[builder(default, setter(strip_option))]
+    request_focus: Option<bool>,
     #[builder(default = RouteSettings::new((*name).clone()), setter(skip))]
     settings: RouteSettings,
     #[builder(default = DEFAULT_PAGE_TRANSITION_DURATION, setter(skip))]
@@ -371,6 +403,7 @@ impl PageRouteBuilder {
             child: child.into(),
             transition: None,
             presentation: RoutePresentation::default(),
+            request_focus: None,
             transition_duration: DEFAULT_PAGE_TRANSITION_DURATION,
             reverse_transition_duration: DEFAULT_PAGE_TRANSITION_DURATION,
             transitions_builder: None,
@@ -421,6 +454,13 @@ impl PageRouteBuilder {
     #[must_use]
     pub fn transition(mut self, transition: RouteTransition) -> Self {
         self.transition = Some(transition);
+        self
+    }
+
+    /// Flutter `PageRouteBuilder.requestFocus` for this route.
+    #[must_use]
+    pub fn request_focus(mut self, request: bool) -> Self {
+        self.request_focus = Some(request);
         self
     }
 
@@ -479,17 +519,21 @@ impl PageRouteBuilder {
                 ))
             }
         };
-        Route::new(self.name, self.child)
+        let mut route = Route::new(self.name, self.child)
             .settings(self.settings)
             .transition(transition)
-            .presentation(self.presentation)
+            .presentation(self.presentation);
+        route.request_focus = self.request_focus;
+        route
     }
 }
 impl From<Page> for Route {
     fn from(page: Page) -> Self {
-        Self::new(page.name, page.child)
+        let mut route = Self::new(page.name, page.child)
             .presentation(page.presentation)
-            .transition(page.transition)
+            .transition(page.transition);
+        route.request_focus = page.request_focus;
+        route
     }
 }
 
