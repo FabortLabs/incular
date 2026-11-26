@@ -1836,10 +1836,18 @@ impl WidgetTree {
         } else {
             sliver.reserve(view_start, view_end)
         };
-        let delta = if start < view_start {
-            start - view_start
-        } else if end > view_end {
-            end - view_end
+        // Flutter showInViewport clamps the current position between
+        // both aligned offsets, regardless of which is smaller. When the
+        // target is larger than the viewport, a viewport already within
+        // that interval keeps seeing the same useful part of the target.
+        let align_start = start - view_start;
+        let align_end = end - view_end;
+        let first = align_start.min(align_end);
+        let last = align_start.max(align_end);
+        let delta = if first > 0. {
+            first
+        } else if last < 0. {
+            last
         } else {
             return true;
         };

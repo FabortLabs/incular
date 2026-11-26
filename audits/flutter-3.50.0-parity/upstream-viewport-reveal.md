@@ -74,3 +74,22 @@ The layout now records which sliver actually pins. The reveal solver
 uses the pinned edge only for rectangles that do not protrude from its
 growth-leading edge, and shares the result with EnsureVisible. The
 forward-growth header and ordinary negative-offset tests stay green.
+
+## Automatic reveal of an oversized tile and implicit-scroll veto
+
+Pinned :1419 and the mounted semantic ShowOnScreen route act on
+300 px tiles inside a 200 px viewport. The native node carries the
+full tile bounds. Before the fix its first reveal jumped from 300
+to 400 even though the requested tile was already aligned. The
+automatic solver now sorts the two aligned offsets and leaves the
+current position alone while between them. Exact successive results
+are 300, 100, 300, 100 after a jump to 250, and 300 after a jump to 150.
+The native control checks both axes and both viewport directions.
+
+Pinned :1319/:1367 and the native mounted nested controls keep the
+horizontal viewport at zero when page physics disallows implicit
+scrolling. The outer viewport moves 50 for the full-height box but
+only 25 for the padded sliver's actual descendant. The semantic
+route preserves the requested bounds rather than substituting the
+entire inner viewport. Both controls already passed before the
+oversized-tile correction.

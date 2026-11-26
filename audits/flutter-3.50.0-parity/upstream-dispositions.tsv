@@ -1839,3 +1839,6 @@ packages/flutter/test/rendering/viewport_test.dart	740	right, forward growth	pai
 packages/flutter/test/rendering/viewport_test.dart	801	left, forward growth	paired-match	upstream-viewport-reveal.md#pinned-headers-in-forward-growth
 packages/flutter/test/rendering/viewport_test.dart	863	up, reverse growth	paired-match	upstream-viewport-reveal.md#pinned-headers-before-the-viewport-center
 packages/flutter/test/rendering/viewport_test.dart	923	left, reverse growth	paired-match	upstream-viewport-reveal.md#pinned-headers-before-the-viewport-center
+packages/flutter/test/rendering/viewport_test.dart	1319	Nested Viewports showOnScreen with allowImplicitScrolling=false for inner viewport	paired-match	upstream-viewport-reveal.md#automatic-reveal-of-an-oversized-tile-and-implicit-scroll-veto
+packages/flutter/test/rendering/viewport_test.dart	1367	Nested Viewports showOnScreen on Sliver with allowImplicitScrolling=false for inner viewport	paired-match	upstream-viewport-reveal.md#automatic-reveal-of-an-oversized-tile-and-implicit-scroll-veto
+packages/flutter/test/rendering/viewport_test.dart	1419	Viewport showOnScreen with objects larger than viewport	paired-match	upstream-viewport-reveal.md#automatic-reveal-of-an-oversized-tile-and-implicit-scroll-veto
