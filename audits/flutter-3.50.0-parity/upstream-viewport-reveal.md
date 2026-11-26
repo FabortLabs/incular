@@ -235,3 +235,14 @@ A three-column shrink-wrapping grid with aspect-ratio sizing in a Column
 with unbounded main-axis constraints also lays out and handles a real
 drag in both Apple policies. Its finite viewport extent is about 88.22 px
 and the short content stays at offset zero.
+
+## Reverse-growing floating pinned header
+
+The two pinned Flutter variants of `rendering/viewport_test.dart:1871`
+and Incular's `reverse_growing_floating_pinned_header_reveals_without_unpinning`
+check the centered 20-sliver sequence in both orientations. At offset
+−4500 the header's trailing edge is at the viewport edge (400 px) and
+revealing the visible header does not move the controller. Revealing
+tile 9 at −3100 moves to −3000 to clear the obstruction. These cases only
+cover a visible header and normal viewport reveal of content, not the
+floating header's separate reveal-to-expand lifecycle.

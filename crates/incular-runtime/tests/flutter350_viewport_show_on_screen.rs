@@ -409,3 +409,70 @@ fn reveal_forwards_the_inner_tile_projected_into_the_outer_viewport_with_no_cach
         (0., 300.)
     );
 }
+
+#[test]
+fn reverse_growing_floating_pinned_header_reveals_without_unpinning() {
+    use incular_widgets::{
+        Scrollable, ShowOnScreen, SliverHeaderScrollBehavior, SliverPersistentHeader,
+    };
+    for axis in [Axis::Vertical, Axis::Horizontal] {
+        let controller = ScrollController::new().with_initial_scroll_offset(300.);
+        let slivers = (0u64..20).map(|index| -> Box<dyn Sliver> {
+            if index == 10 {
+                Box::new(
+                    SliverPersistentHeader::with_delegate(100., 300., |_, _| {
+                        Widget::from(SizedBox::expand()).with_key("pinned floating header")
+                    })
+                    .scroll_behavior(SliverHeaderScrollBehavior::FloatingPinned),
+                )
+            } else {
+                let tile = Widget::from(SizedBox::square(300.)).with_key(index);
+                Box::new(SliverToBoxAdapter::new(tile))
+            }
+        });
+        let viewport = CustomScrollView::new(slivers)
+            .scroll_direction(axis)
+            .center(19)
+            .controller(controller.clone());
+        let root = Directionality::new(TextDirection::Ltr, viewport);
+        let bounds = Constraints::tight(Size::new(400., 400.));
+        let mut runtime = Runtime::new(root.into()).unwrap();
+        runtime.run_frame(bounds).unwrap();
+
+        controller.jump_to(-4500.);
+        runtime.run_frame(bounds).unwrap();
+        let tree = runtime.tree();
+        let header = tree
+            .element_with_key(&"pinned floating header".into())
+            .unwrap();
+        let header_bounds = tree.element_bounds(header).unwrap();
+        let start = |offset: Offset| match axis {
+            Axis::Vertical => offset.y,
+            Axis::Horizontal => offset.x,
+        };
+        assert_eq!(
+            start(header_bounds.origin) + axis.main_extent(header_bounds.size),
+            400.,
+            "{axis:?}"
+        );
+        assert_eq!(
+            Scrollable::show_on_screen(tree, header, ShowOnScreen::new()),
+            0,
+            "{axis:?}"
+        );
+        runtime.run_frame(bounds).unwrap();
+        assert_eq!(controller.offset(), -4500.);
+
+        controller.jump_to(-3100.);
+        runtime.run_frame(bounds).unwrap();
+        let tree = runtime.tree();
+        let tile = tree.element_with_key(&9u64.into()).unwrap();
+        assert_eq!(
+            Scrollable::show_on_screen(tree, tile, ShowOnScreen::new()),
+            1,
+            "{axis:?}"
+        );
+        runtime.run_frame(bounds).unwrap();
+        assert_eq!(controller.offset(), -3000., "{axis:?}");
+    }
+}
