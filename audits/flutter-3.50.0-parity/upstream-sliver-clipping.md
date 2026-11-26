@@ -119,3 +119,13 @@ main=75 and rejects main=25. A default antialiased rounded clip
 includes the center and (25,25), but excludes its (0,0) corner.
 
 All 14 focused native clip tests passed.
+
+## Nested rectangular and rounded scopes
+
+The pinned authored and native fixtures combine a half-width outer
+clip and a rounded inner saved-layer clip over five actual rows.
+The right-side tap is blocked by the outer clip, and the top-left
+tap is blocked by the rounded corner. Removing the outer clip
+admits the right-side tap but keeps the inner boundary and row
+identity. Native painting records one layer for each scope, not
+ten per-row clips. All 15 focused native clip tests passed.

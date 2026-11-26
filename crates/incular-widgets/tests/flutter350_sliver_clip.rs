@@ -845,3 +845,63 @@ fn default_rounded_clip_hits_after_the_corner_arc() {
     assert!(hit(&tree, key, Offset::new(400., 50.)));
     assert!(hit(&tree, key, Offset::new(25., 25.)));
 }
+
+#[derive(Clone)]
+struct HalfWidthWithInset;
+
+impl CustomClipper for HalfWidthWithInset {
+    fn get_clip(&self, size: Size) -> ClipShape {
+        ClipShape::Rect(Rect::from_origin_size(
+            Offset::new(0., 10.),
+            Size::new(size.width / 2., (size.height - 10.).max(0.)),
+        ))
+    }
+}
+
+#[test]
+fn nested_sliver_clips_share_layers_and_both_gate_pointer_hits() {
+    let controller = ScrollController::new();
+    let key = GlobalKey::new();
+    let build = |outer_behavior| {
+        let rows = SliverFixedExtentList::new(5, 40., move |i| {
+            let row = Widget::box_(Size::new(800., 40.), FILL);
+            if i == 0 { row.with_key(key) } else { row }
+        });
+        let inner = SliverClipRRect::new(rows)
+            .border_radius(BorderRadiusGeometry::circular(20.))
+            .clip_behavior(Clip::AntiAliasWithSaveLayer);
+        let outer = SliverClipRect::new(inner)
+            .clipper(HalfWidthWithInset)
+            .clip_behavior(outer_behavior);
+        scene(&controller, Box::new(outer), Axis::Vertical, false, false)
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(build(Clip::HardEdge)).unwrap();
+    layout(&mut tree);
+    let leaf = tree.element_with_key(&key.into()).unwrap();
+    let active_clips = |tree: &mut WidgetTree| {
+        let paint = tree.paint();
+        paint
+            .commands()
+            .iter()
+            .filter_map(|command| match command {
+                PaintCommand::PushClip { .. } => Some("outer"),
+                PaintCommand::PushClipRRect {
+                    isolation: Some(_), ..
+                } => Some("inner"),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(active_clips(&mut tree), ["outer", "inner"]);
+    assert!(hit(&tree, key, Offset::new(50., 20.)));
+    assert!(!hit(&tree, key, Offset::new(450., 20.)));
+    assert!(!hit(&tree, key, Offset::new(0., 10.)));
+
+    tree.update(root, build(Clip::None)).unwrap();
+    layout(&mut tree);
+    assert_eq!(tree.element_with_key(&key.into()), Some(leaf));
+    assert_eq!(active_clips(&mut tree), ["inner"]);
+    assert!(hit(&tree, key, Offset::new(450., 20.)));
+    assert!(!hit(&tree, key, Offset::new(0., 10.)));
+}
