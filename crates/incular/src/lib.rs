@@ -31,7 +31,8 @@ pub use incular_widgets::widget_previews;
 /// out of the application facade.
 pub mod scroll {
     pub use incular_widgets::{
-        PersistentHeaderShowOnScreenConfiguration, RevealedOffset, ScrollIncrementType, ScrollIntent,
+        PersistentHeaderShowOnScreenConfiguration, RevealedOffset, ScrollIncrementCalculator,
+        ScrollIncrementDetails, ScrollIncrementType, ScrollIntent,
         ShowOnScreen,
     };
     pub use incular_scroll::{

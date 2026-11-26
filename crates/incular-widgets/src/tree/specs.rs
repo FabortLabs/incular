@@ -1012,6 +1012,7 @@ pub(crate) enum WidgetKind {
         axis: Axis,
         reverse: bool,
         physics: ScrollPhysics,
+        increment_calculator: Option<crate::ScrollIncrementCalculator>,
         inherit_physics: Option<bool>,
         clip_behavior: Clip,
         drag_start_behavior: DragStartBehavior,

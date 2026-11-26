@@ -16,6 +16,11 @@ pub struct SingleChildScrollView {
     controller: Option<ScrollController>,
     #[builder(default, setter(strip_option))]
     physics: Option<ScrollPhysics>,
+    /// Overrides the default 50-pixel line and 80%-viewport page increments.
+    #[builder(default, setter(transform = |calculator: impl Fn(ScrollIncrementDetails) -> f32 + 'static| {
+        Some(ScrollIncrementCalculator::new(calculator))
+    }))]
+    increment_calculator: Option<ScrollIncrementCalculator>,
     /// Flutter `clipBehavior`; defaults to `Clip.hardEdge`.
     #[builder(default = WidgetDefaults::DEFAULT.scroll_clip_behavior)]
     clip_behavior: Clip,
@@ -46,6 +51,7 @@ impl SingleChildScrollView {
             drag_start_behavior: DragStartBehavior::Start,
             hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
             page_storage_key: None,
+            increment_calculator: None,
         }
     }
 
@@ -89,6 +95,17 @@ impl SingleChildScrollView {
         self.physics = Some(physics);
         self
     }
+
+    /// Supplies the actual pixel increment using the invoked scrollable's metrics.
+    #[must_use]
+    pub fn increment_calculator(
+        mut self,
+        calculator: impl Fn(ScrollIncrementDetails) -> f32 + 'static,
+    ) -> Self {
+        self.increment_calculator = Some(ScrollIncrementCalculator::new(calculator));
+        self
+    }
+
 
     /// Sets how the viewport clips its content (Flutter `clipBehavior`).
     /// `Clip::None` paints children that extend past the viewport.
@@ -147,12 +164,11 @@ impl From<SingleChildScrollView> for Widget {
             .get_or_insert_with(ScrollController::default)
             .clone();
         let key = value.page_storage_key.take();
+        let increment_calculator = value.increment_calculator.take();
         let inherit = value.physics.is_none().then_some(InheritedPhysics::Scroll);
-        keep_scroll_offset(
-            inherit_physics(single_child_scroll_view_widget(value), inherit),
-            &controller,
-            key,
-        )
+        let viewport = single_child_scroll_view_widget(value)
+            .with_scroll_increment_calculator(increment_calculator);
+        keep_scroll_offset(inherit_physics(viewport, inherit), &controller, key)
     }
 }
 fn single_child_scroll_view_widget(value: SingleChildScrollView) -> Widget {
@@ -397,6 +413,11 @@ pub struct ListView {
     cache_extent: Option<f32>,
     #[builder(default, setter(strip_option))]
     physics: Option<ScrollPhysics>,
+    /// Overrides the default 50-pixel line and 80%-viewport page increments.
+    #[builder(default, setter(transform = |calculator: impl Fn(ScrollIncrementDetails) -> f32 + 'static| {
+        Some(ScrollIncrementCalculator::new(calculator))
+    }))]
+    increment_calculator: Option<ScrollIncrementCalculator>,
     /// Flutter `clipBehavior`; defaults to `Clip.hardEdge`.
     #[builder(default = WidgetDefaults::DEFAULT.scroll_clip_behavior)]
     clip_behavior: Clip,
@@ -440,6 +461,7 @@ impl ListView {
             drag_start_behavior: DragStartBehavior::Start,
             hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
             page_storage_key: None,
+            increment_calculator: None,
         }
     }
 
@@ -471,6 +493,7 @@ impl ListView {
             drag_start_behavior: DragStartBehavior::Start,
             hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
             page_storage_key: None,
+            increment_calculator: None,
         }
     }
 
@@ -520,6 +543,7 @@ impl ListView {
             drag_start_behavior: DragStartBehavior::Start,
             hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
             page_storage_key: None,
+            increment_calculator: None,
         }
     }
 
@@ -606,6 +630,17 @@ impl ListView {
         self
     }
 
+    /// Supplies the actual pixel increment using the invoked scrollable's metrics.
+    #[must_use]
+    pub fn increment_calculator(
+        mut self,
+        calculator: impl Fn(ScrollIncrementDetails) -> f32 + 'static,
+    ) -> Self {
+        self.increment_calculator = Some(ScrollIncrementCalculator::new(calculator));
+        self
+    }
+
+
     /// Sets how the viewport clips its content (Flutter `clipBehavior`).
     /// `Clip::None` paints children that extend past the viewport.
     #[must_use]
@@ -675,12 +710,11 @@ impl From<ListView> for Widget {
             .get_or_insert_with(ScrollController::default)
             .clone();
         let key = value.page_storage_key.take();
+        let increment_calculator = value.increment_calculator.take();
         let inherit = value.physics.is_none().then_some(InheritedPhysics::Scroll);
-        keep_scroll_offset(
-            inherit_physics(list_view_widget(value), inherit),
-            &controller,
-            key,
-        )
+        let viewport = list_view_widget(value)
+            .with_scroll_increment_calculator(increment_calculator);
+        keep_scroll_offset(inherit_physics(viewport, inherit), &controller, key)
     }
 }
 fn list_view_widget(value: ListView) -> Widget {

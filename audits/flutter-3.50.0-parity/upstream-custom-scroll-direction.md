@@ -66,10 +66,7 @@ centered viewport, the configured center item's signed offset matches
 through 0 → 400 → −100 after ten downward and ten upward line actions;
 its retained rectangles match at each checkpoint.
 
-The direct intent original :546 passed in Flutter but remains open:
-there is no equivalent first-class public ScrollIntent/ScrollAction
-invocation in Incular. The keyboard fallback and controller animation
-are not substitutes for that API.
+The formerly open direct-intent original :546 is now paired below.
 
 The wider Runtime binary showed 200 passing and 15 failing checks
 both immediately before and after the keyboard direction change,
@@ -122,4 +119,24 @@ shadows the built-in action rather than scrolling as well.
 The primary-controller fallback from a sibling and the physical
 direction/cross-axis behavior on a reversed viewport passed on both
 pinned Flutter and native. Four native tests and all three pinned
-comparisons passed. Custom increment calculators remain separate.
+comparisons passed. Custom increment calculators are covered below.
+
+## Custom scroll increments
+
+Scroll intents now call the actual viewport's optional increment
+calculator with the request kind and live geometry, after resolving
+ownership, axis and physics. The pinned custom-control case moves
+by 37 logical pixels for a line then a third of a 600-pixel viewport
+for a page, reaching 237. Both implementations observe offsets 0
+and 37 at invocation, a 600-pixel viewport and [0,1200] extents, and
+do not call the calculator for a request on the other axis.
+
+The native tests cover the low-level Scrollable and the single-child,
+list and custom-scroll descriptors. Removing the callback restores
+the default increment on the same controller. Neither a nested viewport
+nor a sibling with a different controller inherits the wrong callback.
+Invalid native callback results cause no motion.
+
+Three authored Flutter cases passed. Fifteen native intent, keyboard
+direction and platform cases passed. This extension adds no upstream
+registration to the total.

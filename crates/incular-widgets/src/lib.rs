@@ -377,7 +377,6 @@ pub use repeating_animation_builder::{
 };
 pub use safe_area::{RemovePadding, SafeArea};
 pub use scroll_aware_image_provider::{ScrollAwareContext, ScrollAwareImageProvider};
-pub use scrolling::{ScrollIncrementType, ScrollIntent};
 pub use scroll_behavior::{
     AndroidOverscrollIndicator, MultitouchDragStrategy, ScrollBehavior, TOUCH_LIKE_DEVICE_KINDS,
 };
@@ -386,7 +385,8 @@ pub use scrolling::{
     ListView, NestedScrollView, NotificationListener, PageController, PageView,
     PersistentHeaderBuilder, PinnedHeaderSliver, ReorderableDelayedDragStartListener,
     ReorderableDragStartListener, ReorderableList, ScrollCacheExtent, ScrollNotificationObserver,
-    RevealedOffset, ScrollPositionAlignmentPolicy, Scrollable, SemanticIndexCallback,
+    RevealedOffset, ScrollIncrementCalculator, ScrollIncrementDetails, ScrollIncrementType,
+    ScrollIntent, ScrollPositionAlignmentPolicy, Scrollable, SemanticIndexCallback,
     ShowOnScreen, ShrinkWrappingViewport,
     SingleChildScrollView, Sliver, SliverAnimatedList, SliverAnimatedListController,
     SliverAnimatedOpacity, SliverChildBuilderDelegate, SliverChildDelegate,

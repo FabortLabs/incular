@@ -71,4 +71,63 @@ void main() {
       expect(controller.offset, expected);
     }
   });
+
+  testWidgets(
+    'Scrollable calculates custom line and page increments from live metrics',
+    (tester) async {
+      final controller = ScrollController();
+      final observed = <ScrollIncrementDetails>[];
+      final pixels = <double>[];
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        actions(
+          Scrollable(
+            controller: controller,
+            incrementCalculator: (details) {
+              observed.add(details);
+              pixels.add(details.metrics.pixels);
+              return details.type == ScrollIncrementType.line
+                  ? 37
+                  : details.metrics.viewportDimension / 3;
+            },
+            viewportBuilder: (context, offset) => Viewport(
+              offset: offset,
+              slivers: const [
+                SliverToBoxAdapter(child: SizedBox(key: caller, height: 1800)),
+              ],
+            ),
+          ),
+        ),
+      );
+      final origin = tester.element(find.byKey(caller));
+      Actions.invoke(origin, const ScrollIntent(direction: AxisDirection.down));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(controller.offset, 37.0);
+      Actions.invoke(
+        origin,
+        const ScrollIntent(
+          direction: AxisDirection.down,
+          type: ScrollIncrementType.page,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(controller.offset, 237.0);
+      await invoke(tester, find.byKey(caller), AxisDirection.left);
+      expect(controller.offset, 237.0);
+      expect(observed.map((details) => details.type), [
+        ScrollIncrementType.line,
+        ScrollIncrementType.page,
+      ]);
+      expect(pixels, [0.0, 37.0]);
+      // ScrollIncrementDetails holds the live position, so read these
+      // stable dimensions after movement rather than treating it as a copy.
+      for (final details in observed) {
+        expect(details.metrics.viewportDimension, 600.0);
+        expect(details.metrics.minScrollExtent, 0.0);
+        expect(details.metrics.maxScrollExtent, 1200.0);
+      }
+    },
+  );
 }

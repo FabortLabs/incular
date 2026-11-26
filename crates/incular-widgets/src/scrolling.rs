@@ -37,6 +37,43 @@ pub enum ScrollIncrementType {
     Page,
 }
 
+/// The kind of request and the scrollable's live geometry at invocation.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ScrollIncrementDetails {
+    pub increment_type: ScrollIncrementType,
+    pub metrics: incular_scroll::ScrollMetrics,
+}
+
+/// Calculates a logical-pixel increment for a programmatic or keyboard scroll.
+#[derive(Clone)]
+pub struct ScrollIncrementCalculator(Rc<dyn Fn(ScrollIncrementDetails) -> f32>);
+
+impl ScrollIncrementCalculator {
+    #[must_use]
+    pub fn new(calculate: impl Fn(ScrollIncrementDetails) -> f32 + 'static) -> Self {
+        Self(Rc::new(calculate))
+    }
+
+    #[must_use]
+    pub fn calculate(&self, details: ScrollIncrementDetails) -> f32 {
+        (self.0)(details)
+    }
+}
+
+impl PartialEq for ScrollIncrementCalculator {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+// Binds a low-level Scrollable's option through an application-supplied
+// wrapper, without applying it to another controller nested below it.
+#[derive(Clone)]
+pub(crate) struct ScopedScrollIncrement {
+    pub(crate) controller: ScrollController,
+    pub(crate) calculator: ScrollIncrementCalculator,
+}
+
 /// A typed action request for the nearest retained scrollable. Invoke it
 /// from a mounted element through the runtime action dispatcher.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

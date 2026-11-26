@@ -459,6 +459,11 @@ pub struct CustomScrollView {
     reverse: bool,
     #[builder(default, setter(strip_option))]
     physics: Option<ScrollPhysics>,
+    /// Overrides the default 50-pixel line and 80%-viewport page increments.
+    #[builder(default, setter(transform = |calculator: impl Fn(ScrollIncrementDetails) -> f32 + 'static| {
+        Some(ScrollIncrementCalculator::new(calculator))
+    }))]
+    increment_calculator: Option<ScrollIncrementCalculator>,
     #[builder(default = WidgetDefaults::DEFAULT.sliver_cache_extent, setter(transform = |extent: f32| extent.max(0.0)))]
     cache_extent: f32,
     /// Flutter `clipBehavior`; defaults to `Clip.hardEdge`.
@@ -507,6 +512,7 @@ impl CustomScrollView {
             drag_start_behavior: DragStartBehavior::Start,
             hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
             page_storage_key: None,
+            increment_calculator: None,
             cache_extent: WidgetDefaults::DEFAULT.sliver_cache_extent,
             paint_order: SliverPaintOrder::FirstIsTop,
             center: 0,
@@ -548,6 +554,17 @@ impl CustomScrollView {
         self.physics = Some(physics);
         self
     }
+
+    /// Supplies the actual pixel increment using the invoked scrollable's metrics.
+    #[must_use]
+    pub fn increment_calculator(
+        mut self,
+        calculator: impl Fn(ScrollIncrementDetails) -> f32 + 'static,
+    ) -> Self {
+        self.increment_calculator = Some(ScrollIncrementCalculator::new(calculator));
+        self
+    }
+
 
     /// Sets how the viewport clips its content (Flutter `clipBehavior`).
     /// `Clip::None` paints children that extend past the viewport.
@@ -646,11 +663,12 @@ impl CustomScrollView {
             .get_or_insert_with(ScrollController::default)
             .clone();
         let key = self.page_storage_key.take();
+        let increment_calculator = self.increment_calculator.take();
         let inherit = self
             .physics
             .is_none()
             .then_some(super::scroll_views::InheritedPhysics::Scroll);
-        let mut viewport = custom_scroll_view_widget(self, ambient_horizontal_axis);
+        let mut viewport = custom_scroll_view_widget(self, ambient_horizontal_axis).with_scroll_increment_calculator(increment_calculator);
         if implicit && let WidgetKind::SliverViewport { config } = viewport.kind_mut() {
             Rc::make_mut(config).preserve_implicit_scroll_position = true;
         }
@@ -714,6 +732,7 @@ fn custom_scroll_view_widget(value: CustomScrollView, ambient_horizontal_axis: b
 #[derive(Clone)]
 pub struct Scrollable {
     controller: Option<ScrollController>,
+    increment_calculator: Option<ScrollIncrementCalculator>,
     viewport_builder: Rc<dyn Fn(&ScrollController) -> Widget>,
 }
 
@@ -725,6 +744,7 @@ impl Scrollable {
     {
         Self {
             controller: None,
+            increment_calculator: None,
             viewport_builder: Rc::new(move |c| viewport_builder(c).into()),
         }
     }
@@ -734,12 +754,31 @@ impl Scrollable {
         self.controller = Some(controller);
         self
     }
+
+    /// Controls action increments for the viewport returned by the builder.
+    #[must_use]
+    pub fn increment_calculator(
+        mut self,
+        calculator: impl Fn(ScrollIncrementDetails) -> f32 + 'static,
+    ) -> Self {
+        self.increment_calculator = Some(ScrollIncrementCalculator::new(calculator));
+        self
+    }
+
 }
 
 impl From<Scrollable> for Widget {
     fn from(value: Scrollable) -> Self {
         let controller = value.controller.unwrap_or_default();
-        (value.viewport_builder)(&controller)
+        let viewport = (value.viewport_builder)(&controller);
+        let Some(calculator) = value.increment_calculator else {
+            return viewport;
+        };
+        if matches!(viewport.kind(), WidgetKind::Scroll { .. } | WidgetKind::SliverViewport { .. }) {
+            viewport.with_scroll_increment_calculator(Some(calculator))
+        } else {
+            Widget::environment_scope(ScopedScrollIncrement { controller, calculator }, viewport)
+        }
     }
 }
 

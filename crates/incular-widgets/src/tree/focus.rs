@@ -914,7 +914,7 @@ impl WidgetTree {
                 self.scrollable_viewport_chain(*element).into_iter().find(|(_, controller, ..)| controller == &primary)
             })
         });
-        let Some((_, controller, axis, reverse, physics)) = target else {
+        let Some((viewport, controller, axis, reverse, physics)) = target else {
             return false;
         };
         // Use the retained viewport's physical direction after resolving
@@ -934,10 +934,40 @@ impl WidgetTree {
         {
             return true;
         }
-        let increment = match intent.increment_type {
-            crate::ScrollIncrementType::Page => 0.8 * controller.viewport_extent(),
-            crate::ScrollIncrementType::Line => 50.0,
+        let calculator = self.elements.get(viewport.0).and_then(|entry| {
+            let direct = match entry.widget.kind() {
+                WidgetKind::Scroll { increment_calculator, .. } => increment_calculator.as_ref(),
+                WidgetKind::SliverViewport { config } => config.increment_calculator.as_ref(),
+                _ => None,
+            };
+            direct.cloned().or_else(|| {
+                let scope = entry.build_context.read::<crate::scrolling::ScopedScrollIncrement>()?;
+                (scope.controller == controller).then_some(scope.calculator)
+            })
+        });
+        let increment = if let Some(calculator) = calculator {
+            calculator.calculate(crate::ScrollIncrementDetails {
+                increment_type: intent.increment_type,
+                metrics: incular_scroll::ScrollMetrics {
+                    pixels: controller.offset(),
+                    min_scroll_extent: controller.min_offset(),
+                    max_scroll_extent: controller.max_offset(),
+                    viewport_dimension: controller.viewport_extent(),
+                    axis,
+                    axis_direction,
+                    device_pixel_ratio: self.environment.scale_factor as f32,
+                    page_viewport_fraction: None,
+                },
+            })
+        } else {
+            match intent.increment_type {
+                crate::ScrollIncrementType::Page => 0.8 * controller.viewport_extent(),
+                crate::ScrollIncrementType::Line => 50.0,
+            }
         };
+        if !increment.is_finite() || increment == 0.0 {
+            return true;
+        }
         let signed = if intent.direction == axis_direction { increment } else { -increment };
         let target = (controller.offset() + signed)
             .clamp(controller.min_offset(), controller.max_offset().max(0.0));

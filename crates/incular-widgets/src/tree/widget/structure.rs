@@ -1327,6 +1327,7 @@ impl PartialEq for WidgetKind {
                     axis: e,
                     reverse: f,
                     physics: g,
+                    increment_calculator: ga,
                     inherit_physics: r,
                     clip_behavior: k,
                     drag_start_behavior: m,
@@ -1338,6 +1339,7 @@ impl PartialEq for WidgetKind {
                     axis: h,
                     reverse: i,
                     physics: j,
+                    increment_calculator: ja,
                     inherit_physics: t,
                     clip_behavior: l,
                     drag_start_behavior: n,
@@ -1349,6 +1351,7 @@ impl PartialEq for WidgetKind {
                     && e == h
                     && f == i
                     && g == j
+                    && ga == ja
                     && r == t
                     && k == l
                     && m == n

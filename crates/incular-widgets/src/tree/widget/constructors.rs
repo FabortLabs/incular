@@ -1389,6 +1389,7 @@ impl Widget {
                 axis,
                 reverse,
                 physics,
+                increment_calculator: None,
                 inherit_physics: None,
                 clip_behavior,
                 drag_start_behavior,
@@ -1568,6 +1569,7 @@ impl Widget {
                     safe_insets: EdgeInsets::ZERO,
                     axis_resolution: Default::default(),
                     physics,
+                    increment_calculator: None,
                     cache_extent: crate::ScrollCacheExtent::pixels(cache_extent.max(0.)),
                     evict_outside_cache: false,
                     shrink_wrap,
@@ -1584,6 +1586,22 @@ impl Widget {
             semantics: None,
         })
     }
+    pub(crate) fn with_scroll_increment_calculator(
+        mut self,
+        calculator: Option<crate::ScrollIncrementCalculator>,
+    ) -> Self {
+        if calculator.is_some() {
+            match self.kind_mut() {
+                WidgetKind::Scroll { increment_calculator, .. } => *increment_calculator = calculator,
+                WidgetKind::SliverViewport { config } => {
+                    Rc::make_mut(config).increment_calculator = calculator;
+                }
+                _ => {}
+            }
+        }
+        self
+    }
+
     pub(crate) fn with_sliver_semantic_child_count(mut self, count: Option<usize>) -> Self {
         if let WidgetKind::SliverViewport { config } = self.kind_mut() {
             Rc::make_mut(config).semantic_child_count = count;

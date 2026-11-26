@@ -435,6 +435,7 @@ pub struct SliverViewportConfig {
     /// resolve a horizontal axis against Directionality.
     pub(crate) axis_resolution: SliverAxisResolution,
     pub(crate) physics: ScrollPhysics,
+    pub(crate) increment_calculator: Option<crate::ScrollIncrementCalculator>,
     pub(crate) cache_extent: ScrollCacheExtent,
     /// Pages leave the retained tree when their whole extent leaves the cache.
     pub(crate) evict_outside_cache: bool,
@@ -479,6 +480,7 @@ impl PartialEq for SliverViewportConfig {
             && self.text_direction == other.text_direction
             && self.safe_insets == other.safe_insets
             && self.physics == other.physics
+            && self.increment_calculator == other.increment_calculator
             && self.cache_extent == other.cache_extent
             && self.evict_outside_cache == other.evict_outside_cache
             && self.shrink_wrap == other.shrink_wrap
