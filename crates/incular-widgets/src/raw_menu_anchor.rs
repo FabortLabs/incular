@@ -13,7 +13,7 @@ use incular_gestures::{Action, ActionResult, CommandId, Intent};
 use incular_scroll::ScrollController;
 
 use crate::{
-    BuildContext, FocusNode, MediaQuery, OverlayChildLayoutInfo, OverlayPortal, TapRegion,
+    BuildContext, Builder, FocusNode, MediaQuery, OverlayChildLayoutInfo, OverlayPortal, TapRegion,
     TapRegionGroupId, TransientDismissPolicy, TransientDismissReason, TransientRole, Widget,
 };
 use crate::{scroll_aware_image_provider::ScrollableScope, tree::RetainedState};
@@ -347,6 +347,14 @@ pub struct MenuController {
     anchor: Rc<RefCell<Weak<AnchorNode>>>,
 }
 
+impl PartialEq for MenuController {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.anchor, &other.anchor)
+    }
+}
+
+impl Eq for MenuController {}
+
 impl MenuController {
     #[must_use]
     pub fn new() -> Self {
@@ -390,13 +398,23 @@ impl MenuController {
         }
     }
 
-    /// `MenuController.maybeOf`: the controller of the nearest enclosing
-    /// anchor or group.
+    /// `MenuController.maybeOf`: reads the nearest controller without
+    /// subscribing to menu state or controller replacements.
     #[must_use]
     pub fn maybe_of(context: &BuildContext<'_>) -> Option<Self> {
         context
-            .depend_on::<AnchorScope>()
-            .and_then(|scope| scope.0.controller.borrow().clone())
+            .find_shared::<AnchorScope>()
+            .and_then(|scope| scope.node.controller.borrow().clone())
+    }
+
+    /// `MenuController.maybeIsOpenOf`: observes the open state of the
+    /// nearest inherited anchor or group, or returns None outside a menu.
+    /// Replacing its controller without changing visibility never notifies.
+    #[must_use]
+    pub fn maybe_is_open_of(context: &BuildContext<'_>) -> Option<bool> {
+        context
+            .depend_on_shared::<AnchorScope>()
+            .map(|scope| scope.open)
     }
 }
 
@@ -439,21 +457,48 @@ impl DismissMenuAction {
     }
 }
 
-/// The nearest anchor, for nested anchors to attach to.
-#[derive(Clone)]
-struct AnchorScope(Rc<AnchorNode>);
+/// The anchor identity and the open state visible to its descendants.
+struct AnchorScope {
+    node: Rc<AnchorNode>,
+    open: bool,
+}
 
-struct AnchorState(Rc<AnchorNode>);
+struct AnchorState {
+    node: Rc<AnchorNode>,
+    scopes: [Rc<AnchorScope>; 2],
+}
+
+impl AnchorState {
+    fn new(is_group: bool, revision: Rc<Cell<u64>>) -> Self {
+        let node = AnchorNode::new(is_group, revision);
+        let scopes = [false, true].map(|open| {
+            Rc::new(AnchorScope {
+                node: node.clone(),
+                open,
+            })
+        });
+        Self { node, scopes }
+    }
+
+    fn scope(&self, child: Widget) -> Widget {
+        // Shared identity implements updateShouldNotify: only a changed
+        // open bit invalidates descendants that deliberately depend on it.
+        Widget::shared_environment_scope(
+            self.scopes[usize::from(self.node.is_open())].clone(),
+            child,
+        )
+    }
+}
 
 impl RetainedState for AnchorState {
     const DISPOSE_ON_UNMOUNT: bool = true;
 
     fn rebind_revision(&self, revision: Rc<Cell<u64>>) {
-        *self.0.revision.borrow_mut() = revision;
+        *self.node.revision.borrow_mut() = revision;
     }
 
     fn dispose(&self) {
-        let node = &self.0;
+        let node = &self.node;
         node.open.set(false);
         node.scrolling.borrow_mut().take();
         if let Some(controller) = node.controller.borrow_mut().take() {
@@ -601,8 +646,13 @@ impl RawMenuAnchor {
         self
     }
 
-    fn build(&self, node: &Rc<AnchorNode>, context: &BuildContext<'_>) -> Widget {
-        node.attach(context.depend_on::<AnchorScope>().map(|scope| scope.0));
+    fn build(&self, state: &AnchorState, context: &BuildContext<'_>) -> Widget {
+        let node = &state.node;
+        node.attach(
+            context
+                .depend_on_shared::<AnchorScope>()
+                .map(|scope| scope.node.clone()),
+        );
         node.bind_controller(&self.controller);
         node.child_focus_node.replace(self.child_focus_node.clone());
         *node.callbacks.borrow_mut() = Callbacks {
@@ -615,7 +665,12 @@ impl RawMenuAnchor {
         let root = node.root();
         let group = TapRegionGroupId::Numeric(root.group_id);
         let anchor = match &self.builder {
-            Some(builder) => builder(context, &self.controller, self.child.clone()),
+            Some(builder) => {
+                let builder = builder.clone();
+                let controller = self.controller.clone();
+                let child = self.child.clone();
+                Builder::new(move |context| builder(context, &controller, child.clone())).into()
+            }
             None => self
                 .child
                 .clone()
@@ -662,15 +717,15 @@ impl RawMenuAnchor {
                 };
                 overlay_builder(context, &info)
             });
-        Widget::environment_scope(AnchorScope(node.clone()), portal.into())
+        state.scope(portal.into())
     }
 }
 
 impl From<RawMenuAnchor> for Widget {
     fn from(value: RawMenuAnchor) -> Self {
         Widget::retained_builder(
-            |revision| AnchorState(AnchorNode::new(false, revision)),
-            move |state, context, _| value.build(&state.0, context),
+            |revision| AnchorState::new(false, revision),
+            move |state, context, _| value.build(state, context),
             false,
         )
     }
@@ -697,10 +752,14 @@ impl RawMenuAnchorGroup {
 impl From<RawMenuAnchorGroup> for Widget {
     fn from(value: RawMenuAnchorGroup) -> Self {
         Widget::retained_builder(
-            |revision| AnchorState(AnchorNode::new(true, revision)),
+            |revision| AnchorState::new(true, revision),
             move |state, context, _| {
-                let node = &state.0;
-                node.attach(context.depend_on::<AnchorScope>().map(|scope| scope.0));
+                let node = &state.node;
+                node.attach(
+                    context
+                        .depend_on_shared::<AnchorScope>()
+                        .map(|scope| scope.node.clone()),
+                );
                 node.bind_controller(&value.controller);
                 node.track_root_dependencies(context);
                 let root = node.root();
@@ -713,7 +772,7 @@ impl From<RawMenuAnchorGroup> for Widget {
                             node.handle_outside_tap();
                         }
                     });
-                Widget::environment_scope(AnchorScope(node.clone()), region.into())
+                state.scope(region.into())
             },
             false,
         )

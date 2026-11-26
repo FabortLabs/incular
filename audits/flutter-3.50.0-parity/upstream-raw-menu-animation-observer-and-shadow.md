@@ -170,3 +170,21 @@ disables it. Native disposal revokes controller and scrolling access
 at element unmount, even if the retained builder still has a cached
 reference. The native command bridge rejects disabled invocations
 without announcing an action invocation.
+
+### Inherited menu state and anchor builders
+
+Pinned `:600` and the native mounted scene observe the same group
+panel and anchor values [false,true,false] and the overlay value
+[true]. Opening a nested submenu does not rebuild any of those
+observers when their nearest open state hasn't changed.
+
+Pinned `:865`: maybeOf is an untracked controller lookup. Opening
+does not rerun the panel or anchor lookup; an independent parent
+rebuild reads the new controllers in panel, anchor, and overlay.
+The overlay's mounting and parent-driven rebuild counts match.
+
+Pinned `:2174`: tapping the custom anchor toggles its closed/open/
+closed painting and calls onOpen and onClose once each. Its builder
+runs under its own menu scope, so the lookup and explicit controller
+argument resolve the same handle. The test positions the panel
+below the anchor as the pinned original does.

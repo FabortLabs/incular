@@ -1715,3 +1715,6 @@ packages/flutter/test/widgets/raw_menu_anchor_test.dart	2811	Async onClose is ca
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	2986	Outside tap triggers onCloseRequested	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#delayed-hiding-and-outside-input
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	1393	DismissMenuAction closes menus	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#dismissal-from-a-submenu
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	2921	DismissMenuAction triggers onCloseRequested	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#dismissal-from-a-submenu
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	600	MenuController.maybeIsOpenOf notifies dependents when isOpen changes	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#inherited-menu-state-and-anchor-builders
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	865	MenuController.maybeOf does not notify dependents when MenuController changes	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#inherited-menu-state-and-anchor-builders
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	2174	Menu builder rebuilds when isOpen state changes	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#inherited-menu-state-and-anchor-builders
