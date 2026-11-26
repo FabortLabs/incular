@@ -59,3 +59,27 @@ move, 25 px move and up to the scrolling content. Both produce
 Release does not immediately change the offset. The actual centered
 one-pixel border then has its 300 × 225.079237 path at (0, 0).
 Seven focused Rust cases passed; the explicit-offset control remains.
+
+## Retained custom painter lifecycle
+
+Pinned :15, :43 and :81 now pair. The custom paint factory is not
+called on descriptor construction, produces one actual painter for
+the mounted 800 × 100 sliver, and disposes exactly once on removal.
+Changing the factory disposes the previous painter and paints with
+one new instance. Moving the same painter from foreground to
+background keeps its state and calls paint once more. Native paint
+has its canvas already translated to the leading edge; the local
+origin is zero. This does not implement Flutter's asynchronous
+BoxPainter onChanged callback.
+
+## Infinite maximum paint extent
+
+Pinned :446 is partial. A live native custom render sliver reports
+infinite maximum paint extent while a finite lazy delegate supplies
+real rows and cache geometry. Its border ends at the same cache
+boundary before and after the 200 px jump: centered outlines
+(0.5, 0.5) × (299, 349) and (0.5, −199.5) × (299, 549). It does
+not eagerly build the delegate. This checks the unbounded paint
+extent branch without claiming a public unlimited SliverList.
+
+Eleven focused native tests passed.

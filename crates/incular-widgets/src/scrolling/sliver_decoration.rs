@@ -1,14 +1,78 @@
 //! One retained paint layer for the sliver, not a decoration on each box row.
 
 use super::{layout::SingleInnerSliver, *};
-use crate::{DecorationPosition, ExcludeSemantics, IgnorePointer, SizedBox};
+use crate::{
+    CustomPaint, CustomPainter, DecorationPosition, ExcludeSemantics, IgnorePointer, SizedBox,
+};
+use incular_config::TextDirection;
+use incular_rendering::{Canvas, DisplayList};
 use std::any::Any;
+use std::rc::Weak;
+
+/// The paint-time configuration of one retained sliver decoration.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SliverBoxPaintConfiguration {
+    pub size: Size,
+    pub text_direction: Option<TextDirection>,
+}
+
+/// Custom painter for an entire decorated sliver. The canvas is already
+/// in the decoration's local coordinates, with its top left at zero.
+pub trait SliverBoxPainter {
+    fn paint(&mut self, canvas: &mut Canvas, configuration: SliverBoxPaintConfiguration);
+
+    /// Releases painter resources when the decoration changes or detaches.
+    fn dispose(&mut self) {}
+}
+
+/// Creates a retained sliver painter. Reuse the same factory handle across
+/// rebuilds to keep that painter's state.
+pub type SliverBoxPainterFactory = Rc<dyn Fn() -> Box<dyn SliverBoxPainter>>;
+
+struct PainterLease(RefCell<Box<dyn SliverBoxPainter>>);
+
+impl Drop for PainterLease {
+    fn drop(&mut self) {
+        self.0.get_mut().dispose();
+    }
+}
+
+struct DecorationPicture {
+    painter: Weak<PainterLease>,
+    position: DecorationPosition,
+    direction: Option<TextDirection>,
+}
+
+impl CustomPainter for DecorationPicture {
+    fn paint(&self, size: Size) -> DisplayList {
+        let Some(painter) = self.painter.upgrade() else {
+            return DisplayList::default();
+        };
+        let mut canvas = Canvas::default();
+        painter.0.borrow_mut().paint(
+            &mut canvas,
+            SliverBoxPaintConfiguration {
+                size,
+                text_direction: self.direction,
+            },
+        );
+        canvas.finish()
+    }
+
+    fn should_repaint(&self, old: &Self) -> bool {
+        !Weak::ptr_eq(&self.painter, &old.painter)
+            || self.direction != old.direction
+            || self.position != old.position
+    }
+}
 
 pub(super) struct DecoratedRenderSliver {
     pub inner: RefCell<Box<dyn RenderSliver>>,
     pub decorate: Rc<dyn Fn(Widget) -> Widget>,
     pub position: DecorationPosition,
     scroll_dependent: bool,
+    factory: Option<SliverBoxPainterFactory>,
+    painter: Option<Rc<PainterLease>>,
 }
 
 impl DecoratedRenderSliver {
@@ -16,12 +80,15 @@ impl DecoratedRenderSliver {
         inner: Box<dyn RenderSliver>,
         decorate: Rc<dyn Fn(Widget) -> Widget>,
         position: DecorationPosition,
+        factory: Option<SliverBoxPainterFactory>,
     ) -> Self {
         Self {
             inner: RefCell::new(inner),
             decorate,
             position,
             scroll_dependent: false,
+            factory,
+            painter: None,
         }
     }
 
@@ -35,6 +102,11 @@ impl DecoratedRenderSliver {
 
 impl RenderSliver for DecoratedRenderSliver {
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout {
+        if self.painter.is_none()
+            && let Some(factory) = &self.factory
+        {
+            self.painter = Some(Rc::new(PainterLease(RefCell::new(factory()))));
+        }
         let mut layout = self.inner.get_mut().perform_layout(constraints);
         let geometry = layout.geometry;
         for child in &mut layout.children {
@@ -68,8 +140,21 @@ impl RenderSliver for DecoratedRenderSliver {
         } else {
             Size::new(extent, cross)
         };
-        let empty = SizedBox::new().width(size.width).height(size.height).into();
-        let widget = IgnorePointer::new(ExcludeSemantics::new((self.decorate)(empty))).into();
+        let decoration = if let Some(painter) = &self.painter {
+            CustomPaint::from_painter(
+                size,
+                DecorationPicture {
+                    painter: Rc::downgrade(painter),
+                    position: self.position,
+                    direction: constraints.text_direction,
+                },
+            )
+            .into()
+        } else {
+            let empty = SizedBox::new().width(size.width).height(size.height).into();
+            (self.decorate)(empty)
+        };
+        let widget = IgnorePointer::new(ExcludeSemantics::new(decoration)).into();
         let layer = SliverChildLayout {
             id: SliverChildId::scoped(1, SliverChildId(0)),
             widget,
@@ -168,6 +253,20 @@ impl RenderSliver for DecoratedRenderSliver {
 }
 
 impl SingleInnerSliver for DecoratedRenderSliver {
+    fn adopt_outer_state(&mut self, old: &mut Self) {
+        match (&self.factory, &old.factory) {
+            (Some(factory), Some(previous)) if Rc::ptr_eq(factory, previous) => {
+                self.painter = old.painter.take();
+            }
+            _ => {
+                // A descriptor replacement releases old resources before
+                // the next painter is created. Previously mounted paint
+                // widgets hold only a weak reference to that lease.
+                old.painter = None;
+            }
+        }
+    }
+
     fn inner_cell(&mut self) -> &RefCell<Box<dyn RenderSliver>> {
         &self.inner
     }

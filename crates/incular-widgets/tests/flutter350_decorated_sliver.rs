@@ -399,3 +399,73 @@ fn decorated_stretching_header_receives_the_flutter_touch_drag() {
     assert_eq!(offsets[3], offsets[2]);
     assert_stretched_outline(&mut tree, 200. - offsets[2]);
 }
+
+#[test]
+fn infinite_max_paint_extent_stops_at_the_live_bottom_cache() {
+    use incular_scroll::SliverConstraints;
+    use incular_widgets::{
+        SliverFixedExtentList,
+        internal::{RenderSliver, SliverLayout},
+    };
+    use std::{cell::Cell, rc::Rc};
+
+    struct OpenPaintExtent(SliverFixedExtentList);
+    struct OpenPaintRenderer(Box<dyn RenderSliver>);
+    impl Sliver for OpenPaintExtent {
+        fn build(&self, controller: &ScrollController) -> Widget {
+            self.0.build(controller)
+        }
+
+        fn create_render_sliver(
+            &self,
+            controller: &ScrollController,
+            axis: Axis,
+            reverse: bool,
+        ) -> Box<dyn RenderSliver> {
+            Box::new(OpenPaintRenderer(
+                self.0.create_render_sliver(controller, axis, reverse),
+            ))
+        }
+    }
+    impl RenderSliver for OpenPaintRenderer {
+        fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout {
+            let mut layout = self.0.perform_layout(constraints);
+            layout.geometry.max_paint_extent = f32::INFINITY;
+            layout
+        }
+    }
+
+    let built = Rc::new(Cell::new(0));
+    let rows = SliverFixedExtentList::new(64, 100., {
+        let built = built.clone();
+        move |_| {
+            built.set(built.get() + 1);
+            incular_widgets::SizedBox::new().height(100.)
+        }
+    });
+    let decorated = DecoratedSliver::new(native_decoration(), OpenPaintExtent(rows));
+    let controller = ScrollController::new();
+    let size = Size::new(300., 100.);
+    let mut tree = mounted(decorated, Axis::Vertical, false, controller.clone(), size);
+    assert_eq!(
+        border_rects(&tree.paint()),
+        [Rect::from_origin_size(
+            Offset::new(0.5, 0.5),
+            Size::new(299., 349.)
+        )]
+    );
+    controller.jump_to(200.);
+    tree.layout(Constraints::tight(size)).unwrap();
+    tree.update_compositor(Instant::now()).unwrap();
+    assert_eq!(
+        border_rects(&tree.paint()),
+        [Rect::from_origin_size(
+            Offset::new(0.5, -199.5),
+            Size::new(299., 549.)
+        )]
+    );
+    assert!(
+        built.get() < 16,
+        "the paint box must not materialize off-cache rows"
+    );
+}

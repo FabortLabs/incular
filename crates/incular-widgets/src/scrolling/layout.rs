@@ -3701,6 +3701,8 @@ fn adopt_floating_header_state(
 }
 
 pub(super) trait SingleInnerSliver {
+    fn adopt_outer_state(&mut self, _old: &mut Self) {}
+
     fn inner_cell(&mut self) -> &RefCell<Box<dyn RenderSliver>>;
 }
 
@@ -3734,6 +3736,7 @@ fn transfer_single_inner_sliver_state<T: SingleInnerSliver + 'static>(
             .as_any_mut()
             .and_then(|any| any.downcast_mut::<T>()),
     ) {
+        fresh.adopt_outer_state(retained);
         let mut fresh_inner = fresh.inner_cell().borrow_mut();
         let mut retained_inner = retained.inner_cell().borrow_mut();
         transfer_retained_sliver_state(

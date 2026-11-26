@@ -399,6 +399,7 @@ pub use scrolling::{
     SliverPrototypeExtentList, SliverReorderController, SliverReorderableList,
     SliverResizingHeader, SliverSafeArea, SliverSemantics, SliverToBoxAdapter,
     SliverVariedExtentList, SliverVisibility, SliverVisibilityFlagError, Viewport,
+    SliverBoxPaintConfiguration, SliverBoxPainter, SliverBoxPainterFactory,
 };
 pub use selection::{
     SelectableChildPolicy, SelectedContent, SelectedContentRange, SelectionAreaController,

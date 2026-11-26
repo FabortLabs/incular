@@ -1846,6 +1846,8 @@ pub struct DecoratedSliver {
     decoration: incular_rendering::Decoration,
     #[builder(default, setter(strip_option))]
     box_decoration: Option<crate::BoxDecoration>,
+    #[builder(default, setter(strip_option))]
+    painter_factory: Option<SliverBoxPainterFactory>,
     #[builder(default)]
     position: crate::DecorationPosition,
     #[builder(setter(transform = |sliver: impl Sliver + 'static| {
@@ -1860,6 +1862,7 @@ impl DecoratedSliver {
         Self {
             decoration,
             box_decoration: None,
+            painter_factory: None,
             position: crate::DecorationPosition::Background,
             sliver: Box::new(sliver),
         }
@@ -1870,6 +1873,18 @@ impl DecoratedSliver {
     pub fn new_box(decoration: crate::BoxDecoration, sliver: impl Sliver + 'static) -> Self {
         Self {
             box_decoration: Some(decoration),
+            ..Self::new(incular_rendering::Decoration::default(), sliver)
+        }
+    }
+
+    /// Uses a custom box painter retained by the viewport's render sliver.
+    #[must_use]
+    pub fn new_with_painter(
+        factory: SliverBoxPainterFactory,
+        sliver: impl Sliver + 'static,
+    ) -> Self {
+        Self {
+            painter_factory: Some(factory),
             ..Self::new(incular_rendering::Decoration::default(), sliver)
         }
     }
@@ -1931,7 +1946,7 @@ impl Sliver for DecoratedSliver {
     ) -> Box<dyn RenderSliver> {
         let inner = self.sliver.create_render_sliver(controller, axis, reverse);
         Box::new(super::sliver_decoration::DecoratedRenderSliver::new(
-            inner, self.decorator(), self.position,
+            inner, self.decorator(), self.position, self.painter_factory.clone(),
         ))
     }
 }
