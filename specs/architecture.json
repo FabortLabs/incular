@@ -613,9 +613,11 @@
       "allowed_dependencies": [
         "incular-accessibility",
         "incular-animation",
+        "incular-assets",
         "incular-config",
         "incular-core",
         "incular-devtools-protocol",
+        "incular-image",
         "incular-navigation",
         "incular-platform",
         "incular-rendering",

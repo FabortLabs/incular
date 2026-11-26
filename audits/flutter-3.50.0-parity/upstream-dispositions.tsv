@@ -1592,3 +1592,14 @@ packages/flutter/test/widgets/image_resolution_test.dart	230	Image for device pi
 packages/flutter/test/widgets/image_resolution_test.dart	242	Image for device pixel ratio 5.1	paired-match	upstream-bundled-image-widgets.md
 packages/flutter/test/widgets/image_resolution_test.dart	254	Image for device pixel ratio 1.0, with a main asset and a 1.0x asset	paired-match	upstream-bundled-image-widgets.md
 packages/flutter/test/widgets/image_resolution_test.dart	308	Low-resolution assets	paired-match	upstream-bundled-image-widgets.md
+packages/flutter/test/painting/binding_test.dart	17	didHaveMemoryPressure clears imageCache	paired-match	upstream-decoded-bundle-image-cache.md
+packages/flutter/test/painting/image_cache_resize_test.dart	23	Image cache resizing based on count	paired-match	upstream-decoded-bundle-image-cache.md
+packages/flutter/test/painting/image_cache_resize_test.dart	68	Image cache resizing based on size	paired-match	upstream-decoded-bundle-image-cache.md
+packages/flutter/test/painting/image_cache_test.dart	25	maintains cache size	paired-match	upstream-decoded-bundle-image-cache.md
+packages/flutter/test/painting/image_cache_test.dart	128	clear removes all images and resets cache size	paired-match	upstream-decoded-bundle-image-cache.md
+packages/flutter/test/painting/image_cache_test.dart	150	evicts individual images	paired-match	upstream-decoded-bundle-image-cache.md
+packages/flutter/test/painting/image_cache_test.dart	166	Do not cache large images	paired-match	upstream-decoded-bundle-image-cache.md
+packages/flutter/test/painting/image_cache_test.dart	211	already pending image is returned when it is put into the cache again	partial-match	upstream-decoded-bundle-image-cache.md
+packages/flutter/test/painting/image_cache_test.dart	267	pending image is removed when image is evicted	paired-match	upstream-decoded-bundle-image-cache.md
+packages/flutter/test/painting/image_cache_test.dart	311	containsKey - pending	partial-match	upstream-decoded-bundle-image-cache.md
+packages/flutter/test/painting/image_cache_test.dart	326	containsKey - completed	paired-match	upstream-decoded-bundle-image-cache.md

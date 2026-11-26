@@ -25,6 +25,7 @@ path = "src/lib.rs"
 incular-accessibility = { workspace = true }
 incular-animation = { workspace = true }
 incular-assets = { workspace = true }
+incular-image = { workspace = true }
 incular-semantics = { workspace = true }
 incular-core = { workspace = true }
 incular-config = { workspace = true }

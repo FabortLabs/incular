@@ -5,10 +5,15 @@
 //! crates, preserving a one-way dependency from those consumers to images.
 
 mod asset_image;
+mod bundled_cache;
 mod stream;
 
 pub use asset_image::{
     AssetBundleImageKey, AssetImage, AssetImageKeyCallback, ExactAssetImage, ImageAssetBundle,
+};
+
+pub use bundled_cache::{
+    BundleImageCache, clear_shared_bundle_image_cache, shared_bundle_image_cache,
 };
 
 pub use stream::{

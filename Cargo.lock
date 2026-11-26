@@ -2470,6 +2470,7 @@ dependencies = [
  "incular-config",
  "incular-controls",
  "incular-core",
+ "incular-image",
  "incular-devtools-protocol",
  "incular-navigation",
  "incular-platform",

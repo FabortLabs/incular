@@ -19,6 +19,8 @@ use crate::{
     ImageStream, finite_positive_or_one,
 };
 
+use crate::shared_bundle_image_cache;
+
 /// A shared bundle with identity-based equality. Two distinct bundles can
 /// each own an asset of the same name and density without aliasing.
 #[derive(Clone)]
@@ -82,11 +84,19 @@ impl AssetBundleImageKey {
     /// Returns the bundle or decode error without retrying a different
     /// format or resolution variant.
     pub fn load(&self) -> Result<ImageHandle, ImageError> {
-        self.decode(&self.bundle.0.load(&self.name)?)
+        shared_bundle_image_cache().load(self)
     }
 
     /// Loads the selected asset over the bundle's callback transport.
     pub fn load_async(self, done: ImageLoadCallback) {
+        shared_bundle_image_cache().load_async(self, done);
+    }
+
+    pub(crate) fn read_uncached(&self) -> Result<ImageHandle, ImageError> {
+        self.decode(&self.bundle.0.load(&self.name)?)
+    }
+
+    pub(crate) fn read_uncached_async(self, done: ImageLoadCallback) {
         let Self {
             bundle,
             name,
@@ -329,12 +339,13 @@ impl ImageProvider for AssetImage {
         let Some(bundle) = self.available_bundle(config) else {
             return ImageStream::from_result(self.load_with(config));
         };
+        let cache = shared_bundle_image_cache();
         ImageStream::from_load_callback(|done| {
             self.obtain_key_from_bundle(
                 bundle,
                 config,
                 Box::new(move |key| match key {
-                    Ok(key) => key.load_async(done),
+                    Ok(key) => cache.load_async(key, done),
                     Err(error) => done(Err(error)),
                 }),
             );

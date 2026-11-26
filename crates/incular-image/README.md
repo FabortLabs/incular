@@ -24,3 +24,8 @@ explicit bundle, image configuration, or root bundle in that order.
 The resolved bundle key names the physical file and carries the density
 used to map source pixels into logical image size. Unbundled native file
 paths also support sibling density directories.
+
+The UI's `BundleImageCache` deduplicates pending loads and keeps recently
+decoded bundle images within independent count and decoded-byte limits.
+A runtime memory-pressure message drops those retained entries. It does not
+invalidate image handles already in use.

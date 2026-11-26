@@ -149,8 +149,10 @@ fn native_warning_also_forgets_root_structured_asset_values() {
     let _override = Override::install(root.clone());
     let app = Application::new(|_| leaf()).unwrap();
     let load = || {
-        root.load_structured_data("structured", |text| Ok::<_, std::convert::Infallible>(text.len()))
-            .unwrap()
+        root.load_structured_data("structured", |text| {
+            Ok::<_, std::convert::Infallible>(text.len())
+        })
+        .unwrap()
     };
     assert_eq!(load(), 10);
     assert_eq!(load(), 10);
@@ -158,4 +160,31 @@ fn native_warning_also_forgets_root_structured_asset_values() {
     app.handle_memory_pressure();
     assert_eq!(load(), 10);
     assert_eq!(source.reads(), 2);
+}
+
+#[test]
+fn memory_pressure_evicts_decoded_bundle_images_without_dropping_live_pixels() {
+    use incular_assets::MemoryAssetBundle;
+    use incular_image::{ExactAssetImage, ImageProvider, shared_bundle_image_cache};
+    const PNG: &[u8] = include_bytes!(
+        "../../../audits/flutter-3.50.0-parity/reference-probes/fixtures/decode_cache_8x8.png"
+    );
+    let app = Application::new(|_| leaf()).unwrap();
+    let cache = shared_bundle_image_cache();
+    cache.clear();
+    let bundle = Arc::new(MemoryAssetBundle::new().with("icon.png", PNG));
+    let image = ExactAssetImage::new("icon.png").bundle(bundle);
+
+    let first = image.load().unwrap();
+    assert_eq!(cache.retained(), (1, 256));
+    assert_eq!(image.load().unwrap().id(), first.id());
+    assert!(!app.handle_system_message("flutter/other", br#"{"type":"memoryPressure"}"#));
+    assert_eq!(cache.retained(), (1, 256));
+    assert!(app.handle_system_message("flutter/system", br#"{"type":"memoryPressure"}"#));
+    assert_eq!(cache.retained(), (0, 0));
+    assert_eq!(first.decoded().pixels()[..4], [28, 94, 193, 255]);
+    let second = image.load().unwrap();
+    assert_ne!(second.id(), first.id());
+    assert_eq!(cache.retained(), (1, 256));
+    cache.clear();
 }

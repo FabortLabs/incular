@@ -2,6 +2,7 @@
 
 use crate::Application;
 use incular_assets::root_asset_bundle;
+use incular_image::clear_shared_bundle_image_cache;
 
 #[derive(serde::Deserialize)]
 struct SystemNotice {
@@ -11,9 +12,11 @@ struct SystemNotice {
 
 impl Application {
     /// Drops cached root asset strings and structured values on a host
-    /// memory warning. Loading them again consults the underlying bundle.
+    /// memory warning, and frees retained decoded bundle images. Handles
+    /// still used by mounted widgets remain valid.
     pub fn handle_memory_pressure(&self) {
         root_asset_bundle().clear();
+        clear_shared_bundle_image_cache();
     }
 
     /// Handles the Flutter-compatible JSON system notification for memory
