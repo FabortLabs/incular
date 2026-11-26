@@ -3493,7 +3493,7 @@ impl Runtime {
         drop(_semantics_guard);
         let _paint_guard = tracing::info_span!("incular.paint").entered();
         let paint_span = profiling::PhaseSpan::start();
-        let display_list = self.tree.paint();
+        let display_list = self.tree.try_paint()?;
         let paint = paint_span.elapsed_us();
         drop(_paint_guard);
         // Flutter `RenderView._updateSystemChrome`: the paint flattened the

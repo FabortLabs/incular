@@ -284,6 +284,9 @@ pub enum TreeError {
         widget: &'static str,
         reason: String,
     },
+    /// A follower cannot depend on a leader inside its own subtree.
+    #[error("LeaderLayer anchor must come before FollowerLayer in paint order")]
+    LeaderAfterFollower,
     /// A debug Flex layout cannot distribute remaining space if its parent
     /// leaves the main axis unbounded.
     #[error(

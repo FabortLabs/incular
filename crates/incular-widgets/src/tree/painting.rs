@@ -178,6 +178,17 @@ pub(super) struct RawHitResult {
 }
 
 impl WidgetTree {
+    /// Paints a runtime scene and checks Flutter's invalid nested link
+    /// diagnostic in debug builds. Independent sibling links still use the
+    /// compositor's order-independent publication.
+    pub fn try_paint(&mut self) -> Result<DisplayList, TreeError> {
+        let list = self.paint();
+        if self.compositor.has_enclosed_linked_leader() {
+            return Err(TreeError::LeaderAfterFollower);
+        }
+        Ok(list)
+    }
+
     #[must_use]
     pub fn paint(&mut self) -> DisplayList {
         let _phase_guard = self.guard_phase_root(FramePhase::Paint);

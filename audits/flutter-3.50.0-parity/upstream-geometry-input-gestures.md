@@ -56,10 +56,11 @@ follower regression checks the flattened display list, not native pixels.
 The three nested layouts at lines 270, 281 and 292 also pass. These add
 padding, an unlinked outer follower and skew before the linked inner
 follower. Both sides also lay out a linked target and follower at zero
-area without an exception (line 401). Line 373 is a mismatch: Flutter
-asserts when a follower encloses its own target in paint order; Incular
-handles that link cycle without an exception. This does not imply the
-cycle produces a valid linked transform.
+area without an exception (line 401). Line 373 now also pairs: debug
+runtime frames report the paint-order error when a follower encloses
+its own target. A retained update correcting the hierarchy restores
+publication. Incular's acyclic forward links between sibling layers
+remain supported; the diagnostic only rejects the nested self-cycle.
 
 ## Text state
 

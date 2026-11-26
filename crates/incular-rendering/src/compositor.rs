@@ -521,6 +521,10 @@ pub struct LayerTree {
     /// Live follower layers. Their placement reads link state that another
     /// tree may publish, so a scene holding one is flattened every time.
     follower_layers: usize,
+    /// Flutter's impossible self-dependency: a leader is inside a follower
+    /// that needs this same link before it can paint its child.
+    #[cfg(debug_assertions)]
+    leader_inside_follower: bool,
     /// Whether any layer changed since the last [`Self::flatten`]. An
     /// unchanged scene hands out the published list without walking it.
     scene_dirty: bool,
@@ -573,6 +577,8 @@ impl LayerTree {
             annotation_layers: 0,
             leader_layers: 0,
             follower_layers: 0,
+            #[cfg(debug_assertions)]
+            leader_inside_follower: false,
             scene_dirty: true,
             partitioned: Vec::new(),
             flattened_partitions: Vec::new(),
@@ -2181,12 +2187,24 @@ impl LayerTree {
             self.clear_link_states(*child);
         }
     }
+    /// Whether a leader is enclosed by a follower of the same link.
+    /// Acyclic forward links between siblings are intentionally supported.
+    #[must_use]
+    pub fn has_enclosed_linked_leader(&self) -> bool {
+        #[cfg(debug_assertions)]
+        { self.leader_inside_follower }
+        #[cfg(not(debug_assertions))]
+        { false }
+    }
+
     /// Republishes leader links from current layer state for readers that
     /// run before `flatten` (notably semantic collection, which the frame
     /// runs pre-paint). Same pass `flatten` runs, so follower visibility
     /// reflects this frame's layout instead of the previous paint;
     /// genuinely hidden leaders still stay unpublished. Idempotent.
     pub fn publish_leader_links(&mut self) {
+        #[cfg(debug_assertions)]
+        { self.leader_inside_follower = false; }
         if self.leader_layers == 0 {
             return;
         }
@@ -2210,6 +2228,24 @@ impl LayerTree {
         self.collect_publish_state(root, &mut parents, &mut leaders);
         if leaders.is_empty() {
             return;
+        }
+        #[cfg(debug_assertions)]
+        if self.follower_layers > 0 {
+            self.leader_inside_follower = leaders.iter().any(|leader| {
+                let mut parent = parents.get(&leader.id);
+                while let Some(id) = parent {
+                    if self.layers.get(id.0).is_some_and(|ancestor| {
+                        matches!(
+                            &ancestor.kind,
+                            LayerKind::Follower(follower) if follower.link == leader.link
+                        )
+                    }) {
+                        return true;
+                    }
+                    parent = parents.get(id);
+                }
+                false
+            });
         }
         let mut states = HashMap::new();
         let mut published = 0;

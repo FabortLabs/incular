@@ -158,15 +158,37 @@ fn original_nested_target_and_follower_lay_out_at_zero_area() {
     }
 }
 
+#[cfg(debug_assertions)]
 #[test]
-fn original_leader_inside_follower_is_nonfatal_in_incular() {
+fn original_leader_inside_follower_reports_the_paint_order_error_and_then_recovers() {
+    use incular_widgets::internal::TreeError;
+
     let link = LayerLink::new();
-    let leader =
-        CompositedTransformTarget::new(link.clone(), Widget::box_(Size::new(20., 20.), MARKER));
-    let follower = CompositedTransformFollower::new(link, leader);
-    let mut r = Runtime::new(follower.into()).unwrap();
-    r.run_frame(Constraints::tight(Size::new(800., 600.)))
-        .unwrap();
+    let paint = || Widget::box_(Size::new(20., 20.), MARKER);
+    let leader = CompositedTransformTarget::new(link.clone(), paint());
+    let follower = CompositedTransformFollower::new(link.clone(), leader);
+    let mut runtime = Runtime::new(Center::new(follower).into()).unwrap();
+    let viewport = Constraints::tight(Size::new(800., 600.));
+    for _ in 0..2 {
+        let error = match runtime.run_frame(viewport) {
+            Err(error) => error,
+            Ok(_) => panic!("a follower cannot transform its own leader"),
+        };
+        assert_eq!(error, TreeError::LeaderAfterFollower);
+        assert!(error.to_string().contains(
+            "LeaderLayer anchor must come before FollowerLayer in paint order"
+        ));
+    }
+    let root = runtime.tree().root().unwrap();
+    runtime.schedule_update(
+        root,
+        Center::new(CompositedTransformTarget::new(
+            link.clone(),
+            CompositedTransformFollower::new(link.clone(), paint()),
+        )).into(),
+    ).unwrap();
+    runtime.run_frame(viewport).unwrap();
+    assert!(link.is_linked());
 }
 
 fn rotated_anchors(nested: bool) {
