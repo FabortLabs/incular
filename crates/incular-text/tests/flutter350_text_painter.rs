@@ -701,3 +701,98 @@ fn forced_strut_keeps_the_line_height_when_a_widget_is_much_taller() {
     let placement = &p.shaped_layout().unwrap().placeholders[0];
     assert_eq!(placement.rect.size, Size::new(1000., 1000.));
 }
+
+#[test]
+fn max_lines_hides_text_without_moving_the_caret_into_an_unlaid_line() {
+    use incular_core::Offset;
+    use incular_text::TextAffinity::{Downstream, Upstream};
+    let Ok(path) = std::env::var("INCULAR_FLUTTER_TEST_FONT_PATH") else {
+        return;
+    };
+    let mut engine = TextEngine::new();
+    assert!(engine.register_font_bytes_as("FlutterTest", std::fs::read(path).unwrap()));
+    let style = TextStyle::default()
+        .font_family("FlutterTest")
+        .font_size(10.);
+    for direction in [TextDirection::Ltr, TextDirection::Rtl] {
+        let rtl = direction == TextDirection::Rtl;
+        for (text, max, width, intrinsic, exceeded, hard_break, first_hidden, x, y) in [
+            (
+                "abcd efgh ijkl",
+                1,
+                40.,
+                140.,
+                true,
+                false,
+                6,
+                if rtl { 0. } else { 40. },
+                0.,
+            ),
+            (
+                "ab\ncd\nefgh",
+                2,
+                100.,
+                40.,
+                true,
+                true,
+                6,
+                if rtl { 18. } else { 20. },
+                10.,
+            ),
+            (
+                "ab\n",
+                1,
+                100.,
+                20.,
+                false,
+                true,
+                3,
+                if rtl { 0. } else { 20. },
+                0.,
+            ),
+        ] {
+            let description = format!("{direction:?}, {text:?}");
+            let mut p = painter(TextSpan::new(text).style(style.clone()), direction);
+            assert_eq!(
+                p.set_max_lines(Some(0)),
+                Err(TextPainterError::InvalidMaxLines)
+            );
+            p.set_max_lines(Some(max)).unwrap();
+            p.layout_with_engine(&mut engine, 0., width).unwrap();
+            assert_eq!(p.plain_text(), text, "{description}");
+            assert_eq!(
+                p.size(),
+                Ok(Size::new(f32::min(width, intrinsic), 10. * max as f32)),
+                "{description}"
+            );
+            assert_eq!(p.max_intrinsic_width(), Ok(intrinsic), "{description}");
+            assert_eq!(p.did_exceed_max_lines(), Ok(exceeded), "{description}");
+            assert_eq!(p.line_metrics().unwrap().len(), max, "{description}");
+            assert_eq!(
+                p.line_metrics().unwrap().last().unwrap().hard_break,
+                hard_break,
+                "{description}"
+            );
+            for byte in first_hidden..=text.len() {
+                for affinity in [Downstream, Upstream] {
+                    assert_eq!(
+                        p.caret_offset(byte, affinity, 2.),
+                        Ok(Offset::new(x, y)),
+                        "{description}, byte {byte}, {affinity:?}, shaped {:#?}",
+                        p.line_metrics().unwrap()
+                    );
+                    assert_eq!(
+                        p.full_height_for_caret(byte, affinity),
+                        Ok(10.),
+                        "{description}, byte {byte}, {affinity:?}"
+                    );
+                }
+            }
+            p.set_max_lines(None).unwrap();
+            assert_eq!(p.did_exceed_max_lines(), Err(TextPainterError::NeedsLayout));
+            p.layout_with_engine(&mut engine, 0., width).unwrap();
+            assert!(p.line_metrics().unwrap().len() > max, "{description}");
+            assert_eq!(p.did_exceed_max_lines(), Ok(false), "{description}");
+        }
+    }
+}

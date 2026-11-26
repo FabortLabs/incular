@@ -103,3 +103,23 @@ template height. A forced strut keeps a 1,000 px inline child in a 100 px
 line without shrinking the child's own box. Three original Flutter and
 31 focused Rust cases passed. Glyph selection boxes under forced strut
 are a separate comparison.
+
+## Line limit and hidden carets
+
+Six authored Flutter 3.50.0 probes pair with native assertions. For
+both LTR and RTL paragraphs, a line limit clips visual lines without
+changing the source or its maximum intrinsic width. Hidden positions
+map to the last retained line's paragraph-direction trailing edge,
+with the RTL caret width subtracted. This works across soft wraps and
+explicit line breaks. Dropping only the final empty line after a
+newline does not report overflow. Clearing the limit invalidates the
+layout and restores the omitted lines.
+
+The probes ran alongside 28 targeted Rust tests. They are tracked
+separately from the upstream registration count. This covers clipping
+without ellipsis; custom ellipsis and tight selection geometry remain
+separate work.
+
+```sh
+bash audits/flutter-3.50.0-parity/run-reference-linux.sh probe text_painter_line_limit_test.dart
+```

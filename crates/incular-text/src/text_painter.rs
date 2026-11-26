@@ -19,6 +19,7 @@ use crate::{
 pub enum TextPainterError {
     MissingText,
     MissingTextDirection,
+    InvalidMaxLines,
     InvalidWidth,
     NeedsLayout,
     Disposed,
@@ -29,6 +30,7 @@ impl fmt::Display for TextPainterError {
         f.write_str(match self {
             Self::MissingText => "TextPainter requires text before layout",
             Self::MissingTextDirection => "TextPainter requires a text direction before layout",
+            Self::InvalidMaxLines => "TextPainter max lines must be positive",
             Self::InvalidWidth => "invalid TextPainter width constraints",
             Self::NeedsLayout => "TextPainter requires a current layout",
             Self::Disposed => "TextPainter has already been disposed",
@@ -71,6 +73,7 @@ struct MeasuredText {
     size: Size,
     max_intrinsic_width: f32,
     preferred_line_height: f32,
+    preferred_baseline: f32,
     strut: Option<TextStrut>,
     run_heights: OnceLock<Vec<RunHeight>>,
     paint_offset: Offset,
@@ -87,6 +90,7 @@ pub struct TextPainter {
     direction: Option<TextDirection>,
     alignment: TextAlign,
     width_basis: TextWidthBasis,
+    max_lines: Option<usize>,
     default_style: TextStyle,
     scaler: TextScaler,
     strut_style: Option<StrutStyle>,
@@ -162,6 +166,21 @@ impl TextPainter {
             self.width_basis = basis;
             self.measured = None;
         }
+    }
+
+    /// Caps the number of laid-out lines without changing the source text.
+    pub fn set_max_lines(&mut self, max_lines: Option<usize>) -> Result<(), TextPainterError> {
+        if self.disposed {
+            return Err(TextPainterError::Disposed);
+        }
+        if max_lines == Some(0) {
+            return Err(TextPainterError::InvalidMaxLines);
+        }
+        if self.max_lines != max_lines {
+            self.max_lines = max_lines;
+            self.measured = None;
+        }
+        Ok(())
     }
 
     /// Sets the inherited style for spans that do not specify their own.
@@ -262,26 +281,28 @@ impl TextPainter {
             },
             |last| last.strut,
         );
-        let preferred_line_height = reusable.map_or_else(
+        let (preferred_line_height, preferred_baseline) = reusable.map_or_else(
             || {
-                engine
-                    .layout_with_options(
-                        " ",
-                        &base,
-                        TextLayoutOptions::new(None, TextAlign::Start)
-                            .strut(strut)
-                            .height_behavior(self.height_behavior.unwrap_or_default()),
-                    )
-                    .metrics
-                    .size
-                    .height
+                let template = engine.layout_with_options(
+                    " ",
+                    &base,
+                    TextLayoutOptions::new(None, TextAlign::Start)
+                        .strut(strut)
+                        .height_behavior(self.height_behavior.unwrap_or_default()),
+                );
+                (template.metrics.size.height, template.metrics.baseline)
             },
-            |last| last.preferred_line_height,
+            |last| (last.preferred_line_height, last.preferred_baseline),
         );
-        let measure = |engine: &mut TextEngine, width| {
+        let measure = |engine: &mut TextEngine, width, max_lines: Option<usize>| {
             let options = TextLayoutOptions::new(width, self.alignment)
                 .text_direction(direction)
-                .overflow(TextOverflow::Visible)
+                .max_lines(max_lines)
+                .overflow(if max_lines.is_some() {
+                    TextOverflow::Clip
+                } else {
+                    TextOverflow::Visible
+                })
                 .strut(strut)
                 .height_behavior(self.height_behavior.unwrap_or_default());
             if runs.is_empty() && placeholders.is_empty() {
@@ -292,18 +313,34 @@ impl TextPainter {
         };
         let (intrinsic, shaped, shaping_width) = if max_width.is_finite() {
             let intrinsic = reusable.map_or_else(
-                || longest(&measure(engine, None)),
+                || longest(&measure(engine, None, None)),
                 |last| last.max_intrinsic_width,
             );
-            (intrinsic, measure(engine, Some(max_width)), max_width)
+            (
+                intrinsic,
+                measure(engine, Some(max_width), self.max_lines),
+                max_width,
+            )
         } else {
-            let shaped = measure(engine, None);
-            let intrinsic = longest(&shaped);
+            let unbounded = measure(engine, None, None);
+            let intrinsic = longest(&unbounded);
+            let shaped = if self
+                .max_lines
+                .is_some_and(|limit| unbounded.lines.len() > limit)
+            {
+                measure(engine, None, self.max_lines)
+            } else {
+                unbounded
+            };
             (intrinsic, shaped, intrinsic)
         };
         let measured_width = match self.width_basis {
             TextWidthBasis::Parent => intrinsic,
-            TextWidthBasis::LongestLine => longest(&shaped),
+            TextWidthBasis::LongestLine => shaped
+                .lines
+                .iter()
+                .map(|line| line.width - line.hanging_advance)
+                .fold(0., f32::max),
         }
         .clamp(min_width, max_width);
         let fraction = match (self.alignment, direction) {
@@ -322,6 +359,7 @@ impl TextPainter {
             shaped,
             max_intrinsic_width: intrinsic,
             preferred_line_height,
+            preferred_baseline,
             strut,
             run_heights: OnceLock::new(),
             paint_offset: Offset::new(fraction * (measured_width - shaping_width), 0.),
@@ -354,6 +392,17 @@ impl TextPainter {
         Ok(self.measured()?.paint_offset)
     }
 
+    /// Whether the line limit hid source characters. Suppressing only the
+    /// synthetic empty line after a final newline does not count as overflow.
+    pub fn did_exceed_max_lines(&self) -> Result<bool, TextPainterError> {
+        let layout = &self.measured()?.shaped;
+        Ok(layout.overflowed
+            && layout
+                .lines
+                .last()
+                .is_some_and(|line| line.end < self.plain.len()))
+    }
+
     pub fn shaped_layout(&self) -> Result<&Arc<TextLayout>, TextPainterError> {
         Ok(&self.measured()?.shaped)
     }
@@ -376,7 +425,10 @@ impl TextPainter {
                             self.plain.as_bytes().get(line.caret_end),
                             Some(b'\n' | b'\r')
                         )
-                        || i + 1 == lines.len(),
+                        || line.end.checked_sub(1).is_some_and(|byte| {
+                            matches!(self.plain.as_bytes().get(byte), Some(b'\n' | b'\r'))
+                        })
+                        || (i + 1 == lines.len() && !measured.shaped.overflowed),
                     left: line.offset
                         + if self.direction == Some(TextDirection::Rtl) {
                             line.hanging_advance
@@ -446,6 +498,26 @@ impl TextPainter {
             .checked_sub(1)
             .is_some_and(|prev| matches!(source.as_bytes().get(prev), Some(b'\n' | b'\r')));
         let use_leading = byte == 0 || after_break || affinity == TextAffinity::Downstream;
+        if measured.shaped.overflowed {
+            let last = &lines[lines.len() - 1];
+            let anchor = if use_leading {
+                byte
+            } else {
+                byte.saturating_sub(1)
+            };
+            if anchor >= last.end {
+                let rtl = self.direction == Some(TextDirection::Rtl);
+                let x = if rtl {
+                    last.offset + last.hanging_advance - caret_width.max(0.)
+                } else {
+                    last.offset + last.width - last.hanging_advance
+                };
+                return Ok(Offset::new(
+                    (x + measured.paint_offset.x).clamp(0., measured.size.width),
+                    last.baseline - measured.preferred_baseline,
+                ));
+            }
+        }
         if !use_leading && index > 0 && lines[index].start == byte {
             index -= 1;
         }
@@ -541,6 +613,12 @@ impl TextPainter {
         } else {
             byte
         };
+        if measured.shaped.overflowed
+            && let Some(line) = measured.shaped.lines.last()
+            && anchor >= line.end
+        {
+            return Ok(line.height);
+        }
         let runs = measured.run_heights.get_or_init(|| {
             let mut runs: Vec<_> = measured
                 .shaped
