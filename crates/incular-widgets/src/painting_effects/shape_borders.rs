@@ -57,6 +57,13 @@ pub trait ShapeBorder {
         None
     }
 
+    /// Scales this border for a transition from or to an absent decoration.
+    /// Custom borders that return `None` keep their original outline.
+    fn scaled(&self, factor: f32) -> Option<Rc<dyn ShapeBorder>> {
+        self.rounded_circle_outline()
+            .map(|outline| Rc::new(outline.scale(factor)) as Rc<dyn ShapeBorder>)
+    }
+
     /// Whether the interior has an equivalent specialized painting path.
     fn prefer_paint_interior(&self) -> bool {
         false
@@ -104,6 +111,14 @@ impl CompoundBorder {
 }
 
 impl ShapeBorder for CompoundBorder {
+    fn scaled(&self, factor: f32) -> Option<Rc<dyn ShapeBorder>> {
+        Some(Rc::new(Self {
+            borders: self.borders.iter()
+                .map(|border| border.scaled(factor).unwrap_or_else(|| border.clone()))
+                .collect(),
+        }))
+    }
+
     fn dimensions(&self, direction: Option<TextDirection>) -> EdgeInsets {
         self.borders.iter().fold(EdgeInsets::ZERO, |total, border| {
             let next = border.dimensions(direction);
@@ -205,6 +220,10 @@ impl std::ops::Add for Border {
 }
 
 impl ShapeBorder for Border {
+    fn scaled(&self, factor: f32) -> Option<Rc<dyn ShapeBorder>> {
+        Some(Rc::new(self.scale(factor)))
+    }
+
     fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
         Border::dimensions(*self)
     }
@@ -246,6 +265,16 @@ impl ShapeBorder for Border {
 }
 
 impl ShapeBorder for BorderComposition {
+    fn scaled(&self, factor: f32) -> Option<Rc<dyn ShapeBorder>> {
+        Some(Rc::new(match self {
+            Self::Merged(border) => Self::Merged(border.scale(factor)),
+            Self::Layered { outside, inside } => Self::Layered {
+                outside: outside.scale(factor),
+                inside: inside.scale(factor),
+            },
+        }))
+    }
+
     fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
         match self {
             Self::Merged(border) => Border::dimensions(*border),
@@ -1012,6 +1041,10 @@ impl<R: Copy + Into<BorderRadiusGeometry>> BeveledRectangleBorder<R> {
 }
 
 impl<R: Copy + Into<BorderRadiusGeometry>> ShapeBorder for BeveledRectangleBorder<R> {
+    fn scaled(&self, factor: f32) -> Option<Rc<dyn ShapeBorder>> {
+        Some(Rc::new(BeveledRectangleBorder::new(self.side.scale(factor), self.border_radius.into() * factor)))
+    }
+
     fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
         EdgeInsets::all(self.side.stroke_inset().max(0.))
     }
@@ -1450,6 +1483,10 @@ impl Hash for StarBorder {
 }
 
 impl ShapeBorder for StarBorder {
+    fn scaled(&self, factor: f32) -> Option<Rc<dyn ShapeBorder>> {
+        Some(Rc::new(self.scale(factor)))
+    }
+
     fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
         EdgeInsets::all(self.side.stroke_inset().max(0.))
     }
@@ -1861,6 +1898,10 @@ impl<R: Copy + Into<BorderRadiusGeometry>> ContinuousRectangleBorder<R> {
 }
 
 impl<R: Copy + Into<BorderRadiusGeometry>> ShapeBorder for ContinuousRectangleBorder<R> {
+    fn scaled(&self, factor: f32) -> Option<Rc<dyn ShapeBorder>> {
+        Some(Rc::new(ContinuousRectangleBorder::new(self.side.scale(factor), self.border_radius.into() * factor)))
+    }
+
     fn dimensions(&self, _: Option<TextDirection>) -> EdgeInsets {
         EdgeInsets::all(self.side.width)
     }
@@ -2101,6 +2142,10 @@ fn hairline() -> Stroke {
 }
 
 impl ShapeBorder for LinearBorder {
+    fn scaled(&self, factor: f32) -> Option<Rc<dyn ShapeBorder>> {
+        Some(Rc::new(self.scale(factor)))
+    }
+
     fn dimensions(&self, direction: Option<TextDirection>) -> EdgeInsets {
         let [start, top, end, bottom] = self.insets();
         match direction.unwrap_or(TextDirection::Ltr) {

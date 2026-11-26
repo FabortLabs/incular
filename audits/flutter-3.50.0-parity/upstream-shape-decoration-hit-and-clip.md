@@ -108,3 +108,19 @@ resizing its frame. Hit testing, painting and clipping evaluate the
 same fitted shape. Both Flutter and Incular show a stadium-to-rectangle
 midpoint whose edge is distinct from either endpoint. Five primitive
 native cases and 28 existing shape and outline cases passed.
+
+## Nullable and identical decorations
+
+Pinned `painting/shape_decoration_test.dart:62` and `:68` pass. The
+nullable Rust API returns no value for two absent decorations and
+borrows the exact original for an identical input or a selected
+endpoint when both are present. A single present decoration uses the
+nullable scaling rules instead of jumping to an empty shape at halfway.
+
+An authored Flutter case and its native counterpart verify continuous
+changes to color opacity, rounded corners, stroke width and shadow
+geometry in both directions. A native probe also checks fading a
+single image and gradient while preserving image/shader geometry. Four
+nullable cases and 18 focused transition controls passed. Two distinct
+images still need a true crossfade, and BoxDecoration-to-ShapeDecoration
+conversion remains separate.

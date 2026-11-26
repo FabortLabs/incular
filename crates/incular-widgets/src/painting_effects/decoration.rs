@@ -719,6 +719,40 @@ impl DecorationImage {
     }
 }
 
+pub(super) fn faded_decoration_image(
+    image: Option<&DecorationImage>,
+    factor: f32,
+) -> Option<DecorationImage> {
+    if factor == 0. {
+        return None;
+    }
+    image.cloned().map(|mut image| {
+        image.opacity = (image.opacity * factor).clamp(0., 1.);
+        image
+    })
+}
+
+pub(super) fn faded_brush(brush: &Brush, factor: f32) -> Brush {
+    match brush {
+        Brush::Solid(color) => Brush::Solid(lerp_color(None, Some(*color), factor).unwrap_or(*color)),
+        Brush::LinearGradient(gradient) => {
+            let mut gradient = gradient.clone();
+            gradient.stops = gradient.stops.scale_opacity(factor);
+            Brush::LinearGradient(gradient)
+        }
+        Brush::RadialGradient(gradient) => {
+            let mut gradient = gradient.clone();
+            gradient.stops = gradient.stops.scale_opacity(factor);
+            Brush::RadialGradient(gradient)
+        }
+        Brush::SweepGradient(gradient) => {
+            let mut gradient = gradient.clone();
+            gradient.stops = gradient.stops.scale_opacity(factor);
+            Brush::SweepGradient(gradient)
+        }
+    }
+}
+
 /// Linear gradient with endpoints relative to the painted box. Unlike a
 /// renderer brush in logical pixels, an endpoint can follow text direction.
 #[derive(Clone, Debug, PartialEq)]
@@ -1210,6 +1244,27 @@ pub struct BoxDecoration {
 }
 
 impl BoxDecoration {
+    pub(crate) fn scaled(&self, factor: f32) -> Self {
+        Self {
+            color: lerp_color(None, self.color, factor),
+            image: faded_decoration_image(self.image.as_ref(), factor),
+            border: self.border.map(|border| border.scale(factor)),
+            border_radius: self.border_radius.map(|radius| radius * factor),
+            directional_border_radius: self.directional_border_radius.as_deref()
+                .map(|radius| Arc::new(*radius * factor)),
+            box_shadow: self.box_shadow.iter().map(|shadow| shadow.scale(factor)).collect(),
+            gradient: self.gradient.as_ref().map(|brush| faded_brush(brush, factor)),
+            aligned_gradient: self.aligned_gradient.as_deref()
+                .map(|gradient| Arc::new(gradient.scale(factor))),
+            aligned_radial_gradient: self.aligned_radial_gradient.as_deref()
+                .map(|gradient| Arc::new(gradient.scale(factor))),
+            aligned_sweep_gradient: self.aligned_sweep_gradient.as_deref()
+                .map(|gradient| Arc::new(gradient.scale(factor))),
+            background_blend_mode: None,
+            shape: self.shape,
+        }
+    }
+
     pub(crate) const DIRECTIONAL_RADIUS_NEEDS_DIRECTION: &'static str = "No TextDirection found. BorderRadiusDirectional cannot resolve without a Directionality ancestor";
 
     #[must_use]

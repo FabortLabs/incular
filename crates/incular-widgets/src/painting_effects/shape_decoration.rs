@@ -2,13 +2,14 @@
 //! `ClipPath.shape` (`ShapeBorderClipper`): a [`ShapeBorder`] used as a
 //! decoration and as a clip.
 
-use std::{rc::Rc, sync::Arc};
+use std::{borrow::Cow, rc::Rc, sync::Arc};
 
+use incular_animation::OptionalColorTween;
 use incular_config::{Clip, TextDirection};
-use incular_core::{Color, Offset, Rect, Size};
-use incular_rendering::{Brush, Canvas, CornerRadii, DisplayList, FillRule};
+use incular_core::{Color, Lerp, Offset, Rect, Size};
+use incular_rendering::{Brush, Canvas, CornerRadii, DisplayList, FillRule, GradientStops};
 
-use super::decoration::{BoxShadow, DecorationImage};
+use super::decoration::{BoxShadow, DecorationImage, faded_brush, faded_decoration_image};
 use super::shape_borders::ShapeBorder;
 use crate::{
     Builder, ClipPath, ClipShape, CustomClipper, CustomPaint, IgnorePointer, LayoutBuilder,
@@ -72,6 +73,44 @@ impl ShapeDecoration {
     pub fn shadows(mut self, shadows: impl IntoIterator<Item = BoxShadow>) -> Self {
         self.shadows = shadows.into_iter().collect();
         self
+    }
+
+    /// Interpolates optional shape decorations. Identical objects and exact
+    /// present endpoints are returned by reference.
+    #[must_use]
+    pub fn lerp_optional<'a>(
+        a: Option<&'a Self>,
+        b: Option<&'a Self>,
+        t: f32,
+    ) -> Option<Cow<'a, Self>> {
+        match (a, b) {
+            (None, None) => None,
+            (Some(a), Some(b)) if std::ptr::eq(a, b) || t == 0. => Some(Cow::Borrowed(a)),
+            (Some(_), Some(b)) if t == 1. => Some(Cow::Borrowed(b)),
+            (Some(a), Some(b)) => Some(Cow::Owned(lerp_shape_decoration(a, b, t))),
+            (Some(a), None) => Some(Cow::Owned(a.scaled(1. - t))),
+            (None, Some(b)) => Some(Cow::Owned(b.scaled(t))),
+        }
+    }
+
+    pub(crate) fn scaled(&self, factor: f32) -> Self {
+        Self {
+            color: OptionalColorTween::new(None, self.color).lerp(factor),
+            gradient: self
+                .gradient
+                .as_ref()
+                .map(|brush| faded_brush(brush, factor)),
+            shadows: self
+                .shadows
+                .iter()
+                .map(|shadow| shadow.scale(factor))
+                .collect(),
+            image: faded_decoration_image(self.image.as_ref(), factor),
+            shape: self
+                .shape
+                .scaled(factor)
+                .unwrap_or_else(|| self.shape.clone()),
+        }
     }
 
     /// Tests the shape in local coordinates rather than its bounding box.
@@ -211,6 +250,114 @@ impl ShapeDecoration {
         let mut canvas = Canvas::default();
         self.paint_interior_or_path(&mut canvas, rect, Brush::Solid(shadow.color), direction);
         canvas.finish()
+    }
+}
+
+impl Lerp for ShapeDecoration {
+    fn lerp(&self, other: &Self, t: f32) -> Self {
+        Self::lerp_optional(Some(self), Some(other), t)
+            .expect("two present shape decorations")
+            .into_owned()
+    }
+}
+
+/// The color-to-gradient case uses a matching uniform gradient. Compatible
+/// rounded and circular shapes morph continuously; unrelated families,
+/// pairs of distinct images and pairs of distinct gradients use a midpoint
+/// fallback.
+fn lerp_shape_decoration(a: &ShapeDecoration, b: &ShapeDecoration, t: f32) -> ShapeDecoration {
+    let switches = t >= 0.5;
+    let gradient = match (&a.gradient, &b.gradient) {
+        (None, Some(gradient)) => Some(blend_shape_gradient(gradient, a.color, t, true)),
+        (Some(gradient), None) => Some(blend_shape_gradient(gradient, b.color, t, false)),
+        (a, b) => {
+            if switches {
+                b.clone()
+            } else {
+                a.clone()
+            }
+        }
+    };
+    let shape = if Rc::ptr_eq(&a.shape, &b.shape) {
+        a.shape.clone()
+    } else if let Some(outline) = a.shape.rounded_circle_outline().and_then(|a| {
+        let b = b.shape.rounded_circle_outline()?;
+        a.try_interpolate(b, t)
+    }) {
+        Rc::new(outline)
+    } else if switches {
+        b.shape.clone()
+    } else {
+        a.shape.clone()
+    };
+    ShapeDecoration {
+        color: if gradient.is_none() {
+            OptionalColorTween::new(a.color, b.color).lerp(t)
+        } else {
+            None
+        },
+        gradient,
+        shadows: BoxShadow::lerp_list(&a.shadows, &b.shadows, t),
+        image: match (&a.image, &b.image) {
+            (Some(a), None) => faded_decoration_image(Some(a), 1. - t),
+            (None, Some(b)) => faded_decoration_image(Some(b), t),
+            (a, b) => {
+                if switches {
+                    b.clone()
+                } else {
+                    a.clone()
+                }
+            }
+        },
+        shape,
+    }
+}
+
+fn blend_shape_gradient(
+    template: &Brush,
+    solid: Option<Color>,
+    t: f32,
+    toward_gradient: bool,
+) -> Brush {
+    let Some(solid) = solid else {
+        return faded_brush(template, if toward_gradient { t } else { 1. - t });
+    };
+    let stops = |gradient: &GradientStops| {
+        let uniform = gradient.with_color(solid);
+        if toward_gradient {
+            uniform.interpolate(gradient, t)
+        } else {
+            gradient.interpolate(&uniform, t)
+        }
+    };
+    match template {
+        Brush::Solid(color) => {
+            let (a, b) = if toward_gradient {
+                (Some(solid), Some(*color))
+            } else {
+                (Some(*color), Some(solid))
+            };
+            Brush::Solid(
+                OptionalColorTween::new(a, b)
+                    .lerp(t)
+                    .unwrap_or(Color::TRANSPARENT),
+            )
+        }
+        Brush::LinearGradient(gradient) => {
+            let mut gradient = gradient.clone();
+            gradient.stops = stops(&gradient.stops);
+            Brush::LinearGradient(gradient)
+        }
+        Brush::RadialGradient(gradient) => {
+            let mut gradient = gradient.clone();
+            gradient.stops = stops(&gradient.stops);
+            Brush::RadialGradient(gradient)
+        }
+        Brush::SweepGradient(gradient) => {
+            let mut gradient = gradient.clone();
+            gradient.stops = stops(&gradient.stops);
+            Brush::SweepGradient(gradient)
+        }
     }
 }
 

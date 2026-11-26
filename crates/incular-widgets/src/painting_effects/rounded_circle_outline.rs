@@ -139,6 +139,31 @@ impl RoundedCircleOutline {
         self.interpolate_supported(other, f64::from(t))
     }
 
+    pub(super) fn scale(self, factor: f32) -> Self {
+        Self(match self.0 {
+            Outline::Rounded(shape) => Outline::Rounded(shape.scale(factor)),
+            Outline::Superellipse(shape) => Outline::Superellipse(shape.scale(factor)),
+            Outline::Circle(shape) => Outline::Circle(shape.scale(factor)),
+            Outline::Stadium(shape) => Outline::Stadium(shape.scale(factor)),
+            Outline::StadiumMorph(shape) => Outline::StadiumMorph(StadiumMorph {
+                side: shape.side.scale(factor),
+                fraction: f64::from(factor),
+                target: match shape.target {
+                    StadiumTarget::Rounded { radius } => StadiumTarget::Rounded {
+                        radius: radius * factor,
+                    },
+                    target => target,
+                },
+            }),
+            Outline::Morph(shape) => Outline::Morph(Morph {
+                side: shape.side.scale(factor),
+                radius: shape.radius * factor,
+                circularity: f64::from(factor),
+                ..shape
+            }),
+        })
+    }
+
     fn has_stadium(self) -> bool {
         matches!(self.0, Outline::Stadium(_) | Outline::StadiumMorph(_))
     }

@@ -2,24 +2,23 @@
 //! `DualTransitionBuilder` (`widgets/dual_transition_builder.dart`).
 
 use std::{
+    borrow::Cow,
     cell::{Cell, RefCell},
     rc::Rc,
 };
 
 use incular_animation::{
     AlwaysStoppedAnimation, AnimationController, AnimationStatus, Curve, DoubleAnimation,
-    OptionalColorTween,
 };
 use incular_config::{Alignment, AlignmentDirectional, Axis, TextDirection};
-use incular_core::{Color, Lerp, Offset, Rect, Size, Transform as CoreTransform};
-use incular_rendering::{Brush, GradientStops};
+use incular_core::{Lerp, Offset, Rect, Size, Transform as CoreTransform};
 use incular_text::TextStyle;
 
 use crate::explicit_animations::animated_widget_for;
 use crate::implicit_animations::PropertyTween;
 use crate::tree::RetainedState;
 use crate::{
-    Align, BoxDecoration, BoxShadow, BuildContext, ClipRect, DecoratedBox, DecoratedShapeBox,
+    Align, BoxDecoration, BuildContext, ClipRect, DecoratedBox, DecoratedShapeBox,
     DecorationPosition, DefaultTextStyle, Positioned, ShapeDecoration, Transform, Widget,
 };
 
@@ -489,6 +488,31 @@ impl From<ShapeDecoration> for Decoration {
     }
 }
 
+impl Decoration {
+    /// Interpolates optional decorations. If both are absent, no decoration
+    /// is produced. A single present decoration scales from or to empty.
+    #[must_use]
+    pub fn lerp_optional<'a>(
+        a: Option<&'a Self>,
+        b: Option<&'a Self>,
+        t: f32,
+    ) -> Option<Cow<'a, Self>> {
+        match (a, b) {
+            (None, None) => None,
+            (Some(a), Some(b)) if std::ptr::eq(a, b) || t == 0. => Some(Cow::Borrowed(a)),
+            (Some(_), Some(b)) if t == 1. => Some(Cow::Borrowed(b)),
+            (Some(a), Some(b)) => Some(Cow::Owned(a.lerp(b, t))),
+            (None, Some(value)) | (Some(value), None) => {
+                let factor = if a.is_none() { t } else { 1. - t };
+                match value {
+                    Self::Box(value) => Some(Cow::Owned(Self::Box(value.scaled(factor)))),
+                    Self::Shape(value) => Some(Cow::Owned(Self::Shape(value.scaled(factor)))),
+                }
+            }
+        }
+    }
+}
+
 impl Lerp for Decoration {
     fn lerp(&self, other: &Self, t: f32) -> Self {
         if t == 0.0 {
@@ -499,94 +523,9 @@ impl Lerp for Decoration {
         }
         match (self, other) {
             (Self::Box(a), Self::Box(b)) => Self::Box(a.lerp(b, t)),
-            (Self::Shape(a), Self::Shape(b)) => Self::Shape(lerp_shape_decoration(a, b, t)),
+            (Self::Shape(a), Self::Shape(b)) => Self::Shape(a.lerp(b, t)),
             _ if t < 0.5 => self.clone(),
             _ => other.clone(),
-        }
-    }
-}
-
-/// The color-to-gradient case uses a matching uniform gradient. Compatible
-/// rounded and circular shapes morph continuously; unrelated families,
-/// image transitions and pairs of distinct gradients use a midpoint fallback.
-fn lerp_shape_decoration(a: &ShapeDecoration, b: &ShapeDecoration, t: f32) -> ShapeDecoration {
-    let switches = t >= 0.5;
-    let gradient = match (&a.gradient, &b.gradient) {
-        (None, Some(gradient)) => Some(blend_shape_gradient(gradient, a.color, t, true)),
-        (Some(gradient), None) => Some(blend_shape_gradient(gradient, b.color, t, false)),
-        (a, b) => {
-            if switches { b.clone() } else { a.clone() }
-        }
-    };
-    let shape = if Rc::ptr_eq(&a.shape, &b.shape) {
-        a.shape.clone()
-    } else if let Some(outline) = a.shape.rounded_circle_outline().and_then(|a| {
-        let b = b.shape.rounded_circle_outline()?;
-        a.try_interpolate(b, t)
-    }) {
-        Rc::new(outline)
-    } else if switches {
-        b.shape.clone()
-    } else {
-        a.shape.clone()
-    };
-    ShapeDecoration {
-        color: if gradient.is_none() {
-            OptionalColorTween::new(a.color, b.color).lerp(t)
-        } else {
-            None
-        },
-        gradient,
-        shadows: BoxShadow::lerp_list(&a.shadows, &b.shadows, t),
-        image: if switches {
-            b.image.clone()
-        } else {
-            a.image.clone()
-        },
-        shape,
-    }
-}
-
-fn blend_shape_gradient(
-    template: &Brush,
-    solid: Option<Color>,
-    t: f32,
-    toward_gradient: bool,
-) -> Brush {
-    let stops = |gradient: &GradientStops| {
-        let Some(color) = solid else {
-            return gradient.scale_opacity(if toward_gradient { t } else { 1. - t });
-        };
-        let uniform = gradient.with_color(color);
-        if toward_gradient {
-            uniform.interpolate(gradient, t)
-        } else {
-            gradient.interpolate(&uniform, t)
-        }
-    };
-    match template {
-        Brush::Solid(color) => {
-            let (a, b) = if toward_gradient {
-                (solid, Some(*color))
-            } else {
-                (Some(*color), solid)
-            };
-            Brush::Solid(OptionalColorTween::new(a, b).lerp(t).unwrap_or(Color::TRANSPARENT))
-        }
-        Brush::LinearGradient(gradient) => {
-            let mut gradient = gradient.clone();
-            gradient.stops = stops(&gradient.stops);
-            Brush::LinearGradient(gradient)
-        }
-        Brush::RadialGradient(gradient) => {
-            let mut gradient = gradient.clone();
-            gradient.stops = stops(&gradient.stops);
-            Brush::RadialGradient(gradient)
-        }
-        Brush::SweepGradient(gradient) => {
-            let mut gradient = gradient.clone();
-            gradient.stops = stops(&gradient.stops);
-            Brush::SweepGradient(gradient)
         }
     }
 }
