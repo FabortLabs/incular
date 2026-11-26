@@ -75,23 +75,20 @@ fn flex_children_without_baselines_stay_at_top_in_both_vertical_directions() {
 #[cfg(debug_assertions)]
 #[test]
 fn flex_rejects_negative_spacing_in_debug_instead_of_using_a_zero_gap() {
-    let constructed = std::panic::catch_unwind(|| {
+    let error = std::panic::catch_unwind(|| {
         Widget::from(
-            Flex::horizontal(squares(2))
+            Flex::horizontal(squares(1))
                 .text_direction(TextDirection::Ltr)
                 .spacing(-15.),
         )
-    });
-    if let Ok(scene) = constructed {
-        let mut tree = WidgetTree::new();
-        tree.mount(scene).expect("mount accepted scene");
-        tree.layout(Constraints::loose(Size::new(500., 400.)))
-            .expect("layout accepted scene");
-        panic!(
-            "negative spacing accepted, second child at x={}",
-            bounds(&tree, 2).origin.x
-        );
-    }
+    })
+    .expect_err("RenderFlex must reject the negative spacing at construction");
+    let diagnostic = error
+        .downcast_ref::<String>()
+        .map(String::as_str)
+        .or_else(|| error.downcast_ref::<&str>().copied())
+        .unwrap();
+    assert!(diagnostic.contains("RenderFlex.spacing must be non-negative"));
 }
 
 // widgets/baseline_test.dart:115, "Baseline does not crash at zero area".

@@ -13,6 +13,12 @@ use typed_builder::TypedBuilder;
 
 use crate::{SizedBox, Widget, WidgetKind, macros::widget_from_kind};
 
+#[track_caller]
+fn checked_flex_spacing(spacing: f32) -> f32 {
+    debug_assert!(spacing >= 0.0, "RenderFlex.spacing must be non-negative");
+    spacing.max(0.0)
+}
+
 /// Declares a fixed-axis flex container ([`Row`] or [`Column`]); the two
 /// differ only in their axis.
 macro_rules! axis_flex {
@@ -40,7 +46,7 @@ macro_rules! axis_flex {
             pub vertical_direction: VerticalDirection,
             #[builder(
                         default = 0.0,
-                        setter(transform = |spacing: f32| spacing.max(0.0))
+                        setter(transform = |spacing: f32| checked_flex_spacing(spacing))
                     )]
             pub spacing: f32,
             #[builder(default = Clip::None)]
@@ -112,7 +118,7 @@ macro_rules! axis_flex {
             /// Sets the fixed spacing gap between consecutive children.
             #[must_use]
             pub fn spacing(mut self, spacing: f32) -> Self {
-                self.spacing = spacing.max(0.0);
+                self.spacing = checked_flex_spacing(spacing);
                 self
             }
 
@@ -140,7 +146,7 @@ macro_rules! axis_flex {
 
             #[must_use]
             pub fn get_spacing(&self) -> f32 {
-                self.spacing.max(0.0)
+                checked_flex_spacing(self.spacing)
             }
         }
 
@@ -153,7 +159,7 @@ macro_rules! axis_flex {
                     cross_axis_alignment: value.cross_axis_alignment,
                     text_direction: value.text_direction,
                     vertical_direction: value.vertical_direction,
-                    spacing: value.spacing.max(0.0),
+                    spacing: checked_flex_spacing(value.spacing),
                     clip_behavior: value.clip_behavior,
                     children: value.children,
                 })
@@ -190,7 +196,7 @@ pub struct Flex {
     pub vertical_direction: VerticalDirection,
     #[builder(
         default = 0.0,
-        setter(transform = |spacing: f32| spacing.max(0.0))
+        setter(transform = |spacing: f32| checked_flex_spacing(spacing))
     )]
     pub spacing: f32,
     #[builder(default = Clip::None)]
@@ -257,7 +263,7 @@ impl Flex {
 
     #[must_use]
     pub fn spacing(mut self, spacing: f32) -> Self {
-        self.spacing = spacing.max(0.0);
+        self.spacing = checked_flex_spacing(spacing);
         self
     }
 
@@ -278,7 +284,7 @@ impl From<Flex> for Widget {
             cross_axis_alignment: value.cross_axis_alignment,
             text_direction: value.text_direction,
             vertical_direction: value.vertical_direction,
-            spacing: value.spacing.max(0.0),
+            spacing: checked_flex_spacing(value.spacing),
             clip_behavior: value.clip_behavior,
             children: value.children,
         })

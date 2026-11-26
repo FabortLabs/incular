@@ -112,3 +112,12 @@ cross-axis allocation. The original three element identities persist
 throughout. The pinned no-baselines case also matches the retained
 geometry: baseline alignment leaves both boxes at the top, regardless
 of vertical direction. Its existing partial API disposition is unchanged.
+
+## Negative spacing
+
+Pinned `rendering/flex_test.dart:1256` and the Rust constructor both
+reject a negative gap in debug. The Rust controls cover fluent, typed
+builder and raw-widget conversion paths for Flex, Row and Column.
+Positive spacing still preserves placement. Incular leaves its previous
+zero-gap sanitization unchanged in release; the pinned case describes
+Flutter's debug assertion.

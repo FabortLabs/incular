@@ -25,13 +25,13 @@ fn builders_match_explicit_defaults() {
 }
 
 #[test]
-fn builders_convert_widget_children_and_normalize_values() {
+fn builders_convert_widget_children_and_preserve_valid_values() {
     let row = Row::builder()
         .children([SizedBox::shrink(), SizedBox::shrink()])
-        .spacing(-8.0)
+        .spacing(8.0)
         .build();
     assert_eq!(row.children.len(), 2);
-    assert_eq!(row.spacing, 0.0);
+    assert_eq!(row.spacing, 8.0);
 
     let column = Column::builder()
         .children([Text::new("first"), Text::new("second")])
@@ -119,4 +119,34 @@ fn flexible_and_expanded_preserve_lowering() {
         .build();
     assert_eq!(expanded.flex, 2);
     assert_eq!(Widget::from(expanded).debug_type_name(), "Flexible");
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn debug_rejects_negative_spacing_from_all_flex_construction_paths() {
+    use std::panic::catch_unwind;
+
+    let invalid = [
+        catch_unwind(|| {
+            let _ = Row::builder().spacing(-8.).build();
+        }),
+        catch_unwind(|| {
+            let _ = Column::new([SizedBox::shrink()]).spacing(-8.);
+        }),
+        catch_unwind(|| {
+            let _ = Flex::builder().spacing(-8.).build();
+        }),
+        catch_unwind(|| {
+            let mut flex = Flex::horizontal([SizedBox::shrink()]);
+            flex.spacing = -8.;
+            let _: Widget = flex.into();
+        }),
+    ];
+    assert!(invalid.iter().all(Result::is_err));
+}
+
+#[cfg(not(debug_assertions))]
+#[test]
+fn release_flex_spacing_keeps_the_existing_non_negative_fallback() {
+    assert_eq!(Row::builder().spacing(-8.).build().get_spacing(), 0.);
 }

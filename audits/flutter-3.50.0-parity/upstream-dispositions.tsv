@@ -294,7 +294,7 @@ packages/flutter/test/services/restoration_bucket_test.dart	172	claim child with
 packages/flutter/test/services/restoration_test.dart	238	flushData	partial-mismatch	upstream-repeat-focus-restoration-flex-and-image-filter.md
 packages/flutter/test/rendering/flex_test.dart	494	MainAxisAlignment.spaceBetween with RenderFlex.spacing	paired-match	upstream-repeat-focus-restoration-flex-and-image-filter.md
 packages/flutter/test/rendering/flex_test.dart	914	children with no baselines are top-aligned	partial-match	upstream-repeat-focus-restoration-flex-and-image-filter.md
-packages/flutter/test/rendering/flex_test.dart	1256	Negative RenderFlex.spacing throws an exception	partial-mismatch	upstream-repeat-focus-restoration-flex-and-image-filter.md
+packages/flutter/test/rendering/flex_test.dart	1256	Negative RenderFlex.spacing throws an exception	paired-match	upstream-flex-retained-placement.md#negative-spacing
 packages/flutter/test/widgets/baseline_test.dart	115	Baseline does not crash at zero area	partial-match	upstream-repeat-focus-restoration-flex-and-image-filter.md
 packages/flutter/test/widgets/image_filter_test.dart	104	Image filter - matrix	partial-mismatch	upstream-repeat-focus-restoration-flex-and-image-filter.md
 packages/flutter/test/widgets/image_filter_test.dart	158	Image filter - enabled and disabled	partial-match	upstream-repeat-focus-restoration-flex-and-image-filter.md
