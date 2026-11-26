@@ -23,6 +23,7 @@ mod math;
 pub mod memory;
 mod merged_listenable;
 mod observer_list;
+mod persistent_hash_map;
 pub mod reactivity;
 mod restoration;
 pub mod serialization;
@@ -59,6 +60,7 @@ pub use licenses::{LicenseEntry, LicenseParagraph, LicenseRegistry, LicenseStrea
 pub use math::{InvalidClampBounds, clamp_double, try_clamp_double};
 pub use merged_listenable::{MergedListenable, MergedSubscription};
 pub use observer_list::{HashedObserverList, ObserverList};
+pub use persistent_hash_map::PersistentHashMap;
 pub use restoration::{RestorationBackend, RestorationKey, RestorationKeyError, RestorationScope};
 pub use value_notifier::ValueNotifier;
 pub use widget::{BuildableWidget, Widget};

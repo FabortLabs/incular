@@ -2105,3 +2105,6 @@ packages/flutter/test/services/undo_manager_test.dart	15	UndoManagerClient handl
 packages/flutter/test/services/undo_manager_test.dart	49	UndoManager.setUndoState reports error when channel fails	reference-ran-incular-open	upstream-native-undo-focus.md
 packages/flutter/test/foundation/bit_field_test.dart	12	BitField control test	paired-match	upstream-foundation-bit-field.md
 packages/flutter/test/foundation/bit_field_test.dart	43	BitField.filed control test	paired-match	upstream-foundation-bit-field.md
+packages/flutter/test/foundation/persistent_hash_map_test.dart	23	PersistentHashMap - Simple Test	paired-match	upstream-persistent-hash-map.md
+packages/flutter/test/foundation/persistent_hash_map_test.dart	37	PersistentHashMap - hash collisions	paired-match	upstream-persistent-hash-map.md
+packages/flutter/test/foundation/persistent_hash_map_test.dart	67	PersistentHashMap - inflation of nodes	paired-match	upstream-persistent-hash-map.md
