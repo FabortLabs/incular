@@ -1532,3 +1532,10 @@ packages/flutter/test/gestures/pointer_router_test.dart	102	Per-pointer callback
 packages/flutter/test/gestures/pointer_router_test.dart	122	Exceptions do not stop pointer routing	paired-match	upstream-pointer-router.md
 packages/flutter/test/gestures/pointer_router_test.dart	151	Exceptions include router, route & event	partial-match	upstream-pointer-router.md
 packages/flutter/test/gestures/pointer_router_test.dart	162	Should transform events	paired-match	upstream-pointer-router.md
+packages/flutter/test/gestures/events_test.dart	19	nthMouseButton control tests	paired-match	upstream-pointer-event-primitives.md
+packages/flutter/test/gestures/events_test.dart	24	smallestButton tests	paired-match	upstream-pointer-event-primitives.md
+packages/flutter/test/gestures/events_test.dart	31	isSingleButton tests	paired-match	upstream-pointer-event-primitives.md
+packages/flutter/test/gestures/events_test.dart	38	computed hit slop values are based on pointer device kind	paired-match	upstream-pointer-event-primitives.md
+packages/flutter/test/gestures/events_test.dart	58	computed hit slop values defer to device value when pointer kind is touch	paired-match	upstream-pointer-event-primitives.md
+packages/flutter/test/gestures/events_test.dart	253	transformPosition	paired-match	upstream-pointer-event-primitives.md
+packages/flutter/test/gestures/events_test.dart	264	transformDeltaViaPositions	paired-match	upstream-pointer-event-primitives.md

@@ -5,6 +5,7 @@ use incular_core::time::Instant;
 use incular_core::{
     DragStartBehavior, KeyboardEvent, Offset, PRIMARY_POINTER_BUTTON, PointerPhase,
     PointerSampleMetadata, SECONDARY_POINTER_BUTTON, TERTIARY_POINTER_BUTTON, TrackpadGesture,
+    Transform,
 };
 
 use crate::focus::{FocusBehavior, FocusNode};
@@ -140,6 +141,57 @@ impl RawPointerEvent {
     #[must_use]
     pub const fn with_sample(mut self, sample: PointerSampleMetadata) -> Self {
         self.sample = sample;
+        self
+    }
+
+    /// Maps global position into an optional local affine transform.
+    #[must_use]
+    pub fn transform_position(transform: Option<Transform>, position: Offset) -> Offset {
+        transform.map_or(position, |value| value.transform_point(position))
+    }
+
+    /// Maps a displacement between two positions. If the transformed end
+    /// position is already known, use it. Otherwise the affine linear part
+    /// avoids subtracting two rounded positions at a large translation.
+    #[must_use]
+    pub fn transform_delta_via_positions(
+        transform: Option<Transform>,
+        untransformed_end_position: Offset,
+        transformed_end_position: Option<Offset>,
+        untransformed_delta: Offset,
+    ) -> Offset {
+        let Some(transform) = transform else {
+            return untransformed_delta;
+        };
+        let Some(end) = transformed_end_position else {
+            return transform.transform_vector(untransformed_delta);
+        };
+        let [a, b, c, d, tx, ty] = transform.coefficients();
+        let start_x = f64::from(untransformed_end_position.x) - f64::from(untransformed_delta.x);
+        let start_y = f64::from(untransformed_end_position.y) - f64::from(untransformed_delta.y);
+        Offset::new(
+            (f64::from(end.x) - (a * start_x + c * start_y + tx)) as f32,
+            (f64::from(end.y) - (b * start_x + d * start_y + ty)) as f32,
+        )
+    }
+
+    /// Uses the original global values for the local fields as well.
+    #[must_use]
+    pub const fn in_global_coordinates(mut self) -> Self {
+        self.local_position = self.position;
+        self.local_delta = self.delta;
+        self
+    }
+
+    /// Projects only the local fields. Metadata, position and delta remain
+    /// in their original global coordinate space. Without a transform,
+    /// the event is unchanged.
+    #[must_use]
+    pub fn transformed(mut self, transform: Option<Transform>) -> Self {
+        if let Some(transform) = transform {
+            self.local_position = transform.transform_point(self.position);
+            self.local_delta = transform.transform_vector(self.delta);
+        }
         self
     }
 

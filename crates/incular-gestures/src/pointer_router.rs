@@ -245,6 +245,7 @@ impl PointerRouter {
                 state.global.clone(),
             )
         };
+        let event = event.in_global_coordinates();
         for route in local
             .iter()
             .flat_map(|routes| routes.iter())
@@ -253,15 +254,8 @@ impl PointerRouter {
             if !route.active.get() {
                 continue;
             }
-            let mut local = event;
-            local.local_position = route
-                .transform
-                .map_or(event.position, |t| t.transform_point(event.position));
-            local.local_delta = route
-                .transform
-                .map_or(event.delta, |t| t.transform_vector(event.delta));
             let routed = RoutedPointerEvent {
-                event: local,
+                event: event.transformed(route.transform),
                 transform: route.transform,
             };
             if let Err(panic) = catch_unwind(AssertUnwindSafe(|| (route.callback)(routed))) {

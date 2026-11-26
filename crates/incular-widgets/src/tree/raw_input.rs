@@ -102,6 +102,7 @@ impl WidgetTree {
                 .get(&key)
                 .map_or(Offset::ZERO, |previous| event.position - *previous),
         };
+        let event = event.in_global_coordinates();
         match event.phase {
             PointerPhase::Exit | PointerPhase::Cancel => {
                 self.input.raw_pointer_positions.remove(&key);
@@ -1216,15 +1217,9 @@ impl WidgetTree {
 
 fn localize_with_transform(
     world_to_local: Option<CoreTransform>,
-    mut event: RawPointerEvent,
+    event: RawPointerEvent,
 ) -> RawPointerEvent {
-    if let Some(transform) = world_to_local {
-        let local = transform.transform_point(event.position);
-        let previous = transform.transform_point(event.position - event.delta);
-        event.local_position = local;
-        event.local_delta = local - previous;
-    }
-    event
+    event.transformed(world_to_local)
 }
 
 fn is_inside_tap_region(

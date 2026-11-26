@@ -6,6 +6,7 @@
 
 mod arena;
 pub(crate) mod arena_member;
+mod buttons;
 pub mod constants;
 mod details;
 mod focus;
@@ -24,6 +25,7 @@ mod tap_and_drag;
 mod velocity;
 
 pub use arena_member::{ArenaGestureRecognizer, ArenaRecognizer, ArenaResolver};
+pub use buttons::{is_single_button, nth_mouse_button, nth_stylus_button, smallest_button};
 pub use velocity::VelocityTrackerKind;
 
 pub use arena::{
