@@ -218,3 +218,20 @@ number of top-level slivers and counts the attempt that must accept the
 offset. The extra one-sliver checks verify success with nine corrections,
 failure with ten, and no publication of an unvalidated controller offset.
 The separate shrink-wrap measurement guard was not changed.
+
+## Shrink-wrap bounce and Apple platform defaults
+
+Pinned Flutter and the mounted Incular
+`flutter350_viewport_shrink_overscroll` suite exercise
+`rendering/viewport_test.dart:2481,2529,2579,2622,2670`. A touch drag by
+25 px produces exactly 25 px overscroll and the corresponding painted
+item displacement at both edges. On release the virtual-clock frame loop
+settles back to the exact original edge. This holds vertically and
+horizontally, with explicit bouncing physics and with the default iOS/macOS
+platform policies. The platform variants here select the policies in a
+Linux test host; they are not hardware tests.
+
+A three-column shrink-wrapping grid with aspect-ratio sizing in a Column
+with unbounded main-axis constraints also lays out and handles a real
+drag in both Apple policies. Its finite viewport extent is about 88.22 px
+and the short content stays at offset zero.

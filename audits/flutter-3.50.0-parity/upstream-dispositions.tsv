@@ -1873,3 +1873,8 @@ packages/flutter/test/rendering/viewport_test.dart	2190	Vertical viewport was gi
 packages/flutter/test/rendering/viewport_test.dart	2212	Viewport debugThrowIfNotCheckingIntrinsics() control test	reference-ran-incular-open	upstream-viewport-reveal.md#unbounded-viewport-constraints
 packages/flutter/test/rendering/viewport_test.dart	2751	Shrinkwrapping viewport asserts bounded cross axis	paired-match	upstream-viewport-reveal.md#unbounded-viewport-constraints
 packages/flutter/test/rendering/viewport_test.dart	2822	RenderViewport maxLayoutCycles depends on the number of children	paired-match	upstream-viewport-reveal.md#viewport-layout-correction-budget
+packages/flutter/test/rendering/viewport_test.dart	2481	allows overscrolling on default platforms - vertical	paired-match	upstream-viewport-reveal.md#shrink-wrap-bounce-and-apple-platform-defaults
+packages/flutter/test/rendering/viewport_test.dart	2529	allows overscrolling on default platforms - horizontal	paired-match	upstream-viewport-reveal.md#shrink-wrap-bounce-and-apple-platform-defaults
+packages/flutter/test/rendering/viewport_test.dart	2579	allows overscrolling per physics - vertical	paired-match	upstream-viewport-reveal.md#shrink-wrap-bounce-and-apple-platform-defaults
+packages/flutter/test/rendering/viewport_test.dart	2622	allows overscrolling per physics - horizontal	paired-match	upstream-viewport-reveal.md#shrink-wrap-bounce-and-apple-platform-defaults
+packages/flutter/test/rendering/viewport_test.dart	2670	Handles infinite constraints when TargetPlatform is iOS or macOS	paired-match	upstream-viewport-reveal.md#shrink-wrap-bounce-and-apple-platform-defaults
