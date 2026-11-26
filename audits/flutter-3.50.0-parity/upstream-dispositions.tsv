@@ -2167,3 +2167,8 @@ packages/flutter/test/gestures/arena_test.dart	136	Win before close is delayed t
 packages/flutter/test/gestures/arena_test.dart	174	Eager winner should be cleared when the eager winner rejects while arena is still open	paired-match	upstream-managed-gesture-arena.md
 packages/flutter/test/gestures/arena_test.dart	147	Win before close is delayed to close, and only first winner should win	paired-match	upstream-managed-gesture-arena.md#first-valid-decision-in-either-member-order
 packages/flutter/test/gestures/arena_test.dart	159	Win before close is delayed to close, and only first winner should win, regardless of order	paired-match	upstream-managed-gesture-arena.md#first-valid-decision-in-either-member-order
+packages/flutter/test/gestures/resampler_test.dart	65	basic	paired-match	upstream-pointer-resampler.md#interpolation-and-lifecycle-transitions
+packages/flutter/test/gestures/resampler_test.dart	355	quick tap	paired-match	upstream-pointer-resampler.md#interpolation-and-lifecycle-transitions
+packages/flutter/test/gestures/resampler_test.dart	392	advance slowly	paired-match	upstream-pointer-resampler.md#interpolation-and-lifecycle-transitions
+packages/flutter/test/gestures/resampler_test.dart	471	advance fast	paired-match	upstream-pointer-resampler.md#interpolation-and-lifecycle-transitions
+packages/flutter/test/gestures/resampler_test.dart	712	synthetic move	paired-match	upstream-pointer-resampler.md#interpolation-and-lifecycle-transitions

@@ -18,6 +18,7 @@ mod mouse;
 mod multidrag;
 mod multitap;
 mod pointer;
+mod pointer_resampler;
 mod pointer_router;
 mod raw;
 mod scale;
@@ -69,6 +70,7 @@ pub use multitap::{
 pub use pointer::{
     DragGestureDetector, FlingLimits, GestureDetector, PointerGestureRecognizer, TapMemory,
 };
+pub use pointer_resampler::PointerEventResampler;
 pub use pointer_router::{
     PointerRouteError, PointerRouteErrorHandler, PointerRouteId, PointerRouter, RoutedPointerEvent,
     WeakPointerRouter,
