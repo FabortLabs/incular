@@ -19,3 +19,18 @@ cancels the pending future across handles. The async body has not
 resumed on return from disposal. On its next executor poll, it
 catches TickerCanceled and completes without the success branch.
 All 48 selected native tests passed.
+
+## Live controller descriptions and disposal guards
+
+Pinned `animation_controller_test.dart:429,1074` passed by exact name.
+The native description stays on one line at rest, at the original
+10ms-forward samples, during reverse, and after stopping or disposal.
+It reflects the actual clock-driven values and direction, including
+the pause and disposal markers, rather than formatting a static type.
+The native description does not include Dart's identity hash.
+
+Disposing a shared controller invalidates all of its handles. The
+original six operations then reject use after disposal without changing
+the retained value or restarting the animation. This is an observable
+lifecycle check, not a claim that Dart's private ticker is represented
+identically in Rust. All 28 focused controller tests passed.

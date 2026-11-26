@@ -492,6 +492,28 @@ impl fmt::Debug for AnimationController {
     }
 }
 
+impl fmt::Display for AnimationController {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let controller = self.inner.borrow();
+        let symbol = match controller.state.status {
+            AnimationStatus::Forward => "▶",
+            AnimationStatus::Reverse => "◀",
+            AnimationStatus::Completed => "⏭",
+            AnimationStatus::Dismissed => "⏮",
+        };
+        write!(f, "AnimationController({symbol} {:.3}", controller.state.value)?;
+        if controller.run.is_none() {
+            f.write_str("; paused")?;
+        }
+        if controller.disposed {
+            f.write_str("; DISPOSED")?;
+        } else if controller.ticker.as_ref().is_some_and(Ticker::muted) {
+            f.write_str("; silenced")?;
+        }
+        f.write_str(")")
+    }
+}
+
 impl PartialEq for AnimationController {
     fn eq(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.inner, &other.inner)

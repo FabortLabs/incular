@@ -2598,3 +2598,5 @@ packages/flutter/test/painting/border_rtl_test.dart	971	BorderDirectional hashCo
 packages/flutter/test/animation/curves_test.dart	184	Cubic transformInternal clamps values outside the unit interval	paired-match	upstream-curves-intrinsic-layout-and-system-overlay.md#checked-curve-inputs-and-raw-cubic-sampling
 packages/flutter/test/animation/curves_test.dart	189	Cubic transformInternal throws for NaN	paired-match	upstream-curves-intrinsic-layout-and-system-overlay.md#checked-curve-inputs-and-raw-cubic-sampling
 packages/flutter/test/animation/curves_test.dart	193	Invalid transform parameter should assert	paired-match	upstream-curves-intrinsic-layout-and-system-overlay.md#checked-curve-inputs-and-raw-cubic-sampling
+packages/flutter/test/animation/animation_controller_test.dart	429	toString control test	paired-match	upstream-animation-controller-disposal.md#live-controller-descriptions-and-disposal-guards
+packages/flutter/test/animation/animation_controller_test.dart	1074	AnimationController methods assert _ticker is not null	paired-match	upstream-animation-controller-disposal.md#live-controller-descriptions-and-disposal-guards

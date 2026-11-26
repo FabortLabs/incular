@@ -461,3 +461,45 @@ fn a_controller_reports_one_shared_create_and_dispose_event() {
     assert_eq!(events[1].kind, ObjectEventKind::Disposed);
     assert_eq!(events[0].library, "animation");
 }
+
+#[test]
+fn controller_description_is_one_line_at_idle_and_during_both_directions() {
+    let controller = AnimationController::new(ms(100));
+    let now = Instant::now();
+    assert_eq!(controller.to_string(), "AnimationController(⏮ 0.000; paused)");
+    let _forward = controller.forward_on_next_tick();
+    let _ = controller.tick(now + ms(10));
+    let _ = controller.tick(now + ms(20));
+    assert_eq!(controller.to_string(), "AnimationController(▶ 0.100)");
+    let _ = controller.tick(now + ms(30));
+    assert_eq!(controller.to_string(), "AnimationController(▶ 0.200)");
+    let _reverse = controller.reverse_on_next_tick();
+    let _ = controller.tick(now + ms(40));
+    let _ = controller.tick(now + ms(50));
+    assert_eq!(controller.to_string(), "AnimationController(◀ 0.100)");
+    controller.stop();
+    assert_eq!(controller.to_string(), "AnimationController(◀ 0.100; paused)");
+    controller.dispose();
+    assert_eq!(controller.to_string(), "AnimationController(◀ 0.100; paused; DISPOSED)");
+}
+
+#[test]
+fn all_original_ticker_operations_reject_a_disposed_controller() {
+    use incular_animation::GravitySimulation;
+
+    let controller = AnimationController::without_duration();
+    let other_handle = controller.clone();
+    controller.dispose();
+    let now = Instant::now();
+    let rejected = [
+        panic_text(|| { let _ = other_handle.animate_back(now, 0.); }),
+        panic_text(|| { let _ = other_handle.animate_to(now, 0.); }),
+        panic_text(|| { let _ = other_handle.animate_with(GravitySimulation::new(0., 0., 0., 0.)); }),
+        panic_text(|| other_handle.stop()),
+        panic_text(|| { let _ = other_handle.forward(now); }),
+        panic_text(|| { let _ = other_handle.reverse(now); }),
+    ];
+    assert!(rejected.iter().all(|message| message == "AnimationController used after dispose"));
+    assert!(other_handle.is_disposed() && !other_handle.is_animating());
+    assert_eq!(other_handle.value(), 0.);
+}
