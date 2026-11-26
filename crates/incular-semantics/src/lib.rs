@@ -491,6 +491,19 @@ impl SemanticAnnotationFlags {
     }
 }
 
+/// Describes the kind of input announced by assistive technology. It does
+/// not configure the software keyboard or edit the value.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum SemanticsInputType {
+    #[default]
+    None,
+    Text,
+    Url,
+    Phone,
+    Search,
+    Email,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct SemanticState {
     /// Whether the node accepts input. Flutter's default is "unspecified",
@@ -519,6 +532,7 @@ pub struct SemanticState {
     pub annotation_flags: SemanticAnnotationFlags,
     pub read_only: bool,
     pub editable: bool,
+    pub input_type: SemanticsInputType,
     /// Whether a text field's value is visually obscured (for example a
     /// password field).  Keeping this in the portable tree lets native
     /// accessibility adapters make the same privacy decision as the widget
@@ -571,6 +585,9 @@ pub struct SemanticState {
     /// Flutter's `identifier`: a stable platform identifier (Android
     /// resource-id, iOS accessibilityIdentifier) for UI automation.
     pub identifier: Option<String>,
+    /// Identifiers of nodes whose visibility this node controls, in stable
+    /// discovery order. Targets need not be present in the current tree.
+    pub controls_nodes: Option<std::sync::Arc<[String]>>,
     /// Flutter's `increasedValue`: the value an increment action would
     /// produce, for steppers and sliders.
     pub increased_value: Option<String>,
@@ -594,6 +611,27 @@ pub struct SemanticState {
 }
 
 impl SemanticState {
+    /// Unions a controls relation without reordering existing identifiers.
+    pub fn absorb_controls_nodes(target: &mut Option<std::sync::Arc<[String]>>, nodes: &std::sync::Arc<[String]>) {
+        let Some(current) = target else {
+            *target = Some(nodes.clone());
+            return;
+        };
+        let mut additions = nodes
+            .iter()
+            .filter(|node| !current.contains(node))
+            .peekable();
+        if additions.peek().is_some() {
+            let mut combined = current.to_vec();
+            for node in additions {
+                if !combined.contains(node) {
+                    combined.push(node.clone());
+                }
+            }
+            *target = Some(combined.into());
+        }
+    }
+
     /// Effective override of the input-focus flag. A focused declaration
     /// takes precedence over the legacy focusable declaration.
     #[must_use]
@@ -670,6 +708,7 @@ impl Default for SemanticState {
             annotation_flags: SemanticAnnotationFlags::default(),
             read_only: false,
             editable: false,
+            input_type: SemanticsInputType::None,
             obscured: false,
             multiline: false,
             selection: None,
@@ -696,6 +735,7 @@ impl Default for SemanticState {
             tooltip: None,
             link_url: None,
             identifier: None,
+            controls_nodes: None,
             increased_value: None,
             decreased_value: None,
             sort_key: None,

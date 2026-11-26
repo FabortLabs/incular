@@ -998,7 +998,11 @@ impl AccessKitProjection {
 
     fn accesskit_node(&self, semantic: &SemanticNode, scale_factor: f64) -> Node {
         let native_id = self.semantic_to_native[&semantic.id];
-        let mut node = Node::new(map_role(semantic.role, semantic.state.obscured));
+        let mut node = Node::new(map_role(
+            semantic.role,
+            semantic.state.obscured,
+            semantic.state.input_type,
+        ));
         node.set_bounds(to_accesskit_rect(semantic.bounds, scale_factor));
         if semantic.role == Role::Text && !semantic.state.obscured {
             if let Some(text) = semantic.value.as_ref().or(semantic.label.as_ref()) {
@@ -1211,7 +1215,7 @@ fn supports(node: &SemanticNode, action: SemanticActionKind) -> bool {
     node.supports_action(action)
 }
 
-fn map_role(role: Role, obscured: bool) -> AccessKitRole {
+fn map_role(role: Role, obscured: bool, input_type: SemanticsInputType) -> AccessKitRole {
     match role {
         Role::Button => AccessKitRole::Button,
         Role::Text => AccessKitRole::Label,
@@ -1219,7 +1223,13 @@ fn map_role(role: Role, obscured: bool) -> AccessKitRole {
             if obscured {
                 AccessKitRole::PasswordInput
             } else {
-                AccessKitRole::TextInput
+                match input_type {
+                    SemanticsInputType::Phone => AccessKitRole::PhoneNumberInput,
+                    SemanticsInputType::Email => AccessKitRole::EmailInput,
+                    SemanticsInputType::Url => AccessKitRole::UrlInput,
+                    SemanticsInputType::Search => AccessKitRole::SearchInput,
+                    SemanticsInputType::None | SemanticsInputType::Text => AccessKitRole::TextInput,
+                }
             }
         }
         Role::TextArea => AccessKitRole::MultilineTextInput,

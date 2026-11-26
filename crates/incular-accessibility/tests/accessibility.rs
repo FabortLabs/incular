@@ -530,3 +530,35 @@ fn alert_dialog_alert_status_and_form_keep_distinct_native_roles() {
         assert_eq!(node.role(), expected);
     }
 }
+
+#[test]
+fn native_input_kind_keeps_specific_editable_fields_without_overriding_passwords() {
+    use incular_semantics::SemanticsInputType;
+    let mut tree = SemanticsTree::new();
+    let cases = [
+        (SemanticsInputType::Text, false, AccessKitRole::TextInput),
+        (SemanticsInputType::Phone, false, AccessKitRole::PhoneNumberInput),
+        (SemanticsInputType::Email, false, AccessKitRole::EmailInput),
+        (SemanticsInputType::Url, false, AccessKitRole::UrlInput),
+        (SemanticsInputType::Search, false, AccessKitRole::SearchInput),
+        (SemanticsInputType::Phone, true, AccessKitRole::PasswordInput),
+    ];
+    let ids = cases.map(|(input, obscured, _)| {
+        let mut field = node(Role::TextField);
+        field.state.input_type = input;
+        field.state.obscured = obscured;
+        tree.insert(field)
+    });
+    let mut root = node(Role::GenericContainer);
+    root.children = ids.to_vec();
+    let root = tree.insert(root);
+    tree.set_root(Some(root));
+
+    let mut projection = AccessKitProjection::new();
+    let update = full(&mut projection, &tree);
+    for (id, (_, _, expected)) in ids.into_iter().zip(cases) {
+        let native = projection.native_node_id(id).unwrap();
+        let (_, node) = update.nodes.iter().find(|(id, _)| id.0 == native).unwrap();
+        assert_eq!(node.role(), expected);
+    }
+}

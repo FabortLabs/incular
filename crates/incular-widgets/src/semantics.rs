@@ -3,7 +3,7 @@
 use incular_semantics::{
     AccessibilityFocusBlockType, AttributedString, CustomSemanticsAction, SemanticAction,
     SemanticActionKind, SemanticAnnotationFlag, SemanticRole, SemanticState,
-    SemanticTextAttributes, TextSelection,
+    SemanticTextAttributes, SemanticsInputType, TextSelection,
 };
 use smart_default::SmartDefault;
 use std::{rc::Rc, sync::Arc};
@@ -174,6 +174,31 @@ impl Semantics {
     #[must_use]
     pub fn role(mut self, role: SemanticRole) -> Self {
         self.role = Some(role);
+        self
+    }
+
+    /// Declares the semantic kind of input without changing the keyboard.
+    #[must_use]
+    pub fn input_type(mut self, input_type: SemanticsInputType) -> Self {
+        self.state.input_type = input_type;
+        self
+    }
+
+    /// Declares which identified nodes this widget controls. Repeated
+    /// identifiers are ignored without changing discovery order.
+    #[must_use]
+    pub fn controls_nodes(
+        mut self,
+        identifiers: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        let mut nodes = Vec::new();
+        for identifier in identifiers {
+            let identifier = identifier.into();
+            if !nodes.contains(&identifier) {
+                nodes.push(identifier);
+            }
+        }
+        self.state.controls_nodes = Some(nodes.into());
         self
     }
 

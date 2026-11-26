@@ -225,7 +225,8 @@ pub mod prelude {
     };
     pub use incular_semantics::{
         AccessibilityFocusBlockType, Role as SemanticRole, SemanticAction, SemanticActionKind,
-        SemanticNodeId, SemanticState, SemanticValidationResult, SemanticsDiagnostics, SemanticsTree,
+        SemanticNodeId, SemanticState, SemanticValidationResult, SemanticsDiagnostics,
+        SemanticsInputType, SemanticsTree,
     };
     pub use incular_text::{
         EditableText as TextEditingModel, FontFamily, FontFeature, FontStyle, FontVariation,
