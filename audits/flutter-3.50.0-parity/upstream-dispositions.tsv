@@ -2554,3 +2554,6 @@ packages/flutter/test/widgets/editable_text_test.dart	4064	When "done" is presse
 packages/flutter/test/widgets/editable_text_test.dart	4104	When "next" is pressed callbacks are invoked: onEditingComplete > onSubmitted	paired-match	upstream-editable-action-focus.md
 packages/flutter/test/widgets/editable_text_test.dart	4314	finalizeEditing should reset the input connection when shouldUnfocus is true but the unfocus is cancelled	paired-match	upstream-editable-action-focus.md
 packages/flutter/test/widgets/editable_text_test.dart	4393	requesting focus in the onSubmitted callback should keep the onscreen keyboard visible	paired-match	upstream-editable-action-focus.md
+packages/flutter/test/widgets/editable_text_test.dart	4144	When "newline" action is called on a Editable text with maxLines == 1 callbacks are invoked: onEditingComplete > onSubmitted	paired-match	upstream-editable-action-focus.md
+packages/flutter/test/widgets/editable_text_test.dart	4184	When "newline" action is called on a Editable text with maxLines != 1, onEditingComplete and onSubmitted callbacks are not invoked.	paired-match	upstream-editable-action-focus.md
+packages/flutter/test/widgets/editable_text_test.dart	4445	does not request keyboard after the keyboard changes the selection	paired-match	upstream-editable-action-focus.md

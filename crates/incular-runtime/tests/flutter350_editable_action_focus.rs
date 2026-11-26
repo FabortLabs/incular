@@ -182,3 +182,57 @@ fn noncompletion_action_commits_the_composing_range_without_blur() {
     assert!(text.value().composing.is_none());
     assert_eq!(text.text(), "typed");
 }
+
+#[test]
+fn a_single_line_newline_completes_before_the_submitted_text() {
+    verify_callback_order(TextInputAction::Newline);
+}
+
+#[test]
+fn a_multiline_newline_skips_completion_and_submission() {
+    let node = FocusNode::new();
+    let controller = TextEditingController::with_text("typed");
+    let mut runtime = mount(
+        editable(&node, &controller)
+            .multiline(true)
+            .on_editing_complete(|| panic!("multiline action must not complete"))
+            .on_submit(|_| panic!("multiline action must not submit"))
+            .into(),
+    );
+    assert!(runtime.handle_text_input_action(TextInputAction::Newline));
+    assert!(node.has_primary_focus());
+    assert_eq!(controller.text(), "typed");
+}
+
+#[test]
+fn changing_selection_through_the_keyboard_does_not_request_show() {
+    use incular_platform::{PlatformEvent, TextInputState};
+
+    let node = FocusNode::new();
+    let controller = TextEditingController::with_text("123");
+    controller.set_selection(incular_text::TextSelection::collapsed(0));
+    let mut runtime = mount(editable(&node, &controller).into());
+    runtime.take_text_input_commands();
+    assert!(node.has_primary_focus());
+
+    runtime.handle_platform_event(PlatformEvent::TextEditingState(TextInputState {
+        text: "123".into(),
+        selection_start: 1,
+        selection_end: 1,
+        composing: None,
+    }));
+    runtime
+        .run_frame(Constraints::tight(Size::new(180., 100.)))
+        .unwrap();
+    assert_eq!(
+        controller.selection(),
+        incular_text::TextSelection::collapsed(1)
+    );
+    assert!(node.has_primary_focus());
+    assert!(!runtime.take_text_input_commands().iter().any(|c| {
+        matches!(
+            c,
+            TextInputCommand::Show { .. } | TextInputCommand::SetClient { .. }
+        )
+    }));
+}

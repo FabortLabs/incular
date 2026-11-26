@@ -22,3 +22,12 @@ restarting the keyboard. The native suite ran 46 focused tests,
 including existing input-gating, lifecycle, and IME regressions.
 This verifies the native command boundary, not physical keyboard
 visibility on a particular handset.
+
+## Newline and selection-only updates
+
+Pinned originals 4144, 4184, and 4445 also passed. Mounted native
+tests show that a single-line Newline invokes completion before
+submission, a multiline Newline invokes neither callback, and a
+selection-only native update moves the caret without emitting a
+Show or SetClient command. All ten tests in the focused native
+completion suite passed.
