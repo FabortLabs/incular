@@ -307,3 +307,72 @@ fn overlap_hit_testing_respects_policy_in_both_paint_directions() {
         }
     }
 }
+
+#[derive(Clone)]
+struct WatchedClip {
+    top: std::rc::Rc<std::cell::Cell<f32>>,
+    calls: std::rc::Rc<std::cell::Cell<usize>>,
+    reclip: incular_widgets::ClipReclip,
+}
+
+impl CustomClipper for WatchedClip {
+    fn get_clip(&self, size: Size) -> ClipShape {
+        self.calls.set(self.calls.get() + 1);
+        Inset(self.top.get()).get_clip(size)
+    }
+
+    fn reclip(&self) -> Option<incular_widgets::ClipReclip> {
+        Some(self.reclip.clone())
+    }
+}
+
+#[test]
+fn live_reclip_updates_hit_and_paint_without_rebuilding_or_laying_out() {
+    let controller = ScrollController::new();
+    let key = GlobalKey::new();
+    let watched = WatchedClip {
+        top: std::rc::Rc::new(std::cell::Cell::new(50.)),
+        calls: std::rc::Rc::new(std::cell::Cell::new(0)),
+        reclip: incular_widgets::ClipReclip::default(),
+    };
+    let sliver = SliverClipRect::new(SliverToBoxAdapter::new(
+        Widget::box_(Size::new(800., 100.), FILL).with_key(key),
+    ))
+    .clipper(watched.clone());
+    let mut tree = WidgetTree::new();
+    tree.mount(scene(
+        &controller,
+        Box::new(sliver),
+        Axis::Vertical,
+        false,
+        false,
+    ))
+    .unwrap();
+    layout(&mut tree);
+    let child = tree.element_with_key(&key.into());
+    assert_eq!(
+        rect(&mut tree),
+        [Rect::from_origin_size(
+            Offset::new(0., 50.),
+            Size::new(800., 50.)
+        )]
+    );
+    assert!(!hit(&tree, key, Offset::new(400., 40.)));
+
+    let before = tree.diagnostics();
+    let calls = watched.calls.get();
+    watched.top.set(30.);
+    watched.reclip.notify();
+    assert!(hit(&tree, key, Offset::new(400., 40.)));
+    assert_eq!(
+        rect(&mut tree),
+        [Rect::from_origin_size(
+            Offset::new(0., 30.),
+            Size::new(800., 70.)
+        )]
+    );
+    assert_eq!(watched.calls.get(), calls + 1, "one new shared clip shape");
+    assert_eq!(tree.element_with_key(&key.into()), child);
+    assert_eq!(tree.diagnostics().layouts, before.layouts);
+    assert_eq!(tree.diagnostics().rebuilds, before.rebuilds);
+}

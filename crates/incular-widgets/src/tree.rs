@@ -1430,6 +1430,7 @@ pub struct WidgetTree {
     default_spell_check_provider: Option<crate::DefaultSpellCheckProvider>,
     compositor: LayerTree,
     compositor_initialized: bool,
+    sliver_reclips: Option<Rc<RefCell<FastHashSet<ElementId>>>>,
     /// Maps the platform's monotonic frame clock onto the animation-only
     /// clock. Tokio, input, profiler timing and all other runtime clocks keep
     /// using real time.

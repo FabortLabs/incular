@@ -5,6 +5,7 @@ use incular_scroll::{SliverConstraints, SliverGeometry, SliverGrowthDirection};
 
 /// Full sliver paint bounds, including its cached offscreen extent, in the
 /// physical coordinate space of its render sliver.
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct SliverPaintBounds {
     pub(super) rect: Rect,
     /// Distance from the maximum rectangle's leading edge to its visible

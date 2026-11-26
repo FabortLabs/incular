@@ -37,8 +37,8 @@ are preserved with an 80 px final main extent even under a 50 px
 header overlap. The focused native clip tests, and the adjacent native
 decorator, grouped focus and grouped tap tests passed.
 
-Approximate semantic clipping, clipper-driven reclip callbacks,
-elliptical radii, and the rest of the nested and overlap edge cases
+Approximate semantic clipping, elliptical radii, and the rest of the
+nested and overlap edge cases
 remain open. No physical GPU pixel readback was required to compare
 these exact retained clip commands and input targets.
 
@@ -53,3 +53,14 @@ blocking the uncovered content. The native fixture makes the
 overlapping header itself transparent to hit testing so it observes
 the clip's decision rather than the header's paint order. Fourteen
 expanded fixtures represent two upstream registration sites.
+
+## Live clip changes
+
+An authored pinned Flutter probe changes a notifier from top inset
+50 to 30. Hit testing reflects the new top before the next paint,
+and paint uses the same newly resolved clip without replacing the
+child. Both Flutter and native obtain the revised custom shape
+exactly once. The native test also verifies unchanged rebuild and
+layout counts. The retained viewport subscribes only to clip sources
+that currently participate in it, and drops subscriptions with the
+layers.

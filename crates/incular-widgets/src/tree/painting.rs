@@ -212,6 +212,7 @@ impl WidgetTree {
     #[must_use]
     pub fn paint(&mut self) -> DisplayList {
         let _phase_guard = self.guard_phase_root(FramePhase::Paint);
+        self.flush_sliver_reclips();
         self.flush_proxy_repaints();
         if let Some(root) = self.root.and_then(|id| self.render_id(id)) {
             self.paint_render(root);
@@ -1199,7 +1200,7 @@ impl WidgetTree {
         }
         if let Some(clips) = &node.parent_sliver_clips {
             let local = point - self.hit_origin(id, node, origin);
-            if clips.iter().any(|clip| !crate::scrolling::sliver_clip::shape_contains(&clip.shape, local)) {
+            if clips.iter().any(|clip| !crate::scrolling::sliver_clip::shape_contains(&clip.resolved_shape(), local)) {
                 return true;
             }
         }

@@ -3329,9 +3329,9 @@ impl WidgetTree {
         // Render ids are unique, so an in-place sort keeps the order and
         // needs no merge buffer.
         nodes.sort_unstable_by_key(|(render, ..)| render.0);
-        let mut changed = false;
+        let mut changed = self.flush_sliver_reclips();
         let mut focus_geometry_changed = false;
-        let mut hover_geometry_changed = false;
+        let mut hover_geometry_changed = changed;
         let mut active = false;
         for (_render, element, kind, layers) in nodes.drain(..) {
             // Hidden subtrees stop ticking; explicit controller changes still

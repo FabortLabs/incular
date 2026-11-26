@@ -58,6 +58,14 @@ impl ClipReclip {
         self.0.source().notify();
     }
 
+    pub(crate) fn revision(&self) -> u64 {
+        *self.0.borrow()
+    }
+
+    pub(crate) fn source(&self) -> incular_core::reactivity::DependencySource {
+        self.0.source().clone()
+    }
+
     fn track(&self) -> u64 {
         self.0.source().track();
         *self.0.borrow()
@@ -155,6 +163,10 @@ impl ClipDelegate {
     #[must_use]
     pub(crate) fn clip(&self, size: Size) -> ClipShape {
         (self.get_clip)(&*self.clipper, size)
+    }
+
+    pub(crate) fn reclip_signal(&self) -> Option<&ClipReclip> {
+        self.reclip.as_ref()
     }
 
     pub(crate) fn tracked(&self) -> Self {

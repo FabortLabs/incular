@@ -124,12 +124,14 @@ pub(crate) fn shape_contains(shape: &ClipShape, point: Offset) -> bool {
 }
 
 use super::{Sliver, SliverChildId, SliverLayout, SliverScrollDependency, geometry::RenderSliver};
-use crate::{CustomClipper, Widget, layout::basic::ClipDelegate};
+use crate::{ClipReclip, CustomClipper, Widget, layout::basic::ClipDelegate};
 use incular_config::Clip;
 use incular_rendering::ClipCoverage;
 use incular_scroll::ScrollController;
 use std::{
     any::Any,
+    cell::RefCell,
+    rc::Rc,
     sync::atomic::{AtomicU64, Ordering},
     time::Instant,
 };
@@ -302,11 +304,117 @@ impl Sliver for SliverClipRRect {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct ClipShapeResolver {
+    constraints: SliverConstraints,
+    geometry: SliverGeometry,
+    bounds: SliverPaintBounds,
+    radii: Option<BorderRadiusGeometry>,
+    overlap: ClipOverlapBehavior,
+}
+
+impl ClipShapeResolver {
+    fn resolve(self, clipper: Option<&ClipDelegate>) -> ClipShape {
+        let local_rect = Rect::from_origin_size(Offset::ZERO, self.bounds.size());
+        let explicit = clipper.map(|clipper| clipper.clip(self.bounds.size()));
+        let shape = match (explicit, self.radii) {
+            (Some(ClipShape::Rect(rect)), None) => ClipShape::Rect(rect),
+            (Some(ClipShape::RRect(rect)), Some(_)) => ClipShape::RRect(rect),
+            (_, None) => ClipShape::Rect(local_rect),
+            (_, Some(radii)) => ClipShape::RRect(RRect {
+                rect: local_rect,
+                radii: radii
+                    .resolve(
+                        self.constraints
+                            .text_direction
+                            .unwrap_or(incular_config::TextDirection::Ltr),
+                    )
+                    .to_corner_radii(),
+            }),
+        };
+        sliver_clip_shape(
+            self.constraints,
+            self.geometry,
+            &self.bounds,
+            shape,
+            self.overlap,
+        )
+    }
+}
+
+/// The same lazy shape snapshot is shared by every materialized row and
+/// used by both painting and input. Reclip does not need the sliver to lay
+/// its children out again.
+struct LiveClipFrame {
+    resolver: ClipShapeResolver,
+    clipper: ClipDelegate,
+    signal: ClipReclip,
+    cached: RefCell<(u64, ClipShape)>,
+}
+
+impl LiveClipFrame {
+    fn shape(&self) -> ClipShape {
+        let revision = self.signal.revision();
+        let mut cached = self.cached.borrow_mut();
+        if revision != cached.0 {
+            *cached = (revision, self.resolver.resolve(Some(&self.clipper)));
+        }
+        cached.1.clone()
+    }
+}
+
+#[derive(Clone)]
 pub(crate) struct SliverClipPlacement {
     pub key: u64,
     pub shape: ClipShape,
     pub coverage: ClipCoverage,
+    live: Option<Rc<LiveClipFrame>>,
+    translation: Offset,
+}
+
+impl std::fmt::Debug for SliverClipPlacement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SliverClipPlacement")
+            .field("key", &self.key)
+            .field("shape", &self.shape)
+            .field("coverage", &self.coverage)
+            .finish_non_exhaustive()
+    }
+}
+
+impl PartialEq for SliverClipPlacement {
+    fn eq(&self, other: &Self) -> bool {
+        self.key == other.key
+            && self.shape == other.shape
+            && self.coverage == other.coverage
+            && match (&self.live, &other.live) {
+                (Some(a), Some(b)) => Rc::ptr_eq(a, b) && self.translation == other.translation,
+                (None, None) => true,
+                _ => false,
+            }
+    }
+}
+
+impl SliverClipPlacement {
+    pub(crate) fn resolved_shape(&self) -> ClipShape {
+        self.live.as_ref().map_or_else(
+            || self.shape.clone(),
+            |live| translate_shape(&live.shape(), self.translation),
+        )
+    }
+
+    pub(crate) fn in_parent_space(&self, origin: Offset) -> Self {
+        Self {
+            shape: translate_shape(&self.resolved_shape(), origin),
+            live: None,
+            translation: Offset::ZERO,
+            ..self.clone()
+        }
+    }
+
+    pub(crate) fn dependency(&self) -> Option<incular_core::reactivity::DependencySource> {
+        Some(self.live.as_ref()?.signal.source())
+    }
 }
 
 pub(super) struct ClipRenderSliver {
@@ -354,27 +462,24 @@ impl RenderSliver for ClipRenderSliver {
         else {
             return layout;
         };
-        let local_rect = Rect::from_origin_size(Offset::ZERO, bounds.size());
-        let explicit = self
-            .clipper
-            .as_ref()
-            .map(|clipper| clipper.clip(bounds.size()));
-        let shape = match (explicit, self.radii) {
-            (Some(ClipShape::Rect(rect)), None) => ClipShape::Rect(rect),
-            (Some(ClipShape::RRect(rect)), Some(_)) => ClipShape::RRect(rect),
-            (_, None) => ClipShape::Rect(local_rect),
-            (_, Some(radii)) => ClipShape::RRect(RRect {
-                rect: local_rect,
-                radii: radii
-                    .resolve(
-                        constraints
-                            .text_direction
-                            .unwrap_or(incular_config::TextDirection::Ltr),
-                    )
-                    .to_corner_radii(),
-            }),
+        let resolver = ClipShapeResolver {
+            constraints,
+            geometry,
+            bounds,
+            radii: self.radii,
+            overlap: self.overlap,
         };
-        let shape = sliver_clip_shape(constraints, geometry, &bounds, shape, self.overlap);
+        let shape = resolver.resolve(self.clipper.as_ref());
+        let live = self.clipper.as_ref().and_then(|clipper| {
+            let signal = clipper.reclip_signal()?.clone();
+            let cached = RefCell::new((signal.revision(), shape.clone()));
+            Some(Rc::new(LiveClipFrame {
+                resolver,
+                clipper: clipper.clone(),
+                signal,
+                cached,
+            }))
+        });
         let coverage = match self.behavior {
             Clip::None => unreachable!(),
             Clip::HardEdge => ClipCoverage::HardEdge,
@@ -390,10 +495,13 @@ impl RenderSliver for ClipRenderSliver {
                 main = geometry.paint_extent - main - child.extent;
             }
             let origin = constraints.axis.offset(main, child.cross_offset);
+            let translation = Offset::ZERO - origin;
             let placement = SliverClipPlacement {
                 key: self.key,
-                shape: translate_shape(&shape, Offset::ZERO - origin),
+                shape: translate_shape(&shape, translation),
                 coverage,
+                live: live.clone(),
+                translation,
             };
             child.widget = child.widget.clone().with_sliver_clip(placement);
         }

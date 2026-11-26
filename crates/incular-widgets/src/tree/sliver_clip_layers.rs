@@ -2,16 +2,20 @@
 //! a clip (or offscreen isolation) per materialized row.
 
 use super::*;
-use crate::scrolling::sliver_clip::{SliverClipPlacement, translate_shape};
+use crate::scrolling::sliver_clip::SliverClipPlacement;
+use incular_core::reactivity::Subscription;
 use incular_rendering::{LayerId, LayerTree};
 use std::collections::HashMap;
 
 #[derive(Default)]
-pub(super) struct SliverClipLayers(HashMap<(u64, usize), LayerId>);
+pub(super) struct SliverClipLayers {
+    layers: HashMap<(u64, usize), LayerId>,
+    listeners: HashMap<u64, Subscription>,
+}
 
 impl SliverClipLayers {
     pub(super) fn remove_all(self, compositor: &mut LayerTree) {
-        for layer in self.0.into_values() {
+        for layer in self.layers.into_values() {
             compositor.remove(layer);
         }
     }
@@ -41,7 +45,7 @@ fn finish(
     let k = (placement.key, segment);
     let layer = match placement.shape {
         crate::ClipShape::Rect(rect) => {
-            if let Some(layer) = previous.0.remove(&k) {
+            if let Some(layer) = previous.layers.remove(&k) {
                 compositor.update_clip(layer, rect);
                 compositor.update_clip_rect_coverage(layer, placement.coverage);
                 layer
@@ -51,7 +55,7 @@ fn finish(
         }
         crate::ClipShape::RRect(rrect) => {
             let rrect = incular_rendering::RRect::new(rrect.rect, rrect.radii);
-            if let Some(layer) = previous.0.remove(&k) {
+            if let Some(layer) = previous.layers.remove(&k) {
                 compositor.update_clip_rrect(layer, rrect);
                 compositor.update_clip_rrect_coverage(layer, placement.coverage);
                 layer
@@ -62,7 +66,7 @@ fn finish(
         crate::ClipShape::Path(_) => unreachable!("sliver clips resolve a rect or rrect"),
     };
     compositor.set_children(layer, children);
-    layers.0.insert(k, layer);
+    layers.layers.insert(k, layer);
     active
         .last_mut()
         .map_or(root, |p| &mut p.children)
@@ -97,6 +101,27 @@ impl WidgetTree {
         }
 
         let mut layers = SliverClipLayers::default();
+        for (clips, _) in sources.values() {
+            for clip in clips.iter() {
+                let Some(source) = clip.dependency() else {
+                    continue;
+                };
+                layers.listeners.entry(source.id()).or_insert_with(|| {
+                    if let Some(existing) = previous.listeners.remove(&source.id()) {
+                        return existing;
+                    }
+                    let updates =
+                        Rc::downgrade(self.sliver_reclips.get_or_insert_with(Default::default));
+                    source.subscribe(owner, move || {
+                        if let Some(updates) = updates.upgrade()
+                            && updates.borrow_mut().insert(owner)
+                        {
+                            incular_animation::schedule_frame();
+                        }
+                    })
+                });
+            }
+        }
         let mut seen = HashMap::<u64, usize>::new();
         let mut root = Vec::new();
         let mut active = Vec::<PendingClip>::new();
@@ -122,10 +147,7 @@ impl WidgetTree {
             }
             for clip in &clips[shared..] {
                 let next = seen.entry(clip.key).or_default();
-                let placement = SliverClipPlacement {
-                    shape: translate_shape(&clip.shape, origin),
-                    ..clip.clone()
-                };
+                let placement = clip.in_parent_space(origin);
                 active.push(PendingClip {
                     placement,
                     children: Vec::new(),
@@ -161,5 +183,28 @@ impl WidgetTree {
                 .as_ref()
                 .is_some_and(|s| s.sliver_clip_layers.is_some())
         })
+    }
+}
+
+impl WidgetTree {
+    pub(super) fn flush_sliver_reclips(&mut self) -> bool {
+        let Some(updates) = &self.sliver_reclips else {
+            return false;
+        };
+        if updates.borrow().is_empty() {
+            return false;
+        }
+        let pending = std::mem::take(&mut *updates.borrow_mut());
+        let mut changed = false;
+        for owner in pending {
+            if self.has_sliver_clip_layers(owner) {
+                self.sync_render_children(owner);
+                changed = true;
+            }
+        }
+        if changed {
+            self.input.hover_hit_revision = self.input.hover_hit_revision.wrapping_add(1);
+        }
+        changed
     }
 }
