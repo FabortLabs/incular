@@ -344,3 +344,118 @@ fn ordinary_parent_focus_and_traversal_gates_have_different_descendant_effects()
     runtime.run_frame(bounds).unwrap();
     assert!(!traversable(&runtime, &a) && !traversable(&runtime, &b));
 }
+
+#[test]
+fn external_focus_scope_owns_both_key_callbacks_and_permissions_across_rebuilds() {
+    use incular_core::{Code, KeyboardEvent, KeyboardKey, NamedKey};
+    use incular_widgets::{FocusKeyEventHandler, FocusRawKeyEventHandler, KeyEventResult};
+    use std::{cell::Cell, rc::Rc};
+
+    let scope = FocusScopeNode::new();
+    let node = scope.scope_focus_node();
+    node.set_skip_traversal(false);
+    scope.set_descendants_are_focusable(false);
+    scope.set_descendants_are_traversable(false);
+    let ignored: FocusKeyEventHandler = Rc::new(|_, _| KeyEventResult::Ignored);
+    let ignored_raw: FocusRawKeyEventHandler = Rc::new(|_, _| KeyEventResult::Ignored);
+    node.set_on_key_event(Some(ignored.clone()));
+    node.set_on_key(Some(ignored_raw.clone()));
+
+    let scene = || FocusScope::with_external_focus_node(SizedBox::shrink(), scope.clone());
+    let check = |typed: &FocusKeyEventHandler, raw: &FocusRawKeyEventHandler, descendants| {
+        let descriptor = scene();
+        assert!(Rc::ptr_eq(
+            descriptor.key_event_handler().as_ref().unwrap(),
+            typed
+        ));
+        assert!(Rc::ptr_eq(node.on_key_event().as_ref().unwrap(), typed));
+        assert!(Rc::ptr_eq(
+            descriptor.raw_key_handler().as_ref().unwrap(),
+            raw
+        ));
+        assert!(Rc::ptr_eq(node.on_key().as_ref().unwrap(), raw));
+        assert_eq!(descriptor.allows_descendant_focus(), descendants);
+        assert_eq!(scope.descendants_are_focusable(), descendants);
+        assert_eq!(descriptor.allows_descendant_traversal(), descendants);
+        assert_eq!(scope.descendants_are_traversable(), descendants);
+        assert!(!descriptor.skips_traversal() && !node.skip_traversal());
+        assert!(descriptor.allows_focus_requests() && scope.can_request_focus());
+    };
+    let bounds = Constraints::tight(Size::new(120., 80.));
+    let mut runtime = Runtime::new(scene().into()).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    check(&ignored, &ignored_raw, false);
+    assert!(scope.request_focus_in_scope());
+    runtime.run_frame(bounds).unwrap();
+    let focused = runtime.focused_element().unwrap();
+    let send = |runtime: &mut Runtime| {
+        let key = KeyboardEvent::key_down(KeyboardKey::Named(NamedKey::Enter), Code::Enter);
+        let handled = runtime.dispatch_keyboard_event(key.clone());
+        let mut up = key;
+        up.state = incular_core::KeyState::Up;
+        runtime.dispatch_keyboard_event(up);
+        handled
+    };
+    assert!(!send(&mut runtime));
+
+    let seen = Rc::new(Cell::new(0));
+    let typed: FocusKeyEventHandler = Rc::new({
+        let seen = seen.clone();
+        move |_, event| {
+            if event.state == incular_core::KeyState::Down {
+                seen.set(seen.get() + 1);
+            }
+            KeyEventResult::Handled
+        }
+    });
+    let raw: FocusRawKeyEventHandler = Rc::new({
+        let seen = seen.clone();
+        move |_, event| {
+            if event.is_key_down() {
+                seen.set(seen.get() + 1);
+            }
+            KeyEventResult::Handled
+        }
+    });
+    node.set_on_key_event(Some(typed.clone()));
+    node.set_on_key(Some(raw.clone()));
+    scope.set_descendants_are_focusable(true);
+    scope.set_descendants_are_traversable(true);
+    let root = runtime.tree().root().unwrap();
+    runtime.schedule_update(root, scene().into()).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    check(&typed, &raw, true);
+    assert_eq!(runtime.focused_element(), Some(focused));
+    assert!(scope.has_primary_focus());
+    assert!(send(&mut runtime));
+    assert_eq!(seen.get(), 2);
+}
+
+#[test]
+fn building_a_scope_with_different_permission_is_side_effect_free_until_mount() {
+    let scope = FocusScopeNode::new();
+    let scene = |allowed| {
+        Widget::from(
+            FocusScope::new(SizedBox::shrink())
+                .node(scope.clone())
+                .can_request_focus(allowed),
+        )
+    };
+    let bounds = Constraints::tight(Size::new(120., 80.));
+    let mut runtime = Runtime::new(scene(true)).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    scope.request_scope_focus();
+    runtime.run_frame(bounds).unwrap();
+    let focused = runtime.focused_element().unwrap();
+    assert!(scope.has_primary_focus());
+    drop(scene(false));
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(runtime.focused_element(), Some(focused));
+    assert!(scope.can_request_focus() && scope.has_primary_focus());
+
+    let root = runtime.tree().root().unwrap();
+    runtime.schedule_update(root, scene(false)).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert!(!scope.can_request_focus() && !scope.has_primary_focus());
+    assert_ne!(runtime.focused_element(), Some(focused));
+}

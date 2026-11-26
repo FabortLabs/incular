@@ -7,7 +7,7 @@ use std::rc::{Rc, Weak};
 
 use incular_core::{Code, KeyboardEvent, KeyboardKey, Modifiers};
 
-use crate::details::GestureCallbacks;
+use crate::details::{FocusKeyHandlerOwner, GestureCallbacks};
 
 /// Flutter's result for routing an event through focus handlers.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -153,7 +153,7 @@ impl GestureCallbacks {
             return KeyEventResult::Handled;
         }
         if let Some(node) = &self.focus_node {
-            let result = if self.routes_node_key_events {
+            let result = if self.focus_key_handler_owner != FocusKeyHandlerOwner::CallbackContainer {
                 let typed = node.on_key_event().map(|handler| handler(node, event.clone()));
                 let raw = if has_raw_event {
                     node.on_key().map(|handler| handler(node, RawKeyEvent::from(event.clone())))

@@ -109,6 +109,19 @@ The portable raw view carries real logical and physical key and
 state; platform-specific scan tables or native key objects are not
 manufactured or included. Twelve focused Rust tests passed.
 
+### External scope callbacks and mount-only permissions
+
+Pinned :997 now pairs. The external FocusScope publishes both exact
+callback identities from its node, not widget defaults. Enter first
+falls through, then both updated callbacks handle it without moving
+primary focus from the scope. Descendant focus/traversal permissions
+update without disturbing the other node properties.
+
+An authored Flutter and native control extends the discarded-descriptor
+case to an externally supplied scope with a regular widget permission
+override: only mounting the replacement can disable or unfocus the
+live scope. Seventeen focused Rust tests passed.
+
 ## Retained identity across focus reparenting
 
 The pinned `widgets/focus_manager_test.dart:1825` original and the

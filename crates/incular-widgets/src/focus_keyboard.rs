@@ -280,7 +280,11 @@ impl From<Focus> for Widget {
         let callbacks = incular_gestures::GestureCallbacks {
             focus_node: value.node,
             owned_focus_permission,
-            routes_node_key_events: true,
+            focus_key_handler_owner: if value.use_external_properties {
+                incular_gestures::FocusKeyHandlerOwner::FocusNode
+            } else {
+                incular_gestures::FocusKeyHandlerOwner::FocusWidget
+            },
             focus_node_widget_properties: (!value.use_external_properties).then_some(
                 incular_gestures::FocusNodeWidgetProperties {
                     can_request_focus: value.can_request_focus,
@@ -314,6 +318,7 @@ impl From<Focus> for Widget {
 pub struct FocusScope {
     node: Option<FocusScopeNode>,
     can_request_focus: Option<bool>,
+    use_external_properties: bool,
     autofocus: bool,
     policy: FocusTraversalPolicyKind,
     child: Option<Widget>,
@@ -324,6 +329,7 @@ impl Default for FocusScope {
         Self {
             node: None,
             can_request_focus: None,
+            use_external_properties: false,
             autofocus: false,
             policy: FocusTraversalPolicyKind::ReadingOrder,
             child: None,
@@ -338,6 +344,7 @@ impl FocusScope {
         Self {
             node: None,
             can_request_focus: None,
+            use_external_properties: false,
             autofocus: false,
             policy: FocusTraversalPolicyKind::ReadingOrder,
             child: Some(child.into()),
@@ -365,7 +372,49 @@ impl FocusScope {
     #[must_use]
     pub fn node(mut self, node: FocusScopeNode) -> Self {
         self.node = Some(node);
+        self.use_external_properties = false;
         self
+    }
+
+    /// A scope whose node owns both its callbacks and its permissions.
+    #[must_use]
+    pub fn with_external_focus_node(child: impl Into<Widget>, node: FocusScopeNode) -> Self {
+        Self {
+            node: Some(node),
+            use_external_properties: true,
+            ..Self::new(child)
+        }
+    }
+
+    #[must_use]
+    pub fn key_event_handler(&self) -> Option<incular_gestures::FocusKeyEventHandler> {
+        self.node.as_ref()?.scope_focus_node().on_key_event()
+    }
+
+    #[must_use]
+    pub fn raw_key_handler(&self) -> Option<incular_gestures::FocusRawKeyEventHandler> {
+        self.node.as_ref()?.scope_focus_node().on_key()
+    }
+
+    #[must_use]
+    pub fn allows_focus_requests(&self) -> bool {
+        let authored = if self.use_external_properties { None } else { self.can_request_focus };
+        authored.unwrap_or_else(|| self.node.as_ref().is_none_or(FocusScopeNode::can_request_focus))
+    }
+
+    #[must_use]
+    pub fn allows_descendant_focus(&self) -> bool {
+        self.node.as_ref().is_none_or(FocusScopeNode::descendants_are_focusable)
+    }
+
+    #[must_use]
+    pub fn allows_descendant_traversal(&self) -> bool {
+        self.node.as_ref().is_none_or(FocusScopeNode::descendants_are_traversable)
+    }
+
+    #[must_use]
+    pub fn skips_traversal(&self) -> bool {
+        self.node.as_ref().is_none_or(|scope| scope.scope_focus_node().skip_traversal())
     }
 
     /// Controls focus eligibility inside this scope. A disabled scope blocks
@@ -412,12 +461,15 @@ impl From<FocusScope> for Widget {
             .child
             .unwrap_or_else(|| crate::SizedBox::shrink().into());
         let scope = if let Some(node) = &value.node {
-            if let Some(allowed) = value.can_request_focus {
-                node.set_can_request_focus(allowed);
-            }
-            let mut widget = Widget::from(Focus::new(child).node(node.scope_focus_node()));
+            let mut widget = Widget::from(Focus::with_external_focus_node(child, node.scope_focus_node()));
             if let WidgetKind::Gesture { callbacks, .. } = widget.kind_mut() {
                 callbacks.focus_scope = Some(node.clone());
+                if !value.use_external_properties && let Some(allowed) = value.can_request_focus {
+                    callbacks.focus_node_widget_properties = Some(incular_gestures::FocusNodeWidgetProperties {
+                        can_request_focus: Some(allowed),
+                        ..incular_gestures::FocusNodeWidgetProperties::default()
+                    });
+                }
             }
             widget
         } else {

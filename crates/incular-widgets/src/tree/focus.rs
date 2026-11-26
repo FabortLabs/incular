@@ -244,16 +244,17 @@ impl WidgetTree {
             bindings.unbind(id);
         }
         let node = kind.and_then(external_node);
-        if let (Some(node), Some(WidgetKind::Gesture { callbacks, .. })) = (node, kind)
-            && let Some(properties) = callbacks.focus_node_widget_properties
-        {
-            properties.apply(node);
-            node.install_mounted_key_handlers(
-                callbacks.on_focus_key_event.as_ref(),
-                callbacks.on_focus_raw_key.as_ref(),
-            );
+        if let (Some(node), Some(WidgetKind::Gesture { callbacks, .. })) = (node, kind) {
+            if let Some(properties) = callbacks.focus_node_widget_properties {
+                properties.apply(node);
+            }
+            if callbacks.focus_key_handler_owner == incular_gestures::FocusKeyHandlerOwner::FocusWidget {
+                node.install_mounted_key_handlers(
+                    callbacks.on_focus_key_event.as_ref(),
+                    callbacks.on_focus_raw_key.as_ref(),
+                );
+            }
         }
-
         let callback = match kind {
             Some(WidgetKind::Gesture { callbacks, .. }) => callbacks.on_focus_change.as_ref(),
             _ => None,

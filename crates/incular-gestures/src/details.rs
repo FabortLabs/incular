@@ -419,6 +419,17 @@ impl ButtonGestureCallbacks {
     }
 }
 
+/// Selects who owns the raw and typed callbacks on a mounted focus node.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FocusKeyHandlerOwner {
+    /// A lower-level callback container, not a mounted Focus widget.
+    #[default]
+    CallbackContainer,
+    FocusWidget,
+    FocusNode,
+}
+
 /// Callbacks understood by Incular's retained pointer gesture recognizer.
 #[derive(Clone, Default)]
 pub struct GestureCallbacks {
@@ -502,10 +513,10 @@ pub struct GestureCallbacks {
     pub on_focus_key_event: Option<FocusKeyEventHandler>,
     /// A mounted Focus widget's deprecated raw keyboard callback.
     pub on_focus_raw_key: Option<crate::FocusRawKeyEventHandler>,
-    /// Whether this mounted Focus routes typed keys through the node's storage.
+    /// Selects the callback provider and controls mounted slot installation.
     #[doc(hidden)]
-    pub routes_node_key_events: bool,
-    /// A regular Focus installs widget callbacks; an external Focus does not.
+    pub focus_key_handler_owner: FocusKeyHandlerOwner,
+    /// Property overrides are separate from callback ownership.
     #[doc(hidden)]
     pub focus_node_widget_properties: Option<crate::FocusNodeWidgetProperties>,
     /// Receives key-down events that were not consumed by [`Self::on_key`].

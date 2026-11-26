@@ -2281,3 +2281,4 @@ packages/flutter/test/gestures/drag_test.dart	2583	Pointer pan/zooms drags shoul
 packages/flutter/test/gestures/drag_test.dart	2671	Touch drags should allow pointer pan/zooms to join them	paired-match	upstream-geometry-input-gestures.md#trackpad-pan-and-mixed-drag-tenure
 packages/flutter/test/gestures/scale_test.dart	15	Should recognize scale gestures	paired-match	upstream-geometry-input-gestures.md#full-scale-lifecycle-and-device-kind
 packages/flutter/test/widgets/focus_scope_test.dart	1749	Focus doesn't update the focusNode attributes when the widget updates if withExternalFocusNode is used	paired-match	upstream-focus-widget-semantics.md#typed-and-deprecated-raw-callbacks-on-the-same-node
+packages/flutter/test/widgets/focus_scope_test.dart	997	FocusScope doesn't update the focusNode attributes when the widget updates if withExternalFocusNode is used	paired-match	upstream-focus-widget-semantics.md#external-scope-callbacks-and-mount-only-permissions
