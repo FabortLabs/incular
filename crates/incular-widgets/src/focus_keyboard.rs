@@ -26,6 +26,7 @@ pub struct Focus {
     use_external_properties: bool,
     include_semantics: bool,
     on_key_event: Option<incular_gestures::FocusKeyEventHandler>,
+    on_raw_key: Option<incular_gestures::FocusRawKeyEventHandler>,
     on_focus_change: Option<Rc<dyn Fn(bool)>>,
     child: Option<Widget>,
 }
@@ -42,6 +43,7 @@ impl Default for Focus {
             use_external_properties: false,
             include_semantics: true,
             on_key_event: None,
+            on_raw_key: None,
             on_focus_change: None,
             child: None,
         }
@@ -223,6 +225,33 @@ impl Focus {
         }
     }
 
+    /// Handles the deprecated Flutter raw-key route. Prefer `on_key_event`
+    /// for new code. Both callbacks may observe the same portable key input.
+    #[must_use]
+    pub fn on_key(
+        self,
+        handler: impl Fn(&FocusNode, incular_gestures::RawKeyEvent) -> KeyEventResult + 'static,
+    ) -> Self {
+        self.with_raw_key_handler(Some(Rc::new(handler)))
+    }
+
+    /// Sets or clears the legacy callback for a regular Focus widget.
+    #[must_use]
+    pub fn with_raw_key_handler(mut self, handler: Option<incular_gestures::FocusRawKeyEventHandler>) -> Self {
+        self.on_raw_key = handler;
+        self
+    }
+
+    /// Resolves the widget's raw callback, or reads the externally owned one.
+    #[must_use]
+    pub fn raw_key_handler(&self) -> Option<incular_gestures::FocusRawKeyEventHandler> {
+        if self.use_external_properties {
+            self.node.as_ref().and_then(FocusNode::on_key)
+        } else {
+            self.on_raw_key.clone()
+        }
+    }
+
     /// Reports a change in whether the node or one of its descendants has focus.
     #[must_use]
     pub fn on_focus_change(mut self, callback: impl Fn(bool) + 'static) -> Self {
@@ -263,6 +292,7 @@ impl From<Focus> for Widget {
             autofocus: value.autofocus,
             on_focus_change: value.on_focus_change,
             on_focus_key_event: value.on_key_event,
+            on_focus_raw_key: value.on_raw_key,
             include_semantics: value.include_semantics,
             annotates_focus: true,
             ..incular_gestures::GestureCallbacks::default()

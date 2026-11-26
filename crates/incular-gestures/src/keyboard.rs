@@ -24,6 +24,56 @@ pub enum KeyEventResult {
 /// Input handler for a mounted, typed focus node.
 pub type FocusKeyEventHandler = Rc<dyn Fn(&crate::FocusNode, KeyboardEvent) -> KeyEventResult>;
 
+/// The portable fields of Flutter's deprecated `RawKeyEvent`. Incular
+/// does not manufacture OS-specific key-table data from a normalized event.
+#[derive(Clone, Debug)]
+pub struct RawKeyEvent(KeyboardEvent);
+
+impl RawKeyEvent {
+    #[must_use]
+    pub const fn portable(&self) -> &KeyboardEvent {
+        &self.0
+    }
+
+    #[must_use]
+    pub const fn logical_key(&self) -> &KeyboardKey {
+        &self.0.key
+    }
+
+    #[must_use]
+    pub const fn physical_key(&self) -> Code {
+        self.0.code
+    }
+
+    #[must_use]
+    pub fn is_key_down(&self) -> bool {
+        self.0.state.is_down()
+    }
+}
+
+impl From<KeyboardEvent> for RawKeyEvent {
+    fn from(event: KeyboardEvent) -> Self {
+        Self(event)
+    }
+}
+
+/// Deprecated Focus raw-key callback, after the typed callback on that node.
+pub type FocusRawKeyEventHandler = Rc<dyn Fn(&crate::FocusNode, RawKeyEvent) -> KeyEventResult>;
+
+/// Combines outcomes from handlers on the same focus node. Handled takes
+/// precedence over a request to skip the remaining framework handlers.
+pub fn combine_key_event_results(results: impl IntoIterator<Item = KeyEventResult>) -> KeyEventResult {
+    let mut combined = KeyEventResult::Ignored;
+    for result in results {
+        match result {
+            KeyEventResult::Handled => return KeyEventResult::Handled,
+            KeyEventResult::SkipRemainingHandlers => combined = KeyEventResult::SkipRemainingHandlers,
+            KeyEventResult::Ignored => {}
+        }
+    }
+    combined
+}
+
 impl GestureCallbacks {
     /// Whether this callback set carries retained keyboard/focus behavior.
     #[must_use]
@@ -76,6 +126,18 @@ impl GestureCallbacks {
         event: KeyboardEvent,
         lock_modes: Modifiers,
     ) -> KeyEventResult {
+        self.route_keyboard_with_raw_mode(event, lock_modes, true)
+    }
+
+    /// Routes one normalized key. A framework-created semantic key has no
+    /// raw counterpart and must not call the deprecated raw handler.
+    #[doc(hidden)]
+    pub fn route_keyboard_with_raw_mode(
+        &self,
+        event: KeyboardEvent,
+        lock_modes: Modifiers,
+        has_raw_event: bool,
+    ) -> KeyEventResult {
         if self
             .on_shortcut_with_lock_modes
             .as_ref()
@@ -92,16 +154,19 @@ impl GestureCallbacks {
         }
         if let Some(node) = &self.focus_node {
             let result = if self.routes_node_key_events {
-                node.on_key_event()
-                    .map(|handler| handler(node, event.clone()))
+                let typed = node.on_key_event().map(|handler| handler(node, event.clone()));
+                let raw = if has_raw_event {
+                    node.on_key().map(|handler| handler(node, RawKeyEvent::from(event.clone())))
+                } else {
+                    None
+                };
+                combine_key_event_results(typed.into_iter().chain(raw))
             } else {
-                self.on_focus_key_event
-                    .as_ref()
-                    .map(|handler| handler(node, event.clone()))
+                self.on_focus_key_event.as_ref().map_or(KeyEventResult::Ignored, |handler| {
+                    handler(node, event.clone())
+                })
             };
-            if let Some(result) = result
-                && result != KeyEventResult::Ignored
-            {
+            if result != KeyEventResult::Ignored {
                 return result;
             }
         }

@@ -121,12 +121,21 @@ struct FocusGeometry {
     traversal: Rect,
 }
 
-type WeakFocusKeyEventHandler =
-    Weak<dyn Fn(&FocusNode, incular_core::KeyboardEvent) -> crate::KeyEventResult>;
+type FocusHandler<E> = Rc<dyn Fn(&FocusNode, E) -> crate::KeyEventResult>;
+type WeakFocusHandler<E> = Weak<dyn Fn(&FocusNode, E) -> crate::KeyEventResult>;
 
-enum NodeKeyEventHandler {
-    External(crate::FocusKeyEventHandler),
-    Mounted(WeakFocusKeyEventHandler),
+enum NodeKeyEventHandler<E> {
+    External(FocusHandler<E>),
+    Mounted(WeakFocusHandler<E>),
+}
+
+impl<E> NodeKeyEventHandler<E> {
+    fn get(&self) -> Option<FocusHandler<E>> {
+        match self {
+            Self::External(handler) => Some(handler.clone()),
+            Self::Mounted(handler) => handler.upgrade(),
+        }
+    }
 }
 
 struct FocusState {
@@ -143,7 +152,8 @@ struct FocusState {
     skip_traversal: Cell<bool>,
     descendants_are_focusable: Cell<bool>,
     descendants_are_traversable: Cell<bool>,
-    key_event_handler: RefCell<Option<NodeKeyEventHandler>>,
+    key_event_handler: RefCell<Option<NodeKeyEventHandler<incular_core::KeyboardEvent>>>,
+    raw_key_handler: RefCell<Option<NodeKeyEventHandler<crate::RawKeyEvent>>>,
     geometry: Cell<FocusGeometry>,
     traversal_order: std::cell::RefCell<Option<FocusOrder>>,
     changes: incular_core::reactivity::DependencySource,
@@ -241,6 +251,7 @@ impl FocusNode {
                 descendants_are_focusable: Cell::new(true),
                 descendants_are_traversable: Cell::new(true),
                 key_event_handler: RefCell::new(None),
+                raw_key_handler: RefCell::new(None),
                 geometry: Cell::new(FocusGeometry::default()),
                 traversal_order: std::cell::RefCell::new(None),
                 changes: incular_core::reactivity::DependencySource::default(),
@@ -258,10 +269,18 @@ impl FocusNode {
     /// The currently installed typed keyboard callback.
     #[must_use]
     pub fn on_key_event(&self) -> Option<crate::FocusKeyEventHandler> {
-        match self.state.key_event_handler.borrow().as_ref()? {
-            NodeKeyEventHandler::External(handler) => Some(handler.clone()),
-            NodeKeyEventHandler::Mounted(handler) => handler.upgrade(),
-        }
+        self.state.key_event_handler.borrow().as_ref()?.get()
+    }
+
+    /// The currently installed deprecated raw-key callback.
+    #[must_use]
+    pub fn on_key(&self) -> Option<crate::FocusRawKeyEventHandler> {
+        self.state.raw_key_handler.borrow().as_ref()?.get()
+    }
+
+    /// Replaces the node-owned callback for the deprecated raw-key route.
+    pub fn set_on_key(&self, handler: Option<crate::FocusRawKeyEventHandler>) {
+        *self.state.raw_key_handler.borrow_mut() = handler.map(NodeKeyEventHandler::External);
     }
 
     /// Replaces the node-owned callback. A regular mounted Focus widget
@@ -273,9 +292,15 @@ impl FocusNode {
     /// Mirrors a mounted widget's callback without creating a cycle when
     /// that callback itself captures this node.
     #[doc(hidden)]
-    pub fn install_mounted_key_event_handler(&self, handler: Option<&crate::FocusKeyEventHandler>) {
+    pub fn install_mounted_key_handlers(
+        &self,
+        typed: Option<&crate::FocusKeyEventHandler>,
+        raw: Option<&crate::FocusRawKeyEventHandler>,
+    ) {
         *self.state.key_event_handler.borrow_mut() =
-            handler.map(|handler| NodeKeyEventHandler::Mounted(Rc::downgrade(handler)));
+            typed.map(|handler| NodeKeyEventHandler::Mounted(Rc::downgrade(handler)));
+        *self.state.raw_key_handler.borrow_mut() =
+            raw.map(|handler| NodeKeyEventHandler::Mounted(Rc::downgrade(handler)));
     }
 
     /// Subscribes to focus and focus-property changes.

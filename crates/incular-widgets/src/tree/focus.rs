@@ -248,7 +248,10 @@ impl WidgetTree {
             && let Some(properties) = callbacks.focus_node_widget_properties
         {
             properties.apply(node);
-            node.install_mounted_key_event_handler(callbacks.on_focus_key_event.as_ref());
+            node.install_mounted_key_handlers(
+                callbacks.on_focus_key_event.as_ref(),
+                callbacks.on_focus_raw_key.as_ref(),
+            );
         }
 
         let callback = match kind {
@@ -608,7 +611,7 @@ impl WidgetTree {
         event: KeyboardEvent,
         lock_modes: incular_core::Modifiers,
     ) -> KeyEventResult {
-        self.dispatch_keyboard_where(focused, event, lock_modes, |_| true)
+        self.dispatch_keyboard_where(focused, event, lock_modes, true, |_| true)
     }
 
     /// Shared ancestor walk behind keyboard dispatch. The `serve`
@@ -622,6 +625,7 @@ impl WidgetTree {
         focused: Option<ElementId>,
         event: KeyboardEvent,
         lock_modes: incular_core::Modifiers,
+        has_raw_event: bool,
         mut serve: impl FnMut(&incular_gestures::GestureCallbacks) -> bool,
     ) -> KeyEventResult {
         self.notify_key_observers(focused, &event);
@@ -640,7 +644,7 @@ impl WidgetTree {
                 && callbacks.has_keyboard_listener()
                 && serve(callbacks)
             {
-                let result = callbacks.route_keyboard_with_lock_modes(event.clone(), lock_modes);
+                let result = callbacks.route_keyboard_with_raw_mode(event.clone(), lock_modes, has_raw_event);
                 if result != KeyEventResult::Ignored {
                     return result;
                 }
@@ -681,6 +685,7 @@ impl WidgetTree {
             Some(element),
             KeyboardEvent::key_down(key, code),
             incular_core::Modifiers::empty(),
+            false,
             incular_gestures::GestureCallbacks::services_semantic_keys,
         ) == KeyEventResult::Handled
     }

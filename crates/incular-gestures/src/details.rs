@@ -500,6 +500,8 @@ pub struct GestureCallbacks {
     pub on_key: Option<Rc<dyn Fn(KeyboardEvent) -> bool>>,
     /// A mounted Focus widget's typed keyboard handler.
     pub on_focus_key_event: Option<FocusKeyEventHandler>,
+    /// A mounted Focus widget's deprecated raw keyboard callback.
+    pub on_focus_raw_key: Option<crate::FocusRawKeyEventHandler>,
     /// Whether this mounted Focus routes typed keys through the node's storage.
     #[doc(hidden)]
     pub routes_node_key_events: bool,

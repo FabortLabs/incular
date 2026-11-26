@@ -91,6 +91,24 @@ The previous native widget conversion applied permissions eagerly.
 Ten focused Rust tests passed, including the existing focus and window
 lifecycle controls.
 
+### Typed and deprecated raw callbacks on the same node
+
+Pinned :1643, :1696 and :1749 now pair at the portable keyboard
+boundary. Both accessors report the identical callback on the Focus
+widget and its node, inactive slots remain absent, and the retained
+element keeps focus while an ignored Enter handler is replaced by a
+handling one. The external node owns both live callback slots and all
+four tested permissions before and after rebuild.
+
+An authored reference and native control also invokes both callbacks
+on the same key: typed first, raw second, before bubbling. Handled
+dominates SkipRemainingHandlers; otherwise skip leaves the key
+unconsumed while preventing ancestor handling. Native semantic-generated
+keys have no raw counterpart and do not invoke the raw callback.
+The portable raw view carries real logical and physical key and
+state; platform-specific scan tables or native key objects are not
+manufactured or included. Twelve focused Rust tests passed.
+
 ## Retained identity across focus reparenting
 
 The pinned `widgets/focus_manager_test.dart:1825` original and the

@@ -210,7 +210,9 @@ pub use environment::{
 pub use explicit_animations::{AnimatedBuilder, Listenable, ListenableBuilder, TransitionBuilder};
 pub use fade_in_image::FadeInImage;
 pub use flutter_logo::{FlutterLogo, FlutterLogoLayout, FlutterLogoStyle};
-pub use incular_gestures::{FocusExtent, FocusKeyEventHandler, FocusRect};
+pub use incular_gestures::{
+    FocusExtent, FocusKeyEventHandler, FocusRawKeyEventHandler, FocusRect, RawKeyEvent,
+};
 pub use focus_keyboard::{
     Action, ActionInvocationPhase, ActionListener, ActionResult, Actions, CallbackShortcuts,
     Command, CommandId, ExcludeFocus, ExcludeFocusTraversal, Focus, FocusManager, FocusNode,

@@ -1123,8 +1123,8 @@ packages/flutter/test/painting/paint_image_test.dart	135	debugInvertOversizedIma
 packages/flutter/test/painting/paint_image_test.dart	230	Reports Image painting	reference-ran-incular-open	upstream-decoration-image-paint.md#flutter-specific-paint-diagnostics
 packages/flutter/test/painting/paint_image_test.dart	269	Reports Image painting - change per frame	reference-ran-incular-open	upstream-decoration-image-paint.md#flutter-specific-paint-diagnostics
 packages/flutter/test/painting/paint_image_test.dart	312	Reports Image painting - no debug label	reference-ran-incular-open	upstream-decoration-image-paint.md#flutter-specific-paint-diagnostics
-packages/flutter/test/widgets/focus_scope_test.dart	1643	Focus updates the onKey handler when the widget updates	reference-ran-incular-open	upstream-focus-widget-semantics.md#focus-key-routing-and-handler-replacement
-packages/flutter/test/widgets/focus_scope_test.dart	1696	Focus updates the onKeyEvent handler when the widget updates	partial-match	upstream-focus-widget-semantics.md#focus-key-routing-and-handler-replacement
+packages/flutter/test/widgets/focus_scope_test.dart	1643	Focus updates the onKey handler when the widget updates	paired-match	upstream-focus-widget-semantics.md#typed-and-deprecated-raw-callbacks-on-the-same-node
+packages/flutter/test/widgets/focus_scope_test.dart	1696	Focus updates the onKeyEvent handler when the widget updates	paired-match	upstream-focus-widget-semantics.md#typed-and-deprecated-raw-callbacks-on-the-same-node
 packages/flutter/test/widgets/focus_manager_test.dart	1825	Autofocus works with global key reparenting	partial-match	upstream-focus-widget-semantics.md#retained-identity-across-focus-reparenting
 packages/flutter/test/widgets/focus_manager_test.dart	1480	Initial highlight mode guesses correctly.	paired-match	upstream-focus-widget-semantics.md#initial-and-input-driven-focus-highlights
 packages/flutter/test/widgets/focus_manager_test.dart	1494	Mouse events change initial focus highlight mode on mobile.	paired-match	upstream-focus-widget-semantics.md#initial-and-input-driven-focus-highlights
@@ -2280,3 +2280,4 @@ packages/flutter/test/gestures/drag_test.dart	2522	Should recognize pan gestures
 packages/flutter/test/gestures/drag_test.dart	2583	Pointer pan/zooms drags should allow touches to join them	paired-match	upstream-geometry-input-gestures.md#trackpad-pan-and-mixed-drag-tenure
 packages/flutter/test/gestures/drag_test.dart	2671	Touch drags should allow pointer pan/zooms to join them	paired-match	upstream-geometry-input-gestures.md#trackpad-pan-and-mixed-drag-tenure
 packages/flutter/test/gestures/scale_test.dart	15	Should recognize scale gestures	paired-match	upstream-geometry-input-gestures.md#full-scale-lifecycle-and-device-kind
+packages/flutter/test/widgets/focus_scope_test.dart	1749	Focus doesn't update the focusNode attributes when the widget updates if withExternalFocusNode is used	paired-match	upstream-focus-widget-semantics.md#typed-and-deprecated-raw-callbacks-on-the-same-node

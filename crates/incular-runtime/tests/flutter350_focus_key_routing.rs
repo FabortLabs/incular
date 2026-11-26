@@ -148,6 +148,8 @@ fn mounted_focus_installs_the_exact_typed_handler_on_its_node() {
             expected
         ));
         assert!(Rc::ptr_eq(node.on_key_event().as_ref().unwrap(), expected));
+        assert!(widget.raw_key_handler().is_none());
+        assert!(node.on_key().is_none());
         assert_eq!(
             widget.allows_descendant_focus(),
             node.descendants_are_focusable()
@@ -235,33 +237,183 @@ fn abandoned_focus_descriptor_cannot_change_live_focus_permissions() {
 }
 
 #[test]
-fn external_focus_node_controls_the_callback_independently_of_rebuilds() {
-    use incular_widgets::FocusKeyEventHandler;
+fn external_focus_node_controls_both_callbacks_independently_of_rebuilds() {
+    use incular_widgets::{FocusKeyEventHandler, FocusRawKeyEventHandler};
     let node = FocusNode::new();
     let original: FocusKeyEventHandler = Rc::new(|_, _| KeyEventResult::Ignored);
-    let changed: FocusKeyEventHandler = Rc::new(|_, _| KeyEventResult::Handled);
+    let original_raw: FocusRawKeyEventHandler = Rc::new(|_, _| KeyEventResult::Ignored);
+    let called = Rc::new(RefCell::new(Vec::new()));
+    let changed: FocusKeyEventHandler = Rc::new({
+        let called = called.clone();
+        move |_, event| {
+            if event.state == KeyState::Down {
+                called.borrow_mut().push("typed");
+            }
+            KeyEventResult::Handled
+        }
+    });
+    let changed_raw: FocusRawKeyEventHandler = Rc::new({
+        let called = called.clone();
+        move |_, event| {
+            if event.is_key_down() {
+                assert_eq!(event.physical_key(), Code::Enter);
+                called.borrow_mut().push("raw");
+            }
+            KeyEventResult::Handled
+        }
+    });
     node.set_on_key_event(Some(original.clone()));
+    node.set_on_key(Some(original_raw.clone()));
+    node.set_descendants_are_focusable(false);
+    node.set_descendants_are_traversable(false);
     let scene = || Focus::with_external_focus_node(SizedBox::shrink(), node.clone());
+    let verify = |typed: &FocusKeyEventHandler, raw: &FocusRawKeyEventHandler, descendants| {
+        let focus = scene();
+        assert!(Rc::ptr_eq(
+            focus.key_event_handler().as_ref().unwrap(),
+            typed
+        ));
+        assert!(Rc::ptr_eq(node.on_key_event().as_ref().unwrap(), typed));
+        assert!(Rc::ptr_eq(focus.raw_key_handler().as_ref().unwrap(), raw));
+        assert!(Rc::ptr_eq(node.on_key().as_ref().unwrap(), raw));
+        assert_eq!(focus.allows_descendant_focus(), descendants);
+        assert_eq!(focus.allows_descendant_traversal(), descendants);
+        assert_eq!(node.descendants_are_focusable(), descendants);
+        assert_eq!(node.descendants_are_traversable(), descendants);
+        assert!(focus.allows_focus_requests() && node.can_request_focus());
+        assert!(!focus.skips_traversal() && !node.skip_traversal());
+    };
     let mut runtime = Runtime::new(scene().into()).unwrap();
     frame(&mut runtime);
     node.request_focus();
     frame(&mut runtime);
     let target = runtime.focused_element().unwrap();
-    assert!(Rc::ptr_eq(
-        scene().key_event_handler().as_ref().unwrap(),
-        &original
-    ));
+    verify(&original, &original_raw, false);
     assert!(!deliver(&mut runtime, NamedKey::Enter, Code::Enter));
+    assert!(called.borrow().is_empty());
 
     node.set_on_key_event(Some(changed.clone()));
+    node.set_on_key(Some(changed_raw.clone()));
+    node.set_descendants_are_focusable(true);
+    node.set_descendants_are_traversable(true);
     let root = runtime.tree().root().unwrap();
     runtime.schedule_update(root, scene().into()).unwrap();
     frame(&mut runtime);
     assert_eq!(runtime.focused_element(), Some(target));
-    assert!(Rc::ptr_eq(
-        scene().key_event_handler().as_ref().unwrap(),
-        &changed
-    ));
-    assert!(Rc::ptr_eq(node.on_key_event().as_ref().unwrap(), &changed));
+    verify(&changed, &changed_raw, true);
     assert!(deliver(&mut runtime, NamedKey::Enter, Code::Enter));
+    assert_eq!(&*called.borrow(), &["typed", "raw"]);
+}
+
+#[test]
+fn mounted_focus_replaces_the_raw_callback_without_replacing_the_node() {
+    use incular_widgets::FocusRawKeyEventHandler;
+    let node = FocusNode::new();
+    let handled = Rc::new(std::cell::Cell::new(false));
+    let ignored: FocusRawKeyEventHandler = Rc::new(|_, _| KeyEventResult::Ignored);
+    let active: FocusRawKeyEventHandler = Rc::new({
+        let handled = handled.clone();
+        move |_, event| {
+            assert_eq!(event.logical_key(), &KeyboardKey::Named(NamedKey::Enter));
+            assert_eq!(event.physical_key(), Code::Enter);
+            if event.is_key_down() {
+                handled.set(true);
+            }
+            KeyEventResult::Handled
+        }
+    });
+    let scene = |handler| {
+        Focus::new(SizedBox::shrink())
+            .node(node.clone())
+            .can_request_focus(true)
+            .skip_traversal(true)
+            .with_raw_key_handler(Some(handler))
+    };
+    let verify = |widget: &Focus, handler: &FocusRawKeyEventHandler| {
+        assert!(Rc::ptr_eq(
+            widget.raw_key_handler().as_ref().unwrap(),
+            handler
+        ));
+        assert!(Rc::ptr_eq(node.on_key().as_ref().unwrap(), handler));
+        assert!(widget.key_event_handler().is_none() && node.on_key_event().is_none());
+        assert_eq!(
+            widget.allows_descendant_focus(),
+            node.descendants_are_focusable()
+        );
+        assert!(widget.skips_traversal() && node.skip_traversal());
+        assert!(widget.allows_focus_requests() && node.can_request_focus());
+    };
+    let start = scene(ignored.clone());
+    let mut runtime = Runtime::new(start.clone().into()).unwrap();
+    frame(&mut runtime);
+    verify(&start, &ignored);
+    node.request_focus();
+    frame(&mut runtime);
+    let focus = runtime.focused_element().unwrap();
+    assert!(!deliver(&mut runtime, NamedKey::Enter, Code::Enter));
+    assert!(!handled.get());
+
+    let updated = scene(active.clone());
+    let root = runtime.tree().root().unwrap();
+    runtime
+        .schedule_update(root, updated.clone().into())
+        .unwrap();
+    frame(&mut runtime);
+    verify(&updated, &active);
+    assert_eq!(runtime.focused_element(), Some(focus));
+    assert!(deliver(&mut runtime, NamedKey::Enter, Code::Enter));
+    assert!(handled.get());
+}
+
+#[test]
+fn typed_and_raw_combine_before_bubbling_and_only_native_keys_have_a_raw_view() {
+    use KeyEventResult::{Handled, Ignored, SkipRemainingHandlers};
+    let node = FocusNode::new();
+    let calls = Rc::new(RefCell::new(Vec::new()));
+    let raw_result = Rc::new(std::cell::Cell::new(Handled));
+    let leaf = Focus::new(SizedBox::shrink())
+        .node(node.clone())
+        .on_key_event({
+            let calls = calls.clone();
+            move |_, event| {
+                if event.state == KeyState::Down {
+                    calls.borrow_mut().push("typed");
+                }
+                SkipRemainingHandlers
+            }
+        })
+        .on_key({
+            let calls = calls.clone();
+            let raw_result = raw_result.clone();
+            move |_, event| {
+                if event.is_key_down() {
+                    calls.borrow_mut().push("raw");
+                }
+                raw_result.get()
+            }
+        });
+    let root = Focus::new(leaf).on_key_event({
+        let calls = calls.clone();
+        move |_, event| {
+            if event.state == KeyState::Down {
+                calls.borrow_mut().push("parent");
+            }
+            Ignored
+        }
+    });
+    let mut runtime = Runtime::new(root.into()).unwrap();
+    frame(&mut runtime);
+    node.request_focus();
+    frame(&mut runtime);
+    assert!(deliver(&mut runtime, NamedKey::Enter, Code::Enter));
+    assert_eq!(&*calls.borrow(), &["typed", "raw"]);
+    calls.borrow_mut().clear();
+    raw_result.set(Ignored);
+    assert!(!deliver(&mut runtime, NamedKey::Enter, Code::Enter));
+    assert_eq!(&*calls.borrow(), &["typed", "raw"]);
+    calls.borrow_mut().clear();
+
+    let focused = runtime.focused_element().unwrap();
+    assert!(!runtime.tree().dispatch_semantic_increment(focused, true));
+    assert_eq!(&*calls.borrow(), &["typed"]);
 }
