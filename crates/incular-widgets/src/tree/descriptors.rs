@@ -1063,6 +1063,7 @@ pub struct EditableText {
     input_type: Option<TextInputTypeHint>,
     input_action: TextInputActionHint,
     text_direction: Option<incular_config::TextDirection>,
+    locale: Option<incular_config::Locale>,
     paragraph_layout: bool,
     /// `None` resolves like Flutter's `_inferAutocorrect`.
     autocorrect: Option<bool>,
@@ -1124,6 +1125,7 @@ impl EditableText {
             input_type: None,
             input_action: TextInputActionHint::Unspecified,
             text_direction: None,
+            locale: None,
             paragraph_layout: false,
             autocorrect: None,
             enable_suggestions: true,
@@ -1599,6 +1601,14 @@ impl EditableText {
         self
     }
 
+    /// Locale used for font shaping and spell checking, independent of
+    /// keyboard language hints. Without it the editor inherits localization.
+    #[must_use]
+    pub fn locale(mut self, locale: incular_config::Locale) -> Self {
+        self.locale = Some(locale);
+        self
+    }
+
     /// Flutter's `hintLocales`: the requested languages for the soft keyboard.
     /// These do not change the editor's own locale. `None` leaves it up to the
     /// keyboard; an empty list explicitly requests no language hints.
@@ -1773,6 +1783,7 @@ impl From<EditableText> for Widget {
             cursor_color: value.cursor_color,
             selection_color: value.selection_color,
             text_direction: value.text_direction,
+            locale: value.locale,
             paragraph_layout: value.paragraph_layout,
             traits: incular_platform::TextInputTraits {
                 autocorrect: value

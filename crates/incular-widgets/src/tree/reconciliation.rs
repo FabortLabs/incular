@@ -181,30 +181,35 @@ impl WidgetTree {
             return;
         };
         let controller = spec.controller.clone();
-        // Flutter `widget.locale ?? Localizations.maybeLocaleOf(context)`;
-        // without any locale the check runs for the undetermined locale.
-        let locale = BuildContext::new(&element.build_context)
-            .locales()
-            .into_iter()
-            .next()
-            .unwrap_or(incular_config::Locale::UNKNOWN);
+        let explicit_locale = spec.locale.clone();
+        let context = element.build_context.clone();
+        // Resolve the current inherited locale for each edit. An ordinary
+        // locale update changes a retained binding without replacing the field.
+        let locale = move || {
+            let context = BuildContext::new(&context);
+            explicit_locale.clone()
+                .or_else(|| crate::Localizations::maybe_locale_of(&context))
+                .or_else(|| context.locales().into_iter().next())
+                .unwrap_or(incular_config::Locale::UNKNOWN)
+        };
         let auxiliary = element.auxiliary_state_mut();
         let refresh = std::mem::take(&mut auxiliary.spell_check_refresh_on_enable);
         let session = auxiliary
             .spell_check_session
             .get_or_insert_with(Rc::default)
             .clone();
-        let on_edit = (session.clone(), service.clone(), locale.clone());
+        let (on_edit_session, on_edit_service, on_edit_locale) =
+            (session.clone(), service.clone(), locale.clone());
         auxiliary.spell_check_subscription = Some(controller.observe_user_edits(move |value| {
             if !value.text.is_empty() {
-                on_edit.0.request(&on_edit.1, &on_edit.2, &value.text);
+                on_edit_session.request(&on_edit_service, &on_edit_locale(), &value.text);
             }
         }));
         if let Some(text) = refresh
             .then(|| controller.text())
             .filter(|text| !text.is_empty())
         {
-            session.request(&service, &locale, &text);
+            session.request(&service, &locale(), &text);
         }
     }
 
@@ -339,6 +344,9 @@ impl WidgetTree {
                     aux.indexed_visibility = None;
                 }
                 element.reset_layout_builder_state();
+            }
+            if matches!(widget.kind(), WidgetKind::TextField(spec) if spec.spell_check.is_some()) {
+                self.sync_spell_check(id);
             }
             if matches!(widget.kind(), WidgetKind::LayoutBuilder { .. })
                 || invalidation.contains(Invalidation::LAYOUT)

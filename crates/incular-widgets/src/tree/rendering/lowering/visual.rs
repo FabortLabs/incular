@@ -177,10 +177,20 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                 "validated EditableText requires a direction"
             );
             let direction = direction.unwrap_or(TextDirection::Ltr);
+            let resolved_locale = spec.locale.clone().or_else(|| {
+                crate::Localizations::maybe_locale_of(&BuildContext::new(context))
+            });
+            let resolve_field_style = |style: &incular_text::TextStyle| {
+                let mut style = text_field_style(style, context);
+                if style.locale.is_none() {
+                    style.locale = resolved_locale.as_ref().map(ToString::to_string);
+                }
+                style
+            };
             RenderKind::TextField(Box::new(TextFieldRender {
                 controller: spec.controller.clone(),
                 desired: spec.size,
-                style: text_field_style(&spec.style, context),
+                style: resolve_field_style(&spec.style),
                 placeholder: spec.placeholder.clone(),
                 placeholder_color: spec.placeholder_color,
                 focused_border: spec.focused_border,
@@ -213,7 +223,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                     .as_ref()
                     .filter(|_| !spec.spell_check_suppressed)
                     .and_then(crate::SpellCheckConfiguration::resolve)
-                    .map(|(_, style)| text_field_style(&style, context)),
+                    .map(|(_, style)| resolve_field_style(&style)),
                 paragraph_layout: spec.paragraph_layout,
             }))
         }
