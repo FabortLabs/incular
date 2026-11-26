@@ -2821,6 +2821,7 @@ impl SequenceRenderSliver {
             }
 
             self.reveal_geometry.borrow_mut()[sliver_index] = SliverRevealGeometry {
+                pins_at_edge: geometry.max_scroll_obstruction_extent > 0.,
                 obstruction_before: preceding_obstruction,
                 reverse_growth: constraints.growth_direction == SliverGrowthDirection::Reverse,
             };

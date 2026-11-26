@@ -1006,12 +1006,26 @@ impl WidgetTree {
     pub fn parent(&self, id: ElementId) -> Option<ElementId> {
         self.elements.get(id.0).and_then(|e| e.parent)
     }
+    pub(crate) fn viewport_child_containing(
+        &self,
+        viewport: ElementId,
+        mut target: ElementId,
+    ) -> Option<ElementId> {
+        while let Some(parent) = self.parent(target) {
+            if parent == viewport {
+                return Some(target);
+            }
+            target = parent;
+        }
+        None
+    }
+
     /// Looks up geometry from the viewport's last laid-out sliver run
     /// rather than inferring an obstruction from currently painted pixels.
     pub(crate) fn sliver_reveal_geometry(
         &self,
         viewport: ElementId,
-        mut target: ElementId,
+        target: ElementId,
     ) -> crate::scrolling::SliverRevealGeometry {
         let Some(RenderKind::SliverViewport { config }) = self
             .render_id(viewport)
@@ -1019,19 +1033,12 @@ impl WidgetTree {
         else {
             return crate::scrolling::SliverRevealGeometry::default();
         };
-        while let Some(parent) = self.parent(target) {
-            if parent == viewport {
-                let Some(entry) = self.elements.get(viewport.0) else {
-                    break;
-                };
-                if let Some(slot) = entry.children.iter().position(|&child| child == target)
-                    && let Some(&id) = entry.sliver_child_ids().get(slot)
-                {
-                    return config.delegate.reveal_geometry(id);
-                }
-                break;
-            }
-            target = parent;
+        if let Some(child) = self.viewport_child_containing(viewport, target)
+            && let Some(entry) = self.elements.get(viewport.0)
+            && let Some(slot) = entry.children.iter().position(|&element| element == child)
+            && let Some(&id) = entry.sliver_child_ids().get(slot)
+        {
+            return config.delegate.reveal_geometry(id);
         }
         crate::scrolling::SliverRevealGeometry::default()
     }

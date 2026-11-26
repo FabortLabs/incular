@@ -145,6 +145,44 @@ impl WidgetTree {
                 .transform_rect_bbox(rect),
         )
     }
+
+    fn reveal_sliver_for_rect(
+        &self,
+        viewport: &AncestorViewport,
+        target: ElementId,
+        rect: Rect,
+    ) -> SliverRevealGeometry {
+        let mut sliver = self.sliver_reveal_geometry(viewport.element, target);
+        if !sliver.pins_at_edge {
+            return sliver;
+        }
+
+        // Flutter only treats the target as pinned if its requested rect
+        // does not protrude past the sliver's growth-leading edge.
+        let child_bounds = self
+            .viewport_child_containing(viewport.element, target)
+            .and_then(|child| {
+                let (_, size) = self.element_geometry(child)?;
+                self.rect_in_viewport(
+                    child,
+                    Rect::from_origin_size(Offset::ZERO, size),
+                    viewport.element,
+                )
+            });
+        sliver.pins_at_edge = child_bounds.is_some_and(|child| {
+            let (start, child_start) = match viewport.axis {
+                Axis::Vertical => (rect.origin.y, child.origin.y),
+                Axis::Horizontal => (rect.origin.x, child.origin.x),
+            };
+            if viewport.reverse ^ sliver.reverse_growth {
+                start + viewport.axis.main_extent(rect.size)
+                    <= child_start + viewport.axis.main_extent(child.size)
+            } else {
+                start >= child_start
+            }
+        });
+        sliver
+    }
 }
 
 /// `RenderAbstractViewport.getOffsetToReveal` for a target whose rectangle is
@@ -176,6 +214,17 @@ fn offset_to_reveal(
         sliver.obstruction_before
     };
     let leading_scroll_offset = pixels + leading - leading_obstruction;
+    if sliver.pins_at_edge {
+        if !sliver.reverse_growth && alignment <= 0. {
+            return pixels.max(leading_scroll_offset);
+        }
+        if sliver.reverse_growth && alignment >= 1. {
+            // The reverse-growing header sticks to the trailing edge.
+            // Its current logical trailing coordinate is the latest
+            // offset at which the query must move toward it.
+            return pixels.min(pixels + leading + extent);
+        }
+    }
     leading_scroll_offset - (viewport_extent - sliver.obstruction_before - extent) * alignment
 }
 
@@ -213,7 +262,7 @@ impl Scrollable {
             viewport.reverse,
             pixels,
             alignment,
-            tree.sliver_reveal_geometry(viewport.element, target),
+            tree.reveal_sliver_for_rect(&viewport, target, rect),
         );
         if !offset.is_finite() || !rect.origin.x.is_finite() || !rect.origin.y.is_finite() {
             return None;
@@ -289,7 +338,7 @@ impl Scrollable {
                 break;
             };
             let pixels = viewport.controller.offset();
-            let sliver = tree.sliver_reveal_geometry(viewport.element, object);
+            let sliver = tree.reveal_sliver_for_rect(&viewport, object, rect);
             let min = viewport.controller.min_offset().min(0.0);
             let max = viewport.controller.max_offset().max(0.0);
             let reveal = |alignment| {

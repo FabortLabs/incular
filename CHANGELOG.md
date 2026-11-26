@@ -343,6 +343,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- Centered viewports respect both axis and growth direction in sliver
+  padding. Reveal queries account for the edge of a pinned header.
+
 - Hidden, unlinked followers no longer receive new taps. Moving a leader
   updates stationary hover and focus geometry for its linked followers.
 

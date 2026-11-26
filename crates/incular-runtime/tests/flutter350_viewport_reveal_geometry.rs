@@ -309,3 +309,48 @@ fn a_pinned_header_reveals_at_its_current_scroll_offset_once_pinned() {
         }
     }
 }
+
+#[test]
+fn a_reverse_growth_header_reveals_at_its_trailing_pinned_edge() {
+    use incular_widgets::{CustomScrollView, Sliver, SliverPersistentHeader, SliverToBoxAdapter};
+
+    for axis in [Axis::Vertical, Axis::Horizontal] {
+        let ctl = ScrollController::new();
+        let box_of = |extent| {
+            let (w, h) = match axis {
+                Axis::Vertical => (300., extent),
+                Axis::Horizontal => (extent, 300.),
+            };
+            SizedBox::new().width(w).height(h)
+        };
+        let header = Widget::from(box_of(50.)).with_key("reverse header");
+        let slivers: [Box<dyn Sliver>; 4] = [
+            Box::new(SliverToBoxAdapter::new(box_of(500.))),
+            Box::new(SliverPersistentHeader::new(50., header).pinned(true)),
+            Box::new(SliverToBoxAdapter::new(box_of(300.))),
+            Box::new(SliverToBoxAdapter::new(box_of(100.))),
+        ];
+        let viewport = CustomScrollView::new(slivers)
+            .controller(ctl.clone())
+            .scroll_direction(axis)
+            .center(3);
+        let bounds = Constraints::tight(match axis {
+            Axis::Vertical => Size::new(300., 400.),
+            Axis::Horizontal => Size::new(400., 300.),
+        });
+        let mut runtime =
+            Runtime::new(Directionality::new(TextDirection::Ltr, viewport).into()).unwrap();
+        runtime.run_frame(bounds).unwrap();
+        let current_reveal = |runtime: &Runtime| {
+            let tree = runtime.tree();
+            let header = tree.element_with_key(&"reverse header".into()).unwrap();
+            Scrollable::get_offset_to_reveal(tree, header, 1., None)
+                .unwrap()
+                .offset
+        };
+        assert_eq!(current_reveal(&runtime), -300., "{axis:?} before pinning");
+        assert!(ctl.jump_to(-500.));
+        runtime.run_frame(bounds).unwrap();
+        assert_eq!(current_reveal(&runtime), -500., "{axis:?} after pinning");
+    }
+}

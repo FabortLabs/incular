@@ -252,6 +252,7 @@ pub enum SliverScrollDependency {
 /// Obstruction in the laid-out growth run before a viewport child.
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct SliverRevealGeometry {
+    pub(crate) pins_at_edge: bool,
     pub(crate) obstruction_before: f32,
     pub(crate) reverse_growth: bool,
 }

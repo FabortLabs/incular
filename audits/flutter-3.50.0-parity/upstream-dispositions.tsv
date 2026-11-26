@@ -1837,3 +1837,5 @@ packages/flutter/test/rendering/viewport_test.dart	619	down, forward growth	pair
 packages/flutter/test/rendering/viewport_test.dart	679	up, forward growth	paired-match	upstream-viewport-reveal.md#pinned-headers-in-forward-growth
 packages/flutter/test/rendering/viewport_test.dart	740	right, forward growth	paired-match	upstream-viewport-reveal.md#pinned-headers-in-forward-growth
 packages/flutter/test/rendering/viewport_test.dart	801	left, forward growth	paired-match	upstream-viewport-reveal.md#pinned-headers-in-forward-growth
+packages/flutter/test/rendering/viewport_test.dart	863	up, reverse growth	paired-match	upstream-viewport-reveal.md#pinned-headers-before-the-viewport-center
+packages/flutter/test/rendering/viewport_test.dart	923	left, reverse growth	paired-match	upstream-viewport-reveal.md#pinned-headers-before-the-viewport-center

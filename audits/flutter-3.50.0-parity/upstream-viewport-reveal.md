@@ -36,7 +36,7 @@ the minimal facade check passed.
 
 Pinned :314/:363/:413/:567 and the native CustomScrollView fixtures
 use 100 px box adapters with 22 px physical leading-side padding and
-23 px on the opposite side. The adapter at index five's mounted box has the
+23 px on the opposite side. The mounted box for the adapter at index five has the
 same bounds as the one-box Flutter sliver. The query returns 747/647
 down and right, and 748/648 up and left, for the whole box. A local
 (1,2,2,2) subrectangle matches all eight pinned offsets, including
@@ -63,3 +63,14 @@ scroll origin. The 50 px header's projected rectangle remains against
 the viewport's logical leading edge, physically y/x=0 or 350 according
 to direction. The test uses a lazy list of twenty 50 px trailing rows
 and checks the actual viewport position and rect.
+
+## Pinned headers before the viewport center
+
+Pinned :863/:923 exercise a pinned header in the reverse-growth side
+of a centered viewport. Trailing-aligned reveal returns −300 before the
+header pins and the current offset, −500, after it pins. Incular had
+treated it as a moving box and returned −700 for the first query.
+The layout now records which sliver actually pins. The reveal solver
+uses the pinned edge only for rectangles that do not protrude from its
+growth-leading edge, and shares the result with EnsureVisible. The
+forward-growth header and ordinary negative-offset tests stay green.
