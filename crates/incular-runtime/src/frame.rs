@@ -54,6 +54,7 @@ use std::{
     cell::{Cell, RefCell},
     collections::{HashMap, VecDeque},
     rc::{Rc, Weak},
+    time::Duration,
 };
 
 mod hover_devices;
@@ -62,6 +63,7 @@ mod system_chrome;
 mod text_actions;
 mod autofill;
 mod text_gestures;
+mod touch_resampling;
 
 /// Sequence numbering runtime driver domains so outlet ownership errors
 /// can name the runtimes involved.
@@ -160,6 +162,7 @@ pub struct Runtime {
     pub(crate) legacy_pointer: Option<(u64, u64)>,
     pub(crate) last_pointer: Offset,
     hover_devices: hover_devices::HoverDevices,
+    touch_resampling: touch_resampling::TouchResampling,
     mouse_cursor_update_handler: Option<Rc<dyn Fn(MouseCursorUpdate)>>,
     hover_hit_revision: u64,
     pub(crate) focused: Option<ElementId>,
@@ -391,6 +394,7 @@ impl Runtime {
             legacy_pointer: None,
             last_pointer: Offset::ZERO,
             hover_devices: hover_devices::HoverDevices::default(),
+            touch_resampling: touch_resampling::TouchResampling::default(),
             mouse_cursor_update_handler: None,
             hover_hit_revision: 0,
             focused: None,
@@ -1543,7 +1547,11 @@ impl Runtime {
     /// redraws while waiting. Hosts can sleep until this instant.
     #[must_use]
     pub fn next_frame_deadline(&self) -> Option<Instant> {
-        self.text_histories.values().filter_map(UndoHistoryController::next_deadline).min()
+        self.text_histories
+            .values()
+            .filter_map(UndoHistoryController::next_deadline)
+            .chain(self.touch_resampling.deadline)
+            .min()
     }
 
     #[must_use]
@@ -1564,9 +1572,59 @@ impl Runtime {
         target
     }
 
-    /// Dispatches a complete pointer sample, preserving synthesized motion
-    /// and the supplied timestamp through listeners and retained gestures.
+    /// Enables touch resampling with Flutter's default 38 ms delay, or
+    /// disables it and drains any queued raw input immediately.
+    pub fn set_touch_resampling_enabled(&mut self, enabled: bool) {
+        self.set_touch_resampling_delay(enabled.then_some(touch_resampling::DEFAULT_DELAY));
+    }
+
+    /// Sets how far before a frame's clock time to sample touch positions.
+    /// `None` or zero leaves touch input immediate. Mouse, stylus and
+    /// pointer signals always bypass this touch-only path.
+    pub fn set_touch_resampling_delay(&mut self, delay: Option<Duration>) {
+        self.touch_resampling.delay = delay.filter(|value| !value.is_zero());
+        if self.touch_resampling.delay.is_none() {
+            self.touch_resampling.stop();
+            self.dispatch_sampled_touch();
+        }
+    }
+
+    #[must_use]
+    pub fn touch_resampling_delay(&self) -> Option<Duration> {
+        self.touch_resampling.delay
+    }
+
+    fn enqueue_touch_sample(&mut self, event: RawPointerEvent) -> bool {
+        if !self.touch_resampling.enqueue(event) {
+            return false;
+        }
+        if self.touch_resampling.deadline.is_none() {
+            self.request_frame();
+        }
+        true
+    }
+
+    fn dispatch_sampled_touch(&mut self) {
+        if self.touch_resampling.ready.is_empty() {
+            return;
+        }
+        let mut ready = std::mem::take(&mut self.touch_resampling.ready);
+        for event in ready.drain(..) {
+            let _ = self.dispatch_raw_pointer_immediately(event);
+        }
+        self.touch_resampling.ready = ready;
+    }
+
+    /// Dispatches a complete pointer sample, or queues opted-in touch input.
+    /// The raw timestamp and metadata remain available to the input path.
     pub fn handle_raw_pointer_event(&mut self, event: RawPointerEvent) -> Option<EventTarget> {
+        if self.enqueue_touch_sample(event) {
+            return None;
+        }
+        self.dispatch_raw_pointer_immediately(event)
+    }
+
+    fn dispatch_raw_pointer_immediately(&mut self, event: RawPointerEvent) -> Option<EventTarget> {
         let traced_at = incular_core::time::Instant::now();
         let diagnostic = InputEvent::PointerWithMetadata {
             pointer: event.pointer,
@@ -1755,6 +1813,9 @@ impl Runtime {
         )
         .with_button(button)
         .with_sample(sample);
+        if self.enqueue_touch_sample(raw_event) {
+            return None;
+        }
         self.handle_pointer_input(raw_event, metadata_rich)
     }
 
@@ -3532,6 +3593,8 @@ impl Runtime {
         self.advance_text_history_clock(now);
         self.sync_mounted_text_histories();
         if !warm_up {
+            self.touch_resampling.sample(now);
+            self.dispatch_sampled_touch();
             self.process_runtime_work_at(now);
             if self.lifecycle != ApplicationLifecycle::Suspended {
                 // Ordinary prioritized tasks yield between frames.

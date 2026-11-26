@@ -27,3 +27,19 @@ Stopping forwards each still-queued event unchanged and clears the
 track. A supplied next frame can process a release or removal early
 while keeping its interpolated position on the current sample, not
 jumping to the future hardware event.
+
+### Opt-in runtime touch delivery
+
+Both pinned `gestures/gesture_binding_resample_event_on_widget_test.dart`
+registrations (13, 109) passed. The native fixture mounts a real
+Listener, queues the original eight samples converted from physical to
+logical pixels, then uses a 5 ms lookbehind at 10, 20 and 30 ms frames.
+The listener receives one Down, two interpolated Moves, and one early
+Up, with the same timestamps, positions and deltas.
+
+Touch resampling is disabled by default. Enabling with no custom delay
+uses Flutter's 38 ms lookbehind. Mouse and stylus continue to dispatch
+immediately. Disabling clears the runtime polling deadline and delivers
+pending events with their original times; the test checks that a later
+frame cannot replay them. The runtime uses its existing host frame
+deadline interface rather than spawning a separate timer per contact.
