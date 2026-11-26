@@ -270,3 +270,28 @@ fn reentrant_takeover_in_direction_notification_prevents_the_stale_drag_write() 
         &[Start, UserScroll, End, UserScroll]
     );
 }
+
+#[test]
+fn scrolling_state_observers_do_not_receive_synthetic_idle_jump_notifications() {
+    let controller = ScrollController::new();
+    controller.update_extents(500., 100.).unwrap();
+    let trace = Rc::new(RefCell::new(Vec::new()));
+    let _stop = controller.add_listener(|_| true);
+    let state = controller.clone();
+    let observed = trace.clone();
+    let registration = controller.add_scrolling_listener(move || {
+        observed.borrow_mut().push(state.is_scrolling());
+    });
+
+    assert!(controller.jump_to(50.));
+    assert!(trace.borrow().is_empty());
+    let drag = controller.start_owned_activity(ActivityOrigin::Drag);
+    let animation = controller.start_owned_activity(ActivityOrigin::Animation);
+    assert!(!drag.finish());
+    assert!(animation.finish());
+    assert_eq!(*trace.borrow(), [true, false]);
+
+    drop(registration);
+    assert!(controller.begin_activity() && controller.end_activity());
+    assert_eq!(*trace.borrow(), [true, false]);
+}

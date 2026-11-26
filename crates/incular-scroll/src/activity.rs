@@ -40,6 +40,43 @@ pub enum ActivityOrigin {
 }
 
 impl ScrollController {
+    /// Whether this position is currently driven by a scroll activity.
+    #[must_use]
+    pub fn is_scrolling(&self) -> bool {
+        self.state.borrow().activity_active
+    }
+
+    /// Observes transitions of the position's scrolling state. Unlike
+    /// bubbled ScrollNotifications, another listener cannot consume these.
+    /// An instantaneous in-range jump from idle leaves the state unchanged.
+    /// Silent driver teardown does not deliver a notification from Drop.
+    #[must_use]
+    pub fn add_scrolling_listener(
+        &self,
+        listener: impl Fn() + 'static,
+    ) -> incular_core::ChangeNotifierSubscription {
+        let notifier = self
+            .state
+            .borrow_mut()
+            .activity_changes
+            .get_or_insert_with(incular_core::ChangeNotifier::new)
+            .clone();
+        notifier.add_listener(listener)
+    }
+
+    fn notify_scrolling_changed(&self, expected: bool) {
+        let notifier = {
+            let state = self.state.borrow();
+            if state.activity_active != expected {
+                return;
+            }
+            state.activity_changes.clone()
+        };
+        if let Some(notifier) = notifier {
+            notifier.notify_listeners();
+        }
+    }
+
     /// Begins a user-driven scroll activity and emits one `Start` event.
     /// Repeated pointer/wheel samples in the same gesture do not emit
     /// duplicate starts.
@@ -55,7 +92,10 @@ impl ScrollController {
             }
         };
         if started {
-            self.dispatch_notification(ScrollNotificationType::Start, 0., 0.);
+            self.notify_scrolling_changed(true);
+            if self.is_scrolling() {
+                self.dispatch_notification(ScrollNotificationType::Start, 0., 0.);
+            }
         }
         started
     }
@@ -89,7 +129,10 @@ impl ScrollController {
             origin,
         };
         if started {
-            self.dispatch_notification(ScrollNotificationType::Start, 0., 0.);
+            self.notify_scrolling_changed(true);
+            if self.is_scrolling() {
+                self.dispatch_notification(ScrollNotificationType::Start, 0., 0.);
+            }
         }
         token
     }
@@ -123,6 +166,7 @@ impl ScrollController {
             (state.activity_generation, had_direction)
         };
         self.dispatch_notification(ScrollNotificationType::End, 0., 0.);
+        self.notify_scrolling_changed(false);
         if had_direction {
             // An End listener may open a replacement activity. Never inject
             // an idle sample into that newer owner's notification bracket.

@@ -105,3 +105,21 @@ attaches real Focus widgets for explicit nodes, and advances the frame
 scheduler. The previous five failures were reproducible with the prior
 production code because the fixture had neither an outside hit target
 nor attached focus nodes. No new pair is counted for the fixture repair.
+
+### Nearest ancestor scroll activity
+
+Pinned `:3076` and `flutter350_raw_menu_scrolling` agree: jumping
+while closed does not request a close, a routed tap opens the panel,
+and the out-of-range jump to 500 (400 maximum) starts a spring and
+requests one close. The panel disappears while the anchor stays
+mounted, and a later jump while closed does not call the handler.
+
+The authored `raw_menu_scroll_activity_test.dart` and mounted Rust
+control distinguish scrolling state from scroll notifications. An
+idle in-range jump and a farther ancestor's animation keep the
+menu open. A nearest-position animation requests a deferred hide
+once at activity start, not on updates, and again on return to idle
+if it is still open. The retained subscription does not consume
+bubbled notifications and is replaced on a nearest-position change.
+Mid-activity jump takeover and reduced-motion substitutions are not
+covered by these comparisons.

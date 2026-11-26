@@ -219,6 +219,7 @@ pub(crate) struct ScrollState {
     pub(crate) next_notification_listener: u64,
     pub(crate) notification_context: Option<(incular_config::Axis, bool)>,
     pub(crate) activity_active: bool,
+    pub(crate) activity_changes: Option<incular_core::ChangeNotifier>,
     /// Last offset direction emitted by accepted user input, held through a drag
     /// and its
     /// ballistic continuation. Zero means idle.

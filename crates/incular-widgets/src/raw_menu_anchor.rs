@@ -8,13 +8,14 @@ use std::{
 };
 
 use incular_animation::scheduler::{add_post_frame_callback, schedule_frame};
-use incular_core::{IdGenerator, Offset, Rect, Size};
+use incular_core::{ChangeNotifierSubscription, IdGenerator, Offset, Rect, Size};
+use incular_scroll::ScrollController;
 
-use crate::tree::RetainedState;
 use crate::{
     BuildContext, FocusNode, MediaQuery, OverlayChildLayoutInfo, OverlayPortal, TapRegion,
     TapRegionGroupId, TransientDismissPolicy, TransientDismissReason, TransientRole, Widget,
 };
+use crate::{scroll_aware_image_provider::ScrollableScope, tree::RetainedState};
 
 /// Flutter's `RawMenuOverlayInfo`: what a [`RawMenuAnchor`] overlay
 /// builder receives.
@@ -60,6 +61,7 @@ struct AnchorNode {
     child_focus_node: RefCell<Option<FocusNode>>,
     /// The view size a root saw at its last build; a change closes it.
     view_size: Cell<Option<Size>>,
+    scrolling: RefCell<Option<(ScrollController, ChangeNotifierSubscription)>>,
     group_id: u64,
     revision: RefCell<Rc<Cell<u64>>>,
 }
@@ -77,6 +79,7 @@ impl AnchorNode {
             callbacks: RefCell::new(Callbacks::default()),
             child_focus_node: RefCell::new(None),
             view_size: Cell::new(None),
+            scrolling: RefCell::new(None),
             group_id: NEXT.next(),
             revision: RefCell::new(revision),
         })
@@ -264,29 +267,53 @@ impl AnchorNode {
         }
     }
 
-    /// `didChangeDependencies` of a root: the menus close when the view
-    /// changes size.
-    fn track_view_size(self: &Rc<Self>, context: &BuildContext<'_>) {
+    /// Only roots observe the nearest scroll position and ambient view size.
+    fn track_root_dependencies(self: &Rc<Self>, context: &BuildContext<'_>) {
         if self.parent().is_some() {
+            self.scrolling.borrow_mut().take();
             return;
+        }
+        let scroll = context
+            .depend_on::<ScrollableScope>()
+            .map(|scope| scope.controller().clone());
+        let observed = self.scrolling.borrow();
+        if observed.as_ref().map(|(controller, _)| controller) != scroll.as_ref() {
+            drop(observed);
+            let next = scroll.map(|controller| {
+                let weak = Rc::downgrade(self);
+                let subscription = controller.add_scrolling_listener(move || {
+                    if let Some(node) = weak.upgrade().filter(|node| node.is_open()) {
+                        if incular_core::reactivity::try_assert_mutation_allowed().is_err() {
+                            node.request_close_after_frame();
+                        } else {
+                            node.request_close();
+                        }
+                    }
+                });
+                (controller, subscription)
+            });
+            self.scrolling.replace(next);
         }
         let size = MediaQuery::maybe_size_of(context).unwrap_or_else(|| context.viewport());
         let previous = self.view_size.replace(Some(size));
         if previous.is_some_and(|previous| previous != size) && self.is_open() {
-            // This is called from dependency rebuilding. User callbacks
-            // may mutate state, so deliver them after layout and paint.
-            let node = Rc::downgrade(self);
-            add_post_frame_callback(move |_| {
-                let Some(node) = node.upgrade().filter(|node| node.is_open()) else {
-                    return;
-                };
-                let before = node.revision.borrow().get();
-                node.request_close();
-                if node.revision.borrow().get() != before {
-                    schedule_frame();
-                }
-            });
+            self.request_close_after_frame();
         }
+    }
+
+    fn request_close_after_frame(self: &Rc<Self>) {
+        // User callbacks may mutate state, so don't deliver them in build.
+        let node = Rc::downgrade(self);
+        add_post_frame_callback(move |_| {
+            let Some(node) = node.upgrade().filter(|node| node.is_open()) else {
+                return;
+            };
+            let before = node.revision.borrow().get();
+            node.request_close();
+            if node.revision.borrow().get() != before {
+                schedule_frame();
+            }
+        });
     }
 
     /// `requestClose`, through `onCloseRequested` as for opening.
@@ -523,7 +550,7 @@ impl RawMenuAnchor {
             on_open_requested: self.callbacks.on_open_requested.clone(),
             on_close_requested: self.callbacks.on_close_requested.clone(),
         };
-        node.track_view_size(context);
+        node.track_root_dependencies(context);
         let root = node.root();
         let group = TapRegionGroupId::Numeric(root.group_id);
         let anchor = match &self.builder {
@@ -614,7 +641,7 @@ impl From<RawMenuAnchorGroup> for Widget {
                 let node = &state.0;
                 node.attach(context.depend_on::<AnchorScope>().map(|scope| scope.0));
                 node.bind_controller(&value.controller);
-                node.track_view_size(context);
+                node.track_root_dependencies(context);
                 let root = node.root();
                 // A tap outside the tree closes the group's menus.
                 let weak = Rc::downgrade(node);
