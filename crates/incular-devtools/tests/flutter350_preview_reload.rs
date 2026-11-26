@@ -344,3 +344,38 @@ async fn publishing_a_preview_is_part_of_a_successful_reload() {
         [(source, "freshly published".to_owned())],
     );
 }
+
+#[cfg(feature = "preview-watch")]
+#[tokio::test]
+async fn native_change_reloads_and_publishes_the_file_contents() {
+    use incular_devtools::{
+        preview_changes::PreviewChange,
+        preview_watcher::{PreviewWatchUpdate, PreviewWatcher},
+    };
+
+    let f = Fixture::new();
+    let manifest = PreviewManifest::new(
+        f.dir.path().join("src/generated-preview"),
+        "pinned",
+        f.dir.path().join("Cargo.toml"),
+    );
+    let mut watcher = PreviewWatcher::start(manifest.change_router().unwrap()).unwrap();
+    f.change("src/generated-preview/src/lib.rs", "not a preview");
+    let content = "fn real_preview() {}";
+    let updated = f.change("src/lib.rs", content);
+    let notification = tokio::time::timeout(Duration::from_secs(5), watcher.next_update())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    let PreviewWatchUpdate::Change(PreviewChange::Source(path)) = notification else {
+        panic!("expected a source invalidation, got {notification:?}");
+    };
+    assert_eq!(path, updated);
+    let result = f.coordinator.handle(&path).await.unwrap();
+    assert!(matches!(result, PreviewReload::Reloaded { ref previews, .. } if previews == content));
+    assert_eq!(
+        f.trace.lock().unwrap().published,
+        [(updated, content.to_owned())]
+    );
+}

@@ -107,12 +107,20 @@ Eight focused native checks pass. The new cases create and remove
 temporary project files, assert no callbacks for the excluded paths,
 and exercise an actual dependency metadata refresh on the manifest
 callback. Paths are matched by components so unrelated names cannot
-be mistaken for a configured exclusion. The original remains partial:
-the native host supplies the watcher events and Cargo contexts; this is
-not a running OS watcher, analyzer, or preview reload loop.
+be mistaken for a configured exclusion. The opt-in `preview-watch` feature now also tests real Linux watcher
+notifications. Writes inside the scaffold and Cargo target, and source
+files without a registered context, do not invalidate previews. A
+valid nested source does reload and publish its exact on-disk contents.
+The original Flutter case injects its watcher and now has a full
+behavioral pair for the tested callback scope. Separate native tests
+verify deletion, atomic manifest replacement, and rescanning after a
+missing source directory appears. Watch plans exclude generated
+subtrees, the queue is bounded, and overruns request a rescan instead
+of presenting missing events as a complete stream. The IDE analysis
+transport and other OS backends are not verified by these tests.
 
 ```sh
-cargo test --locked -j 1 -p incular-devtools --test flutter350_preview_changes --test flutter350_preview_manifest -- --test-threads=1
+cargo test --locked -j 1 -p incular-devtools --features preview-watch --test flutter350_preview_changes --test flutter350_preview_watcher --test flutter350_preview_reload -- --test-threads=1
 bash audits/flutter-3.50.0-parity/run-reference-linux.sh tooling preview_detector/preview_detector_regression_178317_test.dart 'PreviewDetector regression test https://github.com/flutter/flutter/issues/178317'
 ```
 
@@ -137,6 +145,5 @@ both active and queued requests.
 All six reference and 17 focused native tests passed. These are
 pairs at the watcher/analysis boundary, where Flutter's tests also
 inject the watcher and analysis services. Incular returns a local
-timing result rather than transmitting Flutter analytics. An OS
-watcher, IDE transport and existing-DTD initialization are still
-separate work.
+timing result rather than transmitting Flutter analytics. Native filesystem integration is checked above. IDE transport and
+existing-DTD initialization are still separate work.

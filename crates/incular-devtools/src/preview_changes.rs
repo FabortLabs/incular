@@ -125,6 +125,81 @@ impl PreviewChangeRouter {
         true
     }
 
+    #[cfg(feature = "preview-watch")]
+    pub(crate) fn watch_plan(&self) -> io::Result<std::collections::BTreeMap<PathBuf, bool>> {
+        use std::{collections::BTreeMap, fs};
+
+        fn register_parent(plan: &mut BTreeMap<PathBuf, bool>, path: &Path) {
+            if let Some(parent) = path
+                .ancestors()
+                .skip(1)
+                .find(|candidate| candidate.is_dir())
+            {
+                plan.entry(parent.to_owned()).or_insert(false);
+            }
+        }
+
+        let mut plan = BTreeMap::new();
+        for file in self.manifests.iter().chain(&self.sources) {
+            if !self
+                .excluded
+                .iter()
+                .any(|excluded| file.starts_with(excluded))
+            {
+                // Watch the containing directory to survive atomic replacement.
+                register_parent(&mut plan, file);
+            }
+        }
+        for root in &self.source_dirs {
+            let mut directories = vec![root.clone()];
+            while let Some(path) = directories.pop() {
+                if self
+                    .excluded
+                    .iter()
+                    .any(|excluded| path.starts_with(excluded))
+                {
+                    continue;
+                }
+                match fs::symlink_metadata(&path) {
+                    Ok(metadata) if !metadata.is_dir() => continue,
+                    Ok(_) => {}
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                        register_parent(&mut plan, &path);
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                }
+                if self
+                    .excluded
+                    .iter()
+                    .any(|excluded| excluded.starts_with(&path))
+                {
+                    // A recursive watch cannot exclude any descendants.
+                    // Only branch where necessary to avoid generated trees.
+                    plan.entry(path.clone()).or_insert(false);
+                    for entry in fs::read_dir(path)? {
+                        let entry = entry?;
+                        if entry.file_type()?.is_dir() {
+                            directories.push(entry.path());
+                        }
+                    }
+                } else {
+                    plan.insert(path, true);
+                }
+            }
+        }
+        let recursive: Vec<_> = plan
+            .iter()
+            .filter_map(|(path, recursive)| recursive.then_some(path.clone()))
+            .collect();
+        plan.retain(|path, _| {
+            !recursive
+                .iter()
+                .any(|parent| parent != path && path.starts_with(parent))
+        });
+        Ok(plan)
+    }
+
     fn absolute(base: &Path, raw: &Path) -> io::Result<PathBuf> {
         let requested = base.join(raw);
         let mut normalized = PathBuf::new();
