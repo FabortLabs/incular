@@ -15,6 +15,7 @@ mod id;
 /// the crate root re-exports it as [`KeyboardKey`] to avoid colliding with the
 /// retained widget-key trait.
 pub mod input;
+pub mod licenses;
 mod key;
 mod math;
 pub mod memory;
@@ -49,6 +50,7 @@ pub use input::{
     WindowResizeDirection, additional_pointer_button_mask,
 };
 pub use key::{Key, KeyHandle, KeyId, KeyObject, LocalKey, StringKey, UniqueKey, ValueKey};
+pub use licenses::{LicenseEntry, LicenseParagraph, LicenseRegistry, LicenseStream};
 pub use math::{InvalidClampBounds, clamp_double, try_clamp_double};
 pub use merged_listenable::{MergedListenable, MergedSubscription};
 pub use observer_list::{HashedObserverList, ObserverList};

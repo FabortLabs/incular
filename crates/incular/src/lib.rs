@@ -110,7 +110,8 @@ pub mod prelude {
     pub use incular_core::{
         BACK_POINTER_BUTTON, ChangeImpact, ChangeNotifier, ChangeNotifierSubscription, Code, Color,
         DirtyFlags, FORWARD_POINTER_BUTTON, HslColor, HsvColor, ImeEvent, InputEvent, Invalidation,
-        Key, KeyState, KeyboardEvent, KeyboardKey, Lerp, LocalKey, Location, Modifiers, NamedKey,
+        Key, KeyState, KeyboardEvent, KeyboardKey, Lerp, LicenseEntry, LicenseParagraph,
+        LicenseRegistry, LicenseStream, LocalKey, Location, Modifiers, NamedKey,
         NormalizedPressure, Offset, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase,
         PointerSampleMetadata, Rect, RestorationKey, RestorationKeyError, RestorationScope,
         SECONDARY_POINTER_BUTTON, Size, StylusMetadata, StylusOrientation, TERTIARY_POINTER_BUTTON,

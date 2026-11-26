@@ -1544,3 +1544,7 @@ packages/flutter/test/widgets/mouse_region_test.dart	1362	a transparent one shou
 packages/flutter/test/widgets/mouse_region_test.dart	1408	an opaque one should prevent MouseRegions behind it receiving pointers	paired-match	upstream-mouse-region-local-motion.md#overlapping-regions-and-absorber-boundaries
 packages/flutter/test/widgets/mouse_region_test.dart	1454	opaque should default to true	paired-match	upstream-mouse-region-local-motion.md#overlapping-regions-and-absorber-boundaries
 packages/flutter/test/widgets/mouse_region_test.dart	1475	an empty opaque MouseRegion is effective	paired-match	upstream-mouse-region-local-motion.md#overlapping-regions-and-absorber-boundaries
+packages/flutter/test/foundation/licenses_test.dart	9	LicenseEntryWithLineBreaks - most cases	paired-match	upstream-foundation-licenses.md
+packages/flutter/test/foundation/licenses_test.dart	159	LicenseEntryWithLineBreaks - leading and trailing whitespace	paired-match	upstream-foundation-licenses.md
+packages/flutter/test/foundation/licenses_test.dart	182	LicenseEntryWithLineBreaks - CRLF line endings inside paragraphs	paired-match	upstream-foundation-licenses.md
+packages/flutter/test/foundation/licenses_test.dart	197	LicenseRegistry	paired-match	upstream-foundation-licenses.md
