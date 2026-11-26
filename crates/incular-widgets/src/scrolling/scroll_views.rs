@@ -1852,6 +1852,7 @@ fn page_view_widget(value: PageView) -> Widget {
             let sliver = SliverFillViewport::new(children)
                 .viewport_fraction(fraction)
                 .pad_ends(value.pad_ends)
+                .allow_implicit_scrolling(value.allow_implicit_scrolling)
                 .fallback_extent(WidgetDefaults::DEFAULT.sliver_fill_viewport_extent);
             let render =
                 sliver.create_render_sliver(&controller, value.scroll_direction, value.reverse);
@@ -1879,6 +1880,7 @@ fn page_view_widget(value: PageView) -> Widget {
                 .with_child_index_lookup(find_child_index)
                 .viewport_fraction(fraction)
                 .pad_ends(value.pad_ends)
+                .allow_implicit_scrolling(value.allow_implicit_scrolling)
                 .fallback_extent(WidgetDefaults::DEFAULT.sliver_fill_viewport_extent);
             let render =
                 sliver.create_render_sliver(&controller, value.scroll_direction, value.reverse);

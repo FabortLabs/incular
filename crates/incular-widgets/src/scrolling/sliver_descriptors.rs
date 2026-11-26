@@ -1342,6 +1342,9 @@ pub struct SliverFillViewport {
     /// space `viewport_fraction` leaves unused. Defaults to true.
     #[builder(default = true)]
     pad_ends: bool,
+    /// Includes retained cached pages in accessibility. Defaults to true.
+    #[builder(default = true)]
+    allow_implicit_scrolling: bool,
 }
 
 impl Default for SliverFillViewport {
@@ -1361,6 +1364,7 @@ impl SliverFillViewport {
             viewport_fraction: 1.0,
             fallback_extent: WidgetDefaults::DEFAULT.sliver_fill_viewport_extent,
             pad_ends: true,
+            allow_implicit_scrolling: true,
         }
     }
 
@@ -1378,6 +1382,7 @@ impl SliverFillViewport {
             viewport_fraction: 1.0,
             fallback_extent: WidgetDefaults::DEFAULT.sliver_fill_viewport_extent,
             pad_ends: true,
+            allow_implicit_scrolling: true,
         }
     }
 
@@ -1406,6 +1411,15 @@ impl SliverFillViewport {
     #[must_use]
     pub fn viewport_fraction_value(&self) -> f32 {
         self.viewport_fraction
+    }
+
+    /// Expose cached offscreen pages to accessibility when true (default).
+    /// When false, only pages overlapping the sliver's visible interval
+    /// contribute semantic children; layout and caching are unchanged.
+    #[must_use]
+    pub fn allow_implicit_scrolling(mut self, allow: bool) -> Self {
+        self.allow_implicit_scrolling = allow;
+        self
     }
 
     /// Sets Flutter's `padEnds` (default true).
@@ -1446,6 +1460,7 @@ impl Sliver for SliverFillViewport {
             viewport_fraction: self.viewport_fraction,
             fallback_extent: self.fallback_extent,
             pad_ends: self.pad_ends,
+            allow_implicit_scrolling: self.allow_implicit_scrolling,
         })
     }
 }

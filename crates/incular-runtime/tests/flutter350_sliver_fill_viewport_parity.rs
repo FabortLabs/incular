@@ -79,3 +79,34 @@ fn default_implicit_scrolling_exposes_the_cached_second_page_in_semantics() {
     });
     assert_eq!(actual, [true, true]);
 }
+
+#[test]
+fn disabling_implicit_scrolling_keeps_the_cached_page_out_of_runtime_semantics() {
+    let c = ScrollController::new();
+    let mut r = viewport(
+        SliverFillViewport::new([
+            Widget::from(Text::new("Page 1")).with_key(Key::Value(1)),
+            Widget::from(Text::new("Page 2")).with_key(Key::Value(2)),
+        ])
+        .allow_implicit_scrolling(false),
+        &c,
+    );
+    let cached = r
+        .tree()
+        .element_with_key(&Key::Value(2))
+        .expect("cache keeps the second page");
+    for (offset, expected) in [(0., [true, false]), (600., [false, true])] {
+        if c.offset() != offset {
+            assert!(c.jump_to(offset));
+        }
+        frame(&mut r);
+        let tree = r.tree();
+        let labels = ["Page 1", "Page 2"].map(|label| {
+            tree.semantics()
+                .iter()
+                .any(|(_, node)| node.label.as_deref() == Some(label))
+        });
+        assert_eq!(labels, expected);
+        assert_eq!(tree.element_with_key(&Key::Value(2)), Some(cached));
+    }
+}

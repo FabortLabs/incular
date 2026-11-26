@@ -1937,6 +1937,7 @@ pub(super) struct ViewportExtentRenderSliver {
     pub(super) fallback_extent: f32,
     /// Flutter `SliverFillViewport.padEnds`.
     pub(super) pad_ends: bool,
+    pub(super) allow_implicit_scrolling: bool,
 }
 
 impl ViewportExtentRenderSliver {
@@ -2022,6 +2023,16 @@ impl RenderSliver for ViewportExtentRenderSliver {
         Some(self)
     }
 
+    fn scroll_layout_dependency(&self) -> SliverScrollDependency {
+        if self.allow_implicit_scrolling {
+            SliverScrollDependency::CacheWindow
+        } else {
+            // The visiting interval can cross a page boundary without
+            // invalidating the cached materialization range.
+            SliverScrollDependency::ScrollOffset
+        }
+    }
+
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout {
         let viewport_extent = if constraints.viewport_main_axis_extent.is_finite() {
             constraints.viewport_main_axis_extent.max(0.)
@@ -2038,6 +2049,8 @@ impl RenderSliver for ViewportExtentRenderSliver {
             0.
         };
         let total = self.item_count as f32 * extent + 2. * pad;
+        let visible_start = (constraints.scroll_offset - pad).max(0.);
+        let visible_end = visible_start + viewport_extent;
         let cache_start = (constraints.scroll_offset + constraints.cache_origin - pad).max(0.);
         let cache_end = (constraints.scroll_offset
             + constraints.cache_origin
@@ -2048,12 +2061,20 @@ impl RenderSliver for ViewportExtentRenderSliver {
         let parked = retain_fixed_cache(&mut self.widgets, &range, self.item_count);
         let children = fixed_cache_slots(range, &parked)
             .map(|(index, placement)| {
-                let widget = self.child_widget(index);
+                let start = index as f32 * extent;
+                let mut widget = self.child_widget(index);
+                if !self.allow_implicit_scrolling
+                    && (start >= visible_end || start + extent <= visible_start)
+                {
+                    // Do not park or replace the page: its identity, paint,
+                    // focus and retained cache membership stay unchanged.
+                    widget = widget.exclude_semantics();
+                }
                 SliverChildLayout {
                     id: SliverChildId::list_item(index),
                     widget,
                     semantic_index: Some(index),
-                    offset: pad + index as f32 * extent,
+                    offset: pad + start,
                     cross_offset: 0.,
                     constraints: sliver_child_constraints(
                         constraints.axis,
