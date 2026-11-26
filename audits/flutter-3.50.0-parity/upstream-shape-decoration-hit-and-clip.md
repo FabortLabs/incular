@@ -13,3 +13,19 @@ Five pinned `painting/shape_decoration_test.dart` registrations passed.
 Native: five focused geometry/dispatch tests and seven preexisting
 shape-decoration widget tests passed. This slice checks the public
 decoration and border API; mounted hit routing is a separate comparison.
+
+## Mounted hit routing
+
+Four authored Flutter probes and their retained Incular callbacks match:
+a transparent corner falls through to the sibling behind it, a real
+child can still accept a point outside the shape, a custom border
+override can reject a painted point, and changing LTR to RTL moves a
+rounded start corner. Before the fix, the background paint layers
+claimed their rectangular bounds and hid the underlying target.
+
+The paint-only layers now ignore pointer input, and the decoration
+tests its true border only after its real child misses. Paint and hit
+testing share the inherited text direction. Shape-only hit updates also
+invalidate stationary pointer hit testing. Native: four mounted tests,
+nine ColoredBox controls and twelve focused shape API/widget tests
+passed. Authored cases are not counted as upstream registrations.

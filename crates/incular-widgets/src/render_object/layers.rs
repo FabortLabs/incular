@@ -890,6 +890,10 @@ impl RenderLayers {
 }
 
 fn needs_picture(widget: &WidgetKind) -> bool {
+    if let WidgetKind::Decorated { background, border, .. } = widget {
+        // A hit-only decoration uses its child's paint layers.
+        return background.is_some() || border.is_some();
+    }
     matches!(
         widget,
         WidgetKind::Box { .. }
@@ -897,7 +901,6 @@ fn needs_picture(widget: &WidgetKind) -> bool {
             | WidgetKind::CustomPaint { .. }
             | WidgetKind::RepaintBoundary { .. }
             | WidgetKind::Colored { .. }
-            | WidgetKind::Decorated { .. }
             | WidgetKind::Banner { .. }
             | WidgetKind::Button(_)
             | WidgetKind::Text { .. }

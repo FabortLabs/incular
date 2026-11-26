@@ -6,13 +6,13 @@ use std::{rc::Rc, sync::Arc};
 
 use incular_config::{Clip, TextDirection};
 use incular_core::{Color, Offset, Rect, Size};
-use incular_rendering::{Brush, Canvas, DisplayList, FillRule};
+use incular_rendering::{Brush, Canvas, CornerRadii, DisplayList, FillRule};
 
 use super::decoration::{BoxShadow, DecorationImage};
 use super::shape_borders::ShapeBorder;
 use crate::{
-    Builder, ClipPath, ClipShape, CustomClipper, CustomPaint, LayoutBuilder, Positioned, Stack,
-    StackFit, Widget,
+    Builder, ClipPath, ClipShape, CustomClipper, CustomPaint, IgnorePointer, LayoutBuilder,
+    Positioned, Stack, StackFit, Widget,
 };
 
 /// Flutter `ShapeDecoration`: a shape's interior filled with a color or
@@ -108,65 +108,100 @@ impl ShapeDecoration {
     #[must_use]
     pub fn paint(&self, size: Size) -> DisplayList {
         let mut canvas = Canvas::default();
-        self.paint_fill_into(&mut canvas, size);
-        self.paint_outline_into(&mut canvas, size);
+        self.paint_fill_into(&mut canvas, size, None);
+        self.paint_outline_into(&mut canvas, size, None);
         canvas.finish()
     }
 
     /// The interior color or gradient over the outer path.
     #[must_use]
     pub fn paint_fill(&self, size: Size) -> DisplayList {
+        self.paint_fill_with_direction(size, None)
+    }
+
+    fn paint_fill_with_direction(
+        &self,
+        size: Size,
+        direction: Option<TextDirection>,
+    ) -> DisplayList {
         let mut canvas = Canvas::default();
-        self.paint_fill_into(&mut canvas, size);
+        self.paint_fill_into(&mut canvas, size, direction);
         canvas.finish()
     }
 
     /// The shape's own border, painted last.
     #[must_use]
     pub fn paint_outline(&self, size: Size) -> DisplayList {
+        self.paint_outline_with_direction(size, None)
+    }
+
+    fn paint_outline_with_direction(
+        &self,
+        size: Size,
+        direction: Option<TextDirection>,
+    ) -> DisplayList {
         let mut canvas = Canvas::default();
-        self.paint_outline_into(&mut canvas, size);
+        self.paint_outline_into(&mut canvas, size, direction);
         canvas.finish()
     }
 
-    fn paint_fill_into(&self, canvas: &mut Canvas, size: Size) {
+    fn paint_fill_into(&self, canvas: &mut Canvas, size: Size, direction: Option<TextDirection>) {
         let rect = Rect::from_origin_size(Offset::ZERO, size);
         let brush = self
             .gradient
             .clone()
             .or_else(|| self.color.map(Brush::Solid));
         if let Some(brush) = brush {
-            self.paint_interior_or_path(canvas, rect, brush);
+            self.paint_interior_or_path(canvas, rect, brush, direction);
         }
     }
 
-    fn paint_interior_or_path(&self, canvas: &mut Canvas, rect: Rect, brush: Brush) {
+    fn paint_interior_or_path(
+        &self,
+        canvas: &mut Canvas,
+        rect: Rect,
+        brush: Brush,
+        direction: Option<TextDirection>,
+    ) {
         if self.shape.prefer_paint_interior() {
             self.shape.paint_interior(
                 canvas,
                 rect,
                 &incular_rendering::Paint::new().brush(brush),
-                None,
+                direction,
             );
         } else {
             canvas.fill_path(
-                Arc::new(self.shape.outer_path(rect)),
+                Arc::new(self.shape.outer_path_with_direction(rect, direction)),
                 brush,
                 FillRule::NonZero,
             );
         }
     }
 
-    fn paint_outline_into(&self, canvas: &mut Canvas, size: Size) {
-        self.shape
-            .paint(canvas, Rect::from_origin_size(Offset::ZERO, size));
+    fn paint_outline_into(
+        &self,
+        canvas: &mut Canvas,
+        size: Size,
+        direction: Option<TextDirection>,
+    ) {
+        self.shape.paint_with_direction(
+            canvas,
+            Rect::from_origin_size(Offset::ZERO, size),
+            direction,
+        );
     }
 
     /// One shadow's path filled with its color, before the blur.
-    fn paint_shadow(&self, size: Size, shadow: &BoxShadow) -> DisplayList {
+    fn paint_shadow(
+        &self,
+        size: Size,
+        shadow: &BoxShadow,
+        direction: Option<TextDirection>,
+    ) -> DisplayList {
         let rect = Self::shadow_rect(Rect::from_origin_size(Offset::ZERO, size), shadow);
         let mut canvas = Canvas::default();
-        self.paint_interior_or_path(&mut canvas, rect, Brush::Solid(shadow.color));
+        self.paint_interior_or_path(&mut canvas, rect, Brush::Solid(shadow.color), direction);
         canvas.finish()
     }
 }
@@ -191,36 +226,66 @@ impl DecoratedShapeBox {
 
 impl From<DecoratedShapeBox> for Widget {
     fn from(value: DecoratedShapeBox) -> Self {
+        use crate::tree::DecorationHitGeometry;
         let decoration = Rc::new(value.decoration);
-        // Filling the stack, which takes the child's size, the builder sees
-        // tight constraints of exactly that size.
-        let painted = LayoutBuilder::new(move |_, constraints| {
-            let size = constraints.biggest();
-            let mut layers: Vec<Widget> = Vec::with_capacity(decoration.shadows.len() + 3);
-            layers.extend(decoration.shadows.iter().map(|shadow| {
-                Widget::blur(
-                    crate::utilities::banner_shadow_sigma(shadow.blur_radius),
-                    CustomPaint::new(size, decoration.paint_shadow(size, shadow)).into(),
-                )
-            }));
-            layers.push(CustomPaint::new(size, decoration.paint_fill(size)).into());
-            if let Some(image) = &decoration.image {
-                // Flutter clips the image to the shape's outer path
-                // (`_paintImage` under `_ShapeDecorationPainter.paint`).
-                let clip = Arc::new(
-                    decoration
-                        .shape
-                        .outer_path(Rect::from_origin_size(Offset::ZERO, size)),
+        let child = value.child;
+        Builder::new(move |context| {
+            let direction = context.text_direction();
+            let hit = DecorationHitGeometry::Shape {
+                border: decoration.shape.clone(),
+                direction,
+            };
+            let decoration = decoration.clone();
+            // Fill the stack at the child's final size; paint layers have no
+            // input surface. The outer decoration supplies the shape hit
+            // only when the real child does not accept the point.
+            let painted = LayoutBuilder::new(move |_, constraints| {
+                let size = constraints.biggest();
+                let mut layers: Vec<Widget> = Vec::with_capacity(decoration.shadows.len() + 3);
+                layers.extend(decoration.shadows.iter().map(|shadow| {
+                    Widget::blur(
+                        crate::utilities::banner_shadow_sigma(shadow.blur_radius),
+                        CustomPaint::new(size, decoration.paint_shadow(size, shadow, direction))
+                            .into(),
+                    )
+                }));
+                layers.push(
+                    CustomPaint::new(size, decoration.paint_fill_with_direction(size, direction))
+                        .into(),
                 );
-                let painted = super::box_painter::decoration_image_widget(image);
-                layers.push(Positioned::fill(ClipPath::new(clip, painted)).into());
-            }
-            layers.push(CustomPaint::new(size, decoration.paint_outline(size)).into());
-            Stack::new(layers).into()
-        });
-        Stack::new([Positioned::fill(painted).into(), value.child])
+                if let Some(image) = &decoration.image {
+                    let clip = Arc::new(
+                        decoration
+                            .get_clip_path(Rect::from_origin_size(Offset::ZERO, size), direction),
+                    );
+                    let painted = super::box_painter::decoration_image_widget(image);
+                    layers.push(Positioned::fill(ClipPath::new(clip, painted)).into());
+                }
+                layers.push(
+                    CustomPaint::new(
+                        size,
+                        decoration.paint_outline_with_direction(size, direction),
+                    )
+                    .into(),
+                );
+                Stack::new(layers).clip_behavior(Clip::None).into()
+            });
+            let stack = Stack::new([
+                Positioned::fill(IgnorePointer::new(painted)).into(),
+                child.clone(),
+            ])
             .fit(StackFit::Passthrough)
-            .into()
+            .clip_behavior(Clip::None);
+            Widget::decorated_with_geometry(
+                None,
+                None,
+                None,
+                CornerRadii::ZERO,
+                stack.into(),
+                Some(hit),
+            )
+        })
+        .into()
     }
 }
 
@@ -284,8 +349,11 @@ impl ClipPath {
             let delegate = crate::layout::ClipDelegate::new(ShapeBorderClipper::new(
                 shape.clone(),
                 context.text_direction(),
-            )).with_hit_testing(clip_hit_tests);
-            let clip = Self::builder().clip_behavior(clip_behavior).clipper(delegate);
+            ))
+            .with_hit_testing(clip_hit_tests);
+            let clip = Self::builder()
+                .clip_behavior(clip_behavior)
+                .clipper(delegate);
             match &child {
                 Some(child) => clip.child(child.clone()).build().into(),
                 None => clip.build().into(),

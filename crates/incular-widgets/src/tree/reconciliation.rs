@@ -995,7 +995,15 @@ impl WidgetTree {
             },
             _ => None,
         };
+        let decoration_hit_changed = match (old.kind(), widget.kind()) {
+            (
+                WidgetKind::Decorated { hit_decoration: before, .. },
+                WidgetKind::Decorated { hit_decoration: after, .. },
+            ) => before != after,
+            _ => false,
+        };
         if before_mouse != after_mouse
+            || decoration_hit_changed
             || control_cursor(old.kind()) != control_cursor(widget.kind())
             || resize_cursor(old.kind()) != resize_cursor(widget.kind())
         {

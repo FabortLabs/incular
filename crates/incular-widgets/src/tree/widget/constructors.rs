@@ -558,6 +558,19 @@ impl Widget {
         child: Widget,
         hit_decoration: Option<Rc<crate::BoxDecoration>>,
     ) -> Self {
+        Self::decorated_with_geometry(
+            size, background, border, radius, child, hit_decoration.map(DecorationHitGeometry::Box),
+        )
+    }
+
+    pub(crate) fn decorated_with_geometry(
+        size: Option<Size>,
+        background: Option<Brush>,
+        border: Option<Border>,
+        radius: CornerRadii,
+        child: Widget,
+        hit_decoration: Option<DecorationHitGeometry>,
+    ) -> Self {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::Decorated {

@@ -589,6 +589,42 @@ pub(crate) struct DirectionRequirement {
     pub reason: &'static str,
 }
 
+/// Hit-only geometry of a decoration, independent of its paint layers.
+#[derive(Clone)]
+pub(crate) enum DecorationHitGeometry {
+    Box(Rc<crate::BoxDecoration>),
+    Shape {
+        border: Rc<dyn crate::ShapeBorder>,
+        direction: Option<TextDirection>,
+    },
+}
+
+impl DecorationHitGeometry {
+    pub(crate) fn hit_test(&self, size: Size, position: Offset) -> bool {
+        match self {
+            Self::Box(decoration) => decoration.hit_test(size, position),
+            Self::Shape { border, direction } => border.hit_test(
+                Rect::from_origin_size(Offset::ZERO, size),
+                position,
+                *direction,
+            ),
+        }
+    }
+}
+
+impl PartialEq for DecorationHitGeometry {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Box(a), Self::Box(b)) => a == b,
+            (
+                Self::Shape { border: a, direction: direction_a },
+                Self::Shape { border: b, direction: direction_b },
+            ) => Rc::ptr_eq(a, b) && direction_a == direction_b,
+            _ => false,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub(crate) enum WidgetKind {
     Box {
@@ -616,7 +652,7 @@ pub(crate) enum WidgetKind {
         background: Option<Brush>,
         border: Option<Border>,
         radius: CornerRadii,
-        hit_decoration: Option<Rc<crate::BoxDecoration>>,
+        hit_decoration: Option<DecorationHitGeometry>,
         child: Widget,
     },
     Banner {
