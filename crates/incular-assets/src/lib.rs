@@ -7,12 +7,17 @@
 use std::{fmt, sync::Arc};
 
 mod bundle;
+mod consolidate_response;
 mod manifest;
 mod network;
 pub mod notices;
 mod root_bundle;
 pub use bundle::{
     AssetBundle, AssetError, CachingAssetBundle, DirectoryAssetBundle, MemoryAssetBundle,
+};
+pub use consolidate_response::{
+    ConsolidateResponseError, HttpResponseCompressionState, HttpResponseOptions,
+    consolidate_http_client_response_bytes, consolidate_http_client_response_bytes_with_progress,
 };
 pub use manifest::{AssetManifest, AssetManifestFormat, AssetManifestLoadCallback, AssetMetadata};
 pub use network::{

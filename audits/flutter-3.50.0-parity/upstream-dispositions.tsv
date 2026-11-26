@@ -2508,3 +2508,13 @@ packages/flutter/test/services/browser_context_menu_test.dart	23	disableContextM
 packages/flutter/test/services/browser_context_menu_test.dart	31	enableContextMenu asserts	paired-match	upstream-browser-context-menu.md
 packages/flutter/test/services/browser_context_menu_test.dart	57	disableContextMenu calls its platform channel method	paired-match	upstream-browser-context-menu.md
 packages/flutter/test/services/browser_context_menu_test.dart	74	enableContextMenu calls its platform channel method	paired-match	upstream-browser-context-menu.md
+packages/flutter/test/foundation/consolidate_response_test.dart	25	Converts an HttpClientResponse with contentLength to bytes	paired-match	upstream-consolidate-http-response.md
+packages/flutter/test/foundation/consolidate_response_test.dart	32	Converts a compressed HttpClientResponse with contentLength to bytes	paired-match	upstream-consolidate-http-response.md
+packages/flutter/test/foundation/consolidate_response_test.dart	39	Converts an HttpClientResponse without contentLength to bytes	paired-match	upstream-consolidate-http-response.md
+packages/flutter/test/foundation/consolidate_response_test.dart	46	Notifies onBytesReceived for every chunk of bytes	paired-match	upstream-consolidate-http-response.md
+packages/flutter/test/foundation/consolidate_response_test.dart	65	forwards errors from HttpClientResponse	paired-match	upstream-consolidate-http-response.md
+packages/flutter/test/foundation/consolidate_response_test.dart	72	Propagates error to Future return value if onBytesReceived throws	paired-match	upstream-consolidate-http-response.md
+packages/flutter/test/foundation/consolidate_response_test.dart	94	Uncompresses GZIP bytes if autoUncompress is true and response.compressionState is compressed	paired-match	upstream-consolidate-http-response.md
+packages/flutter/test/foundation/consolidate_response_test.dart	100	returns gzipped bytes if autoUncompress is false and response.compressionState is compressed	paired-match	upstream-consolidate-http-response.md
+packages/flutter/test/foundation/consolidate_response_test.dart	109	Notifies onBytesReceived with gzipped numbers	paired-match	upstream-consolidate-http-response.md
+packages/flutter/test/foundation/consolidate_response_test.dart	127	Notifies onBytesReceived with expectedContentLength of -1 if response.compressionState is decompressed	paired-match	upstream-consolidate-http-response.md
