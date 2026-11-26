@@ -2449,3 +2449,4 @@ packages/flutter/test/widgets/scrollable_dispose_test.dart	31	Disposing a (neste
 packages/flutter/test/widgets/scroll_interaction_test.dart	9	Scroll flings twice in a row does not crash	paired-match	upstream-scroll-fling-taps.md
 packages/flutter/test/widgets/scrollable_fling_test.dart	101	fling and tap to stop	paired-match	upstream-scroll-fling-taps.md
 packages/flutter/test/widgets/scrollable_fling_test.dart	136	fling and wait and tap	paired-match	upstream-scroll-fling-taps.md
+packages/flutter/test/widgets/scrollable_fling_test.dart	34	Flings on different platforms	paired-match	upstream-scroll-fling-taps.md#platform-defaults

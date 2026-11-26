@@ -1,5 +1,5 @@
-//! Mounted scroll teardown, including an overscrolled nested hold.
-//! Upstream: widgets/scrollable_dispose_test.dart.
+//! Mounted scroll activity, including disposal, ballistic timing, and stop taps.
+//! Upstream: scrollable_dispose_test, scroll_interaction_test, and scrollable_fling_test.
 
 use std::time::Duration;
 
@@ -377,4 +377,55 @@ fn stopping_a_driven_scroll_does_not_dispatch_a_new_contact_to_rows() {
 
     tap_center(&mut runtime, at(220));
     assert_eq!((presses.get(), taps.get()), (2, 2));
+}
+
+#[test]
+fn platform_fling_defaults_have_flutter_drag_distance_and_relative_deceleration() {
+    use incular_core::DragStartBehavior;
+
+    let settled = [
+        TargetPlatform::Android,
+        TargetPlatform::Linux,
+        TargetPlatform::Windows,
+        TargetPlatform::Ios,
+        TargetPlatform::MacOs,
+    ]
+    .map(|platform| {
+        let controller = ScrollController::new();
+        let list = ListView::new([SizedBox::new().height(100_000.)])
+            .controller(controller.clone())
+            .drag_start_behavior(DragStartBehavior::Down);
+        let configured =
+            ScrollConfiguration::new(list).behavior(ScrollBehavior::new().platform(platform));
+        let mut runtime =
+            Runtime::new(Directionality::new(TextDirection::Ltr, configured).into()).unwrap();
+        let now = Instant::now();
+        frame(&mut runtime, now);
+        let release = reference_fling(
+            &mut runtime,
+            now + Duration::from_millis(10),
+            -213.82,
+            1000.,
+        );
+        let expected = if matches!(platform, TargetPlatform::Ios | TargetPlatform::MacOs) {
+            210.710_27
+        } else {
+            213.82
+        };
+        assert!(
+            (controller.offset() - expected).abs() < 0.002,
+            "{platform:?} drag: {} differs from {expected}",
+            controller.offset()
+        );
+        let at_release = controller.offset();
+        frame(&mut runtime, release);
+        assert_eq!(controller.offset(), at_release);
+        frame(&mut runtime, release + Duration::from_secs(5));
+        controller.offset()
+    });
+    let [android, linux, windows, ios, macos] = settled;
+    assert!(android > 408. && android < 409., "{settled:?}");
+    assert_eq!(linux, android);
+    assert_eq!(windows, android);
+    assert!(macos < android && android < ios, "{settled:?}");
 }

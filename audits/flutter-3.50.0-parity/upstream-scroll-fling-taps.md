@@ -26,3 +26,16 @@ An authored Flutter probe and matching runtime control also verified
 that a stop tap during animateTo reaches neither the child's
 onPointerDown nor its onTap, and a later tap reaches both. All seven
 focused activity tests and eleven runtime pointer tests passed.
+
+## Platform defaults
+
+The remaining original in the pinned fling file (:34) passed. Rust
+replays the 213.82-pixel, 1,000 px/s trace in all five ambient platforms.
+Android, Linux, and Windows drag the full 213.82 pixels and finish at
+the identical offset between 408 and 409. iOS and macOS ease into the
+drag, reaching approximately 210.71027 before release. In every case
+the first frame only starts the clock; at five seconds macOS has gone
+less far than the clamping platforms and iOS has gone farther.
+These are platform policy variations in the Linux runtime harness,
+not captures from five native hosts. All eight tests in the renamed
+scrollable activity target passed.
