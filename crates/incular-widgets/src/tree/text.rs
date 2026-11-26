@@ -1800,6 +1800,56 @@ impl WidgetTree {
         )
     }
 
+    /// Returns the local bounds of the shaped text in a composing range.
+    ///
+    /// The range indexes the displayed, unmasked UTF-8 text (including
+    /// preedit, if any). It includes complete shaped glyphs and zero-width
+    /// hard breaks. Invalid or collapsed ranges have no bounds. The result
+    /// includes content and scroll offsets without clipping to the viewport.
+    #[must_use]
+    pub fn editable_composing_rect(&self, id: ElementId, range: TextRange) -> Option<Rect> {
+        if range.is_empty() {
+            return None;
+        }
+        let render = self.render_id(id)?;
+        let node = self.renders.get(render.0)?;
+        let RenderKind::TextField(field) = node.object.kind() else {
+            return None;
+        };
+        let layout = node.field_layout()?;
+        let state = node.text_field_state()?;
+        if node.dirty.contains(DirtyFlags::LAYOUT)
+            || field.controller.revisions() != (state.content_revision, state.visual_revision)
+        {
+            return None;
+        }
+        let rect = with_text_field_display(&field.controller, "", None, |text| {
+            if !range.is_valid_for(text) {
+                return None;
+            }
+            if !field.obscure_text {
+                return composing_text_bounds(&layout, range, text);
+            }
+            let bytes_per_mask = field.obscuring_character.len_utf8();
+            let start = utf16_units(&text[..range.start]);
+            let end = start + utf16_units(&text[range.as_range()]);
+            // The displayed mask has no hard line breaks.
+            let range = TextRange::new(start * bytes_per_mask, end * bytes_per_mask);
+            composing_text_bounds(&layout, range, "")
+        })?;
+        let padding = field.content_padding;
+        let top = text_field_content_top(
+            field.multiline,
+            node.size.height,
+            layout.metrics().line_height,
+            padding,
+        );
+        Some(Rect::from_origin_size(
+            rect.origin + Offset::new(padding.left - state.scroll_x, top - state.scroll_y),
+            rect.size,
+        ))
+    }
+
     fn text_field_input_snapshot_with(
         &self,
         id: ElementId,
@@ -2285,6 +2335,68 @@ pub(super) fn text_field_caret_geometry(
         };
     }
     (x, y, height)
+}
+
+fn composing_text_bounds(layout: &dyn TextGeometry, range: TextRange, text: &str) -> Option<Rect> {
+    // Find the first potentially intersecting line without traversing
+    // all earlier paragraphs in a large document.
+    let mut first = 0;
+    let mut limit = layout.line_count();
+    while first < limit {
+        let mid = first + (limit - first) / 2;
+        let line = layout.line(mid);
+        // An explicit line break at the caret end can have a zero-width box.
+        if line.caret_end() < range.start {
+            first = mid + 1;
+        } else {
+            limit = mid;
+        }
+    }
+
+    let mut left = f32::INFINITY;
+    let mut right = f32::NEG_INFINITY;
+    let mut top = f32::INFINITY;
+    let mut bottom = f32::NEG_INFINITY;
+    for index in first..layout.line_count() {
+        let line = layout.line(index);
+        if line.start() >= range.end {
+            break;
+        }
+        let blank_end = line.caret_end();
+        let mut line_left = f32::INFINITY;
+        let mut line_right = f32::NEG_INFINITY;
+        for cluster in line.clusters() {
+            let source = cluster.range();
+            // A shaped glyph crossing either endpoint is not selected.
+            if cluster.left < cluster.right && range.start <= source.start && source.end <= range.end
+            {
+                line_left = line_left.min(cluster.left);
+                line_right = line_right.max(cluster.right);
+            }
+        }
+        let has_line_break = text
+            .get(blank_end..range.end)
+            .is_some_and(|ending| ending.starts_with(['\n', '\r']));
+        if range.start <= blank_end && has_line_break {
+            let x = line_caret_x_for_affinity(
+                layout,
+                index,
+                blank_end,
+                incular_text::TextAffinity::Upstream,
+            );
+            line_left = line_left.min(x);
+            line_right = line_right.max(x);
+        }
+        if line_left <= line_right {
+            left = left.min(line_left);
+            right = right.max(line_right);
+            top = top.min(line.top());
+            bottom = bottom.max(line.top() + line.shaped().height);
+        }
+    }
+    (left <= right).then(|| {
+        Rect::from_origin_size(Offset::new(left, top), Size::new(right - left, bottom - top))
+    })
 }
 
 pub(super) fn selection_rects<'a>(

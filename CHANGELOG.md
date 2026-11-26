@@ -7,6 +7,8 @@ a version and date when publishing.
 
 ### Added
 
+- A mounted editor can report the local text bounds of an IME composing range.
+
 - Retained editable text can measure its minimum and maximum intrinsic widths.
   Only maximum width includes the caret reservation.
 

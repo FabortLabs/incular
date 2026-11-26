@@ -170,6 +170,9 @@ A mounted editor can be measured through `WidgetTree::editable_intrinsic_widths`
 without changing its current layout or scroll. Only the maximum reserves room
 for the caret.
 
+`WidgetTree::editable_composing_rect` reports local range bounds using
+the editor’s current shaping and scroll.
+
 ## Read-only selection
 
 `SelectableRegion` is the retained selection primitive; it has no mutable text

@@ -112,3 +112,7 @@ Related: [`TextEditingController`](/docs/api/content/text-controller),
 Use `TextEditingDelta::try_apply` or `TextEditingController::try_apply_delta`
 when malformed offsets need to be reported. A reversed, out-of-range, or
 misaligned UTF-8 replacement range does not edit the value or run formatters.
+
+For renderer-level IME placement, the retained editor can resolve a composing
+range to a local rectangle. The range indexes displayed UTF-8 text before
+masking, and the rectangle includes the current text scroll offset.
