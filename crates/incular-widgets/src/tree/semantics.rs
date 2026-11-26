@@ -2823,7 +2823,9 @@ pub(super) fn semantic_action_is_executable(
         return true;
     }
     match action {
-        SemanticActionKind::Focus | SemanticActionKind::Custom => false,
+        SemanticActionKind::Focus | SemanticActionKind::Custom | SemanticActionKind::Dismiss => {
+            false
+        }
         // Advertised only inside a viewport; the dispatch reports whether a
         // viewport actually moved.
         SemanticActionKind::ShowOnScreen => true,

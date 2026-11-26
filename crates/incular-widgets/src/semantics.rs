@@ -74,6 +74,8 @@ pub struct Semantics {
     #[builder(default)]
     on_long_press: Option<Rc<dyn Fn() + 'static>>,
     #[builder(default)]
+    on_dismiss: Option<Rc<dyn Fn() + 'static>>,
+    #[builder(default)]
     state: SemanticState,
     #[builder(default, setter(skip))]
     // The outer option keeps the explicit annotation when a caller clears
@@ -119,6 +121,7 @@ impl Semantics {
             on_scroll_up: None,
             on_scroll_down: None,
             on_long_press: None,
+            on_dismiss: None,
             state: SemanticState::default(),
             tag_for_children: None,
             locale_for_subtree: None,
@@ -531,6 +534,14 @@ impl Semantics {
         self.action(SemanticAction::LongPress)
     }
 
+    /// Flutter's `Semantics.onDismiss`: advertises a dismiss action and
+    /// invokes this callback when the framework dispatches it.
+    #[must_use]
+    pub fn on_dismiss(mut self, callback: impl Fn() + 'static) -> Self {
+        self.on_dismiss = Some(Rc::new(callback));
+        self.action(SemanticAction::Dismiss)
+    }
+
     #[must_use]
     pub fn on_increase(mut self, callback: impl Fn() + 'static) -> Self {
         self.on_increase = Some(Rc::new(callback));
@@ -639,6 +650,7 @@ impl From<Semantics> for Widget {
         let explicit = value.explicit();
         let on_tap = value.on_tap.clone();
         let on_long_press = value.on_long_press.clone();
+        let on_dismiss = value.on_dismiss.clone();
         let on_increase = value.on_increase.clone();
         let on_decrease = value.on_decrease.clone();
         let on_scroll_forward = value.on_scroll_forward.clone();
@@ -671,6 +683,10 @@ impl From<Semantics> for Widget {
         if let Some(callback) = on_long_press {
             widget = widget
                 .with_semantic_callback(incular_semantics::SemanticActionKind::LongPress, callback);
+        }
+        if let Some(callback) = on_dismiss {
+            widget = widget
+                .with_semantic_callback(incular_semantics::SemanticActionKind::Dismiss, callback);
         }
         if let Some(callback) = on_increase {
             widget = widget

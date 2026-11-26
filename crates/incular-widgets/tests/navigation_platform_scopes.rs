@@ -10,6 +10,7 @@
 
 use incular_config::Constraints;
 use incular_core::{Color, Offset, Size, WindowResizeDirection};
+use incular_semantics::SemanticActionKind;
 use incular_widgets::NavigationBackButtonDispatcher as BackButtonDispatcher;
 use incular_widgets::{
     AnimatedModalBarrier, BackButtonListener, BackHandlerResult, LayoutBuilder, MenuDispatchResult,
@@ -477,7 +478,9 @@ fn animated_modal_barrier_options() {
             "modal blocks preceding siblings ({dismissible},{semantics_dismissible},{labeled}):\n{dump}"
         );
         assert_eq!(
-            dump.contains("Dismiss"),
+            tree.semantics()
+                .iter()
+                .any(|(_, node)| node.label.as_deref() == Some("Dismiss")),
             labeled,
             "label survives dismissal flags ({dismissible},{semantics_dismissible},{labeled}):\n{dump}"
         );
@@ -494,6 +497,13 @@ fn animated_modal_barrier_options() {
             dump.contains("Activate"),
             dismissible && semantics_dismissible,
             "semantic dismissal is gated by both flags:\n{dump}"
+        );
+        assert_eq!(
+            tree.semantics()
+                .iter()
+                .any(|(_, node)| { node.actions.contains(&SemanticActionKind::Dismiss) }),
+            dismissible && semantics_dismissible,
+            "dismiss action follows the same eligibility gate",
         );
         if dismissible && semantics_dismissible {
             assert!(

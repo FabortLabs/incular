@@ -1263,9 +1263,12 @@ fn map_action(action: SemanticActionKind) -> Option<Action> {
         SemanticActionKind::ScrollDown => Some(Action::ScrollDown),
         SemanticActionKind::ScrollToOffset => Some(Action::SetScrollOffset),
         SemanticActionKind::ShowOnScreen => Some(Action::ScrollIntoView),
-        // AccessKit has no long-press action. The parameterized custom
-        // action is advertised only once its native descriptions are known.
-        SemanticActionKind::LongPress | SemanticActionKind::Custom => None,
+        // AccessKit has neither long-press nor a distinct dismiss action.
+        // A modal's separate Activate still projects to Click. Parameterized
+        // custom actions are advertised only with native descriptions.
+        SemanticActionKind::LongPress
+        | SemanticActionKind::Dismiss
+        | SemanticActionKind::Custom => None,
     }
 }
 

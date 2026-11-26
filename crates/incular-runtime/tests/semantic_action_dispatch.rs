@@ -665,3 +665,30 @@ fn show_on_screen_scrolls_the_nearest_viewport_to_the_node() {
         controller.offset()
     );
 }
+
+#[test]
+fn explicit_dismiss_is_advertised_and_invoked_without_aliasing_activate() {
+    let dismissed = Rc::new(Cell::new(0));
+    let child = Widget::box_(Size::new(60., 30.), incular_core::Color::WHITE);
+    let semantic = Semantics::new(child)
+        .role(SemanticRole::Group)
+        .label("dismissible panel")
+        .on_dismiss({
+            let dismissed = dismissed.clone();
+            move || dismissed.set(dismissed.get() + 1)
+        });
+    let mut runtime = Runtime::new(semantic.into()).unwrap();
+    runtime
+        .run_frame(Constraints::tight(Size::new(60., 30.)))
+        .unwrap();
+    let id = runtime
+        .tree()
+        .semantics()
+        .iter()
+        .find_map(|(id, node)| (node.label.as_deref() == Some("dismissible panel")).then_some(id))
+        .unwrap();
+    assert_eq!(node_actions(&runtime, id), [SemanticActionKind::Dismiss]);
+    assert!(!runtime.dispatch_semantic_action(id, SemanticAction::Activate));
+    assert!(runtime.dispatch_semantic_action(id, SemanticAction::Dismiss));
+    assert_eq!(dismissed.get(), 1);
+}

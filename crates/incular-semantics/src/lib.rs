@@ -147,6 +147,8 @@ pub enum SemanticActionKind {
     ShowOnScreen,
     /// An application-defined action with a canonical identifier.
     Custom,
+    /// Flutter's `SemanticsAction.dismiss`: dismiss the current surface.
+    Dismiss,
 }
 
 impl SemanticActionKind {
@@ -188,6 +190,7 @@ pub enum SemanticAction {
     LongPress,
     ShowOnScreen,
     Custom(CustomSemanticsActionId),
+    Dismiss,
 }
 
 impl SemanticAction {
@@ -210,6 +213,7 @@ impl SemanticAction {
             Self::LongPress => SemanticActionKind::LongPress,
             Self::ShowOnScreen => SemanticActionKind::ShowOnScreen,
             Self::Custom(_) => SemanticActionKind::Custom,
+            Self::Dismiss => SemanticActionKind::Dismiss,
         }
     }
 }

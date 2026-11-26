@@ -1117,6 +1117,13 @@ impl Runtime {
                     }
                 })
             }
+            SemanticAction::Dismiss => self
+                .tree
+                .semantic_action_callback(element, incular_semantics::SemanticActionKind::Dismiss)
+                .is_some_and(|callback| {
+                    callback();
+                    true
+                }),
             SemanticAction::SetText(text) => {
                 if !self.tree.text_field_is_editable(element) {
                     false

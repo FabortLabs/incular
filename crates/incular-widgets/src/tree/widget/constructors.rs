@@ -380,6 +380,7 @@ impl Widget {
             SemanticActionKind::ScrollForward => callbacks.scroll_forward = Some(callback),
             SemanticActionKind::ScrollBackward => callbacks.scroll_backward = Some(callback),
             SemanticActionKind::LongPress => callbacks.long_press = Some(callback),
+            SemanticActionKind::Dismiss => callbacks.dismiss = Some(callback),
             SemanticActionKind::Focus
             | SemanticActionKind::SetText
             | SemanticActionKind::SetSelection

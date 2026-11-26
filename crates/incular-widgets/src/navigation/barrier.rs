@@ -270,8 +270,8 @@ impl From<AnimatedModalBarrier> for Widget {
 
             // Semantic ownership is split three ways. The label (with its
             // tap hint) always gets a node when present, so removing
-            // dismissal never drops the name. The Activate dismissal action
-            // lives on that same veil node exactly when pointer dismissal
+            // dismissal never drops the name. Activate and Dismiss live on
+            // that same veil node exactly when pointer dismissal
             // and the semantic-dismiss flag agree; it never depends on the
             // label existing. Modal blocking below is independent of both.
             let semantic_dismiss = dismissible && semantics_dismissible;
@@ -289,14 +289,12 @@ impl From<AnimatedModalBarrier> for Widget {
                     explicit = explicit.description(hint.clone());
                 }
                 if semantic_dismiss {
-                    explicit = explicit.actions([SemanticActionKind::Activate]);
-                    barrier = barrier.semantics(explicit).with_semantic_callback(
-                        SemanticActionKind::Activate,
-                        {
-                            let dismiss = dismiss.clone();
-                            Rc::new(move || dismiss())
-                        },
-                    );
+                    explicit = explicit
+                        .actions([SemanticActionKind::Activate, SemanticActionKind::Dismiss]);
+                    barrier = barrier
+                        .semantics(explicit)
+                        .with_semantic_callback(SemanticActionKind::Activate, dismiss.clone())
+                        .with_semantic_callback(SemanticActionKind::Dismiss, dismiss.clone());
                 } else {
                     barrier = barrier.semantics(explicit);
                 }

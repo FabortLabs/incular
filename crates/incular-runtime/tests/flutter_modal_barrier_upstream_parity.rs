@@ -400,3 +400,238 @@ fn the_barrier_consults_the_pop_guard_on_release_and_respects_both_results() {
 fn an_override_receives_dismissal_instead_of_popping_the_route() {
     check_barrier(PRIMARY_POINTER_BUTTON, ModalScenario::Override);
 }
+
+#[test]
+fn locked_modal_without_a_label_advertises_no_semantic_node() {
+    let mut runtime = Runtime::new(
+        AnimatedModalBarrier::with_flat_color(RED)
+            .dismissible(false)
+            .into(),
+    )
+    .unwrap();
+    runtime.run_frame(bounds()).unwrap();
+    assert!(runtime.tree().semantics().iter().next().is_none());
+}
+
+#[test]
+fn labeled_barrier_exposes_and_dispatches_both_activation_and_dismissal() {
+    use incular_core::Rect;
+    use incular_semantics::{SemanticAction, SemanticActionKind, SemanticRole};
+    let events = Rc::new(Cell::new(0));
+    let build = |dismissible| {
+        let events = events.clone();
+        Widget::from(
+            AnimatedModalBarrier::with_flat_color(RED)
+                .semantics_label("Dismiss")
+                .dismissible(dismissible)
+                .on_dismiss(move || events.set(events.get() + 1)),
+        )
+    };
+    let mut runtime = Runtime::new(build(true)).unwrap();
+    runtime.run_frame(bounds()).unwrap();
+    let find_label = |runtime: &Runtime| {
+        runtime
+            .tree()
+            .semantics()
+            .iter()
+            .find_map(|(id, node)| (node.label.as_deref() == Some("Dismiss")).then_some(id))
+            .expect("labeled barrier node")
+    };
+    let id = find_label(&runtime);
+    let data = runtime.tree().semantics().node(id).unwrap();
+    assert_eq!(data.role, SemanticRole::Button);
+    assert_eq!(
+        data.bounds,
+        Rect::from_origin_size(Offset::ZERO, Size::new(800., 600.))
+    );
+    assert_eq!(
+        data.actions,
+        [SemanticActionKind::Activate, SemanticActionKind::Dismiss]
+    );
+    assert!(runtime.dispatch_semantic_action(id, SemanticAction::Activate));
+    assert!(runtime.dispatch_semantic_action(id, SemanticAction::Dismiss));
+    assert_eq!(events.get(), 2);
+
+    let root = runtime.tree().root().unwrap();
+    runtime.schedule_update(root, build(false)).unwrap();
+    runtime.run_frame(bounds()).unwrap();
+    let locked = find_label(&runtime);
+    assert!(
+        runtime
+            .tree()
+            .semantics()
+            .node(locked)
+            .unwrap()
+            .actions
+            .is_empty()
+    );
+    assert!(!runtime.dispatch_semantic_action(locked, SemanticAction::Dismiss));
+    assert!(!runtime.dispatch_semantic_action(id, SemanticAction::Dismiss));
+    assert_eq!(events.get(), 2);
+}
+
+#[test]
+fn an_animated_barrier_can_lay_out_at_zero_area() {
+    let child = Widget::from(AnimatedModalBarrier::with_flat_color(RED)).with_key("zero-barrier");
+    let scene =
+        incular_widgets::Center::new(SizedBox::from_dimensions(Some(0.), Some(0.), Some(child)));
+    let mut runtime = Runtime::new(scene.into()).unwrap();
+    runtime.run_frame(bounds()).unwrap();
+    let target = runtime
+        .tree()
+        .element_with_key(&"zero-barrier".into())
+        .unwrap();
+    assert_eq!(
+        runtime.tree().element_bounds(target).unwrap().size,
+        Size::ZERO
+    );
+}
+
+#[test]
+fn a_translucent_drag_in_front_of_a_locked_barrier_still_reaches_its_recognizer() {
+    let moves = Rc::new(Cell::new(0));
+    let target = GestureDetector::new(incular_widgets::Center::new(Widget::box_(
+        Size::new(50., 30.),
+        Color::WHITE,
+    )))
+    .behavior(HitTestBehavior::Translucent)
+    .on_horizontal_drag_start({
+        let moves = moves.clone();
+        move |_| moves.set(moves.get() + 1)
+    });
+    let scene = Stack::new([
+        Widget::from(AnimatedModalBarrier::with_flat_color(RED).dismissible(false)),
+        Widget::from(target),
+    ]);
+    let mut runtime = Runtime::new(scene.into()).unwrap();
+    let now = Instant::now();
+    runtime.run_frame_at(bounds(), now).unwrap();
+    for (ms, phase, point) in [
+        (2, PointerPhase::Down, Offset::new(790., 590.)),
+        (4, PointerPhase::Move, Offset::new(770., 590.)),
+        (6, PointerPhase::Up, Offset::new(770., 590.)),
+    ] {
+        send_touch(
+            &mut runtime,
+            now + Duration::from_millis(ms),
+            1,
+            phase,
+            point,
+            PRIMARY_POINTER_BUTTON,
+        );
+    }
+    assert_eq!(moves.get(), 1);
+}
+
+fn mouse(runtime: &mut Runtime, at: Instant, point: Offset, phase: PointerPhase) {
+    let _ = runtime.handle_input_at(
+        InputEvent::PointerWithMetadata {
+            pointer: 41,
+            device: 0,
+            kind: PointerDeviceKind::Mouse,
+            buttons: u32::from(phase == PointerPhase::Down),
+            button: matches!(phase, PointerPhase::Down | PointerPhase::Up)
+                .then_some(PRIMARY_POINTER_BUTTON),
+            sample: PointerSampleMetadata::default(),
+            phase,
+            position: point,
+        },
+        at,
+    );
+}
+
+#[test]
+fn the_locked_barrier_blocks_hover_behind_it_but_not_in_front() {
+    use incular_widgets::MouseRegion;
+    for front in [false, true] {
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let region = MouseRegion::new(Widget::box_(Size::new(10., 10.), Color::WHITE))
+            .on_enter({
+                let log = log.clone();
+                move |_| log.borrow_mut().push("enter")
+            })
+            .on_exit({
+                let log = log.clone();
+                move |_| log.borrow_mut().push("exit")
+            });
+        let subject = Widget::from(Positioned::new(region).left(0.).top(0.));
+        let locked = Widget::from(AnimatedModalBarrier::with_flat_color(RED).dismissible(false));
+        let stack = Stack::new(if front {
+            [locked, subject]
+        } else {
+            [subject, locked]
+        });
+        let mut runtime = Runtime::new(stack.into()).unwrap();
+        let now = Instant::now();
+        runtime.run_frame_at(bounds(), now).unwrap();
+        mouse(
+            &mut runtime,
+            now + Duration::from_millis(2),
+            Offset::new(100., 100.),
+            PointerPhase::Move,
+        );
+        assert!(log.borrow().is_empty());
+        if front {
+            mouse(
+                &mut runtime,
+                now + Duration::from_millis(3),
+                ORIGIN_TARGET,
+                PointerPhase::Move,
+            );
+            assert_eq!(*log.borrow(), ["enter"]);
+        } else {
+            mouse(
+                &mut runtime,
+                now + Duration::from_millis(3),
+                ORIGIN_TARGET,
+                PointerPhase::Down,
+            );
+            mouse(
+                &mut runtime,
+                now + Duration::from_millis(4),
+                ORIGIN_TARGET,
+                PointerPhase::Up,
+            );
+            assert!(log.borrow().is_empty());
+        }
+        mouse(
+            &mut runtime,
+            now + Duration::from_millis(5),
+            Offset::new(100., 100.),
+            PointerPhase::Move,
+        );
+        assert_eq!(
+            &*log.borrow(),
+            if front {
+                &["enter", "exit"][..]
+            } else {
+                &[][..]
+            }
+        );
+    }
+}
+
+#[test]
+fn a_modal_barrier_keeps_the_basic_cursor_over_a_click_cursor() {
+    use incular_widgets::{MouseCursor, MouseRegion};
+    for dismissible in [false, true] {
+        let underneath = MouseRegion::new(Widget::box_(Size::new(800., 600.), Color::WHITE))
+            .cursor(MouseCursor::Click);
+        let barrier = AnimatedModalBarrier::with_flat_color(RED).dismissible(dismissible);
+        let scene = Stack::new([Widget::from(underneath), Widget::from(barrier)]);
+        let mut runtime = Runtime::new(scene.into()).unwrap();
+        let now = Instant::now();
+        runtime.run_frame_at(bounds(), now).unwrap();
+        mouse(
+            &mut runtime,
+            now + Duration::from_millis(2),
+            BARRIER_CENTER,
+            PointerPhase::Enter,
+        );
+        assert_eq!(
+            runtime.effective_mouse_cursor(),
+            MouseCursor::Basic,
+            "dismissible: {dismissible}"
+        );
+    }
+}

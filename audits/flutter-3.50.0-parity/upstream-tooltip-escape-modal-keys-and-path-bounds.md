@@ -93,3 +93,29 @@ and compares settled route/marker presence, not future scheduling.
 Pinned :854/:883 also pair: the supplied onDismiss runs once
 instead of popping the route. Eight modal tests and focused
 pointer, raw-arena, transformed-gesture and menu controls passed.
+
+### Barrier semantics, hover and cursor
+
+Pinned :525 and :600 and the mounted native Stack agree: an animated
+locked barrier hides a MouseRegion behind it from hover, but the
+MouseRegion in front sees both enter and exit. At :573 a translucent
+20 px foreground drag reaches its recognizer even when the barrier is
+locked. The pinned and native zero-area builds at :954 both lay out
+without failing. For :1009 the actual runtime cursor remains Basic
+over an underlying Click region; the native constant-color animated
+path covers both locked and dismissible barriers.
+
+Pinned :910 and native agree that a locked unlabeled barrier does not
+add a semantic node. The three target variants of :922 passed upstream.
+Incular now exposes separately dispatchable Activate and Dismiss actions
+on the full-screen labeled veil. An explicit Semantics.on_dismiss is not
+an Activate alias. The mounted test also disables semantic dismissal
+and checks that stale actions no longer invoke the callback. This is
+partial parity: native label retention and platform eligibility differ,
+and AccessKit projects Activate to Click but has no separate Dismiss
+action to project.
+
+Pinned :630 passed: a tap on a locked barrier submits the SystemSound
+alert service request. Incular still blocks that tap but has no paired
+alert service behavior. This upstream test observes the request, not
+whether a host audibly plays it.

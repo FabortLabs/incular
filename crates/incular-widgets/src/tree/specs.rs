@@ -307,6 +307,7 @@ pub(super) struct SemanticCallbacks {
     pub(super) scroll_backward: Option<Rc<dyn Fn() + 'static>>,
     directional_scroll: Option<Box<[Option<SemanticActionCallback>; 4]>>,
     pub(super) long_press: Option<Rc<dyn Fn() + 'static>>,
+    pub(super) dismiss: Option<Rc<dyn Fn() + 'static>>,
 }
 
 impl std::fmt::Debug for SemanticCallbacks {
@@ -327,6 +328,7 @@ impl std::fmt::Debug for SemanticCallbacks {
                 }),
             )
             .field("long_press", &self.long_press.is_some())
+            .field("dismiss", &self.dismiss.is_some())
             .finish()
     }
 }
@@ -346,6 +348,7 @@ impl PartialEq for SemanticCallbacks {
                 _ => false,
             }
             && same_rc(&self.long_press, &other.long_press)
+            && same_rc(&self.dismiss, &other.dismiss)
     }
 }
 
@@ -385,6 +388,7 @@ impl SemanticCallbacks {
             SemanticActionKind::ScrollForward => self.scroll_forward.clone(),
             SemanticActionKind::ScrollBackward => self.scroll_backward.clone(),
             SemanticActionKind::LongPress => self.long_press.clone(),
+            SemanticActionKind::Dismiss => self.dismiss.clone(),
             SemanticActionKind::Focus
             | SemanticActionKind::SetText
             | SemanticActionKind::SetSelection
