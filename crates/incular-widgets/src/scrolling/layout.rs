@@ -2968,10 +2968,23 @@ impl SequenceRenderSliver {
                 break;
             }
 
+            // Flutter's describeApproximatePaintClip adjusts each sliver's
+            // leading edge by its own overlap, not by the viewport-wide
+            // obstruction total. The cache still includes the clipped rows.
+            let semantic_clip_inset = if sliver_constraints.overlap != 0.
+                && sliver_constraints.viewport_main_axis_extent.is_finite()
+            {
+                sliver_constraints.viewport_main_axis_extent
+                    - sliver_constraints.remaining_paint_extent
+                    + sliver_constraints.overlap
+            } else {
+                0.
+            };
             self.reveal_geometry.borrow_mut()[sliver_index] = SliverRevealGeometry {
                 pins_at_edge: geometry.max_scroll_obstruction_extent > 0.,
                 obstruction_before: preceding_obstruction,
                 reverse_growth: constraints.growth_direction == SliverGrowthDirection::Reverse,
+                semantic_clip_inset,
             };
             preceding_obstruction = (preceding_obstruction + geometry.max_scroll_obstruction_extent)
                 .min(f32::MAX);

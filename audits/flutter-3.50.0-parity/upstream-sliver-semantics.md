@@ -303,3 +303,16 @@ unindexed sliver boxes into index 4,294,967,295. The 23 focused
 Rust regressions passed. These are authored tests, not new upstream
 registration sites. Operating-system scroll-event delivery is not
 verified.
+
+### Per-sliver semantic paint clip
+
+The pinned Dart overlap probe and retained fixture run on both axes
+with reverse on and off. A 20-pixel pinned header leaves one pixel of
+row 0 exposed at offset 49. At exactly 50 and at 55, the row is
+still in the semantic cache but is hidden behind the pinned header.
+The first visible index is 0, then 1; the row's semantic ID persists.
+The clip uses the following sliver's own overlap and remaining paint
+extent in viewport coordinates, rather than the single viewport-wide
+rectangle. The scroll index uses the pre-sort child order: a reversed
+viewport can have a different reading order without reporting its
+last visible item as its first. All 21 focused Rust tests passed.

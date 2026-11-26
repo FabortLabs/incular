@@ -27,10 +27,11 @@ impl WidgetTree {
         element: ElementId,
         outer: SemanticNodeId,
         build: Collected,
-        children: &[SemanticNodeId],
+        ordered: (&[SemanticNodeId], &[(u32, u32, ElementId)]),
         changed_children: &FastHashMap<SemanticNodeId, PaneChild>,
         detached: &mut Vec<SemanticNodeId>,
     ) {
+        let (children, traversal_edges) = ordered;
         let old_inner = self.viewport_semantic_panes.get(&element).copied();
         let old_content = old_inner.unwrap_or(outer);
         let role = match &build {
@@ -50,6 +51,25 @@ impl WidgetTree {
             })
         };
         let is_excluded = |id| pane_child(id).excluded;
+        // Scroll indices describe logical order, not screen-reader reading
+        // order. Reversed/RTL viewports or sort keys can change the latter.
+        let first_visible_index = split
+            .then(|| {
+                children
+                    .iter()
+                    .copied()
+                    .zip(traversal_edges)
+                    .filter_map(|(id, &(_, sequence, _))| {
+                        let child = pane_child(id);
+                        (!child.excluded)
+                            .then_some(child.visible_index)
+                            .flatten()
+                            .map(|index| (sequence, index))
+                    })
+                    .min_by_key(|(sequence, _)| *sequence)
+                    .map(|(_, index)| index)
+            })
+            .flatten();
         let mut excluded = Vec::new();
         let mut included = Vec::new();
         let children = if split && children.iter().copied().any(is_excluded) {
@@ -63,11 +83,6 @@ impl WidgetTree {
             &included
         } else {
             children
-        };
-        let first_visible_index = if split {
-            children.iter().find_map(|&id| pane_child(id).visible_index)
-        } else {
-            None
         };
         if let Some(old) = old_inner.and_then(|id| self.semantics.node(id)) {
             // The normal attachment sweep only examines the outer node.

@@ -274,6 +274,9 @@ pub(crate) struct SliverRevealGeometry {
     pub(crate) pins_at_edge: bool,
     pub(crate) obstruction_before: f32,
     pub(crate) reverse_growth: bool,
+    /// Leading-edge adjustment to this sliver's approximate paint clip.
+    /// Independent of the cache bounds used to retain offscreen semantics.
+    pub(crate) semantic_clip_inset: f32,
 }
 
 impl SliverRevealGeometry {

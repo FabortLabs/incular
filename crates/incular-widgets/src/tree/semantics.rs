@@ -857,7 +857,7 @@ impl WidgetTree {
                     element,
                     id,
                     build,
-                    child_ids,
+                    (child_ids, &edges[start..cursor]),
                     changed_viewport_children,
                     detached,
                 );
@@ -997,10 +997,21 @@ impl WidgetTree {
         // walk over the ancestors per node.
         let world = parent_world.then(CoreTransform::translation(render.offset));
         let child_world = world.then(self.child_content_transform(render_id));
+        let direct_sliver = entry
+            .parent
+            .and_then(|parent| self.elements.get(parent.0))
+            .filter(|parent| matches!(parent.widget.kind(), WidgetKind::SliverViewport { .. }))
+            .and_then(|parent| {
+                parent
+                    .children
+                    .iter()
+                    .position(|child| *child == element)
+                    .map(|slot| (parent, slot))
+            });
         let cached_bounds =
             sliver_window.map(|_| self.semantic_bounds(render_id, world, child_world));
         let mut outside_sliver_cache = false;
-        if let Some(window) = sliver_window {
+        if let Some(mut window) = sliver_window {
             let layout_box =
                 world.transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, render.size));
             let in_window = semantic_clip_overlaps(window.cache, layout_box);
@@ -1009,16 +1020,16 @@ impl WidgetTree {
                 // descendants, not just its direct wrapper.
                 sliver_window = None;
             } else {
-                if !in_window
-                    && entry
-                        .parent
-                        .and_then(|parent| self.elements.get(parent.0))
-                        .is_some_and(|parent| {
-                            matches!(parent.widget.kind(), WidgetKind::SliverViewport { .. })
-                        })
-                {
+                if !in_window && direct_sliver.is_some() {
                     // The direct sliver itself has no viewport/cache coverage.
                     return;
+                }
+                if window.visible.is_some()
+                    && let Some((parent, slot)) = direct_sliver
+                    && let Some(clip) = self.sliver_semantic_paint_clip(parent, slot, parent_world)
+                {
+                    window.visible = Some(clip);
+                    sliver_window = Some(window);
                 }
                 if let Some(visible) = window.visible
                     && viewport_clip != Some(visible)
@@ -1247,9 +1258,8 @@ impl WidgetTree {
                 set_size: collection.and_then(|context| context.set_size),
             });
         } else if collection.is_none()
-            && let Some(parent) = entry.parent.and_then(|parent| self.elements.get(parent.0))
+            && let Some((parent, slot)) = direct_sliver
             && let WidgetKind::SliverViewport { config } = parent.widget.kind()
-            && let Some(slot) = parent.children.iter().position(|child| *child == element)
         {
             collection = Some(SemanticCollectionContext {
                 item_index: parent
@@ -1952,6 +1962,40 @@ impl WidgetTree {
             }
             run_start = run_end;
         }
+    }
+
+    /// The current viewport's physical paint clip for an overlapping sliver,
+    /// transformed from the viewport's local space, not the scrolled child's.
+    fn sliver_semantic_paint_clip(
+        &self,
+        viewport: &Element,
+        child_slot: usize,
+        child_parent_world: CoreTransform,
+    ) -> Option<Rect> {
+        let render = self.renders.get(viewport.render.0)?;
+        let RenderKind::SliverViewport { config } = render.object.kind() else {
+            return None;
+        };
+        let child = *viewport.sliver_child_ids().get(child_slot)?;
+        let geometry = config.delegate.reveal_geometry(child);
+        let inset = geometry.semantic_clip_inset;
+        if inset == 0. {
+            return None;
+        }
+        let unscroll = self.child_content_transform(viewport.render).inverse()?;
+        let viewport_world = child_parent_world.then(unscroll);
+        let reverse = config.reverse ^ geometry.reverse_growth;
+        let origin = if reverse {
+            Offset::ZERO
+        } else {
+            config.axis.offset(inset, 0.)
+        };
+        let main = (config.axis.main_extent(render.size) - inset).max(0.);
+        let cross = config.axis.cross_extent(render.size);
+        Some(viewport_world.transform_rect_bbox(Rect::from_origin_size(
+            origin,
+            config.axis.size(main, cross),
+        )))
     }
 
     /// Whether a visible `element` sits in a scroll viewport, so an

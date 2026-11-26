@@ -436,29 +436,46 @@ fn pinned_header_switches_semantic_panes_only_after_losing_layout_extent() {
 
 #[test]
 fn viewport_reports_total_count_and_first_visible_index_on_the_scroll_pane_only() {
+    for axis in [
+        incular_config::Axis::Vertical,
+        incular_config::Axis::Horizontal,
+    ] {
+        for reverse in [false, true] {
+            check_collection_axis(axis, reverse);
+        }
+    }
+}
+
+fn check_collection_axis(axis: incular_config::Axis, reverse: bool) {
     use incular_accessibility::MobileAccessibilityProjection;
     use incular_widgets::{
-        CustomScrollView, PinnedHeaderSliver, ScrollController, Sliver, SliverFixedExtentList,
+        CustomScrollView, Directionality, PinnedHeaderSliver, ScrollController, Sliver,
+        SliverFixedExtentList, TextDirection,
     };
 
     let controller = ScrollController::new();
     let slivers: [Box<dyn Sliver>; 2] = [
         Box::new(PinnedHeaderSliver::new(
-            Semantics::new(SizedBox::new().height(20.))
+            Semantics::new(SizedBox::square(20.))
                 .container(true)
                 .label("pinned"),
         )),
         Box::new(SliverFixedExtentList::new(50, 50., |i| {
-            Semantics::new(SizedBox::new().height(50.))
+            Semantics::new(SizedBox::square(50.))
                 .container(true)
                 .label(format!("row {i}"))
         })),
     ];
     let mut runtime = Runtime::new(
-        CustomScrollView::new(slivers)
-            .controller(controller.clone())
-            .semantic_child_count(50)
-            .into(),
+        Directionality::new(
+            TextDirection::Ltr,
+            CustomScrollView::new(slivers)
+                .controller(controller.clone())
+                .scroll_direction(axis)
+                .reverse(reverse)
+                .semantic_child_count(50),
+        )
+        .into(),
     )
     .unwrap();
     let surface = Constraints::tight(Size::new(800., 600.));
@@ -474,7 +491,16 @@ fn viewport_reports_total_count_and_first_visible_index_on_the_scroll_pane_only(
         .id;
     let mut projection = MobileAccessibilityProjection::new();
     let mut native_pane = None;
-    for (offset, index) in [(0., 0), (70., 1), (120., 2), (70., 1), (0., 0)] {
+    for (offset, index) in [
+        (0., 0),
+        (49., 0),
+        (50., 1),
+        (55., 1),
+        (70., 1),
+        (120., 2),
+        (70., 1),
+        (0., 0),
+    ] {
         let _ = controller.jump_to(offset);
         runtime.run_frame(surface).unwrap();
         let tree = runtime.tree().semantics();
@@ -492,12 +518,20 @@ fn viewport_reports_total_count_and_first_visible_index_on_the_scroll_pane_only(
         let contents = tree.node(pane).unwrap();
         let metrics = contents.state.scroll_metrics.unwrap();
         assert_eq!(metrics.child_count, Some(50));
-        assert_eq!(metrics.first_visible_index, Some(index));
+        assert_eq!(
+            metrics.first_visible_index,
+            Some(index),
+            "{axis:?} reverse={reverse} at {offset}",
+        );
         let row = tree
             .node(first)
             .expect("cached indexed row stays materialized");
         assert_eq!(row.state.item_index, Some(0));
-        assert_eq!(row.state.hidden, index > 0);
+        assert_eq!(
+            row.state.hidden,
+            index > 0,
+            "{axis:?} reverse={reverse} at {offset}"
+        );
         let update = projection
             .sync(tree)
             .expect("a scroll frame publishes changed metrics");
