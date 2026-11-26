@@ -62,7 +62,7 @@ pub use keyboard::{
     Action, ActionInvocationPhase, ActionInvocationSubscription, ActionListenerSubscription,
     ActionResult, Actions, CharacterActivator, Command, CommandId, ErasedActionScope, ErasedIntent,
     ErasedShortcutScope, FocusKeyEventHandler, FocusRawKeyEventHandler, Intent, KeyEventResult,
-    LockState, LogicalKeySet, LogicalShortcutKey, RawKeyEvent, ShortcutActivator, ShortcutKey,
+    LockState, LogicalKeySet, LogicalShortcutKey, RawKeyDelivery, RawKeyEvent, ShortcutActivator, ShortcutKey,
     ShortcutMatch, ShortcutTrigger, Shortcuts, SingleActivator, combine_key_event_results,
 };
 pub use least_squares::{LeastSquaresSolver, PolynomialFit};

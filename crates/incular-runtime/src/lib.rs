@@ -67,7 +67,7 @@ pub use flutter_text_input::{
     FlutterDeltaTextInputConnection, FlutterDeltaTextInputError, FlutterTextInputLifecycleError,
 };
 pub use focus_keys::FocusKeySubscription;
-pub use frame::{EditingDiagnostics, EventTarget, FocusDiagnostics, FrameStats, MouseCursorUpdate, Runtime};
+pub use frame::{EditingDiagnostics, EventTarget, FocusDiagnostics, FrameStats, KeyMessage, MouseCursorUpdate, Runtime};
 pub use global_shortcuts::{
     GlobalShortcutCompletionStatus, GlobalShortcutRegistration, GlobalShortcutRegistrationRequest,
     GlobalShortcutRequestId, GlobalShortcutService, GlobalShortcutUnregistrationRequest,

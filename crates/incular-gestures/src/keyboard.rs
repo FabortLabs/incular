@@ -74,6 +74,26 @@ pub fn combine_key_event_results(results: impl IntoIterator<Item = KeyEventResul
     combined
 }
 
+/// Selects the raw counterpart of one normalized key event. Mirroring
+/// delays the event clone until a raw callback actually needs it.
+#[doc(hidden)]
+#[derive(Clone, Copy)]
+pub enum RawKeyDelivery<'a> {
+    Absent,
+    Mirror,
+    Supplied(&'a RawKeyEvent),
+}
+
+impl RawKeyDelivery<'_> {
+    fn payload(self, event: &KeyboardEvent) -> Option<RawKeyEvent> {
+        match self {
+            Self::Absent => None,
+            Self::Mirror => Some(RawKeyEvent::from(event.clone())),
+            Self::Supplied(raw) => Some(raw.clone()),
+        }
+    }
+}
+
 impl GestureCallbacks {
     /// Whether this callback set carries retained keyboard/focus behavior.
     #[must_use]
@@ -126,17 +146,17 @@ impl GestureCallbacks {
         event: KeyboardEvent,
         lock_modes: Modifiers,
     ) -> KeyEventResult {
-        self.route_keyboard_with_raw_mode(event, lock_modes, true)
+        self.route_keyboard_with_raw_payload(event, lock_modes, RawKeyDelivery::Mirror)
     }
 
     /// Routes one normalized key. A framework-created semantic key has no
     /// raw counterpart and must not call the deprecated raw handler.
     #[doc(hidden)]
-    pub fn route_keyboard_with_raw_mode(
+    pub fn route_keyboard_with_raw_payload(
         &self,
         event: KeyboardEvent,
         lock_modes: Modifiers,
-        has_raw_event: bool,
+        raw_delivery: RawKeyDelivery<'_>,
     ) -> KeyEventResult {
         if self
             .on_shortcut_with_lock_modes
@@ -155,11 +175,9 @@ impl GestureCallbacks {
         if let Some(node) = &self.focus_node {
             let result = if self.focus_key_handler_owner != FocusKeyHandlerOwner::CallbackContainer {
                 let typed = node.on_key_event().map(|handler| handler(node, event.clone()));
-                let raw = if has_raw_event {
-                    node.on_key().map(|handler| handler(node, RawKeyEvent::from(event.clone())))
-                } else {
-                    None
-                };
+                let raw = node.on_key().and_then(|handler| {
+                    raw_delivery.payload(&event).map(|raw| handler(node, raw))
+                });
                 combine_key_event_results(typed.into_iter().chain(raw))
             } else {
                 self.on_focus_key_event.as_ref().map_or(KeyEventResult::Ignored, |handler| {

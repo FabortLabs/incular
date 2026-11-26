@@ -137,6 +137,19 @@ struct MountedTextInputConnection {
     target: ElementId,
 }
 
+/// One platform key message entering focus routing. Raw-only messages
+/// create a typed event from their portable fields. Combined messages
+/// deliver their two views together and update hardware state only once.
+#[derive(Clone, Debug)]
+pub enum KeyMessage {
+    Typed(KeyboardEvent),
+    Raw(incular_widgets::RawKeyEvent),
+    TypedAndRaw {
+        typed: KeyboardEvent,
+        raw: incular_widgets::RawKeyEvent,
+    },
+}
+
 /// Retained application execution, input dispatch and frame coordination.
 pub struct Runtime {
     pub(crate) tree: WidgetTree,
@@ -3038,10 +3051,37 @@ impl Runtime {
         self.dispatch_keyboard_event_from(event, KeyboardInputSource::Physical)
     }
 
+    /// Dispatches one explicit key message without guessing a missing raw
+    /// counterpart. Keys sent through the existing portable ingress keep
+    /// their ordinary mirrored view.
+    pub fn dispatch_key_message(&mut self, message: KeyMessage) -> bool {
+        use incular_widgets::RawKeyDelivery;
+        match message {
+            KeyMessage::Typed(event) => self.dispatch_keyboard_event_parts(
+                event, KeyboardInputSource::Physical, RawKeyDelivery::Absent,
+            ),
+            KeyMessage::Raw(raw) => self.dispatch_keyboard_event_parts(
+                raw.portable().clone(), KeyboardInputSource::Physical, RawKeyDelivery::Supplied(&raw),
+            ),
+            KeyMessage::TypedAndRaw { typed, raw } => self.dispatch_keyboard_event_parts(
+                typed, KeyboardInputSource::Physical, RawKeyDelivery::Supplied(&raw),
+            ),
+        }
+    }
+
     fn dispatch_keyboard_event_from(
         &mut self,
         event: KeyboardEvent,
         source: KeyboardInputSource,
+    ) -> bool {
+        self.dispatch_keyboard_event_parts(event, source, incular_widgets::RawKeyDelivery::Mirror)
+    }
+
+    fn dispatch_keyboard_event_parts(
+        &mut self,
+        event: KeyboardEvent,
+        source: KeyboardInputSource,
+        raw_delivery: incular_widgets::RawKeyDelivery<'_>,
     ) -> bool {
         if source == KeyboardInputSource::Physical {
             FocusHighlightManager::new().note_keyboard_input();
@@ -3121,7 +3161,7 @@ impl Runtime {
         let lock_modes = event.modifiers | self.hardware_keyboard.lock_modes_enabled();
         let focus_result =
             self.tree
-                .route_keyboard_with_lock_modes(self.focused, event.clone(), lock_modes);
+                .route_keyboard_with_raw_payload(self.focused, event.clone(), lock_modes, raw_delivery);
         let late_result = if has_focus_root && focus_result != KeyEventResult::Handled {
             self.late_focus_key_handlers.dispatch(&event)
         } else {

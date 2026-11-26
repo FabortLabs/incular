@@ -213,6 +213,8 @@ pub use flutter_logo::{FlutterLogo, FlutterLogoLayout, FlutterLogoStyle};
 pub use incular_gestures::{
     FocusExtent, FocusKeyEventHandler, FocusRawKeyEventHandler, FocusRect, RawKeyEvent,
 };
+#[doc(hidden)]
+pub use incular_gestures::RawKeyDelivery;
 pub use focus_keyboard::{
     Action, ActionInvocationPhase, ActionListener, ActionResult, Actions, CallbackShortcuts,
     Command, CommandId, ExcludeFocus, ExcludeFocusTraversal, Focus, FocusManager, FocusNode,

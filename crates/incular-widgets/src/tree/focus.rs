@@ -612,7 +612,22 @@ impl WidgetTree {
         event: KeyboardEvent,
         lock_modes: incular_core::Modifiers,
     ) -> KeyEventResult {
-        self.dispatch_keyboard_where(focused, event, lock_modes, true, |_| true)
+        self.route_keyboard_with_raw_payload(
+            focused, event, lock_modes, incular_gestures::RawKeyDelivery::Mirror,
+        )
+    }
+
+    /// Routes one key message while preserving whether it carried a raw event.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn route_keyboard_with_raw_payload(
+        &self,
+        focused: Option<ElementId>,
+        event: KeyboardEvent,
+        lock_modes: incular_core::Modifiers,
+        raw_delivery: incular_gestures::RawKeyDelivery<'_>,
+    ) -> KeyEventResult {
+        self.dispatch_keyboard_where(focused, event, lock_modes, raw_delivery, |_| true)
     }
 
     /// Shared ancestor walk behind keyboard dispatch. The `serve`
@@ -626,7 +641,7 @@ impl WidgetTree {
         focused: Option<ElementId>,
         event: KeyboardEvent,
         lock_modes: incular_core::Modifiers,
-        has_raw_event: bool,
+        raw_delivery: incular_gestures::RawKeyDelivery<'_>,
         mut serve: impl FnMut(&incular_gestures::GestureCallbacks) -> bool,
     ) -> KeyEventResult {
         self.notify_key_observers(focused, &event);
@@ -645,7 +660,7 @@ impl WidgetTree {
                 && callbacks.has_keyboard_listener()
                 && serve(callbacks)
             {
-                let result = callbacks.route_keyboard_with_raw_mode(event.clone(), lock_modes, has_raw_event);
+                let result = callbacks.route_keyboard_with_raw_payload(event.clone(), lock_modes, raw_delivery);
                 if result != KeyEventResult::Ignored {
                     return result;
                 }
@@ -686,7 +701,7 @@ impl WidgetTree {
             Some(element),
             KeyboardEvent::key_down(key, code),
             incular_core::Modifiers::empty(),
-            false,
+            incular_gestures::RawKeyDelivery::Absent,
             incular_gestures::GestureCallbacks::services_semantic_keys,
         ) == KeyEventResult::Handled
     }

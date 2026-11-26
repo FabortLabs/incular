@@ -160,3 +160,142 @@ fn root_scope_receives_early_and_late_key_stages_without_a_focused_leaf() {
     assert!(!dispatch());
     assert_eq!(log.take(), ["early", "late"]);
 }
+
+#[test]
+fn focus_key_stages_match_callback_counts_in_raw_and_combined_messages() {
+    use KeyEventResult::{Handled, Ignored};
+    use incular_runtime::KeyMessage;
+    use incular_widgets::RawKeyEvent;
+
+    for raw_only in [true, false] {
+        for early_stage in [true, false] {
+            let node = FocusNode::new();
+            let logs = Rc::new(RefCell::new(Vec::new()));
+            let focus_result = Rc::new(Cell::new(Ignored));
+            let stage_result = Rc::new(Cell::new(Ignored));
+            let scene = Focus::new(SizedBox::shrink())
+                .node(node.clone())
+                .on_key_event({
+                    let logs = logs.clone();
+                    let focus_result = focus_result.clone();
+                    move |_, event| {
+                        logs.borrow_mut().push(0);
+                        if event.state.is_down() {
+                            focus_result.get()
+                        } else {
+                            Ignored
+                        }
+                    }
+                })
+                .on_key({
+                    let logs = logs.clone();
+                    move |_, _| {
+                        logs.borrow_mut().push(1);
+                        Ignored
+                    }
+                });
+            let mut runtime = Runtime::new(scene.into()).unwrap();
+            let bounds = Constraints::tight(Size::new(20., 20.));
+            runtime.run_frame(bounds).unwrap();
+            node.request_focus();
+            runtime.run_frame(bounds).unwrap();
+            assert!(node.has_primary_focus());
+
+            let key_message = |down| {
+                let key = KeyboardKey::Character("1".to_owned());
+                let typed = if down {
+                    KeyboardEvent::key_down(key, Code::Digit1)
+                } else {
+                    KeyboardEvent::key_up(key, Code::Digit1)
+                };
+                let raw = RawKeyEvent::from(typed.clone());
+                if raw_only {
+                    KeyMessage::Raw(raw)
+                } else {
+                    KeyMessage::TypedAndRaw { typed, raw }
+                }
+            };
+            let check = |runtime: &mut Runtime, consumed, expected_down: &[u8]| {
+                assert_eq!(runtime.dispatch_key_message(key_message(true)), consumed);
+                assert_eq!(logs.take(), expected_down);
+                assert!(!runtime.dispatch_key_message(key_message(false)));
+                assert_eq!(logs.take(), [0, 1]);
+            };
+            check(&mut runtime, false, &[0, 1]);
+
+            let stage = {
+                let stage_result = stage_result.clone();
+                move |event: &KeyboardEvent| {
+                    if event.state.is_down() {
+                        stage_result.get()
+                    } else {
+                        Ignored
+                    }
+                }
+            };
+            let subscription = if early_stage {
+                runtime.add_early_focus_key_handler(stage)
+            } else {
+                runtime.add_late_focus_key_handler(stage)
+            };
+            stage_result.set(Handled);
+            check(&mut runtime, true, if early_stage { &[] } else { &[0, 1] });
+            stage_result.set(Ignored);
+            check(&mut runtime, false, &[0, 1]);
+            focus_result.set(Handled);
+            check(&mut runtime, true, &[0, 1]);
+
+            drop(subscription);
+            focus_result.set(Ignored);
+            stage_result.set(Handled);
+            check(&mut runtime, false, &[0, 1]);
+            focus_result.set(Handled);
+            stage_result.set(Ignored);
+            check(&mut runtime, true, &[0, 1]);
+        }
+    }
+}
+
+#[test]
+fn typed_only_messages_do_not_invent_raw_data_and_combined_messages_keep_both_views() {
+    use incular_runtime::KeyMessage;
+    use incular_widgets::RawKeyEvent;
+    let calls = Rc::new(RefCell::new(Vec::new()));
+    let node = FocusNode::new();
+    let scene = Focus::new(SizedBox::shrink())
+        .node(node.clone())
+        .on_key_event({
+            let calls = calls.clone();
+            move |_, event| {
+                calls.borrow_mut().push((0, event.key));
+                KeyEventResult::Ignored
+            }
+        })
+        .on_key({
+            let calls = calls.clone();
+            move |_, event| {
+                calls.borrow_mut().push((1, event.logical_key().clone()));
+                KeyEventResult::Ignored
+            }
+        });
+    let mut runtime = Runtime::new(scene.into()).unwrap();
+    let bounds = Constraints::tight(Size::new(20., 20.));
+    runtime.run_frame(bounds).unwrap();
+    node.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    assert!(node.has_primary_focus());
+
+    let typed_key = KeyboardKey::Character("x".to_owned());
+    let raw_key = KeyboardKey::Character("X".to_owned());
+    let typed = KeyboardEvent::key_down(typed_key.clone(), Code::KeyX);
+    let raw = RawKeyEvent::from(KeyboardEvent::key_down(raw_key.clone(), Code::KeyX));
+    assert!(!runtime.dispatch_key_message(KeyMessage::Typed(typed.clone())));
+    assert_eq!(calls.take(), [(0, typed_key.clone())]);
+    runtime.dispatch_key_message(KeyMessage::Typed(KeyboardEvent::key_up(
+        typed_key.clone(),
+        Code::KeyX,
+    )));
+    calls.borrow_mut().clear();
+    assert!(!runtime.dispatch_key_message(KeyMessage::TypedAndRaw { typed, raw }));
+    assert_eq!(calls.take(), [(0, typed_key), (1, raw_key)]);
+}

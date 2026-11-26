@@ -34,3 +34,21 @@ key unconsumed. Incular initially failed the first check because both
 stages required a focused element. They now run for a mounted root
 without inventing a focused child. The focused-node and registration
 snapshot controls still pass (ten targeted Rust tests).
+
+
+## Raw-only and combined key messages
+
+Both :2107 and :2186 now pair at the keyboard message boundary.
+The pinned Linux reference passed all four expanded Flutter variants.
+The retained runtime test replays each sequence through two distinct
+portable ingress modes: a raw key that supplies the typed projection,
+and a combined typed/raw message. Both update hardware keyboard state
+once; the Focus receives typed then raw once each unless an early
+handler consumes that key. Late registration, consumption, removal,
+and key-up are checked separately. A typed-only message does not
+fabricate a raw event, and a combined message preserves the two
+supplied key views even when their logical labels differ.
+
+Twelve targeted Rust tests passed. This does not emulate native
+scan tables or the Flutter engine/test channel itself; the paired
+behavior here is framework focus routing, not OS keyboard delivery.
