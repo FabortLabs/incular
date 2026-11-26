@@ -168,13 +168,15 @@ impl PhysicalModel {
 
 impl From<PhysicalModel> for Widget {
     fn from(value: PhysicalModel) -> Self {
-        // Flutter clips the child to the model's shape when `clipBehavior`
-        // is not `none` (`RenderPhysicalModel.paint`).
-        let child = match (value.shape, value.clip_behavior) {
-            (_, Clip::None) => value.child,
-            (BoxShape::Circle, clip) => ClipOval::new(value.child).clip_behavior(clip).into(),
-            (BoxShape::Rectangle, clip) => ClipRRect::new(value.border_radius, value.child)
-                .clip_behavior(clip)
+        // Keep the wrapper mounted even at Clip.none: toggling physical
+        // paint clipping must not rebuild the child's focus or local state.
+        let child: Widget = match value.shape {
+            BoxShape::Circle => ClipOval::new(value.child)
+                .retain_rectangular_hit_test()
+                .clip_behavior(value.clip_behavior)
+                .into(),
+            BoxShape::Rectangle => ClipRRect::new(value.border_radius, value.child)
+                .clip_behavior(value.clip_behavior)
                 .into(),
         };
         let surface: Widget = match value.shape {
@@ -307,17 +309,18 @@ impl From<PhysicalShape> for Widget {
             clip_behavior,
             child,
         } = value;
-        let child = match clip_behavior {
-            Clip::None => child,
-            clip => ClipPath::new(clipper.clone(), child)
-                .clip_behavior(clip)
-                .into(),
-        };
+        // The custom outline always restricts hit testing, even when it
+        // does not clip painted descendants. Keep the same mounted child
+        // when only the paint mode changes.
+        let child: Widget = ClipPath::new(clipper.clone(), child)
+            .clip_behavior(clip_behavior)
+            .into();
         // The path is already local geometry. A tightly positioned
         // CustomPaint adopts the Stack size without a fresh layout closure.
-        let mut canvas = Canvas::default();
-        canvas.fill_path(clipper, color, FillRule::NonZero);
-        let surface: Widget = CustomPaint::new(incular_core::Size::ZERO, canvas.finish()).into();
+        let surface: Widget = CustomPaint::from_painter(
+            Size::ZERO,
+            PhysicalPathSurface { path: clipper, color },
+        ).into();
         let fill = if elevation > 0.0 {
             elevation_shadow(elevation, shadow_color, surface)
         } else {
@@ -327,6 +330,28 @@ impl From<PhysicalShape> for Widget {
             .fit(StackFit::Passthrough)
             .clip_behavior(Clip::None)
             .into()
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct PhysicalPathSurface {
+    path: Arc<Path>,
+    color: Color,
+}
+
+impl CustomPainter for PhysicalPathSurface {
+    fn paint(&self, _: Size) -> DisplayList {
+        let mut canvas = Canvas::default();
+        canvas.fill_path(self.path.clone(), self.color, FillRule::NonZero);
+        canvas.finish()
+    }
+
+    fn should_repaint(&self, old: &Self) -> bool {
+        self != old
+    }
+
+    fn hit_test(&self, _: Offset) -> Option<bool> {
+        Some(false)
     }
 }
 

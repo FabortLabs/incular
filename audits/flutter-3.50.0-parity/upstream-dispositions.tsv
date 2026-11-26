@@ -2430,3 +2430,5 @@ packages/flutter/test/widgets/box_decoration_test.dart	372	BoxDecoration not tap
 packages/flutter/test/widgets/box_decoration_test.dart	436	BoxDecoration tap inside rounded angles - Top Left	paired-match	upstream-box-decoration-hits.md
 packages/flutter/test/widgets/physical_model_test.dart	119	PhysicalModel does not crash at zero area	paired-match	upstream-physical-surfaces.md
 packages/flutter/test/widgets/physical_model_test.dart	131	PhysicalShape does not crash at zero area	paired-match	upstream-physical-surfaces.md
+packages/flutter/test/widgets/physical_model_test.dart	19	PhysicalModel updates clipBehavior in updateRenderObject	paired-match	upstream-physical-surfaces.md#changing-a-physical-clip
+packages/flutter/test/widgets/physical_model_test.dart	39	PhysicalShape updates clipBehavior in updateRenderObject	paired-match	upstream-physical-surfaces.md#changing-a-physical-clip

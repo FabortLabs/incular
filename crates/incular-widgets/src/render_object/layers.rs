@@ -1259,7 +1259,7 @@ fn cached_clip<'a>(
 
 impl RenderLayers {
     pub(crate) fn accepts_clip_hit(&self, kind: &RenderKind, size: Size, local: Offset) -> bool {
-        if matches!(kind, RenderKind::ClipPath { clipper: Some(delegate), .. } if !delegate.clips_hit_tests()) {
+        if clip_delegate(kind).is_some_and(|delegate| !delegate.clips_hit_tests()) {
             return true;
         }
         // RenderClipRect and RenderClipRRect only narrow their normal box

@@ -358,6 +358,17 @@ impl ClipOval {
         self
     }
 
+    /// PhysicalModel's default oval is a paint clip, not a custom hit clip.
+    pub(crate) fn retain_rectangular_hit_test(mut self) -> Self {
+        thread_local! {
+            static PAINT_ONLY_OVAL: ClipDelegate = ClipDelegate::from_fn(|size| {
+                ClipShape::Rect(Rect::from_origin_size(Offset::ZERO, size))
+            }).with_hit_testing(false);
+        }
+        self.clipper = Some(PAINT_ONLY_OVAL.with(Clone::clone));
+        self
+    }
+
     /// Clips to the oval inscribed in the bounds of the shape the clipper
     /// returns for the laid-out size.
     #[must_use]
