@@ -101,3 +101,14 @@ parent places the Row 55px below an 80px anchor. A retained
 update removes both real baselines and restores top alignment.
 This also exercises baseline forwarding through Flexible and
 ConstrainedBox, which had previously hidden the child baseline.
+
+## Direction changes
+
+The pinned `Flex RTL` sequence runs through sixteen states of the same
+retained Flex. The Rust fixture matches each child's exact origin and
+size when alignment, writing direction and vertical direction flip,
+when the Flex changes axis, and when stretch takes the full 800px
+cross-axis allocation. The original three element identities persist
+throughout. The pinned no-baselines case also matches the retained
+geometry: baseline alignment leaves both boxes at the top, regardless
+of vertical direction. Its existing partial API disposition is unchanged.

@@ -1698,3 +1698,4 @@ packages/flutter/test/widgets/editable_text_test.dart	1589	enableInlinePredictio
 packages/flutter/test/widgets/editable_text_test.dart	1619	sent to the engine properly	paired-match	upstream-smart-keyboard-options.md
 packages/flutter/test/widgets/editable_text_test.dart	1657	default to true when obscureText is false	paired-match	upstream-smart-keyboard-options.md
 packages/flutter/test/widgets/editable_text_test.dart	1685	default to false when obscureText is true	paired-match	upstream-smart-keyboard-options.md
+packages/flutter/test/rendering/flex_test.dart	761	Flex RTL	paired-match	upstream-flex-retained-placement.md#direction-changes
