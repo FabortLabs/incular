@@ -123,6 +123,9 @@ impl WidgetTree {
         }
         self.dispatch_listeners(key, event, hit.raw());
         self.route_pointer(event);
+        if event.phase == PointerPhase::Down {
+            self.notify_tooltips_of_pointer_down(event);
+        }
 
         let tap_target = self.dispatch_tap_regions(event, hit.raw());
         if let Some(target) = tap_target {

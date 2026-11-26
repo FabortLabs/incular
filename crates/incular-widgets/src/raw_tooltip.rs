@@ -11,12 +11,9 @@
 //! `OverlayPortal` is a semantic transient portal. A constrained host can keep
 //! it in the owning view while a capable desktop adapter can lift the same
 //! retained relationship into a true transient surface without changing this
-//! API. The existing raw input layer has
-//! no window-global pointer route, so tap-to-dismiss outside the tooltip is
-//! provided through an ancestor `TapRegionSurface` when one exists, plus the
-//! child listener and the explicit controller dismissal methods. A host that
-//! needs Flutter's application-wide outside-pointer behavior should forward
-//! that event to [`RawTooltipController::dismiss_all`].
+//! API. Pointer-down dismissal applies across the owning retained window,
+//! after its hit-path listeners have identified the tooltip's own anchor
+//! gesture. Separate host windows keep independent pointer routing.
 //!
 //! Use [`RawTooltip::with_animated_builder`] to receive Flutter's show/hide
 //! animation for the tooltip content. The ordinary Rust component builder
@@ -38,7 +35,7 @@ use std::time::Duration;
 
 use incular_config::{Alignment, Constraints, TransientPresentation};
 use incular_core::{Offset, Size};
-use incular_gestures::PointerDeviceKind;
+use incular_gestures::{PointerDeviceKind, RawPointerEvent};
 use incular_rendering::LayerLink;
 use incular_text::RichText;
 use smart_default::SmartDefault;
@@ -46,7 +43,7 @@ use smart_default::SmartDefault;
 use crate::{
     CompositedTransformFollower, CompositedTransformTarget, FocusNode, FocusableActionDetector,
     GestureDetector, HitTestBehavior, IgnorePointer, Listener, MouseRegion, OverlayPortal,
-    Semantics, TapRegion, Text, Widget,
+    Semantics, Text, Widget,
 };
 
 thread_local! {
@@ -209,13 +206,16 @@ impl TooltipPresentation {
     }
 
     fn tick(&self, now: Instant, visible: bool) -> bool {
-        self.timeline.tick(now);
         if self.target_visible.replace(visible) != visible {
+            // Flutter reverses from the last value actually sampled. Do not
+            // advance the old direction on the frame applying a new request.
             if visible {
                 let _ = self.timeline.forward(now);
             } else {
                 let _ = self.timeline.reverse(now);
             }
+        } else {
+            self.timeline.tick(now);
         }
         let next = visible || self.timeline.is_active() || self.timeline.value() > 0.0;
         self.mounted.replace(next) != next
@@ -236,6 +236,8 @@ struct ControllerState {
     presentation: Option<Rc<TooltipPresentation>>,
     hovering: HashSet<u64>,
     last_hover_dismissal: Option<(u64, Instant)>,
+    tap_to_dismiss: bool,
+    anchor_trigger_down: Option<(u64, u64, Instant)>,
     focused: bool,
     manual: bool,
     held: bool,
@@ -292,6 +294,8 @@ impl RawTooltipController {
                 presentation: None,
                 hovering: HashSet::new(),
                 last_hover_dismissal: None,
+                tap_to_dismiss: false,
+                anchor_trigger_down: None,
                 focused: false,
                 manual: false,
                 held: false,
@@ -567,8 +571,7 @@ impl RawTooltipController {
     }
 
     /// Dismisses in response to an unrecognized pointer down, matching
-    /// Flutter's application-global tap-to-dismiss policy as closely as the
-    /// local retained input route permits.
+    /// Flutter's tap-to-dismiss policy for the owning window.
     pub fn dismiss_by_pointer(&self) {
         let _ = self.dismiss_by_pointer_at(Instant::now());
     }
@@ -581,6 +584,29 @@ impl RawTooltipController {
         state.held = false;
         let _ = now;
         set_visible(&mut state, false)
+    }
+
+    fn note_anchor_trigger_down(&self, event: RawPointerEvent) {
+        self.state.borrow_mut().anchor_trigger_down =
+            Some((event.device, event.pointer, event.time));
+    }
+
+    pub(crate) fn handle_window_pointer_down(&self, event: RawPointerEvent) {
+        let dismiss = {
+            let mut state = self.state.borrow_mut();
+            if !state.tap_to_dismiss {
+                return;
+            }
+            // The anchor Listener ran first. Leave this down for its tap or
+            // long-press recognizer; unrelated downs dismiss pending or open
+            // content even when there is no TapRegionSurface.
+            let starts_trigger = state.anchor_trigger_down.take()
+                == Some((event.device, event.pointer, event.time));
+            !starts_trigger && (state.visible || state.pending.is_some())
+        };
+        if dismiss {
+            self.dismiss_by_pointer_at(event.time);
+        }
     }
 
     /// Cancels an in-progress tap/long-press trigger.
@@ -760,6 +786,8 @@ impl RawTooltipController {
             state.detached = true;
             state.hovering.clear();
             state.last_hover_dismissal = None;
+            state.anchor_trigger_down = None;
+            state.tap_to_dismiss = false;
             state.focused = false;
             state.manual = false;
             state.held = false;
@@ -1594,8 +1622,11 @@ impl RawTooltip {
             let mut listener = Listener::new(anchor).behavior(HitTestBehavior::Opaque);
             listener = listener.on_pointer_down(move |event| {
                 down_time.set(event.time);
-                if dismissible && !is_trigger_pointer(mode, event.kind) {
-                    let _ = down_controller.dismiss_by_pointer_at(event.time);
+                if dismissible
+                    && is_trigger_pointer(mode, event.kind)
+                    && event.button.is_none_or(|button| button == incular_core::PRIMARY_POINTER_BUTTON)
+                {
+                    down_controller.note_anchor_trigger_down(event);
                 }
             });
             let up_time = last_event_time.clone();
@@ -1628,7 +1659,7 @@ impl RawTooltip {
                 let cancel_time = last_event_time.clone();
                 let dismiss_canceled = move || {
                     if dismissible {
-                        let _ = cancel.cancel_trigger_at(cancel_time.get());
+                        let _ = cancel.dismiss_by_pointer_at(cancel_time.get());
                     }
                 };
                 if self.trigger_mode == TooltipTriggerMode::Tap {
@@ -1658,15 +1689,6 @@ impl RawTooltip {
                 .enabled(self.enabled)
                 .on_focus_change(move |focused| {
                     let _ = focus_controller.focus_changed_at(focused, Instant::now());
-                })
-                .into();
-        }
-
-        if self.enable_tap_to_dismiss {
-            let outside_controller = controller.clone();
-            anchor = TapRegion::new(anchor)
-                .on_tap_outside(move |event| {
-                    let _ = outside_controller.dismiss_by_pointer_at(event.time);
                 })
                 .into();
         }
@@ -1795,7 +1817,11 @@ impl From<RawTooltip> for Widget {
                         .replace(value.controller.clone())
                         .dispose_mount();
                 }
-                value.controller.state.borrow_mut().detached = false;
+                {
+                    let mut state = value.controller.state.borrow_mut();
+                    state.detached = false;
+                    state.tap_to_dismiss = value.enable_tap_to_dismiss;
+                }
                 value.controller.set_durations(value.durations);
                 value
                     .controller

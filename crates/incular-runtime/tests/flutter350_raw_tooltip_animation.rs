@@ -140,7 +140,9 @@ fn forward_motion_is_linear_but_reverse_motion_uses_its_own_curve() {
     assert!(mid.commands().iter().any(|command| {
         matches!(command, PaintCommand::PushOpacity { alpha, .. } if (*alpha - 0.5).abs() < 0.0001)
     }));
-    tooltip.frame(110);
+    // Flutter's original uses pumpAndSettle before reversing. A
+    // frame exactly at 110 ms has value 1 but is not yet completed.
+    tooltip.frame_us(110_001);
     close(tooltip.value(), 1.0);
 
     tooltip.dismiss(120);

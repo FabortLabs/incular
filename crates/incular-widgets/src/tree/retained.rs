@@ -452,23 +452,36 @@ impl WidgetTree {
         self.dismiss_transients_matching(reason, |_| true)
     }
 
-    /// Advance deadlines on the frame's event clock, not the animation clock.
-    #[doc(hidden)]
-    pub fn pump_tooltip_timers(&self, now: Instant) -> bool {
-        let mut pending = false;
+    fn for_each_tooltip_controller(&self, mut visit: impl FnMut(&crate::RawTooltipController)) {
         for id in &self.tracked.transient_portals {
-            let timer = self
+            let controller = self
                 .elements
                 .get(id.0)
                 .and_then(|node| node.environment_override.as_ref())
                 .and_then(|scope| scope.value.downcast_ref::<TransientPortalMarker>())
                 .and_then(|marker| marker.tooltip_timer.as_ref());
-            if let Some(timer) = timer {
-                timer.tick(now);
-                pending |= timer.pending_deadline().is_some() || timer.presentation_is_active();
+            if let Some(controller) = controller {
+                visit(controller);
             }
         }
+    }
+
+    /// Advance deadlines and presentation on the frame's event clock.
+    #[doc(hidden)]
+    pub fn pump_tooltip_timers(&self, now: Instant) -> bool {
+        let mut pending = false;
+        self.for_each_tooltip_controller(|controller| {
+            controller.tick(now);
+            pending |= controller.pending_deadline().is_some()
+                || controller.presentation_is_active();
+        });
         pending
+    }
+
+    /// Deliver a window-global down after hit listeners have marked their
+    /// own anchor downs, without consuming a target's ordinary input.
+    pub(super) fn notify_tooltips_of_pointer_down(&self, event: incular_gestures::RawPointerEvent) {
+        self.for_each_tooltip_controller(|controller| controller.handle_window_pointer_down(event));
     }
 
     /// Tooltips get the first Escape before a focused dismiss shortcut or
