@@ -90,7 +90,7 @@ impl Host {
             .iter()
             .find(|(_, node)| node.label.as_deref() == Some(LABELS[page]))
             .expect("the cache retains the requested semantic page");
-        assert!(node.actions.contains(&SemanticActionKind::ShowOnScreen));
+        assert!(node.supports_action(SemanticActionKind::ShowOnScreen));
         self.runtime
             .dispatch_semantic_action(id, SemanticAction::ShowOnScreen)
     }

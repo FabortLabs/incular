@@ -535,7 +535,7 @@ fn request(window: WindowId, native_id: u64, action: SemanticAction) -> bool {
             semantics
                 .nodes
                 .get(&native_id)
-                .is_some_and(|node| node.actions.contains(&action.kind()))
+                .is_some_and(|node| node.supports_action(action.kind()))
         };
         if offers(native_id) {
             return Some(native_id);

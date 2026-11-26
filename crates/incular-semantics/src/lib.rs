@@ -527,6 +527,9 @@ pub struct SemanticState {
     pub hidden: bool,
     /// Flutter `hasImplicitScrolling`.
     pub has_implicit_scrolling: bool,
+    /// A viewport can reveal this node through the renderer's default
+    /// ShowOnScreen fallback. This is not an explicitly advertised action.
+    pub implicit_show_on_screen: bool,
     pub scroll_metrics: Option<SemanticScrollMetrics>,
     /// Flutter's `isLiveRegion`: changes are announced politely.
     pub live_region: bool,
@@ -659,6 +662,7 @@ impl Default for SemanticState {
             toggled: None,
             hidden: false,
             has_implicit_scrolling: false,
+            implicit_show_on_screen: false,
             scroll_metrics: None,
             live_region: false,
             text_direction: None,
@@ -692,6 +696,13 @@ pub struct SemanticNode {
 }
 
 impl SemanticNode {
+    /// Whether an explicit action or a renderer fallback can be dispatched.
+    #[must_use]
+    pub fn supports_action(&self, action: SemanticActionKind) -> bool {
+        self.actions.contains(&action)
+            || (action == SemanticActionKind::ShowOnScreen && self.state.implicit_show_on_screen)
+    }
+
     /// Returns the node's framework-only tags.
     #[must_use]
     pub fn tags(&self) -> &[SemanticsTag] {

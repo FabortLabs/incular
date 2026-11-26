@@ -31,7 +31,7 @@ fn a_partially_visible_page_has_semantics_but_default_reveal_does_not_scroll() {
         .expect("the partly visible neighbor contributes semantics");
     let expected = Rect::from_origin_size(Offset::new(250., 0.), Size::new(250., 200.));
     assert_eq!(node.bounds, expected);
-    assert!(node.actions.contains(&SemanticActionKind::ShowOnScreen));
+    assert!(node.supports_action(SemanticActionKind::ShowOnScreen));
     assert_eq!(controller.offset(), 0.);
 
     let _ = runtime.dispatch_semantic_action(id, SemanticAction::ShowOnScreen);

@@ -431,9 +431,9 @@ fn nodes_inside_a_scroll_view_advertise_show_on_screen() {
         Widget::from(SingleChildScrollView::new(button("Inside"))),
     ]));
     let inside = labelled(&tree, "Inside").expect("inside node");
-    assert!(inside.actions.contains(&SemanticActionKind::ShowOnScreen));
+    assert!(inside.supports_action(SemanticActionKind::ShowOnScreen));
     let outside = labelled(&tree, "Outside").expect("outside node");
-    assert!(!outside.actions.contains(&SemanticActionKind::ShowOnScreen));
+    assert!(!outside.supports_action(SemanticActionKind::ShowOnScreen));
 }
 
 fn blocked_fixture_label(label: &str) -> Widget {

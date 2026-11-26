@@ -89,10 +89,8 @@ the descriptor closures alone:
   arbitrary sliver remain open; editor-specific capabilities are separate.
 
 The original complete-tree checks also include Flutter's two-pane graph.
-Its default reveal uses a callback without advertising an extra action,
-whereas Incular's portable projection exposes `ShowOnScreen` directly.
-The tested callback and annotation behavior matches; these broader
-dispositions remain partial.
+The tested callback and annotation behavior matches. The wider cases
+remain partial until their full graph and action inventory are checked.
 
 ## Heading annotation on a sliver's text
 
@@ -190,9 +188,8 @@ tests confirm that:
   declared taps still prevent merging even if one cannot execute.
 
 The ten focused action tests and fifteen runtime action/keyboard focus
-regressions passed. The merged cases are partial matches because
-Incular exposes its portable `ShowOnScreen` action on the node,
-whereas Flutter uses a separate fallback rather than an action bit.
+regressions passed. The original merged cases also compare the
+complete graph, not just the label and handler results.
 
 ## Typed text action payloads
 
@@ -370,9 +367,12 @@ remain separate. The pinned authored probe and native regression
 also verify text replacement, release as an explicit child, and
 reabsorption with the same parent ID and stale leaf removal.
 
-All 51 focused Rust tests passed. The upstream cases remain partial
-because Incular still exposes its portable default ShowOnScreen
-action and legacy numeric scroll value in that graph.
+All 51 focused Rust tests passed in the initial comparison. The
+subsequent typed scroll position and renderer-reveal changes removed
+the two extra fields in the default graph. The strict native fixture
+now checks empty action/value/hint fields and the exact viewport,
+container and leaf edges/tags. Pinned lines 682 and 735 are paired,
+with the host's synthetic root normalized.
 
 ### Numeric scroll position without fabricated value text
 
@@ -387,3 +387,16 @@ The mobile projection emits a Scrolled event for a changed offset,
 not ValueChanged, and retains the pane ID. The 13 targeted Rust
 tests include the existing incremental scaling checks. Actual
 operating-system event delivery was not tested.
+
+### Default reveal without an extra action bit
+
+The pinned `semantic_show_on_screen_fallback_test.dart` and retained
+test each reveal cached row 14 at offset 150 without an explicitly
+advertised ShowOnScreen action. The same semantic node becomes visible.
+Mobile action validation still accepts the renderer fallback, and
+AccessKit exposes and translates ScrollIntoView without adding a
+Flutter-style explicit action. Explicit table-row actions continue
+to work. In addition to the 12 strict tag and topology tests, 62
+focused page, runtime, table and widget regressions passed. The
+browser uses the shared capability predicate; a wasm build was not
+run here.

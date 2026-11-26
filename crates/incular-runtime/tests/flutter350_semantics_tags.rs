@@ -683,13 +683,18 @@ fn immediate_viewport_tag_stops_at_nested_sliver_and_lazy_box_containers() {
             let tree = runtime.tree().semantics();
             let outer = tree.node(tree.root().unwrap()).unwrap();
             assert_eq!(outer.children.len(), 1);
+            assert!(outer.label.is_none());
+            assert!(outer.tags().is_empty());
+            assert!(!outer.state.has_implicit_scrolling);
             let pane = tree.node(outer.children[0]).unwrap();
             assert!(pane.state.has_implicit_scrolling);
+            assert!(pane.label.is_none());
+            assert!(pane.tags().is_empty());
             assert_eq!(pane.children.len(), 1);
             let group = tree.node(pane.children[0]).unwrap();
             assert!(group.label.is_none());
             let tag = Viewport::use_two_pane_semantics_tag();
-            assert!(group.is_tagged(tag));
+            assert_eq!(group.tags(), &[tag.clone()]);
             assert_eq!(group.children.len(), 2);
             for (&id, label) in group.children.iter().zip(["child 1", "child 2"]) {
                 let child = tree.node(id).unwrap();
@@ -700,8 +705,28 @@ fn immediate_viewport_tag_stops_at_nested_sliver_and_lazy_box_containers() {
                     runtime.tree().semantics_debug_dump(),
                 );
                 assert_eq!(child.state.text_direction, Some(TextDirection::Ltr));
-                assert!(!child.is_tagged(tag));
+                assert!(child.tags().is_empty());
+                assert!(!child.state.has_implicit_scrolling);
                 assert!(child.children.is_empty());
+            }
+            for (_, node) in tree.iter() {
+                assert!(node.actions.is_empty());
+                assert!(node.value.is_none());
+                assert!(node.description.is_none());
+                assert!(node.state.tooltip.is_none());
+                assert!(node.state.selection.is_none());
+                assert!(node.state.increased_value.is_none());
+                assert!(node.state.decreased_value.is_none());
+                assert!(node.state.checked.is_none());
+                assert!(node.state.toggled.is_none());
+                assert!(node.state.expanded.is_none());
+                assert!(node.state.identifier.is_none());
+                assert!(node.state.link_url.is_none());
+                assert!(node.state.heading_level.is_none());
+                assert!(!node.state.hidden);
+                assert!(!node.state.has_enabled_state);
+                assert!(!node.state.focusable);
+                assert!(!node.state.focused);
             }
             (
                 outer.id,

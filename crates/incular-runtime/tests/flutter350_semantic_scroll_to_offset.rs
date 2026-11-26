@@ -355,3 +355,83 @@ fn fractional_scroll_position_uses_numeric_metadata_and_a_scroll_event_not_value
         }
     }
 }
+
+#[test]
+fn a_cached_row_reveals_through_both_projections_without_an_explicit_show_action() {
+    use incular_accessibility::MobileAccessibilityProjection;
+    use incular_widgets::Semantics;
+
+    let controller = ScrollController::new();
+    let list = ListView::builder(30, |index| {
+        Semantics::new(SizedBox::new().height(50.)).label(format!("row {index}"))
+    })
+    .item_extent(50.)
+    .controller(controller.clone());
+    let mut runtime = Runtime::new(Directionality::new(TextDirection::Ltr, list).into()).unwrap();
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    runtime.run_frame(bounds).unwrap();
+    let target = |runtime: &Runtime| {
+        runtime
+            .tree()
+            .semantics()
+            .iter()
+            .map(|(_, node)| node)
+            .find(|node| node.label.as_deref() == Some("row 14"))
+            .unwrap()
+            .clone()
+    };
+    let hidden = target(&runtime);
+    assert!(hidden.state.hidden);
+    assert!(!hidden.actions.contains(&SemanticActionKind::ShowOnScreen));
+    assert!(hidden.supports_action(SemanticActionKind::ShowOnScreen));
+
+    let mut mobile = MobileAccessibilityProjection::new();
+    let mobile_update = mobile.sync(runtime.tree().semantics()).unwrap();
+    let native = mobile_update
+        .nodes
+        .iter()
+        .find(|event| event.semantic.id == hidden.id)
+        .unwrap();
+    assert!(
+        !native
+            .semantic
+            .actions
+            .contains(&SemanticActionKind::ShowOnScreen)
+    );
+    let request = mobile
+        .translate_action(native.native_id, SemanticAction::ShowOnScreen)
+        .unwrap();
+    assert_eq!(request.node, hidden.id);
+    assert_eq!(request.action, SemanticAction::ShowOnScreen);
+
+    let mut bridge = AccessKitProjection::new();
+    let desktop = bridge
+        .sync(runtime.tree().semantics(), 1.)
+        .unwrap()
+        .into_accesskit();
+    let desktop_id = NodeId(bridge.native_node_id(hidden.id).unwrap());
+    let desktop_node = desktop
+        .nodes
+        .iter()
+        .find(|(id, _)| *id == desktop_id)
+        .unwrap();
+    assert!(desktop_node.1.supports_action(Action::ScrollIntoView));
+    let mapped = bridge
+        .translate_action(&ActionRequest {
+            action: Action::ScrollIntoView,
+            target_tree: TreeId::ROOT,
+            target_node: desktop_id,
+            data: None,
+        })
+        .unwrap();
+    assert_eq!(mapped.node, request.node);
+    assert_eq!(mapped.action, request.action);
+    assert!(runtime.dispatch_semantic_action(mapped.node, mapped.action));
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(controller.offset(), 150.);
+    let revealed = target(&runtime);
+    assert_eq!(revealed.id, hidden.id);
+    assert!(!revealed.state.hidden);
+    assert!(!revealed.actions.contains(&SemanticActionKind::ShowOnScreen));
+    assert!(revealed.supports_action(SemanticActionKind::ShowOnScreen));
+}

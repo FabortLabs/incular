@@ -1175,6 +1175,9 @@ impl AccessKitProjection {
                 node.add_action(action);
             }
         }
+        if semantic.state.implicit_show_on_screen {
+            node.add_action(Action::ScrollIntoView);
+        }
         if supports(semantic, SemanticActionKind::Custom) {
             for id in &semantic.state.custom_actions {
                 let Some(action) = CustomSemanticsAction::get_action(*id) else {
@@ -1205,7 +1208,7 @@ impl AccessKitProjection {
 }
 
 fn supports(node: &SemanticNode, action: SemanticActionKind) -> bool {
-    node.actions.contains(&action)
+    node.supports_action(action)
 }
 
 fn map_role(role: Role, obscured: bool) -> AccessKitRole {

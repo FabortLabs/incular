@@ -1613,16 +1613,9 @@ impl WidgetTree {
                 actions.push(action);
             }
         }
-        // Flutter's semantics owner can reveal a node via its default
-        // showOnScreen callback even when the action isn't advertised.
-        // Incular exposes that ability to portable bridges as an action.
-        // Role-less elements skip the allocation because they emit no node.
-        if role.is_some()
-            && !actions.contains(&SemanticActionKind::ShowOnScreen)
-            && self.has_scroll_ancestor(element)
-        {
-            actions.push(SemanticActionKind::ShowOnScreen);
-        }
+        // Flutter's owner can reveal a node through the renderer even
+        // when ShowOnScreen is absent from its explicit action list.
+        state.implicit_show_on_screen = role.is_some() && self.has_scroll_ancestor(element);
         let focus_blocked = state.accessibility_focus_block_type.blocks_focus();
         let keyboard_target = !focus_blocked && self.can_request_focus(element);
         let declared_focusable = state.declared_input_focusable();
@@ -1646,6 +1639,7 @@ impl WidgetTree {
                 && declared_focusable != Some(false)
                 && (focus_annotation.is_none() || self.focus_semantic_actions_enabled));
         let has_user_actions = focus_action
+            || state.implicit_show_on_screen
             || !actions.is_empty()
             || merged.standard_actions != 0
             || !merged.custom_actions.is_empty()
@@ -1659,6 +1653,7 @@ impl WidgetTree {
                     && entry.widget.semantic_properties().callbacks.supports(*action)
             });
             state.custom_actions = Box::default();
+            state.implicit_show_on_screen = false;
         } else {
             if focus_action && !actions.contains(&SemanticActionKind::Focus) {
                 actions.push(SemanticActionKind::Focus);
@@ -2784,7 +2779,7 @@ impl WidgetTree {
         {
             return Some(child);
         }
-        if !semantic.actions.contains(&action.kind()) {
+        if !semantic.supports_action(action.kind()) {
             return None;
         }
         match action {
