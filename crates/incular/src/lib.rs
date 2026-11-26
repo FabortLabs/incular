@@ -117,6 +117,10 @@ pub mod prelude {
         TrackpadGesture, TrackpadGestureKind, TrackpadGesturePhase, Transform as AffineTransform,
         UniqueKey, ValueKey, ValueNotifier, WindowResizeDirection, additional_pointer_button_mask,
     };
+    pub use incular_gestures::{
+        PointerRouteError, PointerRouteErrorHandler, PointerRouteId, PointerRouter,
+        RoutedPointerEvent, WeakPointerRouter,
+    };
     pub use incular_image::{
         AnyImageProvider, AssetImage, DecodedImage, FileImage, ImageCache, ImageCacheDiagnostics,
         ImageChunkEvent, ImageConfiguration, ImageError, ImageHandle, ImageId, ImageLoadState,

@@ -199,3 +199,33 @@ fn local_samples(trace: &Trace) -> Vec<(Offset, Offset)> {
         .map(|e| (e.local_position, e.local_delta))
         .collect()
 }
+
+#[test]
+fn tree_pointer_router_observes_hit_callbacks_then_local_routes_and_native_scroll() {
+    let (mut tree, listener) = record(|listener| listener);
+    let observations = Rc::new(RefCell::new(Vec::new()));
+    let router = tree.pointer_router();
+    router.add_route(1, Some(Transform::scale(0.5)), {
+        let listener = listener.clone();
+        let observations = observations.clone();
+        move |routed| {
+            assert!(!listener.borrow().is_empty(), "the hit path goes first");
+            observations.borrow_mut().push(("local", routed.event));
+        }
+    });
+    router.add_global_route(None, {
+        let observations = observations.clone();
+        move |routed| observations.borrow_mut().push(("global", routed.event))
+    });
+
+    send(&mut tree, PointerPhase::Down, 1, 20., 20.);
+    send(&mut tree, PointerPhase::Move, 1, 24., 26.);
+    tree.scroll_at(Offset::new(24., 26.), Offset::new(0., 8.));
+    let observed = observations.borrow();
+    let labels: Vec<_> = observed.iter().map(|(label, _)| *label).collect();
+    assert_eq!(labels, ["local", "global", "local", "global", "global"]);
+    assert_eq!(observed[2].1.local_position, Offset::new(12., 13.));
+    assert_eq!(observed[2].1.local_delta, Offset::new(2., 3.));
+    assert_eq!(observed[3].1.local_delta, Offset::new(4., 6.));
+    assert_eq!(observed[4].1.scroll_delta, Offset::new(0., 8.));
+}

@@ -43,6 +43,22 @@ impl WidgetTree {
         }
     }
 
+    /// Pointer-routing table for this retained window. Its observers receive
+    /// raw events after hit-path listeners and before the recognizer arena.
+    #[must_use]
+    pub fn pointer_router(&self) -> incular_gestures::PointerRouter {
+        self.input
+            .pointer_router
+            .get_or_init(incular_gestures::PointerRouter::new)
+            .clone()
+    }
+
+    fn route_pointer(&self, event: RawPointerEvent) {
+        if let Some(router) = self.input.pointer_router.get() {
+            router.route(event);
+        }
+    }
+
     /// Dispatches one metadata-rich pointer event through the standalone
     /// retained window.
     pub fn dispatch_raw_pointer(&mut self, event: RawPointerEvent) -> Option<ElementId> {
@@ -96,9 +112,11 @@ impl WidgetTree {
         }
         self.dispatch_mouse_regions(window, event, hit, true);
         if matches!(event.phase, PointerPhase::Enter | PointerPhase::Exit) {
+            self.route_pointer(event);
             return None;
         }
         self.dispatch_listeners(key, event, hit.raw());
+        self.route_pointer(event);
 
         let tap_target = self.dispatch_tap_regions(event, hit.raw());
         if let Some(target) = tap_target {
@@ -556,6 +574,7 @@ impl WidgetTree {
             callback(event);
         }
         crate::raw_input::PointerSignalResolver::set_listener(None);
+        self.route_pointer(event);
         delivered
     }
 

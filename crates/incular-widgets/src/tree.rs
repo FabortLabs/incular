@@ -7,7 +7,7 @@
 use incular_core::time::Instant;
 use std::{
     any::{Any, TypeId},
-    cell::{Cell, RefCell},
+    cell::{Cell, OnceCell, RefCell},
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     rc::Rc,
     time::Duration,
@@ -1328,6 +1328,8 @@ struct InputState {
     raw_recognizers: HashMap<ElementId, HashMap<TypeId, Box<dyn GestureRecognizer>>>,
     raw_gesture_streams: HashMap<GestureArenaKey, ActiveRawGesture>,
     raw_pointer_routes: HashMap<GestureArenaKey, Vec<RawPointerRouteEntry>>,
+    /// Global and per-pointer observers, created only by explicit callers.
+    pointer_router: OnceCell<incular_gestures::PointerRouter>,
     /// The previous raw position of each pointer, for Flutter's `delta`.
     raw_pointer_positions: HashMap<GestureArenaKey, Offset>,
     /// The most recent hit-transform for each hovered annotation. Exits

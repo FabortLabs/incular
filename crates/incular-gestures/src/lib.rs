@@ -16,6 +16,7 @@ mod mouse;
 mod multidrag;
 mod multitap;
 mod pointer;
+mod pointer_router;
 mod raw;
 mod scale;
 mod slop;
@@ -63,6 +64,10 @@ pub use multitap::{
 };
 pub use pointer::{
     DragGestureDetector, FlingLimits, GestureDetector, PointerGestureRecognizer, TapMemory,
+};
+pub use pointer_router::{
+    PointerRouteError, PointerRouteErrorHandler, PointerRouteId, PointerRouter, RoutedPointerEvent,
+    WeakPointerRouter,
 };
 pub use raw::{
     ErasedGestureRecognizerFactory, GestureRecognizer, GestureRecognizerFactory,

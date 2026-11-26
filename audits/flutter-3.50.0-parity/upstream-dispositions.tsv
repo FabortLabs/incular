@@ -1523,3 +1523,12 @@ packages/flutter/test/painting/text_style_test.dart	717	Throws when lerping betw
 packages/flutter/test/painting/text_style_test.dart	724	Does not throw when lerping between inherit:true and inherit:false but fully specified styles	paired-match	upstream-text-style-tween.md
 packages/flutter/test/painting/text_style_test.dart	618	TextStyle apply	paired-match	upstream-text-style-apply.md
 packages/flutter_tools/test/commands.shard/hermetic/widget_preview/preview_detector/preview_detector_regression_178317_test.dart	76	regression test https://github.com/flutter/flutter/issues/178317	partial-match	upstream-widget-previews-runtime.md#watch-event-scope-and-invalidation
+packages/flutter/test/gestures/pointer_router_test.dart	12	Should route pointers	paired-match	upstream-pointer-router.md
+packages/flutter/test/gestures/pointer_router_test.dart	33	Supports re-entrant cancellation	paired-match	upstream-pointer-router.md
+packages/flutter/test/gestures/pointer_router_test.dart	49	Supports global callbacks	paired-match	upstream-pointer-router.md
+packages/flutter/test/gestures/pointer_router_test.dart	68	Supports re-entrant global cancellation	paired-match	upstream-pointer-router.md
+packages/flutter/test/gestures/pointer_router_test.dart	84	Per-pointer callbacks cannot re-entrantly add global routes	paired-match	upstream-pointer-router.md
+packages/flutter/test/gestures/pointer_router_test.dart	102	Per-pointer callbacks happen before global callbacks	paired-match	upstream-pointer-router.md
+packages/flutter/test/gestures/pointer_router_test.dart	122	Exceptions do not stop pointer routing	paired-match	upstream-pointer-router.md
+packages/flutter/test/gestures/pointer_router_test.dart	151	Exceptions include router, route & event	partial-match	upstream-pointer-router.md
+packages/flutter/test/gestures/pointer_router_test.dart	162	Should transform events	paired-match	upstream-pointer-router.md
