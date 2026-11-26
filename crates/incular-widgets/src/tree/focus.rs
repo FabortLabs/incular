@@ -377,6 +377,7 @@ impl WidgetTree {
 
     fn refresh_explicit_focus_parents(&mut self) {
         self.resolved_focus_parents.clear();
+        self.resolved_focus_children.clear();
         let Some(hosted) = &self.hosted_focus_nodes else {
             return;
         };
@@ -386,11 +387,53 @@ impl WidgetTree {
             }) else {
                 continue;
             };
-            // Reject any loop, including one formed through ordinary widget
-            // ancestry. Until a valid parent is mounted, use widget ancestry.
-            if !self.is_focus_descendant_or_self(parent, id) {
+            let mut implicit = self.parent(id);
+            while let Some(candidate) = implicit {
+                if hosted.contains_key(&candidate) {
+                    break;
+                }
+                implicit = self.parent(candidate);
+            }
+            if implicit != Some(parent) {
                 self.resolved_focus_parents.insert(id, parent);
             }
+        }
+        // Decide from the entire prospective graph, not in mount order:
+        // one override can make a separate override valid by moving that
+        // branch away. Dropping a cyclic override may reveal another cycle
+        // through its ordinary widget parent, so validate each fallback.
+        loop {
+            let cyclic = self
+                .resolved_focus_parents
+                .keys()
+                .copied()
+                .filter(|&origin| {
+                    let mut visited = BTreeSet::new();
+                    let mut current = self.mounted_focus_parent(origin);
+                    while let Some(id) = current {
+                        if id == origin {
+                            return true;
+                        }
+                        if !visited.insert(id) {
+                            break;
+                        }
+                        current = self.mounted_focus_parent(id);
+                    }
+                    false
+                })
+                .collect::<Vec<_>>();
+            if cyclic.is_empty() {
+                break;
+            }
+            for id in cyclic {
+                self.resolved_focus_parents.remove(&id);
+            }
+        }
+        for (&child, &parent) in &self.resolved_focus_parents {
+            self.resolved_focus_children
+                .entry(parent)
+                .or_default()
+                .push(child);
         }
     }
 
@@ -507,15 +550,22 @@ impl WidgetTree {
             return false;
         }
         let mut current = id;
+        let has_overrides = !self.resolved_focus_parents.is_empty();
+        let mut focus_ancestor_blocked = false;
+        let mut reparented = false;
         loop {
             let Some(entry) = self.elements.get(current.0) else {
                 return false;
             };
+            reparented |= has_overrides && self.resolved_focus_parents.contains_key(&current);
             if entry.widget.semantic_properties().exclude_focus {
                 return false;
             }
             let Some(parent) = entry.parent else {
-                return self.root == Some(current);
+                if self.root != Some(current) {
+                    return false;
+                }
+                break;
             };
             let Some(ancestor) = self.elements.get(parent.0) else {
                 return false;
@@ -526,18 +576,34 @@ impl WidgetTree {
                 {
                     return false;
                 }
-                WidgetKind::Gesture { callbacks, .. }
-                    if callbacks
+                WidgetKind::Gesture { callbacks, .. } => {
+                    focus_ancestor_blocked |= callbacks
                         .focus_node
                         .as_ref()
-                        .is_some_and(|node| !node.descendants_are_focusable()) =>
-                {
-                    return false;
+                        .is_some_and(|node| !node.descendants_are_focusable());
+                    if focus_ancestor_blocked && !has_overrides {
+                        return false;
+                    }
                 }
                 _ => {}
             }
             current = parent;
         }
+        if !reparented {
+            return !focus_ancestor_blocked;
+        }
+        let mut ancestor = self.mounted_focus_parent(id);
+        while let Some(id) = ancestor {
+            let Some(entry) = self.elements.get(id.0) else {
+                return false;
+            };
+            if external_node(entry.widget.kind()).is_some_and(|node| !node.descendants_are_focusable())
+            {
+                return false;
+            }
+            ancestor = self.mounted_focus_parent(id);
+        }
+        true
     }
 
     #[must_use]
@@ -589,7 +655,7 @@ impl WidgetTree {
             {
                 return Vec::new();
             }
-            ancestor = element.parent;
+            ancestor = self.mounted_focus_parent(id);
         }
 
         let mut descendants = Vec::new();
@@ -619,10 +685,9 @@ impl WidgetTree {
             }
             if node.is_none_or(incular_gestures::FocusNode::descendants_are_traversable) {
                 pending.extend(
-                    Self::focus_children(element)
-                        .iter()
+                    self.mounted_focus_children(id, element)
                         .rev()
-                        .map(|&child| (child, false)),
+                        .map(|child| (child, false)),
                 );
             }
         }
@@ -1360,7 +1425,7 @@ impl WidgetTree {
                 focusable
                     .iter()
                     .copied()
-                    .find(|candidate| self.is_descendant_or_self(*candidate, scope))
+                    .find(|candidate| self.is_focus_descendant_or_self(*candidate, scope))
             })
     }
 
@@ -1529,7 +1594,7 @@ impl WidgetTree {
                 .then(|| {
                     self.focusable_elements()
                         .into_iter()
-                        .find(|candidate| self.is_descendant_or_self(*candidate, id))
+                        .find(|candidate| self.is_focus_descendant_or_self(*candidate, id))
                 })
                 .flatten()
         })
@@ -1611,7 +1676,7 @@ impl WidgetTree {
             if scan.excluded_traversal
                 && !scan
                     .anchor
-                    .is_some_and(|anchor| self.is_descendant_or_self(anchor, id))
+                    .is_some_and(|anchor| self.is_focus_descendant_or_self(anchor, id))
             {
                 continue;
             }
@@ -1662,7 +1727,7 @@ impl WidgetTree {
                 continue;
             }
             scan.excluded_focus |= !descendants_are_focusable;
-            for &child in Self::focus_children(element).iter().rev() {
+            for child in self.mounted_focus_children(id, element).rev() {
                 let child_policy = self
                     .elements
                     .get(child.0)
@@ -1675,13 +1740,28 @@ impl WidgetTree {
             }
         }
     }
-    fn focus_children(element: &Element) -> &[ElementId] {
-        match element.widget.kind() {
+    fn mounted_focus_children<'a>(
+        &'a self,
+        id: ElementId,
+        element: &'a Element,
+    ) -> impl DoubleEndedIterator<Item = ElementId> + 'a {
+        let children: &[ElementId] = match element.widget.kind() {
             WidgetKind::IndexedStack { index, .. } => index
                 .and_then(|slot| element.children.get(slot))
                 .map_or(&[], std::slice::from_ref),
-            _ => &element.children,
-        }
+            _ => element.children.as_slice(),
+        };
+        children
+            .iter()
+            .copied()
+            .filter(|child| !self.resolved_focus_parents.contains_key(child))
+            .chain(
+                self.resolved_focus_children
+                    .get(&id)
+                    .into_iter()
+                    .flatten()
+                    .copied(),
+            )
     }
 
     pub(super) fn is_descendant_or_self(&self, candidate: ElementId, ancestor: ElementId) -> bool {

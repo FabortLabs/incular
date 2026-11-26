@@ -1045,3 +1045,156 @@ fn an_explicit_scope_parent_survives_inserting_another_scope() {
         assert_eq!(inserted.focused_child(), None);
     }
 }
+
+#[test]
+fn scope_traversal_and_requests_follow_the_explicit_parent_until_it_is_cleared() {
+    use incular_widgets::{GlobalKey, Row};
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let left = FocusScopeNode::new();
+    let right = FocusScopeNode::new();
+    let leaf = FocusNode::new();
+    let left_key = GlobalKey::new();
+    let right_key = GlobalKey::new();
+    let leaf_key = GlobalKey::new();
+    let scene = |parent: Option<FocusNode>| {
+        let leaf = Widget::from(
+            Focus::with_external_focus_node(SizedBox::square(50.), leaf.clone())
+                .parent_node(parent),
+        )
+        .with_key(leaf_key);
+        Directionality::new(
+            TextDirection::Ltr,
+            Row::new([
+                Widget::from(FocusScope::with_external_focus_node(SizedBox::square(50.), left.clone()))
+                    .with_key(left_key),
+                Widget::from(FocusScope::with_external_focus_node(leaf, right.clone()))
+                    .with_key(right_key),
+            ]),
+        )
+        .into()
+    };
+    let mut runtime = Runtime::new(scene(Some(left.scope_focus_node()))).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    let left_id = runtime.tree().element_with_key(&left_key.into()).unwrap();
+    let right_id = runtime.tree().element_with_key(&right_key.into()).unwrap();
+    let leaf_id = runtime.tree().element_with_key(&leaf_key.into()).unwrap();
+    let initial_bounds = runtime.tree().element_bounds(leaf_id);
+    assert_eq!(runtime.tree().focus_traversal_children(Some(left_id)), [leaf.clone()]);
+    assert!(runtime.tree().focus_traversal_descendants(Some(right_id)).is_empty());
+
+    right.set_descendants_are_focusable(false);
+    right.set_descendants_are_traversable(false);
+    assert!(leaf.can_request_focus());
+    assert_eq!(runtime.tree().focus_traversal_elements(None), [leaf_id]);
+    assert!(left.request_focus(&leaf));
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(runtime.focused_element(), Some(leaf_id));
+    assert_eq!(left.focused_child(), Some(leaf.clone()));
+    assert!(!right.has_focus());
+
+    left.set_descendants_are_traversable(false);
+    assert!(runtime.tree().focus_traversal_descendants(Some(left_id)).is_empty());
+    assert!(runtime.tree().focus_traversal_elements(None).is_empty());
+    assert!(leaf.can_request_focus() && left.request_focus(&leaf));
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(runtime.focused_element(), Some(leaf_id));
+    left.set_descendants_are_traversable(true);
+    right.set_descendants_are_focusable(true);
+    right.set_descendants_are_traversable(true);
+
+    runtime.schedule_update(runtime.tree().root().unwrap(), scene(None)).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(runtime.focused_element(), Some(leaf_id));
+    assert_eq!(runtime.tree().element_bounds(leaf_id), initial_bounds);
+    assert!(runtime.tree().focus_traversal_descendants(Some(left_id)).is_empty());
+    assert_eq!(runtime.tree().focus_traversal_children(Some(right_id)), [leaf.clone()]);
+    assert_eq!(left.focused_child(), None);
+    assert_eq!(right.focused_child(), Some(leaf));
+    assert!(!left.has_focus() && right.has_focus());
+}
+
+#[test]
+fn simultaneous_focus_parent_changes_resolve_before_rejecting_real_cycles() {
+    use incular_widgets::Column;
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let a = FocusNode::new();
+    let b = FocusNode::new();
+    let c = FocusNode::new();
+    let scene = |cycle: bool| {
+        let b_parent = if cycle { a.clone() } else { c.clone() };
+        Column::new([
+            Widget::from(
+                Focus::with_external_focus_node(
+                    Focus::with_external_focus_node(SizedBox::shrink(), b.clone())
+                        .parent_node(b_parent),
+                    a.clone(),
+                )
+                .parent_node(b.clone())
+                .autofocus(true),
+            ),
+            Focus::with_external_focus_node(SizedBox::shrink(), c.clone()).into(),
+        ])
+        .into()
+    };
+    let mut runtime = Runtime::new(scene(false)).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert!(a.has_primary_focus() && b.has_focus() && c.has_focus());
+
+    runtime.schedule_update(runtime.tree().root().unwrap(), scene(true)).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert!(a.has_primary_focus() && !b.has_focus() && !c.has_focus());
+    b.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    assert!(b.has_primary_focus() && a.has_focus() && !c.has_focus());
+}
+
+#[test]
+fn traversal_queries_distinguish_skipping_a_parent_from_skipping_its_children() {
+    use incular_widgets::{Column, GlobalKey};
+
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let scope = FocusScopeNode::new();
+    let p1 = FocusNode::new();
+    let p2 = FocusNode::new();
+    let c1 = FocusNode::new();
+    let c2 = FocusNode::new();
+    let p2_key = GlobalKey::new();
+    let branch = |parent: &FocusNode, child: &FocusNode| {
+        Widget::from(Focus::with_external_focus_node(
+            Focus::with_external_focus_node(SizedBox::shrink(), child.clone()),
+            parent.clone(),
+        ))
+    };
+    let scene = FocusScope::with_external_focus_node(
+        Column::new([branch(&p1, &c1), branch(&p2, &c2).with_key(p2_key)]),
+        scope.clone(),
+    );
+    let mut runtime = Runtime::new(scene.into()).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    let root = runtime.tree().root();
+    let p2_id = runtime.tree().element_with_key(&p2_key.into());
+    assert!(p2_id.is_some());
+    let descendants = |runtime: &Runtime| runtime.tree().focus_traversal_descendants(root);
+
+    assert_eq!(descendants(&runtime), [c1.clone(), p1.clone(), c2.clone(), p2.clone()]);
+    p2.set_descendants_are_traversable(false);
+    assert_eq!(descendants(&runtime), [c1.clone(), p1.clone(), p2.clone()]);
+    p1.set_descendants_are_traversable(false);
+    assert_eq!(descendants(&runtime), [p1.clone(), p2.clone()]);
+    p1.set_descendants_are_traversable(true);
+    p2.set_descendants_are_traversable(true);
+    scope.set_descendants_are_traversable(false);
+    assert!(descendants(&runtime).is_empty());
+    scope.set_descendants_are_traversable(true);
+
+    c1.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    assert!(c1.has_primary_focus() && scope.focused_child() == Some(c1.clone()));
+    assert_eq!(runtime.tree().focus_traversal_children(p2_id), [c2.clone()]);
+    assert_eq!(runtime.tree().focus_traversal_children(root), [p1.clone(), p2.clone()]);
+    p2.set_can_request_focus(false);
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(runtime.tree().focus_traversal_children(p2_id), [c2]);
+    assert_eq!(runtime.tree().focus_traversal_children(root), [p1]);
+    assert!(c1.has_primary_focus());
+}

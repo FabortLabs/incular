@@ -81,6 +81,7 @@ impl WidgetTree {
             hosted_scope_membership_dirty: false,
             requested_focus_parents: BTreeMap::new(),
             resolved_focus_parents: BTreeMap::new(),
+            resolved_focus_children: BTreeMap::new(),
             focus_change_bindings: BTreeMap::new(),
             focus_semantics_bindings: None,
             focus_semantic_actions_enabled: !cfg!(target_os = "ios"),

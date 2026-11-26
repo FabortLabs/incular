@@ -80,10 +80,8 @@ focusable when it disallows descendant focus. A blocked child's
 explicit request cannot steal primary focus and both branches can
 be blocked independently. A traversal-only restriction skips a
 descendant on Tab but permits a direct request. An ordinary parent's
-own can-request flag does not exclude its children. :170 and :210
-remain partial: the test checks membership through the mounted
-traversal route, not Flutter's separately enumerable, ordered raw
-focus-tree children/descendants.
+own can-request flag does not exclude its children. The independent
+ordered traversal queries for :170 and :210 are verified below.
 
 ## Unfocus and fallback through scope history
 
@@ -112,5 +110,25 @@ The scope case checks every scope's immediate focused child. All 23
 targeted mounted-scope tests passed.
 
 An absent or cyclic target safely falls back to widget ancestry in the
-runtime. Manual Flutter focus attachments, missing-parent diagnostics,
-and logical traversal order are separate from these comparisons.
+runtime. Flutter's manual attachment API and debug diagnostics for
+invalid parents are separate from these comparisons.
+
+## Ordered traversal queries
+
+The pinned `focus_manager_test.dart:170` and `:210` originals
+passed by exact name. The mounted native counterpart asserts
+every ordered traversal list before and after disabling each branch,
+then the whole scope. A parent that cannot request focus drops
+out of its own parent's list without removing its child from its
+local traversal list or moving existing primary focus.
+
+The pinned authored `explicit_focus_scope_traversal_test.dart`
+probe additionally verifies that the explicit scope owns traversal
+membership and direct focus eligibility, not the visual scope.
+Disabling traversal alone still permits direct requests. Clearing the
+override moves focus history to the visual scope without changing the
+mounted leaf's identity or bounds. Native coverage adds simultaneous
+valid reparenting followed by a true cycle, which falls back safely
+without disabling focus. All 43 targeted mounted-focus, key-routing
+and traversal tests passed. The authored probe and cycle checks do not
+increase upstream coverage.
