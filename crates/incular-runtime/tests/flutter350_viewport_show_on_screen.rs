@@ -253,3 +253,52 @@ fn same_axis_reveal_forwards_the_post_move_inner_rectangle() {
         );
     }
 }
+
+#[test]
+fn centered_reversed_list_can_animate_an_offstage_negative_item_into_view() {
+    use std::time::Duration;
+
+    use incular_core::{Rect, time::Instant};
+    use incular_widgets::{Scrollable, ShowOnScreen, SliverList};
+
+    let controller = ScrollController::new();
+    let negative = SliverList::builder(10, |index| {
+        Widget::from(SizedBox::new().height(40.)).with_key(index as u64)
+    });
+    let center = SliverList::builder(1, |_| SizedBox::new().height(40.));
+    let positive = SliverList::builder(10, |_| SizedBox::new().height(40.));
+    let slivers: [Box<dyn Sliver>; 3] = [Box::new(negative), Box::new(center), Box::new(positive)];
+    let root = Directionality::new(
+        TextDirection::Ltr,
+        CustomScrollView::new(slivers)
+            .controller(controller.clone())
+            .center(1)
+            .reverse(true),
+    );
+    let mut runtime = Runtime::new(root.into()).unwrap();
+    let bounds = Constraints::tight(Size::new(400., 400.));
+    let viewport = Rect::from_origin_size(Offset::ZERO, Size::new(400., 400.));
+    let now = Instant::now();
+    runtime.run_frame_at(bounds, now).unwrap();
+    let target = runtime.tree().element_with_key(&0u64.into()).unwrap();
+    let before = runtime.tree().element_bounds(target).unwrap();
+    assert!(!viewport.intersects(before), "{before:?}");
+    assert_eq!(controller.offset(), 0.);
+    assert_eq!(
+        Scrollable::show_on_screen(
+            runtime.tree(),
+            target,
+            ShowOnScreen::new().duration(Duration::from_secs(1)),
+        ),
+        1
+    );
+    runtime
+        .run_frame_at(bounds, now + Duration::from_millis(16))
+        .unwrap();
+    runtime
+        .run_frame_at(bounds, now + Duration::from_millis(1040))
+        .unwrap();
+    let after = runtime.tree().element_bounds(target).unwrap();
+    assert!(viewport.intersects(after), "{after:?}");
+    assert!(controller.offset() < 0.);
+}

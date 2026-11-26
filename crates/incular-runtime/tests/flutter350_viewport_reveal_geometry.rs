@@ -354,3 +354,63 @@ fn a_reverse_growth_header_reveals_at_its_trailing_pinned_edge() {
         assert_eq!(current_reveal(&runtime), -500., "{axis:?} after pinning");
     }
 }
+
+#[test]
+fn changing_scroll_direction_reroutes_subsequent_drag_motion() {
+    use std::time::Duration;
+
+    use incular_core::{PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase, time::Instant};
+    use incular_widgets::{Center, RawPointerEvent, SingleChildScrollView};
+
+    let controller = ScrollController::new();
+    let build = |axis| {
+        Directionality::new(
+            TextDirection::Ltr,
+            Center::new(
+                SizedBox::square(100.).child(
+                    SingleChildScrollView::new(SizedBox::square(200.))
+                        .controller(controller.clone())
+                        .scroll_direction(axis),
+                ),
+            ),
+        )
+        .into()
+    };
+    let mut runtime = Runtime::new(build(Axis::Vertical)).unwrap();
+    let frame = Constraints::tight(Size::new(800., 600.));
+    let now = Instant::now();
+    runtime.run_frame_at(frame, now).unwrap();
+    assert_eq!(controller.offset(), 0.);
+    let root = runtime.tree().root().unwrap();
+    runtime
+        .schedule_update(root, build(Axis::Horizontal))
+        .unwrap();
+    runtime
+        .run_frame_at(frame, now + Duration::from_millis(16))
+        .unwrap();
+    assert_eq!(controller.offset(), 0.);
+
+    for (ms, phase, x, y, expected) in [
+        (18, PointerPhase::Down, 400., 300., 0.),
+        (20, PointerPhase::Move, 400., 310., 0.),
+        (22, PointerPhase::Move, 400., 300., 0.),
+        (24, PointerPhase::Move, 390., 300., 10.),
+        (26, PointerPhase::Move, 400., 300., 0.),
+        (28, PointerPhase::Up, 400., 300., 0.),
+    ] {
+        let _ = runtime.handle_raw_pointer_event(RawPointerEvent::new(
+            1,
+            1,
+            PointerDeviceKind::Touch,
+            if phase == PointerPhase::Up {
+                0
+            } else {
+                PRIMARY_POINTER_BUTTON
+            },
+            Offset::new(x, y),
+            phase,
+            now + Duration::from_millis(ms),
+        ));
+        assert_eq!(controller.offset(), expected, "{phase:?} at ({x},{y})");
+    }
+}

@@ -111,3 +111,18 @@ inner viewport. Exact controller pairs are (inner, outer):
 (0,100), (300,200), (200,200), (400,200), and (0,200).
 The render-facing API does not require a semantic node; the previous
 section independently tests the accessibility action adapter.
+
+## Runtime axis change and an offstage negative item
+
+Pinned :51 and the mounted runtime both change a live 100×100
+SingleChildScrollView from vertical to horizontal at offset zero.
+The same admitted touch stream moves 10 px down and back without
+scrolling, then 10 px left and back with offsets 10 and 0. No
+synthetic controller movement stands in for the real drag.
+
+Pinned :1188 and the native centered reverse list begin with the
+first negative sliver item outside the 400×400 viewport but still
+cached. A one-second ShowOnScreen request moves the controller in
+the negative direction and the item's retained bounds enter the
+viewport. This exercises the offstage target rather than the
+already-visible center.
