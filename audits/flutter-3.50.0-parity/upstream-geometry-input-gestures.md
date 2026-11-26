@@ -176,3 +176,27 @@ both contacts. Previously adding the second device replaced the first
 contact. The arena also removes a rejected contact immediately, before
 a different device's motion can use its position. This host normalization
 check does not add an upstream registration.
+
+### Local scale deltas and first rotation
+
+The authored Flutter and native mounted probes scale the same 100×100
+gesture surface by 2. A (40,20) world move keeps focalPoint in world
+coordinates but reports focalPointDelta (20,10) and the new focal point
+in local coordinates. The previous native update incorrectly reported
+(40,20) as the delta. Slop and span still use global positions.
+
+Pinned scale_test.dart :694 now pairs: the first two-finger move from
+the line (0,0)–(10,10) to (0,0)–(0,10) reports +π/4, without an update
+on the second pointer's down. The native tolerance is 10⁻⁶ radians.
+
+### Trackpad scale input remains separate
+
+Pinned :774/:890/:1092/:1186/:1293/:1447 passed upstream. Those cases
+require a single retained pan/zoom contact with correlated translation,
+scale, rotation and timestamps. They respectively exercise raw scale
+details, simultaneous touch interaction, competition with drag, the
+start-geometry reset, optional scroll-to-scale conversion and the final
+scale velocity. Incular's native aggregate pinch/rotation events use
+an independent retained callback and do not enter the touch-scale
+recognizer as correlated pan/zoom contacts. These are reference-only
+rather than equivalences with native aggregate callbacks.

@@ -278,3 +278,22 @@ fn scale_pointer_count_follows_finger_addition_and_removal() {
     f.expect_update(&update, Some(6), 6, [(0., 10.), (0., 0.)], [1.; 3], 1);
     expect_end(&f.touch(2, (0., 10.), Up, 7), 0);
 }
+
+#[test]
+fn first_rotation_reports_the_angle_from_the_initial_two_contact_line() {
+    use PointerPhase::{Down, Move, Up};
+
+    let mut f = ScaleFixture::new();
+    assert!(f.touch(1, (0., 0.), Down, 1).is_empty());
+    f.scale.accept().expect("only arena member");
+    let start = f.events.borrow_mut().pop().unwrap();
+    assert!(matches!(start, Event::Start(d) if d.pointer_count == 1));
+    expect_end(&f.touch(2, (10., 10.), Down, 2), 2);
+    let events = f.touch(2, (0., 10.), Move, 3);
+    let [Event::Start(_), Event::Update(update)] = events.as_slice() else {
+        panic!("first rotation should start and update: {events:?}");
+    };
+    assert!((update.rotation - std::f32::consts::FRAC_PI_4).abs() < 0.000001);
+    expect_end(&f.touch(2, (0., 10.), Up, 4), 1);
+    assert!(f.touch(1, (0., 0.), Up, 5).is_empty());
+}

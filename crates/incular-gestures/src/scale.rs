@@ -38,7 +38,7 @@ pub struct ScaleUpdateDetails {
     /// Clockwise rotation in radians of the line between the first two
     /// contacts since the start.
     pub rotation: f32,
-    /// How far the focal point moved since the previous event.
+    /// Focal point movement in the recognizer's local coordinates.
     pub focal_point_delta: Offset,
     pub pointer_count: usize,
     /// Timestamp of the event (`sourceTimeStamp`).
@@ -133,7 +133,8 @@ pub struct ScaleGestureDetector {
     state: ScaleState,
     initial_focal_point: Offset,
     current_focal_point: Option<Offset>,
-    /// `_delta`: focal point movement since the previous event.
+    current_local_focal_point: Offset,
+    /// `_delta`: local focal point movement since the previous event.
     focal_point_delta: Offset,
     initial_span: f32,
     current_span: f32,
@@ -184,6 +185,7 @@ impl ScaleGestureDetector {
             state: ScaleState::Ready,
             initial_focal_point: Offset::ZERO,
             current_focal_point: None,
+            current_local_focal_point: Offset::ZERO,
             focal_point_delta: Offset::ZERO,
             initial_span: 0.0,
             current_span: 0.0,
@@ -500,7 +502,9 @@ impl ScaleGestureDetector {
     /// the spans the mean (horizontal, vertical) distances of the contacts
     /// from it.
     fn update(&mut self) {
-        let previous = self.current_focal_point;
+        let previous_local = self
+            .current_focal_point
+            .map(|_| self.current_local_focal_point);
         let count = self.pointers.len();
         let mut focal_point = Offset::ZERO;
         for contact in &self.pointers {
@@ -511,10 +515,10 @@ impl ScaleGestureDetector {
         }
         let divisor = count.max(1) as f32;
         let focal_point = Offset::new(focal_point.x / divisor, focal_point.y / divisor);
+        let local = self.local(focal_point);
         self.current_focal_point = Some(focal_point);
-        self.focal_point_delta = previous.map_or(Offset::ZERO, |previous| {
-            Offset::new(focal_point.x - previous.x, focal_point.y - previous.y)
-        });
+        self.current_local_focal_point = local;
+        self.focal_point_delta = previous_local.map_or(Offset::ZERO, |previous| local - previous);
         let (mut total, mut horizontal, mut vertical) = (0.0, 0.0, 0.0);
         for contact in &self.pointers {
             total += distance(focal_point, contact.position);
@@ -624,7 +628,7 @@ impl ScaleGestureDetector {
         if let (Some(callback), Some(focal_point)) = (&self.on_start, self.current_focal_point) {
             callback(ScaleStartDetails {
                 focal_point,
-                local_focal_point: self.local(focal_point),
+                local_focal_point: self.current_local_focal_point,
                 pointer_count: self.pointers.len(),
                 source_time: self.initial_event_time,
                 kind: self.pointers.first().map(|contact| contact.kind),
@@ -655,7 +659,7 @@ impl ScaleGestureDetector {
         let focal_point = self.current_focal_point.unwrap_or(Offset::ZERO);
         ScaleUpdateDetails {
             focal_point,
-            local_focal_point: self.local(focal_point),
+            local_focal_point: self.current_local_focal_point,
             scale: ratio(self.current_span, self.initial_span),
             horizontal_scale: ratio(self.current_horizontal_span, self.initial_horizontal_span),
             vertical_scale: ratio(self.current_vertical_span, self.initial_vertical_span),
