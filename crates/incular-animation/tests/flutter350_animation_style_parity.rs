@@ -172,3 +172,48 @@ fn curve_blends_keep_nested_outputs_and_release_owned_storage() {
         "no global allocation retains the blend"
     );
 }
+
+#[test]
+fn an_unset_animation_style_omits_all_normal_diagnostic_properties() {
+    assert!(AnimationStyle::default().diagnostic_properties().next().is_none());
+    let actual = AnimationStyle::NO_ANIMATION
+        .diagnostic_properties()
+        .map(|property| property.to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(actual, ["duration: 0:00:00.000000", "reverseDuration: 0:00:00.000000"]);
+}
+
+#[test]
+fn animation_style_diagnostics_preserve_the_typed_overrides_and_pinned_labels() {
+    use incular_animation::AnimationStyleProperty;
+
+    let style = AnimationStyle::new()
+        .curve(Curve::EaseInOut)
+        .duration(Duration::from_secs(1))
+        .reverse_curve(Curve::EaseInOutBounce)
+        .reverse_duration(Duration::from_secs(2));
+    let actual = style.diagnostic_properties().collect::<Vec<_>>();
+    assert_eq!(
+        actual,
+        [
+            AnimationStyleProperty::Curve(&Curve::EaseInOut),
+            AnimationStyleProperty::Duration(Duration::from_secs(1)),
+            AnimationStyleProperty::ReverseCurve(&Curve::EaseInOutBounce),
+            AnimationStyleProperty::ReverseDuration(Duration::from_secs(2)),
+        ]
+    );
+    assert_eq!(
+        actual.iter().map(ToString::to_string).collect::<Vec<_>>(),
+        [
+            "curve: Cubic(0.42, 0.00, 0.58, 1.00)",
+            "duration: 0:00:01.000000",
+            "reverseCurve: _BounceInOutCurve",
+            "reverseDuration: 0:00:02.000000",
+        ]
+    );
+
+    assert_eq!(
+        AnimationStyleProperty::Duration(Duration::new(3661, 5_007_500)).to_string(),
+        "duration: 1:01:01.005007"
+    );
+}

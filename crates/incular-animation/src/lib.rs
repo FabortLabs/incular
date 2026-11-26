@@ -51,7 +51,7 @@ pub use scheduler::{
     schedule_frame_microtask, set_time_dilation, time_dilation, try_assert_no_time_dilation,
     try_set_time_dilation,
 };
-pub use style::AnimationStyle;
+pub use style::{AnimationStyle, AnimationStyleProperty};
 pub use tween::{
     FlippedTweenSequence, NullableTween, OptionalColorTween, OptionalRectTween, OptionalSizeTween,
     OptionalTween, Tween, TweenSegment, TweenSequence, TweenValue,

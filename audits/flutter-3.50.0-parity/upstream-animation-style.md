@@ -36,3 +36,13 @@ The Rust checks use the same endpoint curves to isolate blending from
 f32 differences in individual solvers. Cloning a blend keeps owned
 operands alive, and releasing the last curve handle releases that
 storage; runtime blends do not use the legacy intern table.
+
+## Explicit style diagnostics
+
+Pinned `animation_style_test.dart:113,126` passed. A default style
+supplies no normal diagnostic properties. A configured style returns
+four independent typed properties in the original order and with the
+same cubic, bounce and duration descriptions. An explicitly zero
+duration remains visible, so the diagnostic distinguishes "no override"
+from "no animation". The iterator does not allocate or format strings
+until requested. All 24 focused style and curve tests passed.

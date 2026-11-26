@@ -1,7 +1,7 @@
 //! Flutter's `AnimationStyle` (`animation/animation_style.dart`).
 
 use crate::Curve;
-use std::time::Duration;
+use std::{fmt, time::Duration};
 
 /// Flutter `AnimationStyle`: overrides for the curve and duration of a
 /// widget's built-in animations, forward and in reverse. An unset field
@@ -12,6 +12,33 @@ pub struct AnimationStyle {
     pub duration: Option<Duration>,
     pub reverse_curve: Option<Curve>,
     pub reverse_duration: Option<Duration>,
+}
+
+/// One explicitly set AnimationStyle override, in diagnostic order.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum AnimationStyleProperty<'a> {
+    Curve(&'a Curve),
+    Duration(Duration),
+    ReverseCurve(&'a Curve),
+    ReverseDuration(Duration),
+}
+
+impl fmt::Display for AnimationStyleProperty<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let (name, duration) = match self {
+            Self::Curve(curve) => return write!(f, "curve: {curve}"),
+            Self::ReverseCurve(curve) => return write!(f, "reverseCurve: {curve}"),
+            Self::Duration(duration) => ("duration", duration),
+            Self::ReverseDuration(duration) => ("reverseDuration", duration),
+        };
+        let seconds = duration.as_secs();
+        let (hours, minutes, seconds) = (seconds / 3600, seconds / 60 % 60, seconds % 60);
+        write!(
+            f,
+            "{name}: {hours}:{minutes:02}:{seconds:02}.{:06}",
+            duration.subsec_micros()
+        )
+    }
 }
 
 impl AnimationStyle {
@@ -55,6 +82,19 @@ impl AnimationStyle {
     pub const fn reverse_duration(mut self, duration: Duration) -> Self {
         self.reverse_duration = Some(duration);
         self
+    }
+
+    /// Diagnostic properties at the normal information level. Unset
+    /// overrides are omitted; an explicit zero duration remains visible.
+    pub fn diagnostic_properties(&self) -> impl Iterator<Item = AnimationStyleProperty<'_>> {
+        [
+            self.curve.as_ref().map(AnimationStyleProperty::Curve),
+            self.duration.map(AnimationStyleProperty::Duration),
+            self.reverse_curve.as_ref().map(AnimationStyleProperty::ReverseCurve),
+            self.reverse_duration.map(AnimationStyleProperty::ReverseDuration),
+        ]
+        .into_iter()
+        .flatten()
     }
 
     /// Flutter `AnimationStyle.copyWith`: `other`'s set fields win.

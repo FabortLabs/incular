@@ -540,6 +540,40 @@ impl Curve {
     }
 }
 
+impl std::fmt::Display for Curve {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some((a, b, c, d)) = self.cubic_points() {
+            return write!(f, "Cubic({a:.2}, {b:.2}, {c:.2}, {d:.2})");
+        }
+        match self {
+            Self::Linear => f.write_str("_Linear"),
+            Self::Decelerate => f.write_str("DecelerateCurve"),
+            Self::EaseInBounce => f.write_str("_BounceInCurve"),
+            Self::EaseOutBounce => f.write_str("_BounceOutCurve"),
+            Self::EaseInOutBounce => f.write_str("_BounceInOutCurve"),
+            Self::EaseInElastic => f.write_str("ElasticInCurve(0.4)"),
+            Self::EaseOutElastic => f.write_str("ElasticOutCurve(0.4)"),
+            Self::EaseInOutElastic => f.write_str("ElasticInOutCurve(0.4)"),
+            Self::ElasticIn(period) => write!(f, "ElasticInCurve({period})"),
+            Self::ElasticOut(period) => write!(f, "ElasticOutCurve({period})"),
+            Self::ElasticInOut(period) => write!(f, "ElasticInOutCurve({period})"),
+            Self::SawTooth(count) => write!(f, "SawTooth({count})"),
+            Self::Interval { begin, end, curve } => {
+                write!(f, "Interval({begin:?}⋯{end:?})")?;
+                if !matches!(**curve, Self::Linear) {
+                    write!(f, "➩{curve}")?;
+                }
+                Ok(())
+            }
+            Self::Split { split, begin_curve, end_curve } =>
+                write!(f, "Split({split:?}, {begin_curve}, {end_curve})"),
+            Self::Flipped(curve) => write!(f, "FlippedCurve({curve})"),
+            Self::Blend(pair) => write!(f, "Blend({}, {}, {})", pair.first, pair.second, pair.weight),
+            rest => write!(f, "{rest:?}"),
+        }
+    }
+}
+
 fn bounce_out(mut t: f32) -> f32 {
     let n1 = 7.5625;
     let d1 = 2.75;
