@@ -2531,3 +2531,7 @@ packages/flutter/test/widgets/raw_tooltip_test.dart	2810	Hide animation uses the
 packages/flutter/test/widgets/raw_tooltip_test.dart	2851	AnimationStyle duration changes take effect after the first show	paired-match	upstream-raw-tooltip-animation.md
 packages/flutter/test/widgets/raw_tooltip_test.dart	2916	Null AnimationStyle durations fall back to the documented defaults	paired-match	upstream-raw-tooltip-animation.md
 packages/flutter/test/widgets/raw_tooltip_test.dart	2957	Hide animation defaults to 75ms even when AnimationStyle.duration is set	paired-match	upstream-raw-tooltip-animation.md
+packages/flutter/test/widgets/raw_tooltip_test.dart	2995	AnimationStyle curve changes take effect after the first show	paired-match	upstream-raw-tooltip-animation.md
+packages/flutter/test/widgets/raw_tooltip_test.dart	3063	AnimationStyle changes while the tooltip is shown apply to the next animation	paired-match	upstream-raw-tooltip-animation.md
+packages/flutter/test/widgets/raw_tooltip_test.dart	3125	Changing animationStyle while the tooltip is animating in does not crash	paired-match	upstream-raw-tooltip-animation.md
+packages/flutter/test/widgets/raw_tooltip_test.dart	3186	Zero show duration shows instantly and hides with the default 75ms	paired-match	upstream-raw-tooltip-animation.md

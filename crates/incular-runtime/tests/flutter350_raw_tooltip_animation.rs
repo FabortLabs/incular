@@ -233,3 +233,101 @@ fn a_custom_show_duration_does_not_change_the_default_hide_duration() {
     tooltip.frame_us(495_001);
     assert!(!tooltip.mounted());
 }
+
+fn short_linear() -> AnimationStyle {
+    AnimationStyle::new()
+        .curve(Curve::Linear)
+        .duration(duration(100))
+        .reverse_duration(duration(100))
+}
+
+#[test]
+fn a_new_style_replaces_both_curves_without_replacing_the_animation() {
+    let mut tooltip = Fixture::new(short_linear());
+    tooltip.show(10);
+    let original = tooltip.captured.borrow().as_ref().unwrap().clone();
+    tooltip.frame(111);
+    tooltip.dismiss(120);
+    tooltip.frame(221);
+    assert!(!tooltip.mounted());
+
+    tooltip.set_style(
+        short_linear()
+            .curve(Curve::EaseInExpo)
+            .reverse_curve(Curve::EaseOutBounce),
+        230,
+    );
+    tooltip.show(240);
+    assert_eq!(tooltip.captured.borrow().as_ref(), Some(&original));
+    tooltip.frame(290);
+    close(original.value(), Curve::EaseInExpo.apply(0.5));
+    tooltip.frame(341);
+
+    tooltip.dismiss(350);
+    tooltip.frame(400);
+    close(original.value(), 0.765625);
+    tooltip.frame(451);
+    assert!(!tooltip.mounted());
+}
+
+#[test]
+fn style_update_while_open_changes_the_next_reverse_duration_and_curve() {
+    let mut tooltip = Fixture::new(short_linear());
+    tooltip.show(10);
+    tooltip.frame(111);
+    close(tooltip.value(), 1.);
+
+    tooltip.set_style(
+        short_linear()
+            .reverse_curve(Curve::EaseInExpo)
+            .reverse_duration(duration(200)),
+        115,
+    );
+    assert!(tooltip.mounted());
+    tooltip.dismiss(120);
+    tooltip.frame(220);
+    close(tooltip.value(), Curve::EaseInExpo.apply(0.5));
+    tooltip.frame(321);
+    assert!(!tooltip.mounted());
+}
+
+#[test]
+fn changing_style_mid_show_keeps_the_in_flight_timebase() {
+    let mut tooltip = Fixture::new(short_linear());
+    tooltip.show(10);
+    let original = tooltip.captured.borrow().as_ref().unwrap().clone();
+    tooltip.frame(35);
+    close(original.value(), 0.25);
+
+    tooltip.set_style(
+        short_linear()
+            .duration(duration(300))
+            .curve(Curve::EaseInExpo),
+        35,
+    );
+    assert_eq!(tooltip.captured.borrow().as_ref(), Some(&original));
+    close(original.value(), Curve::EaseInExpo.apply(0.25));
+    tooltip.frame(110);
+    close(original.value(), 1.);
+    assert!(tooltip.mounted());
+
+    tooltip.dismiss(120);
+    tooltip.frame(221);
+    assert!(!tooltip.mounted());
+}
+
+#[test]
+fn zero_show_duration_still_uses_the_default_reverse_duration() {
+    let mut tooltip = Fixture::new(
+        AnimationStyle::new()
+            .curve(Curve::Linear)
+            .duration(Duration::ZERO),
+    );
+    tooltip.show(10);
+    close(tooltip.value(), 1.);
+    tooltip.dismiss(20);
+    tooltip.frame_us(57_500);
+    close(tooltip.value(), 0.5);
+    tooltip.frame_us(95_001);
+    assert!(!tooltip.mounted());
+}

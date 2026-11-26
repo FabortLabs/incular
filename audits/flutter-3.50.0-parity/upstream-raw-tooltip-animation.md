@@ -27,3 +27,15 @@ The older Rust builder without animation input or an explicit style
 keeps its immediate behavior. This pass is not claiming that every
 tooltip descriptor now fades, nor that the anchor descriptor never
 rebuilds when the portal is mounted or unmounted.
+
+## Live style replacement and instant show
+
+The next four pinned registrations also passed against corresponding
+native runtime controls:
+
+| Registration line | Verified behavior |
+| ---: | --- |
+| 2995 | New show and hide curves apply on the next cycle without replacing the animation handle. |
+| 3063 | Updating the open tooltip applies the new 200 ms duration and curve to its next hide. |
+| 3125 | A new curve applies during an ongoing show, but the running 100 ms timeline is not restarted. |
+| 3186 | Zero show duration is immediately fully visible; the default reverse still takes 75 ms. |
