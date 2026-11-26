@@ -16,6 +16,7 @@ use crate::{
     tree::{ImageFit, ImageRepeat},
 };
 use std::{
+    borrow::Cow,
     hash::{Hash, Hasher},
     sync::Arc,
 };
@@ -804,6 +805,21 @@ pub(super) fn faded_brush(brush: &Brush, factor: f32) -> Brush {
     }
 }
 
+fn lerp_gradient_ref<'a, T: Clone + Lerp>(
+    a: Option<&'a T>,
+    b: Option<&'a T>,
+    t: f32,
+    scale: impl FnOnce(&T, f32) -> T,
+) -> Option<Cow<'a, T>> {
+    match (a, b) {
+        (None, None) => None,
+        (Some(a), Some(b)) if std::ptr::eq(a, b) => Some(Cow::Borrowed(a)),
+        (Some(a), Some(b)) => Some(Cow::Owned(a.lerp(b, t))),
+        (Some(a), None) => Some(Cow::Owned(scale(a, 1. - t))),
+        (None, Some(b)) => Some(Cow::Owned(scale(b, t))),
+    }
+}
+
 /// Linear gradient with endpoints relative to the painted box. Unlike a
 /// renderer brush in logical pixels, an endpoint can follow text direction.
 #[derive(Clone, Debug, PartialEq)]
@@ -869,12 +885,18 @@ impl BoxLinearGradient {
     /// Interpolates two gradients, fading from or to transparent when absent.
     #[must_use]
     pub fn lerp_optional(a: Option<&Self>, b: Option<&Self>, t: f32) -> Option<Self> {
-        match (a, b) {
-            (None, None) => None,
-            (Some(a), None) => Some(a.scale(1. - t)),
-            (None, Some(b)) => Some(b.scale(t)),
-            (Some(a), Some(b)) => Some(a.lerp(b, t)),
-        }
+        Self::lerp_ref(a, b, t).map(Cow::into_owned)
+    }
+
+    /// Interpolates optional gradients without replacing an identical input.
+    /// Two distinct inputs produce an owned gradient, even at an endpoint.
+    #[must_use]
+    pub fn lerp_ref<'a>(
+        a: Option<&'a Self>,
+        b: Option<&'a Self>,
+        t: f32,
+    ) -> Option<Cow<'a, Self>> {
+        lerp_gradient_ref(a, b, t, Self::scale)
     }
 
     /// Creates a shader with an optional ambient direction. Logical
@@ -1025,12 +1047,18 @@ impl BoxRadialGradient {
 
     #[must_use]
     pub fn lerp_optional(a: Option<&Self>, b: Option<&Self>, t: f32) -> Option<Self> {
-        match (a, b) {
-            (None, None) => None,
-            (Some(a), None) => Some(a.scale(1. - t)),
-            (None, Some(b)) => Some(b.scale(t)),
-            (Some(a), Some(b)) => Some(a.lerp(b, t)),
-        }
+        Self::lerp_ref(a, b, t).map(Cow::into_owned)
+    }
+
+    /// Interpolates optional gradients without replacing an identical input.
+    /// Two distinct inputs produce an owned gradient, even at an endpoint.
+    #[must_use]
+    pub fn lerp_ref<'a>(
+        a: Option<&'a Self>,
+        b: Option<&'a Self>,
+        t: f32,
+    ) -> Option<Cow<'a, Self>> {
+        lerp_gradient_ref(a, b, t, Self::scale)
     }
 
     /// Creates a shader with an optional ambient direction. Logical
@@ -1183,12 +1211,18 @@ impl BoxSweepGradient {
 
     #[must_use]
     pub fn lerp_optional(a: Option<&Self>, b: Option<&Self>, t: f32) -> Option<Self> {
-        match (a, b) {
-            (None, None) => None,
-            (Some(a), None) => Some(a.scale(1. - t)),
-            (None, Some(b)) => Some(b.scale(t)),
-            (Some(a), Some(b)) => Some(a.lerp(b, t)),
-        }
+        Self::lerp_ref(a, b, t).map(Cow::into_owned)
+    }
+
+    /// Interpolates optional gradients without replacing an identical input.
+    /// Two distinct inputs produce an owned gradient, even at an endpoint.
+    #[must_use]
+    pub fn lerp_ref<'a>(
+        a: Option<&'a Self>,
+        b: Option<&'a Self>,
+        t: f32,
+    ) -> Option<Cow<'a, Self>> {
+        lerp_gradient_ref(a, b, t, Self::scale)
     }
 
     /// Creates a shader with an optional ambient direction. Logical

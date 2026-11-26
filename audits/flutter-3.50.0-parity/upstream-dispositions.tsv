@@ -1284,7 +1284,7 @@ packages/flutter/test/painting/gradient_test.dart	308	LinearGradient with Alignm
 packages/flutter/test/painting/gradient_test.dart	406	RadialGradient.fromColor replaces all colors and preserves geometry	paired-match	upstream-radial-gradients.md
 packages/flutter/test/painting/gradient_test.dart	482	RadialGradient with AlignmentDirectional	paired-match	upstream-radial-gradients.md
 packages/flutter/test/painting/gradient_test.dart	510	RadialGradient lerp test	paired-match	upstream-radial-gradients.md
-packages/flutter/test/painting/gradient_test.dart	536	RadialGradient.lerp identical a,b	partial-match	upstream-radial-gradients.md
+packages/flutter/test/painting/gradient_test.dart	536	RadialGradient.lerp identical a,b	paired-match	upstream-gradient-identity.md
 packages/flutter/test/painting/gradient_test.dart	542	RadialGradient lerp test with stops	paired-match	upstream-radial-gradients.md
 packages/flutter/test/painting/gradient_test.dart	573	RadialGradient lerp test with unequal number of colors	paired-match	upstream-radial-gradients.md
 packages/flutter/test/painting/gradient_test.dart	591	RadialGradient lerp test with stops and unequal number of colors	paired-match	upstream-radial-gradients.md
@@ -1296,7 +1296,7 @@ packages/flutter/test/painting/gradient_test.dart	736	RadialGradient.scale prese
 packages/flutter/test/painting/gradient_test.dart	1010	Gradient lerp test (LinearGradient to RadialGradient)	paired-match	upstream-radial-gradients.md
 packages/flutter/test/painting/gradient_test.dart	432	SweepGradient.fromColor replaces all colors and preserves geometry	paired-match	upstream-sweep-gradients.md#box-relative-descriptor
 packages/flutter/test/painting/gradient_test.dart	766	SweepGradient lerp test	paired-match	upstream-sweep-gradients.md#box-relative-descriptor
-packages/flutter/test/painting/gradient_test.dart	794	SweepGradient.lerp identical a,b	partial-match	upstream-sweep-gradients.md#box-relative-descriptor
+packages/flutter/test/painting/gradient_test.dart	794	SweepGradient.lerp identical a,b	paired-match	upstream-gradient-identity.md
 packages/flutter/test/painting/gradient_test.dart	830	SweepGradient lerp test with unequal number of colors	paired-match	upstream-sweep-gradients.md#box-relative-descriptor
 packages/flutter/test/painting/gradient_test.dart	848	SweepGradient lerp test with stops and unequal number of colors	paired-match	upstream-sweep-gradients.md#box-relative-descriptor
 packages/flutter/test/painting/gradient_test.dart	875	SweepGradient lerp test with transforms	paired-match	upstream-sweep-gradients.md#box-relative-descriptor
@@ -2266,3 +2266,4 @@ packages/flutter/test/painting/shape_decoration_test.dart	120	ShapeBorder.hitTes
 packages/flutter/test/painting/shape_decoration_test.dart	62	ShapeDecoration.lerp identical a,b	paired-match	upstream-shape-decoration-hit-and-clip.md#nullable-and-identical-decorations
 packages/flutter/test/painting/shape_decoration_test.dart	68	ShapeDecoration.lerp null a,b	paired-match	upstream-shape-decoration-hit-and-clip.md#nullable-and-identical-decorations
 packages/flutter/test/painting/shape_decoration_test.dart	16	ShapeDecoration constructor	paired-match	upstream-shape-decoration-hit-and-clip.md#box-to-shape-conversion
+packages/flutter/test/painting/gradient_test.dart	177	LinearGradient.lerp identical a,b	paired-match	upstream-gradient-identity.md

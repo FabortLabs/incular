@@ -67,8 +67,11 @@ impl AlignedShapeGradient {
 impl Lerp for AlignedShapeGradient {
     fn lerp(&self, other: &Self, t: f32) -> Self {
         match (self, other) {
+            (Self::Linear(a), Self::Linear(b)) if Arc::ptr_eq(a, b) => Self::Linear(a.clone()),
             (Self::Linear(a), Self::Linear(b)) => Self::Linear(Arc::new(a.lerp(b, t))),
+            (Self::Radial(a), Self::Radial(b)) if Arc::ptr_eq(a, b) => Self::Radial(a.clone()),
             (Self::Radial(a), Self::Radial(b)) => Self::Radial(Arc::new(a.lerp(b, t))),
+            (Self::Sweep(a), Self::Sweep(b)) if Arc::ptr_eq(a, b) => Self::Sweep(a.clone()),
             (Self::Sweep(a), Self::Sweep(b)) => Self::Sweep(Arc::new(a.lerp(b, t))),
             (a, _) if t < 0.5 => a.scale(1. - 2. * t),
             (_, b) => b.scale(2. * t - 1.),
