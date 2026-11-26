@@ -21,3 +21,18 @@ offset (UTF-16 offset 7, native byte 11). The native test now verifies
 that no offset change, focus transition, or manual caret reset is needed
 to repaint. Both exact Flutter originals, one authored reference case,
 and 45 focused native checks passed.
+
+## Incular restoration regression
+
+A new controller restoring the same mixed-direction caret now paints
+it on the same visual edge as the saved controller. Before the fix,
+the test reproduced a move from x=23.904001 to x=55.082 without a
+logical offset change. Snapshot loading preserves affinity, the
+directional flag, and whether the selection is set. Older snapshots
+with only endpoints still restore to the previous downstream default.
+An in-flight IME preedit is still cleared and undo history is rebaselined
+on restore.
+
+This is an Incular-only regression: Flutter's
+`RestorableTextEditingController` stores only the text. It adds no
+paired Flutter case. All 16 focused native checks passed.

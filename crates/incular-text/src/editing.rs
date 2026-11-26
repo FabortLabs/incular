@@ -590,10 +590,14 @@ impl TextEditingController {
     /// Binds committed text and selection to a stable restoration value.
     pub fn bind_restoration(&self, scope: RestorationScope, key: RestorationKey) {
         let restored = scope.get_json(&key).and_then(value_from_json);
-        let changed = restored
-            .as_ref()
-            .is_some_and(|value| *value != self.inner.borrow().value);
         let mut state = self.inner.borrow_mut();
+        let changed = restored.as_ref().is_some_and(|restored| {
+            state.value != restored.value
+                || state.selection_unset != restored.selection_unset
+                || state.caret_affinity != restored.affinity
+                || state.selection_is_directional != restored.is_directional
+                || state.preedit.is_some()
+        });
         state.restoration = Some(TextRestoration { scope, key });
         // Restoration is a baseline, not an edit: bump the generation so
         // history observers rebaseline instead of recording an undo step.
@@ -601,9 +605,9 @@ impl TextEditingController {
             .restoration_generation
             .checked_add(1)
             .expect("text restoration generation exhausted");
-        if let Some(value) = restored {
-            state.value = value;
-            state.selection_unset = false;
+        if let Some(restored) = restored {
+            state.value = restored.value;
+            state.selection_unset = restored.selection_unset;
             state.content_revision = state
                 .content_revision
                 .checked_add(1)
@@ -616,8 +620,8 @@ impl TextEditingController {
             state.preedit_selection = None;
             state.caret_reset = None;
             state.preferred_caret_x = None;
-            state.caret_affinity = TextAffinity::Downstream;
-            state.selection_is_directional = false;
+            state.caret_affinity = restored.affinity;
+            state.selection_is_directional = restored.is_directional;
         }
         drop(state);
         if changed {
@@ -1473,28 +1477,43 @@ impl TextEditingController {
             let Some(restoration) = state.restoration.clone() else {
                 return;
             };
-            (restoration, value_to_json(&state.value))
+            (restoration, value_to_json(&state))
         };
         restoration.scope.set_json(&restoration.key, value);
     }
 }
 
-fn value_to_json(value: &TextEditingValue) -> serde_json::Value {
+fn value_to_json(state: &ControllerState) -> serde_json::Value {
+    let value = &state.value;
     serde_json::json!({
         "text": value.text,
         "selection": {
             "base": value.selection.base,
             "extent": value.selection.extent,
+            "isSet": !state.selection_unset,
+            "affinity": match state.caret_affinity {
+                TextAffinity::Downstream => "downstream",
+                TextAffinity::Upstream => "upstream",
+            },
+            "isDirectional": state.selection_is_directional,
         },
     })
 }
 
-fn value_from_json(value: serde_json::Value) -> Option<TextEditingValue> {
+struct RestoredTextValue {
+    value: TextEditingValue,
+    selection_unset: bool,
+    affinity: TextAffinity,
+    is_directional: bool,
+}
+
+fn value_from_json(value: serde_json::Value) -> Option<RestoredTextValue> {
     let object = value.as_object()?;
     let text = object.get("text")?.as_str()?.to_owned();
-    let selection = object
+    let saved_selection = object
         .get("selection")
-        .and_then(serde_json::Value::as_object)
+        .and_then(serde_json::Value::as_object);
+    let selection = saved_selection
         .and_then(|selection| {
             let base = usize::try_from(selection.get("base")?.as_u64()?).ok()?;
             let extent = usize::try_from(selection.get("extent")?.as_u64()?).ok()?;
@@ -1502,7 +1521,26 @@ fn value_from_json(value: serde_json::Value) -> Option<TextEditingValue> {
         })
         .unwrap_or_else(|| TextSelection::collapsed(text.len()));
     let selection = selection.clamp_to(&text);
-    Some(TextEditingValue::new(text).with_selection(selection))
+    let flag = |key| {
+        saved_selection
+            .and_then(|selection| selection.get(key))
+            .and_then(serde_json::Value::as_bool)
+    };
+    Some(RestoredTextValue {
+        value: TextEditingValue::new(text).with_selection(selection),
+        // Legacy snapshots contained only offsets and loaded as valid.
+        selection_unset: flag("isSet") == Some(false),
+        affinity: if saved_selection
+            .and_then(|selection| selection.get("affinity"))
+            .and_then(serde_json::Value::as_str)
+            == Some("upstream")
+        {
+            TextAffinity::Upstream
+        } else {
+            TextAffinity::Downstream
+        },
+        is_directional: flag("isDirectional") == Some(true),
+    })
 }
 
 /// A renderer-neutral editable text description.

@@ -541,3 +541,79 @@ fn ligature_and_combining_carets_snap_to_cluster_edges() {
         "cluster edges order left to right"
     );
 }
+
+#[test]
+fn restoration_keeps_the_original_visual_caret_edge_at_a_bidi_boundary() {
+    use incular_core::{RestorationBackend, RestorationKey, RestorationScope};
+    use serde_json::{Value, json};
+    use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
+
+    #[derive(Default)]
+    struct Store(RefCell<BTreeMap<Vec<RestorationKey>, Value>>);
+    impl RestorationBackend for Store {
+        fn read_value(&self, path: &[RestorationKey]) -> Option<Value> {
+            self.0.borrow().get(path).cloned()
+        }
+        fn write_value(&self, path: &[RestorationKey], value: Value) {
+            self.0.borrow_mut().insert(path.to_vec(), value);
+        }
+        fn remove_value(&self, path: &[RestorationKey]) {
+            self.0.borrow_mut().remove(path);
+        }
+    }
+
+    let scope = RestorationScope::root(Rc::new(Store::default()));
+    let key = RestorationKey::new("editor").unwrap();
+    let text = "hi שלום bye";
+    let cursor = Color::rgba(255, 0, 0, 255);
+    let paint_caret = |editor: TextEditingController| {
+        let (mut tree, root) = mount_field(editor, |field| field.cursor_color(cursor));
+        layout_tight(&mut tree, 300., 32.);
+        tree.set_focused(root, true, Instant::now()).unwrap();
+        colored_rects(&tree.paint(), cursor)[0].origin.x
+    };
+
+    let editor = TextEditingController::with_text(text);
+    editor.bind_restoration(scope.clone(), key.clone());
+    editor.set_selection_with_affinity(TextSelection::collapsed(11), TextAffinity::Upstream);
+    let live_caret = paint_caret(editor);
+    let restored = TextEditingController::restored(scope.clone(), key.clone());
+    assert_eq!(
+        restored.selection_if_set(),
+        Some(TextSelection::collapsed(11))
+    );
+    assert_eq!(
+        paint_caret(restored.clone()),
+        live_caret,
+        "the same offset must restore to the same edge"
+    );
+    assert_eq!(restored.caret_affinity(), TextAffinity::Upstream);
+
+    scope.set_json(
+        &key,
+        json!({"text": text, "selection": {"base": 11, "extent": 11}}),
+    );
+    let legacy = TextEditingController::restored(scope.clone(), key.clone());
+    assert_eq!(legacy.caret_affinity(), TextAffinity::Downstream);
+    assert!(
+        paint_caret(legacy) - live_caret > 5.,
+        "the legacy record defaults to the opposite edge"
+    );
+
+    let edit = TextEditingController::restored(scope.clone(), key.clone());
+    edit.set_text("no selection yet");
+    assert_eq!(
+        TextEditingController::restored(scope.clone(), key.clone()).selection_if_set(),
+        None
+    );
+    let span = TextSelection::new(3, 0);
+    edit.apply_autofill_value(
+        incular_text::TextEditingValue::new("reverse").with_selection(span),
+        true,
+        TextAffinity::Downstream,
+        true,
+    );
+    let restored = TextEditingController::restored(scope, key);
+    assert_eq!(restored.selection_if_set(), Some(span));
+    assert!(restored.selection_is_directional());
+}
