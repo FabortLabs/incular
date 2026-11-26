@@ -796,3 +796,85 @@ fn max_lines_hides_text_without_moving_the_caret_into_an_unlaid_line() {
         }
     }
 }
+
+#[test]
+fn tight_boxes_keep_natural_font_bounds_under_positive_and_negative_leading() {
+    use TextLeadingDistribution::{Even, Proportional};
+    use incular_core::{Offset, Rect};
+    use incular_text::{TextHeightBehavior, TextLeadingDistribution, TextPainterBox};
+    let Ok(path) = std::env::var("INCULAR_FLUTTER_TEST_FONT_PATH") else {
+        return;
+    };
+    let mut engine = TextEngine::new();
+    assert!(engine.register_font_bytes_as("FlutterTest", std::fs::read(path).unwrap()));
+    let base = TextStyle::default().font_family("FlutterTest");
+    let even = TextHeightBehavior::new(true, true, Even);
+    let trimmed = TextHeightBehavior::new(false, false, Proportional);
+
+    for (font, multiplier, style_distribution, behavior, height, top) in [
+        (1., Some(20.), Some(Even), None, 20., 9.5),
+        (10., Some(0.1), Some(Even), None, 1., -4.5),
+        (10., Some(0.1), Some(Even), Some(trimmed), 10., 0.),
+        (1., Some(20.), None, Some(even), 20., 9.5),
+        (1., None, None, Some(even), 1., 0.),
+        (1., None, None, Some(TextHeightBehavior::default()), 1., 0.),
+    ] {
+        let mut style = base.clone().font_size(font);
+        if let Some(multiplier) = multiplier {
+            style = style.line_height_multiplier(multiplier);
+        }
+        style.leading_distribution = style_distribution;
+        let mut p = painter(TextSpan::new("A").style(style), TextDirection::Ltr);
+        p.set_text_height_behavior(behavior);
+        p.layout_with_engine(&mut engine, 0., f32::INFINITY)
+            .unwrap();
+        assert_eq!(p.size(), Ok(Size::new(font, height)));
+        assert_eq!(
+            p.tight_boxes_for_selection(TextRange::new(0, 1)).unwrap(),
+            [TextPainterBox {
+                rect: Rect::from_origin_size(Offset::new(0., top), Size::new(font, font)),
+                direction: TextDirection::Ltr,
+            }],
+            "size {font}, height multiplier {multiplier:?}, behavior {behavior:?}",
+        );
+    }
+}
+
+#[test]
+fn forced_strut_does_not_stretch_the_selected_glyph_box() {
+    use incular_core::{Offset, Rect};
+    use incular_text::{StrutStyle, TextLeadingDistribution, TextPainterBox};
+    let Ok(path) = std::env::var("INCULAR_FLUTTER_TEST_FONT_PATH") else {
+        return;
+    };
+    let mut engine = TextEngine::new();
+    assert!(engine.register_font_bytes_as("FlutterTest", std::fs::read(path).unwrap()));
+    let style = TextStyle::default()
+        .font_family("FlutterTest")
+        .font_size(20.);
+    let mut p = painter(TextSpan::new("A").style(style), TextDirection::Ltr);
+    let base_strut = StrutStyle::new()
+        .height(10.)
+        .font_size(10.)
+        .force_strut_height(true);
+    for (strut, baseline) in [
+        (base_strut.clone(), 75.),
+        (
+            base_strut.leading_distribution(TextLeadingDistribution::Even),
+            52.5,
+        ),
+    ] {
+        p.set_strut_style(Some(strut));
+        p.layout_with_engine(&mut engine, 0., f32::INFINITY)
+            .unwrap();
+        assert_eq!(p.size().unwrap().height, 100.);
+        assert_eq!(p.alphabetic_baseline(), Ok(baseline));
+        assert_eq!(
+            p.tight_boxes_for_selection(TextRange::new(0, 1)).unwrap(),
+            [TextPainterBox {
+                rect: Rect::from_origin_size(Offset::new(0., baseline - 15.), Size::new(20., 20.)),
+                direction: TextDirection::Ltr,
+            }],
+        );
+    }
+}

@@ -2031,3 +2031,10 @@ packages/flutter/test/painting/text_painter_test.dart	1310	TextPainter line metr
 packages/flutter/test/painting/text_painter_test.dart	1956	strut style applies when the span has no style	paired-match	upstream-text-painter.md#strut-spacing-and-tall-inline-children
 packages/flutter/test/painting/text_painter_test.dart	1966	strut style leading is a fontSize multiplier	paired-match	upstream-text-painter.md#strut-spacing-and-tall-inline-children
 packages/flutter/test/painting/text_painter_test.dart	2017	force strut height applies to widget spans	paired-match	upstream-text-painter.md#strut-spacing-and-tall-inline-children
+packages/flutter/test/painting/text_painter_test.dart	1373	half-leading	paired-match	upstream-text-painter.md#tight-selection-bounds-under-leading-and-strut
+packages/flutter/test/painting/text_painter_test.dart	1398	half-leading with small height	paired-match	upstream-text-painter.md#tight-selection-bounds-under-leading-and-strut
+packages/flutter/test/painting/text_painter_test.dart	1424	half-leading with leading trim	paired-match	upstream-text-painter.md#tight-selection-bounds-under-leading-and-strut
+packages/flutter/test/painting/text_painter_test.dart	1451	TextLeadingDistribution falls back to paragraph style	paired-match	upstream-text-painter.md#tight-selection-bounds-under-leading-and-strut
+packages/flutter/test/painting/text_painter_test.dart	1473	TextLeadingDistribution does nothing if height multiplier is null	paired-match	upstream-text-painter.md#tight-selection-bounds-under-leading-and-strut
+packages/flutter/test/painting/text_painter_test.dart	1978	strut no half leading + force strut height	paired-match	upstream-text-painter.md#tight-selection-bounds-under-leading-and-strut
+packages/flutter/test/painting/text_painter_test.dart	1995	strut half leading + force strut height	paired-match	upstream-text-painter.md#tight-selection-bounds-under-leading-and-strut

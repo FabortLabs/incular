@@ -123,3 +123,20 @@ separate work.
 ```sh
 bash audits/flutter-3.50.0-parity/run-reference-linux.sh probe text_painter_line_limit_test.dart
 ```
+
+## Tight selection bounds under leading and strut
+
+Seven original cases pair. The new tight selection query uses retained
+cluster advances and the resolved font's ascent and natural height
+against each line's actual baseline. A 1 px glyph stays 1 px within a
+20 px line; a 10 px glyph remains 10 px within a 1 px line, yielding
+−4.5 px top and bottom insets. Clearing first and last leading makes
+the same box exactly fill its line. Leaving the multiplier unset keeps
+the glyph unchanged regardless of leading distribution. Forced 100 px
+struts shift the baseline to 75 px (proportional) or 52.5 px (even) but
+keep the selected glyph exactly 20 px high.
+
+Seven pinned Flutter and 36 focused Rust tests passed. These cases use
+tight boxes for complete glyphs; newline rectangles, additional box
+width and height styles, and every mixed-direction selection are not
+claimed.

@@ -10,7 +10,7 @@ mod flutter_editing_delta;
 mod spans;
 mod style;
 mod text_painter;
-pub use text_painter::{TextPainter, TextPainterError, TextPainterLine};
+pub use text_painter::{TextPainter, TextPainterBox, TextPainterError, TextPainterLine};
 #[cfg(all(target_os = "windows", not(feature = "bundled-dictionaries")))]
 mod windows_segmentation;
 
@@ -37,11 +37,10 @@ pub use style::{
 
 mod engine;
 pub use engine::{
-    FontId, FontRunDebug, TextBackgroundRect, TextCaretPosition, TextClusterSpan, TextColorRun, TextDiagnostics,
-    TextDocumentLayout, TextEngine, TextLayout, TextLayoutOptions, TextLine, TextMetrics,
-    TextPlaceholder, TextPlaceholderBox, TextStrut, register_application_font,
-    register_application_font_as,
-    set_missing_characters_listener, take_missing_characters,
+    FontId, FontRunDebug, TextBackgroundRect, TextCaretPosition, TextClusterSpan, TextColorRun,
+    TextDiagnostics, TextDocumentLayout, TextEngine, TextLayout, TextLayoutOptions, TextLine,
+    TextMetrics, TextPlaceholder, TextPlaceholderBox, TextStrut, register_application_font,
+    register_application_font_as, set_missing_characters_listener, take_missing_characters,
 };
 mod geometry;
 pub use geometry::{TextGeometry, TextLineRef, TextLines};

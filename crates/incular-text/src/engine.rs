@@ -160,6 +160,8 @@ pub struct FontRunDebug {
     pub direction: &'static str,
     /// Tight font height in logical pixels, before strut or paragraph leading.
     pub caret_height: f32,
+    /// Baseline-to-top distance for the natural font box.
+    pub caret_ascent: f32,
 }
 
 /// A visual insertion point emitted by the shaping engine.
@@ -2004,6 +2006,7 @@ impl TextEngine {
                     font: font_id,
                     direction: if run.is_rtl() { "rtl" } else { "ltr" },
                     caret_height: (run.font_metrics().ascent + run.font_metrics().descent).max(0.),
+                    caret_ascent: run.font_metrics().ascent,
                 });
             }
             // Every merged cluster, including zero-advance ones that only
