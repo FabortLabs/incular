@@ -54,7 +54,7 @@ pub enum NavigationEvent {
     /// A route was popped from the stack.
     Popped { route: Route },
     /// An imperative removal, not a pop. `previous` was the route
-    /// immediately below the removed one, even if neither was the top.
+    /// immediately below the removed one that remains in the stack.
     Removed { route: Route, previous: Option<Route> },
     /// The active route was replaced in place.
     Replaced { previous: Route, route: Route },
@@ -1192,7 +1192,7 @@ impl Navigator {
             .iter()
             .rposition(predicate)
             .map_or(0, |index| index + 1);
-        let doomed: Vec<RouteId> = below[start..]
+        let doomed: HashSet<RouteId> = below[start..]
             .iter()
             .map(|candidate| candidate.id)
             .collect();
@@ -1200,10 +1200,11 @@ impl Navigator {
             let mut state = self.state.borrow_mut();
             let previous_top = state.routes.last().map(|entry| entry.route.clone());
             let mut removed = Vec::new();
-            let mut kept = Vec::with_capacity(state.routes.len());
+            let mut kept: Vec<RouteEntry> = Vec::with_capacity(state.routes.len());
             for entry in std::mem::take(&mut state.routes) {
                 if doomed.contains(&entry.route.id) {
-                    removed.push(entry);
+                    let previous = kept.last().map(|kept| kept.route.clone());
+                    removed.push((entry, previous));
                 } else {
                     kept.push(entry);
                 }
@@ -1226,15 +1227,13 @@ impl Navigator {
         effects.events.push(NavigationEvent::Pushed {
             route: route.clone(),
         });
-        effects
-            .events
-            .extend(Self::active_transition(previous_top, current_top));
-        for entry in removed.into_iter().rev() {
+        // Flutter flushes the route addition, then its removals from top
+        // to bottom, and finally announces the collective top change.
+        for (entry, previous) in removed.into_iter().rev() {
             effects.lifetimes.push(entry.lifetime);
-            effects
-                .events
-                .push(NavigationEvent::Popped { route: entry.route });
+            effects.events.push(NavigationEvent::Removed { route: entry.route, previous });
         }
+        effects.events.extend(Self::active_transition(previous_top, current_top));
         self.dispatch_effects(effects);
         id
     }

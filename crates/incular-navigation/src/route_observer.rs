@@ -273,9 +273,11 @@ impl RouteObserver {
                         aware.did_pop();
                     }
                 }
-                NavigationEvent::Replaced { .. } | NavigationEvent::Removed { .. } => {
-                    pending.set(None);
+                NavigationEvent::Removed { .. } => {
+                    // didRemove does not produce route-aware pop callbacks.
+                    // During pushAndRemoveUntil, an earlier push is pending.
                 }
+                NavigationEvent::Replaced { .. } => pending.set(None),
                 NavigationEvent::ActiveRouteChanged { previous, current } => {
                     match pending.take() {
                         // `didPush(route, previousRoute)`.

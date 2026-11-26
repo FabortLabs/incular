@@ -70,24 +70,27 @@ impl HeroController {
         // reverse animation starts on the next frame, after this event.
         let popping = Cell::new(None::<RouteId>);
         let removing = Cell::new(None::<RouteId>);
+        let pushing = Cell::new(None::<RouteId>);
         let observer = navigator.observe(move |event| {
             // Pushes, replacements and page reconciliation all add routes.
             for route in routes.routes() {
                 route.heroes().activate();
             }
             match event {
+                NavigationEvent::Pushed { route } => pushing.set(Some(route.id)),
                 NavigationEvent::Popped { route } => popping.set(Some(route.id)),
                 NavigationEvent::Removed { route, .. } => removing.set(Some(route.id)),
-                NavigationEvent::ActiveRouteChanged {
-                    previous: Some(previous),
-                    current: Some(current),
-                } => {
-                    let popped = popping.take() == Some(previous.id);
-                    if removing.take() == Some(previous.id) {
-                        // removeRoute does not run an outgoing animation.
+                NavigationEvent::ActiveRouteChanged { previous, current } => {
+                    let (popped, removed, pushed) = (popping.take(), removing.take(), pushing.take());
+                    let (Some(previous), Some(current)) = (previous, current) else {
+                        return;
+                    };
+                    if removed == Some(previous.id) && pushed != Some(current.id) {
+                        // An immediate removal has no outgoing animation,
+                        // except that a batch push still has its own flight.
                         return;
                     }
-                    controller.did_change_top(&current, &previous, popped);
+                    controller.did_change_top(&current, &previous, popped == Some(previous.id));
                 }
                 _ => {}
             }

@@ -204,3 +204,30 @@ fn removing_a_middle_route_uses_its_neighbor_and_does_not_change_the_top() {
     assert_eq!(current(&navigator), "/B");
     assert_eq!(log.take(), [Record::Removed("/".into(), None)]);
 }
+
+#[test]
+fn a_batch_push_reports_removals_against_the_remaining_neighbor_before_top_change() {
+    for keep_root in [true, false] {
+        let navigator = Navigator::new();
+        navigator.push(route("/"));
+        navigator.push(route("/A"));
+        navigator.push(route("/B"));
+        let (log, _observer) = observe(&navigator);
+        let new_id = navigator.push_and_remove_until(
+            route("/C"),
+            |route| keep_root && route.name == "/",
+        );
+        assert_eq!(navigator.current().unwrap().id, new_id);
+        let previous = keep_root.then(|| String::from("/"));
+        let mut expected = vec![
+            Record::Pushed("/C".into()),
+            Record::Removed("/B".into(), previous.clone()),
+            Record::Removed("/A".into(), previous),
+        ];
+        if !keep_root {
+            expected.push(Record::Removed("/".into(), None));
+        }
+        expected.push(active(Some("/B"), "/C"));
+        assert_eq!(log.take(), expected);
+    }
+}
