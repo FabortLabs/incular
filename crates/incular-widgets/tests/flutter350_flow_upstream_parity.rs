@@ -192,6 +192,16 @@ fn flow_zero_area_lays_out_and_paints_its_placeholder() {
 fn overlap_dispatches_to_the_last_child_in_delegate_paint_order() {
     let mut seen = Vec::new();
     for order in [vec![0, 1], vec![1, 0]] {
+        let colors: Vec<_> = order
+            .iter()
+            .map(|index| {
+                if *index == 0 {
+                    Color::WHITE
+                } else {
+                    Color::BLACK
+                }
+            })
+            .collect();
         let hits = Rc::new(RefCell::new(Vec::new()));
         let mut tree = WidgetTree::new();
         tree.mount(flow(
@@ -202,6 +212,16 @@ fn overlap_dispatches_to_the_last_child_in_delegate_paint_order() {
         ))
         .unwrap();
         layout(&mut tree, Size::new(800., 600.));
+        let actual = tree
+            .paint()
+            .commands()
+            .iter()
+            .filter_map(|command| match command {
+                PaintCommand::Rect { color, .. } => Some(*color),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(actual, colors);
         tap(&mut tree, Offset::new(20., 20.), Instant::now(), 1);
         seen.push(hits.take());
     }

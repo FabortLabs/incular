@@ -28,3 +28,13 @@ selection of the last child by index rather than the delegate's
 last paint call, distinct from the repaint subscription gap.
 See `flutter350_flow_upstream_parity` and
 `flow_delegate_paint_order_test.dart`.
+
+### Delegate order controls paint and hits
+
+The pinned two-child authored comparison now matches. With overlapping
+children, delegate calls [0,1] produce that draw order and hit [1];
+calls [1,0] produce reversed draw order and hit [0]. Native geometry
+and semantics keep their retained child identities, but the composed
+and hit-tested order is the one actually painted; omitted children are
+not attached to the paint itinerary. The original repaint-provider
+registration (:64) is still open at this checkpoint.

@@ -2941,6 +2941,9 @@ impl WidgetTree {
             let changed = node.children != render_children;
             if changed {
                 node.children.clone_from(&render_children);
+                if let crate::render_object::RenderFeatureState::Flow(order) = &mut node.object.feature {
+                    order.clear();
+                }
                 node.dirty.insert(DirtyFlags::LAYOUT | DirtyFlags::PAINT);
             }
             changed
@@ -2967,7 +2970,15 @@ impl WidgetTree {
             );
             (!child.parked).then_some(child.object.layers.root)
         };
-        let mut child_layers = if let Some(slots) = paint_slots {
+        let mut child_layers = if let Some(order) = self
+            .render_live(render, "mounted render must remain live")
+            .flow_paint_order()
+        {
+            order.iter().filter_map(|child| {
+                let node = self.render_live(*child, "mounted flow child render must remain live");
+                (!node.parked).then_some(node.object.layers.root)
+            }).collect()
+        } else if let Some(slots) = paint_slots {
             slots
                 .into_iter()
                 .filter_map(layer_for_child)

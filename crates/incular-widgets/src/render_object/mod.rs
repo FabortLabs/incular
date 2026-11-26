@@ -210,6 +210,7 @@ pub(crate) enum RenderFeatureState {
     DraggableSheet(RenderDraggableSheetState),
     TwoDimensional(Box<RenderTwoDimensionalState>),
     TableBorder(Box<RenderTableBorderState>),
+    Flow(Vec<RenderObjectId>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -225,6 +226,7 @@ enum FeatureClass {
     DraggableSheet,
     TwoDimensional,
     TableBorder,
+    Flow,
 }
 
 impl RenderFeatureState {
@@ -240,6 +242,9 @@ impl RenderFeatureState {
                 FeatureClass::Wheel
             }
             RenderKind::DraggableScrollableSheet { .. } => FeatureClass::DraggableSheet,
+            RenderKind::CustomLayout {
+                delegate: crate::custom_layout::CustomLayoutDelegate::Flow(_),
+            } => FeatureClass::Flow,
             RenderKind::Table {
                 border: Some(border),
                 ..
@@ -263,6 +268,7 @@ impl RenderFeatureState {
             Self::DraggableSheet(_) => FeatureClass::DraggableSheet,
             Self::TwoDimensional(_) => FeatureClass::TwoDimensional,
             Self::TableBorder(_) => FeatureClass::TableBorder,
+            Self::Flow(_) => FeatureClass::Flow,
         }
     }
 
@@ -297,6 +303,7 @@ impl RenderFeatureState {
                 }
                 FeatureClass::TwoDimensional => Self::TwoDimensional(Box::default()),
                 FeatureClass::TableBorder => Self::TableBorder(Box::default()),
+                FeatureClass::Flow => Self::Flow(Vec::new()),
             },
         }
     }
@@ -343,6 +350,7 @@ impl FeatureClass {
             Self::DraggableSheet => "draggable-sheet",
             Self::TwoDimensional => "two-dimensional",
             Self::TableBorder => "table-border",
+            Self::Flow => "flow",
         }
     }
 }
@@ -533,6 +541,13 @@ impl RenderNode {
             RenderFeatureState::class_for(self.object.kind()).name(),
             self.object.feature.class().name(),
         )
+    }
+
+    pub(crate) fn flow_paint_order(&self) -> Option<&[RenderObjectId]> {
+        match &self.object.feature {
+            RenderFeatureState::Flow(order) => Some(order),
+            _ => None,
+        }
     }
 
     pub(crate) fn text_layout(&self) -> Option<&Arc<TextLayout>> {

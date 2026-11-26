@@ -1067,12 +1067,37 @@ impl WidgetTree {
                 // transforms only need the sizes known here.
                 let mut context = crate::custom_layout::FlowPaintingContext::new(size, &sizes);
                 delegate.paint_children(&mut context);
-                for (&child, painted) in children.iter().zip(context.into_painted()) {
+                let (painted, ordered) = context.into_painted();
+                for (&child, painted) in children.iter().zip(painted) {
                     self.apply_flow_slot(child, painted);
                 }
+                self.sync_flow_paint_order(
+                    id,
+                    ordered.into_iter().map(|index| children[index]).collect(),
+                );
                 Ok((size, children.iter().map(|_| Offset::ZERO).collect()))
             }
         }
+    }
+
+    fn sync_flow_paint_order(&mut self, id: RenderObjectId, next: Vec<RenderObjectId>) {
+        let node = self.render_live(id, "flow render must remain live");
+        if node.flow_paint_order() == Some(next.as_slice()) {
+            return;
+        }
+        let layers = next.iter().map(|child| {
+            self.render_live(*child, "flow child must remain live").object.layers.root
+        }).collect();
+        let kind = node.object.shared_kind();
+        let surface = node.object.layers.clone();
+        if let crate::render_object::RenderFeatureState::Flow(order) = &mut self
+            .render_live_mut(id, "flow render must remain live")
+            .object.feature
+        {
+            *order = next;
+        }
+        surface.set_render_children(&mut self.compositor, &kind, layers);
+        self.mark_render_semantics(id, SemanticsDirty::Subtree);
     }
 
     /// Writes a flow child's paint call into its slot and pushes the new

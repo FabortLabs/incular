@@ -482,6 +482,7 @@ pub struct FlowPaintingContext<'a> {
     size: Size,
     child_sizes: &'a [Size],
     painted: Vec<Option<(CoreTransform, f32)>>,
+    order: Vec<usize>,
 }
 
 impl<'a> FlowPaintingContext<'a> {
@@ -490,6 +491,7 @@ impl<'a> FlowPaintingContext<'a> {
             size,
             child_sizes,
             painted: vec![None; child_sizes.len()],
+            order: Vec::with_capacity(child_sizes.len()),
         }
     }
 
@@ -509,9 +511,8 @@ impl<'a> FlowPaintingContext<'a> {
         self.child_sizes.get(index).copied()
     }
 
-    /// Paints the child at `index` with `transform` and `opacity`. Flutter
-    /// paints children in the order of these calls; here children always
-    /// paint in their own order.
+    /// Paints the child at `index` with `transform` and `opacity`. Paint
+    /// and hit testing follow the order of these calls.
     ///
     /// # Panics
     /// Panics when `index` is out of range or the child was already
@@ -542,11 +543,12 @@ impl<'a> FlowPaintingContext<'a> {
             return Err(FlowPaintError::AlreadyPainted(index));
         }
         *slot = Some((transform, opacity.clamp(0., 1.)));
+        self.order.push(index);
         Ok(())
     }
 
-    pub(crate) fn into_painted(self) -> Vec<Option<(CoreTransform, f32)>> {
-        self.painted
+    pub(crate) fn into_painted(self) -> (Vec<Option<(CoreTransform, f32)>>, Vec<usize>) {
+        (self.painted, self.order)
     }
 }
 

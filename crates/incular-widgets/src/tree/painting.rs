@@ -14,7 +14,9 @@ use super::text::{
 /// The paintable subset; unselected IndexedStack children remain laid out
 /// and retain any pending paint until their layer is attached again.
 fn visible_paint_children(node: &RenderNode) -> &[RenderObjectId] {
-    if let RenderKind::IndexedStack { index, .. } = node.object.kind() {
+    if let Some(order) = node.flow_paint_order() {
+        order
+    } else if let RenderKind::IndexedStack { index, .. } = node.object.kind() {
         index
             .and_then(|slot| node.children.get(slot))
             .map(std::slice::from_ref)
@@ -1247,8 +1249,7 @@ impl WidgetTree {
                     .collect::<Vec<_>>()
                     .into()
             }
-            RenderKind::IndexedStack { .. } => visible_paint_children(node).into(),
-            _ => node.children.as_slice().into(),
+            _ => visible_paint_children(node).into(),
         }
     }
     pub(super) fn scrollbar_controller_and_geometry(
