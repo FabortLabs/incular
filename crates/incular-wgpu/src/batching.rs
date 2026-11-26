@@ -33,7 +33,7 @@ impl BatchPlan {
         let mut transforms = vec![Transform::IDENTITY];
         for command in list.commands() {
             match command {
-                PaintCommand::Rect { rect, color } => current.instances.push(RectangleInstance {
+                PaintCommand::Rect { rect, color } | PaintCommand::HardEdgeRect { rect, color } => current.instances.push(RectangleInstance {
                     rect: transforms
                         .last()
                         .expect("transform stack")

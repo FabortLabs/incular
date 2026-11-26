@@ -4139,6 +4139,9 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
             })
         }
         WidgetKind::CustomPaint { size, .. } => size.and_then(|size| dimension(size, axis)),
+        WidgetKind::Colored { child, .. } => child
+            .as_ref()
+            .map_or(Some(0.), |child| widget_main_extent_hint(child, axis)),
         WidgetKind::Decorated { size, child, .. } => size
             .and_then(|size| dimension(size, axis))
             .or_else(|| widget_main_extent_hint(child, axis)),

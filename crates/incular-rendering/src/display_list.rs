@@ -92,6 +92,11 @@ pub enum PaintCommand {
         rect: Rect,
         color: Color,
     },
+    /// A solid rectangle rasterized without fractional edge coverage.
+    HardEdgeRect {
+        rect: Rect,
+        color: Color,
+    },
     RRect {
         rrect: RRect,
         brush: Brush,
@@ -555,7 +560,7 @@ impl DisplayList {
                     transforms.pop();
                 }
                 PaintCommand::PushSurfacePartition { .. } | PaintCommand::PopSurfacePartition => {}
-                PaintCommand::Rect { rect, color } => {
+                PaintCommand::Rect { rect, color } | PaintCommand::HardEdgeRect { rect, color } => {
                     if color.alpha != u8::MAX {
                         return false;
                     }

@@ -896,6 +896,7 @@ fn needs_picture(widget: &WidgetKind) -> bool {
             | WidgetKind::Shape { .. }
             | WidgetKind::CustomPaint { .. }
             | WidgetKind::RepaintBoundary { .. }
+            | WidgetKind::Colored { .. }
             | WidgetKind::Decorated { .. }
             | WidgetKind::Banner { .. }
             | WidgetKind::Button(_)

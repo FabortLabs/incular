@@ -200,6 +200,31 @@ impl WgpuRenderer {
                         );
                     }
                 }
+                PaintCommand::HardEdgeRect { rect, color } => {
+                    if transform.is_translation() {
+                        append_rectangle(
+                            batches,
+                            clip,
+                            RectangleInstance {
+                                rect: translated_rect(*rect, translation),
+                                color: *color,
+                            },
+                        );
+                    } else {
+                        let path = self.shape_path(false, rect.size);
+                        self.append_path(
+                            batches,
+                            clip,
+                            &path,
+                            PathMeshKind::HardEdgeRect,
+                            &Brush::Solid(*color),
+                            PathPlacement {
+                                transform: transform.then(Transform::translation(rect.origin)),
+                                scale,
+                            },
+                        );
+                    }
+                }
                 // Common solid rounded primitives retain painter order even on
                 // renderers that do not yet select the analytic pipeline.
                 PaintCommand::RRect { rrect, brush } => append_rrect(

@@ -119,6 +119,7 @@ pub(crate) fn install_listener(
         | WidgetKind::ClipRect { child, .. }
         | WidgetKind::ClipRRect { child, .. }
         | WidgetKind::FittedBox { child, .. }
+        | WidgetKind::Colored { child, .. }
         | WidgetKind::Limited { child, .. }
         | WidgetKind::Fractional { child, .. }
         | WidgetKind::Overflow { child, .. }

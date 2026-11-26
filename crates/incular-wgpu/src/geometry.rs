@@ -32,6 +32,19 @@ pub struct PathMesh {
 }
 
 impl PathMesh {
+    pub(crate) fn hard_edge_rect(rect: incular_core::Rect) -> Self {
+        let x = rect.origin.x;
+        let y = rect.origin.y;
+        let right = x + rect.size.width;
+        let bottom = y + rect.size.height;
+        Self {
+            vertices: vec![[x, y], [right, y], [right, bottom], [x, bottom]],
+            extrusions: vec![[0.; 2]; 4],
+            coverage: vec![1.; 4],
+            indices: vec![0, 1, 2, 0, 2, 3],
+        }
+    }
+
     /// Interleaved `[x, y, extrude_x, extrude_y, coverage]` vertices, the
     /// layout of the retained path vertex buffer.
     pub(crate) fn gpu_vertices(&self) -> Vec<[f32; 5]> {
@@ -307,4 +320,25 @@ fn contour_miters(contour: &[Point], sign: f64) -> Vec<[f32; 2]> {
             [miter.x as f32, miter.y as f32]
         })
         .collect()
+}
+
+#[cfg(test)]
+mod hard_edge_rect_tests {
+    use super::PathMesh;
+    use incular_core::{Offset, Rect, Size};
+
+    #[test]
+    fn rectangle_mesh_has_exact_corners_and_no_antialias_fringe() {
+        let mesh = PathMesh::hard_edge_rect(Rect::from_origin_size(
+            Offset::new(2.25, 3.5),
+            Size::new(9.5, 4.25),
+        ));
+        assert_eq!(
+            mesh.vertices,
+            [[2.25, 3.5], [11.75, 3.5], [11.75, 7.75], [2.25, 7.75]]
+        );
+        assert_eq!(mesh.indices, [0, 1, 2, 0, 2, 3]);
+        assert_eq!(mesh.extrusions, [[0.; 2]; 4]);
+        assert_eq!(mesh.coverage, [1.; 4]);
+    }
 }

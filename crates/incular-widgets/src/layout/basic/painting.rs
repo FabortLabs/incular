@@ -9,15 +9,15 @@ use typed_builder::TypedBuilder;
 
 use super::SizedBox;
 use crate::painting_effects::PainterDelegate;
-use crate::{
-    DecoratedBox, IgnorePointer, Positioned, Stack, Widget, WidgetKind, macros::widget_from_kind,
-};
+use crate::{IgnorePointer, Positioned, Stack, Widget, WidgetKind, macros::widget_from_kind};
 
 /// Paints a solid background color behind a child widget.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct ColoredBox {
     #[builder(setter(into))]
     color: Color,
+    #[builder(default = true)]
+    is_anti_alias: bool,
     #[builder(default, setter(strip_option, into))]
     pub(super) child: Option<Widget>,
 }
@@ -26,10 +26,25 @@ impl ColoredBox {
     /// Creates a ColoredBox wrapping a child with a background color.
     #[must_use]
     pub fn new(color: Color, child: impl Into<Widget>) -> Self {
+        Self::empty(color).child(child)
+    }
+
+    /// Creates a colored box without a child. Its size is the incoming minimum.
+    #[must_use]
+    pub fn empty(color: Color) -> Self {
         Self {
             color,
-            child: Some(child.into()),
+            is_anti_alias: true,
+            child: None,
         }
+    }
+
+    /// Uses fractional edge coverage, including under affine transforms.
+    /// Enabled by default; disable to avoid seams between adjoining boxes.
+    #[must_use]
+    pub fn is_anti_alias(mut self, enabled: bool) -> Self {
+        self.is_anti_alias = enabled;
+        self
     }
 
     /// Sets the background color.
@@ -47,12 +62,7 @@ impl ColoredBox {
     }
 }
 
-impl From<ColoredBox> for Widget {
-    fn from(value: ColoredBox) -> Self {
-        let child = value.child.unwrap_or_else(|| SizedBox::shrink().into());
-        DecoratedBox::new(child).background(value.color).into()
-    }
-}
+widget_from_kind!(ColoredBox => Colored { color, is_anti_alias, child });
 
 /// Isolates display list painting and caching into a dedicated layer.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]

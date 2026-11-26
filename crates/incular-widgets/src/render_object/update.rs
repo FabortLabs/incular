@@ -84,6 +84,7 @@ fn visual_paint_only_change(old: &RenderKind, new: &RenderKind) -> bool {
     match (old, new) {
         (RenderKind::Box { desired: a, .. }, RenderKind::Box { desired: b, .. })
         | (RenderKind::Shape { desired: a, .. }, RenderKind::Shape { desired: b, .. }) => a == b,
+        (RenderKind::Colored { .. }, RenderKind::Colored { .. }) => true,
         (RenderKind::Decorated { desired: a, .. }, RenderKind::Decorated { desired: b, .. }) => {
             a == b
         }

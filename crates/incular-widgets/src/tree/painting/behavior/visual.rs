@@ -61,6 +61,16 @@ impl WidgetTree {
                 }
                 cache.extend_from(display_list);
             }
+            RenderKind::Colored { color, is_anti_alias } => {
+                if size.width > 0. && size.height > 0. {
+                    let rect = Rect::from_origin_size(Offset::ZERO, size);
+                    cache.push(if is_anti_alias {
+                        PaintCommand::Rect { rect, color }
+                    } else {
+                        PaintCommand::HardEdgeRect { rect, color }
+                    });
+                }
+            }
             RenderKind::Decorated {
                 ref background,
                 border,

@@ -271,7 +271,7 @@ pub(crate) fn oval_path(rect: Rect) -> Path {
 /// line, whose bounds have zero area, although its stroke has area.
 pub(crate) fn mesh_bounds_outset(kind: PathMeshKind) -> f32 {
     match kind {
-        PathMeshKind::Fill(_) => 0.,
+        PathMeshKind::Fill(_) | PathMeshKind::HardEdgeRect => 0.,
         PathMeshKind::Stroke {
             width,
             cap,

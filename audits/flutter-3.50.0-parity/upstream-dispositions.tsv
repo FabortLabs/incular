@@ -2203,3 +2203,11 @@ packages/flutter/test/widgets/basic_test.dart	1842	Padding does not crash at zer
 packages/flutter/test/widgets/basic_test.dart	1868	Offstage does not crash at zero area	paired-match	upstream-basic-zero-area.md
 packages/flutter/test/widgets/basic_test.dart	1880	RawImage does not crash at zero area	paired-match	upstream-basic-zero-area.md
 packages/flutter/test/widgets/basic_test.dart	1920	Builder does not crash at zero area	paired-match	upstream-basic-zero-area.md
+packages/flutter/test/widgets/basic_test.dart	1105	ColoredBox - no size, no child	paired-match	upstream-colored-box.md
+packages/flutter/test/widgets/basic_test.dart	1124	ColoredBox - no size, child	paired-match	upstream-colored-box.md
+packages/flutter/test/widgets/basic_test.dart	1150	ColoredBox - size, no child	paired-match	upstream-colored-box.md
+packages/flutter/test/widgets/basic_test.dart	1163	ColoredBox - size, child	paired-match	upstream-colored-box.md
+packages/flutter/test/widgets/basic_test.dart	1179	ColoredBox - debugFillProperties	paired-match	upstream-colored-box.md
+packages/flutter/test/widgets/basic_test.dart	1187	ColoredBox - default isAntiAlias	paired-match	upstream-colored-box.md
+packages/flutter/test/widgets/basic_test.dart	1196	ColoredBox - passing isAntiAlias = false	paired-match	upstream-colored-box.md
+packages/flutter/test/widgets/basic_test.dart	1944	ColoredBox does not crash at zero area	paired-match	upstream-colored-box.md

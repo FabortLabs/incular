@@ -186,6 +186,7 @@ pub(crate) struct BlurKernel {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum PathMeshKind {
     Fill(FillRule),
+    HardEdgeRect,
     Stroke {
         width: u32,
         cap: LineCap,

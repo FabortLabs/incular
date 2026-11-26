@@ -42,7 +42,7 @@ impl WidgetTree {
                     self.probe_intrinsic_extent(grandchild, dimension, probe)
                 });
             }
-            RenderKind::Decorated { desired: None, .. } => {
+            RenderKind::Colored { .. } | RenderKind::Decorated { desired: None, .. } => {
                 let Some(&grandchild) = node.children.first() else {
                     return Ok(0.0);
                 };
@@ -94,7 +94,11 @@ impl WidgetTree {
                 ),
                 ChildOffsets::default(),
             ),
-            RenderKind::Decorated { desired, .. } => {
+            RenderKind::Colored { .. } | RenderKind::Decorated { .. } => {
+                let desired = match kind {
+                    RenderKind::Decorated { desired, .. } => *desired,
+                    _ => None,
+                };
                 if let Some(&child) = children.first() {
                     // Flutter's `RenderDecoratedBox` is a proxy: the child gets the
                     // box's constraints, so a tight parent sizes the child too.

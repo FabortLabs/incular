@@ -658,6 +658,10 @@ pub enum RenderKind {
         display_list: DisplayList,
         painter: Option<crate::painting_effects::PainterDelegate>,
     },
+    Colored {
+        color: Color,
+        is_anti_alias: bool,
+    },
     Decorated {
         desired: Option<Size>,
         background: Option<Brush>,

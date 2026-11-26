@@ -22,6 +22,7 @@ impl LayoutFamily {
             RenderKind::Box { .. }
             | RenderKind::Shape { .. }
             | RenderKind::CustomPaint { .. }
+            | RenderKind::Colored { .. }
             | RenderKind::Decorated { .. }
             | RenderKind::Banner { .. }
             | RenderKind::Button { .. }

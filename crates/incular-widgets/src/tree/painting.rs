@@ -127,8 +127,8 @@ fn claims_own_bounds(kind: Option<&WidgetKind>) -> bool {
 fn paints_own_hit_surface(kind: Option<&WidgetKind>) -> bool {
     // A transparent `Box` is the layout placeholder of a childless
     // `SizedBox`, `ConstrainedBox` or `Container` (Flutter's childless
-    // `RenderConstrainedBox`, which never hits itself); `ColoredBox` is a
-    // `Decorated` and hits whatever its color.
+    // `RenderConstrainedBox`, which never hits itself). ColoredBox is
+    // separately opaque to hit testing regardless of its paint alpha.
     if let Some(WidgetKind::Box { color, .. }) = kind {
         return color.alpha > 0;
     }
@@ -137,6 +137,7 @@ fn paints_own_hit_surface(kind: Option<&WidgetKind>) -> bool {
         Some(
             WidgetKind::Shape { .. }
                 | WidgetKind::CustomPaint { .. }
+                | WidgetKind::Colored { .. }
                 | WidgetKind::Decorated { .. }
                 | WidgetKind::Button(_)
                 | WidgetKind::Text { .. }
@@ -151,6 +152,16 @@ fn paints_own_hit_surface(kind: Option<&WidgetKind>) -> bool {
 // Flutter Size.contains is half-open at the lower and right edges.
 fn absorb_pointer_hit(size: Size, local: Offset) -> bool {
     local.x >= 0.0 && local.y >= 0.0 && local.x < size.width && local.y < size.height
+}
+
+fn hit_box_contains(kind: &RenderKind, size: Size, origin: Offset, point: Offset) -> bool {
+    if matches!(kind, RenderKind::Colored { .. }) {
+        // Like Flutter's RenderProxyBoxWithHitTestBehavior, the colored
+        // surface claims only the half-open box, even with a transparent fill.
+        absorb_pointer_hit(size, point - origin)
+    } else {
+        Rect::from_origin_size(origin, size).contains(point)
+    }
 }
 
 /// Whether a node whose bounds hold the point is hit itself once its
@@ -610,7 +621,7 @@ impl WidgetTree {
             return (result, target);
         }
         let current = self.hit_origin(id, node, origin);
-        if !Rect::from_origin_size(current, node.size).contains(point) {
+        if !hit_box_contains(node.object.kind(), node.size, current, point) {
             return (RawHitResult::default(), None);
         }
         let child_origin = hit_child_origin(node.object.kind(), current);
@@ -1149,7 +1160,7 @@ impl WidgetTree {
             return None;
         }
         let current = self.hit_origin(id, node, origin);
-        if !Rect::from_origin_size(current, node.size).contains(point) {
+        if !hit_box_contains(node.object.kind(), node.size, current, point) {
             return None;
         }
         if matches!(
@@ -1611,7 +1622,9 @@ fn painted_bounds(commands: &[PaintCommand], size: Size) -> Rect {
     for command in commands {
         let transform = transforms[depth];
         let local = match command {
-            PaintCommand::Rect { rect, .. } => Some(*rect),
+            PaintCommand::Rect { rect, .. } | PaintCommand::HardEdgeRect { rect, .. } => {
+                Some(*rect)
+            }
             PaintCommand::RRect { rrect, .. } | PaintCommand::Border { rrect, .. } => {
                 Some(rrect.rect)
             }

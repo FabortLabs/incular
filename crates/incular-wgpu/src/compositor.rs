@@ -182,6 +182,7 @@ pub(crate) fn display_list_composition_bounds(commands: &[PaintCommand]) -> Opti
         let translation = *transforms.last().expect("root transform");
         match command {
             PaintCommand::Rect { rect, .. }
+            | PaintCommand::HardEdgeRect { rect, .. }
             | PaintCommand::Image {
                 destination: rect, ..
             } => add_composition_bounds(&mut bounds, translated_rect(*rect, translation)),

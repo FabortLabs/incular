@@ -22,7 +22,7 @@ fn optional_child_builders_accept_widgets() {
         .child(child.clone())
         .build();
     let lowered = Widget::from(colored_box);
-    assert_eq!(lowered.debug_type_name(), "DecoratedBox");
+    assert_eq!(lowered.debug_type_name(), "ColoredBox");
 }
 
 #[test]

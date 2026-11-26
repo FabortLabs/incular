@@ -73,11 +73,12 @@ impl WgpuRenderer {
             }
             Entry::Vacant(entry) => {
                 self.counters.path_tessellation_cache_misses += 1;
-                let (rule, stroke) = match key.kind {
+                let mesh = match key.kind {
                     PathMeshKind::Fill(rule) => {
                         self.counters.path_fill_tessellations += 1;
-                        (rule, None)
+                        tessellate_path(path, rule, None)
                     }
+                    PathMeshKind::HardEdgeRect => path.tight_bounds().map(PathMesh::hard_edge_rect),
                     PathMeshKind::Stroke {
                         width,
                         cap,
@@ -85,7 +86,8 @@ impl WgpuRenderer {
                         miter_limit,
                     } => {
                         self.counters.path_stroke_tessellations += 1;
-                        (
+                        tessellate_path(
+                            path,
                             FillRule::NonZero,
                             Some(Stroke {
                                 width: f32::from_bits(width),
@@ -96,7 +98,7 @@ impl WgpuRenderer {
                         )
                     }
                 };
-                let Some(mesh) = tessellate_path(path, rule, stroke) else {
+                let Some(mesh) = mesh else {
                     return false;
                 };
                 self.counters.path_cpu_vertices += mesh.vertices.len() as u64;

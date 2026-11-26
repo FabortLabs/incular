@@ -258,6 +258,17 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
             }
             summarize_child(&mut out, child);
         }
+        WidgetKind::Colored {
+            color,
+            is_anti_alias,
+            child,
+        } => {
+            out.push(prop("color", color_value(*color)));
+            out.push(prop("isAntiAlias", DebugValue::Bool(*is_anti_alias)));
+            if let Some(child) = child {
+                summarize_child(&mut out, child);
+            }
+        }
         WidgetKind::Decorated {
             background,
             border,

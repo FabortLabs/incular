@@ -31,6 +31,10 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             display_list: display_list.clone(),
             painter: painter.clone(),
         },
+        WidgetKind::Colored { color, is_anti_alias, .. } => RenderKind::Colored {
+            color: *color,
+            is_anti_alias: *is_anti_alias,
+        },
         WidgetKind::Decorated {
             size,
             background,

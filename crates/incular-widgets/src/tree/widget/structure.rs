@@ -32,6 +32,11 @@ impl std::fmt::Debug for WidgetKind {
                 .field("size", size)
                 .field("command_count", &display_list.len())
                 .finish(),
+            Self::Colored { color, is_anti_alias, .. } => f
+                .debug_struct("ColoredBox")
+                .field("color", color)
+                .field("is_anti_alias", is_anti_alias)
+                .finish(),
             Self::Decorated {
                 size,
                 background,
@@ -1036,6 +1041,18 @@ impl PartialEq for WidgetKind {
                 a == e && b == f && c == g && cw == cx && dcw == dcx && dva == dvb && tda == tdb && ba == bb && d == h
             }
             (
+                Self::Colored {
+                    color: a,
+                    is_anti_alias: b,
+                    child: c,
+                },
+                Self::Colored {
+                    color: d,
+                    is_anti_alias: e,
+                    child: f,
+                },
+            ) => a == d && b == e && c == f,
+            (
                 Self::Decorated {
                     size: a,
                     background: b,
@@ -1939,6 +1956,7 @@ pub(crate) enum WidgetType {
     Box,
     Shape,
     CustomPaint,
+    Colored,
     Decorated,
     Banner,
     Image,
@@ -2034,6 +2052,7 @@ impl WidgetType {
             Self::Box => "Box",
             Self::Shape => "Shape",
             Self::CustomPaint => "CustomPaint",
+            Self::Colored => "ColoredBox",
             Self::Decorated => "DecoratedBox",
             Self::Banner => "Banner",
             Self::Image => "Image",
@@ -2250,6 +2269,12 @@ impl WidgetKind {
             WidgetKind::Box { .. } => (WidgetType::Box, Visual, None, NoChildren),
             WidgetKind::Shape { .. } => (WidgetType::Shape, Visual, None, NoChildren),
             WidgetKind::CustomPaint { .. } => (WidgetType::CustomPaint, Visual, None, NoChildren),
+            WidgetKind::Colored { child, .. } => (
+                WidgetType::Colored,
+                Visual,
+                Optional,
+                WidgetChildren::Optional(child.as_ref()),
+            ),
             WidgetKind::Decorated { child, .. } => (
                 WidgetType::Decorated,
                 Visual,
