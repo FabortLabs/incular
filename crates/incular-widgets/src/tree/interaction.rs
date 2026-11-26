@@ -1577,34 +1577,29 @@ impl WidgetTree {
             claimed
         };
         if matches!(event.phase, PointerPhase::Up | PointerPhase::Cancel) {
-            // A fast release transfers the live bracket into a ballistic
-            // tenure instead of finishing it; anything else ends here.
-            // Cancellation never flings.
-            if matches!(event.phase, PointerPhase::Up) {
-                self.maybe_begin_fling(key);
-            }
-            self.finish_drag(
-                key,
-                matches!(event.phase, PointerPhase::Cancel),
-                event.position,
-            );
-            self.cancel_gesture_stream(key, matches!(event.phase, PointerPhase::Cancel));
+            // A cancellation never carries pointer velocity, but Flutter
+            // still starts a zero-velocity ballistic to settle overscroll or
+            // a snapped position (ScrollDragController.cancel).
+            let cancelled = event.phase == PointerPhase::Cancel;
+            self.maybe_begin_fling(key, cancelled);
+            self.finish_drag(key, cancelled, event.position);
+            self.cancel_gesture_stream(key, cancelled);
         } else {
             self.remove_scale_recognizers_when_idle();
         }
         claimed.then_some(element)
     }
 
-    /// Transfers a live drag bracket into a ballistic tenure when the
-    /// release was fast enough to fling. The token moves, not copies —
-    /// no `End`/`Start` churn at handoff — and later frames pump it
-    /// through [`pump_scroll_flings`](Self::pump_scroll_flings). Slow
-    /// releases, unaccepted presses, and stale brackets finish or drop
-    /// silently exactly as before. Propagated outer tenures always
+    /// Lets the scroll physics decide whether a live drag settles or rests.
+    /// Cancellation releases with zero velocity. On a ballistic handoff,
+    /// the same token avoids an extra `End`/`Start` pair and subsequent
+    /// frames drive it through [`pump_scroll_flings`](Self::pump_scroll_flings).
+    /// Unaccepted presses and stale brackets drop without starting a drive.
+    /// Propagated outer tenures always
     /// close here with `End`: only the gesture's own viewport goes
     /// ballistic. Fling remainder routing is a separate, unbuilt
     /// policy — this transfer never carries it implicitly.
-    fn maybe_begin_fling(&mut self, key: GestureArenaKey) {
+    fn maybe_begin_fling(&mut self, key: GestureArenaKey, cancelled: bool) {
         let Some(bracket) = self.input.scroll_brackets.remove(&key) else {
             return;
         };
@@ -1619,7 +1614,11 @@ impl WidgetTree {
         if !activity.is_current() {
             return;
         }
-        let Some(velocity) = bracket.end_velocity.get() else {
+        let velocity = if cancelled {
+            0.
+        } else if let Some(velocity) = bracket.end_velocity.get() {
+            velocity
+        } else {
             activity.finish();
             return;
         };

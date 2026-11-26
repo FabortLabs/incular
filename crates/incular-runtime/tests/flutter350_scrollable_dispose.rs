@@ -24,7 +24,7 @@ fn touch(runtime: &mut Runtime, time: Instant, id: u64, phase: PointerPhase, at:
         id,
         0,
         PointerDeviceKind::Touch,
-        if phase == PointerPhase::Up {
+        if matches!(phase, PointerPhase::Up | PointerPhase::Cancel) {
             0
         } else {
             PRIMARY_POINTER_BUTTON
@@ -128,6 +128,7 @@ fn replacing_nested_scrollables_while_holding_overscroll_detaches_both_positions
         let contact = Offset::new(250., 50.);
         touch(&mut runtime, at(324), 2, PointerPhase::Down, contact);
         frame(&mut runtime, at(524));
+        assert_eq!(controller.offset(), held);
         frame(&mut runtime, at(724));
         assert_eq!(controller.offset(), held, "{platform:?}");
         remove_scrollables(&mut runtime, at(725));
@@ -136,5 +137,52 @@ fn replacing_nested_scrollables_while_holding_overscroll_detaches_both_positions
         touch(&mut runtime, at(726), 2, PointerPhase::Up, contact);
         frame(&mut runtime, at(1000));
         assert!(!runtime.tree().has_pending_scroll_animations());
+    }
+}
+
+#[test]
+fn ending_a_hold_without_dragging_resumes_springback() {
+    use incular_widgets::ScrollPhysics;
+
+    for ending in [PointerPhase::Up, PointerPhase::Cancel] {
+        let controller = ScrollController::new();
+        let list = ListView::builder(250, |_| SizedBox::new().height(200.))
+            .item_extent(200.)
+            .physics(ScrollPhysics::BOUNCING)
+            .controller(controller.clone());
+        let mut runtime =
+            Runtime::new(Directionality::new(TextDirection::Ltr, list).into()).unwrap();
+        let now = Instant::now();
+        let at = |ms| now + Duration::from_millis(ms);
+        frame(&mut runtime, now);
+
+        fling_y(&mut runtime, at(10), 400., 50., 70.);
+        frame(&mut runtime, at(123));
+        frame(&mut runtime, at(223));
+        let previous = controller.offset();
+        frame(&mut runtime, at(323));
+        let held = controller.offset();
+        assert!(previous < held && held < 0., "{previous} → {held}");
+
+        let contact = Offset::new(400., 50.);
+        touch(&mut runtime, at(324), 2, PointerPhase::Down, contact);
+        frame(&mut runtime, at(524));
+        frame(&mut runtime, at(724));
+        assert_eq!(controller.offset(), held);
+
+        touch(&mut runtime, at(725), 2, ending, contact);
+        assert!(
+            controller.is_scrolling(),
+            "{ending:?} should resume the spring"
+        );
+        frame(&mut runtime, at(726));
+        frame(&mut runtime, at(826));
+        assert!(
+            controller.offset() > held,
+            "{ending:?} must approach the edge"
+        );
+        frame(&mut runtime, at(3000));
+        assert!(controller.offset().abs() < 0.001);
+        assert!(!controller.is_scrolling());
     }
 }
