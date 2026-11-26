@@ -38,6 +38,7 @@ pub use engine::{
     FontId, FontRunDebug, TextCaretPosition, TextClusterSpan, TextColorRun, TextDiagnostics,
     TextDocumentLayout, TextEngine, TextLayout, TextLayoutOptions, TextLine, TextMetrics,
     TextPlaceholder, TextPlaceholderBox, TextStrut, register_application_font,
+    register_application_font_as,
     set_missing_characters_listener, take_missing_characters,
 };
 mod geometry;

@@ -563,9 +563,15 @@ impl<'a> LayoutKey<'a> {
     }
 }
 
+#[derive(Clone)]
+struct ApplicationFont {
+    blob: parley::fontique::Blob<u8>,
+    alias: Option<Arc<str>>,
+}
+
 // Fonts every engine on this thread registers, in registration order.
 thread_local! {
-    static APPLICATION_FONTS: std::cell::RefCell<Vec<parley::fontique::Blob<u8>>> =
+    static APPLICATION_FONTS: std::cell::RefCell<Vec<ApplicationFont>> =
         const { std::cell::RefCell::new(Vec::new()) };
 }
 
@@ -579,8 +585,19 @@ thread_local! {
 /// too, as the fallback for characters the earlier ones lack. Native
 /// platforms keep their system generics and fallback.
 pub fn register_application_font(bytes: impl Into<Vec<u8>>) {
-    let blob = parley::fontique::Blob::from(bytes.into());
-    APPLICATION_FONTS.with(|fonts| fonts.borrow_mut().push(blob));
+    enqueue_application_font(bytes.into(), None);
+}
+
+/// Registers the font with a family alias on the current UI thread.
+/// Existing engines apply it on their next layout, invalidating stale
+/// fallback results. Use the full package-qualified key for a package font.
+pub fn register_application_font_as(family: impl Into<Arc<str>>, bytes: impl Into<Vec<u8>>) {
+    enqueue_application_font(bytes.into(), Some(family.into()));
+}
+
+fn enqueue_application_font(bytes: Vec<u8>, alias: Option<Arc<str>>) {
+    let blob = parley::fontique::Blob::from(bytes);
+    APPLICATION_FONTS.with(|fonts| fonts.borrow_mut().push(ApplicationFont { blob, alias }));
 }
 
 #[derive(Default)]
@@ -812,8 +829,8 @@ impl TextEngine {
         });
         self.application_fonts += pending.len();
         let registered = !pending.is_empty();
-        for blob in pending {
-            self.register_font_blob(blob);
+        for font in pending {
+            self.register_font_blob(font.blob, font.alias.as_deref());
         }
         registered
     }
@@ -834,15 +851,27 @@ impl TextEngine {
     /// Fontique collection. Invalid buffers are harmless: Fontique ignores
     /// them, while the generation still invalidates stale cached layouts.
     pub fn register_font_bytes(&mut self, bytes: impl Into<Vec<u8>>) {
-        self.register_font_blob(parley::fontique::Blob::from(bytes.into()));
+        self.register_font_blob(parley::fontique::Blob::from(bytes.into()), None);
     }
 
-    fn register_font_blob(&mut self, blob: parley::fontique::Blob<u8>) {
-        use parley::fontique::GenericFamily;
+    /// Registers the font under a caller-supplied family name in this engine.
+    /// Returns false if the input contained no usable faces.
+    pub fn register_font_bytes_as(&mut self, family: &str, bytes: impl Into<Vec<u8>>) -> bool {
+        self.register_font_blob(parley::fontique::Blob::from(bytes.into()), Some(family))
+    }
+
+    fn register_font_blob(&mut self, blob: parley::fontique::Blob<u8>, alias: Option<&str>) -> bool {
+        use parley::fontique::{FontInfoOverride, GenericFamily};
 
         let collection = &mut self.font_context.collection;
         let families: Vec<_> = collection
-            .register_fonts(blob, None)
+            .register_fonts(
+                blob,
+                alias.map(|name| FontInfoOverride {
+                    family_name: Some(name),
+                    ..FontInfoOverride::default()
+                }),
+            )
             .into_iter()
             .map(|(family, _)| family)
             .collect();
@@ -882,6 +911,7 @@ impl TextEngine {
         self.shaped.clear();
         self.documents.clear();
         self.retained_documents.clear();
+        !families.is_empty()
     }
 
     pub fn layout(
@@ -2267,17 +2297,12 @@ fn previous_grapheme_boundary(text: &str, offset: usize) -> usize {
 }
 
 fn push_family_name(out: &mut String, family: &FontFamily) {
-    match family {
-        FontFamily::SansSerif => out.push_str("sans-serif"),
-        FontFamily::Serif => out.push_str("serif"),
-        FontFamily::Monospace => out.push_str("monospace"),
-        FontFamily::Cursive => out.push_str("cursive"),
-        FontFamily::SystemUi => out.push_str("system-ui"),
-        FontFamily::Named(name) => {
-            out.push('\'');
-            out.push_str(name);
-            out.push('\'');
-        }
+    if let FontFamily::Named(name) = family {
+        out.push('\'');
+        out.push_str(name);
+        out.push('\'');
+    } else {
+        out.push_str(family.name());
     }
 }
 

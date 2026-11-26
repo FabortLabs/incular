@@ -58,3 +58,8 @@ misaligned UTF-8 replacement range does not edit the value or run formatters.
 Use `TextScaler::try_clamp(min, max)` to cap or floor a linear scale before
 laying out text. Invalid bounds return `TextScaleBoundsError`. No scaling
 and a linear factor of one are equal as scaling policies.
+
+For packaged fonts, use `FontFamily::packaged(package, name)` and register
+the bytes under that family’s `name()` via `register_application_font_as`.
+`TextStyle` can use the same package keys for the primary family and an
+ordered fallback list.

@@ -18,6 +18,25 @@ impl FontFamily {
     pub fn named(name: impl Into<String>) -> Self {
         Self::Named(name.into().into())
     }
+
+    /// A font family supplied by a package, under Flutter's canonical key.
+    #[must_use]
+    pub fn packaged(package: &str, name: &str) -> Self {
+        Self::named(format!("packages/{package}/{name}"))
+    }
+
+    /// The canonical string used by the shaping engine for this candidate.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        match self {
+            Self::SansSerif => "sans-serif",
+            Self::Serif => "serif",
+            Self::Monospace => "monospace",
+            Self::Cursive => "cursive",
+            Self::SystemUi => "system-ui",
+            Self::Named(name) => name,
+        }
+    }
 }
 
 /// Font weight values (1..1000).

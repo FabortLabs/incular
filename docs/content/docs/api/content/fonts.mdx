@@ -91,3 +91,9 @@ above.
 
 Related: [`TextStyle`](/docs/api/content/text-style),
 [`TextDecoration`](/docs/api/content/text-decoration).
+
+For a bundled font with a package-specific name, use
+`FontFamily::packaged("my-package", "Body")`. Register its bytes with
+`incular::text::register_application_font_as(family.name(), bytes)` before
+selecting that family in a `TextStyle`. Existing text refreshes at the next
+layout if registration happens later.

@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- Fonts can be registered under package-qualified family aliases. Existing text
+  layouts refresh when the named font becomes available.
+
 - Linear text scalers can be clamped with validated bounds.
 
 - Predictive back can decode Flutter-compatible standard method messages.

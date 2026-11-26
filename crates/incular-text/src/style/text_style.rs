@@ -83,6 +83,28 @@ impl TextStyle {
         self
     }
 
+    /// Uses the package-qualified font family as the primary candidate.
+    #[must_use]
+    pub fn packaged_font_family(self, package: &str, family: &str) -> Self {
+        self.family(FontFamily::packaged(package, family))
+    }
+
+    /// Replaces the fallback list with ordered names from the package.
+    /// An empty list still overrides inherited fallbacks.
+    #[must_use]
+    pub fn packaged_fallback_families(
+        mut self,
+        package: &str,
+        families: impl IntoIterator<Item = impl AsRef<str>>,
+    ) -> Self {
+        self.fallback_families = families
+            .into_iter()
+            .map(|name| FontFamily::packaged(package, name.as_ref()))
+            .collect();
+        self.has_explicit_fallback_families = true;
+        self
+    }
+
     #[must_use]
     pub fn fallback_family(mut self, family: FontFamily) -> Self {
         let mut families = self.fallback_families.to_vec();
