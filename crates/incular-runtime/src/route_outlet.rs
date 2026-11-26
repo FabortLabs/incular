@@ -964,6 +964,15 @@ impl RouteOutlet {
         let retained_focus_owner = self.focus_neutral_reorder.and_then(|(revision, owner)| {
             (attempt.revision == revision).then_some(owner).flatten()
         });
+        // Building an incoming route is speculative. Preserve the live
+        // focus of a retained outgoing route until the build is admitted:
+        // a builder can navigate again, fail, or request an unsupported
+        // route after we have already staged the new visibility.
+        let staged_focus_owner = self
+            .pending
+            .as_ref()
+            .filter(|pending| pending.saved.is_some())
+            .and_then(|pending| pending.previous);
         // Top-down visibility: everything paints until (and including) the
         // first opaque page.
         let mut visible = vec![false; routes.len()];
@@ -1015,7 +1024,7 @@ impl RouteOutlet {
                 route,
                 visible,
                 attempt.active == Some(route.id),
-                retained_focus_owner == Some(route.id),
+                retained_focus_owner == Some(route.id) || staged_focus_owner == Some(route.id),
             ));
             // Routes leaving above this one: replaced routes stay under
             // their replacement until it settles.
@@ -1523,11 +1532,29 @@ impl RouteOutlet {
             self.capture_transition(runtime, Some(&pending));
             return false;
         }
+        let enters_page_scope = self.navigator.current().is_some_and(|route| {
+            matches!(route.presentation, RoutePresentation::Page { .. })
+        });
+        let release_staged_focus = enters_page_scope
+            && pending.previous.is_some_and(|previous| {
+                pending.saved.is_some()
+                    && runtime.focused_element() == pending.saved
+                    && self.focus.current_owner(runtime) == Some(previous)
+                    && !self.focus_neutral_reorder.is_some_and(|(revision, owner)| {
+                        revision == self.navigator.revision() && owner == Some(previous)
+                    })
+            });
         if let Some(previous) = pending.previous {
             self.focus.commit_saved(previous, pending.saved);
         }
         self.presented = active;
         self.pending = None;
+        // The capture belongs to the previously committed route until
+        // this point. Release only that exact target; do not blur an
+        // unrelated or reentrant focus request made during the build.
+        if release_staged_focus {
+            runtime.set_focus(None);
+        }
         true
     }
 
@@ -1582,6 +1609,11 @@ impl RouteOutlet {
             return;
         };
         if transitioned {
+            if self.presented != Some(id) {
+                // A focus listener navigated after commitment. The new
+                // route must mount before its focus can be restored.
+                return;
+            }
             self.focus.restore_saved(runtime, &self.navigator, id);
             if runtime.focused_element().is_none() && !self.focus.has_saved_target(id) {
                 let scope_element = self

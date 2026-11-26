@@ -327,7 +327,11 @@ fn assert_focus_restored_after_superseded_navigation(settle_destination: bool) {
     if settle_destination {
         present(&mut harness);
     }
-    assert!(!original_node.has_focus(), "covered page is not focused");
+    assert_eq!(
+        original_node.has_focus(),
+        !settle_destination,
+        "only committing the eventual destination releases the previous focus",
+    );
 
     navigator.pop();
     navigator.pop();
@@ -2573,6 +2577,9 @@ fn outlet_combined_ownership_flow() {
     )
     .expect_err("duplicate keys fail the rebuild");
     assert!(!inner_b_scope.is_cancelled());
+    // A compatible page-list update retains its attached pageless
+    // routes. Explicitly remove the offending pageless transaction.
+    assert_eq!(outer_nav.pop().expect("offending route").name, "bad");
     outer_nav
         .set_pages([Page::new(
             "solo",
@@ -2623,7 +2630,16 @@ fn outlet_combined_ownership_flow() {
     let inner_drives = outlet_inner.borrow().frame_drive_count();
     inner_nav.push_page(Page::new("e", Widget::box_(Size::new(40., 40.), YELLOW)));
     let ie = inner_nav.current().expect("inner route").id;
+    let before_detach_focus = runtime1.focused_element();
     present_outer_tree(&mut runtime1, &outlet_outer);
+    if runtime1.frame_requested() {
+        assert_ne!(
+            runtime1.focused_element(),
+            before_detach_focus,
+            "only the cleared content focus can request the follow-up",
+        );
+        present_outer_tree(&mut runtime1, &outlet_outer);
+    }
     assert_eq!(
         outlet_inner.borrow().frame_drive_count(),
         inner_drives,
@@ -5926,4 +5942,84 @@ fn flutter_350_simultaneous_route_pops_restore_the_surviving_focus_scope() {
             [true, false, false]
         );
     }
+}
+
+#[test]
+fn rejected_route_keeps_the_committed_editor_receiving_keys_until_a_page_commits() {
+    use incular_widgets::EditableText;
+
+    let navigator = Navigator::new();
+    let mut harness = harness(&navigator);
+    harness.outlet.borrow_mut().set_host_overlay_routes(false);
+    let controller = TextEditingController::with_text("");
+    let key = Key::from("committed editor");
+    navigator.push_page(Page::new(
+        "editor",
+        Widget::from(
+            EditableText::new(controller.clone())
+                .text_direction(TextDirection::Ltr)
+                .autofocus(true)
+                .select_all_on_focus(false),
+        )
+        .with_key(key.clone()),
+    ));
+    present(&mut harness);
+    let editor = harness
+        .runtime
+        .tree()
+        .element_with_key(&key)
+        .expect("editor");
+    assert_eq!(harness.runtime.focused_element(), Some(editor));
+
+    let once = Cell::new(true);
+    navigator.push_page(Page::new(
+        "speculative",
+        LayoutBuilder::new({
+            let navigator = navigator.clone();
+            move |_, _| {
+                if once.take() {
+                    navigator.push(
+                        Route::new("unsupported", Widget::box_(Size::new(10., 10.), BLUE)).overlay(
+                            vec![OverlayEntry::new(Widget::box_(Size::new(10., 10.), BLUE))],
+                        ),
+                    );
+                }
+                Widget::box_(Size::new(40., 40.), GREEN)
+            }
+        }),
+    ));
+    let failure = RouteOutlet::present_frame(
+        &harness.outlet,
+        &mut harness.runtime,
+        Constraints::tight(Size::new(200., 200.)),
+    )
+    .expect_err("mid-build navigation cannot commit");
+    assert!(matches!(
+        failure,
+        OutletError::UnsupportedPresentation { .. }
+    ));
+    assert_eq!(harness.runtime.focused_element(), Some(editor));
+    let _ = harness
+        .runtime
+        .handle_input(InputEvent::Text("held".into()));
+    assert_eq!(controller.text(), "held");
+
+    assert_eq!(
+        navigator.pop().expect("offending route").name,
+        "unsupported"
+    );
+    present(&mut harness);
+    assert_primary_route_scope(&harness.runtime);
+    let _ = harness
+        .runtime
+        .handle_input(InputEvent::Text("not the editor".into()));
+    assert_eq!(controller.text(), "held");
+
+    navigator.pop();
+    present(&mut harness);
+    assert_eq!(harness.runtime.focused_element(), Some(editor));
+    let _ = harness
+        .runtime
+        .handle_input(InputEvent::Text(" again".into()));
+    assert_eq!(controller.text(), "held again");
 }

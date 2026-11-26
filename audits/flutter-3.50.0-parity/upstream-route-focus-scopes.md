@@ -25,3 +25,26 @@ test. Its 11 pre-existing failures reproduce with the same names
 before and after this change; they include focus lost during an
 abandoned build and retry scheduling. This does not claim parity
 for those transactions or for implicit scopes on popup presentations.
+
+## Preserving committed focus while a route is still speculative
+
+The 11 baseline outlet failures above are now resolved. A retained
+outgoing page keeps its current focus while the next page is only a
+speculative build. A rejected frame or a builder that pushes another
+route cannot clear that focus. On commit, a normal incoming Page
+releases the exact captured outgoing focus, not an unrelated request.
+A transparent popup and a focus-neutral reorder still do not steal
+focus. Reentrant navigation from a focus listener waits until the
+new route actually mounts.
+
+An EditableText regression starts an unsupported route during the
+next page's build. The committed editor continues to receive real
+text input after the rejected frame, stops receiving it once the
+new page commits, and receives it again on return to the same retained
+editor. The combined ownership fixture explicitly removes a rejected
+pageless route instead of assuming a compatible page update removes
+it; it still verifies detached outlets do not schedule work.
+
+All 103 tests in the focused route-outlet filter passed. The additional
+recovery checks are native regression coverage, not new upstream
+registrations.
