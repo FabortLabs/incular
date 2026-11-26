@@ -224,3 +224,17 @@ fn pageless_route_stays_attached_to_retained_page(){
 ```
 
 Temporary test targets were removed; logs are in `.tmp/flutter350-full-audit/`.
+
+## A route at zero opacity does not paint
+
+Two existing RouteOutlet cases expected the new page to record paint on
+the first frame of a fade, when its opacity is exactly zero. Both
+assertions failed before and after the animation precision change. The
+pinned, design-system-free `navigator_fade_first_frame_test.dart` shows
+the old blue page unchanged at zero opacity, a mix of blue and green
+at 50 ms, and only green once settled. The corrected native tests
+assert no paint from the incoming page at zero, both paint commands
+at the midpoint, and retain their existing transition-end and reverse
+checks. Both passed. This backfills the retained transition behavior;
+it does not count as an original Flutter registration or a native
+pixel comparison.

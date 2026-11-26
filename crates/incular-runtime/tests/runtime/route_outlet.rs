@@ -5227,12 +5227,14 @@ fn page_routes_animate_in_over_the_page_below_and_out_when_popped() {
         top_animation.animation().status(),
         incular_widgets::AnimationStatus::Forward
     );
-    assert!(paints(list.commands(), GREEN) && paints(list.commands(), BLUE));
+    assert!(paints(list.commands(), BLUE));
+    assert!(!paints(list.commands(), GREEN), "alpha zero does not paint");
+    assert_eq!(top_animation.animation().value(), 0.0);
     let list = present_at(&mut harness, start + Duration::from_millis(50));
     assert!((top_animation.animation().value() - 0.5).abs() < 1e-4);
     // The page below stays while the new page animates in, and its
     // secondary animation follows the new page.
-    assert!(paints(list.commands(), BLUE));
+    assert!(paints(list.commands(), BLUE) && paints(list.commands(), GREEN));
     assert!(
         (below_secondary.get() - 0.5).abs() < 1e-4,
         "{}",
@@ -5282,11 +5284,16 @@ fn fading_page_reveals_the_route_below_until_its_fade_completes() {
             .transition(RouteTransition::fade_in(Duration::from_millis(100), start)),
     );
     let list = present_at(&mut harness, start);
-    assert!(paints(list.commands(), BLUE) && paints(list.commands(), GREEN));
+    assert!(paints(list.commands(), BLUE));
+    assert!(!paints(list.commands(), GREEN), "alpha zero does not paint");
     let list = present_at(&mut harness, start + Duration::from_millis(50));
     assert!(
         paints(list.commands(), BLUE),
         "the route below shows while the fade runs"
+    );
+    assert!(
+        paints(list.commands(), GREEN),
+        "the fading page paints at positive opacity"
     );
     present_at(&mut harness, start + Duration::from_millis(116));
     let list = present_at(&mut harness, start + Duration::from_millis(132));
