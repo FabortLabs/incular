@@ -19,3 +19,17 @@ Thirty-nine focused Rust tests passed across retained wheel resolution,
 scrolling, runtime input and allocation controls. The new host API
 reports the default decision; no assertion is made about a browser or
 other native adapter actually acting on it.
+
+## Standalone transformed signal identity
+
+Pinned `:86` now pairs at the direct resolver boundary. Each
+transformed view has its own identity and local position while
+retaining the exact same original signal. Both views register, but
+only the first view's callback receives that very instance when the
+original resolves. Equal raw contents on different originals do not
+make them the same dispatch. Unclaimed default responses and resolver
+reuse after an error are covered separately.
+
+Three direct native tests and nine retained wheel controls passed.
+The mounted wheel path retains its lightweight event values; it does
+not pay for the optional shared handles.

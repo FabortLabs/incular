@@ -16,6 +16,10 @@ pub use incular_gestures::{
     Shortcuts, TapDownDetails, TapMoveDetails, TapUpDetails, Velocity,
 };
 
+pub use incular_gestures::{
+    PointerSignalError, PointerSignalEvent, PointerSignalResolver as StandalonePointerSignalResolver,
+};
+
 use crate::{Widget, WidgetKind, macros::widget_from_kind};
 
 /// How a gesture detector behaves during hit testing.

@@ -25,6 +25,7 @@ mod pointer_resampler;
 mod pointer_router;
 mod raw;
 mod scale;
+mod signal;
 mod slop;
 mod tap_and_drag;
 mod velocity;
@@ -76,6 +77,7 @@ pub use multitap::{
 pub use pointer::{
     DragGestureDetector, FlingLimits, GestureDetector, PointerGestureRecognizer, TapMemory,
 };
+pub use signal::{PointerSignalError, PointerSignalEvent, PointerSignalResolver};
 pub use pointer_resampler::PointerEventResampler;
 pub use pointer_router::{
     PointerRouteError, PointerRouteErrorHandler, PointerRouteId, PointerRouter, RoutedPointerEvent,
