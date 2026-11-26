@@ -3101,8 +3101,10 @@ impl Runtime {
         }
         // A window-wide handler cannot suppress notification of the focused
         // keyboard scope. Both results gate fallback editing and traversal.
-        if self.focused.is_some()
-            && self.early_focus_key_handlers.dispatch(&event) == KeyEventResult::Handled
+        // Flutter's implicit root scope receives focus-manager key stages
+        // even when no application widget has input focus.
+        let has_focus_root = self.tree.root().is_some();
+        if has_focus_root && self.early_focus_key_handlers.dispatch(&event) == KeyEventResult::Handled
         {
             self.frame_requested = true;
             return true;
@@ -3120,7 +3122,7 @@ impl Runtime {
         let focus_result =
             self.tree
                 .route_keyboard_with_lock_modes(self.focused, event.clone(), lock_modes);
-        let late_result = if self.focused.is_some() && focus_result != KeyEventResult::Handled {
+        let late_result = if has_focus_root && focus_result != KeyEventResult::Handled {
             self.late_focus_key_handlers.dispatch(&event)
         } else {
             KeyEventResult::Ignored

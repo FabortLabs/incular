@@ -119,3 +119,44 @@ fn existing_snapshot_visits_subscriptions_removed_by_an_earlier_callback() {
     assert_eq!(second_calls.get(), 1);
     assert_eq!(focus_calls.get(), 0);
 }
+
+#[test]
+fn root_scope_receives_early_and_late_key_stages_without_a_focused_leaf() {
+    use KeyEventResult::{Handled, Ignored, SkipRemainingHandlers};
+    let mut runtime = Runtime::new(SizedBox::shrink().into()).unwrap();
+    runtime
+        .run_frame(Constraints::tight(Size::new(20., 20.)))
+        .unwrap();
+    assert!(runtime.focused_element().is_none());
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let early = Rc::new(Cell::new(Handled));
+    let late = Rc::new(Cell::new(Handled));
+    let handler = |tag, result: Rc<Cell<KeyEventResult>>| {
+        let log = log.clone();
+        move |event: &KeyboardEvent| {
+            if event.state.is_down() {
+                log.borrow_mut().push(tag);
+                result.get()
+            } else {
+                Ignored
+            }
+        }
+    };
+    let _early = runtime.add_early_focus_key_handler(handler("early", early.clone()));
+    let _late = runtime.add_late_focus_key_handler(handler("late", late.clone()));
+    let mut dispatch = || {
+        let key = KeyboardKey::Character("1".to_owned());
+        let consumed =
+            runtime.dispatch_keyboard_event(KeyboardEvent::key_down(key.clone(), Code::Digit1));
+        assert!(!runtime.dispatch_keyboard_event(KeyboardEvent::key_up(key, Code::Digit1)));
+        consumed
+    };
+    assert!(dispatch());
+    assert_eq!(log.take(), ["early"]);
+    early.set(Ignored);
+    assert!(dispatch());
+    assert_eq!(log.take(), ["early", "late"]);
+    late.set(SkipRemainingHandlers);
+    assert!(!dispatch());
+    assert_eq!(log.take(), ["early", "late"]);
+}

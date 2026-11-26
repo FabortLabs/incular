@@ -24,3 +24,13 @@ The new stages are specific to each runtime, and are independent of the
 hardware handler list. That list still visits every registration and
 reports alongside focus dispatch. Root-scope routing without a mounted
 focus target and deprecated raw-key transport remain unproven.
+
+## Window key stages with only implicit root focus
+
+The authored pinned Flutter and retained runtime tests both start with
+no focused widget. A handled early key prevents the late stage; ignored
+early allows late to handle it; late SkipRemainingHandlers leaves the
+key unconsumed. Incular initially failed the first check because both
+stages required a focused element. They now run for a mounted root
+without inventing a focused child. The focused-node and registration
+snapshot controls still pass (ten targeted Rust tests).
