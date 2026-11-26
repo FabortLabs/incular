@@ -22,5 +22,5 @@ headless wgpu pixel readback was available for this pair.
 
 Full per-draw pixel equivalence is open for nine-sliced or transformed
 images, globally transparent sources with destructive blend modes,
-and combinations of color inversion and tint. This does not change
-the existing no-slice vs. nine-slice fit-default discrepancy.
+and combinations of color inversion and tint. The independent fit-default fix is
+[reported separately](upstream-tap-absorber-delta-and-raw-image.md#resolved-rawimage-fit-default).

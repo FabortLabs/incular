@@ -129,3 +129,17 @@ The native dispatcher also rejects a stale platform user-action request
 before notifying TapRegion or invoking its callback. This is independent
 of invoking Flutter's underlying callback directly. All 31 focused
 runtime tests and 47 focused widget tests passed.
+
+## Resolved RawImage fit default
+
+RawImage now preserves an omitted fit until image painting, like
+Flutter. Without a slice, the original centered 30×30 behavior stays
+the same. With a slice, omitted fit paints all 100×60, as does explicit
+Fill; explicit ScaleDown still paints centered 30×30. The Linux native
+test verifies that all nine emitted patches stay inside those exact
+bounds, fill the expected area, and do not overlap. It reproduced the
+900-versus-6,000 pixel-area regression before the fix, then passed
+with 39 adjacent native cases. The pinned Flutter authored test passed
+four actual readback controls. The Windows wgpu reproduction remains
+in the repository but was not re-run on the cloud computer. This is
+an authored case, not an added upstream registration.

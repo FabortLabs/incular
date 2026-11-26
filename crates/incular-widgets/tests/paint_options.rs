@@ -14,7 +14,7 @@ use incular_rendering::{
 };
 use incular_widgets::internal::WidgetTree;
 use incular_widgets::{
-    BlurStyle, BorderRadius, BorderSide, BoxDecoration, BoxShadow, Container,
+    BlurStyle, BorderRadius, BorderSide, BoxDecoration, BoxFit, BoxShadow, Container,
     ContinuousRectangleBorder, DecorationImage, Directionality, Image, ImageFiltered, ImageRepeat,
     LinearBorder, LinearBorderEdge, Positioned, RawImage, ShapeBorder, SizedBox, Stack, Widget,
 };
@@ -753,6 +753,51 @@ fn raw_image_replacement_blend_stays_inside_the_fitted_image() {
                 .expect("destination effect")
                 .2,
             expected
+        );
+    }
+}
+
+#[test]
+fn raw_image_defaults_to_fill_only_when_center_slice_is_set() {
+    let source = handle(30, 30);
+    let slice = rect(10., 10., 10., 10.);
+    let centered = rect(35., 15., 30., 30.);
+    let fills = rect(0., 0., 100., 60.);
+    for (uses_slice, fit, expected) in [
+        (false, None, centered),
+        (true, Some(BoxFit::ScaleDown), centered),
+        (true, Some(BoxFit::Fill), fills),
+        (true, None, fills),
+    ] {
+        let mut raw = RawImage::builder()
+            .image(source.clone())
+            .width(100.)
+            .height(60.)
+            .build();
+        if uses_slice {
+            raw = raw.center_slice(slice);
+        }
+        if let Some(fit) = fit {
+            raw = raw.fit(fit);
+        }
+        let commands = painted(raw.into(), Size::new(100., 60.));
+        let patches = images(&commands);
+        assert_eq!(patches.len(), if uses_slice { 9 } else { 1 });
+        let mut area = 0.;
+        for (index, (_, patch)) in patches.iter().enumerate() {
+            assert_eq!(patch.intersection(expected), Some(*patch));
+            assert!(
+                patches[..index]
+                    .iter()
+                    .all(|(_, old)| !old.intersects(*patch)),
+                "overlapping nine-slice patches"
+            );
+            area += patch.size.width * patch.size.height;
+        }
+        assert_eq!(
+            area,
+            expected.size.width * expected.size.height,
+            "slice={uses_slice} fit={fit:?}"
         );
     }
 }

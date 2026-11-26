@@ -39,8 +39,9 @@ pub struct RawImage {
     pub(super) scale: f32,
     #[builder(default, setter(strip_option))]
     color: Option<Color>,
-    #[builder(default = ImageFit::ScaleDown)]
-    pub(super) fit: ImageFit,
+    /// When omitted, paints with scale-down, or fill for a nine-slice.
+    #[builder(default, setter(strip_option))]
+    pub(super) fit: Option<ImageFit>,
     #[builder(default = ImageRepeat::NoRepeat)]
     pub(super) repeat: ImageRepeat,
     /// Flutter `alignment`: where a fitted image sits inside its box.
@@ -89,7 +90,7 @@ impl RawImage {
             height: None,
             scale: 1.0,
             color: None,
-            fit: ImageFit::ScaleDown,
+            fit: None,
             repeat: ImageRepeat::NoRepeat,
             alignment: Alignment::CENTER,
             filter_quality: None,
@@ -134,7 +135,7 @@ impl RawImage {
 
     #[must_use]
     pub fn fit(mut self, fit: ImageFit) -> Self {
-        self.fit = fit;
+        self.fit = Some(fit);
         self
     }
 
@@ -207,10 +208,12 @@ impl From<RawImage> for Widget {
             Some(handle) => {
                 let mut img = Image::new(handle)
                     .scale(value.scale)
-                    .fit(value.fit)
                     .repeat(value.repeat)
                     .alignment(value.alignment)
                     .match_text_direction(value.match_text_direction);
+                if let Some(fit) = value.fit {
+                    img = img.fit(fit);
+                }
                 if let Some(slice) = value.center_slice {
                     img = img.center_slice(slice);
                 }
