@@ -987,7 +987,7 @@ impl WidgetTree {
         let own_text_merge = if joins_text_merge || outside_sliver_cache {
             SemanticTextMerge::None
         } else if can_own_blocked_labels(entry, own_focus_block)
-            || self.is_sliver_heading_label_owner(element, entry)
+            || self.is_sliver_label_annotation_owner(element, entry)
         {
             SemanticTextMerge::CompatibleLabels
         } else if can_own_hint_value(entry, own_focus_block) {
@@ -1959,16 +1959,20 @@ impl WidgetTree {
         });
     }
 
-    /// A heading annotation on a sliver owns its compatible text label,
-    /// but not independent child nodes (buttons, fields, explicit boundaries).
-    fn is_sliver_heading_label_owner(&self, element: ElementId, entry: &Element) -> bool {
+    /// A heading or ordered annotation on a sliver owns its compatible
+    /// text. This keeps the label on the node with its role or sort key
+    /// without absorbing independent actions or explicit child nodes.
+    fn is_sliver_label_annotation_owner(&self, element: ElementId, entry: &Element) -> bool {
         entry
             .widget
             .semantic_properties()
             .explicit
             .as_ref()
             .is_some_and(|annotation| {
-                annotation.role == SemanticRole::Heading && !annotation.state.explicit_child_nodes
+                !annotation.state.explicit_child_nodes
+                    && (annotation.role == SemanticRole::Heading
+                        || (annotation.role == SemanticRole::GenericContainer
+                            && annotation.state.sort_key.is_some()))
             })
             && entry.parent.is_some_and(|viewport| {
                 self.elements.get(viewport.0).is_some_and(|parent| {

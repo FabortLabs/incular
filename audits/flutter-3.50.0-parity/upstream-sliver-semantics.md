@@ -107,3 +107,17 @@ roleless wrapper. A separate Flutter/Rust comparison with opposite
 500 px translations and an intermediate padding box verifies that a
 descendant restored to (2, 2) is still exposed. Existing ensured-sliver
 and off-cache regressions also pass.
+
+## Reading order through nested axis groups
+
+Pinned lines 1519, 1606 and 1661 and the retained `sliver_semantics`
+fixtures cover ordinary and keyed traversal. Unkeyed nested groups read
+labels 1–5 in spatial order. The keyed cross-axis group reads 2, 3, 1,
+with the keys and text on the same nodes rather than extra unlabeled
+wrappers. Nested keyed groups read [5, 4, 3], then 2 and 1 without
+flattening the explicit child-node boundaries. Updating the keys changes
+the order without replacing the existing labeled nodes.
+
+Incular's named `OrdinalSortKey` represents the key group in the native
+fixtures; Dart subclass sort-key identity and the two-pane wrapper
+are still open. The unkeyed behavioral comparison is paired.

@@ -436,3 +436,159 @@ fn a_sliver_heading_collects_plain_text_without_absorbing_an_independent_action(
     assert!(action.actions.contains(&SemanticActionKind::Activate));
     assert_eq!(title.children, [action.id]);
 }
+
+fn labeled_scroll_children(tree: &WidgetTree, parent: &SemanticNode) -> Vec<Option<String>> {
+    parent
+        .children
+        .iter()
+        .map(|id| tree.semantics().node(*id).unwrap().label.clone())
+        .collect()
+}
+
+fn scroll_node(tree: &WidgetTree) -> &SemanticNode {
+    tree.semantics()
+        .iter()
+        .map(|(_, node)| node)
+        .find(|node| node.role == SemanticRole::ScrollView)
+        .unwrap()
+}
+
+fn keyed_anchor(index: u8, order: f64, named: bool) -> Box<dyn Sliver> {
+    use incular_semantics::OrdinalSortKey;
+    Box::new(SliverSemantics::new(
+        move || {
+            Semantics::default().sort_key(if named {
+                OrdinalSortKey::named(order, "CustomSortKey")
+            } else {
+                OrdinalSortKey::new(order)
+            })
+        },
+        SliverToBoxAdapter::new(row(&format!("Label {index}"))),
+    ))
+}
+
+#[test]
+fn sort_keys_reorder_labeled_slivers_within_a_cross_axis_group() {
+    use incular_widgets::SliverCrossAxisGroup;
+    let group = SliverCrossAxisGroup::new([
+        keyed_anchor(1, 3., true),
+        keyed_anchor(2, 1., true),
+        keyed_anchor(3, 2., true),
+    ]);
+    let mut tree = WidgetTree::new();
+    tree.mount(semantic_view(TextDirection::Ltr, group))
+        .unwrap();
+    layout(&mut tree);
+    assert_eq!(
+        labeled_scroll_children(&tree, scroll_node(&tree)),
+        [
+            Some("Label 2".into()),
+            Some("Label 3".into()),
+            Some("Label 1".into())
+        ]
+    );
+}
+
+#[test]
+fn nested_sort_keys_reorder_both_groups_without_flattening_explicit_child_nodes() {
+    use incular_semantics::OrdinalSortKey;
+    use incular_widgets::{SliverCrossAxisGroup, SliverMainAxisGroup};
+    let cross = SliverCrossAxisGroup::new([
+        keyed_anchor(3, 3., false),
+        keyed_anchor(4, 2., false),
+        keyed_anchor(5, 1., false),
+    ]);
+    let inner: Box<dyn Sliver> = Box::new(SliverSemantics::new(
+        || {
+            Semantics::default()
+                .sort_key(OrdinalSortKey::named(1., "CustomSortKey"))
+                .explicit_child_nodes(true)
+        },
+        cross,
+    ));
+    let group =
+        SliverMainAxisGroup::new([keyed_anchor(1, 3., true), keyed_anchor(2, 2., true), inner]);
+    let outer = SliverSemantics::new(
+        || {
+            Semantics::default()
+                .sort_key(OrdinalSortKey::named(0., "CustomSortKey"))
+                .explicit_child_nodes(true)
+        },
+        group,
+    );
+    let mut tree = WidgetTree::new();
+    tree.mount(semantic_view(TextDirection::Ltr, outer))
+        .unwrap();
+    layout(&mut tree);
+    let root = scroll_node(&tree);
+    assert_eq!(root.children.len(), 1);
+    let group = tree.semantics().node(root.children[0]).unwrap();
+    assert_eq!(
+        labeled_scroll_children(&tree, group),
+        [None, Some("Label 2".into()), Some("Label 1".into())]
+    );
+    let nested = tree.semantics().node(group.children[0]).unwrap();
+    assert_eq!(
+        labeled_scroll_children(&tree, nested),
+        [
+            Some("Label 5".into()),
+            Some("Label 4".into()),
+            Some("Label 3".into())
+        ]
+    );
+}
+
+#[test]
+fn nested_slivers_without_keys_keep_their_spatial_reading_order() {
+    use incular_widgets::{SliverCrossAxisGroup, SliverMainAxisGroup};
+    let plain = |label| -> Box<dyn Sliver> { Box::new(SliverToBoxAdapter::new(row(label))) };
+    let cross: Box<dyn Sliver> = Box::new(SliverCrossAxisGroup::new([
+        plain("Label 3"),
+        plain("Label 4"),
+        plain("Label 5"),
+    ]));
+    let main = SliverMainAxisGroup::new([plain("Label 1"), plain("Label 2"), cross]);
+    let mut tree = WidgetTree::new();
+    tree.mount(semantic_view(TextDirection::Ltr, main)).unwrap();
+    layout(&mut tree);
+    assert_eq!(
+        labeled_scroll_children(&tree, scroll_node(&tree)),
+        (1..=5)
+            .map(|i| Some(format!("Label {i}")))
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn changing_sliver_sort_keys_reorders_the_same_labeled_nodes() {
+    use incular_widgets::SliverCrossAxisGroup;
+
+    let scene = |orders: [f64; 3]| {
+        semantic_view(
+            TextDirection::Ltr,
+            SliverCrossAxisGroup::new(
+                orders
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, order)| keyed_anchor(i as u8 + 1, order, true)),
+            ),
+        )
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scene([3., 1., 2.])).unwrap();
+    layout(&mut tree);
+    let by_label =
+        |tree: &WidgetTree| ["Label 1", "Label 2", "Label 3"].map(|label| find(tree, label).id);
+    let original = by_label(&tree);
+    assert_eq!(
+        scroll_node(&tree).children,
+        [original[1], original[2], original[0]]
+    );
+    tree.update(root, scene([1., 3., 2.])).unwrap();
+    layout(&mut tree);
+    assert_eq!(by_label(&tree), original);
+    assert_eq!(
+        scroll_node(&tree).children,
+        [original[0], original[2], original[1]]
+    );
+}
