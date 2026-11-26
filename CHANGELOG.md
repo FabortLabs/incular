@@ -357,6 +357,8 @@ a version and date when publishing.
 
 ### Fixed
 
+- Disposing a pending long press now reports cancellation after its down event.
+
 - Native text input anchors the IME at the logical selection start in either
   direction and uses the editor’s actual cursor size.
 

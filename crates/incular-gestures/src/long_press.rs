@@ -184,9 +184,15 @@ impl LongPressGestureRecognizer {
         }
     }
 
-    /// Abandons tracking without synthesizing a release or cancellation.
+    /// Abandons tracking. A routed hold that is still pending is canceled;
+    /// disposal never synthesizes a release for an accepted hold.
     pub fn dispose(&mut self) {
-        self.contact = None;
+        if let Some(mut contact) = self.contact.take()
+            && contact.routed_down
+            && !contact.started
+        {
+            contact.engine.reject();
+        }
         self.arena = ArenaLink::default();
     }
 }

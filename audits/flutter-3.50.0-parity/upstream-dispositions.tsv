@@ -190,13 +190,18 @@ packages/flutter/test/gestures/long_press_test.dart	61	Should recognize long pre
 packages/flutter/test/gestures/long_press_test.dart	106	Moving before accept cancels	paired-match	upstream-current-route-aspect-and-long-press.md#direct-long-press-arena-checkpoints
 packages/flutter/test/gestures/long_press_test.dart	124	Moving after accept is ok	paired-match	upstream-long-press-release.md
 packages/flutter/test/gestures/long_press_test.dart	142	Should recognize both tap down and long press	paired-match	upstream-long-press-release.md#tap-down-before-a-competing-hold
+packages/flutter/test/gestures/long_press_test.dart	163	Drag start delayed by microtask	partial-match	upstream-long-press-release.md#device-filters-button-changes-and-disposal
 packages/flutter/test/gestures/long_press_test.dart	188	Should recognize long press up	paired-match	upstream-long-press-release.md
+packages/flutter/test/gestures/long_press_test.dart	227	Should cancel long press when buttons change before acceptance	paired-match	upstream-long-press-release.md#device-filters-button-changes-and-disposal
+packages/flutter/test/gestures/long_press_test.dart	254	non-allowed pointer does not inadvertently reset the recognizer	paired-match	upstream-long-press-release.md#device-filters-button-changes-and-disposal
 packages/flutter/test/gestures/long_press_test.dart	365	Moving after accept does not cancel	paired-match	upstream-current-route-aspect-and-long-press.md#direct-long-press-arena-checkpoints
 packages/flutter/test/gestures/long_press_test.dart	427	Buttons change before acceptance should not prevent the next long press	paired-match	upstream-current-route-aspect-and-long-press.md#current-disposition-of-button-mask-regression
 packages/flutter/test/gestures/long_press_test.dart	75	Should recognize long press with altered duration	paired-match	upstream-current-route-aspect-and-long-press.md#direct-long-press-arena-checkpoints
 packages/flutter/test/gestures/long_press_test.dart	91	Up cancels long press	paired-match	upstream-current-route-aspect-and-long-press.md#direct-long-press-arena-checkpoints
 packages/flutter/test/gestures/long_press_test.dart	204	Should not recognize long press with more than one buttons	paired-match	upstream-current-route-aspect-and-long-press.md#direct-long-press-arena-checkpoints
 packages/flutter/test/gestures/long_press_test.dart	455	Should not cancel long press when buttons change after acceptance	paired-match	upstream-current-route-aspect-and-long-press.md
+packages/flutter/test/gestures/long_press_test.dart	472	Buttons change after acceptance should not prevent the next long press	paired-match	upstream-long-press-release.md#device-filters-button-changes-and-disposal
+packages/flutter/test/gestures/long_press_test.dart	497	Can filter long press based on device kind	paired-match	upstream-long-press-release.md#device-filters-button-changes-and-disposal
 packages/flutter/test/widgets/opacity_test.dart	19	Opacity	partial-match	upstream-opacity-hover-flex-notifier-futures.md
 packages/flutter/test/widgets/opacity_test.dart	152	offset is correctly handled in Opacity	partial-match	upstream-opacity-hover-flex-notifier-futures.md
 packages/flutter/test/widgets/opacity_test.dart	179	empty opacity does not crash	partial-match	upstream-opacity-hover-flex-notifier-futures.md
