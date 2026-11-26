@@ -2229,3 +2229,8 @@ packages/flutter/test/gestures/lsq_solver_test.dart	28	Least-squares fit: linear
 packages/flutter/test/gestures/lsq_solver_test.dart	42	Least-squares fit: quadratic polynomial to line	paired-match	upstream-least-squares.md
 packages/flutter/test/gestures/lsq_solver_test.dart	57	Least-squares fit: quadratic polynomial to sloped line	paired-match	upstream-least-squares.md
 packages/flutter/test/gestures/lsq_solver_test.dart	72	Least-squares fit: toString	paired-match	upstream-least-squares.md
+packages/flutter/test/widgets/basic_test.dart	342	Semantics can set attributed Text	paired-match	upstream-basic-semantic-boundaries.md
+packages/flutter/test/widgets/basic_test.dart	412	Semantics does not merge role - text field	paired-match	upstream-basic-semantic-boundaries.md
+packages/flutter/test/widgets/basic_test.dart	429	Semantics does not merge role - link	paired-match	upstream-basic-semantic-boundaries.md
+packages/flutter/test/widgets/basic_test.dart	489	Semantics does not merge role - image	paired-match	upstream-basic-semantic-boundaries.md
+packages/flutter/test/widgets/basic_test.dart	523	Semantics does not merge role - keyboard key	paired-match	upstream-basic-semantic-boundaries.md
