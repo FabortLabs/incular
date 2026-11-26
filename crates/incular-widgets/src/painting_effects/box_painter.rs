@@ -34,8 +34,8 @@ pub enum DecorationPosition {
 
 impl BoxDecoration {
     /// Whether painting this decoration needs more than a fill and one
-    /// uniform inside border: shadows, a circle, an image, or a border
-    /// whose sides differ or are not drawn inside the box.
+    /// uniform positive-width inside border: shadows, a circle, an
+    /// image, or a border needing paths to preserve its stroke semantics.
     #[must_use]
     pub(crate) fn needs_full_painter(&self) -> bool {
         !self.box_shadow.is_empty()
@@ -48,7 +48,14 @@ impl BoxDecoration {
             || self.has_elliptical_corners()
             || self
                 .border
-                .is_some_and(|border| !border.is_uniform() || border.top.stroke_align != -1.0)
+                .is_some_and(|border| {
+                    !border.is_uniform()
+                        || border.top.stroke_align != -1.0
+                        // A solid width-zero side is a physical-pixel
+                        // hairline, not a fill or an omitted outline. The
+                        // analytic inside-border command cannot encode it.
+                        || border.top.style == BorderStyle::Solid && border.top.width == 0.
+                })
     }
 
     /// Flutter `BoxDecoration.padding`: the border's `dimensions`.
