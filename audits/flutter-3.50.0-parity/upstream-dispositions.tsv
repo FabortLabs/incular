@@ -1758,3 +1758,7 @@ packages/flutter/test/widgets/raw_menu_anchor_test.dart	1445	[Group] Menu panel 
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	1981	Menu closes on view size change	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#group-panel-geometry-and-default-root-closure
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	2023	Menu closes on ancestor scroll	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#group-panel-geometry-and-default-root-closure
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	1340	Actions that wrap Menu are invoked by both anchor and overlay	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#programmatic-inherited-actions
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	1805	[Default] diagnostics	reference-ran-incular-open	upstream-raw-menu-animation-observer-and-shadow.md#remaining-raw-menu-registration-gaps
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	1830	[Group] diagnostics	reference-ran-incular-open	upstream-raw-menu-animation-observer-and-shadow.md#remaining-raw-menu-registration-gaps
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	1847	Surface clip behavior	reference-ran-incular-open	upstream-raw-menu-animation-observer-and-shadow.md#remaining-raw-menu-registration-gaps
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	3138	MenuController can be overridden after removing final modifier	reference-ran-incular-open	upstream-raw-menu-animation-observer-and-shadow.md#remaining-raw-menu-registration-gaps

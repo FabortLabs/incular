@@ -350,3 +350,23 @@ the same inherited action from the mounted anchor and panel contexts.
 Each callback executes once, and neither invocation closes the menu.
 The Rust typed command selects the registry entry by identity and
 preserves each invocation's callback through type erasure.
+
+### Remaining raw menu registration gaps
+
+All registrations in the pinned raw_menu_anchor_test.dart now have
+an explicit disposition. Three separate buckets are still open:
+
+- `:1805`/`:1830` pass on Flutter and assert its exact
+  DiagnosticPropertiesBuilder output. The native anchor/group
+  descriptors do not expose that property listing.
+- `:1847` verifies the test helper Panel's default AntiAlias and an
+  explicit HardEdge override, not a default owned by RawMenuAnchor.
+  Incular accepts caller-built panels, but this fixture's explicit
+  clip behavior has not been paired here. No default menu border or
+  extra clip was added to match a test helper.
+- `:3138` overrides Dart's non-final MenuController methods through
+  subclassing. The native concrete, cloneable handle supports app
+  wrappers and request callbacks, but has no drop-in subclass
+  equivalent; this exact case remains reference-only.
+
+The separate-overlay theater cases remain partial, as noted above.
