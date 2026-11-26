@@ -82,3 +82,13 @@ offset in the same coordinate system.
 The perspective case at 319 is reference-only. The retained layer
 transform here is affine; replacing it with a 2D approximation would
 not preserve the reference's projective inside/outside tests.
+
+### AnnotatedRegion widget lowering
+
+Both pinned `widgets/annotated_region_test.dart` cases (10, 19) passed.
+The Rust tests mount, lay out, and paint the actual `AnnotatedRegion`
+widget with the sized child. They find its typed value in the published
+compositor layer tree and reproduce the translated case: (10, 10)
+misses, and (50, 50) hits value 1 at local (25, 25). Positions presented to
+the Incular tree are logical pixels, equivalent to the DPR-adjusted
+test points on Flutter's root layer.
