@@ -2506,6 +2506,9 @@ impl WidgetTree {
                     };
                     self.tracked.untrack(id, element.tracked);
                     self.focus_change_bindings.remove(&id);
+                    if let Some(nodes) = &mut self.standalone_focus_geometry {
+                        nodes.remove(&id);
+                    }
                     if let Some(bindings) = &mut self.focus_semantics_bindings {
                         bindings.unbind(id);
                     }

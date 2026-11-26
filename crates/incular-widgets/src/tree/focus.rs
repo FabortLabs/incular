@@ -255,10 +255,44 @@ impl WidgetTree {
             self.focus_change_bindings
                 .insert(id, FocusChangeBinding::new(node, callback));
         }
-        if self.hosted_focus_nodes.is_none()
-            && let Some(node) = node
+        if self.hosted_focus_nodes.is_none() {
+            if let Some(node) = node {
+                node.bind_standalone_tree();
+                self.standalone_focus_geometry
+                    .get_or_insert_with(BTreeSet::new)
+                    .insert(id);
+            } else if let Some(nodes) = &mut self.standalone_focus_geometry {
+                nodes.remove(&id);
+            }
+        }
+        if node.is_some() {
+            // Rebinding to a new node may not invalidate the existing layout.
+            self.focus_geometry_stamp = None;
+        }
+    }
+
+    pub(super) fn refresh_focus_geometry(&mut self, force: bool) {
+        if self.hosted_focus_nodes.as_ref().is_none_or(BTreeMap::is_empty)
+            && self.standalone_focus_geometry.as_ref().is_none_or(BTreeSet::is_empty)
         {
-            node.bind_standalone_tree();
+            return;
+        }
+        let stamp = (self.diagnostics.layouts, self.hover_hit_revision());
+        if !force && self.focus_geometry_stamp == Some(stamp) {
+            return;
+        }
+        self.focus_geometry_stamp = Some(stamp);
+        let nodes = self.hosted_focus_nodes.iter().flat_map(|nodes| nodes.keys())
+            .chain(self.standalone_focus_geometry.iter().flatten());
+        for &id in nodes {
+            let Some(element) = self.elements.get(id.0) else {
+                continue;
+            };
+            let Some(node) = external_node(element.widget.kind()) else {
+                continue;
+            };
+            let render = self.render_live(element.render, "mounted focus render");
+            node.set_mounted_geometry(render.size, self.render_world_transform(element.render));
         }
     }
 
@@ -1060,7 +1094,6 @@ impl WidgetTree {
                     .focus_traversal_order
                     .clone();
                 if let Some(node) = node {
-                    node.set_rect(bounds);
                     node.set_focus_order(order.clone());
                 }
                 out.push(FocusTraversalMember::Candidate(FocusCandidate {

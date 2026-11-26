@@ -3081,6 +3081,7 @@ impl WidgetTree {
         // needs no merge buffer.
         nodes.sort_unstable_by_key(|(render, ..)| render.0);
         let mut changed = false;
+        let mut focus_geometry_changed = false;
         let mut active = false;
         for (_render, element, kind, layers) in nodes.drain(..) {
             // Hidden subtrees stop ticking; explicit controller changes still
@@ -3605,6 +3606,7 @@ impl WidgetTree {
                         | RenderKind::BackdropFilter { .. }
                 )
             {
+                focus_geometry_changed = true;
                 self.mark_render_semantics(
                     _render,
                     SemanticsDirty::Bounds.union(SemanticsDirty::Node),
@@ -3642,6 +3644,9 @@ impl WidgetTree {
         }
         if changed {
             self.diagnostics.composites += 1;
+        }
+        if focus_geometry_changed {
+            self.refresh_focus_geometry(true);
         }
         #[cfg(feature = "devtools")]
         self.devtools_trace_end(trace);

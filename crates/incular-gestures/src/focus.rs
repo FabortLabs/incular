@@ -2,7 +2,7 @@ use std::cell::{Cell, OnceCell, RefCell};
 use std::collections::VecDeque;
 use std::rc::{Rc, Weak};
 
-use incular_core::Rect;
+use incular_core::{Offset, Rect, Size, Transform};
 
 use crate::details::PointerDeviceKind;
 
@@ -60,6 +60,36 @@ enum FocusAuthority {
     Hosted,
 }
 
+/// Signed size of a focus rectangle. Unlike a layout [Size], the projected
+/// corner-to-corner extents can be negative after a rotation or reflection.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct FocusExtent {
+    pub width: f32,
+    pub height: f32,
+}
+
+/// The transformed top-left corner and signed extent of a focus node.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct FocusRect {
+    pub origin: Offset,
+    pub size: FocusExtent,
+}
+
+impl From<Rect> for FocusRect {
+    fn from(rect: Rect) -> Self {
+        Self {
+            origin: rect.origin,
+            size: FocusExtent { width: rect.size.width, height: rect.size.height },
+        }
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+struct FocusGeometry {
+    oriented: FocusRect,
+    traversal: Rect,
+}
+
 struct FocusState {
     scope_owner: Option<Weak<FocusScopeState>>,
     host_enclosing_scope: RefCell<Option<Weak<FocusScopeState>>>,
@@ -74,7 +104,7 @@ struct FocusState {
     skip_traversal: Cell<bool>,
     descendants_are_focusable: Cell<bool>,
     descendants_are_traversable: Cell<bool>,
-    rect: Cell<Rect>,
+    geometry: Cell<FocusGeometry>,
     traversal_order: std::cell::RefCell<Option<FocusOrder>>,
     changes: incular_core::reactivity::DependencySource,
     revision: Cell<u64>,
@@ -170,7 +200,7 @@ impl FocusNode {
                 skip_traversal: Cell::new(false),
                 descendants_are_focusable: Cell::new(true),
                 descendants_are_traversable: Cell::new(true),
-                rect: Cell::new(Rect::default()),
+                geometry: Cell::new(FocusGeometry::default()),
                 traversal_order: std::cell::RefCell::new(None),
                 changes: incular_core::reactivity::DependencySource::default(),
                 revision: Cell::new(0),
@@ -472,12 +502,48 @@ impl FocusNode {
     /// Bounds are logical pixels in the same coordinate space as the widget
     /// tree. A node that never receives bounds remains in registration order.
     pub fn set_rect(&self, rect: Rect) {
-        self.state.rect.set(rect);
+        self.state.geometry.set(FocusGeometry {
+            oriented: rect.into(),
+            traversal: rect,
+        });
+    }
+
+    /// Publishes the mounted semantic rectangle in its current paint space.
+    #[doc(hidden)]
+    pub fn set_mounted_geometry(&self, size: Size, local_to_world: Transform) {
+        let corner = local_to_world.transform_point(Offset::ZERO);
+        let size_in_world = local_to_world.transform_vector(Offset::new(size.width, size.height));
+        self.state.geometry.set(FocusGeometry {
+            oriented: FocusRect {
+                origin: corner,
+                size: FocusExtent { width: size_in_world.x, height: size_in_world.y },
+            },
+            traversal: local_to_world.transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, size)),
+        });
+    }
+
+    /// Opposite transformed corners, in their original order. Rotation or
+    /// reflection can give this rectangle a negative width or height.
+    #[must_use]
+    pub fn rect(&self) -> FocusRect {
+        self.state.geometry.get().oriented
     }
 
     #[must_use]
-    pub fn rect(&self) -> Rect {
-        self.state.rect.get()
+    pub fn offset(&self) -> Offset {
+        self.rect().origin
+    }
+
+    #[must_use]
+    pub fn size(&self) -> FocusExtent {
+        self.rect().size
+    }
+
+    /// Axis-aligned paint bounds for layout-independent hit and traversal
+    /// helpers. This retains the previous bounded geometry of `rect()`.
+    #[must_use]
+    pub fn bounds(&self) -> Rect {
+        self.state.geometry.get().traversal
     }
 
     /// Sets the explicit numeric order used by [`OrderedTraversalPolicy`].
@@ -953,7 +1019,7 @@ fn traversable(nodes: &[FocusNode]) -> Vec<FocusNode> {
 }
 
 fn reading_order(nodes: Vec<FocusNode>) -> Vec<FocusNode> {
-    reading_order_by(nodes, |node| node.rect())
+    reading_order_by(nodes, FocusNode::bounds)
 }
 
 /// Flutter's `ReadingOrderTraversalPolicy.sort` for left-to-right text.

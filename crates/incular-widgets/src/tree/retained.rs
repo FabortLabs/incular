@@ -64,6 +64,8 @@ impl WidgetTree {
             recursion_diagnostics: RecursionDiagnostics::new(),
             tracked: TrackedElements::default(),
             hosted_focus_nodes: None,
+            standalone_focus_geometry: None,
+            focus_geometry_stamp: None,
             pending_focus_attachment_revision: 0,
             hosted_scope_membership_dirty: false,
             focus_change_bindings: BTreeMap::new(),

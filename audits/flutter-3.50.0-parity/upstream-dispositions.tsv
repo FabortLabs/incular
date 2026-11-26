@@ -1539,3 +1539,4 @@ packages/flutter/test/gestures/events_test.dart	38	computed hit slop values are 
 packages/flutter/test/gestures/events_test.dart	58	computed hit slop values defer to device value when pointer kind is touch	paired-match	upstream-pointer-event-primitives.md
 packages/flutter/test/gestures/events_test.dart	253	transformPosition	paired-match	upstream-pointer-event-primitives.md
 packages/flutter/test/gestures/events_test.dart	264	transformDeltaViaPositions	paired-match	upstream-pointer-event-primitives.md
+packages/flutter/test/widgets/focus_manager_test.dart	75	Geometry is transformed properly.	paired-match	upstream-focus-geometry.md

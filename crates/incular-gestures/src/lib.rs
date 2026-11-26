@@ -41,9 +41,9 @@ pub use details::{
 };
 pub use hit_test::{BoxHitTestResult, HitTestEntry, HitTestResult, HitTestTransform};
 pub use focus::{
-    DirectionalFocusCandidate, FocusBehavior, FocusHighlightManager, FocusHighlightMode,
+    DirectionalFocusCandidate, FocusBehavior, FocusExtent, FocusHighlightManager, FocusHighlightMode,
     FocusHighlightStrategy, FocusHighlightSubscription, FocusManager, FocusNode,
-    FocusNodeAttachment, FocusNodeSubscription, FocusOrder, FocusScopeNode, FocusScopeSubscription,
+    FocusNodeAttachment, FocusNodeSubscription, FocusOrder, FocusRect, FocusScopeNode, FocusScopeSubscription,
     UnfocusDisposition,
     FocusTraversalPolicy, FocusTraversalPolicyKind, OrderedTraversalPolicy,
     ReadingOrderTraversalPolicy, TraversalDirection, WidgetOrderTraversalPolicy,

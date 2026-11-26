@@ -116,6 +116,7 @@ impl WidgetTree {
         self.finalize_parked_global_elements();
         self.refresh_selection_states();
         self.refresh_notification_listeners();
+        self.refresh_focus_geometry(false);
         Ok(())
     }
 

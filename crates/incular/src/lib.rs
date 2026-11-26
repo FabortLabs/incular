@@ -118,7 +118,7 @@ pub mod prelude {
         UniqueKey, ValueKey, ValueNotifier, WindowResizeDirection, additional_pointer_button_mask,
     };
     pub use incular_gestures::{
-        PointerRouteError, PointerRouteErrorHandler, PointerRouteId, PointerRouter,
+        FocusExtent, FocusRect, PointerRouteError, PointerRouteErrorHandler, PointerRouteId, PointerRouter,
         RoutedPointerEvent, WeakPointerRouter,
     };
     pub use incular_image::{
