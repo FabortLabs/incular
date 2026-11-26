@@ -20,6 +20,7 @@ mod data_transfer;
 mod display;
 mod file_dialog;
 mod haptic_feedback;
+mod flutter_lifecycle;
 mod flutter_platform_channel;
 mod flutter_text_input_config;
 pub use flutter_text_input_config::FlutterTextInputConfiguration;
@@ -83,6 +84,10 @@ pub use file_dialog::{
     FileDialogCapabilities, FileDialogError, FileDialogFilter, FileDialogFilterId, FileDialogKind,
     FileDialogOption, FileDialogOptions, FileDialogOutcome, FileDialogRequest, FileDialogRequestId,
     FileDialogSelection, FileDialogValidationError, FileExtension,
+};
+pub use flutter_lifecycle::{
+    AppLifecycleBinding, AppLifecycleCallback, AppLifecycleError, AppLifecycleState,
+    AppLifecycleStateChange,
 };
 pub use flutter_platform_channel::{FlutterPlatformChannelError, FlutterPlatformMessenger};
 pub use haptic_feedback::{HapticFeedback, HapticFeedbackError, HapticFeedbackType};
