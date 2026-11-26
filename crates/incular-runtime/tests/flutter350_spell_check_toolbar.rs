@@ -318,3 +318,83 @@ fn android_single_taps_switch_between_suggestions_and_selection_handles() {
         );
     }
 }
+
+#[test]
+fn ios_touch_spelling_tap_selects_the_word_and_toggles_but_mouse_only_moves_the_caret() {
+    use incular_core::{
+        InputEvent, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase, PointerSampleMetadata,
+    };
+    use std::time::{Duration, Instant};
+
+    let controller = TextEditingController::with_text("tset here");
+    let focus = FocusNode::new();
+    let shown = BuiltMenus::default();
+    let mut runtime = Runtime::new(input(&controller, &focus, &shown, false, false)).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Ios);
+    layout(&mut runtime);
+    focus.request_focus();
+    layout(&mut runtime);
+    let field = runtime.focused_element().unwrap();
+    controller.move_end(false);
+    controller.insert_text("!");
+    controller.set_selection(TextSelection::collapsed(2));
+    layout(&mut runtime);
+    let rect = runtime
+        .tree()
+        .text_field_input_geometry(field)
+        .unwrap()
+        .caret_rect;
+    let wrong = Offset::new(rect.origin.x, rect.origin.y + rect.size.height / 2.0);
+    controller.set_selection(TextSelection::collapsed(7));
+    layout(&mut runtime);
+
+    let start = Instant::now();
+    for (index, (kind, showing)) in [
+        (PointerDeviceKind::Touch, true),
+        (PointerDeviceKind::Touch, false),
+        (PointerDeviceKind::Mouse, false),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let at = start + Duration::from_millis(600 * index as u64);
+        for (phase, buttons) in [
+            (PointerPhase::Down, PRIMARY_POINTER_BUTTON),
+            (PointerPhase::Up, 0),
+        ] {
+            let _ = runtime.handle_input_at(
+                InputEvent::PointerWithMetadata {
+                    pointer: 1,
+                    device: 3,
+                    kind,
+                    buttons,
+                    button: Some(PRIMARY_POINTER_BUTTON),
+                    sample: PointerSampleMetadata::default(),
+                    phase,
+                    position: wrong,
+                },
+                at,
+            );
+            if index == 0 && phase == PointerPhase::Down {
+                assert_eq!(
+                    controller.selection(),
+                    TextSelection::collapsed(7),
+                    "touch-down has not confirmed a spelling tap"
+                );
+            }
+        }
+        runtime
+            .run_frame_at(Constraints::tight(Size::new(300., 40.)), at)
+            .unwrap();
+        let state = runtime.tree().text_field_toolbar_state(field).unwrap();
+        assert_eq!(state.is_spell_check_showing(), showing);
+        if !showing {
+            assert!(!state.is_showing());
+        }
+        if kind == PointerDeviceKind::Touch {
+            assert_eq!(controller.selection().range().as_range(), 0..4);
+        } else {
+            assert_eq!(controller.selection(), TextSelection::collapsed(2));
+        }
+    }
+}

@@ -556,6 +556,8 @@ pub(crate) struct TextTapRun {
     raw_count: u32,
     effective_count: u32,
     shift: bool,
+    ios_misspelling_tap: bool,
+    menu_was_showing: bool,
     /// Whether the field had focus before this press, so its tap asks for
     /// the keyboard again rather than attaching it.
     was_focused: bool,
@@ -609,7 +611,8 @@ impl Runtime {
         field: ElementId,
         position: Offset,
         was_focused: bool,
-        touch: bool,
+        kind: PointerDeviceKind,
+        menu_was_showing: bool,
     ) {
         use incular_widgets::internal::gesture_constants::{DOUBLE_TAP_SLOP, DOUBLE_TAP_TIMEOUT};
         let now = self.input_now();
@@ -630,6 +633,18 @@ impl Runtime {
         };
         let effective_count = self.effective_tap_count(raw_count);
         let shift = self.keyboard_modifiers.shift();
+        let touch = matches!(
+            kind,
+            PointerDeviceKind::Touch | PointerDeviceKind::Stylus | PointerDeviceKind::InvertedStylus
+        );
+        let ios_misspelling_tap = self.text_shortcut_platform == TextShortcutPlatform::Ios
+            && matches!(kind, PointerDeviceKind::Touch | PointerDeviceKind::Unknown)
+            && effective_count == 1
+            && !shift
+            && self.tree.text_field_spell_check_toolbar(field).is_some()
+            && self.tree.text_field_position_at(field, position).is_some_and(|(offset, _)| {
+                self.tree.text_field_suggestion_span_at_cursor_index(field, offset).is_some()
+            });
         self.text_taps = Some(TextTapRun {
             field,
             down_position: position,
@@ -637,9 +652,16 @@ impl Runtime {
             raw_count,
             effective_count,
             shift,
+            ios_misspelling_tap,
+            menu_was_showing,
             was_focused,
         });
         self.hide_text_field_overlays(field);
+        // The iOS selection gesture is confirmed on tap-up; a touch
+        // drag or long press must not select a misspelling on the press.
+        if ios_misspelling_tap {
+            return;
+        }
         match effective_count {
             2 => {
                 self.text_field_select_word_at(field, position, now);
@@ -767,11 +789,26 @@ impl Runtime {
             self.text_input_show_requested = true;
         }
         let delta = position - run.down_position;
-        if self.text_shortcut_platform == TextShortcutPlatform::Android
-            && run.effective_count == 1
+        let single_tap = run.effective_count == 1
             && !run.shift
             && !was_long_press
-            && delta.x.hypot(delta.y) <= TOUCH_SLOP
+            && delta.x.hypot(delta.y) <= TOUCH_SLOP;
+        if single_tap && run.ios_misspelling_tap {
+            let Some(controller) = self.tree.text_controller(run.field) else {
+                return;
+            };
+            let previous = (controller.selection_if_set(), controller.caret_affinity());
+            self.text_field_select_word_at(run.field, run.down_position, now);
+            let current = (controller.selection_if_set(), controller.caret_affinity());
+            if previous != current {
+                let _ = self.show_spell_check_suggestions_toolbar(run.field);
+            } else if !run.menu_was_showing {
+                self.show_text_field_touch_menu(run.field, position);
+            }
+            return;
+        }
+        if single_tap
+            && self.text_shortcut_platform == TextShortcutPlatform::Android
             && !self.show_spell_check_suggestions_toolbar(run.field)
             && matches!(
                 kind,
@@ -940,6 +977,7 @@ pub(crate) struct TextLongPress {
 pub(super) struct PendingMobileTextTouch {
     pub(super) field: ElementId,
     pub(super) position: Offset,
+    pub(super) menu_was_showing: bool,
 }
 
 impl PendingMobileTextTouch {

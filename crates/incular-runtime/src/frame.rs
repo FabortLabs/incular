@@ -1769,7 +1769,9 @@ impl Runtime {
             self.frame_requested = true;
         }
         let text_menu_was_showing = phase == PointerPhase::Down
-            && button == Some(incular_core::SECONDARY_POINTER_BUTTON)
+            && (button == Some(incular_core::SECONDARY_POINTER_BUTTON)
+                || (self.text_shortcut_platform == TextShortcutPlatform::Ios
+                    && matches!(kind, PointerDeviceKind::Touch | PointerDeviceKind::Unknown)))
             && self.text_menu_open_at(position);
         // A press on the focused field's handle is part of that field, so it
         // does not dismiss the field's toolbar.
@@ -2046,8 +2048,11 @@ impl Runtime {
                     text_target.filter(|field| self.text_field_pointer_selection_enabled(*field));
                 if let Some(field) = text_target {
                     if deferred_text_touch {
-                        self.pending_mobile_text_touch =
-                            Some(text_gestures::PendingMobileTextTouch { field, position });
+                        self.pending_mobile_text_touch = Some(text_gestures::PendingMobileTextTouch {
+                            field,
+                            position,
+                            menu_was_showing: text_menu_was_showing,
+                        });
                     }
                     if self.captured_text_field.is_some() {
                         if !deferred_text_touch {
@@ -2055,7 +2060,8 @@ impl Runtime {
                                 field,
                                 position,
                                 text_target_was_focused,
-                                touch,
+                                kind,
+                                text_menu_was_showing,
                             );
                         }
                         self.text_long_press_begin(
@@ -2098,7 +2104,8 @@ impl Runtime {
                                 press.field,
                                 press.position,
                                 was_focused,
-                                true,
+                                kind,
+                                press.menu_was_showing,
                             );
                         }
                     } else {

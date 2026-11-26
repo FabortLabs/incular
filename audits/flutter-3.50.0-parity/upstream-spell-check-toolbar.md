@@ -42,3 +42,19 @@ label is not part of Incular's comparison, so the registration is partial.
 The neighboring Android first-drag focus expectation also failed with
 this change reverted. That baseline issue is separate from spelling and
 is not marked as fixed by the passing pointer sequence.
+
+## iOS precise and touch taps
+
+The authored Flutter fixture attaches the neutral selection gesture builder
+to an EditableText. A finger tap inside a misspelling selects the word and
+opens the suggestions toolbar at gesture completion. A later tap on the
+same already selected word hides the open toolbar without dropping the
+selection. The fixture explicitly reopens the toolbar if caret-reveal work
+hides it before that second press, keeping the repeated-tap assertion
+independent of the animation. A mouse tap places a collapsed caret and
+does not open suggestions.
+
+The Incular fixture drives actual pointer events under the iOS runtime
+policy. Touch-down alone does not select the word before the tap wins.
+This is an authored comparison, not a physical-device run or a new row
+in the upstream registration count.
