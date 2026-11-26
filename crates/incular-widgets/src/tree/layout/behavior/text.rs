@@ -1,6 +1,96 @@
 use super::super::*;
 
 impl WidgetTree {
+    /// Measures the natural text width of a mounted editable, including its
+    /// caret reservation, without replacing its current layout or scroll.
+    #[must_use]
+    pub fn editable_max_intrinsic_width(&mut self, element: ElementId) -> Option<f32> {
+        let field = self.editable_measurement_field(element)?;
+        let options = self.editable_measurement_options(&field, None)
+            .soft_wrap(false)
+            .max_lines(None);
+        let text_width = with_text_field_display(
+            &field.controller,
+            &field.placeholder,
+            field.obscure_text.then_some(field.obscuring_character),
+            |display| self.text_engine.layout_with_options(display, &field.style, options).metrics.size.width,
+        );
+        Some(text_width + crate::tree::text::editable_caret_margin(&field)
+            + field.content_padding.horizontal())
+    }
+
+    /// The minimum and maximum intrinsic heights of an editable coincide.
+    /// Measures that height for a given logical width, ignoring a tight
+    /// viewport height. Pass infinity to measure without soft wrapping.
+    #[must_use]
+    pub fn editable_intrinsic_height(&mut self, element: ElementId, width: f32) -> Option<f32> {
+        if width.is_nan() || width < 0. {
+            return None;
+        }
+        let field = self.editable_measurement_field(element)?;
+        let padding = field.content_padding;
+        let measure_width = (width.is_finite() && field.max_lines != Some(1)).then(|| {
+            (width - padding.horizontal() - crate::tree::text::editable_caret_margin(&field)).max(0.)
+        });
+        let options = self.editable_measurement_options(&field, measure_width);
+        let preferred_line_height = self.text_engine.layout_with_options(
+            " ", &field.style, options.soft_wrap(false).max_lines(Some(1)),
+        ).metrics.line_height;
+        let min_lines = field.min_lines.or(field.max_lines).unwrap_or(0);
+        let min_height = preferred_line_height * min_lines as f32;
+        let height = if field.max_lines.is_some_and(|max| max > 1 && max == min_lines) {
+            min_height
+        } else {
+            let content_height = with_text_field_display(
+                &field.controller,
+                &field.placeholder,
+                field.obscure_text.then_some(field.obscuring_character),
+                |display| {
+                    if field.max_lines.is_none() && width.is_infinite() {
+                        let lines = 1 + display.chars().filter(|&ch| {
+                            matches!(ch, '\n' | '\u{85}' | '\u{b}' | '\u{c}' | '\u{2028}' | '\u{2029}')
+                        }).count();
+                        preferred_line_height * lines as f32
+                    } else {
+                        self.text_engine.layout_with_options(display, &field.style, options)
+                            .metrics.size.height
+                    }
+                },
+            );
+            match field.max_lines {
+                Some(1) => content_height,
+                Some(max) => content_height.min(preferred_line_height * max as f32).max(min_height),
+                None => content_height.max(min_height),
+            }
+        };
+        Some(height + padding.vertical())
+    }
+
+    fn editable_measurement_field(&self, element: ElementId) -> Option<Box<TextFieldRender>> {
+        let render = self.render_id(element)?;
+        let RenderKind::TextField(field) = self.render_live(render, "mounted editable").object.kind()
+        else {
+            return None;
+        };
+        Some(field.clone())
+    }
+
+    fn editable_measurement_options(
+        &mut self, field: &TextFieldRender, width: Option<f32>,
+    ) -> TextLayoutOptions {
+        let strut = field.strut.as_deref().map(|strut| {
+            self.text_engine.resolve_strut(strut, &field.style)
+        });
+        TextLayoutOptions::new(
+            width,
+            rendering::physical_text_align(field.text_align, field.text_direction),
+        )
+        .text_direction(field.text_direction)
+        .soft_wrap(field.multiline)
+        .max_lines(if field.multiline { None } else { field.max_lines })
+        .strut(strut)
+    }
+
     pub(super) fn layout_text_kind(
         &mut self,
         id: RenderObjectId,
@@ -163,8 +253,6 @@ impl WidgetTree {
                     min_lines,
                     max_lines,
                     expands,
-                    text_align,
-                    text_direction,
                     obscure_text,
                     obscuring_character,
                     paragraph_layout,
@@ -196,15 +284,9 @@ impl WidgetTree {
                     intrinsic_width.clamp(constraints.min_width(), constraints.max_width());
                 let margin = crate::tree::text::editable_caret_margin(field);
                 let width_for_text = (width - content_padding.horizontal() - margin).max(0.);
-                let options = TextLayoutOptions::new(
-                    Some(width_for_text),
-                    rendering::physical_text_align(text_align, text_direction),
-                )
-                .text_direction(text_direction)
-                .soft_wrap(multiline)
-                // A multiline height cap belongs to the viewport, not
-                // the paragraph: lines below it must remain scrollable.
-                .max_lines(if multiline { None } else { max_lines });
+                // A multiline height cap restricts the viewport, not the
+                // paragraph: all lines below it remain scrollable.
+                let options = self.editable_measurement_options(field, Some(width_for_text));
                 let mask = obscure_text.then_some(obscuring_character);
                 let (metrics, layout, document) =
                     with_text_field_display(controller, placeholder, mask, |display| {

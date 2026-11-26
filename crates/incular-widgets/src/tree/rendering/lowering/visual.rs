@@ -203,8 +203,9 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             let resolved_locale = spec.locale.clone().or_else(|| {
                 crate::Localizations::maybe_locale_of(&BuildContext::new(context))
             });
+            let scaler = spec.text_scaler.unwrap_or_else(|| environment_text_scaler(context));
             let resolve_field_style = |style: &incular_text::TextStyle| {
-                let mut style = text_field_style(style, context);
+                let mut style = text_field_style(style, context, scaler);
                 if style.locale.is_none() {
                     style.locale = resolved_locale.as_ref().map(ToString::to_string);
                 }
@@ -214,6 +215,10 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                 controller: spec.controller.clone(),
                 desired: spec.size,
                 style: resolve_field_style(&spec.style),
+                strut: spec.strut.clone().map(|mut strut| {
+                    strut.font_size = strut.font_size.map(|size| scaler.scale(size));
+                    strut
+                }),
                 placeholder: spec.placeholder.clone(),
                 placeholder_color: spec.placeholder_color,
                 focused_border: spec.focused_border,

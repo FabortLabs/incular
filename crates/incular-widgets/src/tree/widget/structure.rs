@@ -747,6 +747,8 @@ impl PartialEq for TextFieldSpec {
             && self.select_all_on_focus == other.select_all_on_focus
             && self.size == other.size
             && self.style == other.style
+            && self.text_scaler == other.text_scaler
+            && self.strut == other.strut
             && self.placeholder == other.placeholder
             && self.placeholder_color == other.placeholder_color
             && self.focused_border == other.focused_border

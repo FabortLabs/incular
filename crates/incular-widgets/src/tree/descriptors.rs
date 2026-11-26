@@ -994,6 +994,8 @@ pub struct EditableText {
     select_all_on_focus: Option<bool>,
     size: Size,
     style: TextStyle,
+    text_scaler: Option<TextScaler>,
+    strut: Option<Box<StrutStyle>>,
     placeholder: String,
     placeholder_color: Color,
     focused_border: Option<(incular_rendering::Border, f32)>,
@@ -1062,6 +1064,8 @@ impl EditableText {
             select_all_on_focus: None,
             size: Size::ZERO,
             style: TextStyle::default(),
+            text_scaler: None,
+            strut: None,
             placeholder: String::new(),
             placeholder_color: Color::rgba(150, 154, 170, 255),
             focused_border: None,
@@ -1222,6 +1226,20 @@ impl EditableText {
     #[must_use]
     pub fn style(mut self, style: TextStyle) -> Self {
         self.style = style;
+        self
+    }
+
+    /// Overrides the inherited text scaling for this editor only.
+    #[must_use]
+    pub fn text_scaler(mut self, scaler: TextScaler) -> Self {
+        self.text_scaler = Some(scaler);
+        self
+    }
+
+    /// Configures the editor's minimum or forced line metrics.
+    #[must_use]
+    pub fn strut_style(mut self, strut: StrutStyle) -> Self {
+        self.strut = Some(Box::new(strut));
         self
     }
     #[must_use]
@@ -1775,6 +1793,8 @@ impl From<EditableText> for Widget {
             edit_changed: value.edit_changed,
             size: value.size,
             style: value.style,
+            text_scaler: value.text_scaler,
+            strut: value.strut,
             placeholder: value.placeholder,
             placeholder_color: value.placeholder_color,
             focused_border: value.focused_border,

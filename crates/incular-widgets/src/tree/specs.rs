@@ -521,6 +521,8 @@ pub struct TextFieldSpec {
     pub(crate) edit_changed: Option<EditChanged>,
     pub(crate) size: Size,
     pub(crate) style: TextStyle,
+    pub(crate) text_scaler: Option<TextScaler>,
+    pub(crate) strut: Option<Box<StrutStyle>>,
     pub(crate) placeholder: String,
     pub(crate) placeholder_color: Color,
     pub(crate) focused_border: Option<(incular_rendering::Border, f32)>,

@@ -2601,3 +2601,6 @@ packages/flutter/test/animation/curves_test.dart	193	Invalid transform parameter
 packages/flutter/test/animation/animation_controller_test.dart	429	toString control test	paired-match	upstream-animation-controller-disposal.md#live-controller-descriptions-and-disposal-guards
 packages/flutter/test/animation/animation_controller_test.dart	1074	AnimationController methods assert _ticker is not null	paired-match	upstream-animation-controller-disposal.md#live-controller-descriptions-and-disposal-guards
 packages/flutter/test/animation/animations_test.dart	251	CurvedAnimation with bogus curve	paired-match	upstream-curve-lifetimes-and-shapes.md#custom-curve-endpoints
+packages/flutter/test/rendering/editable_intrinsics_test.dart	54	textScaler affects intrinsics	paired-match	upstream-editable-intrinsics.md
+packages/flutter/test/rendering/editable_intrinsics_test.dart	70	maxLines affects intrinsics	paired-match	upstream-editable-intrinsics.md
+packages/flutter/test/rendering/editable_intrinsics_test.dart	90	strutStyle affects intrinsics	paired-match	upstream-editable-intrinsics.md

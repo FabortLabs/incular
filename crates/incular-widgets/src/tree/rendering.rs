@@ -85,11 +85,14 @@ pub(super) fn environment_text_scaler(context: &DependencyContext) -> TextScaler
     TextScaler::linear(factor)
 }
 
-/// The resolved style of an editable text. `EditableText` has no scaler of its
-/// own, so the environment text scale is applied to its font size.
-pub(super) fn text_field_style(style: &TextStyle, context: &DependencyContext) -> TextStyle {
+/// Resolves the editor style before scaling its logical font size.
+pub(super) fn text_field_style(
+    style: &TextStyle,
+    context: &DependencyContext,
+    scaler: TextScaler,
+) -> TextStyle {
     let mut resolved = resolve_text_style(style, context).into_owned();
-    resolved.size = environment_text_scaler(context).scale(resolved.size);
+    resolved.size = scaler.scale(resolved.size);
     resolved
 }
 
