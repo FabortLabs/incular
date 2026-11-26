@@ -633,3 +633,20 @@ fn trackpad_drag_applies_axis_and_start_behavior_in_widget_coordinates() {
     assert_eq!(downs.borrow()[1].global_position, Offset::new(10., 20.));
     assert_eq!(motions.borrow().len(), 1);
 }
+
+#[test]
+fn rejecting_a_touch_twice_does_not_evict_an_absolute_stream_with_the_same_identity() {
+    let mut h = Harness::new(DragStartBehavior::Down);
+    h.start();
+    assert_eq!(h.touch(4, Offset::ZERO, PointerPhase::Down), None);
+    assert_eq!(h.scale.pointer_count(), 3);
+    for _ in 0..2 {
+        h.scale.reject_device_pointer(0, 4);
+        assert_eq!(h.scale.pointer_count(), 2);
+    }
+    assert_eq!(h.update(Offset::ZERO, Offset::ZERO, 2., 0.), None);
+    assert!(h.scale.wants_acceptance());
+    assert_eq!(h.scale.accept().unwrap().scale, 2.);
+    h.end();
+    assert_eq!(h.scale.pointer_count(), 0);
+}

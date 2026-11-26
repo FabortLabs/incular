@@ -575,31 +575,30 @@ impl ScaleGestureDetector {
     }
 
     /// Flutter `rejectGesture`: another recognizer won this pointer's arena.
+    /// Use a protocol-specific rejection when a numeric ID may be reused.
     pub fn reject_pointer(&mut self, pointer: u64) {
-        let id = self
+        if let Some(contact) = self
             .pointers
             .iter()
             .find(|contact| contact.id.pointer == pointer)
-            .map(|contact| contact.id)
-            .or_else(|| {
-                self.pan_zooms
-                    .iter()
-                    .find(|contact| contact.id.pointer == pointer)
-                    .map(|contact| contact.id)
-            });
-        if let Some(id) = id {
-            self.reject_device_pointer(id.device, id.pointer);
+        {
+            self.reject_device_pointer(contact.id.device, pointer);
+        } else if let Some(contact) = self
+            .pan_zooms
+            .iter()
+            .find(|contact| contact.id.pointer == pointer)
+        {
+            self.reject_pan_zoom(contact.id.device, pointer);
         }
     }
 
-    /// Rejects only the contact from the specified device and pointer.
+    /// Rejects only the ordinary pointer from the specified device, leaving
+    /// any absolute trackpad stream with the same numeric IDs intact.
     pub fn reject_device_pointer(&mut self, device: u64, pointer: u64) {
         let id = ContactId { device, pointer };
         if let Some(index) = self.pointers.iter().position(|contact| contact.id == id) {
             self.pointers.remove(index);
             self.reset_if_empty();
-        } else {
-            self.reject_pan_zoom(device, pointer);
         }
     }
 
