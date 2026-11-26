@@ -28,8 +28,8 @@ fn layered(log: &Rc<RefCell<Vec<&'static str>>>) -> Widget {
             "behind",
             action(Size::new(60., 60.), Color::WHITE, ActionId(1)),
         )),
-        // The detector's bounds hold the point, so the region claims it for
-        // raw input, yet nothing in it is a retained target.
+        // A deferring detector over IgnorePointer is not an accepting
+        // descendant, even though its layout bounds enclose the point.
         Positioned::new(
             region(
                 log,
@@ -128,29 +128,35 @@ fn one_walk_finds_the_same_retained_target_and_cursor() {
 }
 
 #[test]
-fn an_opaque_region_over_ignored_content_blocks_raw_but_not_retained_hits() {
+fn a_deferring_region_over_ignored_content_leaves_the_behind_target_and_hover() {
     let log = Rc::new(RefCell::new(Vec::new()));
     let mut tree = mounted(layered(&log));
     let point = Offset::new(25., 25.);
     let hit = tree.pointer_hit_test(point);
-    // The retained route looks behind the region's ignored child and finds
-    // the action underneath; the raw route stops at the opaque region.
+    // Opacity can block the sibling only if this region accepted the hit.
+    // Flutter's deferring region does neither over an ignored child.
     let target = hit
         .target()
         .and_then(|render| tree.element_for_render(render))
         .expect("retained target");
-    assert_eq!(tree.action_for_element(target), Some(ActionId(1)));
+    assert_eq!(
+        tree.action_for_element(target),
+        Some(ActionId(1)),
+        "hit {:?} at {:?}",
+        hit.target().and_then(|render| tree.render_object_kind(render)),
+        tree.element_bounds(target),
+    );
     let _ = tree.dispatch_raw_pointer_with_hit(7, hover(PointerPhase::Move, point), &hit);
-    assert_eq!(*log.borrow(), ["opaque-over-ignored"]);
+    assert_eq!(*log.borrow(), ["behind"]);
 
-    // A translucent region lets the opaque one behind it enter too.
+    // The translucent annotation joins without hiding the region behind.
     let point = Offset::new(45., 25.);
     let hit = tree.pointer_hit_test(point);
     let _ = tree.dispatch_raw_pointer_with_hit(7, hover(PointerPhase::Move, point), &hit);
     assert_eq!(
         *log.borrow(),
-        ["opaque-over-ignored", "translucent"],
-        "only the translucent region enters; the opaque one is still hovered"
+        ["behind", "translucent"],
+        "only the translucent region enters; the back region is still hovered"
     );
     assert_eq!(tree.mouse_cursor_for_hit(&hit), MouseCursor::Text);
 }

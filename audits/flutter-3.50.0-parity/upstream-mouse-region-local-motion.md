@@ -72,3 +72,35 @@ Nested motion enters both regions and only exits the child when moving
 into the parent's padding. Two authored probes also verify active touch
 motion and toggling opacity without re-entering the top region.
 Thirty-five focused Rust checks passed.
+
+## Overlapping regions and absorber boundaries
+
+Four originals from `widgets/mouse_region_test.dart:1362,1408,1454,1475`
+pair. The native scene replays every position in the three-region
+fixture with the exact enter, hover, and exit order, including the
+default-opaque variant. A childless opaque region still blocks the
+underlying region over its own size.
+
+Five authored Flutter checks and 25 focused native checks pass.
+A MouseRegion that defers to a child now requires an accepted child
+hit, not merely an enclosing layout box. If that child ignores
+pointers, the underlying region receives both hover and taps.
+An accepting opaque MouseRegion blocks the siblings behind it,
+while non-opaque or no-child translucent annotations can observe
+hover without stealing the retained tap. Both sides enter two
+overlapping regions in back-to-front order.
+
+The old combined hit-test failure had a second, independent cause:
+the AbsorbPointer at y=60 incorrectly claimed a hit at y=25 because
+the absorber returned before checking its own bounds. The raw and
+retained paths now constrain absorption to its layout box, including
+the top/left edges but excluding the bottom/right edges. Both
+probes exercise real taps inside, outside, and at the edges.
+The existing regression still asserts the underlying ActionId(1);
+its hover expectation now matches the pinned Flutter deferring
+region instead of treating a rejected child as a hit.
+
+```sh
+cargo test --locked -j 1 -p incular-widgets --test flutter350_mouse_region_overlap --test pointer_hit_test --test pointer_hover --test pointer_event_fields --test flutter350_absorb_pointer_upstream_parity -- --test-threads=1
+bash audits/flutter-3.50.0-parity/run-reference-linux.sh probe mouse_region_overlap_test.dart
+```

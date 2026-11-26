@@ -30,3 +30,7 @@ The existing native `pointer_hit_test` case
 still fails on both the unmodified `00b10697` baseline and this batch
 (retained ActionId(1) is absent). Its expectation was not changed or
 counted as a pass.
+
+The later [overlapping region and absorber fix](upstream-mouse-region-local-motion.md#overlapping-regions-and-absorber-boundaries)
+identifies the off-box absorber and restores both the expected
+retained action and the Flutter hover route.

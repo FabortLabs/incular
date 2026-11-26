@@ -1540,3 +1540,7 @@ packages/flutter/test/gestures/events_test.dart	58	computed hit slop values defe
 packages/flutter/test/gestures/events_test.dart	253	transformPosition	paired-match	upstream-pointer-event-primitives.md
 packages/flutter/test/gestures/events_test.dart	264	transformDeltaViaPositions	paired-match	upstream-pointer-event-primitives.md
 packages/flutter/test/widgets/focus_manager_test.dart	75	Geometry is transformed properly.	paired-match	upstream-focus-geometry.md
+packages/flutter/test/widgets/mouse_region_test.dart	1362	a transparent one should allow MouseRegions behind it to receive pointers	paired-match	upstream-mouse-region-local-motion.md#overlapping-regions-and-absorber-boundaries
+packages/flutter/test/widgets/mouse_region_test.dart	1408	an opaque one should prevent MouseRegions behind it receiving pointers	paired-match	upstream-mouse-region-local-motion.md#overlapping-regions-and-absorber-boundaries
+packages/flutter/test/widgets/mouse_region_test.dart	1454	opaque should default to true	paired-match	upstream-mouse-region-local-motion.md#overlapping-regions-and-absorber-boundaries
+packages/flutter/test/widgets/mouse_region_test.dart	1475	an empty opaque MouseRegion is effective	paired-match	upstream-mouse-region-local-motion.md#overlapping-regions-and-absorber-boundaries

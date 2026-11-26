@@ -139,6 +139,12 @@ fn paints_own_hit_surface(kind: Option<&WidgetKind>) -> bool {
     )
 }
 
+// RenderAbsorbPointer tests its own box instead of consulting its child.
+// Flutter Size.contains is half-open at the lower and right edges.
+fn absorb_pointer_hit(size: Size, local: Offset) -> bool {
+    local.x >= 0.0 && local.y >= 0.0 && local.x < size.width && local.y < size.height
+}
+
 /// Whether a node whose bounds hold the point is hit itself once its
 /// children declined it: only when its hit-test behavior claims its bounds
 /// or it paints its own surface. A childless layout (an empty `Column`,
@@ -521,6 +527,9 @@ impl WidgetTree {
                 ..
             })
         ) {
+            if !absorb_pointer_hit(node.size, point - self.hit_origin(id, node, origin)) {
+                return (RawHitResult::default(), None);
+            }
             return (
                 RawHitResult {
                     subtree_hit: true,
@@ -608,15 +617,17 @@ impl WidgetTree {
         if let (Some(element), Some(WidgetKind::RawInput { kind, .. })) = (element, kind) {
             use crate::gestures::HitTestBehavior::{DeferToChild, Opaque};
             let behavior = kind.hit_test_behavior();
-            let annotation_child_hit = if matches!(
-                &**kind,
-                RawInputKind::TapRegionSurface
-                    | RawInputKind::TapRegion { .. }
-                    | RawInputKind::TextFieldTapRegion { .. }
-            ) {
-                // Flutter's surface caches a route only when a child
-                // actually accepts the hit. A translucent TapRegion
-                // still adds an annotation, without accepting on its own.
+            let annotation_child_hit = if kind.mouse_region_opaque().is_some()
+                || matches!(
+                    &**kind,
+                    RawInputKind::TapRegionSurface
+                        | RawInputKind::TapRegion { .. }
+                        | RawInputKind::TextFieldTapRegion { .. }
+                )
+            {
+                // These annotations defer to a child that actually
+                // accepted the hit, not to a proxy that only occupies
+                // the point over a non-hitting child.
                 result.accepts_hit
             } else {
                 child_hit
@@ -624,7 +635,7 @@ impl WidgetTree {
             let include = kind.is_enabled() && (behavior != DeferToChild || annotation_child_hit);
             if include {
                 result.elements.push(element);
-                let hit_target = child_hit || behavior == Opaque;
+                let hit_target = annotation_child_hit || behavior == Opaque;
                 result.content_hit |= behavior != DeferToChild;
                 result.blocks_siblings = match kind.mouse_region_opaque() {
                     // RenderMouseRegion.hitTest: `super.hitTest(..) && _opaque`.
@@ -1043,7 +1054,10 @@ impl WidgetTree {
             Some(WidgetKind::IgnorePointer { ignoring: true, .. }) => return None,
             Some(WidgetKind::AbsorbPointer {
                 absorbing: true, ..
-            }) => return Some(id),
+            }) => {
+                return absorb_pointer_hit(node.size, point - self.hit_origin(id, node, origin))
+                    .then_some(id);
+            }
             _ => {}
         }
         if flow_child_hidden(node.object.kind()) {
@@ -1107,9 +1121,8 @@ impl WidgetTree {
     /// Whether `point` lies outside `node`'s box and that alone rules out a
     /// hit anywhere in its subtree. Most children of a long list are rejected
     /// here, before any widget lookup. Nodes that hit-test through a
-    /// transform place their content elsewhere, and a gesture node may be an
-    /// `AbsorbPointer`, which claims the pointer wherever it is; both take
-    /// the full path.
+    /// transform can place their content elsewhere. Gesture nodes defer
+    /// their bounds check to the actual widget's hit behavior.
     fn misses_outside_bounds(
         &self,
         id: RenderObjectId,
@@ -1458,7 +1471,14 @@ fn retained_self_hit(kind: Option<&WidgetKind>) -> bool {
             *behavior != crate::gestures::HitTestBehavior::DeferToChild
         }
         Some(WidgetKind::RawInput { kind, .. }) => {
-            kind.hit_test_behavior() != crate::gestures::HitTestBehavior::DeferToChild
+            use crate::gestures::HitTestBehavior::{DeferToChild, Opaque};
+            // MouseRegion adds an annotation even when it does not claim
+            // the hit. A non-opaque region, or a translucent region with
+            // no hit child, must not intercept the retained tap target.
+            match kind.mouse_region_opaque() {
+                Some(opaque) => opaque && kind.hit_test_behavior() == Opaque,
+                None => kind.hit_test_behavior() != DeferToChild,
+            }
         }
         // drag_target.dart: Draggable defaults to HitTestBehavior.deferToChild,
         // so it claims a hit only where its child is hit.
