@@ -90,3 +90,28 @@ the simulated brightness/scale/size, padding changes are inherited
 without remounting, and an outer MediaQuery's independent fields are
 still visible. The authored probe does not exercise scaffold controls,
 including the user-selected brightness override, zoom, or restart.
+
+## Watch event scope and invalidation
+
+Pinned hermetic `preview_detector_regression_178317_test.dart:76`
+passed. The real Flutter detector checks generated paths before
+manifest handling and drops source events without an analysis
+context. Incular's preview manifest now creates a matching native
+event router for its workspace. It calls neither invalidation path
+for the generated scaffold, Cargo target directories, files outside
+registered source contexts, or unrelated files. Source and manifest
+changes have distinct actions, so an actual dependency edit can
+refresh metadata without replacing the whole scaffold.
+
+Eight focused native checks pass. The new cases create and remove
+temporary project files, assert no callbacks for the excluded paths,
+and exercise an actual dependency metadata refresh on the manifest
+callback. Paths are matched by components so unrelated names cannot
+be mistaken for a configured exclusion. The original remains partial:
+the native host supplies the watcher events and Cargo contexts; this is
+not a running OS watcher, analyzer, or preview reload loop.
+
+```sh
+cargo test --locked -j 1 -p incular-devtools --test flutter350_preview_changes --test flutter350_preview_manifest -- --test-threads=1
+bash audits/flutter-3.50.0-parity/run-reference-linux.sh tooling preview_detector/preview_detector_regression_178317_test.dart 'PreviewDetector regression test https://github.com/flutter/flutter/issues/178317'
+```

@@ -10,6 +10,8 @@ use std::{
 
 use serde_json::{Value, json};
 
+use crate::preview_changes::PreviewChangeRouter;
+
 /// Filesystem-backed metadata for an existing or future preview scaffold.
 /// This manages invalidation only; it does not generate or launch a host.
 #[derive(Clone, Debug)]
@@ -105,6 +107,13 @@ impl PreviewManifest {
     pub fn workspace_members(mut self, members: impl IntoIterator<Item = PathBuf>) -> Self {
         self.members = members.into_iter().collect();
         self
+    }
+
+    /// Creates a change router using the same workspace manifests and
+    /// generated scaffold path as this cache. It can be configured with
+    /// additional Cargo target paths before a host starts watching.
+    pub fn change_router(&self) -> io::Result<PreviewChangeRouter> {
+        PreviewChangeRouter::for_workspace(&self.scaffold, &self.root_manifest, &self.members)
     }
 
     /// The metadata filename within this host's scaffold.

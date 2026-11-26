@@ -9,6 +9,7 @@
 
 pub mod commands;
 pub mod discovery;
+pub mod preview_changes;
 pub mod preview_manifest;
 pub mod session;
 
