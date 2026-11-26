@@ -322,3 +322,41 @@ fn a_failed_asset_provider_resolution_is_removed_from_the_pending_cache() {
     assert_eq!(cache.retained(), (1, BYTES));
     clear_shared_bundle_image_cache();
 }
+
+#[test]
+fn a_blocking_decode_started_with_retention_off_does_not_enter_a_reenabled_cache() {
+    struct EnableOnce {
+        cache: Mutex<Option<BundleImageCache>>,
+        reads: AtomicUsize,
+    }
+
+    impl AssetBundle for EnableOnce {
+        fn load(&self, _key: &str) -> Result<Arc<[u8]>, AssetError> {
+            self.reads.fetch_add(1, Ordering::Relaxed);
+            if let Some(cache) = self.cache.lock().unwrap().take() {
+                cache.set_limits(ImageCacheLimits::new(4, 4096));
+            }
+            Ok(Arc::from(IMAGE))
+        }
+    }
+
+    for limits in [ImageCacheLimits::new(0, 4096), ImageCacheLimits::new(4, 0)] {
+        let cache = BundleImageCache::with_limits(limits);
+        let source = Arc::new(EnableOnce {
+            cache: Mutex::new(Some(cache.clone())),
+            reads: AtomicUsize::new(0),
+        });
+        let key = AssetBundleImageKey::new(ImageAssetBundle::new(source.clone()), "asset", 1.);
+        let first = cache.load(&key).unwrap();
+        assert_eq!(first.decoded().pixels().len(), BYTES);
+        assert!(!cache.contains_key(&key), "limits at request start: {limits:?}");
+        assert_eq!(cache.retained(), (0, 0));
+        assert_eq!(cache.pending_image_count(), 0);
+
+        let second = cache.load(&key).unwrap();
+        assert_ne!(first.id(), second.id());
+        assert_eq!(cache.retained(), (1, BYTES));
+        assert_eq!(cache.load(&key).unwrap().id(), second.id());
+        assert_eq!(source.reads.load(Ordering::Relaxed), 2);
+    }
+}

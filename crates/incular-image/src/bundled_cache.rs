@@ -256,6 +256,13 @@ impl BundleImageCache {
             if let Some(image) = state.ready.get(&key) {
                 return Ok(image.clone());
             }
+            // Like the async path, latch whether retention is enabled
+            // before invoking the loader. A budget change during a cold
+            // read must not admit work that started outside the cache.
+            if !state.fits(0) {
+                drop(state);
+                return key.read_uncached();
+            }
             state.generation
         };
         let image = key.read_uncached()?;

@@ -37,3 +37,16 @@ count changes from zero to one, then back to zero before the stream exposes
 the original not-found error. The failure leaves no retained entry.
 A fresh resolution after correcting the fixture decodes once and is
 retained under the same key. All eight focused bundle cache tests passed.
+
+## Retention disabled at request start
+
+The authored pinned `image_cache_retention_enable_test.dart` probe starts a
+delayed resolution with either the entry count or the byte limit set to
+zero, then enables retention before delivering the image. The listener
+still receives the decoded frame, but neither case enters the retained
+cache. Incular's blocking bundle path previously admitted the first image
+after that transition. It now makes the enabled/disabled decision before
+invoking the external loader, like its asynchronous path. A new resolve
+after re-enabling the cache can still populate it. The regression failed
+before the fix; all nine focused native bundle-cache tests now pass. This
+authored comparison does not increase the upstream registration count.
