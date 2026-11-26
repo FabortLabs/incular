@@ -38,3 +38,7 @@ Selection painting is line-by-line from cached Parley caret stops; both
 
 Related: [`RichText`](/docs/api/content/rich-text),
 [`TextStyle`](/docs/api/content/text-style).
+
+For a renderer-level measurement, `TextEngine::intrinsic_widths` returns the
+natural width with every ordinary soft line break taken and with none taken.
+The measurement does not apply a viewport, padding, or caret reservation.

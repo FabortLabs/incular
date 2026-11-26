@@ -38,7 +38,7 @@ pub use style::{
 mod engine;
 pub use engine::{
     FontId, FontRunDebug, TextBackgroundRect, TextCaretPosition, TextClusterSpan, TextColorRun,
-    TextDiagnostics, TextDocumentLayout, TextEngine, TextLayout, TextLayoutOptions, TextLine,
+    TextDiagnostics, TextDocumentLayout, TextEngine, TextIntrinsicWidths, TextLayout, TextLayoutOptions, TextLine,
     TextMetrics, TextPlaceholder, TextPlaceholderBox, TextStrut, register_application_font,
     register_application_font_as, set_missing_characters_listener, take_missing_characters,
 };

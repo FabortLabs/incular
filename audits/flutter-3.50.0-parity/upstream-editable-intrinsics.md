@@ -47,3 +47,17 @@ the template glyph, and registering a font invalidates stale entries.
 The tests check both effects through native counters. All 62 distinct
 focused editor, text painter and document checks passed. The authored
 reference does not add an original registration.
+
+## Minimum and maximum content widths
+
+The pinned original `:12` and authored
+`editable_minimum_width_test.dart` both passed. Native measurement uses
+the text shaper's word boundaries and keeps the caret reservation out
+of minimum width: five Ahem digits measure 50 minimum / 52 maximum;
+`Hi World` measures 50 / 82, or 100 / 162 at 2×. This uses the same
+font state as normal layout. Measuring after late font registration
+does not suppress the retained editor's subsequent reflow.
+
+The original is marked partial: native tests now cover its minimum
+and maximum width and height, but not Dart's detached render object's
+diagnostic tree. The authored probe adds no original registration.

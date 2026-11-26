@@ -44,6 +44,16 @@ pub struct TextMetrics {
     pub line_height: f32,
 }
 
+/// The two natural widths of a shaped paragraph, before any viewport
+/// padding or decorations are applied.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TextIntrinsicWidths {
+    /// Width with every ordinary soft line break taken.
+    pub min: f32,
+    /// Width with no soft line breaks taken.
+    pub max: f32,
+}
+
 /// A shaped cluster's selectable source coverage, in text-area coordinates
 /// with `left <= right`. Spans follow visual order, so a logical byte
 /// range can cover several disjoint spans in mixed-direction text.
@@ -963,6 +973,26 @@ impl TextEngine {
         self.documents.clear();
         self.retained_documents.clear();
         !families.is_empty()
+    }
+
+    /// Measures both intrinsic widths from the same shaped paragraph,
+    /// without reflowing it into a viewport.
+    #[must_use]
+    pub fn intrinsic_widths(
+        &mut self,
+        text: &str,
+        style: &TextStyle,
+        direction: TextDirection,
+    ) -> TextIntrinsicWidths {
+        if text.is_empty() {
+            return TextIntrinsicWidths { min: 0., max: 0. };
+        }
+        self.sync_application_fonts();
+        // A shape prepared for wrapping retains normal word break
+        // opportunities; no specific width or line count is imposed.
+        let layout = self.shape_paragraph(text, style, Some(0.), Some(direction), &[]);
+        let widths = layout.calculate_content_widths();
+        TextIntrinsicWidths { min: widths.min, max: widths.max }
     }
 
     pub fn layout(

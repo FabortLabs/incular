@@ -196,7 +196,47 @@ fn default_editor_strut_stabilizes_line_height_when_the_glyph_font_falls_back() 
         include_bytes!("../../../harness/flutter/fonts/Inter-Regular.ttf").to_vec(),
     );
     assert!(tree.has_pending_application_fonts());
+    let before_layout = tree.diagnostics().layouts;
+    assert!(tree.editable_intrinsic_widths(root).is_some());
+    assert!(!tree.has_pending_application_fonts());
+    assert_eq!(tree.diagnostics().layouts, before_layout);
     frame(&mut tree);
+    assert!(tree.diagnostics().layouts > before_layout);
     assert!(tree.text_diagnostics().strut_font_shapes > after.strut_font_shapes);
     assert_eq!(tree.element_bounds(root).unwrap().size.height, 20.);
+}
+
+#[test]
+fn minimum_intrinsic_width_uses_word_breaks_and_never_includes_the_caret_gap() {
+    use incular_text::TextIntrinsicWidths;
+
+    let Some(style) = base_style() else { return };
+    let style = style.line_height_multiplier(1.);
+    let controller = TextEditingController::with_text("12345");
+    let scene = |scale, lines| {
+        editor(&controller, &style)
+            .text_scaler(TextScaler::linear(scale))
+            .max_lines(lines)
+            .into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scene(1., Some(1))).unwrap();
+    let retained = tree.render_id(root);
+    assert_eq!(tree.editable_min_intrinsic_width(root), Some(50.));
+    assert_eq!(tree.editable_max_intrinsic_width(root), Some(52.));
+    assert_eq!(tree.editable_intrinsic_height(root, f32::INFINITY), Some(10.));
+
+    controller.set_text("Hi World");
+    tree.update(root, scene(1., None)).unwrap();
+    frame(&mut tree);
+    let actual = tree.element_bounds(root);
+    let layouts = tree.diagnostics().layouts;
+    assert_eq!(tree.editable_intrinsic_widths(root), Some(TextIntrinsicWidths { min: 50., max: 82. }));
+    assert_eq!(tree.element_bounds(root), actual);
+    assert_eq!(tree.diagnostics().layouts, layouts);
+
+    tree.update(root, scene(2., None)).unwrap();
+    frame(&mut tree);
+    assert_eq!(tree.render_id(root), retained);
+    assert_eq!(tree.editable_intrinsic_widths(root), Some(TextIntrinsicWidths { min: 100., max: 162. }));
 }

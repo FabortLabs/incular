@@ -1,22 +1,37 @@
 use super::super::*;
 
 impl WidgetTree {
-    /// Measures the natural text width of a mounted editable, including its
-    /// caret reservation, without replacing its current layout or scroll.
+    /// Measures both natural widths without replacing the editor's viewport
+    /// or scroll position. Only the maximum includes the caret reservation.
     #[must_use]
-    pub fn editable_max_intrinsic_width(&mut self, element: ElementId) -> Option<f32> {
+    pub fn editable_intrinsic_widths(
+        &mut self,
+        element: ElementId,
+    ) -> Option<incular_text::TextIntrinsicWidths> {
+        self.refresh_application_fonts();
         let field = self.editable_measurement_field(element)?;
-        let options = self.editable_measurement_options(&field, None)
-            .soft_wrap(false)
-            .max_lines(None);
-        let text_width = with_text_field_display(
+        let mut widths = with_text_field_display(
             &field.controller,
             &field.placeholder,
             field.obscure_text.then_some(field.obscuring_character),
-            |display| self.text_engine.layout_with_options(display, &field.style, options).metrics.size.width,
+            |display| self.text_engine.intrinsic_widths(display, &field.style, field.text_direction),
         );
-        Some(text_width + crate::tree::text::editable_caret_margin(&field)
-            + field.content_padding.horizontal())
+        let padding = field.content_padding.horizontal();
+        widths.min += padding;
+        widths.max += padding + crate::tree::text::editable_caret_margin(&field);
+        Some(widths)
+    }
+
+    /// Measures the editable's minimum width, without the caret gap.
+    #[must_use]
+    pub fn editable_min_intrinsic_width(&mut self, element: ElementId) -> Option<f32> {
+        self.editable_intrinsic_widths(element).map(|widths| widths.min)
+    }
+
+    /// Measures the editable's maximum width, including the caret gap.
+    #[must_use]
+    pub fn editable_max_intrinsic_width(&mut self, element: ElementId) -> Option<f32> {
+        self.editable_intrinsic_widths(element).map(|widths| widths.max)
     }
 
     /// The minimum and maximum intrinsic heights of an editable coincide.
@@ -27,6 +42,7 @@ impl WidgetTree {
         if width.is_nan() || width < 0. {
             return None;
         }
+        self.refresh_application_fonts();
         let field = self.editable_measurement_field(element)?;
         let padding = field.content_padding;
         let measure_width = (width.is_finite() && field.max_lines != Some(1)).then(|| {

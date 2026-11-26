@@ -166,6 +166,10 @@ Flutter, Left/Right move the caret in the logical order of the text, whatever
 its writing direction; carets are placed with the retained Parley caret stops.
 Wrap an editor in `UndoHistory` to configure its runtime undo/redo capacity.
 
+A mounted editor can be measured through `WidgetTree::editable_intrinsic_widths`
+without changing its current layout or scroll. Only the maximum reserves room
+for the caret.
+
 ## Read-only selection
 
 `SelectableRegion` is the retained selection primitive; it has no mutable text

@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- Retained editable text can measure its minimum and maximum intrinsic widths.
+  Only maximum width includes the caret reservation.
+
 - Automatic ShowOnScreen can reveal a mounted box or subrectangle
   through nested viewports, including coordinated scrolling animations.
 

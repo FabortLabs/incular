@@ -45,6 +45,9 @@ rasterizer; color-glyph formats are outside this path.
 
 ## Paragraph bounds and overflow
 
+`TextEngine::intrinsic_widths` measures the width with all or no ordinary soft
+line breaks, without laying out a viewport or adding widget padding.
+
 `Text` and `RichText` expose `soft_wrap`, `max_lines`, and `TextOverflow`
 without leaking Parley layout types. The same `TextLayoutOptions` reaches the
 retained widget tree. `Clip` restricts retained paint to the laid-out bounds,
