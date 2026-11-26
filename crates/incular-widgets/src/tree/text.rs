@@ -1462,6 +1462,56 @@ impl WidgetTree {
             self.sync_static_selection(area);
         }
     }
+    /// Runs the logical cursor action advertised to assistive technology.
+    #[doc(hidden)]
+    pub fn move_text_accessibility_cursor(
+        &self,
+        id: ElementId,
+        forward: bool,
+        by_word: bool,
+        extend: bool,
+    ) -> bool {
+        if !self.text_field_keyboard_selection_enabled(id) {
+            return false;
+        }
+        let Some(element) = self.elements.get(id.0) else { return false };
+        let WidgetKind::TextField(spec) = element.widget.kind() else { return false };
+        let Some(selection) = spec.controller.selection_if_set() else { return false };
+        let target = spec.controller.with_value(|value| {
+            let text = value.text.as_str();
+            let caret = text.floor_char_boundary(selection.extent);
+            let target = |text: &str, caret| {
+                if by_word {
+                    incular_text::accessibility_word_cursor(text, caret, forward)
+                } else if forward {
+                    text.get(caret..)?.chars().next().map(|ch| caret + ch.len_utf8())
+                } else {
+                    text.get(..caret)?.char_indices().next_back().map(|(offset, _)| offset)
+                }
+            };
+            if !spec.obscure_text {
+                return target(text, caret);
+            }
+            // Move on the mask, not the secret. A word action must not
+            // reveal the placement of whitespace in a password.
+            let mask = spec.obscuring_character;
+            let displayed = utf16_units(&text[..caret]) * mask.len_utf8();
+            let boundary = with_obscured(mask, utf16_units(text), |masked| target(masked, displayed))?;
+            let affinity = if forward {
+                incular_text::TextAffinity::Downstream
+            } else {
+                incular_text::TextAffinity::Upstream
+            };
+            Some(source_byte_at_utf16(text, boundary / mask.len_utf8(), affinity))
+        });
+        if let Some(target) = target {
+            spec.controller.move_cursor(target, extend);
+            true
+        } else {
+            false
+        }
+    }
+
     #[must_use]
     pub fn text_controller(&self, id: ElementId) -> Option<TextEditingController> {
         let render = self.render_id(id)?;

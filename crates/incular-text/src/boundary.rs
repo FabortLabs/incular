@@ -428,6 +428,24 @@ pub fn word_boundary_at(text: &str, offset: usize) -> (usize, usize) {
     (start, text.len())
 }
 
+/// The next/previous visible word's beginning for an assistive cursor move.
+#[doc(hidden)]
+#[must_use]
+pub fn accessibility_word_cursor(text: &str, offset: usize, forward: bool) -> Option<usize> {
+    let offset = floor_char_boundary(text, offset);
+    let boundaries = word_boundaries(text);
+    let current = boundaries.partition_point(|&boundary| boundary <= offset).saturating_sub(1);
+    let visible_word = |pair: &&[usize]| {
+        text.get(pair[0]..pair[1])
+            .is_some_and(|word| word.chars().any(|c| !is_layout_whitespace(c)))
+    };
+    if forward {
+        boundaries.windows(2).skip(current + 1).find(visible_word)
+    } else {
+        boundaries.windows(2).take(current).rev().find(visible_word)
+    }.map(|word| word[0])
+}
+
 /// Flutter's `TextLayoutMetrics.isWhitespace` for one character.
 #[must_use]
 pub const fn is_layout_whitespace(c: char) -> bool {

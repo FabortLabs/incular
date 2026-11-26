@@ -1345,10 +1345,23 @@ impl WidgetTree {
             WidgetKind::TextField(spec) => {
                 let value = spec.controller.value();
                 let focused = self.text_field_state_live(render_id).focused;
-                let mut actions = actions_with_room(&[
-                    SemanticActionKind::Focus,
-                    SemanticActionKind::SetSelection,
-                ]);
+                let selection = (spec.enabled && spec.keyboard_selection_enabled)
+                    .then(|| spec.controller.selection_if_set())
+                    .flatten();
+                let mut actions = actions_with_room(&[SemanticActionKind::Focus]);
+                if focused && spec.enabled && spec.keyboard_selection_enabled {
+                    actions.push(SemanticActionKind::SetSelection);
+                }
+                if let Some(selection) = selection {
+                    if selection.extent > 0 {
+                        actions.push(SemanticActionKind::MoveCursorBackwardByCharacter);
+                        actions.push(SemanticActionKind::MoveCursorBackwardByWord);
+                    }
+                    if selection.extent < value.text.len() {
+                        actions.push(SemanticActionKind::MoveCursorForwardByCharacter);
+                        actions.push(SemanticActionKind::MoveCursorForwardByWord);
+                    }
+                }
                 // Flutter advertises setText only on the focused, editable field.
                 if spec.enabled && !spec.read_only && focused {
                     actions.push(SemanticActionKind::SetText);
@@ -1388,9 +1401,9 @@ impl WidgetTree {
                             RenderKind::TextField(field) => Some(field.text_direction),
                             _ => None,
                         },
-                        selection: Some(SemanticTextSelection {
-                            base: value.selection.base,
-                            extent: value.selection.extent,
+                        selection: selection.map(|selection| SemanticTextSelection {
+                            base: selection.base,
+                            extent: selection.extent,
                         }),
                         ..SemanticState::default()
                     },
@@ -3448,8 +3461,6 @@ pub(super) fn semantic_action_is_executable(
         | SemanticActionKind::Paste
         | SemanticActionKind::Expand
         | SemanticActionKind::Collapse
-        | SemanticActionKind::MoveCursorForwardByCharacter
-        | SemanticActionKind::MoveCursorBackwardByCharacter
         | SemanticActionKind::DidGainAccessibilityFocus
         | SemanticActionKind::DidLoseAccessibilityFocus => false,
         // Advertised only inside a viewport; the dispatch reports whether a
@@ -3474,7 +3485,12 @@ pub(super) fn semantic_action_is_executable(
                 WidgetKind::Scroll { .. } | WidgetKind::SliverViewport { .. }
             ) || gesture_can_execute(kind, callbacks.gesture_policy, action)
         }
-        SemanticActionKind::SetText | SemanticActionKind::SetSelection => {
+        SemanticActionKind::SetText
+        | SemanticActionKind::SetSelection
+        | SemanticActionKind::MoveCursorForwardByCharacter
+        | SemanticActionKind::MoveCursorBackwardByCharacter
+        | SemanticActionKind::MoveCursorForwardByWord
+        | SemanticActionKind::MoveCursorBackwardByWord => {
             matches!(kind, WidgetKind::TextField(_))
         }
         SemanticActionKind::ScrollForward

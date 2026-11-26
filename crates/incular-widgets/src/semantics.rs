@@ -783,6 +783,34 @@ impl Semantics {
         )
     }
 
+    /// Receives a request to move the accessibility cursor forward by
+    /// a word with the original selection-extension flag.
+    #[must_use]
+    pub fn on_move_cursor_forward_by_word(self, callback: impl Fn(bool) + 'static) -> Self {
+        self.with_bound_callback(
+            SemanticAction::MoveCursorForwardByWord { extend_selection: false },
+            move |action| {
+                if let SemanticAction::MoveCursorForwardByWord { extend_selection } = action {
+                    callback(extend_selection);
+                }
+            },
+        )
+    }
+
+    /// Receives a request to move the accessibility cursor backward by
+    /// a word with the original selection-extension flag.
+    #[must_use]
+    pub fn on_move_cursor_backward_by_word(self, callback: impl Fn(bool) + 'static) -> Self {
+        self.with_bound_callback(
+            SemanticAction::MoveCursorBackwardByWord { extend_selection: false },
+            move |action| {
+                if let SemanticAction::MoveCursorBackwardByWord { extend_selection } = action {
+                    callback(extend_selection);
+                }
+            },
+        )
+    }
+
     /// Registers a request to set input focus. The handler decides how to
     /// do that; this annotation does not make its child keyboard-focusable.
     #[must_use]

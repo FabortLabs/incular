@@ -15,7 +15,7 @@ pub use text_painter::{TextPainter, TextPainterBox, TextPainterError, TextPainte
 mod windows_segmentation;
 
 pub use boundary::{
-    LineBoundary, TextBoundaryKind, is_layout_whitespace, set_word_segmenter, word_boundary_at,
+    LineBoundary, TextBoundaryKind, accessibility_word_cursor, is_layout_whitespace, set_word_segmenter, word_boundary_at,
 };
 pub use editing::{
     ComposingRange, EditableText, FocusedSelectionLease, InvalidTextDeltaRange,

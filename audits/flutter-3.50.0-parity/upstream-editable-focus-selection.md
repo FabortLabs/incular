@@ -96,3 +96,25 @@ hit, and the masked semantic value continue to agree with the
 selected mask, without changing the controller text. A supplementary
 character is rejected since Flutter requires exactly one UTF-16 unit.
 Both authored cases and 45 focused Rust tests passed.
+
+## Accessibility cursor movement and retained editor actions
+
+Five pinned `widgets/editable_text_test.dart` cases now pair:
+`:4893` for the beginning/middle/end action inventory and
+`:4971,5077,5191,5308` for moving and extending selection by a
+character or a word. The retained runtime now advertises the correct
+directions for the caret and routes the actions to the editor,
+skipping whitespace between words. It preserves the anchor only when
+the caller requests extension. The native probes dispatch the same
+action sequences at the same offsets without pretending to use an
+operating-system screen reader.
+
+Both password originals also ran. Native focused and unfocused
+leaves now agree on the masked value, caret, input kind and supported
+editing/movement operations; an unset selection remains absent.
+Password navigation uses the mask and does not inspect the secret's
+word boundaries. The original whole semantic trees remain partial:
+Incular keeps its own focus action, and the tests do not reproduce
+the design-system route wrappers. AccessKit does not expose the four
+portable cursor actions directly. Five native editor cases, 23
+semantics controls and six accessibility-projection cases passed.

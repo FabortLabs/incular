@@ -1134,6 +1134,8 @@ impl Runtime {
                 | SemanticAction::Collapse
                 | SemanticAction::MoveCursorForwardByCharacter { .. }
                 | SemanticAction::MoveCursorBackwardByCharacter { .. }
+                | SemanticAction::MoveCursorForwardByWord { .. }
+                | SemanticAction::MoveCursorBackwardByWord { .. }
         ) {
             if let Some(callback) = self.tree.semantic_bound_callback(element, kind) {
                 if !self
@@ -1289,13 +1291,27 @@ impl Runtime {
                     true
                 })
                 .unwrap_or(false),
+            SemanticAction::MoveCursorForwardByCharacter { extend_selection }
+            | SemanticAction::MoveCursorBackwardByCharacter { extend_selection }
+            | SemanticAction::MoveCursorForwardByWord { extend_selection }
+            | SemanticAction::MoveCursorBackwardByWord { extend_selection } => {
+                let supported = self.tree.semantics().node(node)
+                    .is_some_and(|node| node.actions.contains(&kind));
+                let forward = matches!(kind,
+                    incular_semantics::SemanticActionKind::MoveCursorForwardByCharacter
+                    | incular_semantics::SemanticActionKind::MoveCursorForwardByWord);
+                let by_word = matches!(kind,
+                    incular_semantics::SemanticActionKind::MoveCursorForwardByWord
+                    | incular_semantics::SemanticActionKind::MoveCursorBackwardByWord);
+                supported && self.tree.move_text_accessibility_cursor(
+                    element, forward, by_word, extend_selection,
+                )
+            }
             SemanticAction::Copy
             | SemanticAction::Cut
             | SemanticAction::Paste
             | SemanticAction::Expand
             | SemanticAction::Collapse
-            | SemanticAction::MoveCursorForwardByCharacter { .. }
-            | SemanticAction::MoveCursorBackwardByCharacter { .. }
             | SemanticAction::DidGainAccessibilityFocus
             | SemanticAction::DidLoseAccessibilityFocus => false,
             SemanticAction::ShowOnScreen => self.tree.semantic_show_on_screen(element),

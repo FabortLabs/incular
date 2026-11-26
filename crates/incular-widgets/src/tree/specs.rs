@@ -426,6 +426,8 @@ impl SemanticCallbacks {
             | SemanticActionKind::Collapse
             | SemanticActionKind::MoveCursorForwardByCharacter
             | SemanticActionKind::MoveCursorBackwardByCharacter
+            | SemanticActionKind::MoveCursorForwardByWord
+            | SemanticActionKind::MoveCursorBackwardByWord
             | SemanticActionKind::DidGainAccessibilityFocus
             | SemanticActionKind::DidLoseAccessibilityFocus
             | SemanticActionKind::ScrollToOffset

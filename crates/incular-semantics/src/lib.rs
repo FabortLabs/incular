@@ -164,6 +164,8 @@ pub enum SemanticActionKind {
     Collapse,
     MoveCursorForwardByCharacter,
     MoveCursorBackwardByCharacter,
+    MoveCursorForwardByWord,
+    MoveCursorBackwardByWord,
     DidGainAccessibilityFocus,
     DidLoseAccessibilityFocus,
 }
@@ -222,6 +224,8 @@ pub enum SemanticAction {
     Collapse,
     MoveCursorForwardByCharacter { extend_selection: bool },
     MoveCursorBackwardByCharacter { extend_selection: bool },
+    MoveCursorForwardByWord { extend_selection: bool },
+    MoveCursorBackwardByWord { extend_selection: bool },
     DidGainAccessibilityFocus,
     DidLoseAccessibilityFocus,
 }
@@ -254,6 +258,8 @@ impl SemanticAction {
             Self::Paste => SemanticActionKind::Paste,
             Self::Expand => SemanticActionKind::Expand,
             Self::Collapse => SemanticActionKind::Collapse,
+            Self::MoveCursorForwardByWord { .. } => SemanticActionKind::MoveCursorForwardByWord,
+            Self::MoveCursorBackwardByWord { .. } => SemanticActionKind::MoveCursorBackwardByWord,
             Self::MoveCursorForwardByCharacter { .. } => {
                 SemanticActionKind::MoveCursorForwardByCharacter
             }
