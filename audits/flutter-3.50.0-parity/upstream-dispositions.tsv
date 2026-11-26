@@ -2160,3 +2160,8 @@ packages/flutter/test/rendering/mouse_tracker_cursor_test.dart	71	Should work on
 packages/flutter/test/rendering/mouse_tracker_cursor_test.dart	319	Finding no annotation is equivalent to specifying default cursor	paired-match	upstream-mouse-cursor-sessions.md#independent-devices-and-absent-hosts
 packages/flutter/test/rendering/mouse_tracker_cursor_test.dart	363	Removing a pointer resets it back to the default cursor	paired-match	upstream-mouse-cursor-sessions.md#independent-devices-and-absent-hosts
 packages/flutter/test/rendering/mouse_tracker_cursor_test.dart	398	Pointing devices display cursors separately	paired-match	upstream-mouse-cursor-sessions.md#independent-devices-and-absent-hosts
+packages/flutter/test/gestures/arena_test.dart	76	Should win by sweep	paired-match	upstream-managed-gesture-arena.md
+packages/flutter/test/gestures/arena_test.dart	86	Should win on release after hold sweep release	paired-match	upstream-managed-gesture-arena.md
+packages/flutter/test/gestures/arena_test.dart	100	Should win on sweep after hold release sweep	paired-match	upstream-managed-gesture-arena.md
+packages/flutter/test/gestures/arena_test.dart	136	Win before close is delayed to close	paired-match	upstream-managed-gesture-arena.md
+packages/flutter/test/gestures/arena_test.dart	174	Eager winner should be cleared when the eager winner rejects while arena is still open	paired-match	upstream-managed-gesture-arena.md

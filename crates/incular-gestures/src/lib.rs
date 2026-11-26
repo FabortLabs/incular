@@ -13,6 +13,7 @@ mod focus;
 mod force_press;
 mod hit_test;
 mod keyboard;
+mod managed_arena;
 mod mouse;
 mod multidrag;
 mod multitap;
@@ -58,6 +59,7 @@ pub use keyboard::{
     LogicalShortcutKey, ShortcutActivator, ShortcutKey, ShortcutMatch, ShortcutTrigger, Shortcuts,
     SingleActivator,
 };
+pub use managed_arena::{GestureArenaClient, GestureArenaManager, GestureArenaRegistration};
 pub use mouse::MouseRegion;
 pub use multidrag::{Drag, MultiDragGestureRecognizer, MultiDragStartCallback};
 pub use multitap::{
