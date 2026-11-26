@@ -1,5 +1,6 @@
 //! Weighted polynomial fitting used by Flutter-style velocity estimation.
 
+use incular_core::debug_double::{format_double_fixed, format_double_precision};
 use std::fmt;
 
 const PRECISION_ERROR_TOLERANCE: f64 = 1e-10;
@@ -30,9 +31,13 @@ impl fmt::Display for PolynomialFit {
             if index != 0 {
                 write!(f, ", ")?;
             }
-            write!(f, "{}", format_coefficient(value))?;
+            write!(f, "{}", format_double_precision(value, 3))?;
         }
-        write!(f, "], confidence: {})", format_confidence(self.confidence))
+        write!(
+            f,
+            "], confidence: {})",
+            format_double_fixed(self.confidence, 3)
+        )
     }
 }
 
@@ -216,95 +221,4 @@ impl FactoredFit<'_> {
 
 fn dot(left: &[f64], right: &[f64]) -> f64 {
     left.iter().zip(right).fold(0., |sum, (a, b)| sum + a * b)
-}
-
-fn nonfinite(value: f64) -> Option<&'static str> {
-    if value.is_nan() {
-        Some("NaN")
-    } else if value == f64::INFINITY {
-        Some("Infinity")
-    } else if value == f64::NEG_INFINITY {
-        Some("-Infinity")
-    } else {
-        None
-    }
-}
-
-/// Decimal halfway values are dyadic rationals. Test their exact bit
-/// representation rather than multiplying by a floating-point power of ten
-/// (which would falsely round values just to one side of a tie).
-fn decimal_halfway(abs: f64, power: i32) -> bool {
-    const MANTISSA_MASK: u64 = (1_u64 << 52) - 1;
-    let bits = abs.to_bits();
-    let biased_exp = ((bits >> 52) & 0x7ff) as i32;
-    let (mantissa, exponent) = if biased_exp == 0 {
-        (bits & MANTISSA_MASK, -1074)
-    } else {
-        (
-            (bits & MANTISSA_MASK) | (1_u64 << 52),
-            biased_exp - 1023 - 52,
-        )
-    };
-    if mantissa == 0 {
-        return false;
-    }
-    let zeros = mantissa.trailing_zeros();
-    // 2 * value / 10^power must be an odd integer.
-    exponent + 1 - power + zeros as i32 == 0
-        && (power <= 0
-            || 5_u64
-                .checked_pow(power as u32)
-                .is_some_and(|factor| (mantissa >> zeros).is_multiple_of(factor)))
-}
-
-fn format_coefficient(value: f64) -> String {
-    if let Some(label) = nonfinite(value) {
-        return label.to_owned();
-    }
-    let sign = if value.is_sign_negative() { "-" } else { "" };
-    let abs = value.abs();
-    let mut formatted = format!("{abs:.2e}");
-    let exponent_of = |text: &str| text.rsplit_once('e').unwrap().1.parse::<i32>().unwrap();
-    let mut exp = exponent_of(&formatted);
-    // Dart's precision formatting rounds exact ties away from zero.
-    if decimal_halfway(abs, exp - 2) {
-        formatted = format!("{:.2e}", abs.next_up());
-        exp = exponent_of(&formatted);
-    }
-    let significand = formatted.split_once('e').unwrap().0;
-    if !(-6..=2).contains(&exp) {
-        return format!("{sign}{significand}e{exp:+}");
-    }
-    let digits = significand.replace('.', "");
-    if exp < 0 {
-        let zeros = "0".repeat((-exp - 1) as usize);
-        format!("{sign}0.{zeros}{digits}")
-    } else {
-        let position = exp as usize + 1;
-        if position == digits.len() {
-            format!("{sign}{digits}")
-        } else {
-            format!("{sign}{}.{}", &digits[..position], &digits[position..])
-        }
-    }
-}
-
-fn format_confidence(value: f64) -> String {
-    if let Some(label) = nonfinite(value) {
-        return label.to_owned();
-    }
-    let sign = if value.is_sign_negative() { "-" } else { "" };
-    let abs = value.abs();
-    if abs >= 1e21 {
-        let shortest = format!("{abs:e}");
-        let (mantissa, exponent) = shortest.split_once('e').unwrap();
-        let exponent: i32 = exponent.parse().unwrap();
-        return format!("{sign}{mantissa}e{exponent:+}");
-    }
-    let rounded = if decimal_halfway(abs, -3) {
-        abs.next_up()
-    } else {
-        abs
-    };
-    format!("{sign}{rounded:.3}")
 }

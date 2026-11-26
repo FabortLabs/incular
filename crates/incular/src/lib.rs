@@ -121,7 +121,8 @@ pub mod prelude {
         SECONDARY_POINTER_BUTTON, Size, StylusMetadata, StylusOrientation, TERTIARY_POINTER_BUTTON,
         TrackpadGesture, TrackpadGestureKind, TrackpadGesturePhase, Transform as AffineTransform,
         UniqueKey, ValueKey, ValueNotifier, WindowResizeDirection, additional_pointer_button_mask,
-        debug_print_synchronously, debug_word_wrap,
+        debug_double_precision, debug_format_double, debug_print_synchronously, debug_word_wrap,
+        set_debug_double_precision,
     };
     pub use incular_gestures::{
         FocusExtent, FocusRect, PointerRouteError, PointerRouteErrorHandler, PointerRouteId, PointerRouter,
