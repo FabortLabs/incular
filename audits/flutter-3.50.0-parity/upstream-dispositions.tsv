@@ -202,6 +202,12 @@ packages/flutter/test/gestures/long_press_test.dart	204	Should not recognize lon
 packages/flutter/test/gestures/long_press_test.dart	455	Should not cancel long press when buttons change after acceptance	paired-match	upstream-current-route-aspect-and-long-press.md
 packages/flutter/test/gestures/long_press_test.dart	472	Buttons change after acceptance should not prevent the next long press	paired-match	upstream-long-press-release.md#device-filters-button-changes-and-disposal
 packages/flutter/test/gestures/long_press_test.dart	497	Can filter long press based on device kind	paired-match	upstream-long-press-release.md#device-filters-button-changes-and-disposal
+packages/flutter/test/gestures/long_press_test.dart	569	A primary long press recognizer does not form competition with a secondary tap recognizer	paired-match	upstream-long-press-release.md#button-competition-and-late-mask-changes
+packages/flutter/test/gestures/long_press_test.dart	581	A primary long press recognizer forms competition with a primary tap recognizer	paired-match	upstream-long-press-release.md#button-competition-and-late-mask-changes
+packages/flutter/test/gestures/long_press_test.dart	596	A secondary long press should not trigger primary	paired-match	upstream-long-press-release.md#button-competition-and-late-mask-changes
+packages/flutter/test/gestures/long_press_test.dart	640	A tertiary long press should not trigger primary or secondary	paired-match	upstream-long-press-release.md#button-competition-and-late-mask-changes
+packages/flutter/test/gestures/long_press_test.dart	701	Switching buttons mid-stream does not fail to send "end" event	paired-match	upstream-long-press-release.md#button-competition-and-late-mask-changes
+packages/flutter/test/gestures/long_press_test.dart	742	Switching buttons mid-stream does not fail to send "end" event (alternative sequence)	paired-match	upstream-long-press-release.md#button-competition-and-late-mask-changes
 packages/flutter/test/widgets/opacity_test.dart	19	Opacity	partial-match	upstream-opacity-hover-flex-notifier-futures.md
 packages/flutter/test/widgets/opacity_test.dart	152	offset is correctly handled in Opacity	partial-match	upstream-opacity-hover-flex-notifier-futures.md
 packages/flutter/test/widgets/opacity_test.dart	179	empty opacity does not crash	partial-match	upstream-opacity-hover-flex-notifier-futures.md

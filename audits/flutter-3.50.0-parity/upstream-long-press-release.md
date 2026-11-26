@@ -47,3 +47,15 @@ default award cannot start a hold before 500 ms. A deadline that
 precedes an award cannot leak a start, move, or end. Release before
 the award cancels and ignores a late result. The native suite includes
 70 focused arena and gesture checks and ten mounted runtime controls.
+
+## Button competition and late mask changes
+
+Six exact originals (:569, :581, :596, :640, :701, :742) passed. In
+the retained arena a primary hold does not delay a secondary
+tap-down, but keeps a primary tap pending until early release.
+A secondary hold cannot trigger primary callbacks; tertiary
+cannot trigger either primary or secondary. Positive controls
+confirm that configured button callbacks are live. A hold begun
+with primary sends one primary end even after adding secondary and
+then releasing primary in either of the original contact sequences.
+Four standalone button tests and three actual runtime tests passed.
