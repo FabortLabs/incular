@@ -516,6 +516,11 @@ pub(super) struct VariableExtentRenderSliver {
     /// Flutter's `SliverVariedExtentList` does. Plain list rows keep
     /// their intrinsic main-axis size.
     pub(super) tight_main_extent: bool,
+    /// The Flutter SliverList descriptor publishes an estimate derived from
+    /// this layout's child sample. Explicit Incular ListView extent indexes
+    /// retain their own estimates and reconciliation behavior.
+    pub(super) sample_scroll_extent: bool,
+    last_sampled_extent: Option<f64>,
     /// Scratch list of kept-alive rows outside the window, reused per layout.
     kept: Vec<usize>,
     /// First child from the last materialized range, not a kept-alive child
@@ -549,6 +554,8 @@ impl VariableExtentRenderSliver {
             find_child_index: None,
             transferred: Rc::new(RefCell::new(HashSet::new())),
             tight_main_extent: false,
+            sample_scroll_extent: false,
+            last_sampled_extent: None,
             kept: Vec::new(),
             leading_anchor: None,
             reentered_leading_range: None,
@@ -727,15 +734,38 @@ impl RenderSliver for VariableExtentRenderSliver {
         } else {
             self.leading_anchor = None;
         }
-        let scroll_extent = if constraints.growth_direction == SliverGrowthDirection::Reverse
+        let scroll_extent = if self.sample_scroll_extent && !range.is_empty() {
+            // The viewport may publish this pass before its children have
+            // been measured. Use the measured sample for its projection,
+            // not the 48 px lookup seed for provisional rows. Otherwise
+            // jumping to the last page can clamp to that provisional end
+            // before the actual last rows have a chance to be measured.
+            let transferred = self.transferred.borrow();
+            let (sum, measured) = range
+                .clone()
+                .filter(|index| !transferred.contains(index))
+                .filter_map(|index| self.index.measured_extent(index))
+                .fold((0., 0usize), |(sum, count), extent| {
+                    (sum + f64::from(extent), count + 1)
+                });
+            let sample = if measured != 0 {
+                let average = sum / measured as f64;
+                self.last_sampled_extent = Some(average);
+                average
+            } else {
+                self.last_sampled_extent
+                    .unwrap_or_else(|| f64::from(self.index.estimated_extent()))
+            };
+            let estimate =
+                f64::from(offsets[0]) + sum + sample * (count - range.start - measured) as f64;
+            estimate.min(f64::from(f32::MAX)) as f32
+        } else if constraints.growth_direction == SliverGrowthDirection::Reverse
             && !self.tight_main_extent
             && !range.is_empty()
             && range.end < count
         {
-            // Flutter's reverse-growth SliverList publishes the estimate
-            // from the current contiguous sample, not a previously cached
-            // extent for a row outside this layout window. Keep those
-            // measurements in the index for positioning/reconciliation.
+            // For reverse-growth lists that use an Incular extent index,
+            // preserve the current layout sample as the scroll estimate.
             let leading = f64::from(offsets[0]);
             let trailing = f64::from(offsets[range.len()]);
             (trailing + (trailing - leading) / range.len() as f64 * (count - range.end) as f64)
@@ -3586,6 +3616,9 @@ fn adopt_variable_extent_measurements(
         probes,
     );
     let fresh_len = fresh.index.len();
+    if preserve_anchor && fresh.sample_scroll_extent && retained.sample_scroll_extent {
+        fresh.last_sampled_extent = retained.last_sampled_extent;
+    }
     if preserve_anchor && !fresh.tight_main_extent && !retained.tight_main_extent {
         fresh.leading_anchor = retained
             .leading_anchor

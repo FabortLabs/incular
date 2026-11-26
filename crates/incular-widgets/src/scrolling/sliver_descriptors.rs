@@ -122,10 +122,12 @@ impl Sliver for SliverList {
         _axis: Axis,
         _reverse: bool,
     ) -> Box<dyn RenderSliver> {
-        Box::new(VariableExtentRenderSliver::new(
+        let mut sliver = VariableExtentRenderSliver::new(
             MeasuredExtentIndex::new(self.item_count, DEFAULT_LAZY_ITEM_EXTENT),
             self.builder.clone(),
-        ))
+        );
+        sliver.sample_scroll_extent = true;
+        Box::new(sliver)
     }
 }
 

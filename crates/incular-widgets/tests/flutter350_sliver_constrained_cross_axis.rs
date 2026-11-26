@@ -152,3 +152,218 @@ fn fixed_lanes_use_reported_width_and_flex_only_divides_the_remainder() {
         );
     }
 }
+
+fn directional_group(
+    axis: Axis,
+    reverse: bool,
+    slivers: Vec<Box<dyn Sliver>>,
+    following: Vec<Box<dyn Sliver>>,
+) -> (WidgetTree, ScrollController) {
+    let controller = ScrollController::new();
+    let mut tree = WidgetTree::new();
+    let slivers = std::iter::once(Box::new(SliverCrossAxisGroup::new(slivers)) as Box<dyn Sliver>)
+        .chain(following);
+    tree.mount(
+        Directionality::new(
+            TextDirection::Ltr,
+            CustomScrollView::new(slivers)
+                .scroll_direction(axis)
+                .reverse(reverse)
+                .controller(controller.clone()),
+        )
+        .into(),
+    )
+    .unwrap();
+    layout_group(&mut tree);
+    (tree, controller)
+}
+
+const GROUP_VIEW: Size = Size {
+    width: 300.,
+    height: 600.,
+};
+
+fn layout_group(tree: &mut WidgetTree) {
+    tree.layout(Constraints::tight(GROUP_VIEW)).unwrap();
+    tree.update_compositor(Instant::now()).unwrap();
+}
+
+fn variable_lane(axis: Axis, key: GlobalKey, extent: f32) -> incular_widgets::SliverList {
+    incular_widgets::SliverList::builder(20, move |index| {
+        let child = if axis.is_vertical() {
+            SizedBox::new().height(extent)
+        } else {
+            SizedBox::new().width(extent)
+        };
+        let child = Widget::from(child);
+        if index == 0 {
+            child.with_key(key)
+        } else {
+            child
+        }
+    })
+}
+
+#[test]
+fn constrained_and_flex_lanes_keep_cross_axis_order_on_both_scroll_axes() {
+    for axis in [Axis::Vertical, Axis::Horizontal] {
+        for reverse in [false, true] {
+            let keys = [GlobalKey::new(), GlobalKey::new(), GlobalKey::new()];
+            let first = variable_lane(axis, keys[0], 300.);
+            let second = variable_lane(axis, keys[1], 200.);
+            let third = variable_lane(axis, keys[2], 200.);
+            let (tree, controller) = directional_group(
+                axis,
+                reverse,
+                vec![
+                    Box::new(SliverConstrainedCrossAxis::new(30., first)),
+                    Box::new(SliverCrossAxisExpanded::new(2, second)),
+                    Box::new(third),
+                ],
+                vec![],
+            );
+            let widths = if axis.is_vertical() {
+                [30., 180., 90.]
+            } else {
+                [30., 380., 190.]
+            };
+            let mut cross = 0.;
+            for ((key, main), width) in keys.into_iter().zip([300., 200., 200.]).zip(widths) {
+                let leading = if reverse {
+                    axis.main_extent(GROUP_VIEW) - main
+                } else {
+                    0.
+                };
+                assert_eq!(
+                    bounds(&tree, key),
+                    Rect::from_origin_size(axis.offset(leading, cross), axis.size(main, width)),
+                    "{axis:?}, reverse={reverse}, lane starts at {cross}",
+                );
+                cross += width;
+            }
+            assert_eq!(
+                controller.content_extent(),
+                6000.,
+                "{axis:?}, reverse={reverse}"
+            );
+        }
+    }
+}
+
+#[test]
+fn final_fixed_lane_is_capped_at_the_remaining_cross_extent() {
+    let a = GlobalKey::new();
+    let b = GlobalKey::new();
+    let (tree, controller) = directional_group(
+        Axis::Vertical,
+        false,
+        vec![
+            Box::new(SliverConstrainedCrossAxis::new(
+                200.,
+                variable_lane(Axis::Vertical, a, 300.),
+            )),
+            Box::new(SliverConstrainedCrossAxis::new(
+                200.,
+                variable_lane(Axis::Vertical, b, 200.),
+            )),
+        ],
+        vec![],
+    );
+    assert_eq!(
+        bounds(&tree, a),
+        Rect::from_origin_size(Offset::ZERO, Size::new(200., 300.))
+    );
+    assert_eq!(
+        bounds(&tree, b),
+        Rect::from_origin_size(Offset::new(200., 0.), Size::new(100., 200.))
+    );
+    assert_eq!(controller.content_extent(), 6000.);
+}
+
+#[test]
+fn flex_weights_divide_the_cross_extent_without_changing_scroll_range() {
+    let a = GlobalKey::new();
+    let b = GlobalKey::new();
+    let (tree, controller) = directional_group(
+        Axis::Vertical,
+        false,
+        vec![
+            Box::new(SliverCrossAxisExpanded::new(
+                3,
+                variable_lane(Axis::Vertical, a, 300.),
+            )),
+            Box::new(SliverCrossAxisExpanded::new(
+                2,
+                variable_lane(Axis::Vertical, b, 200.),
+            )),
+        ],
+        vec![],
+    );
+    assert_eq!(
+        bounds(&tree, a),
+        Rect::from_origin_size(Offset::ZERO, Size::new(180., 300.))
+    );
+    assert_eq!(
+        bounds(&tree, b),
+        Rect::from_origin_size(Offset::new(180., 0.), Size::new(120., 200.))
+    );
+    assert_eq!(controller.content_extent(), 6000.);
+}
+
+#[test]
+fn unweighted_lanes_share_cross_extent_and_jump_to_the_longer_lanes_end() {
+    let a: [GlobalKey; 20] = std::array::from_fn(|_| GlobalKey::new());
+    let b: [GlobalKey; 20] = std::array::from_fn(|_| GlobalKey::new());
+    let list = |keys: [GlobalKey; 20], height| {
+        incular_widgets::SliverList::builder(keys.len(), move |i| {
+            Widget::from(SizedBox::new().height(height)).with_key(keys[i])
+        })
+    };
+    let (mut tree, controller) = directional_group(
+        Axis::Vertical,
+        false,
+        vec![Box::new(list(a, 300.)), Box::new(list(b, 200.))],
+        vec![],
+    );
+    assert_eq!(controller.offset(), 0.);
+    assert_eq!(controller.content_extent(), 6000.);
+    let viewport = Rect::from_origin_size(Offset::ZERO, GROUP_VIEW);
+    let visible = |tree: &WidgetTree, key: GlobalKey| {
+        tree.element_with_key(&key.into())
+            .and_then(|id| tree.element_bounds(id))
+            .is_some_and(|rect| rect.intersects(viewport))
+    };
+    for (key, expected) in [
+        (a[0], true),
+        (a[1], true),
+        (a[2], false),
+        (b[0], true),
+        (b[2], true),
+        (b[3], false),
+    ] {
+        assert_eq!(visible(&tree, key), expected);
+    }
+    assert_eq!(
+        bounds(&tree, a[0]),
+        Rect::from_origin_size(Offset::ZERO, Size::new(150., 300.))
+    );
+    assert_eq!(
+        bounds(&tree, b[0]),
+        Rect::from_origin_size(Offset::new(150., 0.), Size::new(150., 200.))
+    );
+
+    assert!(controller.jump_to(5400.));
+    layout_group(&mut tree);
+    assert_eq!(controller.offset(), 5400.);
+    assert_eq!(controller.content_extent(), 6000.);
+    assert!(!visible(&tree, a[17]));
+    assert_eq!(
+        bounds(&tree, a[18]),
+        Rect::from_origin_size(Offset::ZERO, Size::new(150., 300.))
+    );
+    assert_eq!(
+        bounds(&tree, a[19]),
+        Rect::from_origin_size(Offset::new(0., 300.), Size::new(150., 300.))
+    );
+    assert!(!visible(&tree, b[19]));
+}
