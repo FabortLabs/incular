@@ -26,6 +26,7 @@ pub use stream::{
 use incular_core::finite_non_negative;
 use smart_default::SmartDefault;
 use std::{
+    cell::{OnceCell, RefCell},
     fmt,
     path::{Path, PathBuf},
     sync::{
@@ -161,9 +162,9 @@ pub enum ImageSource {
 /// run on the originating thread or a worker.
 pub type ImageLoadCallback = Box<dyn FnOnce(Result<ImageHandle, ImageError>) + Send>;
 
-/// A Rust-native image provider. Providers are cheap descriptions; decoding
-/// happens only when [`Self::load`] is called, so rebuilds do not reread or
-/// recopy image bytes.
+/// A Rust-native image provider. Providers are cheap descriptions;
+/// constructing one does not read or decode the image. Consumers load or
+/// resolve it explicitly, reusing a cache where the provider supports it.
 pub trait ImageProvider: Clone + fmt::Debug + PartialEq + Eq {
     fn load(&self) -> Result<ImageHandle, ImageError>;
 
@@ -216,6 +217,27 @@ pub trait ImageProvider: Clone + fmt::Debug + PartialEq + Eq {
     }
 }
 
+thread_local! {
+    static MEMORY_PROVIDER_CACHE: OnceCell<RefCell<ImageCache>> = const { OnceCell::new() };
+}
+
+fn with_memory_provider_cache<T>(access: impl FnOnce(&mut ImageCache) -> T) -> T {
+    MEMORY_PROVIDER_CACHE.with(|slot| {
+        let cache = slot.get_or_init(|| RefCell::new(ImageCache::default()));
+        access(&mut cache.borrow_mut())
+    })
+}
+
+/// Releases retained in-memory provider images on this UI thread. Existing
+/// stream and rendering handles remain valid.
+pub fn clear_shared_memory_image_cache() {
+    MEMORY_PROVIDER_CACHE.with(|slot| {
+        if let Some(cache) = slot.get() {
+            cache.borrow_mut().clear();
+        }
+    });
+}
+
 /// Loads an image from encoded in-memory bytes.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MemoryImage(Arc<[u8]>);
@@ -230,11 +252,49 @@ impl MemoryImage {
     pub fn bytes(&self) -> &Arc<[u8]> {
         &self.0
     }
+
+    /// Resolves through an explicitly supplied decoded-image cache without
+    /// changing the shared provider cache.
+    #[must_use]
+    pub fn resolve_in_cache(&self, cache: &mut ImageCache) -> ImageStream {
+        ImageStream::from_result(cache.load_with_key(&self.0, || self.0.clone()))
+    }
+
+    /// Drops this image from the current UI thread's shared provider cache.
+    pub fn evict(&self) -> bool {
+        MEMORY_PROVIDER_CACHE.with(|slot| {
+            slot.get().is_some_and(|cache| self.evict_from(&mut cache.borrow_mut()))
+        })
+    }
+
+    /// Drops this image from just the supplied cache. Other caches and
+    /// already delivered image handles are unaffected.
+    pub fn evict_from(&self, cache: &mut ImageCache) -> bool {
+        cache.evict_bytes(&self.0)
+    }
 }
 
 impl ImageProvider for MemoryImage {
     fn load(&self) -> Result<ImageHandle, ImageError> {
         ImageHandle::from_bytes(&*self.0)
+    }
+
+    fn resolve(&self, _configuration: &ImageConfiguration) -> ImageStream {
+        with_memory_provider_cache(|cache| self.resolve_in_cache(cache))
+    }
+
+    fn resolve_cached(
+        &self,
+        _configuration: &ImageConfiguration,
+        resize: Option<ImageResizeOptions>,
+    ) -> Option<ImageStream> {
+        if resize.is_some() {
+            return None;
+        }
+        MEMORY_PROVIDER_CACHE.with(|slot| {
+            let image = slot.get()?.borrow_mut().images.get(self.0.as_ref())?.clone();
+            Some(ImageStream::ready(image))
+        })
     }
 }
 
@@ -764,9 +824,27 @@ impl ImageCache {
         self.resident_bytes
     }
 
+    /// Removes one encoded key from this cache, leaving live handles valid.
+    pub fn evict_bytes(&mut self, bytes: impl AsRef<[u8]>) -> bool {
+        let Some((key, image)) = self.images.pop_entry(bytes.as_ref()) else {
+            return false;
+        };
+        self.resident_bytes -= key.len() + image.size_bytes();
+        self.diagnostics.evictions += 1;
+        true
+    }
+
     pub fn load_bytes(&mut self, bytes: impl AsRef<[u8]>) -> Result<ImageHandle, ImageError> {
-        self.diagnostics.loads_requested += 1;
         let bytes = bytes.as_ref();
+        self.load_with_key(bytes, || Arc::from(bytes))
+    }
+
+    fn load_with_key(
+        &mut self,
+        bytes: &[u8],
+        retained_key: impl FnOnce() -> Arc<[u8]>,
+    ) -> Result<ImageHandle, ImageError> {
+        self.diagnostics.loads_requested += 1;
         if let Some(image) = self.images.get(bytes) {
             let image = image.clone();
             self.diagnostics.load_cache_hits += 1;
@@ -775,7 +853,7 @@ impl ImageCache {
         match ImageHandle::from_bytes(bytes) {
             Ok(image) => {
                 self.diagnostics.image_decodes += 1;
-                self.admit(bytes, image.clone());
+                self.admit(bytes.len(), retained_key, image.clone());
                 Ok(image)
             }
             Err(error) => {
@@ -792,14 +870,18 @@ impl ImageCache {
 
     /// Admits a freshly decoded image unless it cannot fit the budget, then
     /// evicts oldest-first back within the limits.
-    fn admit(&mut self, bytes: &[u8], image: ImageHandle) {
-        let entry_bytes = bytes.len().saturating_add(image.size_bytes());
+    fn admit(
+        &mut self,
+        encoded_len: usize,
+        retained_key: impl FnOnce() -> Arc<[u8]>,
+        image: ImageHandle,
+    ) {
+        let entry_bytes = encoded_len.saturating_add(image.size_bytes());
         if self.limits.max_entries == 0 || entry_bytes > self.limits.max_bytes {
             return;
         }
-        let key: Arc<[u8]> = Arc::from(bytes);
         self.resident_bytes = self.resident_bytes.saturating_add(entry_bytes);
-        let previous = self.images.put(key, image);
+        let previous = self.images.put(retained_key(), image);
         debug_assert!(
             previous.is_none(),
             "a freshly decoded image must follow a cache miss"

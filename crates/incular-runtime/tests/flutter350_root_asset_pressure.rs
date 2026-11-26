@@ -188,3 +188,34 @@ fn memory_pressure_evicts_decoded_bundle_images_without_dropping_live_pixels() {
     assert_eq!(cache.retained(), (1, 256));
     cache.clear();
 }
+
+
+#[test]
+fn memory_pressure_evicts_the_shared_memory_provider_without_invalidating_its_stream() {
+    use incular_image::{
+        ImageConfiguration, ImageLoadState, ImageProvider, MemoryImage,
+        clear_shared_memory_image_cache,
+    };
+    const PNG: &[u8] = include_bytes!(
+        "../../../audits/flutter-3.50.0-parity/reference-probes/fixtures/decode_cache_8x8.png"
+    );
+    clear_shared_memory_image_cache();
+    let app = Application::new(|_| leaf()).unwrap();
+    let image = MemoryImage::new(PNG);
+    let configuration = ImageConfiguration::empty();
+    let live_stream = image.resolve(&configuration);
+    let ImageLoadState::Ready(first) = live_stream.state() else {
+        panic!("memory image must decode");
+    };
+    assert!(!app.handle_system_message("flutter/other", br#"{"type":"memoryPressure"}"#));
+    assert!(image.resolve_cached(&configuration, None).is_some());
+    assert!(app.handle_system_message("flutter/system", br#"{"type":"memoryPressure"}"#));
+    assert!(image.resolve_cached(&configuration, None).is_none());
+    assert_eq!(live_stream.state(), ImageLoadState::Ready(first.clone()));
+    let ImageLoadState::Ready(second) = image.resolve(&configuration).state() else {
+        panic!("memory image must decode after eviction");
+    };
+    assert_ne!(first.id(), second.id());
+    assert_eq!(first.decoded().pixels(), second.decoded().pixels());
+    clear_shared_memory_image_cache();
+}
