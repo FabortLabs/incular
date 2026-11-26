@@ -412,6 +412,7 @@ pub mod material_prelude {
     feature = "mobile-host"
 ))]
 pub use incular_platform as platform;
+pub use incular_core::app_build_version;
 
 #[cfg(any(
     feature = "desktop-host",

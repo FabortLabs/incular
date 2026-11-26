@@ -29,6 +29,7 @@ mod system_ui_overlay_style;
 mod undo_manager;
 mod window_control;
 
+pub use incular_core::{AppBuildVersion, app_build_version};
 pub use application_activation::{
     ApplicationActivation, GlobalShortcutChord, GlobalShortcutChordError, GlobalShortcutError,
     GlobalShortcutId, LaunchActivation, SingleInstancePolicy, SingleInstancePolicyError,

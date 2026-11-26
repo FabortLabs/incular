@@ -1,5 +1,6 @@
 //! Renderer- and platform-independent primitives shared by Incular.
 
+mod app_build_version;
 mod arena;
 mod bit_field;
 mod caching_iterable;
@@ -32,6 +33,7 @@ pub mod time;
 mod value_notifier;
 mod widget;
 
+pub use app_build_version::AppBuildVersion;
 pub use arena::{Arena, ArenaId};
 pub use bit_field::{BitField, K_MAX_UNSIGNED_SMI};
 pub use caching_iterable::{CachingCursor, CachingIndexError, CachingIterable};

@@ -2108,3 +2108,5 @@ packages/flutter/test/foundation/bit_field_test.dart	43	BitField.filed control t
 packages/flutter/test/foundation/persistent_hash_map_test.dart	23	PersistentHashMap - Simple Test	paired-match	upstream-persistent-hash-map.md
 packages/flutter/test/foundation/persistent_hash_map_test.dart	37	PersistentHashMap - hash collisions	paired-match	upstream-persistent-hash-map.md
 packages/flutter/test/foundation/persistent_hash_map_test.dart	67	PersistentHashMap - inflation of nodes	paired-match	upstream-persistent-hash-map.md
+packages/flutter/test/services/app_version_test.dart	9	appBuildName matches the FLUTTER_BUILD_NAME environment declaration	paired-match	upstream-app-build-version.md
+packages/flutter/test/services/app_version_test.dart	18	appBuildNumber matches the FLUTTER_BUILD_NUMBER environment declaration	paired-match	upstream-app-build-version.md
