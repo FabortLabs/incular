@@ -68,7 +68,12 @@ impl FlutterTextInputConfiguration {
             SmartQuotesType::Enabled
         });
         let action = match self.input_action {
-            TextInputAction::Unspecified | TextInputAction::Done => "done",
+            TextInputAction::Unspecified => "unspecified",
+            TextInputAction::Done => "done",
+            TextInputAction::ContinueAction => "continueAction",
+            TextInputAction::Join => "join",
+            TextInputAction::Route => "route",
+            TextInputAction::EmergencyCall => "emergencyCall",
             TextInputAction::None => "none",
             TextInputAction::Go => "go",
             TextInputAction::Search => "search",

@@ -31,7 +31,7 @@ url = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = { workspace = true }
-web-sys = { workspace = true, features = ["Event", "EventTarget"] }
+web-sys = { workspace = true, features = ["Element", "Event", "EventTarget", "Navigator", "Window"] }
 
 [package.metadata.docs.rs]
 all-features = true

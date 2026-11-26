@@ -104,3 +104,45 @@ fn numeric_password_changes_the_keyboard_policy_not_the_editor_content_flag() {
     assert_eq!(fields["obscureText"], json!(false));
     assert_eq!(fields["inputAction"], json!("TextInputAction.go"));
 }
+
+#[test]
+fn explicit_noncompletion_actions_keep_their_wire_identity() {
+    use TextInputAction::*;
+    for (action, wire) in [
+        (Unspecified, "TextInputAction.unspecified"),
+        (None, "TextInputAction.none"),
+        (ContinueAction, "TextInputAction.continueAction"),
+        (Join, "TextInputAction.join"),
+        (Route, "TextInputAction.route"),
+        (EmergencyCall, "TextInputAction.emergencyCall"),
+    ] {
+        let config = FlutterTextInputConfiguration {
+            input_action: action,
+            ..Default::default()
+        };
+        assert_eq!(config.to_json()["inputAction"], wire, "{action:?}");
+    }
+}
+
+#[test]
+fn android_and_web_project_every_keyboard_action_to_its_native_vocabulary() {
+    use TextInputAction::*;
+    for (action, android, web) in [
+        (Unspecified, 0, Option::None),
+        (None, 1, Option::None),
+        (Newline, 1, Some("enter")),
+        (Go, 2, Some("go")),
+        (Search, 3, Some("search")),
+        (Send, 4, Some("send")),
+        (Next, 5, Some("next")),
+        (Done, 6, Some("done")),
+        (Previous, 7, Some("previous")),
+        (ContinueAction, 0, Some("next")),
+        (Join, 0, Option::None),
+        (Route, 0, Option::None),
+        (EmergencyCall, 0, Option::None),
+    ] {
+        assert_eq!(action.android_ime_action(), android, "{action:?}");
+        assert_eq!(action.web_enter_key_hint(), web, "{action:?}");
+    }
+}

@@ -2557,3 +2557,4 @@ packages/flutter/test/widgets/editable_text_test.dart	4393	requesting focus in t
 packages/flutter/test/widgets/editable_text_test.dart	4144	When "newline" action is called on a Editable text with maxLines == 1 callbacks are invoked: onEditingComplete > onSubmitted	paired-match	upstream-editable-action-focus.md
 packages/flutter/test/widgets/editable_text_test.dart	4184	When "newline" action is called on a Editable text with maxLines != 1, onEditingComplete and onSubmitted callbacks are not invoked.	paired-match	upstream-editable-action-focus.md
 packages/flutter/test/widgets/editable_text_test.dart	4445	does not request keyboard after the keyboard changes the selection	paired-match	upstream-editable-action-focus.md
+packages/flutter/test/widgets/editable_text_test.dart	3950	Handles focus correctly when action is invoked	paired-match	upstream-editable-action-focus.md

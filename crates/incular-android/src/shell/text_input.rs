@@ -190,16 +190,7 @@ fn input_type(configuration: &TextInputConfiguration) -> jint {
 fn ime_options(configuration: &TextInputConfiguration) -> jint {
     const FLAG_NO_PERSONALIZED_LEARNING: jint = 0x100_0000;
     const FLAG_NO_FULLSCREEN: jint = 0x200_0000;
-    let action = match configuration.action {
-        TextInputAction::Unspecified => 0,
-        TextInputAction::None | TextInputAction::Newline => 1,
-        TextInputAction::Go => 2,
-        TextInputAction::Search => 3,
-        TextInputAction::Send => 4,
-        TextInputAction::Next => 5,
-        TextInputAction::Done => 6,
-        TextInputAction::Previous => 7,
-    };
+    let action = configuration.action.android_ime_action();
     let mut options = FLAG_NO_FULLSCREEN | action;
     if !configuration.traits.enable_ime_personalized_learning {
         options |= FLAG_NO_PERSONALIZED_LEARNING;

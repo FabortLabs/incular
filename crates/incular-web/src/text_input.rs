@@ -21,7 +21,7 @@ use std::cell::RefCell;
 use incular_core::{
     Code, ImeEvent, InputEvent, KeyState, KeyboardEvent, KeyboardKey, Location, Modifiers, NamedKey,
 };
-use incular_platform::{TextCapitalization, TextInputAction, TextInputCommand, TextInputType};
+use incular_platform::{TextCapitalization, TextInputCommand, TextInputType};
 use wasm_bindgen::{JsCast as _, closure::Closure};
 use winit::{platform::web::WindowExtWebSys as _, window::WindowId};
 
@@ -179,21 +179,7 @@ fn configure(
         TextInputType::Text | TextInputType::Multiline | TextInputType::Password
         | TextInputType::Name | TextInputType::StreetAddress | TextInputType::DateTime => "text",
     };
-    let enter = match configuration.action {
-        TextInputAction::Done => "done",
-        TextInputAction::Go => "go",
-        TextInputAction::Search => "search",
-        TextInputAction::Send => "send",
-        TextInputAction::Next => "next",
-        TextInputAction::Previous => "previous",
-        TextInputAction::Newline | TextInputAction::Unspecified | TextInputAction::None => {
-            if configuration.multiline {
-                "enter"
-            } else {
-                "done"
-            }
-        }
-    };
+    incular_platform::update_dom_enter_key_hint(element, configuration.action);
     let assisted = !incular_platform::autofill::is_password_input(
         configuration.obscure_text,
         configuration.input_type,
@@ -218,7 +204,6 @@ fn configure(
     };
     for (name, value) in [
         ("inputmode", mode),
-        ("enterkeyhint", enter),
         ("autocomplete", autocomplete),
         ("autocorrect", if traits.autocorrect { "on" } else { "off" }),
         ("autocapitalize", autocapitalize),

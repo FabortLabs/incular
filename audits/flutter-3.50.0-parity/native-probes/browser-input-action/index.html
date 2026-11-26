@@ -1,0 +1,47 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Incular browser keyboard hint parity</title>
+<textarea id="editor"></textarea><textarea id="other" enterkeyhint="send"></textarea>
+<pre id="results">running</pre>
+<script type="module">
+  import init, {apply_action} from "./browser_input_action.js";
+  const output = document.getElementById("results");
+  const editor = document.getElementById("editor");
+  const other = document.getElementById("other");
+  function navigatorAs(platform, maxTouchPoints, userAgent) {
+    for (const [key, value] of Object.entries({platform, maxTouchPoints, userAgent}))
+      Object.defineProperty(navigator, key, {configurable: true, value});
+  }
+  function check(action, expected, caseName) {
+    apply_action(editor, action);
+    const observed = editor.getAttribute("enterkeyhint");
+    if (observed !== expected) throw Error(caseName + ": " + observed + " != " + expected);
+    if (other.getAttribute("enterkeyhint") !== "send") throw Error("unrelated textarea changed");
+  }
+  try {
+    await init();
+    editor.setAttribute("enterkeyhint", "go");
+    check(0, null, "real desktop Chrome removes stale mobile hint");
+    navigatorAs("Linux armv8l", 5, "Mozilla/5.0 (Linux; Android 15)");
+    check(0, "done", "Android Done");
+    check(1, "next", "Android Continue");
+    check(2, null, "Android Join removes Continue's hint");
+    check(4, "enter", "Android Newline");
+    check(3, null, "Android explicit Unspecified");
+    navigatorAs("MacIntel", 5, "Mozilla/5.0 (Macintosh)");
+    check(5, "previous", "iPadOS using a desktop-class user agent");
+    check(6, null, "iPadOS emergency call has no HTML hint");
+    navigatorAs("iPhone", 5, "Mozilla/5.0");
+    check(0, "done", "iPhone Done");
+    check(7, null, "iPhone Route leaves the browser default");
+    check(4, "enter", "iPhone Newline");
+    check(8, null, "iPhone None clears reused field");
+    navigatorAs("MacIntel", 0, "Mozilla/5.0 (Macintosh)");
+    check(0, null, "desktop Mac must not get mobile hints");
+    output.textContent = "PASS\nActual DOM hints, mobile profile, reused and unrelated editor behavior";
+  } catch (error) {
+    output.textContent = `FAIL: ${error}`;
+  } finally {
+    await fetch("/result", {method:"POST", body: output.textContent});
+  }
+</script>

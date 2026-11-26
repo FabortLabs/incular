@@ -67,6 +67,10 @@ pub enum TextInputActionHint {
     Next,
     Previous,
     Newline,
+    ContinueAction,
+    Join,
+    Route,
+    EmergencyCall,
 }
 
 #[derive(Clone, Debug, PartialEq)]

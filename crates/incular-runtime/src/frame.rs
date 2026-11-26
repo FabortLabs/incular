@@ -169,6 +169,10 @@ fn resolve_text_input_action(hint: TextInputActionHint, multiline: bool) -> Text
         TextInputActionHint::Next => TextInputAction::Next,
         TextInputActionHint::Previous => TextInputAction::Previous,
         TextInputActionHint::Newline => TextInputAction::Newline,
+        TextInputActionHint::ContinueAction => TextInputAction::ContinueAction,
+        TextInputActionHint::Join => TextInputAction::Join,
+        TextInputActionHint::Route => TextInputAction::Route,
+        TextInputActionHint::EmergencyCall => TextInputAction::EmergencyCall,
     }
 }
 
@@ -3513,7 +3517,12 @@ impl Runtime {
     fn finish_text_editing(&mut self, field: ElementId, action: TextInputAction) -> bool {
         let should_move_focus = !matches!(
             action,
-            TextInputAction::Unspecified | TextInputAction::None
+            TextInputAction::Unspecified
+                | TextInputAction::None
+                | TextInputAction::ContinueAction
+                | TextInputAction::Join
+                | TextInputAction::Route
+                | TextInputAction::EmergencyCall
         );
         let will_submit = self.tree.text_field_has_submit(field);
         let mut requested_blur = false;

@@ -13,6 +13,8 @@ mod application_shell;
 pub mod autofill;
 mod back_gesture;
 mod browser_context_menu;
+#[cfg(target_arch = "wasm32")]
+mod browser_input_action;
 mod capabilities;
 mod clipboard_channel;
 mod content_sensitivity;
@@ -57,6 +59,9 @@ pub use back_gesture::{
 pub use browser_context_menu::BrowserContextMenu;
 #[cfg(target_arch = "wasm32")]
 pub use browser_context_menu::{DomContextMenuError, DomContextMenuMessenger};
+#[cfg(target_arch = "wasm32")]
+#[doc(hidden)]
+pub use browser_input_action::update_dom_enter_key_hint;
 pub use capabilities::{
     AdvancedInputCapabilities, ApplicationServiceCapabilities, CapabilitySupport,
     DataTransferCapabilities, DisplayPlacementCapabilities, NativeMenuCapabilities,
@@ -665,6 +670,46 @@ pub enum TextInputAction {
     Next,
     Previous,
     Newline,
+    ContinueAction,
+    Join,
+    Route,
+    EmergencyCall,
+}
+
+impl TextInputAction {
+    /// Projects Flutter's input action to Android's EditorInfo flags.
+    /// iOS-only keys deliberately request the Android default action.
+    #[doc(hidden)]
+    #[must_use]
+    pub const fn android_ime_action(self) -> i32 {
+        match self {
+            Self::Unspecified | Self::ContinueAction | Self::Join | Self::Route | Self::EmergencyCall => 0,
+            Self::None | Self::Newline => 1,
+            Self::Go => 2,
+            Self::Search => 3,
+            Self::Send => 4,
+            Self::Next => 5,
+            Self::Done => 6,
+            Self::Previous => 7,
+        }
+    }
+
+    /// Projects Flutter's input action to the web engine's HTML hint.
+    /// An unsupported action leaves the browser to choose its default.
+    #[doc(hidden)]
+    #[must_use]
+    pub const fn web_enter_key_hint(self) -> Option<&'static str> {
+        match self {
+            Self::Newline => Some("enter"),
+            Self::Done => Some("done"),
+            Self::Go => Some("go"),
+            Self::Search => Some("search"),
+            Self::Send => Some("send"),
+            Self::Next | Self::ContinueAction => Some("next"),
+            Self::Previous => Some("previous"),
+            Self::Unspecified | Self::None | Self::Join | Self::Route | Self::EmergencyCall => None,
+        }
+    }
 }
 
 /// Flutter's `TextCapitalization`: the casing a soft keyboard applies

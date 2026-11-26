@@ -236,3 +236,50 @@ fn changing_selection_through_the_keyboard_does_not_request_show() {
         )
     }));
 }
+
+#[test]
+fn each_keyboard_action_retains_releases_or_traverses_focus_like_flutter() {
+    use TextInputAction::*;
+    for (action, expected) in [
+        (None, "editor"),
+        (Unspecified, "editor"),
+        (Done, "none"),
+        (Go, "none"),
+        (Search, "none"),
+        (Send, "none"),
+        (ContinueAction, "editor"),
+        (Join, "editor"),
+        (Route, "editor"),
+        (EmergencyCall, "editor"),
+        (Newline, "none"),
+        (Next, "following"),
+        (Previous, "preceding"),
+    ] {
+        let [preceding, editor, following] = std::array::from_fn(|_| FocusNode::new());
+        let mut runtime = mount(
+            Column::new([
+                Widget::from(Focus::new(SizedBox::square(25.)).node(preceding.clone())),
+                Widget::from(editable(&editor, &TextEditingController::new())),
+                Widget::from(Focus::new(SizedBox::square(25.)).node(following.clone())),
+            ])
+            .into(),
+        );
+        assert!(editor.has_primary_focus(), "{action:?}");
+        assert!(runtime.handle_text_input_action(action), "{action:?}");
+        assert_eq!(
+            editor.has_primary_focus(),
+            expected == "editor",
+            "{action:?}"
+        );
+        assert_eq!(
+            preceding.has_primary_focus(),
+            expected == "preceding",
+            "{action:?}"
+        );
+        assert_eq!(
+            following.has_primary_focus(),
+            expected == "following",
+            "{action:?}"
+        );
+    }
+}
