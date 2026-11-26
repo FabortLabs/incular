@@ -270,3 +270,39 @@ fn touch_span_and_rotation_combine_with_trackpad_but_count_differs_from_focal_we
     assert_eq!(h.log.borrow().end.len(), 3);
     assert_eq!(h.scale.pointer_count(), 0);
 }
+
+#[test]
+fn scrolling_reports_the_scale_velocity_not_a_pan_fling() {
+    let h = Rc::new(RefCell::new(Harness::new(DragStartBehavior::Start)));
+    h.borrow_mut()
+        .scale
+        .set_trackpad_scroll_to_scale(Some(DEFAULT_TRACKPAD_SCROLL_TO_SCALE_FACTOR));
+    let arena = GestureArenaManager::new();
+    let key = GestureArenaKey::pointer(0, 4);
+    let _registration = arena.add(key, Rc::new(SoleScale(h.clone())));
+    arena.close(key);
+    assert!(h.borrow().log.borrow().start.is_empty());
+    h.borrow_mut().start();
+    arena.flush_deferred_resolutions();
+
+    let mut h = h.borrow_mut();
+    assert_eq!(h.log.borrow().start.len(), 1);
+    assert_eq!(h.log.borrow().start[0].focal_point, Offset::ZERO);
+    assert!(h.log.borrow().end.is_empty());
+    let start = h.now;
+    for i in 0..100 {
+        h.now = start + std::time::Duration::from_millis(i * 25);
+        let d = h
+            .update(Offset::ZERO, Offset::new(0., -10. * i as f32), 1., 0.)
+            .unwrap();
+        assert_eq!(d.focal_point, Offset::ZERO);
+    }
+    h.now = start + std::time::Duration::from_millis(2500);
+    h.end();
+    assert_eq!(h.log.borrow().start.len(), 1);
+    let log = h.log.borrow();
+    assert_eq!(log.end.len(), 1);
+    assert_eq!(log.end[0].velocity, Velocity::ZERO);
+    assert_eq!(log.end[0].pointer_count, 0);
+    close(log.end[0].scale_velocity, 281.414_55);
+}

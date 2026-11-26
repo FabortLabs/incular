@@ -219,6 +219,15 @@ and a custom horizontal gain across two lifecycles. This is the direct
 input protocol. The OS aggregate trackpad callback and hardware ingress
 are separate and not verified by this run.
 
+#### Direct pan/zoom ending velocity
+
+Pinned :1447 pairs at the absolute recognizer boundary. The managed arena
+settles the sole contender after Start; 100 vertical pan samples at 25 ms
+intervals increase scale exponentially while the focal point remains
+anchored. Native and reference ending scale velocity agree within 0.0001
+(Flutter: 281.41454098027765). No translational fling is reported by the
+native scroll-to-scale path.
+
 ### Drag before scale and signed rotations
 
 The authored Flutter and native mounted probes also reverse the route

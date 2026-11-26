@@ -1808,7 +1808,7 @@ packages/flutter/test/gestures/scale_test.dart	890	Pointer pan/zooms should work
 packages/flutter/test/gestures/scale_test.dart	1092	Scale gesture competes with drag for trackpad gesture	reference-ran-incular-open	upstream-geometry-input-gestures.md#trackpad-scale-input-remains-separate
 packages/flutter/test/gestures/scale_test.dart	1186	Scale gesture from pan/zoom events properly handles DragStartBehavior.start	partial-match	upstream-geometry-input-gestures.md#direct-absolute-panzoom-events
 packages/flutter/test/gestures/scale_test.dart	1293	scale trackpadScrollCausesScale	paired-match	upstream-geometry-input-gestures.md#direct-absolute-panzoom-events
-packages/flutter/test/gestures/scale_test.dart	1447	scale ending velocity	reference-ran-incular-open	upstream-geometry-input-gestures.md#trackpad-scale-input-remains-separate
+packages/flutter/test/gestures/scale_test.dart	1447	scale ending velocity	paired-match	upstream-geometry-input-gestures.md#direct-panzoom-ending-velocity
 packages/flutter/test/gestures/scale_test.dart	472	Should recognize rotation gestures	paired-match	upstream-geometry-input-gestures.md#drag-before-scale-and-signed-rotations
 packages/flutter/test/rendering/proxy_box_test.dart	619	RenderFractionalTranslation updates its semantics after its translation value is set	paired-match	upstream-hit-transforms.md#proxy-follower-hit-gating-and-semantic-translation
 packages/flutter/test/rendering/proxy_box_test.dart	631	RenderFollowerLayer hit test without a leader layer and the showWhenUnlinked is true	paired-match	upstream-hit-transforms.md#proxy-follower-hit-gating-and-semantic-translation
