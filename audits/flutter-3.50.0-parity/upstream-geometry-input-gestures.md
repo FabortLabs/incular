@@ -304,6 +304,14 @@ the last contact leaves. The previous active pointer resumes from its
 own last sample if the latest contact lifts. This direct evidence does
 not by itself verify mixed drag on the mounted widget routes.
 
+Mounted application pan-only detectors now share that same tenure across
+the two routes. The nested two-detector replay of :2583 and :2671 checks
+both join orders, callback delta and device kind, and final-only End.
+This also retains the previous transformed drag and tap-versus-pan
+controls. Scroll brackets, payload drag-and-drop and mixed callback
+detectors retain their specialized routes; they are not covered by the
+mounted shared-pan claim.
+
 ### Drag before scale and signed rotations
 
 The authored Flutter and native mounted probes also reverse the route

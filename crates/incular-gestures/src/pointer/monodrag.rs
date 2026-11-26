@@ -358,6 +358,12 @@ impl MonodragGestureRecognizer {
         true
     }
 
+    /// Whether the drag still has at least one routed contact.
+    #[must_use]
+    pub fn is_tracking(&self) -> bool {
+        !self.contacts.is_empty()
+    }
+
     #[must_use]
     pub const fn wants_acceptance(&self) -> bool {
         self.wants_acceptance

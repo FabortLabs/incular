@@ -362,3 +362,93 @@ fn mounted_trackpad_pan_crosses_slop_before_emitting_updates() {
         ]
     );
 }
+
+#[test]
+fn seated_pan_keeps_its_tenure_when_the_other_pointer_protocol_joins() {
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    enum Pan {
+        Start,
+        Move(Offset, PointerDeviceKind),
+        End,
+    }
+    for trackpad_first in [true, false] {
+        let calls = Rc::new(RefCell::new(Vec::new()));
+        let child = GestureDetector::new(Widget::box_(Size::new(120., 120.), Color::BLACK))
+            .on_pan_start({
+                let calls = calls.clone();
+                move |_| calls.borrow_mut().push(Pan::Start)
+            })
+            .on_pan_update({
+                let calls = calls.clone();
+                move |d| calls.borrow_mut().push(Pan::Move(d.delta, d.kind))
+            })
+            .on_pan_end({
+                let calls = calls.clone();
+                move |_| calls.borrow_mut().push(Pan::End)
+            });
+        let mut tree = mounted_detector(
+            GestureDetector::new(child)
+                .on_pan_start(|_| panic!("outer pan must lose both streams")),
+        );
+        let now = Instant::now();
+        let touch = |tree: &mut WidgetTree, x, y, phase| {
+            tree.dispatch_pointer_gesture_in_window(
+                0,
+                7,
+                PointerDeviceKind::Touch,
+                PointerEvent {
+                    pointer: 4,
+                    position: Offset::new(x, y),
+                    phase,
+                    time: now,
+                },
+            );
+        };
+        let pan = |tree: &mut WidgetTree, x, y| {
+            absolute(
+                tree,
+                PointerPanZoomPhase::Update {
+                    pan: Offset::new(x, y),
+                    scale: 1.,
+                    rotation: 0.,
+                },
+            )
+        };
+        let check = |expected: &[Pan]| {
+            assert_eq!(&*calls.borrow(), expected);
+            calls.borrow_mut().clear();
+        };
+        if trackpad_first {
+            absolute(&mut tree, PointerPanZoomPhase::Start);
+            pan(&mut tree, 20., 20.);
+            check(&[]);
+            pan(&mut tree, 30., 30.);
+            check(&[Pan::Start]);
+            pan(&mut tree, 30., 25.);
+            check(&[Pan::Move(Offset::new(0., -5.), PointerDeviceKind::Trackpad)]);
+            touch(&mut tree, 20., 20., PointerPhase::Down);
+            touch(&mut tree, 25., 25., PointerPhase::Move);
+            check(&[Pan::Move(Offset::new(5., 5.), PointerDeviceKind::Touch)]);
+            touch(&mut tree, 25., 25., PointerPhase::Up);
+            check(&[]);
+            absolute(&mut tree, PointerPanZoomPhase::End);
+        } else {
+            touch(&mut tree, 20., 20., PointerPhase::Down);
+            touch(&mut tree, 60., 60., PointerPhase::Move);
+            check(&[Pan::Start]);
+            touch(&mut tree, 70., 70., PointerPhase::Move);
+            check(&[Pan::Move(Offset::new(10., 10.), PointerDeviceKind::Touch)]);
+            absolute(&mut tree, PointerPanZoomPhase::Start);
+            pan(&mut tree, 20., 20.);
+            pan(&mut tree, 30., 30.);
+            check(&[
+                Pan::Move(Offset::new(20., 20.), PointerDeviceKind::Trackpad),
+                Pan::Move(Offset::new(10., 10.), PointerDeviceKind::Trackpad),
+            ]);
+            absolute(&mut tree, PointerPanZoomPhase::End);
+            check(&[]);
+            touch(&mut tree, 70., 70., PointerPhase::Up);
+        }
+        check(&[Pan::End]);
+    }
+}

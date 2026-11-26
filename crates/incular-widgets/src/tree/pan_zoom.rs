@@ -8,6 +8,7 @@ use incular_gestures::{
 
 enum Recognizer {
     Scale,
+    SharedPan,
     Drag(Box<TrackpadDragRecognizer>),
 }
 
@@ -35,6 +36,76 @@ impl ActivePanZoom {
 }
 
 impl WidgetTree {
+    /// Pure application pan detectors can use the same recognizer on both
+    /// paths. Special drag-and-drop and scroll drivers own their raw brackets
+    /// and must continue to route via their existing gesture actions.
+    pub(super) fn uses_shared_pan(&self, element: ElementId, callbacks: &GestureCallbacks) -> bool {
+        if !matches!(
+            self.elements
+                .get(element.0)
+                .map(|element| element.widget.kind()),
+            Some(WidgetKind::Gesture { .. })
+        ) || callbacks.only_accept_drag_on_threshold
+            || callbacks.on_scale_start.is_some()
+            || callbacks.on_scale_update.is_some()
+            || callbacks.on_scale_end.is_some()
+            || callbacks.has_force_press()
+        {
+            return false;
+        }
+        if callbacks.on_pan_down.is_none()
+            && callbacks.on_pan_start.is_none()
+            && callbacks.on_pan_update.is_none()
+            && callbacks.on_pan_end.is_none()
+            && callbacks.on_pan_cancel.is_none()
+        {
+            return false;
+        }
+        let mut other = callbacks.clone();
+        other.on_pan_down = None;
+        other.on_pan_start = None;
+        other.on_pan_update = None;
+        other.on_pan_end = None;
+        other.on_pan_cancel = None;
+        !other.has_pointer_recognizer()
+    }
+
+    pub(super) fn shared_pan(
+        &mut self,
+        window: u64,
+        element: ElementId,
+        callbacks: &GestureCallbacks,
+    ) -> &mut incular_gestures::MonodragGestureRecognizer {
+        let transform = self
+            .render_id(element)
+            .and_then(|render| self.pointer_world_to_local(render));
+        let settings = self.gesture_settings_at(element);
+        let pan = self
+            .input
+            .shared_pans
+            .entry((window, element))
+            .or_insert_with(|| {
+                TrackpadDragRecognizer::new(
+                    TrackpadDragAxis::Pan,
+                    DragCallbacks {
+                        on_start: callbacks.on_pan_start.clone(),
+                        on_update: callbacks.on_pan_update.clone(),
+                        on_end: callbacks.on_pan_end.clone(),
+                    },
+                )
+                .with_pending_callbacks(
+                    callbacks.on_pan_down.clone(),
+                    callbacks.on_pan_cancel.clone(),
+                )
+                .with_drag_start_behavior(callbacks.drag_start_behavior)
+            });
+        pan.set_gesture_settings(settings);
+        if let Some(transform) = transform {
+            pan.set_local_transform(transform);
+        }
+        pan
+    }
+
     /// Routes one absolute trackpad stream to mounted scale and drag
     /// recognizers. Its hit path is captured on Start. This is not the
     /// independent OS aggregate gesture route.
@@ -99,6 +170,17 @@ impl WidgetTree {
                         scale.dispatch(details);
                     }
                 }
+                Recognizer::SharedPan => {
+                    let wants = self
+                        .input
+                        .shared_pans
+                        .get_mut(&(window, element))
+                        .is_some_and(|pan| pan.observe(event) && pan.wants_acceptance());
+                    if wants {
+                        let entries = self.input.gesture_arena.accept(key, id);
+                        self.apply_pan_zoom_entries(key, &entries, false);
+                    }
+                }
                 Recognizer::Drag(drag) => {
                     if drag.observe(event) && drag.wants_acceptance() {
                         let entries = self.input.gesture_arena.accept(key, id);
@@ -133,6 +215,15 @@ impl WidgetTree {
                 continue;
             };
             let admits_drag = callbacks.allows_pointer_device(PointerDeviceKind::Trackpad);
+            if admits_drag && self.uses_shared_pan(element, &callbacks) {
+                self.shared_pan(key.window, element, &callbacks);
+                members.push(Member {
+                    element,
+                    id: self.input.gesture_arena.add(key, false),
+                    recognizer: Recognizer::SharedPan,
+                });
+                continue;
+            }
             let transform = self
                 .render_id(element)
                 .and_then(|render| self.pointer_world_to_local(render));
@@ -268,6 +359,21 @@ impl WidgetTree {
                 continue;
             };
             match (&mut member.recognizer, entry.disposition) {
+                (Recognizer::SharedPan, disposition) => {
+                    if let Some(pan) = self
+                        .input
+                        .shared_pans
+                        .get_mut(&(key.window, member.element))
+                    {
+                        match disposition {
+                            GestureDisposition::Accepted => pan.accept_stream(key),
+                            GestureDisposition::Rejected | GestureDisposition::Cancelled => {
+                                pan.reject_stream(key)
+                            }
+                            GestureDisposition::Pending => {}
+                        }
+                    }
+                }
                 (Recognizer::Drag(drag), GestureDisposition::Accepted) => drag.accept(),
                 (
                     Recognizer::Drag(drag),
@@ -298,6 +404,11 @@ impl WidgetTree {
         let entries = self.input.gesture_arena.cancel(key);
         self.apply_pan_zoom_entries(key, &entries, false);
         self.input.active_pan_zoom.remove(&key);
+        self.prune_shared_pans();
         self.remove_scale_recognizers_when_idle();
+    }
+
+    pub(super) fn prune_shared_pans(&mut self) {
+        self.input.shared_pans.retain(|_, pan| pan.is_tracking());
     }
 }

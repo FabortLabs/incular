@@ -897,6 +897,7 @@ impl WidgetTree {
                 yields_taps: inner_button.is_some(),
             };
             let mut force_press_decisions = Vec::new();
+            let mut eager_pans = Vec::new();
             for candidate in elements {
                 let Some(callbacks) = self.gesture_callbacks(candidate) else {
                     continue;
@@ -904,6 +905,7 @@ impl WidgetTree {
                 if !callbacks.allows_pointer_device(kind) {
                     continue;
                 }
+                let shared_pan = primary && self.uses_shared_pan(candidate, &callbacks);
                 // A press competes only with the callbacks of its own button.
                 let mut live_tap_buttons = callbacks.on_any_tap.is_some().then_some(buttons);
                 let Some(mut callbacks) = callbacks.for_button_mask(buttons) else {
@@ -931,6 +933,27 @@ impl WidgetTree {
                     self.input
                         .deferred_single_taps
                         .retain(|tap| tap.owner != candidate);
+                }
+                if shared_pan {
+                    if buttons != 0 && buttons != incular_core::PRIMARY_POINTER_BUTTON {
+                        continue;
+                    }
+                    let member = self.input.gesture_arena.add(key, false);
+                    let raw = raw_for_shared_pan(event, device, kind, buttons, synthesized);
+                    let pan = self.shared_pan(window, candidate, &callbacks);
+                    if pan.observe_raw(raw) && pan.wants_acceptance() {
+                        eager_pans.push(member);
+                    }
+                    active.members.push(ActiveGestureMember {
+                        element: candidate,
+                        member,
+                        kind: RetainedGestureKind::SharedPan,
+                        recognizer: None,
+                        force_press: None,
+                        live_tap_buttons: None,
+                        on_cancel: callbacks.on_cancel.clone(),
+                    });
+                    continue;
                 }
                 if callbacks.has_pointer_recognizer() {
                     let member = self.input.gesture_arena.add(key, false);
@@ -1273,6 +1296,10 @@ impl WidgetTree {
             let sole_press = active.members.len() == 1 && !active.yields_taps && !nested_scroll;
             self.input.active_gestures.insert(key, active);
             self.input.pointer_captures.insert(key, element);
+            for member in eager_pans {
+                let entries = self.input.gesture_arena.accept(key, member);
+                self.apply_arena_entries(key, entries);
+            }
             // A force press can resolve on the press itself: a press already
             // past the start pressure claims the arena (Flutter `handleEvent`
             // for the down event).
@@ -1390,6 +1417,20 @@ impl WidgetTree {
                             | GestureDecision::Cancelled => {}
                         }
                     }
+                    RetainedGestureKind::SharedPan => {
+                        if matches!(
+                            disposition, GestureDisposition::Rejected | GestureDisposition::Cancelled
+                        ) {
+                            continue;
+                        }
+                        let raw = raw_for_shared_pan(event, device, kind, buttons, synthesized);
+                        if let Some(pan) = self.input.shared_pans.get_mut(&(window, candidate.element))
+                            && pan.observe_raw(raw)
+                            && pan.wants_acceptance()
+                        {
+                            accepts.push(PendingAccept::SharedPan(candidate.member));
+                        }
+                    }
                     RetainedGestureKind::ForcePress => {
                         let Some(force_press) = candidate.force_press.as_mut() else {
                             continue;
@@ -1423,7 +1464,7 @@ impl WidgetTree {
                         // this pending scale member. Do not let its contact
                         // restart a previously won scale before that loss.
                         if disposition == GestureDisposition::Pending
-                            && matches!(accepts.first(), Some(PendingAccept::Pointer(..)))
+                            && matches!(accepts.first(), Some(PendingAccept::Pointer(..) | PendingAccept::SharedPan(..)))
                             && !dispositions.iter().any(|entry| {
                                 entry.disposition == GestureDisposition::Accepted
                             })
@@ -1479,6 +1520,10 @@ impl WidgetTree {
                     {
                         callbacks.push((member, action));
                     }
+                }
+                PendingAccept::SharedPan(member) => {
+                    let entries = self.input.gesture_arena.accept(key, member);
+                    self.apply_arena_entries(key, entries);
                 }
                 PendingAccept::Scale(scale_element, observed) => {
                     if let Some(details) = self.accept_scale(key.window, scale_element, observed) {
@@ -2169,7 +2214,7 @@ impl WidgetTree {
                 .recognizer
                 .as_ref()
                 .is_some_and(|recognizer| accept_tap || recognizer.can_accept_on_press()),
-            RetainedGestureKind::Scale => true,
+            RetainedGestureKind::Scale | RetainedGestureKind::SharedPan => true,
             // The sole member wins at the arena close; a force press that
             // already claimed the arena on the press needs no second accept.
             RetainedGestureKind::ForcePress => {
@@ -2211,6 +2256,7 @@ impl WidgetTree {
                     self.dispatch_gesture_action(key, member, action);
                 }
             }
+            RetainedGestureKind::SharedPan => {} // accepted by apply_arena_entries
             RetainedGestureKind::Scale => {
                 // Flutter `ScaleGestureRecognizer.acceptGesture` reports
                 // only `onStart` when the arena resolves at the press; the
@@ -2269,19 +2315,21 @@ impl WidgetTree {
         }
         if let Some(active) = self.input.active_gestures.get_mut(&key) {
             for entry in entries {
-                if !matches!(
-                    entry.disposition,
-                    GestureDisposition::Rejected | GestureDisposition::Cancelled
-                ) {
+                let Some(candidate) = active.members.iter_mut()
+                    .find(|candidate| candidate.member == entry.member)
+                else { continue; };
+                if candidate.kind == RetainedGestureKind::SharedPan
+                    && let Some(pan) = self.input.shared_pans.get_mut(&(key.window, candidate.element))
+                {
+                    match entry.disposition {
+                        GestureDisposition::Accepted => pan.accept_stream(key),
+                        GestureDisposition::Rejected | GestureDisposition::Cancelled => pan.reject_stream(key),
+                        GestureDisposition::Pending => {}
+                    }
+                }
+                if !matches!(entry.disposition, GestureDisposition::Rejected | GestureDisposition::Cancelled) {
                     continue;
                 }
-                let Some(candidate) = active
-                    .members
-                    .iter_mut()
-                    .find(|candidate| candidate.member == entry.member)
-                else {
-                    continue;
-                };
                 // Flutter `rejectGesture`: a tap that reported `onTapDown`
                 // reports `onTapCancel`.
                 if let Some(recognizer) = candidate.recognizer.as_mut() {
@@ -2750,6 +2798,7 @@ impl WidgetTree {
         }
         self.input.active_gestures.remove(&key);
         self.input.pointer_captures.remove(&key);
+        self.prune_shared_pans();
         self.remove_scale_recognizers_when_idle();
     }
 
@@ -4469,8 +4518,27 @@ fn adjust_for_scroll_start_threshold(
     }
 }
 
+fn raw_for_shared_pan(
+    event: PointerEvent,
+    device: u64,
+    kind: crate::raw_input::PointerDeviceKind,
+    buttons: u32,
+    synthesized: bool,
+) -> crate::raw_input::RawPointerEvent {
+    // The legacy retained ingress does not carry buttons. A zero mask
+    // there means an implicit primary contact rather than a chord change.
+    let buttons = if buttons == 0 { incular_core::PRIMARY_POINTER_BUTTON } else { buttons };
+    crate::raw_input::RawPointerEvent {
+        synthesized,
+        ..crate::raw_input::RawPointerEvent::new(
+            event.pointer, device, kind, buttons, event.position, event.phase, event.time,
+        )
+    }
+}
+
 /// A recognizer claim gathered while routing one pointer event.
 enum PendingAccept {
+    SharedPan(GestureArenaMember),
     Pointer(GestureArenaMember, GestureAction),
     /// The scale passed slop or an accepted scale is claiming new contacts.
     Scale(ElementId, Option<incular_gestures::ScaleUpdateDetails>),
