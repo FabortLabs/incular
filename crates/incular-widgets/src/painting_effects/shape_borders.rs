@@ -288,7 +288,7 @@ impl ShapeBorder for BorderComposition {
     }
 }
 
-fn deflate_border(rect: Rect, insets: EdgeInsets) -> Rect {
+pub(super) fn deflate_border(rect: Rect, insets: EdgeInsets) -> Rect {
     Rect::from_origin_size(
         Offset::new(rect.origin.x + insets.left, rect.origin.y + insets.top),
         Size::new(

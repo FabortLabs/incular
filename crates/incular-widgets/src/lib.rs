@@ -325,7 +325,7 @@ pub use overscroll_indicator::{
 };
 pub use painting_effects::{
     BeveledRectangleBorder, BlurStyle, Border, BorderComposition, BorderDirectional, BorderRadius,
-    BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder,
+    BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxBorderLayer, BoxBorderStack,
     BoxDecoration, BoxLinearGradient, BoxRadialGradient, BoxShadow, BoxShape, BoxSweepGradient,
     CircleBorder, ClipRSuperellipse, CompoundBorder, ContinuousRectangleBorder, CustomPainter,
     CustomPainterSemantics, DecoratedShapeBox, DecorationImage, DecorationPosition, GridPaper,

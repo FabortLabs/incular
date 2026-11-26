@@ -2096,3 +2096,5 @@ packages/flutter/test/painting/border_radius_test.dart	10	BorderRadius control t
 packages/flutter/test/painting/border_radius_test.dart	185	BorderRadiusDirectional control test	paired-match	upstream-edge-insets.md#corner-radius-factories-and-signed-arithmetic
 packages/flutter/test/painting/border_radius_test.dart	662	BorderRadius copyWith, merge, ==, hashCode basics	paired-match	upstream-edge-insets.md#corner-radius-factories-and-signed-arithmetic
 packages/flutter/test/painting/border_radius_test.dart	688	BorderRadiusGeometry factories	paired-match	upstream-edge-insets.md#corner-radius-factories-and-signed-arithmetic
+packages/flutter/test/painting/shape_border_test.dart	86	Compound borders	paired-match	upstream-edge-insets.md#compound-physical-and-directional-borders
+packages/flutter/test/painting/shape_border_test.dart	153	Compound borders	paired-match	upstream-edge-insets.md#compound-physical-and-directional-borders

@@ -279,7 +279,7 @@ pub mod prelude {
         AuxiliaryViewOutcome, AuxiliaryViewRequest, BackButtonDispatcher, BackButtonListener,
         BackCallbackSubscription, BackHandlerResult, BackRegistration, Banner, BannerLocation,
         Baseline, BasicRouterDelegate, Border, BorderComposition, BorderDirectional, BorderRadius,
-        BorderRadiusDirectional, BorderSide, BorderStyle, BoxBorder, BoxDecoration, BoxFit,
+        BorderRadiusDirectional, BorderSide, BorderStyle, BoxBorder, BoxBorderLayer, BoxBorderStack, BoxDecoration, BoxFit,
         BoxLinearGradient, BoxShadow, BoxShape, Builder, CacheExtentStyle, CallbackShortcuts,
         Center, ChangeReportingBehavior, CheckedModeBanner, ChildBackButtonDispatcher,
         ChildVicinity, ClipOval, ClipPath, ClipRRect, ClipRSuperellipse, ClipRect, ClipShape,

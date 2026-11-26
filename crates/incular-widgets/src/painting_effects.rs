@@ -1,6 +1,8 @@
 //! Painting, image, masking, clipping, and compositor effect widgets.
 
 mod box_painter;
+mod box_border_stack;
+pub use box_border_stack::{BoxBorderLayer, BoxBorderStack};
 mod custom_paint;
 
 pub use custom_paint::PainterDelegate;

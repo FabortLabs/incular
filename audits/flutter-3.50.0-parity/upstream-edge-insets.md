@@ -190,3 +190,18 @@ remainder operate on each stored corner. They do not normalize values
 to zero, substitute a circular radius, or resolve the logical part
 of a mixed radius before applying arithmetic. Four exact Flutter
 and 30 focused Rust cases passed.
+
+### Compound physical and directional borders
+
+Both `painting/shape_border_test.dart` registrations named `Compound borders`
+(lines 86 and 153) passed against the pinned revision. The native
+`flutter350_box_border_stack` test mirrors insets, merge grouping, scaling to
+three and zero, all four interpolation samples, value equality, LTR/RTL edge
+retention, and the diagnostic order. The two layers consume 2 logical pixels
+and paint centers at 0.5 and 1.5; three layers consume 3 and add a third
+center at 2.5. The right operand paints first but is printed last, and a
+scaled-to-zero layer produces no hairline. Additional native controls check
+asymmetric mixed insets and which mixed pairs can merge. The native path
+recording uses rectangular stroke paths where Flutter records drawRect;
+these tests verify equivalent stroke centerlines and color, not raster
+goldens or Dart class identity.
