@@ -301,3 +301,17 @@ overflowing viewport clips by default and does not with `Clip::None`;
 neither an empty nor a fitting viewport paints a redundant clip layer.
 It does not expose Flutter's per-sliver approximate paint-clip query,
 which stays open.
+
+## Concurrent sliver animation clocks
+
+A separate authored comparison, `concurrent_sliver_animations_test.dart`,
+ran three simultaneous 200 ms opacity transitions in the viewport, a
+main-axis sliver group, and a cross-axis group. In each arrangement Flutter
+samples 0.6/0.7/0.8 at the shared midpoint and 0.2/0.4/0.6 at the endpoint;
+each completion fires once. Incular's
+`flutter350_concurrent_sliver_animations` asserts the same composited alpha
+samples and completion counts. A short-circuiting tick previously let the
+first fading sliver advance while the others were still opaque. All
+siblings now receive each tick, and cross-axis lanes preserve compatible
+animation state when rebuilt. Authored comparisons do not change the
+upstream registration count.

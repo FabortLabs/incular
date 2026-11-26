@@ -1,3 +1,4 @@
+use super::sliver_descriptors::CrossAxisGroupRenderSliver;
 use super::sliver_fade::AnimatedOpacityRenderSliver;
 use super::*;
 use incular_core::finite_non_negative;
@@ -3091,9 +3092,11 @@ impl RenderSliver for SequenceRenderSliver {
     }
 
     fn tick(&mut self, now: Instant) -> bool {
-        self.children
-            .iter()
-            .any(|child| child.borrow_mut().tick(now))
+        // Every sibling observes this frame, even when an earlier sliver
+        // has already changed. A short-circuiting any() starves later tickers.
+        self.children.iter().fold(false, |changed, child| {
+            child.borrow_mut().tick(now) | changed
+        })
     }
 
     fn is_animating(&self) -> bool {
@@ -3177,6 +3180,17 @@ pub(crate) fn transfer_retained_sliver_state(
                 preserve_anchor,
             );
         }
+        return;
+    }
+    if let (Some(fresh), Some(retained)) = (
+        fresh
+            .as_any_mut()
+            .and_then(|any| any.downcast_mut::<CrossAxisGroupRenderSliver>()),
+        retained
+            .as_any_mut()
+            .and_then(|any| any.downcast_mut::<CrossAxisGroupRenderSliver>()),
+    ) {
+        fresh.adopt_compatible_state(retained, probes, preserve_anchor);
         return;
     }
     transfer_single_inner_sliver_state::<PaddingRenderSliver>(

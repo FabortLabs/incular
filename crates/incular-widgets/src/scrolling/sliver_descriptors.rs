@@ -1574,7 +1574,7 @@ impl Sliver for SliverCrossAxisGroup {
 /// Lays out several slivers against the same main-axis scroll position while
 /// dividing the cross axis into flex lanes. Each lane has independent sliver
 /// geometry, but the group consumes the maximum lane scroll extent.
-struct CrossAxisGroupRenderSliver {
+pub(super) struct CrossAxisGroupRenderSliver {
     children: Vec<(Box<dyn RenderSliver>, usize)>,
 }
 
@@ -1585,6 +1585,22 @@ impl CrossAxisGroupRenderSliver {
                 .into_iter()
                 .map(|(child, flex)| (child, flex.max(1)))
                 .collect(),
+        }
+    }
+
+    pub(super) fn adopt_compatible_state(
+        &mut self,
+        previous: &mut Self,
+        probes: &mut u64,
+        preserve_anchor: bool,
+    ) {
+        for ((fresh, _), (retained, _)) in self.children.iter_mut().zip(&mut previous.children) {
+            super::layout::transfer_retained_sliver_state(
+                &mut **fresh,
+                &mut **retained,
+                probes,
+                preserve_anchor,
+            );
         }
     }
 }
@@ -1669,7 +1685,14 @@ impl RenderSliver for CrossAxisGroupRenderSliver {
     }
 
     fn tick(&mut self, now: Instant) -> bool {
-        self.children.iter_mut().any(|(sliver, _)| sliver.tick(now))
+        // Each lane advances independently in the same frame.
+        self.children
+            .iter_mut()
+            .fold(false, |changed, (sliver, _)| sliver.tick(now) | changed)
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
     }
 
     fn is_animating(&self) -> bool {
