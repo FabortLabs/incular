@@ -174,7 +174,8 @@ fn configure(
         TextInputType::Phone => "tel",
         TextInputType::Email => "email",
         TextInputType::Url => "url",
-        TextInputType::Text | TextInputType::Multiline | TextInputType::Password => "text",
+        TextInputType::Text | TextInputType::Multiline | TextInputType::Password
+        | TextInputType::Name | TextInputType::StreetAddress | TextInputType::DateTime => "text",
     };
     let enter = match configuration.action {
         TextInputAction::Done => "done",

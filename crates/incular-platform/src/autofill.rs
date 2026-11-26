@@ -24,6 +24,131 @@ impl AutofillContextAction {
     }
 }
 
+/// The iOS/macOS native keyboard policy differs from the browser and
+/// other hosts. The web always uses [Self::Other].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AutofillKeyboardPlatform {
+    Apple,
+    Other,
+}
+
+impl AutofillKeyboardPlatform {
+    #[must_use]
+    pub const fn current() -> Self {
+        if cfg!(any(target_os = "ios", target_os = "macos")) {
+            Self::Apple
+        } else {
+            Self::Other
+        }
+    }
+}
+
+/// Flutter's EditableText keyboard inference. Only the first hint can
+/// affect it, and explicitly configured keyboards take precedence in
+/// the caller.
+#[must_use]
+pub fn infer_autofill_keyboard(
+    platform: AutofillKeyboardPlatform,
+    first_hint: Option<&str>,
+    multiline: bool,
+) -> crate::TextInputType {
+    use crate::TextInputType::{
+        self, DateTime, Email, Multiline, Name, Phone, StreetAddress, Text, Url,
+    };
+    let Some(hint) = first_hint else {
+        return if multiline { Multiline } else { Text };
+    };
+    if platform == AutofillKeyboardPlatform::Apple {
+        let apple = match hint {
+            "addressCity"
+            | "addressCityAndState"
+            | "addressState"
+            | "countryName"
+            | "familyName"
+            | "fullStreetAddress"
+            | "givenName"
+            | "jobTitle"
+            | "location"
+            | "middleName"
+            | "name"
+            | "namePrefix"
+            | "nameSuffix"
+            | "nickname"
+            | "postalCode"
+            | "streetAddressLine1"
+            | "streetAddressLine2"
+            | "sublocality"
+            | "telephoneNumber" => Some(Name),
+            "creditCardNumber" | "oneTimeCode" => Some(TextInputType::NUMBER),
+            "email" => Some(Email),
+            "emailOTPCode" | "newPassword" | "newUsername" | "organizationName" | "password"
+            | "username" => Some(Text),
+            "url" => Some(Url),
+            _ => None,
+        };
+        if let Some(apple) = apple {
+            return apple;
+        }
+    }
+    if multiline {
+        return Multiline;
+    }
+    match hint {
+        "addressCity"
+        | "addressCityAndState"
+        | "addressState"
+        | "fullStreetAddress"
+        | "location"
+        | "postalAddress"
+        | "postalAddressExtended"
+        | "streetAddressLevel1"
+        | "streetAddressLevel2"
+        | "streetAddressLevel3"
+        | "streetAddressLevel4"
+        | "streetAddressLine1"
+        | "streetAddressLine2"
+        | "streetAddressLine3"
+        | "sublocality" => StreetAddress,
+        "birthday"
+        | "birthdayDay"
+        | "birthdayMonth"
+        | "birthdayYear"
+        | "creditCardExpirationDate"
+        | "creditCardExpirationDay"
+        | "creditCardExpirationMonth"
+        | "creditCardExpirationYear" => DateTime,
+        "countryCode"
+        | "creditCardNumber"
+        | "creditCardSecurityCode"
+        | "postalAddressExtendedPostalCode"
+        | "postalCode" => TextInputType::NUMBER,
+        "creditCardFamilyName"
+        | "creditCardGivenName"
+        | "creditCardMiddleName"
+        | "creditCardName"
+        | "familyName"
+        | "givenName"
+        | "middleInitial"
+        | "middleName"
+        | "name"
+        | "namePrefix"
+        | "nameSuffix" => Name,
+        "email" => Email,
+        "impp" | "url" => Url,
+        "telephoneNumber"
+        | "telephoneNumberAreaCode"
+        | "telephoneNumberCountryCode"
+        | "telephoneNumberDevice"
+        | "telephoneNumberExtension"
+        | "telephoneNumberLocal"
+        | "telephoneNumberLocalPrefix"
+        | "telephoneNumberLocalSuffix"
+        | "telephoneNumberNational" => Phone,
+        "transactionAmount" => TextInputType::number_with_options(false, true),
+        _ => Text,
+    }
+}
+
 /// The Flutter wire affinity of a UTF-16 text selection.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum AutofillSelectionAffinity {

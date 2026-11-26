@@ -1626,7 +1626,7 @@ impl WidgetTree {
                 .widget
                 .semantic_properties()
                 .text_input_type
-                .unwrap_or_default(),
+                .unwrap_or(if spec.multiline { TextInputTypeHint::Multiline } else { TextInputTypeHint::Text }),
             input_action: element
                 .widget
                 .semantic_properties()

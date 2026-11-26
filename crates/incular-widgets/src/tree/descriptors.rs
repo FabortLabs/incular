@@ -1060,7 +1060,7 @@ pub struct EditableText {
     show_cursor: Option<bool>,
     cursor_color: Color,
     selection_color: Color,
-    input_type: TextInputTypeHint,
+    input_type: Option<TextInputTypeHint>,
     input_action: TextInputActionHint,
     text_direction: Option<incular_config::TextDirection>,
     paragraph_layout: bool,
@@ -1120,7 +1120,7 @@ impl EditableText {
             show_cursor: None,
             cursor_color: Color::WHITE,
             selection_color: Color::rgba(72, 120, 220, 150),
-            input_type: TextInputTypeHint::Text,
+            input_type: None,
             input_action: TextInputActionHint::Unspecified,
             text_direction: None,
             paragraph_layout: false,
@@ -1440,7 +1440,7 @@ impl EditableText {
     /// runtime still validates and owns the committed text value.
     #[must_use]
     pub fn input_type(mut self, input_type: TextInputTypeHint) -> Self {
-        self.input_type = input_type;
+        self.input_type = Some(input_type);
         self
     }
 
@@ -1695,7 +1695,12 @@ fn compose_edit_transform(
 impl From<EditableText> for Widget {
     fn from(value: EditableText) -> Self {
         // Numeric policy is already normalized by the setters above.
-        let (input_type, input_action) = (value.input_type, value.input_action);
+        use incular_platform::autofill::{AutofillKeyboardPlatform, infer_autofill_keyboard};
+        let first_hint = value.autofill_hints.as_ref().and_then(|hints| hints.first()).map(String::as_str);
+        let input_type = value.input_type.unwrap_or_else(|| {
+            infer_autofill_keyboard(AutofillKeyboardPlatform::current(), first_hint, value.max_lines != Some(1))
+        });
+        let input_action = value.input_action;
         let context_menu_builder = value.context_menu_builder.clone();
         let selection_handles_builder = value.selection_handles_builder.clone();
         let edit_transform = compose_edit_transform(

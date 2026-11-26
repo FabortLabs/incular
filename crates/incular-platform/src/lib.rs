@@ -565,9 +565,29 @@ pub enum TextInputType {
     Email,
     Url,
     Password,
+    Name,
+    StreetAddress,
+    DateTime,
 }
 
 impl TextInputType {
+    /// Flutter's wire name for this keyboard policy.
+    #[must_use]
+    pub const fn flutter_name(self) -> &'static str {
+        match self {
+            Self::Text => "TextInputType.text",
+            Self::Multiline => "TextInputType.multiline",
+            Self::Number { .. } => "TextInputType.number",
+            Self::Phone => "TextInputType.phone",
+            Self::Email => "TextInputType.emailAddress",
+            Self::Url => "TextInputType.url",
+            Self::Password => "TextInputType.visiblePassword",
+            Self::Name => "TextInputType.name",
+            Self::StreetAddress => "TextInputType.address",
+            Self::DateTime => "TextInputType.datetime",
+        }
+    }
+
     /// Flutter's `TextInputType.number`: integers only, no sign.
     pub const NUMBER: Self = Self::Number {
         signed: false,

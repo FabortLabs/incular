@@ -1668,3 +1668,9 @@ packages/flutter/test/widgets/autofill_group_test.dart	14	AutofillGroup has the 
 packages/flutter/test/widgets/autofill_group_test.dart	53	new clients can be added & removed to a scope	paired-match	upstream-autofill-groups.md
 packages/flutter/test/widgets/autofill_group_test.dart	107	AutofillGroup has the right clients after reparenting	paired-match	upstream-autofill-groups.md
 packages/flutter/test/widgets/autofill_group_test.dart	174	disposing AutofillGroups	paired-match	upstream-autofill-groups.md
+packages/flutter/test/widgets/editable_text_test.dart	972	infer keyboard types from autofillHints: ios	partial-match	upstream-autofill-keyboard-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	1014	infer keyboard types from autofillHints: non-ios	paired-match	upstream-autofill-keyboard-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	1047	inferred keyboard types can be overridden: ios	partial-match	upstream-autofill-keyboard-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	1088	inferred keyboard types can be overridden: non-ios	paired-match	upstream-autofill-keyboard-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	1122	infer keyboard types from autofillHints emailOTPCode: ios	partial-match	upstream-autofill-keyboard-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	1162	infer keyboard types from autofillHints emailOTPCode: non-ios	paired-match	upstream-autofill-keyboard-defaults.md

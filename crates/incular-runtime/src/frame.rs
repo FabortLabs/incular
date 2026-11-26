@@ -48,7 +48,7 @@ use incular_widgets::internal::{
 };
 use incular_widgets::{
     FocusHighlightManager, FocusHighlightMode, FocusNode, KeyEventResult, TextInputActionHint,
-    TextInputTypeHint, Widget,
+    Widget,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -2529,18 +2529,7 @@ impl Runtime {
         };
 
         let client = TextInputClientId::new(snapshot.client_id);
-        let input_type = match snapshot.input_type {
-            TextInputTypeHint::Text if snapshot.multiline => TextInputType::Multiline,
-            TextInputTypeHint::Text => TextInputType::Text,
-            TextInputTypeHint::Multiline => TextInputType::Multiline,
-            TextInputTypeHint::Number { signed, decimal } => {
-                TextInputType::Number { signed, decimal }
-            }
-            TextInputTypeHint::Phone => TextInputType::Phone,
-            TextInputTypeHint::Email => TextInputType::Email,
-            TextInputTypeHint::Url => TextInputType::Url,
-            TextInputTypeHint::Password => TextInputType::Password,
-        };
+        let input_type = snapshot.input_type;
         let action = match snapshot.input_action {
             TextInputActionHint::Unspecified => {
                 if snapshot.multiline {

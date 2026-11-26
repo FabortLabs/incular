@@ -120,10 +120,13 @@ fn input_type(configuration: &TextInputConfiguration) -> jint {
     const CLASS_TEXT: jint = 0x1;
     const CLASS_NUMBER: jint = 0x2;
     const CLASS_PHONE: jint = 0x3;
+    const CLASS_DATETIME: jint = 0x4;
     const FLAG_NUMBER_SIGNED: jint = 0x1000;
     const FLAG_NUMBER_DECIMAL: jint = 0x2000;
     const VARIATION_URI: jint = 0x10;
     const VARIATION_EMAIL_ADDRESS: jint = 0x20;
+    const VARIATION_PERSON_NAME: jint = 0x60;
+    const VARIATION_POSTAL_ADDRESS: jint = 0x70;
     const VARIATION_PASSWORD: jint = 0x80;
     const VARIATION_VISIBLE_PASSWORD: jint = 0x90;
     const FLAG_CAP_CHARACTERS: jint = 0x1000;
@@ -144,6 +147,9 @@ fn input_type(configuration: &TextInputConfiguration) -> jint {
             return bits;
         }
         TextInputType::Phone => return CLASS_PHONE,
+        TextInputType::DateTime => return CLASS_DATETIME,
+        TextInputType::Name => CLASS_TEXT | VARIATION_PERSON_NAME,
+        TextInputType::StreetAddress => CLASS_TEXT | VARIATION_POSTAL_ADDRESS,
         TextInputType::Email => CLASS_TEXT | VARIATION_EMAIL_ADDRESS,
         TextInputType::Url => CLASS_TEXT | VARIATION_URI,
         TextInputType::Text | TextInputType::Multiline | TextInputType::Password => CLASS_TEXT,

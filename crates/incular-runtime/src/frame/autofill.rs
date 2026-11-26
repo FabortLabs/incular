@@ -231,17 +231,9 @@ fn editor_wire(
 }
 
 fn field_input(field: &TextFieldInputSnapshot, view_id: &Value) -> Map<String, Value> {
-    let (name, signed, decimal, password) = match field.input_type {
-        TextInputTypeHint::Text if field.multiline => ("multiline", None, None, None),
-        TextInputTypeHint::Text => ("text", None, None, None),
-        TextInputTypeHint::Multiline => ("multiline", None, None, None),
-        TextInputTypeHint::Number { signed, decimal } => {
-            ("number", Some(signed), Some(decimal), None)
-        }
-        TextInputTypeHint::Phone => ("phone", None, None, None),
-        TextInputTypeHint::Email => ("emailAddress", None, None, None),
-        TextInputTypeHint::Url => ("url", None, None, None),
-        TextInputTypeHint::Password => ("visiblePassword", None, None, None::<bool>),
+    let (signed, decimal) = match field.input_type {
+        TextInputTypeHint::Number { signed, decimal } => (Some(signed), Some(decimal)),
+        _ => (None, None),
     };
     let action = match field.input_action {
         TextInputActionHint::Unspecified if field.multiline => "newline",
@@ -267,7 +259,7 @@ fn field_input(field: &TextFieldInputSnapshot, view_id: &Value) -> Map<String, V
     let smart = if field.obscure_text { "0" } else { "1" };
     json!({
         "viewId": view_id,
-        "inputType":{"name":format!("TextInputType.{name}"),"signed":signed,"decimal":decimal,"password":password},
+        "inputType":{"name":field.input_type.flutter_name(),"signed":signed,"decimal":decimal,"password":Value::Null},
         "readOnly":field.read_only, "obscureText":field.obscure_text,
         "autocorrect":field.traits.autocorrect, "smartDashesType":smart, "smartQuotesType":smart,
         "enableSuggestions":field.traits.enable_suggestions,

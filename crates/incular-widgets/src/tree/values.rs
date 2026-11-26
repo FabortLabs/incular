@@ -38,38 +38,8 @@ pub struct RenderObjectId(pub(crate) ArenaId);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ActionId(pub u64);
 
-/// Retained text-input information exposed to the runtime/native boundary.
-/// The controller remains the source of truth; this value is a frame-local
-/// snapshot and contains no native handles.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub enum TextInputTypeHint {
-    #[default]
-    Text,
-    Multiline,
-    /// A numeric keyboard; `signed` allows a minus sign and `decimal` a decimal point.
-    Number {
-        signed: bool,
-        decimal: bool,
-    },
-    Phone,
-    Email,
-    Url,
-    Password,
-}
-
-impl TextInputTypeHint {
-    /// An integer keyboard without a sign.
-    pub const NUMBER: Self = Self::Number {
-        signed: false,
-        decimal: false,
-    };
-
-    /// A numeric keyboard with optional sign and decimal point.
-    #[must_use]
-    pub const fn number_with_options(signed: bool, decimal: bool) -> Self {
-        Self::Number { signed, decimal }
-    }
-}
+/// A renderer-neutral keyboard policy from widget build to the platform.
+pub type TextInputTypeHint = incular_platform::TextInputType;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum TextInputActionHint {
