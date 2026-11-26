@@ -35,6 +35,13 @@ pub trait ShapeBorder {
         self.outer_path(rect)
     }
 
+    /// Tests the outer shape. Implementations can override this to avoid
+    /// constructing a path for simple geometry.
+    fn hit_test(&self, rect: Rect, position: Offset, direction: Option<TextDirection>) -> bool {
+        self.outer_path_with_direction(rect, direction)
+            .contains(position, FillRule::NonZero)
+    }
+
     /// Flutter `getInnerPath`: the outline inset by the stroke's inner
     /// width.
     fn inner_path(&self, rect: Rect) -> Path;
@@ -108,6 +115,10 @@ impl ShapeBorder for CompoundBorder {
 
     fn outer_path_with_direction(&self, rect: Rect, direction: Option<TextDirection>) -> Path {
         self.borders[0].outer_path_with_direction(rect, direction)
+    }
+
+    fn hit_test(&self, rect: Rect, position: Offset, direction: Option<TextDirection>) -> bool {
+        self.borders[0].hit_test(rect, position, direction)
     }
 
     fn inner_path(&self, rect: Rect) -> Path {

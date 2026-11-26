@@ -2254,3 +2254,8 @@ packages/flutter/test/painting/matrix_utils_test.dart	93	cylindricalProjectionTr
 packages/flutter/test/painting/matrix_utils_test.dart	119	forceToPoint	paired-match	upstream-matrix-utils.md
 packages/flutter/test/painting/matrix_utils_test.dart	139	transformRect with no perspective (w = 1)	paired-match	upstream-matrix-utils.md
 packages/flutter/test/painting/matrix_utils_test.dart	158	transformRect with perspective (w != 1)	paired-match	upstream-matrix-utils.md
+packages/flutter/test/painting/shape_decoration_test.dart	102	ShapeBorder.hitTest defaults to getOuterPath	paired-match	upstream-shape-decoration-hit-and-clip.md
+packages/flutter/test/painting/shape_decoration_test.dart	112	ShapeDecoration.hitTest delegates to ShapeBorder.hitTest	paired-match	upstream-shape-decoration-hit-and-clip.md
+packages/flutter/test/painting/shape_decoration_test.dart	177	_CompoundBorder.hitTest preserves child hitTest optimizations	paired-match	upstream-shape-decoration-hit-and-clip.md
+packages/flutter/test/painting/shape_decoration_test.dart	272	ShapeDecoration.getClipPath	paired-match	upstream-shape-decoration-hit-and-clip.md
+packages/flutter/test/painting/shape_decoration_test.dart	282	ShapeDecoration.getClipPath for oval	paired-match	upstream-shape-decoration-hit-and-clip.md

@@ -66,6 +66,26 @@ impl ShapeDecoration {
         self
     }
 
+    /// Tests the shape in local coordinates rather than its bounding box.
+    #[must_use]
+    pub fn hit_test(&self, size: Size, position: Offset, direction: Option<TextDirection>) -> bool {
+        self.shape.hit_test(
+            Rect::from_origin_size(Offset::ZERO, size),
+            position,
+            direction,
+        )
+    }
+
+    /// Returns the outer outline used by a decoration clip.
+    #[must_use]
+    pub fn get_clip_path(
+        &self,
+        rect: Rect,
+        direction: Option<TextDirection>,
+    ) -> incular_rendering::Path {
+        self.shape.outer_path_with_direction(rect, direction)
+    }
+
     /// Flutter `BoxShadow.toPaint`'s path: the outline of the shape in
     /// `rect` shifted by the shadow's offset and inflated by its spread.
     #[must_use]
