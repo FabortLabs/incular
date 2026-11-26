@@ -330,7 +330,7 @@ pub use painting_effects::{
     CircleBorder, ClipRSuperellipse, CompoundBorder, ContinuousRectangleBorder, CustomPainter,
     CustomPainterSemantics, DecoratedShapeBox, DecorationImage, DecorationPosition, GridPaper,
     EllipticalRoundedRect, ImageFiltered, ImageIcon, LinearBorder, LinearBorderEdge, OvalBorder,
-    PhysicalModel, PhysicalShape, Radius, RawImage, RoundedRectangleBorder, RoundedSuperellipseBorder,
+    PhysicalModel, PhysicalShape, Radius, RawImage, RoundedCircleOutline, RoundedRectangleBorder, RoundedSuperellipseBorder,
     SemanticsBuilder, ShapeBorder, ShapeBorderClipper, ShapeDecoration, SnapshotWidget,
     StadiumBorder, StarBorder, StarBorderError, TableBorder, TileMode,
 };

@@ -336,7 +336,7 @@ pub mod prelude {
         ReorderableDelayedDragStartListener, ReorderableDragStartListener, ReorderableList,
         RepaintBoundary, RepeatMode, RepeatingAnimationBuilder, RepeatingAnimationWidgetBuilder,
         RootBackButtonDispatcher, RootRestorationScope, RotatedBox, RotationTransition,
-        RoundedRectangleBorder, RoundedSuperellipseBorder, RouteInformation,
+        RoundedCircleOutline, RoundedRectangleBorder, RoundedSuperellipseBorder, RouteInformation,
         RouteInformationListener, RouteInformationParser, RouteInformationProvider,
         RouteInformationReportingType, RouteInformationSubscription, Router, RouterConfig,
         RouterData, RouterDelegate, RouterDelegateListener, RouterDelegateSubscription,

@@ -94,3 +94,15 @@ same policy as BoxBorder. Pinned Flutter raster samples for 5×4, 6×6,
 path's coverage. An explicit zero-width solid side is still a hairline;
 an absent side draws nothing. No Incular GPU readback is claimed.
 Four originals, one authored raster test, and 24 focused Rust cases passed.
+
+## Rounded rectangle to circle morph
+
+The pinned `rounded_rectangle_border_test.dart:84` case pairs. A
+100×20 rounded rectangle includes the centerline sample at x=30;
+a fitted circle does not. The 10% and 90% transitions produce the
+expected coverage and both keep x=50. The nested and reversed blends
+pass the full set of point probes. The 10.0%, 20.0%, and 82.0%
+diagnostic strings match for the default outline, and directly and
+indirectly interpolated halfway values compare and hash identically.
+The native shape also retains eccentricity and paints the interpolated
+side width. One exact Flutter and 24 targeted Rust cases passed.

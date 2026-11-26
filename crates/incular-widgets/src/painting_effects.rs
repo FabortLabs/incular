@@ -8,6 +8,8 @@ mod decoration;
 mod geometry;
 mod images;
 mod layers;
+mod rounded_circle_outline;
+pub use rounded_circle_outline::RoundedCircleOutline;
 mod shape_borders;
 mod shape_decoration;
 mod table_border;
