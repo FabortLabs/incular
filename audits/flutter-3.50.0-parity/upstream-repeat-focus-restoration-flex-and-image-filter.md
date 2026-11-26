@@ -142,3 +142,17 @@ test checks both the next-frame and timestamped entry points and shows an
 already-running controller progressing from .25 to .5 after rejection.
 `None`, not zero, is the unbounded repeat request. The five native finite
 and indefinite repeat controls also passed.
+
+
+## Restoration disposition recheck
+
+On Nov 26 both original pinned cases, `restoration_bucket_test.dart:172`
+and `restoration_test.dart:238`, passed again, along with the seven
+`flutter350_restoration_dirty_flush_parity` cases. :238 is a full
+behavioral pair: the boundary is the start of observable persistence,
+with zero saves before a queued frame, exactly one at its end, and an
+immediate save while idle. The format and engine IPC are not compared.
+:172 matches the original empty-bucket dirty and value-save assertions;
+it stays partial because Incular does not expose Flutter's debug-owner
+metadata. The separate duplicate live-lease handoff still fails its
+retained test and is not included in either disposition.

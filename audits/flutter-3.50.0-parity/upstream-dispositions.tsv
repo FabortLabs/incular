@@ -189,7 +189,7 @@ packages/flutter/test/gestures/long_press_test.dart	365	Moving after accept does
 packages/flutter/test/gestures/long_press_test.dart	427	Buttons change before acceptance should not prevent the next long press	paired-match	upstream-current-route-aspect-and-long-press.md#current-disposition-of-button-mask-regression
 packages/flutter/test/gestures/long_press_test.dart	75	Should recognize long press with altered duration	partial-match	upstream-current-route-aspect-and-long-press.md#custom-long-press-duration
 packages/flutter/test/gestures/long_press_test.dart	91	Up cancels long press	partial-match	upstream-current-route-aspect-and-long-press.md#custom-long-press-duration
-packages/flutter/test/gestures/long_press_test.dart	204	Should not recognize long press with more than one buttons	partial-mismatch	upstream-current-route-aspect-and-long-press.md#chord-at-contact-start
+packages/flutter/test/gestures/long_press_test.dart	204	Should not recognize long press with more than one buttons	partial-match	upstream-current-route-aspect-and-long-press.md#chord-at-contact-start
 packages/flutter/test/gestures/long_press_test.dart	455	Should not cancel long press when buttons change after acceptance	paired-match	upstream-current-route-aspect-and-long-press.md
 packages/flutter/test/widgets/opacity_test.dart	19	Opacity	partial-match	upstream-opacity-hover-flex-notifier-futures.md
 packages/flutter/test/widgets/opacity_test.dart	152	offset is correctly handled in Opacity	partial-match	upstream-opacity-hover-flex-notifier-futures.md
@@ -290,8 +290,8 @@ packages/flutter/test/widgets/focus_traversal_test.dart	1279	Move focus to next/
 packages/flutter/test/widgets/focus_traversal_test.dart	1331	Move focus to next/previous node using lexical order.	partial-match	upstream-repeat-focus-restoration-flex-and-image-filter.md
 packages/flutter/test/widgets/focus_traversal_test.dart	3691	Descendants aren't traversable	partial-match	upstream-repeat-focus-restoration-flex-and-image-filter.md
 packages/flutter/test/services/restoration_bucket_test.dart	147	claim child with existing data	partial-match	upstream-repeat-focus-restoration-flex-and-image-filter.md
-packages/flutter/test/services/restoration_bucket_test.dart	172	claim child with no existing data	partial-mismatch	upstream-repeat-focus-restoration-flex-and-image-filter.md
-packages/flutter/test/services/restoration_test.dart	238	flushData	partial-mismatch	upstream-repeat-focus-restoration-flex-and-image-filter.md
+packages/flutter/test/services/restoration_bucket_test.dart	172	claim child with no existing data	partial-match	upstream-repeat-focus-restoration-flex-and-image-filter.md#empty-restoration-buckets-survive-a-save
+packages/flutter/test/services/restoration_test.dart	238	flushData	paired-match	upstream-repeat-focus-restoration-flex-and-image-filter.md#restoration-disposition-recheck
 packages/flutter/test/rendering/flex_test.dart	494	MainAxisAlignment.spaceBetween with RenderFlex.spacing	paired-match	upstream-repeat-focus-restoration-flex-and-image-filter.md
 packages/flutter/test/rendering/flex_test.dart	914	children with no baselines are top-aligned	partial-match	upstream-repeat-focus-restoration-flex-and-image-filter.md
 packages/flutter/test/rendering/flex_test.dart	1256	Negative RenderFlex.spacing throws an exception	paired-match	upstream-flex-retained-placement.md#negative-spacing
