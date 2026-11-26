@@ -656,3 +656,73 @@ fn updating_a_sliver_validation_result_keeps_the_same_explicit_annotation_node()
         revision = tree.semantics().revision();
     }
 }
+
+#[test]
+fn hint_and_value_merges_match_the_complete_two_pane_graph() {
+    use incular_widgets::Viewport;
+    type Annotation = fn(Semantics) -> Semantics;
+
+    let variants: [(Annotation, Annotation); 3] = [
+        (|s| s.hint("hint one"), |s| s.hint("hint two")),
+        (|s| s.value("value one"), |s| s.value("value two")),
+        (|s| s.hint("hint"), |s| s.value("value")),
+    ];
+    let tag = Viewport::use_two_pane_semantics_tag();
+    for box_annotations in [false, true] {
+        for (variant, (first, second)) in variants.into_iter().enumerate() {
+            let widgets = annotate_pair(box_annotations, first, second);
+            let tree = widgets.semantics();
+            assert_eq!(tree.roots().len(), 1);
+            let outer = tree.node(tree.root().unwrap()).unwrap();
+            assert!(!outer.state.has_implicit_scrolling);
+            assert_eq!(outer.children.len(), 1);
+            let pane = tree.node(outer.children[0]).unwrap();
+            assert!(pane.state.has_implicit_scrolling);
+            assert_eq!(pane.children.len(), 1);
+            let annotation = tree.node(pane.children[0]).unwrap();
+            assert_eq!(annotation.tags(), &[tag.clone()]);
+            assert!(outer.tags().is_empty() && pane.tags().is_empty());
+            assert!(outer.value.is_none() && pane.value.is_none());
+            assert!(outer.description.is_none() && pane.description.is_none());
+            for (_, node) in tree.iter() {
+                assert!(node.label.is_none());
+                assert!(node.actions.is_empty());
+                assert!(node.state.tooltip.is_none());
+                assert!(
+                    !node.state.hidden && !node.state.focusable && !node.state.has_enabled_state
+                );
+            }
+            match variant {
+                0 => {
+                    assert_eq!(
+                        annotation.description.as_deref(),
+                        Some("hint one\nhint two")
+                    );
+                    assert!(annotation.value.is_none());
+                    assert_eq!(annotation.state.text_direction, Some(TextDirection::Ltr));
+                    assert!(annotation.children.is_empty());
+                    assert_eq!(tree.iter().count(), 3);
+                }
+                1 => {
+                    assert!(annotation.value.is_none() && annotation.description.is_none());
+                    assert_eq!(annotation.children.len(), 2);
+                    for (&id, value) in annotation.children.iter().zip(["value one", "value two"]) {
+                        let child = tree.node(id).unwrap();
+                        assert_eq!(child.value.as_deref(), Some(value));
+                        assert_eq!(child.state.text_direction, Some(TextDirection::Ltr));
+                        assert!(child.children.is_empty() && child.tags().is_empty());
+                        assert!(child.description.is_none());
+                    }
+                    assert_eq!(tree.iter().count(), 5);
+                }
+                _ => {
+                    assert_eq!(annotation.value.as_deref(), Some("value"));
+                    assert_eq!(annotation.description.as_deref(), Some("hint"));
+                    assert_eq!(annotation.state.text_direction, Some(TextDirection::Ltr));
+                    assert!(annotation.children.is_empty());
+                    assert_eq!(tree.iter().count(), 3);
+                }
+            }
+        }
+    }
+}
