@@ -13,8 +13,7 @@ use incular_animation::{
     AnimationController, AnimationStatus, Channel, Curve, MotionValue, Transition,
 };
 use incular_config::{
-    Alignment, AlignmentDirectional, Clip, Constraints, EdgeInsets, EdgeInsetsDirectional,
-    TextDirection,
+    Alignment, AlignmentDirectional, Clip, Constraints, EdgeInsets, TextDirection,
 };
 use incular_core::{Color, Lerp, Offset, Transform as CoreTransform};
 use incular_text::{TextAlign, TextOverflow, TextStyle};
@@ -116,36 +115,7 @@ impl From<AlignmentDirectional> for AlignmentGeometry {
     }
 }
 
-/// Flutter `EdgeInsetsGeometry`: physical insets, or insets whose start and
-/// end sides follow the text direction.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum EdgeInsetsGeometry {
-    Physical(EdgeInsets),
-    Directional(EdgeInsetsDirectional),
-}
-
-impl EdgeInsetsGeometry {
-    /// The physical insets under `direction`.
-    #[must_use]
-    pub fn resolve(self, direction: TextDirection) -> EdgeInsets {
-        match self {
-            Self::Physical(insets) => insets,
-            Self::Directional(insets) => insets.resolve(direction),
-        }
-    }
-}
-
-impl From<EdgeInsets> for EdgeInsetsGeometry {
-    fn from(value: EdgeInsets) -> Self {
-        Self::Physical(value)
-    }
-}
-
-impl From<EdgeInsetsDirectional> for EdgeInsetsGeometry {
-    fn from(value: EdgeInsetsDirectional) -> Self {
-        Self::Directional(value)
-    }
-}
+pub use incular_config::EdgeInsetsGeometry;
 
 /// The two walks `ImplicitlyAnimatedWidgetState` makes over its tweens. Each
 /// carries the ambient text direction, which resolves directional targets.
@@ -540,7 +510,7 @@ impl AnimatedContainer {
         self
     }
 
-    /// Accepts [`EdgeInsets`] or [`EdgeInsetsDirectional`].
+    /// Accepts [`EdgeInsets`] or [`EdgeInsetsDirectional`](incular_config::EdgeInsetsDirectional).
     #[must_use]
     pub fn padding(mut self, padding: impl Into<EdgeInsetsGeometry>) -> Self {
         self.padding = Some(padding.into());
@@ -732,7 +702,7 @@ pub struct AnimatedPadding {
 }
 
 impl AnimatedPadding {
-    /// Accepts [`EdgeInsets`] or [`EdgeInsetsDirectional`], which follows the
+    /// Accepts [`EdgeInsets`] or [`EdgeInsetsDirectional`](incular_config::EdgeInsetsDirectional), which follows the
     /// text direction.
     #[must_use]
     pub fn new(

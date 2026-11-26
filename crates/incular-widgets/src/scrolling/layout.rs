@@ -2504,14 +2504,8 @@ impl RenderSliver for PaddingRenderSliver {
                 if edges.bottom { safe.bottom } else { 0. }.max(minimum.bottom),
             )
         } else {
-            match self.padding {
-                crate::EdgeInsetsGeometry::Physical(padding) => padding,
-                crate::EdgeInsetsGeometry::Directional(padding) => padding.resolve(
-                    constraints
-                        .text_direction
-                        .expect("directional SliverPadding requires Directionality"),
-                ),
-            }
+            self.padding.try_resolve(constraints.text_direction)
+                .expect("directional SliverPadding requires Directionality")
         };
         debug_assert!(
             [padding.left, padding.top, padding.right, padding.bottom]

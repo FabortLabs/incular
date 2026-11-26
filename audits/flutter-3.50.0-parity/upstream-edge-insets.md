@@ -38,3 +38,23 @@ inverted and exactly empty interiors rather than panicking on a
 negative size or filling the center incorrectly. Rust checks point
 coverage of the actual EvenOdd border paint path; it does not claim
 an Incular GPU readback.
+
+## Mixed values resolve at layout
+
+Physical left/right and logical start/end now coexist in the public
+`EdgeInsetsGeometry`. Comparing, interpolating and doing arithmetic
+on them does not resolve the directions early. Equality compares all
+six components, so equal top/bottom-only values can cross concrete
+kinds but physical left is not logical start. Display preserves the
+pinned decimal diagnostics. Physical geometry works without a
+direction; other values return a typed missing-direction error.
+
+Ten exact pinned cases pair across equality, interpolation, mixed
+operators, diagnostics, factories, and missing direction. The three
+additional Dart identity cases are partial: Rust preserves the value
+when both endpoints match, but a Copy value has no Dart reference
+identity. The authored retained SliverPadding probe verifies that
+LTR→RTL→LTR moves the same child across x=16,22,16 with y=22 and
+unchanged 58×50 size. The Rust checks also cover existing sliver
+corrections and implicit animations. All 15 focused configuration and
+39 widget checks passed, and the public Incular facade compiles.

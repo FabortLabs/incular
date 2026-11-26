@@ -1985,3 +1985,16 @@ packages/flutter/test/painting/edge_insets_test.dart	572	inflateRRect with zero 
 packages/flutter/test/painting/edge_insets_test.dart	586	deflateRRect with zero insets returns the same RRect	paired-match	upstream-edge-insets.md#independent-axes-in-rounded-borders
 packages/flutter/test/painting/edge_insets_test.dart	600	deflateRRect clamps radius to zero when insets are larger than radius	paired-match	upstream-edge-insets.md#independent-axes-in-rounded-borders
 packages/flutter/test/painting/edge_insets_test.dart	625	inflateRRect and deflateRRect are inverse operations	paired-match	upstream-edge-insets.md#independent-axes-in-rounded-borders
+packages/flutter/test/painting/edge_insets_test.dart	128	EdgeInsets.lerp identical a,b	partial-match	upstream-edge-insets.md#mixed-values-resolve-at-layout
+packages/flutter/test/painting/edge_insets_test.dart	193	EdgeInsets equality	paired-match	upstream-edge-insets.md#mixed-values-resolve-at-layout
+packages/flutter/test/painting/edge_insets_test.dart	234	EdgeInsetsGeometry.lerp(...)	paired-match	upstream-edge-insets.md#mixed-values-resolve-at-layout
+packages/flutter/test/painting/edge_insets_test.dart	297	EdgeInsetsGeometry.lerp identical a,b	partial-match	upstream-edge-insets.md#mixed-values-resolve-at-layout
+packages/flutter/test/painting/edge_insets_test.dart	303	EdgeInsetsDirectional.lerp identical a,b	partial-match	upstream-edge-insets.md#mixed-values-resolve-at-layout
+packages/flutter/test/painting/edge_insets_test.dart	309	EdgeInsetsGeometry.lerp(normal, ...)	paired-match	upstream-edge-insets.md#mixed-values-resolve-at-layout
+packages/flutter/test/painting/edge_insets_test.dart	322	EdgeInsetsGeometry.lerp(directional, ...)	paired-match	upstream-edge-insets.md#mixed-values-resolve-at-layout
+packages/flutter/test/painting/edge_insets_test.dart	341	EdgeInsetsGeometry.lerp(mixed, ...)	paired-match	upstream-edge-insets.md#mixed-values-resolve-at-layout
+packages/flutter/test/painting/edge_insets_test.dart	382	EdgeInsetsGeometry operators	paired-match	upstream-edge-insets.md#mixed-values-resolve-at-layout
+packages/flutter/test/painting/edge_insets_test.dart	399	EdgeInsetsGeometry toString	paired-match	upstream-edge-insets.md#mixed-values-resolve-at-layout
+packages/flutter/test/painting/edge_insets_test.dart	434	EdgeInsetsGeometry factories	paired-match	upstream-edge-insets.md#mixed-values-resolve-at-layout
+packages/flutter/test/painting/edge_insets_test.dart	463	EdgeInsetsDirectional.resolve with null TextDirection asserts	paired-match	upstream-edge-insets.md#mixed-values-resolve-at-layout
+packages/flutter/test/painting/edge_insets_test.dart	478	resolve method of _MixedEdgeInsets throws detailed error when TextDirection is null	paired-match	upstream-edge-insets.md#mixed-values-resolve-at-layout

@@ -459,3 +459,42 @@ fn retained_nested_padding_reacts_to_ambient_direction_changes() {
         assert_eq!(controller.offset(), 0.);
     }
 }
+
+#[test]
+fn mixed_padding_resolves_late_without_remounting_the_sliver_child() {
+    let controller = ScrollController::new();
+    let id = Key::from("mixed padding child");
+    let padding = EdgeInsetsGeometry::only(3., 5., 7., 11.)
+        + EdgeInsetsGeometry::directional(13., 17., 19., 23.);
+    let viewport: Widget = Viewport::new([Box::new(SliverPadding::new(
+        padding,
+        SliverToBoxAdapter::new(
+            Widget::box_(Size::new(100., 50.), Color::WHITE).with_key(id.clone()),
+        ),
+    )) as Box<dyn Sliver>])
+    .controller(controller.clone())
+    .into();
+    let scene = |dir| Directionality::new(dir, viewport.clone()).into();
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scene(TextDirection::Ltr)).unwrap();
+    let bounds = Constraints::tight(Size::new(100., 120.));
+    tree.layout(bounds).unwrap();
+    let child = tree.element_with_key(&id).unwrap();
+    for (direction, left) in [
+        (TextDirection::Ltr, 16.),
+        (TextDirection::Rtl, 22.),
+        (TextDirection::Ltr, 16.),
+    ] {
+        tree.update(root, scene(direction)).unwrap();
+        tree.layout(bounds).unwrap();
+        assert_eq!(tree.element_with_key(&id), Some(child));
+        assert_eq!(
+            tree.element_bounds(child),
+            Some(Rect::from_origin_size(
+                Offset::new(left, 22.),
+                Size::new(58., 50.)
+            ))
+        );
+        assert_eq!(controller.offset(), 0.);
+    }
+}

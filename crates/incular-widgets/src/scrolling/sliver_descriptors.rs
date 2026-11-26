@@ -245,7 +245,7 @@ impl Sliver for SliverPadding {
         );
         match self.padding {
             crate::EdgeInsetsGeometry::Physical(padding) => Padding::new(padding, child).into(),
-            crate::EdgeInsetsGeometry::Directional(padding) => {
+            padding => {
                 crate::Builder::new(move |context| {
                     Padding::new(
                         padding

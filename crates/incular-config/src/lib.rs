@@ -9,6 +9,7 @@ mod constraints;
 mod defaults;
 mod environment;
 mod insets;
+mod insets_geometry;
 mod localization;
 mod transient;
 
@@ -27,6 +28,7 @@ pub use environment::{
 pub use icu_locale::Locale;
 pub use incular_core::TextDirection;
 pub use insets::{EdgeInsets, EdgeInsetsDirectional};
+pub use insets_geometry::{EdgeInsetsGeometry, MissingInsetsDirection};
 pub use localization::{
     LocaleResolver, LocalizationCatalog, LocalizationError, LocalizedMessage, PluralCategory,
     PluralForms,

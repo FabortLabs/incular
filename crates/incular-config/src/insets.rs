@@ -84,6 +84,12 @@ impl EdgeInsets {
         self
     }
 
+    /// Converts raw device-pixel view padding to logical units.
+    #[must_use]
+    pub fn from_view_padding(padding: Self, device_pixel_ratio: f32) -> Self {
+        padding / device_pixel_ratio
+    }
+
     /// Copies the insets, replacing only the supplied physical edges.
     #[must_use]
     pub fn copy_with(
@@ -584,7 +590,7 @@ impl incular_core::Lerp for EdgeInsetsDirectional {
     }
 }
 
-fn lerp_insets<T: Lerp + std::ops::Mul<f32, Output = T>>(
+fn lerp_insets<T: Lerp + PartialEq + std::ops::Mul<f32, Output = T>>(
     begin: Option<T>,
     end: Option<T>,
     t: f32,
@@ -593,11 +599,12 @@ fn lerp_insets<T: Lerp + std::ops::Mul<f32, Output = T>>(
         (None, None) => None,
         (Some(a), None) => Some(a * (1.0 - t)),
         (None, Some(b)) => Some(b * t),
+        (Some(a), Some(b)) if a == b => Some(a),
         (Some(a), Some(b)) => Some(a.lerp(&b, t)),
     }
 }
 
-fn truncate_edge_quotient(edge: f32, divisor: f32) -> f32 {
+pub(super) fn truncate_edge_quotient(edge: f32, divisor: f32) -> f32 {
     let quotient = edge / divisor;
     assert!(quotient.is_finite(), "non-finite inset division");
     quotient.trunc()
