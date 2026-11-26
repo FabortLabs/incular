@@ -232,3 +232,14 @@ Pinned `:1522` pairs with a panel positioned away from its anchor:
 the same anchor tap is inside while the panel joins the anchor's
 TapRegion group, but outside after the reopened panel omits the
 group ID. The test asserts mounting and both callback results.
+
+### Delayed opening, position, and disposal
+
+Pinned `:2401`, `:2432`, and `:2467` pair with precise request and
+onOpen counts, null and explicit (10,15) positions, no panel before
+show, and two open notifications when the supplied show runs twice.
+
+Pinned `:2520`: after the application's 100 ms delay, the native
+retained panel appears at (0,0), then moves to (50,50) only after the
+second request's delay. Pinned `:2563`: calling the saved show after
+the anchor has unmounted neither paints a panel nor fires onOpen.

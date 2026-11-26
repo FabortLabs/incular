@@ -1729,3 +1729,8 @@ packages/flutter/test/widgets/raw_menu_anchor_test.dart	3228	RawMenuAnchorGroup 
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	1522	[Default] TapRegion group ID is passed to overlay	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#outside-activation-consumption-and-groups
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	1576	[Default] Menus close and consume tap when consumesOutsideTap is true	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#outside-activation-consumption-and-groups
 packages/flutter/test/widgets/raw_menu_anchor_test.dart	1654	[Default] Menus close and do not consume tap when consumesOutsideTap is false	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#outside-activation-consumption-and-groups
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	2401	Triggered by MenuController.open	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#delayed-opening-position-and-disposal
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	2432	Is passed a position	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#delayed-opening-position-and-disposal
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	2467	showOverlay triggers onOpen	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#delayed-opening-position-and-disposal
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	2520	showOverlay shows the menu at a position	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#delayed-opening-position-and-disposal
+packages/flutter/test/widgets/raw_menu_anchor_test.dart	2563	showOverlay does nothing after the menu is disposed	paired-match	upstream-raw-menu-animation-observer-and-shadow.md#delayed-opening-position-and-disposal

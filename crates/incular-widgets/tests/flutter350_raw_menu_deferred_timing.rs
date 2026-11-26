@@ -193,3 +193,131 @@ fn retained_four_deep_tree_requests_from_the_root_and_hides_descendants_first() 
     }
     assert!(controllers.iter().all(|controller| !controller.is_open()));
 }
+
+#[test]
+fn open_requests_forward_optional_positions_but_only_show_notifies_open() {
+    let controller = MenuController::new();
+    let requests = Rc::new(RefCell::new(Vec::<Option<Offset>>::new()));
+    let pending = Rc::new(RefCell::new(None::<Hide>));
+    let opened = Rc::new(Cell::new(0));
+    let menu = RawMenuAnchor::new(controller.clone(), |_, _| {
+        Widget::box_(Size::new(40., 40.), PANEL)
+    })
+    .child(anchor_button())
+    .on_open_requested({
+        let (requests, pending) = (requests.clone(), pending.clone());
+        move |position, show| {
+            requests.borrow_mut().push(position);
+            *pending.borrow_mut() = Some(show);
+        }
+    })
+    .on_open({
+        let opened = opened.clone();
+        move || opened.set(opened.get() + 1)
+    });
+    let mut tree = WidgetTree::new();
+    tree.mount(Center::new(menu).into()).unwrap();
+    assert!(!panel_visible(&mut tree));
+    assert!(requests.borrow().is_empty());
+    assert_eq!(opened.get(), 0);
+
+    controller.open(None);
+    assert!(!panel_visible(&mut tree));
+    assert_eq!(*requests.borrow(), [None]);
+    assert_eq!(opened.get(), 0);
+    controller.close();
+    assert_eq!(*requests.borrow(), [None]);
+
+    let at = Offset::new(10., 15.);
+    controller.open(Some(at));
+    assert_eq!(*requests.borrow(), [None, Some(at)]);
+    assert_eq!(opened.get(), 0);
+    let show = pending.borrow().clone().unwrap();
+    show();
+    assert!(panel_visible(&mut tree));
+    assert_eq!(opened.get(), 1);
+    show();
+    assert!(panel_visible(&mut tree));
+    assert_eq!(opened.get(), 2);
+    assert_eq!(*requests.borrow(), [None, Some(at)]);
+}
+
+#[test]
+fn a_scheduled_show_places_a_live_panel_at_zero_or_the_requested_position() {
+    use incular_widgets::{Positioned, Stack};
+    let controller = MenuController::new();
+    let clock = Rc::new(Clock::default());
+    let panel = Key::from("scheduled-panel");
+    let panel_key = panel.clone();
+    let menu = RawMenuAnchor::new(controller.clone(), move |_, info| {
+        let at = info.position.unwrap_or(Offset::ZERO);
+        Stack::new([Widget::from(
+            Positioned::new(Widget::box_(Size::new(300., 300.), PANEL).with_key(panel_key.clone()))
+                .left(at.x)
+                .top(at.y),
+        )])
+        .into()
+    })
+    .child(anchor_button())
+    .on_open_requested({
+        let clock = clock.clone();
+        move |_, show| clock.schedule(100, show)
+    });
+    let mut tree = WidgetTree::new();
+    tree.mount(Center::new(menu).into()).unwrap();
+    assert!(!panel_visible(&mut tree));
+    controller.open(None);
+    assert!(!panel_visible(&mut tree));
+    clock.pump_to(101);
+    assert!(panel_visible(&mut tree));
+    let origin = |tree: &WidgetTree| {
+        tree.element_bounds(tree.element_with_key(&panel).unwrap())
+            .unwrap()
+            .origin
+    };
+    assert_eq!(origin(&tree), Offset::ZERO);
+
+    let at = Offset::new(50., 50.);
+    controller.open(Some(at));
+    assert!(panel_visible(&mut tree));
+    assert_eq!(origin(&tree), Offset::ZERO);
+    clock.pump_to(202);
+    assert!(panel_visible(&mut tree));
+    assert_eq!(origin(&tree), at);
+}
+
+#[test]
+fn a_saved_show_cannot_reopen_a_disposed_anchor() {
+    let controller = MenuController::new();
+    let pending = Rc::new(RefCell::new(None::<Hide>));
+    let opened = Rc::new(Cell::new(0));
+    let menu = RawMenuAnchor::new(controller.clone(), |_, _| {
+        Widget::box_(Size::new(40., 40.), PANEL)
+    })
+    .child(anchor_button())
+    .on_open_requested({
+        let pending = pending.clone();
+        move |_, show| *pending.borrow_mut() = Some(show)
+    })
+    .on_open({
+        let opened = opened.clone();
+        move || opened.set(opened.get() + 1)
+    });
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(Center::new(menu).into()).unwrap();
+    assert!(!panel_visible(&mut tree));
+    controller.open(None);
+    let show = pending.borrow().clone().unwrap();
+    show();
+    assert!(panel_visible(&mut tree));
+    assert_eq!(opened.get(), 1);
+    controller.close();
+    assert!(!panel_visible(&mut tree));
+    tree.update(root, Center::new(anchor_button()).into())
+        .unwrap();
+    assert!(!panel_visible(&mut tree));
+    show();
+    assert!(!panel_visible(&mut tree));
+    assert_eq!(opened.get(), 1);
+    assert!(!controller.is_open());
+}
