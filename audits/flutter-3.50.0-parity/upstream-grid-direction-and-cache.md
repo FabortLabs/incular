@@ -44,3 +44,16 @@ All three pinned originals and the authored probe passed. The seven
 widget targets passed, with 46 total distinct Rust tests after the
 two extra clip controls. These comparisons exercise the retained
 display list; they do not assert a new WGPU pixel fixture.
+
+## Padded and changing static grids
+
+All three pinned `widgets/scrollable_grid_test.dart` originals
+passed, as did three focused native runtime tests. A centered empty
+one-lane grid mounts a position but has zero scroll extent. A 300px
+grid with 100px top padding places its first tile at (250, 100)
+with size 300×300. The onstage indices across the two actual touch
+drags are [0, 1], [1, 2, 3], and [0, 1, 2]. Offscreen cached
+elements are excluded from that comparison, as Flutter's test finder
+excludes them. Changing the count from three to four updates the
+retained grid and shows the fourth tile at (600, 0) at 200×200.
+A drag over the fitting grid leaves its scroll offset at zero.

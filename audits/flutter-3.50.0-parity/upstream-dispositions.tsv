@@ -2450,3 +2450,6 @@ packages/flutter/test/widgets/scroll_interaction_test.dart	9	Scroll flings twice
 packages/flutter/test/widgets/scrollable_fling_test.dart	101	fling and tap to stop	paired-match	upstream-scroll-fling-taps.md
 packages/flutter/test/widgets/scrollable_fling_test.dart	136	fling and wait and tap	paired-match	upstream-scroll-fling-taps.md
 packages/flutter/test/widgets/scrollable_fling_test.dart	34	Flings on different platforms	paired-match	upstream-scroll-fling-taps.md#platform-defaults
+packages/flutter/test/widgets/scrollable_grid_test.dart	9	GridView default control	paired-match	upstream-grid-direction-and-cache.md#padded-and-changing-static-grids
+packages/flutter/test/widgets/scrollable_grid_test.dart	19	GridView displays correct children with nonzero padding	paired-match	upstream-grid-direction-and-cache.md#padded-and-changing-static-grids
+packages/flutter/test/widgets/scrollable_grid_test.dart	77	GridView.count() fixed itemExtent, scroll to end, append, scroll	paired-match	upstream-grid-direction-and-cache.md#padded-and-changing-static-grids
