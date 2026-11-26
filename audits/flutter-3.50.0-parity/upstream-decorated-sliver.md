@@ -38,3 +38,14 @@ Pinned :446 and :558 also passed on Flutter and are recorded as
 reference-only. The finite cached layer and basic pinned case do
 not certify unbounded lazy lists or the bounced, stretched size
 and stroke alignment of the original overscroll gesture.
+
+## Stretching header paint geometry
+
+Pinned :558 is now partial. The original Flutter drag reaches a
+225.1 px stretched extent. Injecting that same observed overscroll
+into the native viewport exercises the retained resizing header, the
+real centered one-pixel BoxDecoration stroke, and the generated
+path. Native paints one 300 × 225.1 outline from (0, 0), then one
+300 × 200 outline when reset, without extending logical scroll
+range. This controls the painter and placement, not whether Incular
+derives 25.1 px from the exact same pointer gesture.

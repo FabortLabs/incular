@@ -284,3 +284,74 @@ fn decorated_pinned_header_keeps_its_outline_at_the_viewport_edge() {
         );
     }
 }
+
+#[test]
+fn decorated_stretching_header_uses_the_current_paint_extent_without_growing_scroll_range() {
+    use incular_widgets::{
+        Border, BorderSide, SliverHeaderOverscrollBehavior, SliverHeaderScrollBehavior,
+    };
+    let controller = ScrollController::new();
+    let view = Size::new(300., 500.);
+    let header =
+        incular_widgets::internal::SliverPersistentHeader::with_delegate(100., 200., |_, _| {
+            incular_widgets::SizedBox::new().width(300.)
+        })
+        .scroll_behavior(SliverHeaderScrollBehavior::Pinned)
+        .overscroll_behavior(SliverHeaderOverscrollBehavior::Stretch);
+    let border = BoxDecoration::new().border(Border::all(BorderSide {
+        stroke_align: 0.,
+        ..BorderSide::solid(EDGE, 1.)
+    }));
+    let decorated = DecoratedSliver::new_box(border, header);
+    let content = SliverToBoxAdapter::new(Widget::box_(Size::new(300., 1000.), CHILD));
+    let viewport = CustomScrollView::new(vec![
+        Box::new(decorated) as Box<dyn Sliver>,
+        Box::new(content),
+    ])
+    .physics(incular_scroll::ScrollPhysics::BOUNCING)
+    .controller(controller.clone());
+    let mut tree = WidgetTree::new();
+    tree.mount(Directionality::new(TextDirection::Ltr, viewport).into())
+        .unwrap();
+    tree.layout(Constraints::tight(view)).unwrap();
+    let range = controller.max_offset();
+    for (offset, height) in [(-25.1, 225.1), (0., 200.)] {
+        assert!(controller.jump_to(offset));
+        tree.layout(Constraints::tight(view)).unwrap();
+        tree.update_compositor(Instant::now()).unwrap();
+        assert_eq!(controller.max_offset(), range);
+        let mut transforms = vec![Offset::ZERO];
+        let mut found = Vec::new();
+        for command in tree.paint().commands() {
+            match command {
+                PaintCommand::PushTransform { transform } => {
+                    transforms.push(
+                        *transforms.last().unwrap() + transform.transform_point(Offset::ZERO),
+                    );
+                }
+                PaintCommand::PopTransform => {
+                    transforms.pop();
+                }
+                PaintCommand::StrokePath {
+                    path,
+                    brush: Brush::Solid(color),
+                    stroke,
+                } if *color == EDGE => {
+                    assert_eq!(stroke.width, 1.);
+                    let mut bounds = path.bounds().unwrap();
+                    bounds.origin = bounds.origin + *transforms.last().unwrap();
+                    found.push(bounds);
+                }
+                _ => {}
+            }
+        }
+        assert_eq!(found.len(), 1);
+        let actual = found[0];
+        assert!(
+            actual.origin.x.abs() <= 0.03 && actual.origin.y.abs() <= 0.03,
+            "{actual:?}"
+        );
+        assert_eq!(actual.size.width, 300.);
+        assert!((actual.size.height - height).abs() <= 0.03, "{actual:?}");
+    }
+}
