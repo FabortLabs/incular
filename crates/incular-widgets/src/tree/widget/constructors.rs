@@ -902,6 +902,7 @@ impl Widget {
         repeat: ImageRepeat,
         alignment: Alignment,
         sampling: ImageSampling,
+        blend_mode: BlendMode,
     ) -> Self {
         Self::from_node(WidgetNode {
             key: None,
@@ -914,6 +915,7 @@ impl Widget {
                 repeat,
                 alignment,
                 sampling,
+                blend_mode,
             },
             semantics: None,
         })
@@ -1872,9 +1874,19 @@ impl Widget {
     }
     #[must_use]
     pub(crate) fn blend(mode: BlendMode, child: Self) -> Self {
+        Self::blend_with_isolation(mode, true, child)
+    }
+    pub(crate) fn image_blend(mode: BlendMode, child: Self) -> Self {
+        Self::blend_with_isolation(mode, mode != BlendMode::SrcOver, child)
+    }
+    fn blend_with_isolation(mode: BlendMode, isolate: bool, child: Self) -> Self {
         Self::from_node(WidgetNode {
             key: None,
-            kind: WidgetKind::Blend { mode, child },
+            kind: WidgetKind::Blend {
+                mode,
+                isolate,
+                child,
+            },
             semantics: None,
         })
     }

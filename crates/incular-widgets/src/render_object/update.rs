@@ -48,6 +48,9 @@ impl RenderObjectPayload {
 fn invalidation_for_change(old: &RenderKind, new: &RenderKind) -> Invalidation {
     use Invalidation as I;
 
+    if image_blend_only_change(old, new) {
+        return I::COMPOSITE;
+    }
     if same_compositor_family(old, new) {
         // Geometry consumers read the current retained transform directly; they
         // do not require measurement or picture recording to observe movement.
@@ -104,6 +107,30 @@ fn visual_paint_only_change(old: &RenderKind, new: &RenderKind) -> bool {
         ) => old_size == new_size && old_enabled == new_enabled && old_focusable == new_focusable,
         _ => false,
     }
+}
+
+fn image_blend_only_change(old: &RenderKind, new: &RenderKind) -> bool {
+    let (
+        RenderKind::Image {
+            blend_mode: old_mode,
+            ..
+        },
+        RenderKind::Image {
+            blend_mode: new_mode,
+            ..
+        },
+    ) = (old, new)
+    else {
+        return false;
+    };
+    if old_mode == new_mode {
+        return false;
+    }
+    let mut without_blend_change = new.clone();
+    if let RenderKind::Image { blend_mode, .. } = &mut without_blend_change {
+        *blend_mode = *old_mode;
+    }
+    *old == without_blend_change
 }
 
 fn image_paint_only_change(old: &RenderKind, new: &RenderKind) -> bool {

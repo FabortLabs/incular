@@ -62,6 +62,10 @@ pub struct RawImage {
     /// (`ColorFilter.mode(color, mode)`); `None` is Flutter's `srcIn`.
     #[builder(default, setter(strip_option))]
     pub(super) color_blend_mode: Option<BlendMode>,
+    /// Composites the finished image against the destination (Flutter
+    /// `blendMode`). Independent of the optional tint's `colorBlendMode`.
+    #[builder(default = BlendMode::SrcOver)]
+    blend_mode: BlendMode,
     /// Flutter `centerSlice`, in logical image pixels.
     #[builder(default, setter(strip_option))]
     pub(super) center_slice: Option<incular_core::Rect>,
@@ -92,6 +96,7 @@ impl RawImage {
             opacity: 1.0,
             invert_colors: false,
             color_blend_mode: None,
+            blend_mode: BlendMode::SrcOver,
             center_slice: None,
             match_text_direction: false,
         }
@@ -172,6 +177,14 @@ impl RawImage {
         self
     }
 
+    /// Composites the image against what's already painted. The default
+    /// is source-over; this does not change how an optional tint is applied.
+    #[must_use]
+    pub fn blend_mode(mut self, mode: BlendMode) -> Self {
+        self.blend_mode = mode;
+        self
+    }
+
     /// Flutter `centerSlice`: paints the image as a nine-slice.
     #[must_use]
     pub fn center_slice(mut self, slice: incular_core::Rect) -> Self {
@@ -210,6 +223,14 @@ impl From<RawImage> for Widget {
                 if let Some(quality) = value.filter_quality {
                     img = img.filter_quality(quality);
                 }
+                let has_source_effects = value.color.is_some()
+                    || value.invert_colors
+                    || value.opacity < 1.0
+                    || value.center_slice.is_some()
+                    || value.match_text_direction;
+                if !has_source_effects {
+                    return img.destination_blend_mode(value.blend_mode).into();
+                }
                 let mut image: Widget = img.into();
                 // Flutter applies `invertColors` to the decoded pixels before
                 // the `color` tint, and `opacity` to the finished image.
@@ -233,11 +254,12 @@ impl From<RawImage> for Widget {
                     .into(),
                     None => image,
                 };
-                if value.opacity < 1.0 {
+                let image = if value.opacity < 1.0 {
                     Opacity::new(value.opacity, image).into()
                 } else {
                     image
-                }
+                };
+                Widget::image_blend(value.blend_mode, image)
             }
             None => crate::layout::SizedBox::new()
                 .width(value.width.unwrap_or(0.0))

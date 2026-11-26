@@ -163,6 +163,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             repeat,
             alignment,
             sampling,
+            blend_mode,
         } => RenderKind::Image {
             image: image.clone(),
             width: *width,
@@ -172,6 +173,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             repeat: *repeat,
             alignment: *alignment,
             sampling: *sampling,
+            blend_mode: *blend_mode,
         },
         WidgetKind::TextField(spec) => {
             let direction = spec

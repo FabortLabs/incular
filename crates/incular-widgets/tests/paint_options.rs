@@ -15,8 +15,8 @@ use incular_rendering::{
 use incular_widgets::internal::WidgetTree;
 use incular_widgets::{
     BlurStyle, BorderRadius, BorderSide, BoxDecoration, BoxShadow, Container,
-    ContinuousRectangleBorder, DecorationImage, Directionality, Image, ImageFiltered, LinearBorder,
-    LinearBorderEdge, Positioned, RawImage, ShapeBorder, SizedBox, Stack, Widget,
+    ContinuousRectangleBorder, DecorationImage, Directionality, Image, ImageFiltered, ImageRepeat,
+    LinearBorder, LinearBorderEdge, Positioned, RawImage, ShapeBorder, SizedBox, Stack, Widget,
 };
 
 fn rect(x: f32, y: f32, width: f32, height: f32) -> Rect {
@@ -581,4 +581,178 @@ fn fade_in_image_tints_the_placeholder_and_the_image_separately() {
     );
     assert!(pushes_filter(&target, ColorFilter::tint(blue)));
     assert!(!pushes_filter(&target, ColorFilter::tint(red)));
+}
+
+fn raw_image_render_blend(kind: Option<&incular_widgets::internal::RenderKind>) -> BlendMode {
+    let Some(incular_widgets::internal::RenderKind::Image {
+        blend_mode: mode, ..
+    }) = kind
+    else {
+        panic!("expected a retained destination blend")
+    };
+    *mode
+}
+
+fn raw_image_destination_blend(
+    commands: &[PaintCommand],
+) -> Option<(incular_rendering::LayerId, BlendMode, Rect)> {
+    commands.iter().find_map(|command| match command {
+        PaintCommand::PushBlend {
+            layer,
+            mode,
+            bounds,
+            ..
+        } => Some((*layer, *mode, *bounds)),
+        _ => None,
+    })
+}
+
+#[test]
+fn raw_image_defaults_to_source_over_and_skips_the_effect_layer() {
+    for raw in [RawImage::new(), RawImage::builder().build()] {
+        let mut tree = WidgetTree::new();
+        let id = tree.mount(raw.image(handle(10, 10)).into()).expect("mount");
+        let render = tree.render_id(id).expect("raw image render");
+        assert_eq!(
+            raw_image_render_blend(tree.render_object_kind(render)),
+            BlendMode::SrcOver
+        );
+        let size = Size::new(20., 20.);
+        tree.layout(Constraints::tight(size)).expect("layout");
+        tree.update_compositor(incular_core::time::Instant::now())
+            .expect("composite");
+        let display = tree.paint();
+        assert_eq!(images(display.commands()).len(), 1);
+        assert_eq!(raw_image_destination_blend(display.commands()), None);
+    }
+}
+
+#[test]
+fn raw_image_retains_its_render_and_image_across_destination_blend_updates() {
+    let mut tree = WidgetTree::new();
+    let image = handle(10, 10);
+    let first = RawImage::builder()
+        .image(image.clone())
+        .blend_mode(BlendMode::Plus)
+        .build();
+    let id = tree.mount(first.into()).expect("mount");
+    let render = tree.render_id(id).expect("raw image render");
+    let mut first_custom_layer = None;
+    let mut previous_work = None;
+    for mode in [
+        BlendMode::Plus,
+        BlendMode::Multiply,
+        BlendMode::SrcOver,
+        BlendMode::Plus,
+    ] {
+        if first_custom_layer.is_some() {
+            tree.update(
+                id,
+                RawImage::new().image(image.clone()).blend_mode(mode).into(),
+            )
+            .expect("update");
+        }
+        let size = Size::new(20., 20.);
+        tree.layout(Constraints::tight(size)).expect("layout");
+        tree.update_compositor(incular_core::time::Instant::now())
+            .expect("composite");
+
+        assert_eq!(tree.render_id(id), Some(render));
+        assert_eq!(tree.render_size(render), Some(size));
+        assert_eq!(
+            raw_image_render_blend(tree.render_object_kind(render)),
+            mode
+        );
+        let display = tree.paint();
+        assert!(display.commands().iter().any(|command| matches!(
+            command,
+            PaintCommand::Image { image: active, .. } if active == &image
+        )));
+        let blend = raw_image_destination_blend(display.commands());
+        if mode == BlendMode::SrcOver {
+            assert_eq!(blend, None);
+        } else {
+            let (layer, actual, _) = blend.expect("destination effect");
+            assert_eq!(actual, mode);
+            if mode == BlendMode::Multiply {
+                assert_eq!(Some(layer), first_custom_layer);
+            }
+            first_custom_layer = Some(layer);
+        }
+        let diagnostics = tree.diagnostics();
+        let work = (diagnostics.layouts, diagnostics.paints);
+        if let Some(previous) = previous_work {
+            assert_eq!(
+                work, previous,
+                "changing only the blend must reuse the layout and picture"
+            );
+        }
+        previous_work = Some(work);
+    }
+}
+
+#[test]
+fn raw_image_destination_blend_follows_tint_and_opacity_and_skips_absent_image() {
+    let tint = Color::rgba(0, 0, 255, 255);
+    let display = painted(
+        RawImage::new()
+            .image(handle(10, 10))
+            .color(tint)
+            .color_blend_mode(BlendMode::Screen)
+            .opacity(0.5)
+            .blend_mode(BlendMode::Multiply)
+            .into(),
+        Size::new(10., 10.),
+    );
+    let stages: Vec<_> = display
+        .iter()
+        .filter_map(|command| match command {
+            PaintCommand::PushBlend { mode, .. } if *mode == BlendMode::Multiply => {
+                Some("destination")
+            }
+            PaintCommand::PushOpacity { alpha, .. } if (*alpha - 0.5).abs() < f32::EPSILON => {
+                Some("opacity")
+            }
+            PaintCommand::PushColorFilter { filter, .. }
+                if *filter == ColorFilter::blend(tint, BlendMode::Screen) =>
+            {
+                Some("tint")
+            }
+            PaintCommand::Image { .. } => Some("image"),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(stages, ["destination", "opacity", "tint", "image"]);
+
+    let absent = painted(
+        RawImage::new().blend_mode(BlendMode::Clear).into(),
+        Size::new(10., 10.),
+    );
+    assert!(images(&absent).is_empty());
+    assert_eq!(raw_image_destination_blend(&absent), None);
+}
+
+#[test]
+fn raw_image_replacement_blend_stays_inside_the_fitted_image() {
+    for (repeat, expected) in [
+        (ImageRepeat::NoRepeat, rect(15., 5., 10., 10.)),
+        (ImageRepeat::RepeatX, rect(0., 5., 40., 10.)),
+        (ImageRepeat::RepeatY, rect(15., 0., 10., 20.)),
+        (ImageRepeat::Repeat, rect(0., 0., 40., 20.)),
+    ] {
+        let display = painted(
+            RawImage::new()
+                .image(handle(10, 10))
+                .repeat(repeat)
+                .blend_mode(BlendMode::Src)
+                .into(),
+            Size::new(40., 20.),
+        );
+        assert_eq!(
+            raw_image_destination_blend(&display)
+                .expect("destination effect")
+                .2,
+            expected
+        );
+    }
 }

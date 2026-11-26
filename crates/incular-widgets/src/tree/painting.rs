@@ -869,7 +869,11 @@ impl WidgetTree {
         // A picture may paint past its box (an offset box shadow, a stroke on
         // the edge); effect layers above it size their input from these
         // bounds, so they cover what was painted, as Flutter's layers do.
-        let bounds = painted_bounds(picture.commands(), size);
+        let bounds = if matches!(&*kind, RenderKind::Image { .. }) {
+            image_picture_bounds(picture.commands())
+        } else {
+            painted_bounds(picture.commands(), size)
+        };
         self.render_live_mut(id, "retained render must remain live")
             .dirty
             .remove(DirtyFlags::PAINT);
@@ -1626,6 +1630,34 @@ fn flow_child_hidden(kind: &RenderKind) -> bool {
         kind,
         RenderKind::Transform { slot: Some(slot), .. } if !slot.painted()
     )
+}
+
+/// Destination blending can replace the destination even for transparent
+/// source pixels, but never in the space around a fitted image or tile.
+fn image_picture_bounds(commands: &[PaintCommand]) -> Rect {
+    let zero = Rect::from_origin_size(Offset::ZERO, Size::ZERO);
+    let (images, clip) = match commands {
+        [PaintCommand::PushClip { rect }, images @ .., PaintCommand::PopClip] => (images, Some(*rect)),
+        _ => (commands, None),
+    };
+    images
+        .iter()
+        .filter_map(|command| match command {
+            PaintCommand::Image { destination, .. } => match clip {
+                Some(clip) => destination.intersection(clip),
+                None => Some(*destination),
+            }
+            .filter(|rect| rect.size.width > 0.0 && rect.size.height > 0.0),
+            _ => None,
+        })
+        .reduce(|a, b| {
+            let left = a.origin.x.min(b.origin.x);
+            let top = a.origin.y.min(b.origin.y);
+            let right = (a.origin.x + a.size.width).max(b.origin.x + b.size.width);
+            let bottom = (a.origin.y + a.size.height).max(b.origin.y + b.size.height);
+            Rect::from_origin_size(Offset::new(left, top), Size::new(right - left, bottom - top))
+        })
+        .unwrap_or(zero)
 }
 
 /// The box of `size` grown to cover the geometry `commands` paint outside

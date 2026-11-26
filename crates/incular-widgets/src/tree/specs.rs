@@ -737,6 +737,7 @@ pub(crate) enum WidgetKind {
         repeat: ImageRepeat,
         alignment: Alignment,
         sampling: ImageSampling,
+        blend_mode: BlendMode,
     },
     TextField(Box<TextFieldSpec>),
     Padding {
@@ -1112,6 +1113,7 @@ pub(crate) enum WidgetKind {
     },
     Blend {
         mode: BlendMode,
+        isolate: bool,
         child: Widget,
     },
     ShaderMask {

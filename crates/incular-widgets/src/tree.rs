@@ -871,6 +871,7 @@ pub enum RenderKind {
         repeat: ImageRepeat,
         alignment: Alignment,
         sampling: ImageSampling,
+        blend_mode: BlendMode,
     },
     /// Boxed: text fields are rare and this is the largest payload.
     TextField(Box<TextFieldRender>),

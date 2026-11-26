@@ -2354,3 +2354,7 @@ packages/flutter/test/widgets/custom_painter_test.dart	425	Supports all actions	
 packages/flutter/test/widgets/custom_painter_test.dart	171	'applies $SemanticsProperties'	paired-match	upstream-custom-paint.md#painter-property-replacement
 packages/flutter/test/widgets/custom_painter_test.dart	652	semantics properties	paired-match	upstream-custom-paint.md#full-painted-region-metadata
 packages/flutter/test/widgets/custom_painter_test.dart	540	Supports all flags	paired-match	upstream-custom-paint.md#raw-painted-region-flags
+packages/flutter/test/rendering/image_test.dart	217	RenderImage blendMode defaults to BlendMode.srcOver	paired-match	upstream-raw-image-blend.md
+packages/flutter/test/rendering/image_test.dart	222	RenderImage blendMode can be set via constructor and setter	paired-match	upstream-raw-image-blend.md
+packages/flutter/test/widgets/image_test.dart	3145	RawImage forwards default blendMode to RenderImage	paired-match	upstream-raw-image-blend.md
+packages/flutter/test/widgets/image_test.dart	3155	RawImage forwards custom blendMode to RenderImage	paired-match	upstream-raw-image-blend.md

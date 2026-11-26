@@ -116,6 +116,7 @@ impl std::fmt::Debug for WidgetKind {
                 repeat,
                 alignment,
                 sampling: _,
+                blend_mode,
             } => f
                 .debug_struct("Image")
                 .field("id", &image.id())
@@ -125,6 +126,7 @@ impl std::fmt::Debug for WidgetKind {
                 .field("fit", fit)
                 .field("repeat", repeat)
                 .field("alignment", alignment)
+                .field("blend_mode", blend_mode)
                 .finish(),
             Self::TextField(spec) => f
                 .debug_struct("TextField")
@@ -1158,6 +1160,7 @@ impl PartialEq for WidgetKind {
                     repeat: e,
                     alignment: k,
                     sampling: m,
+                    blend_mode: o,
                 },
                 Self::Image {
                     image: f,
@@ -1168,8 +1171,19 @@ impl PartialEq for WidgetKind {
                     repeat: j,
                     alignment: l,
                     sampling: n,
+                    blend_mode: p,
                 },
-            ) => a == f && b == g && c == h && s == t && d == i && e == j && k == l && m == n,
+            ) => {
+                a == f
+                    && b == g
+                    && c == h
+                    && s == t
+                    && d == i
+                    && e == j
+                    && k == l
+                    && m == n
+                    && o == p
+            }
             (Self::TextField(left), Self::TextField(right)) => left == right,
             (
                 Self::Padding {
@@ -1540,9 +1554,18 @@ impl PartialEq for WidgetKind {
                     child: f,
                 },
             ) => a == d && b == e && c == f,
-            (Self::Blend { mode: a, child: b }, Self::Blend { mode: c, child: d }) => {
-                a == c && b == d
-            }
+            (
+                Self::Blend {
+                    mode: a,
+                    isolate: b,
+                    child: c,
+                },
+                Self::Blend {
+                    mode: d,
+                    isolate: e,
+                    child: f,
+                },
+            ) => a == d && b == e && c == f,
             (
                 Self::ShaderMask {
                     shader: a,

@@ -1,8 +1,8 @@
 use incular_config::Clip;
 use incular_core::{Color, Offset, Rect, Size, Transform as CoreTransform};
 use incular_rendering::{
-    Brush, CornerRadii, DisplayList, DropShadowEffect, FillRule, FollowerLayer, GaussianBlur,
-    LayerId, LayerTree, Path, RRect,
+    BlendMode, Brush, CornerRadii, DisplayList, DropShadowEffect, FillRule, FollowerLayer,
+    GaussianBlur, LayerId, LayerTree, Path, RRect,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -127,7 +127,10 @@ impl LayerSpec {
                 AttachmentSpec::DropShadow
             }
             WidgetKind::ColorFiltered { .. } => AttachmentSpec::ColorFilter,
-            WidgetKind::Blend { .. } => AttachmentSpec::Blend,
+            WidgetKind::Blend { isolate: true, .. } => AttachmentSpec::Blend,
+            WidgetKind::Image { blend_mode, .. } if *blend_mode != BlendMode::SrcOver => {
+                AttachmentSpec::Blend
+            }
             WidgetKind::ShaderMask { .. } => AttachmentSpec::ShaderMask,
             WidgetKind::BackdropFilter { .. } => AttachmentSpec::BackdropFilter,
             WidgetKind::AnnotatedRegion { .. } => AttachmentSpec::Annotation,
@@ -391,7 +394,17 @@ impl RenderLayers {
                 compositor.set_children(root, vec![layer]);
                 LayerAttachment::ColorFilter { layer }
             }
-            WidgetKind::Blend { mode, .. } => {
+            WidgetKind::Image { blend_mode, .. } if *blend_mode != BlendMode::SrcOver => {
+                let layer = compositor.create_blend(*blend_mode);
+                compositor.set_children(layer, picture.into_iter().collect());
+                compositor.set_children(root, vec![layer]);
+                LayerAttachment::Blend { layer }
+            }
+            WidgetKind::Blend {
+                mode,
+                isolate: true,
+                ..
+            } => {
                 let layer = compositor.create_blend(*mode);
                 compositor.set_children(root, vec![layer]);
                 LayerAttachment::Blend { layer }
@@ -544,6 +557,21 @@ impl RenderLayers {
             return false;
         }
 
+        if let WidgetKind::Image { blend_mode, .. } = widget {
+            // Only the optional blend stage changes. Keep the existing
+            // image picture attached across source-over toggles.
+            self.attachment = if *blend_mode == BlendMode::SrcOver {
+                if let Some(layer) = self.blend() {
+                    compositor.remove(layer);
+                }
+                LayerAttachment::Direct
+            } else {
+                LayerAttachment::Blend {
+                    layer: compositor.create_blend(*blend_mode),
+                }
+            };
+            return true;
+        }
         self.remove_owned_except_root(compositor);
         let fresh = Self::create(compositor, widget);
         compositor.remove(fresh.root);
@@ -702,7 +730,13 @@ impl RenderLayers {
             (LayerAttachment::ColorFilter { layer }, RenderKind::ColorFiltered { filter, .. }) => {
                 compositor.update_color_filter(*layer, **filter);
             }
-            (LayerAttachment::Blend { layer }, RenderKind::Blend { mode }) => {
+            (
+                LayerAttachment::Blend { layer },
+                RenderKind::Blend { mode }
+                | RenderKind::Image {
+                    blend_mode: mode, ..
+                },
+            ) => {
                 compositor.update_blend(*layer, *mode);
             }
             (
@@ -870,6 +904,11 @@ impl RenderLayers {
             LayerAttachment::Clip { content, .. }
             | LayerAttachment::Transform { layer: content } => {
                 compositor.set_children(content, child_layers);
+            }
+            LayerAttachment::Blend { layer } => {
+                child_layers.extend(self.picture);
+                compositor.set_children(layer, child_layers);
+                compositor.set_children(self.root, vec![layer]);
             }
             _ => {
                 let layer = self

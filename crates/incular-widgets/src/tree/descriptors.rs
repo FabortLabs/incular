@@ -48,6 +48,7 @@ pub(crate) struct ImageOptions {
     pub(crate) color: Option<Color>,
     /// Flutter `colorBlendMode`; `None` is Flutter's `srcIn`.
     pub(crate) color_blend_mode: Option<BlendMode>,
+    pub(crate) destination_blend_mode: BlendMode,
 }
 
 impl Default for ImageOptions {
@@ -64,6 +65,7 @@ impl Default for ImageOptions {
             match_text_direction: false,
             color: None,
             color_blend_mode: None,
+            destination_blend_mode: BlendMode::SrcOver,
         }
     }
 }
@@ -202,6 +204,11 @@ impl Image {
         Self { image, options }
     }
 
+    pub(crate) fn destination_blend_mode(mut self, mode: BlendMode) -> Self {
+        self.options.destination_blend_mode = mode;
+        self
+    }
+
     image_option_setters!();
 }
 impl From<Image> for Widget {
@@ -254,6 +261,7 @@ impl From<Image> for Widget {
             options.repeat,
             options.alignment,
             options.sampling,
+            options.destination_blend_mode,
         )
     }
 }
