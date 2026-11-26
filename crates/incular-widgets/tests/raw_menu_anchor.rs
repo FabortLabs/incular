@@ -6,9 +6,9 @@ use incular_config::{Constraints, TextDirection};
 use incular_core::{Color, Offset, PRIMARY_POINTER_BUTTON, PointerPhase, Rect, Size, Transform};
 use incular_gestures::{PointerDeviceKind, RawPointerEvent};
 use incular_rendering::{DisplayList, PaintCommand};
-use incular_widgets::internal::WidgetTree;
+use incular_widgets::internal::{ElementId, WidgetTree};
 use incular_widgets::{
-    Align, Alignment, Directionality, FocusNode, MenuController, Positioned, RawMenuAnchor,
+    Align, Alignment, Directionality, Focus, FocusNode, MenuController, Positioned, RawMenuAnchor,
     RawMenuAnchorGroup, RawMenuOverlayInfo, Row, SizedBox, Stack, TapRegion, TapRegionSurface,
     Widget,
 };
@@ -62,45 +62,76 @@ fn anchor_box() -> Widget {
 
 struct Harness {
     tree: WidgetTree,
+    focused: Option<ElementId>,
 }
 
 impl Harness {
     fn new(widget: Widget) -> Self {
         let mut tree = WidgetTree::new();
+        let mut environment = tree.environment().clone();
+        environment.viewport = Size::new(200., 200.);
+        let _ = tree.set_environment(environment);
         tree.mount(
             Directionality::new(
                 TextDirection::Ltr,
-                TapRegionSurface::new(Align::new(Alignment::TOP_LEFT, widget)),
+                // RenderTapRegionSurface defers to a hitting child. Give
+                // the scene a background so a tap away from the anchor
+                // still hits the surface (as in the Flutter test app).
+                TapRegionSurface::new(Stack::new([
+                    Widget::box_(Size::new(200., 200.), Color::WHITE),
+                    Align::new(Alignment::TOP_LEFT, widget).into(),
+                ])),
             )
             .into(),
         )
         .expect("mount");
-        let mut harness = Self { tree };
+        let mut harness = Self {
+            tree,
+            focused: None,
+        };
         harness.frame();
         harness
     }
 
     fn frame(&mut self) {
+        let now = Instant::now();
+        incular_animation::scheduler::begin_frame(now);
         self.tree
             .layout(Constraints::tight(Size::new(200., 200.)))
             .expect("layout");
+        self.tree.refresh_hosted_scope_membership();
+        if let Some(next) = self.tree.external_focus_change(self.focused) {
+            self.focused = next;
+            self.tree.sync_hosted_focus_chain(next);
+        }
+        let _ = self.tree.paint();
+        incular_animation::scheduler::end_frame(now);
     }
 
     fn tap(&mut self, point: Offset) {
-        let event = RawPointerEvent {
-            buttons: PRIMARY_POINTER_BUTTON,
-            button: Some(PRIMARY_POINTER_BUTTON),
-            ..RawPointerEvent::new(
-                0,
-                1,
-                PointerDeviceKind::Mouse,
-                0,
-                point,
-                PointerPhase::Down,
-                Instant::now(),
-            )
-        };
-        let _ = self.tree.dispatch_raw_pointer_in_window(1, event);
+        for (phase, buttons) in [
+            (PointerPhase::Down, PRIMARY_POINTER_BUTTON),
+            (PointerPhase::Up, 0),
+        ] {
+            let event = RawPointerEvent {
+                buttons,
+                button: Some(PRIMARY_POINTER_BUTTON),
+                ..RawPointerEvent::new(
+                    0,
+                    1,
+                    PointerDeviceKind::Mouse,
+                    0,
+                    point,
+                    phase,
+                    Instant::now(),
+                )
+            };
+            let hit = self.tree.pointer_hit_test(point);
+            let _ = self.tree.dispatch_raw_pointer_with_hit(1, event, &hit);
+            let _ = self
+                .tree
+                .dispatch_pointer_gesture_raw_with_hit(1, event, &hit);
+        }
         self.frame();
     }
 
@@ -312,13 +343,13 @@ fn a_root_menu_focuses_its_child_focus_node_on_opening() {
         menu_below(info, 10., SUBMENU, SizedBox::shrink().into())
     })
     .child_focus_node(submenu_focus.clone())
-    .child(Widget::box_(Size::new(10., 10.), Color::WHITE))
+    .child(Focus::new(Widget::box_(Size::new(10., 10.), Color::WHITE)).node(submenu_focus.clone()))
     .into();
     let anchor = RawMenuAnchor::new(menu.clone(), move |_, info| {
         menu_below(info, 50., MENU, items.clone())
     })
     .child_focus_node(menu_focus.clone())
-    .child(anchor_box());
+    .child(Focus::new(anchor_box()).node(menu_focus.clone()));
     let mut harness = Harness::new(anchor.into());
     assert!(!menu_focus.has_focus());
     menu.open(None);
@@ -338,7 +369,7 @@ fn a_menu_directly_in_a_group_focuses_its_child_focus_node() {
         menu_below(info, 30., MENU, SizedBox::shrink().into())
     })
     .child_focus_node(focus.clone())
-    .child(anchor_box())
+    .child(Focus::new(anchor_box()).node(focus.clone()))
     .into();
     let mut harness = Harness::new(RawMenuAnchorGroup::new(group, anchor).into());
     menu.open(None);

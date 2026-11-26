@@ -96,3 +96,12 @@ One attached controller close requests hiding without dismissing the
 menu until the supplied callback is invoked; a saved callback invoked
 after disposal is silent. No native timer or physical resize is
 required for these three behaviors.
+
+### Retained menu integration controls
+
+The eight older native controls are now green. Their fixture gives the
+TapRegionSurface a hit-testable background and routes down/up input,
+attaches real Focus widgets for explicit nodes, and advances the frame
+scheduler. The previous five failures were reproducible with the prior
+production code because the fixture had neither an outside hit target
+nor attached focus nodes. No new pair is counted for the fixture repair.
