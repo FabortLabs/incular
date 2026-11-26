@@ -33,6 +33,17 @@ pub(crate) async fn invoke_optional_json<M: FlutterPlatformMessenger>(
     method: &'static str,
     arguments: Value,
 ) -> Result<(), FlutterPlatformChannelError<M::Error>> {
+    invoke_optional_json_value(messenger, channel, method, arguments)
+        .await
+        .map(|_| ())
+}
+
+pub(crate) async fn invoke_optional_json_value<M: FlutterPlatformMessenger>(
+    messenger: &mut M,
+    channel: &'static str,
+    method: &'static str,
+    arguments: Value,
+) -> Result<Value, FlutterPlatformChannelError<M::Error>> {
     let payload = JsonMethodCodec::encode_method_call(&MethodCall {
         method: method.to_owned(),
         arguments,
@@ -42,7 +53,8 @@ pub(crate) async fn invoke_optional_json<M: FlutterPlatformMessenger>(
         .await
         .map_err(FlutterPlatformChannelError::Transport)?
     {
-        JsonMethodCodec::decode_envelope(&reply)?;
+        Ok(JsonMethodCodec::decode_envelope(&reply)?)
+    } else {
+        Ok(Value::Null)
     }
-    Ok(())
 }

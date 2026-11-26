@@ -27,6 +27,7 @@ mod operation;
 mod platform_view;
 mod pointer;
 mod process_text;
+mod scribe;
 mod semantics_messages;
 mod spell_check;
 mod system_chrome;
@@ -84,6 +85,7 @@ pub use haptic_feedback::{HapticFeedback, HapticFeedbackError, HapticFeedbackTyp
 pub use process_text::{
     DefaultProcessTextService, ProcessTextAction, ProcessTextError, ProcessTextService,
 };
+pub use scribe::{Scribe, ScribeError};
 pub use semantics_messages::{
     AccessibilityMessenger, Assertiveness, SemanticsAnnouncement, SemanticsEvent,
     SemanticsMessageError, SemanticsNodeErrorReport, SemanticsService,
