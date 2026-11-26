@@ -2106,9 +2106,10 @@ impl Runtime {
                     }
                 }
                 self.text_handle_drag_end(position);
+                let was_long_press = self.text_long_press.as_ref().is_some_and(|press| press.started);
                 self.text_long_press_end(position);
                 if self.captured_text_field.take().is_some() {
-                    self.text_field_primary_up();
+                    self.text_field_primary_up(position, kind, was_long_press);
                 }
                 self.captured_selectable_text = None;
                 let pressed = self.pressed_button.take();

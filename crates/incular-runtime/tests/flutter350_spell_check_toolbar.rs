@@ -43,6 +43,7 @@ fn input(
         .read_only(read_only)
         .obscure_text(obscure)
         .context_menu_builder(|_, _| SizedBox::shrink().into())
+        .selection_handles_builder(|_, _| SizedBox::shrink().into())
         .spell_check_configuration(
             SpellCheckConfiguration::new()
                 .spell_check_service(Checker)
@@ -237,4 +238,83 @@ fn suggestion_selection_color_repaints_and_restores_the_same_rectangles() {
     assert_eq!(default_after, normal);
     assert!(special_after.is_empty());
     assert_eq!(controller.selection(), TextSelection::new(0, 2));
+}
+
+#[test]
+fn android_single_taps_switch_between_suggestions_and_selection_handles() {
+    use incular_core::{
+        InputEvent, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase, PointerSampleMetadata,
+    };
+    use std::time::{Duration, Instant};
+
+    let controller = TextEditingController::with_text("tset here");
+    let focus = FocusNode::new();
+    let shown = BuiltMenus::default();
+    let mut runtime = Runtime::new(input(&controller, &focus, &shown, false, false)).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
+    layout(&mut runtime);
+    let field = runtime.tree().text_field_at(Offset::new(15., 12.)).unwrap();
+    controller.move_end(false);
+    controller.insert_text("!");
+    let mut position_at = |offset| {
+        controller.set_selection(TextSelection::collapsed(offset));
+        layout(&mut runtime);
+        let rect = runtime
+            .tree()
+            .text_field_input_geometry(field)
+            .unwrap()
+            .caret_rect;
+        Offset::new(rect.origin.x, rect.origin.y + rect.size.height / 2.0)
+    };
+    let good = position_at(7);
+    let misspelled = position_at(2);
+    controller.set_selection(TextSelection::collapsed(0));
+    layout(&mut runtime);
+    assert_eq!(runtime.focused_element(), None);
+
+    let start = Instant::now();
+    for (index, (position, spelling)) in [(good, false), (misspelled, true), (good, false)]
+        .into_iter()
+        .enumerate()
+    {
+        let at = start + Duration::from_millis(600 * index as u64);
+        for (phase, buttons) in [
+            (PointerPhase::Down, PRIMARY_POINTER_BUTTON),
+            (PointerPhase::Up, 0),
+        ] {
+            let _ = runtime.handle_input_at(
+                InputEvent::PointerWithMetadata {
+                    pointer: 1,
+                    device: 3,
+                    kind: PointerDeviceKind::Touch,
+                    buttons,
+                    button: Some(PRIMARY_POINTER_BUTTON),
+                    sample: PointerSampleMetadata::default(),
+                    phase,
+                    position,
+                },
+                at,
+            );
+        }
+        runtime
+            .run_frame_at(Constraints::tight(Size::new(300., 40.)), at)
+            .unwrap();
+        assert_eq!(runtime.focused_element(), Some(field));
+        assert_eq!(
+            runtime
+                .tree()
+                .text_field_toolbar_state(field)
+                .unwrap()
+                .is_spell_check_showing(),
+            spelling
+        );
+        assert_eq!(
+            runtime
+                .tree()
+                .text_field_selection_handles(field)
+                .unwrap()
+                .is_showing(),
+            !spelling
+        );
+    }
 }

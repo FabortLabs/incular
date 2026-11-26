@@ -429,6 +429,7 @@ impl Runtime {
             })
         }).collect();
         let anchors = self.text_field_menu_anchors(field, snapshot.caret_rect.origin);
+        self.hide_text_field_handles(field);
         self.frame_requested = true;
         menu.show_spell_check(anchors, buttons, span)
     }
@@ -738,15 +739,42 @@ impl Runtime {
         }
     }
 
-    pub(super) fn text_field_primary_up(&mut self) {
+    pub(super) fn text_field_primary_up(
+        &mut self,
+        position: Offset,
+        kind: PointerDeviceKind,
+        was_long_press: bool,
+    ) {
         let now = self.input_now();
-        if let Some(run) = &mut self.text_taps {
-            run.last_up = Some(now);
-            // `TextSelectionGestureDetectorBuilder.onSingleTapUp`:
-            // `editableText.requestKeyboard()`.
-            if run.was_focused && self.focused == Some(run.field) {
-                self.text_input_show_requested = true;
-            }
+        let Some(run) = &mut self.text_taps else {
+            return;
+        };
+        run.last_up = Some(now);
+        let run = *run;
+        if self.focused != Some(run.field) {
+            return;
+        }
+        // `TextSelectionGestureDetectorBuilder.onSingleTapUp` re-opens the
+        // keyboard if this editor was already focused.
+        if run.was_focused {
+            self.text_input_show_requested = true;
+        }
+        let delta = position - run.down_position;
+        if self.text_shortcut_platform == TextShortcutPlatform::Android
+            && run.effective_count == 1
+            && !run.shift
+            && !was_long_press
+            && delta.x.hypot(delta.y) <= TOUCH_SLOP
+            && !self.show_spell_check_suggestions_toolbar(run.field)
+            && matches!(
+                kind,
+                PointerDeviceKind::Touch | PointerDeviceKind::Stylus | PointerDeviceKind::InvertedStylus
+            )
+            // A field with the spell overlay keeps the handles visible when
+            // the tapped word is spelled correctly, including first focus.
+            && (run.was_focused || self.tree.text_field_spell_check_toolbar(run.field).is_some())
+        {
+            self.show_text_field_handles(run.field);
         }
     }
 

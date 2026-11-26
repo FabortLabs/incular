@@ -30,3 +30,15 @@ changes; the range, geometry, and original highlight are preserved.
 The Incular visibility transition invalidates selection paint without
 requesting editor layout on its own. This authored control does not add
 an upstream registration.
+
+## Android single-tap handles
+
+The pinned Android test and the native runtime pointer sequence compare
+three transitions: a correctly spelled word shows the caret handle;
+a misspelled word opens suggestions and hides the handle; another tap on
+a correctly spelled word restores the handle. The original designer toolbar
+label is not part of Incular's comparison, so the registration is partial.
+
+The neighboring Android first-drag focus expectation also failed with
+this change reverted. That baseline issue is separate from spelling and
+is not marked as fixed by the passing pointer sequence.
