@@ -241,3 +241,97 @@ fn retained_table_adds_only_explicit_strokes_over_cells_and_clears_them_on_remov
         PaintCommand::StrokePath { .. } | PaintCommand::FillPath { .. }
     )));
 }
+
+#[test]
+fn all_preserves_the_radius_and_paints_a_rounded_one_pixel_ring() {
+    let radius = BorderRadius::all(Radius::circular(8.));
+    let border = TableBorder::all(BorderSide::default()).border_radius(radius);
+    assert_eq!(border.border_radius, radius);
+    let rect = Rect::from_origin_size(Offset::ZERO, Size::new(80., 50.));
+    let mut canvas = Canvas::default();
+    border.paint(&mut canvas, rect, &[], &[]);
+    let list = canvas.finish();
+    let [PaintCommand::FillPath { path, brush: Brush::Solid(Color::BLACK), fill_rule }] =
+        list.commands()
+    else {
+        panic!("expected a rounded ring, got {list:?}");
+    };
+    assert_eq!(*fill_rule, FillRule::EvenOdd);
+    assert!(!path.contains(Offset::new(0.5, 0.5), *fill_rule));
+    assert!(path.contains(Offset::new(40., 0.5), *fill_rule));
+    assert!(!path.contains(Offset::new(40., 1.5), *fill_rule));
+}
+
+#[test]
+fn different_inside_dividers_do_not_make_the_outer_edges_different() {
+    let black = BorderSide::solid(Color::BLACK, 2.);
+    let blue = BorderSide::solid(BLUE, 1.);
+    let outer_uniform = TableBorder::symmetric(blue, black);
+    assert!(!outer_uniform.is_uniform());
+    assert_eq!([outer_uniform.right, outer_uniform.bottom, outer_uniform.left], [outer_uniform.top; 3]);
+    let outer_nonuniform = TableBorder {
+        right: BorderSide::solid(GREEN, 2.),
+        ..TableBorder::all(black)
+    };
+    assert_ne!(outer_nonuniform.right, outer_nonuniform.top);
+
+    let mut canvas = Canvas::default();
+    outer_uniform
+        .border_radius(BorderRadius::all(Radius::circular(8.)))
+        .paint(
+            &mut canvas,
+            Rect::from_origin_size(Offset::ZERO, Size::new(80., 50.)),
+            &[25.],
+            &[40.],
+        );
+    let list = canvas.finish();
+    assert!(matches!(
+        list.commands(),
+        [
+            PaintCommand::StrokePath { brush: Brush::Solid(BLUE), .. },
+            PaintCommand::StrokePath { brush: Brush::Solid(BLUE), .. },
+            PaintCommand::FillPath { brush: Brush::Solid(Color::BLACK), fill_rule: FillRule::EvenOdd, .. },
+        ]
+    ));
+}
+
+#[test]
+fn same_color_nonuniform_widths_keep_the_rounded_corners_and_independent_insets() {
+    let radius = BorderRadius::all(Radius::circular(8.));
+    let border = TableBorder {
+        top: BorderSide::solid(BLUE, 3.),
+        right: BorderSide::solid(BLUE, 1.),
+        bottom: BorderSide::solid(BLUE, 2.),
+        left: BorderSide::solid(BLUE, 1.5),
+        border_radius: radius,
+        ..TableBorder::default()
+    };
+    assert_ne!(border.top.width, border.bottom.width);
+    assert_ne!(border.left.width, border.right.width);
+    assert_eq!([border.right.color, border.bottom.color, border.left.color], [border.top.color; 3]);
+    assert_eq!(border.border_radius, radius);
+
+    let mut canvas = Canvas::default();
+    border.paint(
+        &mut canvas,
+        Rect::from_origin_size(Offset::ZERO, Size::new(80., 50.)),
+        &[],
+        &[],
+    );
+    let list = canvas.finish();
+    let [PaintCommand::FillPath { path, brush: Brush::Solid(BLUE), fill_rule }] = list.commands()
+    else {
+        panic!("expected a single rounded ring, got {list:?}");
+    };
+    assert_eq!(*fill_rule, FillRule::EvenOdd);
+    assert!(!path.contains(Offset::new(0.5, 0.5), *fill_rule));
+    for (inside_stroke, outside_stroke) in [
+        (Offset::new(40., 2.5), Offset::new(40., 3.5)),
+        (Offset::new(79.5, 25.), Offset::new(78.5, 25.)),
+        (Offset::new(40., 48.5), Offset::new(40., 47.5)),
+        (Offset::new(1., 25.), Offset::new(2., 25.)),
+    ] {
+        assert!(path.contains(inside_stroke, *fill_rule), "{inside_stroke:?}");
+        assert!(!path.contains(outside_stroke, *fill_rule), "{outside_stroke:?}");
+    }
+}
