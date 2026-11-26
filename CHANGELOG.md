@@ -340,6 +340,10 @@ a version and date when publishing.
 
 ### Fixed
 
+- Scale gestures distinguish contacts from separate devices, preserve
+  first-in-route drag competition when a finger joins, and report focal
+  movement in the recognizer's local coordinates.
+
 - Shaping and retained text caches now honor word spacing.
 
 - Text and rich spans draw their background behind the measured glyph runs.

@@ -1808,3 +1808,4 @@ packages/flutter/test/gestures/scale_test.dart	1092	Scale gesture competes with 
 packages/flutter/test/gestures/scale_test.dart	1186	Scale gesture from pan/zoom events properly handles DragStartBehavior.start	reference-ran-incular-open	upstream-geometry-input-gestures.md#trackpad-scale-input-remains-separate
 packages/flutter/test/gestures/scale_test.dart	1293	scale trackpadScrollCausesScale	reference-ran-incular-open	upstream-geometry-input-gestures.md#trackpad-scale-input-remains-separate
 packages/flutter/test/gestures/scale_test.dart	1447	scale ending velocity	reference-ran-incular-open	upstream-geometry-input-gestures.md#trackpad-scale-input-remains-separate
+packages/flutter/test/gestures/scale_test.dart	472	Should recognize rotation gestures	paired-match	upstream-geometry-input-gestures.md#drag-before-scale-and-signed-rotations

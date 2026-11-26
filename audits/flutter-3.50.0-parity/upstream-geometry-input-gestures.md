@@ -200,3 +200,19 @@ scale velocity. Incular's native aggregate pinch/rotation events use
 an independent retained callback and do not enter the touch-scale
 recognizer as correlated pan/zoom contacts. These are reference-only
 rather than equivalences with native aggregate callbacks.
+
+### Drag before scale and signed rotations
+
+The authored Flutter and native mounted probes also reverse the route
+order. A horizontal drag ahead of the scale wins the second contact's
+20 px move. That event must not report a scale restart or update; the
+surviving first contact then restarts on its own. Incular previously
+reported both a losing two-contact scale restart/update and a drag
+start on the same move. The pending scale now observes no event when
+an earlier exclusive claim will reject that contact.
+
+Pinned :472 pairs: the mounted scale competes with a tap throughout
+a 1→2→3→2 contact sequence. It reports rotation +π after crossing the
+first two-contact line, rebases after a contact is replaced, and reports
+−π crossing the new line in the opposite direction. The focal points,
+deltas, callback count, and end sequence match; no tap is delivered.

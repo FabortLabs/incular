@@ -1385,6 +1385,18 @@ impl WidgetTree {
                         }
                     }
                     RetainedGestureKind::Scale => {
+                        // This event is routed in hit order. An earlier
+                        // exclusive claim in an undecided arena will reject
+                        // this pending scale member. Do not let its contact
+                        // restart a previously won scale before that loss.
+                        if disposition == GestureDisposition::Pending
+                            && matches!(accepts.first(), Some(PendingAccept::Pointer(..)))
+                            && !dispositions.iter().any(|entry| {
+                                entry.disposition == GestureDisposition::Accepted
+                            })
+                        {
+                            continue;
+                        }
                         let Some(scale) = self.input.scale_gestures.get_mut(&candidate.element)
                         else {
                             continue;
