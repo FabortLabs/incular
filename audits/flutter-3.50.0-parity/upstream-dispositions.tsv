@@ -2276,3 +2276,6 @@ packages/flutter/test/widgets/editable_text_test.dart	5077	can move cursor with 
 packages/flutter/test/widgets/editable_text_test.dart	5191	can extend selection with a11y means - character	paired-match	upstream-editable-focus-selection.md#accessibility-cursor-movement-and-retained-editor-actions
 packages/flutter/test/widgets/editable_text_test.dart	5308	can extend selection with a11y means - word	paired-match	upstream-editable-focus-selection.md#accessibility-cursor-movement-and-retained-editor-actions
 packages/flutter/test/widgets/semantics_test.dart	579	Semantics widget supports all flags	paired-match	upstream-semantic-gesture-directions.md#full-ordinary-semantics-flag-inventory
+packages/flutter/test/gestures/drag_test.dart	2522	Should recognize pan gestures from platform	paired-match	upstream-geometry-input-gestures.md#trackpad-pan-and-mixed-drag-tenure
+packages/flutter/test/gestures/drag_test.dart	2583	Pointer pan/zooms drags should allow touches to join them	reference-ran-incular-open	upstream-geometry-input-gestures.md#trackpad-pan-and-mixed-drag-tenure
+packages/flutter/test/gestures/drag_test.dart	2671	Touch drags should allow pointer pan/zooms to join them	reference-ran-incular-open	upstream-geometry-input-gestures.md#trackpad-pan-and-mixed-drag-tenure

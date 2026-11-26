@@ -286,6 +286,15 @@ and a losing horizontal drag delivers one Down and one Cancel before
 ScaleStart, with no DragStart or duplicate cancellation. These authored
 probes are separate from the pinned registration count.
 
+#### Trackpad pan and mixed drag tenure
+
+Pinned drag_test.dart :2522 pairs on the mounted correlated-input route
+with two real pan recognizers: the winning route stays pending after
+28.28 px, starts on the step taking travel to 42.43 px, then delivers only
+the incremental (0, −5) move and one end. No outer pan starts.
+The two mixed touch/trackpad drag-tenure cases :2583 and :2671 passed on
+the reference and are recorded separately from mixed **scale** support.
+
 ### Drag before scale and signed rotations
 
 The authored Flutter and native mounted probes also reverse the route

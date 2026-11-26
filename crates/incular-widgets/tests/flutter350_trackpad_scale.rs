@@ -301,3 +301,64 @@ fn trackpad_scale_admission_and_pending_drag_lifecycle_match_flutter() {
         assert_eq!(&*log.borrow(), want);
     }
 }
+
+#[test]
+fn mounted_trackpad_pan_crosses_slop_before_emitting_updates() {
+    #[derive(Debug, PartialEq)]
+    enum Pan {
+        Start(Offset, PointerDeviceKind),
+        Update(Offset),
+        End,
+    }
+    let trace = Rc::new(RefCell::new(Vec::new()));
+    let child = GestureDetector::new(Widget::box_(Size::new(120., 120.), Color::BLACK))
+        .on_pan_start({
+            let trace = trace.clone();
+            move |d| {
+                trace
+                    .borrow_mut()
+                    .push(Pan::Start(d.global_position, d.kind))
+            }
+        })
+        .on_pan_update({
+            let trace = trace.clone();
+            move |d| {
+                assert_eq!(d.primary_delta, None);
+                trace.borrow_mut().push(Pan::Update(d.delta));
+            }
+        })
+        .on_pan_end({
+            let trace = trace.clone();
+            move |_| trace.borrow_mut().push(Pan::End)
+        });
+    let mut tree = mounted_detector(
+        GestureDetector::new(child).on_pan_start(|_| panic!("the outer pan must lose")),
+    );
+    let pan = |x, y| PointerPanZoomPhase::Update {
+        pan: Offset::new(x, y),
+        scale: 1.,
+        rotation: 0.,
+    };
+    absolute(&mut tree, PointerPanZoomPhase::Start);
+    assert!(trace.borrow().is_empty());
+    absolute(&mut tree, pan(20., 20.));
+    assert!(trace.borrow().is_empty());
+    absolute(&mut tree, pan(30., 30.));
+    assert_eq!(
+        &*trace.borrow(),
+        &[Pan::Start(
+            Offset::new(60., 60.),
+            PointerDeviceKind::Trackpad
+        )]
+    );
+    absolute(&mut tree, pan(30., 25.));
+    absolute(&mut tree, PointerPanZoomPhase::End);
+    assert_eq!(
+        &*trace.borrow(),
+        &[
+            Pan::Start(Offset::new(60., 60.), PointerDeviceKind::Trackpad),
+            Pan::Update(Offset::new(0., -5.)),
+            Pan::End,
+        ]
+    );
+}
