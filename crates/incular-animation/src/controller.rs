@@ -22,7 +22,7 @@ use incular_core::finite_or_zero;
 use incular_core::time::Instant;
 use std::{
     any::Any,
-    cell::{Cell, RefCell},
+    cell::{Cell, RefCell, RefMut},
     fmt,
     panic::{AssertUnwindSafe, catch_unwind},
     rc::{Rc, Weak},
@@ -407,6 +407,7 @@ fn remove_registration<F: ?Sized>(
 
 struct ControllerState {
     state: State,
+    disposed: bool,
     run: Option<Run>,
     listeners: Vec<Listener>,
     status_listeners: Vec<StatusListener>,
@@ -425,6 +426,7 @@ impl ControllerState {
     fn new(state: State) -> Self {
         Self {
             state,
+            disposed: false,
             run: None,
             listeners: Vec::new(),
             status_listeners: Vec::new(),
@@ -466,7 +468,8 @@ impl Drop for ControllerState {
 /// `tick` is deterministic and can be driven by a frame scheduler, a test
 /// clock, or a native animation callback. Values are always kept inside the
 /// configured bounds.
-/// Dropping the last handle cancels an unfinished run.
+/// Dropping the last handle cancels an unfinished run. Use [Self::dispose]
+/// to shut down all clones or release callbacks that captured a handle.
 #[derive(Clone, Default)]
 pub struct AnimationController {
     changes: incular_core::reactivity::DependencySource,
@@ -475,7 +478,8 @@ pub struct AnimationController {
 
 impl fmt::Debug for AnimationController {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let state = self.inner.borrow().state.clone();
+        let controller = self.inner.borrow();
+        let state = &controller.state;
         formatter
             .debug_struct("AnimationController")
             .field("value", &state.value)
@@ -483,6 +487,7 @@ impl fmt::Debug for AnimationController {
             .field("duration", &state.duration)
             .field("lower_bound", &state.lower_bound)
             .field("upper_bound", &state.upper_bound)
+            .field("disposed", &controller.disposed)
             .finish()
     }
 }
@@ -494,17 +499,81 @@ impl PartialEq for AnimationController {
 }
 
 impl AnimationController {
+    #[track_caller]
+    fn live_inner_mut(&self) -> RefMut<'_, ControllerState> {
+        let controller = self.inner.borrow_mut();
+        assert!(!controller.disposed, "AnimationController used after dispose");
+        controller
+    }
+
+    #[track_caller]
+    fn assert_live(&self) {
+        assert!(!self.is_disposed(), "AnimationController used after dispose");
+    }
+
+    /// Releases the run, ticker and manual listeners for all handles.
+    ///
+    /// A pending animation is canceled. A disposed controller cannot be
+    /// reused. Reading its last value remains possible through another handle.
+    pub fn dispose(&self) {
+        #[cfg(debug_assertions)]
+        let allocation;
+        let (ticker, future, run, listeners, status_listeners, error_handler) = {
+            let mut controller = self.inner.borrow_mut();
+            assert!(
+                !controller.disposed,
+                "AnimationController.dispose() called more than once."
+            );
+            controller.disposed = true;
+            controller.state.started_at = None;
+            controller.state.pending_start = false;
+            for entry in &controller.listeners {
+                entry.active.set(false);
+            }
+            for entry in &controller.status_listeners {
+                entry.active.set(false);
+            }
+            #[cfg(debug_assertions)]
+            {
+                allocation = controller.allocation.take();
+            }
+            (
+                controller.ticker.take(),
+                controller.future.take(),
+                controller.run.take(),
+                std::mem::take(&mut controller.listeners),
+                std::mem::take(&mut controller.status_listeners),
+                controller.listener_error_handler.take(),
+            )
+        };
+        // A future or a callback's captures can reenter this controller on
+        // release. Never drop those resources with the state mutably borrowed.
+        drop(ticker);
+        if let Some(future) = future {
+            future.resolve(false);
+        }
+        drop((run, listeners, status_listeners, error_handler));
+        #[cfg(debug_assertions)]
+        drop(allocation);
+    }
+
+    #[must_use]
+    pub fn is_disposed(&self) -> bool {
+        self.inner.borrow().disposed
+    }
+
     #[doc(hidden)]
     pub fn adopt_timeline_from(&self, other: &Self) {
         if Rc::ptr_eq(&self.inner, &other.inner) {
             return;
         }
         let (next, run) = {
+            other.assert_live();
             let other = other.inner.borrow();
             (other.state.clone(), other.run.clone())
         };
         let changed = {
-            let mut controller = self.inner.borrow_mut();
+            let mut controller = self.live_inner_mut();
             let changed = controller.state != next;
             controller.state = next;
             controller.run = run;
@@ -571,7 +640,7 @@ impl AnimationController {
     #[must_use]
     pub fn with_value(self, value: f32) -> Self {
         {
-            let mut controller = self.inner.borrow_mut();
+            let mut controller = self.live_inner_mut();
             let state = &mut controller.state;
             state.value = clamp_finite(value, state);
             state.status = state.status_at(state.value);
@@ -585,7 +654,7 @@ impl AnimationController {
     /// `animate_back` runs, when set.
     #[must_use]
     pub fn with_reverse_duration(self, duration: Duration) -> Self {
-        self.inner.borrow_mut().state.reverse_duration = Some(duration);
+        self.live_inner_mut().state.reverse_duration = Some(duration);
         self
     }
 
@@ -595,7 +664,7 @@ impl AnimationController {
     }
 
     pub fn set_reverse_duration(&self, duration: Option<Duration>) {
-        self.inner.borrow_mut().state.reverse_duration = duration;
+        self.live_inner_mut().state.reverse_duration = duration;
     }
 
     /// Flutter's `vsync:`: ticks this controller from the frame scheduler
@@ -615,6 +684,7 @@ impl AnimationController {
     /// Like `resync`, but configures the new ticker before it receives the
     /// existing run. For example, an owning scope can set its muted policy.
     pub fn resync_with(&self, configure: impl FnOnce(&Ticker)) {
+        self.assert_live();
         let weak = WeakController {
             changes: self.changes.clone(),
             inner: Rc::downgrade(&self.inner),
@@ -627,7 +697,7 @@ impl AnimationController {
         configure(&ticker);
         assert!(!ticker.is_active(), "the replacement ticker must be inactive");
         {
-            let mut owner = self.inner.borrow_mut();
+            let mut owner = self.live_inner_mut();
             if let Some(old) = owner.ticker.take() {
                 ticker.absorb_ticker(&old);
             }
@@ -668,7 +738,7 @@ impl AnimationController {
     /// `animationBehavior`, default [`AnimationBehavior::Normal`]).
     #[must_use]
     pub fn with_animation_behavior(self, behavior: AnimationBehavior) -> Self {
-        self.inner.borrow_mut().state.animation_behavior = behavior;
+        self.live_inner_mut().state.animation_behavior = behavior;
         self
     }
 
@@ -695,7 +765,7 @@ impl AnimationController {
     }
 
     pub fn set_optional_duration(&self, duration: Option<Duration>) {
-        self.inner.borrow_mut().state.duration = duration;
+        self.live_inner_mut().state.duration = duration;
     }
 
     #[must_use]
@@ -707,7 +777,7 @@ impl AnimationController {
     pub fn set_bounds(&self, lower_bound: f32, upper_bound: f32) {
         let (lower_bound, upper_bound) = normalize_bounds(lower_bound, upper_bound);
         let changed = {
-            let mut controller = self.inner.borrow_mut();
+            let mut controller = self.live_inner_mut();
             let old = controller.state.value;
             controller.state.lower_bound = lower_bound;
             controller.state.upper_bound = upper_bound;
@@ -869,7 +939,7 @@ impl AnimationController {
     /// Lets a repeating animation finish the cycle it is in and complete
     /// there, instead of stopping mid-cycle.
     pub fn stop_repeat(&self) {
-        let mut controller = self.inner.borrow_mut();
+        let mut controller = self.live_inner_mut();
         let elapsed = controller.state.last_elapsed.as_secs_f64();
         if let Some(Run::Repeating {
             period,
@@ -911,7 +981,7 @@ impl AnimationController {
     /// [`TickerFuture`] is canceled.
     pub fn stop(&self) {
         let future = {
-            let mut controller = self.inner.borrow_mut();
+            let mut controller = self.live_inner_mut();
             controller.run = None;
             controller.state.started_at = None;
             controller.state.pending_start = false;
@@ -1103,7 +1173,7 @@ impl AnimationController {
     /// with. Flutter's controller is linear; ease it with a
     /// `CurvedAnimation` to keep that model.
     pub fn set_curve(&self, curve: Curve) {
-        self.inner.borrow_mut().state.curve = curve;
+        self.live_inner_mut().state.curve = curve;
     }
 
     #[must_use]
@@ -1116,18 +1186,24 @@ impl AnimationController {
         &self,
         listener: impl Fn(f32) + 'static,
     ) -> incular_core::reactivity::Subscription {
+        self.assert_live();
         let inner = Rc::downgrade(&self.inner);
         self.changes.subscribe((), move || {
             if let Some(inner) = inner.upgrade() {
-                let value = inner.borrow().state.value as f32;
-                listener(value);
+                let value = {
+                    let controller = inner.borrow();
+                    (!controller.disposed).then_some(controller.state.value as f32)
+                };
+                if let Some(value) = value {
+                    listener(value);
+                }
             }
         })
     }
 
     /// Low-level manual registration. Prefer `observe` for owned listeners.
     pub fn add_listener(&self, listener: impl Fn(f32) + 'static) -> usize {
-        let mut controller = self.inner.borrow_mut();
+        let mut controller = self.live_inner_mut();
         let id = next_listener_id(&mut controller);
         controller.listeners.push(Rc::new(ListenerRegistration {
             id,
@@ -1143,7 +1219,7 @@ impl AnimationController {
     /// that ID once for each add to release all registrations.
     pub fn add_shared_listener(&self, listener: Rc<dyn Fn(f32)>) -> usize {
         let key = Rc::as_ptr(&listener).cast::<()>();
-        let mut controller = self.inner.borrow_mut();
+        let mut controller = self.live_inner_mut();
         for entry in &controller.listeners {
             if let Some(shared) = &entry.shared
                 && shared.key == key
@@ -1178,7 +1254,7 @@ impl AnimationController {
 
     /// Flutter `addStatusListener`: called whenever the status changes.
     pub fn add_status_listener(&self, listener: impl Fn(AnimationStatus) + 'static) -> usize {
-        let mut controller = self.inner.borrow_mut();
+        let mut controller = self.live_inner_mut();
         let id = next_listener_id(&mut controller);
         controller
             .status_listeners
@@ -1202,9 +1278,7 @@ impl AnimationController {
     /// payload and whether it came from a value or status observer.
     /// Like other unwind recovery, this is not available with panic=abort.
     pub fn set_listener_error_handler(&self, handler: impl Fn(AnimationListenerError) + 'static) {
-        let previous = self
-            .inner
-            .borrow_mut()
+        let previous = self.live_inner_mut()
             .listener_error_handler
             .replace(Rc::new(handler));
         drop(previous);
@@ -1235,6 +1309,7 @@ impl AnimationController {
 
     #[track_caller]
     fn require_direction_duration(&self, forward: bool) {
+        self.assert_live();
         if self.inner.borrow().state.duration_for(forward).is_none() {
             if forward {
                 panic!("AnimationController.forward() called with no default duration");
@@ -1249,7 +1324,7 @@ impl AnimationController {
         // The direction also applies to interpreting the assigned value.
         // Observers of an interior assignment therefore see the requested
         // direction immediately, without two opposing status events.
-        self.inner.borrow_mut().state.forward = forward;
+        self.live_inner_mut().state.forward = forward;
         self.set_value(from);
         if forward {
             self.forward_at(now)
@@ -1275,6 +1350,7 @@ impl AnimationController {
         curve: Option<Curve>,
         forward: bool,
     ) -> TickerFuture {
+        self.assert_live();
         let state = self.inner.borrow().state.clone();
         let scale = behavior_scale(state.animation_behavior);
         // The public rendering value is narrower than the interpolation
@@ -1340,7 +1416,7 @@ impl AnimationController {
                 state.status != old
             };
             if value_changed || status_changed {
-                self.changes.notify();
+                self.notify_dependents();
             }
             self.notify_status();
             return TickerFuture::complete();
@@ -1427,13 +1503,13 @@ impl AnimationController {
     /// status to the direction of travel.
     fn start_run(&self, now: Option<Instant>, run: Run, forward: bool) -> TickerFuture {
         // Flutter's `stop()` before a new run cancels the old run's future.
-        let previous = self.inner.borrow_mut().future.take();
+        let previous = self.live_inner_mut().future.take();
         if let Some(previous) = previous {
             previous.resolve(false);
         }
         let future = TickerFuture::pending();
         let changed = {
-            let mut controller = self.inner.borrow_mut();
+            let mut controller = self.live_inner_mut();
             controller.future = Some(future.clone());
             let start = run.x(0.0);
             let vsync = controller.ticker.is_some();
@@ -1465,7 +1541,7 @@ impl AnimationController {
         if changed {
             self.notify_value(true);
         } else {
-            self.changes.notify();
+            self.notify_dependents();
         }
         self.notify_status();
         self.sync_ticker();
@@ -1501,6 +1577,12 @@ impl AnimationController {
             }
         }
         if changed {
+            self.notify_dependents();
+        }
+    }
+
+    fn notify_dependents(&self) {
+        if !self.is_disposed() {
             self.changes.notify();
         }
     }
@@ -1511,7 +1593,7 @@ impl AnimationController {
         let (listeners, status) = {
             let mut controller = self.inner.borrow_mut();
             let status = controller.state.status;
-            if controller.state.reported_status == status {
+            if controller.disposed || controller.state.reported_status == status {
                 return;
             }
             controller.state.reported_status = status;
@@ -1605,5 +1687,144 @@ fn normalize_bounds(lower: f32, upper: f32) -> (f32, f32) {
         (lower, upper)
     } else {
         (upper, lower)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn controller_dispose_clears_both_value_and_status_listeners() {
+        let controller = AnimationController::new(Duration::from_millis(100)).with_vsync();
+        let value_calls = Rc::new(Cell::new(0));
+        let status_calls = Rc::new(Cell::new(0));
+        let value_capture = Rc::new(());
+        let status_capture = Rc::new(());
+        let weak_value = Rc::downgrade(&value_capture);
+        let weak_status = Rc::downgrade(&status_capture);
+        let value_id = controller.add_listener({
+            let calls = value_calls.clone();
+            move |_| {
+                let _capture = &value_capture;
+                calls.set(calls.get() + 1);
+            }
+        });
+        let status_id = controller.add_status_listener({
+            let calls = status_calls.clone();
+            move |_| {
+                let _capture = &status_capture;
+                calls.set(calls.get() + 1);
+            }
+        });
+        assert_eq!((value_calls.get(), status_calls.get()), (0, 0));
+
+        controller.notify_value(false);
+        controller.inner.borrow_mut().state.status = AnimationStatus::Completed;
+        controller.notify_status();
+        assert_eq!((value_calls.get(), status_calls.get()), (1, 1));
+
+        let retained = controller.clone();
+        controller.dispose();
+        assert!(retained.is_disposed());
+        assert!(weak_value.upgrade().is_none() && weak_status.upgrade().is_none());
+        assert!(!retained.remove_listener(value_id));
+        assert!(!retained.remove_status_listener(status_id));
+        retained.notify_value(false);
+        retained.inner.borrow_mut().state.status = AnimationStatus::Reverse;
+        retained.notify_status();
+        assert_eq!((value_calls.get(), status_calls.get()), (1, 1));
+    }
+
+    #[test]
+    fn controller_dispose_cancels_vsync_and_an_active_run_with_another_handle_alive() {
+        let controller = AnimationController::new(Duration::from_millis(100)).with_vsync();
+        let retained = controller.clone();
+        let future = controller.forward_on_next_tick();
+        let settled = Rc::new(Cell::new(0));
+        future.when_complete_or_cancel({
+            let settled = settled.clone();
+            move || settled.set(settled.get() + 1)
+        });
+        assert!(retained.has_vsync() && retained.is_animating());
+        assert_eq!(settled.get(), 0);
+
+        controller.dispose();
+
+        assert_eq!(settled.get(), 1);
+        assert!(future.is_canceled());
+        assert!(!retained.has_vsync());
+        assert!(!retained.is_animating());
+        assert!(!retained.tick(Instant::now()));
+        assert!(catch_unwind(AssertUnwindSafe(|| retained.forward_on_next_tick())).is_err());
+    }
+
+    #[test]
+    fn controller_dispose_from_a_value_listener_stops_the_notification_snapshot() {
+        let controller = AnimationController::new(Duration::from_millis(100));
+        let calls = Rc::new(Cell::new(0));
+        controller.add_listener({
+            let controller = controller.clone();
+            move |_| controller.dispose()
+        });
+        controller.add_listener({
+            let calls = calls.clone();
+            move |_| calls.set(calls.get() + 1)
+        });
+        let _subscription = controller.observe({
+            let calls = calls.clone();
+            move |_| calls.set(calls.get() + 1)
+        });
+
+        controller.set_value(0.5);
+
+        assert!(controller.is_disposed());
+        assert_eq!(controller.value(), 0.5);
+        assert_eq!(calls.get(), 0);
+    }
+
+    #[test]
+    fn controller_dispose_leaves_a_single_line_debug_description() {
+        let controller = AnimationController::new(Duration::from_millis(100)).with_vsync();
+        controller.dispose();
+        let line = format!("{controller:?}");
+        assert_eq!(line.lines().count(), 1);
+        assert!(line.starts_with("AnimationController {"));
+        assert!(line.contains("disposed: true"));
+        assert_eq!(controller.value(), 0.0);
+    }
+
+    #[test]
+    fn controller_dispose_resumes_a_waiter_only_when_the_executor_polls_again() {
+        use std::future::Future;
+        use std::pin::pin;
+        use std::task::{Context, Poll, Waker};
+
+        let controller = AnimationController::new(Duration::from_millis(100)).with_vsync();
+        let log = RefCell::new(Vec::new());
+        let mut task = pin!(async {
+            log.borrow_mut().push("start");
+            match controller.forward_on_next_tick().or_cancel().await {
+                Ok(()) => log.borrow_mut().push("fail"),
+                Err(crate::TickerCanceled) => log.borrow_mut().push("caught"),
+            }
+            log.borrow_mut().push("end");
+        });
+        let mut context = Context::from_waker(Waker::noop());
+        assert_eq!(task.as_mut().poll(&mut context), Poll::Pending);
+        let now = Instant::now();
+        for elapsed in [0, 50] {
+            let at = now + Duration::from_millis(elapsed);
+            crate::scheduler::begin_frame(at);
+            crate::scheduler::end_frame(at);
+            assert_eq!(task.as_mut().poll(&mut context), Poll::Pending);
+            assert_eq!(&*log.borrow(), &["start"]);
+        }
+        assert_eq!(controller.value(), 0.5);
+
+        controller.dispose();
+        assert_eq!(&*log.borrow(), &["start"]);
+        assert_eq!(task.as_mut().poll(&mut context), Poll::Ready(()));
+        assert_eq!(&*log.borrow(), &["start", "caught", "end"]);
     }
 }

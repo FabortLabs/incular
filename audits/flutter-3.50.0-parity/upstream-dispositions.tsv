@@ -205,7 +205,7 @@ packages/flutter/test/rendering/flex_test.dart	744	MainAxisSize.min inside tight
 packages/flutter/test/foundation/change_notifier_test.dart	83	ChangeNotifier	partial-match	upstream-opacity-hover-flex-notifier-futures.md#notifier-disposal-diagnostics-and-composition#observer-failure-isolation
 packages/flutter/test/foundation/change_notifier_test.dart	168	ChangeNotifier with mutating listener	paired-match	upstream-opacity-hover-flex-notifier-futures.md
 packages/flutter/test/foundation/change_notifier_test.dart	457	hasListeners	paired-match	upstream-opacity-hover-flex-notifier-futures.md
-packages/flutter/test/animation/futures_test.dart	122	awaiting animation controllers and failing	partial-match	upstream-opacity-hover-flex-notifier-futures.md#awaited-controller-chains-under-uneven-frame-times
+packages/flutter/test/animation/futures_test.dart	122	awaiting animation controllers and failing	paired-match	upstream-animation-controller-disposal.md
 packages/flutter/test/animation/futures_test.dart	153	creating orCancel future later	paired-match	upstream-opacity-hover-flex-notifier-futures.md
 packages/flutter/test/animation/futures_test.dart	167	creating orCancel future later	paired-match	upstream-opacity-hover-flex-notifier-futures.md
 packages/flutter/test/widgets/semantics_test.dart	100	Semantics tooltip	paired-match	upstream-semantics-text-and-locale.md
@@ -2471,3 +2471,5 @@ packages/flutter/test/widgets/focus_traversal_test.dart	4160	GIVEN a FocusScope 
 packages/flutter/test/widgets/focus_traversal_test.dart	3364	Focus traversal group doesn't introduce a Semantics node	paired-match	upstream-repeat-focus-restoration-flex-and-image-filter.md#programmatic-focus-group-parity
 packages/flutter/test/widgets/focus_traversal_test.dart	3374	Descendants of FocusTraversalGroup aren't focusable if descendantsAreFocusable is false.	paired-match	upstream-repeat-focus-restoration-flex-and-image-filter.md#programmatic-focus-group-parity
 packages/flutter/test/widgets/focus_traversal_test.dart	3733	Doesn't introduce a Semantics node	paired-match	upstream-repeat-focus-restoration-flex-and-image-filter.md#programmatic-focus-group-parity
+packages/flutter/test/animation/animation_controller_test.dart	493	Disposed AnimationController toString works	paired-match	upstream-animation-controller-disposal.md
+packages/flutter/test/animation/animation_controller_listener_test.dart	9	Disposing controller removes listeners to avoid memory leaks	paired-match	upstream-animation-controller-disposal.md
