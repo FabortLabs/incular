@@ -33,3 +33,24 @@ control and the neighboring compositor and widget tests passed. This is
 not an Incular native surface pixel capture; a local display socket was
 unavailable in this environment. This authored comparison adds no
 upstream registration credit.
+
+## Rotated coverage and child overflow
+
+The pinned Flutter `shader_mask_rotated_overflow_test.dart` draws a
+100×100 mask over a white child extending 20 px to the left. It checks
+an aligned control, a 45° rotation, and a fully transparent rotated
+mask. Samples include the immediately adjacent covered and uncovered
+pixels at the hard edge. The overflow stays white outside the actual
+quad; it is not clipped to the mask bounds.
+
+The Incular mounted test checks that the overflow is in the group and
+inside the mask's broad scissor, but outside its quad. The wgpu
+offscreen readback uses production pipeline resources and geometry. An
+AABB-only control reproduced the old erased overflow. The corrected
+blend preserves the overflow on llvmpipe GL and leaves genuinely
+covered pixels transparent when the shader is transparent. Pixel-aligned
+rectangles keep their simple scissor; rotated and fractional rectangles
+use independent hard stencil coverage. The mask fill itself uses
+non-antialiased geometry, matching the pinned engine. The shader-blend,
+clip geometry and four mounted shader-mask controls passed. This is an
+authored probe and does not credit the separate positioning golden.

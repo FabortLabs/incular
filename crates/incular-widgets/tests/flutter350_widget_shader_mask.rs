@@ -185,3 +185,73 @@ fn preserved_shader_tracks_reflection_even_when_the_mask_bounds_are_unchanged() 
         assert_eq!(calls.get(), 1);
     }
 }
+
+#[test]
+fn rotated_overflow_remains_in_the_mask_group_but_outside_its_quad() {
+    use incular_config::{Clip, TextDirection};
+    use incular_widgets::{Center, Positioned, Stack, Transform, Widget};
+
+    let area = Size::new(100., 100.);
+    let overflow = Positioned::new(Widget::box_(Size::new(120., 100.), Color::WHITE))
+        .left(-20.)
+        .top(0.)
+        .width(120.)
+        .height(100.);
+    let child = SizedBox::from_size(area).child(
+        Stack::new([overflow])
+            .text_direction(TextDirection::Ltr)
+            .clip_behavior(Clip::None),
+    );
+    let mut tree = WidgetTree::new();
+    tree.mount(
+        Center::new(Transform::rotation(
+            std::f32::consts::FRAC_PI_4,
+            ShaderMask::new(gradient, child),
+        ))
+        .into(),
+    )
+    .unwrap();
+    tree.layout(Constraints::tight(Size::new(200., 200.)))
+        .unwrap();
+    let list = tree.paint();
+    let (bounds, matrix, size) = list
+        .commands()
+        .iter()
+        .find_map(|command| match command {
+            PaintCommand::PushShaderMask {
+                bounds,
+                mask_transform,
+                mask_size,
+                ..
+            } => Some((bounds, mask_transform, mask_size)),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(*size, area);
+    let actual_quad = Rect::from_origin_size(Offset::ZERO, area);
+    let overflow_local = Offset::new(-15., 50.);
+    assert!(!actual_quad.contains(overflow_local));
+    let overflow_world = matrix.transform_point(overflow_local);
+    assert!(
+        matrix
+            .transform_rect_bbox(actual_quad)
+            .contains(overflow_world)
+    );
+    assert!(bounds.contains(overflow_world));
+    // Verify the group did not insert a clip that hides the painted child.
+    let group = list
+        .commands()
+        .iter()
+        .skip_while(|command| !matches!(command, PaintCommand::PushShaderMask { .. }))
+        .skip(1)
+        .take_while(|command| !matches!(command, PaintCommand::PopEffect))
+        .collect::<Vec<_>>();
+    assert!(group.iter().any(
+        |command| matches!(command, PaintCommand::Rect { color, .. } if *color == Color::WHITE)
+    ));
+    assert!(
+        !group
+            .iter()
+            .any(|command| matches!(command, PaintCommand::PushClip { .. }))
+    );
+}

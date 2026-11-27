@@ -90,3 +90,7 @@ mod shader_mask_placement_tests {
         );
     }
 }
+
+#[cfg(all(test, not(incular_d3d11), not(target_arch = "wasm32")))]
+#[path = "renderer/shader_mask_raster_test.rs"]
+mod shader_mask_raster_test;

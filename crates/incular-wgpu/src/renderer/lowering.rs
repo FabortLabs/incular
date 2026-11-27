@@ -15,6 +15,25 @@ impl AnalyticClip {
     }
 }
 
+pub(super) fn shader_mask_needs_stencil(bounds: Rect, placement: Transform, scale: f32) -> bool {
+    let [_, b, c, _, _, _] = placement.to_kurbo().as_coeffs();
+    b != 0. || c != 0. || !device_pixel_aligned(bounds, scale)
+}
+
+pub(super) fn shader_mask_fill_instance(
+    square: RRect,
+    shader: &Brush,
+    placement: Transform,
+    scale: f32,
+    target: Size,
+) -> GpuRRectInstance {
+    let mut instance = rrect_instance(
+        square, shader, placement, scale, target.width, target.height,
+    );
+    instance.surface[2] = 1.; // exact, non-antialiased source geometry
+    instance
+}
+
 impl WgpuRenderer {
     fn push_hard_round_rect_mask(
         &mut self,
@@ -1159,46 +1178,40 @@ impl WgpuRenderer {
 
     /// Renders the mask rectangle filled with the shader into the effect
     /// texture of `layer`, sized like the group target being lowered, and
-    /// returns the batch that blends it over the group's child. The blend
-    /// is scissored to the mask rectangle, so child pixels outside it stay
-    /// unchanged, as with Flutter's `drawRect` of the mask. `None` when the
-    /// mask rectangle is empty, which leaves the child unmasked like an
-    /// empty Flutter mask rect.
+    /// adds a hard-covered blend over the group's child. Pixels outside the
+    /// transformed quad must never be blended: even a transparent source
+    /// changes the destination under modes such as Modulate. Flutter's
+    /// ShaderMaskLayer explicitly draws its rectangle without antialiasing.
     fn lower_shader_mask_fill(
         &mut self,
         mask: &ShaderMaskStage<'_>,
         scale: f32,
         placement: Transform,
         layer: incular_painting::LayerId,
-    ) -> Result<Option<DrawBatch>, RendererError> {
+        batches: &mut Vec<DrawBatch>,
+    ) -> Result<(), RendererError> {
         let size = mask.mask_size;
         if !(size.width.is_finite() && size.height.is_finite())
             || size.width <= 0.
             || size.height <= 0.
+            || placement.inverse().is_none()
         {
-            return Ok(None);
+            return Ok(());
         }
         let rect = Rect::from_origin_size(Offset::ZERO, size);
-        let fill = self.lower_commands(
-            &[
-                PaintCommand::PushTransform {
-                    transform: placement,
-                },
-                PaintCommand::RRect {
-                    rrect: RRect {
-                        rect,
-                        radii: incular_rendering::CornerRadii::ZERO,
-                    },
-                    brush: mask.shader.clone(),
-                },
-                PaintCommand::PopTransform,
-            ],
-            scale,
-            Transform::IDENTITY,
-            ClipState::Unbounded,
-        )?;
+        let square = RRect::new(rect, incular_rendering::CornerRadii::ZERO);
         let mask_rect = placement.transform_rect_bbox(rect);
         let (width, height) = (self.target_width, self.target_height);
+        let gradient = self.ensure_gradient(mask.shader);
+        let instance = shader_mask_fill_instance(
+            square,
+            mask.shader,
+            placement,
+            scale,
+            Size::new(width as f32, height as f32),
+        );
+        let mut fill = Vec::new();
+        append_rrect(&mut fill, ClipState::Unbounded, gradient, instance);
         if let Some(previous) = self.effect_cache.remove(&layer) {
             self.remove_effect_cache_bytes(previous.bytes);
             self.offscreen_target_pool.recycle(previous.target);
@@ -1249,13 +1262,28 @@ impl WgpuRenderer {
         self.add_effect_cache_bytes(bytes);
         self.counters.shader_mask_passes += 1;
         let placed = Placed::new(self.target_origin, width, height);
-        Ok(Some(DrawBatch::Blend {
-            clip: ClipState::Rect(ClipRect::hard(mask_rect)),
+        let (clip, stencil) = if shader_mask_needs_stencil(mask_rect, placement, scale) {
+            self.push_hard_round_rect_mask(
+                ClipState::Unbounded,
+                square,
+                placement,
+                scale,
+                batches,
+            )?
+        } else {
+            (ClipState::Rect(ClipRect::hard(mask_rect)), None)
+        };
+        batches.push(DrawBatch::Blend {
+            clip,
             layer,
             source: BlendSource::Effect,
             mode: mask.blend_mode,
             instance: blend_instance(placed, placed, scale, mask.blend_mode),
-        }))
+        });
+        if let Some(ClipMask::RRect(instance)) = stencil {
+            batches.push(DrawBatch::StencilRRect { clip, instance, increment: false });
+        }
+        Ok(())
     }
 
     pub(super) fn lower_source_group(
@@ -1424,13 +1452,8 @@ impl WgpuRenderer {
         if !batches_have_content(&batches) {
             return Ok(false);
         }
-        if let Some((mask, placement)) = mask
-            && let Some(batch) = self.lower_shader_mask_fill(mask, scale, placement, layer)?
-        {
-            // The mask blends over the child already painted in this
-            // group, as Flutter's `ShaderMaskLayer` draws its mask rect
-            // into the child's save layer.
-            batches.push(batch);
+        if let Some((mask, placement)) = mask {
+            self.lower_shader_mask_fill(mask, scale, placement, layer, &mut batches)?;
         }
         let (width, height) = (self.target_width, self.target_height);
         let target = if let Some(target) =

@@ -39,6 +39,7 @@ pub(crate) struct GpuRRectInstance {
     pub(crate) rect: [f32; 4],
     pub(crate) affine: [f32; 4],
     pub(crate) translation: [f32; 4],
+    /// Target width/height and the square shader’s hard-coverage flag (z).
     pub(crate) surface: [f32; 4],
     /// Radii in physical pixels, TL/TR/BR/BL.
     pub(crate) radii: [f32; 4],
