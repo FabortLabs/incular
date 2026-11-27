@@ -235,3 +235,91 @@ fn unlimited_ellipsis_excludes_the_truncated_inline_render_child() {
     assert_eq!(root.label.as_deref(), Some(line));
     assert!(root.children.is_empty());
 }
+
+// rendering/paragraph_test.dart:538. This reads the real retained layout,
+// never the descriptor's independent convenience shaping API.
+#[test]
+fn inherited_span_fonts_are_scaled_once_in_the_mounted_paragraph() {
+    use incular_text::TextScaler;
+
+    let Some(_) = std::env::var_os("INCULAR_FLUTTER_AHEM_PATH") else {
+        return;
+    };
+    let span = TextSpan::new("a")
+        .style(ahem().font_size(10.))
+        .child(
+            TextSpan::new("b")
+                .style(TextStyle::new().font_size(20.))
+                .child(TextSpan::new("c")),
+        )
+        .child(TextSpan::new("d"));
+    for (factor, widths, expected) in [
+        (1.3, [13., 26., 26., 13.], Size::new(78., 26.)),
+        (1., [10., 20., 20., 10.], Size::new(60., 20.)),
+    ] {
+        let key = GlobalKey::new();
+        let rich = RichText::new(span.clone()).text_scaler(TextScaler::linear(factor));
+        let scene = Directionality::new(
+            TextDirection::Ltr,
+            Align::new(Alignment::CENTER, Widget::from(rich).with_key(key)),
+        );
+        let mut tree = WidgetTree::new();
+        tree.mount(scene.into()).unwrap();
+        tree.layout(Constraints::tight(Size::new(800., 600.)))
+            .unwrap();
+        assert_eq!(size(&tree, key), expected);
+
+        let element = tree.element_with_key(&key.into()).unwrap();
+        let layout = tree.text_layout(tree.render_id(element).unwrap()).unwrap();
+        assert_eq!(layout.lines.len(), 1);
+        for (byte, expected_width) in widths.into_iter().enumerate() {
+            let [(left, right)] = layout.lines[0].selection_spans(byte, byte + 1)[..] else {
+                panic!("expected one selected box for byte {byte}");
+            };
+            assert_eq!(right - left, expected_width);
+            let run = layout
+                .font_runs
+                .iter()
+                .find(|run| run.range.contains(&byte))
+                .unwrap();
+            assert!((run.caret_height - expected_width).abs() < 0.000_1);
+        }
+    }
+}
+
+// rendering/paragraph_test.dart:488, :494 and :500. Height is unconstrained
+// by the parent so the flag describes line truncation, not vertical clipping.
+#[test]
+fn retained_paragraph_reports_line_and_ellipsis_truncation_separately_from_wrapping() {
+    use incular_text::TextOverflow;
+
+    let Some(_) = std::env::var_os("INCULAR_FLUTTER_AHEM_PATH") else {
+        return;
+    };
+    let span =
+        TextSpan::new("Here is a long text, maybe exceed maxlines").style(ahem().font_size(10.));
+    for (max_lines, overflow, truncated) in [
+        (None, TextOverflow::Clip, false),
+        (Some(1), TextOverflow::Clip, true),
+        (None, TextOverflow::Ellipsis, true),
+    ] {
+        let key = GlobalKey::new();
+        let rich = RichText::new(span.clone())
+            .max_lines(max_lines)
+            .overflow(overflow);
+        let scene = Directionality::new(
+            TextDirection::Ltr,
+            Align::new(Alignment::TOP_LEFT, Widget::from(rich).with_key(key)),
+        );
+        let mut tree = WidgetTree::new();
+        tree.mount(scene.into()).unwrap();
+        tree.layout(Constraints::tight(Size::new(100., 600.)))
+            .unwrap();
+        let element = tree.element_with_key(&key.into()).unwrap();
+        let layout = tree.text_layout(tree.render_id(element).unwrap()).unwrap();
+        assert_eq!(
+            layout.overflowed, truncated,
+            "max={max_lines:?}, overflow={overflow:?}"
+        );
+    }
+}

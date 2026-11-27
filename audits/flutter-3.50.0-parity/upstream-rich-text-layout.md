@@ -70,3 +70,20 @@ the already-measured clusters, then verifies the shaped ellipsis fits.
 The same no-glyph check passes with or without an explicit one-line cap.
 The reference's cluster-first cutoff is described in the
 [pinned Flutter engine dependency](https://raw.githubusercontent.com/google/skia/0e5d8d1be81b22f5529a41cf4810dd89b63527ba/modules/skparagraph/src/TextLine.cpp).
+
+## Inherited span scaling and overflow state
+
+Four exact registrations in pinned `rendering/paragraph_test.dart`
+passed: :488, :494, :500 and :538. The mounted native paragraph now
+applies the supplied RichText text scaler in retained lowering.
+Previously the scaler was discarded there, even though the standalone
+text descriptor could shape scaled spans.
+
+With Ahem, a 1.3× scale on nested 10-, 20-, 20- and 10-pixel spans now
+produces a 78×26 paragraph rather than 60×20. The individual retained
+cluster widths are 13, 26, 26 and 13, and natural font heights agree
+within 0.0001 logical pixels. The 1× control keeps the unscaled values.
+The original 100-pixel overflow comparison distinguishes naturally
+wrapped text from a one-line cap or ellipsis; only the latter two
+report truncation. Seven mounted layout and seven adjacent comparison
+and semantics tests passed.

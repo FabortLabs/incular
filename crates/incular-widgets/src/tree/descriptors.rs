@@ -999,7 +999,7 @@ fn rich_text_widget(
         },
         None,
         None,
-        Some(TextScaler::no_scaling()),
+        Some(value.text_scaler),
         spans,
         inline,
         strut.map(Box::new),
