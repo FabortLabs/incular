@@ -553,6 +553,7 @@ pub struct TextFieldSpec {
     pub(crate) paint_cursor_above_text: bool,
     pub(crate) cursor_color: Color,
     pub(crate) selection_color: Option<Color>,
+    pub(crate) autocorrection_text_rect_color: Option<Color>,
     pub(crate) text_direction: Option<TextDirection>,
     pub(crate) locale: Option<incular_config::Locale>,
     pub(crate) paragraph_layout: bool,

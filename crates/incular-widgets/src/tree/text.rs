@@ -193,6 +193,40 @@ impl WidgetTree {
         }
     }
 
+    /// Sets the editor's host autocorrection prompt using exact UTF-16 offsets.
+    #[doc(hidden)]
+    pub fn set_autocorrection_prompt(
+        &mut self,
+        id: ElementId,
+        start: usize,
+        end: usize,
+    ) -> bool {
+        let Some(render) = self.render_id(id) else {
+            return false;
+        };
+        let Some(controller) = self.text_controller(id) else {
+            return false;
+        };
+        let range = controller.with_value(|value| {
+            let byte_at = |units| {
+                let byte = incular_text::byte_offset_at_utf16_boundary(&value.text, units);
+                (utf16_units(&value.text[..byte]) == units).then_some(byte)
+            };
+            let (start, end) = (byte_at(start)?, byte_at(end)?);
+            (start <= end).then(|| TextRange::new(start, end))
+        });
+        let Some(range) = range else {
+            return false;
+        };
+        let revision = controller.revisions().0;
+        let prompt = Some((controller, revision, range));
+        if self.text_field_state_live(render).autocorrection_prompt != prompt {
+            self.text_field_state_live_mut(render).autocorrection_prompt = prompt;
+            self.mark_render_paint(render);
+        }
+        true
+    }
+
     /// Samples the focused editor's caret before paint, returning the next
     /// deadline only while blinking. No paragraph layout is invalidated.
     #[doc(hidden)]
@@ -304,6 +338,9 @@ impl WidgetTree {
             let state = node.text_field_state_mut().expect("text field state");
             state.focused = focused;
             state.cursor_frame = CursorFrame::Unmanaged;
+            if !focused {
+                state.autocorrection_prompt = None;
+            }
             repaint = true;
             changed_editor_focus = true;
             if focused && let RenderKind::TextField(field) = node.object.kind() {

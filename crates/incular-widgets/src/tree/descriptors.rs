@@ -1082,6 +1082,7 @@ pub struct EditableText {
     paint_cursor_above_text: bool,
     cursor_color: Color,
     selection_color: Option<Color>,
+    autocorrection_text_rect_color: Option<Color>,
     input_type: Option<TextInputTypeHint>,
     input_action: TextInputActionHint,
     text_direction: Option<incular_config::TextDirection>,
@@ -1153,6 +1154,7 @@ impl EditableText {
             paint_cursor_above_text: false,
             cursor_color: Color::WHITE,
             selection_color: None,
+            autocorrection_text_rect_color: None,
             input_type: None,
             input_action: TextInputActionHint::Unspecified,
             text_direction: None,
@@ -1538,6 +1540,12 @@ impl EditableText {
 
     /// Sets the selection highlight paint color. A raw editor does not
     /// paint a selection highlight unless a color is supplied.
+    #[must_use]
+    pub fn autocorrection_text_rect_color(mut self, color: Color) -> Self {
+        self.autocorrection_text_rect_color = Some(color);
+        self
+    }
+
     #[must_use]
     pub fn selection_color(mut self, color: Color) -> Self {
         self.selection_color = Some(color);
@@ -1929,6 +1937,7 @@ impl From<EditableText> for Widget {
             paint_cursor_above_text: value.paint_cursor_above_text,
             cursor_color: value.cursor_color,
             selection_color: value.selection_color,
+            autocorrection_text_rect_color: value.autocorrection_text_rect_color,
             text_direction: value.text_direction,
             locale: value.locale,
             paragraph_layout: value.paragraph_layout,

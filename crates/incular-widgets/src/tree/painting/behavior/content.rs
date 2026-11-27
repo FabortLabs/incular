@@ -170,10 +170,11 @@ impl WidgetTree {
                     paint_cursor_above_text,
                     cursor_color,
                     selection_color,
+                    autocorrection_text_rect_color,
                     spell_check_selection_color,
                     ..
                 } = **field;
-                let (layout, focused, scroll_x, scroll_y, revealed, decorations, cursor_frame, floating_cursor) = {
+                let (layout, focused, scroll_x, scroll_y, revealed, decorations, cursor_frame, floating_cursor, autocorrection_prompt) = {
                     let node = self.render_live(id, "retained render must remain live");
                     let state = self.text_field_state_live(id);
                     (
@@ -185,6 +186,9 @@ impl WidgetTree {
                         state.decorations.clone(),
                         state.cursor_frame,
                         state.floating_cursor,
+                        state.autocorrection_prompt.as_ref().and_then(|(owner, revision, range)| {
+                            (owner == controller).then_some((*revision, *range))
+                        }),
                     )
                 };
                 let alternate_selection_color = spell_check_selection_color.filter(|_| {
@@ -311,6 +315,26 @@ impl WidgetTree {
                                     }),
                                 });
                             }
+                        }
+                    }
+                    if focused
+                        && let (Some(color), Some((revision, range))) =
+                            (autocorrection_text_rect_color, autocorrection_prompt)
+                        && revision == reveal_key.0
+                        && !range.is_empty()
+                    {
+                        let range = TextRange::new(
+                            text_field_display_offset(controller, range.start, mask),
+                            text_field_display_offset(controller, range.end, mask),
+                        );
+                        for rect in selection_rects(
+                            &layout,
+                            range,
+                            active_scroll_x - content_padding.left,
+                            active_scroll_y,
+                            top,
+                        ) {
+                            cache.push(PaintCommand::Rect { rect, color });
                         }
                     }
                     let selection = value_selection.range();

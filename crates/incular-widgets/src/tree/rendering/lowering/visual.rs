@@ -261,6 +261,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                 paint_cursor_above_text: spec.paint_cursor_above_text,
                 cursor_color: spec.cursor_color,
                 selection_color: spec.selection_color,
+                autocorrection_text_rect_color: spec.autocorrection_text_rect_color,
                 spell_check_selection_color: spec
                     .spell_check
                     .as_ref()

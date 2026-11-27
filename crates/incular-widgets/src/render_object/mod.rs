@@ -157,6 +157,7 @@ pub(crate) struct RenderTextFieldState {
     pub(crate) focused: bool,
     pub(crate) cursor_frame: CursorFrame,
     pub(crate) floating_cursor: Option<incular_core::Rect>,
+    pub(crate) autocorrection_prompt: Option<(incular_text::TextEditingController, u64, incular_text::TextRange)>,
     /// The editing value (content revision and selection), focus and size
     /// whose caret the scroll offsets last revealed. Like Flutter's
     /// `_scheduleShowCaretOnScreen`, the caret is brought into view only

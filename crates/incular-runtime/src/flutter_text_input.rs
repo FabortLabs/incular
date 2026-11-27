@@ -145,6 +145,8 @@ pub enum FlutterTextInputLifecycleError {
     Codec(#[from] JsonMethodCodecError),
     #[error("expected a text input connection ID")]
     InvalidClientId,
+    #[error("expected a valid UTF-16 autocorrection prompt range")]
+    InvalidPromptRange,
 }
 
 /// A full editing-state message could not be routed or decoded.
@@ -347,6 +349,37 @@ impl crate::Runtime {
             _ => return Err(InvalidData),
         };
         self.dispatch_flutter_app_private_command(action, data);
+        Ok(Some(true))
+    }
+
+    /// Shows the active editor's autocorrection prompt range without
+    /// changing its selection or editing value.
+    pub fn handle_flutter_autocorrection_prompt_call(
+        &mut self,
+        data: &[u8],
+    ) -> Result<Option<bool>, FlutterTextInputLifecycleError> {
+        let call = JsonMethodCodec::decode_method_call(data)?;
+        if call.method != "TextInputClient.showAutocorrectionPromptRect" {
+            return Ok(None);
+        }
+        self.adopt_external_focus_change();
+        let Some(active) = self.active_flutter_editable_client() else {
+            return Ok(Some(false));
+        };
+        let args = call.arguments.as_array().ok_or(FlutterTextInputLifecycleError::InvalidClientId)?;
+        let sender = args.first().ok_or(FlutterTextInputLifecycleError::InvalidClientId)?;
+        if !sender_matches(sender, active).ok_or(FlutterTextInputLifecycleError::InvalidClientId)? {
+            return Ok(Some(false));
+        }
+        let endpoint = |index| args.get(index).and_then(Value::as_u64)
+            .and_then(|value| usize::try_from(value).ok())
+            .ok_or(FlutterTextInputLifecycleError::InvalidPromptRange);
+        let (start, end) = (endpoint(1)?, endpoint(2)?);
+        let field = self.focused_element().expect("validated active attachment");
+        if !self.tree.set_autocorrection_prompt(field, start, end) {
+            return Err(FlutterTextInputLifecycleError::InvalidPromptRange);
+        }
+        self.request_frame();
         Ok(Some(true))
     }
 
