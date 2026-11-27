@@ -110,3 +110,24 @@ Strict existing frame rechecks after the overlap repair also match:
 `focus_input__absorb_pointer_blocks_sibling` (2), and
 `focus_input__ignore_pointer_falls_through` (2). These are
 rechecks of previously accounted registrations.
+
+## Hover transfer and feedback across frames
+
+Five exact pinned cases and their native counterparts pass:
+`widgets/mouse_region_test.dart:580,982,1102,1152,1203`.
+
+- Between adjacent 100px centered regions, the mouse exits the old
+  region before entering and hovering the new one. The exit uses the
+  new global cursor position in the previous region's local coordinates.
+  Moving outside and removing both regions adds no duplicate events.
+- Unplugging at (400,300) emits exactly one exit at that position,
+  local (50,50), with zero motion delta and no additional hover.
+- Mounting or moving a region under a still pointer records one enter
+  but leaves both rendered feedback widgets unchanged in that frame.
+  The next frame rebuilds both and settles without another request.
+  Unmounting while still hovered leaves the outer feedback unchanged,
+  sends no synthetic exit, and queues no extra frame.
+
+Five new mounted runtime tests and 26 adjacent checks passed. These
+compare visible feedback and scheduling, not the internal phase in
+which a callback can affect an unrelated custom painter.

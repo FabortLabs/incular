@@ -3468,3 +3468,8 @@ packages/flutter/test/rendering/viewport_caching_test.dart	102	Cache extent - 1x
 packages/flutter/test/rendering/viewport_caching_test.dart	115	Cache extent - 2.5x viewport	paired-match	upstream-viewport-semantics-cache.md
 packages/flutter/test/rendering/viewport_caching_test.dart	128	RenderShrinkWrappingViewport describeApproximatePaintClip with infinite viewportMainAxisExtent returns finite rect	paired-match	upstream-viewport-semantics-cache.md#unbounded-shrink-wrapping-paint-clip
 packages/flutter/test/widgets/focus_traversal_test.dart	3935	RequestFocusAction calls the RequestFocusIntent.requestFocusCallback	paired-match	upstream-request-focus-action.md
+packages/flutter/test/widgets/mouse_region_test.dart	580	Hover transfers between two listeners	paired-match	upstream-mouse-region-local-motion.md#hover-transfer-and-feedback-across-frames
+packages/flutter/test/widgets/mouse_region_test.dart	982	Exit event when unplugging mouse should have a position	paired-match	upstream-mouse-region-local-motion.md#hover-transfer-and-feedback-across-frames
+packages/flutter/test/widgets/mouse_region_test.dart	1102	A MouseRegion mounted under the pointer should take effect in the next postframe	paired-match	upstream-mouse-region-local-motion.md#hover-transfer-and-feedback-across-frames
+packages/flutter/test/widgets/mouse_region_test.dart	1152	A MouseRegion unmounted under the pointer should not trigger state change	paired-match	upstream-mouse-region-local-motion.md#hover-transfer-and-feedback-across-frames
+packages/flutter/test/widgets/mouse_region_test.dart	1203	A MouseRegion moved into the mouse should take effect in the next postframe	paired-match	upstream-mouse-region-local-motion.md#hover-transfer-and-feedback-across-frames

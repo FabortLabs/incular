@@ -3,11 +3,14 @@ use std::{cell::RefCell, rc::Rc};
 use incular_config::Constraints;
 use incular_core::{
     InputEvent, Offset, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase,
-    PointerSampleMetadata, Size,
+    PointerSampleMetadata, Size, ValueNotifier,
 };
 use incular_platform::{HoverDeviceChange, HoverDeviceEvent, PlatformEvent};
 use incular_runtime::Runtime;
-use incular_widgets::{Align, Alignment, Column, MouseRegion, SizedBox, Transform, Widget};
+use incular_widgets::{
+    Align, Alignment, Builder, Column, CrossAxisAlignment, Directionality, MainAxisAlignment,
+    MouseRegion, SizedBox, Text, TextDirection, Transform, Widget, internal::Key,
+};
 
 use PointerDeviceKind::{Mouse, Stylus, Touch};
 use PointerPhase::{Down, Enter, Exit, Move, Up};
@@ -381,4 +384,261 @@ fn a_mouse_region_includes_top_and_left_but_excludes_exact_bottom_and_right() {
         log.take(),
         [event("area", Exit, bottom, Offset::new(5., 10.))]
     );
+}
+
+#[test]
+fn hover_transfers_between_centered_listeners_then_leaves_without_unmount_callbacks() {
+    let log = Log::default();
+    let empty = || Column::new(Vec::<Widget>::new()).into();
+    let mut runtime = Runtime::new(empty()).unwrap();
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    runtime.run_frame(bounds).unwrap();
+    let outside = Offset::new(400., 0.);
+    presence(&mut runtime, Mouse, outside, HoverDeviceChange::Added);
+    let root = runtime.tree().root().unwrap();
+    let scene = Column::new([
+        region("A", SizedBox::square(100.), &log),
+        region("B", SizedBox::square(100.), &log),
+    ])
+    .main_axis_alignment(MainAxisAlignment::Center);
+    runtime.tree_mut().update(root, scene.into()).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert!(log.take().is_empty());
+
+    let a = Offset::new(400., 250.);
+    let b = Offset::new(400., 350.);
+    let center = Offset::new(50., 50.);
+    pointer(&mut runtime, Mouse, a, Move, false);
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(
+        log.take(),
+        [event("A", Enter, a, center), event("A", Move, a, center)]
+    );
+    pointer(&mut runtime, Mouse, b, Move, false);
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(
+        log.take(),
+        [
+            event("A", Exit, b, Offset::new(50., 150.)),
+            event("B", Enter, b, center),
+            event("B", Move, b, center),
+        ]
+    );
+    let outside = Offset::new(400., 450.);
+    pointer(&mut runtime, Mouse, outside, Move, false);
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(
+        log.take(),
+        [event("B", Exit, outside, Offset::new(50., 150.))]
+    );
+    runtime.tree_mut().update(root, empty()).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert!(log.take().is_empty());
+}
+
+#[test]
+fn unplugging_the_mouse_exits_at_its_last_position_without_motion_delta() {
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let capture = |phase| {
+        let log = log.clone();
+        move |event: incular_widgets::RawPointerEvent| {
+            log.borrow_mut()
+                .push((phase, event.position, event.local_position, event.delta));
+        }
+    };
+    let region = MouseRegion::new(SizedBox::square(100.))
+        .on_enter(capture(Enter))
+        .on_hover(capture(Move))
+        .on_exit(capture(Exit));
+    let mut runtime = Runtime::new(Align::new(Alignment::CENTER, region).into()).unwrap();
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    runtime.run_frame(bounds).unwrap();
+    presence(&mut runtime, Mouse, Offset::ZERO, HoverDeviceChange::Added);
+    runtime.run_frame(bounds).unwrap();
+    assert!(log.take().is_empty());
+
+    let point = Offset::new(400., 300.);
+    let local = Offset::new(50., 50.);
+    pointer(&mut runtime, Mouse, point, Move, false);
+    assert_eq!(
+        log.take()
+            .into_iter()
+            .map(|(phase, global, local, _)| (phase, global, local))
+            .collect::<Vec<_>>(),
+        [(Enter, point, local), (Move, point, local)]
+    );
+    presence(&mut runtime, Mouse, point, HoverDeviceChange::Removed);
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(log.take(), [(Exit, point, local, Offset::ZERO)]);
+}
+
+#[derive(Clone)]
+struct HoverFeedback {
+    shown: ValueNotifier<bool>,
+    top: ValueNotifier<bool>,
+    hovering: ValueNotifier<bool>,
+    callback_revision: ValueNotifier<u64>,
+    changes: Rc<RefCell<Vec<bool>>>,
+}
+
+impl HoverFeedback {
+    fn new(shown: bool, top: bool) -> Self {
+        Self {
+            shown: ValueNotifier::new(shown),
+            top: ValueNotifier::new(top),
+            hovering: ValueNotifier::new(false),
+            callback_revision: ValueNotifier::new(0),
+            changes: Rc::default(),
+        }
+    }
+
+    fn widget(&self) -> Widget {
+        let model = self.clone();
+        Builder::new(move |_| {
+            let shown = model.shown.value();
+            let hovering = model.hovering.value();
+            let _ = model.callback_revision.value();
+            let text = |key| {
+                Widget::from(Text::new(if hovering { "hovering" } else { "outside" })).with_key(key)
+            };
+            let outer = text(if hovering {
+                "hover outer"
+            } else {
+                "unhover outer"
+            });
+            let children = if shown {
+                let update = |value| {
+                    let model = model.clone();
+                    move |_| {
+                        model.changes.borrow_mut().push(value);
+                        model.hovering.set_value(value);
+                        // Flutter's StateSetter queues a rebuild even when
+                        // the written value was already true.
+                        model
+                            .callback_revision
+                            .set_value(model.callback_revision.value() + 1);
+                    }
+                };
+                let inner = text(if hovering {
+                    "hover inner"
+                } else {
+                    "unhover inner"
+                });
+                let region = MouseRegion::new(SizedBox::square(10.).child(inner))
+                    .on_enter(update(true))
+                    .on_exit(update(false));
+                let alignment = if model.top.value() {
+                    Alignment::TOP_LEFT
+                } else {
+                    Alignment::BOTTOM_LEFT
+                };
+                let area = SizedBox::new()
+                    .width(10.)
+                    .height(100.)
+                    .child(Align::new(alignment, region));
+                vec![area.into(), outer]
+            } else {
+                vec![outer]
+            };
+            Directionality::new(
+                TextDirection::Ltr,
+                Align::new(
+                    Alignment::TOP_LEFT,
+                    Column::new(children).cross_axis_alignment(CrossAxisAlignment::Start),
+                ),
+            )
+            .into()
+        })
+        .into()
+    }
+
+    fn has(runtime: &Runtime, key: &str) -> bool {
+        runtime.tree().element_with_key(&Key::from(key)).is_some()
+    }
+}
+
+#[test]
+fn mounting_under_the_pointer_defers_reactive_feedback() {
+    let model = HoverFeedback::new(false, true);
+    let mut runtime = mount(model.widget());
+    let bounds = Constraints::tight(Size::new(300., 400.));
+    presence(
+        &mut runtime,
+        Mouse,
+        Offset::new(5., 5.),
+        HoverDeviceChange::Added,
+    );
+    assert!(HoverFeedback::has(&runtime, "unhover outer"));
+    assert!(!HoverFeedback::has(&runtime, "unhover inner"));
+    model.shown.set_value(true);
+    assert!(model.changes.borrow().is_empty());
+    let (_, stats) = runtime.run_frame(bounds).unwrap();
+    assert_eq!(model.changes.take(), [true]);
+    assert!(HoverFeedback::has(&runtime, "unhover outer"));
+    assert!(HoverFeedback::has(&runtime, "unhover inner"));
+    assert!(stats.requested_another_frame);
+    let (_, stats) = runtime.run_frame(bounds).unwrap();
+    assert!(HoverFeedback::has(&runtime, "hover outer"));
+    assert!(HoverFeedback::has(&runtime, "hover inner"));
+    assert!(!stats.requested_another_frame);
+}
+
+#[test]
+fn unmounting_under_a_stationary_pointer_does_not_change_reactive_feedback() {
+    let model = HoverFeedback::new(true, true);
+    model.hovering.set_value(true);
+    let mut runtime = Runtime::new(model.widget()).unwrap();
+    let bounds = Constraints::tight(Size::new(300., 400.));
+    presence(
+        &mut runtime,
+        Mouse,
+        Offset::new(5., 5.),
+        HoverDeviceChange::Added,
+    );
+    let (_, stats) = runtime.run_frame(bounds).unwrap();
+    assert!(HoverFeedback::has(&runtime, "hover inner"));
+    assert!(HoverFeedback::has(&runtime, "hover outer"));
+    assert_eq!(model.changes.take(), [true]);
+    assert!(stats.requested_another_frame);
+    let (_, stats) = runtime.run_frame(bounds).unwrap();
+    assert!(HoverFeedback::has(&runtime, "hover outer"));
+    assert!(HoverFeedback::has(&runtime, "hover inner"));
+    assert!(!stats.requested_another_frame);
+
+    model.shown.set_value(false);
+    let (_, stats) = runtime.run_frame(bounds).unwrap();
+    assert!(HoverFeedback::has(&runtime, "hover outer"));
+    assert!(!HoverFeedback::has(&runtime, "hover inner"));
+    assert!(model.changes.borrow().is_empty());
+    assert!(!stats.requested_another_frame);
+}
+
+#[test]
+fn moving_an_existing_region_under_the_pointer_rebuilds_its_feedback_next_frame() {
+    let model = HoverFeedback::new(true, false);
+    let mut runtime = mount(model.widget());
+    let bounds = Constraints::tight(Size::new(300., 400.));
+    presence(
+        &mut runtime,
+        Mouse,
+        Offset::new(5., 5.),
+        HoverDeviceChange::Added,
+    );
+    let (_, stats) = runtime.run_frame(bounds).unwrap();
+    assert!(HoverFeedback::has(&runtime, "unhover outer"));
+    assert!(HoverFeedback::has(&runtime, "unhover inner"));
+    assert!(model.changes.borrow().is_empty());
+    assert!(!stats.requested_another_frame);
+
+    model.top.set_value(true);
+    let (_, stats) = runtime.run_frame(bounds).unwrap();
+    assert!(HoverFeedback::has(&runtime, "unhover outer"));
+    assert!(HoverFeedback::has(&runtime, "unhover inner"));
+    assert_eq!(model.changes.take(), [true]);
+    assert!(stats.requested_another_frame);
+    let (_, stats) = runtime.run_frame(bounds).unwrap();
+    assert!(HoverFeedback::has(&runtime, "hover outer"));
+    assert!(HoverFeedback::has(&runtime, "hover inner"));
+    assert!(model.changes.borrow().is_empty());
+    assert!(!stats.requested_another_frame);
 }
