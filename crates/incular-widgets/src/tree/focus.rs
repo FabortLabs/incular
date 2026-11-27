@@ -418,6 +418,34 @@ impl WidgetTree {
         None
     }
 
+    /// Delegates a traversal request to the policy of the initiating focus
+    /// group. If there is no origin, the target supplies the starting group.
+    #[doc(hidden)]
+    pub fn dispatch_custom_focus_request(
+        &self,
+        origin: Option<ElementId>,
+        target: ElementId,
+        alignment_policy: crate::ScrollPositionAlignmentPolicy,
+    ) -> bool {
+        let mut current = Some(origin.unwrap_or(target));
+        while let Some(id) = current {
+            let Some(entry) = self.elements.get(id.0) else { return false; };
+            let properties = entry.widget.semantic_properties();
+            if properties.owns_focus_group {
+                let Some(callback) = &properties.custom_focus_request else {
+                    return false;
+                };
+                (callback.0)(crate::FocusTraversalRequest {
+                    node: self.focus_node_at(target),
+                    alignment_policy,
+                });
+                return true;
+            }
+            current = self.mounted_focus_parent(id);
+        }
+        false
+    }
+
     fn is_focus_descendant_or_self(&self, candidate: ElementId, ancestor: ElementId) -> bool {
         let mut current = Some(candidate);
         while let Some(id) = current {
@@ -804,8 +832,19 @@ impl WidgetTree {
         active: Option<ElementId>,
         reverse: bool,
     ) -> SequentialFocusResolution {
+        self.resolve_node_sequential_focus_with_origin(origin, active, reverse).1
+    }
+
+    /// Resolves traversal together with the mounted policy origin.
+    #[doc(hidden)]
+    pub fn resolve_node_sequential_focus_with_origin(
+        &self,
+        origin: &incular_gestures::FocusNode,
+        active: Option<ElementId>,
+        reverse: bool,
+    ) -> (Option<ElementId>, SequentialFocusResolution) {
         let Some(origin) = self.mounted_focus_element(origin) else {
-            return SequentialFocusResolution::Unchanged;
+            return (None, SequentialFocusResolution::Unchanged);
         };
         let scope = self.scope_of_focus_boundary(origin);
         let anchor = if let Some(scope) = &scope {
@@ -823,7 +862,7 @@ impl WidgetTree {
                 self.mounted_focus_element(&outer.scope_focus_node())
             })
         };
-        self.resolve_sequential_focus_in_scope(anchor, scope, reverse)
+        (Some(origin), self.resolve_sequential_focus_in_scope(anchor, scope, reverse))
     }
 
     fn resolve_sequential_focus_in_scope(

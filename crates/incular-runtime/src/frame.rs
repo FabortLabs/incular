@@ -3328,22 +3328,27 @@ impl Runtime {
     fn focus_from(&mut self, node: &incular_widgets::FocusNode, reverse: bool) -> bool {
         self.adopt_external_focus_change();
         self.directional_focus_history = None;
-        let step = self.tree.resolve_node_sequential_focus(node, self.focused, reverse);
-        self.apply_sequential_focus(step, reverse)
+        let (origin, step) = self.tree.resolve_node_sequential_focus_with_origin(node, self.focused, reverse);
+        self.apply_sequential_focus(step, reverse, origin)
     }
 
     fn focus_next(&mut self, reverse: bool) -> bool {
         self.directional_focus_history = None;
         let step = self.tree.resolve_sequential_focus(self.focused, reverse);
-        self.apply_sequential_focus(step, reverse)
+        self.apply_sequential_focus(step, reverse, self.focused)
     }
 
-    fn apply_sequential_focus(&mut self, step: SequentialFocusResolution, reverse: bool) -> bool {
+    fn apply_sequential_focus(
+        &mut self,
+        step: SequentialFocusResolution,
+        reverse: bool,
+        origin: Option<ElementId>,
+    ) -> bool {
         match step {
             SequentialFocusResolution::Move(next) => {
                 let previous = self.focused;
-                self.set_traversal_focus(next, reverse, false);
-                self.focused != previous
+                let delegated = self.set_traversal_focus(next, reverse, false, origin);
+                self.focused != previous || (delegated && Some(next) != previous)
             }
             SequentialFocusResolution::LeaveView => {
                 self.set_focus(None);
@@ -3352,24 +3357,35 @@ impl Runtime {
             SequentialFocusResolution::Unchanged => false,
         }
     }
-    fn set_traversal_focus(&mut self, target: ElementId, toward_start: bool, directional: bool) {
+    /// Returns whether the policy delegated focus and reveal to a callback.
+    fn set_traversal_focus(
+        &mut self,
+        target: ElementId,
+        toward_start: bool,
+        directional: bool,
+        origin: Option<ElementId>,
+    ) -> bool {
         use incular_widgets::{EnsureVisible, ScrollPositionAlignmentPolicy, Scrollable};
 
-        self.set_focus_inner(Some(target), true, directional);
-        if self.focused != Some(target) {
-            return;
-        }
         let policy = if toward_start {
             ScrollPositionAlignmentPolicy::KeepVisibleAtStart
         } else {
             ScrollPositionAlignmentPolicy::KeepVisibleAtEnd
         };
+        if self.tree.dispatch_custom_focus_request(origin, target, policy) {
+            return true;
+        }
+        self.set_focus_inner(Some(target), true, directional);
+        if self.focused != Some(target) {
+            return false;
+        }
         let moved = Scrollable::ensure_visible(
             &self.tree,
             target,
             EnsureVisible::new().alignment_policy(policy),
         );
         self.frame_requested |= moved != 0;
+        false
     }
 
     /// Flutter's native `WidgetsApp` defaults: unmodified arrows traverse
@@ -3440,8 +3456,8 @@ impl Runtime {
                 && self.tree.can_retrace_directional_focus(current, stop)
             {
                 self.directional_focus_history = history.filter(|run| !run.stops.is_empty());
-                self.set_traversal_focus(stop, toward_start, true);
-                return self.focused == Some(stop);
+                let delegated = self.set_traversal_focus(stop, toward_start, true, previous);
+                return self.focused == Some(stop) || delegated;
             }
             history = None;
         }
@@ -3469,8 +3485,8 @@ impl Runtime {
                 .push((stop, self.tree.focus_node_at(stop)));
             self.directional_focus_history = history;
         }
-        self.set_traversal_focus(next, toward_start, true);
-        self.focused == Some(next)
+        let delegated = self.set_traversal_focus(next, toward_start, true, previous);
+        self.focused == Some(next) || delegated
     }
 
     /// The portable pressed-key and lock state observed by this runtime.

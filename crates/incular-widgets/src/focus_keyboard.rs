@@ -1309,11 +1309,35 @@ impl PartialEq for CustomFocusTraversalPolicy {
     }
 }
 
+/// A focus request picked by traversal. The node is absent only for an
+/// implicit native control that does not expose a FocusNode.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FocusTraversalRequest {
+    pub node: Option<FocusNode>,
+    pub alignment_policy: crate::ScrollPositionAlignmentPolicy,
+}
+
+#[derive(Clone)]
+pub(crate) struct CustomFocusRequest(pub(crate) Rc<dyn Fn(FocusTraversalRequest)>);
+
+impl std::fmt::Debug for CustomFocusRequest {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("CustomFocusRequest(..)")
+    }
+}
+
+impl PartialEq for CustomFocusRequest {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
 /// Establishes a focus traversal policy group for its descendants.
 #[derive(Clone)]
 pub struct FocusTraversalGroup {
     policy: FocusTraversalPolicyKind,
     custom_policy: Option<CustomFocusTraversalPolicy>,
+    request_focus_callback: Option<CustomFocusRequest>,
     descendants_are_focusable: bool,
     descendants_are_traversable: bool,
     parent_node: Option<FocusNode>,
@@ -1326,6 +1350,7 @@ impl Default for FocusTraversalGroup {
         Self {
             policy: FocusTraversalPolicyKind::ReadingOrder,
             custom_policy: None,
+            request_focus_callback: None,
             descendants_are_focusable: true,
             descendants_are_traversable: true,
             parent_node: None,
@@ -1341,6 +1366,7 @@ impl FocusTraversalGroup {
         Self {
             policy: FocusTraversalPolicyKind::ReadingOrder,
             custom_policy: None,
+            request_focus_callback: None,
             descendants_are_focusable: true,
             descendants_are_traversable: true,
             parent_node: None,
@@ -1377,6 +1403,18 @@ impl FocusTraversalGroup {
     #[must_use]
     pub fn on_focus_node_created(mut self, callback: impl Fn(FocusNode) + 'static) -> Self {
         self.on_focus_node_created = Some(Rc::new(callback));
+        self
+    }
+
+    /// Replaces traversal's default focus-and-reveal operation. Calling
+    /// `request_focus` on the supplied node requests focus without
+    /// accepting the default reveal behavior.
+    #[must_use]
+    pub fn request_focus_callback(
+        mut self,
+        callback: impl Fn(FocusTraversalRequest) + 'static,
+    ) -> Self {
+        self.request_focus_callback = Some(CustomFocusRequest(Rc::new(callback)));
         self
     }
 
@@ -1443,7 +1481,11 @@ impl From<FocusTraversalGroup> for Widget {
                 .parent_node(value.parent_node),
         )
         .with_focus_traversal_policy(policy)
-        .with_owned_focus_group(value.on_focus_node_created, value.custom_policy)
+        .with_owned_focus_group(
+            value.on_focus_node_created,
+            value.custom_policy,
+            value.request_focus_callback,
+        )
     }
 }
 

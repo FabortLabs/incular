@@ -320,7 +320,7 @@ pub mod prelude {
         FadeInImage, FadeTransition, FittedBox, Flex, Flexible, Flow, FlowDelegate,
         FlowPaintingContext, FlutterLogo, FlutterLogoLayout, FlutterLogoStyle, Focus, FocusManager,
         FocusNode, FocusScope, FocusScopeNode, FocusTraversalCandidate, FocusTraversalGroup, FocusTraversalOrder,
-        FocusTraversalPolicy, FocusableActionDetector, Form, FormController, FormField,
+        FocusTraversalPolicy, FocusTraversalRequest, FocusableActionDetector, Form, FormController, FormField,
         FormFieldState, FormState, FractionalTranslation, FractionallySizedBox, FutureBuilder,
         GestureDetector, GestureRecognizer, GestureRecognizerFactory,
         GestureRecognizerFactoryError, GestureRecognizerFactoryWithHandlers,

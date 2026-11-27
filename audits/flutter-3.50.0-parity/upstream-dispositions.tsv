@@ -3335,3 +3335,6 @@ packages/flutter/test/widgets/focus_traversal_test.dart	3471	Group parentNode at
 packages/flutter/test/widgets/focus_traversal_test.dart	4147	GIVEN onFocusNodeCreated is not null THEN it is called when the FocusTraversalGroup is built	paired-match	upstream-focus-group-nodes.md
 packages/flutter/test/widgets/focus_traversal_test.dart	394	Move focus to next/previous node while skipping nodes in policy	paired-match	upstream-custom-focus-policy.md
 packages/flutter/test/widgets/focus_traversal_test.dart	3418	Group applies correct policy if focus tree is different from widget tree.	paired-match	upstream-custom-focus-policy.md
+packages/flutter/test/widgets/focus_traversal_test.dart	513	Custom requestFocusCallback gets called on the next/previous focus.	paired-match	upstream-focus-request-callback.md
+packages/flutter/test/widgets/focus_traversal_test.dart	1140	Custom requestFocusCallback gets called on the next/previous focus.	paired-match	upstream-focus-request-callback.md
+packages/flutter/test/widgets/focus_traversal_test.dart	1618	Custom requestFocusCallback gets called on the next/previous focus.	paired-match	upstream-focus-request-callback.md

@@ -286,6 +286,7 @@ pub(crate) struct SemanticProperties {
     pub(super) focus_traversal_policy: Option<FocusTraversalPolicyKind>,
     pub(super) owns_focus_group: bool,
     pub(super) custom_focus_policy: Option<crate::CustomFocusTraversalPolicy>,
+    pub(super) custom_focus_request: Option<crate::focus_keyboard::CustomFocusRequest>,
     pub(super) owned_focus_creation: Option<OwnedFocusCreation>,
     pub(super) focus_traversal_order: Option<incular_gestures::FocusOrder>,
     pub(super) exclude_focus: bool,
