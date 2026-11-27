@@ -3072,3 +3072,7 @@ packages/flutter/test/widgets/actions_test.dart	53	Actions widget can invoke act
 packages/flutter/test/widgets/actions_test.dart	79	Actions widget can invoke actions with default dispatcher and maybeInvoke	paired-match	upstream-action-dispatchers.md
 packages/flutter/test/widgets/actions_test.dart	105	maybeInvoke returns null when no action is found	paired-match	upstream-action-dispatchers.md
 packages/flutter/test/widgets/actions_test.dart	132	invoke throws when no action is found	paired-match	upstream-action-dispatchers.md
+packages/flutter/test/widgets/actions_test.dart	159	Actions widget can invoke actions with custom dispatcher	paired-match	upstream-action-dispatchers.md#custom-and-inherited-dispatcher-selection
+packages/flutter/test/widgets/actions_test.dart	187	Actions can invoke actions in ancestor dispatcher	paired-match	upstream-action-dispatchers.md#custom-and-inherited-dispatcher-selection
+packages/flutter/test/widgets/actions_test.dart	219	Actions can invoke actions in ancestor dispatcher if a lower one isn't specified	paired-match	upstream-action-dispatchers.md#custom-and-inherited-dispatcher-selection
+packages/flutter/test/widgets/actions_test.dart	253	Actions widget can be found with of	paired-match	upstream-action-dispatchers.md#custom-and-inherited-dispatcher-selection

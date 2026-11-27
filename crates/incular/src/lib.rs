@@ -282,7 +282,8 @@ pub mod prelude {
     // Explicit animation builders, the transition controllers and Flutter's
     // `RelativeRect`.
     pub use incular_widgets::{
-        AbsorbPointer, Action, ActionDispatcher, ActionInvocationPhase, ActionListener, ActionResult,
+        AbsorbPointer, Action, ActionDispatchInvocation, ActionDispatcher, ActionInvocationPhase,
+        ActionListener, ActionResult,
         ActionScope, Actions, Align,
         AlignTransition, AnimatedAlign, AnimatedContainer, AnimatedCrossFade,
         AnimatedDefaultTextStyle, AnimatedFractionallySizedBox, AnimatedGrid,
@@ -359,7 +360,7 @@ pub mod prelude {
         RouteInformationReportingType, RouteInformationSubscription, Router, RouterConfig,
         RouterData, RouterDelegate, RouterDelegateListener, RouterDelegateSubscription,
         RouterError, Row, SafeArea, ScaleTransition, ScrollAwareContext, ScrollAwareImageProvider,
-        ScrollBehavior, ScrollCacheExtent, ScrollConfiguration, ScrollController, ScrollMetrics,
+        ScopedActionDispatcher, ScrollBehavior, ScrollCacheExtent, ScrollConfiguration, ScrollController, ScrollMetrics,
         ScrollNotification,
         ScrollNotificationObserver, ScrollNotificationSubscription, ScrollNotificationType,
         ScrollPhysics, ScrollViewKeyboardDismissBehavior, SelectableRegion, Semantics,

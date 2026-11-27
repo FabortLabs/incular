@@ -621,6 +621,10 @@ impl<C: CommandId> Action<C> {
         if !self.is_action_enabled(intent) {
             return ActionResult::Ignored;
         }
+        self.invoke_enabled(intent)
+    }
+
+    fn invoke_enabled(&self, intent: &Intent<C>) -> ActionResult {
         self.notify_invocation(ActionInvocationPhase::Start);
         let result = (self.callback)(intent);
         self.notify_invocation(ActionInvocationPhase::End);
@@ -675,29 +679,96 @@ impl ErasedShortcutScope {
     }
 }
 
-/// Type-erased retained action scope used by the widget tree to resolve an
-/// intent against the closest ancestor action map.
-type ErasedActionInvoker = dyn Fn(&ErasedIntent) -> Option<ActionResult>;
+/// A custom dispatcher's view of one enabled action and its intent.
+pub struct ActionDispatchInvocation<'a> {
+    intent: &'a ErasedIntent,
+    action: &'a dyn std::any::Any,
+    invoke: &'a dyn Fn() -> ActionResult,
+}
 
+impl ActionDispatchInvocation<'_> {
+    #[must_use]
+    pub fn command<C: CommandId>(&self) -> Option<&C> {
+        self.intent.downcast_command::<C>()
+    }
+
+    #[must_use]
+    pub fn action<C: CommandId>(&self) -> Option<&Action<C>> {
+        self.action.downcast_ref()
+    }
+
+    /// Calls the action, preserving invocation observers.
+    #[must_use]
+    pub fn invoke(&self) -> ActionResult {
+        (self.invoke)()
+    }
+}
+
+/// Optional interceptor for an action scope. A handler can delegate to the
+/// bound action, observe the result, or return its own result.
+pub type ScopedActionDispatcher = dyn for<'a> Fn(ActionDispatchInvocation<'a>) -> ActionResult;
+
+type DispatcherLookup<'a> = dyn Fn() -> Option<Rc<ScopedActionDispatcher>> + 'a;
+type ErasedActionInvoker = dyn Fn(&ErasedIntent, &DispatcherLookup<'_>) -> Option<ActionResult>;
+
+/// Type-erased mapping used by the retained widget tree.
 pub struct ErasedActionScope {
     invoker: Rc<ErasedActionInvoker>,
+    dispatcher: Option<Rc<ScopedActionDispatcher>>,
 }
 
 impl ErasedActionScope {
     #[must_use]
     pub fn from_actions<C: CommandId>(actions: Rc<Actions<C>>) -> Rc<Self> {
         Rc::new(Self {
-            invoker: Rc::new(move |intent| {
-                let command = intent.downcast_command::<C>()?;
+            invoker: Rc::new(move |erased, dispatcher| {
+                let command = erased.downcast_command::<C>()?;
+                let action = actions.action_ref(command)?;
                 let intent = Intent::new(command.clone());
-                actions.invoke_intent_first(&intent)
+                if !action.is_action_enabled(&intent) {
+                    return Some(ActionResult::Ignored);
+                }
+                let invoke = || action.invoke_enabled(&intent);
+                Some(if let Some(dispatcher) = dispatcher() {
+                    dispatcher(ActionDispatchInvocation {
+                        intent: erased,
+                        action,
+                        invoke: &invoke,
+                    })
+                } else {
+                    invoke()
+                })
             }),
+            dispatcher: None,
         })
     }
 
     #[must_use]
+    pub fn with_dispatcher(&self, dispatcher: Rc<ScopedActionDispatcher>) -> Rc<Self> {
+        Rc::new(Self {
+            dispatcher: Some(dispatcher),
+            invoker: self.invoker.clone(),
+        })
+    }
+
+    #[must_use]
+    pub fn dispatcher(&self) -> Option<Rc<ScopedActionDispatcher>> {
+        self.dispatcher.clone()
+    }
+
+    #[must_use]
     pub fn invoke(&self, intent: &ErasedIntent) -> Option<ActionResult> {
-        (self.invoker)(intent)
+        self.invoke_resolving_dispatcher(intent, || self.dispatcher())
+    }
+
+    /// Only resolves a dispatcher if this scope owns an enabled mapping.
+    #[must_use]
+    pub fn invoke_resolving_dispatcher(
+        &self,
+        intent: &ErasedIntent,
+        find: impl Fn() -> Option<Rc<ScopedActionDispatcher>>,
+    ) -> Option<ActionResult> {
+        (self.invoker)(intent, &find)
     }
 }
 
@@ -832,10 +903,11 @@ impl<C: CommandId> Actions<C> {
     /// Returns the nearest registered action, if any.
     #[must_use]
     pub fn action(&self, command: &C) -> Option<Action<C>> {
-        self.scopes
-            .iter()
-            .rev()
-            .find_map(|scope| scope.actions.get(command).cloned())
+        self.action_ref(command).cloned()
+    }
+
+    fn action_ref(&self, command: &C) -> Option<&Action<C>> {
+        self.scopes.iter().rev().find_map(|scope| scope.actions.get(command))
     }
 
     fn current_scope_mut(&mut self) -> &mut ActionScope<C> {

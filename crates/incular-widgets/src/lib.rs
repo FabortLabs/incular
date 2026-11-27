@@ -219,13 +219,15 @@ pub use incular_gestures::{
 #[doc(hidden)]
 pub use incular_gestures::RawKeyDelivery;
 pub use focus_keyboard::{
-    Action, ActionDispatcher, ActionInvocationPhase, ActionListener, ActionResult, ActionScope,
+    Action, ActionDispatchInvocation, ActionDispatcher, ActionInvocationPhase, ActionListener,
+    ActionResult, ActionScope,
     Actions, CallbackShortcuts,
     Command, CommandId, DirectionalFocusIntent, ExcludeFocus, ExcludeFocusTraversal, Focus, FocusManager, FocusNode,
     FocusOrder, FocusScope, FocusScopeNode, FocusScopeSubscription, FocusTraversalGroup,
     FocusTraversalOrder, FocusTraversalPolicy, FocusTraversalPolicyKind, FocusableActionDetector,
     Intent, KeyEventResult, KeyboardListener, LockState, LogicalKeySet, LogicalShortcutKey,
-    OrderedTraversalPolicy, ReadingOrderTraversalPolicy, ShortcutActivator, ShortcutKey,
+    OrderedTraversalPolicy, ReadingOrderTraversalPolicy, ScopedActionDispatcher, ShortcutActivator,
+    ShortcutKey,
     ShortcutTrigger, Shortcuts, SingleActivator, WidgetOrderTraversalPolicy,
     UnfocusDisposition,
 };

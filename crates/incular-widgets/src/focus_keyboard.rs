@@ -4,12 +4,13 @@ use std::rc::Rc;
 
 use incular_core::KeyboardEvent;
 pub use incular_gestures::{
-    Action, ActionDispatcher, ActionInvocationPhase, ActionResult, Actions, Command, CommandId,
+    Action, ActionDispatchInvocation, ActionDispatcher, ActionInvocationPhase, ActionResult, Actions,
+    Command, CommandId,
     FocusBehavior,
     FocusManager, FocusNode, FocusOrder, FocusScopeNode, FocusScopeSubscription, UnfocusDisposition,
     FocusTraversalPolicy, FocusTraversalPolicyKind, Intent, KeyEventResult, LockState,
     LogicalKeySet, LogicalShortcutKey, OrderedTraversalPolicy, ReadingOrderTraversalPolicy,
-    ShortcutActivator, ShortcutKey, ShortcutTrigger, Shortcuts, SingleActivator,
+    ScopedActionDispatcher, ShortcutActivator, ShortcutKey, ShortcutTrigger, Shortcuts, SingleActivator,
     WidgetOrderTraversalPolicy,
 };
 
@@ -33,6 +34,14 @@ impl ActionScope {
             actions: incular_gestures::ErasedActionScope::from_actions(actions),
             child: child.into(),
         }
+    }
+
+    /// Installs an explicit dispatcher for this scope and descendants with
+    /// mappings but no nearer dispatcher.
+    #[must_use]
+    pub fn dispatcher(mut self, dispatcher: Rc<ScopedActionDispatcher>) -> Self {
+        self.actions = self.actions.with_dispatcher(dispatcher);
+        self
     }
 }
 

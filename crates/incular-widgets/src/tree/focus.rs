@@ -984,6 +984,25 @@ impl WidgetTree {
         self.route_keyboard_with_lock_modes(focused, event, lock_modes) == KeyEventResult::Handled
     }
 
+    /// Finds the nearest explicit action dispatcher for this element.
+    #[must_use]
+    pub fn action_dispatcher_at(
+        &self,
+        element: ElementId,
+    ) -> Option<Rc<incular_gestures::ScopedActionDispatcher>> {
+        let mut current = Some(element);
+        while let Some(id) = current {
+            let entry = self.elements.get(id.0)?;
+            if let WidgetKind::Gesture { callbacks, .. } = entry.widget.kind()
+                && let Some(dispatcher) = callbacks.action_scope.as_ref().and_then(|s| s.dispatcher())
+            {
+                return Some(dispatcher);
+            }
+            current = entry.parent;
+        }
+        None
+    }
+
     /// Invokes the closest action registered above a live element, without
     /// synthesizing a key event. A found but disabled action shadows a farther
     /// handler; `None` means no ancestor registered the intent.
@@ -1003,7 +1022,11 @@ impl WidgetTree {
                 && let Some(result) = callbacks
                     .action_scope
                     .as_ref()
-                    .and_then(|scope| scope.invoke(&intent))
+                    .and_then(|scope| {
+                        // Dispatch starts at the action's owner, not at the
+                        // invoking descendant's closer unrelated dispatcher.
+                        scope.invoke_resolving_dispatcher(&intent, || self.action_dispatcher_at(id))
+                    })
             {
                 return Some(result);
             }
