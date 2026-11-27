@@ -38,6 +38,7 @@ pub mod reactivity;
 mod restoration;
 pub mod serialization;
 pub mod standard_message_codec;
+mod synchronous_future;
 pub mod time;
 mod value_notifier;
 mod widget;
@@ -91,6 +92,7 @@ pub use merged_listenable::{MergedListenable, MergedSubscription};
 pub use observer_list::{HashedObserverList, ObserverList};
 pub use persistent_hash_map::PersistentHashMap;
 pub use restoration::{RestorationBackend, RestorationKey, RestorationKeyError, RestorationScope};
+pub use synchronous_future::SynchronousFuture;
 pub use value_notifier::ValueNotifier;
 pub use widget::{BuildableWidget, Widget};
 
