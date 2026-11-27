@@ -592,7 +592,7 @@ impl WidgetTree {
         true
     }
     /// Flutter's `EditableTextState._showCaretOnScreen`: scrolls the field's
-    /// ancestor viewports, innermost first, so its caret inflated by
+    /// ancestor viewports, innermost first, so the caret or selection box inflated by
     /// `scroll_padding` is visible, as `RenderViewportBase.showInViewport`
     /// does (to its leading edge when scrolled past it, else to its trailing
     /// edge when short of it). Flutter animates for 100 ms; this jumps.
@@ -612,7 +612,14 @@ impl WidgetTree {
             padding.bottom = padding.bottom.max(handles.caret_reveal_bottom_clearance());
         }
         let Some(target) = self
-            .editable_local_caret_rect(id, selection.extent, spec.controller.caret_affinity())
+            .editable_local_selection_extent_rect(id, selection)
+            .or_else(|| {
+                self.editable_local_caret_rect(
+                    id,
+                    selection.extent,
+                    spec.controller.caret_affinity(),
+                )
+            })
             .and_then(|rect| padding.inflate_rect(rect))
         else {
             return false;
@@ -2130,6 +2137,54 @@ impl WidgetTree {
         Some((render, rect))
     }
 
+    fn editable_local_selection_extent_rect(
+        &self,
+        id: ElementId,
+        selection: TextSelection,
+    ) -> Option<Rect> {
+        if selection.is_collapsed() {
+            return None;
+        }
+        let render = self.render_id(id)?;
+        let node = self.renders.get(render.0)?;
+        let RenderKind::TextField(field) = node.object.kind() else {
+            return None;
+        };
+        // Platform preedit replaces the committed selection in the shaped
+        // text, so it no longer owns a box there.
+        if field.controller.preedit().is_some() {
+            return None;
+        }
+        let layout = node.field_layout()?;
+        let state = self.text_field_state_live(render);
+        let mask = field.obscure_text.then_some(field.obscuring_character);
+        let start = text_field_display_offset(&field.controller, selection.start(), mask);
+        let end = text_field_display_offset(&field.controller, selection.end(), mask);
+        if start >= end {
+            return None;
+        }
+        let range = TextRange::new(start, end);
+        let lines = layout.line_for_offset(start)..=layout.line_for_offset(end - 1);
+        let forward = selection.base < selection.extent;
+        let box_on_line = |index| selection_box_on_line(layout.get_line(index)?, range, forward);
+        let rect = if forward {
+            lines.rev().find_map(box_on_line)
+        } else {
+            lines.into_iter().find_map(box_on_line)
+        }?;
+        let padding = field.content_padding;
+        let top = text_field_content_top(
+            field.multiline,
+            node.size.height,
+            layout.metrics().line_height,
+            padding,
+        );
+        Some(Rect::from_origin_size(
+            rect.origin + Offset::new(padding.left - state.scroll_x, top - state.scroll_y),
+            rect.size,
+        ))
+    }
+
     /// Returns the local bounds of the shaped text in a composing range.
     ///
     /// The range indexes the displayed, unmasked UTF-8 text (including
@@ -2724,6 +2779,34 @@ pub(super) fn text_field_caret_geometry(
         };
     }
     (x, y, height)
+}
+
+// A selection box spans adjacent selected clusters in the same visual
+// direction. Unlike highlight painting, an incomplete cluster owns no box.
+fn selection_box_on_line(
+    line: incular_text::TextLineRef<'_>,
+    range: TextRange,
+    last: bool,
+) -> Option<Rect> {
+    let mut runs = line.clusters().filter(|cluster| {
+        let source = cluster.range();
+        cluster.left < cluster.right && range.start <= source.start && source.end <= range.end
+    });
+    let mut edge = runs.next()?;
+    for cluster in runs {
+        if cluster.rtl == edge.rtl && cluster.left <= edge.right && edge.left <= cluster.right {
+            edge.left = edge.left.min(cluster.left);
+            edge.right = edge.right.max(cluster.right);
+        } else if last {
+            edge = cluster;
+        } else {
+            break;
+        }
+    }
+    Some(Rect::from_origin_size(
+        Offset::new(edge.left, line.top()),
+        Size::new(edge.right - edge.left, line.shaped().height),
+    ))
 }
 
 fn composing_text_bounds(layout: &dyn TextGeometry, range: TextRange, text: &str) -> Option<Rect> {
