@@ -44,6 +44,7 @@ fn copying_pointer_motion_preserves_device_contact_and_phase_specific_metadata()
                 Offset::ZERO
             },
             sample: PointerSampleMetadata::EMPTY.with_contact(PointerContactMetadata {
+                raw_pressure: None,
                 obscured: true,
                 pressure_min: 1.1,
                 pressure_max: 2.1,
@@ -89,6 +90,7 @@ fn copying_pointer_motion_preserves_device_contact_and_phase_specific_metadata()
         assert_eq!(copied.delta, expected_delta);
         assert_eq!(copied.local_delta, expected_delta);
         assert_eq!(copied.sample.pressure, None);
+        assert_eq!(copied.pressure(), if expected_down { 1. } else { 0. });
         let metrics = copied.sample.contact;
         assert!(metrics.obscured);
         assert_eq!((metrics.pressure_min, metrics.pressure_max), (1.1, 2.1));
@@ -133,7 +135,14 @@ fn copying_a_routed_event_drops_the_previous_local_coordinates_and_preserves_mea
 
     let now = Instant::now();
     let delta = Offset::new(5., 3.);
-    let sample = PointerSampleMetadata::new(NormalizedPressure::new(0.75), None);
+    let sample = PointerSampleMetadata::new(NormalizedPressure::new(0.75), None).with_contact(
+        PointerContactMetadata {
+            raw_pressure: Some(8.5),
+            pressure_min: 1.,
+            pressure_max: 11.,
+            ..PointerContactMetadata::DEFAULT
+        },
+    );
     let original = RawPointerEvent::contact_move(
         1,
         2,
@@ -150,6 +159,8 @@ fn copying_a_routed_event_drops_the_previous_local_coordinates_and_preserves_mea
     assert_eq!(moved.local_position, moved.position);
     assert_eq!(moved.local_delta, delta);
     assert_eq!(moved.sample, sample);
+    assert_eq!(moved.pressure(), 8.5);
+    assert_eq!(moved.as_mouse_exit().pressure(), 0.);
     let retargeted = moved.transformed(Some(Transform::translation(Offset::new(-20., -30.))));
     assert_eq!(retargeted.local_position, Offset::new(-17., -26.));
     assert_eq!(retargeted.local_delta, delta);

@@ -32,6 +32,7 @@ fn moving_a_pressed_stylus_across_a_region_resets_only_contact_pressure() {
         barrel_button: false,
     };
     let contact = PointerContactMetadata {
+        raw_pressure: None,
         pressure_min: 0.,
         pressure_max: 1024.,
         distance: 11.,
@@ -150,6 +151,7 @@ fn constructor_boundary_cases_keep_all_source_contact_geometry() {
         .with_sample(
             PointerSampleMetadata::new(NormalizedPressure::new(0.7), None).with_contact(
                 PointerContactMetadata {
+                    raw_pressure: None,
                     pressure_min: 1.1,
                     pressure_max: 2.1,
                     distance: if pressed { 0. } else { 11. },

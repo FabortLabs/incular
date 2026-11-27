@@ -92,6 +92,8 @@ pub struct StylusMetadata {
 /// for gesture thresholds; enter and exit events retain those bounds.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PointerContactMetadata {
+    /// Raw pressure in device units, independent of normalized gesture force.
+    pub raw_pressure: Option<f32>,
     pub pressure_min: f32,
     pub pressure_max: f32,
     pub distance: f32,
@@ -109,6 +111,7 @@ pub struct PointerContactMetadata {
 impl PointerContactMetadata {
     /// Pointer defaults when no backend measurement is supplied.
     pub const DEFAULT: Self = Self {
+        raw_pressure: None,
         pressure_min: 1.0,
         pressure_max: 1.0,
         distance: 0.0,

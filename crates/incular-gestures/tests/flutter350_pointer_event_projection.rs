@@ -68,6 +68,7 @@ fn converted_contacts_signals_and_pan_zoom_project_without_replacing_the_origina
                 synthesized: true,
                 sample: PointerSampleMetadata::new(NormalizedPressure::new(0.5), None)
                     .with_contact(PointerContactMetadata {
+                        raw_pressure: None,
                         obscured: true,
                         pressure_min: 10.,
                         pressure_max: 60.,

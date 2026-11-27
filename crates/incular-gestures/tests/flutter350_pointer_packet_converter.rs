@@ -288,6 +288,7 @@ fn a_lazy_packet_ignores_unknown_signals_and_missing_views_without_disturbing_co
         sample: PointerSampleMetadata {
             pressure: NormalizedPressure::new(0.5),
             contact: PointerContactMetadata {
+                raw_pressure: None,
                 radius_major: 15.,
                 radius_minor: 10.,
                 radius_min: 5.,

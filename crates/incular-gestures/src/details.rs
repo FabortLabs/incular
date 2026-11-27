@@ -248,6 +248,23 @@ impl RawPointerEvent {
         }
     }
 
+    /// Flutter pressure for this phase. The device measurement is not
+    /// normalized for gestures: those continue to read `sample.pressure`.
+    #[must_use]
+    pub fn pressure(&self) -> f32 {
+        let fallback = match self.phase {
+            PointerPhase::Down => 1.0,
+            PointerPhase::Move if self.down => 1.0,
+            PointerPhase::Up => 0.0,
+            _ => return 0.0,
+        };
+        self.sample
+            .contact
+            .raw_pressure
+            .filter(|value| value.is_finite())
+            .unwrap_or(fallback)
+    }
+
     /// Records the button whose state changed for a Down/Up transition.
     #[must_use]
     pub const fn with_button(mut self, button: Option<u32>) -> Self {

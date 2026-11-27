@@ -34,6 +34,7 @@ fn native_stylus_metadata_preserves_inversion_barrel_hover_and_device_identity()
                 barrel_button: true,
             }),
             contact: PointerContactMetadata {
+                raw_pressure: None,
                 pressure_min: 0.,
                 pressure_max: 1024.,
                 distance: 4.,

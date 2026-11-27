@@ -3677,12 +3677,12 @@ packages/flutter/test/services/platform_channel_test.dart	191	can handle method 
 packages/flutter/test/services/platform_channel_test.dart	206	can handle method call with no registered plugin (setting after)	paired-match	upstream-json-method-channel.md#direct-missing-plugin-inbound-dispatch
 packages/flutter/test/gestures/events_test.dart	228	PointerDownEvent	paired-match	upstream-pointer-event-primitives.md#default-press-and-contact-motion-buttons
 packages/flutter/test/gestures/events_test.dart	233	PointerMoveEvent	paired-match	upstream-pointer-event-primitives.md#default-press-and-contact-motion-buttons
-packages/flutter/test/gestures/events_test.dart	660	PointerAddedEvent.copyWith()	partial-match	upstream-pointer-event-primitives.md#copying-a-global-pointer-sample
-packages/flutter/test/gestures/events_test.dart	688	PointerHoverEvent.copyWith()	partial-match	upstream-pointer-event-primitives.md#copying-a-global-pointer-sample
-packages/flutter/test/gestures/events_test.dart	716	PointerDownEvent.copyWith()	partial-match	upstream-pointer-event-primitives.md#copying-a-global-pointer-sample
-packages/flutter/test/gestures/events_test.dart	744	PointerMoveEvent.copyWith()	partial-match	upstream-pointer-event-primitives.md#copying-a-global-pointer-sample
-packages/flutter/test/gestures/events_test.dart	772	PointerUpEvent.copyWith()	partial-match	upstream-pointer-event-primitives.md#copying-a-global-pointer-sample
-packages/flutter/test/gestures/events_test.dart	800	PointerRemovedEvent.copyWith()	partial-match	upstream-pointer-event-primitives.md#copying-a-global-pointer-sample
+packages/flutter/test/gestures/events_test.dart	660	PointerAddedEvent.copyWith()	paired-match	upstream-pointer-event-primitives.md#copying-a-global-pointer-sample
+packages/flutter/test/gestures/events_test.dart	688	PointerHoverEvent.copyWith()	paired-match	upstream-pointer-event-primitives.md#copying-a-global-pointer-sample
+packages/flutter/test/gestures/events_test.dart	716	PointerDownEvent.copyWith()	paired-match	upstream-pointer-event-primitives.md#copying-a-global-pointer-sample
+packages/flutter/test/gestures/events_test.dart	744	PointerMoveEvent.copyWith()	paired-match	upstream-pointer-event-primitives.md#copying-a-global-pointer-sample
+packages/flutter/test/gestures/events_test.dart	772	PointerUpEvent.copyWith()	paired-match	upstream-pointer-event-primitives.md#copying-a-global-pointer-sample
+packages/flutter/test/gestures/events_test.dart	800	PointerRemovedEvent.copyWith()	paired-match	upstream-pointer-event-primitives.md#copying-a-global-pointer-sample
 packages/flutter/test/gestures/events_test.dart	289	transforming events	partial-match	upstream-pointer-event-primitives.md#borrowed-event-projections
 packages/flutter/test/widgets/editable_text_test.dart	2891	Copy selection does not collapse selection on desktop and iOS	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md#copy-preserves-selection-on-desktop-and-ios
 packages/flutter/test/widgets/editable_text_test.dart	2937	Copy selection collapses selection and hides the toolbar on Android and Fuchsia	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md#copy-preserves-selection-on-desktop-and-ios

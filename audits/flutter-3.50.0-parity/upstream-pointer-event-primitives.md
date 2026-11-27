@@ -55,11 +55,13 @@ copy path rather than separately writing global and local coordinates.
 A routed stylus control preserves measured pressure and explicitly
 projects the copied sample into its next target.
 
-The registrations remain partial. Incular uses an optional normalized
-force measurement rather than Flutter's non-null default raw pressure,
-and a global Rust copy intentionally drops the previous local routing
-rather than carrying Flutter's transform wrapper. All 34 focused native
-copy, primitive, packet and resampler tests passed.
+The six originals now pair. Native raw pressure is independent of
+the optional normalized force used by recognizers: without a device
+measurement, down and contact moves report 1, and the other tested
+phases report 0. The stylus control preserves an explicit raw value
+outside the 0–1 normalized range. A global copy still drops the old
+local routing; none of these six originals starts from a transformed
+sample. Focused copy, packet, projection and resampler tests passed.
 
 ## Borrowed event projections
 
