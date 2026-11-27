@@ -87,3 +87,21 @@ once. Neither a later frame nor the device release starts or ends it.
 The router now passes the specific pointer to cancellation separately
 from a competitor's rejection, which remains silent for long press.
 This authored lifecycle test adds no original registration credit.
+
+### Holds and consecutive taps with no intervening pointer motion
+
+Two authored pinned `raw_gesture_deadlines_test.dart` cases verify that
+an idle raw long press starts at 500 ms, not 499 ms, and ends only
+on release. A second consecutive tap has an earlier 100 ms deadline.
+Even if an application frame arrives at 500 ms and the hold was
+registered first, the earlier deadline wins and no long press fires.
+
+The raw widget arena now exposes those deadlines to the existing
+frame timer pump and processes due raw contacts in chronological
+order, checking that the original member is still live before each
+poll. A due timer also runs before a later real input sample, and
+does not manufacture pointer motion. Two focused timing, 21 adjacent
+widget and two runtime arbitration tests passed. These authored
+checks cover the raw long-press and combined tap/drag ports; this
+does not claim every recognizer has a frame timer, or verify
+ordering against a custom earlier deadline from a non-raw widget.

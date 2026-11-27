@@ -24,6 +24,22 @@ pub trait GestureRecognizer: Any {
     /// Dispatches an action after arena arbitration accepts this recognizer.
     fn dispatch(&mut self, action: GestureAction);
 
+    /// Next observable timer for one tracked raw pointer.
+    #[doc(hidden)]
+    fn raw_deadline(&self, _pointer: u64) -> Option<incular_core::time::Instant> {
+        None
+    }
+
+    /// Delivers raw timer work without manufacturing a movement event.
+    #[doc(hidden)]
+    fn poll_raw(
+        &mut self,
+        _pointer: u64,
+        _now: incular_core::time::Instant,
+    ) -> GestureDecision {
+        GestureDecision::Pending
+    }
+
     /// Whether this recognizer should receive a Flutter-style default win
     /// when it remains the only contender after routing the current sample.
     #[doc(hidden)]

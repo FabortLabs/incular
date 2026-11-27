@@ -194,7 +194,7 @@ pub(crate) trait ArenaMember {
 /// recognizer with inherent `add_pointer`, `handle_event`,
 /// `accept_gesture`, `reject_gesture` and `poll` methods and a `link` field.
 macro_rules! arena_recognizer {
-    ($recognizer:ty) => {
+    ($recognizer:ty $(, $timer:ident)?) => {
         impl $crate::arena_member::ArenaMember for $recognizer {
             fn link(&mut self) -> &mut $crate::arena_member::ArenaLink {
                 &mut self.link
@@ -234,6 +234,9 @@ macro_rules! arena_recognizer {
             }
             fn poll(&mut self, now: incular_core::time::Instant) {
                 <$recognizer>::poll(self, now);
+            }
+            fn deadline_for_pointer(&self, _pointer: u64) -> Option<incular_core::time::Instant> {
+                None$(.or_else(|| self.$timer(_pointer)))?
             }
         }
 
@@ -289,6 +292,10 @@ pub trait ArenaRecognizer: 'static {
         self.reject_gesture(pointer);
     }
 
+    /// The observable deadline for one contact, if this port supports it.
+    fn deadline_for_pointer(&self, _pointer: u64) -> Option<Instant> {
+        None
+    }
     /// Fires the recognizer's timers that are due at `now`.
     fn poll(&mut self, now: Instant);
 }
@@ -442,6 +449,20 @@ impl<R: ArenaRecognizer> GestureRecognizer for ArenaGestureRecognizer<R> {
                 self.pointers.remove(&pointer);
             }
         }
+    }
+
+    fn raw_deadline(&self, pointer: u64) -> Option<Instant> {
+        self.pointers.contains_key(&pointer)
+            .then(|| self.recognizer.deadline_for_pointer(pointer))
+            .flatten()
+    }
+
+    fn poll_raw(&mut self, pointer: u64, now: Instant) -> GestureDecision {
+        if !self.pointers.contains_key(&pointer) {
+            return GestureDecision::Pending;
+        }
+        self.recognizer.poll(now);
+        self.decide(pointer, PointerPhase::Move)
     }
 
     fn can_win_uncontested(&self, pointer: u64) -> bool {

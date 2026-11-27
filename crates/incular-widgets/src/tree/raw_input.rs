@@ -46,6 +46,16 @@ impl MouseTransitionCallback {
     }
 }
 
+#[derive(Clone, Copy)]
+struct RawGestureDeadline {
+    when: Instant,
+    key: GestureArenaKey,
+    member: GestureArenaMember,
+    element: ElementId,
+    recognizer: TypeId,
+    pointer: u64,
+}
+
 impl WidgetTree {
     pub(super) fn dispatch_raw_trackpad_gesture(&self, position: Offset, event: TrackpadGesture) {
         for callback in self
@@ -108,6 +118,7 @@ impl WidgetTree {
         mut event: RawPointerEvent,
         hit: &PointerHitTest,
     ) -> Option<ElementId> {
+        self.pump_raw_gesture_timers(event.time);
         let key = GestureArenaKey::pointer_device(window, event.device, event.pointer);
         if event.phase == PointerPhase::Cancel
             || (event.phase == PointerPhase::Up && event.buttons == 0)
@@ -206,6 +217,65 @@ impl WidgetTree {
                 key, winner, GestureAction::ArenaAccepted { pointer: event.pointer },
             );
         }
+    }
+
+    fn raw_gesture_deadlines(&self) -> impl Iterator<Item = RawGestureDeadline> + '_ {
+        self.input.raw_gesture_streams.iter().flat_map(move |(&key, stream)| {
+            stream.members.iter().filter_map(move |member| {
+                let incular_gestures::GestureArenaSource::Pointer { pointer, .. } = key.source else {
+                    return None;
+                };
+                if member.cancelled {
+                    return None;
+                }
+                let recognizer = self.input.raw_recognizers.get(&member.element)?.get(&member.type_id)?;
+                let when = recognizer.raw_deadline(pointer)?;
+                Some(RawGestureDeadline {
+                    when, key, member: member.member, element: member.element,
+                    recognizer: member.type_id, pointer,
+                })
+            })
+        })
+    }
+
+    pub(super) fn pump_raw_gesture_timers(&mut self, now: Instant) -> bool {
+        if self.input.raw_gesture_streams.is_empty() {
+            return false;
+        }
+        let mut due: Vec<_> = self.raw_gesture_deadlines()
+            .filter(|deadline| deadline.when <= now)
+            .collect();
+        // A delayed frame may cover more than one deadline. Visiting in hit
+        // order could give a later hold priority over an earlier tap.
+        due.sort_by_key(|deadline| deadline.when);
+        for RawGestureDeadline { when, key, member, element, recognizer, pointer } in due {
+            let disposition = self.input.gesture_arena.disposition(key, member);
+            if !matches!(disposition, Some(GestureDisposition::Pending | GestureDisposition::Accepted)) {
+                continue;
+            }
+            let Some(recognizer) = self.input.raw_recognizers.get_mut(&element)
+                .and_then(|recognizers| recognizers.get_mut(&recognizer))
+            else {
+                continue;
+            };
+            if recognizer.raw_deadline(pointer).is_none_or(|deadline| deadline > when) {
+                continue;
+            }
+            match recognizer.poll_raw(pointer, when) {
+                GestureDecision::Accept(action) => {
+                    self.accept_raw_gesture_action(key, member, action);
+                }
+                GestureDecision::Reject | GestureDecision::Cancelled
+                    if disposition == Some(GestureDisposition::Pending) =>
+                {
+                    self.input.gesture_arena.reject(key, member);
+                    self.apply_arena_entries(key, self.input.gesture_arena.entries(key));
+                }
+                GestureDecision::Cancelled => recognizer.cancel_pointer(pointer),
+                GestureDecision::Pending | GestureDecision::Reject => {}
+            }
+        }
+        self.raw_gesture_deadlines().next().is_some()
     }
 
     /// Whether the normalized event belongs to a captured contact, even if

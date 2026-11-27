@@ -28,6 +28,7 @@ pub struct LongPressGestureRecognizer {
 
 struct Contact {
     pointer: u64,
+    deadline: Option<Instant>,
     routed_down: bool,
     started: bool,
     award: ArenaAward,
@@ -138,6 +139,7 @@ impl LongPressGestureRecognizer {
         self.arena.add(down.pointer);
         self.contact = Some(Contact {
             pointer: down.pointer,
+            deadline: down.time.checked_add(self.duration),
             routed_down: false,
             started: false,
             award,
@@ -294,6 +296,19 @@ impl crate::ArenaRecognizer for LongPressGestureRecognizer {
 
     fn cancel_gesture(&mut self, pointer: u64) {
         LongPressGestureRecognizer::reject_gesture(self, pointer);
+    }
+
+    fn deadline_for_pointer(&self, pointer: u64) -> Option<Instant> {
+        let contact = self.contact.as_ref().filter(|contact| contact.pointer == pointer)?;
+        if contact.routed_down
+            && !contact.started
+            && !matches!(contact.award, ArenaAward::Pending(Some(_)))
+            && contact.engine.has_pending_long_press()
+        {
+            contact.deadline
+        } else {
+            None
+        }
     }
 
     fn poll(&mut self, now: Instant) {

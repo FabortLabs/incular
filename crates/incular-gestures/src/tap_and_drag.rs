@@ -521,6 +521,10 @@ impl TapAndDragGestureRecognizer {
         }
     }
 
+    fn tracked_deadline(&self, pointer: u64) -> Option<Instant> {
+        (self.primary_pointer == Some(pointer)).then(|| self.next_deadline()).flatten()
+    }
+
     /// The earliest pending deadline. The consecutive-tap timer only marks
     /// the series stale, which the next press checks, so it is not one.
     #[must_use]
@@ -851,4 +855,4 @@ impl TapAndDragGestureRecognizer {
     }
 }
 
-arena_recognizer!(TapAndDragGestureRecognizer);
+arena_recognizer!(TapAndDragGestureRecognizer, tracked_deadline);

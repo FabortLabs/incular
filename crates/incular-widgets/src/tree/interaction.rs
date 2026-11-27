@@ -2115,7 +2115,8 @@ impl WidgetTree {
     pub fn pump_gesture_timers(&mut self, now: Instant) -> bool {
         self.flush_single_tap_deadlines(now);
         let keys: Vec<GestureArenaKey> = self.input.active_gestures.keys().copied().collect();
-        let mut pending = !self.input.deferred_single_taps.is_empty();
+        let mut pending = self.pump_raw_gesture_timers(now)
+            || !self.input.deferred_single_taps.is_empty();
         for key in keys {
             let dispositions = self.input.gesture_arena.entries(key);
             let mut accepts = Vec::new();
