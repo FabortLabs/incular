@@ -710,24 +710,28 @@ impl LayerTree {
     /// Whether a layer or any live descendant has an active observer.
     #[must_use]
     pub fn subtree_has_composition_callbacks(&self, root: LayerId) -> bool {
-        if !self.layers.contains(root.0) {
-            return false;
-        }
-        self.composition_observers
-            .observed_layers()
-            .any(|observed| {
-                let mut current = Some(observed);
-                for _ in 0..=self.diagnostics.layers {
-                    let Some(layer) = current else {
-                        return false;
-                    };
-                    if layer == root {
-                        return true;
-                    }
-                    current = self.layers.get(layer.0).and_then(|layer| layer.parent);
-                }
-                false
+        self.layers.contains(root.0)
+            && self.composition_observers.observed_layers().any(|observed| {
+                self.layer_path_contains(observed, root)
             })
+    }
+
+    fn layer_path_contains(&self, layer: LayerId, ancestor: LayerId) -> bool {
+        let mut current = Some(layer);
+        for _ in 0..=self.diagnostics.layers {
+            let Some(layer) = current else {
+                return false;
+            };
+            if layer == ancestor {
+                return true;
+            }
+            current = self.layers.get(layer.0).and_then(|layer| layer.parent);
+        }
+        false
+    }
+
+    fn actually_attached(&self, layer: LayerId) -> bool {
+        self.root.is_some_and(|root| self.layer_path_contains(layer, root))
     }
 
     fn fire_composition_callbacks(&mut self) {
@@ -1206,6 +1210,8 @@ impl LayerTree {
         }
     }
     pub fn set_children(&mut self, id: LayerId, children: Vec<LayerId>) {
+        let track_detachment = !self.composition_observers.is_empty();
+        let parent_was_attached = track_detachment && self.actually_attached(id);
         let Some(layer) = self.layers.get_mut(id.0) else {
             return;
         };
@@ -1215,11 +1221,15 @@ impl LayerTree {
         let previous = std::mem::replace(&mut layer.children, children);
         layer.generation = next_generation(&mut self.next_generation);
         self.scene_dirty = true;
-        for child in previous {
-            if let Some(child) = self.layers.get_mut(child.0)
+        let mut potentially_detached = Vec::new();
+        for child_id in previous {
+            if let Some(child) = self.layers.get_mut(child_id.0)
                 && child.parent == Some(id)
             {
                 child.parent = None;
+                if parent_was_attached {
+                    potentially_detached.push(child_id);
+                }
             }
         }
         let mut previous_parents = Vec::new();
@@ -1236,6 +1246,9 @@ impl LayerTree {
             };
             if let Some(old) = child.parent.replace(id).filter(|old| *old != id) {
                 previous_parents.push(old);
+                if track_detachment && !parent_was_attached && self.actually_attached(old) {
+                    potentially_detached.push(child_id);
+                }
             }
         }
         // Every adopted child belongs to precisely one scene branch.
@@ -1257,6 +1270,15 @@ impl LayerTree {
             self.reset_cull_bounds(old);
         }
         self.reset_cull_bounds(id);
+        // Only a real departure from the attached scene notifies. A
+        // reordered child or atomic adoption into another attached parent
+        // is still attached after both sides of the change settle.
+        let mut notified = std::collections::HashSet::new();
+        for child in potentially_detached {
+            if !self.actually_attached(child) && notified.insert(child) {
+                self.notify_composition_subtree(child, true);
+            }
+        }
     }
 
     /// Marks one retained layer subtree as detachable presentation content.

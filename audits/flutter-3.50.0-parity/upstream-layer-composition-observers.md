@@ -32,3 +32,17 @@ assertion original remains reference-only: the Rust observer receives a
 layer ID rather than a mutable layer. These two registrations add no
 paired-match credit. The native detachment fixture exercises the explicit
 root lifecycle, not a window-system presentation event.
+
+## Observer notification on attached branch removal
+
+A pinned Flutter probe showed that removing a branch with an observer
+from an attached parent notifies the removed branch before the parent.
+The Rust callbacks now run in that order for actual branch detachment.
+The native controls distinguish this from reordering, staging in an
+unattached tree, and atomic reparenting between two attached parents.
+Moving from an attached branch to an unattached parent notifies the
+detached subtree; reconnecting and composing it resumes its existing
+subscription. The initial native regressions failed before this fix.
+All 44 focused native observer, topology, layer reuse and shader cases
+passed. These are additional authored scenarios, not new paired credit
+against the upstream manifest.

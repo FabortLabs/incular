@@ -55,6 +55,10 @@ impl CompositionObservers {
         CompositionCallbackSubscription(entry)
     }
 
+    pub(crate) fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     pub(crate) fn has_on(&self, layer: LayerId) -> bool {
         self.0.get(&layer).is_some_and(|entries| {
             entries

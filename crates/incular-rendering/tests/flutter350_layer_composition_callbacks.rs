@@ -179,3 +179,94 @@ fn repeated_cancellation_is_idempotent_in_the_rust_subscription_api() {
     assert!(!observer.is_active());
     let _ = tree.flatten();
 }
+
+#[test]
+fn removing_an_attached_branch_notifies_it_once_before_other_scenes_continue() {
+    let (mut tree, [root, branch, sibling, child]) = layer_tree();
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let subscriptions: Vec<_> = [root, branch, sibling, child]
+        .into_iter()
+        .map(|id| {
+            let seen = seen.clone();
+            tree.add_composition_callback(id, move |id| seen.borrow_mut().push(id))
+                .unwrap()
+        })
+        .collect();
+
+    let _ = tree.flatten();
+    assert_eq!(seen.borrow().as_slice(), &[root, branch, child, sibling]);
+    seen.borrow_mut().clear();
+
+    tree.set_children(root, vec![sibling, branch]);
+    assert!(
+        seen.borrow().is_empty(),
+        "order changed, but no branch detached"
+    );
+    tree.set_children(root, vec![sibling]);
+    assert_eq!(seen.borrow().as_slice(), &[child, branch]);
+    assert!(subscriptions.iter().all(|listener| listener.is_active()));
+
+    seen.borrow_mut().clear();
+    let _ = tree.flatten();
+    assert_eq!(seen.borrow().as_slice(), &[root, sibling]);
+    seen.borrow_mut().clear();
+    tree.set_children(root, vec![branch, sibling]);
+    assert!(seen.borrow().is_empty());
+    let _ = tree.flatten();
+    assert_eq!(seen.borrow().as_slice(), &[root, branch, child, sibling]);
+}
+
+#[test]
+fn atomic_adoption_within_a_scene_and_unattached_staging_do_not_detach() {
+    let (mut tree, [root, _, sibling, child]) = layer_tree();
+    let count = Rc::new(Cell::new(0));
+    let _observer = tree
+        .add_composition_callback(child, {
+            let count = count.clone();
+            move |_| count.set(count.get() + 1)
+        })
+        .unwrap();
+    tree.set_children(sibling, vec![child]);
+    assert_eq!(count.get(), 0);
+    let _ = tree.flatten();
+    assert_eq!(count.get(), 1);
+    tree.set_children(sibling, vec![]);
+    assert_eq!(count.get(), 2);
+
+    let staging = tree.create_transform(Transform::IDENTITY);
+    tree.set_children(staging, vec![child]);
+    tree.set_children(staging, vec![]);
+    assert_eq!(
+        count.get(),
+        2,
+        "an unpublished staging branch never detached"
+    );
+    let _ = tree.flatten();
+    assert_eq!(count.get(), 2);
+    assert_eq!(tree.root(), Some(root));
+}
+
+#[test]
+fn moving_a_live_layer_into_a_detached_tree_is_a_real_detachment() {
+    let (mut tree, [root, first, sibling, child]) = layer_tree();
+    let count = Rc::new(Cell::new(0));
+    let observer = tree
+        .add_composition_callback(child, {
+            let count = count.clone();
+            move |_| count.set(count.get() + 1)
+        })
+        .unwrap();
+    let _ = tree.flatten();
+    assert_eq!(count.get(), 1);
+
+    let staging = tree.create_transform(Transform::IDENTITY);
+    tree.set_children(staging, vec![child]);
+    assert_eq!(count.get(), 2);
+    assert!(observer.is_active());
+    assert!(!tree.subtree_has_composition_callbacks(root));
+
+    tree.set_children(root, vec![first, sibling, staging]);
+    assert_eq!(count.get(), 2);
+    let _ = tree.flatten();
+    assert_eq!(count.get(), 3);
+}
