@@ -29,7 +29,7 @@ fn visible_paint_children(node: &RenderNode) -> &[RenderObjectId] {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct SpanPointerHit {
     pub(super) element: ElementId,
-    pub(super) annotation: Arc<incular_text::TextSpanMouse>,
+    pub(super) span: MouseSpanTarget,
     raw_before: usize,
 }
 
@@ -241,11 +241,11 @@ pub(super) struct RawHitResult {
     blocks_siblings: bool,
 }
 
-fn paragraph_pointer_annotation<'a>(
+fn paragraph_pointer_annotation(
     node: &RenderNode,
-    ranges: &'a [ParagraphMouseRange],
+    ranges: &[ParagraphMouseRange],
     local: Offset,
-) -> Option<&'a Arc<incular_text::TextSpanMouse>> {
+) -> Option<usize> {
     let layout = node.text_layout()?;
     let row = layout.lines.partition_point(|line| line.top <= local.y).checked_sub(1)?;
     let line = &layout.lines[row];
@@ -254,7 +254,8 @@ fn paragraph_pointer_annotation<'a>(
     if byte >= layout.retained_source_end() {
         return None;
     }
-    let range = ranges.get(ranges.partition_point(|span| span.source.end <= byte))?;
+    let index = ranges.partition_point(|span| span.source.end <= byte);
+    let range = ranges.get(index)?;
     if !range.source.contains(&byte) {
         return None;
     }
@@ -268,7 +269,7 @@ fn paragraph_pointer_annotation<'a>(
             (top, top + run.caret_height)
         },
     );
-    (top <= local.y && local.y < bottom).then_some(&range.annotation)
+    (top <= local.y && local.y < bottom).then_some(index)
 }
 
 impl WidgetTree {
@@ -706,11 +707,11 @@ impl WidgetTree {
         if !result.accepts_hit
             && let (Some(element), Some(WidgetKind::Text { pointer_spans: Some(ranges), .. })) =
                 (element, kind)
-            && let Some(annotation) = paragraph_pointer_annotation(node, ranges, point - current)
+            && let Some(index) = paragraph_pointer_annotation(node, &ranges.ranges, point - current)
         {
             result.pointer_spans.push(SpanPointerHit {
                 element,
-                annotation: annotation.clone(),
+                span: MouseSpanTarget { paragraph: ranges.clone(), index },
                 raw_before: result.elements.len(),
             });
             // A hit on a literal span is a real paragraph child hit.

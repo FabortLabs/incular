@@ -86,3 +86,13 @@ pointer delivers its span's final exit, unlike the enclosing widget's
 unmount policy. This does not implement the separate span gesture
 recognizer API or its semantics actions. All five focused native cases
 and 33 neighboring mouse routing/region/cursor cases passed.
+
+Shared callbacks do not make different TextSpans the same annotation.
+The authored Linux `text_span_mouse_identity_test.dart` and retained
+native fixture cross adjacent spans with the same callbacks. Different
+literal text sends exit then enter; truly equivalent spans leave the
+hover in place. The native annotation holds one shared source tree for
+an interactive paragraph, with a direct identity shortcut when the
+same span stays hovered. This also keeps the callback snapshot valid
+until its deferred exit. Six focused and twenty neighboring native
+tests passed; the authored identity control adds no registration credit.

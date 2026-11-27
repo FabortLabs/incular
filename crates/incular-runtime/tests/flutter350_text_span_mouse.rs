@@ -174,3 +174,36 @@ fn unmounting_the_hovered_span_delivers_an_exit() {
     assert_eq!(events[0].phase, PointerPhase::Exit);
     assert_eq!(events[0].position, Offset::new(400., 300.));
 }
+
+#[test]
+fn shared_callbacks_do_not_merge_different_spans_but_equal_spans_keep_hover() {
+    let Some(style) = ahem() else {
+        return;
+    };
+    for equivalent in [false, true] {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let entering = events.clone();
+        let exiting = events.clone();
+        let left = TextSpan::new("xxxxx")
+            .on_enter(move |event| entering.lock().unwrap().push(event.phase))
+            .on_exit(move |event| exiting.lock().unwrap().push(event.phase));
+        let mut right = left.clone();
+        if !equivalent {
+            right.text = "yyyyy".into();
+        }
+        let span = TextSpan::empty()
+            .style(style.clone())
+            .child(left)
+            .child(right);
+        let mut runtime = mount(RichText::new(span).into());
+        move_mouse(&mut runtime, 380., 300.);
+        assert_eq!(*events.lock().unwrap(), [PointerPhase::Enter]);
+        move_mouse(&mut runtime, 420., 300.);
+        let expected: &[PointerPhase] = if equivalent {
+            &[PointerPhase::Enter]
+        } else {
+            &[PointerPhase::Enter, PointerPhase::Exit, PointerPhase::Enter]
+        };
+        assert_eq!(*events.lock().unwrap(), expected, "equivalent={equivalent}");
+    }
+}

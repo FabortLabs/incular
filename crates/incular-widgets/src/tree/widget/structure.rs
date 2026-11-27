@@ -102,7 +102,7 @@ impl std::fmt::Debug for WidgetKind {
                 .field("text_height_behavior", text_height_behavior)
                 .field("text_scaler", text_scaler)
                 .field("spans", &spans.as_ref().map(|runs| runs.len()))
-                .field("pointer_spans", &pointer_spans.as_ref().map(|ranges| ranges.len()))
+                .field("pointer_spans", &pointer_spans.as_ref().map(|spans| spans.ranges.len()))
                 .field(
                     "inline",
                     &inline.as_ref().map(|inline| inline.0.placeholders.len()),

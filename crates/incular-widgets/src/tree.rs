@@ -1392,26 +1392,89 @@ struct DeferredSingleTap {
     deadline: Instant,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct ParagraphMouseRange {
+#[derive(Debug, PartialEq)]
+pub(crate) struct ParagraphMouseSpans {
+    root: incular_text::TextSpan,
+    ranges: Vec<ParagraphMouseRange>,
+}
+
+#[derive(Debug, PartialEq)]
+struct ParagraphMouseRange {
     source: std::ops::Range<usize>,
+    path: Vec<usize>,
     annotation: Arc<incular_text::TextSpanMouse>,
 }
+
+#[derive(Clone)]
+struct MouseSpanTarget {
+    paragraph: Arc<ParagraphMouseSpans>,
+    index: usize,
+}
+
+impl MouseSpanTarget {
+    fn annotation(&self) -> &incular_text::TextSpanMouse {
+        &self.paragraph.ranges[self.index].annotation
+    }
+
+    fn text_span(&self) -> &incular_text::TextSpan {
+        let mut current = &self.paragraph.root;
+        for &index in &self.paragraph.ranges[self.index].path {
+            let incular_text::InlineSpan::Text(child) = &current.children[index] else {
+                unreachable!("mouse targets only have text spans in their paths");
+            };
+            current = child;
+        }
+        current
+    }
+}
+
+impl std::fmt::Debug for MouseSpanTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&self.paragraph.ranges[self.index].source, f)
+    }
+}
+
+impl PartialEq for MouseSpanTarget {
+    fn eq(&self, other: &Self) -> bool {
+        fn span_eq(left: &incular_text::TextSpan, right: &incular_text::TextSpan) -> bool {
+            use incular_text::InlineSpan;
+            // Flutter keys the annotation by TextSpan value. Locale and spell
+            // metadata are not part of TextSpan.operator== at this revision.
+            std::ptr::eq(left, right)
+                || left.text == right.text
+                    && left.style == right.style
+                    && left.semantics_label == right.semantics_label
+                    && left.semantics_identifier == right.semantics_identifier
+                    && left.mouse == right.mouse
+                    && left.children.len() == right.children.len()
+                    && left.children.iter().zip(&right.children).all(|(left, right)| {
+                        match (left, right) {
+                            (InlineSpan::Text(left), InlineSpan::Text(right)) => span_eq(left, right),
+                            (InlineSpan::Widget(left), InlineSpan::Widget(right)) => left == right,
+                            _ => false,
+                        }
+                    })
+        }
+
+        self.index == other.index && Arc::ptr_eq(&self.paragraph, &other.paragraph)
+            || span_eq(self.text_span(), other.text_span())
+    }
+}
+impl Eq for MouseSpanTarget {}
 
 struct MouseHoverEntry {
     element: ElementId,
     world_to_local: Option<CoreTransform>,
-    span: Option<Arc<incular_text::TextSpanMouse>>,
+    span: Option<MouseSpanTarget>,
 }
 
 impl MouseHoverEntry {
     fn same_annotation(&self, other: &Self) -> bool {
-        self.element == other.element
-            && match (&self.span, &other.span) {
-                (None, None) => true,
-                (Some(left), Some(right)) => Arc::ptr_eq(left, right),
-                _ => false,
-            }
+        match (&self.span, &other.span) {
+            (None, None) => self.element == other.element,
+            (Some(left), Some(right)) => left == right,
+            _ => false,
+        }
     }
 }
 

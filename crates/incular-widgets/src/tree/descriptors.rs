@@ -1004,57 +1004,80 @@ fn rich_text_widget(
         inline,
         strut.map(Box::new),
     );
-    if let WidgetKind::Text { pointer_spans, .. } = widget.kind_mut() {
-        let mut ranges = Vec::new();
-        collect_paragraph_mouse_ranges(&value.text, &mut 0, &mut ranges);
-        if !ranges.is_empty() {
-            *pointer_spans = Some(ranges.into());
-        }
-    }
-    if let Some(parts) = super::semantics::paragraph::ParagraphSemanticPart::for_spans(&value.text) {
-        widget.semantic_properties_mut().paragraph_parts = Some(parts);
-        return widget;
-    }
-    if let Some(label) = paragraph_pronunciation(&value.text) {
-        crate::Semantics::new(widget).attributed_label(label).into()
+    let parts = super::semantics::paragraph::ParagraphSemanticPart::for_spans(&value.text);
+    let pronunciation = if parts.is_none() {
+        paragraph_pronunciation(&value.text)
+    } else {
+        None
+    };
+    let label = if parts.is_some() || pronunciation.is_some() {
+        None
     } else if has_placeholders {
         // Replacement characters are layout protocol bytes, not speech.
         // An actual inline child contributes its own semantics if placed.
-        widget.accessibility_label(value.text.to_plain_text(incular_text::PlainTextOptions {
+        Some(value.text.to_plain_text(incular_text::PlainTextOptions {
             include_semantics_labels: true,
             include_placeholders: false,
         }))
     } else {
-        match value.text.semantics_text() {
-            Some(label) => widget.accessibility_label(label),
-            None => widget,
-        }
+        value.text.semantics_text()
+    };
+    if let WidgetKind::Text { pointer_spans, .. } = widget.kind_mut() {
+        *pointer_spans = paragraph_mouse_spans(value.text);
+    }
+    if let Some(parts) = parts {
+        widget.semantic_properties_mut().paragraph_parts = Some(parts);
+        widget
+    } else if let Some(pronunciation) = pronunciation {
+        crate::Semantics::new(widget).attributed_label(pronunciation).into()
+    } else if let Some(label) = label {
+        widget.accessibility_label(label)
+    } else {
+        widget
     }
 }
 
-fn collect_paragraph_mouse_ranges(
-    span: &incular_text::TextSpan,
-    offset: &mut usize,
-    ranges: &mut Vec<ParagraphMouseRange>,
-) {
-    let end = *offset + span.text.len();
-    if end > *offset
-        && let Some(annotation) = &span.mouse
-    {
-        ranges.push(ParagraphMouseRange {
-            source: *offset..end,
-            annotation: annotation.clone(),
-        });
+fn paragraph_mouse_spans(root: incular_text::TextSpan) -> Option<Arc<ParagraphMouseSpans>> {
+    fn has_annotation(span: &incular_text::TextSpan) -> bool {
+        span.mouse.is_some() && !span.text.is_empty()
+            || span.children.iter().any(|child| {
+                matches!(child, incular_text::InlineSpan::Text(child) if has_annotation(child))
+            })
     }
-    *offset = end;
-    for child in &span.children {
-        match child {
-            incular_text::InlineSpan::Text(child) => {
-                collect_paragraph_mouse_ranges(child, offset, ranges);
+
+    fn collect(
+        span: &incular_text::TextSpan,
+        offset: &mut usize,
+        path: &mut Vec<usize>,
+        ranges: &mut Vec<ParagraphMouseRange>,
+    ) {
+        let end = *offset + span.text.len();
+        if end > *offset && let Some(annotation) = &span.mouse {
+            ranges.push(ParagraphMouseRange {
+                source: *offset..end,
+                path: path.clone(),
+                annotation: annotation.clone(),
+            });
+        }
+        *offset = end;
+        for (index, child) in span.children.iter().enumerate() {
+            match child {
+                incular_text::InlineSpan::Text(child) => {
+                    path.push(index);
+                    collect(child, offset, path, ranges);
+                    path.pop();
+                }
+                incular_text::InlineSpan::Widget(_) => *offset += '\u{fffc}'.len_utf8(),
             }
-            incular_text::InlineSpan::Widget(_) => *offset += '\u{fffc}'.len_utf8(),
         }
     }
+
+    if !has_annotation(&root) {
+        return None;
+    }
+    let mut ranges = Vec::new();
+    collect(&root, &mut 0, &mut Vec::new(), &mut ranges);
+    Some(Arc::new(ParagraphMouseSpans { root, ranges }))
 }
 
 fn paragraph_pronunciation(
