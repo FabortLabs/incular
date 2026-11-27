@@ -38,6 +38,23 @@ impl Matrix4 {
         &self.0
     }
 
+    /// Orthographically projects the matrix's local z=0 plane into XY.
+    /// A constant nonzero homogeneous denominator is affine even when a
+    /// matrix rotates out of plane. Perspective that varies X/Y's
+    /// denominator is not representable by the retained affine path.
+    #[must_use]
+    pub fn affine_xy_plane(self) -> Option<crate::Transform> {
+        let [a, b, _, wx, c, d, _, wy, _, _, _, _, x, y, _, w] = self.0;
+        if wx != 0.0 || wy != 0.0 || w == 0.0 || !w.is_finite() {
+            return None;
+        }
+        let matrix = [a / w, b / w, c / w, d / w, x / w, y / w];
+        matrix
+            .iter()
+            .all(|v| v.is_finite())
+            .then(|| crate::Transform::from_coefficients(matrix))
+    }
+
     #[must_use]
     pub const fn translation(x: f64, y: f64, z: f64) -> Self {
         let mut matrix = Self::IDENTITY;

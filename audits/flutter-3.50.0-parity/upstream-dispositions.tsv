@@ -2894,3 +2894,12 @@ packages/flutter/test/painting/image_stream_test.dart	909	Keep alive handles do 
 packages/flutter/test/painting/image_stream_test.dart	985	MultiFrameImageStreamCompleter - one frame image should only be decoded once	paired-match	upstream-image-playback.md#callback-and-error-lifecycle
 packages/flutter/test/semantics/semantics_binding_set_semantics_tree_enabled_1_test.dart	10	setSemanticsTreeEnabled calls when the semantics is enabled before binding initialized	paired-match	upstream-semantics-binding.md#native-tree-activation-handshake
 packages/flutter/test/semantics/semantics_binding_set_semantics_tree_enabled_test.dart	10	SemanticsHandle ensureSemantics calls setSemanticsTreeEnabled	paired-match	upstream-semantics-binding.md#native-tree-activation-handshake
+packages/flutter/test/rendering/transform_test.dart	19	RenderTransform - identity	paired-match	upstream-render-transform-coordinates.md
+packages/flutter/test/rendering/transform_test.dart	41	RenderTransform - identity with internal offset	paired-match	upstream-render-transform-coordinates.md
+packages/flutter/test/rendering/transform_test.dart	66	RenderTransform - translation	paired-match	upstream-render-transform-coordinates.md
+packages/flutter/test/rendering/transform_test.dart	88	RenderTransform - translation with internal offset	paired-match	upstream-render-transform-coordinates.md
+packages/flutter/test/rendering/transform_test.dart	113	RenderTransform - rotation	paired-match	upstream-render-transform-coordinates.md
+packages/flutter/test/rendering/transform_test.dart	135	RenderTransform - rotation with internal offset	paired-match	upstream-render-transform-coordinates.md
+packages/flutter/test/rendering/transform_test.dart	166	RenderTransform - perspective - globalToLocal	paired-match	upstream-render-transform-coordinates.md
+packages/flutter/test/rendering/transform_test.dart	190	RenderTransform - globalToLocal with parallel view direction returns zero	paired-match	upstream-render-transform-coordinates.md
+packages/flutter/test/rendering/transform_test.dart	206	RenderTransform - perspective - localToGlobal	paired-match	upstream-render-transform-coordinates.md

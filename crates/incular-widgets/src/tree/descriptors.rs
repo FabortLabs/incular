@@ -2106,6 +2106,14 @@ impl Transform {
             child: child.into(),
         }
     }
+    /// Applies a matrix whose projection of the local XY plane is
+    /// affine. Depth is not retained by this wgpu widget path. A
+    /// variable perspective denominator is refused rather than flattened.
+    #[must_use]
+    pub fn from_matrix4(matrix: incular_core::Matrix4, child: impl Into<Widget>) -> Option<Self> {
+        Some(Self::new(matrix.affine_xy_plane()?, child))
+    }
+
     #[must_use]
     pub fn translation(offset: Offset, child: impl Into<Widget>) -> Self {
         Self::new(CoreTransform::translation(offset), child)

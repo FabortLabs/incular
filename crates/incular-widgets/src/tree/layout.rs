@@ -814,6 +814,21 @@ impl WidgetTree {
         ))
     }
 
+    /// Converts a view point, or an ancestor's point, to an element's own
+    /// layout plane. A singular projection has no inverse and returns
+    /// the zero offset, like Flutter's `globalToLocal`.
+    pub fn element_global_to_local(
+        &self,
+        element: ElementId,
+        point: Offset,
+        ancestor: Option<ElementAddress>,
+    ) -> Result<Offset, TreeError> {
+        Ok(self
+            .resolve_element_transform(element, ancestor)?
+            .and_then(|transform| transform.inverse_transform_point(point))
+            .unwrap_or(Offset::ZERO))
+    }
+
     /// Laid-out geometry of a frame-ticker node, for motion that reacts to
     /// layout (in-view, layout and shared transitions, reordering).
     pub(super) fn frame_geometry(&self, id: RenderObjectId) -> FrameGeometry {
