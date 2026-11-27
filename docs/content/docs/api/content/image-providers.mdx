@@ -78,3 +78,10 @@ image_decodes, evictions }`.
 `Embedded` / `Memory` / `FileSystem` / `Generated`.
 
 Related: [`Image`](/docs/api/content/image).
+
+## Image stream progress
+
+`ImageStream::state()` includes the most recent chunk while loading.
+Use `listen_chunks` for new progress events without replaying old ones.
+Keep the returned subscription alive; dropping it stops future reports.
+Use `listen_frame` separately for a ready image or error.

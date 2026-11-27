@@ -22,7 +22,8 @@ pub use info::ImageInfo;
 pub use resize::{ImageResizeOptions, ResizeImage, ResizeImageKey, ResizeImagePolicy};
 
 pub use stream::{
-    AnyImageProvider, ImageChunkEvent, ImageFrameSubscription, ImageLoadState, ImageStream,
+    AnyImageProvider, ImageChunkEvent, ImageChunkSubscription, ImageFrameSubscription,
+    ImageLoadState, ImageStream,
     ImageStreamCompleter,
 };
 

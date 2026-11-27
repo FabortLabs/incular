@@ -12,7 +12,7 @@ use std::{
     any::Any,
     cell::{Cell, OnceCell, RefCell},
     fmt,
-    rc::Rc,
+    rc::{Rc, Weak},
 };
 
 use futures_channel::oneshot;
@@ -58,6 +58,7 @@ struct StreamCell {
     state: RefCell<ImageLoadState>,
     changes: DependencySource,
     frame_changes: OnceCell<DependencySource>,
+    chunks: OnceCell<ChunkListeners>,
     completed: Cell<bool>,
     /// The stream this one follows after [`ImageStreamCompleter::follow`].
     source: RefCell<Option<ImageStream>>,
@@ -97,6 +98,7 @@ impl ImageStream {
                 state: RefCell::new(state),
                 changes: DependencySource::default(),
                 frame_changes: OnceCell::new(),
+                chunks: OnceCell::new(),
                 completed: Cell::new(completed),
                 source: RefCell::new(None),
                 map: RefCell::new(None),
@@ -225,6 +227,46 @@ impl ImageStream {
         ImageFrameSubscription { _binding: binding }
     }
 
+    /// Receives new progress reports, without replaying the latest snapshot.
+    /// Reading the stream's state remains the way to obtain existing progress.
+    /// Identical consecutive reports are still events. Listener changes
+    /// made during an event take effect on the next report.
+    pub fn listen_chunks(
+        &self,
+        callback: impl Fn(ImageChunkEvent) + 'static,
+    ) -> ImageChunkSubscription {
+        let listeners = self.cell.chunks.get_or_init(ChunkListeners::default);
+        let id = listeners.next_id.get();
+        listeners
+            .next_id
+            .set(id.checked_add(1).expect("too many image chunk listeners"));
+        Rc::make_mut(&mut listeners.active.borrow_mut()).push((id, Rc::new(callback)));
+        self.bind_chunk_source();
+        ImageChunkSubscription {
+            owner: Rc::downgrade(&self.cell),
+            id,
+        }
+    }
+
+    fn bind_chunk_source(&self) {
+        let Some(listeners) = self.cell.chunks.get() else {
+            return;
+        };
+        if listeners.active.borrow().is_empty() || listeners.upstream.borrow().is_some() {
+            return;
+        }
+        let Some(source) = self.source() else {
+            return;
+        };
+        let owner = Rc::downgrade(&self.cell);
+        let upstream = source.listen_chunks(move |event| {
+            if let Some(cell) = owner.upgrade() {
+                cell.deliver_chunk(event);
+            }
+        });
+        *listeners.upstream.borrow_mut() = Some(upstream);
+    }
+
     fn observed_state(&self, include_progress: bool) -> ImageLoadState {
         if include_progress {
             self.cell.changes.track();
@@ -252,6 +294,10 @@ impl ImageStream {
                 self.cell.completed.set(true);
                 *self.cell.source.borrow_mut() = None;
                 *self.cell.state.borrow_mut() = outcome.clone();
+                if let Some(listeners) = self.cell.chunks.get() {
+                    let upstream = listeners.upstream.borrow_mut().take();
+                    drop(upstream);
+                }
                 return outcome;
             }
             return outcome;
@@ -284,14 +330,77 @@ impl ImageStream {
         if self.cell.completed.get() || self.cell.source.borrow().is_some() {
             return false;
         }
+        let chunk = match &state {
+            ImageLoadState::Loading(event) => *event,
+            _ => None,
+        };
         let completes = !matches!(state, ImageLoadState::Loading(_));
         *self.cell.state.borrow_mut() = state;
         self.cell.completed.set(completes);
+        if let Some(chunk) = chunk {
+            self.cell.deliver_chunk(chunk);
+        }
         self.cell.changes.notify();
         if completes && let Some(changes) = self.cell.frame_changes.get() {
             changes.notify();
         }
         true
+    }
+}
+
+type ImageChunkCallback = Rc<dyn Fn(ImageChunkEvent)>;
+
+#[derive(Default)]
+struct ChunkListeners {
+    next_id: Cell<u64>,
+    active: RefCell<Rc<Vec<(u64, ImageChunkCallback)>>>,
+    upstream: RefCell<Option<ImageChunkSubscription>>,
+}
+
+impl StreamCell {
+    fn deliver_chunk(&self, event: ImageChunkEvent) {
+        let Some(listeners) = self.chunks.get() else {
+            return;
+        };
+        // Hold a snapshot, not a borrow. An application callback may
+        // add or remove observers, including its own subscription.
+        let snapshot = Rc::clone(&listeners.active.borrow());
+        for (_, callback) in snapshot.iter() {
+            callback(event);
+        }
+    }
+}
+
+/// Retains one live progress listener. Drop to stop future reports.
+#[must_use = "keep the subscription alive while listening for image progress"]
+pub struct ImageChunkSubscription {
+    owner: Weak<StreamCell>,
+    id: u64,
+}
+
+impl Drop for ImageChunkSubscription {
+    fn drop(&mut self) {
+        let Some(owner) = self.owner.upgrade() else {
+            return;
+        };
+        let Some(listeners) = owner.chunks.get() else {
+            return;
+        };
+        let (removed, empty) = {
+            let mut active = listeners.active.borrow_mut();
+            let active = Rc::make_mut(&mut active);
+            let Some(index) = active.iter().position(|(id, _)| *id == self.id) else {
+                return;
+            };
+            (active.remove(index), active.is_empty())
+        };
+        if empty {
+            let upstream = listeners.upstream.borrow_mut().take();
+            drop(upstream);
+        }
+        // A captured destructor may itself own a subscription on this
+        // stream. Release it only after dropping the registry borrow.
+        drop(removed);
     }
 }
 
@@ -406,6 +515,7 @@ impl ImageStreamCompleter {
             return false;
         }
         *stream.cell.source.borrow_mut() = Some(source.clone());
+        stream.bind_chunk_source();
         stream.cell.changes.notify();
         // A dormant frame-only reader must rebind to the followed source
         // even when that source has not completed yet.

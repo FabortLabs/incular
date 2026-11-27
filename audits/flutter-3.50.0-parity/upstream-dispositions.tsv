@@ -2863,3 +2863,7 @@ packages/flutter/test/painting/image_stream_test.dart	1058	ImageStream, setCompl
 packages/flutter/test/painting/image_stream_test.dart	1092	ImageInfo dispatches memory events	paired-match	upstream-image-info-and-handoff.md
 packages/flutter/test/painting/image_stream_test.dart	1156	ImageInfo.isCloneOf returns false when scales differ	paired-match	upstream-image-info-and-handoff.md
 packages/flutter/test/painting/image_stream_test.dart	1169	ImageInfo.isCloneOf returns true when all properties match	paired-match	upstream-image-info-and-handoff.md
+packages/flutter/test/painting/image_stream_test.dart	179	Chunk events of base ImageStreamCompleter are delivered	paired-match	upstream-image-live-chunks.md
+packages/flutter/test/painting/image_stream_test.dart	207	Chunk events of base ImageStreamCompleter are not buffered before listener registration	paired-match	upstream-image-live-chunks.md
+packages/flutter/test/painting/image_stream_test.dart	235	Chunk events of MultiFrameImageStreamCompleter are delivered	partial-match	upstream-image-live-chunks.md
+packages/flutter/test/painting/image_stream_test.dart	266	Chunk events of MultiFrameImageStreamCompleter are not buffered before listener registration	partial-match	upstream-image-live-chunks.md

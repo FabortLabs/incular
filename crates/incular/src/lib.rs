@@ -132,7 +132,7 @@ pub mod prelude {
     };
     pub use incular_image::{
         AnyImageProvider, AssetBundleImageKey, AssetImage, DecodedImage, ExactAssetImage, FileImage,
-        ImageAssetBundle, ImageCache, ImageCacheDiagnostics, ImageChunkEvent, ImageConfiguration,
+        ImageAssetBundle, ImageCache, ImageCacheDiagnostics, ImageChunkEvent, ImageChunkSubscription, ImageConfiguration,
         ImageError, ImageHandle, ImageInfo, ImageId, ImageLoadState, ImageProvider, ImageResizeOptions,
         ImageSource, ImageStream, ImageStreamCompleter, MemoryImage, ResizeImage, ResizeImageKey, ResizeImagePolicy,
     };
