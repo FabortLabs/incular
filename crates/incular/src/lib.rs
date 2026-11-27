@@ -201,7 +201,7 @@ pub mod prelude {
         AsyncState, AsyncValue, BudgetStatistics, BuildContext, ClaimedRestorationScope,
         EditingDiagnostics, FileRestorationStore, FocusDiagnostics, FrameHistory, FrameRecord,
         FrameStatistics, GpuSample, HardwareKeyHandlerError, InMemoryRestorationStore,
-        LastWindowPolicy, Memo,
+        KeyMessage, KeyMessageHandlerError, LastWindowPolicy, Memo,
         NativeOperationCompletionStatus, NativeOperationRequest, NativeWindowCommand,
         OutletAttachError, OutletError, OutletId, OutletPlacement, PendingRestorationScope, PerformanceHub,
         PerformanceSnapshot, ProfilerMode, RenderFrameMetrics, Restorable, RestorableWindowFactory,

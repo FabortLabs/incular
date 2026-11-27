@@ -151,6 +151,55 @@ pub enum KeyMessage {
     },
 }
 
+#[derive(Clone, Copy)]
+enum KeyMessageSource<'a> {
+    Typed,
+    Raw(&'a incular_widgets::RawKeyEvent),
+    Paired(&'a incular_widgets::RawKeyEvent),
+    Portable,
+}
+
+impl<'a> KeyMessageSource<'a> {
+    fn raw_delivery(self) -> incular_widgets::RawKeyDelivery<'a> {
+        use incular_widgets::RawKeyDelivery;
+        match self {
+            Self::Typed => RawKeyDelivery::Absent,
+            Self::Raw(raw) | Self::Paired(raw) => RawKeyDelivery::Supplied(raw),
+            Self::Portable => RawKeyDelivery::Mirror,
+        }
+    }
+
+    fn into_message(self, event: KeyboardEvent) -> KeyMessage {
+        match self {
+            Self::Typed => KeyMessage::Typed(event),
+            Self::Raw(raw) => KeyMessage::Raw(raw.clone()),
+            Self::Paired(raw) => KeyMessage::TypedAndRaw {
+                typed: event,
+                raw: raw.clone(),
+            },
+            Self::Portable => KeyMessage::TypedAndRaw {
+                raw: event.clone().into(),
+                typed: event,
+            },
+        }
+    }
+}
+
+/// A caught key-message callback failure. Hardware pressed state has
+/// already been updated for this message.
+pub struct KeyMessageHandlerError {
+    pub message: KeyMessage,
+    pub payload: Box<dyn Any + Send + 'static>,
+}
+
+#[derive(Default)]
+enum KeyMessageRoute {
+    #[default]
+    Focus,
+    Disabled,
+    Custom(Box<dyn Fn(&KeyMessage) -> bool>),
+}
+
 /// A caught failure from a window-wide hardware-key handler. The event
 /// is the same portable event whose pressed state the runtime recorded.
 pub struct HardwareKeyHandlerError {
@@ -230,6 +279,8 @@ pub struct Runtime {
     hardware_keyboard: incular_core::HardwareKeyboardState,
     hardware_key_handlers: incular_core::HardwareKeyHandlers,
     hardware_key_error_handler: Option<Box<dyn Fn(HardwareKeyHandlerError)>>,
+    key_message_route: KeyMessageRoute,
+    key_message_error_handler: Option<Box<dyn Fn(KeyMessageHandlerError)>>,
     early_focus_key_handlers: FocusKeyHandlers,
     late_focus_key_handlers: FocusKeyHandlers,
     keyboard_event_debug_listener: Option<Box<dyn Fn(&str)>>,
@@ -462,6 +513,8 @@ impl Runtime {
             hardware_keyboard: incular_core::HardwareKeyboardState::default(),
             hardware_key_handlers: incular_core::HardwareKeyHandlers::default(),
             hardware_key_error_handler: None,
+            key_message_route: KeyMessageRoute::default(),
+            key_message_error_handler: None,
             early_focus_key_handlers: FocusKeyHandlers::default(),
             late_focus_key_handlers: FocusKeyHandlers::default(),
             keyboard_event_debug_listener: None,
@@ -3137,6 +3190,35 @@ impl Runtime {
         self.hardware_key_error_handler = None;
     }
 
+    /// Replaces the default focus and editing route for key messages.
+    /// Window-wide hardware callbacks still run independently, first.
+    pub fn set_key_message_handler(&mut self, handler: impl Fn(&KeyMessage) -> bool + 'static) {
+        self.key_message_route = KeyMessageRoute::Custom(Box::new(handler));
+    }
+
+    /// Disables message routing without disabling hardware-state tracking.
+    pub fn clear_key_message_handler(&mut self) {
+        self.key_message_route = KeyMessageRoute::Disabled;
+    }
+
+    /// Reinstates the original window focus and editing route.
+    pub fn restore_default_key_message_handler(&mut self) {
+        self.key_message_route = KeyMessageRoute::Focus;
+    }
+
+    /// Reports a callback panic with its original payload and key message.
+    /// Without a reporter the error is logged.
+    pub fn set_key_message_error_handler(
+        &mut self,
+        handler: impl Fn(KeyMessageHandlerError) + 'static,
+    ) {
+        self.key_message_error_handler = Some(Box::new(handler));
+    }
+
+    pub fn clear_key_message_error_handler(&mut self) {
+        self.key_message_error_handler = None;
+    }
+
     /// Adds a window-local focus-key handler before the focused node and
     /// its ancestors. A handled result prevents the focus route from running.
     pub fn add_early_focus_key_handler(
@@ -3188,18 +3270,12 @@ impl Runtime {
     /// counterpart. Keys sent through the existing portable ingress keep
     /// their ordinary mirrored view.
     pub fn dispatch_key_message(&mut self, message: KeyMessage) -> bool {
-        use incular_widgets::RawKeyDelivery;
-        match message {
-            KeyMessage::Typed(event) => self.dispatch_keyboard_event_parts(
-                event, KeyboardInputSource::Physical, RawKeyDelivery::Absent,
-            ),
-            KeyMessage::Raw(raw) => self.dispatch_keyboard_event_parts(
-                raw.portable().clone(), KeyboardInputSource::Physical, RawKeyDelivery::Supplied(&raw),
-            ),
-            KeyMessage::TypedAndRaw { typed, raw } => self.dispatch_keyboard_event_parts(
-                typed, KeyboardInputSource::Physical, RawKeyDelivery::Supplied(&raw),
-            ),
-        }
+        let (event, message_source) = match message {
+            KeyMessage::Typed(event) => (event, KeyMessageSource::Typed),
+            KeyMessage::Raw(ref raw) => (raw.portable().clone(), KeyMessageSource::Raw(raw)),
+            KeyMessage::TypedAndRaw { typed, ref raw } => (typed, KeyMessageSource::Paired(raw)),
+        };
+        self.dispatch_keyboard_event_parts(event, KeyboardInputSource::Physical, message_source)
     }
 
     fn dispatch_keyboard_event_from(
@@ -3207,14 +3283,14 @@ impl Runtime {
         event: KeyboardEvent,
         source: KeyboardInputSource,
     ) -> bool {
-        self.dispatch_keyboard_event_parts(event, source, incular_widgets::RawKeyDelivery::Mirror)
+        self.dispatch_keyboard_event_parts(event, source, KeyMessageSource::Portable)
     }
 
     fn dispatch_keyboard_event_parts(
         &mut self,
         event: KeyboardEvent,
         source: KeyboardInputSource,
-        raw_delivery: incular_widgets::RawKeyDelivery<'_>,
+        message_source: KeyMessageSource<'_>,
     ) -> bool {
         if source == KeyboardInputSource::Physical {
             FocusHighlightManager::new().note_keyboard_input();
@@ -3279,6 +3355,29 @@ impl Runtime {
                 .unwrap_or("non-string hardware key handler panic");
             tracing::error!(?event, %message, "hardware key handler failed");
         }
+        if !matches!(self.key_message_route, KeyMessageRoute::Focus) {
+            let mut handled = hardware.handled;
+            if let KeyMessageRoute::Custom(callback) = &self.key_message_route {
+                let message = message_source.into_message(event);
+                match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| callback(&message))) {
+                    Ok(result) => handled |= result,
+                    Err(payload) => {
+                        if let Some(report) = &self.key_message_error_handler {
+                            report(KeyMessageHandlerError { message, payload });
+                        } else {
+                            let detail = payload
+                                .downcast_ref::<&str>()
+                                .copied()
+                                .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+                                .unwrap_or("non-string key message handler panic");
+                            tracing::error!(?message, %detail, "key message handler failed");
+                        }
+                    }
+                }
+            }
+            self.frame_requested |= handled;
+            return handled;
+        }
         // A window-wide handler cannot suppress notification of the focused
         // keyboard scope. Both results gate fallback editing and traversal.
         // Flutter's implicit root scope receives focus-manager key stages
@@ -3299,9 +3398,12 @@ impl Runtime {
             return true;
         }
         let lock_modes = event.modifiers | self.hardware_keyboard.lock_modes_enabled();
-        let focus_result =
-            self.tree
-                .route_keyboard_with_raw_payload(self.focused, event.clone(), lock_modes, raw_delivery);
+        let focus_result = self.tree.route_keyboard_with_raw_payload(
+            self.focused,
+            event.clone(),
+            lock_modes,
+            message_source.raw_delivery(),
+        );
         let late_result = if has_focus_root && focus_result != KeyEventResult::Handled {
             self.late_focus_key_handlers.dispatch(&event)
         } else {

@@ -192,3 +192,126 @@ fn mutations_apply_after_the_current_dispatch_snapshot() {
     assert_eq!(log.take(), [1, 3]);
     drop(first);
 }
+
+#[cfg(panic = "unwind")]
+#[test]
+fn key_message_callback_error_preserves_message_and_pressed_state() {
+    use incular_runtime::KeyMessage;
+    use incular_widgets::RawKeyEvent;
+
+    let mut runtime = Runtime::new(SizedBox::shrink().into()).unwrap();
+    let reports = Rc::new(RefCell::new(Vec::new()));
+    runtime.set_key_message_error_handler({
+        let reports = reports.clone();
+        move |error| reports.borrow_mut().push(error)
+    });
+    let order = Rc::new(RefCell::new(Vec::new()));
+    let _hardware = runtime.add_hardware_key_handler({
+        let order = order.clone();
+        move |_| {
+            order.borrow_mut().push("hardware");
+            false
+        }
+    });
+    runtime.set_key_message_handler({
+        let order = order.clone();
+        move |_| {
+            order.borrow_mut().push("message");
+            std::panic::panic_any(1_i32)
+        }
+    });
+    let down = key(true);
+    assert!(!runtime.dispatch_key_message(KeyMessage::TypedAndRaw {
+        typed: down.clone(),
+        raw: RawKeyEvent::from(down),
+    }));
+    assert_eq!(order.take(), ["hardware", "message"]);
+    let mut errors = reports.take();
+    assert_eq!(errors.len(), 1);
+    let error = errors.pop().unwrap();
+    assert_eq!(error.payload.downcast_ref::<i32>(), Some(&1));
+    let KeyMessage::TypedAndRaw { typed, raw } = error.message else {
+        panic!("expected the original typed and raw KeyMessage");
+    };
+    assert_eq!(typed.code, Code::KeyA);
+    assert_eq!(typed.key, KeyboardKey::Character("a".into()));
+    assert!(typed.state.is_down());
+    assert_eq!(raw.physical_key(), Code::KeyA);
+    assert_eq!(raw.logical_key(), &typed.key);
+    assert!(raw.is_key_down());
+    assert!(runtime.hardware_keyboard().is_physical_key_pressed(Code::KeyA));
+
+    runtime.clear_key_message_handler();
+    let up = key(false);
+    assert!(!runtime.dispatch_key_message(KeyMessage::TypedAndRaw {
+        typed: up.clone(),
+        raw: up.into(),
+    }));
+    assert!(reports.borrow().is_empty());
+    assert_eq!(order.take(), ["hardware"]);
+    assert!(!runtime.hardware_keyboard().is_physical_key_pressed(Code::KeyA));
+}
+
+#[test]
+fn replacing_and_restoring_key_message_handler_only_changes_focus_delivery() {
+    use incular_runtime::KeyMessage;
+
+    let focus = FocusNode::new();
+    let focused_calls = Rc::new(Cell::new(0));
+    let listener = KeyboardListener::new(SizedBox::shrink())
+        .focus_node(focus.clone())
+        .on_key_event({
+            let focused_calls = focused_calls.clone();
+            move |_| {
+                focused_calls.set(focused_calls.get() + 1);
+                false
+            }
+        });
+    let mut runtime = Runtime::new(listener.into()).unwrap();
+    let constraints = Constraints::tight(Size::new(20.0, 20.0));
+    runtime.run_frame(constraints).unwrap();
+    focus.request_focus();
+    runtime.run_frame(constraints).unwrap();
+    assert!(focus.has_primary_focus());
+
+    let hardware_handled = Rc::new(Cell::new(true));
+    let _hardware = runtime.add_hardware_key_handler({
+        let hardware_handled = hardware_handled.clone();
+        move |_| hardware_handled.get()
+    });
+    let messages = Rc::new(RefCell::new(Vec::new()));
+    runtime.set_key_message_handler({
+        let messages = messages.clone();
+        move |message| {
+            let seen = match message {
+                KeyMessage::TypedAndRaw { typed, raw } => {
+                    ("paired", Some(typed.state.is_down()), Some(raw.is_key_down()))
+                }
+                KeyMessage::Typed(event) => ("typed", Some(event.state.is_down()), None),
+                KeyMessage::Raw(raw) => ("raw", None, Some(raw.is_key_down())),
+            };
+            messages.borrow_mut().push(seen);
+            seen.0 == "paired"
+        }
+    });
+    assert!(runtime.dispatch_key_message(KeyMessage::Typed(key(true))));
+    hardware_handled.set(false);
+    assert!(runtime.dispatch_keyboard_event(key(false)));
+    assert!(!runtime.dispatch_key_message(KeyMessage::Typed(key(true))));
+    assert!(!runtime.dispatch_key_message(KeyMessage::Raw(key(false).into())));
+    assert_eq!(
+        messages.take(),
+        [
+            ("typed", Some(true), None),
+            ("paired", Some(false), Some(false)),
+            ("typed", Some(true), None),
+            ("raw", None, Some(false)),
+        ]
+    );
+    runtime.clear_key_message_handler();
+    assert!(!runtime.dispatch_keyboard_event(key(true)));
+    assert_eq!(focused_calls.get(), 0);
+    runtime.restore_default_key_message_handler();
+    assert!(!runtime.dispatch_keyboard_event(key(false)));
+    assert_eq!(focused_calls.get(), 1);
+}

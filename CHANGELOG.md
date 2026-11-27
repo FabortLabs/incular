@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- Runtime windows can override key-message routing and report callback failures
+  with their original payload and key message, without losing pressed state.
+
 - FontLoader registers asynchronously supplied faces under one family in
   declaration order, including for already mounted text.
 

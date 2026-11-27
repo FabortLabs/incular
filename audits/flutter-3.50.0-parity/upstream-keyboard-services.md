@@ -51,3 +51,20 @@ mismatched ups clear the physical position. All events still reach
 handlers. Output is per-runtime and disabled by default; the Rust debug
 representation of keys need not match Dart's string format. Sixteen
 focused Rust tests passed.
+
+## Key-message handler failure isolation
+
+The exact pinned `services/hardware_keyboard_test.dart:481` registration
+passed. The runtime records the key-down before the optional key-message
+callback. Its failure reporter receives the original integer panic payload
+and the combined typed/raw message for A, not just the portable hardware
+event. The input remains pressed. Disabling only the message route and
+sending key-up clears pressed state without another report.
+
+The window-wide hardware handler still runs first and combines its result
+with the custom message callback without short-circuiting. Setting the
+message callback replaces focus routing, clearing it disables focus routing,
+and restoring the default reinstates it. The separate authored control
+checks that lifecycle; the Rust control also checks typed-only, raw-only,
+and mirrored portable messages. This does not claim parity for GTK, the
+native Flutter transit queue, synthesized repeats, or abort-on-panic builds.
