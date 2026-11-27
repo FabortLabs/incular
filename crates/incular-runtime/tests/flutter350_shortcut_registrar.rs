@@ -221,3 +221,111 @@ fn a_newer_registration_still_wins_within_the_same_tier() {
     assert!(letter(&mut runtime, "c", Code::KeyC, true));
     assert_eq!((old.get(), newer.get()), (1, 1));
 }
+
+#[test]
+fn an_inner_registrar_precedes_typed_actions_which_precede_an_outer_registrar() {
+    use incular_widgets::{ActionScope, Actions, ShortcutScope, Shortcuts};
+
+    let callback_a = Rc::new(Cell::new(0));
+    let callback_b = Rc::new(Cell::new(0));
+    let action_a = Rc::new(Cell::new(0));
+    let action_b = Rc::new(Cell::new(0));
+
+    let outer = ShortcutRegistry::new();
+    let inner = ShortcutRegistry::new();
+    let _outer = outer.add(CharacterActivator::new("b"), increment(&callback_b));
+    let _inner = inner.add(CharacterActivator::new("a"), increment(&callback_a));
+
+    let mut actions = Actions::<char>::typed();
+    actions.register('a', increment(&action_a));
+    actions.register('b', increment(&action_b));
+    let mut shortcuts = Shortcuts::<char>::typed();
+    shortcuts.bind_activator(activator("a"), 'a');
+    shortcuts.bind_activator(activator("b"), 'b');
+    let mut runtime = mount(
+        ActionScope::new(
+            Rc::new(actions),
+            ShortcutRegistrar::with_registry(
+                outer,
+                ShortcutScope::new(
+                    Rc::new(shortcuts),
+                    ShortcutRegistrar::with_registry(inner, child()),
+                ),
+            ),
+        )
+        .into(),
+    );
+    let counts = || {
+        (
+            callback_a.get(),
+            callback_b.get(),
+            action_a.get(),
+            action_b.get(),
+        )
+    };
+
+    assert!(letter(&mut runtime, "a", Code::KeyA, true));
+    assert_eq!(counts(), (1, 0, 0, 0));
+    assert!(!letter(&mut runtime, "a", Code::KeyA, false));
+    assert_eq!(counts(), (1, 0, 0, 0));
+
+    callback_a.set(0);
+    assert!(letter(&mut runtime, "b", Code::KeyB, true));
+    assert_eq!(counts(), (0, 0, 0, 1));
+    assert!(!letter(&mut runtime, "b", Code::KeyB, false));
+    assert_eq!(counts(), (0, 0, 0, 1));
+}
+
+#[test]
+fn registrar_logical_key_sets_require_the_actual_set_and_precede_character_fallbacks() {
+    use incular_widgets::LogicalKeySet;
+
+    let registry = ShortcutRegistry::new();
+    let chords = Rc::new(Cell::new(0));
+    let characters = Rc::new(Cell::new(0));
+    let binding = registry.add(
+        LogicalKeySet::new([
+            KeyboardKey::Character("a".into()),
+            KeyboardKey::Character("b".into()),
+        ]),
+        increment(&chords),
+    );
+    let _character = registry.add(CharacterActivator::new("b"), increment(&characters));
+    let mut runtime = mount(ShortcutRegistrar::with_registry(registry, child()).into());
+
+    assert!(!letter(&mut runtime, "a", Code::KeyA, true));
+    assert!(letter(&mut runtime, "b", Code::KeyB, true));
+    assert_eq!((chords.get(), characters.get()), (1, 0));
+    assert!(!letter(&mut runtime, "b", Code::KeyB, false));
+    assert_eq!((chords.get(), characters.get()), (1, 0));
+
+    assert!(!letter(&mut runtime, "c", Code::KeyC, true));
+    assert!(letter(&mut runtime, "b", Code::KeyB, true));
+    assert_eq!((chords.get(), characters.get()), (1, 1));
+    assert!(!letter(&mut runtime, "c", Code::KeyC, false));
+    assert_eq!((chords.get(), characters.get()), (1, 1));
+
+    let repeat = |runtime: &mut Runtime| {
+        runtime.dispatch_keyboard_event(KeyboardEvent {
+            repeat: true,
+            ..KeyboardEvent::key_down(KeyboardKey::Character("b".into()), Code::KeyB)
+        })
+    };
+    assert!(repeat(&mut runtime));
+    assert_eq!((chords.get(), characters.get()), (2, 1));
+    drop(binding);
+    runtime
+        .run_frame(Constraints::tight(Size::new(20., 20.)))
+        .unwrap();
+    assert!(repeat(&mut runtime));
+    assert_eq!((chords.get(), characters.get()), (2, 2));
+    assert!(!letter(&mut runtime, "b", Code::KeyB, false));
+    assert!(!letter(&mut runtime, "a", Code::KeyA, false));
+    assert_eq!((chords.get(), characters.get()), (2, 2));
+    assert!(
+        runtime
+            .hardware_keyboard()
+            .logical_keys_pressed()
+            .is_empty()
+    );
+}

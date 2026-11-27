@@ -112,3 +112,22 @@ registry borrow. CallbackShortcuts are not changed.
 Both authored Flutter probes and all 20 focused native tests passed.
 This is authored evidence, not an additional original-registration
 pair.
+
+## Registrar and typed action precedence
+
+The exact pinned `shortcuts_test.dart:1964` registration passed.
+The native fixture mounts, in order, an outer B character registration,
+a typed A/B SingleActivator scope, and an inner A character
+registration. A goes to the inner callback and B goes to the typed
+action; neither reaches another ancestor and releases do not
+reinvoke them. The typed map now accepts Flutter-style activators
+including SingleActivator, LogicalKeySet and CharacterActivator.
+
+The authored `shortcut_registrar_chord_test.dart` probe confirms that
+a registered A+B wins over a matching character fallback when exactly
+A+B are held, but C blocks it. Releasing C is silent; a subsequent
+repeat matches the chord. Removing the binding and settling the
+reference publication restores the character fallback. Incular
+verifies that same post-frame result; publication timing itself is
+not claimed to match. The one exact original and both endpoints
+of the authored probe passed, as did the adjacent shortcut targets.

@@ -3,9 +3,9 @@
 //! the tree add and remove while they are mounted, such as menu accelerators.
 
 use crate::{BuildContext, Widget, tree::WidgetKind};
-use incular_core::{KeyboardEvent, KeyboardKey, Modifiers};
+use incular_core::{HardwareKeyboardState, KeyboardEvent, KeyboardKey, Modifiers};
 pub use incular_gestures::CharacterActivator;
-use incular_gestures::SingleActivator;
+use incular_gestures::{LogicalKeySet, SingleActivator};
 use std::{
     cell::{Cell, RefCell},
     fmt,
@@ -17,18 +17,28 @@ use std::{
 pub enum RegistryActivator {
     Single(SingleActivator),
     Character(CharacterActivator),
+    LogicalSet(LogicalKeySet),
 }
 
 impl RegistryActivator {
     #[must_use]
     pub fn accepts(&self, event: &KeyboardEvent) -> bool {
-        self.accepts_with_lock_modes(event, event.modifiers)
+        self.accepts_with_keyboard_state(event, event.modifiers, None)
     }
 
-    fn accepts_with_lock_modes(&self, event: &KeyboardEvent, lock_modes: Modifiers) -> bool {
+    fn accepts_with_keyboard_state(
+        &self,
+        event: &KeyboardEvent,
+        lock_modes: Modifiers,
+        keyboard: Option<&HardwareKeyboardState>,
+    ) -> bool {
         match self {
             Self::Single(activator) => activator.accepts_with_lock_modes(event, lock_modes),
             Self::Character(activator) => activator.accepts(event),
+            Self::LogicalSet(activator) => keyboard.map_or_else(
+                || activator.accepts(event),
+                |keyboard| activator.accepts_with_keyboard_state(event, keyboard),
+            ),
         }
     }
 }
@@ -42,6 +52,12 @@ impl From<SingleActivator> for RegistryActivator {
 impl From<CharacterActivator> for RegistryActivator {
     fn from(value: CharacterActivator) -> Self {
         Self::Character(value)
+    }
+}
+
+impl From<LogicalKeySet> for RegistryActivator {
+    fn from(value: LogicalKeySet) -> Self {
+        Self::LogicalSet(value)
     }
 }
 
@@ -156,10 +172,16 @@ impl ShortcutRegistry {
     /// Keyed triggers precede character fallbacks; the newest matching
     /// registration within the same tier wins.
     pub fn handle_key(&self, event: &KeyboardEvent) -> bool {
-        self.handle_key_with_lock_modes(event, event.modifiers)
+        self.handle_key_with_keyboard_state(event, event.modifiers, None)
     }
 
-    fn handle_key_with_lock_modes(&self, event: &KeyboardEvent, lock_modes: Modifiers) -> bool {
+    /// Routes an event after the host has updated its hardware snapshot.
+    pub fn handle_key_with_keyboard_state(
+        &self,
+        event: &KeyboardEvent,
+        lock_modes: Modifiers,
+        keyboard: Option<&HardwareKeyboardState>,
+    ) -> bool {
         let mut modifiers = event.modifiers;
         let alt_key = matches!(event.key, KeyboardKey::Named(incular_core::NamedKey::Alt));
         if alt_key {
@@ -183,12 +205,12 @@ impl ShortcutRegistry {
             let mut character_fallback = None;
             let keyed = entries.iter().rev().find_map(|(_, activator, callback)| {
                 match activator {
-                    RegistryActivator::Single(_) => activator
-                        .accepts_with_lock_modes(event, lock_modes)
+                    RegistryActivator::Single(_) | RegistryActivator::LogicalSet(_) => activator
+                        .accepts_with_keyboard_state(event, lock_modes, keyboard)
                         .then(|| callback.clone()),
                     RegistryActivator::Character(_) => {
                         if character_fallback.is_none()
-                            && activator.accepts_with_lock_modes(event, lock_modes)
+                            && activator.accepts_with_keyboard_state(event, lock_modes, keyboard)
                         {
                             character_fallback = Some(callback.clone());
                         }
@@ -273,8 +295,8 @@ impl crate::tree::RetainedState for RegistrarState {
 fn registrar(registry: ShortcutRegistry, child: Widget) -> Widget {
     let handler = registry.clone();
     let callbacks = incular_gestures::GestureCallbacks {
-        on_shortcut_with_lock_modes: Some(Rc::new(move |event, lock_modes| {
-            handler.handle_key_with_lock_modes(&event, lock_modes)
+        on_shortcut_with_keyboard_state: Some(Rc::new(move |event, lock_modes, keyboard| {
+            handler.handle_key_with_keyboard_state(&event, lock_modes, keyboard)
         })),
         include_semantics: false,
         ..incular_gestures::GestureCallbacks::default()
