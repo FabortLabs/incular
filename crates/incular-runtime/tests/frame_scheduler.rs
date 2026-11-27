@@ -141,3 +141,23 @@ fn a_vsync_controller_ticks_itself_until_it_completes() {
         &[AnimationStatus::Forward, AnimationStatus::Completed]
     );
 }
+
+#[test]
+fn registered_frame_deadline_is_exposed_to_the_retained_host() {
+    use incular_animation::scheduler::schedule_frame_deadline;
+
+    let mut runtime = runtime();
+    let at = Instant::now() + Duration::from_secs(30);
+    let ticks = Rc::new(RefCell::new(Vec::new()));
+    let observed = ticks.clone();
+    let _pending = schedule_frame_deadline(at, move |timestamp| observed.borrow_mut().push(timestamp));
+    assert_eq!(runtime.next_frame_deadline(), Some(at));
+    assert!(!runtime.frame_requested());
+    runtime
+        .run_frame_at(bounds(), at - Duration::from_millis(1))
+        .unwrap();
+    assert!(ticks.borrow().is_empty());
+    runtime.run_frame_at(bounds(), at).unwrap();
+    assert_eq!(*ticks.borrow(), vec![at]);
+    assert_eq!(runtime.next_frame_deadline(), None);
+}

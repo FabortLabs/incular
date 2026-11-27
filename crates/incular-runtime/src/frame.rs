@@ -1742,6 +1742,7 @@ impl Runtime {
             .values()
             .filter_map(UndoHistoryController::next_deadline)
             .chain(self.touch_resampling.deadline)
+            .chain(incular_animation::scheduler::next_scheduled_frame_deadline())
             .min()
     }
 

@@ -28,6 +28,8 @@ pub use crate::ui_tasks::{
     set_scheduling_strategy,
 };
 
+mod deadline;
+pub use deadline::{FrameDeadlineHandle, next_scheduled_frame_deadline, schedule_frame_deadline};
 mod performance_mode;
 mod warm_up;
 pub use performance_mode::{
@@ -420,7 +422,10 @@ pub fn transient_callback_count() -> usize {
 /// callback was still waiting. Does not withdraw a requested frame.
 pub fn cancel_frame_callback(id: FrameCallbackId) -> bool {
     // Release the scheduler borrow before a captured value is dropped.
-    let removed = SCHEDULER.with(|scheduler| scheduler.borrow_mut().remove_frame_callback(id));
+    let removed = SCHEDULER
+        .try_with(|scheduler| scheduler.borrow_mut().remove_frame_callback(id))
+        .ok()
+        .flatten();
     removed.is_some()
 }
 
@@ -497,6 +502,9 @@ pub fn begin_frame(raw: Instant) {
 
 fn begin_frame_with_mode(raw: Instant, warm_up: bool) {
     let enabled = warm_up || frames_enabled();
+    if enabled && !warm_up {
+        deadline::enqueue_due(raw);
+    }
     let (now, has_batch) = SCHEDULER.with(|scheduler| {
         let mut scheduler = scheduler.borrow_mut();
         // Flutter `handleBeginFrame`: the raw timestamp, dilated.
