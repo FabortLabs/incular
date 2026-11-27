@@ -1129,7 +1129,7 @@ impl WidgetTree {
     ) -> Option<Rect> {
         let entry = self.elements.get(viewport.0)?;
         let render = self.renders.get(entry.render.0)?;
-        render.constraints?;
+        let incoming = render.constraints?;
         let RenderKind::SliverViewport { config } = render.object.kind() else {
             return None;
         };
@@ -1143,7 +1143,10 @@ impl WidgetTree {
         {
             return None;
         }
-        Some(geometry.local_paint_clip(config.axis, config.reverse, render.size))
+        Some(
+            config.overlap_paint_clip(incoming, render.size, geometry)
+                .unwrap_or_else(|| Rect::from_origin_size(Offset::ZERO, render.size)),
+        )
     }
 
     #[must_use]

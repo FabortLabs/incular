@@ -304,17 +304,6 @@ pub(crate) struct SliverRevealGeometry {
 }
 
 impl SliverRevealGeometry {
-    pub(crate) fn local_paint_clip(self, axis: Axis, reverse: bool, viewport: Size) -> Rect {
-        let inset = self.semantic_clip_inset;
-        let origin = if reverse ^ self.reverse_growth {
-            incular_core::Offset::ZERO
-        } else {
-            axis.offset(inset, 0.)
-        };
-        let main = (axis.main_extent(viewport) - inset).max(0.);
-        Rect::from_origin_size(origin, axis.size(main, axis.cross_extent(viewport)))
-    }
-
     /// Reserves the covered strip in logical scroll-direction coordinates.
     pub(crate) fn reserve(self, leading: f32, trailing: f32) -> (f32, f32) {
         let obstruction = self.obstruction_before.min((trailing - leading).max(0.));
@@ -464,6 +453,41 @@ pub struct SliverViewportConfig {
     pub(crate) inherit_physics: Option<bool>,
     /// The ambient scroll behavior, resolved at lowering.
     pub(crate) behavior: crate::scroll_behavior::ResolvedScrollBehavior,
+}
+
+impl SliverViewportConfig {
+    /// The sliver's overlap-adjusted clip, if it differs from the viewport bounds.
+    pub(crate) fn overlap_paint_clip(
+        &self,
+        incoming: Constraints,
+        viewport: Size,
+        geometry: SliverRevealGeometry,
+    ) -> Option<Rect> {
+        let inset = geometry.semantic_clip_inset;
+        // Although shrink-wrap measures its retained children with a finite
+        // working size, Flutter has no finite start of overlap when the
+        // incoming maximum along the scroll axis is infinite.
+        let bounded = match self.axis {
+            Axis::Horizontal => incoming.is_width_bounded(),
+            Axis::Vertical => incoming.is_height_bounded(),
+        };
+        if inset == 0. || (self.shrink_wrap && !bounded) {
+            return None;
+        }
+        let origin = self.axis.offset(
+            if self.reverse ^ geometry.reverse_growth {
+                0.
+            } else {
+                inset
+            },
+            0.,
+        );
+        let main = (self.axis.main_extent(viewport) - inset).max(0.);
+        Some(Rect::from_origin_size(
+            origin,
+            self.axis.size(main, self.axis.cross_extent(viewport)),
+        ))
+    }
 }
 
 impl std::fmt::Debug for SliverViewportConfig {

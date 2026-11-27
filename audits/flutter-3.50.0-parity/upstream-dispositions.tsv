@@ -3466,3 +3466,4 @@ packages/flutter/test/rendering/viewport_caching_test.dart	76	Cache extent - 0x 
 packages/flutter/test/rendering/viewport_caching_test.dart	89	Cache extent - .5x viewport	paired-match	upstream-viewport-semantics-cache.md
 packages/flutter/test/rendering/viewport_caching_test.dart	102	Cache extent - 1x viewport	paired-match	upstream-viewport-semantics-cache.md
 packages/flutter/test/rendering/viewport_caching_test.dart	115	Cache extent - 2.5x viewport	paired-match	upstream-viewport-semantics-cache.md
+packages/flutter/test/rendering/viewport_caching_test.dart	128	RenderShrinkWrappingViewport describeApproximatePaintClip with infinite viewportMainAxisExtent returns finite rect	paired-match	upstream-viewport-semantics-cache.md#unbounded-shrink-wrapping-paint-clip

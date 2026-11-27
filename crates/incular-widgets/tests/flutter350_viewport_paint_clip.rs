@@ -1,9 +1,14 @@
 use incular_config::{Axis, Clip, Constraints};
-use incular_core::{Color, Rect, Size};
+use incular_core::{Color, Offset, Rect, Size};
 use incular_rendering::PaintCommand;
+use incular_scroll::{SliverConstraints, SliverGeometry};
 use incular_widgets::{
-    CustomScrollView, ScrollController, SliverEnsureSemantics, Widget,
-    internal::{ElementId, PinnedHeaderSliver, Sliver, SliverToBoxAdapter, WidgetTree},
+    CustomScrollView, ScrollController, ShrinkWrappingViewport, SizedBox, SliverEnsureSemantics,
+    Widget,
+    internal::{
+        ElementId, PinnedHeaderSliver, RenderSliver, Sliver, SliverLayout, SliverToBoxAdapter,
+        WidgetTree,
+    },
 };
 
 fn mount(view: CustomScrollView) -> (WidgetTree, ElementId) {
@@ -110,5 +115,80 @@ fn ensured_sliver_outside_the_cache_is_not_clipped_by_the_query() {
             should_clip,
             "cache={cache}"
         );
+    }
+}
+
+#[derive(Clone, Copy)]
+struct OnePixelOverlap;
+
+impl Sliver for OnePixelOverlap {
+    fn build(&self, _controller: &ScrollController) -> Widget {
+        SizedBox::shrink().into()
+    }
+
+    fn create_render_sliver(
+        &self,
+        _controller: &ScrollController,
+        _axis: Axis,
+        _reverse: bool,
+    ) -> Box<dyn RenderSliver> {
+        Box::new(*self)
+    }
+}
+
+impl RenderSliver for OnePixelOverlap {
+    fn perform_layout(&mut self, _constraints: SliverConstraints) -> SliverLayout {
+        SliverLayout {
+            geometry: SliverGeometry {
+                paint_extent: 1.,
+                max_paint_extent: 1.,
+                ..SliverGeometry::ZERO
+            },
+            children: Vec::new(),
+            absorbed_overlap: 0.,
+        }
+    }
+}
+
+#[test]
+fn unbounded_shrink_wrapping_ignores_overlap_in_the_finite_paint_clip() {
+    let size = Size::new(800., 600.);
+    let full = Rect::from_origin_size(Offset::ZERO, size);
+    for axis in [Axis::Vertical, Axis::Horizontal] {
+        for reverse in [false, true] {
+            let slivers: Vec<Box<dyn Sliver>> =
+                vec![Box::new(OnePixelOverlap), Box::new(sliver(axis, 40.))];
+            let mut tree = WidgetTree::new();
+            let root = tree
+                .mount(
+                    ShrinkWrappingViewport::new(slivers)
+                        .axis_direction(axis)
+                        .reverse(reverse)
+                        .into(),
+                )
+                .unwrap();
+            let bounded = Constraints::tight(size);
+            let unbounded = match axis {
+                Axis::Vertical => Constraints::new(800., 800., 600., f32::INFINITY),
+                Axis::Horizontal => Constraints::new(800., f32::INFINITY, 600., 600.),
+            };
+            let inset_clip = Rect::from_origin_size(
+                axis.offset(if reverse { 0. } else { 1. }, 0.),
+                axis.size(axis.main_extent(size) - 1., axis.cross_extent(size)),
+            );
+            for (constraints, expected) in
+                [(bounded, inset_clip), (unbounded, full), (bounded, inset_clip)]
+            {
+                tree.layout(constraints).unwrap();
+                tree.update_compositor(incular_core::time::Instant::now())
+                    .unwrap();
+                let child = tree.children(root).unwrap()[0];
+                assert_eq!(
+                    tree.viewport_approximate_paint_clip(root, child),
+                    Some(expected),
+                    "{axis:?}, reverse={reverse}, {constraints:?}"
+                );
+            }
+        }
     }
 }

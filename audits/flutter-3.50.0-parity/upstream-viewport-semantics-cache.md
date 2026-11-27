@@ -18,6 +18,22 @@ Flutter's separate null factor in viewport mode throws. A Rust
 `ScrollCacheExtent::Viewport` must contain a numeric factor; leaving the
 property unset chooses the normal pixel default. Because the public Rust
 API cannot express that nullable input, it is not counted as paired.
-The special infinite shrink-wrapping paint-clip test is a separate case.
 
 Three direct and 15 adjacent native viewport and semantics checks passed.
+
+## Unbounded shrink-wrapping paint clip
+
+The separate pinned `rendering/viewport_caching_test.dart:128` case
+passes: a shrink-wrapping viewport reports the full finite 800×600
+paint clip when the main-axis constraint is infinite, even with one
+pixel of preceding overlap. A mounted reference probe supplies that
+overlap through a preceding sliver and checks all four axis directions.
+It switches from bounded to unbounded and back at the same final size:
+only the finite layout insets the physical leading edge by one pixel.
+
+The mounted native test initially reproduced the one-pixel crop under
+unbounded constraints. The retained clip query and the accessibility
+projection now share the same rule. It reads the incoming limit, not
+the finite working extent that native shrink-wrap uses to lay out children.
+The fix does not change sliver sizing, actual viewport overflow layers,
+or scroll metrics.

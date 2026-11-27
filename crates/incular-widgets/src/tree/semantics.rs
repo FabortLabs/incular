@@ -2177,15 +2177,10 @@ impl WidgetTree {
         };
         let child = *viewport.sliver_child_ids().get(child_slot)?;
         let geometry = config.delegate.reveal_geometry(child);
-        let inset = geometry.semantic_clip_inset;
-        if inset == 0. {
-            return None;
-        }
+        let clip = config.overlap_paint_clip(render.constraints?, render.size, geometry)?;
         let unscroll = self.child_content_transform(viewport.render).inverse()?;
         let viewport_world = child_parent_world.then(unscroll);
-        Some(viewport_world.transform_rect_bbox(
-            geometry.local_paint_clip(config.axis, config.reverse, render.size),
-        ))
+        Some(viewport_world.transform_rect_bbox(clip))
     }
 
     /// Whether a visible `element` sits in a scroll viewport, so an
