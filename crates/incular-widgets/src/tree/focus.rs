@@ -1080,6 +1080,9 @@ impl WidgetTree {
         element: ElementId,
         intent: &incular_gestures::Intent<C>,
     ) -> Option<incular_gestures::ActionOutput> {
+        let origin = self.element_address(element)?;
+        let source = &self.elements.get(element.0)?.build_context;
+        let context = incular_gestures::ActionContext::new(&origin, source);
         let intent = incular_gestures::ErasedIntent::from_intent(intent);
         let dismiss = intent.downcast_command::<crate::DismissIntent>().is_some();
         let scroll = intent.downcast_command::<crate::ScrollIntent>().copied();
@@ -1093,7 +1096,7 @@ impl WidgetTree {
                     .and_then(|scope| {
                         // Dispatch starts at the action's owner, not at the
                         // invoking descendant's closer unrelated dispatcher.
-                        scope.invoke_output_resolving_dispatcher(&intent, || self.action_dispatcher_at(id))
+                        scope.invoke_in_context(&intent, || self.action_dispatcher_at(id), Some(&context))
                     })
             {
                 return Some(result);
@@ -1119,6 +1122,11 @@ impl WidgetTree {
         focused: ElementId,
         intent: &incular_gestures::ErasedIntent,
     ) -> KeyEventResult {
+        let Some(origin) = self.element_address(focused) else {
+            return KeyEventResult::Ignored;
+        };
+        let source = &self.element_live(focused, "shortcut caller is mounted").build_context;
+        let context = incular_gestures::ActionContext::new(&origin, source);
         let mut current = Some(focused);
         while let Some(id) = current {
             let Some(entry) = self.elements.get(id.0) else {
@@ -1128,7 +1136,7 @@ impl WidgetTree {
                 && let Some(result) = callbacks.action_scope.as_ref().and_then(|scope| {
                     // Unlike direct Actions.invoke, Shortcuts gets the
                     // dispatcher from the original focused context.
-                    scope.invoke_shortcut(intent, || self.action_dispatcher_at(focused))
+                    scope.invoke_shortcut_in_context(intent, || self.action_dispatcher_at(focused), Some(&context))
                 })
             {
                 return result;

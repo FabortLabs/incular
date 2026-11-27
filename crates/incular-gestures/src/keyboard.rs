@@ -338,6 +338,33 @@ impl From<bool> for ActionResult {
     }
 }
 
+/// A live invocation's origin and inherited values. It is borrowed for
+/// just the duration of dispatch, not retained by the action.
+pub struct ActionContext<'a> {
+    origin: &'a dyn Any,
+    inherited: &'a incular_core::BuildContext,
+}
+
+impl<'a> ActionContext<'a> {
+    #[doc(hidden)]
+    #[must_use]
+    pub fn new(origin: &'a dyn Any, inherited: &'a incular_core::BuildContext) -> Self {
+        Self { origin, inherited }
+    }
+
+    /// The caller identity supplied by the host, such as a widget element address.
+    #[must_use]
+    pub fn origin<T: Any>(&self) -> Option<&T> {
+        self.origin.downcast_ref::<T>()
+    }
+
+    /// Reads an inherited value from the caller, without subscribing.
+    #[must_use]
+    pub fn find<T: Any + Clone>(&self) -> Option<T> {
+        self.inherited.read::<T>()
+    }
+}
+
 /// The handling status and optional typed result of an action invocation.
 /// A handled action can return no value; a missing mapping remains distinct
 /// from both a disabled action and a handled action with no value.
@@ -458,7 +485,7 @@ impl Drop for ActionListenerSubscription {
 /// Actions are values with an enabled state and a callback. They do not form
 /// a generic inheritance tree like Flutter's `Action<T>` classes; a command
 /// registry composes them by scope instead.
-type ActionCallback<C> = Rc<dyn Fn(&Intent<C>) -> ActionOutput>;
+type ActionCallback<C> = Rc<dyn Fn(&Intent<C>, Option<&ActionContext<'_>>) -> ActionOutput>;
 
 #[derive(Clone)]
 pub struct Action<C: CommandId = Command> {
@@ -500,7 +527,7 @@ impl<C: CommandId> Action<C> {
     where
         R: Into<ActionResult> + 'static,
     {
-        Self::with_output(command, move |intent| ActionOutput::from(callback(intent).into()))
+        Self::with_context(command, move |intent, _| ActionOutput::from(callback(intent).into()))
     }
 
     /// Creates a handled action that returns an application-defined value.
@@ -509,12 +536,15 @@ impl<C: CommandId> Action<C> {
         command: impl Into<Intent<C>>,
         callback: impl Fn(&Intent<C>) -> T + 'static,
     ) -> Self {
-        Self::with_output(command, move |intent| ActionOutput::handled_with_value(callback(intent)))
+        Self::with_context(command, move |intent, _| ActionOutput::handled_with_value(callback(intent)))
     }
 
-    fn with_output(
+    /// Creates an action that can inspect the calling element's context.
+    /// Direct invocation without a host supplies no context.
+    #[must_use]
+    pub fn with_context(
         command: impl Into<Intent<C>>,
-        callback: impl Fn(&Intent<C>) -> ActionOutput + 'static,
+        callback: impl Fn(&Intent<C>, Option<&ActionContext<'_>>) -> ActionOutput + 'static,
     ) -> Self {
         Self {
             intent: command.into(),
@@ -706,12 +736,16 @@ impl<C: CommandId> Action<C> {
         if !self.is_action_enabled(intent) {
             return ActionResult::Ignored.into();
         }
-        self.invoke_enabled_output(intent)
+        self.invoke_enabled_output(intent, None)
     }
 
-    fn invoke_enabled_output(&self, intent: &Intent<C>) -> ActionOutput {
+    fn invoke_enabled_output(
+        &self,
+        intent: &Intent<C>,
+        context: Option<&ActionContext<'_>>,
+    ) -> ActionOutput {
         self.notify_invocation(ActionInvocationPhase::Start);
-        let result = (self.callback)(intent);
+        let result = (self.callback)(intent, context);
         self.notify_invocation(ActionInvocationPhase::End);
         result
     }
@@ -816,6 +850,7 @@ impl ErasedShortcutScope {
 pub struct ActionDispatchInvocation<'a> {
     intent: &'a ErasedIntent,
     action: &'a dyn std::any::Any,
+    context: Option<&'a ActionContext<'a>>,
     invoke: &'a dyn Fn() -> ActionResult,
 }
 
@@ -828,6 +863,12 @@ impl ActionDispatchInvocation<'_> {
     #[must_use]
     pub fn action<C: CommandId>(&self) -> Option<&Action<C>> {
         self.action.downcast_ref()
+    }
+
+    /// The caller's context, if a host routed this invocation.
+    #[must_use]
+    pub fn context(&self) -> Option<&ActionContext<'_>> {
+        self.context
     }
 
     /// Calls the action, preserving invocation observers.
@@ -848,21 +889,22 @@ fn dispatch_bound_action_output<C: CommandId>(
     intent: &Intent<C>,
     erased: &ErasedIntent,
     dispatcher: &DispatcherLookup<'_>,
+    context: Option<&ActionContext<'_>>,
 ) -> ActionOutput {
     if !action.is_action_enabled(intent) {
         return ActionResult::Ignored.into();
     }
     let Some(dispatcher) = dispatcher() else {
-        return action.invoke_enabled_output(intent);
+        return action.invoke_enabled_output(intent, context);
     };
     let invocation_output = RefCell::new(None);
     let invoke = || {
-        let output = action.invoke_enabled_output(intent);
+        let output = action.invoke_enabled_output(intent, context);
         let result = output.result();
         *invocation_output.borrow_mut() = Some(output);
         result
     };
-    let dispatched = dispatcher(ActionDispatchInvocation { intent: erased, action, invoke: &invoke });
+    let dispatched = dispatcher(ActionDispatchInvocation { intent: erased, action, context, invoke: &invoke });
     invocation_output
         .into_inner()
         .filter(|output| output.result() == dispatched)
@@ -882,7 +924,7 @@ impl ActionDispatcher {
             return self.invoke_action(action, intent);
         }
         let erased = ErasedIntent::from_intent(intent);
-        dispatch_bound_action_output(action, intent, &erased, &|| dispatcher.clone()).result()
+        dispatch_bound_action_output(action, intent, &erased, &|| dispatcher.clone(), None).result()
     }
 }
 
@@ -892,11 +934,17 @@ trait ActionRegistry {
         changed: &incular_core::reactivity::DependencySource,
     ) -> Vec<ActionListenerSubscription>;
     fn action_for(&self, command: &dyn std::any::Any) -> Option<&dyn std::any::Any>;
-    fn invoke(&self, erased: &ErasedIntent, dispatcher: &DispatcherLookup<'_>) -> Option<ActionOutput>;
+    fn invoke(
+        &self,
+        erased: &ErasedIntent,
+        dispatcher: &DispatcherLookup<'_>,
+        context: Option<&ActionContext<'_>>,
+    ) -> Option<ActionOutput>;
     fn invoke_shortcut(
         &self,
         erased: &ErasedIntent,
         dispatcher: &DispatcherLookup<'_>,
+        context: Option<&ActionContext<'_>>,
     ) -> Option<KeyEventResult>;
 }
 
@@ -926,22 +974,28 @@ impl<C: CommandId> ActionRegistry for Actions<C> {
             .map(|action| action as &dyn std::any::Any)
     }
 
-    fn invoke(&self, erased: &ErasedIntent, dispatcher: &DispatcherLookup<'_>) -> Option<ActionOutput> {
+    fn invoke(
+        &self,
+        erased: &ErasedIntent,
+        dispatcher: &DispatcherLookup<'_>,
+        context: Option<&ActionContext<'_>>,
+    ) -> Option<ActionOutput> {
         let command = erased.downcast_command::<C>()?;
         let action = self.action_ref(command)?;
         let intent: Intent<C> = Intent::new(command.clone());
-        Some(dispatch_bound_action_output(action, &intent, erased, dispatcher))
+        Some(dispatch_bound_action_output(action, &intent, erased, dispatcher, context))
     }
 
     fn invoke_shortcut(
         &self,
         erased: &ErasedIntent,
         dispatcher: &DispatcherLookup<'_>,
+        context: Option<&ActionContext<'_>>,
     ) -> Option<KeyEventResult> {
         let command = erased.downcast_command::<C>()?;
         let action = self.action_ref(command)?;
         let intent: Intent<C> = Intent::new(command.clone());
-        let result = dispatch_bound_action_output(action, &intent, erased, dispatcher).result();
+        let result = dispatch_bound_action_output(action, &intent, erased, dispatcher, context).result();
         Some(match result {
             ActionResult::Handled => action.to_key_event_result(&intent),
             ActionResult::Ignored => KeyEventResult::Ignored,
@@ -1024,7 +1078,19 @@ impl ErasedActionScope {
         intent: &ErasedIntent,
         find: impl Fn() -> Option<Rc<ScopedActionDispatcher>>,
     ) -> Option<ActionOutput> {
-        self.registry.invoke(intent, &find)
+        self.invoke_in_context(intent, find, None)
+    }
+
+    /// Invokes an inherited action with the original calling element.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn invoke_in_context(
+        &self,
+        intent: &ErasedIntent,
+        find: impl Fn() -> Option<Rc<ScopedActionDispatcher>>,
+        context: Option<&ActionContext<'_>>,
+    ) -> Option<ActionOutput> {
+        self.registry.invoke(intent, &find, context)
     }
 
     /// Routes a shortcut through the action mapping and its key consumption policy.
@@ -1034,7 +1100,19 @@ impl ErasedActionScope {
         intent: &ErasedIntent,
         find: impl Fn() -> Option<Rc<ScopedActionDispatcher>>,
     ) -> Option<KeyEventResult> {
-        self.registry.invoke_shortcut(intent, &find)
+        self.invoke_shortcut_in_context(intent, find, None)
+    }
+
+    /// Routes a shortcut with the focused element as the action's caller.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn invoke_shortcut_in_context(
+        &self,
+        intent: &ErasedIntent,
+        find: impl Fn() -> Option<Rc<ScopedActionDispatcher>>,
+        context: Option<&ActionContext<'_>>,
+    ) -> Option<KeyEventResult> {
+        self.registry.invoke_shortcut(intent, &find, context)
     }
 }
 

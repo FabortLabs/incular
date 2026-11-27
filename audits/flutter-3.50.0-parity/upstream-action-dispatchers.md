@@ -152,3 +152,14 @@ behavior. A dispatcher that rejects a delegated action does not leak
 its payload. Existing status-only and keyboard dispatch remain
 compatible. All 19 focused native tests passed, including the
 enabled-state lifecycle with its exact Boolean callback values.
+
+## Context action origin and null result
+
+The pinned original's custom dispatcher and context action both see
+the actual invocation request. A handled action may return no output.
+The native fixture distinguishes the owner scope from its caller and
+verifies caller identity and inherited values as well as the absence of
+a payload. A separate pinned comparison confirms that a keyboard
+shortcut supplies the context of primary focus, not the shortcut's
+scope. The native runtime verifies that exact focused element. All 17
+focused native regressions passed.
