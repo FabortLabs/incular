@@ -9,6 +9,7 @@ use super::text::{
 use incular_config::WidgetDefaults;
 use incular_core::{ChangeImpact, Color, Lerp};
 use std::fmt;
+use std::hash::{Hash, Hasher};
 use std::sync::{Arc, LazyLock};
 
 /// Multiplies a specified text metric by `factor`, then adds `delta`.
@@ -155,6 +156,61 @@ impl PartialEq for TextStyle {
             && self.decoration_style == other.decoration_style
             && self.decoration_thickness == other.decoration_thickness
             && self.overflow == other.overflow
+    }
+}
+
+impl Hash for TextStyle {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // IEEE equality identifies signed zeros, so hash them alike. All
+        // remaining floats keep their bits; NaN is not equal to any value.
+        let number = |value: f32| if value == 0. { 0 } else { value.to_bits() };
+        self.inherit.hash(state);
+        self.has_explicit_color.hash(state);
+        self.has_explicit_size.hash(state);
+        self.has_explicit_weight.hash(state);
+        self.has_explicit_style.hash(state);
+        self.has_explicit_family.hash(state);
+        self.has_explicit_fallback_families.hash(state);
+        self.has_explicit_letter_spacing.hash(state);
+        self.has_explicit_shadows.hash(state);
+        self.family.hash(state);
+        self.fallback_families.hash(state);
+        number(self.size).hash(state);
+        self.weight.hash(state);
+        self.style.hash(state);
+        self.color.hash(state);
+        self.background_color.hash(state);
+        self.line_height
+            .map(|height| match height {
+                LineHeight::Normal => (0_u8, 0),
+                LineHeight::Multiplier(value) => (1, number(value)),
+                LineHeight::Absolute(value) => (2, number(value)),
+            })
+            .hash(state);
+        number(self.letter_spacing).hash(state);
+        self.word_spacing.map(number).hash(state);
+        self.text_baseline.hash(state);
+        self.leading_distribution.hash(state);
+        self.locale.hash(state);
+        self.foreground.hash(state);
+        self.background.hash(state);
+        self.shadows.len().hash(state);
+        for shadow in self.shadows.iter() {
+            (
+                shadow.color,
+                number(shadow.offset.x),
+                number(shadow.offset.y),
+                number(shadow.blur_radius),
+            )
+                .hash(state);
+        }
+        self.font_variations.hash(state);
+        self.font_features.hash(state);
+        self.decoration.hash(state);
+        self.decoration_color.hash(state);
+        self.decoration_style.hash(state);
+        self.decoration_thickness.map(number).hash(state);
+        self.overflow.hash(state);
     }
 }
 
