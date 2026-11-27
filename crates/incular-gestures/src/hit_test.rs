@@ -1,5 +1,10 @@
 //! Paint-to-hit coordinate conversion and a retained hit path.
 
+use std::{
+    cell::{Ref, RefCell},
+    rc::Rc,
+};
+
 use incular_core::{Offset, Transform};
 
 /// How a parent's hit coordinate is mapped into a child.
@@ -78,8 +83,66 @@ impl<T> HitTestResult<T> {
             .push(compose(self.transforms.last().copied(), transform));
     }
 
+    /// Pushes a caller-to-child translation (not the inverse paint offset).
+    pub fn push_offset(&mut self, offset: Offset) {
+        self.push_transform(Transform::translation(offset));
+    }
+
     pub fn pop_transform(&mut self) -> Option<Transform> {
         self.transforms.pop()
+    }
+
+    /// Shares this transaction with independently retained result handles.
+    /// Ordinary owned hit tests need no reference counting or interior borrows.
+    #[must_use]
+    pub fn into_shared(self) -> SharedHitTestResult<T> {
+        SharedHitTestResult(Rc::new(RefCell::new(self)))
+    }
+}
+
+/// A live view of one hit-test transaction. Wrapping shares both the path
+/// and the active transform stack, not a snapshot of either.
+#[derive(Debug)]
+pub struct SharedHitTestResult<T>(Rc<RefCell<HitTestResult<T>>>);
+
+impl<T> Clone for SharedHitTestResult<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<T> SharedHitTestResult<T> {
+    #[must_use]
+    pub fn wrap(result: &Self) -> Self {
+        result.clone()
+    }
+
+    /// Another wrapper can observe appended entries. Drop a path borrow
+    /// before changing the shared transaction.
+    #[must_use]
+    pub fn path(&self) -> Ref<'_, [HitTestEntry<T>]> {
+        Ref::map(self.0.borrow(), HitTestResult::path)
+    }
+
+    #[must_use]
+    pub fn shares_path_with(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+
+    pub fn add(&self, target: T) {
+        self.0.borrow_mut().add(target);
+    }
+
+    pub fn push_transform(&self, transform: Transform) {
+        self.0.borrow_mut().push_transform(transform);
+    }
+
+    pub fn push_offset(&self, offset: Offset) {
+        self.0.borrow_mut().push_offset(offset);
+    }
+
+    pub fn pop_transform(&self) -> Option<Transform> {
+        self.0.borrow_mut().pop_transform()
     }
 }
 

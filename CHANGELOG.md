@@ -13,6 +13,9 @@ a version and date when publishing.
 
 ### Added
 
+- Gesture hit-test results can share a live target path and transform stack
+  without adding reference counting to ordinary owned hit tests.
+
 - Shared alignment geometry preserves physical and relative coordinates
   through interpolation and arithmetic, and diagnoses missing direction.
 

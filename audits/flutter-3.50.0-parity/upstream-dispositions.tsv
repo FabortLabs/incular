@@ -2706,3 +2706,6 @@ packages/flutter/test/painting/alignment_test.dart	338	AlignmentGeometry factori
 packages/flutter/test/painting/alignment_test.dart	343	AlignmentGeometry static members	paired-match	upstream-alignment-geometry.md
 packages/flutter/test/painting/alignment_test.dart	361	AlignmentDirectional.resolve with null TextDirection asserts	paired-match	upstream-alignment-geometry.md
 packages/flutter/test/painting/alignment_test.dart	376	AlignmentDirectional.resolve with null TextDirection asserts	paired-match	upstream-alignment-geometry.md
+packages/flutter/test/gestures/hit_test_test.dart	9	wrapped HitTestResult gets HitTestEntry added to wrapping HitTestResult	paired-match	upstream-shared-hit-test-result.md
+packages/flutter/test/gestures/hit_test_test.dart	35	HitTestResult should correctly push and pop transforms	paired-match	upstream-shared-hit-test-result.md
+packages/flutter/test/gestures/hit_test_test.dart	76	HitTestResult should correctly push and pop offsets	paired-match	upstream-shared-hit-test-result.md

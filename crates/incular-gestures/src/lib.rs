@@ -47,7 +47,9 @@ pub use details::{
     PointerButtonClass, PointerDeviceKind, PointerEvent, RawPointerEvent, TapDownDetails,
     TapMoveDetails, TapUpDetails, Velocity,
 };
-pub use hit_test::{BoxHitTestResult, HitTestEntry, HitTestResult, HitTestTransform};
+pub use hit_test::{
+    BoxHitTestResult, HitTestEntry, HitTestResult, HitTestTransform, SharedHitTestResult,
+};
 pub use focus::{
     DirectionalFocusCandidate, FocusBehavior, FocusExtent, FocusHighlightManager, FocusHighlightMode,
     FocusHighlightStrategy, FocusHighlightSubscription, FocusManager, FocusNode,
