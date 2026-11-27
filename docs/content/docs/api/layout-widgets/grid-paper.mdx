@@ -32,6 +32,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-Defaults: interval `100.0`, divisions `2`, subdivisions `5`, transparent child.
+Defaults: interval `100.0`, divisions `2`, subdivisions `5`, and translucent
+light blue. The grid paints over the optional child without intercepting its
+pointer events. Primary, medium, and fine lines are 1, 0.5, and 0.25 logical
+pixels wide. Use `.divisions(...)` and `.subdivisions(...)` to set the counts.
+
+Use a finite, positive interval and nonzero division counts. An invalid
+configuration or a grid requiring more than 16,384 lines leaves its child
+visible without drawing a grid.
 
 Related: [`CustomPaint`](/docs/api/painting/canvas).

@@ -20,6 +20,9 @@ and `descendants_are_focusable` prevents descendant focus requests.
 width and height only on unbounded axes. With `.child(...)`, it paints
 behind that child without intercepting pointer input.
 
+`GridPaper` paints a foreground engineering grid over its optional child.
+Its line spacing and widths are retained across identical rebuilds.
+
 ## Frame recursion diagnostics
 
 Build, layout, paint, semantics, and compositor traversal track their active

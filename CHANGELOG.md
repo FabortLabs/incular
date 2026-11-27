@@ -423,6 +423,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `GridPaper` now paints the engineering grid above its child, with the
+  configured spacing and distinct primary, medium, and fine lines.
+
 - `Placeholder` fills bounded space and uses its fallback sizes only along
   unbounded axes. It can paint behind an optional interactive child,
   and preserves hairline and subpixel stroke widths.

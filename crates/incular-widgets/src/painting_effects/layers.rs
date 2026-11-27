@@ -4,7 +4,7 @@ use std::{rc::Rc, sync::Arc};
 
 use incular_config::Clip;
 use incular_core::{Color, Offset, Rect, Size};
-use incular_rendering::{Canvas, CornerRadii, DisplayList, FillRule, Path};
+use incular_rendering::{Canvas, CornerRadii, DisplayList, FillRule, Path, Stroke};
 use typed_builder::TypedBuilder;
 
 use super::{
@@ -355,15 +355,16 @@ impl CustomPainter for PhysicalPathSurface {
     }
 }
 
-/// Draws an engineering grid paper over its background.
+/// Draws a foreground engineering grid without intercepting pointer hits.
+///
+/// An interval must be finite and positive and both division counts must
+/// be nonzero. Invalid parameters or grids requiring more than 16,384
+/// lines leave the content visible without a grid.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct GridPaper {
     #[builder(default = Color::rgba(195, 232, 243, 127))]
     color: Color,
-    #[builder(
-        default = 100.0,
-        setter(transform = |interval: f32| interval.max(1.0))
-    )]
+    #[builder(default = 100.0)]
     interval: f32,
     #[builder(default = 2)]
     divisions: usize,
@@ -399,7 +400,21 @@ impl GridPaper {
 
     #[must_use]
     pub fn interval(mut self, interval: f32) -> Self {
-        self.interval = interval.max(1.0);
+        self.interval = interval;
+        self
+    }
+
+    /// Sets the positive number of divisions per interval.
+    #[must_use]
+    pub fn divisions(mut self, divisions: usize) -> Self {
+        self.divisions = divisions;
+        self
+    }
+
+    /// Sets the positive number of subdivisions.
+    #[must_use]
+    pub fn subdivisions(mut self, subdivisions: usize) -> Self {
+        self.subdivisions = subdivisions;
         self
     }
 
@@ -410,10 +425,97 @@ impl GridPaper {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct GridPaperPainter {
+    color: Color,
+    interval: f32,
+    divisions: usize,
+    subdivisions: usize,
+}
+
+impl CustomPainter for GridPaperPainter {
+    fn paint(&self, size: Size) -> DisplayList {
+        const MAX_GRID_LINES: u32 = 16_384;
+        let interval = f64::from(self.interval);
+        if !interval.is_finite() || interval <= 0. || self.divisions == 0 || self.subdivisions == 0
+        {
+            return DisplayList::default();
+        }
+        let step = interval / (self.divisions as f64 * self.subdivisions as f64);
+        let medium = interval / self.subdivisions as f64;
+        let estimated_lines =
+            (f64::from(size.width) / step).floor() + (f64::from(size.height) / step).floor() + 2.;
+        if estimated_lines > f64::from(MAX_GRID_LINES) {
+            return DisplayList::default();
+        }
+        let mut canvas = Canvas::default();
+        let mut remaining = MAX_GRID_LINES;
+        for (extent, vertical) in [(size.width, true), (size.height, false)] {
+            let mut coordinate = 0.;
+            while coordinate <= f64::from(extent) {
+                // Guard the actual count as well: accumulated rounding can
+                // place one more stroke on the final edge than division predicts.
+                if remaining == 0 {
+                    return DisplayList::default();
+                }
+                remaining -= 1;
+                let width = if coordinate % interval == 0. {
+                    1.
+                } else if coordinate % medium == 0. {
+                    0.5
+                } else {
+                    0.25
+                };
+                // Accumulate in double precision as Flutter does; only the
+                // final points use the renderer-neutral logical pixel type.
+                let position = coordinate as f32;
+                let (start, end) = if vertical {
+                    (
+                        Offset::new(position, 0.),
+                        Offset::new(position, size.height),
+                    )
+                } else {
+                    (Offset::new(0., position), Offset::new(size.width, position))
+                };
+                let mut path = Path::builder();
+                path.move_to(start).line_to(end);
+                canvas.stroke_path(
+                    Arc::new(path.build()),
+                    self.color,
+                    Stroke {
+                        width,
+                        ..Stroke::default()
+                    },
+                );
+                coordinate += step;
+            }
+        }
+        canvas.finish()
+    }
+
+    fn should_repaint(&self, old: &Self) -> bool {
+        self != old
+    }
+
+    fn hit_test(&self, _: Offset) -> Option<bool> {
+        Some(false)
+    }
+}
+
 impl From<GridPaper> for Widget {
     fn from(value: GridPaper) -> Self {
-        value
-            .child
-            .unwrap_or_else(|| crate::layout::SizedBox::shrink().into())
+        let paint = CustomPaint::new(Size::ZERO, DisplayList::default()).foreground_painter(
+            GridPaperPainter {
+                color: value.color,
+                interval: value.interval,
+                divisions: value.divisions,
+                subdivisions: value.subdivisions,
+            },
+        );
+        if let Some(child) = value.child {
+            paint.child(child).into()
+        } else {
+            paint.into()
+        }
     }
 }
