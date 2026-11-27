@@ -11,6 +11,7 @@ mod listener;
 mod playback;
 mod resize;
 mod stream;
+mod webp_animation;
 
 pub use asset_image::{
     AssetBundleImageKey, AssetImage, AssetImageKeyCallback, ExactAssetImage, ImageAssetBundle,
@@ -21,6 +22,7 @@ pub use bundled_cache::{
 };
 
 pub use info::ImageInfo;
+pub use webp_animation::AnimatedWebpDecoder;
 pub use listener::{
     ImageChunkListener, ImageErrorListener, ImageListener, ImageStreamListener,
     ImageStreamSubscription,

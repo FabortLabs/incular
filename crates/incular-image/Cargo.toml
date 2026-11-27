@@ -25,6 +25,7 @@ path = "src/lib.rs"
 futures-channel = { workspace = true }
 smart-default = { workspace = true }
 image = { workspace = true }
+image-webp = "0.2"
 incular-animation = { workspace = true }
 incular-assets = { workspace = true }
 incular-config = { workspace = true }

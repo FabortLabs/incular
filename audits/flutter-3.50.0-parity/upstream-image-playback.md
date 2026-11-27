@@ -26,3 +26,20 @@ uses that deadline rather than polling. Both scheduler and runtime
 focused tests passed. These are mock-codec parity cases like Flutter's
 originals, not proof of stock animation-format decoding or default
 provider and widget integration. No wgpu paint-path changes.
+
+## Real WebP frames
+
+The two checked-in authored bitstreams exercise a finite two-play
+animation with 200/400 ms delays and an infinite partial-frame
+animation. The pinned Flutter probe checks exact straight RGBA bytes
+through two loops and tests an explicit rectangle disposal bit.
+Six native decoder tests passed, including the same pixel assertions,
+static-image detection, invalid input, and pre-allocation dimension
+rejection. The original third-party animation compositing path rounded
+an opaque blue channel from 255 to 254. Incular reuses the WebP decoder
+for each subimage and composites it locally, preserving opaque
+channel values and clearing the canvas at a loop boundary. The
+synthetic subimage header borrows encoded bytes, and the decoder need
+not cache any prior full output frames. This is an opt-in decoder
+that can run on a blocking pool; default provider integration remains
+open. Authored fixtures add no original registrations.

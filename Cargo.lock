@@ -2291,6 +2291,7 @@ version = "0.1.5"
 dependencies = [
  "futures-channel",
  "image",
+ "image-webp",
  "incular-animation",
  "incular-assets",
  "incular-config",

@@ -131,7 +131,8 @@ pub mod prelude {
         RoutedPointerEvent, WeakPointerRouter,
     };
     pub use incular_image::{
-        AnyImageProvider, AssetBundleImageKey, AssetImage, DecodedImage, DecodedImageFrame,
+        AnimatedWebpDecoder, AnyImageProvider, AssetBundleImageKey, AssetImage, DecodedImage,
+        DecodedImageFrame,
         ExactAssetImage, FileImage, ImageAssetBundle, ImageCache, ImageCacheDiagnostics,
         ImageChunkEvent, ImageChunkListener, ImageChunkSubscription, ImageConfiguration,
         ImageDecodeCompletion, ImageError, ImageErrorListener, ImageFrameCodec, ImageFrameDemand,
