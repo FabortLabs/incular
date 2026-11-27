@@ -2815,3 +2815,4 @@ packages/flutter/test/services/text_input_test.dart	952	TextInputClient performP
 packages/flutter/test/services/text_input_test.dart	980	TextInputClient performPrivateCommand method is called with CharSequence	paired-match	upstream-app-private-input-command.md
 packages/flutter/test/services/text_input_test.dart	1005	TextInputClient performPrivateCommand method is called with float array	paired-match	upstream-app-private-input-command.md
 packages/flutter/test/services/text_input_test.dart	1030	TextInputClient performPrivateCommand method is called with no data at all	paired-match	upstream-app-private-input-command.md
+packages/flutter/test/gestures/monodrag_test.dart	41	do not crash on up event for a pending pointer after winning arena for another pointer	paired-match	upstream-monodrag-arena-threshold.md#pending-pointer-released-after-a-different-pointer-wins

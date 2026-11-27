@@ -100,3 +100,12 @@ allowlists, button-change cancellation, or the widget-level
 GestureDetector's button-specific callback routing. Filters are
 evaluated on Down, not repeated over the active stream. Fourteen
 focused native drag checks passed.
+
+## Pending pointer released after a different pointer wins
+
+The pinned `gestures/monodrag_test.dart:41` regression passed. The mounted
+`flutter350_monodrag_arbitration` fixture registers one vertical contender at
+(10,10) and horizontal followed by the shared vertical contender at (20,20).
+The sole vertical entrant starts without a move. Releasing 90 then 91 through
+the normal event path does not throw. As an extra native cleanup assertion,
+a third contact on the same detector starts and ends independently.
