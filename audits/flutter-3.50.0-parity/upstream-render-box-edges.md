@@ -47,3 +47,14 @@ the native test checks the empty unmounted tree, not direct visits to
 a detached render object that still owns its child.
 
 All 13 targeted box edge, opacity, and proxy widget tests passed.
+
+## Independent layout and paint
+
+Both exact pinned `rendering/independent_layout_test.dart` cases
+(:41 and :75) passed. The native `flutter350_independent_layout`
+target mounts an ordinary Runtime beside an independently driven
+retained tree. In both drive orders the other tree remains unmeasured
+and unpainted. Layout measures the constrained child at 800×10;
+updating the isolated compositor does not invoke the painter, and
+the explicit paint phase does. This verifies pipeline isolation, not
+a native window or framebuffer.
