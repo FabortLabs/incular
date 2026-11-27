@@ -256,3 +256,77 @@ fn a_host_checkpoint_drains_only_live_cancellations_and_a_dropped_view_cannot_en
     drop(f);
     assert!(!canceller.cancel(24, 7));
 }
+
+#[test]
+fn packet_pan_zoom_retains_its_raw_listener_path_and_normalizes_pan_and_delta() {
+    use incular_core::PointerPanZoomPhase;
+    use incular_widgets::{PointerPanZoomDetails, Transform};
+
+    let trace = Rc::new(RefCell::new(Vec::<PointerPanZoomDetails>::new()));
+    let record = || {
+        let trace = trace.clone();
+        move |details| trace.borrow_mut().push(details)
+    };
+    let listener = Listener::new(SizedBox::expand())
+        .behavior(HitTestBehavior::Opaque)
+        .on_pointer_pan_zoom_start(record())
+        .on_pointer_pan_zoom_update(record())
+        .on_pointer_pan_zoom_end(record());
+    let mut runtime = Runtime::new(Transform::scale(2., listener).into()).unwrap();
+    let now = Instant::now();
+    runtime
+        .run_frame_at(Constraints::tight(Size::new(200., 200.)), now)
+        .unwrap();
+    let start = PointerData {
+        view_id: VIEW,
+        device: 25,
+        pointer: 11,
+        kind: PointerDeviceKind::Trackpad,
+        physical_position: Offset::new(250., 250.),
+        ..PointerData::new(Data::PanZoomStart, now)
+    };
+    let update = PointerData {
+        change: Data::PanZoomUpdate {
+            physical_pan: Offset::new(40., 20.),
+            physical_pan_delta: Offset::new(30., -10.),
+            scale: 1.2,
+            rotation: 0.23,
+        },
+        physical_position: Offset::new(1400., 1500.),
+        time: now + Duration::from_millis(10),
+        synthesized: true,
+        ..start
+    };
+    let end = PointerData {
+        change: Data::PanZoomEnd,
+        time: now + Duration::from_millis(20),
+        ..update
+    };
+    runtime.handle_pointer_data_packet(VIEW, RATIO, [update]);
+    assert!(trace.borrow().is_empty());
+    runtime.handle_pointer_data_packet(VIEW, RATIO, [start, update, end, update, end]);
+    let trace = trace.borrow();
+    assert_eq!(trace.len(), 3);
+    assert_eq!(trace[0].event.phase, PointerPanZoomPhase::Start);
+    assert_eq!(
+        trace[1].event.phase,
+        PointerPanZoomPhase::Update {
+            pan: Offset::new(16., 8.),
+            scale: 1.2,
+            rotation: 0.23
+        }
+    );
+    assert_eq!(trace[2].event.phase, PointerPanZoomPhase::End);
+    assert_eq!(trace[0].local_position, Offset::new(100., 100.));
+    assert_eq!(trace[1].event.position, Offset::new(560., 600.));
+    assert_eq!(trace[1].local_position, Offset::new(330., 350.));
+    assert_eq!(trace[1].local_pan, Offset::new(58., 54.));
+    assert_eq!(trace[1].pan_delta, Offset::new(12., -4.));
+    assert_eq!(trace[1].local_pan_delta, Offset::new(6., -2.));
+    assert!(trace[1].event.synthesized);
+    assert!(
+        trace
+            .iter()
+            .all(|sample| sample.event.device == 25 && sample.event.pointer == 11)
+    );
+}

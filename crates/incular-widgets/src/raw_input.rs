@@ -12,7 +12,7 @@ pub use incular_core::TrackpadGesture;
 pub use incular_gestures::{
     ErasedGestureRecognizerFactory, GestureRecognizer, GestureRecognizerFactory,
     GestureRecognizerFactoryError, GestureRecognizerFactoryWithHandlers, MouseCursor,
-    PointerDeviceKind, RawPointerEvent,
+    PointerDeviceKind, PointerPanZoomEvent, RawPointerEvent,
 };
 
 use crate::{Widget, WidgetKind};
@@ -28,6 +28,17 @@ pub enum WindowInteraction {
     Resize(WindowResizeDirection),
 }
 
+/// One raw trackpad pan/zoom event and its coordinates on the captured
+/// listener path. Global fields retain the embedder's absolute sample.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PointerPanZoomDetails {
+    pub event: PointerPanZoomEvent,
+    pub pan_delta: incular_core::Offset,
+    pub local_position: incular_core::Offset,
+    pub local_pan: incular_core::Offset,
+    pub local_pan_delta: incular_core::Offset,
+}
+
 /// Callback set used by [`Listener`].
 #[derive(Clone, Default)]
 pub struct ListenerCallbacks {
@@ -37,6 +48,9 @@ pub struct ListenerCallbacks {
     pub on_pointer_hover: Option<Rc<dyn Fn(RawPointerEvent)>>,
     pub on_pointer_cancel: Option<Rc<dyn Fn(RawPointerEvent)>>,
     pub on_pointer_signal: Option<Rc<dyn Fn(RawPointerEvent)>>,
+    pub on_pointer_pan_zoom_start: Option<Rc<dyn Fn(PointerPanZoomDetails)>>,
+    pub on_pointer_pan_zoom_update: Option<Rc<dyn Fn(PointerPanZoomDetails)>>,
+    pub on_pointer_pan_zoom_end: Option<Rc<dyn Fn(PointerPanZoomDetails)>>,
     pub on_trackpad_gesture: Option<Rc<dyn Fn(TrackpadGesture)>>,
 }
 
@@ -224,6 +238,9 @@ impl fmt::Debug for ListenerCallbacks {
             .field("on_pointer_hover", &self.on_pointer_hover.is_some())
             .field("on_pointer_cancel", &self.on_pointer_cancel.is_some())
             .field("on_pointer_signal", &self.on_pointer_signal.is_some())
+            .field("on_pointer_pan_zoom_start", &self.on_pointer_pan_zoom_start.is_some())
+            .field("on_pointer_pan_zoom_update", &self.on_pointer_pan_zoom_update.is_some())
+            .field("on_pointer_pan_zoom_end", &self.on_pointer_pan_zoom_end.is_some())
             .field("on_trackpad_gesture", &self.on_trackpad_gesture.is_some())
             .finish()
     }
@@ -259,6 +276,9 @@ fn listener_callbacks_eq(left: &ListenerCallbacks, right: &ListenerCallbacks) ->
         && same_rc(&left.on_pointer_hover, &right.on_pointer_hover)
         && same_rc(&left.on_pointer_cancel, &right.on_pointer_cancel)
         && same_rc(&left.on_pointer_signal, &right.on_pointer_signal)
+        && same_rc(&left.on_pointer_pan_zoom_start, &right.on_pointer_pan_zoom_start)
+        && same_rc(&left.on_pointer_pan_zoom_update, &right.on_pointer_pan_zoom_update)
+        && same_rc(&left.on_pointer_pan_zoom_end, &right.on_pointer_pan_zoom_end)
         && same_rc(&left.on_trackpad_gesture, &right.on_trackpad_gesture)
 }
 
@@ -475,6 +495,24 @@ impl Listener {
     #[must_use]
     pub fn on_pointer_signal(mut self, callback: impl Fn(RawPointerEvent) + 'static) -> Self {
         self.callbacks.on_pointer_signal = Some(Rc::new(callback));
+        self
+    }
+
+    #[must_use]
+    pub fn on_pointer_pan_zoom_start(mut self, callback: impl Fn(PointerPanZoomDetails) + 'static) -> Self {
+        self.callbacks.on_pointer_pan_zoom_start = Some(Rc::new(callback));
+        self
+    }
+
+    #[must_use]
+    pub fn on_pointer_pan_zoom_update(mut self, callback: impl Fn(PointerPanZoomDetails) + 'static) -> Self {
+        self.callbacks.on_pointer_pan_zoom_update = Some(Rc::new(callback));
+        self
+    }
+
+    #[must_use]
+    pub fn on_pointer_pan_zoom_end(mut self, callback: impl Fn(PointerPanZoomDetails) + 'static) -> Self {
+        self.callbacks.on_pointer_pan_zoom_end = Some(Rc::new(callback));
         self
     }
 

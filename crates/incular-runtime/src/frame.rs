@@ -2016,8 +2016,14 @@ impl Runtime {
                     event.time,
                 );
             }
-            ConvertedPointerKind::PanZoom { event, .. } => {
-                let _ = self.handle_input_at(InputEvent::PointerPanZoom(event), event.time);
+            ConvertedPointerKind::PanZoom { event, pan_delta } => {
+                let traced_at = Instant::now();
+                self.advance_text_history_clock(event.time);
+                let window = self.gesture_window();
+                let target = self.tree.dispatch_pointer_pan_zoom_with_delta(window, event, Some(pan_delta));
+                self.frame_requested |= target.is_some();
+                self.pending_event_processing_us = self.pending_event_processing_us
+                    .saturating_add(us_since_instant(traced_at));
             }
             // The retained window does not yet consume these signal kinds;
             // direct embedders can still observe them from the converter.

@@ -1,6 +1,7 @@
 //! Correlated absolute pan/zoom input, distinct from OS aggregate callbacks.
 
 use super::*;
+use crate::raw_input::PointerPanZoomDetails;
 use incular_gestures::{
     DEFAULT_TRACKPAD_SCROLL_TO_SCALE_FACTOR, DragCallbacks, PointerDeviceKind, PointerPanZoomEvent,
     PointerPanZoomPhase, TrackpadDragAxis, TrackpadDragRecognizer,
@@ -21,6 +22,8 @@ struct Member {
 pub(super) struct ActivePanZoom {
     target: ElementId,
     members: Vec<Member>,
+    listeners: Vec<RawPointerRouteEntry>,
+    last_pan: Offset,
 }
 
 impl ActivePanZoom {
@@ -163,14 +166,66 @@ impl WidgetTree {
         window: u64,
         event: PointerPanZoomEvent,
     ) -> Option<ElementId> {
+        self.dispatch_pointer_pan_zoom_with_delta(window, event, None)
+    }
+
+    /// A physical packet may already have a normalized motion delta.
+    #[doc(hidden)]
+    pub fn dispatch_pointer_pan_zoom_with_delta(
+        &mut self,
+        window: u64,
+        event: PointerPanZoomEvent,
+        measured_delta: Option<Offset>,
+    ) -> Option<ElementId> {
         let key = GestureArenaKey::pointer_pan_zoom(window, event.device, event.pointer);
         if event.phase == PointerPanZoomPhase::Start {
             self.cancel_pointer_pan_zoom(key);
             self.begin_pointer_pan_zoom(key, event)?;
         }
-        let stream = self.input.active_pan_zoom.get(&key)?;
+        let stream = self.input.active_pan_zoom.get_mut(&key)?;
+        let (pan, pan_delta) = if let PointerPanZoomPhase::Update { pan, .. } = event.phase {
+            let previous = std::mem::replace(&mut stream.last_pan, pan);
+            (pan, measured_delta.unwrap_or(pan - previous))
+        } else {
+            (Offset::ZERO, Offset::ZERO)
+        };
         let target = stream.target;
         let count = stream.members.len();
+        let stream = self.input.active_pan_zoom.get(&key)?;
+        for entry in &stream.listeners {
+            let Some(callbacks) = self.listener_callbacks(entry.element) else {
+                continue;
+            };
+            let (callback, local_pan) = match event.phase {
+                PointerPanZoomPhase::Start => (callbacks.on_pointer_pan_zoom_start, Offset::ZERO),
+                PointerPanZoomPhase::Update { .. } => (
+                    callbacks.on_pointer_pan_zoom_update,
+                    entry
+                        .world_to_local
+                        .map_or(pan, |transform| transform.transform_point(pan)),
+                ),
+                PointerPanZoomPhase::End => (callbacks.on_pointer_pan_zoom_end, Offset::ZERO),
+            };
+            if let Some(callback) = callback {
+                let local_position = entry.world_to_local.map_or(event.position, |transform| {
+                    transform.transform_point(event.position)
+                });
+                let local_pan_delta = entry.world_to_local.map_or(pan_delta, |transform| {
+                    if matches!(event.phase, PointerPanZoomPhase::Update { .. }) {
+                        local_pan - transform.transform_point(pan - pan_delta)
+                    } else {
+                        Offset::ZERO
+                    }
+                });
+                callback(PointerPanZoomDetails {
+                    event,
+                    pan_delta,
+                    local_position,
+                    local_pan,
+                    local_pan_delta,
+                });
+            }
+        }
         for index in 0..count {
             let member = &mut self.input.active_pan_zoom.get_mut(&key)?.members[index];
             let Some(status) = self.input.gesture_arena.disposition(key, member.id) else {
@@ -254,17 +309,36 @@ impl WidgetTree {
     ) -> Option<()> {
         let hit = self.pointer_hit_test(event.position);
         let gestures = hit.coincident_gestures();
+        let listeners: Vec<_> = self
+            .listener_ids(hit.raw())
+            .into_iter()
+            .filter(|element| {
+                self.listener_callbacks(*element).is_some_and(|callbacks| {
+                    callbacks.on_pointer_pan_zoom_start.is_some()
+                        || callbacks.on_pointer_pan_zoom_update.is_some()
+                        || callbacks.on_pointer_pan_zoom_end.is_some()
+                })
+            })
+            .map(|element| RawPointerRouteEntry {
+                element,
+                world_to_local: self
+                    .render_id(element)
+                    .and_then(|id| self.pointer_world_to_local(id)),
+            })
+            .collect();
         let target = hit
             .target()
             .and_then(|render| self.element_for_render(render))
-            .or_else(|| gestures.first().copied())?;
+            .or_else(|| gestures.first().copied())
+            .or_else(|| listeners.first().map(|entry| entry.element))?;
         let mut members = Vec::new();
         for element in self.gesture_route_elements(target, gestures) {
             let Some(callbacks) = self.gesture_callbacks(element) else {
                 continue;
             };
             let admits_drag = callbacks.allows_pointer_device(PointerDeviceKind::Trackpad);
-            if admits_drag && let Some(binding) = self.shared_application_drag(element, &callbacks) {
+            if admits_drag && let Some(binding) = self.shared_application_drag(element, &callbacks)
+            {
                 let axis = binding.axis;
                 self.shared_drag(key.window, element, binding, callbacks.drag_start_behavior);
                 members.push(Member {
@@ -356,12 +430,18 @@ impl WidgetTree {
                 });
             }
         }
-        if members.is_empty() {
+        if members.is_empty() && listeners.is_empty() {
             return None;
         }
-        self.input
-            .active_pan_zoom
-            .insert(key, ActivePanZoom { target, members });
+        self.input.active_pan_zoom.insert(
+            key,
+            ActivePanZoom {
+                target,
+                members,
+                listeners,
+                last_pan: Offset::ZERO,
+            },
+        );
         Some(())
     }
 
@@ -410,10 +490,10 @@ impl WidgetTree {
             };
             match (&mut member.recognizer, entry.disposition) {
                 (Recognizer::SharedDrag(axis), disposition) => {
-                    if let Some(pan) = self
-                        .input
-                        .shared_drags
-                        .get_mut(&(key.window, member.element, *axis))
+                    if let Some(pan) =
+                        self.input
+                            .shared_drags
+                            .get_mut(&(key.window, member.element, *axis))
                     {
                         match disposition {
                             GestureDisposition::Accepted => pan.accept_stream(key),

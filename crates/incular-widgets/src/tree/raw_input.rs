@@ -629,7 +629,7 @@ impl WidgetTree {
         }
     }
 
-    fn listener_callbacks(&self, element: ElementId) -> Option<ListenerCallbacks> {
+    pub(super) fn listener_callbacks(&self, element: ElementId) -> Option<ListenerCallbacks> {
         match self.raw_input_kind(element)? {
             RawInputKind::Listener { callbacks, .. } => Some(callbacks.clone()),
             _ => None,
@@ -690,7 +690,7 @@ impl WidgetTree {
         }
     }
 
-    fn listener_ids(&self, elements: &[ElementId]) -> Vec<ElementId> {
+    pub(super) fn listener_ids(&self, elements: &[ElementId]) -> Vec<ElementId> {
         let mut out = Vec::with_capacity(elements.len());
         for &id in elements {
             if !out.contains(&id)

@@ -60,3 +60,17 @@ mouse location. This comparison uses immediate packet delivery;
 cancellation requested from an opted-in resampled touch callback is
 a separate clock-path case. Seven delivery and nine adjacent native
 tests passed.
+
+## Raw pan and zoom listener delivery
+
+The exact pinned :668 “Pointer pan/zoom events” case passed. A
+mounted `Listener` now observes absolute trackpad start, update
+and end separately from aggregate native gestures. Start captures
+the path and its transforms, an update outside the view follows
+that path, and orphan updates and repeated ends do not fire.
+An authored pinned probe uses a 2.5× pixel ratio and a centered 2×
+widget transform. The native counterpart agrees on global and
+local position, total pan, measured pan delta, scale, rotation,
+synthesized state and device/pointer identity. Eight delivery and
+12 adjacent scale/transform tests passed. The authored probe
+adds no original registration credit.

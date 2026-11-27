@@ -378,7 +378,7 @@ pub use raw_input::{
     ErasedGestureRecognizerFactory, GestureRecognizer, GestureRecognizerFactory,
     GestureRecognizerFactoryError, GestureRecognizerFactoryWithHandlers, Listener,
     ListenerCallbacks, MetaData, MouseCursor, MouseRegion, MouseRegionCallbacks, PointerDeviceKind,
-    PointerSignalResolver, RawGestureDetector, RawPointerEvent, TapRegion, TapRegionCallbacks,
+    PointerPanZoomDetails, PointerSignalResolver, RawGestureDetector, RawPointerEvent, TapRegion, TapRegionCallbacks,
     TapRegionGroupId, TapRegionSurface, TextFieldTapRegion,
 };
 pub use raw_menu_anchor::{
