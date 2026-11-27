@@ -568,14 +568,8 @@ pub(super) fn word_at_offset(
     if obscured {
         return (TextSelection::new(0, text.len()), affinity);
     }
-    let (start, end) = word_boundary_at(text, offset);
-    let effective = match affinity {
-        TextAffinity::Upstream => text[..offset]
-            .char_indices()
-            .next_back()
-            .map_or(0, |(index, _)| index),
-        TextAffinity::Downstream => offset,
-    };
+    let effective = word_character_offset(text, offset, affinity);
+    let (start, end) = word_boundary_at(text, effective);
     let whitespace_at = |index: usize| {
         text[index..]
             .chars()
@@ -614,6 +608,19 @@ pub(super) fn word_at_offset(
         }
     }
     (TextSelection::new(start, end), affinity)
+}
+
+/// The engine resolves an upstream caret against the preceding character,
+/// not against the next word or the newline at the same byte offset.
+fn word_character_offset(text: &str, offset: usize, affinity: TextAffinity) -> usize {
+    let offset = text.floor_char_boundary(offset.min(text.len()));
+    match affinity {
+        TextAffinity::Upstream => text[..offset]
+            .char_indices()
+            .next_back()
+            .map_or(0, |(index, _)| index),
+        TextAffinity::Downstream => offset,
+    }
 }
 
 fn only_whitespace(text: &str, start: usize, end: usize) -> bool {
@@ -861,7 +868,9 @@ impl Runtime {
             return;
         }
         match run.effective_count {
-            2 => self.text_field_select_words_in_range(field, run.down_position, position, now),
+            2 => {
+                self.text_field_select_words_in_range(field, run.down_position, position, now);
+            }
             3 => {
                 self.text_field_select_boundaries_in_range(field, run.down_position, position, now)
             }
@@ -929,6 +938,44 @@ impl Runtime {
         }
     }
 
+    /// Selects whole words between two global points in a laid-out editor.
+    /// This does not request focus or change either scroll position directly.
+    pub fn select_editable_words_in_range(
+        &mut self,
+        field: ElementId,
+        from: Offset,
+        to: Offset,
+    ) -> bool {
+        let changed = self.text_field_select_words_in_range(field, from, to, self.input_now());
+        self.frame_requested |= changed;
+        changed
+    }
+
+    /// Moves the caret to the word edge used by Flutter's
+    /// `RenderEditable.selectWordEdge` for this global pointer position.
+    pub fn select_editable_word_edge_at(&mut self, field: ElementId, point: Offset) -> bool {
+        let (Some(controller), Some((offset, affinity))) = (
+            self.tree.text_controller(field),
+            self.tree.text_field_position_at(field, point),
+        ) else {
+            return false;
+        };
+        let (boundary, affinity) = controller.with_value(|value| {
+            let effective = word_character_offset(&value.text, offset, affinity);
+            let (start, end) = word_boundary_at(&value.text, effective);
+            if offset <= start {
+                (start, TextAffinity::Downstream)
+            } else {
+                (end, TextAffinity::Upstream)
+            }
+        });
+        let changed = self.tree.text_field_select(
+            field, TextSelection::collapsed(boundary), affinity, self.input_now(),
+        );
+        self.frame_requested |= changed;
+        changed
+    }
+
     /// `RenderEditable.selectWordsInRange`.
     fn text_field_select_words_in_range(
         &mut self,
@@ -936,13 +983,13 @@ impl Runtime {
         from: Offset,
         to: Offset,
         now: Instant,
-    ) {
+    ) -> bool {
         let (Some(controller), Some((from_offset, from_affinity)), Some((to_offset, to_affinity))) = (
             self.tree.text_controller(field),
             self.tree.text_field_position_at(field, from),
             self.tree.text_field_position_at(field, to),
         ) else {
-            return;
+            return false;
         };
         let obscured = self.text_field_obscured(field);
         let read_only = !self.tree.text_field_is_editable(field);
@@ -966,7 +1013,7 @@ impl Runtime {
             };
             (selection, affinity)
         });
-        self.tree.text_field_select(field, selection, affinity, now);
+        self.tree.text_field_select(field, selection, affinity, now)
     }
 
     /// `selectAll` for single-line fields, else `_selectParagraphsInRange`

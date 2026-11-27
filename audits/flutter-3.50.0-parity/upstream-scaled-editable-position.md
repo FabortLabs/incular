@@ -13,3 +13,15 @@ projects the updated caret into enclosing viewports. An unset selection no
 longer automatically reveals the controller's fallback caret at the end.
 Hit testing converts through the retained transform rather than treating
 global coordinates as editor coordinates.
+
+## Word boundaries and affinity
+
+The pinned scaled whole-word selection and word-edge originals both
+passed. Incular previously looked up the byte after an upstream caret
+when selecting its word. Dragging past the visible line end therefore
+included the hard newline at byte 17 (extent 18). The word boundary now
+uses the previous character for upstream affinity, preserving the exact
+12..17 range. The separate word-edge operation at byte 13 collapses at
+17 with upstream affinity. The same position-based selection code serves
+the retained double-tap drag. Four scaled controls and 21 adjacent
+double-tap and editing-shortcut tests passed.
