@@ -3732,3 +3732,4 @@ packages/flutter/test/widgets/image_filter_test.dart	178	ImageFiltered does not 
 packages/flutter/test/widgets/animated_image_filtered_repaint_test.dart	14	ImageFiltered avoids repainting child as it animates	paired-match	upstream-image-filter-lifecycle.md
 packages/flutter/test/painting/text_style_test.dart	433	TextStyle.debugLabel	paired-match	upstream-text-style-diagnostics.md
 packages/flutter/test/painting/text_style_test.dart	458	TextStyle.hashCode	paired-match	upstream-text-style-diagnostics.md#hash-semantics
+packages/flutter/test/painting/text_style_test.dart	669	TextStyle fontFamily and package	paired-match	upstream-package-fonts.md#replacing-a-package-qualifier

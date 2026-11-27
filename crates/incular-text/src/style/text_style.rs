@@ -56,6 +56,8 @@ pub struct TextStyleApply<'a> {
     pub decoration_style: Option<TextDecorationStyle>,
     pub decoration_thickness: TextMetricAdjustment,
     pub font_family: Option<FontFamily>,
+    /// Qualifies the effective primary and fallback names after replacements.
+    pub font_package: Option<&'a str>,
     pub font_family_fallback: Option<&'a [FontFamily]>,
     pub font_size: TextMetricAdjustment,
     pub font_weight_delta: i32,
@@ -255,6 +257,28 @@ impl TextStyle {
     #[must_use]
     pub fn packaged_font_family(self, package: &str, family: &str) -> Self {
         self.family(FontFamily::packaged(package, family))
+    }
+
+    /// Sets the qualifier of the specified primary and fallback names.
+    /// An existing canonical package prefix is replaced, not duplicated.
+    /// An omitted family or fallback list remains omitted.
+    #[must_use]
+    pub fn font_package(mut self, package: &str) -> Self {
+        let qualify = |family: &FontFamily| {
+            let canonical = family.name();
+            let name = canonical
+                .strip_prefix("packages/")
+                .and_then(|remaining| remaining.split_once('/'))
+                .map_or(canonical, |(_, name)| name);
+            FontFamily::packaged(package, name)
+        };
+        if self.has_explicit_family {
+            self.family = qualify(&self.family);
+        }
+        if !self.fallback_families.is_empty() {
+            self.fallback_families = self.fallback_families.iter().map(qualify).collect();
+        }
+        self
     }
 
     /// Replaces the fallback list with ordered names from the package.
@@ -751,6 +775,9 @@ impl TextStyle {
         if let Some(fallback) = options.font_family_fallback {
             result.fallback_families = fallback.into();
             result.has_explicit_fallback_families = true;
+        }
+        if let Some(package) = options.font_package {
+            result = result.font_package(package);
         }
         if let Some(style) = options.font_style {
             result = result.font_style(style);

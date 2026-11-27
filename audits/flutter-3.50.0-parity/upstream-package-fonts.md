@@ -23,3 +23,12 @@ package. A mounted Text also picks up the new face without replacing
 its render object. Forty-five distinct focused Rust checks and the
 authored Flutter probe passed. This does not compare GPU raster pixels
 or provide a platform asset-manifest loader.
+
+## Replacing a package qualifier
+
+The pinned `painting/text_style_test.dart:669` passed. The native
+tests distinguish otherwise identical styles from different packages
+in equality and hashing. Copying or applying a replacement package
+adds the qualifier to an unqualified name and replaces an existing
+qualifier without nesting it. A control preserves the fallback order
+and the distinction between omitted and explicitly empty lists.
