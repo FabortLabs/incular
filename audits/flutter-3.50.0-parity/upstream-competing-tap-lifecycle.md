@@ -44,3 +44,14 @@ while the drag is held, it does not restart the rejected tap. A fresh
 contact after both releases still taps. Eight focused recognizer and
 mounted tests and four adjacent mounted overlap tests passed. No runtime
 change was needed for these cases.
+
+### Primary tap contenders with different button masks
+
+The three pinned `gestures/tap_test.dart` registrations at :895,
+:911 and :927 passed. For the original primary touch, a mounted
+secondary-only or tertiary-only ancestor does not delay the inner
+tap down and receives no callback when that touch lifts. Two
+primary listeners both remain pending at 99 ms, report down at
+100 ms in hit-path order, and do not repeat at 500 ms. Three
+focused and 12 adjacent runtime tests passed, with no production
+change needed.
