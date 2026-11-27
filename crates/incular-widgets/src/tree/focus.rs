@@ -961,7 +961,9 @@ impl WidgetTree {
         }
         let mut result = Vec::new();
         flatten_focus_group(
+            self,
             FocusTraversalGroupMembers {
+                owner: None,
                 policy: FocusTraversalPolicyKind::ReadingOrder,
                 members,
             },
@@ -1756,6 +1758,22 @@ impl WidgetTree {
         Some(self.restore_scope_history(owner, scope, None))
     }
 
+    /// Finds a new attachment for the exact same primary focus node after
+    /// its former element was removed by a retained rebuild.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn reattached_primary_focus_target(
+        &self,
+        node: &incular_gestures::FocusNode,
+    ) -> Option<ElementId> {
+        self.hosted_focus_nodes
+            .as_ref()?
+            .iter()
+            .find_map(|(&id, binding)| {
+                (binding.node() == node && self.can_request_focus(id)).then_some(id)
+            })
+    }
+
     /// Finds the same external autofocus node after the layout widget that
     /// hosted it was replaced, provided an explicit focus attachment still
     /// connects it. A different newly mounted autofocus node cannot win
@@ -2146,6 +2164,7 @@ impl WidgetTree {
             return;
         }
         out.push(FocusTraversalMember::Group(FocusTraversalGroupMembers {
+            owner: Some(id),
             policy,
             members,
         }));

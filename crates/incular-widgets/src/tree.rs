@@ -100,6 +100,7 @@ mod descriptors;
 mod external_drop;
 mod flex_overflow;
 mod focus;
+mod focus_reading_order;
 pub use focus::{DirectionalFocusResolution, SequentialFocusResolution};
 mod global_keys;
 mod interaction;
@@ -1621,11 +1622,19 @@ enum FocusTraversalMember {
 }
 
 struct FocusTraversalGroupMembers {
+    owner: Option<ElementId>,
     policy: FocusTraversalPolicyKind,
     members: Vec<FocusTraversalMember>,
 }
 
 impl FocusTraversalMember {
+    fn direction_owner(&self) -> Option<ElementId> {
+        match self {
+            Self::Candidate(candidate) => Some(candidate.id),
+            Self::Group(group) => group.owner,
+        }
+    }
+
     fn first_candidate(&self) -> Option<&FocusCandidate> {
         match self {
             Self::Candidate(candidate) => Some(candidate),
@@ -1649,24 +1658,24 @@ impl FocusTraversalMember {
     }
 }
 
-fn sort_focus_members(policy: FocusTraversalPolicyKind, members: &mut Vec<FocusTraversalMember>) {
+fn sort_focus_members(
+    tree: &WidgetTree,
+    policy: FocusTraversalPolicyKind,
+    members: &mut Vec<FocusTraversalMember>,
+) {
     match policy {
         FocusTraversalPolicyKind::WidgetOrder => {}
         FocusTraversalPolicyKind::ReadingOrder => {
             // Flutter's band-based reading order, read from registration order
             // so that ties keep widget order.
             members.sort_by_key(|member| member.representative_sequence());
-            *members = incular_gestures::reading_order_by(std::mem::take(members), |member| {
-                member.representative_bounds()
-            });
+            focus_reading_order::sort_members(tree, members);
         }
         FocusTraversalPolicyKind::Ordered => {
             // Flutter's OrderedTraversalPolicy: reading order is the secondary
             // policy, so nodes with equal or absent orders keep that order.
             members.sort_by_key(|member| member.representative_sequence());
-            *members = incular_gestures::reading_order_by(std::mem::take(members), |member| {
-                member.representative_bounds()
-            });
+            focus_reading_order::sort_members(tree, members);
             members.sort_by(|left, right| {
                 match (left.representative_order(), right.representative_order()) {
                     (Some(left), Some(right)) => left.compare(right),
@@ -1679,16 +1688,20 @@ fn sort_focus_members(policy: FocusTraversalPolicyKind, members: &mut Vec<FocusT
     }
 }
 
-fn flatten_focus_group(group: FocusTraversalGroupMembers, out: &mut Vec<ElementId>) {
+fn flatten_focus_group(
+    tree: &WidgetTree,
+    group: FocusTraversalGroupMembers,
+    out: &mut Vec<ElementId>,
+) {
     let mut members = group.members;
-    sort_focus_members(group.policy, &mut members);
+    sort_focus_members(tree, group.policy, &mut members);
     let mut work = members.into_iter().rev().collect::<Vec<_>>();
     while let Some(member) = work.pop() {
         match member {
             FocusTraversalMember::Candidate(candidate) => out.push(candidate.id),
             FocusTraversalMember::Group(group) => {
                 let mut members = group.members;
-                sort_focus_members(group.policy, &mut members);
+                sort_focus_members(tree, group.policy, &mut members);
                 work.extend(members.into_iter().rev());
             }
         }

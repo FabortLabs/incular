@@ -2931,7 +2931,10 @@ impl Runtime {
     /// unfocused current node clears it.
     pub(crate) fn adopt_external_focus_change(&mut self) {
         if let Some(next) = self.take_external_focus_change() {
-            self.set_focus(next);
+            let same_node = self.primary_focus_node.as_ref().is_some_and(|previous| {
+                next.and_then(|id| self.tree.focus_node_at(id)).as_ref() == Some(previous)
+            });
+            self.set_focus_with_external_selection(next, !same_node);
         }
     }
 
@@ -2949,13 +2952,21 @@ impl Runtime {
         // being delivered. Do not acknowledge that newer request here.
         self.adopted_focus_epoch = Some(epoch);
         self.tree.external_focus_change(current).or_else(|| {
-            // Replacing a widget can remount the same autofocused node in
-            // an explicitly parented branch. A different node reusing the
-            // element must never inherit focus.
+            // Explicit requests have already won. If a widget moved under
+            // a new parent and retained the same FocusNode, preserve that
+            // node's primary focus even though its old ElementId is gone.
             replaced.then(|| {
                 self.primary_focus_node
                     .as_ref()
-                    .and_then(|node| self.tree.reattached_autofocus_target(node))
+                    .and_then(|node| {
+                        let old_element_is_gone =
+                            self.focused.is_some_and(|id| !self.tree.element_exists(id));
+                        if old_element_is_gone {
+                            self.tree.reattached_primary_focus_target(node)
+                        } else {
+                            self.tree.reattached_autofocus_target(node)
+                        }
+                    })
                     .or_else(|| self.tree.focus_fallback_after_node_detached())
             })
         })

@@ -3286,3 +3286,9 @@ packages/flutter/test/widgets/focus_traversal_test.dart	320	Move focus to previo
 packages/flutter/test/widgets/focus_traversal_test.dart	2020	Directional prefers the closest node even on irregular grids	paired-match	upstream-focus-navigation-matrix.md
 packages/flutter/test/widgets/focus_traversal_test.dart	2154	Closest vertical is picked when only out of band items are considered	paired-match	upstream-focus-navigation-matrix.md
 packages/flutter/test/widgets/focus_traversal_test.dart	2245	Closest horizontal is picked when only out of band items are considered	paired-match	upstream-focus-navigation-matrix.md
+packages/flutter/test/widgets/focus_traversal_test.dart	643	Find the initial focus if there is none yet.	paired-match	upstream-reading-order-directions.md
+packages/flutter/test/widgets/focus_traversal_test.dart	684	Move reading focus to next node.	paired-match	upstream-reading-order-directions.md
+packages/flutter/test/widgets/focus_traversal_test.dart	799	Requesting nextFocus on node focuses its descendant	paired-match	upstream-reading-order-directions.md
+packages/flutter/test/widgets/focus_traversal_test.dart	836	Move reading focus to previous node.	paired-match	upstream-reading-order-directions.md
+packages/flutter/test/widgets/focus_traversal_test.dart	910	Focus order is correct in the presence of different directionalities.	paired-match	upstream-reading-order-directions.md
+packages/flutter/test/widgets/focus_traversal_test.dart	1035	Focus order is reading order regardless of widget order, even when overlapping.	paired-match	upstream-reading-order-directions.md

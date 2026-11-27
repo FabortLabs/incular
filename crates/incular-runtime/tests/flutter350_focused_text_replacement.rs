@@ -103,3 +103,39 @@ fn replacing_a_focused_widgets_controller_moves_the_selection_policy() {
     after.set_text("Attached");
     assert_eq!(after.selection_if_set(), Some(TextSelection::new(0, 8)));
 }
+
+#[test]
+fn reattaching_the_same_focus_node_keeps_the_editors_selection() {
+    use incular_widgets::Padding;
+
+    let controller = TextEditingController::with_text("ABCDE");
+    let node = FocusNode::new();
+    let build = |wrapped| {
+        let child = editor(&controller, &node);
+        let child = if wrapped {
+            Widget::from(Padding::all(5., child))
+        } else {
+            child
+        };
+        Directionality::new(TextDirection::Ltr, child)
+    };
+    let mut runtime = Runtime::new(build(false).into()).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Linux);
+    frame(&mut runtime);
+    node.request_focus();
+    frame(&mut runtime);
+    assert!(node.has_primary_focus());
+    let old = runtime.focused_element().unwrap();
+    let expected = TextSelection::new(1, 3);
+    controller.set_selection(expected);
+    runtime
+        .schedule_update(runtime.tree().root().unwrap(), build(true).into())
+        .unwrap();
+    frame(&mut runtime);
+    assert!(node.has_primary_focus());
+    let new = runtime.focused_element().unwrap();
+    assert_ne!(new, old);
+    assert!(!runtime.tree().element_exists(old));
+    assert_eq!(controller.text(), "ABCDE");
+    assert_eq!(controller.selection(), expected);
+}

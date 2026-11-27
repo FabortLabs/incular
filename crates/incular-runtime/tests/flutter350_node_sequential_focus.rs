@@ -111,7 +111,7 @@ fn a_detached_node_cannot_redirect_focus_and_a_scope_remembers_its_child() {
     assert!(b.has_primary_focus());
 }
 
-fn nested_scope_cycle(backwards: bool) {
+fn nested_scope_cycle(backwards: bool, reading: bool) {
     use std::{cell::RefCell, rc::Rc};
     let changes = Rc::new(RefCell::new([None; 4]));
     let watcher = |index: usize| {
@@ -121,18 +121,29 @@ fn nested_scope_cycle(backwards: bool) {
     let outer = FocusScopeNode::new();
     let inner = FocusScopeNode::new();
     let [first, second] = std::array::from_fn(|_| FocusNode::new());
-    let child = FocusScope::new(Column::new([
+    let leaves = [
         item(&first, 100.).on_focus_change(watcher(2)),
         item(&second, 100.).on_focus_change(watcher(3)),
-    ]))
-    .node(inner.clone())
-    .on_focus_change(watcher(1));
+    ];
+    let leaves = if reading && !backwards {
+        Widget::from(Row::new(leaves))
+    } else {
+        Widget::from(Column::new(leaves))
+    };
+    let child = FocusScope::new(leaves)
+        .node(inner.clone())
+        .on_focus_change(watcher(1));
     let outer_scope = FocusScope::new(Column::new([child]))
         .node(outer.clone())
         .on_focus_change(watcher(0));
+    let group = FocusTraversalGroup::new(outer_scope);
     let root = Directionality::new(
         TextDirection::Ltr,
-        FocusTraversalGroup::new(outer_scope).widget_order(),
+        if reading {
+            group.reading_order()
+        } else {
+            group.widget_order()
+        },
     );
     let mut runtime = Runtime::new(root.into()).unwrap();
     frame(&mut runtime);
@@ -175,12 +186,12 @@ fn nested_scope_cycle(backwards: bool) {
 
 #[test]
 fn next_focus_cycles_within_nested_scopes_without_republishing_ancestor_focus() {
-    nested_scope_cycle(false);
+    nested_scope_cycle(false, false);
 }
 
 #[test]
 fn previous_focus_cycles_within_nested_scopes_from_the_current_primary_node() {
-    nested_scope_cycle(true);
+    nested_scope_cycle(true, false);
 }
 
 #[test]
@@ -192,8 +203,7 @@ fn a_mount_owned_scope_reports_focus_entering_and_leaving_its_descendants() {
     let scope = FocusScope::new(item(&inside, 100.))
         .on_focus_change(move |has_focus| observed.borrow_mut().push(has_focus));
     let child = Column::new([Widget::from(scope), Widget::from(item(&outside, 100.))]);
-    let mut runtime =
-        Runtime::new(Directionality::new(TextDirection::Ltr, child).into()).unwrap();
+    let mut runtime = Runtime::new(Directionality::new(TextDirection::Ltr, child).into()).unwrap();
     frame(&mut runtime);
     assert!(changes.borrow().is_empty());
     inside.request_focus();
@@ -205,4 +215,14 @@ fn a_mount_owned_scope_reports_focus_entering_and_leaving_its_descendants() {
     outside.request_focus();
     frame(&mut runtime);
     assert_eq!(*changes.borrow(), [true, false]);
+}
+
+#[test]
+fn next_reading_focus_tracks_the_row_while_preserving_nested_scope_focus() {
+    nested_scope_cycle(false, true);
+}
+
+#[test]
+fn previous_reading_focus_wraps_repeatedly_from_the_current_node() {
+    nested_scope_cycle(true, true);
 }
