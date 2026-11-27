@@ -280,6 +280,32 @@ pub trait RenderSliver {
     ) -> bool {
         false
     }
+
+    /// Routes one source without clearing another source's retention.
+    #[doc(hidden)]
+    fn update_child_retention(
+        &mut self,
+        child: SliverChildId,
+        grid_tile: Option<usize>,
+        source: SliverKeepAliveSource,
+        keep_alive: bool,
+    ) -> bool {
+        match source {
+            SliverKeepAliveSource::Explicit => self.set_child_keep_alive(child, grid_tile, keep_alive),
+            SliverKeepAliveSource::Focus => self.set_child_focus_keep_alive(child, grid_tile, keep_alive),
+            SliverKeepAliveSource::Automatic => false,
+        }
+    }
+
+}
+
+/// Independent owners of retained sliver parent data.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SliverKeepAliveSource {
+    Explicit,
+    Focus,
+    Automatic,
 }
 
 /// Scroll input that invalidates a sliver's retained layout.
@@ -357,25 +383,16 @@ pub(crate) trait SliverViewportDelegate {
     fn invalidate_sliver_child(&self, _child: SliverChildId) -> bool {
         false
     }
-    fn set_child_keep_alive(
+    fn update_child_retention(
         &self,
         _child: SliverChildId,
         _grid_tile: Option<usize>,
+        _source: SliverKeepAliveSource,
         _keep_alive: bool,
     ) -> bool {
         false
     }
 
-    /// Retains an active editor independently of explicit KeepAlive.
-    #[doc(hidden)]
-    fn set_child_focus_keep_alive(
-        &self,
-        _child: SliverChildId,
-        _grid_tile: Option<usize>,
-        _keep_alive: bool,
-    ) -> bool {
-        false
-    }
     /// Pushes the ambient reduced-motion policy toward snap-capable
     /// descendants. The default ignores it; sequence delegates override it to
     /// reach headers nested behind transparent wrappers.

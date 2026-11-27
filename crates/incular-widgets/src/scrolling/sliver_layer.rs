@@ -194,26 +194,16 @@ impl RenderSliver for OpacityRenderSliver {
         self.inner.get_mut().set_child_extent(child, extent)
     }
 
-    fn set_child_keep_alive(
+    fn update_child_retention(
         &mut self,
         child: SliverChildId,
         grid_tile: Option<usize>,
+        source: super::SliverKeepAliveSource,
         keep_alive: bool,
     ) -> bool {
         self.inner
             .get_mut()
-            .set_child_keep_alive(child, grid_tile, keep_alive)
-    }
-
-    fn set_child_focus_keep_alive(
-        &mut self,
-        child: SliverChildId,
-        grid_tile: Option<usize>,
-        keep_alive: bool,
-    ) -> bool {
-        self.inner
-            .get_mut()
-            .set_child_focus_keep_alive(child, grid_tile, keep_alive)
+            .update_child_retention(child, grid_tile, source, keep_alive)
     }
 
     fn revision(&self) -> u64 {

@@ -125,7 +125,34 @@ impl NotificationDispatcher {
     }
 }
 
-struct ListenerState(Rc<ListenerNode>);
+pub(crate) struct ListenerState(Rc<ListenerNode>);
+
+impl ListenerState {
+    pub(crate) fn new() -> Self {
+        Self(Rc::new(ListenerNode {
+            handlers: RefCell::new(Rc::from([])),
+            parent: RefCell::new(None),
+        }))
+    }
+
+    pub(crate) fn wrap(
+        &self,
+        context: &BuildContext<'_>,
+        handlers: Rc<[NotificationHandler]>,
+        child: Widget,
+    ) -> Widget {
+        *self.0.handlers.borrow_mut() = handlers;
+        *self.0.parent.borrow_mut() = context
+            .find_shared::<ListenerScope>()
+            .map(|scope| scope.0.clone());
+        Widget::shared_environment_scope(Rc::new(ListenerScope(self.0.clone())), child)
+    }
+
+    pub(crate) fn detach(&self) {
+        self.0.handlers.replace(Rc::from([]));
+        self.0.parent.borrow_mut().take();
+    }
+}
 
 impl crate::tree::RetainedState for ListenerState {
     fn rebind_revision(&self, _revision: Rc<std::cell::Cell<u64>>) {}
@@ -135,20 +162,8 @@ impl crate::tree::RetainedState for ListenerState {
 pub(crate) fn listen(handlers: Vec<NotificationHandler>, child: Widget) -> Widget {
     let handlers: Rc<[NotificationHandler]> = handlers.into();
     Widget::retained_builder(
-        |_| {
-            ListenerState(Rc::new(ListenerNode {
-                handlers: RefCell::new(Rc::from(Vec::new())),
-                parent: RefCell::new(None),
-            }))
-        },
-        move |state, context, _| {
-            let node = &state.0;
-            *node.handlers.borrow_mut() = handlers.clone();
-            *node.parent.borrow_mut() = context
-                .find_shared::<ListenerScope>()
-                .map(|scope| scope.0.clone());
-            Widget::shared_environment_scope(Rc::new(ListenerScope(node.clone())), child.clone())
-        },
+        |_| ListenerState::new(),
+        move |state, context, _| state.wrap(context, handlers.clone(), child.clone()),
         false,
     )
 }

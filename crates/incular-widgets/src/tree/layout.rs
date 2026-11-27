@@ -105,6 +105,7 @@ impl WidgetTree {
         self.apply_inherited_invalidations();
         self.refresh_application_fonts();
         self.refresh_text_fields();
+        self.apply_automatic_keep_alive_changes();
         self.refresh_sliver_ranges();
         self.refresh_wheel_ranges();
         self.refresh_stateful_layout_builders();
@@ -112,6 +113,8 @@ impl WidgetTree {
             self.layout_render(root, constraints)?;
         }
         self.resolve_transient_placements(constraints)?;
+        // New descendants can request retention during their first build.
+        self.apply_automatic_keep_alive_changes();
         // Builders have materialized: a global-keyed element nobody took
         // over in this frame is gone.
         self.finalize_parked_global_elements();

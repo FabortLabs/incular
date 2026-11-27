@@ -33,6 +33,7 @@ pub use animated::{
     AnimatedList, AnimatedListController, AnimatedRemovedItemBuilder, SliverAnimatedGrid,
     SliverAnimatedGridController,
 };
+pub(crate) use keep_alive::AutomaticKeepAliveQueue;
 pub use keep_alive::{
     AutomaticKeepAlive, KeepAlive, KeepAliveHandle, KeepAliveNotification, KeepAliveRegistry,
 };

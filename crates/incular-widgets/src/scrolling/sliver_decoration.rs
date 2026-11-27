@@ -203,27 +203,15 @@ impl RenderSliver for DecoratedRenderSliver {
         }
     }
 
-    fn set_child_keep_alive(
+    fn update_child_retention(
         &mut self,
         child: SliverChildId,
         tile: Option<usize>,
+        source: super::SliverKeepAliveSource,
         keep: bool,
     ) -> bool {
         Self::content_id(child)
-            .is_some_and(|child| self.inner.get_mut().set_child_keep_alive(child, tile, keep))
-    }
-
-    fn set_child_focus_keep_alive(
-        &mut self,
-        child: SliverChildId,
-        tile: Option<usize>,
-        keep: bool,
-    ) -> bool {
-        Self::content_id(child).is_some_and(|child| {
-            self.inner
-                .get_mut()
-                .set_child_focus_keep_alive(child, tile, keep)
-        })
+            .is_some_and(|child| self.inner.get_mut().update_child_retention(child, tile, source, keep))
     }
 
     fn revision(&self) -> u64 {

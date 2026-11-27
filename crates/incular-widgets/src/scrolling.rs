@@ -119,6 +119,8 @@ pub use sliver_clip::{ClipOverlapBehavior, SliverClipRRect, SliverClipRect};
 mod sliver_lists;
 mod sliver_semantics;
 
+#[doc(hidden)]
+pub use geometry::SliverKeepAliveSource;
 pub use geometry::{
     RenderSliver, ScrollCacheExtent, SliverChildId, SliverChildLayout, SliverChildPlacement,
     SliverLayout, SliverPaintOrder, SliverScrollDependency, SliverViewportConfig,

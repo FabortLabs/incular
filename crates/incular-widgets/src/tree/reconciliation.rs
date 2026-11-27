@@ -8,6 +8,7 @@ use super::rendering::{carry_replaced_transition, render_kind};
 use super::widget::WidgetChildren;
 use crate::overscroll_indicator::ScrollOverscrollIndicator;
 use crate::scroll_behavior::OverscrollStyle;
+use crate::scrolling::SliverKeepAliveSource;
 
 /// Semantics-only reactive sources use the same retained render consumer,
 /// so neither rebuild nor measurement is scheduled when an inset changes.
@@ -381,7 +382,11 @@ impl WidgetTree {
                 },
             );
         let mut build = if boundary {
-            parent_build.boundary_for_consumer(build_consumer)
+            let context = parent_build.boundary_for_consumer(build_consumer);
+            // Framework parent-data work stays local to this retained tree
+            // even if the application resets its inherited values here.
+            context.insert(self.automatic_keep_alives.clone());
+            context
         } else {
             parent_build.for_related_consumer(build_consumer)
         };
@@ -514,7 +519,7 @@ impl WidgetTree {
         // descendants after reconciliation had just avoided that work.
         if changed {
             if old_request != new_request {
-                self.apply_materialized_keep_alive(id, new_request, false);
+                self.apply_materialized_keep_alive(id, new_request, SliverKeepAliveSource::Explicit);
             }
             self.refresh_notification_listeners();
         }
@@ -523,7 +528,12 @@ impl WidgetTree {
 
     /// KeepAlive is parent data. Route a local update to its materializer
     /// before the next viewport pass so rebuilding the list is unnecessary.
-    fn apply_materialized_keep_alive(&mut self, id: ElementId, keep_alive: bool, focus: bool) {
+    fn apply_materialized_keep_alive(
+        &mut self,
+        id: ElementId,
+        keep_alive: bool,
+        source: SliverKeepAliveSource,
+    ) {
         let Some(parent) = self.parent(id) else {
             return;
         };
@@ -554,17 +564,25 @@ impl WidgetTree {
         else {
             return;
         };
-        let changed = if focus {
-            config
-                .delegate
-                .set_child_focus_keep_alive(scoped, grid_tile, keep_alive)
-        } else {
-            config
-                .delegate
-                .set_child_keep_alive(scoped, grid_tile, keep_alive)
-        };
+        let changed = config
+            .delegate
+            .update_child_retention(scoped, grid_tile, source, keep_alive);
         if changed {
             self.mark_render_dirty(render, DirtyFlags::LAYOUT, true);
+        }
+    }
+
+    pub(super) fn apply_automatic_keep_alive_changes(&mut self) {
+        for (consumer, keep_alive) in self.automatic_keep_alives.take() {
+            let Some(&(id, InheritedDependencyKind::Build)) = self.inherited_consumers.get(&consumer)
+            else {
+                continue;
+            };
+            if self.elements.get(id.0).is_some_and(|element| {
+                element.widget.has_automatic_keep_alive_scope()
+            }) {
+                self.apply_materialized_keep_alive(id, keep_alive, SliverKeepAliveSource::Automatic);
+            }
         }
     }
 
@@ -582,7 +600,7 @@ impl WidgetTree {
                     RenderKind::SliverViewport { .. }
                 )
             {
-                self.apply_materialized_keep_alive(child, focused, true);
+                self.apply_materialized_keep_alive(child, focused, SliverKeepAliveSource::Focus);
             }
             child = parent;
         }

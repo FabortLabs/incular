@@ -157,30 +157,18 @@ impl RenderSliver for SemanticsRenderSliver {
         self.inner.get_mut().reveal_child(child, rect, options)
     }
 
-    fn set_child_keep_alive(
+    fn update_child_retention(
         &mut self,
         child: SliverChildId,
         grid_tile: Option<usize>,
+        source: super::SliverKeepAliveSource,
         keep_alive: bool,
     ) -> bool {
         !is_semantics_anchor(child)
             && self
                 .inner
                 .borrow_mut()
-                .set_child_keep_alive(child, grid_tile, keep_alive)
-    }
-
-    fn set_child_focus_keep_alive(
-        &mut self,
-        child: SliverChildId,
-        grid_tile: Option<usize>,
-        keep_alive: bool,
-    ) -> bool {
-        !is_semantics_anchor(child)
-            && self
-                .inner
-                .borrow_mut()
-                .set_child_focus_keep_alive(child, grid_tile, keep_alive)
+                .update_child_retention(child, grid_tile, source, keep_alive)
     }
 
     fn scroll_layout_dependency(&self) -> SliverScrollDependency {

@@ -26,6 +26,8 @@ impl WidgetTree {
     #[must_use]
     pub fn with_text_engine(text_engine: TextEngine) -> Self {
         let dependency_root = DependencyContext::new();
+        let automatic_keep_alives = crate::advanced_slivers::AutomaticKeepAliveQueue::default();
+        dependency_root.insert(automatic_keep_alives.clone());
         let environment = RuntimeEnvironment::default();
         super::context::install_runtime_environment(&dependency_root, &environment);
         Self {
@@ -76,6 +78,7 @@ impl WidgetTree {
             lifted_scene: None,
             static_selections: FastHashMap::default(),
             dependency_root,
+            automatic_keep_alives,
             inherited_consumers: FastHashMap::default(),
             environment,
             transient_placements: HashMap::new(),
@@ -119,11 +122,11 @@ impl WidgetTree {
     }
 
     /// Whether a value a build read (an inherited value or another tracked
-    /// dependency such as a `UiFuture`) changed since the last layout: the
-    /// next layout rebuilds its readers.
+    /// dependency such as a `UiFuture`) changed since the last layout or
+    /// mounted automatic keep-alive parent data needs to be applied.
     #[must_use]
     pub fn has_dirty_dependencies(&self) -> bool {
-        self.dependency_root.has_dirty_consumers()
+        self.dependency_root.has_dirty_consumers() || !self.automatic_keep_alives.is_empty()
     }
 
     /// Sets the ambient runtime environment (safe insets, scaling, etc.) and invalidates layout if needed.

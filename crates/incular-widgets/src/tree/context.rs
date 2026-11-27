@@ -287,6 +287,10 @@ impl<'a> BuildContext<'a> {
         Self { inner }
     }
 
+    pub(crate) fn consumer_id(&self) -> incular_core::ConsumerId {
+        self.inner.consumer_id()
+    }
+
     /// Reads the nearest inherited value and registers this element as a
     /// dependent of the exact retained scope that supplied it.
     #[must_use]

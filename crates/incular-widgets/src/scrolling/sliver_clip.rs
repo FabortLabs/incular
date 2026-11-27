@@ -618,24 +618,14 @@ impl RenderSliver for ClipRenderSliver {
         self.inner.get_mut().invalidate_child_measurement(child);
     }
 
-    fn set_child_keep_alive(
+    fn update_child_retention(
         &mut self,
         child: SliverChildId,
         tile: Option<usize>,
+        source: super::SliverKeepAliveSource,
         keep: bool,
     ) -> bool {
-        self.inner.get_mut().set_child_keep_alive(child, tile, keep)
-    }
-
-    fn set_child_focus_keep_alive(
-        &mut self,
-        child: SliverChildId,
-        tile: Option<usize>,
-        keep: bool,
-    ) -> bool {
-        self.inner
-            .get_mut()
-            .set_child_focus_keep_alive(child, tile, keep)
+        self.inner.get_mut().update_child_retention(child, tile, source, keep)
     }
 
     fn reveal_child(

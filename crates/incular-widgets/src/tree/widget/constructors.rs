@@ -354,10 +354,34 @@ impl Widget {
         self.semantic_properties().keep_alive
     }
 
+    pub(crate) fn with_automatic_keep_alive_scope(mut self) -> Self {
+        self.semantic_properties_mut().automatic_keep_alive_scope = true;
+        self
+    }
+
+    #[must_use]
+    pub(crate) fn has_automatic_keep_alive_scope(&self) -> bool {
+        self.semantic_properties().automatic_keep_alive_scope
+    }
+
+    pub(crate) fn with_automatic_keep_alive_request(mut self, keep_alive: bool) -> Self {
+        if self.automatic_keep_alive_request() != keep_alive {
+            self.semantic_properties_mut().automatic_keep_alive = keep_alive;
+        }
+        self
+    }
+
+    #[must_use]
+    pub(crate) fn automatic_keep_alive_request(&self) -> bool {
+        self.semantic_properties().automatic_keep_alive
+    }
+
     /// Whether this descriptor asks its sliver to keep it alive.
     #[must_use]
     pub(crate) fn keep_alive_request(&self) -> bool {
-        self.explicit_keep_alive_request() || self.focus_keep_alive_request()
+        self.explicit_keep_alive_request()
+            || self.focus_keep_alive_request()
+            || self.automatic_keep_alive_request()
     }
 
     #[doc(hidden)]

@@ -1632,6 +1632,7 @@ pub struct WidgetTree {
     lifted_scene: Option<(DisplayList, DisplayList)>,
     static_selections: FastHashMap<ElementId, StaticSelection>,
     dependency_root: DependencyContext,
+    automatic_keep_alives: crate::advanced_slivers::AutomaticKeepAliveQueue,
     inherited_consumers: FastHashMap<ConsumerId, (ElementId, InheritedDependencyKind)>,
     environment: RuntimeEnvironment,
     transient_placements:

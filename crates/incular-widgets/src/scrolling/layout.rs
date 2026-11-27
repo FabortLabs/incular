@@ -173,30 +173,25 @@ fn fixed_extent_cache_range(
 fn set_cached_keep_alive(
     widgets: &mut HashMap<usize, Widget>,
     index: usize,
+    source: SliverKeepAliveSource,
     keep_alive: bool,
 ) -> bool {
     let Some(widget) = widgets.get_mut(&index) else {
         return false;
     };
-    if widget.explicit_keep_alive_request() == keep_alive {
-        return false;
-    }
-    *widget = widget.clone().with_keep_alive_request(keep_alive);
-    true
-}
-
-fn set_cached_focus_keep_alive(
-    widgets: &mut HashMap<usize, Widget>,
-    index: usize,
-    keep_alive: bool,
-) -> bool {
-    let Some(widget) = widgets.get_mut(&index) else {
-        return false;
+    let old = match source {
+        SliverKeepAliveSource::Explicit => widget.explicit_keep_alive_request(),
+        SliverKeepAliveSource::Focus => widget.focus_keep_alive_request(),
+        SliverKeepAliveSource::Automatic => widget.automatic_keep_alive_request(),
     };
-    if widget.focus_keep_alive_request() == keep_alive {
+    if old == keep_alive {
         return false;
     }
-    *widget = widget.clone().with_focus_keep_alive_request(keep_alive);
+    *widget = match source {
+        SliverKeepAliveSource::Explicit => widget.clone().with_keep_alive_request(keep_alive),
+        SliverKeepAliveSource::Focus => widget.clone().with_focus_keep_alive_request(keep_alive),
+        SliverKeepAliveSource::Automatic => widget.clone().with_automatic_keep_alive_request(keep_alive),
+    };
     true
 }
 
@@ -271,28 +266,17 @@ impl FixedExtentRenderSliver {
 }
 
 impl RenderSliver for FixedExtentRenderSliver {
-    fn set_child_keep_alive(
+    fn update_child_retention(
         &mut self,
         child: SliverChildId,
         grid_tile: Option<usize>,
+        source: super::SliverKeepAliveSource,
         keep_alive: bool,
     ) -> bool {
         grid_tile.is_none()
             && child
                 .item_index()
-                .is_some_and(|index| set_cached_keep_alive(&mut self.widgets, index, keep_alive))
-    }
-
-    fn set_child_focus_keep_alive(
-        &mut self,
-        child: SliverChildId,
-        grid_tile: Option<usize>,
-        keep_alive: bool,
-    ) -> bool {
-        grid_tile.is_none()
-            && child.item_index().is_some_and(|index| {
-                set_cached_focus_keep_alive(&mut self.widgets, index, keep_alive)
-            })
+                .is_some_and(|index| set_cached_keep_alive(&mut self.widgets, index, source, keep_alive))
     }
 
     fn child_count(&self) -> Option<usize> {
@@ -373,23 +357,14 @@ impl GridRenderSliver {
 }
 
 impl RenderSliver for GridRenderSliver {
-    fn set_child_keep_alive(
+    fn update_child_retention(
         &mut self,
         _child: SliverChildId,
         grid_tile: Option<usize>,
+        source: super::SliverKeepAliveSource,
         keep_alive: bool,
     ) -> bool {
-        grid_tile.is_some_and(|index| set_cached_keep_alive(&mut self.widgets, index, keep_alive))
-    }
-
-    fn set_child_focus_keep_alive(
-        &mut self,
-        _child: SliverChildId,
-        grid_tile: Option<usize>,
-        keep_alive: bool,
-    ) -> bool {
-        grid_tile
-            .is_some_and(|index| set_cached_focus_keep_alive(&mut self.widgets, index, keep_alive))
+        grid_tile.is_some_and(|index| set_cached_keep_alive(&mut self.widgets, index, source, keep_alive))
     }
 
     fn child_count(&self) -> Option<usize> {
@@ -648,28 +623,17 @@ impl VariableExtentRenderSliver {
 }
 
 impl RenderSliver for VariableExtentRenderSliver {
-    fn set_child_keep_alive(
+    fn update_child_retention(
         &mut self,
         child: SliverChildId,
         grid_tile: Option<usize>,
+        source: super::SliverKeepAliveSource,
         keep_alive: bool,
     ) -> bool {
         grid_tile.is_none()
             && child
                 .item_index()
-                .is_some_and(|index| set_cached_keep_alive(&mut self.widgets, index, keep_alive))
-    }
-
-    fn set_child_focus_keep_alive(
-        &mut self,
-        child: SliverChildId,
-        grid_tile: Option<usize>,
-        keep_alive: bool,
-    ) -> bool {
-        grid_tile.is_none()
-            && child.item_index().is_some_and(|index| {
-                set_cached_focus_keep_alive(&mut self.widgets, index, keep_alive)
-            })
+                .is_some_and(|index| set_cached_keep_alive(&mut self.widgets, index, source, keep_alive))
     }
 
     fn child_count(&self) -> Option<usize> {
@@ -1983,7 +1947,7 @@ impl ViewportExtentRenderSliver {
             {
                 self.widgets.insert(
                     destination,
-                    widget.with_focus_keep_alive_request(old.focus_keep_alive_request()),
+                    transfer_retained_keep_alive_sources(widget, old, true),
                 );
             }
         }
@@ -1991,28 +1955,17 @@ impl ViewportExtentRenderSliver {
 }
 
 impl RenderSliver for ViewportExtentRenderSliver {
-    fn set_child_keep_alive(
+    fn update_child_retention(
         &mut self,
         child: SliverChildId,
         grid_tile: Option<usize>,
+        source: super::SliverKeepAliveSource,
         keep_alive: bool,
     ) -> bool {
         grid_tile.is_none()
             && child
                 .item_index()
-                .is_some_and(|index| set_cached_keep_alive(&mut self.widgets, index, keep_alive))
-    }
-
-    fn set_child_focus_keep_alive(
-        &mut self,
-        child: SliverChildId,
-        grid_tile: Option<usize>,
-        keep_alive: bool,
-    ) -> bool {
-        grid_tile.is_none()
-            && child.item_index().is_some_and(|index| {
-                set_cached_focus_keep_alive(&mut self.widgets, index, keep_alive)
-            })
+                .is_some_and(|index| set_cached_keep_alive(&mut self.widgets, index, source, keep_alive))
     }
 
     fn child_count(&self) -> Option<usize> {
@@ -2612,26 +2565,16 @@ impl RenderSliver for PaddingRenderSliver {
         self.inner.get_mut().reveal_child(child, rect, options)
     }
 
-    fn set_child_keep_alive(
+    fn update_child_retention(
         &mut self,
         child: SliverChildId,
         grid_tile: Option<usize>,
+        source: super::SliverKeepAliveSource,
         keep_alive: bool,
     ) -> bool {
         self.inner
             .borrow_mut()
-            .set_child_keep_alive(child, grid_tile, keep_alive)
-    }
-
-    fn set_child_focus_keep_alive(
-        &mut self,
-        child: SliverChildId,
-        grid_tile: Option<usize>,
-        keep_alive: bool,
-    ) -> bool {
-        self.inner
-            .borrow_mut()
-            .set_child_focus_keep_alive(child, grid_tile, keep_alive)
+            .update_child_retention(child, grid_tile, source, keep_alive)
     }
 
     fn scroll_layout_dependency(&self) -> SliverScrollDependency {
@@ -2848,12 +2791,8 @@ impl RenderSliver for ConstrainedCrossAxisRenderSliver {
         self.inner.get_mut().invalidate_child_measurement(child);
     }
 
-    fn set_child_keep_alive(&mut self, child: SliverChildId, tile: Option<usize>, keep: bool) -> bool {
-        self.inner.get_mut().set_child_keep_alive(child, tile, keep)
-    }
-
-    fn set_child_focus_keep_alive(&mut self, child: SliverChildId, tile: Option<usize>, keep: bool) -> bool {
-        self.inner.get_mut().set_child_focus_keep_alive(child, tile, keep)
+    fn update_child_retention(&mut self, child: SliverChildId, tile: Option<usize>, source: super::SliverKeepAliveSource, keep: bool) -> bool {
+        self.inner.get_mut().update_child_retention(child, tile, source, keep)
     }
 
     fn revision(&self) -> u64 { self.inner.borrow().revision() }
@@ -2958,26 +2897,16 @@ impl RenderSliver for OverlapAbsorberRenderSliver {
         self.inner.get_mut().reveal_child(child, rect, options)
     }
 
-    fn set_child_keep_alive(
+    fn update_child_retention(
         &mut self,
         child: SliverChildId,
         grid_tile: Option<usize>,
+        source: super::SliverKeepAliveSource,
         keep_alive: bool,
     ) -> bool {
         self.inner
             .borrow_mut()
-            .set_child_keep_alive(child, grid_tile, keep_alive)
-    }
-
-    fn set_child_focus_keep_alive(
-        &mut self,
-        child: SliverChildId,
-        grid_tile: Option<usize>,
-        keep_alive: bool,
-    ) -> bool {
-        self.inner
-            .borrow_mut()
-            .set_child_focus_keep_alive(child, grid_tile, keep_alive)
+            .update_child_retention(child, grid_tile, source, keep_alive)
     }
 
     fn scroll_layout_dependency(&self) -> SliverScrollDependency {
@@ -3044,26 +2973,16 @@ impl RenderSliver for WidgetWrapRenderSliver {
         self.inner.get_mut().reveal_child(child, rect, options)
     }
 
-    fn set_child_keep_alive(
+    fn update_child_retention(
         &mut self,
         child: SliverChildId,
         grid_tile: Option<usize>,
+        source: super::SliverKeepAliveSource,
         keep_alive: bool,
     ) -> bool {
         self.inner
             .borrow_mut()
-            .set_child_keep_alive(child, grid_tile, keep_alive)
-    }
-
-    fn set_child_focus_keep_alive(
-        &mut self,
-        child: SliverChildId,
-        grid_tile: Option<usize>,
-        keep_alive: bool,
-    ) -> bool {
-        self.inner
-            .borrow_mut()
-            .set_child_focus_keep_alive(child, grid_tile, keep_alive)
+            .update_child_retention(child, grid_tile, source, keep_alive)
     }
 
     fn scroll_layout_dependency(&self) -> SliverScrollDependency {
@@ -3293,29 +3212,17 @@ impl RenderSliver for SequenceRenderSliver {
             .reveal_child(child.local(), rect, options)
     }
 
-    fn set_child_keep_alive(
+    fn update_child_retention(
         &mut self,
         child: SliverChildId,
         grid_tile: Option<usize>,
+        source: super::SliverKeepAliveSource,
         keep_alive: bool,
     ) -> bool {
         self.children.get(child.scope()).is_some_and(|sliver| {
             sliver
                 .borrow_mut()
-                .set_child_keep_alive(child.local(), grid_tile, keep_alive)
-        })
-    }
-
-    fn set_child_focus_keep_alive(
-        &mut self,
-        child: SliverChildId,
-        grid_tile: Option<usize>,
-        keep_alive: bool,
-    ) -> bool {
-        self.children.get(child.scope()).is_some_and(|sliver| {
-            sliver
-                .borrow_mut()
-                .set_child_focus_keep_alive(child.local(), grid_tile, keep_alive)
+                .update_child_retention(child.local(), grid_tile, source, keep_alive)
         })
     }
 
@@ -3559,10 +3466,17 @@ fn transfer_keep_alives(
         if !new.keep_alive_request() || same_child {
             fresh.insert(
                 destination,
-                new.with_focus_keep_alive_request(same_child && old.focus_keep_alive_request()),
+                transfer_retained_keep_alive_sources(new, old, same_child),
             );
         }
     }
+}
+
+fn transfer_retained_keep_alive_sources(new: Widget, old: &Widget, same_child: bool) -> Widget {
+    let automatic = same_child && new.has_automatic_keep_alive_scope()
+        && old.automatic_keep_alive_request();
+    new.with_focus_keep_alive_request(same_child && old.focus_keep_alive_request())
+        .with_automatic_keep_alive_request(automatic)
 }
 
 fn adopt_indexed_keep_alives(
@@ -4076,26 +3990,16 @@ impl SequenceViewportDelegate {
 }
 
 impl SliverViewportDelegate for SequenceViewportDelegate {
-    fn set_child_keep_alive(
+    fn update_child_retention(
         &self,
         child: SliverChildId,
         grid_tile: Option<usize>,
+        source: super::SliverKeepAliveSource,
         keep_alive: bool,
     ) -> bool {
         self.sequence
             .borrow_mut()
-            .set_child_keep_alive(child, grid_tile, keep_alive)
-    }
-
-    fn set_child_focus_keep_alive(
-        &self,
-        child: SliverChildId,
-        grid_tile: Option<usize>,
-        keep_alive: bool,
-    ) -> bool {
-        self.sequence
-            .borrow_mut()
-            .set_child_focus_keep_alive(child, grid_tile, keep_alive)
+            .update_child_retention(child, grid_tile, source, keep_alive)
     }
 
     fn scroll_layout_dependency(&self) -> SliverScrollDependency {
