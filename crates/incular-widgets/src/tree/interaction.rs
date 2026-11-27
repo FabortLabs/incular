@@ -1051,7 +1051,7 @@ impl WidgetTree {
                     {
                         recognizer.set_delayed_drag(Some(delay));
                     }
-                    if callbacks.on_double_tap.is_some() {
+                    if callbacks.has_double_tap_callbacks() {
                         let memory = self
                             .input
                             .tap_memories

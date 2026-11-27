@@ -36,15 +36,21 @@ impl GestureCallbacks {
             || self.on_tap_cancel.is_some()
     }
 
+    #[doc(hidden)]
+    #[must_use]
+    pub fn has_double_tap_callbacks(&self) -> bool {
+        self.on_double_tap.is_some()
+            || self.on_double_tap_down.is_some()
+            || self.on_double_tap_cancel.is_some()
+    }
+
     /// Whether this callback set contributes an exclusive single-pointer
     /// recognizer to a gesture arena. Scale is intentionally separate so a
     /// pending pinch can coexist until one recognizer claims the stream.
     #[must_use]
     pub fn has_pointer_recognizer(&self) -> bool {
         self.has_tap_callbacks()
-            || self.on_double_tap.is_some()
-            || self.on_double_tap_down.is_some()
-            || self.on_double_tap_cancel.is_some()
+            || self.has_double_tap_callbacks()
             || self.on_long_press_down.is_some()
             || self.on_long_press_cancel.is_some()
             || self.on_long_press.is_some()
@@ -136,7 +142,7 @@ pub struct PointerGestureRecognizer {
     /// tap went down.
     last_tap_down: Option<(Instant, Offset, u32)>,
     /// The current press is the second tap of a double tap.
-    double_tap_second: bool,
+    double_tap_second: Cell<bool>,
     /// The current press is too far from the first tap to join its double
     /// tap (`kDoubleTapSlop`), so the first tap stays pending without it.
     double_tap_ignored: bool,
@@ -286,7 +292,7 @@ impl PointerGestureRecognizer {
             down_buttons: None,
             last_tap: None,
             last_tap_down: None,
-            double_tap_second: false,
+            double_tap_second: Cell::new(false),
             double_tap_ignored: false,
             double_tap_moved: false,
             pending_tap_down: None,
@@ -349,8 +355,22 @@ impl PointerGestureRecognizer {
     fn reject_double_tap_press(&mut self) {
         // Flutter resets a pending first tap even when a second press
         // is rejected by the device or allowed-buttons filter.
+        self.cancel_double_tap();
         self.forget_first_tap();
         self.save_tap_memory();
+    }
+
+    // Only a press that qualified as the second tap reaches the cancellation
+    // callback. Resolving the flag before invoking user code makes it one-shot.
+    fn cancel_double_tap(&mut self) {
+        if self.double_tap_second.replace(false) {
+            self.double_tap_moved = true;
+            self.forget_first_tap();
+            self.save_tap_memory();
+            if let Some(callback) = &self.callbacks.on_double_tap_cancel {
+                callback();
+            }
+        }
     }
 
     fn save_tap_memory(&self) {
@@ -625,6 +645,7 @@ impl PointerGestureRecognizer {
     /// The recognizer lost its gesture arena (Flutter `rejectGesture`): a
     /// tap that already reported `onTapDown` is cancelled.
     pub fn reject(&mut self) {
+        self.cancel_double_tap();
         self.tap_rejected = true;
         self.tap_cancel(TapCancelReason::Forced);
         self.long_press_cancel();
@@ -1089,9 +1110,9 @@ impl PointerGestureRecognizer {
     /// this decision, even if they belong to a different detector.
     #[must_use]
     pub fn first_tap_hold_deadline(&self) -> Option<Instant> {
-        if self.callbacks.on_double_tap.is_some()
+        if self.callbacks.has_double_tap_callbacks()
             && !self.double_tap_ignored
-            && !self.double_tap_second
+            && !self.double_tap_second.get()
             && !self.double_tap_moved
         {
             self.last_tap?.checked_add(Self::DOUBLE_TAP_TIMEOUT)
@@ -1121,7 +1142,8 @@ impl PointerGestureRecognizer {
                 // mask; a custom filter can opt into other masks. This does not
                 // prevent a combined member from handling a secondary single tap.
                 self.double_tap_ignored =
-                    self.allowed_buttons.is_none() && button != PRIMARY_POINTER_BUTTON;
+                    !self.callbacks.has_double_tap_callbacks()
+                        || (self.allowed_buttons.is_none() && button != PRIMARY_POINTER_BUTTON);
                 self.double_tap_moved = false;
                 if self.double_tap_ignored {
                     self.forget_first_tap();
@@ -1141,7 +1163,7 @@ impl PointerGestureRecognizer {
                         }
                     }
                 }
-                self.double_tap_second = is_double_tap;
+                self.double_tap_second.set(is_double_tap);
                 self.down = Some(event);
                 self.drag_cancel_pending = true;
                 self.velocity.clear();
@@ -1252,6 +1274,7 @@ impl PointerGestureRecognizer {
                 }
                 if distance > DOUBLE_TAP_TOUCH_SLOP {
                     self.double_tap_moved = true;
+                    self.cancel_double_tap();
                 }
                 if event.time.saturating_duration_since(down.time) >= PRESS_TIMEOUT
                     && !self.pan_started
@@ -1363,6 +1386,7 @@ impl PointerGestureRecognizer {
                 };
                 self.drag.pending_time = None;
                 if self.pan_started {
+                    self.cancel_double_tap();
                     return self
                         .drag_end(event.time)
                         .map_or(GestureDecision::Pending, GestureDecision::Accept);
@@ -1382,6 +1406,7 @@ impl PointerGestureRecognizer {
                     self.long_press_cancel();
                 }
                 if long_press_taken {
+                    self.cancel_double_tap();
                     self.tap_cancel(TapCancelReason::Forced);
                     let end = LongPressEndDetails {
                         global_position: event.position,
@@ -1404,9 +1429,7 @@ impl PointerGestureRecognizer {
                         };
                         GestureDecision::Accept(GestureAction::LongPress { start, end })
                     }
-                } else if self.double_tap_second
-                    && !self.double_tap_moved
-                    && self.callbacks.on_double_tap.is_some()
+                } else if self.double_tap_second.get() && !self.double_tap_moved
                 {
                     // The second tap qualified when it went down (within
                     // `kDoubleTapTimeout` and `kDoubleTapSlop` of the first)
@@ -1434,7 +1457,7 @@ impl PointerGestureRecognizer {
                         },
                         down_announced: std::mem::take(&mut self.tap_down_sent),
                     }));
-                    if !self.double_tap_ignored {
+                    if !self.double_tap_ignored && !self.double_tap_moved {
                         self.last_tap = Some(event.time);
                         self.last_tap_down = Some((
                             down.time,
@@ -1446,7 +1469,7 @@ impl PointerGestureRecognizer {
                 } else {
                     // Flutter `DoubleTapGestureRecognizer` keeps the first tap
                     // pending for a second one even without `onTap`.
-                    if self.callbacks.on_double_tap.is_some() && !self.double_tap_ignored {
+                    if !self.double_tap_ignored && !self.double_tap_moved {
                         self.last_tap = Some(event.time);
                         self.last_tap_down = Some((
                             down.time,
@@ -1458,6 +1481,7 @@ impl PointerGestureRecognizer {
                 }
             }
             PointerPhase::Cancel => {
+                self.cancel_double_tap();
                 self.drag.pending_time = None;
                 self.tap_cancel(self.tap_withdrawal_reason(TapCancelReason::Pointer));
                 self.long_press_cancel();
@@ -1525,11 +1549,10 @@ impl PointerGestureRecognizer {
                     .as_ref()
                     .map(|callback| invoke_tap_callback(TapCallbackKind::Tap, || callback()))
             }
-            GestureAction::DoubleTap => self
-                .callbacks
-                .on_double_tap
-                .as_ref()
-                .map(|callback| callback()),
+            GestureAction::DoubleTap => {
+                self.double_tap_second.set(false);
+                self.callbacks.on_double_tap.as_ref().map(|callback| callback())
+            }
             GestureAction::LongPress { start, end } => {
                 self.dispatch_long_press_start(start);
                 self.dispatch_long_press_end(end);
@@ -1607,9 +1630,7 @@ impl PointerGestureRecognizer {
     pub fn cancel(&mut self) {
         self.tap_cancel(self.tap_withdrawal_reason(TapCancelReason::Forced));
         self.long_press_cancel();
-        if let Some(callback) = &self.callbacks.on_double_tap_cancel {
-            callback();
-        }
+        self.cancel_double_tap();
         self.cancel_pending_drag();
         if let Some(callback) = &self.callbacks.on_cancel {
             callback();

@@ -222,3 +222,15 @@ TapDown, an inadmissible press cancels it once; a silent candidate
 stays silent. The runtime now invalidates the held tap before releasing
 the double-tap sequence on the hit route. All 22 focused native tests
 passed. These are mounted backfill cases, not new original credit.
+
+## Moved and cancelled double-tap contacts
+
+Four authored pinned comparisons and all 59 focused native tests
+passed. Before the fix all four native regressions failed. A moved
+first contact no longer seeds a false double tap. This fixture uses a
+qualifying inter-tap interval, so the minimum-time rule cannot hide an
+invalid first contact. A moved or cancelled second contact delivers
+one cancellation immediately and cannot be revived by moving back or
+releasing. Cancelling a first contact stays silent. Down and Cancel
+handlers still work if no completion handler is installed. These
+authored checks supplement rather than repeat original credit.
