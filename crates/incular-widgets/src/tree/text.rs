@@ -607,9 +607,13 @@ impl WidgetTree {
         let Some(selection) = spec.controller.selection_if_set() else {
             return false;
         };
+        let mut padding = spec.scroll_padding;
+        if let Some(handles) = &spec.selection_handles {
+            padding.bottom = padding.bottom.max(handles.caret_reveal_bottom_clearance());
+        }
         let Some(target) = self
             .editable_local_caret_rect(id, selection.extent, spec.controller.caret_affinity())
-            .and_then(|rect| spec.scroll_padding.inflate_rect(rect))
+            .and_then(|rect| padding.inflate_rect(rect))
         else {
             return false;
         };

@@ -3367,3 +3367,4 @@ packages/flutter/test/widgets/editable_text_test.dart	18321	selectPositionAt is 
 packages/flutter/test/widgets/editable_text_test.dart	18461	Composing region can truncate grapheme	paired-match	upstream-editable-composing-decoration.md#combining-marks-and-first-frame-autofocus
 packages/flutter/test/widgets/editable_text_test.dart	18368	selectWordsInRange is correct when EditableText is scaled	paired-match	upstream-scaled-editable-position.md#word-boundaries-and-affinity
 packages/flutter/test/widgets/editable_text_test.dart	18415	selectWordEdge is correct when EditableText is scaled	paired-match	upstream-scaled-editable-position.md#word-boundaries-and-affinity
+packages/flutter/test/widgets/editable_text_test.dart	18201	ShowCaretOnScreen is correctly scheduled within a SliverMainAxisGroup	paired-match	upstream-editable-selection-handle-reveal.md

@@ -440,7 +440,8 @@ pub use spell_check::{
 };
 pub use stateful_builder::{StateSetter, StatefulBuilder};
 pub use text_selection_handles::{
-    SELECTION_HANDLE_SIZE, TextSelectionHandle, TextSelectionHandles, TextSelectionHandlesBuilder,
+    SELECTION_HANDLE_SIZE, TextSelectionHandle, TextSelectionHandleLayout, TextSelectionHandles,
+    TextSelectionHandlesBuilder,
     TextSelectionHandlesState,
 };
 pub use transient::{

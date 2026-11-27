@@ -1192,6 +1192,7 @@ pub struct EditableText {
     /// Flutter's `contextMenuBuilder`; `None` shows no context menu.
     context_menu_builder: Option<crate::EditableTextContextMenuBuilder>,
     selection_handles_builder: Option<crate::TextSelectionHandlesBuilder>,
+    collapsed_selection_handle_layout: Option<crate::TextSelectionHandleLayout>,
     edit_transform: Option<super::specs::EditTransform>,
     edit_changed: Option<super::specs::EditChanged>,
     /// Flutter `spellCheckConfiguration`.
@@ -1262,6 +1263,7 @@ impl EditableText {
             toolbar_options: None,
             context_menu_builder: None,
             selection_handles_builder: None,
+            collapsed_selection_handle_layout: None,
             edit_transform: None,
             edit_changed: None,
             input_formatters: Vec::new(),
@@ -1746,6 +1748,18 @@ impl EditableText {
         self
     }
 
+    /// Supplies the layout of a custom collapsed handle built by the
+    /// selection-handles builder. Caret reveal and handle hit testing
+    /// account for its actual box and minimum interactive area.
+    #[must_use]
+    pub fn collapsed_selection_handle_layout(
+        mut self,
+        layout: crate::TextSelectionHandleLayout,
+    ) -> Self {
+        self.collapsed_selection_handle_layout = Some(layout);
+        self
+    }
+
     /// The toolbar options in effect.
     #[must_use]
     pub fn resolved_toolbar_options(&self) -> ToolbarOptions {
@@ -1979,6 +1993,7 @@ impl From<EditableText> for Widget {
             .and_then(crate::SpellCheckConfiguration::suggestions_toolbar_builder)
             .cloned();
         let selection_handles_builder = value.selection_handles_builder.clone();
+        let collapsed_selection_handle_layout = value.collapsed_selection_handle_layout;
         let legacy_selection_controls = context_menu_builder.is_none()
             && selection_handles_builder.is_none();
         let edit_transform = compose_edit_transform(
@@ -2098,6 +2113,7 @@ impl From<EditableText> for Widget {
                     with_menu(spec)
                 },
                 builder,
+                collapsed_selection_handle_layout,
             ),
             None => with_menu(spec),
         }
