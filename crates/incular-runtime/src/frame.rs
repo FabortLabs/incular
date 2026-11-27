@@ -42,8 +42,8 @@ use incular_semantics::{SemanticAction, SemanticNodeId};
 #[cfg(feature = "devtools")]
 use incular_widgets::internal::InvalidationCause;
 use incular_widgets::internal::{
-    ActionId, ButtonInk, Diagnostics, DirectionalFocusResolution, ElementId, MouseCursor, PlatformMenuBinding,
-    PointerDeviceKind, PointerHitTest, RawPointerEvent, SequentialFocusResolution, TextEditingController, TextRange,
+    ActionId, ButtonInk, ConvertedPointerEvent, ConvertedPointerKind, Diagnostics, DirectionalFocusResolution, ElementId, MouseCursor, PlatformMenuBinding,
+    PointerData, PointerDeviceKind, PointerEventConverter, PointerHitTest, PointerRouter, RawPointerEvent, SequentialFocusResolution, TextEditingController, TextRange,
     TextSelection, TreeError, WidgetTree, WindowInteraction,
 };
 use incular_widgets::{
@@ -269,6 +269,7 @@ pub struct Runtime {
     /// The contact currently allowed to drive single-contact controls. Other
     /// contacts still reach retained gesture regions for scale/pan input.
     pub(crate) legacy_pointer: Option<(u64, u64)>,
+    packet_buttons: HashMap<(u64, u64), u32>,
     pub(crate) last_pointer: Offset,
     hover_devices: hover_devices::HoverDevices,
     hover_press_hit: Option<HoverPressHit>,
@@ -541,6 +542,7 @@ impl Runtime {
             hovered_button: None,
             pressed_button: None,
             legacy_pointer: None,
+            packet_buttons: HashMap::new(),
             last_pointer: Offset::ZERO,
             hover_devices: hover_devices::HoverDevices::default(),
             hover_press_hit: None,
@@ -1913,7 +1915,7 @@ impl Runtime {
         }
         let mut ready = std::mem::take(&mut self.touch_resampling.ready);
         for event in ready.drain(..) {
-            let _ = self.dispatch_raw_pointer_immediately(event);
+            let _ = self.dispatch_raw_pointer_immediately(event, false);
         }
         self.touch_resampling.ready = ready;
     }
@@ -1924,10 +1926,88 @@ impl Runtime {
         if self.enqueue_touch_sample(event) {
             return None;
         }
-        self.dispatch_raw_pointer_immediately(event)
+        self.dispatch_raw_pointer_immediately(event, false)
     }
 
-    fn dispatch_raw_pointer_immediately(&mut self, event: RawPointerEvent) -> Option<EventTarget> {
+    /// Global pointer routes for this retained view, shared with its mounted
+    /// listeners and recognizers. Device add/remove traverse this table only.
+    #[must_use]
+    pub fn pointer_router(&self) -> PointerRouter {
+        self.tree.pointer_router()
+    }
+
+    /// Converts a host packet for this runtime's view and routes each
+    /// supported record through the retained input path. Inputs addressed
+    /// to any other view are ignored. Native adapters that already supply
+    /// logical events should continue to use the ordinary input methods.
+    pub fn handle_pointer_data_packet(
+        &mut self,
+        view_id: u64,
+        device_pixel_ratio: f64,
+        records: impl IntoIterator<Item = PointerData>,
+    ) {
+        let converted = PointerEventConverter::expand(records, |id| {
+            (id == view_id).then_some(device_pixel_ratio)
+        });
+        for event in converted {
+            self.handle_converted_pointer_event(event);
+        }
+    }
+
+    fn handle_converted_pointer_event(&mut self, input: ConvertedPointerEvent) {
+        match input.kind {
+            ConvertedPointerKind::Contact { mut event, .. } => {
+                let key = (event.device, event.pointer);
+                match event.phase {
+                    PointerPhase::Down => {
+                        let previous = self.packet_buttons.insert(key, event.buttons).unwrap_or(0);
+                        let pressed = event.buttons & !previous;
+                        event.button = (pressed.count_ones() == 1).then_some(pressed);
+                    }
+                    PointerPhase::Up => {
+                        let Some(previous) = self.packet_buttons.remove(&key) else {
+                            return;
+                        };
+                        let released = previous & !event.buttons;
+                        event.button = (released.count_ones() == 1).then_some(released);
+                        if event.buttons != 0 {
+                            self.packet_buttons.insert(key, event.buttons);
+                        }
+                    }
+                    PointerPhase::Cancel => {
+                        if self.packet_buttons.remove(&key).is_none() {
+                            return;
+                        }
+                    }
+                    PointerPhase::Move if event.down && !self.packet_buttons.contains_key(&key) => {
+                        return;
+                    }
+                    _ => {}
+                }
+                if !self.enqueue_touch_sample(event) {
+                    let _ = self.dispatch_raw_pointer_immediately(event, true);
+                }
+            }
+            ConvertedPointerKind::Scroll(event) => {
+                let _ = self.handle_input_at(
+                    InputEvent::ScrollAt { position: event.position, delta: event.scroll_delta },
+                    event.time,
+                );
+            }
+            ConvertedPointerKind::PanZoom { event, .. } => {
+                let _ = self.handle_input_at(InputEvent::PointerPanZoom(event), event.time);
+            }
+            // The retained window does not yet consume these signal kinds;
+            // direct embedders can still observe them from the converter.
+            ConvertedPointerKind::ScrollInertiaCancel(_) | ConvertedPointerKind::Scale { .. } => {}
+        }
+    }
+
+    fn dispatch_raw_pointer_immediately(
+        &mut self,
+        event: RawPointerEvent,
+        measured_delta: bool,
+    ) -> Option<EventTarget> {
         let traced_at = incular_core::time::Instant::now();
         let diagnostic = InputEvent::PointerWithMetadata {
             pointer: event.pointer,
@@ -1945,7 +2025,7 @@ impl Runtime {
             diagnostic_input_trigger,
         );
         let previous_clock = self.input_clock.replace(event.time);
-        let result = self.handle_pointer_input(event, true);
+        let result = self.handle_pointer_input(event, true, measured_delta);
         self.input_clock = previous_clock;
         self.pending_event_processing_us = self
             .pending_event_processing_us
@@ -2126,7 +2206,7 @@ impl Runtime {
         if self.enqueue_touch_sample(raw_event) {
             return None;
         }
-        self.handle_pointer_input(raw_event, metadata_rich)
+        self.handle_pointer_input(raw_event, metadata_rich, false)
     }
 
     fn handle_hover_device_event(&mut self, event: HoverDeviceEvent) {
@@ -2202,8 +2282,9 @@ impl Runtime {
         &mut self,
         raw_event: RawPointerEvent,
         metadata_rich: bool,
+        measured_delta: bool,
     ) -> Option<EventTarget> {
-        let result = self.route_pointer_input(raw_event, metadata_rich);
+        let result = self.route_pointer_input(raw_event, metadata_rich, measured_delta);
         self.hover_devices.notify_connection_change();
         result
     }
@@ -2275,6 +2356,7 @@ impl Runtime {
         &mut self,
         raw_event: RawPointerEvent,
         metadata_rich: bool,
+        measured_delta: bool,
     ) -> Option<EventTarget> {
         let gesture_window = self.gesture_window();
         let RawPointerEvent {
@@ -2337,7 +2419,7 @@ impl Runtime {
         self.frame_requested |= notified_text_outside;
         let raw_target = self
             .tree
-            .dispatch_raw_pointer_with_hit(gesture_window, raw_event, &hit);
+            .dispatch_raw_pointer_with_motion_source(gesture_window, raw_event, &hit, measured_delta);
         if hover_capable && !matches!(phase, PointerPhase::Enter | PointerPhase::Exit) {
             self.update_mouse_cursor(raw_event, &hit);
         }

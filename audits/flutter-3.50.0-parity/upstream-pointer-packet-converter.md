@@ -24,3 +24,23 @@ unusable coordinates. The converter does not replace a window dispatcher:
 delivery to hit paths, canceled-pointer queues, and scroll response
 callbacks are separate from these conversion comparisons. Ten converter
 tests and 22 adjacent resampler, router and signal tests passed.
+
+## Delivery through a retained view
+
+Four further exact pinned `gesture_binding_test.dart` cases passed:
+:165 (tap), :182 (move), :201 (hover) and :237 (cancel). A real
+mounted Incular listener and the view's global router receive the
+converted samples. Down/up reach the tap recognizer without erasing
+the changed button, and move/up retain the down hit path even when
+the pointer is outside. Measured logical motion and the synthesized
+flag survive delivery. Device add/remove reach the global route
+only; the three hover samples also reach the listener. Explicit
+cancel ends the contact, drops a subsequent orphan up and lets the
+same pointer tap on a fresh down.
+
+The view-scoped packet entry also rejects foreign views and ignores
+contact motion without a prior down rather than treating it as hover.
+Hosts already supplying logical events still derive deltas as before.
+Five delivery and ten adjacent boundary-metadata, raw-scale and
+touch-resampling tests passed. Queued cancellation and raw pan/zoom
+listener delivery are separate from these four comparisons.

@@ -3511,3 +3511,7 @@ packages/flutter/test/gestures/gesture_binding_test.dart	491	Should synthesize k
 packages/flutter/test/gestures/gesture_binding_test.dart	552	Should synthesize kPrimaryButton for unknown devices when no button is set	paired-match	upstream-pointer-packet-converter.md
 packages/flutter/test/gestures/gesture_binding_test.dart	609	Should not synthesize kPrimaryButton for mouse	paired-match	upstream-pointer-packet-converter.md
 packages/flutter/test/gestures/gesture_binding_test.dart	721	PointerEventConverter processes view IDs	paired-match	upstream-pointer-packet-converter.md
+packages/flutter/test/gestures/gesture_binding_test.dart	165	Pointer tap events	paired-match	upstream-pointer-packet-converter.md#delivery-through-a-retained-view
+packages/flutter/test/gestures/gesture_binding_test.dart	182	Pointer move events	paired-match	upstream-pointer-packet-converter.md#delivery-through-a-retained-view
+packages/flutter/test/gestures/gesture_binding_test.dart	201	Pointer hover events	paired-match	upstream-pointer-packet-converter.md#delivery-through-a-retained-view
+packages/flutter/test/gestures/gesture_binding_test.dart	237	Pointer cancel events	paired-match	upstream-pointer-packet-converter.md#delivery-through-a-retained-view

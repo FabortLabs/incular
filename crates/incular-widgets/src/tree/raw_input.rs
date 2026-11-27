@@ -115,8 +115,20 @@ impl WidgetTree {
     pub fn dispatch_raw_pointer_with_hit(
         &mut self,
         window: u64,
+        event: RawPointerEvent,
+        hit: &PointerHitTest,
+    ) -> Option<ElementId> {
+        self.dispatch_raw_pointer_with_motion_source(window, event, hit, false)
+    }
+
+    /// Framework input from a physical packet includes its measured delta.
+    #[doc(hidden)]
+    pub fn dispatch_raw_pointer_with_motion_source(
+        &mut self,
+        window: u64,
         mut event: RawPointerEvent,
         hit: &PointerHitTest,
+        measured_delta: bool,
     ) -> Option<ElementId> {
         self.pump_raw_gesture_timers(event.time);
         let key = GestureArenaKey::pointer_device(window, event.device, event.pointer);
@@ -127,14 +139,16 @@ impl WidgetTree {
         }
         // Flutter `PointerEvent.delta`: movement since this pointer's
         // previous event; a press starts from rest.
-        event.delta = match event.phase {
-            PointerPhase::Down | PointerPhase::Enter | PointerPhase::Exit => Offset::ZERO,
-            PointerPhase::Move | PointerPhase::Up | PointerPhase::Cancel => self
-                .input
-                .raw_pointer_positions
-                .get(&key)
-                .map_or(Offset::ZERO, |previous| event.position - *previous),
-        };
+        if !measured_delta {
+            event.delta = match event.phase {
+                PointerPhase::Down | PointerPhase::Enter | PointerPhase::Exit => Offset::ZERO,
+                PointerPhase::Move | PointerPhase::Up | PointerPhase::Cancel => self
+                    .input
+                    .raw_pointer_positions
+                    .get(&key)
+                    .map_or(Offset::ZERO, |previous| event.position - *previous),
+            };
+        }
         let event = event.in_global_coordinates();
         match event.phase {
             PointerPhase::Exit | PointerPhase::Cancel => {
@@ -696,7 +710,7 @@ impl WidgetTree {
     ) {
         let hit = pointer_hit.raw();
         let hover_event = event.phase == PointerPhase::Move
-            && event.buttons == 0
+            && !event.down
             && !self.input.raw_pointer_routes.contains_key(&key);
         if event.phase == PointerPhase::Down && !self.input.raw_pointer_routes.contains_key(&key) {
             // Flutter retains both the recipient and its hit-test transform

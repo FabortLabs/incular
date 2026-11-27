@@ -51,7 +51,10 @@ impl PlatformMenuCommandModel {
 // The editor model is owned by `incular-text`; the internal bridge keeps the
 // path available to sibling implementation crates without creating a second
 // retained controller type in Widgets.
-pub use incular_gestures::PointerEventResampler;
+pub use incular_gestures::{
+    ConvertedPointerEvent, ConvertedPointerKind, PointerData, PointerDataChange, PointerEventConverter,
+    PointerEventResampler, PointerRouter,
+};
 pub use incular_text::{TextEditingController, TextEditingValue, TextRange, TextSelection};
 
 // The retained engine is deliberately kept behind this `doc(hidden)` bridge.
