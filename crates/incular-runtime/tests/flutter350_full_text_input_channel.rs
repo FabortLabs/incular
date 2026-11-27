@@ -320,3 +320,53 @@ fn physical_keys_and_native_typed_text_report_user_selection_changes() {
     frame(&mut runtime);
     assert_eq!(log.borrow().len(), 3, "programmatic changes are silent");
 }
+
+#[test]
+fn live_interactive_selection_updates_the_existing_keyboard_client_without_showing_it_again() {
+    let focus = FocusNode::new();
+    let controller = TextEditingController::with_text("test");
+    controller.set_selection(TextSelection::collapsed(2));
+    let build = |enabled| {
+        field(&controller, &focus, true)
+            .max_lines(None)
+            .enable_interactive_selection(enabled)
+    };
+    let mut runtime = Runtime::new(build(true).into()).unwrap();
+    frame(&mut runtime);
+    let attached = |commands: Vec<TextInputCommand>| {
+        commands
+            .into_iter()
+            .find_map(|command| match command {
+                TextInputCommand::SetClient {
+                    configuration,
+                    state,
+                    ..
+                } => Some((configuration, state)),
+                _ => None,
+            })
+            .unwrap()
+    };
+    let (initial, value) = attached(runtime.take_text_input_commands());
+    assert!(initial.traits.enable_interactive_selection);
+    assert!(initial.multiline);
+    let field = runtime.focused_element().unwrap();
+
+    runtime.schedule_update(field, build(false).into()).unwrap();
+    frame(&mut runtime);
+    let commands = runtime.take_text_input_commands();
+    assert!(!commands.iter().any(|command| matches!(
+        command,
+        TextInputCommand::Show { .. }
+            | TextInputCommand::Hide { .. }
+            | TextInputCommand::Clear { .. }
+    )));
+    let (updated, latest_value) = attached(commands);
+    assert_eq!(updated.client, initial.client);
+    assert!(!updated.traits.enable_interactive_selection);
+    assert_eq!(latest_value, value);
+    assert_eq!(runtime.focused_element(), Some(field));
+    assert!(focus.has_primary_focus());
+
+    frame(&mut runtime);
+    assert!(runtime.take_text_input_commands().is_empty());
+}

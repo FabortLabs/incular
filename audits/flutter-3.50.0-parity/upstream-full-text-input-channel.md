@@ -51,3 +51,12 @@ as `Keyboard`; key release and direct controller setters do not add
 notifications. The shared comparison does no selection snapshot work when no
 callback is installed. Three focused native targets passed 27 tests.
 No original registration count was added for the authored cases.
+
+## Live interactive selection configuration
+
+The pinned editable-text configuration test changes
+`enableInteractiveSelection` from true to false on the mounted multiline
+editor. The Rust regression verifies the same switch in the actual
+keyboard command. It uses the same client ID, selection and text, does
+not re-show or close the keyboard, and does not resend its unchanged
+configuration on the next frame. All six focused native tests passed.
