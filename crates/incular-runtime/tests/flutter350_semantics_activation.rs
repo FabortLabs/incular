@@ -205,3 +205,49 @@ fn semantics_handle_emits_one_creation_and_disposal_for_the_same_identity() {
     assert_eq!(events[1].kind, ObjectEventKind::Disposed);
     assert_eq!(events[0].id, events[1].id);
 }
+
+#[test]
+fn restarting_application_semantics_republishes_the_same_label_without_remounting() {
+    use incular_config::TextDirection;
+
+    let mut app = Application::new(|_| {
+        Semantics::new(SizedBox::expand())
+            .label("test1")
+            .text_direction(TextDirection::Ltr)
+            .into()
+    })
+    .unwrap();
+    let window = app.primary_window();
+    app.set_semantics_enabled(window, false);
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let mut projection = MobileAccessibilityProjection::new();
+    for pass in 0..2 {
+        let request = app.ensure_semantics(window).unwrap();
+        assert!(app.frame_requested(window));
+        app.run_window_frame_at(window, bounds, Instant::now())
+            .unwrap();
+        let published = app
+            .sync_semantics_projection(window, &mut projection)
+            .unwrap();
+        let [only] = published.nodes.as_slice() else {
+            panic!("one semantics label")
+        };
+        assert_eq!(only.semantic.label.as_deref(), Some("test1"));
+        assert_eq!(only.semantic.state.text_direction, Some(TextDirection::Ltr));
+        assert!(!app.frame_requested(window));
+
+        drop(request);
+        assert_eq!(app.semantics_enabled(window), Some(false));
+        // Incular's native host queues the snapshot removal on a frame even
+        // though Flutter's release does not itself schedule a render frame.
+        assert!(app.frame_requested(window));
+        app.run_window_frame_at(window, bounds, Instant::now())
+            .unwrap();
+        let cleared = app
+            .sync_semantics_projection(window, &mut projection)
+            .unwrap();
+        assert!(cleared.nodes.is_empty());
+        assert!(cleared.removed.contains(&only.native_id));
+        assert!(!app.frame_requested(window), "pass {pass}");
+    }
+}

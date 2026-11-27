@@ -2776,6 +2776,7 @@ impl WidgetTree {
                     }
                     if let Some(pane) = self.viewport_semantic_panes.remove(&id) {
                         let _ = self.semantics.remove(pane);
+                        self.semantic_point_order.remove(&Some(pane));
                     }
                     if let Some(wrappers) = self.table_semantic_wrappers.remove(&id) {
                         for node in wrappers.into_ids() {

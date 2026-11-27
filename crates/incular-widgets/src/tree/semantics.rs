@@ -874,7 +874,7 @@ impl WidgetTree {
             let semantic_revision_before = self.semantics.revision();
             if matches!(
                 self.element_live(element, "semantic element remains live").widget.kind(),
-                WidgetKind::SliverViewport { .. }
+                WidgetKind::SliverViewport { .. } | WidgetKind::Scroll { .. }
             ) {
                 self.assemble_viewport_semantic_panes(
                     element,
@@ -910,6 +910,9 @@ impl WidgetTree {
                 }
             }
             self.remember_semantic_point_order(Some(id), &edges[start..cursor]);
+            if let Some(pane) = self.viewport_semantic_panes.get(&element).copied() {
+                self.remember_semantic_point_order(Some(pane), &edges[start..cursor]);
+            }
             #[cfg(feature = "devtools")]
             if (inserted.contains(&element)
                 || self.semantics.revision() != semantic_revision_before)
@@ -2960,7 +2963,11 @@ impl WidgetTree {
         if !semantic.bounds.contains(position) {
             return None;
         }
-        let element = self.element_for_semantic_node(node)?;
+        let Some(element) = self.element_for_semantic_node(node) else {
+            // A synthetic semantics-only container has no local render box
+            // or action handler; its published bounds still clip its children.
+            return self.semantic_action_in_children(Some(node), &semantic.children, position, action);
+        };
         let render_id = self.render_id(element)?;
         let render = self.renders.get(render_id.0)?;
         let world = self.render_world_transform(render_id);

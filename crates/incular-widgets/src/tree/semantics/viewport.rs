@@ -38,9 +38,21 @@ impl WidgetTree {
             Collected::Full(build) => build.role,
             Collected::Bounds { .. } => self.semantics.node(old_content).unwrap().role,
         };
-        // ChildTagScope marks the first projected semantic node(s) under
-        // this viewport. An empty viewport falls back to a single node.
-        let split = role == SemanticRole::ScrollView && !children.is_empty();
+        let is_sliver = matches!(
+            self.element_live(element, "semantic scroll element remains live").widget.kind(),
+            WidgetKind::SliverViewport { .. }
+        );
+        let indexed_state = match &build {
+            Collected::Full(build) => &build.state,
+            Collected::Bounds { .. } => &self.semantics.node(outer).unwrap().state,
+        };
+        let indexed_item = indexed_state.item_index.is_some()
+            && indexed_state.tags.contains(crate::Viewport::use_two_pane_semantics_tag());
+        // A sliver viewport can introduce two panes. Separately, an indexed
+        // item that is itself a scroll boundary needs an outer node for the
+        // enclosing viewport's index and tags, not for its scrolling flags.
+        let split = role == SemanticRole::ScrollView
+            && (indexed_item || (is_sliver && !children.is_empty()));
         let exclude_tag = crate::Viewport::exclude_from_scrolling_tag();
         let pane_child = |id: SemanticNodeId| {
             changed_children.get(&id).copied().unwrap_or_else(|| {
@@ -53,7 +65,7 @@ impl WidgetTree {
         let is_excluded = |id| pane_child(id).excluded;
         // Scroll indices describe logical order, not screen-reader reading
         // order. Reversed/RTL viewports or sort keys can change the latter.
-        let first_visible_index = split
+        let first_visible_index = (is_sliver && split)
             .then(|| {
                 children
                     .iter()
@@ -72,7 +84,7 @@ impl WidgetTree {
             .flatten();
         let mut excluded = Vec::new();
         let mut included = Vec::new();
-        let children = if split && children.iter().copied().any(is_excluded) {
+        let children = if is_sliver && split && children.iter().copied().any(is_excluded) {
             for &id in children {
                 if is_excluded(id) {
                     excluded.push(id);
@@ -132,10 +144,14 @@ impl WidgetTree {
                     node.state.hidden = hidden;
                 }
                 if old_inner.is_some() {
-                    node.state.tags = self.semantics.node(outer).unwrap().state.tags.clone();
                     let outer_state = &self.semantics.node(outer).unwrap().state;
+                    node.state.tags.clone_from(&outer_state.tags);
                     node.state.sort_key.clone_from(&outer_state.sort_key);
                     node.state.custom_sort_key.clone_from(&outer_state.custom_sort_key);
+                    if indexed_item {
+                        node.state.item_index = outer_state.item_index;
+                        node.state.set_size = outer_state.set_size;
+                    }
                 }
                 node.children = children.to_vec();
                 node
@@ -159,6 +175,8 @@ impl WidgetTree {
             tags: std::mem::take(&mut content.state.tags),
             sort_key: content.state.sort_key.take(),
             custom_sort_key: content.state.custom_sort_key.take(),
+            item_index: if indexed_item { content.state.item_index.take() } else { None },
+            set_size: if indexed_item { content.state.set_size.take() } else { None },
             ..SemanticState::default()
         };
         let inner = if let Some(inner) = old_inner {

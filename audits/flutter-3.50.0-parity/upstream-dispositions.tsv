@@ -2831,3 +2831,6 @@ packages/flutter/test/widgets/semantics_test.dart	1343	Semantics widgets without
 packages/flutter/test/widgets/semantics_test.dart	1385	Semantics widgets that are transformed are sorted properly	paired-match	upstream-ordinary-semantics-traversal.md
 packages/flutter/test/widgets/semantics_test.dart	1432	Semantics widgets without sort orders are sorted properly when no Directionality is present	paired-match	upstream-ordinary-semantics-traversal.md
 packages/flutter/test/widgets/semantics_test.dart	2460	Semantics geometry can scroll to reveal hidden children in a scrollable container	paired-match	upstream-box-semantics-scroll-reveal.md
+packages/flutter/test/widgets/semantics_test.dart	21	Semantics shutdown and restart	partial-match	upstream-semantics-tags.md#application-semantics-shutdown-and-restart
+packages/flutter/test/widgets/semantics_test.dart	54	Semantics tag only applies to immediate child	paired-match	upstream-semantics-tags.md#immediate-list-tags-stop-before-a-nested-scroll-boundary
+packages/flutter/test/widgets/semantics_test.dart	429	Semantics tagForChildren works	paired-match	upstream-semantics-tags.md#immediate-list-tags-stop-before-a-nested-scroll-boundary

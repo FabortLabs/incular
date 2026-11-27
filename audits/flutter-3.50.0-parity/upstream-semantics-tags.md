@@ -42,3 +42,30 @@ real enabled-state change still reaches the same native IDs.
 Two regression cases failed before the fix and passed afterwards,
 alongside 14 focused projection cases. These are adapter-output
 checks, not measurements of physical screen-reader timing.
+
+## Immediate list tags stop before a nested scroll boundary
+
+Exact pinned `widgets/semantics_test.dart:54,429` and the two native
+`flutter350_semantics_child_tags` ports passed. The ordinary annotation
+passes its custom tag to both direct semantic text children but not to
+itself. The original list fixture does not mark a node that has implicit
+scrolling with the list's two-pane tag, even after a subsequent frame.
+
+The additional pinned and native control verifies the actual shape:
+the tagged, indexed list item is a non-scrolling outer node around the
+untagged inner scroll node. Before the fix Incular put the index, inherited
+tag and scroll semantics on one node. The existing synthetic pane path now
+handles nested indexed scroll boundaries and keeps their scroll actions
+on the inner node. Point dispatch can also pass through semantics-only
+containers to live descendants, as verified in the pinned and native
+fixtures. The 27 selected regressions across the two native runs passed.
+
+## Application semantics shutdown and restart
+
+Exact pinned `widgets/semantics_test.dart:21` passed. Incular's focused
+application fixture acquires, publishes, releases, and reacquires a
+semantics request on the same window, observing the same labeled content
+and direction on both starts. The projection removes the retired native
+node. Flutter does not schedule a frame merely to release the request;
+Incular intentionally wakes its native host to release the held
+projection. This remains a partial match for scheduling.
