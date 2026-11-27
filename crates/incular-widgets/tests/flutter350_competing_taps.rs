@@ -210,31 +210,36 @@ fn a_secondary_drag_never_invokes_primary_recognizers() {
     }
 }
 
+fn horizontal_drag_with_tap(log: &TapLog) -> WidgetTree {
+    let emit = |owner, phase| {
+        let log = Rc::clone(&log);
+        move || log.borrow_mut().push((owner, phase))
+    };
+    let h_down = emit("H", "down");
+    let h_start = emit("H", "start");
+    let h_update = emit("H", "update");
+    let h_end = emit("H", "end");
+    let t_down = emit("T", "down");
+    let t_up = emit("T", "up");
+    let child = Widget::box_(Size::new(100., 100.), Color::WHITE);
+    let drag = GestureDetector::new(child)
+        .on_horizontal_drag_down(move |_| h_down())
+        .on_horizontal_drag_start(move |_| h_start())
+        .on_horizontal_drag_update(move |_| h_update())
+        .on_horizontal_drag_end(move |_| h_end())
+        .on_horizontal_drag_cancel(emit("H", "cancel"));
+    let tap = GestureDetector::new(drag)
+        .on_tap_down(move |_| t_down())
+        .on_tap_up(move |_| t_up())
+        .on_tap_cancel(|| {});
+    mounted(tap)
+}
+
 #[test]
 fn a_horizontal_drag_keeps_one_lifecycle_across_two_contacts() {
     for (first_release, accepts) in [(4, None), (5, None), (5, Some(4)), (4, Some(5))] {
         let log = TapLog::default();
-        let emit = |owner, phase| {
-            let log = Rc::clone(&log);
-            move || log.borrow_mut().push((owner, phase))
-        };
-        let h_down = emit("H", "down");
-        let h_start = emit("H", "start");
-        let h_update = emit("H", "update");
-        let h_end = emit("H", "end");
-        let t_down = emit("T", "down");
-        let t_up = emit("T", "up");
-        let child = Widget::box_(Size::new(100., 100.), Color::WHITE);
-        let drag = GestureDetector::new(child)
-            .on_horizontal_drag_down(move |_| h_down())
-            .on_horizontal_drag_start(move |_| h_start())
-            .on_horizontal_drag_update(move |_| h_update())
-            .on_horizontal_drag_end(move |_| h_end())
-            .on_horizontal_drag_cancel(emit("H", "cancel"));
-        let tap = GestureDetector::new(drag)
-            .on_tap_down(move |_| t_down())
-            .on_tap_up(move |_| t_up());
-        let mut tree = mounted(tap);
+        let mut tree = horizontal_drag_with_tap(&log);
         let now = Instant::now();
         let position = |pointer| Offset::new(if pointer == 4 { 10. } else { 11. }, 10.);
 
@@ -309,4 +314,57 @@ fn a_horizontal_drag_keeps_one_lifecycle_across_two_contacts() {
             assert_eq!(log.take(), [("H", "cancel"), ("T", "down"), ("T", "up")]);
         }
     }
+}
+
+#[test]
+fn a_canceled_button_chord_does_not_leave_the_other_contact_waiting() {
+    let log = TapLog::default();
+    let mut tree = horizontal_drag_with_tap(&log);
+    let now = Instant::now();
+    let time = |ms| now + Duration::from_millis(ms);
+    pressed_button(
+        &mut tree,
+        4,
+        1,
+        PointerPhase::Down,
+        Offset::new(10., 10.),
+        time(0),
+    );
+    pressed_button(
+        &mut tree,
+        5,
+        1,
+        PointerPhase::Down,
+        Offset::new(11., 10.),
+        time(1),
+    );
+    assert_eq!(log.take(), [("H", "down")]);
+
+    pressed_button(
+        &mut tree,
+        4,
+        2,
+        PointerPhase::Move,
+        Offset::new(9.9, 9.9),
+        time(2),
+    );
+    assert_eq!(log.take(), [("H", "start")]);
+    pressed_button(
+        &mut tree,
+        5,
+        1,
+        PointerPhase::Move,
+        Offset::new(100., 100.),
+        time(3),
+    );
+    assert_eq!(log.take(), [("H", "update")]);
+    pressed_button(
+        &mut tree,
+        5,
+        0,
+        PointerPhase::Up,
+        Offset::new(100., 100.),
+        time(4),
+    );
+    assert_eq!(log.take(), [("H", "end")]);
 }

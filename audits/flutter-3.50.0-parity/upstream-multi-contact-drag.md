@@ -22,3 +22,14 @@ and local callback geometry. Mixed detector configurations and the
 scroll/drag-and-drop specialized paths keep their original routes.
 Button-mask changes during a multi-contact arena are separate and
 not credited in this batch.
+
+### Button change while another contact is pending
+
+Pinned case 2321 passed. In the mounted native fixture the first
+pointer changes from primary to secondary at (9.9, 9.9), before
+either pointer has passed slop. The abandoned tap stops delaying
+the other pointer's default drag acceptance. The native callbacks
+are one start at the button change, one update on the other pointer
+at (100, 100), then one end on its release. The invalid source does
+not win its old arena. Fifteen targeted tests passed; normal lifts
+still follow the previous cancellation and acceptance rules.

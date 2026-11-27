@@ -2803,3 +2803,4 @@ packages/flutter/test/gestures/drag_test.dart	2056	On multiple pointers, DragGes
 packages/flutter/test/gestures/drag_test.dart	2120	On multiple pointers, DragGestureRecognizer is canceled when all pointers are canceled (FILO)	paired-match	upstream-multi-contact-drag.md
 packages/flutter/test/gestures/drag_test.dart	2185	On multiple pointers, DragGestureRecognizer is accepted when the first pointer is accepted	paired-match	upstream-multi-contact-drag.md
 packages/flutter/test/gestures/drag_test.dart	2253	On multiple pointers, canceled pointers (due to up) do not prevent later pointers getting accepted	paired-match	upstream-multi-contact-drag.md
+packages/flutter/test/gestures/drag_test.dart	2321	On multiple pointers, canceled pointers (due to buttons) do not prevent later pointers getting accepted	paired-match	upstream-multi-contact-drag.md#button-change-while-another-contact-is-pending

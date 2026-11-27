@@ -868,6 +868,34 @@ impl WidgetTree {
         });
     }
 
+    fn release_quiet_tap_contenders(&mut self, key: GestureArenaKey, owner: ElementId) {
+        let Some(group) = self.input.mounted_tap_contacts.get(&owner) else {
+            return;
+        };
+        if group.primary != Some(key) {
+            return;
+        }
+        let contacts = group.additional.clone();
+        for contact in contacts {
+            let Some(active) = self.input.active_gestures.get_mut(&contact) else {
+                continue;
+            };
+            let Some(index) = active.quiet_taps.iter().position(|tap| *tap == owner) else {
+                continue;
+            };
+            active.quiet_taps.remove(index);
+            if active.quiet_taps.is_empty()
+                && !active.yields_taps
+                && let [only] = active.members.as_slice()
+                && matches!(only.kind, RetainedGestureKind::SharedDrag(_))
+                && self.input.gesture_arena.disposition(contact, only.member)
+                    == Some(GestureDisposition::Pending)
+            {
+                self.accept_sole_press(contact);
+            }
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn dispatch_pointer_gesture_with_target(
         &mut self,
@@ -917,11 +945,11 @@ impl WidgetTree {
                 members: Vec::new(),
                 cancelled_elements: FastHashSet::default(),
                 start: event.position,
+                quiet_taps: Vec::new(),
                 yields_taps: inner_button.is_some(),
             };
             let mut force_press_decisions = Vec::new();
             let mut eager_drags = Vec::new();
-            let mut suppressed_tap_contender = false;
             for candidate in elements {
                 let Some(callbacks) = self.gesture_callbacks(candidate) else {
                     continue;
@@ -939,7 +967,9 @@ impl WidgetTree {
                 };
                 let tracks_tap = callbacks.has_tap_callbacks() && inner_button.is_none();
                 let owns_tap = tracks_tap && self.register_mounted_tap_contact(candidate, key);
-                suppressed_tap_contender |= tracks_tap && !owns_tap;
+                if tracks_tap && !owns_tap {
+                    active.quiet_taps.push(candidate);
+                }
                 if !owns_tap {
                     callbacks.on_tap = None;
                     callbacks.on_tap_down = None;
@@ -1326,7 +1356,7 @@ impl WidgetTree {
             let sole_press = active.members.len() == 1
                 && !active.yields_taps
                 && !nested_scroll
-                && !suppressed_tap_contender;
+                && active.quiet_taps.is_empty();
             self.input.active_gestures.insert(key, active);
             self.input.pointer_captures.insert(key, element);
             for member in eager_drags {
@@ -1468,11 +1498,15 @@ impl WidgetTree {
                             continue;
                         }
                         let raw = raw_for_shared_drag(event, device, kind, buttons, synthesized);
-                        if let Some(pan) = self.input.shared_drags.get_mut(&(window, candidate.element, axis))
-                            && pan.observe_raw(raw)
-                            && pan.wants_acceptance()
-                        {
-                            accepts.push(PendingAccept::SharedDrag(candidate.member));
+                        if let Some(drag) = self.input.shared_drags.get_mut(&(window, candidate.element, axis)) {
+                            if drag.observe_raw(raw) && drag.wants_acceptance() {
+                                accepts.push(PendingAccept::SharedDrag(candidate.member));
+                            } else if raw.phase == PointerPhase::Move
+                                && raw.buttons != incular_core::PRIMARY_POINTER_BUTTON
+                                && disposition == GestureDisposition::Pending
+                            {
+                                rejects.push(candidate.member);
+                            }
                         }
                     }
                     RetainedGestureKind::ForcePress => {
@@ -1549,7 +1583,15 @@ impl WidgetTree {
             }
         }
         let had_rejections = !rejects.is_empty();
+        let mut rejected_taps = Vec::new();
         for member in rejects {
+            if event.phase == PointerPhase::Move
+                && let Some(candidate) = self.input.active_gestures.get(&key)
+                    .and_then(|active| active.members.iter().find(|candidate| candidate.member == member))
+                && candidate.kind == RetainedGestureKind::Pointer
+            {
+                rejected_taps.push(candidate.element);
+            }
             self.input.gesture_arena.reject(key, member);
             self.apply_arena_entries(key, self.input.gesture_arena.entries(key));
         }
@@ -1582,6 +1624,9 @@ impl WidgetTree {
             // the default win, after explicit claims from this move. A
             // pressure recognizer can leave below the drag's distance slop.
             self.accept_remaining_arena_drag(key, &event);
+        }
+        for owner in rejected_taps {
+            self.release_quiet_tap_contenders(key, owner);
         }
         for (member, action) in callbacks {
             self.dispatch_gesture_action(key, member, action);

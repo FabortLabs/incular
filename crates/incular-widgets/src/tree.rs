@@ -1201,6 +1201,9 @@ struct ActiveGesture {
     members: Vec<ActiveGestureMember>,
     cancelled_elements: FastHashSet<ElementId>,
     start: Offset,
+    /// Mounted tap recognizers still tracking this non-primary contact
+    /// without dispatching tap callbacks for it.
+    quiet_taps: Vec<ElementId>,
     /// The press landed on a button below every detector on the route,
     /// so the detectors left their tap recognizers to the button.
     yields_taps: bool,
