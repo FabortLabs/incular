@@ -3609,3 +3609,5 @@ packages/flutter/test/widgets/default_text_height_behavior_test.dart	99	DefaultT
 packages/flutter/test/widgets/default_text_editing_shortcuts_test.dart	532	are triggered when numlock is locked	partial-match	upstream-linux-numpad-editing.md
 packages/flutter/test/widgets/default_text_editing_shortcuts_test.dart	690	are triggered when numlock is unlocked	partial-match	upstream-linux-numpad-editing.md
 packages/flutter/test/painting/shape_border_test.dart	61	Outlined shape borders interpolate symmetrically	partial-match	upstream-shape-outline-symmetry.md
+packages/flutter/test/widgets/app_lifecycle_listener_test.dart	192	Receives exit requests	paired-match	upstream-app-exit-observers.md
+packages/flutter/test/widgets/app_lifecycle_listener_test.dart	207	Does not notify listeners disposed while handling an exit request	paired-match	upstream-app-exit-observers.md

@@ -114,7 +114,10 @@ pub use file_dialog::{
     FileDialogOption, FileDialogOptions, FileDialogOutcome, FileDialogRequest, FileDialogRequestId,
     FileDialogSelection, FileDialogValidationError, FileExtension,
 };
-pub use flutter_app_exit::{AppExitResponse, AppExitType, FlutterAppExit};
+pub use flutter_app_exit::{
+    AppExitObserverFailure, AppExitObservers, AppExitResponse, AppExitSubscription, AppExitType,
+    FlutterAppExit,
+};
 pub use flutter_keyboard_state::{FlutterKeyboardState, FlutterKeyboardSyncError};
 pub use flutter_lifecycle::{
     AppLifecycleBinding, AppLifecycleCallback, AppLifecycleError, AppLifecycleState,

@@ -1,11 +1,17 @@
 //! Flutter-compatible lifecycle state and host-message dispatch. This retains
 //! the full view lifecycle without reinterpreting native process shutdown.
 
-use std::{collections::BTreeMap, fmt, str::FromStr};
+use std::{cell::OnceCell, collections::BTreeMap, fmt, str::FromStr};
 
-use crate::flutter_platform_channel::{
-    FlutterPlatformChannelError, FlutterPlatformMessenger, invoke_optional_json,
+use crate::flutter_app_exit::{
+    AppExitObserverFailure, AppExitObservers, AppExitResponse, FlutterAppExit,
 };
+use crate::flutter_platform_channel::{
+    FlutterJsonMethodResult, FlutterPlatformChannelError, FlutterPlatformMessenger,
+    invoke_optional_json,
+};
+use crate::message_codecs::MethodCall;
+use serde_json::Value;
 
 /// Application lifecycle in Flutter's state-machine order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -110,6 +116,7 @@ pub struct AppLifecycleBinding {
     state: Option<AppLifecycleState>,
     observers: BTreeMap<u64, LifecycleObserver>,
     next_observer: u64,
+    exit_observers: OnceCell<AppExitObservers>,
 }
 
 impl AppLifecycleBinding {
@@ -155,6 +162,31 @@ impl AppLifecycleBinding {
 
     pub fn remove_observer(&mut self, id: u64) -> bool {
         self.observers.remove(&id).is_some()
+    }
+
+    /// Exit observers attached to this binding, separate from lifecycle-state
+    /// transitions. The handle may be used during an asynchronous exit query.
+    #[must_use]
+    pub fn exit_observers(&self) -> AppExitObservers {
+        self.exit_observers
+            .get_or_init(AppExitObservers::default)
+            .clone()
+    }
+
+    /// Handles the host's cancelable exit query without shutting down the
+    /// process. Leave other methods to the embedder's existing handler.
+    pub async fn handle_app_exit_request(
+        &self,
+        call: &MethodCall<Value>,
+        report_failure: impl FnMut(AppExitObserverFailure),
+    ) -> Option<FlutterJsonMethodResult> {
+        FlutterAppExit::route_request(call, || async {
+            match self.exit_observers.get() {
+                Some(observers) => observers.request_exit(report_failure).await,
+                None => AppExitResponse::Exit,
+            }
+        })
+        .await
     }
 
     /// Applies the StringCodec payload of a native lifecycle notification.
