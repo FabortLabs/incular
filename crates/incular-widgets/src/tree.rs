@@ -1373,6 +1373,12 @@ struct RawPointerRouteEntry {
     world_to_local: Option<CoreTransform>,
 }
 
+struct RawPointerRoute {
+    listeners: Vec<RawPointerRouteEntry>,
+    /// The press hit path for TapRegionSurface, retained until release.
+    tap_path: Vec<ElementId>,
+}
+
 struct DeferredSingleTap {
     owner: ElementId,
     details: Option<incular_gestures::PendingTapRelease>,
@@ -1395,7 +1401,7 @@ struct InputState {
     >,
     raw_recognizers: HashMap<ElementId, HashMap<TypeId, Box<dyn GestureRecognizer>>>,
     raw_gesture_streams: HashMap<GestureArenaKey, ActiveRawGesture>,
-    raw_pointer_routes: HashMap<GestureArenaKey, Vec<RawPointerRouteEntry>>,
+    raw_pointer_routes: HashMap<GestureArenaKey, RawPointerRoute>,
     /// Global and per-pointer observers, created only by explicit callers.
     pointer_router: OnceCell<incular_gestures::PointerRouter>,
     /// The previous raw position of each pointer, for Flutter's `delta`.

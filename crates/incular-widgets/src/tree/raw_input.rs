@@ -121,13 +121,31 @@ impl WidgetTree {
             self.route_pointer(event);
             return None;
         }
+        let captured_tap_path = if event.phase == PointerPhase::Up {
+            self.input.raw_pointer_routes.get_mut(&key).map(|route| {
+                if event.buttons == 0 {
+                    std::mem::take(&mut route.tap_path)
+                } else {
+                    route.tap_path.clone()
+                }
+            })
+        } else {
+            None
+        };
         self.dispatch_listeners(key, event, hit.raw());
         self.route_pointer(event);
         if event.phase == PointerPhase::Down {
             self.notify_tooltips_of_pointer_down(event);
         }
 
-        let tap_target = self.dispatch_tap_regions(event, hit.raw());
+        // GestureBinding sends up through the down entry. Classify using
+        // that path but deliver the original up event and its position.
+        let tap_hit = if event.phase == PointerPhase::Up {
+            captured_tap_path.as_deref().unwrap_or_default()
+        } else {
+            hit.raw()
+        };
+        let tap_target = self.dispatch_tap_regions(event, tap_hit);
         if let Some(target) = tap_target {
             self.cancel_raw_gesture_stream(key, true);
             self.input.consumed_tap_pointers.insert(key);
@@ -495,7 +513,7 @@ impl WidgetTree {
         if event.phase == PointerPhase::Down && !self.input.raw_pointer_routes.contains_key(&key) {
             // Flutter retains both the recipient and its hit-test transform
             // for the contact. Layout or scrolling may move it afterwards.
-            let route = self
+            let listeners = self
                 .listener_ids(hit)
                 .into_iter()
                 .map(|element| RawPointerRouteEntry {
@@ -505,7 +523,20 @@ impl WidgetTree {
                         .and_then(|id| self.pointer_world_to_local(id)),
                 })
                 .collect();
-            self.input.raw_pointer_routes.insert(key, route);
+            let tap_path = if hit.iter().copied().any(|element| {
+                matches!(
+                    self.raw_input_kind(element),
+                    Some(RawInputKind::TapRegionSurface)
+                )
+            }) {
+                hit.to_vec()
+            } else {
+                Vec::new()
+            };
+            self.input.raw_pointer_routes.insert(
+                key,
+                RawPointerRoute { listeners, tap_path },
+            );
         }
         let finished;
         let route = match event.phase {
@@ -524,7 +555,7 @@ impl WidgetTree {
         };
         let callbacks = route
             .into_iter()
-            .flatten()
+            .flat_map(|route| &route.listeners)
             .filter_map(|entry| {
                 self.listener_callbacks(entry.element).map(|callbacks| {
                     (
@@ -1245,7 +1276,8 @@ impl WidgetTree {
         // An empty captured route still marks a pressed contact. A later
         // buttonless move on that stream is not an independent hover.
         for route in self.input.raw_pointer_routes.values_mut() {
-            route.retain(|candidate| candidate.element != element);
+            route.listeners.retain(|candidate| candidate.element != element);
+            route.tap_path.retain(|candidate| *candidate != element);
         }
         self.input.mouse_hover.retain(|_, hover| {
             hover.retain(|candidate| candidate.element != element);

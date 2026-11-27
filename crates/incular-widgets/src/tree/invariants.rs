@@ -765,8 +765,13 @@ impl WidgetTree {
             .input
             .raw_pointer_routes
             .values()
-            .flatten()
-            .map(|entry| entry.element)
+            .flat_map(|route| {
+                route
+                    .listeners
+                    .iter()
+                    .map(|entry| entry.element)
+                    .chain(route.tap_path.iter().copied())
+            })
             .chain(
                 self.input
                     .mouse_hover
