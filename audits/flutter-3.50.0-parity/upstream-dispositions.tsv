@@ -3541,3 +3541,8 @@ dev/integration_tests/widget_preview_scaffold/test/filter_by_selected_file_test.
 dev/integration_tests/widget_preview_scaffold/test/filter_by_selected_file_test.dart	238	Filter by selected file preference is persisted	paired-match	upstream-preview-selected-file.md
 dev/integration_tests/widget_preview_scaffold/test/preview_search_controls_test.dart	12	Search query updates and clears correctly	paired-match	upstream-preview-search.md
 dev/integration_tests/widget_preview_scaffold/test/soft_restart_test.dart	18	Soft restart removes and re-inserts previewed widget into the widget tree	paired-match	upstream-preview-soft-restart.md
+packages/flutter/test/widgets/focus_manager_test.dart	23	Can add children.	paired-match	upstream-focus-ancestry-updates.md
+packages/flutter/test/widgets/focus_manager_test.dart	46	Can remove children.	paired-match	upstream-focus-ancestry-updates.md
+packages/flutter/test/widgets/focus_manager_test.dart	518	Removing a node removes it from scope.	partial-match	upstream-focus-ancestry-updates.md
+packages/flutter/test/widgets/focus_manager_test.dart	547	Can add children to scope and focus	paired-match	upstream-focus-ancestry-updates.md
+packages/flutter/test/widgets/focus_manager_test.dart	592	removing grandchildren from scope updates focusedChild	paired-match	upstream-focus-ancestry-updates.md
