@@ -87,3 +87,47 @@ fn ready_group_receives_image_info_with_the_same_pixels_synchronously() {
     assert_eq!(info.scale(), image.scale());
     assert_eq!(info.size_bytes(), 8);
 }
+
+#[test]
+fn a_successful_frame_dispatches_the_snapshot_even_after_removal() {
+    for handoff in [false, true] {
+        for remove_before in [false, true] {
+            let (stream, loader) = ImageStream::loading();
+            let (source, source_loader) = ImageStream::loading();
+            let events = Rc::new(RefCell::new(Vec::new()));
+            let second = Rc::new(RefCell::new(None));
+            let _first = stream.listen(ImageStreamListener::new(Rc::new({
+                let events = events.clone();
+                let second = second.clone();
+                move |_, synchronous| {
+                    events.borrow_mut().push(("A", synchronous));
+                    let token = second.borrow_mut().take();
+                    drop(token);
+                }
+            })));
+            *second.borrow_mut() = Some(stream.listen(ImageStreamListener::new(Rc::new({
+                let events = events.clone();
+                move |_, synchronous| events.borrow_mut().push(("B", synchronous))
+            }))));
+            if handoff {
+                assert!(loader.follow(&source));
+            }
+            if remove_before {
+                let token = second.borrow_mut().take();
+                drop(token);
+            }
+            let image = ImageHandle::from_rgba8(1, 1, vec![0x11, 0x22, 0x33, 0xff]).unwrap();
+            assert!(if handoff {
+                source_loader.complete(image)
+            } else {
+                loader.complete(image)
+            });
+            let want = if remove_before {
+                vec![("A", false)]
+            } else {
+                vec![("A", false), ("B", false)]
+            };
+            assert_eq!(*events.borrow(), want, "handoff: {handoff}");
+        }
+    }
+}

@@ -31,3 +31,16 @@ the group unregisters both kinds of callbacks. Already-ready groups
 receive the same decoded image synchronously as an `ImageInfo`.
 The owned API still models one provider resolution; animation
 playback is not claimed by this registration.
+
+## Successful frame dispatch is a snapshot
+
+An authored Flutter probe registers A before B, then has A remove B
+while the successful frame is delivered. The reference still calls
+both in registration order with `synchronousCall == false`.
+Removing B before completion leaves only A. The native test failed
+before this fix (only A got the in-progress frame), and now matches
+both cases both directly and through a deferred source handoff.
+Pending outcome listeners register with the unresolved source and
+are snapshotted before any callback; widget build dependencies still
+use the ordinary reactive cancellation rules. This probe adds no
+original registration to the coverage ledger.

@@ -11,13 +11,15 @@
 use std::{
     any::Any,
     cell::{Cell, OnceCell, RefCell},
+    collections::BTreeMap,
     fmt,
+    panic::{AssertUnwindSafe, catch_unwind, resume_unwind},
     rc::{Rc, Weak},
 };
 
 use futures_channel::oneshot;
 use incular_animation::scheduler::{Priority, schedule_async_task};
-use incular_core::reactivity::{DependencySource, Subscription, TrackingGuard};
+use incular_core::reactivity::DependencySource;
 
 use crate::{ImageConfiguration, ImageError, ImageHandle, ImageProvider, ImageResizeOptions};
 
@@ -58,6 +60,7 @@ struct StreamCell {
     state: RefCell<ImageLoadState>,
     changes: DependencySource,
     frame_changes: OnceCell<DependencySource>,
+    pending_frames: OnceCell<PendingFrameListeners>,
     chunks: OnceCell<ChunkListeners>,
     completed: Cell<bool>,
     /// The stream this one follows after [`ImageStreamCompleter::follow`].
@@ -98,6 +101,7 @@ impl ImageStream {
                 state: RefCell::new(state),
                 changes: DependencySource::default(),
                 frame_changes: OnceCell::new(),
+                pending_frames: OnceCell::new(),
                 chunks: OnceCell::new(),
                 completed: Cell::new(completed),
                 source: RefCell::new(None),
@@ -200,20 +204,21 @@ impl ImageStream {
     /// on this stream.
     #[must_use]
     pub fn state(&self) -> ImageLoadState {
-        self.observed_state(true)
+        self.read_state(true, true)
     }
 
     /// Reads the frame or failure, observing completion but not progress
     /// reports. Decoration painters do not show loading indicators.
     #[must_use]
     pub fn frame_state(&self) -> ImageLoadState {
-        self.observed_state(false)
+        self.read_state(false, true)
     }
 
     /// Listens once for a decoded frame or its error, not for download
     /// progress. The second callback argument is true if the outcome was
     /// already available when the listener was attached. Drop the token to
-    /// cancel a pending listener.
+    /// cancel a pending listener. Once frame delivery starts, the captured
+    /// listeners still receive that outcome even if a callback removes them.
     pub fn listen_frame(
         &self,
         listener: impl FnOnce(Result<ImageHandle, ImageError>, bool) + 'static,
@@ -221,10 +226,10 @@ impl ImageStream {
         let binding = Rc::new(ImageFrameBinding {
             stream: RefCell::new(Some(self.clone())),
             callback: RefCell::new(Some(Box::new(listener))),
-            subscriptions: RefCell::new(Vec::new()),
+            registration: RefCell::new(None),
         });
         binding.refresh(true);
-        ImageFrameSubscription { _binding: binding }
+        ImageFrameSubscription { binding }
     }
 
     /// Receives new progress reports, without replaying the latest snapshot.
@@ -267,17 +272,17 @@ impl ImageStream {
         *listeners.upstream.borrow_mut() = Some(upstream);
     }
 
-    fn observed_state(&self, include_progress: bool) -> ImageLoadState {
-        if include_progress {
+    fn read_state(&self, include_progress: bool, track: bool) -> ImageLoadState {
+        if include_progress && track {
             self.cell.changes.track();
-        } else {
+        } else if track {
             self.cell
                 .frame_changes
                 .get_or_init(DependencySource::default)
                 .track();
         }
         if let Some(source) = self.source() {
-            let outcome = source.observed_state(include_progress);
+            let outcome = source.read_state(include_progress, track);
             let map = if matches!(outcome, ImageLoadState::Loading(_)) {
                 None
             } else {
@@ -312,6 +317,14 @@ impl ImageStream {
         self.cell.source.borrow().clone()
     }
 
+    fn leaf(&self) -> Rc<StreamCell> {
+        let mut leaf = self.clone();
+        while let Some(next) = leaf.source() {
+            leaf = next;
+        }
+        leaf.cell
+    }
+
     /// Whether `other` is this stream or one it follows.
     fn reaches(&self, other: &Self) -> bool {
         self == other || self.source().is_some_and(|source| source.reaches(other))
@@ -337,6 +350,11 @@ impl ImageStream {
         let completes = !matches!(state, ImageLoadState::Loading(_));
         *self.cell.state.borrow_mut() = state;
         self.cell.completed.set(completes);
+        let listeners = if completes {
+            self.cell.take_frame_listeners()
+        } else {
+            Vec::new()
+        };
         if let Some(chunk) = chunk {
             self.cell.deliver_chunk(chunk);
         }
@@ -344,6 +362,7 @@ impl ImageStream {
         if completes && let Some(changes) = self.cell.frame_changes.get() {
             changes.notify();
         }
+        deliver_frames(listeners);
         true
     }
 }
@@ -406,50 +425,101 @@ impl Drop for ImageChunkSubscription {
 
 type ImageFrameCallback = Box<dyn FnOnce(Result<ImageHandle, ImageError>, bool)>;
 
+#[derive(Default)]
+struct PendingFrameListeners {
+    next_id: Cell<u64>,
+    bindings: RefCell<BTreeMap<u64, Weak<ImageFrameBinding>>>,
+}
+
+impl StreamCell {
+    fn take_frame_listeners(&self) -> Vec<Rc<ImageFrameBinding>> {
+        self.pending_frames.get().map_or_else(Vec::new, |pending| {
+            std::mem::take(&mut *pending.bindings.borrow_mut())
+                .into_values()
+                .filter_map(|binding| binding.upgrade())
+                .collect()
+        })
+    }
+}
+
+fn deliver_frames(listeners: Vec<Rc<ImageFrameBinding>>) {
+    let mut failure = None;
+    for binding in listeners {
+        if let Err(panic) = catch_unwind(AssertUnwindSafe(|| binding.refresh(false))) {
+            failure.get_or_insert(panic);
+        }
+    }
+    if let Some(panic) = failure {
+        resume_unwind(panic);
+    }
+}
+
+struct FrameRegistration {
+    cell: Weak<StreamCell>,
+    id: u64,
+}
+
+impl Drop for FrameRegistration {
+    fn drop(&mut self) {
+        if let Some(cell) = self.cell.upgrade()
+            && let Some(pending) = cell.pending_frames.get()
+        {
+            pending.bindings.borrow_mut().remove(&self.id);
+        }
+    }
+}
+
 /// Owns one listener for an image stream's first outcome.
 #[must_use = "keep the subscription alive until the image arrives"]
 pub struct ImageFrameSubscription {
-    _binding: Rc<ImageFrameBinding>,
+    binding: Rc<ImageFrameBinding>,
+}
+
+impl Drop for ImageFrameSubscription {
+    fn drop(&mut self) {
+        // A dispatch snapshot can still own the callback after removal.
+        self.binding.registration.borrow_mut().take();
+    }
 }
 
 struct ImageFrameBinding {
     stream: RefCell<Option<ImageStream>>,
     callback: RefCell<Option<ImageFrameCallback>>,
-    subscriptions: RefCell<Vec<Subscription>>,
+    registration: RefCell<Option<FrameRegistration>>,
 }
 
 impl ImageFrameBinding {
+    fn bind_pending(self: &Rc<Self>, leaf: &Rc<StreamCell>) {
+        let pending = leaf
+            .pending_frames
+            .get_or_init(PendingFrameListeners::default);
+        let id = pending.next_id.get();
+        pending
+            .next_id
+            .set(id.checked_add(1).expect("too many image frame listeners"));
+        pending
+            .bindings
+            .borrow_mut()
+            .insert(id, Rc::downgrade(self));
+        *self.registration.borrow_mut() = Some(FrameRegistration {
+            cell: Rc::downgrade(leaf),
+            id,
+        });
+    }
+
     fn refresh(self: &Rc<Self>, synchronous: bool) {
         let Some(stream) = self.stream.borrow().clone() else {
             return;
         };
-        let sources = Rc::new(RefCell::new(Vec::<DependencySource>::new()));
-        let outcome = {
-            let sources = sources.clone();
-            let _tracking = TrackingGuard::enter(move |source| sources.borrow_mut().push(source));
-            stream.frame_state()
-        };
-        let result = match outcome {
+        let result = match stream.read_state(false, false) {
             ImageLoadState::Loading(_) => {
-                let subscriptions = sources
-                    .borrow()
-                    .iter()
-                    .map(|source| {
-                        let listener = Rc::downgrade(self);
-                        source.subscribe((), move || {
-                            if let Some(listener) = listener.upgrade() {
-                                listener.refresh(false);
-                            }
-                        })
-                    })
-                    .collect();
-                *self.subscriptions.borrow_mut() = subscriptions;
+                self.bind_pending(&stream.leaf());
                 return;
             }
             ImageLoadState::Ready(image) => Ok(image),
             ImageLoadState::Failed(error) => Err(error),
         };
-        self.subscriptions.borrow_mut().clear();
+        self.registration.borrow_mut().take();
         self.stream.borrow_mut().take();
         let callback = self.callback.borrow_mut().take();
         if let Some(callback) = callback {
@@ -514,7 +584,14 @@ impl ImageStreamCompleter {
         {
             return false;
         }
+        let mut listeners = stream.cell.take_frame_listeners();
         *stream.cell.source.borrow_mut() = Some(source.clone());
+        if !listeners.is_empty() && !source.is_completed() {
+            let leaf = source.leaf();
+            for listener in listeners.drain(..) {
+                listener.bind_pending(&leaf);
+            }
+        }
         stream.bind_chunk_source();
         stream.cell.changes.notify();
         // A dormant frame-only reader must rebind to the followed source
@@ -522,6 +599,7 @@ impl ImageStreamCompleter {
         if let Some(changes) = stream.cell.frame_changes.get() {
             changes.notify();
         }
+        deliver_frames(listeners);
         true
     }
 }
