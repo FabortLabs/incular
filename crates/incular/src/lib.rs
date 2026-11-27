@@ -131,10 +131,14 @@ pub mod prelude {
         RoutedPointerEvent, WeakPointerRouter,
     };
     pub use incular_image::{
-        AnyImageProvider, AssetBundleImageKey, AssetImage, DecodedImage, ExactAssetImage, FileImage,
-        ImageAssetBundle, ImageCache, ImageCacheDiagnostics, ImageChunkEvent, ImageChunkListener, ImageChunkSubscription, ImageConfiguration,
-        ImageError, ImageErrorListener, ImageHandle, ImageInfo, ImageId, ImageListener, ImageLoadState, ImageProvider, ImageResizeOptions,
-        ImageSource, ImageStream, ImageStreamCompleter, ImageStreamListener, ImageStreamSubscription, MemoryImage, ResizeImage, ResizeImageKey, ResizeImagePolicy,
+        AnyImageProvider, AssetBundleImageKey, AssetImage, DecodedImage, DecodedImageFrame,
+        ExactAssetImage, FileImage, ImageAssetBundle, ImageCache, ImageCacheDiagnostics,
+        ImageChunkEvent, ImageChunkListener, ImageChunkSubscription, ImageConfiguration,
+        ImageDecodeCompletion, ImageError, ImageErrorListener, ImageFrameCodec, ImageFrameDemand,
+        ImageHandle, ImageId, ImageInfo, ImageListener, ImageLoadState, ImagePlayback,
+        ImagePlaybackKeepAlive, ImagePlaybackSubscription, ImageProvider, ImageResizeOptions,
+        ImageSource, ImageStream, ImageStreamCompleter, ImageStreamListener, ImageStreamSubscription,
+        MemoryImage, ResizeImage, ResizeImageKey, ResizeImagePolicy,
     };
     pub use incular_navigation::{
         BackDispatchReport, BackDispatcher, BottomSheet, Dialog, HeroController, ModalBarrier,

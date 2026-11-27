@@ -8,6 +8,7 @@ mod asset_image;
 mod bundled_cache;
 mod info;
 mod listener;
+mod playback;
 mod resize;
 mod stream;
 
@@ -23,6 +24,10 @@ pub use info::ImageInfo;
 pub use listener::{
     ImageChunkListener, ImageErrorListener, ImageListener, ImageStreamListener,
     ImageStreamSubscription,
+};
+pub use playback::{
+    DecodedImageFrame, ImageDecodeCompletion, ImageFrameCodec, ImageFrameDemand, ImagePlayback,
+    ImagePlaybackKeepAlive, ImagePlaybackSubscription,
 };
 pub use resize::{ImageResizeOptions, ResizeImage, ResizeImageKey, ResizeImagePolicy};
 

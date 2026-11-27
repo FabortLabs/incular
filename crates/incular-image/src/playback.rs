@@ -1,0 +1,333 @@
+use std::{
+    cell::RefCell,
+    collections::BTreeMap,
+    num::NonZeroUsize,
+    rc::Rc,
+    time::{Duration, Instant},
+};
+
+use crate::{ImageError, ImageInfo};
+
+/// A decoded image and the requested time it should remain visible.
+pub struct DecodedImageFrame {
+    pub image: ImageInfo,
+    pub duration: Duration,
+}
+
+pub type ImageDecodeCompletion = Box<dyn FnOnce(Result<DecodedImageFrame, ImageError>)>;
+
+/// A UI-thread frame source. Completion can run inline or later, on the same
+/// thread. Successive requests read successive frames, wrapping as needed.
+/// After idle playback restarts, a request can overlap an obsolete request;
+/// the source should preserve its decode order even if completions arrive late.
+pub trait ImageFrameCodec {
+    fn frame_count(&self) -> NonZeroUsize;
+
+    /// Repeats after the initial play, or `None` for unbounded playback.
+    fn repetition_count(&self) -> Option<usize>;
+
+    fn decode_next(&self, complete: ImageDecodeCompletion);
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ImageFrameDemand {
+    /// Present at the next app frame.
+    NextFrame,
+    /// Arrange for an app frame no earlier than this instant.
+    At(Instant),
+}
+
+type FrameResult = Result<ImageInfo, ImageError>;
+type FrameObserver = Rc<dyn Fn(FrameResult, bool)>;
+type SharedState = Rc<RefCell<State>>;
+
+struct Source {
+    codec: Rc<dyn ImageFrameCodec>,
+    frames: NonZeroUsize,
+    repeats: Option<usize>,
+}
+
+#[derive(Default)]
+struct State {
+    source: Option<Source>,
+    attached: bool,
+    disposed: bool,
+    listeners: BTreeMap<u64, FrameObserver>,
+    next_listener: u64,
+    keep_alive: usize,
+    generation: u64,
+    decoding: bool,
+    pending: Option<DecodedImageFrame>,
+    current: Option<FrameResult>,
+    visible: Option<(Instant, Duration)>,
+    frame_in_cycle: usize,
+    cycles: usize,
+}
+
+impl State {
+    fn demand(&self) -> Option<ImageFrameDemand> {
+        if self.listeners.is_empty() || self.pending.is_none() {
+            return None;
+        }
+        Some(match self.visible {
+            None => ImageFrameDemand::NextFrame,
+            Some((start, duration)) => ImageFrameDemand::At(start.checked_add(duration)?),
+        })
+    }
+
+    fn snapshot(&self) -> Vec<FrameObserver> {
+        self.listeners.values().cloned().collect()
+    }
+
+    fn needs_more(&mut self) -> bool {
+        let Some(source) = &self.source else {
+            return false;
+        };
+        self.frame_in_cycle += 1;
+        if self.frame_in_cycle == source.frames.get() {
+            self.frame_in_cycle = 0;
+            if let Some(repeats) = source.repeats {
+                if self.cycles == repeats {
+                    return false;
+                }
+                self.cycles += 1;
+            }
+        }
+        true
+    }
+}
+
+/// Retained image playback driven by the host's monotonic app-frame clock.
+/// Only one pending decoded frame is retained. No thread or timer is started
+/// here: the host responds to demand changes and calls `advance` on app frames.
+#[derive(Clone)]
+pub struct ImagePlayback {
+    state: SharedState,
+    request_frame: Rc<dyn Fn()>,
+}
+
+impl ImagePlayback {
+    /// `request_frame` signals that the host should re-query `frame_demand`
+    /// to schedule or cancel its next wake. The hook runs outside state borrows.
+    pub fn new(request_frame: impl Fn() + 'static) -> Self {
+        Self {
+            state: Rc::new(RefCell::new(State::default())),
+            request_frame: Rc::new(request_frame),
+        }
+    }
+
+    /// Attach the codec once, including after listeners register. An unused
+    /// playback does not request any frames. Returns false if already closed
+    /// or previously attached.
+    pub fn attach(&self, codec: Rc<dyn ImageFrameCodec>) -> bool {
+        let frames = codec.frame_count();
+        let repeats = codec.repetition_count();
+        {
+            let mut state = self.state.borrow_mut();
+            if state.disposed || state.attached {
+                return false;
+            }
+            state.attached = true;
+            state.source = Some(Source {
+                codec,
+                frames,
+                repeats,
+            });
+        }
+        self.decode();
+        true
+    }
+
+    /// Observe new frames until the subscription is dropped. The current
+    /// frame (or terminal error) is replayed synchronously to new listeners.
+    pub fn listen(
+        &self,
+        observer: impl Fn(Result<ImageInfo, ImageError>, bool) + 'static,
+    ) -> Option<ImagePlaybackSubscription> {
+        let observer: FrameObserver = Rc::new(observer);
+        let (id, current) = {
+            let mut state = self.state.borrow_mut();
+            if state.disposed {
+                return None;
+            }
+            let id = state.next_listener;
+            state.next_listener = id.checked_add(1).expect("image listener id exhausted");
+            state.listeners.insert(id, Rc::clone(&observer));
+            (id, state.current.clone())
+        };
+        let subscription = ImagePlaybackSubscription {
+            playback: self.clone(),
+            id,
+        };
+        if let Some(current) = current {
+            observer(current, true);
+        }
+        self.decode();
+        Some(subscription)
+    }
+
+    /// Preserve the codec and previously shown frame while no listeners
+    /// remain. The absence of listeners still prevents further scheduling.
+    pub fn keep_alive(&self) -> Option<ImagePlaybackKeepAlive> {
+        let mut state = self.state.borrow_mut();
+        if state.disposed {
+            return None;
+        }
+        state.keep_alive += 1;
+        Some(ImagePlaybackKeepAlive(self.clone()))
+    }
+
+    #[must_use]
+    pub fn frame_demand(&self) -> Option<ImageFrameDemand> {
+        self.state.borrow().demand()
+    }
+
+    /// Present a pending frame if its predecessor's time has elapsed. A late
+    /// host frame starts the next frame's duration at the actual presentation
+    /// time, rather than catching up by skipping decoded animation frames.
+    pub fn advance(&self, now: Instant) -> bool {
+        let (result, listeners, finished) = {
+            let mut state = self.state.borrow_mut();
+            match state.demand() {
+                None => return false,
+                Some(ImageFrameDemand::At(at)) if now < at => return false,
+                _ => {}
+            }
+            let frame = state
+                .pending
+                .take()
+                .expect("frame demand requires a decode");
+            let result = Ok(frame.image);
+            state.visible = Some((now, frame.duration));
+            state.current = Some(result.clone());
+            let finished = if state.needs_more() {
+                None
+            } else {
+                state.source.take()
+            };
+            (result, state.snapshot(), finished)
+        };
+        for listener in listeners {
+            listener(result.clone(), false);
+        }
+        drop(finished);
+        (self.request_frame)();
+        self.decode();
+        true
+    }
+
+    fn decode(&self) {
+        let (codec, generation) = {
+            let mut state = self.state.borrow_mut();
+            if state.listeners.is_empty() || state.decoding || state.pending.is_some() {
+                return;
+            }
+            let Some(source) = &state.source else {
+                return;
+            };
+            let codec = Rc::clone(&source.codec);
+            state.decoding = true;
+            (codec, state.generation)
+        };
+        let weak_state = Rc::downgrade(&self.state);
+        let weak_request = Rc::downgrade(&self.request_frame);
+        codec.decode_next(Box::new(move |result| {
+            if let (Some(state), Some(request_frame)) =
+                (weak_state.upgrade(), weak_request.upgrade())
+            {
+                Self {
+                    state,
+                    request_frame,
+                }
+                .decoded(generation, result);
+            }
+        }));
+    }
+
+    fn decoded(&self, generation: u64, result: Result<DecodedImageFrame, ImageError>) {
+        let (delivery, finished) = {
+            let mut state = self.state.borrow_mut();
+            if state.generation != generation || !state.decoding {
+                return;
+            }
+            state.decoding = false;
+            match result {
+                Ok(frame)
+                    if state
+                        .source
+                        .as_ref()
+                        .is_some_and(|source| source.frames.get() > 1) =>
+                {
+                    state.pending = Some(frame);
+                    (None, None)
+                }
+                result => {
+                    let result = result.map(|frame| frame.image);
+                    state.current = Some(result.clone());
+                    (Some((result, state.snapshot())), state.source.take())
+                }
+            }
+        };
+        if let Some((result, listeners)) = delivery {
+            for listener in listeners {
+                listener(result.clone(), false);
+            }
+        } else {
+            (self.request_frame)();
+        }
+        drop(finished);
+    }
+
+    fn retire_if_idle(&self, remove: impl FnOnce(&mut State) -> Option<FrameObserver>) {
+        let (removed, source, cancel_wake) = {
+            let mut state = self.state.borrow_mut();
+            let had_listeners = !state.listeners.is_empty();
+            let had_demand = state.demand().is_some();
+            let removed = remove(&mut state);
+            let mut source = None;
+            if state.listeners.is_empty() {
+                if had_listeners {
+                    state.generation = state.generation.wrapping_add(1);
+                    state.decoding = false;
+                    state.pending = None;
+                }
+                if state.keep_alive == 0 && state.next_listener != 0 {
+                    state.disposed = true;
+                    state.current = None;
+                    source = state.source.take();
+                }
+            }
+            (removed, source, had_demand && state.listeners.is_empty())
+        };
+        drop(removed);
+        drop(source);
+        if cancel_wake {
+            (self.request_frame)();
+        }
+    }
+}
+
+#[must_use = "keep the subscription while observing image playback"]
+pub struct ImagePlaybackSubscription {
+    playback: ImagePlayback,
+    id: u64,
+}
+
+impl Drop for ImagePlaybackSubscription {
+    fn drop(&mut self) {
+        self.playback
+            .retire_if_idle(|state| state.listeners.remove(&self.id));
+    }
+}
+
+#[must_use = "keep the handle while preserving idle image playback"]
+pub struct ImagePlaybackKeepAlive(ImagePlayback);
+
+impl Drop for ImagePlaybackKeepAlive {
+    fn drop(&mut self) {
+        self.0.retire_if_idle(|state| {
+            state.keep_alive -= 1;
+            None
+        });
+    }
+}
