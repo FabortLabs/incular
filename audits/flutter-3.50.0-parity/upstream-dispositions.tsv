@@ -3737,3 +3737,5 @@ packages/flutter/test/painting/image_provider_test.dart	111	File image sets tag	
 packages/flutter/test/painting/image_provider_test.dart	124	Memory image sets tag	paired-match	upstream-image-provider-labels.md
 packages/flutter/test/painting/image_provider_test.dart	134	Asset image sets tag	paired-match	upstream-image-provider-labels.md
 packages/flutter/test/painting/image_provider_test.dart	144	Resize image sets tag	paired-match	upstream-image-provider-labels.md
+packages/flutter/test/painting/image_stream_test.dart	1102	MultiFrameImageStreamCompleter image callback can remove listener	paired-match	upstream-image-playback.md#explicit-disposal-and-removal-during-delivery
+packages/flutter/test/painting/image_stream_test.dart	1135	ImageStream that has never had any listeners can be disposed	paired-match	upstream-image-playback.md#explicit-disposal-and-removal-during-delivery

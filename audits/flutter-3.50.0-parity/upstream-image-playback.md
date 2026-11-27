@@ -128,3 +128,13 @@ Flutter key. Incular intentionally keeps its existing content-based
 memory-provider identity for separate equal byte allocations. The
 authored Flutter and native checks assert handle identity on real
 painted frames; all eleven native animated widget tests passed.
+
+## Explicit disposal and removal during delivery
+
+Pinned `painting/image_stream_test.dart:1102,1135` passed. Native
+playback requests its single frame when the observer arrives; removing
+that observer inside its own callback releases the codec after delivery.
+An attached codec that has never had an observer can now be explicitly
+disposed without a throwaway listener. External keep-alive owners delay
+disposal; a disposed session cannot be reopened. Twenty-eight focused
+playback tests and four stream-listener checks passed.

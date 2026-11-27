@@ -752,3 +752,53 @@ fn a_removed_idle_callback_does_not_run_and_a_live_one_can_reenter() {
     drop(second);
     assert!(source.listen(|_, _| {}).is_none());
 }
+
+#[test]
+fn image_callback_can_remove_its_own_listener_and_dispose_the_codec() {
+    let stream = ImagePlayback::new(|| {});
+    let driver = Rc::new(Driver::default());
+    driver.attach(&stream, 1, Some(0));
+    assert_eq!(driver.asked.get(), 0);
+
+    let token = Rc::new(RefCell::new(None));
+    let captured = Rc::clone(&token);
+    let seen = Rc::new(Cell::new(0));
+    let delivered = Rc::clone(&seen);
+    let subscription = stream
+        .listen(move |result, synchronous| {
+            assert!(!synchronous);
+            assert_eq!(result.unwrap().logical_size(), (20., 10.));
+            delivered.set(delivered.get() + 1);
+            drop(captured.borrow_mut().take());
+        })
+        .unwrap();
+    *token.borrow_mut() = Some(subscription);
+    assert_eq!(driver.asked.get(), 1);
+
+    driver.complete(&image(20, 10), 200);
+    assert_eq!(seen.get(), 1);
+    assert!(token.borrow().is_none());
+    assert!(driver.disposed.get());
+    assert!(stream.listen(|_, _| {}).is_none());
+}
+
+#[test]
+fn a_never_observed_codec_can_be_explicitly_disposed() {
+    let stream = ImagePlayback::new(|| {});
+    let driver = Rc::new(Driver::default());
+    driver.attach(&stream, 2, None);
+    assert_eq!(driver.asked.get(), 0);
+    assert!(!driver.disposed.get());
+
+    let keep_alive = stream.keep_alive().unwrap();
+    assert!(!stream.maybe_dispose(), "external owners prevent disposal");
+    drop(keep_alive);
+    assert!(
+        !driver.disposed.get(),
+        "a never-observed stream stays attachable"
+    );
+    assert!(stream.maybe_dispose());
+    assert!(driver.disposed.get());
+    assert!(!stream.maybe_dispose());
+    assert!(stream.listen(|_, _| {}).is_none());
+}

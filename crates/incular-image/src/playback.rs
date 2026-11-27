@@ -330,6 +330,13 @@ impl ImagePlayback {
         Some(ImagePlaybackKeepAlive(self.clone()))
     }
 
+    /// Releases an unobserved playback and its codec, even if no listener
+    /// was ever attached. Active listeners or keep-alive handles prevent it.
+    /// Returns true only when this call closes the playback.
+    pub fn maybe_dispose(&self) -> bool {
+        self.dispose_if_unobserved(true)
+    }
+
     #[must_use]
     pub fn frame_demand(&self) -> Option<ImageFrameDemand> {
         self.state.borrow().demand()
@@ -467,25 +474,34 @@ impl ImagePlayback {
                 }
             }
         }
-        let (source, remaining_callbacks) = {
-            let mut state = self.state.borrow_mut();
-            if state.listeners.is_empty() && state.keep_alive == 0 && state.next_listener != 0 {
-                state.disposed = true;
-                state.current = None;
-                state.error = None;
-                (
-                    state.source.take(),
-                    std::mem::take(&mut state.last_listener_callbacks),
-                )
-            } else {
-                (None, BTreeMap::new())
-            }
-        };
-        drop(source);
-        drop(remaining_callbacks);
+        self.dispose_if_unobserved(false);
         if let Some(panic) = failure {
             resume_unwind(panic);
         }
+    }
+
+    fn dispose_if_unobserved(&self, allow_never_observed: bool) -> bool {
+        let retired = {
+            let mut state = self.state.borrow_mut();
+            if state.disposed
+                || !state.listeners.is_empty()
+                || state.keep_alive != 0
+                || (!allow_never_observed && state.next_listener == 0)
+            {
+                return false;
+            }
+            state.disposed = true;
+            // Release the codec and retained values outside the borrow:
+            // a destructor may invoke user code or complete a task.
+            (
+                state.source.take(),
+                state.current.take(),
+                state.error.take(),
+                std::mem::take(&mut state.last_listener_callbacks),
+            )
+        };
+        drop(retired);
+        true
     }
 }
 
