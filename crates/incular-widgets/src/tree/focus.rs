@@ -1246,7 +1246,7 @@ impl WidgetTree {
         lock_modes: incular_core::Modifiers,
         raw_delivery: incular_gestures::RawKeyDelivery<'_>,
     ) -> KeyEventResult {
-        self.dispatch_keyboard_where(focused, event, lock_modes, raw_delivery, |_| true, None)
+        self.dispatch_keyboard_where(focused, event, lock_modes, raw_delivery, None, |_| true, None)
     }
 
     /// Routes a key and returns a built-in focus intent for the runtime, if
@@ -1259,9 +1259,21 @@ impl WidgetTree {
         lock_modes: incular_core::Modifiers,
         raw_delivery: incular_gestures::RawKeyDelivery<'_>,
     ) -> (KeyEventResult, Option<crate::DirectionalFocusIntent>) {
+        self.route_keyboard_with_focus_intent_and_state(focused, event, lock_modes, raw_delivery, None)
+    }
+
+    #[doc(hidden)]
+    pub fn route_keyboard_with_focus_intent_and_state(
+        &self,
+        focused: Option<ElementId>,
+        event: KeyboardEvent,
+        lock_modes: incular_core::Modifiers,
+        raw_delivery: incular_gestures::RawKeyDelivery<'_>,
+        keyboard: Option<&incular_core::HardwareKeyboardState>,
+    ) -> (KeyEventResult, Option<crate::DirectionalFocusIntent>) {
         let mut intent = None;
         let result = self.dispatch_keyboard_where(
-            focused, event, lock_modes, raw_delivery, |_| true, Some(&mut intent),
+            focused, event, lock_modes, raw_delivery, keyboard, |_| true, Some(&mut intent),
         );
         (result, intent)
     }
@@ -1272,12 +1284,14 @@ impl WidgetTree {
     /// decrement fallback serves only listeners sharing the advertisement
     /// predicate, so execution cannot outrun what semantics advertises.
     #[must_use]
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn dispatch_keyboard_where(
         &self,
         focused: Option<ElementId>,
         event: KeyboardEvent,
         lock_modes: incular_core::Modifiers,
         raw_delivery: incular_gestures::RawKeyDelivery<'_>,
+        keyboard: Option<&incular_core::HardwareKeyboardState>,
         mut serve: impl FnMut(&incular_gestures::GestureCallbacks) -> bool,
         mut directional_intent: Option<&mut Option<crate::DirectionalFocusIntent>>,
     ) -> KeyEventResult {
@@ -1299,7 +1313,10 @@ impl WidgetTree {
             {
                 if callbacks.on_shortcut.is_none()
                     && callbacks.on_shortcut_with_lock_modes.is_none()
-                    && let Some(matched) = callbacks.shortcut_scope.as_ref().and_then(|s| s.find(event.clone()))
+                    && callbacks.on_shortcut_with_keyboard_state.is_none()
+                    && let Some(matched) = callbacks.shortcut_scope.as_ref().and_then(|scope| {
+                        scope.find_with_keyboard(&event, keyboard)
+                    })
                 {
                     use incular_gestures::ShortcutMatch;
                     let result = match matched {
@@ -1315,13 +1332,17 @@ impl WidgetTree {
                         return result;
                     }
                 }
-                let result = callbacks.route_keyboard_with_raw_payload(event.clone(), lock_modes, raw_delivery);
+                let result = callbacks.route_keyboard_with_keyboard_state(
+                    event.clone(), lock_modes, raw_delivery, keyboard,
+                );
                 if result != KeyEventResult::Ignored {
                     return result;
                 }
                 if let Some(slot) = directional_intent.as_deref_mut()
                     && let Some(incular_gestures::ShortcutMatch::Intent(matched)) =
-                        callbacks.shortcut_scope.as_ref().and_then(|scope| scope.find(event.clone()))
+                        callbacks.shortcut_scope.as_ref().and_then(|scope| {
+                            scope.find_with_keyboard(&event, keyboard)
+                        })
                     && let Some(intent) = matched.downcast_command::<crate::DirectionalFocusIntent>()
                 {
                     *slot = Some(*intent);
@@ -1365,6 +1386,7 @@ impl WidgetTree {
             KeyboardEvent::key_down(key, code),
             incular_core::Modifiers::empty(),
             incular_gestures::RawKeyDelivery::Absent,
+            None,
             incular_gestures::GestureCallbacks::services_semantic_keys,
             None,
         ) == KeyEventResult::Handled

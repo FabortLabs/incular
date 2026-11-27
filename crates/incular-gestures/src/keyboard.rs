@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 
 use std::rc::{Rc, Weak};
 
-use incular_core::{Code, KeyboardEvent, KeyboardKey, Modifiers};
+use incular_core::{Code, HardwareKeyboardState, KeyboardEvent, KeyboardKey, Modifiers};
 
 use crate::details::{FocusKeyHandlerOwner, GestureCallbacks};
 
@@ -74,6 +74,10 @@ pub fn combine_key_event_results(results: impl IntoIterator<Item = KeyEventResul
     combined
 }
 
+#[doc(hidden)]
+pub type StatefulShortcutHandler =
+    dyn Fn(KeyboardEvent, Modifiers, Option<&HardwareKeyboardState>) -> bool;
+
 /// Selects the raw counterpart of one normalized key event. Mirroring
 /// delays the event clone until a raw callback actually needs it.
 #[doc(hidden)]
@@ -105,6 +109,7 @@ impl GestureCallbacks {
             || self.on_key_up.is_some()
             || self.on_shortcut.is_some()
             || self.on_shortcut_with_lock_modes.is_some()
+            || self.on_shortcut_with_keyboard_state.is_some()
             || self.shortcut_scope.is_some()
             || self.focus_node.is_some()
     }
@@ -159,6 +164,24 @@ impl GestureCallbacks {
         lock_modes: Modifiers,
         raw_delivery: RawKeyDelivery<'_>,
     ) -> KeyEventResult {
+        self.route_keyboard_with_keyboard_state(event, lock_modes, raw_delivery, None)
+    }
+
+    #[doc(hidden)]
+    pub fn route_keyboard_with_keyboard_state(
+        &self,
+        event: KeyboardEvent,
+        lock_modes: Modifiers,
+        raw_delivery: RawKeyDelivery<'_>,
+        keyboard: Option<&HardwareKeyboardState>,
+    ) -> KeyEventResult {
+        if self
+            .on_shortcut_with_keyboard_state
+            .as_ref()
+            .is_some_and(|callback| callback(event.clone(), lock_modes, keyboard))
+        {
+            return KeyEventResult::Handled;
+        }
         if self
             .on_shortcut_with_lock_modes
             .as_ref()
@@ -861,23 +884,36 @@ pub enum ShortcutMatch {
     Intent(ErasedIntent),
 }
 
+type ScopedShortcutFinder =
+    dyn Fn(&KeyboardEvent, Option<&HardwareKeyboardState>) -> Option<ShortcutMatch>;
+
 /// Type-erased retained shortcut scope used by the widget tree to resolve
 /// local shortcut precedence before walking to an ancestor scope.
 pub struct ErasedShortcutScope {
-    finder: Rc<dyn Fn(KeyboardEvent) -> Option<ShortcutMatch>>,
+    finder: Rc<ScopedShortcutFinder>,
 }
 
 impl ErasedShortcutScope {
     #[must_use]
     pub fn from_shortcuts<C: CommandId>(shortcuts: Rc<Shortcuts<C>>) -> Rc<Self> {
         Rc::new(Self {
-            finder: Rc::new(move |event| shortcuts.find_match(&event)),
+            finder: Rc::new(move |event, keyboard| shortcuts.find_match(event, keyboard)),
         })
     }
 
     #[must_use]
     pub fn find(&self, event: KeyboardEvent) -> Option<ShortcutMatch> {
-        (self.finder)(event)
+        self.find_with_keyboard(&event, None)
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn find_with_keyboard(
+        &self,
+        event: &KeyboardEvent,
+        keyboard: Option<&HardwareKeyboardState>,
+    ) -> Option<ShortcutMatch> {
+        (self.finder)(event, keyboard)
     }
 }
 
@@ -1499,6 +1535,7 @@ pub enum ShortcutActivator {
     },
     Single(SingleActivator),
     Character(CharacterActivator),
+    LogicalSet(LogicalKeySet),
 }
 
 impl ShortcutActivator {
@@ -1540,6 +1577,16 @@ impl ShortcutActivator {
 
     #[must_use]
     pub fn accepts_with_lock_modes(&self, event: &KeyboardEvent, lock_modes: Modifiers) -> bool {
+        self.accepts_with_keyboard_state(event, lock_modes, None)
+    }
+
+    #[must_use]
+    pub fn accepts_with_keyboard_state(
+        &self,
+        event: &KeyboardEvent,
+        lock_modes: Modifiers,
+        keyboard: Option<&HardwareKeyboardState>,
+    ) -> bool {
         match self {
             Self::Physical { key, trigger } => {
                 key.code == event.code && key.modifiers == event.modifiers && trigger.matches(event)
@@ -1549,6 +1596,10 @@ impl ShortcutActivator {
             }
             Self::Single(activator) => activator.accepts_with_lock_modes(event, lock_modes),
             Self::Character(activator) => activator.accepts(event),
+            Self::LogicalSet(activator) => keyboard.map_or_else(
+                || activator.accepts(event),
+                |keyboard| activator.accepts_with_keyboard_state(event, keyboard),
+            ),
         }
     }
 }
@@ -1578,8 +1629,8 @@ impl From<CharacterActivator> for ShortcutActivator {
 }
 
 /// Flutter's `LogicalKeySet`: a set of logical keys pressed together, such
-/// as Control+C. Modifier keys in the set become required modifiers; the one
-/// other key (or, for a modifier-only set, the last modifier) triggers it.
+/// as Control+C. In a hardware event stream, any member can complete the
+/// chord, and an unrelated held key prevents it from matching.
 ///
 /// Incular reports modifiers without sides, so `Control` stands for Flutter's
 /// `LogicalKeyboardKey.control` synonym and matches either side.
@@ -1620,9 +1671,9 @@ impl LogicalKeySet {
         }
     }
 
-    /// The equivalent single-key activator, or `None` for an empty set or a
-    /// set with more than one non-modifier key (which Flutter's matching can
-    /// never accept from one key event either).
+    /// An event-only approximation for hosts without a held-key snapshot.
+    /// There is no such approximation for an empty set or for more than one
+    /// non-modifier. Mounted shortcuts use the full set instead.
     #[must_use]
     pub fn activator(&self) -> Option<SingleActivator> {
         let mut modifiers = Modifiers::empty();
@@ -1643,8 +1694,8 @@ impl LogicalKeySet {
         }
     }
 
-    /// Flutter's `LogicalKeySet.accepts`: the event's key is in the set and
-    /// exactly the set's modifiers are held.
+    /// Event-only fallback for hosts without a held-key snapshot. This
+    /// cannot see extra held non-modifier keys or reverse the trigger.
     #[must_use]
     pub fn accepts(&self, event: &KeyboardEvent) -> bool {
         self.activator().is_some_and(|activator| {
@@ -1661,18 +1712,28 @@ impl LogicalKeySet {
             }
         })
     }
+
+    /// Flutter's `LogicalKeySet.accepts`: down and repeat events for a
+    /// member can trigger only when the held logical keys equal the set.
+    /// Pass the keyboard snapshot after processing the event.
+    #[must_use]
+    pub fn accepts_with_keyboard_state(
+        &self,
+        event: &KeyboardEvent,
+        keyboard: &HardwareKeyboardState,
+    ) -> bool {
+        event.state.is_down()
+            && self.keys.binary_search(&event.key).is_ok()
+            && self.keys.iter().all(|key| keyboard.is_logical_key_pressed(key))
+            && keyboard
+                .pressed_logical_values()
+                .all(|key| self.keys.binary_search(key).is_ok())
+    }
 }
 
 impl From<LogicalKeySet> for ShortcutActivator {
-    /// A set that can never match becomes a never-matching logical key.
     fn from(value: LogicalKeySet) -> Self {
-        match value.activator() {
-            Some(activator) => Self::Single(activator),
-            None => Self::logical(LogicalShortcutKey {
-                key: KeyboardKey::Named(incular_core::NamedKey::Unidentified),
-                modifiers: Modifiers::all(),
-            }),
-        }
+        Self::LogicalSet(value)
     }
 }
 
@@ -1736,6 +1797,7 @@ struct ShortcutRegistration<C: CommandId> {
 struct ShortcutScope<C: CommandId> {
     physical: HashMap<ShortcutKey, Vec<ShortcutRegistration<C>>>,
     logical: HashMap<LogicalShortcutKey, Vec<ShortcutRegistration<C>>>,
+    key_sets: Vec<(LogicalKeySet, Intent<C>)>,
 }
 
 /// A small typed shortcut map that centralizes keyboard dispatch.
@@ -1749,6 +1811,7 @@ impl<C: CommandId> Default for Shortcuts<C> {
             scopes: vec![ShortcutScope {
                 physical: HashMap::new(),
                 logical: HashMap::new(),
+                key_sets: Vec::new(),
             }],
         }
     }
@@ -1841,6 +1904,17 @@ impl<C: CommandId> Shortcuts<C> {
         );
     }
 
+    /// Binds an exact held logical key set to an intent.
+    pub fn bind_key_set(&mut self, keys: LogicalKeySet, intent: impl Into<Intent<C>>) {
+        let bindings = &mut self.current_scope_mut().key_sets;
+        let intent = intent.into();
+        if let Some((_, existing)) = bindings.iter_mut().find(|(key, _)| *key == keys) {
+            *existing = intent;
+        } else {
+            bindings.push((keys, intent));
+        }
+    }
+
     /// Removes all bindings for a shortcut key.
     pub fn clear(&mut self, key: &ShortcutKey) -> bool {
         self.current_scope_mut().physical.remove(key).is_some()
@@ -1851,11 +1925,20 @@ impl<C: CommandId> Shortcuts<C> {
         self.current_scope_mut().logical.remove(key).is_some()
     }
 
+    /// Removes a held-key binding from the nearest scope.
+    pub fn clear_key_set(&mut self, keys: &LogicalKeySet) -> bool {
+        let bindings = &mut self.current_scope_mut().key_sets;
+        let initial_len = bindings.len();
+        bindings.retain(|(key, _)| key != keys);
+        bindings.len() != initial_len
+    }
+
     /// Pushes a nested shortcut scope.
     pub fn push_scope(&mut self) {
         self.scopes.push(ShortcutScope {
             physical: HashMap::new(),
             logical: HashMap::new(),
+            key_sets: Vec::new(),
         });
     }
 
@@ -1886,7 +1969,9 @@ impl<C: CommandId> Shortcuts<C> {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.scopes.iter().all(|scope| {
-            scope.physical.values().all(Vec::is_empty) && scope.logical.values().all(Vec::is_empty)
+            scope.physical.values().all(Vec::is_empty)
+                && scope.logical.values().all(Vec::is_empty)
+                && scope.key_sets.is_empty()
         })
     }
 
@@ -1934,6 +2019,11 @@ impl<C: CommandId> Shortcuts<C> {
                 Self::dispatch_registrations(registrations, &event, actions)
             }) || scope.logical.get(&logical).is_some_and(|registrations| {
                 Self::dispatch_registrations(registrations, &event, actions)
+            }) || actions.is_some_and(|actions| {
+                scope
+                    .key_sets
+                    .iter()
+                    .any(|(keys, intent)| keys.accepts(&event) && actions.invoke_intent(intent))
             }) {
                 return true;
             }
@@ -1941,7 +2031,11 @@ impl<C: CommandId> Shortcuts<C> {
         false
     }
 
-    fn find_match(&self, event: &KeyboardEvent) -> Option<ShortcutMatch> {
+    fn find_match(
+        &self,
+        event: &KeyboardEvent,
+        keyboard: Option<&HardwareKeyboardState>,
+    ) -> Option<ShortcutMatch> {
         let physical = ShortcutKey::new(event.code, event.modifiers);
         let logical = LogicalShortcutKey::new(event.key.clone(), event.modifiers);
         for scope in self.scopes.iter().rev() {
@@ -1958,6 +2052,14 @@ impl<C: CommandId> Shortcuts<C> {
                     .find(|registration| registration.trigger.matches(event))
             }) {
                 return Some(Self::erase_binding(&registration.binding));
+            }
+            if let Some((_, intent)) = scope.key_sets.iter().find(|(keys, _)| {
+                keyboard.map_or_else(
+                    || keys.accepts(event),
+                    |keyboard| keys.accepts_with_keyboard_state(event, keyboard),
+                )
+            }) {
+                return Some(ShortcutMatch::Intent(ErasedIntent::from_intent(intent)));
             }
         }
         None
@@ -1996,6 +2098,7 @@ impl<C: CommandId> Shortcuts<C> {
             self.scopes.push(ShortcutScope {
                 physical: HashMap::new(),
                 logical: HashMap::new(),
+                key_sets: Vec::new(),
             });
         }
         self.scopes

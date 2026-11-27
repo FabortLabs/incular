@@ -3403,3 +3403,5 @@ packages/flutter/test/widgets/shortcuts_test.dart	19	LogicalKeySet passes parame
 packages/flutter/test/widgets/shortcuts_test.dart	72	LogicalKeySet works as a map key.	paired-match	upstream-logical-key-set.md
 packages/flutter/test/widgets/shortcuts_test.dart	178	LogicalKeySet.hashCode is stable	paired-match	upstream-logical-key-set.md
 packages/flutter/test/widgets/shortcuts_test.dart	201	LogicalKeySet.hashCode is order-independent	paired-match	upstream-logical-key-set.md
+packages/flutter/test/widgets/shortcuts_test.dart	112	handles two keys	paired-match	upstream-logical-key-set.md#mounted-chords-and-hardware-state
+packages/flutter/test/widgets/shortcuts_test.dart	238	isActivatedBy works as expected	paired-match	upstream-logical-key-set.md#mounted-chords-and-hardware-state

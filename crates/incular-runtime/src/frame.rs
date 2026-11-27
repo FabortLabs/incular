@@ -3794,11 +3794,12 @@ impl Runtime {
             return true;
         }
         let lock_modes = event.modifiers | self.hardware_keyboard.lock_modes_enabled();
-        let (focus_result, directional_intent) = self.tree.route_keyboard_with_focus_intent(
+        let (focus_result, directional_intent) = self.tree.route_keyboard_with_focus_intent_and_state(
             self.focused,
             event.clone(),
             lock_modes,
             message_source.raw_delivery(),
+            Some(&self.hardware_keyboard),
         );
         let late_result = if has_focus_root && focus_result != KeyEventResult::Handled {
             self.late_focus_key_handlers.dispatch(&event)

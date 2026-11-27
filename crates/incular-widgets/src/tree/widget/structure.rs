@@ -2003,6 +2003,10 @@ fn gesture_callbacks_eq(left: &GestureCallbacks, right: &GestureCallbacks) -> bo
             &left.on_shortcut_with_lock_modes,
             &right.on_shortcut_with_lock_modes,
         )
+        && same_rc(
+            &left.on_shortcut_with_keyboard_state,
+            &right.on_shortcut_with_keyboard_state,
+        )
         && same_rc(&left.shortcut_scope, &right.shortcut_scope)
         && same_rc(&left.action_scope, &right.action_scope)
         && same_rc(&left.mount_action_listener, &right.mount_action_listener)

@@ -88,6 +88,11 @@ impl HardwareKeyboardState {
         self.pressed.values().cloned().collect()
     }
 
+    /// Pressed logical values without copying or collapsing duplicate physical keys.
+    pub fn pressed_logical_values(&self) -> impl Iterator<Item = &Key> {
+        self.pressed.values()
+    }
+
     /// Toggles observed in this event stream, independent of whether the
     /// corresponding lock key is still down.
     #[must_use]

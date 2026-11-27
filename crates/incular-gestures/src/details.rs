@@ -15,7 +15,7 @@ use incular_core::{
 use crate::focus::{FocusBehavior, FocusNode};
 use crate::keyboard::{
     ActionInvocationSubscription, ActionListenerSubscription, ErasedActionScope,
-    ErasedShortcutScope, FocusKeyEventHandler,
+    ErasedShortcutScope, FocusKeyEventHandler, StatefulShortcutHandler,
 };
 
 use crate::scale::{ScaleEndDetails, ScaleStartDetails, ScaleUpdateDetails};
@@ -737,6 +737,9 @@ pub struct GestureCallbacks {
     /// Optional shortcut dispatcher with the separate observed lock state.
     pub on_shortcut_with_lock_modes:
         Option<Rc<dyn Fn(KeyboardEvent, incular_core::Modifiers) -> bool>>,
+    /// Optional shortcut dispatcher that can inspect held logical keys.
+    #[doc(hidden)]
+    pub on_shortcut_with_keyboard_state: Option<Rc<StatefulShortcutHandler>>,
     /// A typed shortcut scope retained separately from the callback above so
     /// the widget tree can resolve an intent against action ancestors.
     pub shortcut_scope: Option<Rc<ErasedShortcutScope>>,

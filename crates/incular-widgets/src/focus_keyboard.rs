@@ -991,10 +991,10 @@ impl From<CallbackShortcuts> for Widget {
     fn from(value: CallbackShortcuts) -> Self {
         let bindings = value.bindings;
         let callbacks = incular_gestures::GestureCallbacks {
-            on_shortcut_with_lock_modes: Some(Rc::new(move |event, lock_modes| {
+            on_shortcut_with_keyboard_state: Some(Rc::new(move |event, lock_modes, keyboard| {
                 let mut handled = false;
                 for (activator, callback) in &bindings {
-                    if activator.accepts_with_lock_modes(&event, lock_modes) {
+                    if activator.accepts_with_keyboard_state(&event, lock_modes, keyboard) {
                         callback();
                         handled = true;
                     }
