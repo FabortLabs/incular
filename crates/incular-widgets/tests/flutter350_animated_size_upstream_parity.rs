@@ -229,3 +229,162 @@ fn animated_size_baseline_includes_its_childs_animated_vertical_offset() {
         Some(baseline(&probe.tree, element).unwrap() + child_y - own_y),
     );
 }
+
+#[test]
+fn animated_size_inside_intrinsic_height_and_wrap_keeps_the_live_tween() {
+    use incular_widgets::{Center, IntrinsicHeight, Wrap, internal::Key};
+
+    let key = Key::from("intrinsic height probe");
+    let make = |width, height| -> Widget {
+        let animated = AnimatedSize::new(
+            Duration::from_millis(200),
+            SizedBox::new().width(width).height(height),
+        )
+        .curve(incular_animation::Curves::EASE_IN_OUT_BACK);
+        Center::new(
+            Widget::from(IntrinsicHeight::new(
+                Wrap::new([animated]).text_direction(TextDirection::Ltr),
+            ))
+            .with_key(key.clone()),
+        )
+        .into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(make(100., 100.)).unwrap();
+    let epoch = Instant::now();
+    let frame = |tree: &mut WidgetTree, millis| {
+        tree.update_compositor(epoch + Duration::from_millis(millis))
+            .unwrap();
+        tree.layout(Constraints::tight(LARGE)).unwrap();
+        tree.element_bounds(tree.element_with_key(&key).unwrap())
+            .unwrap()
+            .size
+    };
+    assert_eq!(frame(&mut tree, 0), Size::new(100., 100.));
+    tree.update(root, make(150., 200.)).unwrap();
+    assert_eq!(frame(&mut tree, 1_000), Size::new(100., 100.));
+    frame(&mut tree, 1_000);
+    for elapsed in (10..=190).step_by(10) {
+        frame(&mut tree, 1_000 + elapsed);
+    }
+    assert_eq!(frame(&mut tree, 1_200), Size::new(150., 200.));
+
+    tree.update(root, make(100., 100.)).unwrap();
+    assert_eq!(frame(&mut tree, 1_200), Size::new(150., 200.));
+    tree.update(root, make(111., 111.)).unwrap();
+    assert_eq!(frame(&mut tree, 1_210), Size::new(111., 111.));
+    tree.update(root, make(222., 222.)).unwrap();
+    assert_eq!(frame(&mut tree, 1_220), Size::new(222., 222.));
+}
+
+#[test]
+fn directional_alignment_mirrors_during_a_size_change_without_restarting_it() {
+    use incular_config::AlignmentDirectional;
+    use incular_core::Offset;
+    use incular_widgets::{Center, Directionality, internal::Key};
+
+    let outer = Key::from("animated size");
+    let child = Key::from("animated child");
+    let ended = Rc::new(Cell::new(0));
+    let make = |direction, side| -> Widget {
+        let animated = AnimatedSize::new(
+            Duration::from_millis(200),
+            Widget::from(SizedBox::new().width(side).height(side)).with_key(child.clone()),
+        )
+        .clip_behavior(incular_config::Clip::None)
+        .alignment(AlignmentDirectional::CENTER_START)
+        .on_end({
+            let ended = ended.clone();
+            move || ended.set(ended.get() + 1)
+        });
+        Directionality::new(
+            direction,
+            Center::new(Widget::from(animated).with_key(outer.clone())),
+        )
+        .into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(make(TextDirection::Ltr, 100.)).unwrap();
+    let epoch = Instant::now();
+    let frame = |tree: &mut WidgetTree, millis| {
+        tree.update_compositor(epoch + Duration::from_millis(millis))
+            .unwrap();
+        tree.layout(Constraints::tight(LARGE)).unwrap();
+        let outer = tree
+            .element_bounds(tree.element_with_key(&outer).unwrap())
+            .unwrap();
+        let child = tree
+            .element_bounds(tree.element_with_key(&child).unwrap())
+            .unwrap();
+        (outer.size, child.origin - outer.origin)
+    };
+    assert_eq!(frame(&mut tree, 0), (Size::new(100., 100.), Offset::ZERO));
+    tree.update(root, make(TextDirection::Ltr, 200.)).unwrap();
+    frame(&mut tree, 1_000);
+    frame(&mut tree, 1_000);
+    assert_eq!(
+        frame(&mut tree, 1_100),
+        (Size::new(150., 150.), Offset::new(0., -25.))
+    );
+    tree.update(root, make(TextDirection::Rtl, 200.)).unwrap();
+    assert_eq!(
+        frame(&mut tree, 1_100),
+        (Size::new(150., 150.), Offset::new(-50., -25.))
+    );
+    assert_eq!(ended.get(), 0);
+    assert_eq!(
+        frame(&mut tree, 1_200),
+        (Size::new(200., 200.), Offset::ZERO)
+    );
+    assert_eq!(ended.get(), 0);
+    frame(&mut tree, 1_201);
+    assert_eq!(ended.get(), 1);
+}
+
+#[test]
+fn clip_defaults_to_hard_edge_and_all_four_modes_update_the_same_retained_layout() {
+    use incular_config::Clip;
+    use incular_widgets::internal::RenderKind;
+
+    let mut tree = WidgetTree::new();
+    let make = |clip: Option<Clip>| -> Widget {
+        let animated = AnimatedSize::new(
+            Duration::from_millis(200),
+            SizedBox::new().width(100.).height(100.),
+        );
+        match clip {
+            Some(clip) => animated.clip_behavior(clip),
+            None => animated,
+        }
+        .into()
+    };
+    let root = tree.mount(make(None)).unwrap();
+    let constraints = Constraints::loose(LARGE);
+    tree.layout(constraints).unwrap();
+    let find_layout = |tree: &WidgetTree| {
+        let mut candidates = vec![root];
+        while let Some(element) = candidates.pop() {
+            if let Some(render_id) = tree.render_id(element)
+                && let Some(RenderKind::CustomLayout { delegate }) =
+                    tree.render_object_kind(render_id)
+                && let Some(clip) = delegate.overflow_clip()
+            {
+                return (render_id, clip);
+            }
+            candidates.extend(tree.children(element).unwrap_or_default());
+        }
+        panic!("animated size layout not mounted")
+    };
+    let (render, initial_clip) = find_layout(&tree);
+    assert_eq!(initial_clip, Clip::HardEdge);
+    for clip in [
+        Clip::None,
+        Clip::HardEdge,
+        Clip::AntiAlias,
+        Clip::AntiAliasWithSaveLayer,
+    ] {
+        tree.update(root, make(Some(clip))).unwrap();
+        tree.layout(constraints).unwrap();
+        assert_eq!(find_layout(&tree), (render, clip));
+    }
+}

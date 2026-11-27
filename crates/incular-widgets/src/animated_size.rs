@@ -8,10 +8,10 @@ use std::{
 };
 
 use incular_animation::{AnimationController, AnimationStatus, Curve};
-use incular_config::{Alignment, Clip, Constraints};
+use incular_config::{Alignment, AlignmentGeometry, Clip, Constraints, TextDirection};
 use incular_core::{Offset, Size};
 
-use crate::Widget;
+use crate::{BuildContext, Widget};
 use crate::custom_layout::{ChildSizedLayout, CustomLayoutDelegate};
 use crate::tree::{RetainedState, WidgetKind};
 
@@ -24,7 +24,7 @@ pub struct AnimatedSize {
     duration: Duration,
     reverse_duration: Option<Duration>,
     curve: Curve,
-    alignment: Alignment,
+    alignment: AlignmentGeometry,
     clip_behavior: Clip,
     on_end: Option<Rc<dyn Fn()>>,
 }
@@ -37,7 +37,7 @@ impl AnimatedSize {
             duration,
             reverse_duration: None,
             curve: Curve::Linear,
-            alignment: Alignment::CENTER,
+            alignment: AlignmentGeometry::CENTER,
             clip_behavior: Clip::HardEdge,
             on_end: None,
         }
@@ -66,10 +66,11 @@ impl AnimatedSize {
         self
     }
 
-    /// Where the child sits while the size differs. Defaults to center.
+    /// Where the child sits while the size differs. A directional alignment
+    /// follows the current text direction. Defaults to center.
     #[must_use]
-    pub fn alignment(mut self, alignment: Alignment) -> Self {
-        self.alignment = alignment;
+    pub fn alignment(mut self, alignment: impl Into<AlignmentGeometry>) -> Self {
+        self.alignment = alignment.into();
         self
     }
 
@@ -197,7 +198,12 @@ impl SizeState {
 
     /// `RenderAnimatedSize.performLayout`, after the child is laid out under
     /// `constraints`: the box size and the child's aligned offset.
-    fn perform_layout(&self, constraints: Constraints, child: Size) -> (Size, Offset) {
+    fn perform_layout(
+        &self,
+        constraints: Constraints,
+        child: Size,
+        alignment: Alignment,
+    ) -> (Size, Offset) {
         let Some(config) = self.config.borrow().clone() else {
             return (constraints.constrain(child), Offset::ZERO);
         };
@@ -218,23 +224,27 @@ impl SizeState {
         self.current.set(size);
         // `alignChild`: the child sits at the alignment within the box.
         let offset = Offset::new(
-            (size.width - child.width) / 2. * (1. + config.alignment.x),
-            (size.height - child.height) / 2. * (1. + config.alignment.y),
+            (size.width - child.width) / 2. * (1. + alignment.x),
+            (size.height - child.height) / 2. * (1. + alignment.y),
         );
         (size, offset)
     }
 
-    fn build(self: &Rc<Self>) -> Widget {
+    fn build(self: &Rc<Self>, context: &BuildContext<'_>) -> Widget {
         let config = self
             .config
             .borrow()
             .clone()
             .expect("the size updates before it builds");
+        let alignment = match config.alignment {
+            AlignmentGeometry::Physical(value) => value,
+            logical => logical.resolve(context.text_direction().unwrap_or(TextDirection::Ltr)),
+        };
         // Flutter sizes the box in the same layout as the child, after it.
         let layout = {
             let weak = Rc::downgrade(self);
             ChildSizedLayout::new(move |constraints, child| match weak.upgrade() {
-                Some(state) => state.perform_layout(constraints, child),
+                Some(state) => state.perform_layout(constraints, child, alignment),
                 None => (constraints.constrain(child), Offset::ZERO),
             })
             .clip_overflow(config.clip_behavior)
@@ -273,7 +283,7 @@ impl From<AnimatedSize> for Widget {
                     }
                 }
             },
-            move |state, _, _| {
+            move |state, context, _| {
                 if state.this.borrow().upgrade().is_none() {
                     *state.this.borrow_mut() = Rc::downgrade(state);
                     let weak = Rc::downgrade(state);
@@ -300,7 +310,7 @@ impl From<AnimatedSize> for Widget {
                     .controller
                     .set_reverse_duration(config.reverse_duration);
                 *state.config.borrow_mut() = Some(config.clone());
-                state.build()
+                state.build(context)
             },
             true,
         )
