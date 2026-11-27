@@ -247,3 +247,13 @@ height for a glyph, an empty string and an empty span when both outer
 leading edges are trimmed. Explicit natural height in a child cancels
 the inherited 1,000× multiplier and produces a 10 px natural Ahem
 line. Two pinned and all 44 focused native cases passed.
+
+## Debug text layout outlines
+
+The pinned debug-outline original pairs. In debug builds the paint
+visitor can emit tight natural glyph boxes as one-pixel cyan outlines,
+before drawing the paragraph. With the embedded FlutterTest font, the
+128 px glyph occupies (0, 0)–(128, 128), and the 64 px glyph
+occupies (128, 48)–(192, 112). The native test also checks translation,
+paint order, disabling the diagnostic, and retained paragraph identity
+across toggles. The pinned original and 45 focused painter tests passed.

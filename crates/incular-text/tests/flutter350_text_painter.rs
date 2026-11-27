@@ -1504,3 +1504,64 @@ fn an_explicit_natural_height_does_not_inherit_the_root_multiplier() {
         .unwrap();
     assert_eq!(painter.size().unwrap().height, 10.);
 }
+
+#[test]
+#[cfg(debug_assertions)]
+fn debug_boxes_outline_natural_text_bounds_before_painting_the_paragraph() {
+    use incular_core::{Color, Offset, Rect};
+    use incular_text::TextPainterPaint;
+    let Ok(path) = std::env::var("INCULAR_FLUTTER_TEST_FONT_PATH") else {
+        return;
+    };
+    let mut engine = TextEngine::new();
+    assert!(engine.register_font_bytes_as("Flutter Debug Boxes", std::fs::read(path).unwrap()));
+    let font = TextStyle::default().font_family("Flutter Debug Boxes");
+    let span = TextSpan::new("M")
+        .style(font.clone().font_size(128.))
+        .children([InlineSpan::from(
+            TextSpan::new("M").style(font.font_size(64.)),
+        )]);
+    let mut painter = painter(span, TextDirection::Ltr);
+    painter
+        .layout_with_engine(&mut engine, 0., f32::INFINITY)
+        .unwrap();
+    let shape = painter.shaped_layout().unwrap().clone();
+    for enabled in [false, true, false] {
+        painter.set_debug_paint_text_layout_boxes(enabled);
+        let origin = Offset::new(5., 7.);
+        let mut outlines = Vec::new();
+        let mut paragraph_painted = false;
+        painter
+            .paint_operations(origin, |op| match op {
+                TextPainterPaint::DebugBox {
+                    rect,
+                    color,
+                    stroke_width,
+                } => {
+                    assert!(!paragraph_painted);
+                    assert_eq!(color, Color::rgba(0, 255, 255, 255));
+                    assert_eq!(stroke_width, 1.);
+                    outlines.push(rect);
+                }
+                TextPainterPaint::Paragraph { layout, offset } => {
+                    assert!(!paragraph_painted);
+                    assert!(std::ptr::eq(layout, shape.as_ref()));
+                    assert_eq!(offset, origin);
+                    paragraph_painted = true;
+                }
+            })
+            .unwrap();
+        assert!(paragraph_painted);
+        if enabled {
+            assert_eq!(
+                outlines,
+                [
+                    Rect::from_origin_size(origin, Size::new(128., 128.)),
+                    Rect::from_origin_size(origin + Offset::new(128., 48.), Size::new(64., 64.)),
+                ]
+            );
+        } else {
+            assert!(outlines.is_empty());
+        }
+    }
+}

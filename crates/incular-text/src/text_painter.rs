@@ -6,7 +6,7 @@ use std::{
 };
 
 use incular_config::TextDirection;
-use incular_core::{Offset, Rect, Size};
+use incular_core::{Color, Offset, Rect, Size};
 
 use crate::{
     StrutStyle, TextAffinity, TextAlign, TextEngine, TextHeightBehavior, TextLayout,
@@ -44,6 +44,19 @@ impl fmt::Display for TextPainterError {
     }
 }
 impl std::error::Error for TextPainterError {}
+
+/// A paragraph paint operation, in the caller's drawing coordinates.
+pub enum TextPainterPaint<'a> {
+    DebugBox {
+        rect: Rect,
+        color: Color,
+        stroke_width: f32,
+    },
+    Paragraph {
+        layout: &'a TextLayout,
+        offset: Offset,
+    },
+}
 
 /// A measured inline widget's geometry. Unlike a positioned text
 /// placeholder, this carries no source index: the painter associates the
@@ -158,6 +171,7 @@ pub struct TextPainter {
     height_behavior: Option<TextHeightBehavior>,
     placeholder_dimensions: Vec<PlaceholderDimensions>,
     measured: Option<MeasuredText>,
+    debug_paint_text_layout_boxes: bool,
     disposed: bool,
 }
 
@@ -507,22 +521,58 @@ impl TextPainter {
         Ok(self.measured()?.paint_offset)
     }
 
-    /// Passes the measured paragraph and its final offset to a renderer.
-    /// Nonfinite paint positions are skipped rather than emitted.
+    /// Toggles drawing tight layout boxes before the paragraph in debug builds.
+    /// This does not invalidate the retained paragraph.
+    pub fn set_debug_paint_text_layout_boxes(&mut self, enabled: bool) {
+        self.debug_paint_text_layout_boxes = enabled;
+    }
+
+    /// Sends the measured paragraph to a renderer without diagnostic overlays.
     pub fn paint_with(
         &self,
         origin: Offset,
         draw: impl FnOnce(&TextLayout, Offset),
     ) -> Result<(), TextPainterError> {
+        if let Some((layout, offset)) = self.paint_geometry(origin)? {
+            draw(layout, offset);
+        }
+        Ok(())
+    }
+
+    /// Visits diagnostic box outlines, when enabled, and then the paragraph.
+    /// Nonfinite paint positions yield no operations.
+    pub fn paint_operations(
+        &self,
+        origin: Offset,
+        mut draw: impl FnMut(TextPainterPaint<'_>),
+    ) -> Result<(), TextPainterError> {
+        let Some((layout, offset)) = self.paint_geometry(origin)? else {
+            return Ok(());
+        };
+        if cfg!(debug_assertions) && self.debug_paint_text_layout_boxes {
+            for item in self.tight_boxes_for_selection(TextRange::new(0, self.plain.len()))? {
+                draw(TextPainterPaint::DebugBox {
+                    rect: Rect::from_origin_size(item.rect.origin + origin, item.rect.size),
+                    color: Color::rgba(0, 255, 255, 255),
+                    stroke_width: 1.,
+                });
+            }
+        }
+        draw(TextPainterPaint::Paragraph { layout, offset });
+        Ok(())
+    }
+
+    fn paint_geometry(
+        &self,
+        origin: Offset,
+    ) -> Result<Option<(&TextLayout, Offset)>, TextPainterError> {
         let measured = self.measured().map_err(|error| match error {
             TextPainterError::NeedsLayout => TextPainterError::PaintNeedsLayout,
             other => other,
         })?;
         let offset = origin + measured.paint_offset;
-        if offset.x.is_finite() && offset.y.is_finite() {
-            draw(measured.shaped.as_ref(), offset);
-        }
-        Ok(())
+        Ok((offset.x.is_finite() && offset.y.is_finite())
+            .then_some((measured.shaped.as_ref(), offset)))
     }
 
     /// Whether the line limit hid source characters. Suppressing only the

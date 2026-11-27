@@ -3154,3 +3154,4 @@ packages/flutter/test/painting/text_painter_test.dart	402	TextPainter caret emoj
 packages/flutter/test/painting/text_painter_test.dart	442	TextPainter caret emoji test RTL: letters next to emoji, as separate TextBoxes	paired-match	upstream-text-painter.md#exact-emoji-and-styled-bidi-carets
 packages/flutter/test/painting/text_painter_test.dart	1783	TextHeightBehavior with strut on empty paragraph	paired-match	upstream-text-painter.md#empty-paragraphs-forced-strut-and-explicit-natural-height
 packages/flutter/test/painting/text_painter_test.dart	2045	kTextHeightNone unsets the text height multiplier	paired-match	upstream-text-painter.md#empty-paragraphs-forced-strut-and-explicit-natural-height
+packages/flutter/test/painting/text_painter_test.dart	2061	debugPaintTextLayoutBoxes	paired-match	upstream-text-painter.md#debug-text-layout-outlines

@@ -11,7 +11,10 @@ mod font_loader;
 mod spans;
 mod style;
 mod text_painter;
-pub use text_painter::{PlaceholderDimensions, TextPainter, TextPainterBox, TextPainterError, TextPainterLine};
+pub use text_painter::{
+    PlaceholderDimensions, TextPainter, TextPainterBox, TextPainterError, TextPainterLine,
+    TextPainterPaint,
+};
 #[cfg(all(target_os = "windows", not(feature = "bundled-dictionaries")))]
 mod windows_segmentation;
 
