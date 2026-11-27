@@ -23,6 +23,7 @@ mod data_transfer;
 mod display;
 mod file_dialog;
 mod haptic_feedback;
+mod flutter_app_exit;
 mod flutter_lifecycle;
 mod flutter_scribble;
 mod flutter_basic_message_channel;
@@ -111,6 +112,7 @@ pub use file_dialog::{
     FileDialogOption, FileDialogOptions, FileDialogOutcome, FileDialogRequest, FileDialogRequestId,
     FileDialogSelection, FileDialogValidationError, FileExtension,
 };
+pub use flutter_app_exit::{AppExitResponse, AppExitType, FlutterAppExit};
 pub use flutter_lifecycle::{
     AppLifecycleBinding, AppLifecycleCallback, AppLifecycleError, AppLifecycleState,
     AppLifecycleStateChange,

@@ -3324,3 +3324,5 @@ packages/flutter/test/gestures/serial_tap_test.dart	167	Wins over release gestur
 packages/flutter/test/gestures/serial_tap_test.dart	185	Fires cancel if competing recognizer declares victory	paired-match	upstream-tap-recognizers.md#serial-tap-arbitration
 packages/flutter/test/gestures/serial_tap_test.dart	197	Wins over double-tap recognizer below it in the tree	paired-match	upstream-tap-recognizers.md#serial-tap-arbitration
 packages/flutter/test/gestures/serial_tap_test.dart	235	Wins over double-tap recognizer above it in the tree	paired-match	upstream-tap-recognizers.md#serial-tap-arbitration
+packages/flutter/test/services/binding_test.dart	146	Calling exitApplication sends a method call to the engine	paired-match	upstream-app-exit-channel.md
+packages/flutter/test/services/binding_test.dart	163	Default handleRequestAppExit returns exit	paired-match	upstream-app-exit-channel.md
