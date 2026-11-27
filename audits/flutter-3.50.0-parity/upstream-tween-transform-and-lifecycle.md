@@ -195,10 +195,9 @@ The optional types don't replace existing nonnullable Rust aliases.
 
 Animate and drive (:108 and :118) both update the driven value when
 the controller changes, but are partial because the original separately
-asserts Dart's animation details string. Matrix4Tween (:159) is partial:
-the XY translation and scale projection and the rotation around Z match,
-but Incular's affine transform does not represent the Z scale of 5 or
-its interpolated value of 3. Six focused Rust targets passed.
+asserts Dart's animation details string. The former XY-only
+Matrix4Tween (:159) pairing is now complete; see the full matrix values
+below. Six focused Rust targets passed for the original tranche.
 
 ## Driven tween diagnostics
 
@@ -210,3 +209,21 @@ and live value. The direct typed controller API is
 `drive_animatable`; Incular's existing timestamped `drive` remains
 unchanged. Also repaired stale test moves after TweenValue became
 owned. All 45 focused tween, controller and animation-graph tests passed.
+
+
+## Double-precision Matrix4Tween
+
+The original `animation/tween_test.dart:159` ran at the pinned revision.
+Both ends match, and the 4×4 midpoint now preserves the third-axis scale
+from 1 to 5, producing Z scale 3 alongside the exact XY translation and
+scales. A Z rotation uses the quaternion midpoint rather than a matrix
+coefficient midpoint.
+
+The authored `matrix4_tween_three_axes_test.dart` additionally compared
+all sixteen entries of a reflected three-dimensional transform, a
+rotation pair with a negative quaternion dot product (without imposing
+a shortest-path flip), and unchanged projective endpoints. Like Flutter,
+the interior value recomposes translation, rotation, and scale rather
+than interpolating perspective entries. Existing affine Incular callers
+keep their lighter tween type. Four new and 26 adjacent native tests
+passed.

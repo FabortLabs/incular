@@ -316,6 +316,12 @@ impl<T: incular_core::Lerp + Clone> LerpTween<T> {
         self
     }
 
+    /// Interpolates the endpoints without applying the curve.
+    #[must_use]
+    pub fn lerp(&self, t: f32) -> T {
+        self.begin.lerp(&self.end, t)
+    }
+
     /// Flutter's `Tween.transform`: `begin` at 0 and `end` at 1 exactly,
     /// the endpoints' `lerp` in between. The curve is not applied.
     #[must_use]
@@ -325,7 +331,7 @@ impl<T: incular_core::Lerp + Clone> LerpTween<T> {
         } else if t == 1.0 {
             self.end.clone()
         } else {
-            self.begin.lerp(&self.end, t)
+            self.lerp(t)
         }
     }
 
@@ -350,5 +356,6 @@ pub type SizeTween = TweenValue<incular_core::Size>;
 pub type IntTween = TweenValue<i32>;
 /// Flutter's `RectTween`.
 pub type RectTween = LerpTween<incular_core::Rect>;
-/// Flutter's `Matrix4Tween`.
-pub type Matrix4Tween = LerpTween<incular_core::Transform>;
+/// Flutter's matrix tween. Endpoints can be double-precision `Matrix4`
+/// values or Incular's existing lightweight affine `Transform`.
+pub type Matrix4Tween<T = incular_core::Transform> = LerpTween<T>;
