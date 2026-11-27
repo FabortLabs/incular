@@ -377,7 +377,7 @@ fn table_border_description_preserves_six_sides_and_the_corner_radius() {
     let radius = BorderRadius::all(Radius::circular(8.));
     assert_eq!(
         TableBorder { top: BorderSide::default(), border_radius: radius, ..zero }.to_string(),
-        format!("TableBorder(BorderSide(), {none}, {none}, {none}, {none}, {none}, BorderRadius.circular(8.0))")
+        format!("TableBorder(BorderSide, {none}, {none}, {none}, {none}, {none}, BorderRadius.circular(8.0))")
     );
     let radius = BorderRadius {
         top_left: Radius::elliptical(3., 4.),

@@ -321,6 +321,9 @@ impl ShapeBorder for BoxBorderStack {
 
 impl fmt::Display for BorderSide {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if *self == Self::default() {
+            return f.write_str("BorderSide");
+        }
         let side = *self;
         f.write_str("BorderSide(")?;
         let mut separated = false;

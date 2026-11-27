@@ -3109,3 +3109,11 @@ packages/flutter/test/gestures/double_tap_test.dart	375	Should cancel on arena r
 packages/flutter/test/gestures/double_tap_test.dart	403	Passive gesture should trigger on double tap cancel	paired-match	upstream-tap-recognizers.md#double-tap-in-an-independent-gesture-arena
 packages/flutter/test/gestures/double_tap_test.dart	640	A primary double tap recognizer does not form competition with a secondary tap recognizer	paired-match	upstream-tap-recognizers.md#double-tap-in-an-independent-gesture-arena
 packages/flutter/test/gestures/double_tap_test.dart	652	A primary double tap recognizer forms competition with a primary tap recognizer	paired-match	upstream-tap-recognizers.md#double-tap-in-an-independent-gesture-arena
+packages/flutter/test/painting/box_painter_test.dart	24	BorderSide control test	paired-match	upstream-decoration-values.md
+packages/flutter/test/painting/box_painter_test.dart	61	BorderSide toString test	paired-match	upstream-decoration-values.md
+packages/flutter/test/painting/box_painter_test.dart	73	Border control test	paired-match	upstream-decoration-values.md
+packages/flutter/test/painting/box_painter_test.dart	88	Border toString test	paired-match	upstream-decoration-values.md
+packages/flutter/test/painting/decoration_test.dart	141	Decoration.lerp()	paired-match	upstream-decoration-values.md
+packages/flutter/test/painting/decoration_test.dart	155	Decoration.lerp identical a,b	paired-match	upstream-decoration-values.md
+packages/flutter/test/painting/decoration_test.dart	428	BoxDecoration.lerp - shapes	paired-match	upstream-decoration-values.md
+packages/flutter/test/painting/decoration_test.dart	457	BoxDecoration.lerp - gradients	paired-match	upstream-decoration-values.md

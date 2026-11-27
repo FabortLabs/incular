@@ -84,7 +84,7 @@ fn border_side_display_uses_the_diagnostic_width_precision() {
         "BorderSide(color: Color(alpha: 1.0000, red: 0.6667, green: 0.7333, blue: 0.8000, colorSpace: ColorSpace.sRGB), width: 1.2)"
     );
     let default_side = BorderSide::solid(Color::BLACK, 1.);
-    assert_eq!(default_side.to_string(), "BorderSide()");
+    assert_eq!(default_side.to_string(), "BorderSide");
     assert_eq!(default_side.lerp(&default_side, 0.5), default_side);
 }
 
