@@ -11,7 +11,7 @@ use incular_core::{Offset, Rect, Size};
 use crate::{
     StrutStyle, TextAffinity, TextAlign, TextEngine, TextHeightBehavior, TextLayout,
     TextLayoutOptions, TextOverflow, TextRange, TextScaler, TextSpan, TextStrut, TextStyle,
-    TextWidthBasis, word_boundary_at,
+    TextWidthBasis, WidgetSpanAlignment, word_boundary_at,
 };
 
 /// A layout request or query that cannot be satisfied yet.
@@ -21,6 +21,7 @@ pub enum TextPainterError {
     MissingTextDirection,
     InvalidMaxLines,
     InvalidWidth,
+    InvalidPlaceholderCount,
     NeedsLayout,
     Disposed,
 }
@@ -32,12 +33,36 @@ impl fmt::Display for TextPainterError {
             Self::MissingTextDirection => "TextPainter requires a text direction before layout",
             Self::InvalidMaxLines => "TextPainter max lines must be positive",
             Self::InvalidWidth => "invalid TextPainter width constraints",
+            Self::InvalidPlaceholderCount => "TextPainter needs one size for each inline widget span",
             Self::NeedsLayout => "TextPainter requires a current layout",
             Self::Disposed => "TextPainter has already been disposed",
         })
     }
 }
 impl std::error::Error for TextPainterError {}
+
+/// A measured inline widget's geometry. Unlike a positioned text
+/// placeholder, this carries no source index: the painter associates the
+/// values with its inline widget spans in traversal order.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PlaceholderDimensions {
+    pub size: Size,
+    pub alignment: WidgetSpanAlignment,
+    pub baseline_offset: Option<f32>,
+}
+
+impl PlaceholderDimensions {
+    #[must_use]
+    pub const fn new(size: Size, alignment: WidgetSpanAlignment) -> Self {
+        Self { size, alignment, baseline_offset: None }
+    }
+
+    #[must_use]
+    pub const fn baseline_offset(mut self, baseline_offset: f32) -> Self {
+        self.baseline_offset = Some(baseline_offset);
+        self
+    }
+}
 
 /// Geometry in the painter's local coordinates, including its alignment
 /// translation. Text ranges are byte offsets into the unlabelled plain text.
@@ -127,6 +152,7 @@ pub struct TextPainter {
     scaler: TextScaler,
     strut_style: Option<StrutStyle>,
     height_behavior: Option<TextHeightBehavior>,
+    placeholder_dimensions: Vec<PlaceholderDimensions>,
     measured: Option<MeasuredText>,
     disposed: bool,
 }
@@ -174,9 +200,38 @@ impl TextPainter {
     pub fn set_text(&mut self, text: Option<TextSpan>) {
         if self.text != text {
             self.plain = text.as_ref().map_or_else(String::new, TextSpan::plain_text);
+            if !self.placeholder_dimensions.is_empty()
+                && text.as_ref().map_or(0, |span| span.placeholders().len()) != self.placeholder_dimensions.len()
+            {
+                self.placeholder_dimensions.clear();
+            }
             self.text = text;
             self.measured = None;
         }
+    }
+
+    /// Sets the measured sizes of inline widgets in source order. An
+    /// absent, empty or identical slice leaves the existing layout alone.
+    pub fn set_placeholder_dimensions(
+        &mut self,
+        dimensions: Option<&[PlaceholderDimensions]>,
+    ) -> Result<(), TextPainterError> {
+        if self.disposed {
+            return Err(TextPainterError::Disposed);
+        }
+        let Some(dimensions) = dimensions.filter(|dimensions| !dimensions.is_empty()) else {
+            return Ok(());
+        };
+        if self.placeholder_dimensions == dimensions {
+            return Ok(());
+        }
+        let count = self.text.as_ref().map_or(0, |span| span.placeholders().len());
+        if count != dimensions.len() {
+            return Err(TextPainterError::InvalidPlaceholderCount);
+        }
+        self.placeholder_dimensions = dimensions.to_vec();
+        self.measured = None;
+        Ok(())
     }
 
     pub fn set_text_direction(&mut self, direction: Option<TextDirection>) {
@@ -299,7 +354,12 @@ impl TextPainter {
         for run in &mut runs {
             run.style = run.style.scaled(self.scaler);
         }
-        let placeholders = text.placeholders();
+        let mut placeholders = text.placeholders();
+        for (placeholder, dimensions) in placeholders.iter_mut().zip(&self.placeholder_dimensions) {
+            placeholder.size = dimensions.size;
+            placeholder.alignment = dimensions.alignment;
+            placeholder.baseline = dimensions.baseline_offset;
+        }
         let strut = reusable.map_or_else(
             || {
                 let mut style = self.strut_style.clone()?;
@@ -755,6 +815,7 @@ impl TextPainter {
         }
         self.disposed = true;
         self.measured = None;
+        self.placeholder_dimensions.clear();
         self.text = None;
         self.plain = String::new();
         Ok(())

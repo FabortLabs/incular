@@ -929,3 +929,72 @@ fn flutter_test_lam_metrics_match_exact_terminal_and_bidi_boundary_carets() {
         assert_eq!(p.caret_offset_utf16(offset, Downstream, 5.).unwrap().x, x);
     }
 }
+
+fn three_inline_widget_dimensions() -> (TextPainter, [incular_text::PlaceholderDimensions; 3]) {
+    use incular_text::{PlaceholderDimensions, WidgetSpanAlignment};
+    let span = TextSpan::new("before").children([
+        InlineSpan::Widget(WidgetSpan::new(1)),
+        InlineSpan::Widget(WidgetSpan::new(2)),
+        InlineSpan::Widget(WidgetSpan::new(3)),
+        InlineSpan::Text(TextSpan::new("after")),
+    ]);
+    let dimensions = [30., 40., 50.].map(|width| {
+        PlaceholderDimensions::new(Size::new(width, 30.), WidgetSpanAlignment::TextBottom)
+    });
+    let mut painter = painter(span, TextDirection::Ltr);
+    painter
+        .set_placeholder_dimensions(Some(&dimensions))
+        .unwrap();
+    painter.layout(0., f32::INFINITY).unwrap();
+    (painter, dimensions)
+}
+
+#[test]
+fn changed_inline_widget_geometry_invalidates_paint_until_layout() {
+    let (mut painter, mut dimensions) = three_inline_widget_dimensions();
+    let shapes = painter.shaped_layout().unwrap();
+    assert_eq!(
+        shapes
+            .placeholders
+            .iter()
+            .map(|item| (item.id, item.rect.size))
+            .collect::<Vec<_>>(),
+        [
+            (1, Size::new(30., 30.)),
+            (2, Size::new(40., 30.)),
+            (3, Size::new(50., 30.))
+        ]
+    );
+
+    dimensions[1].size.height = 20.;
+    painter
+        .set_placeholder_dimensions(Some(&dimensions))
+        .unwrap();
+    assert_eq!(
+        painter.shaped_layout().map(|_| ()),
+        Err(TextPainterError::NeedsLayout)
+    );
+    painter.layout(0., f32::INFINITY).unwrap();
+    assert_eq!(
+        painter.shaped_layout().unwrap().placeholders[1].rect.size,
+        Size::new(40., 20.)
+    );
+}
+
+#[test]
+fn unchanged_inline_widget_dimensions_preserve_the_existing_paint_layout() {
+    let (mut painter, dimensions) = three_inline_widget_dimensions();
+    let first = painter.shaped_layout().unwrap().clone();
+    painter
+        .set_placeholder_dimensions(Some(&dimensions))
+        .unwrap();
+    assert!(Arc::ptr_eq(&first, painter.shaped_layout().unwrap()));
+    painter.set_placeholder_dimensions(None).unwrap();
+    painter.set_placeholder_dimensions(Some(&[])).unwrap();
+    assert!(Arc::ptr_eq(&first, painter.shaped_layout().unwrap()));
+    assert_eq!(
+        painter.set_placeholder_dimensions(Some(&dimensions[1..])),
+        Err(TextPainterError::InvalidPlaceholderCount)
+    );
+    assert!(Arc::ptr_eq(&first, painter.shaped_layout().unwrap()));
+}

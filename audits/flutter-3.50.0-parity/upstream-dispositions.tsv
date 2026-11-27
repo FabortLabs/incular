@@ -3138,3 +3138,5 @@ packages/flutter/test/painting/decoration_test.dart	411	DecorationImage - error 
 packages/flutter/test/painting/decoration_test.dart	306	DecorationImage test	partial-match	upstream-decoration-image-paint.md#image-options-and-diagnostics
 packages/flutter/test/painting/decoration_test.dart	346	DecorationImage.toString	paired-match	upstream-decoration-image-paint.md#image-options-and-diagnostics
 packages/flutter/test/painting/decoration_test.dart	357	DecorationImage with null textDirection configuration should throw Error	partial-match	upstream-decoration-image-paint.md#image-options-and-diagnostics
+packages/flutter/test/painting/text_painter_test.dart	1637	TextPainter requires layout after providing different placeholder dimensions	paired-match	upstream-text-painter.md#inline-widget-dimensions-and-paint-invalidation
+packages/flutter/test/painting/text_painter_test.dart	1676	TextPainter does not require layout after providing identical placeholder dimensions	paired-match	upstream-text-painter.md#inline-widget-dimensions-and-paint-invalidation

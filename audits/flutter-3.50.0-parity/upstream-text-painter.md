@@ -163,3 +163,13 @@ Seven pinned Flutter and 36 focused Rust tests passed. These cases use
 tight boxes for complete glyphs; newline rectangles, additional box
 width and height styles, and every mixed-direction selection are not
 claimed.
+
+## Inline widget dimensions and paint invalidation
+
+Both pinned originals pass. The painter accepts one dimension record per
+inline widget in source order. A changed height (30 px to 20 px on the
+middle child) invalidates the existing paint geometry until the next
+layout. Reassigning an identical slice preserves the same shaped layout
+allocation; absent and empty values are also no-ops. Thirty focused
+native tests passed, including a typed error for a mismatched number of
+dimensions that leaves the previous layout untouched.
