@@ -760,6 +760,79 @@ impl From<FocusScope> for Widget {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct ActivateIntent;
 
+type RequestFocusCallback = Rc<dyn Fn(&FocusNode)>;
+
+/// Requests focus for a specific node. The node identifies the command for
+/// an [`Actions`] mapping; the optional callback is invocation data.
+#[derive(Clone)]
+pub struct RequestFocusIntent {
+    focus_node: FocusNode,
+    callback: Option<RequestFocusCallback>,
+}
+
+impl RequestFocusIntent {
+    #[must_use]
+    pub fn new(focus_node: FocusNode) -> Self {
+        Self {
+            focus_node,
+            callback: None,
+        }
+    }
+
+    #[must_use]
+    pub fn focus_node(&self) -> &FocusNode {
+        &self.focus_node
+    }
+
+    /// Replaces the default focus-and-reveal operation, rather than running
+    /// in addition to it. The callback receives the target node.
+    #[must_use]
+    pub fn request_focus_callback(mut self, callback: impl Fn(&FocusNode) + 'static) -> Self {
+        self.callback = Some(Rc::new(callback));
+        self
+    }
+}
+
+impl PartialEq for RequestFocusIntent {
+    fn eq(&self, other: &Self) -> bool {
+        self.focus_node == other.focus_node
+    }
+}
+
+impl Eq for RequestFocusIntent {}
+
+impl std::hash::Hash for RequestFocusIntent {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::hash::Hash::hash(&self.focus_node, state);
+    }
+}
+
+impl std::fmt::Debug for RequestFocusIntent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RequestFocusIntent")
+            .field("focus_node", &self.focus_node)
+            .field("has_callback", &self.callback.is_some())
+            .finish()
+    }
+}
+
+/// The default mounted [`RequestFocusIntent`] action supplied by WidgetsApp.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct RequestFocusAction;
+
+impl RequestFocusAction {
+    /// Invokes the callback or requests focus and immediately aligns the
+    /// target's trailing edge with each enclosing scroll viewport, limited
+    /// by the scroll range. Call after layout to reveal the target.
+    pub fn invoke(self, tree: &crate::internal::WidgetTree, intent: &RequestFocusIntent) {
+        if let Some(callback) = &intent.callback {
+            callback(&intent.focus_node);
+        } else {
+            tree.request_and_reveal_focus_node(&intent.focus_node);
+        }
+    }
+}
+
 /// Requests spatial keyboard focus traversal.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct DirectionalFocusIntent {

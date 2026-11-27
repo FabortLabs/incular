@@ -108,6 +108,11 @@ impl PartialEq for FocusNode {
     }
 }
 impl Eq for FocusNode {}
+impl std::hash::Hash for FocusNode {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::ptr::hash(Rc::as_ptr(&self.state), state);
+    }
+}
 impl std::fmt::Debug for FocusNode {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter

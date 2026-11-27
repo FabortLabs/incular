@@ -846,6 +846,29 @@ impl WidgetTree {
         })
     }
 
+    pub(crate) fn request_and_reveal_focus_node(&self, node: &incular_gestures::FocusNode) {
+        node.request_focus();
+        let element = self.mounted_focus_element(node).or_else(|| {
+            self.standalone_focus_geometry
+                .as_ref()?
+                .iter()
+                .copied()
+                .find(|&id| {
+                    self.elements
+                        .get(id.0)
+                        .and_then(|entry| external_node(entry.widget.kind()))
+                        == Some(node)
+                })
+        });
+        if let Some(element) = element {
+            crate::Scrollable::ensure_visible(
+                self,
+                element,
+                crate::EnsureVisible::new().alignment(1.),
+            );
+        }
+    }
+
     /// Resolves a traversal invoked from a mounted node's scope, using its
     /// remembered child rather than treating the invoking node as a stop.
     #[doc(hidden)]
@@ -1185,6 +1208,7 @@ impl WidgetTree {
         let intent = incular_gestures::ErasedIntent::from_intent(intent);
         let dismiss = intent.downcast_command::<crate::DismissIntent>().is_some();
         let scroll = intent.downcast_command::<crate::ScrollIntent>().copied();
+        let request_focus = intent.downcast_command::<crate::RequestFocusIntent>();
         let mut current = Some(element);
         while let Some(id) = current {
             let entry = self.elements.get(id.0)?;
@@ -1199,6 +1223,15 @@ impl WidgetTree {
                     })
             {
                 return Some(result);
+            }
+            if let Some(request) = request_focus
+                && let Some(action) = entry
+                    .environment_override
+                    .as_ref()
+                    .and_then(|scope| scope.value.downcast_ref::<crate::RequestFocusAction>())
+            {
+                action.invoke(self, request);
+                return Some(incular_gestures::ActionResult::Handled.into());
             }
             if dismiss
                 && entry
@@ -1226,6 +1259,7 @@ impl WidgetTree {
         };
         let source = &self.element_live(focused, "shortcut caller is mounted").build_context;
         let context = incular_gestures::ActionContext::new(&origin, source);
+        let request_focus = intent.downcast_command::<crate::RequestFocusIntent>();
         let mut current = Some(focused);
         while let Some(id) = current {
             let Some(entry) = self.elements.get(id.0) else {
@@ -1239,6 +1273,15 @@ impl WidgetTree {
                 })
             {
                 return result;
+            }
+            if let Some(request) = request_focus
+                && let Some(action) = entry
+                    .environment_override
+                    .as_ref()
+                    .and_then(|scope| scope.value.downcast_ref::<crate::RequestFocusAction>())
+            {
+                action.invoke(self, request);
+                return KeyEventResult::Handled;
             }
             current = entry.parent;
         }

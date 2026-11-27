@@ -1065,6 +1065,8 @@ impl WidgetsApp {
         child = crate::ShortcutRegistrar::new(child).into();
         if let Some(actions) = &self.actions {
             child = crate::ActionScope::from_erased(actions.clone(), child).into();
+        } else {
+            child = Widget::environment_scope(crate::RequestFocusAction, child);
         }
         child = crate::ShortcutScope::from_erased(self.shortcuts.clone(), child)
             .debug_label("<Default WidgetsApp Shortcuts>")

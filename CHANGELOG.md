@@ -23,6 +23,10 @@ a version and date when publishing.
 
 ### Added
 
+- `RequestFocusIntent` and `RequestFocusAction` can focus and reveal a
+  mounted node. WidgetsApp supplies the default action; a local action or
+  an intent callback can replace its behavior.
+
 - `Viewport` and `CustomScrollView` support typed pixel and
   viewport-relative cache extents, including semantics reach.
 
