@@ -138,8 +138,12 @@ impl OpacityRenderSliver {
         }
     }
 
-    pub(super) fn animated(inner: Box<dyn RenderSliver>, animation: DoubleAnimation) -> Self {
-        let mut sliver = Self::new(inner, animation.value(), false);
+    pub(super) fn animated(
+        inner: Box<dyn RenderSliver>,
+        animation: DoubleAnimation,
+        always_include_semantics: bool,
+    ) -> Self {
+        let mut sliver = Self::new(inner, animation.value(), always_include_semantics);
         sliver.animation = Some(animation);
         sliver
     }

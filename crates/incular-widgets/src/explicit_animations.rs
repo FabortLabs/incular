@@ -375,13 +375,27 @@ impl FadeTransition {
     /// `opacity` on the compositor, without rebuilding or repainting it.
     #[must_use]
     pub fn from_animation(opacity: impl Into<DoubleAnimation>, child: impl Into<Widget>) -> Widget {
+        Self::from_animation_with_semantics(opacity, child, false)
+    }
+
+    /// Drives opacity from an animation, optionally keeping semantics at zero opacity.
+    #[must_use]
+    pub fn from_animation_with_semantics(
+        opacity: impl Into<DoubleAnimation>,
+        child: impl Into<Widget>,
+        always_include_semantics: bool,
+    ) -> Widget {
         compositor_transition(
             opacity.into(),
             OpacityController::new,
             |controller, value| {
                 controller.set_opacity(value);
             },
-            |controller, child| FadeTransition::new(controller, child).into(),
+            move |controller, child| {
+                FadeTransition::new(controller, child)
+                    .always_include_semantics(always_include_semantics)
+                    .into()
+            },
             child.into(),
         )
     }

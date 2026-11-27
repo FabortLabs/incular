@@ -354,3 +354,165 @@ fn implicit_sliver_opacity_isolates_all_rows_together() {
         2
     );
 }
+
+fn animated_sliver_retains_semantics_only_when_requested(source: &str) {
+    use incular_widgets::{GlobalKey, OpacityController, Semantics, SliverAnimatedOpacity};
+
+    let key = GlobalKey::new();
+    let scroll = incular_scroll::ScrollController::new();
+    let animation = AnimationController::new(Duration::from_millis(100));
+    let controlled = OpacityController::new();
+    let build = |alpha, include| {
+        let leaf = Widget::from(
+            Semantics::new(Widget::box_(Size::new(40., 40.), Color::WHITE))
+                .container(true)
+                .label("animated child"),
+        )
+        .with_key(key);
+        let child = SliverToBoxAdapter::new(leaf);
+        let sliver: Box<dyn Sliver> = match source {
+            "explicit" => {
+                animation.set_value(alpha);
+                let fade = SliverFadeTransition::from_animation(animation.clone(), child);
+                Box::new(if let Some(include) = include {
+                    fade.always_include_semantics(include)
+                } else {
+                    fade
+                })
+            }
+            "implicit" => {
+                let fade = SliverAnimatedOpacity::new(alpha, Duration::from_millis(100), child);
+                Box::new(if let Some(include) = include {
+                    fade.always_include_semantics(include)
+                } else {
+                    fade
+                })
+            }
+            "controlled" => {
+                controlled.set_opacity(alpha);
+                let fade = SliverFadeTransition::new(controlled.clone(), child);
+                Box::new(if let Some(include) = include {
+                    fade.always_include_semantics(include)
+                } else {
+                    fade
+                })
+            }
+            _ => unreachable!(),
+        };
+        Directionality::new(
+            TextDirection::Ltr,
+            CustomScrollView::new(vec![sliver]).controller(scroll.clone()),
+        )
+        .into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(build(0., None)).unwrap();
+    let start = Instant::now();
+    let check = |tree: &mut WidgetTree, now, drawn, announced| {
+        let list = draw_overlap(tree, now);
+        assert_eq!(
+            list.commands().iter().any(|op| matches!(
+                op,
+                PaintCommand::Rect {
+                    color: Color::WHITE,
+                    ..
+                }
+            )),
+            drawn,
+            "{source}: paint at {:?}",
+            now.duration_since(start)
+        );
+        tree.update_semantics();
+        assert_eq!(
+            tree.semantics()
+                .iter()
+                .any(|(_, node)| node.label.as_deref() == Some("animated child")),
+            announced,
+            "{source}: semantics at {:?}",
+            now.duration_since(start)
+        );
+    };
+    check(&mut tree, start, false, false);
+    let mounted = tree.element_with_key(&key.into()).unwrap();
+    tree.update(root, build(0., Some(true))).unwrap();
+    check(&mut tree, start + Duration::from_millis(16), false, true);
+    tree.update(root, build(0., Some(false))).unwrap();
+    check(&mut tree, start + Duration::from_millis(32), false, false);
+    tree.update(root, build(0.5, Some(false))).unwrap();
+    let _ = draw_overlap(&mut tree, start + Duration::from_millis(48));
+    check(&mut tree, start + Duration::from_millis(160), true, true);
+    assert_eq!(tree.element_with_key(&key.into()), Some(mounted));
+}
+
+#[test]
+fn explicit_animation_sliver_can_keep_semantics_at_zero_opacity() {
+    animated_sliver_retains_semantics_only_when_requested("explicit");
+}
+
+#[test]
+fn implicit_animation_sliver_can_keep_semantics_at_zero_opacity() {
+    animated_sliver_retains_semantics_only_when_requested("implicit");
+}
+
+#[test]
+fn controlled_sliver_can_keep_semantics_at_zero_opacity() {
+    animated_sliver_retains_semantics_only_when_requested("controlled");
+}
+
+#[test]
+fn animation_backed_box_fade_can_keep_semantics_at_zero_opacity() {
+    use incular_widgets::{FadeTransition, Semantics};
+    let animation = AnimationController::new(Duration::from_millis(100));
+    let build = |include| {
+        Directionality::new(
+            TextDirection::Ltr,
+            SliverFadeTransition::from_animation(
+                animation.clone(),
+                SliverToBoxAdapter::new(
+                    Semantics::new(Widget::box_(Size::new(10., 10.), Color::WHITE))
+                        .container(true)
+                        .label("box fade"),
+                ),
+            )
+            .always_include_semantics(include)
+            .build(&incular_scroll::ScrollController::new()),
+        )
+        .into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(build(false)).unwrap();
+    let at = Instant::now();
+    let check = |tree: &mut WidgetTree, expected| {
+        let list = paint(tree, at);
+        assert!(!list.commands().iter().any(|op| matches!(
+            op,
+            PaintCommand::Rect {
+                color: Color::WHITE,
+                ..
+            }
+        )));
+        tree.update_semantics();
+        assert_eq!(
+            tree.semantics()
+                .iter()
+                .any(|(_, node)| node.label.as_deref() == Some("box fade")),
+            expected
+        );
+    };
+    check(&mut tree, false);
+    tree.update(root, build(true)).unwrap();
+    check(&mut tree, true);
+    tree.update(root, build(false)).unwrap();
+    check(&mut tree, false);
+
+    // The standalone box helper uses the same retained compositor path.
+    let child = Semantics::new(Widget::box_(Size::new(10., 10.), Color::WHITE))
+        .container(true)
+        .label("box fade");
+    tree.update(
+        root,
+        FadeTransition::from_animation_with_semantics(animation, child, true),
+    )
+    .unwrap();
+    check(&mut tree, true);
+}

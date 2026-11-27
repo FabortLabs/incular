@@ -16,6 +16,7 @@ use crate::tree::OpacityController;
 pub struct SliverFadeTransition {
     source: FadeSource,
     sliver: Box<dyn Sliver>,
+    always_include_semantics: bool,
 }
 
 /// Where the sliver's opacity comes from: a retained controller the caller
@@ -31,6 +32,7 @@ impl SliverFadeTransition {
         Self {
             source: FadeSource::Controller(opacity),
             sliver: Box::new(sliver),
+            always_include_semantics: false,
         }
     }
 
@@ -45,7 +47,15 @@ impl SliverFadeTransition {
         Self {
             source: FadeSource::Animation(opacity.into()),
             sliver: Box::new(sliver),
+            always_include_semantics: false,
         }
+    }
+
+    /// Keeps the child's semantics when fully transparent. Defaults to false.
+    #[must_use]
+    pub fn always_include_semantics(mut self, include: bool) -> Self {
+        self.always_include_semantics = include;
+        self
     }
 }
 
@@ -53,12 +63,17 @@ impl Sliver for SliverFadeTransition {
     fn build(&self, controller: &ScrollController) -> Widget {
         match &self.source {
             FadeSource::Controller(opacity) => {
-                crate::Opacity::controlled(opacity.clone(), self.sliver.build(controller)).into()
+                crate::Opacity::controlled(opacity.clone(), self.sliver.build(controller))
+                    .always_include_semantics(self.always_include_semantics)
+                    .into()
             }
-            FadeSource::Animation(animation) => crate::FadeTransition::from_animation(
-                animation.clone(),
-                self.sliver.build(controller),
-            ),
+            FadeSource::Animation(animation) => {
+                crate::FadeTransition::from_animation_with_semantics(
+                    animation.clone(),
+                    self.sliver.build(controller),
+                    self.always_include_semantics,
+                )
+            }
         }
     }
 
@@ -72,17 +87,24 @@ impl Sliver for SliverFadeTransition {
         match &self.source {
             FadeSource::Controller(opacity) => {
                 let opacity = opacity.clone();
+                let include = self.always_include_semantics;
                 Box::new(WidgetWrapRenderSliver {
                     inner: RefCell::new(inner),
                     hidden: false,
                     wrap: Rc::new(move |widget| {
-                        crate::Opacity::controlled(opacity.clone(), widget).into()
+                        crate::Opacity::controlled(opacity.clone(), widget)
+                            .always_include_semantics(include)
+                            .into()
                     }),
                 })
             }
-            FadeSource::Animation(animation) => Box::new(
-                super::sliver_layer::OpacityRenderSliver::animated(inner, animation.clone()),
-            ),
+            FadeSource::Animation(animation) => {
+                Box::new(super::sliver_layer::OpacityRenderSliver::animated(
+                    inner,
+                    animation.clone(),
+                    self.always_include_semantics,
+                ))
+            }
         }
     }
 }
@@ -91,6 +113,7 @@ impl Sliver for SliverFadeTransition {
 pub struct SliverAnimatedOpacity {
     opacity: f32,
     sliver: Box<dyn Sliver>,
+    always_include_semantics: bool,
     duration: Duration,
     curve: Curve,
     on_end: Option<Rc<dyn Fn()>>,
@@ -103,6 +126,7 @@ impl SliverAnimatedOpacity {
         Self {
             opacity: opacity.clamp(0., 1.),
             sliver: Box::new(sliver),
+            always_include_semantics: false,
             duration,
             curve: Curve::Linear,
             on_end: None,
@@ -116,6 +140,13 @@ impl SliverAnimatedOpacity {
         self
     }
 
+    /// Keeps the child's semantics when fully transparent. Defaults to false.
+    #[must_use]
+    pub fn always_include_semantics(mut self, include: bool) -> Self {
+        self.always_include_semantics = include;
+        self
+    }
+
     /// Called each time an animation completes.
     #[must_use]
     pub fn on_end(mut self, callback: impl Fn() + 'static) -> Self {
@@ -126,7 +157,9 @@ impl SliverAnimatedOpacity {
 
 impl Sliver for SliverAnimatedOpacity {
     fn build(&self, controller: &ScrollController) -> Widget {
-        crate::Opacity::new(self.opacity, self.sliver.build(controller)).into()
+        crate::Opacity::new(self.opacity, self.sliver.build(controller))
+            .always_include_semantics(self.always_include_semantics)
+            .into()
     }
 
     fn create_render_sliver(
@@ -138,7 +171,10 @@ impl Sliver for SliverAnimatedOpacity {
         Box::new(AnimatedOpacityRenderSliver {
             inner: RefCell::new(self.sliver.create_render_sliver(controller, axis, reverse)),
             target: self.opacity,
-            placement: super::sliver_layer::SliverOpacityPlacement::new(self.opacity, false),
+            placement: super::sliver_layer::SliverOpacityPlacement::new(
+                self.opacity,
+                self.always_include_semantics,
+            ),
             curve: self.curve.clone(),
             on_end: self.on_end.clone(),
             controller: AnimationController::new(self.duration),
