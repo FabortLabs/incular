@@ -212,6 +212,13 @@ service lifetime must opt into `KeepRunning`. `Application::debug_dump` and
 per-window diagnostics expose frame, input, metric, retained-tree, semantics,
 and stale-command state without leaking native details.
 
+## Flutter-compatible text input
+
+Flutter-compatible embedders can route complete editing-state updates to
+`Runtime::handle_flutter_text_input_editing_call`. It checks the active
+client and converts valid UTF-16 boundaries before applying a native edit.
+Malformed ranges never change stored text, selection, or composition.
+
 ## Opt-in state restoration
 
 The default file-backed restoration store resolves its persistent location with

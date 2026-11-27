@@ -3801,6 +3801,12 @@ impl Runtime {
         })
     }
 
+    pub(crate) fn active_flutter_editable_client(&self) -> Option<TextInputClientId> {
+        let active = self.text_input_client?;
+        (self.focused == Some(active.target) && self.tree.text_field_is_editable(active.target))
+            .then_some(active.client)
+    }
+
     fn validate_ime_composition(&mut self) {
         if !self.ime_owner_current() {
             self.cancel_ime_composition();

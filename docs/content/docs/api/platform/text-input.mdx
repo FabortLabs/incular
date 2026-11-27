@@ -10,6 +10,12 @@ icon: Keyboard
 [`TextInputType`](/docs/api/platform/text-input): [`Text`](/docs/api/content/text) / `Multiline` / `Number { signed, decimal }` (`TextInputType::NUMBER`) / `Phone` / `Email` / `Url` /
 `Password` (soft-keyboard hints).
 
+Flutter-compatible embedders can pass a `flutter/textinput`
+`TextInputClient.updateEditingState` JSON message to
+`Runtime::handle_flutter_text_input_editing_call`. It validates UTF-16
+positions before touching the active editor and ignores updates for a
+retired client.
+
 ```rust
 use incular::prelude::*;
 

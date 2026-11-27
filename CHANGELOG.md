@@ -13,6 +13,9 @@ a version and date when publishing.
 
 ### Added
 
+- Flutter-compatible text-input embedders can send full editing-state
+  messages. Invalid UTF-16 ranges leave the active editor unchanged.
+
 - `BoxDecoration::padding()` exposes border insets without resolving logical
   start and end edges prematurely.
 

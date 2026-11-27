@@ -2,7 +2,7 @@
 //! Flutter's JSON method protocol instead of Incular's native IME events.
 
 use incular_platform::{
-    FlutterTextInputConfiguration, TextInputClientId,
+    FlutterTextInputConfiguration, TextInputClientId, TextInputState,
     message_codecs::{JsonMethodCodec, JsonMethodCodecError, MethodCall},
 };
 use incular_text::{FlutterTextDeltaError, FlutterTextEditingDelta};
@@ -27,6 +27,15 @@ pub enum FlutterDeltaTextInputError {
         #[source]
         source: FlutterTextDeltaError,
     },
+}
+
+fn sender_matches(sender: &Value, client: TextInputClientId) -> Option<bool> {
+    if let Some(id) = sender.as_u64() {
+        Some(id == client.get())
+    } else {
+        // Flutter's -1 cross-client override exists only in debug tests.
+        sender.as_i64().map(|id| cfg!(debug_assertions) && id == -1)
+    }
 }
 
 impl FlutterDeltaTextInputConnection {
@@ -78,17 +87,7 @@ impl FlutterDeltaTextInputConnection {
         }
         let args = call.arguments.as_array().ok_or(InvalidArguments)?;
         let sender = args.first().ok_or(InvalidArguments)?;
-        let sender = if let Some(id) = sender.as_u64() {
-            Some(id)
-        } else if sender.as_i64().is_some() {
-            None
-        } else {
-            return Err(InvalidArguments);
-        };
-        // Flutter's -1 cross-client override exists only in debug tests.
-        let debug_override =
-            cfg!(debug_assertions) && args.first().and_then(Value::as_i64) == Some(-1);
-        if sender != Some(self.client.get()) && !debug_override {
+        if !sender_matches(sender, self.client).ok_or(InvalidArguments)? {
             return Ok(false);
         }
         let encoded = args
@@ -118,7 +117,155 @@ pub enum FlutterTextInputLifecycleError {
     InvalidClientId,
 }
 
+/// A full editing-state message could not be routed or decoded.
+/// Diagnostics include offsets and lengths, never the editing text.
+#[derive(Debug, thiserror::Error)]
+pub enum FlutterTextInputEditingError {
+    #[error(transparent)]
+    Codec(#[from] JsonMethodCodecError),
+    #[error("expected a client ID and an editing-state object")]
+    InvalidArguments,
+    #[error("invalid Flutter editing-state field {0}")]
+    InvalidField(&'static str),
+    #[error(
+        "Invalid {range} range: Range {edge} {offset} is out of text of length {length} (range.{edge} >= 0 && range.{edge} <= text.length)"
+    )]
+    OutOfRange {
+        range: &'static str,
+        edge: &'static str,
+        offset: i64,
+        length: usize,
+    },
+    #[error("invalid UTF-16 {range} range: offset {offset} splits a character")]
+    SplitScalar { range: &'static str, offset: i64 },
+    #[error("invalid UTF-16 composing range: start {start} is after end {end}")]
+    ReversedComposition { start: i64, end: i64 },
+}
+
+fn editing_endpoint(
+    text: &str,
+    offset: i64,
+    range: &'static str,
+    edge: &'static str,
+) -> Result<usize, FlutterTextInputEditingError> {
+    use FlutterTextInputEditingError::{OutOfRange, SplitScalar};
+    let requested = usize::try_from(offset).ok();
+    let mut units = 0;
+    for (bytes, scalar) in text.char_indices() {
+        if requested == Some(units) {
+            return Ok(bytes);
+        }
+        if requested.is_some_and(|requested| requested < units) {
+            return Err(SplitScalar { range, offset });
+        }
+        units += scalar.len_utf16();
+    }
+    match requested {
+        Some(requested) if requested == units => Ok(text.len()),
+        Some(requested) if requested < units => Err(SplitScalar { range, offset }),
+        _ => Err(OutOfRange {
+            range,
+            edge,
+            offset,
+            length: units,
+        }),
+    }
+}
+
+fn decode_full_editing_state(data: &Value) -> Result<TextInputState, FlutterTextInputEditingError> {
+    use FlutterTextInputEditingError::{InvalidArguments, InvalidField, ReversedComposition};
+    let fields = data.as_object().ok_or(InvalidArguments)?;
+    let text = fields
+        .get("text")
+        .and_then(Value::as_str)
+        .ok_or(InvalidField("text"))?;
+    let read_offset = |field| match fields.get(field) {
+        None | Some(Value::Null) => Ok(-1),
+        Some(value) => value.as_i64().ok_or(InvalidField(field)),
+    };
+    // The retained selection stores base and extent but not affinity or
+    // directionality metadata. Still enforce the incoming wire types.
+    for (field, string) in [
+        ("selectionAffinity", true),
+        ("selectionIsDirectional", false),
+    ] {
+        if fields.get(field).is_some_and(|value| {
+            !value.is_null()
+                && if string {
+                    !value.is_string()
+                } else {
+                    !value.is_boolean()
+                }
+        }) {
+            return Err(InvalidField(field));
+        }
+    }
+    let base = read_offset("selectionBase")?;
+    let extent = read_offset("selectionExtent")?;
+    let (selection_start, selection_end) = if (base, extent) == (-1, -1) {
+        // A mounted native editor represents absent selection as an
+        // unselected caret at the end, never as an invalid byte index.
+        (text.len(), text.len())
+    } else {
+        let start = editing_endpoint(text, base.min(extent), "selection", "start")?;
+        let end = editing_endpoint(text, base.max(extent), "selection", "end")?;
+        if base <= extent {
+            (start, end)
+        } else {
+            (end, start)
+        }
+    };
+    let start = read_offset("composingBase")?;
+    let end = read_offset("composingExtent")?;
+    let composing = if (start, end) == (-1, -1) {
+        None
+    } else {
+        if start > end {
+            return Err(ReversedComposition { start, end });
+        }
+        Some((
+            editing_endpoint(text, start, "composing", "start")?,
+            editing_endpoint(text, end, "composing", "end")?,
+        ))
+    };
+    Ok(TextInputState {
+        text: text.to_owned(),
+        selection_start,
+        selection_end,
+        composing,
+    })
+}
+
 impl crate::Runtime {
+    /// Applies a validated Flutter `TextInputClient.updateEditingState`
+    /// message to the current editable attachment only. Wrong client IDs
+    /// return `Some(false)`; unrelated methods return `None`.
+    ///
+    /// # Errors
+    /// A malformed active message or an unrepresentable range leaves the
+    /// controller, composition, and outgoing state unchanged.
+    pub fn handle_flutter_text_input_editing_call(
+        &mut self,
+        data: &[u8],
+    ) -> Result<Option<bool>, FlutterTextInputEditingError> {
+        use FlutterTextInputEditingError::InvalidArguments;
+        let call = JsonMethodCodec::decode_method_call(data)?;
+        if call.method != "TextInputClient.updateEditingState" {
+            return Ok(None);
+        }
+        let Some(active) = self.active_flutter_editable_client() else {
+            return Ok(Some(false));
+        };
+        let args = call.arguments.as_array().ok_or(InvalidArguments)?;
+        let sender = args.first().ok_or(InvalidArguments)?;
+        if !sender_matches(sender, active).ok_or(InvalidArguments)? {
+            return Ok(Some(false));
+        }
+        let state = decode_full_editing_state(args.get(1).ok_or(InvalidArguments)?)?;
+        self.handle_text_editing_state(state);
+        Ok(Some(true))
+    }
+
     /// Handles Flutter's text-input close and focus-received messages.
     /// Returns the accepted/rejected result, or `None` for another method.
     /// IDs are scoped to this window and refer to a specific attachment.

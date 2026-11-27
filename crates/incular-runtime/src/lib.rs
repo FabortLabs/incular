@@ -65,7 +65,8 @@ pub use file_dialogs::{
     NativeFileDialogCompletion, NativeFileDialogRequest,
 };
 pub use flutter_text_input::{
-    FlutterDeltaTextInputConnection, FlutterDeltaTextInputError, FlutterTextInputLifecycleError,
+    FlutterDeltaTextInputConnection, FlutterDeltaTextInputError, FlutterTextInputEditingError,
+    FlutterTextInputLifecycleError,
 };
 pub use semantics_activation::{SemanticsEnabledSubscription, SemanticsHandle};
 pub use focus_keys::FocusKeySubscription;
