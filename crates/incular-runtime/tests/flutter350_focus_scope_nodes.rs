@@ -1471,3 +1471,61 @@ fn authored_focus_gates_restore_history_and_then_allow_an_explicitly_reparented_
     runtime.run_frame(bounds).unwrap();
     assert!(leaf.has_primary_focus() && bridge.has_focus() && !gate.has_focus());
 }
+#[test]
+fn scope_requests_restore_the_last_focused_leaf_after_focus_switches_branches() {
+    use incular_widgets::Column;
+
+    let left = FocusScopeNode::new();
+    let right = FocusScopeNode::new();
+    let parents = std::array::from_fn::<_, 2, _>(|_| FocusNode::new());
+    let children = std::array::from_fn::<_, 4, _>(|_| FocusNode::new());
+    let mut widgets: Vec<Widget> = vec![
+        FocusScope::new(SizedBox::shrink())
+            .node(left.clone())
+            .into(),
+        FocusScope::new(SizedBox::shrink())
+            .node(right.clone())
+            .into(),
+    ];
+    for (index, scope) in [&left, &right].into_iter().enumerate() {
+        widgets.push(
+            Focus::new(SizedBox::shrink())
+                .node(parents[index].clone())
+                .parent_node(scope.scope_focus_node())
+                .into(),
+        );
+        for child in &children[index * 2..index * 2 + 2] {
+            widgets.push(
+                Focus::new(SizedBox::shrink())
+                    .node(child.clone())
+                    .parent_node(parents[index].clone())
+                    .into(),
+            );
+        }
+    }
+    let mut runtime = Runtime::new(Column::new(widgets).into()).unwrap();
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    runtime.run_frame(bounds).unwrap();
+    children[3].request_focus();
+    runtime.run_frame(bounds).unwrap();
+    children[0].request_focus();
+    runtime.run_frame(bounds).unwrap();
+
+    let check = |is_left: bool| {
+        assert_eq!(children[0].has_focus(), is_left);
+        assert_eq!(children[0].has_primary_focus(), is_left);
+        assert_eq!(children[3].has_focus(), !is_left);
+        assert_eq!(children[3].has_primary_focus(), !is_left);
+        assert_eq!(left.has_focus(), is_left);
+        assert_eq!(right.has_focus(), !is_left);
+        assert!(!left.has_primary_focus() && !right.has_primary_focus());
+        assert_eq!(parents[0].has_focus(), is_left);
+        assert_eq!(parents[1].has_focus(), !is_left);
+        assert_eq!(left.focused_child(), Some(children[0].clone()));
+        assert_eq!(right.focused_child(), Some(children[3].clone()));
+    };
+    check(true);
+    assert!(right.request_focus_in_scope());
+    runtime.run_frame(bounds).unwrap();
+    check(false);
+}

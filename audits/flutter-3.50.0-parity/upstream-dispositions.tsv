@@ -2750,3 +2750,4 @@ packages/flutter/test/widgets/focus_scope_test.dart	1382	Setting canRequestFocus
 packages/flutter/test/widgets/focus_scope_test.dart	1508	skipTraversal works as expected.	paired-match	upstream-mounted-focus-scope-nodes.md#scope-and-descendant-traversal-permissions
 packages/flutter/test/widgets/focus_scope_test.dart	1602	descendantsAreTraversable works as expected.	paired-match	upstream-mounted-focus-scope-nodes.md#scope-and-descendant-traversal-permissions
 packages/flutter/test/widgets/focus_manager_test.dart	1406	Key handling bubbles up and terminates when handled.	paired-match	upstream-focus-key-stages.md#focused-ancestry-consumes-raw-keys-once
+packages/flutter/test/widgets/focus_manager_test.dart	1015	Can move focus between scopes and keep focus	paired-match	upstream-mounted-focus-scope-nodes.md#restoring-a-scopes-last-focused-child

@@ -223,3 +223,13 @@ widget focus boundary and then follows its mounted focus parents. Its
 optional API still returns `None` without a scope, rather than returning
 a framework-wide root scope as Dart's non-optional API does. This
 authored comparison adds no original coverage credit.
+
+### Restoring a scope's last focused child
+
+The original `widgets/focus_manager_test.dart:1015` passed. Native tests
+mount the same two scopes, two parents and four leaves, with the focus
+graph authored separately from the widget hierarchy. After visiting the
+right fourth leaf and left first leaf, both scopes remember their last
+child. A focus request on the right scope restores the fourth leaf.
+The active leaf, parent, and scope flip together; only the leaf has
+primary focus, and both remembered children remain unchanged.
