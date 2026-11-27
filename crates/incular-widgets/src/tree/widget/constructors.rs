@@ -1864,38 +1864,32 @@ impl Widget {
     }
     #[must_use]
     pub(crate) fn blur(sigma: f32, child: Self) -> Self {
-        Self::from_node(WidgetNode {
-            key: None,
-            kind: WidgetKind::Blur {
-                sigma_x: normalize_sigma(sigma),
-                sigma_y: normalize_sigma(sigma),
-                controller: None,
-                child,
-            },
-            semantics: None,
-        })
+        Self::blur_stage(sigma, sigma, None, true, child)
     }
     #[must_use]
     pub fn asymmetric_blur(sigma_x: f32, sigma_y: f32, child: Self) -> Self {
+        Self::blur_stage(sigma_x, sigma_y, None, true, child)
+    }
+    #[must_use]
+    pub fn controlled_blur(controller: BlurController, child: Self) -> Self {
+        let sigma = controller.sigma();
+        Self::blur_stage(sigma, sigma, Some(controller), true, child)
+    }
+
+    pub(crate) fn blur_stage(
+        sigma_x: f32,
+        sigma_y: f32,
+        controller: Option<BlurController>,
+        enabled: bool,
+        child: Self,
+    ) -> Self {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::Blur {
                 sigma_x: normalize_sigma(sigma_x),
                 sigma_y: normalize_sigma(sigma_y),
-                controller: None,
-                child,
-            },
-            semantics: None,
-        })
-    }
-    #[must_use]
-    pub fn controlled_blur(controller: BlurController, child: Self) -> Self {
-        Self::from_node(WidgetNode {
-            key: None,
-            kind: WidgetKind::Blur {
-                sigma_x: controller.sigma(),
-                sigma_y: controller.sigma(),
-                controller: Some(controller),
+                controller,
+                enabled,
                 child,
             },
             semantics: None,

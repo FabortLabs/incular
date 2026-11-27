@@ -618,12 +618,14 @@ impl std::fmt::Debug for WidgetKind {
                 sigma_x,
                 sigma_y,
                 controller,
+                enabled,
                 ..
             } => f
                 .debug_struct("Blur")
                 .field("sigma_x", sigma_x)
                 .field("sigma_y", sigma_y)
                 .field("controller", controller)
+                .field("enabled", enabled)
                 .finish(),
             Self::DropShadow {
                 offset,
@@ -1584,15 +1586,17 @@ impl PartialEq for WidgetKind {
                     sigma_x: a,
                     sigma_y: b,
                     controller: c,
+                    enabled: active,
                     child: d,
                 },
                 Self::Blur {
                     sigma_x: e,
                     sigma_y: f,
                     controller: g,
+                    enabled: next_active,
                     child: h,
                 },
-            ) => a == e && b == f && c == g && d == h,
+            ) => a == e && b == f && c == g && active == next_active && d == h,
             (
                 Self::DropShadow {
                     offset: a,

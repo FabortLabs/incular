@@ -314,7 +314,7 @@ packages/flutter/test/rendering/flex_test.dart	914	children with no baselines ar
 packages/flutter/test/rendering/flex_test.dart	1256	Negative RenderFlex.spacing throws an exception	paired-match	upstream-flex-retained-placement.md#negative-spacing
 packages/flutter/test/widgets/baseline_test.dart	115	Baseline does not crash at zero area	partial-match	upstream-repeat-focus-restoration-flex-and-image-filter.md
 packages/flutter/test/widgets/image_filter_test.dart	104	Image filter - matrix	partial-mismatch	upstream-repeat-focus-restoration-flex-and-image-filter.md
-packages/flutter/test/widgets/image_filter_test.dart	158	Image filter - enabled and disabled	partial-match	upstream-repeat-focus-restoration-flex-and-image-filter.md
+packages/flutter/test/widgets/image_filter_test.dart	158	Image filter - enabled and disabled	paired-match	upstream-image-filter-lifecycle.md
 packages/flutter/test/widgets/raw_tooltip_test.dart	573	RawTooltip dismiss countdown begins on long press release	paired-match	upstream-raw-tooltip-trigger-and-hold.md#current-mounted-deadline-behavior
 packages/flutter/test/widgets/raw_tooltip_test.dart	1757	Tooltip triggers on tap when trigger mode is tap	paired-match	upstream-raw-tooltip-trigger-and-hold.md
 packages/flutter/test/widgets/raw_tooltip_test.dart	1767	Tooltip triggers on long press when mode is long press	paired-match	upstream-raw-tooltip-trigger-and-hold.md
@@ -3727,3 +3727,6 @@ packages/flutter/test/rendering/image_filter_config_test.dart	103	ImageFilter re
 packages/flutter/test/widgets/backdrop_filter_test.dart	17	Backdrop key is passed to backdrop Layer	paired-match	upstream-widget-backdrop-filter.md
 packages/flutter/test/widgets/backdrop_filter_test.dart	69	Backdrop key is passed to backdrop Layer via backdrop group	paired-match	upstream-widget-backdrop-filter.md
 packages/flutter/test/widgets/backdrop_filter_test.dart	114	BackdropFilter does not crash at zero area	paired-match	upstream-widget-backdrop-filter.md
+packages/flutter/test/widgets/image_filter_test.dart	137	Image filter - reuses its layer	paired-match	upstream-image-filter-lifecycle.md
+packages/flutter/test/widgets/image_filter_test.dart	178	ImageFiltered does not crash at zero area	paired-match	upstream-image-filter-lifecycle.md
+packages/flutter/test/widgets/animated_image_filtered_repaint_test.dart	14	ImageFiltered avoids repainting child as it animates	paired-match	upstream-image-filter-lifecycle.md

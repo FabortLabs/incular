@@ -9,7 +9,7 @@ use incular_rendering::{
 use typed_builder::TypedBuilder;
 
 use crate::tree::{ImageFit, ImageOptions};
-use crate::{AlignmentGeometry, Blur, BlurController, ColorFiltered, Image, ImageRepeat, Widget};
+use crate::{AlignmentGeometry, BlurController, ColorFiltered, Image, ImageRepeat, Widget};
 
 /// A source filter and group opacity that are ready for the retained image.
 pub(crate) struct RasterPaintSources {
@@ -437,16 +437,20 @@ impl ImageFiltered {
 
 impl From<ImageFiltered> for Widget {
     fn from(value: ImageFiltered) -> Self {
-        if !value.enabled {
-            return value.child;
-        }
         if let Some(filter) = value.filter {
-            return filter
-                .stages()
+            let stages = filter.stages();
+            if !value.enabled
+                && !stages
+                    .iter()
+                    .all(|stage| matches!(stage, ImageFilter::Blur(_)))
+            {
+                return value.child;
+            }
+            return stages
                 .into_iter()
                 .fold(value.child, |child, stage| match stage {
                     ImageFilter::Blur(blur) => {
-                        Widget::asymmetric_blur(blur.sigma_x, blur.sigma_y, child)
+                        Widget::blur_stage(blur.sigma_x, blur.sigma_y, None, value.enabled, child)
                     }
                     ImageFilter::Color(filter) => ColorFiltered::new(filter, child).into(),
                     ImageFilter::Matrix(transform) => {
@@ -471,9 +475,10 @@ impl From<ImageFiltered> for Widget {
                     | ImageFilter::Compose { .. } => child,
                 });
         }
-        match value.controller {
-            Some(c) => Blur::controlled(c, value.child).into(),
-            None => Blur::new(value.sigma, value.child).into(),
-        }
+        let sigma = value
+            .controller
+            .as_ref()
+            .map_or(value.sigma, BlurController::sigma);
+        Widget::blur_stage(sigma, sigma, value.controller, value.enabled, value.child)
     }
 }

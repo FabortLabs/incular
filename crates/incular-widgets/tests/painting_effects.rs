@@ -25,8 +25,9 @@ fn effect_builders_preserve_defaults_and_normalize_values() {
         RawImage::new()
             .width(0.0)
             .height(0.0)
+            // No explicit fit: paintImage chooses scaleDown normally,
+            // but fill when a center slice is supplied.
             .scale(0.001)
-            .fit(ImageFit::ScaleDown)
             .repeat(ImageRepeat::NoRepeat)
     );
 
@@ -171,15 +172,95 @@ fn decoration_image_defaults_to_medium_filter_quality() {
     );
 }
 
+fn blur_stage(
+    tree: &mut incular_widgets::internal::WidgetTree,
+) -> Option<(incular_rendering::LayerId, incular_rendering::GaussianBlur)> {
+    tree.paint()
+        .commands()
+        .iter()
+        .find_map(|command| match command {
+            incular_rendering::PaintCommand::PushBlur { layer, blur, .. } => Some((*layer, *blur)),
+            _ => None,
+        })
+}
+
 #[test]
 fn disabled_image_filter_passes_its_child_through_unchanged() {
-    // Flutter `ImageFiltered.enabled` (widgets/image_filter.dart:39-51): a
-    // disabled filter keeps its configuration but lowers to its child alone.
-    let child: Widget = Text::new("filtered").into();
-    let disabled: Widget = ImageFiltered::blur(4., Text::new("filtered"))
-        .enabled(false)
-        .into();
-    assert_eq!(disabled, child);
-    let enabled: Widget = ImageFiltered::blur(4., Text::new("filtered")).into();
-    assert_ne!(enabled, child, "an enabled filter wraps the child");
+    use incular_config::Constraints;
+    use incular_core::Size;
+    use incular_rendering::GaussianBlur;
+    use incular_widgets::Placeholder;
+    use incular_widgets::internal::WidgetTree;
+
+    let build = |enabled| {
+        ImageFiltered::blur(5., Placeholder::new())
+            .enabled(enabled)
+            .into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(build(false)).unwrap();
+    let constraints = Constraints::tight(Size::new(800., 600.));
+    tree.layout(constraints).unwrap();
+    let original_child = tree.children(root).unwrap()[0];
+    let original_child_render = tree.render_id(original_child);
+    assert_eq!(blur_stage(&mut tree), None);
+    assert!(!tree.paint().commands().is_empty());
+    tree.update(root, build(true)).unwrap();
+    tree.layout(constraints).unwrap();
+    assert_eq!(tree.children(root).unwrap(), [original_child]);
+    assert_eq!(tree.render_id(original_child), original_child_render);
+    assert_eq!(blur_stage(&mut tree).unwrap().1, GaussianBlur::uniform(5.));
+    tree.update(root, build(false)).unwrap();
+    tree.layout(constraints).unwrap();
+    assert_eq!(tree.children(root).unwrap(), [original_child]);
+    assert_eq!(tree.render_id(original_child), original_child_render);
+    assert_eq!(blur_stage(&mut tree), None);
+}
+
+#[test]
+fn image_filter_reuses_the_same_layer_after_sigma_changes() {
+    use incular_config::Constraints;
+    use incular_core::Size;
+    use incular_rendering::{GaussianBlur, ImageFilter};
+    use incular_widgets::Placeholder;
+    use incular_widgets::internal::WidgetTree;
+
+    let build = |sigma| {
+        ImageFiltered::new(ImageFilter::blur(sigma, sigma), Placeholder::new())
+            .unwrap()
+            .into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(build(5.)).unwrap();
+    let constraints = Constraints::tight(Size::new(800., 600.));
+    tree.layout(constraints).unwrap();
+    let render = tree.render_id(root);
+    let (layer, first) = blur_stage(&mut tree).unwrap();
+    assert_eq!(first, GaussianBlur::uniform(5.));
+    tree.update(root, build(10.)).unwrap();
+    tree.layout(constraints).unwrap();
+    assert_eq!(tree.render_id(root), render);
+    assert_eq!(
+        blur_stage(&mut tree),
+        Some((layer, GaussianBlur::uniform(10.)))
+    );
+}
+
+#[test]
+fn image_filter_with_a_shrink_wrapped_child_keeps_zero_size() {
+    use incular_config::Constraints;
+    use incular_core::Size;
+    use incular_widgets::Placeholder;
+    use incular_widgets::internal::WidgetTree;
+
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(ImageFiltered::blur(5., Placeholder::new()).into())
+        .unwrap();
+    tree.layout(Constraints::tight(Size::ZERO)).unwrap();
+    assert_eq!(
+        tree.render_size(tree.render_id(root).unwrap()),
+        Some(Size::ZERO)
+    );
+    let _ = tree.paint();
 }

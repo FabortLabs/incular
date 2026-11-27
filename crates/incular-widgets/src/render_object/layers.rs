@@ -126,7 +126,7 @@ impl LayerSpec {
             | WidgetKind::Rotation { .. }
             | WidgetKind::FittedBox { .. } => AttachmentSpec::Transform,
             WidgetKind::Opacity { .. } => AttachmentSpec::Opacity,
-            WidgetKind::Blur { .. } => AttachmentSpec::Blur,
+            WidgetKind::Blur { enabled: true, .. } => AttachmentSpec::Blur,
             WidgetKind::DropShadow { .. } | WidgetKind::Banner { .. } => AttachmentSpec::DropShadow,
             WidgetKind::Text { style, .. }
                 if crate::utilities::layered_text_shadow(&style.shadows).is_some() =>
@@ -459,7 +459,10 @@ impl RenderLayers {
                 LayerAttachment::Opacity { layer }
             }
             WidgetKind::Blur {
-                sigma_x, sigma_y, ..
+                sigma_x,
+                sigma_y,
+                enabled: true,
+                ..
             } => {
                 let layer = compositor.create_blur(GaussianBlur::new(*sigma_x, *sigma_y));
                 compositor.set_children(root, vec![layer]);

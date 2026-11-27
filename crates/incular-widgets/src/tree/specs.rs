@@ -1185,6 +1185,7 @@ pub(crate) enum WidgetKind {
         sigma_x: f32,
         sigma_y: f32,
         controller: Option<BlurController>,
+        enabled: bool,
         child: Widget,
     },
     DropShadow {
