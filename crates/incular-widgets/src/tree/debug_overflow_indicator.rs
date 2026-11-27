@@ -181,7 +181,7 @@ impl WidgetTree {
             .size(FONT_SIZE)
             .font_weight(FontWeight::W800)
             .color(color);
-        let layout = self.text_engine.layout_with_options(
+        let layout = self.text_engine.get_mut().layout_with_options(
             &label,
             &style,
             TextLayoutOptions::new(None, TextAlign::Left),

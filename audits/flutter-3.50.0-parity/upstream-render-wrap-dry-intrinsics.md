@@ -18,8 +18,22 @@ including when the parent's width 79 overrides the child's 80.
 The dry query does not update the child's or wrapper's measured
 geometry. The parallel-axis controls take the largest child minimum
 or sum of maxima without gaps. Unsupported dry render boxes return
-no estimate; in particular, the two pinned wrapping-paragraph dry
-tests at :64 and :86 still need a non-mutating text sizing path.
+no estimate. The wrapping paragraph cases are covered separately below.
 
 All 32 focused native wrap, clipping and adjacent proxy cases passed.
 The widget inspector build with the devtools feature also checks.
+
+
+## Width-dependent and quarter-turned text
+
+Both original `rendering/wrap_test.dart` cases at :64 and :86 passed.
+The retained paragraph shapes with the pinned test font and reflows
+at the supplied limits: unbounded, 600, and 300 yield cross sizes
+15, 30, and 45. Odd quarter turns swap the constraints and returned
+dimensions. Dry and live layout share the same shaping path, font
+collection and text caches, without overwriting the mounted
+paragraph's size, glyphs, or baseline. The dry measurement can warm
+a newly registered font without consuming the next frame's layout
+invalidation. Actual inline widgets remain outside this dry path.
+
+All 36 focused wrap, editable, font and rich text cases passed.

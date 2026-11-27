@@ -3108,7 +3108,7 @@ impl WidgetTree {
     }
     #[must_use]
     pub fn text_diagnostics(&self) -> TextDiagnostics {
-        self.text_engine.diagnostics()
+        self.text_engine.borrow().diagnostics()
     }
     /// Read-only view of the retained compositor layers (DevTools inspection).
     #[must_use]

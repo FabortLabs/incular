@@ -1222,7 +1222,7 @@ impl WidgetTree {
         affinity: incular_text::TextAffinity,
         caret_width: f32,
     ) -> Option<(Offset, f32)> {
-        if self.text_engine.has_pending_application_fonts() {
+        if self.has_pending_application_fonts() {
             return None;
         }
         let render = self.render_id(id)?;
@@ -1238,9 +1238,11 @@ impl WidgetTree {
         else {
             return None;
         };
-        let strut = strut.as_deref().filter(|strut| strut.font_size != Some(0.))
-            .map(|strut| self.text_engine.resolve_strut(strut, style));
-        let template = self.text_engine.layout_with_options(
+        let strut = strut
+            .as_deref()
+            .filter(|strut| strut.font_size != Some(0.))
+            .map(|strut| self.text_engine.get_mut().resolve_strut(strut, style));
+        let template = self.text_engine.get_mut().layout_with_options(
             " ",
             style,
             incular_text::TextLayoutOptions::new(None, TextAlign::Start)

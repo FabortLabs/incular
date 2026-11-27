@@ -1187,7 +1187,7 @@ impl WidgetTree {
         let _external_call = self
             .recursion_diagnostics
             .external_text_call("TextEngine::layout_with_options", message);
-        let layout = self.text_engine.layout_with_options(
+        let layout = self.text_engine.get_mut().layout_with_options(
             message,
             style,
             TextLayoutOptions::new(Some(max_width), TextAlign::Start)

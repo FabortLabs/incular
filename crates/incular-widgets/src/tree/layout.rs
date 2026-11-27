@@ -128,7 +128,7 @@ impl WidgetTree {
     #[doc(hidden)]
     #[must_use]
     pub fn has_pending_system_fonts(&self) -> bool {
-        self.text_engine.has_pending_system_fonts()
+        self.text_engine.borrow().has_pending_system_fonts()
     }
 
     /// Marks the paint-only font listeners immediately without changing
@@ -152,7 +152,7 @@ impl WidgetTree {
     /// unrelated non-text render objects.
     #[doc(hidden)]
     pub fn apply_system_font_change(&mut self) {
-        if !self.text_engine.sync_system_fonts() {
+        if !self.text_engine.get_mut().sync_system_fonts() {
             return;
         }
         let affected = self
@@ -182,13 +182,15 @@ impl WidgetTree {
     /// this tree's text. The runtime schedules a frame for them.
     #[must_use]
     pub fn has_pending_application_fonts(&self) -> bool {
-        self.text_engine.has_pending_application_fonts()
+        self.dry_shape_refreshed_fonts.get()
+            || self.text_engine.borrow().has_pending_application_fonts()
     }
 
     /// Lays everything out again after new application fonts arrive: any
     /// text may now resolve to a different font, and its size with it.
     fn refresh_application_fonts(&mut self) {
-        if !self.text_engine.sync_application_fonts() {
+        let refreshed = self.text_engine.get_mut().sync_application_fonts();
+        if !self.dry_shape_refreshed_fonts.replace(false) && !refreshed {
             return;
         }
         let renders = self

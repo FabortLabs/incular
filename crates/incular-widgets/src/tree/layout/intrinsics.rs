@@ -226,6 +226,40 @@ impl WidgetTree {
                 *additional,
             )),
             RenderKind::Wrap { wrap, .. } => self.dry_wrap_size(&node.children, wrap, constraints),
+            RenderKind::Text { inline, .. } if node.children.is_empty() => {
+                let placeholders = inline
+                    .as_ref()
+                    .map_or(&[][..], |inline| &inline.placeholders);
+                let mut engine = self.text_engine.borrow_mut();
+                if engine.has_pending_application_fonts() {
+                    // Shaping syncs the collection. The next frame must
+                    // still invalidate previously measured text geometry.
+                    self.dry_shape_refreshed_fonts.set(true);
+                }
+                let layout = super::behavior::shape_render_paragraph(
+                    &mut engine,
+                    node.object.kind(),
+                    placeholders,
+                    constraints,
+                )?;
+                Some(constraints.constrain(layout.metrics.size))
+            }
+            RenderKind::ProxyLayout {
+                mode: ChildLayoutMode::QuarterTurns(turns),
+            } => {
+                if turns.rem_euclid(2) == 0 {
+                    return child(constraints);
+                }
+                let flipped = Constraints::new(
+                    constraints.min_height(),
+                    constraints.max_height(),
+                    constraints.min_width(),
+                    constraints.max_width(),
+                );
+                let size = child(flipped)?;
+                Some(constraints.constrain(Size::new(size.height, size.width)))
+            }
+            RenderKind::Transform { .. } => child(constraints),
             kind if forwards_intrinsic_child(kind) => child(constraints),
             _ => None,
         }

@@ -107,6 +107,7 @@ mod effects;
 mod scrolling;
 mod sliver;
 mod text;
+pub(super) use text::shape_render_paragraph;
 
 impl WidgetTree {
     pub(super) fn layout_kind(

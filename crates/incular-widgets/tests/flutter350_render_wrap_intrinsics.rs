@@ -148,3 +148,61 @@ fn a_cross_axis_overflow_uses_only_the_explicit_clip_mode() {
         );
     }
 }
+
+fn verify_wrapping_text(axis: Axis) {
+    use incular_text::{TextEngine, TextStyle};
+    use incular_widgets::{RotatedBox, Text};
+
+    let Some(font) = std::env::var_os("INCULAR_FLUTTER_TEST_FONT_PATH") else {
+        return;
+    };
+    const FONT: &str = "Pinned Flutter Test for dry Wrap";
+    let mut engine = TextEngine::with_system_fonts(false);
+    assert!(engine.register_font_bytes_as(FONT, std::fs::read(font).unwrap()));
+    let text = Text::new("A very very very very very very very very long text")
+        .style(TextStyle::new().font_family(FONT).font_size(15.))
+        .text_direction(TextDirection::Ltr);
+    let child: Widget = match axis {
+        Axis::Horizontal => text.into(),
+        Axis::Vertical => RotatedBox::new(1, text).into(),
+    };
+    let mut tree = WidgetTree::with_text_engine(engine);
+    let scene = Wrap::new([child])
+        .direction(axis)
+        .text_direction(TextDirection::Ltr);
+    let root = tree.mount(scene.into()).unwrap();
+    let render = tree.render_id(root).unwrap();
+    let child = tree.children(root).unwrap()[0];
+    for (limit, expect) in [(f32::INFINITY, 15.), (600., 30.), (300., 45.)] {
+        let measured = if axis.is_horizontal() {
+            tree.max_intrinsic_height(render, limit)
+        } else {
+            tree.max_intrinsic_width(render, limit)
+        };
+        assert_eq!(measured, Some(expect), "{axis:?} at {limit}");
+        assert_eq!(tree.element_layout_size(root), None);
+        assert_eq!(tree.element_layout_size(child), None);
+    }
+    let constraints = if axis.is_horizontal() {
+        Constraints::at_most(300., f32::INFINITY)
+    } else {
+        Constraints::at_most(f32::INFINITY, 300.)
+    };
+    tree.layout(constraints).unwrap();
+    let previous = tree.element_layout_size(root);
+    let wide = Constraints::loose(Size::new(600., 600.));
+    let queried = tree.dry_layout_size(render, wide).unwrap();
+    assert_eq!(axis.cross_extent(queried), 30.);
+    assert_eq!(tree.element_layout_size(root), previous);
+    assert_eq!(previous.map(|size| axis.cross_extent(size)), Some(45.));
+}
+
+#[test]
+fn horizontal_wrap_dry_height_reflows_paragraph_at_the_supplied_width() {
+    verify_wrapping_text(Axis::Horizontal);
+}
+
+#[test]
+fn vertical_wrap_dry_width_reflows_a_quarter_turned_paragraph() {
+    verify_wrapping_text(Axis::Vertical);
+}

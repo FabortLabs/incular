@@ -14,7 +14,13 @@ impl WidgetTree {
             &field.controller,
             &field.placeholder,
             field.obscure_text.then_some(field.obscuring_character),
-            |display| self.text_engine.intrinsic_widths(display, &field.style, field.text_direction),
+            |display| {
+                self.text_engine.get_mut().intrinsic_widths(
+                    display,
+                    &field.style,
+                    field.text_direction,
+                )
+            },
         );
         let padding = field.content_padding.horizontal();
         widths.min += padding;
@@ -49,9 +55,16 @@ impl WidgetTree {
             (width - padding.horizontal() - crate::tree::text::editable_caret_margin(&field)).max(0.)
         });
         let options = self.editable_measurement_options(&field, measure_width);
-        let preferred_line_height = self.text_engine.layout_with_options(
-            " ", &field.style, options.soft_wrap(false).max_lines(Some(1)),
-        ).metrics.line_height;
+        let preferred_line_height = self
+            .text_engine
+            .get_mut()
+            .layout_with_options(
+                " ",
+                &field.style,
+                options.soft_wrap(false).max_lines(Some(1)),
+            )
+            .metrics
+            .line_height;
         let min_lines = field.min_lines.or(field.max_lines).unwrap_or(0);
         let min_height = preferred_line_height * min_lines as f32;
         let height = if field.max_lines.is_some_and(|max| max > 1 && max == min_lines) {
@@ -68,8 +81,12 @@ impl WidgetTree {
                         }).count();
                         preferred_line_height * lines as f32
                     } else {
-                        self.text_engine.layout_with_options(display, &field.style, options)
-                            .metrics.size.height
+                        self.text_engine
+                            .get_mut()
+                            .layout_with_options(display, &field.style, options)
+                            .metrics
+                            .size
+                            .height
                     }
                 },
             );
@@ -95,7 +112,9 @@ impl WidgetTree {
         &mut self, field: &TextFieldRender, width: Option<f32>,
     ) -> TextLayoutOptions {
         let strut = field.strut.as_deref().map(|strut| {
-            self.text_engine.resolve_strut(strut, &field.style)
+            self.text_engine
+                .get_mut()
+                .resolve_strut(strut, &field.style)
         });
         TextLayoutOptions::new(
             width,
@@ -144,17 +163,8 @@ impl WidgetTree {
         Ok(match *kind {
             RenderKind::Text {
                 ref text,
-                ref style,
-                align,
-                text_direction,
-                soft_wrap,
-                max_lines,
-                overflow,
-                height_behavior,
-                hyphens,
-                ref spans,
                 ref inline,
-                ref strut,
+                ..
             } => {
                 let width = constraints
                     .is_width_bounded()
@@ -180,51 +190,16 @@ impl WidgetTree {
                         }
                     }
                 }
-                let strut = strut
-                    .as_ref()
-                    .map(|strut| self.text_engine.resolve_strut(strut, style));
                 let _external_call = self
                     .recursion_diagnostics
                     .external_text_call("TextEngine::layout_with_options", text);
-                let options = |width| {
-                    TextLayoutOptions::new(width, align)
-                        .text_direction(text_direction)
-                        .soft_wrap(soft_wrap)
-                        .max_lines(max_lines)
-                        .overflow(overflow)
-                        .height_behavior(height_behavior)
-                        .strut(strut)
-                };
-                // A rich paragraph shapes each span with its own style; a
-                // plain one takes the retained single-style path.
-                let mut layout = match spans {
-                    Some(runs) => self.text_engine.layout_rich_with_options(
-                        text,
-                        runs,
-                        &placeholders,
-                        options(width),
-                    ),
-                    None => self
-                        .text_engine
-                        .layout_with_options(text, style, options(width)),
-                };
-                if let Some(shrunk) = shrink_wrapped_text_width(&layout, constraints) {
-                    layout = match spans {
-                        Some(runs) => self.text_engine.layout_rich_with_options(
-                            text,
-                            runs,
-                            &placeholders,
-                            options(Some(shrunk)),
-                        ),
-                        None => {
-                            self.text_engine
-                                .layout_with_options(text, style, options(Some(shrunk)))
-                        }
-                    };
-                }
-                self.text_engine.apply_discretionary_hyphens(
-                    &mut layout, text, style, spans.as_deref().unwrap_or_default(), hyphens, width,
-                );
+                let layout = shape_render_paragraph(
+                    self.text_engine.get_mut(),
+                    kind,
+                    &placeholders,
+                    constraints,
+                )
+                .expect("text layout receives a paragraph");
                 let size = constraints.constrain(layout.metrics.size);
                 let node = self.render_live_mut(id, "retained render must remain live");
                 node.set_text_layout(layout.clone());
@@ -272,9 +247,12 @@ impl WidgetTree {
                 let _external_call = self
                     .recursion_diagnostics
                     .external_text_call("TextEngine::layout", text);
-                let mut layout = self.text_engine.layout(text, style, width, align);
+                let mut layout = self.text_engine.get_mut().layout(text, style, width, align);
                 if let Some(shrunk) = shrink_wrapped_text_width(&layout, constraints) {
-                    layout = self.text_engine.layout(text, style, Some(shrunk), align);
+                    layout = self
+                        .text_engine
+                        .get_mut()
+                        .layout(text, style, Some(shrunk), align);
                 }
                 let size = constraints.constrain(layout.metrics.size);
                 let node = self.render_live_mut(id, "retained render must remain live");
@@ -356,8 +334,10 @@ impl WidgetTree {
                             .recursion_diagnostics
                             .external_text_call("TextEngine::layout_with_options", display);
                         if paragraphs {
-                            let document =
-                                tree.text_engine.layout_paragraphs(display, style, options);
+                            let document = tree
+                                .text_engine
+                                .get_mut()
+                                .layout_paragraphs(display, style, options);
                             (document.metrics, None, Some(document))
                         } else {
                             // Spell check styling belongs to committed text,
@@ -368,9 +348,11 @@ impl WidgetTree {
                             {
                                 Some((_, runs)) => tree
                                     .text_engine
+                                    .get_mut()
                                     .layout_runs_with_options(display, runs, options),
                                 None => tree
                                     .text_engine
+                                    .get_mut()
                                     .layout_with_options(display, style, options),
                             };
                             (layout.metrics, Some(layout), None)
@@ -451,6 +433,65 @@ impl WidgetTree {
             _ => unreachable!("text layout received a non-text render kind"),
         })
     }
+}
+
+/// One paragraph shaping path for dry size and live layout. It never
+/// reads or updates render geometry; live inline boxes are supplied by the caller.
+pub(in crate::tree::layout) fn shape_render_paragraph(
+    engine: &mut TextEngine,
+    kind: &RenderKind,
+    placeholders: &[incular_text::TextPlaceholder],
+    constraints: Constraints,
+) -> Option<Arc<incular_text::TextLayout>> {
+    let RenderKind::Text {
+        text,
+        style,
+        align,
+        text_direction,
+        soft_wrap,
+        max_lines,
+        overflow,
+        height_behavior,
+        hyphens,
+        spans,
+        strut,
+        ..
+    } = kind
+    else {
+        return None;
+    };
+    let width = constraints
+        .is_width_bounded()
+        .then_some(constraints.max_width());
+    let strut = strut
+        .as_ref()
+        .map(|strut| engine.resolve_strut(strut, style));
+    let options = |width| {
+        TextLayoutOptions::new(width, *align)
+            .text_direction(*text_direction)
+            .soft_wrap(*soft_wrap)
+            .max_lines(*max_lines)
+            .overflow(*overflow)
+            .height_behavior(*height_behavior)
+            .strut(strut)
+    };
+    let mut shape = |width| match spans {
+        Some(runs) => engine.layout_rich_with_options(text, runs, placeholders, options(width)),
+        None => engine.layout_with_options(text, style, options(width)),
+    };
+    let mut layout = shape(width);
+    if let Some(shrunk) = shrink_wrapped_text_width(&layout, constraints) {
+        layout = shape(Some(shrunk));
+    }
+    engine.apply_discretionary_hyphens(
+        &mut layout,
+        text,
+        style,
+        spans.as_deref().unwrap_or_default(),
+        *hyphens,
+        width,
+    );
+    Some(layout)
 }
 
 /// The width a paragraph must be laid out again at when its box shrink-wraps

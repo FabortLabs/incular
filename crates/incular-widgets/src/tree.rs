@@ -1571,7 +1571,8 @@ pub struct WidgetTree {
     departures: departing::Departures,
     /// Running `view_transition`s, painted above the scene.
     view_transitions: Vec<crate::dx::view_transition::Active>,
-    text_engine: TextEngine,
+    text_engine: RefCell<TextEngine>,
+    dry_shape_refreshed_fonts: Cell<bool>,
     default_spell_check_provider: Option<crate::DefaultSpellCheckProvider>,
     compositor: LayerTree,
     compositor_initialized: bool,

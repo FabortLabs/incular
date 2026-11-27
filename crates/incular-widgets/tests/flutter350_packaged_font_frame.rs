@@ -24,6 +24,17 @@ fn a_named_application_font_updates_retained_text_at_the_next_layout() {
     distinctive.extend_from_slice(b"incular widget package fixture");
     register_application_font_as(packaged.name(), distinctive.clone());
     assert!(tree.has_pending_application_fonts());
+    let old_size = tree.element_layout_size(root);
+    assert!(tree.dry_layout_size(render, bounds).is_some());
+    assert_eq!(tree.element_layout_size(root), old_size);
+    assert_eq!(
+        tree.text_layout(render).unwrap().lines[0].runs[0].font.id(),
+        before
+    );
+    assert!(
+        tree.has_pending_application_fonts(),
+        "dry shaping must not consume the frame invalidation"
+    );
     tree.layout(bounds).unwrap();
     assert_eq!(tree.render_id(root), Some(render));
     assert!(!tree.has_pending_application_fonts());
