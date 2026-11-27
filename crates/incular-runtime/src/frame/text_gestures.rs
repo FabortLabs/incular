@@ -572,6 +572,7 @@ impl Runtime {
         };
         let editable = self.tree.text_field_is_editable(field);
         let previous = self.observed_editor_selection(field);
+        let _notifications = previous.is_some().then(|| controller.batch_user_edit_notifications());
         if self.run_text_intent(field, &controller, intent, editable) {
             self.report_editor_selection_delta(field, previous, SelectionChangedCause::Toolbar);
             controller.reset_caret(self.input_now());

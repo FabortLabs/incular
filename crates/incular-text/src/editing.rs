@@ -480,6 +480,8 @@ struct ControllerState {
     /// selection was set since the text was. `value.selection` then holds
     /// the collapsed end Incular has always reported.
     selection_unset: bool,
+    user_edit_notification_depth: usize,
+    original_user_edit_text: Option<String>,
     focused_selection_policies: Vec<(u64, bool)>,
     next_focus_policy: u64,
 }
@@ -500,6 +502,31 @@ pub struct TextEditingController {
     user_edits: incular_core::reactivity::DependencySource,
     transforms: incular_core::reactivity::DependencySource,
     inner: Rc<RefCell<ControllerState>>,
+}
+
+/// Delays user text-change observers until the enclosing editor action has
+/// notified its selection callback.
+#[doc(hidden)]
+#[must_use = "keep the batch alive until the editor callbacks have run"]
+pub struct UserEditNotificationBatch {
+    controller: TextEditingController,
+}
+
+impl Drop for UserEditNotificationBatch {
+    fn drop(&mut self) {
+        let changed = {
+            let mut state = self.controller.inner.borrow_mut();
+            state.user_edit_notification_depth -= 1;
+            if state.user_edit_notification_depth == 0 {
+                state.original_user_edit_text.take().is_some_and(|text| text != state.value.text)
+            } else {
+                false
+            }
+        };
+        if changed && !std::thread::panicking() {
+            self.controller.user_edits.notify();
+        }
+    }
 }
 
 /// Owns a text-controller listener until dropped.
@@ -852,6 +879,20 @@ impl TextEditingController {
         let before = state.listeners.len();
         state.listeners.retain(|(id, _)| *id != token);
         before != state.listeners.len()
+    }
+
+    /// Batches the user text-change notification, without deferring
+    /// committed editing state or ordinary controller listeners.
+    #[doc(hidden)]
+    pub fn batch_user_edit_notifications(&self) -> UserEditNotificationBatch {
+        {
+            let mut state = self.inner.borrow_mut();
+            state.user_edit_notification_depth = state
+                .user_edit_notification_depth
+                .checked_add(1)
+                .expect("user edit notification nesting exhausted");
+        }
+        UserEditNotificationBatch { controller: self.clone() }
     }
 
     /// Applies a user (IME or platform) delta. Input formatters run only
@@ -1492,7 +1533,15 @@ impl TextEditingController {
             state.caret_affinity = affinity;
             state.selection_is_directional = is_directional;
             let text_changed = user && state.value.text != value.text;
-            state.value = value;
+            let defer_notification = text_changed && state.user_edit_notification_depth != 0;
+            if defer_notification && state.original_user_edit_text.is_none() {
+                // Move the old string out, rather than copying a potentially
+                // large document just to compare after selection callbacks.
+                let original = std::mem::replace(&mut state.value, value);
+                state.original_user_edit_text = Some(original.text);
+            } else {
+                state.value = value;
+            }
             if content_changed {
                 state.content_revision = state
                     .content_revision
@@ -1511,7 +1560,7 @@ impl TextEditingController {
                 .iter()
                 .map(|(_, listener)| listener.clone())
                 .collect::<Vec<_>>();
-            (listeners, text_changed)
+            (listeners, text_changed && !defer_notification)
         };
         self.notify_value(listeners);
         self.persist_restoration();

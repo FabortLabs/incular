@@ -1481,6 +1481,9 @@ impl Runtime {
             }
             _ => None,
         };
+        let _notifications = previous_selection
+            .and_then(|_| self.tree.text_controller(element))
+            .map(|controller| controller.batch_user_edit_notifications());
         let handled = match action {
             SemanticAction::Focus => {
                 let blocked =
@@ -4244,6 +4247,7 @@ impl Runtime {
         // Flutter's `DefaultTextEditingShortcuts` pick the intent for the
         // chord on the target platform and the field's actions run it.
         let previous = self.observed_editor_selection(field);
+        let _notifications = previous.is_some().then(|| controller.batch_user_edit_notifications());
         if !self.run_text_field_key(field, &controller, &event, lock_modes) {
             return false;
         }
@@ -4417,6 +4421,7 @@ impl Runtime {
         }
         if let Some(controller) = self.tree.text_controller(field) {
             let previous = self.observed_editor_selection(field);
+            let _notifications = previous.is_some().then(|| controller.batch_user_edit_notifications());
             controller.insert(text);
             self.report_editor_selection_delta(
                 field,
@@ -4765,6 +4770,7 @@ impl Runtime {
             current.text != value.text || current.composing != value.composing
         });
         let previous_selection = self.observed_editor_selection(owner.field);
+        let _notifications = previous_selection.is_some().then(|| controller.batch_user_edit_notifications());
         let refresh_caret = if let Some((affinity, directional)) = metadata {
             // EditableTextState keeps the visual caret side when an IME
             // reports a different affinity without moving its origin.

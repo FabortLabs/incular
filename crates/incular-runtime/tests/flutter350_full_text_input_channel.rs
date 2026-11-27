@@ -370,3 +370,88 @@ fn live_interactive_selection_updates_the_existing_keyboard_client_without_showi
     frame(&mut runtime);
     assert!(runtime.take_text_input_commands().is_empty());
 }
+
+#[test]
+fn a_platform_text_edit_notifies_selection_before_on_changed() {
+    use incular_core::InputEvent;
+    use incular_text::SelectionChangedCause;
+    use std::{
+        cell::{Cell, RefCell},
+        rc::Rc,
+    };
+
+    let focus = FocusNode::new();
+    let controller = TextEditingController::with_text("hi");
+    controller.set_selection(TextSelection::collapsed(2));
+    let calls = Rc::new(RefCell::new(Vec::new()));
+    let restore = Rc::new(Cell::new(false));
+    let editor = field(&controller, &focus, true)
+        .on_selection_changed({
+            let calls = calls.clone();
+            let restore = restore.clone();
+            let controller = controller.clone();
+            move |selection, cause| {
+                assert_eq!(cause, SelectionChangedCause::Keyboard);
+                calls
+                    .borrow_mut()
+                    .push(format!("selection:{}", selection.extent));
+                if restore.get() {
+                    controller.set_value(
+                        incular_text::TextEditingValue::new("hello")
+                            .with_selection(TextSelection::collapsed(5)),
+                    );
+                }
+            }
+        })
+        .on_changed({
+            let calls = calls.clone();
+            move |text| calls.borrow_mut().push(format!("text:{text}"))
+        });
+    let mut runtime = Runtime::new(editor.into()).unwrap();
+    frame(&mut runtime);
+    let client = attached(&mut runtime);
+    assert!(calls.borrow().is_empty());
+
+    let message = update(
+        json!(client.get()),
+        json!({"text":"hello","selectionBase":5,"selectionExtent":5}),
+    );
+    assert_eq!(
+        runtime
+            .handle_flutter_text_input_editing_call(&message)
+            .unwrap(),
+        Some(true)
+    );
+    assert_eq!(calls.borrow().as_slice(), &["selection:5", "text:hello"]);
+
+    calls.borrow_mut().clear();
+    let _ = runtime.handle_input(InputEvent::Text("!".into()));
+    assert_eq!(calls.borrow().as_slice(), &["selection:6", "text:hello!"]);
+
+    controller.set_value(
+        incular_text::TextEditingValue::new("hello").with_selection(TextSelection::collapsed(5)),
+    );
+    restore.set(true);
+    calls.borrow_mut().clear();
+    let message = update(
+        json!(client.get()),
+        json!({"text":"hello!","selectionBase":6,"selectionExtent":6}),
+    );
+    assert_eq!(
+        runtime
+            .handle_flutter_text_input_editing_call(&message)
+            .unwrap(),
+        Some(true)
+    );
+    assert_eq!(controller.text(), "hello");
+    assert_eq!(calls.borrow().as_slice(), &["selection:6"]);
+    frame(&mut runtime);
+    assert!(
+        runtime
+            .take_text_input_commands()
+            .iter()
+            .any(|command| matches!(
+                command, TextInputCommand::Update { state, .. } if state.text == "hello"
+            ))
+    );
+}

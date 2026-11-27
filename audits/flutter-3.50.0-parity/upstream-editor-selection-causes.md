@@ -34,8 +34,8 @@ baseline. The corrected fixture checks Flutter's focused-only action
 advertisement, while preserving Incular's direct native SetSelection
 compatibility and rejecting a direct SetText on that field. Three
 focused native targets passed 18 tests. These authored cases add no
-upstream registration credit. Ordering when both onChanged and
-onSelectionChanged are installed remains a separate comparison.
+upstream registration credit. The order when both callbacks are
+installed is compared separately below.
 
 ## Caller-owned pointer handling
 
@@ -51,3 +51,20 @@ different renderer or adding layout borders. The mounted renderer and
 focus identity stay stable across the toggle. The two native editor
 cases and 12 adjacent tap and gesture checks passed. This authored
 comparison adds no original registration count.
+
+## Selection callback before text callback
+
+The pinned `editor_change_callback_order_test.dart` sends a real full
+editing-state update to a focused editor with both callbacks. Flutter
+reports the new selection before `onChanged`. If the selection callback
+restores the previous text, there is no false text-change notification.
+
+The native regression reproduced the reverse order. Incular now defers only
+the user text-change notification until selection callbacks finish, without
+deferring committed controller state or ordinary listeners. It keeps the
+already allocated previous string, so it need not copy large documents to
+compare the final value. The native case checks platform and directly typed
+edits, a re-entrant restoration, and the corrected value sent back to the
+input method. The same ordering applies to the routed key, toolbar and
+accessibility edit paths. Four focused native targets passed 34 tests.
+No original registration count was added for the authored case.
