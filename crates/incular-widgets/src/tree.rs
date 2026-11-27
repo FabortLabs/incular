@@ -156,7 +156,9 @@ use widget::{
 
 #[doc(hidden)]
 pub use invariants::{InvariantCategory, InvariantViolation};
-pub use flex_overflow::FlexOverflowDiagnostic;
+pub use flex_overflow::{ConstraintOverflowDiagnostic, FlexOverflowDiagnostic};
+#[cfg(debug_assertions)]
+mod debug_overflow_indicator;
 pub use painting::PointerHitTest;
 pub use rendering::{image_fit_rects, image_repeat_destinations, render_kind};
 pub use retained::{PERFORMANCE_OVERLAY_KEY, performance_overlay_placeholder};

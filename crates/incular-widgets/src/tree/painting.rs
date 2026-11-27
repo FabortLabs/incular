@@ -864,10 +864,6 @@ impl WidgetTree {
         let mut picture = std::mem::take(&mut self.paint_scratch);
         picture.clear();
         let focus_ring = self.paint_kind(id, &kind, size, &mut picture);
-        #[cfg(debug_assertions)]
-        if matches!(kind.as_ref(), RenderKind::Flex { .. }) && size.width > 0. && size.height > 0. {
-            self.publish_flex_overflow_on_paint(id);
-        }
         // A picture may paint past its box (an offset box shadow, a stroke on
         // the edge); effect layers above it size their input from these
         // bounds, so they cover what was painted, as Flutter's layers do.
@@ -919,6 +915,21 @@ impl WidgetTree {
             }
             self.compositor
                 .update_picture_if_changed(layer, &picture, foreground_bounds);
+        }
+        #[cfg(debug_assertions)]
+        if matches!(kind.as_ref(), RenderKind::Flex { .. } | RenderKind::Unconstrained { .. }) {
+            picture.clear();
+            self.paint_debug_overflow_indicator(id, &kind, size, &mut picture);
+            let bounds = painted_bounds(picture.commands(), size);
+            let node = self.renders.get_mut(id.0).expect("render remains live while painting");
+            let resync = node.object.layers.update_debug_overflow_picture(
+                &mut self.compositor,
+                &picture,
+                bounds,
+            );
+            if resync && let Some(element) = self.element_for_render(id) {
+                self.sync_render_children(element);
+            }
         }
         self.paint_scratch = picture;
         self.diagnostics.paints += 1;

@@ -445,9 +445,9 @@ pub use transient::{
 };
 pub use tree::{FloatingCaretGeometry, TextEditingCallback, TextEditingCallbackError};
 pub use tree::{
-    AffineController, AffineParts, BoxFit, BuildContext, ColorFiltered, DecoratedBox, EditableText,
-    FadeTransition, FlexOverflowDiagnostic, GlobalKey, Icon, Image, ImageRepeat, Opacity,
-    OpacityController, PathView,
+    AffineController, AffineParts, BoxFit, BuildContext, ColorFiltered, ConstraintOverflowDiagnostic,
+    DecoratedBox, EditableText, FadeTransition, FlexOverflowDiagnostic, GlobalKey, Icon, Image,
+    ImageRepeat, Opacity, OpacityController, PathView,
     RichParagraph, RotationController, RotationTransition, ScaleController, ScaleTransition,
     SlideTransition, Text, TextFieldInputSnapshot, TextInputActionHint, TextInputTypeHint,
     ToolbarOptions, Transform, TranslationController, Widget,

@@ -38,7 +38,53 @@ impl fmt::Display for FlexOverflowDiagnostic {
 
 impl std::error::Error for FlexOverflowDiagnostic {}
 
-fn overflow_pixels_text(pixels: f64) -> String {
+/// Debug summary of the physical edges exceeded by a constraint transformation.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ConstraintOverflowDiagnostic {
+    pub render: RenderObjectId,
+    pub left: f64,
+    pub top: f64,
+    pub bottom: f64,
+    pub right: f64,
+}
+
+impl ConstraintOverflowDiagnostic {
+    /// Overflow is a diagnostic summary, not a panic or a layout error.
+    #[must_use]
+    pub const fn level(&self) -> incular_core::DiagnosticLevel {
+        incular_core::DiagnosticLevel::Summary
+    }
+}
+
+impl fmt::Display for ConstraintOverflowDiagnostic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let edges = [
+            ("left", self.left),
+            ("top", self.top),
+            ("bottom", self.bottom),
+            ("right", self.right),
+        ];
+        let clauses: Vec<_> = edges
+            .into_iter()
+            .filter(|(_, pixels)| *pixels > 0.)
+            .map(|(side, pixels)| format!("{} pixels on the {side}", overflow_pixels_text(pixels)))
+            .collect();
+        let summary = match clauses.as_slice() {
+            [] => String::new(),
+            [only] => only.clone(),
+            [first, second] => format!("{first} and {second}"),
+            [prefix @ .., last] => format!("{}, and {last}", prefix.join(", ")),
+        };
+        write!(
+            f,
+            "A RenderConstraintsTransformBox overflowed by {summary}."
+        )
+    }
+}
+
+impl std::error::Error for ConstraintOverflowDiagnostic {}
+
+pub(super) fn overflow_pixels_text(pixels: f64) -> String {
     if pixels > 10. {
         format!("{:.0}", pixels.round())
     } else if pixels > 1. {
@@ -69,7 +115,7 @@ fn overflow_pixels_text(pixels: f64) -> String {
 #[cfg(debug_assertions)]
 enum ReportState {
     Pending(FlexOverflowDiagnostic),
-    Reported,
+    Reported(Option<FlexOverflowDiagnostic>),
 }
 
 #[cfg(debug_assertions)]
@@ -77,6 +123,8 @@ enum ReportState {
 pub(super) struct FlexOverflowDiagnostics {
     states: super::FastHashMap<RenderObjectId, ReportState>,
     reports: std::collections::VecDeque<FlexOverflowDiagnostic>,
+    constraint_states: super::FastHashSet<RenderObjectId>,
+    constraint_reports: std::collections::VecDeque<ConstraintOverflowDiagnostic>,
 }
 
 impl WidgetTree {
@@ -102,24 +150,43 @@ impl WidgetTree {
             let diagnostics = self
                 .flex_overflow_diagnostics
                 .get_or_insert_with(Default::default);
+            let diagnostic = FlexOverflowDiagnostic {
+                render,
+                axis,
+                pixels,
+            };
             let state = diagnostics
                 .states
                 .entry(render)
-                .or_insert(ReportState::Pending(FlexOverflowDiagnostic {
-                    render,
-                    axis,
-                    pixels,
-                }));
-            if let ReportState::Pending(diagnostic) = state {
-                diagnostic.pixels = pixels;
+                .or_insert(ReportState::Pending(diagnostic));
+            *state = match state {
+                ReportState::Pending(_) => ReportState::Pending(diagnostic),
+                ReportState::Reported(_) => ReportState::Reported(Some(diagnostic)),
+            };
+        } else if let Some(diagnostics) = &mut self.flex_overflow_diagnostics {
+            match diagnostics.states.get_mut(&render) {
+                Some(ReportState::Reported(last)) => *last = None,
+                Some(ReportState::Pending(_)) => {
+                    diagnostics.states.remove(&render);
+                }
+                None => {}
             }
-        } else if let Some(diagnostics) = &mut self.flex_overflow_diagnostics
-            && matches!(
-                diagnostics.states.get(&render),
-                Some(ReportState::Pending(_))
-            )
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    pub(super) fn active_flex_overflow(
+        &self,
+        render: RenderObjectId,
+    ) -> Option<FlexOverflowDiagnostic> {
+        match self
+            .flex_overflow_diagnostics
+            .as_ref()?
+            .states
+            .get(&render)?
         {
-            diagnostics.states.remove(&render);
+            ReportState::Pending(report) => Some(*report),
+            ReportState::Reported(report) => *report,
         }
     }
 
@@ -128,10 +195,11 @@ impl WidgetTree {
         let Some(diagnostics) = &mut self.flex_overflow_diagnostics else {
             return;
         };
-        let Some(state @ ReportState::Pending(_)) = diagnostics.states.get_mut(&render) else {
+        let Some(state) = diagnostics.states.get_mut(&render) else {
             return;
         };
-        if let ReportState::Pending(report) = std::mem::replace(state, ReportState::Reported) {
+        if let ReportState::Pending(report) = *state {
+            *state = ReportState::Reported(Some(report));
             if diagnostics.reports.len() == 256 {
                 diagnostics.reports.pop_front();
             }
@@ -143,6 +211,30 @@ impl WidgetTree {
     pub(super) fn forget_flex_overflow(&mut self, render: RenderObjectId) {
         if let Some(diagnostics) = &mut self.flex_overflow_diagnostics {
             diagnostics.states.remove(&render);
+            diagnostics.constraint_states.remove(&render);
+        }
+    }
+
+    /// Drains debug-only reports for the first visible overflow of an
+    /// unconstrained or constraints-transform render object.
+    pub fn take_constraint_overflow_diagnostics(&mut self) -> Vec<ConstraintOverflowDiagnostic> {
+        #[cfg(debug_assertions)]
+        if let Some(diagnostics) = &mut self.flex_overflow_diagnostics {
+            return diagnostics.constraint_reports.drain(..).collect();
+        }
+        Vec::new()
+    }
+
+    #[cfg(debug_assertions)]
+    pub(super) fn publish_constraint_overflow(&mut self, report: ConstraintOverflowDiagnostic) {
+        let diagnostics = self
+            .flex_overflow_diagnostics
+            .get_or_insert_with(Default::default);
+        if diagnostics.constraint_states.insert(report.render) {
+            if diagnostics.constraint_reports.len() == 256 {
+                diagnostics.constraint_reports.pop_front();
+            }
+            diagnostics.constraint_reports.push_back(report);
         }
     }
 }

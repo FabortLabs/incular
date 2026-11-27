@@ -3277,3 +3277,7 @@ packages/flutter/test/widgets/scrollable_list_hit_testing_test.dart	173	Tap imme
 packages/flutter/test/rendering/overflow_test.dart	13	overflow should not affect baseline	paired-match	upstream-overflow-text-baseline.md
 packages/flutter/test/widgets/hit_testing_test.dart	18	A mouse click should only cause one hit test	paired-match	upstream-contact-hit-test-reuse.md
 packages/flutter/test/widgets/hit_testing_test.dart	38	Non-mouse events should not cause movement hit tests	paired-match	upstream-contact-hit-test-reuse.md
+packages/flutter/test/rendering/debug_overflow_indicator_test.dart	9	overflow indicator is not shown when not overflowing	paired-match	upstream-debug-overflow-indicators.md
+packages/flutter/test/rendering/debug_overflow_indicator_test.dart	17	overflow indicator is shown when overflowing	paired-match	upstream-debug-overflow-indicators.md
+packages/flutter/test/rendering/debug_overflow_indicator_test.dart	39	overflow indicator is not shown when constraint size is zero.	paired-match	upstream-debug-overflow-indicators.md
+packages/flutter/test/rendering/flex_overflow_test.dart	9	Flex overflow indicator	paired-match	upstream-debug-overflow-indicators.md
