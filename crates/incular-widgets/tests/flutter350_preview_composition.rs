@@ -371,3 +371,79 @@ fn composed_preview_keeps_outer_media_query_for_unspecified_aspects() {
     tree.layout(Constraints::loose(Size::new(500., 300.)))
         .unwrap();
 }
+
+#[test]
+fn multi_preview_transforms_members_before_its_shared_outer_wrapper() {
+    use incular_widgets::widget_previews::{MultiPreview, Preview, PreviewTransform};
+
+    struct Member {
+        label: &'static str,
+        brightness: Brightness,
+        trace: Rc<RefCell<Vec<&'static str>>>,
+    }
+
+    impl PreviewTransform for Member {
+        fn transform(&self) -> Preview {
+            self.trace.borrow_mut().push(self.label);
+            let mut builder = PreviewBuilder::new();
+            builder.name = Some(self.label.to_owned());
+            builder.brightness = Some(self.brightness);
+            builder.add_wrapper(|child| ColoredBox::new(INNER, child).into());
+            builder.build()
+        }
+    }
+
+    struct Pair([Member; 2]);
+
+    impl MultiPreview for Pair {
+        fn previews(&self) -> Vec<&dyn PreviewTransform> {
+            self.0
+                .iter()
+                .map(|item| item as &dyn PreviewTransform)
+                .collect()
+        }
+
+        fn transform(&self) -> Vec<Preview> {
+            self.transform_members()
+                .into_iter()
+                .map(|preview| {
+                    let mut builder = preview.to_builder();
+                    builder.name = Some(format!("Pair {}", preview.name().unwrap()));
+                    builder.add_wrapper(|child| ColoredBox::new(OUTER, child).into());
+                    builder.build()
+                })
+                .collect()
+        }
+    }
+
+    let trace = Rc::new(RefCell::new(Vec::new()));
+    let pair = Pair([
+        Member {
+            label: "Light",
+            brightness: Brightness::Light,
+            trace: trace.clone(),
+        },
+        Member {
+            label: "Dark",
+            brightness: Brightness::Dark,
+            trace: trace.clone(),
+        },
+    ]);
+    let result = pair.transform();
+    assert_eq!(*trace.borrow(), ["Light", "Dark"]);
+    assert_eq!(result.len(), 2);
+    for (preview, label, brightness) in [
+        (&result[0], "Pair Light", Brightness::Light),
+        (&result[1], "Pair Dark", Brightness::Dark),
+    ] {
+        assert_eq!(preview.name(), Some(label));
+        assert_eq!(preview.brightness(), Some(brightness));
+        assert_eq!(painted_colors(preview.wrap(leaf())), [OUTER, INNER, LEAF]);
+    }
+
+    let fresh = pair.transform_members();
+    assert_eq!(*trace.borrow(), ["Light", "Dark", "Light", "Dark"]);
+    assert_eq!(fresh[0].name(), Some("Light"));
+    assert_eq!(painted_colors(fresh[0].wrap(leaf())), [INNER, LEAF]);
+    assert_eq!(result[0].name(), Some("Pair Light"));
+}

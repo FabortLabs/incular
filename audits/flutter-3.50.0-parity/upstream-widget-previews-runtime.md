@@ -187,3 +187,18 @@ A real Cargo.toml edit then updates the durable manifest hashes
 without another IDE request. All 24 focused Rust IDE, reload, and
 watcher tests passed. This pairs the injected service contract,
 not a real LSP daemon or browser preview scaffold.
+
+## MultiPreview member transformations
+
+The actual Flutter `MultiPreview.transform` invokes its members in
+declaration order before a custom group adds shared wrappers or changes
+labels. The pinned `multi_preview_transform_test.dart` and native
+`flutter350_preview_composition` exercise light and dark members, group
+labels, and the outer-group/inner-member/leaf wrapper order. Repeating just
+the base transform yields a fresh independent set without the group
+changes. Both lanes passed, including eight native composition tests.
+
+Incular expresses the member and group transforms as Rust traits. This
+implements runtime expansion, not compiler annotation discovery or the
+generated scaffold's MultiPreview registration. The fixture is authored
+and adds no original-registration credit.

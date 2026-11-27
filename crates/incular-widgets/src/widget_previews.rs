@@ -177,6 +177,43 @@ impl PreviewBuilder {
 #[derive(Clone, Default)]
 pub struct Preview(PreviewBuilder);
 
+/// A preview descriptor that may resolve runtime options and wrappers.
+pub trait PreviewTransform {
+    /// Builds the transformed preview. The original descriptor is not changed.
+    fn transform(&self) -> Preview;
+}
+
+impl PreviewTransform for Preview {
+    fn transform(&self) -> Preview {
+        self.clone()
+    }
+}
+
+/// A group of previews for one exported widget factory.
+///
+/// Members are transformed in their original order. A custom group can
+/// then apply shared options to those transformed previews.
+pub trait MultiPreview {
+    /// The members in declaration order.
+    fn previews(&self) -> Vec<&dyn PreviewTransform>;
+
+    /// Runs each member's individual transformation.
+    ///
+    /// Group overrides may use this first, then modify the resulting
+    /// descriptors with `Preview::to_builder`.
+    fn transform_members(&self) -> Vec<Preview> {
+        self.previews()
+            .into_iter()
+            .map(PreviewTransform::transform)
+            .collect()
+    }
+
+    /// Resolves all previews for the group.
+    fn transform(&self) -> Vec<Preview> {
+        self.transform_members()
+    }
+}
+
 impl Preview {
     #[must_use]
     pub fn group(&self) -> &str {
