@@ -210,13 +210,12 @@ impl WidgetTree {
                 let local_position = entry.world_to_local.map_or(event.position, |transform| {
                     transform.transform_point(event.position)
                 });
-                let local_pan_delta = entry.world_to_local.map_or(pan_delta, |transform| {
-                    if matches!(event.phase, PointerPanZoomPhase::Update { .. }) {
-                        local_pan - transform.transform_point(pan - pan_delta)
-                    } else {
-                        Offset::ZERO
-                    }
-                });
+                // For an affine path the difference of two projected points
+                // equals the mapped vector. Don't subtract rounded absolute
+                // pan positions: that can erase a small measured delta.
+                let local_pan_delta = entry
+                    .world_to_local
+                    .map_or(pan_delta, |transform| transform.transform_vector(pan_delta));
                 callback(PointerPanZoomDetails {
                     event,
                     pan_delta,

@@ -297,16 +297,31 @@ fn packet_pan_zoom_retains_its_raw_listener_path_and_normalizes_pan_and_delta() 
         synthesized: true,
         ..start
     };
+    // The separately measured delta retains precision after an extended pan.
+    let precise_update = PointerData {
+        change: Data::PanZoomUpdate {
+            physical_pan: Offset::new(83_886_080., 83_886_080.),
+            physical_pan_delta: Offset::new(1.25, -1.25),
+            scale: 1.,
+            rotation: 0.,
+        },
+        time: now + Duration::from_millis(20),
+        ..update
+    };
     let end = PointerData {
         change: Data::PanZoomEnd,
-        time: now + Duration::from_millis(20),
+        time: now + Duration::from_millis(30),
         ..update
     };
     runtime.handle_pointer_data_packet(VIEW, RATIO, [update]);
     assert!(trace.borrow().is_empty());
-    runtime.handle_pointer_data_packet(VIEW, RATIO, [start, update, end, update, end]);
+    runtime.handle_pointer_data_packet(
+        VIEW,
+        RATIO,
+        [start, update, precise_update, end, update, end],
+    );
     let trace = trace.borrow();
-    assert_eq!(trace.len(), 3);
+    assert_eq!(trace.len(), 4);
     assert_eq!(trace[0].event.phase, PointerPanZoomPhase::Start);
     assert_eq!(
         trace[1].event.phase,
@@ -316,7 +331,7 @@ fn packet_pan_zoom_retains_its_raw_listener_path_and_normalizes_pan_and_delta() 
             rotation: 0.23
         }
     );
-    assert_eq!(trace[2].event.phase, PointerPanZoomPhase::End);
+    assert_eq!(trace[3].event.phase, PointerPanZoomPhase::End);
     assert_eq!(trace[0].local_position, Offset::new(100., 100.));
     assert_eq!(trace[1].event.position, Offset::new(560., 600.));
     assert_eq!(trace[1].local_position, Offset::new(330., 350.));
@@ -324,6 +339,8 @@ fn packet_pan_zoom_retains_its_raw_listener_path_and_normalizes_pan_and_delta() 
     assert_eq!(trace[1].pan_delta, Offset::new(12., -4.));
     assert_eq!(trace[1].local_pan_delta, Offset::new(6., -2.));
     assert!(trace[1].event.synthesized);
+    assert_eq!(trace[2].pan_delta, Offset::new(0.5, -0.5));
+    assert_eq!(trace[2].local_pan_delta, Offset::new(0.25, -0.25));
     assert!(
         trace
             .iter()

@@ -117,3 +117,15 @@ invalid engine packets, while Flutter additionally asserts on its
 individual pointer constructors. Incular's coarse already-logical
 RawPointerEvent deliberately remains usable by native adapters.
 Eleven packet-converter and twelve mounted delivery tests passed.
+
+## Small pan updates after large cumulative displacement
+
+The pinned Flutter probe `precise_local_pan_delta_test.dart` projects a
+large cumulative pan and a separately measured subpixel delta through a
+translated scale. The mounted Rust listener used to report a zero local
+delta while its global pan delta was still `(0.5, -0.5)`: it subtracted
+already-rounded absolute coordinates. The listener now maps the delta
+with the linear part of its affine transform. Position and absolute
+local pan still use the full transform, including translation. Retained
+packet delivery now reports Flutter's `(0.25, -0.25)` local delta.
+This authored probe does not add an upstream registration.
