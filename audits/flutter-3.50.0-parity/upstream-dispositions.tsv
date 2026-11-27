@@ -3134,3 +3134,4 @@ packages/flutter/test/painting/decoration_test.dart	639	paintImage boxFit, scale
 packages/flutter/test/painting/decoration_test.dart	671	paintImage with repeatX and fitHeight	paired-match	upstream-decoration-image-paint.md#translated-fits-repeated-tiles-and-shape-clipping
 packages/flutter/test/painting/decoration_test.dart	716	paintImage with repeatY and fitWidth	paired-match	upstream-decoration-image-paint.md#translated-fits-repeated-tiles-and-shape-clipping
 packages/flutter/test/painting/decoration_test.dart	761	DecorationImage scale test	paired-match	upstream-decoration-image-paint.md#translated-fits-repeated-tiles-and-shape-clipping
+packages/flutter/test/painting/decoration_test.dart	411	DecorationImage - error listener	paired-match	upstream-async-decoration-image.md#provider-error-callback

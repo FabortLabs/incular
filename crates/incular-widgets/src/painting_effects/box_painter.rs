@@ -450,12 +450,12 @@ fn resolved_decoration_image(image: &DecorationImage, direction: Option<TextDire
                             if !state.primary_is_ready(&provider, &configuration) =>
                         {
                             Some(DecorationProviderState::stream(
-                                &state.placeholder, fallback, configuration.clone(),
+                                &state.placeholder, fallback, configuration.clone(), image.on_error.as_ref(),
                             ))
                         }
                         _ => None,
                     };
-                    let primary = state.primary_stream(&provider, configuration);
+                    let primary = state.primary_stream(&provider, configuration, image.on_error.as_ref());
                     if let incular_image::ImageLoadState::Ready(bitmap) = primary.frame_state() {
                         state.placeholder.borrow_mut().take();
                         let source_scale = bitmap.scale() as f32;
@@ -497,6 +497,47 @@ struct ResolvedDecorationImage {
     provider: crate::AnyImageProvider,
     configuration: incular_image::ImageConfiguration,
     stream: incular_image::ImageStream,
+    error: Option<DecorationErrorBinding>,
+}
+
+struct DecorationErrorBinding {
+    handler: super::decoration::DecorationImageErrorHandler,
+    _lifetime: Rc<()>,
+    _subscription: incular_image::ImageFrameSubscription,
+}
+
+impl ResolvedDecorationImage {
+    fn sync_error(&mut self, handler: Option<&super::decoration::DecorationImageErrorHandler>) {
+        if self.error.as_ref().map(|link| &link.handler) == handler {
+            return;
+        }
+        self.error = None;
+        let Some(handler) = handler.cloned() else {
+            return;
+        };
+        let lifetime = Rc::new(());
+        let active = Rc::downgrade(&lifetime);
+        let callback = handler.clone();
+        let subscription = self.stream.listen_frame(move |result, synchronous| {
+            let Err(error) = result else { return; };
+            if synchronous {
+                // Never call user code while materializing the painter.
+                // The token also suppresses a replay on a replaced painter.
+                incular_animation::scheduler::add_post_frame_callback(move |_| {
+                    if active.upgrade().is_some() {
+                        callback.notify(error);
+                    }
+                });
+            } else if active.upgrade().is_some() {
+                callback.notify(error);
+            }
+        });
+        self.error = Some(DecorationErrorBinding {
+            handler,
+            _lifetime: lifetime,
+            _subscription: subscription,
+        });
+    }
 }
 
 impl crate::tree::RetainedState for DecorationProviderState {
@@ -535,28 +576,36 @@ impl DecorationProviderState {
         &self,
         provider: &crate::AnyImageProvider,
         configuration: incular_image::ImageConfiguration,
+        on_error: Option<&super::decoration::DecorationImageErrorHandler>,
     ) -> incular_image::ImageStream {
-        if let Some(active) = Self::current_stream(&self.current, provider, &configuration) {
-            return active;
+        if Self::current_stream(&self.current, provider, &configuration).is_none() {
+            self.primary_completion.borrow_mut().take();
         }
-        self.primary_completion.borrow_mut().take();
-        Self::stream(&self.current, provider, configuration)
+        Self::stream(&self.current, provider, configuration, on_error)
     }
 
     fn stream(
         slot: &RefCell<Option<ResolvedDecorationImage>>,
         provider: &crate::AnyImageProvider,
         configuration: incular_image::ImageConfiguration,
+        on_error: Option<&super::decoration::DecorationImageErrorHandler>,
     ) -> incular_image::ImageStream {
-        if let Some(active) = Self::current_stream(slot, provider, &configuration) {
-            return active;
+        if let Some(active) = slot.borrow_mut().as_mut()
+            && active.provider == *provider
+            && active.configuration == configuration
+        {
+            active.sync_error(on_error);
+            return active.stream.clone();
         }
         let stream = provider.resolve(&configuration);
-        slot.replace(Some(ResolvedDecorationImage {
+        let mut active = ResolvedDecorationImage {
             provider: provider.clone(),
             configuration,
             stream: stream.clone(),
-        }));
+            error: None,
+        };
+        active.sync_error(on_error);
+        slot.replace(Some(active));
         stream
     }
 

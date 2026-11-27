@@ -691,6 +691,33 @@ impl From<crate::AnyImageProvider> for DecorationImageSource {
     }
 }
 
+/// An image-error handler whose equality is the shared callback's identity.
+#[derive(Clone)]
+pub struct DecorationImageErrorHandler(Rc<dyn Fn(incular_image::ImageError)>);
+
+impl DecorationImageErrorHandler {
+    #[must_use]
+    pub fn new(callback: impl Fn(incular_image::ImageError) + 'static) -> Self {
+        Self(Rc::new(callback))
+    }
+
+    pub(super) fn notify(&self, error: incular_image::ImageError) {
+        (self.0)(error);
+    }
+}
+
+impl PartialEq for DecorationImageErrorHandler {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl std::fmt::Debug for DecorationImageErrorHandler {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("DecorationImageErrorHandler")
+    }
+}
+
 /// An image configuration drawn inside a box decoration.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct DecorationImage {
@@ -699,6 +726,9 @@ pub struct DecorationImage {
     /// The image painted until the primary provider produces its first frame.
     #[builder(default, setter(strip_option, into))]
     pub placeholder: Option<DecorationImageSource>,
+    /// Receives errors from the primary or placeholder provider.
+    #[builder(default, setter(transform = |callback: impl Fn(incular_image::ImageError) + 'static| Some(DecorationImageErrorHandler::new(callback))))]
+    pub on_error: Option<DecorationImageErrorHandler>,
     /// Flutter `fit`. `None` resolves like Flutter's `paintImage`: scale-down
     /// without a center slice, fill with one. See [`Self::resolved_fit`].
     #[builder(default, setter(strip_option))]
@@ -796,6 +826,7 @@ impl DecorationImage {
         Self {
             image: image.into(),
             placeholder: None,
+            on_error: None,
             fit: None,
             alignment: incular_config::Alignment::CENTER,
             alignment_geometry: None,
@@ -809,6 +840,13 @@ impl DecorationImage {
             filter_quality: FilterQuality::Medium,
             blend: None,
         }
+    }
+
+    /// Registers a handler for the original image provider error.
+    #[must_use]
+    pub fn on_error(mut self, callback: impl Fn(incular_image::ImageError) + 'static) -> Self {
+        self.on_error = Some(DecorationImageErrorHandler::new(callback));
+        self
     }
 
     /// Filters the painted image without altering its bounds or source pixels.

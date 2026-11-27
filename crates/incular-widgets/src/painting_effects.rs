@@ -27,7 +27,7 @@ pub(crate) use box_painter::{ImagePaint, decorated, paint_image};
 pub use custom_paint::{CustomPainter, CustomPainterSemantics, SemanticsBuilder};
 pub use decoration::{
     BlurStyle, Border, BorderDirectional, BorderSide, BorderStyle, BoxBorder, BoxDecoration,
-    BoxLinearGradient, BoxRadialGradient, BoxShadow, BoxShape, BoxSweepGradient, DecorationImage, DecorationImageSource,
+    BoxLinearGradient, BoxRadialGradient, BoxShadow, BoxShape, BoxSweepGradient, DecorationImage, DecorationImageErrorHandler, DecorationImageSource,
     TileMode,
 };
 pub use geometry::{
