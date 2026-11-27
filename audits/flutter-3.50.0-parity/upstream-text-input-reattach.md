@@ -154,3 +154,24 @@ focus again attaches the first editor to a fresh client with its own
 draft. Previously Incular cleared primary focus entirely even with a
 mounted scope. The native scope counterpart plus 19 focused lifecycle
 and focus-scope tests passed. The scope test is authored.
+
+## Platform lifecycle requests and the focused editor
+
+The three services originals at :777, :799, and :826 ran successfully.
+They use an injected fake client to record callback dispatch, including
+a focus request while a connection is still active. Incular instead
+routes wire messages to its mounted editor; it does not expose that
+arbitrary fake client interface. The originals are therefore partial,
+not counted as paired.
+
+The authored pinned mounted-editor control and all 11 focused Incular
+tests pass. While already focused, the mounted editor declines the
+request without a second attach or show. Closing leaves the committed
+text unchanged and sends neither submit nor completion. The eligible
+editor can subsequently refocus with a fresh client ID, and the old ID
+cannot refocus or close that new connection. Flutter can also refresh
+its caret geometry during the active frame; the control distinguishes
+that from a connection or visibility change.
+
+The services selector-delivery original :876 also passed in Flutter.
+Incular has no corresponding selector delivery route yet.
