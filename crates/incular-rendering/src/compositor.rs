@@ -731,7 +731,12 @@ impl LayerTree {
     }
 
     fn fire_composition_callbacks(&mut self) {
-        let Some(root) = self.root else { return };
+        if let Some(root) = self.root {
+            self.notify_composition_subtree(root, false);
+        }
+    }
+
+    fn notify_composition_subtree(&mut self, root: LayerId, children_first: bool) {
         if !self.composition_observers.prune() {
             return;
         }
@@ -746,12 +751,20 @@ impl LayerTree {
                 current = self.layers.get(id.0).and_then(|layer| layer.parent);
             }
         }
-        let mut pending = vec![root];
-        while let Some(id) = pending.pop() {
+        let mut pending = vec![(root, false)];
+        while let Some((id, after_children)) = pending.pop() {
+            if after_children {
+                self.composition_observers.notify(id);
+                continue;
+            }
             if !observed_paths.remove(&id) {
                 continue;
             }
-            self.composition_observers.notify(id);
+            if children_first {
+                pending.push((id, true));
+            } else {
+                self.composition_observers.notify(id);
+            }
             if let Some(layer) = self.layers.get(id.0) {
                 pending.extend(
                     layer
@@ -759,7 +772,8 @@ impl LayerTree {
                         .iter()
                         .rev()
                         .copied()
-                        .filter(|child| observed_paths.contains(child)),
+                        .filter(|child| observed_paths.contains(child))
+                        .map(|child| (child, false)),
                 );
             }
         }
@@ -806,6 +820,17 @@ impl LayerTree {
     pub fn set_root(&mut self, root: LayerId) {
         self.scene_dirty |= self.root != Some(root);
         self.root = Some(root);
+    }
+
+    /// Detaches the scene root without destroying its retained layers.
+    ///
+    /// Observers see the detachment once, children before their parent.
+    /// Attaching the root again does not notify until scene publication.
+    pub fn detach_root(&mut self) -> Option<LayerId> {
+        let root = self.root.take()?;
+        self.scene_dirty = true;
+        self.notify_composition_subtree(root, true);
+        Some(root)
     }
 
     /// Returns the retained scene's conservative world-space visual bounds

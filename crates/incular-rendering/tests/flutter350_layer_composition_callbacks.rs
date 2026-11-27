@@ -106,3 +106,76 @@ fn reused_scene_buffers_still_notify_composition_observers() {
     assert!(tree.flatten().shares_buffer(&second));
     assert_eq!(calls.get(), 1);
 }
+
+#[test]
+fn detaching_the_root_notifies_descendants_then_retains_their_subscriptions() {
+    let (mut tree, [root, first, second, descendant]) = layer_tree();
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let subscriptions: Vec<_> = [root, first, second, descendant]
+        .into_iter()
+        .map(|id| {
+            let seen = seen.clone();
+            tree.add_composition_callback(id, move |id| seen.borrow_mut().push(id))
+                .unwrap()
+        })
+        .collect();
+
+    tree.set_root(root);
+    assert!(seen.borrow().is_empty());
+    assert_eq!(tree.detach_root(), Some(root));
+    assert_eq!(*seen.borrow(), [descendant, first, second, root]);
+    assert!(
+        subscriptions
+            .iter()
+            .all(|subscription| subscription.is_active())
+    );
+    assert!(tree.subtree_has_composition_callbacks(root));
+    assert_eq!(tree.detach_root(), None);
+    assert!(tree.flatten().is_empty());
+    assert_eq!(seen.borrow().len(), 4);
+
+    seen.borrow_mut().clear();
+    tree.set_root(root);
+    assert!(seen.borrow().is_empty());
+    let _ = tree.flatten();
+    assert_eq!(*seen.borrow(), [root, first, descendant, second]);
+}
+
+#[test]
+fn two_observers_on_one_layer_keep_it_observed_until_both_are_removed() {
+    let (mut tree, [root, first, _, _]) = layer_tree();
+    assert!(!tree.subtree_has_composition_callbacks(root));
+    assert!(!tree.subtree_has_composition_callbacks(first));
+    let one = tree.add_composition_callback(first, |_| {}).unwrap();
+    let two = tree.add_composition_callback(first, |_| {}).unwrap();
+    assert!(tree.subtree_has_composition_callbacks(root));
+    assert!(tree.subtree_has_composition_callbacks(first));
+    one.cancel();
+    assert!(tree.subtree_has_composition_callbacks(root));
+    assert!(tree.subtree_has_composition_callbacks(first));
+    two.cancel();
+    assert!(!tree.subtree_has_composition_callbacks(root));
+    assert!(!tree.subtree_has_composition_callbacks(first));
+}
+
+#[test]
+fn cancellation_after_layer_disposal_is_safe() {
+    let (mut tree, [root, _, _, _]) = layer_tree();
+    let observer = tree.add_composition_callback(root, |_| {}).unwrap();
+    tree.remove(root);
+    observer.cancel();
+    assert!(!observer.is_active());
+    assert!(!tree.subtree_has_composition_callbacks(root));
+}
+
+#[test]
+fn repeated_cancellation_is_idempotent_in_the_rust_subscription_api() {
+    let (mut tree, [root, _, _, _]) = layer_tree();
+    let observer = tree
+        .add_composition_callback(root, |_| panic!("cancelled"))
+        .unwrap();
+    observer.cancel();
+    observer.cancel();
+    assert!(!observer.is_active());
+    let _ = tree.flatten();
+}

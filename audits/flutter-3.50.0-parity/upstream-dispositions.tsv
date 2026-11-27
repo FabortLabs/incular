@@ -3008,3 +3008,8 @@ packages/flutter/test/rendering/layers_test.dart	788	Subtree has composition cal
 packages/flutter/test/rendering/layers_test.dart	819	No callback if removed	paired-match	upstream-layer-composition-observers.md
 packages/flutter/test/rendering/layers_test.dart	837	Observe layer tree composition - not retained	paired-match	upstream-layer-composition-observers.md
 packages/flutter/test/rendering/layers_test.dart	861	Observe layer tree composition - retained	paired-match	upstream-layer-composition-observers.md
+packages/flutter/test/rendering/layers_test.dart	898	Observe layer tree composition - asserts on mutation	reference-ran-incular-open	upstream-layer-composition-observers.md#detachment-and-observer-lifetime
+packages/flutter/test/rendering/layers_test.dart	930	Observe layer tree composition - detach triggers callback	paired-match	upstream-layer-composition-observers.md#detachment-and-observer-lifetime
+packages/flutter/test/rendering/layers_test.dart	953	Observe layer tree composition - observer count correctly maintained	paired-match	upstream-layer-composition-observers.md#detachment-and-observer-lifetime
+packages/flutter/test/rendering/layers_test.dart	978	Double removing a observe callback throws	partial-mismatch	upstream-layer-composition-observers.md#detachment-and-observer-lifetime
+packages/flutter/test/rendering/layers_test.dart	986	Removing an observe callback on a disposed layer does not throw	paired-match	upstream-layer-composition-observers.md#detachment-and-observer-lifetime
