@@ -18,6 +18,7 @@ pub enum TextEditingCallback {
     EditingComplete,
     Submitted,
     AppPrivateCommand,
+    ContentInserted,
 }
 
 /// A caught Rust panic from an editor callback, preserving its message.
@@ -2116,6 +2117,34 @@ impl WidgetTree {
                 &mut report,
             );
         }
+    }
+
+    /// Delivers rich IME content only when the mounted editor accepts its MIME type.
+    #[doc(hidden)]
+    pub fn dispatch_keyboard_content(
+        &self,
+        target: ElementId,
+        content: incular_platform::KeyboardInsertedContent,
+        mut report: impl FnMut(TextEditingCallbackError),
+    ) -> bool {
+        let Some(element) = self.elements.get(target.0) else {
+            return false;
+        };
+        let WidgetKind::TextField(spec) = element.widget.kind() else {
+            return false;
+        };
+        let Some(configuration) = &spec.content_insertion else {
+            return false;
+        };
+        if !configuration.allowed_mime_types.contains(&content.mime_type) {
+            return false;
+        }
+        run_editing_callback(
+            TextEditingCallback::ContentInserted,
+            || (configuration.on_content_inserted)(content),
+            &mut report,
+        );
+        true
     }
 
     /// Completes editing in a field: `on_editing_complete` runs first, then

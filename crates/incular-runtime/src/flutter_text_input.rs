@@ -39,6 +39,16 @@ pub enum FlutterTextInputSelectorError {
     InvalidSelector { index: usize },
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum FlutterKeyboardContentError {
+    #[error(transparent)]
+    Codec(#[from] JsonMethodCodecError),
+    #[error("expected a client ID and keyboard content metadata")]
+    InvalidArguments,
+    #[error(transparent)]
+    Content(#[from] incular_platform::KeyboardInsertedContentError),
+}
+
 fn sender_matches(sender: &Value, client: TextInputClientId) -> Option<bool> {
     if let Some(id) = sender.as_u64() {
         Some(id == client.get())
@@ -328,6 +338,35 @@ impl crate::Runtime {
         };
         self.dispatch_flutter_app_private_command(action, data);
         Ok(Some(true))
+    }
+
+    /// Delivers a rich keyboard insertion to the active editor. The data
+    /// and URI are passed to the application rather than inserted as text
+    /// or read from the filesystem by the runtime.
+    pub fn handle_flutter_keyboard_content_call(
+        &mut self,
+        data: &[u8],
+    ) -> Result<Option<bool>, FlutterKeyboardContentError> {
+        use FlutterKeyboardContentError::InvalidArguments;
+        let call = JsonMethodCodec::decode_method_call(data)?;
+        if call.method != "TextInputClient.performAction" {
+            return Ok(None);
+        }
+        let args = call.arguments.as_array().ok_or(InvalidArguments)?;
+        if args.get(1).and_then(Value::as_str) != Some("TextInputAction.commitContent") {
+            return Ok(None);
+        }
+        self.adopt_external_focus_change();
+        let Some(active) = self.active_flutter_editable_client() else {
+            return Ok(Some(false));
+        };
+        let sender = args.first().ok_or(InvalidArguments)?;
+        if !sender_matches(sender, active).ok_or(InvalidArguments)? {
+            return Ok(Some(false));
+        }
+        let data = args.get(2).ok_or(InvalidArguments)?;
+        let content = incular_platform::KeyboardInsertedContent::from_flutter_json(data)?;
+        Ok(Some(self.dispatch_flutter_keyboard_content(content)))
     }
 
     /// Handles a Flutter TextInputClient.performSelectors message.

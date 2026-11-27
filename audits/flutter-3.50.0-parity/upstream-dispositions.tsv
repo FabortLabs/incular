@@ -3190,3 +3190,5 @@ packages/flutter/test/services/text_input_test.dart	777	TextInputClient onConnec
 packages/flutter/test/services/text_input_test.dart	799	TextInputClient onFocusReceived method is called	partial-match	upstream-text-input-reattach.md#platform-lifecycle-requests-and-the-focused-editor
 packages/flutter/test/services/text_input_test.dart	826	TextInputClient onFocusReceived method is called even if already connected	partial-match	upstream-text-input-reattach.md#platform-lifecycle-requests-and-the-focused-editor
 packages/flutter/test/services/text_input_test.dart	876	TextInputClient performSelectors method is called	partial-match	upstream-text-input-reattach.md#native-editing-selector-batches
+packages/flutter/test/services/text_input_test.dart	849	TextInputClient insertContent method is called	paired-match	upstream-keyboard-content-insertion.md
+packages/flutter/test/widgets/editable_text_test.dart	877	insertContent does not throw and parses data correctly	paired-match	upstream-keyboard-content-insertion.md

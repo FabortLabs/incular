@@ -1063,6 +1063,7 @@ pub struct EditableText {
     on_editing_complete: Option<Rc<dyn Fn()>>,
     on_submit: Option<Rc<dyn Fn(String)>>,
     on_app_private_command: Option<AppPrivateCommandCallback>,
+    content_insertion: Option<crate::ContentInsertionConfiguration>,
     multiline: bool,
     min_lines: Option<usize>,
     max_lines: Option<usize>,
@@ -1134,6 +1135,7 @@ impl EditableText {
             on_editing_complete: None,
             on_submit: None,
             on_app_private_command: None,
+            content_insertion: None,
             multiline: false,
             min_lines: None,
             max_lines: Some(1),
@@ -1369,6 +1371,16 @@ impl EditableText {
         self.on_app_private_command = Some(Rc::new(callback));
         self
     }
+    /// Enables rich keyboard content for the listed MIME types.
+    #[must_use]
+    pub fn content_insertion_configuration(
+        mut self,
+        configuration: crate::ContentInsertionConfiguration,
+    ) -> Self {
+        self.content_insertion = Some(configuration);
+        self
+    }
+
     /// Enables multiline editing. Material text-field wrappers should use
     /// this core primitive rather than introducing a separate `TextArea`
     /// widget name.
@@ -1870,6 +1882,8 @@ impl From<EditableText> for Widget {
         let keyboard_selection_enabled = value
             .enable_interactive_selection
             .unwrap_or(can_select_with_pointer);
+        let content_mime_types = value.content_insertion.as_ref()
+            .map(|configuration| configuration.allowed_mime_types.clone());
         let spec = TextFieldSpec {
             context_menu: None,
             has_context_menu_builder: context_menu_builder.is_some(),
@@ -1897,6 +1911,7 @@ impl From<EditableText> for Widget {
             on_editing_complete: value.on_editing_complete,
             on_submit: value.on_submit,
             on_app_private_command: value.on_app_private_command,
+            content_insertion: value.content_insertion,
             multiline: value.multiline,
             min_lines: value.min_lines,
             max_lines: value.max_lines,
@@ -1939,6 +1954,7 @@ impl From<EditableText> for Widget {
                 autofill_hints: value.autofill_hints,
                 hint_locales: value.hint_locales,
                 enable_ime_personalized_learning: value.enable_ime_personalized_learning,
+                content_mime_types,
             },
             scroll_padding: value.scroll_padding,
             cursor_opacity_animates: value.cursor_opacity_animates,

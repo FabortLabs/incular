@@ -40,6 +40,7 @@ mod async_builders;
 mod back_gesture;
 mod box_fit;
 mod compositing;
+mod content_insertion;
 mod context_menu;
 mod custom_layout;
 #[cfg(feature = "devtools")]
@@ -183,6 +184,10 @@ pub use compositing::{
     CompositedTransformTarget, ShaderCallback, ShaderMask,
 };
 #[doc(hidden)]
+pub use content_insertion::{
+    ContentInsertionConfiguration, DEFAULT_CONTENT_INSERTION_MIME_TYPES,
+    EmptyContentInsertionMimeTypes,
+};
 pub use context_menu::TextContextMenuState;
 pub use context_menu::{
     ContextMenuButtonItem, ContextMenuButtonType, DesktopTextSelectionToolbarLayoutDelegate,

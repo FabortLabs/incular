@@ -3955,6 +3955,18 @@ impl Runtime {
         }
     }
 
+    pub(crate) fn dispatch_flutter_keyboard_content(
+        &self,
+        content: incular_platform::KeyboardInsertedContent,
+    ) -> bool {
+        let Some(connection) = self.text_input_client else {
+            return false;
+        };
+        self.tree.dispatch_keyboard_content(connection.target, content, |error| {
+            self.report_editing_callback_error(error);
+        })
+    }
+
     pub(crate) fn dispatch_flutter_text_selector(&mut self, selector: &str) {
         use crate::text_shortcuts::{SelectorIntent, macos_selector};
         let Some(active) = self.text_input_client else {

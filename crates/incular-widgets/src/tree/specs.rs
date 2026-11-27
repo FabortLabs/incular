@@ -535,6 +535,7 @@ pub struct TextFieldSpec {
     pub(crate) on_editing_complete: Option<Rc<dyn Fn()>>,
     pub(crate) on_submit: Option<Rc<dyn Fn(String)>>,
     pub(crate) on_app_private_command: Option<AppPrivateCommandCallback>,
+    pub(crate) content_insertion: Option<crate::ContentInsertionConfiguration>,
     pub(crate) multiline: bool,
     pub(crate) min_lines: Option<usize>,
     pub(crate) max_lines: Option<usize>,

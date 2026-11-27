@@ -28,6 +28,8 @@ mod flutter_inbound_messenger;
 mod flutter_event_channel;
 mod flutter_platform_channel;
 mod flutter_text_input_config;
+mod keyboard_inserted_content;
+pub use keyboard_inserted_content::{KeyboardInsertedContent, KeyboardInsertedContentError};
 pub use flutter_text_input_config::FlutterTextInputConfiguration;
 pub mod message_codecs;
 mod operation;
@@ -813,6 +815,8 @@ pub struct TextInputTraits {
     /// Whether the IME may learn from what the user types (Android's
     /// `IME_FLAG_NO_PERSONALIZED_LEARNING` when false).
     pub enable_ime_personalized_learning: bool,
+    /// Rich content accepted by this active editor. None advertises no types.
+    pub content_mime_types: Option<std::sync::Arc<[String]>>,
 }
 
 impl Default for TextInputTraits {
@@ -829,6 +833,7 @@ impl Default for TextInputTraits {
             autofill_hints: None,
             hint_locales: None,
             enable_ime_personalized_learning: true,
+            content_mime_types: None,
         }
     }
 }
