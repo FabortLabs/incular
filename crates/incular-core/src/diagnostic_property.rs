@@ -37,6 +37,25 @@ impl DiagnosticLevel {
     }
 }
 
+/// The tree presentation attached to a diagnostic property.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum DiagnosticsTreeStyle {
+    /// Do not render a subtree.
+    None,
+    /// Use the normal sparse tree presentation.
+    #[default]
+    Sparse,
+}
+
+impl DiagnosticsTreeStyle {
+    const fn name(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Sparse => "sparse",
+        }
+    }
+}
+
 /// A typed scalar value supported by the diagnostic property wire format.
 pub trait DiagnosticValue: PartialEq {
     /// The scalar's logical type in diagnostics.
@@ -47,6 +66,11 @@ pub trait DiagnosticValue: PartialEq {
 
     /// The undecorated scalar text.
     fn diagnostic_text(&self) -> String;
+
+    /// A boolean value, when this type is a boolean.
+    fn as_diagnostic_bool(&self) -> Option<bool> {
+        None
+    }
 }
 
 impl DiagnosticValue for String {
@@ -63,6 +87,9 @@ impl DiagnosticValue for bool {
     const TYPE_NAME: &'static str = "bool";
     fn diagnostic_text(&self) -> String {
         self.to_string()
+    }
+    fn as_diagnostic_bool(&self) -> Option<bool> {
+        Some(*self)
     }
     fn to_diagnostic_json(&self) -> Value {
         json!(self)
@@ -104,9 +131,11 @@ enum Presentation<T> {
     String {
         quoted: bool,
     },
+    Flag,
     Number {
         type_name: &'static str,
         format: fn(Option<&T>) -> String,
+        unit_separator: &'static str,
     },
 }
 
@@ -128,6 +157,8 @@ pub struct DiagnosticsProperty<T> {
     show_name: bool,
     level: DiagnosticLevel,
     missing_if_null: bool,
+    style: DiagnosticsTreeStyle,
+    flag_labels: [Option<String>; 2],
     presentation: Presentation<T>,
 }
 
@@ -147,6 +178,8 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
             show_name: true,
             level: DiagnosticLevel::Info,
             missing_if_null: false,
+            style: DiagnosticsTreeStyle::Sparse,
+            flag_labels: [None, None],
             presentation: Presentation::Plain,
         }
     }
@@ -220,11 +253,34 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
         self
     }
 
+    /// Sets the tree presentation carried by the property.
+    #[must_use]
+    pub fn style(mut self, style: DiagnosticsTreeStyle) -> Self {
+        self.style = style;
+        self
+    }
+
+    fn flag_label(&self) -> Option<&str> {
+        let value = self.value.as_ref()?.as_diagnostic_bool()?;
+        self.flag_labels[usize::from(value)].as_deref()
+    }
+
+    /// Whether the name is shown for the current value.
+    #[must_use]
+    pub fn shows_name(&self) -> bool {
+        self.show_name
+            || (matches!(self.presentation, Presentation::Flag) && self.flag_label().is_none())
+    }
+
     /// Returns the effective level after default-value and missing-value rules.
     #[must_use]
     pub fn effective_level(&self) -> DiagnosticLevel {
-        if self.level == DiagnosticLevel::Hidden {
-            self.level
+        if self.level == DiagnosticLevel::Hidden
+            || (matches!(self.presentation, Presentation::Flag)
+                && self.value.is_some()
+                && self.flag_label().is_none())
+        {
+            DiagnosticLevel::Hidden
         } else if self.value.is_none() && self.missing_if_null {
             DiagnosticLevel::Warning
         } else if self.default.as_ref() == Some(&self.value) {
@@ -248,12 +304,17 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
             let empty = self.if_empty.as_deref().filter(|_| text.is_empty());
             match self.presentation {
                 Presentation::String { quoted: true } if empty.is_none() => format!("\"{text}\""),
-                Presentation::Number { format, .. } => {
-                    format!(
-                        "{}{}",
-                        format(Some(value)),
-                        self.unit.as_deref().unwrap_or("")
-                    )
+                Presentation::Flag => self.flag_label().map_or(text, str::to_owned),
+                Presentation::Number {
+                    format,
+                    unit_separator,
+                    ..
+                } => {
+                    let number = format(Some(value));
+                    match &self.unit {
+                        Some(unit) => format!("{number}{unit_separator}{unit}"),
+                        None => number,
+                    }
                 }
                 _ => empty.map_or(text, str::to_owned),
             }
@@ -264,9 +325,10 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
                 raw,
             )
         });
-        self.tooltip
-            .as_ref()
-            .map_or_else(|| text.clone(), |tooltip| format!("{text} ({tooltip})"))
+        match &self.tooltip {
+            Some(tooltip) => format!("{text} ({tooltip})"),
+            None => text,
+        }
     }
 
     /// Returns a scalar diagnostics wire object with typed JSON values.
@@ -276,6 +338,7 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
         let type_name = match self.presentation {
             Presentation::Plain => &default_type,
             Presentation::String { .. } => "StringProperty",
+            Presentation::Flag => "FlagProperty",
             Presentation::Number { type_name, .. } => type_name,
         };
         let level = self.effective_level();
@@ -288,8 +351,11 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
             "propertyType": T::TYPE_NAME,
             "defaultLevel": self.level.name(),
         });
-        if !self.show_name {
+        if !self.shows_name() {
             output["showName"] = json!(false);
+        }
+        if self.style != DiagnosticsTreeStyle::Sparse {
+            output["style"] = json!(self.style.name());
         }
         if level != DiagnosticLevel::Info {
             output["level"] = json!(level.name());
@@ -312,6 +378,13 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
         }
         match self.presentation {
             Presentation::String { quoted } => output["quoted"] = json!(quoted),
+            Presentation::Flag => {
+                for (key, label) in ["ifFalse", "ifTrue"].into_iter().zip(&self.flag_labels) {
+                    if let Some(label) = label {
+                        output[key] = json!(label);
+                    }
+                }
+            }
             Presentation::Number { format, .. } => {
                 output["numberToString"] = json!(format(self.value.as_ref()));
                 if let Some(unit) = &self.unit {
@@ -339,6 +412,29 @@ impl DiagnosticsProperty<String> {
     }
 }
 
+impl DiagnosticsProperty<bool> {
+    /// Constructs a boolean flag with at least one displayed state.
+    ///
+    /// A state without a configured label is hidden. If it is explicitly
+    /// displayed, its label and raw value are shown as an ordinary property.
+    #[must_use]
+    pub fn flag(
+        name: impl Into<String>,
+        value: Option<bool>,
+        if_true: Option<&str>,
+        if_false: Option<&str>,
+    ) -> Self {
+        assert!(
+            if_true.is_some() || if_false.is_some(),
+            "a flag needs at least one label"
+        );
+        let mut property = Self::new(name, value).show_name(false).default_value(None);
+        property.presentation = Presentation::Flag;
+        property.flag_labels = [if_false.map(str::to_owned), if_true.map(str::to_owned)];
+        property
+    }
+}
+
 impl DiagnosticsProperty<i64> {
     /// Constructs an integer property with optional measurement units.
     #[must_use]
@@ -346,6 +442,7 @@ impl DiagnosticsProperty<i64> {
         let mut property = Self::new(name, value);
         property.presentation = Presentation::Number {
             type_name: "IntProperty",
+            unit_separator: "",
             format: |value| value.map_or_else(|| "null".to_owned(), ToString::to_string),
         };
         property
@@ -359,7 +456,28 @@ impl DiagnosticsProperty<f64> {
         let mut property = Self::new(name, value);
         property.presentation = Presentation::Number {
             type_name: "DoubleProperty",
+            unit_separator: "",
             format: |value| crate::debug_format_double(value.copied()),
+        };
+        property
+    }
+    /// Describes a fraction from 0 to 1 as a percentage while retaining its
+    /// original (possibly out-of-range) value.
+    #[must_use]
+    pub fn percent(name: impl Into<String>, value: Option<f64>) -> Self {
+        let mut property = Self::new(name, value);
+        property.presentation = Presentation::Number {
+            type_name: "PercentProperty",
+            unit_separator: " ",
+            format: |value| {
+                value.map_or_else(
+                    || "null".to_owned(),
+                    |value| {
+                        let percent = crate::clamp_double(*value, 0., 1.) * 100.;
+                        format!("{}%", crate::debug_double::format_double_fixed(percent, 1))
+                    },
+                )
+            },
         };
         property
     }
@@ -367,7 +485,7 @@ impl DiagnosticsProperty<f64> {
 
 impl<T: DiagnosticValue> fmt::Display for DiagnosticsProperty<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.show_name {
+        if self.shows_name() {
             write!(formatter, "{}: ", self.name)?;
         }
         formatter.write_str(&self.to_description())

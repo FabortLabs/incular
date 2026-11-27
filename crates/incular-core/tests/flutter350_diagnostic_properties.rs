@@ -218,3 +218,151 @@ fn basic_inspector_values_stay_native_json_scalars() {
         assert_eq!(wire["value"], expected);
     }
 }
+
+#[test]
+fn unlabeled_flag_states_are_hidden_but_keep_their_boolean_value() {
+    for value in [true, false] {
+        let flag = DiagnosticsProperty::flag("myFlag", Some(value), Some("myFlag"), None);
+        assert_eq!(flag.value(), Some(&value));
+        assert_eq!(flag.is_filtered(Level::Fine), !value);
+        let description = if value { "myFlag" } else { "false" };
+        let json = inspect(&flag, "myFlag", "FlagProperty", description, json!(value));
+        assert_eq!(json["ifTrue"], "myFlag");
+        assert_eq!(json["defaultValue"], "null");
+        assert!(json.get("ifFalse").is_none());
+        if value {
+            assert_eq!(flag.to_string(), "myFlag");
+            assert_eq!(json["showName"], false);
+        } else {
+            assert_eq!(flag.to_string(), "myFlag: false");
+            assert_eq!(json["level"], "hidden");
+        }
+    }
+}
+
+#[test]
+fn either_flag_state_can_have_a_suppressed_default_label() {
+    for (value, if_true, if_false, label, level) in [
+        (
+            true,
+            Some("layout computed"),
+            None,
+            "layout computed",
+            Level::Info,
+        ),
+        (
+            false,
+            Some("layout computed"),
+            None,
+            "wasLayout: false",
+            Level::Hidden,
+        ),
+        (
+            true,
+            None,
+            Some("no layout computed"),
+            "wasLayout: true",
+            Level::Hidden,
+        ),
+    ] {
+        let flag = DiagnosticsProperty::flag("wasLayout", Some(value), if_true, if_false);
+        assert_eq!(flag.value(), Some(&value));
+        assert_eq!(flag.to_string(), label);
+        assert_eq!(flag.effective_level(), level);
+        let json = inspect(
+            &flag,
+            "wasLayout",
+            "FlagProperty",
+            &flag.to_description(),
+            json!(value),
+        );
+        assert_eq!(
+            json.get("ifTrue"),
+            if_true.map(|label| json!(label)).as_ref()
+        );
+        assert_eq!(
+            json.get("ifFalse"),
+            if_false.map(|label| json!(label)).as_ref()
+        );
+    }
+}
+
+#[test]
+fn infinity_is_reported_as_named_json_text_not_null() {
+    for (name, value, expected) in [
+        ("double1", f64::INFINITY, "Infinity"),
+        ("double2", f64::NEG_INFINITY, "-Infinity"),
+    ] {
+        let property = DiagnosticsProperty::double(name, Some(value));
+        assert_eq!(property.to_string(), format!("{name}: {expected}"));
+        assert_eq!(property.value(), Some(&value));
+        let json = inspect(&property, name, "DoubleProperty", expected, json!(expected));
+        assert_eq!(json["numberToString"], expected);
+        assert!(json.get("unit").is_none());
+    }
+}
+
+#[test]
+fn percent_clamps_only_the_description_and_separates_its_unit() {
+    let prop = |value| DiagnosticsProperty::percent("name", value);
+    for (value, expected) in [
+        (Some(0.4), "name: 40.0%"),
+        (Some(0.), "name: 0.0%"),
+        (Some(-10.), "name: 0.0%"),
+        (Some(1.), "name: 100.0%"),
+        (Some(3.), "name: 100.0%"),
+        (None, "name: null"),
+    ] {
+        let property = prop(value);
+        assert_eq!(property.to_string(), expected);
+        assert_eq!(property.value().copied(), value);
+        assert_eq!(property.to_json()["value"], json!(value));
+    }
+    let decorated = prop(Some(0.99))
+        .unit("invisible")
+        .tooltip("almost transparent");
+    assert_eq!(
+        decorated.to_string(),
+        "name: 99.0% invisible (almost transparent)"
+    );
+    let json = inspect(
+        &decorated,
+        "name",
+        "PercentProperty",
+        "99.0% invisible (almost transparent)",
+        json!(0.99),
+    );
+    assert_eq!(json["unit"], "invisible");
+    assert_eq!(json["numberToString"], "99.0%");
+    assert_eq!(
+        prop(None).unit("invisible").tooltip("!").to_string(),
+        "name: null (!)"
+    );
+    assert_eq!(prop(None).if_null("missing").to_string(), "name: missing");
+    assert_eq!(
+        prop(None).if_null("missing").show_name(false).to_string(),
+        "missing"
+    );
+    assert_eq!(prop(Some(0.5)).show_name(false).to_string(), "50.0%");
+}
+
+#[test]
+fn an_integer_property_retains_the_base_visibility_and_display_options() {
+    use incular_core::diagnostic_property::DiagnosticsTreeStyle;
+
+    let property = DiagnosticsProperty::integer("Example", Some(0))
+        .if_null("is null")
+        .show_name(false)
+        .default_value(Some(1))
+        .style(DiagnosticsTreeStyle::None)
+        .level(Level::Off);
+    assert_eq!(property.value(), Some(&0));
+    assert!(!property.shows_name());
+    assert_eq!(property.effective_level(), Level::Off);
+    let json = property.to_json();
+    assert_eq!(json["ifNull"], "is null");
+    assert_eq!(json["showName"], false);
+    assert_eq!(json["defaultValue"], "1");
+    assert_eq!(json["style"], "none");
+    assert_eq!(json["level"], "off");
+}

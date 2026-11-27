@@ -2981,3 +2981,8 @@ packages/flutter/test/foundation/diagnostics_test.dart	999	bool property test	pa
 packages/flutter/test/foundation/diagnostics_test.dart	1047	property with tooltip test	paired-match	upstream-diagnostic-scalar-properties.md
 packages/flutter/test/foundation/diagnostics_test.dart	1055	double property test	paired-match	upstream-diagnostic-scalar-properties.md
 packages/flutter/test/foundation/diagnostics_test.dart	1981	DiagnosticsProperty for basic types has value in json	paired-match	upstream-diagnostic-scalar-properties.md
+packages/flutter/test/foundation/diagnostics_test.dart	1033	flag property test	paired-match	upstream-diagnostic-scalar-properties.md#flags-percentages-and-special-numbers
+packages/flutter/test/foundation/diagnostics_test.dart	1074	double.infinity serialization test	paired-match	upstream-diagnostic-scalar-properties.md#flags-percentages-and-special-numbers
+packages/flutter/test/foundation/diagnostics_test.dart	1108	percent property	paired-match	upstream-diagnostic-scalar-properties.md#flags-percentages-and-special-numbers
+packages/flutter/test/foundation/diagnostics_test.dart	1418	flag property test	paired-match	upstream-diagnostic-scalar-properties.md#flags-percentages-and-special-numbers
+packages/flutter/test/foundation/diagnostics_test.dart	2018	IntProperty arguments passed to super	paired-match	upstream-diagnostic-scalar-properties.md#flags-percentages-and-special-numbers
