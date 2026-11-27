@@ -114,3 +114,17 @@ location `/`, which appears in its mounted content. Rust's fallible
 configuration constructor rejects a provider with no parser before
 mounting, corresponding to Flutter's constructor assertion. The
 two direct native checks and seven adjacent routing checks passed.
+
+## Initial platform route and named-prefix order
+
+Four authored probes passed against the pinned Flutter checkout. A
+non-root platform launch route takes precedence over the configured
+initial route; a platform root uses the configured route. Default
+startup asks the generator for root, intermediate prefixes, and leaf
+in that order. If the leaf is unknown, it discards the partial stack
+and asks for root again.
+
+Three native tests cover those four scenarios, including the visible
+page and exact generator trace. All three and 41 adjacent app and
+routing tests passed after the fix. These authored cases do not add
+to the original upstream case count.

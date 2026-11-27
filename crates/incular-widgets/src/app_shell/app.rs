@@ -222,6 +222,12 @@ impl WidgetsAppController {
         self.set_home(move || widget.clone());
     }
 
+    /// Removes the explicit home so the route table or generator handles `/`.
+    pub fn clear_home(&self) {
+        self.inner.borrow_mut().home = None;
+        self.invalidate();
+    }
+
     /// Registers or replaces one named route.
     pub fn register_route(
         &self,
@@ -476,9 +482,13 @@ impl WidgetsAppController {
                 state.generate_initial_routes.clone(),
             )
         };
-        let target = initial_route
-            .map(RouteInformation::new)
-            .unwrap_or_else(|| provider.value());
+        let platform_initial = provider.value();
+        let target = if platform_initial.location() == "/" {
+            initial_route.map_or(platform_initial, RouteInformation::new)
+        } else {
+            // A non-root platform route is an explicit launch/deep link.
+            platform_initial
+        };
         let custom = generate_initial_routes
             .map_or_else(Vec::new, |generate| generate(target.location()));
         if let Some(restoration) = restoration
@@ -533,19 +543,32 @@ impl WidgetsAppController {
         target: RouteInformation,
     ) -> Vec<AppRouteEntry> {
         let path = route_path(target.location());
-        let mut stack = vec![AppRouteEntry::named(RouteInformation::new("/"))];
         if path == "/" {
-            return stack;
+            return vec![Self::resolve_entry(inner, target.clone(), true)
+                .unwrap_or_else(|| AppRouteEntry::named(target))];
         }
-        let Some(end) = Self::resolve_entry(inner, target, false) else {
-            return stack;
-        };
-        for prefix in route_prefixes(&path).into_iter().filter(|prefix| *prefix != path) {
+        let root = RouteInformation::new("/");
+        let prefixes = route_prefixes(&path);
+        let mut stack = Vec::with_capacity(prefixes.len() + 1);
+        // Factory invocation order is observable even before any route is
+        // shown: request root, then intermediate prefixes, then the leaf.
+        if let Some(entry) = Self::resolve_entry(inner, root.clone(), false) {
+            stack.push(entry);
+        }
+        for prefix in prefixes.into_iter().filter(|prefix| *prefix != path) {
             if let Some(entry) = Self::resolve_entry(inner, RouteInformation::new(prefix), false) {
                 stack.push(entry);
             }
         }
-        stack.push(end);
+        if let Some(entry) = Self::resolve_entry(inner, target, false) {
+            stack.push(entry);
+        } else {
+            // Do not publish any partial stack. As in Flutter, fallback
+            // asks for a fresh root after discarding the partial pages.
+            stack.clear();
+            stack.push(Self::resolve_entry(inner, root.clone(), true)
+                .unwrap_or_else(|| AppRouteEntry::named(root)));
+        }
         stack
     }
 
