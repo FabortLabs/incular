@@ -3559,3 +3559,15 @@ packages/flutter/test/widgets/raw_keyboard_listener_test.dart	18	Fuchsia key eve
 packages/flutter/test/widgets/raw_keyboard_listener_test.dart	46	Web key event	paired-match	upstream-web-raw-keyboard.md
 packages/flutter/test/widgets/focus_manager_test.dart	264	onKeyEvent and onKey correctly cooperate	paired-match	upstream-raw-keyboard-listener-lifetimes.md#deprecated-and-typed-focus-handlers-cooperate
 packages/flutter/test/foundation/synchronous_future_test.dart	11	SynchronousFuture control test	paired-match	upstream-synchronous-future.md
+packages/flutter/test/foundation/stack_frame_test.dart	13	Parses line	paired-match	upstream-stack-frame.md
+packages/flutter/test/foundation/stack_frame_test.dart	17	Parses string	paired-match	upstream-stack-frame.md
+packages/flutter/test/foundation/stack_frame_test.dart	21	Parses StackTrace	partial-match	upstream-stack-frame.md
+packages/flutter/test/foundation/stack_frame_test.dart	25	Parses complex stack	paired-match	upstream-stack-frame.md
+packages/flutter/test/foundation/stack_frame_test.dart	29	Parses stack without cols	paired-match	upstream-stack-frame.md
+packages/flutter/test/foundation/stack_frame_test.dart	33	Parses web stack	paired-match	upstream-stack-frame.md
+packages/flutter/test/foundation/stack_frame_test.dart	44	Parses ...	paired-match	upstream-stack-frame.md
+packages/flutter/test/foundation/stack_frame_test.dart	66	Traces from package:stack_trace parse without throwing	paired-match	upstream-stack-frame.md
+packages/flutter/test/foundation/stack_frame_test.dart	78	Async-gap marker parses to asynchronousSuspension	paired-match	upstream-stack-frame.md
+packages/flutter/test/foundation/stack_frame_test.dart	85	Near-miss async-gap markers are not parsed as asynchronousSuspension	paired-match	upstream-stack-frame.md
+packages/flutter/test/foundation/stack_frame_test.dart	132	Can parse web constructor invocation with unknown class name	paired-match	upstream-stack-frame.md
+packages/flutter/test/foundation/stack_frame_test.dart	151	Parses to null for wrong format.	paired-match	upstream-stack-frame.md

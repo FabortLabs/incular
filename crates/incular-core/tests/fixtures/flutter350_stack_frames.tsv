@@ -1,0 +1,91 @@
+# Pinned Flutter 3.50.0 foundation/stack_frame_test.dart reference expectations.
+# Copyright 2014 The Flutter Authors. All rights reserved.
+# Use of this source code is governed by the BSD-style license in flutter350_LICENSE.
+# number	className	method	packageScheme	package	packagePath	line	column	isConstructor	source
+
+@stackFrames
+0	_AssertionError	_doThrowNew	dart	core-patch	errors_patch.dart	42	39	false	#0      _AssertionError._doThrowNew (dart:core-patch/errors_patch.dart:42:39)
+1	_AssertionError	_throwNew	dart	core-patch	errors_patch.dart	38	5	false	#1      _AssertionError._throwNew (dart:core-patch/errors_patch.dart:38:5)
+2	Text		package	flutter	src/widgets/text.dart	287	10	true	#2      new Text (package:flutter/src/widgets/text.dart:287:10)
+3	_MyHomePageState	build	package	hello_flutter	main.dart	72	16	false	#3      _MyHomePageState.build (package:hello_flutter/main.dart:72:16)
+4	StatefulElement	build	package	flutter	src/widgets/framework.dart	4414	27	false	#4      StatefulElement.build (package:flutter/src/widgets/framework.dart:4414:27)
+5	ComponentElement	performRebuild	package	flutter	src/widgets/framework.dart	4303	15	false	#5      ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:4303:15)
+6	Element	rebuild	package	flutter	src/widgets/framework.dart	4027	5	false	#6      Element.rebuild (package:flutter/src/widgets/framework.dart:4027:5)
+7	ComponentElement	_firstBuild	package	flutter	src/widgets/framework.dart	4286	5	false	#7      ComponentElement._firstBuild (package:flutter/src/widgets/framework.dart:4286:5)
+8	StatefulElement	_firstBuild	package	flutter	src/widgets/framework.dart	4461	11	false	#8      StatefulElement._firstBuild (package:flutter/src/widgets/framework.dart:4461:11)
+9	ComponentElement	mount	package	flutter	src/widgets/framework.dart	4281	5	false	#9      ComponentElement.mount (package:flutter/src/widgets/framework.dart:4281:5)
+10	Element	inflateWidget	package	flutter	src/widgets/framework.dart	3276	14	false	#10     Element.inflateWidget (package:flutter/src/widgets/framework.dart:3276:14)
+11	Element	updateChild	package	flutter	src/widgets/framework.dart	-1	-1	false	#11     Element.updateChild (package:flutter/src/widgets/framework.dart)
+12	SingleChildRenderObjectElement	mount	package	flutter	blah.dart	999	9	false	#12     SingleChildRenderObjectElement.mount (package:flutter/blah.dart:999:9)
+13		main	package	hello_flutter	main.dart	10	4	false	#13     main (package:hello_flutter/main.dart:10:4)
+
+@asyncStackFrames
+0		getSampleStack	file	<unknown>	/path/to/flutter/packages/flutter/test/foundation/error_reporting_test.dart	40	57	false	#0      getSampleStack.<anonymous closure> (file:///path/to/flutter/packages/flutter/test/foundation/error_reporting_test.dart:40:57)
+1	Future	sync	dart	async	future.dart	224	31	true	#1      new Future.sync (dart:async/future.dart:224:31)
+2		getSampleStack	file	<unknown>	/path/to/flutter/packages/flutter/test/foundation/error_reporting_test.dart	40	10	false	#2      getSampleStack (file:///path/to/flutter/packages/flutter/test/foundation/error_reporting_test.dart:40:10)
+3		main	file	<unknown>	/path/to/flutter/packages/flutter/test/foundation/error_reporting_test.dart	46	40	false	#3      main (file:///path/to/flutter/packages/flutter/test/foundation/error_reporting_test.dart:46:40)
+4		main	package	flutter_goldens	flutter_goldens.dart	43	17	false	#4      main (package:flutter_goldens/flutter_goldens.dart:43:17)
+-1		asynchronous suspension				-1	-1	false	<asynchronous suspension>
+5		main	file	<unknown>	/temp/path.whatever/listener.dart	47	18	false	#5      main.<anonymous closure>.<anonymous closure> (file:///temp/path.whatever/listener.dart:47:18)
+6		_rootRun	dart	async	zone.dart	1126	13	false	#6      _rootRun (dart:async/zone.dart:1126:13)
+7	_CustomZone	run	dart	async	zone.dart	1023	19	false	#7      _CustomZone.run (dart:async/zone.dart:1023:19)
+8		_runZoned	dart	async	zone.dart	1518	10	false	#8      _runZoned (dart:async/zone.dart:1518:10)
+9		runZoned	dart	async	zone.dart	1465	12	false	#9      runZoned (dart:async/zone.dart:1465:12)
+10	Declarer	declare	package	test_api	src/backend/declarer.dart	130	22	false	#10     Declarer.declare (package:test_api/src/backend/declarer.dart:130:22)
+11	RemoteListener	start	package	test_api	src/remote_listener.dart	124	26	false	#11     RemoteListener.start.<anonymous closure>.<anonymous closure>.<anonymous closure> (package:test_api/src/remote_listener.dart:124:26)
+-1		asynchronous suspension				-1	-1	false	<asynchronous suspension>
+12		_rootRun	dart	async	zone.dart	1126	13	false	#12     _rootRun (dart:async/zone.dart:1126:13)
+13	_CustomZone	run	dart	async	zone.dart	1023	19	false	#13     _CustomZone.run (dart:async/zone.dart:1023:19)
+14		_runZoned	dart	async	zone.dart	1518	10	false	#14     _runZoned (dart:async/zone.dart:1518:10)
+15		runZoned	dart	async	zone.dart	1502	12	false	#15     runZoned (dart:async/zone.dart:1502:12)
+16	RemoteListener	start	package	test_api	src/remote_listener.dart	70	9	false	#16     RemoteListener.start.<anonymous closure>.<anonymous closure> (package:test_api/src/remote_listener.dart:70:9)
+17		_rootRun	dart	async	zone.dart	1126	13	false	#17     _rootRun (dart:async/zone.dart:1126:13)
+18	_CustomZone	run	dart	async	zone.dart	1023	19	false	#18     _CustomZone.run (dart:async/zone.dart:1023:19)
+19		_runZoned	dart	async	zone.dart	1518	10	false	#19     _runZoned (dart:async/zone.dart:1518:10)
+20		runZoned	dart	async	zone.dart	1465	12	false	#20     runZoned (dart:async/zone.dart:1465:12)
+21	StackTraceFormatter	asCurrent	package	test_api	src/backend/stack_trace_formatter.dart	41	31	false	#21     StackTraceFormatter.asCurrent (package:test_api/src/backend/stack_trace_formatter.dart:41:31)
+22	RemoteListener	start	package	test_api	src/remote_listener.dart	69	29	false	#22     RemoteListener.start.<anonymous closure> (package:test_api/src/remote_listener.dart:69:29)
+23		_rootRun	dart	async	zone.dart	1126	13	false	#23     _rootRun (dart:async/zone.dart:1126:13)
+24	_CustomZone	run	dart	async	zone.dart	1023	19	false	#24     _CustomZone.run (dart:async/zone.dart:1023:19)
+25		_runZoned	dart	async	zone.dart	1518	10	false	#25     _runZoned (dart:async/zone.dart:1518:10)
+26		runZoned	dart	async	zone.dart	1465	12	false	#26     runZoned (dart:async/zone.dart:1465:12)
+27	SuiteChannelManager	asCurrent	package	test_api	src/suite_channel_manager.dart	34	31	false	#27     SuiteChannelManager.asCurrent (package:test_api/src/suite_channel_manager.dart:34:31)
+28	RemoteListener	start	package	test_api	src/remote_listener.dart	68	27	false	#28     RemoteListener.start (package:test_api/src/remote_listener.dart:68:27)
+29		serializeSuite	file	<unknown>	/temp/path.whatever/listener.dart	17	25	false	#29     serializeSuite (file:///temp/path.whatever/listener.dart:17:25)
+30		main	file	<unknown>	/temp/path.whatever/listener.dart	43	36	false	#30     main (file:///temp/path.whatever/listener.dart:43:36)
+31		_runMainZoned	dart	ui	hooks.dart	239	25	false	#31     _runMainZoned.<anonymous closure>.<anonymous closure> (dart:ui/hooks.dart:239:25)
+32		_rootRun	dart	async	zone.dart	1126	13	false	#32     _rootRun (dart:async/zone.dart:1126:13)
+33	_CustomZone	run	dart	async	zone.dart	1023	19	false	#33     _CustomZone.run (dart:async/zone.dart:1023:19)
+34		_runZoned	dart	async	zone.dart	1518	10	false	#34     _runZoned (dart:async/zone.dart:1518:10)
+35		runZoned	dart	async	zone.dart	1502	12	false	#35     runZoned (dart:async/zone.dart:1502:12)
+36		_runMainZoned	dart	ui	hooks.dart	231	5	false	#36     _runMainZoned.<anonymous closure> (dart:ui/hooks.dart:231:5)
+37		_startIsolate	dart	isolate-patch	isolate_patch.dart	307	19	false	#37     _startIsolate.<anonymous closure> (dart:isolate-patch/isolate_patch.dart:307:19)
+38	_RawReceivePortImpl	_handleMessage	dart	isolate-patch	isolate_patch.dart	174	12	false	#38     _RawReceivePortImpl._handleMessage (dart:isolate-patch/isolate_patch.dart:174:12)
+
+@stackFrameNoColsFrames
+0		blah	package	assertions	main.dart	4	-1	false	#0      blah (package:assertions/main.dart:4)
+1		main	package	assertions	main.dart	8	-1	false	#1      main (package:assertions/main.dart:8)
+2		_runMainZoned	dart	ui	hooks.dart	239	-1	false	#2      _runMainZoned.<anonymous closure>.<anonymous closure> (dart:ui/hooks.dart:239)
+3		_rootRun	dart	async	zone.dart	1126	-1	false	#3      _rootRun (dart:async/zone.dart:1126)
+4	_CustomZone	run	dart	async	zone.dart	1023	-1	false	#4      _CustomZone.run (dart:async/zone.dart:1023)
+5		_runZoned	dart	async	zone.dart	1518	-1	false	#5      _runZoned (dart:async/zone.dart:1518)
+6		runZoned	dart	async	zone.dart	1502	-1	false	#6      runZoned (dart:async/zone.dart:1502)
+7		_runMainZoned	dart	ui	hooks.dart	231	-1	false	#7      _runMainZoned.<anonymous closure> (dart:ui/hooks.dart:231)
+8		_startIsolate	dart	isolate-patch	isolate_patch.dart	307	-1	false	#8      _startIsolate.<anonymous closure> (dart:isolate-patch/isolate_patch.dart:307)
+9	_RawReceivePortImpl	_handleMessage	dart	isolate-patch	isolate_patch.dart	174	-1	false	#9      _RawReceivePortImpl._handleMessage (dart:isolate-patch/isolate_patch.dart:174)
+
+@webStackTraceFrames
+-1	<unknown>	throw_	package	dart-sdk	lib/_internal/js_dev_runtime/private/ddc_runtime/errors.dart	196	49	false	package:dart-sdk/lib/_internal/js_dev_runtime/private/ddc_runtime/errors.dart 196:49  throw_
+-1	<unknown>	blah	package	assertions	main.dart	4	3	false	package:assertions/main.dart 4:3                                                      blah
+-1	<unknown>	main$	package	assertions	main.dart	8	5	false	package:assertions/main.dart 8:5                                                      main$
+-1	<unknown>	main$	package	assertions	main_web_entrypoint.dart	9	3	false	package:assertions/main_web_entrypoint.dart 9:3                                       main$
+-1	<unknown>	onValue	package	dart-sdk	lib/_internal/js_dev_runtime/patch/async_patch.dart	47	50	false	package:dart-sdk/lib/_internal/js_dev_runtime/patch/async_patch.dart 47:50            onValue
+-1	<unknown>	runUnary	package	dart-sdk	lib/async/zone.dart	1381	54	false	package:dart-sdk/lib/async/zone.dart 1381:54                                          runUnary
+-1	<unknown>	performLayout	<unknown>	<unknown>	<unknown>	210	5	false	object_test.dart 210:5                                                                performLayout
+-1	<unknown>	handleValue	package	dart-sdk	lib/async/future_impl.dart	140	18	false	package:dart-sdk/lib/async/future_impl.dart 140:18                                    handleValue
+-1	<unknown>	handleValueCallback	package	dart-sdk	lib/async/future_impl.dart	682	44	false	package:dart-sdk/lib/async/future_impl.dart 682:44                                    handleValueCallback
+-1	<unknown>	_propagateToListeners	package	dart-sdk	lib/async/future_impl.dart	711	32	false	package:dart-sdk/lib/async/future_impl.dart 711:32                                    _propagateToListeners
+-1	<unknown>	callback	package	dart-sdk	lib/async/future_impl.dart	391	9	false	package:dart-sdk/lib/async/future_impl.dart 391:9                                     callback
+-1	<unknown>	_microtaskLoop	package	dart-sdk	lib/async/schedule_microtask.dart	43	11	false	package:dart-sdk/lib/async/schedule_microtask.dart 43:11                              _microtaskLoop
+-1	<unknown>	_startMicrotaskLoop	package	dart-sdk	lib/async/schedule_microtask.dart	52	5	false	package:dart-sdk/lib/async/schedule_microtask.dart 52:5                               _startMicrotaskLoop
+-1	<unknown>	<fn>	package	dart-sdk	lib/_internal/js_dev_runtime/patch/async_patch.dart	168	15	false	package:dart-sdk/lib/_internal/js_dev_runtime/patch/async_patch.dart 168:15           <fn>
