@@ -199,3 +199,39 @@ fn an_ellipsized_inline_widget_does_not_paint_hit_or_expose_semantics_at_the_ori
     assert_eq!(tree.hit_test(location), Some(render));
     assert!(semantics_has_child(&tree));
 }
+
+#[test]
+fn unlimited_ellipsis_excludes_the_truncated_inline_render_child() {
+    use incular_text::TextOverflow;
+    use incular_widgets::Text;
+
+    let Some(_) = std::env::var_os("INCULAR_FLUTTER_AHEM_PATH") else {
+        return;
+    };
+    let style = ahem().font_size(14.);
+    let sentence = "truncated";
+    let line = "a long line to be truncated.";
+    let span = TextSpan::new(line)
+        .style(style.clone())
+        .child(WidgetSpan::new(1));
+    let rich = RichParagraph::new(RichText::new(span).overflow(TextOverflow::Ellipsis))
+        .child(1, Text::new(sentence).style(style));
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(Directionality::new(TextDirection::Ltr, rich).into())
+        .unwrap();
+    tree.layout(Constraints::loose(Size::new(100., 100.)))
+        .unwrap();
+    tree.update_semantics();
+
+    let render = tree.render_id(tree.children(root).unwrap()[0]).unwrap();
+    let layout = tree.text_layout(render).unwrap();
+    assert!(layout.overflowed);
+    assert_eq!(layout.lines.len(), 1);
+    assert!(layout.placeholders.is_empty());
+    let graph = tree.semantics();
+    assert_eq!(graph.len(), 1);
+    let root = graph.node(graph.roots()[0]).unwrap();
+    assert_eq!(root.label.as_deref(), Some(line));
+    assert!(root.children.is_empty());
+}

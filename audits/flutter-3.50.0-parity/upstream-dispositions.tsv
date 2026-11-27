@@ -3352,5 +3352,5 @@ packages/flutter/test/widgets/focus_traversal_test.dart	3286	Focus traversal doe
 packages/flutter/test/widgets/rich_text_test.dart	169	WidgetSpan calculate correct intrinsic heights	paired-match	upstream-rich-text-layout.md
 packages/flutter/test/widgets/rich_text_test.dart	313	RichText does not crash at zero area	paired-match	upstream-rich-text-layout.md
 packages/flutter/test/widgets/text_semantics_test.dart	142	SemanticsIdentifier creates a functional SemanticsNode	paired-match	upstream-rich-text-semantics-fragments.md
-packages/flutter/test/rendering/paragraph_test.dart	755	Does not include the semantics node of truncated rendering children	partial-match	upstream-rich-text-layout.md#ellipsized-inline-children
+packages/flutter/test/rendering/paragraph_test.dart	755	Does not include the semantics node of truncated rendering children	paired-match	upstream-rich-text-layout.md#unlimited-line-ellipsis
 packages/flutter/test/rendering/paragraph_test.dart	815	Supports empty text span with spell out	paired-match	upstream-rich-text-layout.md#ellipsized-inline-children

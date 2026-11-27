@@ -1175,6 +1175,7 @@ impl TextEngine {
         // Trimming the first ascent or last descent applies to the whole
         // text, not to each composed paragraph.
         let document = text.contains('\n')
+            && !(options.overflow == TextOverflow::Ellipsis && options.max_width.is_some())
             && options.max_lines.is_none()
             && options.height_behavior.apply_height_to_first_ascent
             && options.height_behavior.apply_height_to_last_descent
@@ -1540,6 +1541,17 @@ impl TextEngine {
         options: TextLayoutOptions,
         runs: &[StyledTextRun],
     ) -> TextLayout {
+        // Without an explicit cap Flutter's ellipsis does not introduce
+        // soft breaks. Preserve hard lines up through the first line that
+        // cannot fit, and ellipsize that line rather than wrapping it.
+        let unlimited_ellipsis = options.max_lines.is_none()
+            && options.overflow == TextOverflow::Ellipsis
+            && options.max_width.is_some();
+        let options = if unlimited_ellipsis {
+            options.soft_wrap(false)
+        } else {
+            options
+        };
         let wrap_width = options.soft_wrap.then_some(options.max_width).flatten();
         let layout = self.shape_raw(
             text,
@@ -1552,13 +1564,20 @@ impl TextEngine {
             options.strut,
             runs,
         );
-        let horizontal_overflow = !options.soft_wrap
-            && options
-                .max_width
-                .is_some_and(|width| layout.metrics.size.width > width);
-        let line_limit = options
-            .max_lines
-            .or_else(|| horizontal_overflow.then_some(1));
+        let first_overwide = options.max_width.filter(|_| unlimited_ellipsis).and_then(|width| {
+            layout.lines.iter().position(|line| line.width > width)
+        });
+        let horizontal_overflow = if unlimited_ellipsis {
+            first_overwide.is_some()
+        } else {
+            !options.soft_wrap
+                && options.max_width.is_some_and(|width| layout.metrics.size.width > width)
+        };
+        let line_limit = options.max_lines.or_else(|| {
+            first_overwide
+                .map(|index| index + 1)
+                .or_else(|| horizontal_overflow.then_some(1))
+        });
         let line_overflow = line_limit.is_some_and(|limit| layout.lines.len() > limit);
         if (!horizontal_overflow && !line_overflow) || options.overflow == TextOverflow::Visible {
             return layout;

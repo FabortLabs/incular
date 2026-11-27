@@ -39,10 +39,24 @@ cached compositor layer remained attached. The retained paint, hit, and
 semantic walks now use only placed inline children. The text annotation
 does not speak the object-replacement marker.
 
-The original `rendering/paragraph_test.dart:755` passed in Flutter.
-It stays partial because its raw RenderParagraph configuration relies on
-an unlimited-line ellipsis; the paired mounted presentation probe uses
-an explicit one-line cap. The original empty spell-out registration at
+The paired mounted presentation probe uses an explicit one-line cap.
+The original empty spell-out registration at
 `rendering/paragraph_test.dart:815` also passed, and the native
 `flutter350_rich_paragraph_pronunciation` target verifies the mounted
 empty paragraph has no pronunciation attributes or synthetic fragments.
+
+
+## Unlimited line ellipsis
+
+The original `rendering/paragraph_test.dart:755` now pairs with the same
+100-pixel limit, a text-rendered inline child, and no line-count cap. An
+ellipsized line is present but the child has no placeholder placement or
+published semantic annotation. The retained semantics graph contains
+only the paragraph's single spoken label.
+
+The pinned `unlimited_ellipsis_wrap_reference_test.dart` separately tested
+that explicit hard lines survive when they fit, the first over-wide hard
+line is cut there, and ordinary word wrapping does not produce more
+lines while unlimited ellipsis is active. The native text regression
+checks the retained source bytes for all three. The earlier explicit
+one-line variant still passes.
