@@ -2838,3 +2838,9 @@ packages/flutter/test/painting/colors_test.dart	168	HSVColor lerps hue along the
 packages/flutter/test/painting/colors_test.dart	195	HSVColor lerps antipodal hues reversibly.	paired-match	color-clamp-comparisons.md#hue-interpolation-remediation
 packages/flutter/test/painting/colors_test.dart	452	HSLColor lerps hue along the shortest arc.	paired-match	color-clamp-comparisons.md#hue-interpolation-remediation
 packages/flutter/test/painting/colors_test.dart	479	HSLColor lerps antipodal hues reversibly.	paired-match	color-clamp-comparisons.md#hue-interpolation-remediation
+packages/flutter/test/painting/colors_test.dart	39	HSVColor hue sweep test	paired-match	color-clamp-comparisons.md#hsl-and-hsv-conversion-vectors
+packages/flutter/test/painting/colors_test.dart	286	HSLColor hue sweep test	paired-match	color-clamp-comparisons.md#hsl-and-hsv-conversion-vectors
+packages/flutter/test/painting/colors_test.dart	376	Pink	paired-match	color-clamp-comparisons.md#hsl-and-hsv-conversion-vectors
+packages/flutter/test/painting/colors_test.dart	385	White	paired-match	color-clamp-comparisons.md#hsl-and-hsv-conversion-vectors
+packages/flutter/test/painting/colors_test.dart	394	Black	paired-match	color-clamp-comparisons.md#hsl-and-hsv-conversion-vectors
+packages/flutter/test/painting/colors_test.dart	403	Gray	paired-match	color-clamp-comparisons.md#hsl-and-hsv-conversion-vectors

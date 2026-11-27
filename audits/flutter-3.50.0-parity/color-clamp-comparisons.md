@@ -136,3 +136,14 @@ time. The additional pinned control verifies the channel values and
 that an RGB midpoint of 350° → 10° actually paints red. This also
 remediates the historical C36 and C37 failures. All 26 selected native
 color and API checks passed.
+
+## HSL and HSV conversion vectors
+
+Exact pinned `painting/colors_test.dart:39,286,376,385,394,403`
+all passed. The native `flutter350_hue_conversion` target verifies
+both 0°–360° sweeps at 36° intervals against all 22 original packed
+ARGB colors. The reverse conversion uses the same max-component
+tolerance of 0.01 with hue divided by 360, and excludes only the
+duplicate 360° endpoint, as the reference does. Pink, white, black,
+and gray use the original RGB inputs and exact saturation/alpha
+or original hue/lightness tolerances.
