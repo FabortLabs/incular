@@ -3378,3 +3378,6 @@ packages/flutter/test/rendering/paragraph_test.dart	507	changing color does not 
 packages/flutter/test/rendering/paragraph_test.dart	129	getPositionForOffset control test	paired-match	upstream-rich-text-layout.md#retained-paragraph-positions-and-tight-selection-boxes
 packages/flutter/test/rendering/paragraph_test.dart	146	getBoxesForSelection control test	paired-match	upstream-rich-text-layout.md#retained-paragraph-positions-and-tight-selection-boxes
 packages/flutter/test/rendering/paragraph_test.dart	165	getBoxesForSelection test with multiple TextSpans and lines	paired-match	upstream-rich-text-layout.md#retained-paragraph-positions-and-tight-selection-boxes
+packages/flutter/test/rendering/paragraph_test.dart	99	getOffsetForCaret control test	paired-match	upstream-rich-text-layout.md#caret-metrics-and-word-boundaries
+packages/flutter/test/rendering/paragraph_test.dart	118	getFullHeightForCaret control test	paired-match	upstream-rich-text-layout.md#caret-metrics-and-word-boundaries
+packages/flutter/test/rendering/paragraph_test.dart	252	getWordBoundary control test	paired-match	upstream-rich-text-layout.md#caret-metrics-and-word-boundaries

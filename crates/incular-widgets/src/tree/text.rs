@@ -1018,6 +1018,70 @@ impl WidgetTree {
         Some(node.text_layout()?.tight_selection_boxes(range))
     }
 
+    /// Local caret origin and full height for a laid-out paragraph. Uses
+    /// the retained glyphs and a cached template in the paragraph's style.
+    #[must_use]
+    pub fn paragraph_caret_metrics(
+        &mut self,
+        id: ElementId,
+        byte: usize,
+        affinity: incular_text::TextAffinity,
+        caret_width: f32,
+    ) -> Option<(Offset, f32)> {
+        if self.text_engine.has_pending_application_fonts() {
+            return None;
+        }
+        let render = self.render_id(id)?;
+        let node = self.renders.get(render.0)?;
+        if node.dirty.contains(DirtyFlags::LAYOUT) {
+            return None;
+        }
+        let layout = node.text_layout_cloned()?;
+        let width = node.size.width;
+        let kind = node.object.shared_kind();
+        let RenderKind::Text { text, style, text_direction, height_behavior, strut, .. } =
+            kind.as_ref()
+        else {
+            return None;
+        };
+        let strut = strut.as_deref().filter(|strut| strut.font_size != Some(0.))
+            .map(|strut| self.text_engine.resolve_strut(strut, style));
+        let template = self.text_engine.layout_with_options(
+            " ",
+            style,
+            incular_text::TextLayoutOptions::new(None, TextAlign::Start)
+                .strut(strut)
+                .height_behavior(*height_behavior),
+        );
+        let context = incular_text::ParagraphCaretContext {
+            source: text,
+            direction: *text_direction,
+            content_width: width,
+            paint_offset: Offset::ZERO,
+            template_baseline: template.metrics.baseline,
+            template_height: template.metrics.size.height,
+            strut,
+        };
+        Some((
+            layout.caret_offset_in_paragraph(byte, affinity, caret_width, context),
+            layout.caret_height_in_paragraph(byte, affinity, context),
+        ))
+    }
+
+    /// Word boundaries in the visible paragraph's original UTF-8 string,
+    /// including space between words and punctuation inside a word.
+    #[must_use]
+    pub fn paragraph_word_boundary(&self, id: ElementId, byte: usize) -> Option<TextRange> {
+        let render = self.render_id(id)?;
+        let node = self.renders.get(render.0)?;
+        let RenderKind::Text { text, .. } = node.object.kind() else {
+            return None;
+        };
+        node.text_layout()?;
+        let (start, end) = incular_text::word_boundary_at(text, byte);
+        Some(TextRange::new(start, end))
+    }
+
     /// The byte offset under a view point in a selectable label.
     #[must_use]
     pub fn selectable_text_position_at(&self, id: ElementId, point: Offset) -> Option<usize> {

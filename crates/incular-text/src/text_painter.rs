@@ -152,6 +152,19 @@ pub struct TextPainterBox {
     pub direction: TextDirection,
 }
 
+/// Metrics shared by an already-measured standalone or retained paragraph.
+#[doc(hidden)]
+#[derive(Clone, Copy)]
+pub struct ParagraphCaretContext<'a> {
+    pub source: &'a str,
+    pub direction: TextDirection,
+    pub content_width: f32,
+    pub paint_offset: Offset,
+    pub template_baseline: f32,
+    pub template_height: f32,
+    pub strut: Option<TextStrut>,
+}
+
 impl TextLayout {
     /// Tight visual boxes for complete clusters in the UTF-8 range. Boxes
     /// use each run's natural height and this layout's own coordinate space.
@@ -237,6 +250,173 @@ impl TextLayout {
             },
         )
     }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn caret_offset_in_paragraph(
+        &self,
+        byte: usize,
+        affinity: TextAffinity,
+        caret_width: f32,
+        context: ParagraphCaretContext<'_>,
+    ) -> Offset {
+        let source = context.source;
+        let lines = &self.lines;
+        if lines.is_empty() {
+            return Offset::ZERO;
+        }
+        let line_at = |byte| {
+            lines
+                .partition_point(|line| line.start <= byte)
+                .saturating_sub(1)
+        };
+        let mut byte = byte.min(source.len());
+        let mut index = line_at(byte);
+        if byte < lines[index].caret_end
+            && !self
+                .line_caret_positions(index)
+                .iter()
+                .any(|stop| stop.offset == byte)
+        {
+            // A rare inside-cluster query may not have a shaped stop.
+            // Search only its visual line; ordinary caret moves do not
+            // scan preceding text or allocate a segmentation vector.
+            let start = lines[index].start;
+            let end = lines[index].caret_end.min(source.len());
+            if let Some(line_text) = source.get(start..end) {
+                let relative = byte - start;
+                if let Some(next) = icu_segmenter::GraphemeClusterSegmenter::new()
+                    .segment_str(line_text)
+                    .find(|boundary| *boundary >= relative)
+                {
+                    byte = start + next;
+                    index = line_at(byte);
+                }
+            }
+        }
+
+        let after_break = byte
+            .checked_sub(1)
+            .is_some_and(|prev| matches!(source.as_bytes().get(prev), Some(b'\n' | b'\r')));
+        let use_leading = byte == 0 || after_break || affinity == TextAffinity::Downstream;
+        if self.overflowed {
+            let last = &lines[lines.len() - 1];
+            let anchor = if use_leading {
+                byte
+            } else {
+                byte.saturating_sub(1)
+            };
+            if anchor >= last.end {
+                let rtl = context.direction == TextDirection::Rtl;
+                let x = if rtl {
+                    last.offset + last.hanging_advance - caret_width.max(0.)
+                } else {
+                    last.offset + last.width - last.hanging_advance
+                };
+                return Offset::new(
+                    (x + context.paint_offset.x).clamp(0., context.content_width),
+                    last.baseline - context.template_baseline,
+                );
+            }
+        }
+        if !use_leading && index > 0 && lines[index].start == byte {
+            index -= 1;
+        }
+        let line = &lines[index];
+        let stops = self.line_caret_positions(index);
+        let paragraph_rtl = context.direction == TextDirection::Rtl;
+        let (x, rtl) = if byte == source.len() && use_leading && !line.clusters.is_empty() {
+            // For downstream end-of-text, anchor to the paragraph's visual
+            // trailing edge, even if its last glyph has the other direction.
+            let edge = if paragraph_rtl {
+                stops.first()
+            } else {
+                stops.last()
+            };
+            (edge.map_or(line.offset, |stop| stop.x), paragraph_rtl)
+        } else {
+            let wanted = if use_leading {
+                TextAffinity::Downstream
+            } else {
+                TextAffinity::Upstream
+            };
+            let stop = stops
+                .iter()
+                .find(|stop| stop.offset == byte && stop.affinity == wanted)
+                .or_else(|| stops.iter().find(|stop| stop.offset == byte));
+            let direction = line
+                .clusters
+                .iter()
+                .find(|cluster| {
+                    if use_leading {
+                        cluster.range().start == byte
+                    } else {
+                        cluster.range().end == byte
+                    }
+                })
+                .map_or(paragraph_rtl && !line.clusters.is_empty(), |cluster| {
+                    cluster.rtl
+                });
+            (
+                stop.map_or_else(
+                    || {
+                        if byte >= line.caret_end && !paragraph_rtl {
+                            line.offset + line.width
+                        } else {
+                            line.offset
+                        }
+                    },
+                    |stop| stop.x,
+                ),
+                direction,
+            )
+        };
+        let advance = if rtl && caret_width.is_finite() {
+            caret_width.max(0.)
+        } else {
+            0.
+        };
+        Offset::new(
+            (x - advance + context.paint_offset.x).clamp(0., context.content_width),
+            line.top,
+        )
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn caret_height_in_paragraph(
+        &self,
+        byte: usize,
+        affinity: TextAffinity,
+        context: ParagraphCaretContext<'_>,
+    ) -> f32 {
+        if let Some(strut) = context.strut {
+            let height = strut.ascent + strut.descent;
+            return if height > 0. {
+                height
+            } else {
+                context.template_height
+            };
+        }
+        let source = context.source.as_bytes();
+        let byte = byte.min(source.len());
+        let anchor = if byte > 0
+            && affinity == TextAffinity::Upstream
+            && !matches!(source[byte - 1], b'\n' | b'\r')
+        {
+            byte - 1
+        } else {
+            byte
+        };
+        if self.overflowed
+            && let Some(line) = self.lines.last()
+            && anchor >= line.end
+        {
+            return line.height;
+        }
+        self.font_run_at(anchor)
+            .map_or(context.template_height, |run| run.caret_height)
+    }
 }
 
 struct MeasuredText {
@@ -252,6 +432,20 @@ struct MeasuredText {
     strut: Option<TextStrut>,
     paint_offset: Offset,
     lines: OnceLock<Arc<[TextPainterLine]>>,
+}
+
+impl MeasuredText {
+    fn caret_context<'a>(&self, source: &'a str, direction: TextDirection) -> ParagraphCaretContext<'a> {
+        ParagraphCaretContext {
+            source,
+            direction,
+            content_width: self.content_width,
+            paint_offset: self.paint_offset,
+            template_baseline: self.preferred_baseline,
+            template_height: self.preferred_line_height,
+            strut: self.strut,
+        }
+    }
 }
 
 /// Measures and positions a text span without building widgets or owning
@@ -819,126 +1013,11 @@ impl TextPainter {
         caret_width: f32,
     ) -> Result<Offset, TextPainterError> {
         let measured = self.measured()?;
-        let source = &self.plain;
-        let lines = &measured.shaped.lines;
-        if lines.is_empty() {
-            return Ok(Offset::ZERO);
-        }
-        let line_at = |byte| {
-            lines
-                .partition_point(|line| line.start <= byte)
-                .saturating_sub(1)
-        };
-        let mut byte = byte.min(source.len());
-        let mut index = line_at(byte);
-        if byte < lines[index].caret_end
-            && !measured
-                .shaped
-                .line_caret_positions(index)
-                .iter()
-                .any(|stop| stop.offset == byte)
-        {
-            // A rare inside-cluster query may not have a shaped stop.
-            // Search only its visual line; ordinary caret moves do not
-            // scan preceding text or allocate a segmentation vector.
-            let start = lines[index].start;
-            let end = lines[index].caret_end.min(source.len());
-            if let Some(line_text) = source.get(start..end) {
-                let relative = byte - start;
-                if let Some(next) = icu_segmenter::GraphemeClusterSegmenter::new()
-                    .segment_str(line_text)
-                    .find(|boundary| *boundary >= relative)
-                {
-                    byte = start + next;
-                    index = line_at(byte);
-                }
-            }
-        }
-
-        let after_break = byte
-            .checked_sub(1)
-            .is_some_and(|prev| matches!(source.as_bytes().get(prev), Some(b'\n' | b'\r')));
-        let use_leading = byte == 0 || after_break || affinity == TextAffinity::Downstream;
-        if measured.shaped.overflowed {
-            let last = &lines[lines.len() - 1];
-            let anchor = if use_leading {
-                byte
-            } else {
-                byte.saturating_sub(1)
-            };
-            if anchor >= last.end {
-                let rtl = self.direction == Some(TextDirection::Rtl);
-                let x = if rtl {
-                    last.offset + last.hanging_advance - caret_width.max(0.)
-                } else {
-                    last.offset + last.width - last.hanging_advance
-                };
-                return Ok(Offset::new(
-                    (x + measured.paint_offset.x).clamp(0., measured.content_width),
-                    last.baseline - measured.preferred_baseline,
-                ));
-            }
-        }
-        if !use_leading && index > 0 && lines[index].start == byte {
-            index -= 1;
-        }
-        let line = &lines[index];
-        let stops = measured.shaped.line_caret_positions(index);
-        let paragraph_rtl = self.direction == Some(TextDirection::Rtl);
-        let (x, rtl) = if byte == source.len() && use_leading && !line.clusters.is_empty() {
-            // For downstream end-of-text, anchor to the paragraph's visual
-            // trailing edge, even if its last glyph has the other direction.
-            let edge = if paragraph_rtl {
-                stops.first()
-            } else {
-                stops.last()
-            };
-            (edge.map_or(line.offset, |stop| stop.x), paragraph_rtl)
-        } else {
-            let wanted = if use_leading {
-                TextAffinity::Downstream
-            } else {
-                TextAffinity::Upstream
-            };
-            let stop = stops
-                .iter()
-                .find(|stop| stop.offset == byte && stop.affinity == wanted)
-                .or_else(|| stops.iter().find(|stop| stop.offset == byte));
-            let direction = line
-                .clusters
-                .iter()
-                .find(|cluster| {
-                    if use_leading {
-                        cluster.range().start == byte
-                    } else {
-                        cluster.range().end == byte
-                    }
-                })
-                .map_or(paragraph_rtl && !line.clusters.is_empty(), |cluster| {
-                    cluster.rtl
-                });
-            (
-                stop.map_or_else(
-                    || {
-                        if byte >= line.caret_end && !paragraph_rtl {
-                            line.offset + line.width
-                        } else {
-                            line.offset
-                        }
-                    },
-                    |stop| stop.x,
-                ),
-                direction,
-            )
-        };
-        let advance = if rtl && caret_width.is_finite() {
-            caret_width.max(0.)
-        } else {
-            0.
-        };
-        Ok(Offset::new(
-            (x - advance + measured.paint_offset.x).clamp(0., measured.content_width),
-            line.top,
+        Ok(measured.shaped.caret_offset_in_paragraph(
+            byte,
+            affinity,
+            caret_width,
+            measured.caret_context(&self.plain, self.direction.unwrap_or(TextDirection::Ltr)),
         ))
     }
 
@@ -956,34 +1035,11 @@ impl TextPainter {
         affinity: TextAffinity,
     ) -> Result<f32, TextPainterError> {
         let measured = self.measured()?;
-        if let Some(strut) = measured.strut {
-            let height = strut.ascent + strut.descent;
-            return Ok(if height > 0. {
-                height
-            } else {
-                measured.preferred_line_height
-            });
-        }
-        let source = self.plain.as_bytes();
-        let byte = byte.min(source.len());
-        let anchor = if byte > 0
-            && affinity == TextAffinity::Upstream
-            && !matches!(source[byte - 1], b'\n' | b'\r')
-        {
-            byte - 1
-        } else {
-            byte
-        };
-        if measured.shaped.overflowed
-            && let Some(line) = measured.shaped.lines.last()
-            && anchor >= line.end
-        {
-            return Ok(line.height);
-        }
-        Ok(measured
-            .shaped
-            .font_run_at(anchor)
-            .map_or(measured.preferred_line_height, |run| run.caret_height))
+        Ok(measured.shaped.caret_height_in_paragraph(
+            byte,
+            affinity,
+            measured.caret_context(&self.plain, self.direction.unwrap_or(TextDirection::Ltr)),
+        ))
     }
 
     /// Asks for the same caret using a Flutter/IME UTF-16 code-unit offset.

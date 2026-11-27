@@ -127,3 +127,17 @@ application font discovery is unchanged. Four focused and fourteen
 adjacent retained-widget cases passed, along with the standalone
 painter, bidi and selection-span suites. Non-tight height/width styles
 and caret metrics are separate cases.
+
+### Caret metrics and word boundaries
+
+The exact pinned :99, :118 and :252 registrations passed. A mounted
+native paragraph now exposes the local caret origin and full height
+from the same geometry used by standalone TextPainter. The caret
+advances between bytes 5 and 25 on one line, then reaches the next
+line at byte 50. The size-10 test reports a 10-pixel caret at byte 5.
+Word queries use the laid-out paragraph's original text: the three
+probes return `polished`, one space, and `Queen's`, even though the
+embedded test font has no glyph for the ASCII apostrophe. The seven
+retained geometry, seven selection-pointer and 55 standalone painter
+and bidi checks passed. The latter suite's previously ignored case
+was not run or credited.

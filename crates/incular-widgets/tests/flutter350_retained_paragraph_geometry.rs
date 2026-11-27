@@ -158,3 +158,69 @@ fn selecting_by_pointer_uses_the_tall_lines_real_vertical_bounds() {
         TextSelection::collapsed(3)
     );
 }
+
+#[test]
+fn caret_origin_progresses_across_glyphs_and_through_hard_breaks() {
+    // rendering/paragraph_test.dart:99
+    use incular_text::TextAffinity::Downstream;
+
+    let Some((style, engine)) = flutter_test_style() else {
+        return;
+    };
+    let (mut tree, key) = mount(
+        TextSpan::new(SOURCE).style(style.font_size(14.)),
+        engine,
+        800.,
+        false,
+    );
+    let element = tree.element_with_key(&key.into()).unwrap();
+    let mut at = |byte| {
+        tree.paragraph_caret_metrics(element, byte, Downstream, 2.)
+            .unwrap()
+            .0
+    };
+    let first = at(5);
+    assert!(first.x > 0.);
+    assert!(at(25).x > first.x);
+    assert!(at(50).y > first.y);
+}
+
+#[test]
+fn caret_height_uses_the_shaped_fonts_natural_metrics() {
+    // rendering/paragraph_test.dart:118
+    use incular_text::TextAffinity::Downstream;
+
+    let Some((style, engine)) = flutter_test_style() else {
+        return;
+    };
+    let (mut tree, key) = mount(
+        TextSpan::new(SOURCE).style(style.font_size(10.)),
+        engine,
+        800.,
+        false,
+    );
+    let element = tree.element_with_key(&key.into()).unwrap();
+    let (_, height) = tree
+        .paragraph_caret_metrics(element, 5, Downstream, 2.)
+        .unwrap();
+    assert_eq!(height, 10.);
+}
+
+#[test]
+fn laid_out_word_boundaries_preserve_spaces_and_embedded_apostrophes() {
+    // rendering/paragraph_test.dart:252
+    let Some((style, engine)) = flutter_test_style() else {
+        return;
+    };
+    let (tree, key) = mount(
+        TextSpan::new(SOURCE).style(style.font_size(14.)),
+        engine,
+        800.,
+        false,
+    );
+    let element = tree.element_with_key(&key.into()).unwrap();
+    for (byte, word) in [(5, "polished"), (50, " "), (75, "Queen's")] {
+        let bounds = tree.paragraph_word_boundary(element, byte).unwrap();
+        assert_eq!(&SOURCE[bounds.as_range()], word);
+    }
+}
