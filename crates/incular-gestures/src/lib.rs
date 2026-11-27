@@ -43,7 +43,7 @@ pub use arena::{
 pub use details::{
     ButtonGestureCallbacks, DragCallbacks, DragDownDetails, DragEndDetails, DragStartDetails, FocusKeyHandlerOwner,
     DragUpdateDetails, GestureAction, GestureCallbacks, GestureDecision, LongPressDownDetails,
-    LongPressEndDetails, LongPressMoveUpdateDetails, LongPressStartDetails, MouseCursor,
+    LongPressEndDetails, LongPressMoveUpdateDetails, LongPressStartDetails, MouseCursor, OffsetPair,
     PointerButtonClass, PointerDeviceKind, PointerEvent, RawPointerEvent, TapDownDetails,
     TapMoveDetails, TapUpDetails, Velocity,
 };

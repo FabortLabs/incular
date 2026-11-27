@@ -2785,3 +2785,4 @@ packages/flutter/test/widgets/transform_test.dart	592	Transform.scale with Filte
 packages/flutter/test/widgets/transform_test.dart	624	Transform.rotate with FilterQuality produces filter layer	paired-match	upstream-transform-quarter-turns.md#filtered-transforms-in-the-retained-renderer
 packages/flutter/test/widgets/transform_test.dart	656	Offset Transform.rotate with FilterQuality produces filter layer	paired-match	upstream-transform-quarter-turns.md#filtered-transforms-in-the-retained-renderer
 packages/flutter/test/widgets/transform_test.dart	693	Transform layers update to match child and filterQuality	partial-match	upstream-transform-quarter-turns.md#filtered-transforms-in-the-retained-renderer
+packages/flutter/test/gestures/recognizer_test.dart	42	OffsetPair	paired-match	upstream-gesture-offset-pair.md

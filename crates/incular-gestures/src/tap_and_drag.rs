@@ -12,7 +12,7 @@ use incular_core::{
 use crate::arena_member::{ArenaLink, ArenaMember, arena_recognizer, distance};
 use crate::constants::{DOUBLE_TAP_SLOP, DOUBLE_TAP_TIMEOUT, PRESS_TIMEOUT};
 use crate::slop::{compute_hit_slop, compute_pan_slop};
-use crate::{GestureDisposition, PointerDeviceKind, RawPointerEvent, Velocity};
+use crate::{GestureDisposition, OffsetPair, PointerDeviceKind, RawPointerEvent, Velocity};
 use incular_core::DeviceGestureSettings;
 
 /// Flutter `TapDragDownDetails`.
@@ -79,22 +79,6 @@ enum DragState {
 enum DragAxis {
     Horizontal,
     Pan,
-}
-
-/// A (global, local) position pair, Flutter's `OffsetPair`.
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct OffsetPair {
-    global: Offset,
-    local: Offset,
-}
-
-impl OffsetPair {
-    fn of(event: &RawPointerEvent) -> Self {
-        Self {
-            global: event.position,
-            local: event.local_position,
-        }
-    }
 }
 
 type Callback<T> = Option<Rc<dyn Fn(T)>>;
@@ -391,7 +375,7 @@ impl TapAndDragGestureRecognizer {
         self.down = Some(event);
         self.previous_buttons = Some(event.buttons);
         self.last_tap_offset = Some(event.position);
-        self.origin_position = Some(OffsetPair::of(&event));
+        self.origin_position = Some(OffsetPair::from_event_position(&event));
         if let Some(callback) = &self.on_tap_track_start {
             callback();
         }
@@ -400,7 +384,7 @@ impl TapAndDragGestureRecognizer {
         self.global_distance_moved = 0.0;
         self.global_distance_moved_all_axes = 0.0;
         self.drag_state = DragState::Possible;
-        self.initial_position = OffsetPair::of(&event);
+        self.initial_position = OffsetPair::from_event_position(&event);
         self.current_position = self.initial_position;
         self.deadline_timer = Some(event.time + PRESS_TIMEOUT);
     }
@@ -427,7 +411,7 @@ impl TapAndDragGestureRecognizer {
                     || distance(event.position - self.initial_position.global) > slop;
                 match self.drag_state {
                     DragState::Accepted => {
-                        self.current_position = OffsetPair::of(&event);
+                        self.current_position = OffsetPair::from_event_position(&event);
                         self.check_drag_update(&event, None);
                     }
                     DragState::Possible => {
@@ -627,16 +611,13 @@ impl TapAndDragGestureRecognizer {
             return;
         }
         if self.drag_start_behavior == DragStartBehavior::Start {
-            self.initial_position = OffsetPair {
-                global: self.initial_position.global + event.delta,
-                local: self.initial_position.local + event.local_delta,
-            };
+            self.initial_position = self.initial_position + OffsetPair::from_event_delta(event);
             self.current_position = self.initial_position;
         }
         self.check_drag_start(event);
         let local_delta = event.local_delta;
         if local_delta != Offset::ZERO {
-            self.current_position = OffsetPair::of(event);
+            self.current_position = OffsetPair::from_event_position(event);
             let corrected_local = self.initial_position.local + local_delta;
             let global_delta = self.local_to_global_delta(local_delta, corrected_local);
             let corrected = OffsetPair {

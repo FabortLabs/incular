@@ -55,3 +55,5 @@ Use `with_multitouch_drag_strategy` to sum contacts or compute directional
 boundaries for axis drags and average free pans. A host using frame-based
 averaging supplies the current system-frame timestamp through
 `set_multitouch_frame_time`; pointer timestamps do not reset the frame.
+`OffsetPair` carries local and global offsets together. Construct it from a
+raw event's position or delta to preserve the two spaces.

@@ -13,6 +13,9 @@ a version and date when publishing.
 
 ### Added
 
+- `OffsetPair` keeps local and global pointer positions or deltas together
+  and performs arithmetic in each coordinate space.
+
 - `Transform::scale_non_uniform` scales horizontal and vertical axes
   independently around the same center as uniform scaling.
 

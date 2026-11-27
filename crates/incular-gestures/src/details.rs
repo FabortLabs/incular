@@ -1,4 +1,7 @@
-use std::rc::Rc;
+use std::{
+    ops::{Add, Sub},
+    rc::Rc,
+};
 
 use incular_core::time::Instant;
 
@@ -15,6 +18,48 @@ use crate::keyboard::{
 };
 
 use crate::scale::{ScaleEndDetails, ScaleStartDetails, ScaleUpdateDetails};
+
+/// Matching offsets in a target's local space and the global logical space.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct OffsetPair {
+    pub local: Offset,
+    pub global: Offset,
+}
+
+impl OffsetPair {
+    pub const ZERO: Self = Self::new(Offset::ZERO, Offset::ZERO);
+
+    #[must_use]
+    pub const fn new(local: Offset, global: Offset) -> Self {
+        Self { local, global }
+    }
+
+    #[must_use]
+    pub const fn from_event_position(event: &RawPointerEvent) -> Self {
+        Self::new(event.local_position, event.position)
+    }
+
+    #[must_use]
+    pub const fn from_event_delta(event: &RawPointerEvent) -> Self {
+        Self::new(event.local_delta, event.delta)
+    }
+}
+
+impl Add for OffsetPair {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        Self::new(self.local + other.local, self.global + other.global)
+    }
+}
+
+impl Sub for OffsetPair {
+    type Output = Self;
+
+    fn sub(self, other: Self) -> Self {
+        Self::new(self.local - other.local, self.global - other.global)
+    }
+}
 
 /// A platform-neutral pointer event.
 #[derive(Clone, Copy, Debug, PartialEq)]
