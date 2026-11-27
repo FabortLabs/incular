@@ -163,3 +163,10 @@ a payload. A separate pinned comparison confirms that a keyboard
 shortcut supplies the context of primary focus, not the shortcut's
 scope. The native runtime verifies that exact focused element. All 17
 focused native regressions passed.
+
+A follow-up pinned probe verified context-dependent enablement: a
+saved handler checks the caller again before dispatch, becomes a no-op
+when disabled, and resumes when the same context becomes enabled.
+The native test checks that both saved callbacks and direct runtime
+invocation skip the dispatcher while the caller's condition is false.
+All 29 focused native tests passed. This authored probe adds no credit.

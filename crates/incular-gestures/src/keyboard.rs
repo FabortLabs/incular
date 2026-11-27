@@ -487,11 +487,14 @@ impl Drop for ActionListenerSubscription {
 /// registry composes them by scope instead.
 type ActionCallback<C> = Rc<dyn Fn(&Intent<C>, Option<&ActionContext<'_>>) -> ActionOutput>;
 
+type ContextActionCondition<C> = dyn Fn(&Intent<C>, Option<&ActionContext<'_>>) -> bool;
+
 #[derive(Clone)]
 pub struct Action<C: CommandId = Command> {
     intent: Intent<C>,
     enabled: Rc<Cell<bool>>,
     enabled_when: Option<Rc<dyn Fn() -> bool>>,
+    enabled_in_context: Option<Rc<ContextActionCondition<C>>>,
     consumes_key: bool,
     callback: ActionCallback<C>,
     listeners: Rc<ActionListenerState>,
@@ -550,6 +553,7 @@ impl<C: CommandId> Action<C> {
             intent: command.into(),
             enabled: Rc::new(Cell::new(true)),
             enabled_when: None,
+            enabled_in_context: None,
             consumes_key: true,
             callback: Rc::new(callback),
             listeners: Rc::new(ActionListenerState {
@@ -589,6 +593,17 @@ impl<C: CommandId> Action<C> {
         self
     }
 
+    /// Adds an enablement condition that can inspect the calling element.
+    /// This condition is rechecked at invocation, even for a saved handler.
+    #[must_use]
+    pub fn enabled_when_in_context(
+        mut self,
+        predicate: impl Fn(&Intent<C>, Option<&ActionContext<'_>>) -> bool + 'static,
+    ) -> Self {
+        self.enabled_in_context = Some(Rc::new(predicate));
+        self
+    }
+
     /// Returns whether the action can currently run.
     #[must_use]
     pub fn is_enabled(&self) -> bool {
@@ -602,7 +617,19 @@ impl<C: CommandId> Action<C> {
     /// Returns whether this action is enabled for the supplied intent.
     #[must_use]
     pub fn is_action_enabled(&self, intent: &Intent<C>) -> bool {
-        self.is_enabled() && self.intent.command() == intent.command()
+        self.is_action_enabled_in_context(intent, None)
+    }
+
+    /// Returns whether this action can run for this intent and caller.
+    #[must_use]
+    pub fn is_action_enabled_in_context(
+        &self,
+        intent: &Intent<C>,
+        context: Option<&ActionContext<'_>>,
+    ) -> bool {
+        self.is_enabled()
+            && self.intent.command() == intent.command()
+            && self.enabled_in_context.as_ref().is_none_or(|check| check(intent, context))
     }
 
     /// Registers a callback that observes state changes published by this
@@ -733,10 +760,18 @@ impl<C: CommandId> Action<C> {
     /// Invokes this action and preserves any application-defined output.
     #[must_use]
     pub fn invoke_output(&self, intent: &Intent<C>) -> ActionOutput {
-        if !self.is_action_enabled(intent) {
+        self.invoke_output_in_context(intent, None)
+    }
+
+    fn invoke_output_in_context(
+        &self,
+        intent: &Intent<C>,
+        context: Option<&ActionContext<'_>>,
+    ) -> ActionOutput {
+        if !self.is_action_enabled_in_context(intent, context) {
             return ActionResult::Ignored.into();
         }
-        self.invoke_enabled_output(intent, None)
+        self.invoke_enabled_output(intent, context)
     }
 
     fn invoke_enabled_output(
@@ -891,7 +926,7 @@ fn dispatch_bound_action_output<C: CommandId>(
     dispatcher: &DispatcherLookup<'_>,
     context: Option<&ActionContext<'_>>,
 ) -> ActionOutput {
-    if !action.is_action_enabled(intent) {
+    if !action.is_action_enabled_in_context(intent, context) {
         return ActionResult::Ignored.into();
     }
     let Some(dispatcher) = dispatcher() else {
@@ -920,11 +955,23 @@ impl ActionDispatcher {
         intent: &Intent<C>,
         dispatcher: Option<Rc<ScopedActionDispatcher>>,
     ) -> ActionResult {
+        self.invoke_action_with_context(action, intent, dispatcher, None).result()
+    }
+
+    /// Dispatches through the supplied caller context and optional interceptor.
+    #[must_use]
+    pub fn invoke_action_with_context<C: CommandId>(
+        &self,
+        action: &Action<C>,
+        intent: &Intent<C>,
+        dispatcher: Option<Rc<ScopedActionDispatcher>>,
+        context: Option<&ActionContext<'_>>,
+    ) -> ActionOutput {
         if dispatcher.is_none() {
-            return self.invoke_action(action, intent);
+            return action.invoke_output_in_context(intent, context);
         }
         let erased = ErasedIntent::from_intent(intent);
-        dispatch_bound_action_output(action, intent, &erased, &|| dispatcher.clone(), None).result()
+        dispatch_bound_action_output(action, intent, &erased, &|| dispatcher.clone(), context)
     }
 }
 

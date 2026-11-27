@@ -1031,14 +1031,18 @@ impl WidgetTree {
         intent: &incular_gestures::Intent<C>,
     ) -> Option<Rc<dyn Fn()>> {
         let action = self.maybe_find_action_at(element, intent)?;
-        if !action.is_action_enabled(intent) {
+        let origin = self.element_address(element)?;
+        let source = self.element_live(element, "handler caller is mounted").build_context.clone();
+        let context = incular_gestures::ActionContext::new(&origin, &source);
+        if !action.is_action_enabled_in_context(intent, Some(&context)) {
             return None;
         }
         let intent = intent.clone();
         let dispatcher = self.action_dispatcher_at(element);
         Some(Rc::new(move || {
+            let context = incular_gestures::ActionContext::new(&origin, &source);
             let _ = incular_gestures::ActionDispatcher::new()
-                .invoke_action_with(&action, &intent, dispatcher.clone());
+                .invoke_action_with_context(&action, &intent, dispatcher.clone(), Some(&context));
         }))
     }
 

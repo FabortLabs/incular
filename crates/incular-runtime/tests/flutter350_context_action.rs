@@ -105,3 +105,62 @@ fn keyboard_invocation_uses_focused_context_not_the_shortcut_scope() {
     let focused = runtime.tree().focused_keyboard_element().unwrap();
     assert_eq!(hit.get(), runtime.tree().element_address(focused));
 }
+
+#[derive(Clone)]
+struct Gate(Rc<Cell<bool>>);
+
+#[test]
+fn a_context_guard_is_rechecked_by_saved_handlers_and_live_dispatch() {
+    let gate = Rc::new(Cell::new(true));
+    let count = Rc::new(Cell::new(0));
+    let invoked = count.clone();
+    let action = Action::<Command>::with_context("run", move |_, context| {
+        assert!(context.unwrap().find::<Gate>().unwrap().0.get());
+        invoked.set(invoked.get() + 1);
+        ActionResult::Handled.into()
+    })
+    .enabled_when_in_context(|_, context| {
+        context
+            .and_then(|context| context.find::<Gate>())
+            .is_some_and(|gate| gate.0.get())
+    });
+    let dispatches = Rc::new(Cell::new(0));
+    let observed = dispatches.clone();
+    let mut actions = Actions::new();
+    actions.register_action(action);
+    let mut runtime = Runtime::new(
+        ActionScope::new(
+            Rc::new(actions),
+            Widget::environment_scope(Gate(gate.clone()), SizedBox::shrink().into()),
+        )
+        .dispatcher(Rc::new(move |request| {
+            observed.set(observed.get() + 1);
+            request.invoke()
+        }))
+        .into(),
+    )
+    .unwrap();
+    runtime
+        .run_frame(Constraints::tight(Size::new(100., 100.)))
+        .unwrap();
+    let root = runtime.tree().root().unwrap();
+    let proxy = runtime.tree().children(root).unwrap()[0];
+    let caller = runtime.tree().children(proxy).unwrap()[0];
+    let intent = Intent::<Command>::new("run");
+    let handler = runtime.tree().action_handler_at(caller, &intent).unwrap();
+    handler();
+    assert_eq!((count.get(), dispatches.get()), (1, 1));
+
+    gate.set(false);
+    assert!(runtime.tree().action_handler_at(caller, &intent).is_none());
+    assert_eq!(
+        runtime.invoke_action_at(caller, &intent),
+        Some(ActionResult::Ignored)
+    );
+    handler();
+    assert_eq!((count.get(), dispatches.get()), (1, 1));
+
+    gate.set(true);
+    handler();
+    assert_eq!((count.get(), dispatches.get()), (2, 2));
+}
