@@ -30,7 +30,7 @@ fn rectangle_selection_classifies_all_eight_outside_regions_and_the_center() {
 
 #[test]
 fn drag_offsets_snap_to_directional_corners_only_outside_the_rectangle() {
-    use SelectionResult::{End, Next, Pending, Previous};
+    use SelectionResult::{End, Next, Previous};
     for direction in [TextDirection::Ltr, TextDirection::Rtl] {
         let (first, last) = if direction == TextDirection::Ltr {
             (Offset::new(100., 100.), Offset::new(300., 600.))
@@ -42,7 +42,9 @@ fn drag_offsets_snap_to_directional_corners_only_outside_the_rectangle() {
                 Previous => first,
                 Next => last,
                 End => point,
-                Pending => unreachable!("fixture classification"),
+                SelectionResult::Pending | SelectionResult::None => {
+                    unreachable!("fixture classification")
+                }
             };
             assert_eq!(
                 SelectionUtils::adjust_drag_offset(rect(), point, direction),

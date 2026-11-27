@@ -5,6 +5,7 @@ use crate::selection::{
     SelectedContentRange, SelectionGeometry, SelectionHandleType, SelectionPoint, SelectionStatus,
     TextSelectionPoint,
 };
+use incular_rendering::{SelectionResult, SelectionUtils};
 use incular_text::{LineBoundary, TextGeometry};
 
 #[derive(Clone, Copy)]
@@ -1290,15 +1291,41 @@ impl WidgetTree {
         id: ElementId,
         point: Offset,
     ) -> Option<(usize, incular_text::TextAffinity)> {
+        self.selectable_text_affinity_at(id, point, false)
+    }
+
+    fn selectable_text_affinity_at(
+        &self,
+        id: ElementId,
+        point: Offset,
+        snap_drag: bool,
+    ) -> Option<(usize, incular_text::TextAffinity)> {
         let render = self.render_id(id)?;
-        let layout = self
-            .renders
-            .get(render.0)
-            .and_then(RenderNode::text_layout)?;
-        let local = self
+        let node = self.renders.get(render.0)?;
+        let layout = node.text_layout()?;
+        let mut local = self
             .render_world_transform(render)
             .inverse_transform_point(point)
             .unwrap_or(point);
+        if snap_drag {
+            let direction = match node.object.kind() {
+                RenderKind::Text { text_direction, .. } => *text_direction,
+                // The standalone label shapes in automatic direction. Its
+                // first logical cluster supplies the resolved leading side.
+                RenderKind::SelectableText { .. }
+                    if layout
+                        .lines
+                        .first()
+                        .and_then(|line| line.clusters.iter().min_by_key(|cluster| cluster.start))
+                        .is_some_and(|cluster| cluster.rtl) =>
+                {
+                    TextDirection::Rtl
+                }
+                _ => TextDirection::Ltr,
+            };
+            let rect = Rect::from_origin_size(Offset::ZERO, node.size);
+            local = SelectionUtils::adjust_drag_offset(rect, local, direction);
+        }
         let position = layout.closest_text_position(local);
         Some((position.offset, position.affinity))
     }
@@ -1411,6 +1438,55 @@ impl WidgetTree {
             _ => false,
         }
     }
+    /// Extends a captured read-only drag even when the cursor is between
+    /// labels or outside their bounds. A different region never takes over.
+    #[doc(hidden)]
+    pub fn selectable_text_extend_pointer_drag(
+        &mut self,
+        current: ElementId,
+        hit: Option<ElementId>,
+        point: Offset,
+    ) -> Option<ElementId> {
+        let area = self.selection_area_ancestor(current)?;
+        let target = hit
+            .filter(|&hit| hit == current || self.selection_area_ancestor(hit) == Some(area))
+            .or_else(|| self.selectable_outside_drag_target(area, current, point))
+            .unwrap_or(current);
+        self.selectable_text_set_selection(target, point, true)
+            .then_some(target)
+    }
+
+    fn selectable_outside_drag_target(
+        &self,
+        area: ElementId,
+        current: ElementId,
+        point: Offset,
+    ) -> Option<ElementId> {
+        let entries = self.selectable_texts_in_area(area);
+        let mut index = entries.iter().position(|&entry| entry == current)?;
+        let mut last = None;
+        loop {
+            let render = self.render_id(entries[index])?;
+            let node = self.renders.get(render.0)?;
+            let local = self
+                .render_world_transform(render)
+                .inverse_transform_point(point)?;
+            let rect = Rect::from_origin_size(Offset::ZERO, node.size);
+            let next = match SelectionUtils::get_result_based_on_rect(rect, local) {
+                SelectionResult::Next if index + 1 < entries.len() => index + 1,
+                SelectionResult::Previous if index > 0 => index - 1,
+                _ => return Some(entries[index]),
+            };
+            // Between adjacent labels, keep the edge on the label we
+            // approached from rather than bouncing between their bounds.
+            if last == Some(next) {
+                return Some(entries[next]);
+            }
+            last = Some(index);
+            index = next;
+        }
+    }
+
     /// Starts or extends read-only selection from a pointer position. The
     /// caret index is recovered from the cached Parley-backed layout; changing
     /// selection therefore never reshapes or rasterizes the text.
@@ -1425,7 +1501,7 @@ impl WidgetTree {
         };
         // Use shaped line positions and caret stops. A single nominal
         // line height cannot locate a hit between differently sized runs.
-        let Some((byte, affinity)) = self.selectable_text_affinity_position_at(id, point) else {
+        let Some((byte, affinity)) = self.selectable_text_affinity_at(id, point, extend) else {
             return false;
         };
         let point = StaticSelectionPoint {

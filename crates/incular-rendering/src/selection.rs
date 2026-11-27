@@ -13,6 +13,8 @@ pub enum SelectionResult {
     End,
     /// The result cannot be decided in the current frame.
     Pending,
+    /// This event does not use a selection result.
+    None,
 }
 
 /// Geometry helpers for extending a selection across laid-out fragments.

@@ -2787,19 +2787,15 @@ impl Runtime {
                 if let Some(label) = self
                     .captured_selectable_text
                     .filter(|_| !long_press_owns_move)
+                    && let Some(target) = self.tree.selectable_text_extend_pointer_drag(
+                        label,
+                        selectable_target,
+                        position,
+                    )
                 {
-                    if let Some(target) = selectable_target {
-                        if self
-                            .tree
-                            .selectable_text_set_selection(target, position, true)
-                        {
-                            self.captured_selectable_text = Some(target);
-                            self.set_focus(Some(target));
-                            self.frame_requested = true;
-                        }
-                    } else if self.tree.is_selectable_text(label) {
-                        self.frame_requested = true;
-                    }
+                    self.captured_selectable_text = Some(target);
+                    self.set_focus(Some(target));
+                    self.frame_requested = true;
                 }
                 if hover_capable {
                     self.set_hover(target.map(|(element, _)| element));
