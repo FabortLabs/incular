@@ -13,6 +13,9 @@ a version and date when publishing.
 
 ### Added
 
+- `Transform::flip` mirrors either or both axes about the child's center,
+  including its pointer hit targets.
+
 - Flutter-compatible text-input embedders can send full editing-state
   messages. Invalid UTF-16 ranges leave the active editor unchanged.
 

@@ -609,3 +609,106 @@ fn a_scale_inside_padding_does_not_scale_its_outer_layout_offset() {
     }
     assert_eq!(found, 1);
 }
+
+#[test]
+fn mirrored_quadrants_route_taps_to_the_same_red_child() {
+    use incular_config::{Alignment, TextDirection};
+    use incular_core::{PointerDeviceKind, PointerPhase};
+    use incular_gestures::PointerEvent;
+    use incular_widgets::{Align, Column, Directionality, GestureDetector, MainAxisSize, Row};
+    use std::{cell::Cell, rc::Rc, time::Duration};
+
+    let square = |color| Widget::box_(Size::new(40., 40.), color);
+    let taps = Rc::new(Cell::new(0));
+    let red = GestureDetector::new(square(Color::rgba(255, 0, 0, 255))).on_tap({
+        let taps = Rc::clone(&taps);
+        move || taps.set(taps.get() + 1)
+    });
+    let grid = Widget::from(
+        Column::new([
+            Row::new([Widget::from(red), square(Color::rgba(0, 255, 0, 255))])
+                .main_axis_size(MainAxisSize::Min),
+            Row::new([
+                square(Color::rgba(0, 0, 255, 255)),
+                square(Color::rgba(238, 255, 0, 255)),
+            ])
+            .main_axis_size(MainAxisSize::Min),
+        ])
+        .main_axis_size(MainAxisSize::Min),
+    );
+    let scene = |flip_x, flip_y| {
+        Widget::from(Directionality::new(
+            TextDirection::Ltr,
+            Align::new(
+                Alignment::TOP_LEFT,
+                Transform::flip(flip_x, flip_y, grid.clone()),
+            ),
+        ))
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scene(true, false)).unwrap();
+    let now = Instant::now();
+
+    for (index, (flip_x, flip_y, red_quadrant)) in [
+        (true, false, Offset::new(60., 20.)),
+        (false, true, Offset::new(20., 60.)),
+        (true, true, Offset::new(60., 60.)),
+        (false, false, Offset::new(20., 20.)),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        tree.update(root, scene(flip_x, flip_y)).unwrap();
+        tree.layout(Constraints::tight(Size::new(800., 600.)))
+            .unwrap();
+        let _ = tree.paint();
+        let before = taps.get();
+        for (tap, position) in [
+            Offset::new(20., 20.),
+            Offset::new(60., 20.),
+            Offset::new(20., 60.),
+            Offset::new(60., 60.),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let expected = taps.get() + u32::from(position == red_quadrant);
+            let pointer = 1 + 4 * index as u64 + tap as u64;
+            for (phase, elapsed) in [(PointerPhase::Down, 0), (PointerPhase::Up, 10)] {
+                let _ = tree.dispatch_pointer_gesture_in_window(
+                    0,
+                    1,
+                    PointerDeviceKind::Touch,
+                    PointerEvent {
+                        phase,
+                        pointer,
+                        position,
+                        time: now + Duration::from_millis(pointer * 20 + elapsed),
+                    },
+                );
+            }
+            assert_eq!(
+                taps.get(),
+                expected,
+                "flip x={flip_x}, y={flip_y}, point={position:?}"
+            );
+        }
+        assert_eq!(taps.get(), before + 1);
+    }
+}
+
+#[test]
+fn zero_area_flip_of_a_placeholder_stays_zero_sized_and_paints_safely() {
+    use incular_config::TextDirection;
+    use incular_widgets::{Center, Directionality, GlobalKey, Placeholder};
+
+    let key = GlobalKey::new();
+    let flipped = Widget::from(Transform::flip(false, true, Placeholder::new())).with_key(key);
+    let mut tree = WidgetTree::new();
+    tree.mount(Directionality::new(TextDirection::Ltr, Center::new(flipped)).into())
+        .unwrap();
+    tree.layout(Constraints::tight(Size::ZERO)).unwrap();
+    let target = tree.element_with_key(&key.into()).unwrap();
+    assert_eq!(tree.element_bounds(target).unwrap().size, Size::ZERO);
+    let _ = tree.try_paint().unwrap();
+}

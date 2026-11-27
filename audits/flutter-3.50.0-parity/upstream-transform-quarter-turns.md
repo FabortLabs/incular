@@ -28,3 +28,14 @@ The widget's measured location and actual stroked outline both start
 at (30, 20), not at twice that offset, while the 720×510 local box
 paints at 1440×1020. Thirteen native transform tests and the rotated
 drag regression passed.
+
+### Mirrored hits and zero area
+
+Both original `widgets/transform_test.dart` cases (874 and 958) passed.
+The native widget uses the same 2×2 arrangement of 40×40 boxes and
+sends pointer presses/releases at all four quadrant centers. A red
+target is reached only at (60, 20) with X flipped, (20, 60) with Y
+flipped, and (60, 60) with both. The unflipped control reaches (20, 20).
+A centered zero-area placeholder flipped on Y also completes layout
+and paint without growing. Fifteen focused transform tests and the
+existing rotated-drag test passed.

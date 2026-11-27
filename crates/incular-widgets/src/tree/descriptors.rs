@@ -2120,6 +2120,18 @@ impl Transform {
         transform.centered = true;
         transform
     }
+
+    /// Flutter's `Transform.flip`: mirrors the requested axes about the
+    /// child's center. By default pointer hit testing follows the mirror.
+    #[must_use]
+    pub fn flip(flip_x: bool, flip_y: bool, child: impl Into<Widget>) -> Self {
+        let scale_x = if flip_x { -1. } else { 1. };
+        let scale_y = if flip_y { -1. } else { 1. };
+        let mut transform = Self::new(CoreTransform::scale_non_uniform(scale_x, scale_y), child);
+        transform.centered = true;
+        transform
+    }
+
     #[must_use]
     pub fn skew(x: f32, y: f32, child: impl Into<Widget>) -> Self {
         Self::new(CoreTransform::skew(x, y), child)
