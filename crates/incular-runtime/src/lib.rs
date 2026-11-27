@@ -67,7 +67,7 @@ pub use file_dialogs::{
 };
 pub use flutter_text_input::{
     FlutterDeltaTextInputConnection, FlutterDeltaTextInputError, FlutterTextInputEditingError,
-    FlutterTextInputLifecycleError, FlutterTextInputPrivateCommandError,
+    FlutterTextInputLifecycleError, FlutterTextInputPrivateCommandError, FlutterTextInputSelectorError,
 };
 pub use semantics_activation::{SemanticsEnabledSubscription, SemanticsHandle};
 pub use focus_keys::FocusKeySubscription;

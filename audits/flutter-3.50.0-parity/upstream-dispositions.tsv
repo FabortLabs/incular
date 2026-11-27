@@ -3189,4 +3189,4 @@ packages/flutter/test/services/flutter_version_test.dart	32	FlutterVersion.dartV
 packages/flutter/test/services/text_input_test.dart	777	TextInputClient onConnectionClosed method is called	partial-match	upstream-text-input-reattach.md#platform-lifecycle-requests-and-the-focused-editor
 packages/flutter/test/services/text_input_test.dart	799	TextInputClient onFocusReceived method is called	partial-match	upstream-text-input-reattach.md#platform-lifecycle-requests-and-the-focused-editor
 packages/flutter/test/services/text_input_test.dart	826	TextInputClient onFocusReceived method is called even if already connected	partial-match	upstream-text-input-reattach.md#platform-lifecycle-requests-and-the-focused-editor
-packages/flutter/test/services/text_input_test.dart	876	TextInputClient performSelectors method is called	reference-ran-incular-open	upstream-text-input-reattach.md#platform-lifecycle-requests-and-the-focused-editor
+packages/flutter/test/services/text_input_test.dart	876	TextInputClient performSelectors method is called	partial-match	upstream-text-input-reattach.md#native-editing-selector-batches

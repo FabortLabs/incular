@@ -2818,7 +2818,7 @@ impl Runtime {
     /// Applies a focus change made directly on a [`FocusNode`]: the requested
     /// node becomes the runtime's focus (releasing the previous one), and an
     /// unfocused current node clears it.
-    fn adopt_external_focus_change(&mut self) {
+    pub(crate) fn adopt_external_focus_change(&mut self) {
         if let Some(next) = self.take_external_focus_change() {
             self.set_focus(next);
         }
@@ -3952,6 +3952,42 @@ impl Runtime {
         }
         for observer in &self.editing_error_observers {
             observer(&error);
+        }
+    }
+
+    pub(crate) fn dispatch_flutter_text_selector(&mut self, selector: &str) {
+        use crate::text_shortcuts::{SelectorIntent, macos_selector};
+        let Some(active) = self.text_input_client else {
+            return;
+        };
+        let Some(field) = self.focused.filter(|id| *id == active.target) else {
+            return;
+        };
+        let Some(intent) = macos_selector(selector) else {
+            return;
+        };
+        match intent {
+            SelectorIntent::NextFocus => {
+                self.next_focus();
+            }
+            SelectorIntent::PreviousFocus => {
+                self.previous_focus();
+            }
+            SelectorIntent::Dismiss => {
+                self.dismiss_transients(incular_widgets::TransientDismissReason::Escape);
+            }
+            SelectorIntent::Edit(intent) => {
+                self.advance_text_history_clock(self.input_now());
+                let Some(controller) = self.tree.text_controller(field) else {
+                    return;
+                };
+                let editable = self.tree.text_field_is_editable(field);
+                if self.run_text_intent(field, &controller, intent, editable) {
+                    self.hide_text_field_overlays(field);
+                    controller.reset_caret(self.input_now());
+                    self.frame_requested = true;
+                }
+            }
         }
     }
 

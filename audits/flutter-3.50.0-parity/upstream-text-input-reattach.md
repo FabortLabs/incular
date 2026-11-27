@@ -173,5 +173,22 @@ cannot refocus or close that new connection. Flutter can also refresh
 its caret geometry during the active frame; the control distinguishes
 that from a connection or visibility change.
 
-The services selector-delivery original :876 also passed in Flutter.
-Incular has no corresponding selector delivery route yet.
+The services selector-delivery original :876 is described below.
+
+## Native editing selector batches
+
+The pinned Flutter selector table now routes supported commands to
+the existing editing, scroll, dismissal, and focus actions. A message
+must come from the active input attachment. The full payload must
+contain strings before any edit is applied; unknown names are ignored
+by a mounted editor, as in Flutter. A Tab focus change cannot cause
+a batch sent by the previous client to edit the new field.
+
+The authored pinned and native mounted-editor comparisons apply the
+same ordered sequence to `AB😀C`: move left, ignore an unknown
+selector, delete the whole emoji, and extend by one character to
+select C. A final backspace leaves `AB`, and a stale client cannot
+edit it. All 17 focused lifecycle/private-command tests passed.
+The original :876 uses an arbitrary fake client and tests delivery
+of unknown names to it; that separate extension surface remains
+partial rather than counted.

@@ -606,3 +606,99 @@ fn selection_updates_send_the_correct_composing_range_to_the_existing_client() {
         )));
     }
 }
+
+fn send_selectors(
+    runtime: &mut Runtime,
+    client: TextInputClientId,
+    selectors: serde_json::Value,
+) -> Result<Option<bool>, incular_runtime::FlutterTextInputSelectorError> {
+    let call = serde_json::json!({
+        "method": "TextInputClient.performSelectors",
+        "args": [client.get(), selectors],
+    });
+    runtime.handle_flutter_text_input_selectors_call(call.to_string().as_bytes())
+}
+
+#[test]
+fn native_text_selectors_apply_in_order_and_do_not_split_graphemes() {
+    use incular_text::TextSelection;
+    use serde_json::json;
+
+    let controller = TextEditingController::with_text("AB😀C");
+    let node = FocusNode::new();
+    let mut runtime = Runtime::new(field(&controller, &node, true).into()).unwrap();
+    frame(&mut runtime);
+    let active = attached(&mut runtime);
+    controller.set_selection(TextSelection::collapsed(controller.text().len()));
+
+    let error = send_selectors(&mut runtime, active, json!(["deleteBackward:", 42])).unwrap_err();
+    assert!(matches!(
+        error,
+        incular_runtime::FlutterTextInputSelectorError::InvalidSelector { index: 1 }
+    ));
+    assert_eq!(controller.text(), "AB😀C");
+
+    assert_eq!(
+        send_selectors(
+            &mut runtime,
+            active,
+            json!([
+                "moveLeft:",
+                "unbound:",
+                "deleteBackward:",
+                "moveRightAndModifySelection:"
+            ])
+        )
+        .unwrap(),
+        Some(true)
+    );
+    assert_eq!(controller.text(), "ABC");
+    assert_eq!(controller.selection(), TextSelection::new(2, 3));
+    assert_eq!(
+        send_selectors(&mut runtime, active, json!(["deleteBackward:"])).unwrap(),
+        Some(true)
+    );
+    assert_eq!(controller.text(), "AB");
+    assert_eq!(controller.selection(), TextSelection::collapsed(2));
+
+    let other = TextInputClientId::new(active.get() + 1);
+    assert_eq!(
+        send_selectors(&mut runtime, other, json!(["deleteBackward:"])).unwrap(),
+        Some(false)
+    );
+    assert_eq!(controller.text(), "AB");
+}
+
+#[test]
+fn a_native_selector_batch_cannot_edit_a_different_focus_target() {
+    use serde_json::json;
+    let first = TextEditingController::with_text("first");
+    let second = TextEditingController::with_text("second");
+    let first_node = FocusNode::new();
+    let second_node = FocusNode::new();
+    let mut runtime = Runtime::new(
+        Column::new([
+            Widget::from(field(&first, &first_node, true)),
+            Widget::from(field(&second, &second_node, false)),
+        ])
+        .into(),
+    )
+    .unwrap();
+    frame(&mut runtime);
+    let client = attached(&mut runtime);
+    assert!(first_node.has_primary_focus());
+
+    assert_eq!(
+        send_selectors(
+            &mut runtime,
+            client,
+            json!(["insertTab:", "deleteBackward:"])
+        )
+        .unwrap(),
+        Some(true)
+    );
+    frame(&mut runtime);
+    assert!(second_node.has_primary_focus());
+    assert_eq!(first.text(), "first");
+    assert_eq!(second.text(), "second");
+}

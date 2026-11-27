@@ -29,6 +29,16 @@ pub enum FlutterDeltaTextInputError {
     },
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum FlutterTextInputSelectorError {
+    #[error(transparent)]
+    Codec(#[from] JsonMethodCodecError),
+    #[error("expected a client ID and an array of selector names")]
+    InvalidArguments,
+    #[error("selector {index} is not a string")]
+    InvalidSelector { index: usize },
+}
+
 fn sender_matches(sender: &Value, client: TextInputClientId) -> Option<bool> {
     if let Some(id) = sender.as_u64() {
         Some(id == client.get())
@@ -317,6 +327,45 @@ impl crate::Runtime {
             _ => return Err(InvalidData),
         };
         self.dispatch_flutter_app_private_command(action, data);
+        Ok(Some(true))
+    }
+
+    /// Handles a Flutter TextInputClient.performSelectors message.
+    /// Validate the complete array before editing so a malformed suffix
+    /// cannot partially apply earlier selectors.
+    pub fn handle_flutter_text_input_selectors_call(
+        &mut self,
+        data: &[u8],
+    ) -> Result<Option<bool>, FlutterTextInputSelectorError> {
+        use FlutterTextInputSelectorError::{InvalidArguments, InvalidSelector};
+        let call = JsonMethodCodec::decode_method_call(data)?;
+        if call.method != "TextInputClient.performSelectors" {
+            return Ok(None);
+        }
+        self.adopt_external_focus_change();
+        let Some(active) = self.active_flutter_editable_client() else {
+            return Ok(Some(false));
+        };
+        let args = call.arguments.as_array().ok_or(InvalidArguments)?;
+        let sender = args.first().ok_or(InvalidArguments)?;
+        if !sender_matches(sender, active).ok_or(InvalidArguments)? {
+            return Ok(Some(false));
+        }
+        let selectors = args
+            .get(1)
+            .and_then(Value::as_array)
+            .ok_or(InvalidArguments)?;
+        for (index, value) in selectors.iter().enumerate() {
+            if !value.is_string() {
+                return Err(InvalidSelector { index });
+            }
+        }
+        for selector in selectors.iter().filter_map(Value::as_str) {
+            if self.active_flutter_editable_client() != Some(active) {
+                break;
+            }
+            self.dispatch_flutter_text_selector(selector);
+        }
         Ok(Some(true))
     }
 

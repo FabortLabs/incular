@@ -436,3 +436,120 @@ fn mac(code: Code, c: Chord) -> Option<TextIntent> {
         _ => None,
     }
 }
+
+/// The editing or focus action for a macOS text input selector.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SelectorIntent {
+    Edit(TextIntent),
+    NextFocus,
+    PreviousFocus,
+    Dismiss,
+}
+
+/// Flutter's intentForMacOSSelector. Unknown selectors are not edit actions;
+/// in particular, newline insertion belongs to the separate IME action.
+pub(crate) fn macos_selector(selector: &str) -> Option<SelectorIntent> {
+    use TextIntent::*;
+    let intent = match selector {
+        "deleteBackward:" => DeleteCharacter { forward: false },
+        "deleteForward:" => DeleteCharacter { forward: true },
+        "deleteWordBackward:" => DeleteToNextWordBoundary { forward: false },
+        "deleteWordForward:" => DeleteToNextWordBoundary { forward: true },
+        "deleteToBeginningOfLine:" => DeleteToLineBreak { forward: false },
+        "deleteToEndOfLine:" => DeleteToLineBreak { forward: true },
+        "moveLeft:" | "moveBackward:" => ExtendByCharacter {
+            forward: false,
+            collapse: true,
+        },
+        "moveRight:" | "moveForward:" => ExtendByCharacter {
+            forward: true,
+            collapse: true,
+        },
+        "moveLeftAndModifySelection:" => ExtendByCharacter {
+            forward: false,
+            collapse: false,
+        },
+        "moveRightAndModifySelection:" => ExtendByCharacter {
+            forward: true,
+            collapse: false,
+        },
+        "moveUp:" => ExtendVerticallyToAdjacentLine {
+            forward: false,
+            collapse: true,
+        },
+        "moveDown:" => ExtendVerticallyToAdjacentLine {
+            forward: true,
+            collapse: true,
+        },
+        "moveUpAndModifySelection:" => ExtendVerticallyToAdjacentLine {
+            forward: false,
+            collapse: false,
+        },
+        "moveDownAndModifySelection:" => ExtendVerticallyToAdjacentLine {
+            forward: true,
+            collapse: false,
+        },
+        "moveWordLeft:" => ExtendToNextWordBoundary {
+            forward: false,
+            collapse: true,
+        },
+        "moveWordRight:" => ExtendToNextWordBoundary {
+            forward: true,
+            collapse: true,
+        },
+        "moveWordLeftAndModifySelection:" => {
+            ExtendToNextWordBoundaryOrCaretLocation { forward: false }
+        }
+        "moveWordRightAndModifySelection:" => {
+            ExtendToNextWordBoundaryOrCaretLocation { forward: true }
+        }
+        "moveParagraphBackwardAndModifySelection:" => {
+            ExtendToNextParagraphBoundaryOrCaretLocation { forward: false }
+        }
+        "moveParagraphForwardAndModifySelection:" => {
+            ExtendToNextParagraphBoundaryOrCaretLocation { forward: true }
+        }
+        "moveToBeginningOfParagraph:" | "moveToLeftEndOfLine:" => ExtendToLineBreak {
+            forward: false,
+            collapse: true,
+            continues_at_wrap: false,
+        },
+        "moveToEndOfParagraph:" | "moveToRightEndOfLine:" => ExtendToLineBreak {
+            forward: true,
+            collapse: true,
+            continues_at_wrap: false,
+        },
+        "moveToLeftEndOfLineAndModifySelection:" => ExpandToLineBreak { forward: false },
+        "moveToRightEndOfLineAndModifySelection:" => ExpandToLineBreak { forward: true },
+        "moveToBeginningOfDocument:" => ExtendToDocumentBoundary {
+            forward: false,
+            collapse: true,
+        },
+        "moveToEndOfDocument:" => ExtendToDocumentBoundary {
+            forward: true,
+            collapse: true,
+        },
+        "moveToBeginningOfDocumentAndModifySelection:" => {
+            ExpandToDocumentBoundary { forward: false }
+        }
+        "moveToEndOfDocumentAndModifySelection:" => ExpandToDocumentBoundary { forward: true },
+        "transpose:" => TransposeCharacters,
+        "scrollToBeginningOfDocument:" => ScrollToDocumentBoundary { forward: false },
+        "scrollToEndOfDocument:" => ScrollToDocumentBoundary { forward: true },
+        "scrollPageUp:" => ScrollPage { forward: false },
+        "scrollPageDown:" => ScrollPage { forward: true },
+        "pageUpAndModifySelection:" => ExtendVerticallyToAdjacentPage {
+            forward: false,
+            collapse: false,
+        },
+        "pageDownAndModifySelection:" => ExtendVerticallyToAdjacentPage {
+            forward: true,
+            collapse: false,
+        },
+        "insertTab:" => return Some(SelectorIntent::NextFocus),
+        "insertBacktab:" => return Some(SelectorIntent::PreviousFocus),
+        "cancelOperation:" => return Some(SelectorIntent::Dismiss),
+        _ => return None,
+    };
+    Some(SelectorIntent::Edit(intent))
+}
