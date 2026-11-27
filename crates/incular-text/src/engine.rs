@@ -385,6 +385,17 @@ impl Default for TextLayoutOptions {
 }
 
 impl TextLayout {
+    /// Rebuilds only the foreground map of a retained styled paragraph.
+    /// The new runs must keep the original geometry, text and source ranges.
+    /// The cached layout and glyphs stay shared when the map is unchanged.
+    #[doc(hidden)]
+    pub fn refresh_span_foregrounds(layout: &mut Arc<Self>, runs: &[StyledTextRun]) {
+        let colors = color_runs(runs);
+        if layout.color_runs != colors {
+            Arc::make_mut(layout).color_runs = colors;
+        }
+    }
+
     /// Last retained source byte, exclusive. A synthesized ellipsis does
     /// not occupy any byte of the original text.
     #[must_use]

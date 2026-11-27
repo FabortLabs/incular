@@ -1,6 +1,6 @@
 //! Declarative render configuration updates and their phase invalidation.
 
-use super::{RenderKind, RenderObjectPayload};
+use super::{RenderFeatureState, RenderKind, RenderObjectPayload};
 
 use incular_core::Invalidation;
 
@@ -40,6 +40,17 @@ impl RenderObjectPayload {
             return Invalidation::NONE;
         }
         let invalidation = invalidation_for_change(&self.kind, &kind);
+        if invalidation == Invalidation::PAINT
+            && let (
+                RenderKind::Text { spans: before, .. },
+                RenderKind::Text { spans: Some(after), .. },
+                RenderFeatureState::Text(state),
+            ) = (&*self.kind, &kind, &mut self.feature)
+            && before.as_deref() != Some(after.as_ref())
+            && let Some(layout) = &mut state.layout
+        {
+            incular_text::TextLayout::refresh_span_foregrounds(layout, after);
+        }
         self.replace_kind(kind);
         invalidation
     }
@@ -224,11 +235,36 @@ fn text_paint_only_change(old: &RenderKind, new: &RenderKind) -> bool {
         && old_max_lines == new_max_lines
         && old_overflow == new_overflow
         && old_height_behavior == new_height_behavior
-        // Span changes may move glyphs or colors; compare them whole.
-        && old_spans == new_spans
+        && (old_spans == new_spans
+            || old_spans
+                .as_deref()
+                .zip(new_spans.as_deref())
+                .is_some_and(|(before, after)| text_runs_change_only_foreground(before, after)))
         && old_inline == new_inline
         && old_strut == new_strut
         && old_style.change_impact(new_style) != incular_core::ChangeImpact::Layout
+}
+
+// Only foreground is detached from shaping. For example, a span's
+// background rectangles are built during layout and must not go stale.
+fn text_runs_change_only_foreground(
+    before: &[incular_text::StyledTextRun],
+    after: &[incular_text::StyledTextRun],
+) -> bool {
+    before.len() == after.len()
+        && before.iter().zip(after).all(|(before, after)| {
+            if before == after {
+                return true;
+            }
+            if before.range != after.range || before.text != after.text {
+                return false;
+            }
+            let mut baseline = before.style.clone();
+            baseline.color = after.style.color;
+            baseline.has_explicit_color = after.style.has_explicit_color;
+            baseline.foreground = after.style.foreground;
+            baseline == after.style
+        })
 }
 
 fn custom_paint_only_change(old: &RenderKind, new: &RenderKind) -> bool {

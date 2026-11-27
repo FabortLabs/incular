@@ -3374,3 +3374,4 @@ packages/flutter/test/rendering/paragraph_test.dart	488	none limited	paired-matc
 packages/flutter/test/rendering/paragraph_test.dart	494	limited by maxLines	paired-match	upstream-rich-text-layout.md#inherited-span-scaling-and-overflow-state
 packages/flutter/test/rendering/paragraph_test.dart	500	limited by ellipsis	paired-match	upstream-rich-text-layout.md#inherited-span-scaling-and-overflow-state
 packages/flutter/test/rendering/paragraph_test.dart	538	nested TextSpans in paragraph handle linear textScaler correctly.	paired-match	upstream-rich-text-layout.md#inherited-span-scaling-and-overflow-state
+packages/flutter/test/rendering/paragraph_test.dart	507	changing color does not do layout	paired-match	upstream-rich-text-layout.md#foreground-only-updates

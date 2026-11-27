@@ -87,3 +87,17 @@ The original 100-pixel overflow comparison distinguishes naturally
 wrapped text from a one-line cap or ellipsis; only the latter two
 report truncation. Seven mounted layout and seven adjacent comparison
 and semantics tests passed.
+
+## Foreground-only updates
+
+Pinned `rendering/paragraph_test.dart:507` passed. The retained native
+comparison changes “Hello” to “Hello World”, which requires layout,
+then changes only the literal color from black to white. It verifies
+that the same retained cluster allocation survives the recolor, the
+layout count does not increase, and the actual glyph commands turn
+white. The second native case swaps colors in two adjacent spans,
+collapses them to a single color and restores mixed colors without
+running layout. Only the foreground map changes; the classifier does
+not reuse layout for changed source, shape or background attributes.
+Both focused cases and 17 neighboring rich layout and text paint
+cases passed.
