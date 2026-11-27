@@ -187,8 +187,9 @@ pub mod prelude {
         TransferOperation, TransferOperations, TransferReadRequest, TransferRepresentation,
         TransientSurfaceCapabilities, TrayItemId, TrayItemPresentation, UrlActivation,
         UserAttentionType, WindowCommand, WindowControlCapabilities, WindowEvent, WindowEventKind,
-        WindowIcon, WindowIconError, WindowId, WindowLevel, WindowLifecycle, WindowObservedState,
-        WindowOperation, WindowOptions, WindowOptionsError, WindowRequestedState,
+        WindowFocusDirection, WindowFocusEvent, WindowIcon, WindowIconError, WindowId, WindowLevel,
+        WindowLifecycle, WindowObservedState, WindowOperation, WindowOptions, WindowOptionsError,
+        WindowRequestedState,
     };
     pub use incular_rendering::{
         BackdropKey, BlendMode, Border as RenderBorder, Brush, Canvas, ColorFilter, ColorMatrix,
@@ -217,7 +218,8 @@ pub mod prelude {
         RestorationStore, RestorationStoreError, RouteFocusOwner, RouteFocusState, RouteOutlet,
         RouteTaskBinding, Runtime, RuntimeDiagnostics, RuntimeErrorReport, SchedulerCounters,
         Signal, Task, TaskFailure, TaskHandle, TaskScope, UiDispatcher, UndoHistoryController,
-        UndoHistoryState, WindowCommandEnqueueError, WindowDiagnostics, WindowError, WindowHandle,
+        UndoHistoryState, WindowCommandEnqueueError, WindowDiagnostics, WindowError,
+        WindowFocusSubscription, WindowHandle,
         WindowOpener, WindowPlacementError, WindowRestorationId,
     };
     #[cfg(any(

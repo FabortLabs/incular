@@ -42,7 +42,9 @@ pub use app_log::{
 };
 #[cfg(feature = "devtools")]
 pub use app_log::{drain_logs, logs_pending, set_log_wake};
-pub use application::{Application, PERFORMANCE_OVERLAY_KEY, SemanticViewLookupError};
+pub use application::{
+    Application, PERFORMANCE_OVERLAY_KEY, SemanticViewLookupError, WindowFocusSubscription,
+};
 pub use application_activations::{
     ActivationRouteBridge, ApplicationActivationListener, ApplicationActivationService,
     ApplicationActivationSubscription,

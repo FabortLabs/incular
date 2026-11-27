@@ -7,6 +7,11 @@ a version and date when publishing.
 
 ### Changed
 
+- **Breaking (`incular-platform`):** exhaustive matches on
+  `WindowEventKind` must handle `FocusChanged`, which carries the optional
+  platform navigation direction. Existing `Focused` and `Unfocused`
+  lifecycle events continue to work and report `Undefined` direction.
+
 - `FlutterPlatformMessenger::send_platform_message` now takes
   `Option<Vec<u8>>` for its request. Existing method-channel implementations
   receive `Some(encoded_request)`; handle `None` as a true null message.
@@ -22,6 +27,9 @@ a version and date when publishing.
   retains its clamp bounds independently of the current factor.
 
 ### Added
+
+- `Application::observe_window_focus` forwards typed platform focus events
+  with the live window ID and direction.
 
 - `RequestFocusIntent` and `RequestFocusAction` can focus and reveal a
   mounted node. WidgetsApp supplies the default action; a local action or

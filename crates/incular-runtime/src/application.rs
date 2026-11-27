@@ -55,8 +55,8 @@ use incular_platform::{
     FileDialogRequestId, LaunchActivation, NativeOperationCompletion, NativeRequestId,
     PlatformCapabilities, PlatformEvent, PlatformLifecycle, PlatformOperationError,
     PlatformOperationErrorKind, PlatformOperationResult, SingleInstancePolicy, TextInputCommand,
-    WindowCommand, WindowEvent, WindowEventKind, WindowId, WindowLifecycle, WindowOperation,
-    WindowOptions,
+    WindowCommand, WindowEvent, WindowEventKind, WindowFocusDirection, WindowFocusEvent,
+    WindowId, WindowLifecycle, WindowOperation, WindowOptions,
 };
 use incular_rendering::DisplayList;
 use incular_widgets::internal::{Key, MouseCursor, PlatformMenuBinding, TreeError};
@@ -64,7 +64,7 @@ use incular_widgets::{RouteInformation, RouteInformationProvider, Widget};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet, VecDeque},
-    rc::Rc,
+    rc::{Rc, Weak},
     sync::{Arc, RwLock, atomic::Ordering, mpsc},
 };
 use tokio::sync::oneshot;
@@ -79,6 +79,14 @@ pub enum SemanticViewLookupError {
         view: WindowId,
         node: incular_semantics::SemanticNodeId,
     },
+}
+
+type WindowFocusHandler = dyn Fn(WindowFocusEvent);
+
+/// Removes a platform window focus observer when dropped.
+#[must_use = "retain the subscription to receive window focus events"]
+pub struct WindowFocusSubscription {
+    _listener: Rc<WindowFocusHandler>,
 }
 
 /// Flutter's GestureBinding queues pointer packets while a warm-up frame
@@ -155,6 +163,7 @@ pub struct Application {
     pub(crate) last_window_policy: LastWindowPolicy,
     pub(crate) should_exit: bool,
     pub(crate) close_request: Option<Box<dyn FnMut(WindowId) -> bool>>,
+    window_focus_observers: Vec<Weak<WindowFocusHandler>>,
     pub(crate) restoration: Option<restoration::RestorationManager>,
     restoration_frame_barrier: Option<RestorationFrameBarrier>,
     pub(crate) restoration_window_factories:
@@ -333,6 +342,7 @@ impl Application {
             last_window_policy: LastWindowPolicy::ExitOnLastWindow,
             should_exit: false,
             close_request: None,
+            window_focus_observers: Vec::new(),
             restoration,
             restoration_frame_barrier: None,
             restoration_window_factories: HashMap::new(),
@@ -1377,6 +1387,54 @@ impl Application {
         .unwrap_or_default()
     }
 
+    /// Observes focus delivered by the platform for a currently retained window.
+    pub fn observe_window_focus(
+        &mut self,
+        listener: impl Fn(WindowFocusEvent) + 'static,
+    ) -> WindowFocusSubscription {
+        let listener: Rc<WindowFocusHandler> = Rc::new(listener);
+        self.window_focus_observers
+            .retain(|observer| observer.strong_count() != 0);
+        self.window_focus_observers.push(Rc::downgrade(&listener));
+        WindowFocusSubscription { _listener: listener }
+    }
+
+    fn handle_window_focus(&mut self, event: WindowFocusEvent) {
+        if self
+            .with_window_mut(event.window_id, |record| {
+                record.lifecycle = if event.focused {
+                    WindowLifecycle::Focused
+                } else {
+                    WindowLifecycle::Unfocused
+                };
+                record.native_focused = event.focused;
+                if !event.focused {
+                    record.runtime.dismiss_transients(
+                        incular_widgets::TransientDismissReason::ParentDeactivated,
+                    );
+                }
+                let mut environment = record.runtime.environment();
+                environment.window_focused = event.focused;
+                record.runtime.set_environment(environment);
+            })
+            .is_none()
+        {
+            return;
+        }
+        self.window_focus_observers
+            .retain(|observer| observer.strong_count() != 0);
+        let observers: Vec<_> = self
+            .window_focus_observers
+            .iter()
+            .filter_map(Weak::upgrade)
+            .collect();
+        for observer in observers {
+            if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| observer(event))).is_err() {
+                tracing::error!(window = %event.window_id, "window focus observer panicked");
+            }
+        }
+    }
+
     /// Routes a normalized event to exactly one retained root.
     pub fn handle_window_event(&mut self, event: WindowEvent) {
         let window_id = event.window_id;
@@ -1466,30 +1524,25 @@ impl Application {
                 });
             }
             WindowEventKind::Lifecycle(lifecycle) => {
-                let _ = self.with_window_mut(window_id, |record| {
-                    record.lifecycle = lifecycle;
-                    match lifecycle {
-                        WindowLifecycle::Focused => {
-                            record.native_focused = true;
-                            let mut environment = record.runtime.environment();
-                            environment.window_focused = true;
-                            record.runtime.set_environment(environment);
-                        }
-                        WindowLifecycle::Unfocused => {
-                            record.native_focused = false;
-                            record.runtime.dismiss_transients(
-                                incular_widgets::TransientDismissReason::ParentDeactivated,
-                            );
-                            let mut environment = record.runtime.environment();
-                            environment.window_focused = false;
-                            record.runtime.set_environment(environment);
-                        }
-                        WindowLifecycle::Visible
-                        | WindowLifecycle::Hidden
-                        | WindowLifecycle::Creating
-                        | WindowLifecycle::Closing
-                        | WindowLifecycle::Closed => {}
+                match lifecycle {
+                    WindowLifecycle::Focused | WindowLifecycle::Unfocused => {
+                        self.handle_window_focus(WindowFocusEvent {
+                            window_id,
+                            focused: lifecycle == WindowLifecycle::Focused,
+                            direction: WindowFocusDirection::Undefined,
+                        });
                     }
+                    _ => {
+                        let _ =
+                            self.with_window_mut(window_id, |record| record.lifecycle = lifecycle);
+                    }
+                }
+            }
+            WindowEventKind::FocusChanged { focused, direction } => {
+                self.handle_window_focus(WindowFocusEvent {
+                    window_id,
+                    focused,
+                    direction,
                 });
             }
             WindowEventKind::RedrawRequested => {}

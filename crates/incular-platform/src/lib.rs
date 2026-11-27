@@ -499,6 +499,24 @@ pub enum WindowLifecycle {
     Closed,
 }
 
+/// The direction in which a platform transferred focus into a window.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum WindowFocusDirection {
+    /// Native focus changed without a platform navigation direction.
+    #[default]
+    Undefined,
+    Forward,
+    Backward,
+}
+
+/// A platform focus notification whose identity survives native handle reuse.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct WindowFocusEvent {
+    pub window_id: WindowId,
+    pub focused: bool,
+    pub direction: WindowFocusDirection,
+}
+
 /// A native event routed to one normalized Incular window.
 ///
 /// Existing [`PlatformEvent`] values remain unchanged and are carried by the
@@ -527,6 +545,18 @@ impl WindowEvent {
         Self::new(window_id, WindowEventKind::Lifecycle(lifecycle))
     }
 
+    /// Creates a routed focus event while keeping its directional metadata.
+    #[must_use]
+    pub const fn focus(event: WindowFocusEvent) -> Self {
+        Self::new(
+            event.window_id,
+            WindowEventKind::FocusChanged {
+                focused: event.focused,
+                direction: event.direction,
+            },
+        )
+    }
+
     #[must_use]
     pub const fn redraw_requested(window_id: WindowId) -> Self {
         Self::new(window_id, WindowEventKind::RedrawRequested)
@@ -543,6 +573,7 @@ impl WindowEvent {
         match &self.kind {
             WindowEventKind::Platform(event) => Some(event),
             WindowEventKind::Lifecycle(_)
+            | WindowEventKind::FocusChanged { .. }
             | WindowEventKind::RedrawRequested
             | WindowEventKind::StateChanged(_) => None,
         }
@@ -556,6 +587,11 @@ pub enum WindowEventKind {
     Platform(PlatformEvent),
     /// A state transition of the native window itself.
     Lifecycle(WindowLifecycle),
+    /// A focus change from an embedder that can also supply the direction.
+    FocusChanged {
+        focused: bool,
+        direction: WindowFocusDirection,
+    },
     /// The native surface is ready for the target window to present a frame.
     RedrawRequested,
     /// Snapshot of native state that the active backend can actually observe.
