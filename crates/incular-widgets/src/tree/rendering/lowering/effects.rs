@@ -114,7 +114,7 @@ pub(super) fn lower_effects(widget: &Widget, context: &DependencyContext) -> Ren
             blend_mode,
             enabled,
             matrix,
-            image_filter,
+            filter_config,
             backdrop_key,
             ..
         } => RenderKind::BackdropFilter {
@@ -122,7 +122,7 @@ pub(super) fn lower_effects(widget: &Widget, context: &DependencyContext) -> Ren
             blend_mode: *blend_mode,
             enabled: *enabled,
             matrix: *matrix,
-            image_filter: image_filter.clone(),
+            filter_config: filter_config.clone(),
             backdrop_key: *backdrop_key,
         },
         WidgetKind::AnnotatedRegion {

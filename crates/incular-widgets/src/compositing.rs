@@ -6,7 +6,8 @@ use std::{any::Any, rc::Rc};
 use incular_config::Alignment;
 use incular_core::{Offset, Rect};
 use incular_rendering::{
-    Annotation, BackdropKey, BlendMode, GaussianBlur, LayerAnchor, LayerLink, Shader,
+    Annotation, BackdropKey, BlendMode, GaussianBlur, ImageFilterConfig, LayerAnchor, LayerLink,
+    Shader,
 };
 
 use crate::macros::widget_from_kind;
@@ -148,27 +149,38 @@ pub struct BackdropFilter {
     blend_mode: BlendMode,
     enabled: bool,
     matrix: Option<incular_core::Transform>,
-    image_filter: Option<incular_rendering::ImageFilter>,
+    filter_config: Option<ImageFilterConfig>,
     backdrop_key: Option<BackdropKey>,
     /// `BackdropFilter.grouped`: take the key of the nearest
     /// [`BackdropGroup`] at build time.
     grouped: bool,
-    child: Widget,
+    child: Option<Widget>,
 }
 
 impl BackdropFilter {
     #[must_use]
     pub fn new(blur: GaussianBlur, child: impl Into<Widget>) -> Self {
+        Self::with_optional_child(blur, Some(child.into()))
+    }
+
+    fn with_optional_child(blur: GaussianBlur, child: Option<Widget>) -> Self {
         Self {
             blur: GaussianBlur::new(blur.sigma_x, blur.sigma_y),
             blend_mode: BlendMode::SrcOver,
             enabled: true,
             matrix: None,
-            image_filter: None,
+            filter_config: None,
             backdrop_key: None,
             grouped: false,
-            child: child.into(),
+            child,
         }
+    }
+
+    /// Creates a filter with no child. It lays out as an empty proxy box
+    /// and does not composite a backdrop until a child is present.
+    #[must_use]
+    pub fn without_child(blur: GaussianBlur) -> Self {
+        Self::with_optional_child(blur, None)
     }
 
     /// Flutter's `BackdropFilter.grouped`: shares the backdrop of the
@@ -220,10 +232,33 @@ impl BackdropFilter {
             [ImageFilter::Blur(blur)] => Ok(Self::new(*blur, child)),
             [ImageFilter::Matrix(matrix)] => Ok(Self::matrix(*matrix, child)),
             _ => Ok(Self {
-                image_filter: Some(filter),
+                filter_config: Some(ImageFilterConfig::new(filter)),
                 ..Self::new(GaussianBlur::uniform(0.0), child)
             }),
         }
+    }
+
+    /// Uses a layout-aware filter, resolved against the current box at paint time.
+    pub fn filter_config(
+        config: ImageFilterConfig,
+        child: impl Into<Widget>,
+    ) -> Result<Self, incular_rendering::UnsupportedImageFilter> {
+        validate_backdrop_config(&config)?;
+        Ok(Self {
+            filter_config: Some(config),
+            ..Self::new(GaussianBlur::uniform(0.), child)
+        })
+    }
+
+    /// Resolves a layout-aware filter and reads the nearest group's backdrop key.
+    pub fn grouped_filter_config(
+        config: ImageFilterConfig,
+        child: impl Into<Widget>,
+    ) -> Result<Self, incular_rendering::UnsupportedImageFilter> {
+        Ok(Self {
+            grouped: true,
+            ..Self::filter_config(config, child)?
+        })
     }
 
     #[must_use]
@@ -239,7 +274,8 @@ impl BackdropFilter {
     #[must_use]
     pub fn filter(mut self, blur: GaussianBlur) -> Self {
         self.blur = GaussianBlur::new(blur.sigma_x, blur.sigma_y);
-        self.image_filter = None;
+        self.filter_config = None;
+        self.matrix = None;
         self
     }
 
@@ -256,6 +292,21 @@ impl BackdropFilter {
     }
 }
 
+fn validate_backdrop_config(
+    config: &ImageFilterConfig,
+) -> Result<(), incular_rendering::UnsupportedImageFilter> {
+    match config {
+        ImageFilterConfig::Direct(filter) => {
+            incular_rendering::backdrop_image_filter_executable(filter)
+        }
+        ImageFilterConfig::Blur { .. } => Ok(()),
+        ImageFilterConfig::Compose { outer, inner } => {
+            validate_backdrop_config(inner)?;
+            validate_backdrop_config(outer)
+        }
+    }
+}
+
 impl From<BackdropFilter> for Widget {
     fn from(value: BackdropFilter) -> Self {
         let kind = |value: BackdropFilter, backdrop_key| {
@@ -264,7 +315,7 @@ impl From<BackdropFilter> for Widget {
                 blend_mode: value.blend_mode,
                 enabled: value.enabled,
                 matrix: value.matrix,
-                image_filter: value.image_filter.map(std::sync::Arc::new),
+                filter_config: value.filter_config.map(std::sync::Arc::new),
                 backdrop_key,
                 child: value.child,
             })

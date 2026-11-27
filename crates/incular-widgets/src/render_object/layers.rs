@@ -142,7 +142,7 @@ impl LayerSpec {
                 ..
             } => raster_attachment_spec(source_effects.raster_paint_sources(*blend_mode)),
             WidgetKind::ShaderMask { child: Some(_), .. } => AttachmentSpec::ShaderMask,
-            WidgetKind::BackdropFilter { .. } => AttachmentSpec::BackdropFilter,
+            WidgetKind::BackdropFilter { child: Some(_), .. } => AttachmentSpec::BackdropFilter,
             WidgetKind::AnnotatedRegion { .. } => AttachmentSpec::Annotation,
             WidgetKind::CompositedTransformTarget { .. } => AttachmentSpec::Leader,
             WidgetKind::CompositedTransformFollower { .. } => AttachmentSpec::Follower,
@@ -533,13 +533,12 @@ impl RenderLayers {
                 blend_mode,
                 enabled,
                 matrix,
-                image_filter,
                 backdrop_key,
+                child: Some(_),
                 ..
             } => {
                 let layer = compositor.create_backdrop_filter(*blur, *blend_mode, *enabled);
                 compositor.update_backdrop_matrix(layer, *matrix);
-                compositor.update_shared_backdrop_image_filter(layer, image_filter.clone());
                 compositor.update_backdrop_key(layer, *backdrop_key);
                 compositor.set_children(root, vec![layer]);
                 LayerAttachment::BackdropFilter { layer }
@@ -899,13 +898,13 @@ impl RenderLayers {
                     blend_mode,
                     enabled,
                     matrix,
-                    image_filter,
+                    filter_config,
                     backdrop_key,
                 },
             ) => {
                 compositor.update_backdrop_filter(*layer, *blur, *blend_mode, *enabled);
                 compositor.update_backdrop_matrix(*layer, *matrix);
-                compositor.update_shared_backdrop_image_filter(*layer, image_filter.clone());
+                sync_backdrop_config(compositor, *layer, *enabled, filter_config.as_deref(), size);
                 compositor.update_backdrop_key(*layer, *backdrop_key);
             }
             (
@@ -974,6 +973,14 @@ impl RenderLayers {
             compositor.update_transform(content, transform);
         }
         match (&self.attachment, kind) {
+            (
+                LayerAttachment::BackdropFilter { layer },
+                RenderKind::BackdropFilter {
+                    enabled,
+                    filter_config,
+                    ..
+                },
+            ) => sync_backdrop_config(compositor, *layer, *enabled, filter_config.as_deref(), size),
             (
                 LayerAttachment::Annotation { layer },
                 RenderKind::AnnotatedRegion { annotation, sized },
@@ -1123,6 +1130,24 @@ impl RenderLayers {
         self.remove_owned_except_root(compositor);
         compositor.remove(root);
     }
+}
+
+fn sync_backdrop_config(
+    compositor: &mut LayerTree,
+    layer: LayerId,
+    enabled: bool,
+    config: Option<&incular_rendering::ImageFilterConfig>,
+    size: Size,
+) {
+    use incular_rendering::ImageFilterContext;
+    let filter = config.filter(|_| enabled).map(|config| {
+        // The retained layer's transform transports this local box into
+        // the active target; storing its offset here would count it twice.
+        config.resolve(ImageFilterContext {
+            bounds: Rect::from_origin_size(Offset::ZERO, size),
+        })
+    });
+    compositor.update_backdrop_image_filter(layer, filter);
 }
 
 fn needs_picture(widget: &WidgetKind) -> bool {

@@ -3724,3 +3724,6 @@ packages/flutter/test/rendering/image_filter_config_test.dart	65	ImageFilterConf
 packages/flutter/test/rendering/image_filter_config_test.dart	75	ImageFilterConfig.compose == and hashCode	paired-match	upstream-image-filter-config.md
 packages/flutter/test/rendering/image_filter_config_test.dart	89	ImageFilterConfig.compose toString and debugShortDescription	paired-match	upstream-image-filter-config.md
 packages/flutter/test/rendering/image_filter_config_test.dart	103	ImageFilter resolves correctly	paired-match	upstream-image-filter-config.md
+packages/flutter/test/widgets/backdrop_filter_test.dart	17	Backdrop key is passed to backdrop Layer	paired-match	upstream-widget-backdrop-filter.md
+packages/flutter/test/widgets/backdrop_filter_test.dart	69	Backdrop key is passed to backdrop Layer via backdrop group	paired-match	upstream-widget-backdrop-filter.md
+packages/flutter/test/widgets/backdrop_filter_test.dart	114	BackdropFilter does not crash at zero area	paired-match	upstream-widget-backdrop-filter.md

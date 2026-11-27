@@ -4077,17 +4077,14 @@ impl WidgetTree {
                     blend_mode,
                     enabled,
                     matrix,
-                    ref image_filter,
                     backdrop_key,
+                    ..
                 } => {
                     if let Some(layer) = layers.backdrop_filter()
                         && (self
                             .compositor
                             .update_backdrop_filter(layer, blur, blend_mode, enabled)
                             | self.compositor.update_backdrop_matrix(layer, matrix)
-                            | self
-                                .compositor
-                                .update_shared_backdrop_image_filter(layer, image_filter.clone())
                             | self.compositor.update_backdrop_key(layer, backdrop_key))
                     {
                         changed = true;

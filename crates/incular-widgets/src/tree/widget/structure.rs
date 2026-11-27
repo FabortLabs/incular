@@ -657,7 +657,7 @@ impl std::fmt::Debug for WidgetKind {
                 blend_mode,
                 enabled,
                 matrix,
-                image_filter,
+                filter_config,
                 backdrop_key,
                 ..
             } => f
@@ -666,7 +666,7 @@ impl std::fmt::Debug for WidgetKind {
                 .field("blend_mode", blend_mode)
                 .field("enabled", enabled)
                 .field("matrix", matrix)
-                .field("image_filter", image_filter)
+                .field("filter_config", filter_config)
                 .field("backdrop_key", backdrop_key)
                 .finish(),
             Self::AnnotatedRegion { sized, .. } => f
@@ -1644,7 +1644,7 @@ impl PartialEq for WidgetKind {
                     blend_mode: b,
                     enabled: c,
                     matrix: m,
-                    image_filter: p,
+                    filter_config: p,
                     backdrop_key: k,
                     child: d,
                 },
@@ -1653,7 +1653,7 @@ impl PartialEq for WidgetKind {
                     blend_mode: f,
                     enabled: g,
                     matrix: n,
-                    image_filter: q,
+                    filter_config: q,
                     backdrop_key: l,
                     child: h,
                 },
@@ -2821,8 +2821,8 @@ impl WidgetKind {
             WidgetKind::BackdropFilter { child, .. } => (
                 WidgetType::BackdropFilter,
                 Effects,
-                Single,
-                WidgetChildren::Single(child),
+                Optional,
+                WidgetChildren::Optional(child.as_ref()),
             ),
             WidgetKind::AnnotatedRegion { child, .. } => (
                 WidgetType::AnnotatedRegion,

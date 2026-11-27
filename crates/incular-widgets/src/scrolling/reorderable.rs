@@ -117,6 +117,7 @@ pub(crate) fn install_listener(
         WidgetKind::RawInput { child, .. }
         | WidgetKind::ColorFiltered { child, .. }
         | WidgetKind::ShaderMask { child, .. }
+        | WidgetKind::BackdropFilter { child, .. }
         | WidgetKind::ClipRect { child, .. }
         | WidgetKind::ClipRRect { child, .. }
         | WidgetKind::FittedBox { child, .. }
@@ -168,7 +169,6 @@ pub(crate) fn install_listener(
         | WidgetKind::Blur { child, .. }
         | WidgetKind::DropShadow { child, .. }
         | WidgetKind::Blend { child, .. }
-        | WidgetKind::BackdropFilter { child, .. }
         | WidgetKind::AnnotatedRegion { child, .. }
         | WidgetKind::CompositedTransformTarget { child, .. }
         | WidgetKind::CompositedTransformFollower { child, .. }

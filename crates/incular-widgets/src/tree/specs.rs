@@ -1214,9 +1214,9 @@ pub(crate) enum WidgetKind {
         blend_mode: BlendMode,
         enabled: bool,
         matrix: Option<incular_core::Transform>,
-        image_filter: Option<Arc<incular_rendering::ImageFilter>>,
+        filter_config: Option<Arc<incular_rendering::ImageFilterConfig>>,
         backdrop_key: Option<incular_rendering::BackdropKey>,
-        child: Widget,
+        child: Option<Widget>,
     },
     AnnotatedRegion {
         annotation: Annotation,
