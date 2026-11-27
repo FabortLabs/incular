@@ -20,3 +20,14 @@ back on a mounted tree, retaining the owner ID and rejecting retired child
 actions. Focused sliver, pointer blocker, binding, and retained semantics
 regressions passed. Accessibility action blocking is not a pointer hit-test
 or keyboard-focus blocker.
+
+## Ordinary callback lifetime
+
+Exact `widgets/semantics_test.dart:706,1552` also passed on both sides.
+The box-only `flutter350_box_semantic_handlers` fixture swaps the active
+tap closure on the same node and receives no new accessibility projection
+or semantics revision; dispatch immediately calls the replacement. Adding
+or removing long-press changes the projection while retaining node ID and
+bounds. The second fixture verifies the complete original add/remove
+sequence, including the three clipboard actions, the selection payload and
+both accessibility focus notifications. No stale disabled handler can run.

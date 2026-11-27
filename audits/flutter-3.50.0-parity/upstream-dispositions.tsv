@@ -2820,3 +2820,5 @@ packages/flutter/test/gestures/monodrag_test.dart	134	DragGestureRecognizer can 
 packages/flutter/test/widgets/semantics_test.dart	1905	blocking user interaction works on explicit child node.	paired-match	upstream-box-block-user-actions.md
 packages/flutter/test/widgets/semantics_test.dart	1947	blocking user interaction on a merged child	paired-match	upstream-box-block-user-actions.md
 packages/flutter/test/widgets/semantics_test.dart	1980	does not merge conflicting actions even if one of them is blocked	paired-match	upstream-box-block-user-actions.md
+packages/flutter/test/widgets/semantics_test.dart	706	Actions can be replaced without triggering semantics update	paired-match	upstream-box-block-user-actions.md#ordinary-callback-lifetime
+packages/flutter/test/widgets/semantics_test.dart	1552	Can change handlers	paired-match	upstream-box-block-user-actions.md#ordinary-callback-lifetime
