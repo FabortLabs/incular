@@ -3548,3 +3548,7 @@ packages/flutter/test/widgets/focus_manager_test.dart	547	Can add children to sc
 packages/flutter/test/widgets/focus_manager_test.dart	592	removing grandchildren from scope updates focusedChild	paired-match	upstream-focus-ancestry-updates.md
 packages/flutter/test/widgets/focus_traversal_test.dart	3909	NextFocusAction converts invoke result to KeyEventResult	paired-match	upstream-sequential-focus-actions.md
 packages/flutter/test/widgets/focus_traversal_test.dart	3922	PreviousFocusAction converts invoke result to KeyEventResult	paired-match	upstream-sequential-focus-actions.md
+packages/flutter/test/widgets/directionality_test.dart	9	Directionality	paired-match	upstream-directionality-lookup.md
+packages/flutter/test/widgets/directionality_test.dart	29	Directionality default	paired-match	upstream-directionality-lookup.md
+packages/flutter/test/widgets/directionality_test.dart	43	Directionality.maybeOf	paired-match	upstream-directionality-lookup.md
+packages/flutter/test/widgets/directionality_test.dart	59	Directionality.of	paired-match	upstream-directionality-lookup.md

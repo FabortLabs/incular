@@ -461,6 +461,24 @@ pub struct Directionality {
 }
 
 impl Directionality {
+    /// Tracks the nearest inherited direction, or returns none when the
+    /// context is outside any Directionality.
+    #[must_use]
+    pub fn maybe_of(context: &BuildContext<'_>) -> Option<TextDirection> {
+        context.text_direction()
+    }
+
+    /// Tracks the nearest inherited direction.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the context is outside any Directionality. Use
+    /// [`Self::maybe_of`] to check for an optional provider.
+    #[must_use]
+    pub fn of(context: &BuildContext<'_>) -> TextDirection {
+        Self::maybe_of(context).expect("No Directionality widget found.")
+    }
+
     #[must_use]
     pub fn new(text_direction: TextDirection, child: impl Into<Widget>) -> Self {
         Self {

@@ -46,7 +46,9 @@ fn element_environment(
                     if previous.value.downcast_ref::<crate::environment::TickerModeScope>()
                         .is_some_and(|mode| next.value.downcast_ref::<crate::environment::TickerModeScope>() == Some(mode))
                         || previous.value.downcast_ref::<RuntimeEnvironment>()
-                            .is_some_and(|data| next.value.downcast_ref::<RuntimeEnvironment>() == Some(data)) =>
+                            .is_some_and(|data| next.value.downcast_ref::<RuntimeEnvironment>() == Some(data))
+                        || previous.value.downcast_ref::<TextDirection>()
+                            .is_some_and(|direction| next.value.downcast_ref::<TextDirection>() == Some(direction)) =>
                 {
                     Some(previous.clone())
                 }
