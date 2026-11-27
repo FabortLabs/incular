@@ -344,7 +344,10 @@ impl WidgetsAppController {
                 revision: retained.inner.borrow().revision.get(),
             };
             let child = retained.build_route(&data.current_route);
-            Widget::environment_scope(data, child)
+            crate::Semantics::new(Widget::environment_scope(data, child))
+                .explicit_child_nodes(true)
+                .scopes_route(true)
+                .into()
         })
     }
 

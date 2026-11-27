@@ -3420,3 +3420,6 @@ packages/flutter/test/widgets/app_test.dart	465	WidgetsApp.router wraps routing 
 packages/flutter/test/widgets/app_test.dart	496	WidgetsApp.router with routerConfig wraps routing in FocusScope	paired-match	upstream-widgets-app-focus-scope.md
 packages/flutter/test/widgets/app_test.dart	527	WidgetsApp wraps navigator in FocusScope	paired-match	upstream-widgets-app-focus-scope.md
 packages/flutter/test/widgets/app_test.dart	555	WidgetsApp.router passes FocusScope as child to builder	paired-match	upstream-widgets-app-focus-scope.md
+packages/flutter/test/widgets/app_test.dart	585	WidgetsApp.router produces expected semantics tree structure	paired-match	upstream-widgets-app-focus-scope.md#route-and-overlay-semantics-remain-separate
+packages/flutter/test/widgets/app_test.dart	637	WidgetsApp.router with routerConfig produces expected semantics tree structure	paired-match	upstream-widgets-app-focus-scope.md#route-and-overlay-semantics-remain-separate
+packages/flutter/test/widgets/app_test.dart	666	WidgetsApp with navigator produces expected semantics tree structure	paired-match	upstream-widgets-app-focus-scope.md#route-and-overlay-semantics-remain-separate

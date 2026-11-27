@@ -451,6 +451,7 @@ impl From<Focus> for Widget {
 #[derive(Clone)]
 pub struct FocusScope {
     node: Option<FocusScopeNode>,
+    include_semantics: bool,
     debug_label: Option<Rc<str>>,
     parent_node: Option<FocusNode>,
     can_request_focus: Option<bool>,
@@ -475,6 +476,7 @@ impl Default for FocusScope {
             descendants_are_traversable: None,
             use_external_properties: false,
             autofocus: false,
+            include_semantics: true,
             debug_label: None,
             policy: None,
             on_focus_change: None,
@@ -491,6 +493,14 @@ impl FocusScope {
             child: Some(child.into()),
             ..Self::default()
         }
+    }
+
+    /// Keeps the scope's children explicit in the semantics tree. This
+    /// defaults to true and does not change actual keyboard focus.
+    #[must_use]
+    pub fn include_semantics(mut self, include: bool) -> Self {
+        self.include_semantics = include;
+        self
     }
 
     /// Sets a diagnostic name on the scope's retained focus node.
@@ -691,7 +701,8 @@ impl From<FocusScope> for Widget {
             .unwrap_or_else(|| crate::SizedBox::shrink().into());
         let scope = if let Some(node) = &value.node {
             let mut focus = Focus::with_external_focus_node(child, node.scope_focus_node())
-                .parent_node(value.parent_node);
+                .parent_node(value.parent_node)
+                .include_semantics(false);
             focus.on_focus_change = value.on_focus_change;
             let mut widget = Widget::from(focus);
             if let WidgetKind::Gesture { callbacks, .. } = widget.kind_mut() {
@@ -706,7 +717,8 @@ impl From<FocusScope> for Widget {
             // retain that identity and its focused-child history on rebuild.
             let mut focus = Focus::new(child)
                 .parent_node(value.parent_node)
-                .can_request_focus(value.can_request_focus.unwrap_or(true));
+                .can_request_focus(value.can_request_focus.unwrap_or(true))
+                .include_semantics(false);
             focus.on_focus_change = value.on_focus_change;
             let mut widget = Widget::from(focus);
             if let WidgetKind::Gesture { callbacks, .. } = widget.kind_mut() {
@@ -715,6 +727,14 @@ impl From<FocusScope> for Widget {
                 callbacks.focus_debug_label = value.debug_label;
             }
             widget
+        };
+        let scope = if value.include_semantics {
+            crate::Semantics::new(scope)
+                .explicit_child_nodes(true)
+                .focusable(false)
+                .into()
+        } else {
+            scope
         };
         let scope = scope.with_focus_scope_autofocus(value.autofocus);
         match value.policy {

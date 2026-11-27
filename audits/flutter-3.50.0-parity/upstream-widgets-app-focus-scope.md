@@ -15,3 +15,20 @@ still wins. The authored pinned
 The existing explicit first-descendant autofocus option on Incular's
 FocusScope is not repurposed. Four focused and 35 adjacent runtime
 checks passed. Route/overlay semantics nesting is a separate audit.
+
+## Route and overlay semantics remain separate
+
+Pinned `widgets/app_test.dart:585,637,666` passed. A focus scope
+keeps explicit semantic children without exposing a keyboard-focus
+action of its own. The named-route controller also marks its route
+as a route scope instead of letting it merge with the application
+scope. Disabling the focus-scope annotation leaves the mounted
+leaf's real keyboard focus and accessibility label intact.
+
+The native Router fixtures mount a real Navigator and retained
+RouteOutlet. Inserting a nonmodal overlay entry keeps the original
+route's semantic parent and the outer navigation scope at their
+previous IDs; the overlay is a separate direct child of the
+navigation scope. The delegate configurations and the named-route
+controller all preserve the two-level semantic boundary. Four
+direct and 59 adjacent focus/shortcut checks passed.
