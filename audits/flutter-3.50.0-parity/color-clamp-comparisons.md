@@ -122,3 +122,17 @@ fn inverted_clamp_bounds_are_rejected(){
     assert_eq!([px,dx],[true,true]);
 }
 ```
+
+## Hue interpolation remediation
+
+Pinned `painting/colors_test.dart:168,195,452,479` passed, matching
+the native `flutter350_hue_short_arc` suite. Both models cover the
+13 original short-arc vectors and four reversible half-turn vectors.
+The old native implementation gave 240°, not 330°, at one quarter of
+300° → 60°. Both models now cross the correct seam, retain the
+direction of a precisely antipodal delta, and permit extrapolation.
+Non-hue channels clamp after interpolation rather than clamping the
+time. The additional pinned control verifies the channel values and
+that an RGB midpoint of 350° → 10° actually paints red. This also
+remediates the historical C36 and C37 failures. All 26 selected native
+color and API checks passed.

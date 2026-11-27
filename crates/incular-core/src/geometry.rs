@@ -313,15 +313,13 @@ fn unit(value: f32) -> f32 {
     }
 }
 
-/// Hue in `[0, 360]`. Flutter's `HSVColor` accepts 360 as an endpoint, which
-/// keeps a lerp toward it exact, so it is not folded to 0.
+/// Constructors accept both 0 and 360 degrees. Interpolation normalizes
+/// the resulting hue independently, after choosing its short arc.
 fn normalize_hue(hue: f32) -> f32 {
-    if hue.is_finite() {
-        if hue == 360.0 {
-            360.0
-        } else {
-            hue.rem_euclid(360.0)
-        }
+    if (0.0..=360.0).contains(&hue) {
+        hue
+    } else if hue.is_finite() {
+        hue.rem_euclid(360.0)
     } else {
         0.0
     }
@@ -744,30 +742,54 @@ impl Lerp for Color {
     }
 }
 
+fn lerp_hue(a: f32, b: f32, t: f32) -> f32 {
+    let a = f64::from(normalize_hue(a));
+    let mut delta = f64::from(normalize_hue(b)) - a;
+    // Keep the raw direction at exactly half a turn. This makes the
+    // two antipodal paths reversible at complementary factors.
+    if delta > 180.0 {
+        delta -= 360.0;
+    } else if delta < -180.0 {
+        delta += 360.0;
+    }
+    let angle = a + delta * f64::from(t);
+    let folded = if (0.0..360.0).contains(&angle) {
+        angle
+    } else {
+        angle.rem_euclid(360.0)
+    } as f32;
+    if folded == 360.0 { 0.0 } else { folded }
+}
+
+fn lerp_unit_channel(a: f32, b: f32, t: f32) -> f32 {
+    let a = f64::from(a);
+    let b = f64::from(b);
+    // Clamp the result, not the factor. The wider intermediate keeps very
+    // large finite extrapolations from overflowing before they can clamp.
+    (a + (b - a) * f64::from(t)).clamp(0.0, 1.0) as f32
+}
+
 impl Lerp for HslColor {
+    /// Moves hue along the shortest arc and clamps each non-hue channel
+    /// after interpolation, including when `t` is outside the endpoints.
     fn lerp(&self, other: &Self, t: f32) -> Self {
-        let t = t.clamp(0.0, 1.0);
-        let mix = |a: f32, b: f32| a + (b - a) * t;
         Self::new(
-            mix(self.hue, other.hue),
-            mix(self.saturation, other.saturation),
-            mix(self.lightness, other.lightness),
-            mix(self.alpha, other.alpha),
+            lerp_hue(self.hue, other.hue, t),
+            lerp_unit_channel(self.saturation, other.saturation, t),
+            lerp_unit_channel(self.lightness, other.lightness, t),
+            lerp_unit_channel(self.alpha, other.alpha, t),
         )
     }
 }
 
 impl Lerp for HsvColor {
-    /// Flutter `HSVColor.lerp`: the hue interpolates over the raw range and is
-    /// then taken modulo 360, so a run from 300 to 360 passes through 330
-    /// rather than wrapping through 0.
+    /// Moves hue along the shortest arc while letting `t` extrapolate.
     fn lerp(&self, other: &Self, t: f32) -> Self {
-        let mix = |a: f32, b: f32| a + (b - a) * t;
         Self::new(
-            mix(self.hue, other.hue).rem_euclid(360.0),
-            mix(self.saturation, other.saturation),
-            mix(self.value, other.value),
-            mix(self.alpha, other.alpha),
+            lerp_hue(self.hue, other.hue, t),
+            lerp_unit_channel(self.saturation, other.saturation, t),
+            lerp_unit_channel(self.value, other.value, t),
+            lerp_unit_channel(self.alpha, other.alpha, t),
         )
     }
 }

@@ -16,6 +16,10 @@ fn main() {
 }
 ```
 
+HSL and HSV interpolation take the shorter path around the hue circle.
+Extrapolation continues along that arc; saturation, lightness or value, and
+alpha clamp independently.
+
 Swatches with a linear round-trip — copy, paste, and run:
 
 ```rust

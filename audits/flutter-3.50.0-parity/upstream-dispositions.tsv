@@ -2834,3 +2834,7 @@ packages/flutter/test/widgets/semantics_test.dart	2460	Semantics geometry can sc
 packages/flutter/test/widgets/semantics_test.dart	21	Semantics shutdown and restart	partial-match	upstream-semantics-tags.md#application-semantics-shutdown-and-restart
 packages/flutter/test/widgets/semantics_test.dart	54	Semantics tag only applies to immediate child	paired-match	upstream-semantics-tags.md#immediate-list-tags-stop-before-a-nested-scroll-boundary
 packages/flutter/test/widgets/semantics_test.dart	429	Semantics tagForChildren works	paired-match	upstream-semantics-tags.md#immediate-list-tags-stop-before-a-nested-scroll-boundary
+packages/flutter/test/painting/colors_test.dart	168	HSVColor lerps hue along the shortest arc.	paired-match	color-clamp-comparisons.md#hue-interpolation-remediation
+packages/flutter/test/painting/colors_test.dart	195	HSVColor lerps antipodal hues reversibly.	paired-match	color-clamp-comparisons.md#hue-interpolation-remediation
+packages/flutter/test/painting/colors_test.dart	452	HSLColor lerps hue along the shortest arc.	paired-match	color-clamp-comparisons.md#hue-interpolation-remediation
+packages/flutter/test/painting/colors_test.dart	479	HSLColor lerps antipodal hues reversibly.	paired-match	color-clamp-comparisons.md#hue-interpolation-remediation
