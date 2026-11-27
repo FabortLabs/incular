@@ -132,7 +132,7 @@ impl WidgetTree {
         } else {
             None
         };
-        self.dispatch_listeners(key, event, hit.raw());
+        self.dispatch_listeners(key, event, hit);
         self.route_pointer(event);
         if event.phase == PointerPhase::Down {
             self.notify_tooltips_of_pointer_down(event);
@@ -330,6 +330,46 @@ impl WidgetTree {
                 Some(RawInputKind::TextFieldTapRegion { enabled: true, .. })
             )
         })
+    }
+
+    /// Dispatches Flutter's focused EditableText tap-outside notification.
+    /// The caller supplies the currently focused element and the live hit.
+    #[doc(hidden)]
+    pub fn dispatch_editable_tap_outside(
+        &self,
+        window: u64,
+        focused: ElementId,
+        event: RawPointerEvent,
+        hit: &PointerHitTest,
+    ) -> bool {
+        let Some(WidgetKind::TextField(spec)) =
+            self.elements.get(focused.0).map(|element| element.widget.kind())
+        else {
+            return false;
+        };
+        let callback = match event.phase {
+            PointerPhase::Down => spec.on_tap_outside.as_ref(),
+            PointerPhase::Up => spec.on_tap_up_outside.as_ref(),
+            _ => None,
+        };
+        if let Some(callback) = callback {
+            let inside = if event.phase == PointerPhase::Up {
+                let key = GestureArenaKey::pointer_device(window, event.device, event.pointer);
+                let Some(press) = self.input.raw_pointer_routes.get(&key) else {
+                    return false;
+                };
+                press.inside_editable_group
+            } else {
+                self.text_field_for_hit(hit).is_some()
+                    || self.preserves_text_field_focus_with_hit(hit)
+            };
+            if inside {
+                return false;
+            }
+            callback(event);
+            return true;
+        }
+        false
     }
 
     /// Returns the deepest/frontmost custom-chrome interaction annotation at
@@ -533,8 +573,9 @@ impl WidgetTree {
         &mut self,
         key: GestureArenaKey,
         event: RawPointerEvent,
-        hit: &[ElementId],
+        pointer_hit: &PointerHitTest,
     ) {
+        let hit = pointer_hit.raw();
         let hover_event = event.phase == PointerPhase::Move
             && event.buttons == 0
             && !self.input.raw_pointer_routes.contains_key(&key);
@@ -561,9 +602,11 @@ impl WidgetTree {
             } else {
                 Vec::new()
             };
+            let inside_editable_group = self.text_field_for_hit(pointer_hit).is_some()
+                || self.preserves_text_field_focus_with_hit(pointer_hit);
             self.input.raw_pointer_routes.insert(
                 key,
-                RawPointerRoute { listeners, tap_path },
+                RawPointerRoute { listeners, tap_path, inside_editable_group },
             );
         }
         let finished;

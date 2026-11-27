@@ -3354,3 +3354,7 @@ packages/flutter/test/widgets/rich_text_test.dart	313	RichText does not crash at
 packages/flutter/test/widgets/text_semantics_test.dart	142	SemanticsIdentifier creates a functional SemanticsNode	paired-match	upstream-rich-text-semantics-fragments.md
 packages/flutter/test/rendering/paragraph_test.dart	755	Does not include the semantics node of truncated rendering children	paired-match	upstream-rich-text-layout.md#unlimited-line-ellipsis
 packages/flutter/test/rendering/paragraph_test.dart	815	Supports empty text span with spell out	paired-match	upstream-rich-text-layout.md#ellipsized-inline-children
+packages/flutter/test/widgets/editable_text_test.dart	18562	onTapOutside is called upon tap outside	paired-match	upstream-editable-outside-pointer.md
+packages/flutter/test/widgets/editable_text_test.dart	18599	onTapOutside is not called upon tap outside when field is not focused	paired-match	upstream-editable-outside-pointer.md
+packages/flutter/test/widgets/editable_text_test.dart	18635	onTapUpOutside is called upon tap up outside	paired-match	upstream-editable-outside-pointer.md
+packages/flutter/test/widgets/editable_text_test.dart	18672	onTapUpOutside is not called upon tap up outside when field is not focused	paired-match	upstream-editable-outside-pointer.md

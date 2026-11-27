@@ -3,7 +3,7 @@
 //! Public descriptor types lower into the opaque `Widget` transport. Mutable mounted state continues to live exclusively in `WidgetTree`.
 
 use super::*;
-use crate::tree::specs::{AppPrivateCommandCallback, TextParagraphPolicy};
+use crate::tree::specs::{AppPrivateCommandCallback, EditableOutsideTap, TextParagraphPolicy};
 
 /// Renderer-neutral image sizing policy (maps to Flutter's `BoxFit`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -1144,6 +1144,8 @@ pub struct EditableText {
     clip_behavior: incular_config::Clip,
     on_editing_complete: Option<Rc<dyn Fn()>>,
     on_submit: Option<Rc<dyn Fn(String)>>,
+    on_tap_outside: Option<EditableOutsideTap>,
+    on_tap_up_outside: Option<EditableOutsideTap>,
     on_app_private_command: Option<AppPrivateCommandCallback>,
     content_insertion: Option<crate::ContentInsertionConfiguration>,
     multiline: bool,
@@ -1217,6 +1219,8 @@ impl EditableText {
             clip_behavior: incular_config::Clip::HardEdge,
             on_editing_complete: None,
             on_submit: None,
+            on_tap_outside: None,
+            on_tap_up_outside: None,
             on_app_private_command: None,
             content_insertion: None,
             multiline: false,
@@ -1444,6 +1448,22 @@ impl EditableText {
         self.on_submit = Some(Rc::new(callback));
         self
     }
+    /// Handles pointer-down outside the text-field group while this editor
+    /// has focus. A supplied callback replaces the default outside blur.
+    #[must_use]
+    pub fn on_tap_outside(mut self, callback: impl Fn(incular_gestures::RawPointerEvent) + 'static) -> Self {
+        self.on_tap_outside = Some(Rc::new(callback));
+        self
+    }
+
+    /// Handles pointer-up outside the text-field group if this editor
+    /// still has focus. Without a callback, release does nothing.
+    #[must_use]
+    pub fn on_tap_up_outside(mut self, callback: impl Fn(incular_gestures::RawPointerEvent) + 'static) -> Self {
+        self.on_tap_up_outside = Some(Rc::new(callback));
+        self
+    }
+
     /// Receives an application-specific message from the active input method.
     /// Missing message data is delivered as an empty object. The editor does
     /// not interpret the action or change text or focus on its own.
@@ -2000,6 +2020,8 @@ impl From<EditableText> for Widget {
             clip_behavior: value.clip_behavior,
             on_editing_complete: value.on_editing_complete,
             on_submit: value.on_submit,
+            on_tap_outside: value.on_tap_outside,
+            on_tap_up_outside: value.on_tap_up_outside,
             on_app_private_command: value.on_app_private_command,
             content_insertion: value.content_insertion,
             multiline: value.multiline,

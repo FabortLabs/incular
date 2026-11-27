@@ -791,6 +791,8 @@ impl PartialEq for TextFieldSpec {
             && self.cursor_opacity_animates == other.cursor_opacity_animates
             && same_rc(&self.on_editing_complete, &other.on_editing_complete)
             && same_rc(&self.on_submit, &other.on_submit)
+            && same_rc(&self.on_tap_outside, &other.on_tap_outside)
+            && same_rc(&self.on_tap_up_outside, &other.on_tap_up_outside)
             && same_rc(&self.on_app_private_command, &other.on_app_private_command)
             && self.content_insertion == other.content_insertion
             && same_rc(&self.edit_transform, &other.edit_transform)

@@ -2309,6 +2309,14 @@ impl Runtime {
         // One hit test serves the whole event: raw regions and listeners,
         // retained gestures, text editing and buttons.
         let hit = self.hit_for_pointer_event(gesture_window, raw_event, hover_capable);
+        // Outside notifications observe physical down/up independently of
+        // whether a different gesture recognizer later wins the contact.
+        let notified_text_outside = matches!(phase, PointerPhase::Down | PointerPhase::Up)
+            && !on_text_handle
+            && self.focused.is_some_and(|focused| {
+                self.tree.dispatch_editable_tap_outside(gesture_window, focused, raw_event, &hit)
+            });
+        self.frame_requested |= notified_text_outside;
         let raw_target = self
             .tree
             .dispatch_raw_pointer_with_hit(gesture_window, raw_event, &hit);
@@ -2559,7 +2567,9 @@ impl Runtime {
                     && self
                         .focused
                         .is_some_and(|focused| self.tree.is_text_field(focused))
-                    && (mobile_touch || self.tree.preserves_text_field_focus_with_hit(&hit));
+                    && (notified_text_outside
+                        || mobile_touch
+                        || self.tree.preserves_text_field_focus_with_hit(&hit));
                 // Flutter on desktop: a press focuses the text field it hits, a
                 // press outside a focused text field unfocuses it
                 // (`EditableText` tap-outside), and any other press leaves

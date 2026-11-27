@@ -1381,6 +1381,7 @@ struct RawPointerRoute {
     listeners: Vec<RawPointerRouteEntry>,
     /// The press hit path for TapRegionSurface, retained until release.
     tap_path: Vec<ElementId>,
+    inside_editable_group: bool,
 }
 
 struct DeferredSingleTap {

@@ -531,6 +531,7 @@ pub(crate) type EditTransform = Rc<
     ) -> incular_text::TextEditingValue,
 >;
 pub(crate) type EditChanged = Rc<dyn Fn(&str)>;
+pub(crate) type EditableOutsideTap = Rc<dyn Fn(incular_gestures::RawPointerEvent)>;
 
 pub(crate) type AppPrivateCommandCallback =
     Rc<dyn Fn(&str, &serde_json::Map<String, serde_json::Value>)>;
@@ -556,6 +557,8 @@ pub struct TextFieldSpec {
     pub(crate) clip_behavior: incular_config::Clip,
     pub(crate) on_editing_complete: Option<Rc<dyn Fn()>>,
     pub(crate) on_submit: Option<Rc<dyn Fn(String)>>,
+    pub(crate) on_tap_outside: Option<EditableOutsideTap>,
+    pub(crate) on_tap_up_outside: Option<EditableOutsideTap>,
     pub(crate) on_app_private_command: Option<AppPrivateCommandCallback>,
     pub(crate) content_insertion: Option<crate::ContentInsertionConfiguration>,
     pub(crate) multiline: bool,
