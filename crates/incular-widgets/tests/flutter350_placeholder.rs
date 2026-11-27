@@ -221,3 +221,19 @@ fn layout_builder_updates_both_placeholder_paints_across_constraint_changes() {
         assert_eq!(strokes, [expected, expected]);
     }
 }
+
+#[test]
+fn fluent_and_typed_builder_preserve_hairline_and_subpixel_widths() {
+    for width in [0., 0.03125] {
+        for widget in [
+            Placeholder::new().stroke_width(width),
+            Placeholder::builder().stroke_width(width).build(),
+        ] {
+            let mut tree = frame(placeholder(widget));
+            let paint = tree.paint();
+            assert!(paint.commands().iter().any(|command| {
+                matches!(command, PaintCommand::StrokePath { stroke, .. } if stroke.width == width)
+            }), "missing stroke width {width}");
+        }
+    }
+}

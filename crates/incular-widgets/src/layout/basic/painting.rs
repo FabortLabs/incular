@@ -3,7 +3,7 @@
 use std::{cell::{Cell, RefCell}, rc::Rc, sync::Arc};
 
 use incular_config::{Clip, StackFit};
-use incular_core::{Color, Offset, Size};
+use incular_core::{Color, Offset, Size, finite_non_negative};
 use incular_rendering::{Canvas, DisplayList, Path, Stroke};
 use typed_builder::TypedBuilder;
 
@@ -244,7 +244,7 @@ impl From<CustomPaint> for Widget {
 pub struct Placeholder {
     #[builder(default = Color::rgba(69, 90, 100, 255))]
     color: Color,
-    #[builder(default = 2.0, setter(transform = |width: f32| width.max(0.1)))]
+    #[builder(default = 2.0, setter(transform = |width: f32| finite_non_negative(width)))]
     stroke_width: f32,
     #[builder(default = 400.0, setter(transform = |width: f32| width.max(0.0)))]
     fallback_width: f32,
@@ -278,9 +278,10 @@ impl Placeholder {
         self
     }
 
+    /// Sets the stroke width in logical pixels. Zero draws a device hairline.
     #[must_use]
     pub fn stroke_width(mut self, width: f32) -> Self {
-        self.stroke_width = width.max(0.1);
+        self.stroke_width = finite_non_negative(width);
         self
     }
 

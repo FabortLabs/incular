@@ -424,7 +424,8 @@ a version and date when publishing.
 ### Fixed
 
 - `Placeholder` fills bounded space and uses its fallback sizes only along
-  unbounded axes. It can paint behind an optional interactive child.
+  unbounded axes. It can paint behind an optional interactive child,
+  and preserves hairline and subpixel stroke widths.
 
 - Scope lookup follows a focus boundary's explicitly assigned focus parent
   rather than returning a scope from its widget ancestry.

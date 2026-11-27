@@ -31,3 +31,13 @@ box from loose viewport limits to tight 100×100 constraints and rebuilds
 two placeholders with 10×10 bounds rather than 20×20. The native fixture
 flushes both layouts and paint, verifies what constraints the builder
 received, and checks both current outline sizes on both frames.
+
+### Hairline and subpixel outline widths
+
+The separately authored pinned `placeholder_hairline_test.dart` accepts
+both stroke width 0 (one device-pixel hairline) and 0.03125 logical pixels.
+Before the fix Incular's fluent and typed setters clamped widths to 0.1.
+Both now pass the exact supplied finite nonnegative width to the paint
+command. Width 0 selects the existing wgpu device-hairline path; this
+comparison checks the emitted command, not new GPU readback. It does
+not count as an original registration.
