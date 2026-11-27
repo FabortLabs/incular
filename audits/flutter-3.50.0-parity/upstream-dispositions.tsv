@@ -3779,3 +3779,5 @@ packages/flutter/test/widgets/editable_text_shortcuts_test.dart	876	at start	pai
 packages/flutter/test/widgets/editable_text_shortcuts_test.dart	894	at end	paired-match	upstream-editable-plain-deletion.md#line-modified-backspace-and-delete
 packages/flutter/test/widgets/editable_text_shortcuts_test.dart	926	at cluster boundary	paired-match	upstream-editable-plain-deletion.md#line-modified-backspace-and-delete
 packages/flutter/test/widgets/text_selection_toolbar_layout_delegate_test.dart	9	positions itself at anchorAbove if it fits	paired-match	upstream-text-selection-toolbar-placement.md
+packages/flutter/test/rendering/dynamic_intrinsics_test.dart	81	Whether using intrinsics means you get hooked into layout	paired-match	upstream-shifted-box-baselines.md#dynamic-intrinsic-dependents
+packages/flutter/test/rendering/dynamic_intrinsics_test.dart	95	Parent returns correct intrinsics	paired-match	upstream-shifted-box-baselines.md#dynamic-intrinsic-dependents

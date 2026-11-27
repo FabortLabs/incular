@@ -40,3 +40,15 @@ Mounted IntrinsicWidth formerly chose 27.5 px from the actual child
 instead of 50 px from its reported size; it now pairs with Flutter,
 as does the 100 px height case. These probes add no original count.
 All 26 selected native tests passed.
+
+## Dynamic intrinsic dependents
+
+Two pinned `rendering/dynamic_intrinsics_test.dart` cases pair at
+:81 and :95. Growing a leaf from 100×100 to 200×200 recomputes the
+existing intrinsic root and updates all four unbounded intrinsic
+queries on the intermediate parent. The Rust test updates only
+the already-mounted leaf; it does not replace the ancestor or
+change the frame constraints. An unfactored Align provides the
+intermediate forwarding box. This checks dependency propagation
+and sizes, not Flutter's custom RenderBox subclass or the debug
+error for a negative intrinsic dimension.
