@@ -21,3 +21,18 @@ All 21 focused native tests passed across `flutter350_focus_edge_policies`,
 `flutter350_directional_focus_paths`, `flutter350_focus_key_routing`, and
 `focus_directional`. This batch does not claim behavior for sequential
 Tab/Shift+Tab edge policies or actual browser/host focus after leaving.
+
+## First directional target in an empty scope
+
+Exact pinned `widgets/focus_traversal_test.dart:4115` passed. Starting
+downward in a scope with no focused child can put primary focus on a
+nested scope's leading edge, rather than on its padded descendant. The
+native pre-fix test incorrectly focused that leaf. The initial scan now
+includes eligible scope anchors without changing ordinary Tab stops or
+directional moves from an active child.
+
+Two pinned authored checks and native controls verify equal-edge order,
+`skipTraversal` (the scope is skipped, its eligible child is not), and
+falling back to the initiating scope when there are no candidates. A
+native editor without an explicit focus node remains eligible. All four
+direct checks and 21 adjacent focus checks passed.

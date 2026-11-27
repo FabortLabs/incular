@@ -3490,6 +3490,22 @@ impl Runtime {
         let Some((origin, anchor, scope)) = self.tree.node_directional_origin(node, self.focused) else {
             return false;
         };
+        if let Some(scope) = scope.as_ref()
+            && scope.focused_child().is_none()
+            && anchor.is_none_or(|id| self.tree.focus_node_at(id) == Some(scope.scope_focus_node()))
+        {
+            // An empty scope starts at the leading/trailing geometrical
+            // edge, including eligible nested scope anchors. If no stop
+            // exists, Flutter requests the origin itself.
+            let target = self
+                .tree
+                .first_directional_descendant(scope, direction)
+                .unwrap_or(origin);
+            let toward_start = matches!(direction, TraversalDirection::Up | TraversalDirection::Left);
+            self.directional_focus_history = None;
+            let delegated = self.set_traversal_focus(target, toward_start, true, Some(origin));
+            return self.focused == Some(target) || delegated;
+        }
         self.move_directional_focus_with_origin(code, anchor, Some(origin), Some(scope))
     }
 

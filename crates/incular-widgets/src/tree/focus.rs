@@ -741,7 +741,7 @@ impl WidgetTree {
         &self,
         root: Option<ElementId>,
     ) -> Vec<incular_gestures::FocusNode> {
-        self.focus_traversal_snapshot(root, false)
+        self.focus_traversal_snapshot(root, false, false, |_, node| node.cloned())
     }
 
     /// Raw traversal candidates on the first focus layer below `root`.
@@ -753,14 +753,16 @@ impl WidgetTree {
         &self,
         root: Option<ElementId>,
     ) -> Vec<incular_gestures::FocusNode> {
-        self.focus_traversal_snapshot(root, true)
+        self.focus_traversal_snapshot(root, true, false, |_, node| node.cloned())
     }
 
-    fn focus_traversal_snapshot(
+    fn focus_traversal_snapshot<T>(
         &self,
         root: Option<ElementId>,
         children_only: bool,
-    ) -> Vec<incular_gestures::FocusNode> {
+        include_implicit: bool,
+        mut item: impl FnMut(ElementId, Option<&incular_gestures::FocusNode>) -> Option<T>,
+    ) -> Vec<T> {
         let Some(start) = root.or(self.root) else {
             return Vec::new();
         };
@@ -786,18 +788,23 @@ impl WidgetTree {
             };
             let node = external_node(element.widget.kind());
             if visited_children {
-                if let Some(node) = node
-                    && !node.skip_traversal()
+                if node.is_none_or(|node| !node.skip_traversal())
                     && self.can_request_focus(id)
+                    && let Some(entry) = item(id, node)
                 {
-                    descendants.push(node.clone());
+                    descendants.push(entry);
                 }
                 continue;
             }
             if element.widget.semantic_properties().exclude_focus_traversal {
                 continue;
             }
-            if root != Some(id) && node.is_some() {
+            let implicit_stop = include_implicit
+                && matches!(
+                    element.widget.kind(),
+                    WidgetKind::Button(_) | WidgetKind::TextField(_) | WidgetKind::SelectableText { .. }
+                );
+            if root != Some(id) && (node.is_some() || implicit_stop) {
                 pending.push((id, true));
                 if children_only {
                     continue;
@@ -1580,6 +1587,33 @@ impl WidgetTree {
     ) -> DirectionalFocusResolution {
         let scope = focused.and_then(|id| self.scope_of_focus_boundary(id));
         self.resolve_directional_focus_in_scope(focused, code, scope)
+    }
+
+    /// First directional request in an unfocused explicit scope. Unlike the
+    /// regular focus-stop ordering, Flutter ranks all traversal descendants,
+    /// so an eligible nested scope can be the first target by its own bounds.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn first_directional_descendant(
+        &self,
+        scope: &incular_gestures::FocusScopeNode,
+        direction: incular_gestures::TraversalDirection,
+    ) -> Option<ElementId> {
+        let root = self.mounted_focus_element(&scope.scope_focus_node())?;
+        let (ids, candidates): (Vec<_>, Vec<_>) = self
+            .focus_traversal_snapshot(Some(root), false, true, |id, _| {
+                Some((
+                    id,
+                    incular_gestures::DirectionalFocusCandidate {
+                        rect: self.element_bounds(id)?,
+                        shares_scroll_owner: true,
+                    },
+                ))
+            })
+            .into_iter()
+            .unzip();
+        incular_gestures::directional_focus_index(None, &candidates, direction)
+            .map(|index| ids[index])
     }
 
     /// Finds the policy origin and current child of a node-scoped direction request.
