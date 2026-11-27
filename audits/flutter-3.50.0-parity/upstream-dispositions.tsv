@@ -3344,3 +3344,8 @@ packages/flutter/test/widgets/focus_traversal_test.dart	2463	Focus traversal act
 packages/flutter/test/widgets/focus_traversal_test.dart	2553	Focus traversal actions works when current focus skip traversal	paired-match	upstream-focus-key-scroll.md
 packages/flutter/test/widgets/focus_traversal_test.dart	2609	Focus traversal inside a vertical scrollable scrolls to stay visible.	paired-match	upstream-focus-key-scroll.md
 packages/flutter/test/widgets/focus_traversal_test.dart	2733	Focus traversal inside a horizontal scrollable scrolls to stay visible.	paired-match	upstream-focus-key-scroll.md
+packages/flutter/test/widgets/focus_traversal_test.dart	2858	Focus traversal with horizontal scrollables inside a vertical scrollable handles vertical navigation correctly	paired-match	upstream-focus-key-scroll.md#nested-scrollables
+packages/flutter/test/widgets/focus_traversal_test.dart	2985	Focus traversal with vertical scrollables inside a horizontal scrollable handles horizontal navigation correctly	paired-match	upstream-focus-key-scroll.md#nested-scrollables
+packages/flutter/test/widgets/focus_traversal_test.dart	3253	Focus traversal does not break when no focusable is available on a WidgetsApp	paired-match	upstream-focus-key-scroll.md#empty-focus-tree
+packages/flutter/test/widgets/focus_traversal_test.dart	3272	Focus traversal does not throw when no focusable is available in a group	paired-match	upstream-focus-key-scroll.md#empty-focus-tree
+packages/flutter/test/widgets/focus_traversal_test.dart	3286	Focus traversal does not break when no focusable is available on a WidgetsApp	paired-match	upstream-focus-key-scroll.md#empty-focus-tree

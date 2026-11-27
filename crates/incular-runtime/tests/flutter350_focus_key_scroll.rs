@@ -210,3 +210,172 @@ fn vertical_arrows_reveal_each_lazy_item_and_the_outer_controls() {
 fn horizontal_arrows_reveal_each_lazy_item_and_the_outer_controls() {
     reveal_list(Axis::Horizontal);
 }
+
+fn reveal_nested_lists(axis: Axis) {
+    let cross_axis = match axis {
+        Axis::Vertical => Axis::Horizontal,
+        Axis::Horizontal => Axis::Vertical,
+    };
+    let cross_count = if axis == Axis::Vertical { 5 } else { 10 };
+    let sticky = FocusNode::new();
+    let outer = ScrollController::new();
+    let inner: Vec<_> = (0..10).map(|_| ScrollController::new()).collect();
+    let nodes: Vec<Vec<FocusNode>> = (0..10)
+        .map(|_| (0..cross_count).map(|_| FocusNode::new()).collect())
+        .collect();
+    let band = move |length| match axis {
+        Axis::Vertical => SizedBox::new().height(length),
+        Axis::Horizontal => SizedBox::new().width(length),
+    };
+    let outer_list = ListView::separated(
+        nodes.len(),
+        {
+            let nodes = nodes.clone();
+            let inner = inner.clone();
+            move |index| {
+                let row = nodes[index].clone();
+                band(100.).child(
+                    ListView::builder(cross_count, move |slot| {
+                        Focus::new(SizedBox::square(100.)).node(row[slot].clone())
+                    })
+                    .scroll_direction(cross_axis)
+                    .controller(inner[index].clone()),
+                )
+            }
+        },
+        move |_| band(32.),
+    )
+    .scroll_direction(axis)
+    .controller(outer.clone());
+    let sticky_size = match axis {
+        Axis::Vertical => Size::new(800., 100.),
+        Axis::Horizontal => Size::new(100., 600.),
+    };
+    let sticky_widget = Focus::new(SizedBox::from_size(sticky_size)).node(sticky.clone());
+    let children: [Widget; 2] = [sticky_widget.into(), Expanded::new(outer_list).into()];
+    let scene: Widget = match axis {
+        Axis::Vertical => Column::new(children).into(),
+        Axis::Horizontal => Row::new(children).into(),
+    };
+    let mut runtime = Runtime::new(Directionality::new(TextDirection::Ltr, scene).into()).unwrap();
+    frame(&mut runtime);
+    sticky.request_focus();
+    frame(&mut runtime);
+    assert!(sticky.has_primary_focus());
+    let (forward, reverse, scroll_at) = match axis {
+        Axis::Vertical => (
+            (NamedKey::ArrowDown, Code::ArrowDown),
+            (NamedKey::ArrowUp, Code::ArrowUp),
+            5,
+        ),
+        Axis::Horizontal => (
+            (NamedKey::ArrowRight, Code::ArrowRight),
+            (NamedKey::ArrowLeft, Code::ArrowLeft),
+            6,
+        ),
+    };
+    press(
+        &mut runtime,
+        forward.0.clone(),
+        forward.1,
+        Modifiers::empty(),
+    );
+    let cross_slot = nodes[0]
+        .iter()
+        .position(FocusNode::has_primary_focus)
+        .expect("first arrow enters first band");
+    for (index, strip) in nodes.iter().enumerate().skip(1) {
+        press(
+            &mut runtime,
+            forward.0.clone(),
+            forward.1,
+            Modifiers::empty(),
+        );
+        assert!(
+            strip[cross_slot].has_primary_focus(),
+            "{axis:?} forward band {index}, offset {}",
+            outer.offset()
+        );
+        if index >= scroll_at {
+            assert!(outer.offset() > 0., "{axis:?} must reveal band {index}");
+        }
+    }
+    for (index, strip) in nodes.iter().enumerate().rev().skip(1) {
+        press(
+            &mut runtime,
+            reverse.0.clone(),
+            reverse.1,
+            Modifiers::empty(),
+        );
+        assert!(
+            strip[cross_slot].has_primary_focus(),
+            "{axis:?} reverse band {index}, offset {}",
+            outer.offset()
+        );
+    }
+    press(&mut runtime, reverse.0, reverse.1, Modifiers::empty());
+    assert!(sticky.has_primary_focus());
+}
+
+#[test]
+fn vertical_arrows_keep_the_same_column_across_lazy_horizontal_lists() {
+    reveal_nested_lists(Axis::Vertical);
+}
+
+#[test]
+fn horizontal_arrows_keep_the_same_row_across_lazy_vertical_lists() {
+    reveal_nested_lists(Axis::Horizontal);
+}
+
+#[test]
+fn arrow_events_reach_hardware_handlers_without_focusable_widgets() {
+    use std::{cell::RefCell, rc::Rc};
+
+    use incular_core::KeyState;
+    use incular_widgets::{Container, Placeholder};
+
+    // The two original registrations use different non-focusable children.
+    for child in [Widget::from(Container::new()), Placeholder::new().into()] {
+        let mut runtime = Runtime::new(FocusScope::new(child).into()).unwrap();
+        frame(&mut runtime);
+        let before = runtime.focused_element();
+        let keys = Rc::new(RefCell::new(Vec::new()));
+        let _handler = runtime.add_hardware_key_handler({
+            let keys = keys.clone();
+            move |key| {
+                keys.borrow_mut().push((key.code, key.state));
+                true
+            }
+        });
+        press(
+            &mut runtime,
+            NamedKey::ArrowRight,
+            Code::ArrowRight,
+            Modifiers::empty(),
+        );
+        assert_eq!(
+            *keys.borrow(),
+            [
+                (Code::ArrowRight, KeyState::Down),
+                (Code::ArrowRight, KeyState::Up)
+            ]
+        );
+        assert_eq!(runtime.focused_element(), before);
+    }
+}
+
+#[test]
+fn tab_leaves_primary_focus_unchanged_when_the_group_has_no_traversal_stop() {
+    use incular_config::Alignment;
+    use incular_widgets::{Align, FocusTraversalGroup, Text};
+
+    let empty = SizedBox::expand().child(Align::new(Alignment::CENTER, Text::new("title")));
+    let empty = Directionality::new(TextDirection::Ltr, empty);
+    let group = FocusTraversalGroup::new(empty);
+    let mut runtime = Runtime::new(FocusScope::new(group).into()).unwrap();
+    frame(&mut runtime);
+    let before = runtime.focused_element();
+    assert!(runtime.tree().focusable_elements().is_empty());
+    tab(&mut runtime, false);
+    assert_eq!(runtime.focused_element(), before);
+}

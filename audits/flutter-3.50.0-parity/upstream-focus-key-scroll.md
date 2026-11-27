@@ -20,3 +20,20 @@ platform event translation.
   directions, including crossing the viewport boundaries.
 
 Native target: `cargo test -p incular-runtime --test flutter350_focus_key_scroll`.
+
+## Nested scrollables
+
+The registrations at 2858 and 2985 passed in both original key simulator
+variants. Mounted lazy lists match the 800×600 viewport, ten line groups,
+100-pixel controls, and 32-pixel separators. In each orientation, moving
+along the outer axis preserves the chosen cross-axis index for every
+intervening group, scrolls the outer controller past the threshold, then
+reverses through every group to the sticky starting control.
+
+## Empty focus tree
+
+Both duplicate-named arrow registrations (3253 and 3286) ran in both
+variants; the distinct empty-group Tab registration (3272) also ran. The
+Incular tests check normalized arrow down/up at the global hardware handler,
+once for a container and once for a placeholder without focusable children,
+and check that Tab preserves primary focus in a group containing only a label.
