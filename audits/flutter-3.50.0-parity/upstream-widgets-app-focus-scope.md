@@ -76,3 +76,17 @@ notification can read the newly committed route without borrowing
 the stack while notifying observers. The three focused native
 controls and 36 app-shell checks passed. This does not claim parity
 for Flutter's diagnostic wording or add original registrations.
+
+## Caller-generated startup stack
+
+Pinned `widgets/app_test.dart:230` passed. The custom startup
+factory receives the original `/abc` path once, supplies two pages
+outside the normal named generator, and presents the second page.
+Back reveals the first without displaying the regular page or
+running the startup factory again. Duplicate route information
+does not collapse distinct startup entries.
+
+Native controls also verify that later platform deep links use
+the named generator, and that restoring a surviving startup
+prefix preserves its page by position, even when two pages
+share a route name. Three direct and 39 adjacent checks passed.

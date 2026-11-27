@@ -3429,3 +3429,4 @@ packages/flutter/test/widgets/app_test.dart	1008	WidgetsApp does not crash at ze
 packages/flutter/test/widgets/app_test.dart	43	WidgetsApp default key bindings	paired-match	upstream-widgets-app-focus-scope.md#default-and-custom-app-activation
 packages/flutter/test/widgets/app_test.dart	68	WidgetsApp can override default key bindings	paired-match	upstream-widgets-app-focus-scope.md#default-and-custom-app-activation
 packages/flutter/test/widgets/app_test.dart	101	WidgetsApp default activation key mappings work	partial-match	upstream-widgets-app-focus-scope.md#default-and-custom-app-activation
+packages/flutter/test/widgets/app_test.dart	230	WidgetsApp can customize initial routes	paired-match	upstream-widgets-app-focus-scope.md#caller-generated-startup-stack

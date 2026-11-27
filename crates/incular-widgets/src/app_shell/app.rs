@@ -29,6 +29,7 @@ use std::{
 type HomeBuilder = Rc<dyn Fn() -> Widget>;
 type RouteBuilder = Rc<dyn Fn() -> Widget>;
 type GenerateRoute = Rc<dyn Fn(&RouteInformation) -> Option<Widget>>;
+type GenerateInitialRoutes = Rc<dyn Fn(&str) -> Vec<AppRouteEntry>>;
 type UnknownRoute = Rc<dyn Fn(&RouteInformation) -> Widget>;
 type GeneratedTitle = Rc<dyn Fn(&Locale) -> String>;
 
@@ -130,6 +131,7 @@ struct WidgetsAppState {
     home: Option<HomeBuilder>,
     routes: BTreeMap<String, RouteBuilder>,
     generate_route: Option<GenerateRoute>,
+    generate_initial_routes: Option<GenerateInitialRoutes>,
     unknown_route: Option<UnknownRoute>,
     initial_route: Option<String>,
     stack: Vec<AppRouteEntry>,
@@ -174,6 +176,7 @@ impl WidgetsAppController {
             home: None,
             routes: BTreeMap::new(),
             generate_route: None,
+            generate_initial_routes: None,
             unknown_route: None,
             initial_route: None,
             stack: Vec::new(),
@@ -244,6 +247,25 @@ impl WidgetsAppController {
     ) {
         self.inner.borrow_mut().generate_route = Some(Rc::new(builder));
         self.invalidate();
+    }
+
+    /// Replaces the named-route startup expansion with an ordered stack of
+    /// already generated pages. The final page is active; Back reveals
+    /// earlier pages. Later platform deep links still use named routing.
+    pub fn on_generate_initial_routes(
+        &self,
+        builder: impl Fn(&str) -> Vec<(RouteInformation, Widget)> + 'static,
+    ) {
+        self.inner.borrow_mut().generate_initial_routes = Some(Rc::new(move |location| {
+            builder(location)
+                .into_iter()
+                .map(|(information, widget)| AppRouteEntry {
+                    information,
+                    generated: Some(widget),
+                })
+                .collect()
+        }));
+        self.reset_initialization();
     }
 
     /// Installs the final unknown-route fallback.
@@ -445,14 +467,20 @@ impl WidgetsAppController {
         if inner.borrow().initialized {
             return;
         }
-        let (restoration, provider, initial_route) = {
+        let (restoration, provider, initial_route, generate_initial_routes) = {
             let state = inner.borrow();
             (
                 state.restoration.clone(),
                 state.provider.clone(),
                 state.initial_route.clone(),
+                state.generate_initial_routes.clone(),
             )
         };
+        let target = initial_route
+            .map(RouteInformation::new)
+            .unwrap_or_else(|| provider.value());
+        let custom = generate_initial_routes
+            .map_or_else(Vec::new, |generate| generate(target.location()));
         if let Some(restoration) = restoration
             && let Some(value) = restoration.scope.get_json(&restoration.key)
             && let Some(array) = value.as_array()
@@ -460,20 +488,37 @@ impl WidgetsAppController {
             let restored = array
                 .iter()
                 .filter_map(|value| RouteInformation::from_json(value).ok())
-                .map(AppRouteEntry::named)
                 .collect::<Vec<_>>();
             if !restored.is_empty() {
+                // Restore the generated prefix by position, not by route name:
+                // two startup pages may deliberately have identical names.
+                let mut custom = custom.into_iter();
+                let mut still_initial = true;
                 let mut state = inner.borrow_mut();
-                state.stack = restored;
+                state.stack = restored
+                    .into_iter()
+                    .map(|information| {
+                        if still_initial {
+                            if let Some(entry) = custom.next()
+                                && entry.information == information
+                            {
+                                return entry;
+                            }
+                            still_initial = false;
+                        }
+                        AppRouteEntry::named(information)
+                    })
+                    .collect();
                 state.initialized = true;
                 state.bump_revision();
                 return;
             }
         }
-        let target = initial_route
-            .map(RouteInformation::new)
-            .unwrap_or_else(|| provider.value());
-        let stack = Self::initial_stack(inner, target);
+        let stack = if custom.is_empty() {
+            Self::initial_stack(inner, target)
+        } else {
+            custom
+        };
         {
             let mut state = inner.borrow_mut();
             state.stack = stack;
@@ -827,6 +872,16 @@ impl WidgetsApp {
     #[must_use]
     pub fn initial_route(self, location: impl Into<String>) -> Self {
         self.controller.set_initial_route(location);
+        self
+    }
+
+    /// Provides an initial stack instead of expanding the startup path.
+    #[must_use]
+    pub fn on_generate_initial_routes(
+        self,
+        builder: impl Fn(&str) -> Vec<(RouteInformation, Widget)> + 'static,
+    ) -> Self {
+        self.controller.on_generate_initial_routes(builder);
         self
     }
 
