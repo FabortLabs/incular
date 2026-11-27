@@ -110,17 +110,57 @@ fn translated_raw_editor_moves_its_collapsed_selection_anchor_by_the_paint_offse
 
 #[test]
 fn a_mounted_caret_can_change_color_radius_width_text_scale_and_visibility() {
-    use incular_core::{Color, Rect};
-    use incular_rendering::{Brush, DisplayList, PaintCommand, RRect};
-    use incular_text::TextAffinity;
-    use incular_text::TextScaler;
-
     let Some(style) = ahem_style(10.) else {
         return;
     };
-    let style = style.height(Some(1.));
-    let controller = TextEditingController::with_text("test");
-    controller.set_selection_with_affinity(TextSelection::collapsed(4), TextAffinity::Upstream);
+    check_live_caret_configuration(style.height(Some(1.)), "test", 4);
+}
+
+#[test]
+fn a_mounted_caret_uses_ideographic_glyphs_at_the_same_scaled_positions() {
+    const FAMILY: &str = "Pinned FlutterTest ideographic caret";
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../.tmp/flutter/engine/src/flutter/runtime/test_font_data.cc");
+    let Ok(source) = std::fs::read_to_string(path) else {
+        eprintln!("Pinned engine test font unavailable; ideographic geometry not run");
+        return;
+    };
+    // Extract only the reference engine's embedded FlutterTest font, not a
+    // system CJK font with different advances, BASE tables or fallback.
+    let encoded = source
+        .split_once("static const unsigned char kFlutterTestFont[] = {")
+        .and_then(|(_, suffix)| suffix.split_once("};"))
+        .expect("pinned engine embeds the FlutterTest font")
+        .0;
+    let font = encoded
+        .split(',')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .map(|part| u8::from_str_radix(part.strip_prefix("0x").unwrap(), 16).unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(font.len(), 2984);
+    register_application_font_as(FAMILY, font);
+
+    let text = "中文测试文本是否正确";
+    // Flutter's offset 4 is UTF-16; Incular stores an equivalent UTF-8
+    // caret at the start of the fifth glyph.
+    let offset = text.char_indices().nth(4).unwrap().0;
+    assert_eq!(offset, 12);
+    check_live_caret_configuration(
+        TextStyle::new().font_family(FAMILY).font_size(10.),
+        text,
+        offset,
+    );
+}
+
+fn check_live_caret_configuration(style: TextStyle, text: &str, offset: usize) {
+    use incular_core::{Color, Rect};
+    use incular_rendering::{Brush, DisplayList, PaintCommand, RRect};
+    use incular_text::{TextAffinity, TextScaler};
+
+    let controller = TextEditingController::with_text(text);
+    controller
+        .set_selection_with_affinity(TextSelection::collapsed(offset), TextAffinity::Upstream);
 
     const RED: Color = Color::rgba(255, 0, 0, 255);
     const BLUE: Color = Color::rgba(0, 0, 255, 255);
@@ -177,7 +217,7 @@ fn a_mounted_caret_can_change_color_radius_width_text_scale_and_visibility() {
         runtime.schedule_update(field, widget.into()).unwrap();
         let list = frame(&mut runtime);
         assert_eq!(runtime.focused_element(), Some(field));
-        assert_eq!(controller.selection(), TextSelection::collapsed(4));
+        assert_eq!(controller.selection(), TextSelection::collapsed(offset));
         assert_eq!(controller.caret_affinity(), TextAffinity::Upstream);
         list
     };

@@ -91,3 +91,14 @@ list contains the exact rounded rectangle `(49.5, 51, 2, 8)` at radius 1
 before and after the text viewport scrolls by 200 pixels. The ordinary
 text caret moves by exactly 200 pixels, so the scroll assertion cannot
 pass vacuously. Both focused Rust targets passed 13 tests.
+
+## Ideographic caret position and scale
+
+Pinned `rendering/editable_test.dart:385`, “Cursor with ideographic script,”
+passes. The native test reads the bounded `FlutterTest` font array directly
+from the pinned engine source; it does not assume a system CJK fallback
+has the same geometry. The same Chinese text and logical selection (UTF-16
+offset 4, native UTF-8 byte 12) paint the exact 40-pixel horizontal position
+and 10-pixel height. At 2× scale those are 80 and 20, while the requested
+four-pixel caret width and radius three stay fixed. The same retained field
+has no caret before showing or after hiding it again. Nine native tests passed.
