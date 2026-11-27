@@ -1213,7 +1213,7 @@ impl WidgetTree {
                 if let Some(recognizer) = recognizer {
                     match recognizer.observe_raw(event) {
                         GestureDecision::Accept(action) => recognizer.dispatch(action),
-                        GestureDecision::Cancelled => recognizer.cancel(),
+                        GestureDecision::Cancelled => recognizer.cancel_pointer(event.pointer),
                         GestureDecision::Pending | GestureDecision::Reject => {}
                     }
                 }
@@ -1306,6 +1306,9 @@ impl WidgetTree {
         key: GestureArenaKey,
         entries: &[GestureArenaEntry],
     ) {
+        let incular_gestures::GestureArenaSource::Pointer { pointer, .. } = key.source else {
+            return;
+        };
         let to_cancel = {
             let Some(active) = self.input.raw_gesture_streams.get_mut(&key) else {
                 return;
@@ -1327,18 +1330,22 @@ impl WidgetTree {
                         return None;
                     }
                     member.cancelled = true;
-                    Some((member.element, member.type_id))
+                    Some((member.element, member.type_id, entry.disposition))
                 })
                 .collect::<Vec<_>>()
         };
-        for (element, type_id) in to_cancel {
+        for (element, type_id, disposition) in to_cancel {
             if let Some(recognizer) = self
                 .input
                 .raw_recognizers
                 .get_mut(&element)
                 .and_then(|recognizers| recognizers.get_mut(&type_id))
             {
-                recognizer.cancel();
+                if disposition == GestureDisposition::Rejected {
+                    recognizer.reject_pointer(pointer);
+                } else {
+                    recognizer.cancel_pointer(pointer);
+                }
             }
         }
     }
@@ -1373,7 +1380,11 @@ impl WidgetTree {
                     .get_mut(&member_element)
                     .and_then(|recognizers| recognizers.get_mut(&type_id))
                 {
-                    recognizer.cancel();
+                    if let incular_gestures::GestureArenaSource::Pointer { pointer, .. } = key.source {
+                        recognizer.cancel_pointer(pointer);
+                    } else {
+                        recognizer.cancel();
+                    }
                 }
             }
         }

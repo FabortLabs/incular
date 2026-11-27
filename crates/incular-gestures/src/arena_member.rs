@@ -284,6 +284,11 @@ pub trait ArenaRecognizer: 'static {
     fn handle_event(&mut self, event: RawPointerEvent);
     fn accept_gesture(&mut self, pointer: u64);
     fn reject_gesture(&mut self, pointer: u64);
+    /// Stops a physical contact or disposed route, distinct from arena loss.
+    fn cancel_gesture(&mut self, pointer: u64) {
+        self.reject_gesture(pointer);
+    }
+
     /// Fires the recognizer's timers that are due at `now`.
     fn poll(&mut self, now: Instant);
 }
@@ -444,11 +449,21 @@ impl<R: ArenaRecognizer> GestureRecognizer for ArenaGestureRecognizer<R> {
     }
 
     fn cancel(&mut self) {
-        if let Some((pointer, _)) = self.last
-            && self.pointers.get(&pointer) == Some(&false)
-        {
+        if let Some((pointer, _)) = self.last {
+            self.cancel_pointer(pointer);
+        }
+    }
+
+    fn reject_pointer(&mut self, pointer: u64) {
+        if self.pointers.get(&pointer) == Some(&false) {
             self.pointers.remove(&pointer);
             self.recognizer.reject_gesture(pointer);
+        }
+    }
+
+    fn cancel_pointer(&mut self, pointer: u64) {
+        if self.pointers.remove(&pointer).is_some() {
+            self.recognizer.cancel_gesture(pointer);
         }
     }
 

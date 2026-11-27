@@ -76,3 +76,14 @@ instead of a long press. Sixteen mounted competition cases, four
 adjacent raw cases, and the direct long-press and tap-and-drag
 suites passed. This comparison supplies the logical timestamps with
 pointer samples; frame-driven raw deadlines are a separate check.
+
+### Detector removal is not an arena loss
+
+The authored `raw_long_press_dispose_test.dart` and retained native
+fixture remove an idle raw detector after pointer down. The only
+long-press candidate had already won by default, but had not met its
+hold deadline. Removing the detector cancels the pending hold exactly
+once. Neither a later frame nor the device release starts or ends it.
+The router now passes the specific pointer to cancellation separately
+from a competitor's rejection, which remains silent for long press.
+This authored lifecycle test adds no original registration credit.

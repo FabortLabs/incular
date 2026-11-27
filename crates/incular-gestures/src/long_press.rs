@@ -292,6 +292,10 @@ impl crate::ArenaRecognizer for LongPressGestureRecognizer {
         }
     }
 
+    fn cancel_gesture(&mut self, pointer: u64) {
+        LongPressGestureRecognizer::reject_gesture(self, pointer);
+    }
+
     fn poll(&mut self, now: Instant) {
         LongPressGestureRecognizer::poll(self, now);
     }

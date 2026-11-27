@@ -35,6 +35,18 @@ pub trait GestureRecognizer: Any {
     /// arena. The default has no additional state to clear.
     fn cancel(&mut self) {}
 
+    /// Applies a competing member's arena win to the named contact.
+    #[doc(hidden)]
+    fn reject_pointer(&mut self, _pointer: u64) {
+        self.cancel();
+    }
+
+    /// Interrupts the named contact, such as when its detector unmounts.
+    #[doc(hidden)]
+    fn cancel_pointer(&mut self, _pointer: u64) {
+        self.cancel();
+    }
+
     /// Releases recognizer-owned resources before it is removed from a
     /// retained element. This is deliberately separate from `Drop` so a
     /// factory can observe lifecycle cleanup deterministically.

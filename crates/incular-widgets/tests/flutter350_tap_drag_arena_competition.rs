@@ -591,3 +591,51 @@ fn a_second_consecutive_tap_claims_before_the_hold_deadline_and_can_drag() {
         ]
     );
 }
+
+#[test]
+fn unmount_cancels_a_raw_hold_once_even_if_it_already_won_the_arena() {
+    let trace = Trace::default();
+    let widget = RawGestureDetector::new(Widget::box_(Size::new(200., 200.), Color::WHITE))
+        .gesture(long_press_factory(&trace));
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(incular_widgets::Align::new(incular_config::Alignment::CENTER, widget).into())
+        .unwrap();
+    let viewport = Constraints::tight(Size::new(200., 200.));
+    tree.layout(viewport).unwrap();
+    let now = Instant::now();
+    let down = RawPointerEvent::new(
+        5,
+        0,
+        PointerDeviceKind::Touch,
+        1,
+        Offset::new(20., 20.),
+        PointerPhase::Down,
+        now,
+    );
+    tree.dispatch_raw_pointer(down);
+    assert!(trace.borrow().is_empty());
+    tree.update(
+        root,
+        incular_widgets::Align::new(
+            incular_config::Alignment::CENTER,
+            Widget::box_(Size::new(200., 200.), Color::BLACK),
+        )
+        .into(),
+    )
+    .unwrap();
+    tree.layout(viewport).unwrap();
+    assert_eq!(&*trace.borrow(), &["longpresscancel"]);
+    let later = now + Duration::from_secs(1);
+    tree.pump_gesture_timers(later);
+    tree.dispatch_raw_pointer(RawPointerEvent::new(
+        5,
+        0,
+        PointerDeviceKind::Touch,
+        0,
+        Offset::new(20., 20.),
+        PointerPhase::Up,
+        later,
+    ));
+    assert_eq!(trace.take(), ["longpresscancel"]);
+}
