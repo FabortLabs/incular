@@ -10,7 +10,7 @@ Already-normalized native events keep their existing path.
 The original five-record sequence tests assert the actual button masks:
 touch, either stylus kind, and unknown devices get a primary fallback
 only on otherwise buttonless down/contact move. Explicit buttons and
-chords are never rewritten. Mouse and trackpad keep even a zero mask.
+chords are never rewritten. A mouse contact keeps even a zero mask.
 Separate cases check remove/re-add order, zero scroll as a real signal,
 both axes' NaN/infinities, and a zero device pixel ratio. Each surviving
 record keeps its input view, and the test applies ten different ratios
@@ -98,3 +98,22 @@ input. The failed down is not replayed and its orphan up reaches no
 widget. Shutdown discards deferred packets and cancellation requests.
 Ten focused and five adjacent runtime tests passed. This boundary is
 distinct from a widget callback throwing after delivery has started.
+
+
+## Trackpad signals are not contacts
+
+Both original Flutter registrations in gestures/events_test.dart:829
+and :839 passed. The packet converter preserves trackpad hover, scroll,
+inertia cancellation, and pan/zoom with the original device and view
+identity. A signal takes priority over any accompanying contact tag.
+Trackpad Down, Move, and Up tagged as contacts now produce no event,
+instead of sending a fictitious contact to the retained tree. The old
+mouse mask test also exercised those invalid trackpad records; the
+mouse coverage is unchanged and the trackpad expectation now checks
+the reference boundary.
+
+The allowed types pair, but the rejection case is partial: Rust drops
+invalid engine packets, while Flutter additionally asserts on its
+individual pointer constructors. Incular's coarse already-logical
+RawPointerEvent deliberately remains usable by native adapters.
+Eleven packet-converter and twelve mounted delivery tests passed.

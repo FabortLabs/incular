@@ -225,6 +225,15 @@ fn convert(datum: PointerData, ratio: f64) -> Option<ConvertedPointerEvent> {
                 }
             }
             change => {
+                // Trackpad movement is an aggregate pan/zoom or a signal,
+                // not a down/move/up contact sequence. In particular, a bad
+                // contact record must not cancel a valid hover or enter the
+                // tap arena. Signals were selected before this branch.
+                if datum.kind == PointerDeviceKind::Trackpad
+                    && matches!(change, DataChange::Down | DataChange::Move | DataChange::Up)
+                {
+                    return None;
+                }
                 let (change, phase) = match change {
                     DataChange::Add => (Change::Add, PointerPhase::Enter),
                     DataChange::Remove => (Change::Remove, PointerPhase::Exit),

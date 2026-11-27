@@ -3665,3 +3665,5 @@ packages/flutter/test/gestures/recognizer_test.dart	60	cleans up state after win
 packages/flutter/test/gestures/recognizer_test.dart	93	cleans up state after losing arena	paired-match	upstream-primary-pointer-recognizer.md
 packages/flutter/test/gestures/recognizer_test.dart	133	works properly when recycled	paired-match	upstream-primary-pointer-recognizer.md
 packages/flutter/test/gestures/recognizer_test.dart	168	uses expected pre-accept slop tolerance	paired-match	upstream-primary-pointer-recognizer.md
+packages/flutter/test/gestures/events_test.dart	829	Ensure certain event types are allowed	paired-match	upstream-pointer-packet-converter.md#trackpad-signals-are-not-contacts
+packages/flutter/test/gestures/events_test.dart	839	Ensure certain event types are not allowed	partial-match	upstream-pointer-packet-converter.md#trackpad-signals-are-not-contacts

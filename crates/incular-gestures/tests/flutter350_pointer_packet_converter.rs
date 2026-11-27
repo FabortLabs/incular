@@ -117,9 +117,7 @@ fn a_mouse_preserves_even_an_empty_mask_and_tracks_chords_verbatim() {
         TERTIARY | SECONDARY,
         [0, 0, TERTIARY, TERTIARY | SECONDARY, 0],
     );
-    for kind in [Device::Mouse, Device::Trackpad] {
-        check_button_sequence(kind, 0, 0, [0; 5]);
-    }
+    check_button_sequence(Device::Mouse, 0, 0, [0; 5]);
 }
 
 #[test]
@@ -347,4 +345,53 @@ fn a_lazy_packet_ignores_unknown_signals_and_missing_views_without_disturbing_co
     assert_eq!(raw.buttons, 0);
     assert!(expanded.next().is_none());
     assert_eq!(*looked_up.borrow(), [2, 5, 6]);
+}
+
+#[test]
+fn trackpad_hover_scroll_and_inertia_do_not_become_contact_sequences() {
+    let now = Instant::now();
+    let data = [
+        (1, Data::Hover, Signal::None),
+        (2, Data::Down, Signal::None),
+        (3, Data::Move, Signal::None),
+        (4, Data::Up, Signal::None),
+        // A valid signal wins over even an invalid accompanying contact tag.
+        (5, Data::Down, Signal::Scroll(Offset::new(0., 20.))),
+        (6, Data::Move, Signal::ScrollInertiaCancel),
+        (7, Data::PanZoomStart, Signal::None),
+        (8, Data::PanZoomEnd, Signal::None),
+    ]
+    .map(|(embedder_id, change, signal)| PointerData {
+        device: 41,
+        pointer: 7,
+        view_id: 8,
+        embedder_id,
+        kind: Device::Trackpad,
+        signal,
+        physical_position: Offset::new(25., 25.),
+        ..PointerData::new(change, now)
+    });
+    let result: Vec<_> = PointerEventConverter::expand(data, |view| {
+        assert_eq!(view, 8);
+        Some(RATIO)
+    }).collect();
+    assert_eq!(
+        result.iter().map(|event| event.embedder_id).collect::<Vec<_>>(),
+        [1, 5, 6, 7, 8],
+    );
+    let (phase, hover) = contact(result[0].kind);
+    assert_eq!(phase, Change::Hover);
+    assert_eq!((hover.device, hover.pointer, hover.kind, hover.down), (41, 0, Device::Trackpad, false));
+    let Kind::Scroll(scroll) = result[1].kind else { panic!("missing scroll"); };
+    assert_eq!(scroll.scroll_delta, Offset::new(0., 8.));
+    assert_eq!(scroll.position, Offset::new(10., 10.));
+    assert!(!scroll.down);
+    let Kind::ScrollInertiaCancel(cancel) = result[2].kind else { panic!("missing inertia cancellation"); };
+    assert_eq!(cancel.kind, Device::Trackpad);
+    assert!(!cancel.down);
+    for (entry, phase) in result[3..].iter().zip([PointerPanZoomPhase::Start, PointerPanZoomPhase::End]) {
+        let Kind::PanZoom { event, .. } = entry.kind else { panic!("missing pan zoom"); };
+        assert_eq!(event.phase, phase);
+        assert_eq!((event.device, event.pointer), (41, 7));
+    }
 }
