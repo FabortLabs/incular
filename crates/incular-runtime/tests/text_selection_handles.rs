@@ -216,7 +216,11 @@ fn android_touch_drag_moves_a_collapsed_caret_only_in_a_focused_field() {
     let mut point = |offset| {
         controller.set_selection(TextSelection::collapsed(offset));
         runtime.run_frame(bounds()).unwrap();
-        let caret = runtime.tree().text_field_input_geometry(field).unwrap().caret_rect;
+        let caret = runtime
+            .tree()
+            .text_field_input_geometry(field)
+            .unwrap()
+            .caret_rect;
         Offset::new(caret.origin.x, caret.origin.y + caret.size.height / 2.0)
     };
     let from = point(4);
@@ -446,4 +450,149 @@ fn pressing_a_handle_neither_refocuses_nor_starts_a_long_press() {
         "no long press word selection"
     );
     assert_eq!(runtime.focused_element(), focused, "focus does not move");
+}
+
+fn directional_handles(
+    text: &str,
+    direction: TextDirection,
+    platform: TextShortcutPlatform,
+    selected_chars: std::ops::Range<usize>,
+) -> (Runtime, TextEditingController) {
+    use incular_text::{TextStyle, register_application_font_as};
+
+    let font = std::env::var_os("INCULAR_FLUTTER_RTL_FONT_PATH")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf".into());
+    let mut style = TextStyle::new().font_size(32.);
+    if let Ok(bytes) = std::fs::read(font) {
+        const FAMILY: &str = "Incular RTL handles fixture";
+        register_application_font_as(FAMILY, bytes);
+        style = style.font_family(FAMILY);
+    }
+    let controller = TextEditingController::with_text(text);
+    let node = incular_widgets::FocusNode::new();
+    let field = EditableText::new(controller.clone())
+        .text_direction(direction)
+        .focus_node(node.clone())
+        .style(style)
+        .size(Size::new(400., 42.))
+        .select_all_on_focus(false)
+        .selection_handles_builder(|_, _| SizedBox::shrink().into());
+    let mut runtime = Runtime::new(field.into()).unwrap();
+    runtime.set_text_shortcut_platform(platform);
+    node.request_focus();
+    runtime.run_frame(bounds()).unwrap();
+    let byte = |character| {
+        text.char_indices()
+            .nth(character)
+            .map_or(text.len(), |(byte, _)| byte)
+    };
+    controller.set_selection(TextSelection::new(
+        byte(selected_chars.start),
+        byte(selected_chars.end),
+    ));
+    runtime.run_frame(bounds()).unwrap();
+    let field = runtime
+        .focused_element()
+        .expect("actual retained editor focus");
+    let tree = runtime.tree();
+    tree.text_field_selection_handles(field)
+        .unwrap()
+        .show(tree.text_field_selection_handle_geometry(field).unwrap());
+    // The runtime refreshes the visible overlay with the simulated
+    // platform's actual handle policy.
+    runtime.run_frame(bounds()).unwrap();
+    (runtime, controller)
+}
+
+#[test]
+fn android_selection_handle_artwork_follows_the_shaped_endpoint_directions() {
+    use TextDirection::{Ltr, Rtl};
+    use incular_widgets::SelectionHandleType::{Left, Right};
+
+    let cases = [
+        (Ltr, "Hello World", 5, (Ltr, Ltr), (Left, Right)),
+        (Rtl, "Hello World", 5, (Ltr, Ltr), (Left, Right)),
+        (Rtl, "مرحبا بالعالم", 5, (Rtl, Rtl), (Right, Left)),
+        (Ltr, "مرحبا بالعالم", 5, (Rtl, Rtl), (Right, Left)),
+        (Ltr, "abc مرحبا", 9, (Ltr, Rtl), (Left, Left)),
+        (Rtl, "abc مرحبا", 9, (Rtl, Ltr), (Right, Right)),
+    ];
+    for (field, text, end, directions, art) in cases {
+        let (runtime, _) = directional_handles(text, field, TextShortcutPlatform::Android, 0..end);
+        let handles = shown_handles(&runtime).expect("show the mounted selection");
+        let end = handles.end.unwrap();
+        assert_eq!(
+            (handles.start.direction, end.direction),
+            directions,
+            "{field:?}/{text}"
+        );
+        assert_eq!(
+            (handles.start.handle_type, end.handle_type),
+            art,
+            "{field:?}/{text}"
+        );
+    }
+}
+
+#[test]
+fn ios_uses_the_field_direction_for_artwork_without_changing_range_endpoints() {
+    use incular_widgets::SelectionHandleType::{Left, Right};
+    let (android, _) = directional_handles(
+        "abc مرحبا",
+        TextDirection::Ltr,
+        TextShortcutPlatform::Android,
+        0..9,
+    );
+    let (ios, _) = directional_handles(
+        "abc مرحبا",
+        TextDirection::Ltr,
+        TextShortcutPlatform::Ios,
+        0..9,
+    );
+    let reference = shown_handles(&android).unwrap();
+    let handles = shown_handles(&ios).unwrap();
+    let (start, end) = (handles.start, handles.end.unwrap());
+    assert_eq!(
+        (start.direction, end.direction),
+        (TextDirection::Ltr, TextDirection::Rtl)
+    );
+    assert_eq!((start.handle_type, end.handle_type), (Left, Right));
+    assert_eq!(start.anchor, reference.start.anchor);
+    assert_eq!(end.anchor, reference.end.unwrap().anchor);
+}
+
+#[test]
+fn dragging_rtl_start_artwork_moves_the_start_and_keeps_the_other_endpoint() {
+    use incular_text::TextAffinity;
+    use incular_widgets::SelectionHandleType::{Left, Right};
+
+    let (mut runtime, controller) = directional_handles(
+        "אבגדהוזחט",
+        TextDirection::Ltr,
+        TextShortcutPlatform::Android,
+        3..7,
+    );
+    let handles = shown_handles(&runtime).unwrap();
+    assert_eq!(
+        (handles.start.handle_type, handles.end.unwrap().handle_type),
+        (Right, Left)
+    );
+    let field = runtime.focused_element().unwrap();
+    let first = runtime
+        .tree()
+        .text_field_offset_rect(field, 0, TextAffinity::Downstream)
+        .unwrap();
+    let before = controller.selection();
+    let from = knob_centre(handles.start);
+    let target = Offset::new(first.origin.x, from.y);
+    assert!((target.x - from.x).abs() > 18.);
+    drag(
+        &mut runtime,
+        from,
+        target,
+        PointerDeviceKind::Touch,
+        Instant::now(),
+    );
+    assert_eq!(controller.selection(), TextSelection::new(0, before.extent));
 }

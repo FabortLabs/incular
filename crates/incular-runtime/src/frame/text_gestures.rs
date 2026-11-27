@@ -7,9 +7,12 @@ use super::*;
 use crate::text_shortcuts::{TextIntent, TextShortcutPlatform};
 use incular_core::SECONDARY_POINTER_BUTTON;
 use incular_text::{TextAffinity, is_layout_whitespace, word_boundary_at};
-use incular_widgets::internal::gesture_constants::{LONG_PRESS_TIMEOUT, TOUCH_SLOP};
+use incular_widgets::internal::{
+    TextSelectionHandleEndpoint,
+    gesture_constants::{LONG_PRESS_TIMEOUT, TOUCH_SLOP},
+};
 use incular_widgets::{
-    ContextMenuButtonItem, ContextMenuButtonType, SelectionHandleType, TextSelectionToolbarAnchors,
+    ContextMenuButtonItem, ContextMenuButtonType, TextSelectionToolbarAnchors,
 };
 
 /// A secondary press that went down on a text field
@@ -1292,7 +1295,10 @@ impl Runtime {
     /// is known. The per-frame sync keeps them on the endpoints.
     fn show_text_field_handles(&mut self, field: ElementId) {
         if let Some(state) = self.tree.text_field_selection_handles(field)
-            && let Some(handles) = self.tree.text_field_selection_handle_geometry(field)
+            && let Some(handles) = self.tree.text_field_selection_handle_geometry_with_field_direction(
+                field,
+                self.text_shortcut_platform == TextShortcutPlatform::Ios,
+            )
         {
             state.show(handles);
             self.frame_requested = true;
@@ -1323,7 +1329,10 @@ impl Runtime {
         let changed = if !self.tree.text_field_is_editable(field) {
             state.hide()
         } else {
-            match self.tree.text_field_selection_handle_geometry(field) {
+            match self.tree.text_field_selection_handle_geometry_with_field_direction(
+                field,
+                self.text_shortcut_platform == TextShortcutPlatform::Ios,
+            ) {
                 Some(handles) => state.update(handles),
                 None => state.hide(),
             }
@@ -1449,9 +1458,8 @@ impl Runtime {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct TextHandleDrag {
     field: ElementId,
-    /// The pressed handle. `Collapsed` and `Left` are the start handle, and
-    /// `Right` is the end handle.
-    handle: SelectionHandleType,
+    /// Which selection boundary is pressed, independently of its artwork.
+    handle: TextSelectionHandleEndpoint,
     down_position: Offset,
     /// The press landed on the handle's drawn knob, where its tap lives.
     on_knob: bool,
@@ -1490,7 +1498,7 @@ impl Runtime {
         &self,
         position: Offset,
         kind: PointerDeviceKind,
-    ) -> Option<(ElementId, SelectionHandleType)> {
+    ) -> Option<(ElementId, TextSelectionHandleEndpoint)> {
         let touch = matches!(
             kind,
             PointerDeviceKind::Touch
@@ -1503,8 +1511,8 @@ impl Runtime {
         let field = self
             .focused
             .filter(|field| self.tree.is_text_field(*field))?;
-        let handles = self.tree.text_field_selection_handles(field)?.handles()?;
-        Some((field, handles.hit_test(position)?))
+        let state = self.tree.text_field_selection_handles(field)?;
+        Some((field, state.hit_test_endpoint(position)?))
     }
 
     /// Starts a handle drag when a touch or stylus press lands on a visible
@@ -1517,10 +1525,7 @@ impl Runtime {
     ) -> Option<ElementId> {
         let (field, handle) = self.text_handle_under(position, kind)?;
         let handles = self.tree.text_field_selection_handles(field)?.handles()?;
-        let geometry = match handle {
-            SelectionHandleType::Right => handles.end?,
-            _ => handles.start,
-        };
+        let geometry = handles.endpoint(handle)?;
         // `_handleSelectionEndHandleDragStart`: aim at the centre of the line
         // the handle points to, not at the handle itself.
         let centre = geometry.anchor.y - geometry.line_height / 2.0;
@@ -1593,8 +1598,8 @@ impl Runtime {
             } else {
                 let normalized = start.extent >= start.base;
                 match (drag.handle, normalized) {
-                    (SelectionHandleType::Right, true) => TextSelection::new(start.base, offset),
-                    (SelectionHandleType::Right, false) => TextSelection::new(start.extent, offset),
+                    (TextSelectionHandleEndpoint::End, true) => TextSelection::new(start.base, offset),
+                    (TextSelectionHandleEndpoint::End, false) => TextSelection::new(start.extent, offset),
                     (_, true) => TextSelection::new(start.extent, offset),
                     (_, false) => TextSelection::new(start.base, offset),
                 }
@@ -1603,7 +1608,7 @@ impl Runtime {
             TextSelection::collapsed(offset)
         } else {
             let next = match drag.handle {
-                SelectionHandleType::Right => TextSelection::new(current.base, offset),
+                TextSelectionHandleEndpoint::End => TextSelection::new(current.base, offset),
                 _ => TextSelection::new(offset, current.extent),
             };
             // Flutter: do not allow order swapping.
@@ -1625,7 +1630,7 @@ impl Runtime {
         self.frame_requested = true;
         if !drag.started {
             let delta = position - drag.down_position;
-            if drag.handle == SelectionHandleType::Collapsed
+            if drag.handle == TextSelectionHandleEndpoint::Collapsed
                 && drag.on_knob
                 && delta.x.hypot(delta.y) <= TOUCH_SLOP
             {

@@ -3456,3 +3456,5 @@ packages/flutter/test/rendering/editable_test.dart	125	Reports the real height w
 packages/flutter/test/rendering/editable_test.dart	144	has default semantics input type	paired-match	upstream-editable-defaults.md#default-input-semantics-and-single-line-geometry
 packages/flutter/test/rendering/editable_test.dart	159	Reports the height of the first line when maxLines is 1	paired-match	upstream-editable-defaults.md#default-input-semantics-and-single-line-geometry
 packages/flutter/test/rendering/editable_test.dart	200	RenderEditable.paint respects offset argument	partial-match	upstream-editable-defaults.md#default-input-semantics-and-single-line-geometry
+packages/flutter/test/widgets/text_selection_test.dart	2160	'Android selection handles match endpoint direction: ${testCase.description}'	paired-match	upstream-bidi-selection-handles.md
+packages/flutter/test/widgets/text_selection_test.dart	2212	selection handles use text direction for mixed-directionality text on iOS	paired-match	upstream-bidi-selection-handles.md

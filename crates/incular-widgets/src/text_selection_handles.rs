@@ -82,7 +82,7 @@ impl TextSelectionHandleLayout {
 /// One handle of a text field's selection.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TextSelectionHandle {
-    /// Which edge or caret the handle marks.
+    /// The artwork to draw, independent of the boundary a drag moves.
     pub handle_type: SelectionHandleType,
     /// The endpoint the handle's tip touches: the bottom of the endpoint's
     /// caret line, in the field's global coordinates.
@@ -126,7 +126,26 @@ pub struct TextSelectionHandles {
     pub end: Option<TextSelectionHandle>,
 }
 
+/// The logical part of the selection targeted by a handle. Its artwork
+/// can point left or right independently of which boundary the drag moves.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TextSelectionHandleEndpoint {
+    Collapsed,
+    Start,
+    End,
+}
+
 impl TextSelectionHandles {
+    #[doc(hidden)]
+    #[must_use]
+    pub fn endpoint(&self, endpoint: TextSelectionHandleEndpoint) -> Option<TextSelectionHandle> {
+        match endpoint {
+            TextSelectionHandleEndpoint::Collapsed | TextSelectionHandleEndpoint::Start => Some(self.start),
+            TextSelectionHandleEndpoint::End => self.end,
+        }
+    }
+
     /// The handle under `point` in global coordinates, or `None`. A point
     /// counts when it lies in the handle's [`interactive_rect`]; when both
     /// handles' areas cover it, the handle whose tip is nearer wins.
@@ -134,6 +153,18 @@ impl TextSelectionHandles {
     /// [`interactive_rect`]: TextSelectionHandle::interactive_rect
     #[must_use]
     pub fn hit_test(&self, point: Offset) -> Option<SelectionHandleType> {
+        self.hit_test_endpoint(point)
+            .and_then(|endpoint| self.endpoint(endpoint))
+            .map(|handle| handle.handle_type)
+    }
+
+    fn hit_test_endpoint(&self, point: Offset) -> Option<TextSelectionHandleEndpoint> {
+        use TextSelectionHandleEndpoint::{Collapsed, End, Start};
+        let start_endpoint = if self.end.is_none() && self.start.handle_type == SelectionHandleType::Collapsed {
+            Collapsed
+        } else {
+            Start
+        };
         let start = self
             .start
             .interactive_rect()
@@ -149,13 +180,13 @@ impl TextSelectionHandles {
                     delta.x * delta.x + delta.y * delta.y
                 };
                 if distance(&end) < distance(&start) {
-                    Some(end.handle_type)
+                    Some(End)
                 } else {
-                    Some(start.handle_type)
+                    Some(start_endpoint)
                 }
             }
-            (Some(start), None) => Some(start.handle_type),
-            (None, end) => end.map(|end| end.handle_type),
+            (Some(_), None) => Some(start_endpoint),
+            (None, end) => end.map(|_| End),
         }
     }
 }
@@ -239,6 +270,13 @@ impl TextSelectionHandlesState {
     /// The handle under `point` among the showing handles.
     #[must_use]
     pub fn hit_test(&self, point: Offset) -> Option<SelectionHandleType> {
+        let endpoint = self.hit_test_endpoint(point)?;
+        self.handles()?.endpoint(endpoint).map(|handle| handle.handle_type)
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn hit_test_endpoint(&self, point: Offset) -> Option<TextSelectionHandleEndpoint> {
         let handles = self.handles()?;
         if handles.end.is_none() && handles.start.handle_type == SelectionHandleType::Collapsed {
             return self
@@ -246,9 +284,9 @@ impl TextSelectionHandlesState {
                 .get()
                 .interactive_rect(handles.start.anchor)
                 .contains(point)
-                .then_some(SelectionHandleType::Collapsed);
+                .then_some(TextSelectionHandleEndpoint::Collapsed);
         }
-        handles.hit_test(point)
+        handles.hit_test_endpoint(point)
     }
 
     pub(crate) fn caret_reveal_bottom_clearance(&self) -> f32 {

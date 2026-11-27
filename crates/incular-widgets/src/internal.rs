@@ -97,6 +97,7 @@ pub use crate::platform_widgets::PlatformMenuBinding;
 pub use crate::raw_input::*;
 pub use crate::scrolling::*;
 pub use crate::selection::*;
+pub use crate::text_selection_handles::TextSelectionHandleEndpoint;
 #[doc(hidden)]
 pub use crate::transient::TransientPlacementOverride;
 pub use crate::tree::{IndexedStackChildDebugStyle, IndexedStackChildDiagnostic, icons};

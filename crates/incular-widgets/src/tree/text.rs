@@ -139,6 +139,68 @@ pub(super) fn editable_content_clip(
         .then(|| Rect::from_origin_size(Offset::new(padding.left, 0.), Size::new(width, size.height)))
 }
 
+/// Finds the first or last visual selection box without allocating boxes for
+/// the entire highlight. In a visually contiguous RTL run the logical start
+/// is its right edge and the logical end is its left edge.
+fn editor_selection_edge(
+    layout: &impl TextGeometry,
+    start: usize,
+    end: usize,
+    first: bool,
+) -> Option<(f32, f32, f32, TextDirection)> {
+    use incular_text::{TextClusterSpan, TextLineRef};
+
+    fn line_edge(
+        line: TextLineRef<'_>,
+        spans: impl Iterator<Item = TextClusterSpan>,
+        start: usize,
+        end: usize,
+        first: bool,
+    ) -> Option<(f32, f32, f32, TextDirection)> {
+        let mut spans = spans.filter(|span| {
+            let range = span.range();
+            range.start >= start && range.end <= end && span.left < span.right
+        });
+        let edge = spans.next()?;
+        let mut x = match (first, edge.rtl) {
+            (true, false) | (false, true) => edge.left,
+            _ => edge.right,
+        };
+        // For RTL the outer edge of the box is the opposite edge of one
+        // cluster, so continue through the remaining contiguous clusters.
+        if edge.rtl {
+            for next in spans {
+                let (adjacent, outward) = if first {
+                    (next.left, next.right)
+                } else {
+                    (next.right, next.left)
+                };
+                if !next.rtl || (adjacent - x).abs() > 1e-3 {
+                    break;
+                }
+                x = outward;
+            }
+        }
+        let height = line.shaped().height;
+        let direction = if edge.rtl { TextDirection::Rtl } else { TextDirection::Ltr };
+        Some((x, line.top() + height, height, direction))
+    }
+
+    if start >= end {
+        return None;
+    }
+    let indices = layout.line_for_offset(start)..=layout.line_for_offset(end - 1);
+    if first {
+        indices.filter_map(|index| layout.get_line(index)).find_map(|line| {
+            line_edge(line, line.clusters(), start, end, true)
+        })
+    } else {
+        indices.rev().filter_map(|index| layout.get_line(index)).find_map(|line| {
+            line_edge(line, line.clusters().rev(), start, end, false)
+        })
+    }
+}
+
 pub(super) fn editable_cursor_alpha(base_alpha: u8, opacity: f32) -> u8 {
     f32::from(base_alpha).min(opacity * 255.0).round() as u8
 }
@@ -1991,45 +2053,90 @@ impl WidgetTree {
         &self,
         id: ElementId,
     ) -> Option<crate::TextSelectionHandles> {
+        self.text_field_selection_handle_geometry_with_field_direction(
+            id,
+            incular_config::TargetPlatform::current() == incular_config::TargetPlatform::Ios,
+        )
+    }
+
+    /// iOS chooses artwork from the field direction; the actual endpoint
+    /// directions and anchors still come from the shaped selection.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn text_field_selection_handle_geometry_with_field_direction(
+        &self,
+        id: ElementId,
+        use_field_direction: bool,
+    ) -> Option<crate::TextSelectionHandles> {
         use crate::{TextSelectionHandle, TextSelectionHandles};
         use incular_config::TextDirection;
-        use incular_text::TextAffinity;
+
         let snapshot = self.text_field_input_geometry(id)?;
         let selection = snapshot.selection;
-        let handle = |offset: usize, affinity: TextAffinity, handle_type: SelectionHandleType| {
-            let rect = self.text_field_offset_rect(id, offset, affinity)?;
+        let render = self.render_id(id)?;
+        let node = self.renders.get(render.0)?;
+        let RenderKind::TextField(field) = node.object.kind() else {
+            return None;
+        };
+        let field_direction = field.text_direction;
+        let caret = snapshot.caret_rect;
+        let fallback = TextSelectionHandle {
+            handle_type: SelectionHandleType::Collapsed,
+            anchor: Offset::new(caret.origin.x, caret.origin.y + caret.size.height),
+            line_height: caret.size.height,
+            direction: field_direction,
+        };
+        if selection.is_collapsed() {
+            return Some(TextSelectionHandles { start: fallback, end: None });
+        }
+
+        let layout = node.field_layout()?;
+        let state = node.text_field_state()?;
+        let scroll = field.scroll_offset(state.scroll_x, state.scroll_y);
+        let padding = field.content_padding;
+        let top = text_field_content_top(
+            field.multiline,
+            node.size.height,
+            layout.metrics().line_height,
+            padding,
+        );
+        let width = layout.metrics().size.width.max((node.size.width - padding.horizontal()).max(0.));
+        let mask = field.obscure_text.then_some(field.obscuring_character);
+        let start = text_field_display_offset(&field.controller, selection.start(), mask);
+        let end = text_field_display_offset(&field.controller, selection.end(), mask);
+        let world = self.render_world_transform(render);
+        let has_preedit = field.controller.preedit().is_some();
+        let geometry = |first| -> Option<TextSelectionHandle> {
+            if has_preedit {
+                return None;
+            }
+            let (x, bottom, height, direction) = editor_selection_edge(&layout, start, end, first)?;
+            let anchor = Offset::new(x.clamp(0., width) + padding.left - scroll.x, bottom + top - scroll.y);
+            let line = Rect::from_origin_size(anchor - Offset::new(0., height), Size::new(0., height));
             Some(TextSelectionHandle {
-                handle_type,
-                anchor: Offset::new(rect.origin.x, rect.origin.y + rect.size.height),
-                line_height: rect.size.height,
-                direction: TextDirection::Ltr,
+                handle_type: SelectionHandleType::Collapsed,
+                anchor: world.transform_point(anchor),
+                line_height: world.transform_rect_bbox(line).size.height,
+                direction,
             })
         };
-        if selection.base == selection.extent {
-            let caret = snapshot.caret_rect;
-            return Some(TextSelectionHandles {
-                start: TextSelectionHandle {
-                    handle_type: SelectionHandleType::Collapsed,
-                    anchor: Offset::new(caret.origin.x, caret.origin.y + caret.size.height),
-                    line_height: caret.size.height,
-                    direction: TextDirection::Ltr,
-                },
-                end: None,
-            });
-        }
-        let (start, end) = if selection.base < selection.extent {
-            (selection.base, selection.extent)
+        let (mut start, mut end) = if let Some(start) = geometry(true) {
+            (start, geometry(false).unwrap_or(fallback))
         } else {
-            (selection.extent, selection.base)
+            (fallback, fallback)
         };
-        Some(TextSelectionHandles {
-            start: handle(start, TextAffinity::Downstream, SelectionHandleType::Left)?,
-            end: Some(handle(
-                end,
-                TextAffinity::Upstream,
-                SelectionHandleType::Right,
-            )?),
-        })
+        let art_direction = |point: TextSelectionHandle| {
+            if use_field_direction { field_direction } else { point.direction }
+        };
+        start.handle_type = match art_direction(start) {
+            TextDirection::Ltr => SelectionHandleType::Left,
+            TextDirection::Rtl => SelectionHandleType::Right,
+        };
+        end.handle_type = match art_direction(end) {
+            TextDirection::Ltr => SelectionHandleType::Right,
+            TextDirection::Rtl => SelectionHandleType::Left,
+        };
+        Some(TextSelectionHandles { start, end: Some(end) })
     }
 
     /// The global logical rectangle targeted by the platform text menu.
